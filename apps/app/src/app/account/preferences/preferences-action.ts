@@ -28,6 +28,8 @@ const PreferencesSchema = z.object({
   defaultTextModel: z.string().min(1).nullable(),
   defaultImageModel: z.string().min(1).nullable(),
   defaultVideoModel: z.string().min(1).nullable(),
+  timezone: z.string().min(1),
+  language: z.string().min(2),
 });
 
 export type PreferencesInput = z.infer<typeof PreferencesSchema>;

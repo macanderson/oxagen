@@ -122,25 +122,6 @@ export interface ExecutionLogRow {
   created_at: string;
 }
 
-export interface TraceRow {
-  trace_id: string;
-  execution_id: string;
-  org_id: string;
-  started_at: string;
-  completed_at: string | null;
-}
-
-export interface SpanRow {
-  span_id: string;
-  trace_id: string;
-  parent_span_id: string | null;
-  span_type: string;
-  org_id: string;
-  started_at: string;
-  completed_at: string | null;
-  metadata: string;
-}
-
 export interface EventRow {
   event_id: string;
   org_id: string;
@@ -150,16 +131,6 @@ export interface EventRow {
   stream_offset: string | null;
   payload: string;
   emitted_at: string;
-}
-
-export interface ApiKeyEventRow {
-  api_key_id: string;
-  org_id: string;
-  ip_address: string;
-  user_agent: string;
-  request_path: string;
-  response_code: number;
-  created_at: string;
 }
 
 export type Surface = "api" | "mcp" | "app" | "runner" | "ingestion" | "";
@@ -180,7 +151,15 @@ export type Provider =
   | "";
 
 export interface TokenUsageRow {
-  execution_step_id: string;
+  /**
+   * UUID of the execution step that drove this LLM/embedding call, or `null`
+   * when there is no step (e.g. fire-and-forget ingestion embeddings). `null`
+   * is coalesced to the nil UUID at the insert boundary (see `insertTokenUsage`
+   * / `NIL_UUID`) because the underlying ClickHouse column is a non-nullable
+   * sorting-key `UUID`. NEVER pass a non-UUID correlation string here — it makes
+   * ClickHouse abort the whole row (CANNOT_PARSE_INPUT_ASSERTION_FAILED).
+   */
+  execution_step_id: string | null;
   org_id: string;
   workspace_id: string;
   model: string;
@@ -204,15 +183,38 @@ async function insertRows<T>(table: string, rows: readonly T[]): Promise<void> {
   await clickhouse().insert({ table, values: rows, format: "JSONEachRow" });
 }
 
+/**
+ * The all-zeroes UUID. `token_usage.execution_step_id` is a NON-nullable `UUID`
+ * column AND part of the table's sorting key `(org_id, created_at,
+ * execution_step_id)`. ClickHouse forbids converting a key column to
+ * `Nullable` after creation — `ALTER TABLE token_usage MODIFY COLUMN
+ * execution_step_id Nullable(UUID)` fails with `ALTER_OF_COLUMN_IS_FORBIDDEN`
+ * (code 524) even with `allow_nullable_key = 1`, so the only route to a true
+ * Nullable key would be a full rebuild of this 365-day-retention billing table.
+ *
+ * That rebuild buys nothing here: no query joins or filters on
+ * `execution_step_id` (it is purely a tertiary tie-breaker in the sort), so the
+ * nil UUID is an equivalent "no execution step" sentinel — already the
+ * established pattern for `workspace_id` (DEFAULT toUUID('0…0')). Callers
+ * therefore express "no step" as `null`/`undefined`, and we coalesce to the nil
+ * UUID here, at the single insert boundary, so a non-UUID string can never reach
+ * the column. This is what eliminated the `CANNOT_PARSE_INPUT_ASSERTION_FAILED`
+ * (code 27) flood: ingestion callers used to synthesize ids like
+ * `embed:<nodeId>` / `dedup:<key>` / `embed-file:<key>` / the literal
+ * `"unknown"`, which the UUID text parser over-read on and aborted the whole row.
+ */
+export const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+
 export const insertExecutionLogs = (rows: readonly ExecutionLogRow[]) =>
   insertRows("execution_logs", rows);
-export const insertTraces = (rows: readonly TraceRow[]) => insertRows("traces", rows);
-export const insertSpans = (rows: readonly SpanRow[]) => insertRows("spans", rows);
 export const insertEvents = (rows: readonly EventRow[]) => insertRows("events", rows);
-export const insertApiKeyEvents = (rows: readonly ApiKeyEventRow[]) =>
-  insertRows("api_key_events", rows);
 export const insertTokenUsage = (rows: readonly TokenUsageRow[]) =>
-  insertRows("token_usage", rows);
+  insertRows(
+    "token_usage",
+    // Coalesce the "no execution step" sentinel (null/undefined) to the nil UUID
+    // so the non-nullable UUID key column always receives a parseable value.
+    rows.map((r) => (r.execution_step_id == null ? { ...r, execution_step_id: NIL_UUID } : r)),
+  );
 
 // Agent runtime epic (spec §9). One row per tool invocation. Analytics
 // mirror of execution.tool_calls; durable record stays in Postgres.
@@ -242,37 +244,6 @@ export interface ToolInvocationRow {
 
 export const insertToolInvocation = (row: ToolInvocationRow) =>
   insertRows("tool_invocations", [row]);
-
-// Typed agent model (docs/reference/agent-schema.ts §6). One row per
-// AgentLogEntry; the durable definition stays in Postgres. definition_id/version
-// and org/workspace are denormalized so logs query in isolation.
-export interface AgentLogRow {
-  log_id: string;
-  run_id: string;
-  definition_id: string;
-  definition_version: string;
-  org_id: string;
-  workspace_id: string;
-  entry_id: string;
-  entry_type:
-    | "lifecycle"
-    | "decision"
-    | "graph_query"
-    | "graph_write"
-    | "tool_call"
-    | "subagent_call"
-    | "memory"
-    | "error";
-  entry_level: "debug" | "info" | "warn" | "error";
-  entry_message: string;
-  /** Type-specific structured payload, serialized to a JSON string. */
-  entry_data: string;
-  entry_timestamp: string;
-  created_at: string;
-}
-
-export const insertAgentLogs = (rows: readonly AgentLogRow[]) =>
-  insertRows("agent_logs", rows);
 
 /**
  * Deterministic, PII-free cohort key for prompts. SHA-256, first 16 bytes

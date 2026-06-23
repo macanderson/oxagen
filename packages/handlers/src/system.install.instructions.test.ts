@@ -56,8 +56,8 @@ describe("systemInstallInstructionsHandler", () => {
       .map((s) => s.command!)
       .join("\n");
     // MCP is served by the xmcp app (oxagen-v2-mcp) at /mcp, NOT the REST API host.
-    expect(allCommands).toContain("oxagen-v2-mcp.vercel.app/mcp");
-    expect(allCommands).not.toContain("oxagen-v2-api.vercel.app/mcp");
+    expect(allCommands).toContain("mcp.oxagen.sh/mcp");
+    expect(allCommands).not.toContain("api.oxagen.sh/mcp");
   });
 
   it("includes the Authorization header in the claude-code connect command", async () => {

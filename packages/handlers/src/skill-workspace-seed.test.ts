@@ -128,6 +128,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     ...real,
     withTenantDb: async (fn: (tx: ReturnType<typeof buildFakeTx>) => Promise<unknown>) =>
       fn(buildFakeTx()),
+    withSystemDb: async (fn: (tx: ReturnType<typeof buildFakeTx>) => Promise<unknown>) =>
+      fn(buildFakeTx()),
   };
 });
 
@@ -136,7 +138,7 @@ vi.mock("./logger", () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { seedWorkspaceDefaultSkills } from "./skill-workspace-seed";
+import { seedWorkspaceDefaultSkills, seedWorkspaceDefaultSkillsSystem } from "./skill-workspace-seed";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -303,5 +305,65 @@ describe("seedWorkspaceDefaultSkills", () => {
     expect(result.inserted).toBe(1);
     expect(mocks.txInsertVersionReturning).toHaveBeenCalledTimes(1);
     expect(mocks.txUpdate).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── seedWorkspaceDefaultSkillsSystem ─────────────────────────────────────────
+
+describe("seedWorkspaceDefaultSkillsSystem", () => {
+  const sysOrgId = "org_sys_skill";
+  const sysWorkspaceId = "ws_sys_skill";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.registryList.mockResolvedValue(FAKE_TEMPLATES);
+    mocks.txSelect.mockResolvedValue([]);
+    mocks.txInsertSkillReturning.mockImplementation((_val: unknown) =>
+      Promise.resolve([{ id: "uuid-skill-sys", publicId: "skl_SYS", slug: "summarization" }]),
+    );
+    mocks.txInsertVersionReturning.mockImplementation((_val: unknown) =>
+      Promise.resolve([{ id: "uuid-ver-sys", versionNumber: 1 }]),
+    );
+    mocks.txUpdate.mockResolvedValue([]);
+  });
+
+  it("returns { scanned, inserted } with correct scanned count (System variant)", async () => {
+    const result = await seedWorkspaceDefaultSkillsSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
+    expect(result.scanned).toBe(FAKE_TEMPLATES.length);
+  });
+
+  it("returns inserted equal to the number of new skill rows on first run (System variant)", async () => {
+    const result = await seedWorkspaceDefaultSkillsSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
+    expect(result.inserted).toBe(FAKE_TEMPLATES.length);
+  });
+
+  it("passes orgId and workspaceId to every skill insert (System variant)", async () => {
+    await seedWorkspaceDefaultSkillsSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
+    for (const call of mocks.txInsertSkillReturning.mock.calls) {
+      const arg = call[0] as Record<string, unknown>;
+      expect(arg.orgId).toBe(sysOrgId);
+      expect(arg.workspaceId).toBe(sysWorkspaceId);
+    }
+  });
+
+  it("is idempotent — skips existing skills (System variant)", async () => {
+    mocks.txSelect.mockResolvedValue([{ id: "existing-sys-uuid" }]);
+    const result = await seedWorkspaceDefaultSkillsSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
+    expect(result.inserted).toBe(0);
+    expect(mocks.txInsertSkillReturning).not.toHaveBeenCalled();
+    expect(mocks.txInsertVersionReturning).not.toHaveBeenCalled();
+  });
+
+  it("passes source='tenant' to the skill insert (System variant)", async () => {
+    await seedWorkspaceDefaultSkillsSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
+    const insertArg = mocks.txInsertSkillReturning.mock.calls[0]![0] as Record<string, unknown>;
+    expect(insertArg).toMatchObject({ source: "tenant" });
+  });
+
+  it("back-fills active_version_id via update after each version insert (System variant)", async () => {
+    await seedWorkspaceDefaultSkillsSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
+    expect(mocks.txUpdate).toHaveBeenCalledTimes(FAKE_TEMPLATES.length);
+    const firstCall = mocks.txUpdate.mock.calls[0]![0] as Record<string, unknown>;
+    expect(firstCall).toHaveProperty("activeVersionId", "uuid-ver-sys");
   });
 });

@@ -73,7 +73,7 @@ const MOCK_TRIGGERS: MockTrigger[] = [
     playbookName: "Billing anomaly investigation",
     scheduleLabel: null,
     eventName: null,
-    webhookUrl: "https://oxagen-v2-api.vercel.app/v1/hooks/trg-03",
+    webhookUrl: "https://api.oxagen.sh/v1/hooks/trg-03",
     fireCount: 2,
     lastFiredAt: "2026-05-28 08:00",
     createdAt: "2026-05-20",

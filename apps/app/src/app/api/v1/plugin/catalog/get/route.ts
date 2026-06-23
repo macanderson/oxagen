@@ -58,6 +58,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Get failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // "catalog server not found: …" is an expected miss (e.g. an MCP server that
+    // isn't in any enabled registry) — surface it as 404 so the client renders a
+    // clean "not found" state instead of treating a 500 body as plugin detail.
+    const status = /not found/i.test(message) ? 404 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

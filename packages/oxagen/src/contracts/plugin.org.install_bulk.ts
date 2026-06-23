@@ -44,7 +44,10 @@ export const pluginOrgInstallBulk = registerCapability({
   output: z.object({
     installed: z.array(
       z.object({
-        catalogServerId: z.string().nullable(),
+        // The plugin identifier for the item (capability pluginId, or null for
+        // custom/registry servers). Mirrors what the handler returns and what
+        // the app's installBulkPlugin action consumes — must stay in sync.
+        pluginId: z.string().nullable(),
         orgListingId: z.string().nullable(),
         error: z.string().nullable(),
       }),

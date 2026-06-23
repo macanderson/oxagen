@@ -17,11 +17,20 @@ import { SegmentedControl, SegmentedControlItem } from "@/components/ui/segmente
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectPopup,
+  SelectGroup,
+  SelectItem,
+} from "@/components/ui/select";
 import { ModelDefaultsFields, type ModelDefaultsValue } from "@/components/settings/model-defaults-fields";
 import { updatePreferencesAction } from "./preferences-action";
 import type { PreferencesInput } from "./preferences-action";
 import { useRegisterFillableForm, useRegisterPageEntity } from "@/lib/page-context";
 import type { FieldDescriptor } from "@/lib/ask/fill-types";
+import { TIMEZONE_OPTIONS, LANGUAGE_OPTIONS } from "./locale-constants";
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -35,6 +44,8 @@ export interface PreferencesFormProps {
     defaultTextModel: string | null;
     defaultImageModel: string | null;
     defaultVideoModel: string | null;
+    timezone: string;
+    language: string;
   };
 }
 
@@ -49,6 +60,9 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
   const [enterToSubmit, setEnterToSubmit] = React.useState(initial.enterToSubmit);
   const [pendingPromptBehavior, setPendingPromptBehavior] =
     React.useState<PendingPromptBehavior>(initial.pendingPromptBehavior);
+
+  const [timezone, setTimezone] = React.useState(initial.timezone);
+  const [language, setLanguage] = React.useState(initial.language);
 
   const [modelDefaults, setModelDefaults] = React.useState<ModelDefaultsValue>({
     textTier: initial.defaultTextTier,
@@ -111,8 +125,24 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
         ],
         required: false,
       },
+      {
+        name: "timezone",
+        label: "Timezone",
+        type: "select",
+        current: timezone,
+        options: TIMEZONE_OPTIONS,
+        required: false,
+      },
+      {
+        name: "language",
+        label: "Language",
+        type: "select",
+        current: language,
+        options: LANGUAGE_OPTIONS,
+        required: false,
+      },
     ],
-    [fontSize, density, enterToSubmit, pendingPromptBehavior],
+    [fontSize, density, enterToSubmit, pendingPromptBehavior, timezone, language],
   );
 
   const applyPreferences = React.useCallback(
@@ -131,6 +161,12 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
       }
       if (proposed.pendingPromptBehavior === "queue" || proposed.pendingPromptBehavior === "interrupt") {
         setPendingPromptBehavior(proposed.pendingPromptBehavior);
+      }
+      if (typeof proposed.timezone === "string" && proposed.timezone.length > 0) {
+        setTimezone(proposed.timezone);
+      }
+      if (typeof proposed.language === "string" && proposed.language.length >= 2) {
+        setLanguage(proposed.language);
       }
     },
     [],
@@ -174,6 +210,8 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
       defaultTextModel: modelDefaults.textModel,
       defaultImageModel: modelDefaults.imageModel,
       defaultVideoModel: modelDefaults.videoModel,
+      timezone,
+      language,
     };
 
     const result = await updatePreferencesAction(input);
@@ -318,6 +356,68 @@ export function PreferencesForm({ initial }: PreferencesFormProps) {
               scope="user"
               disabled={isSaving}
             />
+          </div>
+        </div>
+      </section>
+
+      <hr className="border-border" />
+
+      {/* ── Regional ────────────────────────────────────────────────────────── */}
+      <section aria-labelledby="regional-heading">
+        <h2
+          id="regional-heading"
+          className="mb-4 text-sm font-semibold uppercase tracking-widest text-muted-foreground"
+        >
+          Regional
+        </h2>
+
+        <div className="flex flex-col gap-5">
+          {/* Timezone */}
+          <div className="flex flex-col gap-2">
+            <Label id="timezone-label" htmlFor="timezone-select">
+              Timezone
+            </Label>
+            <Select value={timezone} onValueChange={(v) => { if (v) setTimezone(v); }} disabled={isSaving}>
+              <SelectTrigger id="timezone-select" aria-labelledby="timezone-label">
+                <SelectValue placeholder="Select timezone" />
+              </SelectTrigger>
+              <SelectPopup className="max-h-72 overflow-y-auto">
+                <SelectGroup>
+                  {TIMEZONE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectPopup>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Used for displaying dates and times across the platform.
+            </p>
+          </div>
+
+          {/* Language */}
+          <div className="flex flex-col gap-2">
+            <Label id="language-label" htmlFor="language-select">
+              Language
+            </Label>
+            <Select value={language} onValueChange={(v) => { if (v) setLanguage(v); }} disabled={isSaving}>
+              <SelectTrigger id="language-select" aria-labelledby="language-label">
+                <SelectValue placeholder="Select language" />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectGroup>
+                  {LANGUAGE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectPopup>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Sets your preferred display language.
+            </p>
           </div>
         </div>
       </section>

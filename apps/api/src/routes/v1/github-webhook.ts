@@ -28,6 +28,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { eventClient } from "../../event-client";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import { requireEnv } from "@oxagen/config/env";
+import { logger } from "../../middleware/logger";
 import type { AppEnv } from "../../app";
 
 export const githubAppWebhookRoute = new Hono<AppEnv>();
@@ -73,9 +74,22 @@ function recordKey(record: unknown): string {
 githubAppWebhookRoute.post("/", async (c) => {
   const { GITHUB_APP_WEBHOOK_SECRET: secret } = requireEnv(["GITHUB_APP_WEBHOOK_SECRET"] as const);
   if (!secret) {
+    // Missing webhook secret is a SERVER misconfiguration, not something the
+    // request can fix. GitHub records every non-2xx (4xx AND 5xx, including
+    // 500/503) as a failed delivery and re-queues it — so any error status here
+    // produces an infinite retry flood. We therefore ACK with 200 (drop the
+    // event) so GitHub stops retrying, and log loudly so operators see the
+    // misconfiguration. This mirrors the ack-and-drop pattern used below for the
+    // no-installation-context branch. The real fix is to set
+    // GITHUB_APP_WEBHOOK_SECRET in Vercel (oxagen-v2-api, production + preview).
+    logger.error(
+      { reason: "github_app_webhook_secret_missing" },
+      "GitHub App webhook received but GITHUB_APP_WEBHOOK_SECRET is not configured — " +
+        "acking with 200 to stop GitHub retries; set GITHUB_APP_WEBHOOK_SECRET in Vercel to process events",
+    );
     return c.json(
-      { error: "GitHub App webhooks are not configured — GITHUB_APP_WEBHOOK_SECRET missing" },
-      503,
+      { received: true, dispatched: 0, reason: "webhook secret not configured" },
+      200,
     );
   }
 

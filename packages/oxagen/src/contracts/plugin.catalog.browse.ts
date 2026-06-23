@@ -36,7 +36,10 @@ export const pluginCatalogBrowse = registerCapability({
         name: z.string(),
         title: z.string().nullable(),
         description: z.string(),
-        icons: z.array(z.object({ src: z.string() }).passthrough()),
+        // icon entries follow the SHARED ICON DATA CONTRACT:
+        //   src is an http(s)/data URI → render <Image>
+        //   src is a plain string (Lucide name) → render CapabilityIcon with color
+        icons: z.array(z.object({ src: z.string(), color: z.string().optional() }).passthrough()),
         transportTypes: z.array(z.string()),
         authKind: z.string(),
         categories: z.array(z.string()),
@@ -55,5 +58,8 @@ export const pluginCatalogBrowse = registerCapability({
     ),
     nextOffset: z.number().nullable(),
     total: z.number(),
+    // Populated when one or more registry fetches were skipped (e.g. network error,
+    // schema validation failure). Lets the UI/approver diagnose empty results.
+    warnings: z.array(z.string()).optional(),
   }),
 });

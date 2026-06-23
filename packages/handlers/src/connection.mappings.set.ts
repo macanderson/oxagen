@@ -6,6 +6,39 @@ import { HTTPException } from "hono/http-exception";
 import { eventClient } from "./event-client";
 import { logger } from "./logger";
 
+type Mapping = {
+  sourceRecordType: string;
+  oxagenEntityType: string;
+  propertyMappings: Record<string, string>;
+};
+
+// Default entity-type mappings for every GitHub record type the connector can
+// normalize. The connect wizard only confirms `repository`, so without these the
+// ingestion pipeline finds no mapping for pull_request/issue/release/commit and
+// SILENTLY SKIPS them (ingestion.pipeline.ts) — the graph then only ever gets the
+// repo node. `propertyMappings: {}` is intentional: the pipeline applies these as
+// renames OVER the connector's already-normalized properties, so an empty map
+// passes the connector's normalized fields through unchanged. User-supplied
+// mappings for the same record type always win.
+const DEFAULT_GITHUB_MAPPINGS: readonly Mapping[] = [
+  { sourceRecordType: "repository", oxagenEntityType: "source_repository", propertyMappings: {} },
+  { sourceRecordType: "pull_request", oxagenEntityType: "pull_request", propertyMappings: {} },
+  { sourceRecordType: "issue", oxagenEntityType: "issue", propertyMappings: {} },
+  { sourceRecordType: "release", oxagenEntityType: "release", propertyMappings: {} },
+  { sourceRecordType: "commit", oxagenEntityType: "commit", propertyMappings: {} },
+];
+
+/** Parse "owner/repo" full names into {owner, repo}, dropping malformed entries. */
+function parseRepos(fullNames: readonly string[] | undefined): Array<{ owner: string; repo: string }> {
+  const out: Array<{ owner: string; repo: string }> = [];
+  for (const full of fullNames ?? []) {
+    const slash = full.indexOf("/");
+    if (slash <= 0 || slash === full.length - 1) continue;
+    out.push({ owner: full.slice(0, slash), repo: full.slice(slash + 1) });
+  }
+  return out;
+}
+
 export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMappingsSet> = async (
   input,
   ctx,
@@ -38,6 +71,32 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
   // constraint (pending_setup | connected | paused | error) — "active" is not
   // a valid value and would fail the CHECK on write.
   const willActivate = input.activateConnection && conn.status === "pending_setup";
+  const isGithub = conn.connectorId === "github";
+
+  // Seed default mappings for every GitHub record type the connector emits, so
+  // the ingestion pipeline never silently skips pull_request/issue/release/commit
+  // for lack of a mapping. User-supplied mappings take precedence per record type.
+  const userTypes = new Set(input.mappings.map((m) => m.sourceRecordType));
+  const mappingsToWrite: Mapping[] = isGithub
+    ? [...input.mappings, ...DEFAULT_GITHUB_MAPPINGS.filter((m) => !userTypes.has(m.sourceRecordType))]
+    : input.mappings;
+
+  // Merge EVERY GitHub source-selection field the caller supplied into
+  // deliveryConfig so the initial sync can resolve which repos to pull
+  // (previously dropped → empty owner/repo → 404). Covers both the multi-repo
+  // wizard flow (selectedRepos) and a single owner/repo/defaultBranch (OXA-1806).
+  const dcUpdates: Record<string, unknown> = {};
+  if (input.owner !== undefined) dcUpdates["owner"] = input.owner;
+  if (input.repo !== undefined) dcUpdates["repo"] = input.repo;
+  if (input.defaultBranch !== undefined) dcUpdates["defaultBranch"] = input.defaultBranch;
+  if (input.installationId !== undefined) dcUpdates["installationId"] = input.installationId;
+  if (input.syncDepthDays !== undefined) dcUpdates["syncDepthDays"] = input.syncDepthDays;
+  if (input.selectedRepos !== undefined) dcUpdates["selectedRepos"] = input.selectedRepos;
+
+  const mergedDeliveryConfig =
+    Object.keys(dcUpdates).length > 0
+      ? { ...((conn.deliveryConfig as Record<string, unknown> | null) ?? {}), ...dcUpdates }
+      : undefined;
 
   // Upsert every mapping AND (optionally) the connection status flip inside a
   // single tenant-scoped transaction. This is atomic — a mid-batch failure
@@ -47,7 +106,7 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
     // One batched lookup of all existing mappings for this connection that
     // collide with the incoming source record types, instead of one SELECT
     // per mapping.
-    const sourceTypes = input.mappings.map((m) => m.sourceRecordType);
+    const sourceTypes = mappingsToWrite.map((m) => m.sourceRecordType);
     const existingRows = sourceTypes.length
       ? await tx
           .select({
@@ -68,7 +127,7 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
     let createdCount = 0;
     let updatedCount = 0;
 
-    for (const mapping of input.mappings) {
+    for (const mapping of mappingsToWrite) {
       const existingId = existingByType.get(mapping.sourceRecordType);
       if (existingId) {
         await tx
@@ -99,12 +158,21 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
       }
     }
 
-    // Activate the connection if requested and currently in pending_setup —
-    // in the same transaction so mappings + status flip commit together.
+    // Persist the merged deliveryConfig and (optionally) flip status — combined
+    // into a single UPDATE when both apply so the row is always consistent.
     if (willActivate) {
       await tx
         .update(schema.sourceConnections)
-        .set({ status: "connected", updatedAt: now })
+        .set({
+          status: "connected",
+          ...(mergedDeliveryConfig ? { deliveryConfig: mergedDeliveryConfig } : {}),
+          updatedAt: now,
+        })
+        .where(eq(schema.sourceConnections.id, conn.id));
+    } else if (mergedDeliveryConfig) {
+      await tx
+        .update(schema.sourceConnections)
+        .set({ deliveryConfig: mergedDeliveryConfig, updatedAt: now })
         .where(eq(schema.sourceConnections.id, conn.id));
     }
 
@@ -116,31 +184,53 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
     connectionStatus = "connected";
 
     // Fire the GitHub initial-sync Inngest event when activating a GitHub
-    // connection — after the transaction commits, never inside it.
-    // deliveryConfig carries { selectedRepos, installationId, owner, repo, defaultBranch }
-    // set by the connection wizard before calling connection.mappings.set.
-    if (conn.connectorId === "github") {
-      const dc = conn.deliveryConfig as Record<string, unknown> | null;
-      const owner = typeof dc?.["owner"] === "string" ? dc["owner"] : "";
-      const repo = typeof dc?.["repo"] === "string" ? dc["repo"] : "";
-      const defaultBranch =
-        typeof dc?.["defaultBranch"] === "string" ? dc["defaultBranch"] : "main";
+    // connection — after the transaction commits, never inside it. One sync is
+    // queued per selected repo. defaultBranch is passed as a hint; the sync still
+    // resolves the repo's real default branch from the GitHub API.
+    if (isGithub) {
+      const dc = ((mergedDeliveryConfig ?? conn.deliveryConfig) as Record<string, unknown> | null) ?? {};
 
-      await eventClient.send({
-        name: "ingestion/github.initial-sync",
-        data: {
-          connectionId: conn.id,
-          orgId: ctx.orgId,
-          workspaceId: ctx.workspaceId,
-          owner,
-          repo,
-          defaultBranch,
-        },
-      });
+      // Repos to sync: the multi-repo wizard selection, else a single
+      // request/stored owner/repo (legacy + OXA-1806).
+      let repos = parseRepos(input.selectedRepos);
+      if (repos.length === 0) {
+        const owner = input.owner ?? (typeof dc["owner"] === "string" ? (dc["owner"] as string) : "");
+        const repo = input.repo ?? (typeof dc["repo"] === "string" ? (dc["repo"] as string) : "");
+        if (owner && repo) repos = [{ owner, repo }];
+      }
+
+      const defaultBranch =
+        input.defaultBranch ??
+        (typeof dc["defaultBranch"] === "string" ? (dc["defaultBranch"] as string) : "main");
+      const syncDepthDays =
+        input.syncDepthDays ??
+        (typeof dc["syncDepthDays"] === "number" ? (dc["syncDepthDays"] as number) : 90);
+
+      if (repos.length === 0) {
+        logger.warn(
+          { connectionId: conn.id, orgId: ctx.orgId },
+          "connection.mappings.set: GitHub connection activated with no repos selected — no sync queued",
+        );
+      }
+
+      for (const { owner, repo } of repos) {
+        await eventClient.send({
+          name: "ingestion/github.initial-sync",
+          data: {
+            connectionId: conn.id,
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+            owner,
+            repo,
+            defaultBranch,
+            syncDepthDays,
+          },
+        });
+      }
 
       logger.info(
-        { connectionId: conn.id, owner, repo, orgId: ctx.orgId },
-        "connection.mappings.set: fired ingestion/github.initial-sync",
+        { connectionId: conn.id, repoCount: repos.length, orgId: ctx.orgId },
+        "connection.mappings.set: queued ingestion/github.initial-sync per repo",
       );
     }
   }

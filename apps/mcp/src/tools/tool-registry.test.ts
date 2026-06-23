@@ -191,6 +191,7 @@ import { metadata as skillVersionActivateMetadata } from "./skill.version.activa
 import { metadata as skillEditMetadata } from "./skill.edit";
 import { metadata as skillExportMetadata } from "./skill.export";
 import { metadata as skillMetricsReadMetadata } from "./skill.metrics.read";
+import { metadata as skillAuthorMetadata } from "./skill.author";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -367,6 +368,7 @@ const allToolMetadata = [
   skillEditMetadata,
   skillExportMetadata,
   skillMetricsReadMetadata,
+  skillAuthorMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────

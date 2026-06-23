@@ -5,7 +5,7 @@ const BASE_INPUT = {
   orgName: "Acme Corp",
   amountCents: 4999,
   description: "500 credits top-up",
-  receiptUrl: "https://oxagen-v2-app.vercel.app/billing/receipts/r_123",
+  receiptUrl: "https://app.oxagen.sh/billing/receipts/r_123",
 };
 
 describe("paymentReceiptTemplate", () => {

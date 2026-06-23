@@ -38,6 +38,27 @@ export const connectionMappingsSet = registerCapability({
       .describe(
         "If true, sets connection status to active and queues initial sync after saving mappings",
       ),
+    // GitHub-specific delivery config fields. The wizard sends these so the
+    // handler can persist them into source_connections.deliveryConfig before
+    // firing the ingestion event. Zod strips unknown keys by default, so
+    // they must be declared here or they never reach the handler.
+    installationId: z.string().optional().describe("GitHub App installation ID"),
+    selectedRepos: z
+      .array(z.string())
+      .optional()
+      .describe("Fully-qualified repo names selected by the user (owner/repo)"),
+    syncDepthDays: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("How many days of git history to include in the initial sync"),
+    owner: z.string().optional().describe("GitHub org or user login (derived from selectedRepos[0])"),
+    repo: z.string().optional().describe("Repository name without owner (derived from selectedRepos[0])"),
+    defaultBranch: z
+      .string()
+      .optional()
+      .describe("Default branch of the primary repository (e.g. 'main')"),
   }),
   output: z.object({
     mappingsCreated: z.number(),

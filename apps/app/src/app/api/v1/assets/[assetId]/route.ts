@@ -41,10 +41,22 @@ export async function GET(
       err instanceof GeneratedAssetNotFoundError ||
       err instanceof GeneratedAssetForbiddenError
     ) {
-      // Both map to 404 — no leaking of asset existence via 403 vs 404.
+      // Both map to 404 — no leaking of asset existence via 403 vs 404. An
+      // absent / wrong-type id (e.g. an agent `agt_…` mistakenly used as an
+      // asset id) has no `generated_assets` row, so it lands here as a clean
+      // 404 — never an unhandled error and never the API's "Organization not
+      // found" JSON.
       return new Response("Not Found", { status: 404 });
     }
-    throw err;
+    // Any UNEXPECTED failure (storage outage, db error) is returned as a plain
+    // 500 — this route is consumed by <img src>/<a href>, so it must never
+    // bubble an unhandled throw (which could render a framework error page or a
+    // raw JSON body in place of the asset).
+    console.error("asset.serve route: unexpected error", {
+      assetId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return new Response("Internal Server Error", { status: 500 });
   }
 
   const headers: Record<string, string> = {

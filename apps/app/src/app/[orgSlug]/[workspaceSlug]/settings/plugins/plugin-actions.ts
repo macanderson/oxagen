@@ -118,11 +118,8 @@ export async function installPlugin(
       // template (idempotent on slug). The browse-row id carries the slug.
       const slug = parsed.data.catalogServerId ?? parsed.data.pluginId;
       if (!slug) return { ok: false, error: "skill slug is required" };
-      await invoke(
-        "skill.workspace.install",
-        { slug, workspace_id: ws.id },
-        ctx,
-        { surface: "agent" },
+      await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
+        invoke("skill.workspace.install", { slug, workspace_id: ws.id }, ctx, { surface: "agent" }),
       );
       const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
       revalidatePath(pluginsPath(routeCtx));
@@ -141,11 +138,8 @@ export async function installPlugin(
         };
       }
     }
-    const out = await invoke(
-      "plugin.org.install",
-      installInput,
-      ctx,
-      { surface: "agent" },
+    const out = await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
+      invoke("plugin.org.install", installInput, ctx, { surface: "agent" }),
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(pluginsPath(routeCtx));
@@ -194,23 +188,79 @@ export async function installBulkPlugin(
   const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
 
   try {
-    const result = (await invoke(
-      "plugin.org.install_bulk",
-      { items: parsed.data.items },
-      ctx,
-      { surface: "agent" },
-    )) as { installed: Array<{ pluginId: string | null; orgListingId: string | null; error: string | null }> };
+    // The marketplace sends each selected row as { catalogServerId, pluginType }
+    // only. plugin.org.install_bulk → installOne expects the SAME per-type shape
+    // the single-install action builds: agent_capability needs `pluginId`;
+    // mcp_server / integration / knowledge_source need `custom` (endpoint resolved
+    // from the workspace registries by name); agent_skill installs through a
+    // different contract entirely. Passing the raw rows made installOne throw
+    // "pluginId is required when pluginType is 'agent_capability'" on every item,
+    // so bulk install always failed. Normalise here, mirroring installPlugin.
+    const items = parsed.data.items;
+    const failures: string[] = [];
+    let attempted = 0;
 
-    // Inspect per-item results. The handler always returns HTTP 200; partial
-    // failures are embedded in the installed[] array rather than thrown.
-    const failures = result.installed
-      .filter((r) => r.error !== null)
-      .map((r) => r.error as string);
+    // agent_skill rows install a workspace-owned copy of the builtin template
+    // via skill.workspace.install — never plugin.org.install_bulk.
+    const skillItems = items.filter((i) => i.pluginType === "agent_skill");
+    for (const it of skillItems) {
+      attempted += 1;
+      const slug = it.catalogServerId ?? it.pluginId;
+      if (!slug) {
+        failures.push("skill slug is required");
+        continue;
+      }
+      try {
+        await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
+          invoke("skill.workspace.install", { slug, workspace_id: ws.id }, ctx, { surface: "agent" }),
+        );
+      } catch (e) {
+        failures.push(e instanceof Error ? e.message : "skill install failed");
+      }
+    }
+
+    // Map the remaining rows to the plugin.org.install_bulk input shape.
+    const bulkItems = items
+      .filter((i) => i.pluginType !== "agent_skill")
+      .map((it) => {
+        const rowId = it.pluginId ?? it.catalogServerId;
+        const pluginType = it.pluginType === "capability" ? "agent_capability" : it.pluginType;
+        if (pluginType === "agent_capability") {
+          return { pluginType, pluginId: rowId };
+        }
+        // mcp_server / integration / knowledge_source: pass the row id as the
+        // custom server name with an empty endpoint so installOne resolves the
+        // real endpoint from the workspace's enabled registries.
+        return {
+          pluginType,
+          ...(rowId
+            ? {
+                custom: {
+                  name: rowId,
+                  endpointUrl: "",
+                  transport: "streamable-http",
+                  authKind: "none" as const,
+                },
+              }
+            : {}),
+        };
+      });
+
+    if (bulkItems.length > 0) {
+      attempted += bulkItems.length;
+      const result = (await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
+        invoke("plugin.org.install_bulk", { items: bulkItems }, ctx, { surface: "agent" }),
+      )) as { installed: Array<{ pluginId: string | null; orgListingId: string | null; error: string | null }> };
+
+      // The handler always returns HTTP 200; partial failures are embedded in the
+      // installed[] array rather than thrown.
+      failures.push(...result.installed.filter((r) => r.error !== null).map((r) => r.error as string));
+    }
 
     if (failures.length > 0) {
       return {
         ok: false,
-        error: `${failures.length} of ${result.installed.length} plugin(s) failed to install`,
+        error: `${failures.length} of ${attempted} plugin(s) failed to install`,
         failures,
       };
     }

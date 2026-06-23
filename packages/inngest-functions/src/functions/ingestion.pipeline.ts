@@ -30,7 +30,7 @@ export const [ingestionPipeline] = createFunction(
   {
     id: "ingestion-pipeline",
     retries: 3,
-    concurrency: { limit: 8, key: "event.data.orgId" },
+    concurrency: { limit: 5, key: "event.data.orgId" },
   },
   { event: "ingestion/entity.received" },
   async ({ event, step }) => {
@@ -155,21 +155,31 @@ export const [ingestionPipeline] = createFunction(
     });
 
     // ── Step 4: Upsert entity node in Neo4j ──────────────────────────────────
+    // Each Inngest step.run is memoized and re-executed as its own (potentially
+    // separate) invocation, so the tenant scope opened in steps 1–3 does NOT
+    // carry into this step — it must open its own. upsertEntityNode →
+    // scopedSession() requires an active scope or it throws
+    // TenantScopeError(no_tenant_scope), which broke all ingestion in prod
+    // (OXA-1790). Steps 2 and 3 already wrap; steps 4 and 5 must too.
     await step.run("upsert-node", () =>
-      upsertEntityNode(mutation, orgId),
+      runInTenantScope({ orgId, workspaceId }, () => upsertEntityNode(mutation, orgId)),
     );
 
     // ── Step 5: Embed ─────────────────────────────────────────────────────────
+    // renderEntityText is pure (no DB/Neo4j); only the embedEntity write —
+    // embedEntity → upsertEmbedding → scopedSession() — needs the scope.
     const text = renderEntityText(mutation.entityType, mutation.displayName, mutation.properties);
     await step.run("embed", () =>
-      embedEntity({
-        nodeId: dedup.principalNodeId,
-        entityType: mutation.entityType,
-        text,
-        workspaceId: mutation.workspaceId,
-        orgId: mutation.orgId,
-        connectionId: mutation.connectionId,
-      }),
+      runInTenantScope({ orgId, workspaceId }, () =>
+        embedEntity({
+          nodeId: dedup.principalNodeId,
+          entityType: mutation.entityType,
+          text,
+          workspaceId: mutation.workspaceId,
+          orgId: mutation.orgId,
+          connectionId: mutation.connectionId,
+        }),
+      ),
     );
 
     // ── Step 6: Fire async downstream events ─────────────────────────────────

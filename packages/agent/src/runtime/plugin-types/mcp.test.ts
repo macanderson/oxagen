@@ -6,12 +6,13 @@
  * right SQL condition is (or isn't) passed depending on serverAllowlist state.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { z } from "zod";
 
 // ── drizzle-orm spy ─────────────────────────────────────────────────────────
 // Wrap `inArray` so we can assert it was called with the right publicIds.
 vi.mock("drizzle-orm", async (importOriginal) => {
   const real = await importOriginal<typeof import("drizzle-orm")>();
-  return { ...real, inArray: vi.fn(real.inArray) };
+  return { ...real, inArray: vi.fn(real.inArray), eq: vi.fn(real.eq) };
 });
 
 // ── @oxagen/database mock ───────────────────────────────────────────────────
@@ -81,8 +82,11 @@ vi.mock("../../dispatch/mcp-client", () => ({
 }));
 
 // ── Imports ─────────────────────────────────────────────────────────────────
-import { inArray } from "drizzle-orm";
+import { inArray, eq } from "drizzle-orm";
 import { contributeMcpTools } from "./mcp";
+// connectMcp / materializeMcpTools are mocked above; import them so vi.mocked()
+// can spy on call counts in the healthStatus describe block below.
+import { connectMcp, materializeMcpTools } from "../../dispatch/mcp-client";
 
 const CTX = {
   orgId: "ten_1",
@@ -119,6 +123,24 @@ const SERVER_B = {
   authConfig: {},
   orgListingId: "lst_b",
   healthStatus: "healthy",
+  authKind: "none",
+};
+
+// A server whose healthStatus is "unknown" — this is the common state for
+// secret-auth servers that have never gone through the OAuth probe path.
+// contributeMcpTools must include it so that secret-auth MCP servers are not
+// silently excluded from the agent's tool list.
+const SERVER_UNKNOWN_HEALTH = {
+  id: "srv_u",
+  publicId: "mcs_u",
+  name: "Server Unknown",
+  orgId: "ten_1",
+  workspaceId: "ws_1",
+  endpointUrl: "https://u.mcp.example.com",
+  authStrategy: "none",
+  authConfig: {},
+  orgListingId: "lst_u",
+  healthStatus: "unknown",
   authKind: "none",
 };
 
@@ -165,5 +187,101 @@ describe("contributeMcpTools — serverAllowlist filtering", () => {
     expect(result).toEqual([]);
     // DB should never be queried when workspaceId is falsy.
     expect(inArray).not.toHaveBeenCalled();
+  });
+});
+
+// ── healthStatus: "unknown" coverage ─────────────────────────────────────────
+//
+// Regression guard: the query must use inArray(healthStatus, ["healthy","unknown"]).
+// A server with healthStatus "unknown" is the typical state for secret-auth MCP
+// servers (they never go through the OAuth health-probe). If the filter is ever
+// narrowed back to only ["healthy"], these tests will fail, surfacing the regression.
+//
+// connectMcp / materializeMcpTools are already mocked at the top of this file via
+// vi.mock("../../dispatch/mcp-client"); re-importing them here to access the vi.mocked
+// wrappers in the new describe block.
+
+describe("contributeMcpTools — healthStatus: 'unknown' servers are included", () => {
+  beforeEach(() => {
+    dbMocks.rowsByTable.clear();
+    vi.mocked(inArray).mockClear();
+    vi.mocked(eq).mockClear();
+    vi.mocked(connectMcp).mockClear();
+    vi.mocked(materializeMcpTools).mockClear();
+  });
+
+  it("includes a server with healthStatus 'unknown' in the query result set", async () => {
+    // Place only the "unknown" server in the mock DB result.
+    // If the contributor filters it out post-query, no tools will be
+    // attempted; if the healthStatus inArray condition itself excluded it,
+    // the DB mock returns an empty array instead — but since the mock always
+    // returns whatever we put in rowsByTable, we verify the call chain:
+    // connectMcp must be called, meaning the server was not filtered out.
+    vi.mocked(materializeMcpTools).mockResolvedValueOnce({
+      "test-tool": {
+        inputSchema: z.object({}),
+        description: "a tool from an unknown-health server",
+        execute: vi.fn(async () => "ok"),
+      },
+    });
+
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [SERVER_UNKNOWN_HEALTH]);
+
+    const tools = await contributeMcpTools(CTX, undefined);
+
+    // connectMcp must have been called (server was not skipped).
+    expect(connectMcp).toHaveBeenCalledTimes(1);
+    // The tool contributed by the server surfaces in the output.
+    expect(tools).toHaveLength(1);
+    expect(tools[0]?.externalServerId).toBe("srv_u");
+  });
+
+  it("accepts both 'healthy' and 'unknown' healthStatus values (or(eq,eq))", async () => {
+    // The query uses or(eq(healthStatus,'healthy'), eq(healthStatus,'unknown'))
+    // rather than inArray (which is reserved for the serverAllowlist filter).
+    // Verify the eq spy was called for the healthStatus column with BOTH accepted
+    // values, so a future narrowing back to only 'healthy' breaks this test.
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, []);
+
+    await contributeMcpTools(CTX, undefined);
+
+    // Cast the eq spy calls to loose tuples: eq's real signature types the column
+    // arg as a drizzle Column, but the mock schema uses string sentinels.
+    const eqCalls = vi.mocked(eq).mock.calls as unknown as Array<[unknown, unknown]>;
+    const healthStatusValues = eqCalls
+      .filter(([col]) => col === dbMocks.schema.mcpServers.healthStatus)
+      .map(([, val]) => val);
+    expect(healthStatusValues).toContain("healthy");
+    expect(healthStatusValues).toContain("unknown");
+  });
+
+  it("mirrors the healthy-server path: an 'unknown'-health server contributes tools identically", async () => {
+    // SERVER_A (healthy) and SERVER_UNKNOWN_HEALTH (unknown) are both in the
+    // result set. Both must produce a connectMcp call and contribute tools.
+    vi.mocked(materializeMcpTools)
+      .mockResolvedValueOnce({
+        "tool-from-healthy": {
+          inputSchema: z.object({}),
+          description: "from healthy server",
+          execute: vi.fn(async () => "a"),
+        },
+      })
+      .mockResolvedValueOnce({
+        "tool-from-unknown": {
+          inputSchema: z.object({}),
+          description: "from unknown-health server",
+          execute: vi.fn(async () => "b"),
+        },
+      });
+
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [SERVER_A, SERVER_UNKNOWN_HEALTH]);
+
+    const tools = await contributeMcpTools(CTX, undefined);
+
+    expect(connectMcp).toHaveBeenCalledTimes(2);
+    expect(tools).toHaveLength(2);
+
+    const serverIds = tools.map((t) => t.externalServerId).sort();
+    expect(serverIds).toEqual(["srv_a", "srv_u"].sort());
   });
 });

@@ -1,0 +1,116 @@
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+
+metadata:
+  id: google-calendar
+  displayName: Google Calendar
+  description: Sync events and calendars from Google Calendar.
+  icon: google-calendar
+  category: productivity
+  version: "1.0.0"
+  schemaVersion: "1"
+  publisher:
+    name: Oxagen
+    verified: true
+
+auth:
+  schemes:
+    - id: oauth2
+      kind: oauth2_authorization_code
+      displayName: Connect with Google
+      scopes:
+        - https://www.googleapis.com/auth/calendar.readonly
+
+config:
+  fields:
+    - key: calendarIds
+      label: Calendar IDs (optional)
+      widget: tag-input
+      description: Restrict sync to specific calendar IDs (e.g. primary, team@company.com). Leave empty to sync all accessible calendars.
+      validation:
+        itemPattern: "^[a-zA-Z0-9_.+@\\-]+$"
+
+    - key: includeDeclinedEvents
+      label: Include Declined Events
+      widget: checkbox
+      description: Sync events the user has declined. Disable to sync only accepted and tentative events.
+      defaultValue: false
+
+    - key: syncMonthsBack
+      label: Initial Sync Depth (months)
+      widget: number
+      description: How many months of past events to pull on the first sync.
+      defaultValue: 3
+      validation:
+        min: 1
+        max: 24
+
+recordTypes:
+  selectionMode: multi
+  defaultAll: false
+  items:
+    - id: event
+      displayName: Events
+      description: Calendar events with title, time, attendees, location, and organizer.
+      defaultEnabled: true
+
+    - id: calendar
+      displayName: Calendars
+      description: Calendar metadata including name, time zone, and access role.
+      defaultEnabled: false
+
+filters:
+  pathFilters:
+    enabled: false
+  labelFilters:
+    enabled: false
+
+inference:
+  enabled: true
+  defaultEnabled: false
+  toggleLabel: Enable AI relationship inference
+  perRecordType:
+    event: true
+    calendar: false
+  confidenceThreshold:
+    defaultValue: 0.75
+    min: 0.50
+    max: 0.99
+  ontologyPrompt: |
+    Infer team collaboration patterns and project context from Google Calendar events.
+
+    Look for:
+    - Event titles referencing product features, sprints, or project codenames
+    - Recurring events that indicate team rituals (standup, retro, planning)
+    - Attendee lists correlating to known team or squad membership
+    - Events with external participants suggesting customer or partner meetings
+
+    Create edges:
+    - CalendarEvent -[discusses]-> Feature (when event title references a product feature)
+    - CalendarEvent -[involves]-> Person (link attendee emails to known person nodes)
+    - CalendarEvent -[part_of]-> Sprint (when event title includes sprint name or cycle reference)
+
+    Cross-source links:
+    - If an attendee email matches a known GitHub or Linear user, create an ALIAS_OF edge
+    - If event description references a Linear ticket (OXA-123) or GitHub PR, link to that node
+
+sync:
+  delivery: webhook
+  pollingSupported: true
+  polling:
+    defaultIntervalSeconds: 900
+    minIntervalSeconds: 300
+    maxIntervalSeconds: 86400
+
+defaultFieldMappings:
+  event:
+    summary: title
+    description: description
+    organizer: author
+    start: createdAt
+    end: updatedAt
+    htmlLink: sourceUrl
+  calendar:
+    summary: title
+    description: description
+    timeZone: timezone

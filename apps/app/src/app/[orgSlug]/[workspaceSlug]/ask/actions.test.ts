@@ -10,10 +10,11 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockGetSession, mockInvoke, parseState } = vi.hoisted(() => ({
+const { mockGetSession, mockInvoke, parseState, mockLoggerError } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockInvoke: vi.fn(),
   parseState: { ok: true as boolean, message: "Invalid task id" },
+  mockLoggerError: vi.fn(),
 }));
 
 vi.mock("@oxagen/handlers/register", () => ({}));
@@ -27,7 +28,6 @@ vi.mock("@oxagen/database", () => ({
   schema: {},
 }));
 
-const mockLoggerError = vi.fn();
 vi.mock("@oxagen/handlers/logger", () => ({
   logger: { error: mockLoggerError, warn: vi.fn(), info: vi.fn() },
 }));

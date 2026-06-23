@@ -10,7 +10,7 @@ You need an API key with the scopes matching the tools you want to use. Create o
 The MCP server endpoint is:
 
 ```
-https://oxagen-v2-mcp.vercel.app/mcp
+https://mcp.oxagen.sh/mcp
 ```
 
 Transport: **streamable HTTP** (the current MCP protocol standard).
@@ -29,7 +29,7 @@ Add to your `~/.claude/mcp.json` (or the project-level `.claude/mcp.json`):
 {
   "mcpServers": {
     "oxagen": {
-      "url": "https://oxagen-v2-mcp.vercel.app/mcp",
+      "url": "https://mcp.oxagen.sh/mcp",
       "headers": {
         "Authorization": "Bearer oxk_live_…"
       }
@@ -46,7 +46,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 {
   "mcpServers": {
     "oxagen": {
-      "url": "https://oxagen-v2-mcp.vercel.app/mcp",
+      "url": "https://mcp.oxagen.sh/mcp",
       "headers": {
         "Authorization": "Bearer oxk_live_…"
       }
@@ -64,7 +64,7 @@ Add to Cursor settings → MCP servers:
 ```json
 {
   "oxagen": {
-    "url": "https://oxagen-v2-mcp.vercel.app/mcp",
+    "url": "https://mcp.oxagen.sh/mcp",
     "headers": {
       "Authorization": "Bearer oxk_live_…"
     }
@@ -80,7 +80,7 @@ Add to your VS Code `settings.json`:
 {
   "mcp.servers": {
     "oxagen": {
-      "url": "https://oxagen-v2-mcp.vercel.app/mcp",
+      "url": "https://mcp.oxagen.sh/mcp",
       "headers": {
         "Authorization": "Bearer oxk_live_…"
       }
@@ -96,7 +96,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 const transport = new StreamableHTTPClientTransport(
-  new URL("https://oxagen-v2-mcp.vercel.app/mcp"),
+  new URL("https://mcp.oxagen.sh/mcp"),
   {
     headers: {
       Authorization: `Bearer ${process.env.OXAGEN_API_KEY}`,

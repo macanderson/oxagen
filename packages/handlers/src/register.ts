@@ -386,6 +386,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./skill.metrics.read")).skillMetricsReadHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "skill.author",
+    async () =>
+      (await import("./skill.author")).skillAuthorHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "agent.execution.record",
     async () =>
       (await import("./agent.execution.record")).agentExecutionRecordHandler as CapabilityHandlerFn,
@@ -580,5 +585,15 @@ registerHandlersOnce("@oxagen/handlers", () => {
   registerHandler(
     "audit.log.query",
     async () => (await import("./audit.log.query")).auditLogQueryHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "command.menu.search",
+    async () =>
+      (await import("./command.menu.search")).commandMenuSearchHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "command.menu.suggest",
+    async () =>
+      (await import("./command.menu.suggest")).commandMenuSuggestHandler as CapabilityHandlerFn,
   );
 });

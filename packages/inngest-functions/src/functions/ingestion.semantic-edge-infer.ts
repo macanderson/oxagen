@@ -60,7 +60,7 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
   {
     id: "ingestion-semantic-edge-infer",
     retries: 2,
-    concurrency: { limit: 8, key: "event.data.orgId" },
+    concurrency: { limit: 5, key: "event.data.orgId" },
   },
   { event: "ingestion/entity.infer" },
   async ({ event, step }) => {
@@ -84,7 +84,10 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
           orgId,
           workspaceId,
           surface: "ingestion",
-          messageId: `semantic-edge-infer:${nodeId}`,
+          // No initiating message for ingestion-time semantic-edge inference.
+          // Must be a UUID or null — `semantic-edge-infer:<nodeId>` flooded
+          // token_usage's UUID column and broke the uuid credit charge.
+          messageId: null,
         },
       }),
     );

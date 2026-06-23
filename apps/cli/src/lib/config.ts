@@ -54,5 +54,5 @@ export function getWorkspaceId(): string | undefined {
 }
 
 export function getApiUrl(): string {
-  return process.env["OXAGEN_API_URL"] ?? readConfig().apiUrl ?? "https://oxagen-v2-api.vercel.app";
+  return process.env["OXAGEN_API_URL"] ?? readConfig().apiUrl ?? "https://api.oxagen.sh";
 }

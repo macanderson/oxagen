@@ -288,7 +288,7 @@ Source: [Vercel xmcp docs](https://vercel.com/docs/frameworks/backend/xmcp) · [
 
 **Runtime**: Vercel Functions using **Fluid compute** (the default for xmcp on Vercel). Not Edge Runtime — xmcp targets Node.js, not the Edge runtime, which is important because `@oxagen/database` (Postgres/Drizzle) and `@oxagen/agent` are not Edge-compatible.
 
-**HTTP Transport on Vercel**: xmcp uses **Streamable HTTP** transport (current MCP spec). The `/mcp` endpoint (configurable in `xmcp.config.ts` via `http.endpoint`) becomes a Vercel Function. MCP clients connect to `https://oxagen-v2-mcp.vercel.app/mcp`.
+**HTTP Transport on Vercel**: xmcp uses **Streamable HTTP** transport (current MCP spec). The `/mcp` endpoint (configurable in `xmcp.config.ts` via `http.endpoint`) becomes a Vercel Function. MCP clients connect to `https://mcp.oxagen.sh/mcp`.
 
 **pnpm monorepo note**: Vercel's `pnpm install` at the root of `apps/mcp` (with `Root Directory = apps/mcp`) will hoist workspace packages from `packages/*`. This works if the Vercel project's Root Directory is set to `apps/mcp` AND the workspace root `pnpm-workspace.yaml` and `pnpm-lock.yaml` are accessible. In practice, Vercel runs install at the repo root when it detects a monorepo (pnpm-workspace.yaml at root), so the workspace deps resolve correctly. No special `vercel.json` overrides are needed.
 
@@ -360,7 +360,7 @@ xmcp uses rspack (not tsc) for compilation, so `tsconfig.json` only needs to sat
 17. Verify preview URL:
     - `GET https://<preview>.vercel.app/mcp` → should return MCP server info (or redirect to MCP handshake — behavior depends on xmcp version).
     - Connect MCP Inspector to the preview URL, invoke a read-only tool.
-18. Merge to main → production deploy to `https://oxagen-v2-mcp.vercel.app`.
+18. Merge to main → production deploy to `https://mcp.oxagen.sh`.
 
 ---
 

@@ -22,7 +22,6 @@ describe("tenant policy manifest", () => {
     expect(tables).toContain("agent.skills");
     expect(tables).toContain("agent.agents");
     expect(tables).toContain("chat.conversations");
-    expect(tables).toContain("graph.outbox");
   });
 
   it("covers the playbook domain added by the 2026-06-11 rebuild (OXA-1700)", () => {
@@ -119,7 +118,8 @@ describe("tenant policy manifest", () => {
     expect(tables).not.toContain("mcp.catalog_servers"); // removed 2026-06-17
     expect(tables).not.toContain("plugin.org_denylist"); // removed 2026-06-17
     expect(tables).not.toContain("ingestion.connector_schemas");
-    expect(tables).not.toContain("graph.projection_checkpoints");
+    expect(tables).not.toContain("graph.projection_checkpoints"); // dropped 2026-06-21
+    expect(tables).not.toContain("graph.outbox"); // dropped 2026-06-21 (was policied; table removed)
   });
 
   it("has no duplicate table entries", () => {
@@ -128,12 +128,24 @@ describe("tenant policy manifest", () => {
     expect(unique.size).toBe(tables.length);
   });
 
-  it("covers exactly the 65 policied tables of the v0.4.x schema", () => {
+  it("covers exactly the 66 policied tables of the v0.4.x schema", () => {
     // Intentional ratchet: adding a tenant-owned table means updating BOTH the
     // manifest and this count (and regenerating the Atlas RLS migration).
     // 62 = 63 baseline − plugin.org_denylist (removed 2026-06-17 workspace-scoping rebuild).
     // 65 = 62 + mcp.consents + mcp.tool_snapshots + security.mcp_server_changes
     //      (OXA-816 / OXA-820 external-MCP consent + snapshot tables).
-    expect(POLICY_MANIFEST.length).toBe(65);
+    // 64 = 65 − graph.outbox (dropped 20260622000000_drop_graph_outbox.sql; the
+    //      outbox/projection_checkpoints tables were never wired).
+    // 66 = 64 + org.org_slug_history + workspace.workspace_slug_history
+    //      (OXA-1779 slug-rename redirect history).
+    expect(POLICY_MANIFEST.length).toBe(66);
+  });
+
+  it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {
+    const find = (t: string) => POLICY_MANIFEST.find((e) => e.table === t);
+    // org_slug_history has org_id only (no workspace_id) → org_only.
+    expect(find("org.org_slug_history")?.policyClass).toBe("org_only");
+    // workspace_slug_history has both org_id + workspace_id NN → standard.
+    expect(find("workspace.workspace_slug_history")?.policyClass).toBe("standard");
   });
 });

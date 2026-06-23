@@ -376,7 +376,7 @@ authentication — closing privilege-escalation and cross-org IDOR.</div>
 <h3>Registered webhook endpoint <span class="pill ok">live</span></h3>
 <table>
 <tr><td>Endpoint id</td><td><code>we_1Tf7k6BqX8HwIjwRYZjdSzU8</code></td></tr>
-<tr><td>URL</td><td><code>https://oxagen-v2-api.vercel.app/webhooks/stripe</code></td></tr>
+<tr><td>URL</td><td><code>https://api.oxagen.sh/webhooks/stripe</code></td></tr>
 <tr><td>API version</td><td><code>2025-02-24.acacia</code> (matches the SDK)</td></tr>
 <tr><td>Enabled events</td><td>20 — the full list in the Webhooks table above</td></tr>
 <tr><td>Signing secret</td><td>Stored as <code>STRIPE_WEBHOOK_SECRET</code> (Vercel <em>sensitive</em>) on <code>oxagen-v2-api</code> + <code>oxagen-v2-app</code>, production target.</td></tr>
@@ -392,7 +392,7 @@ intentionally unset (tax dark).</p>
 <h3>Recreate the webhook endpoint (e.g. for a new account)</h3>
 <pre><span class="c"># enabled_events must list EVERY event the dispatcher handles (see Webhooks table)</span>
 curl https://api.stripe.com/v1/webhook_endpoints -u "$STRIPE_SECRET_KEY:" \
-  -d url=https://oxagen-v2-api.vercel.app/webhooks/stripe \
+  -d url=https://api.oxagen.sh/webhooks/stripe \
   -d api_version=2025-02-24.acacia \
   -d "enabled_events[]=customer.subscription.created" \
   <span class="c"># … through charge.refunded …</span>

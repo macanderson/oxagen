@@ -68,18 +68,10 @@ vi.mock("@/components/ui/button", () => ({
 
 // Auto-stub every icon: a hardcoded subset breaks whenever a component in the
 // render tree adds an icon (this test previously failed on a missing `Minus`).
-vi.mock("lucide-react", () => new Proxy(
-  {},
-  {
-    get: (_target, prop) => {
-      if (prop === "__esModule") return true;
-      if (typeof prop === "symbol") return undefined;
-      const Icon = () => <svg aria-hidden="true" data-icon={String(prop)} />;
-      Icon.displayName = `MockIcon(${String(prop)})`;
-      return Icon;
-    },
-  },
-));
+vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
+  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
+  has: (_t, prop) => prop !== "then",
+}));
 
 import { TriggersPanel } from "./triggers-panel";
 import type { AgentTriggerListOutput } from "../agent-actions";

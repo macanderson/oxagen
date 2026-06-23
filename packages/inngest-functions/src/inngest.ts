@@ -301,6 +301,21 @@ type Events = {
       toolCalls?: Array<{ toolName: string; toolType: string }>;
     };
   };
+
+  // ── Web-search → knowledge-graph ingestion ──────────────────────────────────
+  // Fired by the web.search handler after every search that returns hits (chat
+  // agent, research swarm, API, MCP, CLI — all route through the same handler).
+  // web.search.ingest-graph picks this up and feeds the hits to graph.ingest so
+  // the entities a search uncovers become workspace knowledge-graph nodes/edges.
+  "web/search.completed": {
+    data: {
+      orgId: string;
+      workspaceId: string;
+      userId?: string | null;
+      query: string;
+      results: Array<{ title?: string; url?: string; content?: string }>;
+    };
+  };
 };
 
 // OXA-1349: INNGEST keys are optional in the base schema (not every service

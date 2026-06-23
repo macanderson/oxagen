@@ -13,6 +13,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 import { withTenantDb } from "@oxagen/database";
 import { agentSubagentAggregateHandler } from "./agent.subagent.aggregate";
+import { FanoutNotFoundError } from "./subagent-errors";
 
 // ---- Test helpers -----------------------------------------------------------
 
@@ -228,6 +229,31 @@ describe("agent.subagent.aggregate handler", () => {
     expect(result.aggregatedData).toBeNull();
   });
 
+  it("reports a LIVE completedChildren from runs, not the stale fanout column (progress-bar regression)", async () => {
+    // The executor only writes fanout.completedChildren in its final `finalize`
+    // step, so an in-flight fanout's column is 0 even as children finish.
+    // research.swarm.status surfaces completedChildren as the progress numerator,
+    // so reading the stale column pinned the bar at 0% until the swarm ended.
+    // The aggregate must report the live count derived from the run rows.
+    setupMocks(
+      fanout({ status: "running", completedChildren: 0, totalChildren: 3, createdAt: new Date() }),
+      [
+        run("sar_1", { a: 1 }),
+        run("sar_2", { b: 2 }),
+        run("sar_3", null, { status: "running", outputPayload: null, completedAt: null }),
+      ],
+    );
+
+    const result = await agentSubagentAggregateHandler(
+      { fanoutId: "fan_1", timeoutMs: 30 * 60 * 1000 },
+      CTX,
+    );
+
+    expect(result.status).toBe("running");
+    expect(result.completedChildren).toBe(2); // live (2 of 3), despite fanout column = 0
+    expect(result.totalChildren).toBe(3);
+  });
+
   it("reports 'timed_out' for an in-progress fanout older than the snapshot window", async () => {
     setupMocks(
       fanout({ status: "running", completedChildren: 1, createdAt: new Date("2020-01-01T00:00:00Z") }),
@@ -243,11 +269,64 @@ describe("agent.subagent.aggregate handler", () => {
     expect(result.aggregatedData).toBeNull();
   });
 
-  it("throws when fanout is not found", async () => {
+  it("reports the true terminal status for a fanout stuck at 'pending' when every child is terminal", async () => {
+    // Regression: when the executor never ran (e.g. the dispatch event was
+    // emitted but no Inngest function picked it up), the fan-out row stays
+    // `pending`. With every child already failed (dispatch emit marked them so),
+    // a recent createdAt + large window must NOT report a misleading `running` —
+    // it must surface `failed` immediately so the swarm fails loudly.
+    setupMocks(
+      fanout({ status: "pending", completedChildren: 0, createdAt: new Date() }),
+      [
+        run("sar_1", null, { status: "failed", errorReason: "dispatch emit failed: x", outputPayload: null }),
+        run("sar_2", null, { status: "failed", errorReason: "dispatch emit failed: x", outputPayload: null }),
+      ],
+    );
+
+    const result = await agentSubagentAggregateHandler(
+      { fanoutId: "fan_1", timeoutMs: 30 * 60 * 1000 },
+      CTX,
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.firstError).toBe("dispatch emit failed: x");
+  });
+
+  it("reports 'completed' for a fanout stuck at 'pending' when every child already completed", async () => {
+    // The executor finished the children but never advanced the fan-out row
+    // (e.g. it crashed before mark-complete). All children completed → completed.
+    setupMocks(
+      fanout({ status: "pending", completedChildren: 2, createdAt: new Date() }),
+      [run("sar_1", { a: 1 }), run("sar_2", { b: 2 })],
+    );
+
+    const result = await agentSubagentAggregateHandler(
+      { fanoutId: "fan_1", timeoutMs: 30 * 60 * 1000 },
+      CTX,
+    );
+
+    expect(result.status).toBe("completed");
+    expect(result.aggregatedData).toMatchObject({ a: 1, b: 2 });
+  });
+
+  it("throws a typed FanoutNotFoundError when the fanout is not found", async () => {
     setupMocks(null, []);
 
-    await expect(
-      agentSubagentAggregateHandler({ fanoutId: "fan_missing", timeoutMs: 100 }, CTX),
-    ).rejects.toThrow("Fanout fan_missing not found");
+    // Typed error (not a plain Error) so surfaces can map an unknown / cross-tenant
+    // fanout id to a 404 via instanceof rather than a brittle message regex.
+    // Capture the rejection ONCE (setupMocks arms the query mock for a single
+    // call) and assert both the type and the message off the same error.
+    const err = await agentSubagentAggregateHandler(
+      { fanoutId: "fan_missing", timeoutMs: 100 },
+      CTX,
+    ).then(
+      () => {
+        throw new Error("expected handler to reject");
+      },
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(FanoutNotFoundError);
+    expect((err as FanoutNotFoundError).code).toBe("fanout_not_found");
+    expect((err as Error).message).toBe("Fanout fan_missing not found");
   });
 });

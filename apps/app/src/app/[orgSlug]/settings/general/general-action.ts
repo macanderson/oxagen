@@ -116,9 +116,14 @@ export async function updateOrgGeneralAction(
         }
       }
 
-      // 6. Persist the update.
-      await withTenantDb((tx) =>
-        tx
+      // 6. Persist the update — and, when the slug changed, capture a history
+      //    row in the SAME withTenantDb transaction so the redirect record can
+      //    never lag the rename (spec §4.5; OXA-1779). Drizzle's `transaction`
+      //    semantics give us atomicity for free: either both writes commit, or
+      //    neither does. If we split this across two withTenantDb calls a crash
+      //    between them would leave the old URL 404-ing.
+      await withTenantDb(async (tx) => {
+        await tx
           .update(schema.organizations)
           .set({
             name,
@@ -126,8 +131,16 @@ export async function updateOrgGeneralAction(
             avatarUrl: avatarUrl || null,
             updatedByUserId: session.user.id,
           })
-          .where(eq(schema.organizations.id, org.id)),
-      );
+          .where(eq(schema.organizations.id, org.id));
+
+        if (slug !== orgSlug) {
+          await tx.insert(schema.orgSlugHistory).values({
+            orgId: org.id,
+            oldSlug: orgSlug,
+            newSlug: slug,
+          });
+        }
+      });
 
       // 7. Invalidate the settings page so a refresh shows the latest values.
       //    Revalidate both the old and (if changed) the new slug path.

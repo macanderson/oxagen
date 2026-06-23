@@ -165,10 +165,13 @@ const CLIENT_SECRET = "test_github_client_secret";
 const APP_URL = "https://app.test.oxagen.ai";
 const API_URL = "https://api.test.oxagen.ai";
 
+const APP_SLUG = "oxagen-test";
+
 const DEFAULT_ENV = {
   GITHUB_APP_CLIENT_ID: CLIENT_ID,
   GITHUB_APP_CLIENT_SECRET: CLIENT_SECRET,
   GITHUB_APP_INSTALL_STATE_SECRET: STATE_SECRET,
+  GITHUB_APP_SLUG: APP_SLUG,
   NEXT_PUBLIC_APP_URL: APP_URL,
   NEXT_PUBLIC_API_URL: API_URL,
 };
@@ -290,10 +293,10 @@ describe("GET /connections/github/auth-url", () => {
     expect(body.error).toContain("connectionId");
   });
 
-  it("returns 503 when GITHUB_APP_CLIENT_ID is missing", async () => {
+  it("returns 503 when GITHUB_APP_SLUG is missing", async () => {
     mocks.requireEnv.mockReturnValue({
       ...DEFAULT_ENV,
-      GITHUB_APP_CLIENT_ID: undefined,
+      GITHUB_APP_SLUG: undefined,
     });
     const res = await authGet(`${BASE}/auth-url?connectionId=con_ABC`);
     expect(res.status).toBe(503);
@@ -310,21 +313,21 @@ describe("GET /connections/github/auth-url", () => {
     expect(res.status).toBe(503);
   });
 
-  it("returns authUrl with correct client_id and scope on happy path", async () => {
+  it("returns the GitHub App installations/new URL with the app slug + state", async () => {
     const res = await authGet(`${BASE}/auth-url?connectionId=con_ABC`);
     expect(res.status).toBe(200);
     const body = await res.json() as { authUrl: string };
-    expect(body.authUrl).toContain("github.com/login/oauth/authorize");
-    expect(body.authUrl).toContain(`client_id=${encodeURIComponent(CLIENT_ID)}`);
-    expect(body.authUrl).toContain("scope=repo");
+    // Install flow (not bare OAuth authorize) so a first-time user installs the
+    // App AND GitHub round-trips our signed state back to the callback.
+    expect(body.authUrl).toContain(`github.com/apps/${APP_SLUG}/installations/new`);
+    expect(body.authUrl).not.toContain("login/oauth/authorize");
+    expect(body.authUrl).toContain("state=");
   });
 
-  it("includes redirect_uri pointing to /oauth/github/callback", async () => {
+  it("does NOT pass redirect_uri (the App's configured Callback URL is used)", async () => {
     const res = await authGet(`${BASE}/auth-url?connectionId=con_ABC`);
     const body = await res.json() as { authUrl: string };
-    const url = new URL(body.authUrl);
-    const redirectUri = url.searchParams.get("redirect_uri") ?? decodeURIComponent(url.href.match(/redirect_uri=([^&]+)/)?.[1] ?? "");
-    expect(redirectUri).toContain("/oauth/github/callback");
+    expect(body.authUrl).not.toContain("redirect_uri");
   });
 
   it("state encodes the connectionId + orgId + workspaceId as base64url JSON", async () => {
@@ -385,18 +388,41 @@ describe("GET /oauth/github/callback", () => {
     return app.fetch(makeRequest(`${CALLBACK_PATH}?${qs}`));
   }
 
-  it("returns 400 when code is missing", async () => {
-    const res = await makeCallbackReq({ state: buildValidState() });
+  it("code is optional: a valid-state install with no code still completes (no token exchange)", async () => {
+    // With "user authorization during installation" off, the install redirect
+    // carries installation_id + setup_action + state but no code. The callback
+    // must still record the install and redirect, not 400.
+    // withSystemDb order (no code): conn lookup, UPDATE, org slug, ws slug.
+    mocks.withSystemDb
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ id: "uuid-conn-1" }]) as TxLike))
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([]) as TxLike))
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ slug: "my-org" }]) as TxLike))
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ slug: "my-ws" }]) as TxLike));
+
+    const res = await makeCallbackReq({
+      state: buildValidState(),
+      installation_id: "142003699",
+      setup_action: "install",
+    });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location") ?? "").toContain("/knowledge/sources");
+    // No code → no token exchange / encryption.
+    expect(mocks.encrypt).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when state is missing and there are no install params", async () => {
+    const res = await makeCallbackReq({ code: "test-code" });
     expect(res.status).toBe(400);
     const body = await res.json() as { error: string };
     expect(body.error).toContain("Missing");
   });
 
-  it("returns 400 when state is missing", async () => {
-    const res = await makeCallbackReq({ code: "test-code" });
-    expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
-    expect(body.error).toContain("Missing");
+  it("redirects (not 400) for a GitHub-initiated install that has no signed state", async () => {
+    // User installs the App straight from GitHub's app page → installation_id +
+    // setup_action but no state. Must redirect into the app, not 400.
+    const res = await makeCallbackReq({ installation_id: "142003699", setup_action: "install" });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location") ?? "").toContain("github_installed=1");
   });
 
   it("returns 503 when GitHub App env vars are missing", async () => {
@@ -439,7 +465,11 @@ describe("GET /oauth/github/callback", () => {
   });
 
   it("returns 502 when GitHub token exchange API returns non-200", async () => {
-    // First call (GitHub user: will not be reached) — we need token exchange to fail
+    // Connection lookup runs first now, so it must find the row for the flow to
+    // reach token exchange.
+    mocks.withSystemDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+      fn(makeTxChain([{ id: "uuid-conn-1" }]) as TxLike),
+    );
     mocks.fetch.mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) });
 
     const res = await makeCallbackReq({ code: "code", state: buildValidState() });
@@ -449,6 +479,9 @@ describe("GET /oauth/github/callback", () => {
   });
 
   it("returns 400 when GitHub token exchange returns error field", async () => {
+    mocks.withSystemDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+      fn(makeTxChain([{ id: "uuid-conn-1" }]) as TxLike),
+    );
     mocks.fetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -513,29 +546,56 @@ describe("GET /oauth/github/callback", () => {
   });
 
   it("returns 404 when source_connection is not found", async () => {
-    mocks.fetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        access_token: "ghs_abc123",
-        token_type: "Bearer",
-        scope: "repo",
-      }),
-    });
-    // GitHub user
-    mocks.fetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ id: 12345, login: "user" }),
-    });
-
-    // source_connections lookup returns empty
+    // Connection lookup runs FIRST now, so an empty result 404s before any token
+    // exchange — no fetch should occur.
     mocks.withSystemDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
       fn(makeTxChain([]) as TxLike),
     );
 
     const res = await makeCallbackReq({ code: "auth-code", state: buildValidState() });
     expect(res.status).toBe(404);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it("merges the installation_id into deliveryConfig without clobbering existing keys", async () => {
+    mocks.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: "ghs_x", token_type: "Bearer", scope: "repo" }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ id: 99, login: "u" }) });
+
+    // Capture the UPDATE .set() payload to assert the merge.
+    let updateSetArg: Record<string, unknown> | undefined;
+    const updateChain = {
+      set: vi.fn((arg: Record<string, unknown>) => {
+        updateSetArg = arg;
+        return updateChain;
+      }),
+      where: vi.fn().mockResolvedValue(undefined),
+    };
+    const updateTx = { ...makeTxChain([]), update: vi.fn().mockReturnValue(updateChain) };
+
+    // Order: conn lookup (has existing config), oauth upsert, UPDATE (captured), org slug, ws slug.
+    mocks.withSystemDb
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([{ id: "uuid-conn-1", deliveryConfig: { syncDepthDays: 90 } }]) as TxLike),
+      )
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ id: "oauth-1" }]) as TxLike))
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(updateTx as unknown as TxLike))
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ slug: "o" }]) as TxLike))
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ slug: "w" }]) as TxLike));
+
+    const res = await makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState(),
+      installation_id: "142003699",
+      setup_action: "install",
+    });
+    expect(res.status).toBe(302);
+    expect(updateSetArg?.deliveryConfig).toEqual({ syncDepthDays: 90, installationId: "142003699" });
+    expect(updateSetArg?.oauthAccountId).toBe("oauth-1");
   });
 });
 
@@ -580,6 +640,8 @@ describe("GET /connections/github/installations", () => {
   });
 
   it("returns installations list on happy path", async () => {
+    // Unset GITHUB_APP_SLUG so manageUrl derives from the installation's app_slug.
+    mocks.requireEnv.mockReturnValue({ ...DEFAULT_ENV, GITHUB_APP_SLUG: undefined });
     mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
       fn(makeTxChain([{ accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
     );
@@ -591,6 +653,8 @@ describe("GET /connections/github/installations", () => {
           id: 111,
           account: { login: "acme-org", type: "Organization", avatar_url: "https://avatars.gh.com/111" },
           repository_selection: "all",
+          html_url: "https://github.com/organizations/acme-org/settings/installations/111",
+          app_slug: "oxagen",
         },
         {
           id: 222,
@@ -611,13 +675,69 @@ describe("GET /connections/github/installations", () => {
         accountType: string;
         repositorySelection: string;
         avatarUrl: string;
+        htmlUrl: string | null;
       }>;
+      manageUrl: string;
     };
     expect(body.installations).toHaveLength(2);
     expect(body.installations[0]!.accountLogin).toBe("acme-org");
     expect(body.installations[0]!.accountType).toBe("Organization");
     expect(body.installations[0]!.repositorySelection).toBe("all");
+    // Per-installation management page is mapped through; null when GitHub omits it.
+    expect(body.installations[0]!.htmlUrl).toBe(
+      "https://github.com/organizations/acme-org/settings/installations/111",
+    );
     expect(body.installations[1]!.id).toBe(222);
+    expect(body.installations[1]!.htmlUrl).toBeNull();
+    // manageUrl derives from the installation's app_slug when GITHUB_APP_SLUG is unset.
+    expect(body.manageUrl).toBe("https://github.com/apps/oxagen/installations/new");
+  });
+
+  it("manageUrl uses GITHUB_APP_SLUG when configured", async () => {
+    mocks.requireEnv.mockReturnValue({ ...DEFAULT_ENV, GITHUB_APP_SLUG: "oxagen-prod" });
+    mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+      fn(makeTxChain([{ accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+    );
+    mocks.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        total_count: 1,
+        installations: [
+          {
+            id: 111,
+            account: { login: "acme-org", type: "Organization", avatar_url: "https://gh.com" },
+            repository_selection: "all",
+            app_slug: "from-installation",
+          },
+        ],
+      }),
+    });
+
+    const res = await authGet(`${BASE}/installations?connectionId=con_ABC`);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { manageUrl: string };
+    // Configured slug wins over the installation-derived slug.
+    expect(body.manageUrl).toBe("https://github.com/apps/oxagen-prod/installations/new");
+  });
+
+  it("manageUrl falls back to GitHub settings when no slug is available", async () => {
+    mocks.requireEnv.mockReturnValue({ ...DEFAULT_ENV, GITHUB_APP_SLUG: undefined });
+    mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+      fn(makeTxChain([{ accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+    );
+    // Zero installations and no GITHUB_APP_SLUG → generic settings page.
+    mocks.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ total_count: 0, installations: [] }),
+    });
+
+    const res = await authGet(`${BASE}/installations?connectionId=con_ABC`);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { manageUrl: string; installations: unknown[] };
+    expect(body.installations).toHaveLength(0);
+    expect(body.manageUrl).toBe("https://github.com/settings/installations");
   });
 
   it("paginates when total_count exceeds 100", async () => {

@@ -35,6 +35,7 @@ env:
   GITHUB_APP_CLIENT_ID: Iv1.cie2e0000000000
   GITHUB_APP_CLIENT_SECRET: ci-github-app-secret
   GITHUB_APP_INSTALL_STATE_SECRET: ci-github-install-state-secret
+  GITHUB_APP_SLUG: ci-github-app-slug
   GITHUB_LOGIN_CLIENT_ID: ci-github-login-client-id
   GITHUB_LOGIN_CLIENT_SECRET: ci-github-login-client-secret
   GOOGLE_LOGIN_CLIENT_ID: ci-google-login-client-id
@@ -377,7 +378,9 @@ jobs:
       group: db-migrate-${{ github.event_name != 'pull_request' && 'production' || 'preview' }}
       cancel-in-progress: false
     env:
-      DB_MIGRATE_STORES: clickhouse,neo4j
+      # DB_MIGRATE_STORES is set per-store on the "Migrate ClickHouse and Neo4j"
+      # step from the change-detection output — only the stores whose migration
+      # sources changed are migrated.
       DATABASE_URL: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_DATABASE_URL || secrets.PREVIEW_DATABASE_URL }}
       NEO4J_URI: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_NEO4J_URI || secrets.PREVIEW_NEO4J_URI }}
       NEO4J_USERNAME: ${{ github.event_name != 'pull_request' && secrets.PRODUCTION_NEO4J_USERNAME || secrets.PREVIEW_NEO4J_USERNAME }}
@@ -399,8 +402,16 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_BEFORE: ${{ github.event.before }}
         run: |
+          # Per-store change detection. Each datastore only migrates when its own
+          # migration sources change, so a Postgres-only PR never reaches across to
+          # the live preview/prod ClickHouse or Neo4j instances (and vice versa).
+          # A manual workflow_dispatch run forces all stores (full prod migrate).
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "pg=true"
+              echo "stores=clickhouse,neo4j"
+              echo "any=true"
+            } >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [ "$EVENT_NAME" = "pull_request" ]; then
@@ -412,48 +423,60 @@ jobs:
               BASE="$(git rev-parse HEAD~1)"
             fi
           fi
-          if git diff --name-only "${BASE}"...HEAD | grep -qE '^packages/database/atlas/migrations/|^packages/telemetry/|^packages/ontology/src/.*\.cypher$'; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
+          DIFF="$(git diff --name-only "${BASE}"...HEAD)"
+          PG=false; CH=false; NEO=false
+          echo "$DIFF" | grep -qE '^packages/database/atlas/migrations/' && PG=true
+          echo "$DIFF" | grep -qE '^packages/telemetry/' && CH=true
+          echo "$DIFF" | grep -qE '^packages/ontology/src/.*\.cypher$' && NEO=true
+          STORES=""
+          [ "$CH" = "true" ] && STORES="clickhouse"
+          [ "$NEO" = "true" ] && STORES="${STORES:+$STORES,}neo4j"
+          ANY=false
+          { [ "$PG" = "true" ] || [ "$CH" = "true" ] || [ "$NEO" = "true" ]; } && ANY=true
+          {
+            echo "pg=$PG"
+            echo "stores=$STORES"
+            echo "any=$ANY"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: pnpm/action-setup@v5
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.any == 'true'
       - uses: actions/setup-node@v5
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.any == 'true'
         with:
           node-version: "24"
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.any == 'true'
 
       - name: Install Atlas CLI
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.pg == 'true'
         run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
 
       - name: Bootstrap Postgres extensions (idempotent)
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.pg == 'true'
         run: |
           sudo apt-get install -y postgresql-client
           psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
       - name: Migrate Postgres (Atlas)
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.pg == 'true'
         working-directory: packages/database
         run: atlas migrate apply --env ci
 
       - name: Migrate ClickHouse and Neo4j
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.stores != ''
+        env:
+          DB_MIGRATE_STORES: ${{ steps.changes.outputs.stores }}
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
 
       - name: Seed platform defaults (idempotent)
-        if: steps.changes.outputs.changed == 'true'
+        if: steps.changes.outputs.pg == 'true'
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
 
       - name: Sync billing plans to Stripe (workflow_dispatch only)
-        if: steps.changes.outputs.changed == 'true' && github.event_name == 'workflow_dispatch'
+        if: steps.changes.outputs.pg == 'true' && github.event_name == 'workflow_dispatch'
         run: pnpm billing:stripe-sync --apply
 
   deploy:

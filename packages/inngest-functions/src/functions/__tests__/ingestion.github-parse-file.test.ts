@@ -158,7 +158,7 @@ describe("ingestion.github-parse-file Inngest function", () => {
     expect(opts).toMatchObject({
       id: "ingestion-github-parse-file",
       retries: 3,
-      concurrency: expect.objectContaining({ limit: 20, key: "event.data.orgId" }),
+      concurrency: expect.objectContaining({ limit: 5, key: "event.data.orgId" }),
     });
     expect(trigger).toMatchObject({ event: "ingestion/github.parse-file" });
   });

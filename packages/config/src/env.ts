@@ -38,11 +38,27 @@ export const baseEnvSchema = z.object({
   // GitHub App OAuth — used for the data-connector OAuth flow (repo ingestion).
   // Separate from GITHUB_DATA_CLIENT_* (data client is for future use).
   // CLIENT_ID/SECRET identify the GitHub App itself; WEBHOOK_SECRET validates
-  // inbound webhook payloads; INSTALL_STATE_SECRET signs the OAuth state param.
+  // inbound webhook payloads; INSTALL_STATE_SECRET signs the OAuth state param;
+  // SLUG is the app's public path segment, used to deep-link users to GitHub's
+  // install/configure page so they can add or remove orgs and repos.
   GITHUB_APP_CLIENT_ID: z.string().optional(),
   GITHUB_APP_CLIENT_SECRET: z.string().optional(),
   GITHUB_APP_WEBHOOK_SECRET: z.string().optional(),
   GITHUB_APP_INSTALL_STATE_SECRET: z.string().optional(),
+  GITHUB_APP_SLUG: z.string().optional(),
+
+  // Per-provider OAuth DATA client credentials for token refresh (ingestion cron).
+  // All are optional in the base schema — the ingestion.oauth-refresh function
+  // checks them at runtime and skips the provider with a clear log if absent.
+  // Slack token rotation MUST be enabled in the Slack app settings.
+  SLACK_DATA_CLIENT_ID: z.string().optional(),
+  SLACK_DATA_CLIENT_SECRET: z.string().optional(),
+  ZOOM_DATA_CLIENT_ID: z.string().optional(),
+  ZOOM_DATA_CLIENT_SECRET: z.string().optional(),
+  SALESFORCE_DATA_CLIENT_ID: z.string().optional(),
+  SALESFORCE_DATA_CLIENT_SECRET: z.string().optional(),
+  MICROSOFT_DATA_CLIENT_ID: z.string().optional(),
+  MICROSOFT_DATA_CLIENT_SECRET: z.string().optional(),
 
   STRIPE_SECRET_KEY: z.string().startsWith("sk_"),
   STRIPE_PUBLISHABLE_KEY: z.string().startsWith("pk_"),

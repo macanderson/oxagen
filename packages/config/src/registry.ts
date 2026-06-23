@@ -70,9 +70,9 @@ export interface EnvVarMeta {
 const ALL: EnvName[] = ["development", "preview", "production"];
 const DEPLOYED: EnvName[] = ["preview", "production"];
 
-const APP_PROD_URL = "https://oxagen-v2-app.vercel.app";
-const API_PROD_URL = "https://oxagen-v2-api.vercel.app";
-const MCP_PROD_URL = "https://oxagen-v2-mcp.vercel.app";
+const APP_PROD_URL = "https://app.oxagen.sh";
+const API_PROD_URL = "https://api.oxagen.sh";
+const MCP_PROD_URL = "https://mcp.oxagen.sh";
 
 /**
  * The registry. Ordered for `.env.example` layout. `services`/`requiredIn`
@@ -231,6 +231,33 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
+  OAUTH_PROXY_PRODUCTION_URL: {
+    group: "Better Auth",
+    description:
+      "Canonical production origin the shared social-login OAuth app's callback is " +
+      "registered against (OAuth Proxy productionURL). Preview deployments relay social " +
+      "login through this origin. Defaults to the production app URL when unset.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: APP_PROD_URL, production: APP_PROD_URL },
+  },
+  OAUTH_PROXY_SECRET: {
+    group: "Better Auth",
+    description:
+      "Dedicated secret the OAuth Proxy uses to encrypt/decrypt the relay payload " +
+      "between production and preview deployments. MUST be set to the SAME value in " +
+      "production AND preview for preview social login to work (production alone only " +
+      "passes through). Kept separate from BETTER_AUTH_SECRET to limit blast radius. " +
+      "Generate with `openssl rand -base64 32`.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
 
   // ── OAuth providers ─────────────────────────────────────────────────────────
   // Google OAuth is split into a LOGIN client (minimal openid/profile/email,
@@ -343,6 +370,95 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   GITHUB_APP_INSTALL_STATE_SECRET: {
     group: "github",
     description: "HMAC secret used to sign the OAuth state parameter for GitHub App installs.",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  GITHUB_APP_SLUG: {
+    group: "github",
+    description:
+      "GitHub App public slug (the path segment in https://github.com/apps/<slug>). Used to deep-link users to GitHub's install/configure page so they can add or remove orgs and repos. Optional — when unset the connection dialog derives the slug from an existing installation.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
+  // ── Ingestion OAuth DATA client credentials ──────────────────────────────────
+  // Per-provider OAuth client pairs used exclusively by the ingestion
+  // oauth-refresh Inngest cron (packages/inngest-functions).  All are optional —
+  // the cron skips a provider with a clear log when the env is absent.
+  // Slack: token rotation MUST be enabled in the Slack app settings before
+  // deploying SLACK_DATA_CLIENT_* (without it Slack rejects the refresh request).
+  SLACK_DATA_CLIENT_ID: {
+    group: "Ingestion",
+    description: "Slack DATA OAuth client id for token refresh (ingestion cron). Token rotation must be enabled in the Slack app.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  SLACK_DATA_CLIENT_SECRET: {
+    group: "Ingestion",
+    description: "Slack DATA OAuth client secret for token refresh (ingestion cron).",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  ZOOM_DATA_CLIENT_ID: {
+    group: "Ingestion",
+    description: "Zoom DATA OAuth client id for token refresh (ingestion cron). Zoom rotates the refresh token on each use.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  ZOOM_DATA_CLIENT_SECRET: {
+    group: "Ingestion",
+    description: "Zoom DATA OAuth client secret for token refresh (ingestion cron).",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  SALESFORCE_DATA_CLIENT_ID: {
+    group: "Ingestion",
+    description: "Salesforce DATA OAuth client id for token refresh (ingestion cron).",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  SALESFORCE_DATA_CLIENT_SECRET: {
+    group: "Ingestion",
+    description: "Salesforce DATA OAuth client secret for token refresh (ingestion cron).",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  MICROSOFT_DATA_CLIENT_ID: {
+    group: "Ingestion",
+    description: "Microsoft DATA OAuth client id for token refresh (ingestion cron; MS Graph offline_access).",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  MICROSOFT_DATA_CLIENT_SECRET: {
+    group: "Ingestion",
+    description: "Microsoft DATA OAuth client secret for token refresh (ingestion cron).",
     secret: true,
     clientExposed: false,
     services: ["api"],
@@ -681,7 +797,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp", "website", "admin"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { "*": "noreply@notifications.oxagen.ai" },
+    staticValue: { "*": "noreply@notifications.oxagen.sh" },
   },
   SMTP_FROM_NAME: {
     group: "Email",
@@ -1049,7 +1165,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { development: "http://localhost:4000", production: "https://oxagen-v2-api.vercel.app" },
+    staticValue: { development: "http://localhost:4000", production: "https://api.oxagen.sh" },
   },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",

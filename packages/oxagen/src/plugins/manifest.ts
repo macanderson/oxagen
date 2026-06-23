@@ -77,6 +77,13 @@ export const oxagenPluginManifestSchema = z.object({
   icon: z.string().optional(),
 
   /**
+   * Hex accent color paired with `icon` for the marketplace card. Used by the
+   * UI to tint the CapabilityIcon per the SHARED ICON DATA CONTRACT. Optional.
+   * Example: "#6366f1".
+   */
+  color: z.string().optional(),
+
+  /**
    * The capability contract names claimed by this plugin. At least one is
    * required — zero-contract plugins are not valid capability packs. The
    * registry additionally validates that no contract is claimed by more than

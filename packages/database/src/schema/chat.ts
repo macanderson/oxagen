@@ -62,6 +62,11 @@ export const messages = chatSchema.table(
     // Spec §6.9: tree traversal needs (conversation_id, parent_message_id)
     // for fast walk-from-leaf-to-root reconstruction.
     conversationParentIdx: index("messages_conversation_parent_idx").on(t.conversationId, t.parentMessageId),
+    // The chat history loader filters conversation_id (+ tenant) and ORDER BYs
+    // created_at DESC (chat.stream route, conversation-page). The parent index
+    // above serves the equality but forces an in-memory sort on created_at;
+    // this composite serves the equality + sort in one scan.
+    conversationCreatedIdx: index("messages_conversation_created_idx").on(t.conversationId, t.createdAt),
     orgIdx: index("messages_org_idx").on(t.orgId, t.workspaceId),
   }),
 );

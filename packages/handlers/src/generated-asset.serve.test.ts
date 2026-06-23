@@ -105,6 +105,19 @@ describe("serveGeneratedAsset", () => {
     expect(mocks.storageGet).not.toHaveBeenCalled();
   });
 
+  // Regression — a WRONG-TYPE id (an agent public id `agt_…` mistakenly used as
+  // an asset id) has no matching `generated_assets` row, so it must surface as a
+  // clean GeneratedAssetNotFoundError (→ 404 at the route), never an unhandled
+  // error. The route would otherwise have surfaced the API's raw
+  // "Organization not found" JSON to the consuming <img>/<a>.
+  it("404s (clean NotFound) for an agent-prefixed id with no asset row", async () => {
+    mocks.dbSelect.mockReturnValueOnce(makeSelectBuilder([]));
+    await expect(
+      serveGeneratedAsset("agt_ccbpt7mffmqwbtbg1z1sfg", appPrincipal()),
+    ).rejects.toBeInstanceOf(GeneratedAssetNotFoundError);
+    expect(mocks.storageGet).not.toHaveBeenCalled();
+  });
+
   it("404s when the asset is not ready (pending render)", async () => {
     mocks.dbSelect.mockReturnValueOnce(makeSelectBuilder([asset({ status: "pending" })]));
     await expect(serveGeneratedAsset("gen_T1", apiPrincipal())).rejects.toBeInstanceOf(

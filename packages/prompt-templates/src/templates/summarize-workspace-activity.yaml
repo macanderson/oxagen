@@ -1,0 +1,17 @@
+id: summarize-workspace-activity
+title: Summarize this workspace's recent activity
+description: A digest of what happened in this workspace over the past 24 hours.
+category: analyze
+tags: [workspace, activity, summary, digest]
+applicableTo:
+  - routePattern: /{org}/{ws}
+  - routePattern: /{org}/{ws}/ask
+autoSubmit: true
+variables: []
+body: |
+  Give me a digest of this workspace's activity in the past 24 hours. Include:
+  - Runs completed (successful and failed)
+  - Triggers that fired
+  - Automation changes made
+  - Any alerts or anomalies worth my attention
+  Highlight anything that needs action from me.

@@ -12,6 +12,10 @@ import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { getSessionOrRedirect } from "@/lib/session";
 import { bootstrapOrgIAM } from "@oxagen/handlers/iam-provision";
+import { bootstrapWorkspaceAgents } from "@oxagen/handlers/workspace-agents";
+import { seedWorkspaceDefaultRegistrySystem } from "@oxagen/handlers/workspace-registry-seed";
+import { seedWorkspaceDefaultCapabilitiesSystem } from "@oxagen/handlers/workspace-capability-seed";
+import { seedWorkspaceDefaultSkillsSystem } from "@oxagen/handlers/skill-workspace-seed";
 
 // An avatar URL we already own — served from our Vercel Blob store. Such URLs
 // (produced by /api/v1/upload/avatar) are persisted as-is; no re-ingest needed.
@@ -222,6 +226,15 @@ export async function createOrgAction(
         tx,
       });
 
+      // Bootstrap the built-in qa-chat agent atomically with workspace creation
+      // so the workspace is immediately usable from the ask/chat surface.
+      await bootstrapWorkspaceAgents({
+        workspaceId: workspace.id,
+        orgId: tenant.id,
+        userId: session.user.id,
+        tx,
+      });
+
       // Insert billing profile when billing email or any address field is present.
       if (billingProfile) {
         await tx.insert(schema.orgBillingProfiles).values({
@@ -232,7 +245,7 @@ export async function createOrgAction(
         });
       }
 
-      return { orgId: tenant.id, orgSlug: tenant.slug, workspaceSlug: workspace.slug };
+      return { orgId: tenant.id, orgSlug: tenant.slug, workspaceId: workspace.id, workspaceSlug: workspace.slug };
     });
 
     // Grant the non-expiring Free signup credits ($5) outside the org
@@ -242,6 +255,34 @@ export async function createOrgAction(
       await grantFreeCredits(result.orgId);
     } catch (grantErr) {
       logger.error({ err: grantErr, orgId: result.orgId }, "[onboarding] grantFreeCredits failed");
+    }
+
+    // Seed the default MCP registry, capability packs, and builtin skills
+    // outside the transaction (fire-and-log): a seed failure must NOT roll
+    // back the org/workspace that was just created.
+    try {
+      await seedWorkspaceDefaultRegistrySystem({ orgId: result.orgId, workspaceId: result.workspaceId });
+    } catch (seedErr) {
+      logger.error(
+        { err: seedErr, orgId: result.orgId, workspaceId: result.workspaceId },
+        "[onboarding] seedWorkspaceDefaultRegistrySystem failed — org/workspace created; seed is recoverable via db:backfill-workspace-seeds",
+      );
+    }
+    try {
+      await seedWorkspaceDefaultCapabilitiesSystem({ orgId: result.orgId, workspaceId: result.workspaceId });
+    } catch (seedErr) {
+      logger.error(
+        { err: seedErr, orgId: result.orgId, workspaceId: result.workspaceId },
+        "[onboarding] seedWorkspaceDefaultCapabilitiesSystem failed — org/workspace created; seed is recoverable via db:backfill-workspace-seeds",
+      );
+    }
+    try {
+      await seedWorkspaceDefaultSkillsSystem({ orgId: result.orgId, workspaceId: result.workspaceId });
+    } catch (seedErr) {
+      logger.error(
+        { err: seedErr, orgId: result.orgId, workspaceId: result.workspaceId },
+        "[onboarding] seedWorkspaceDefaultSkillsSystem failed — org/workspace created; seed is recoverable via db:backfill-workspace-seeds",
+      );
     }
 
     return { ok: true, orgSlug: result.orgSlug, workspaceSlug: result.workspaceSlug };

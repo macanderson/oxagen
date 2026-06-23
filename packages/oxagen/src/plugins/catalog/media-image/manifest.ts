@@ -10,7 +10,8 @@ export const mediaImageManifest: OxagenPluginManifest = {
   tier: "free",
   visibility: "ga",
   category: "media",
-  icon: "image",
+  icon: "image-plus",
+  color: "#6366f1",
   contracts: ["image.generate", "image.create", "image.analyze", "image.list"],
   scopes: [],
 };

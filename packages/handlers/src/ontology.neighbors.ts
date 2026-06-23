@@ -66,7 +66,9 @@ export const ontologyNeighborsHandler: CapabilityHandler<typeof ontologyNeighbor
             : "";
 
       // Fetch one extra row beyond the cap so we can flag truncation honestly.
-      const fetchLimit = input.limit + 1;
+      // BigInt forces the driver to send INTEGER on the Bolt wire — a plain JS
+      // number would be serialised as Float and Neo4j rejects it for LIMIT.
+      const fetchLimit = BigInt(input.limit + 1);
       const result = await session.run(
         `MATCH (n:KnowledgeNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
          MATCH (n)-[r]-(m:KnowledgeNode)

@@ -37,7 +37,7 @@ export const [ingestionGithubInferFeatures] = createFunction(
   {
     id: "ingestion-github-infer-features",
     retries: 2,
-    concurrency: { limit: 10, key: "event.data.orgId" },
+    concurrency: { limit: 5, key: "event.data.orgId" },
   },
   { event: "ingestion/github.infer-features" },
   async ({ event, step }) => {
@@ -73,7 +73,10 @@ export const [ingestionGithubInferFeatures] = createFunction(
           orgId,
           workspaceId,
           surface: "ingestion",
-          messageId: `feat-infer:${fileNaturalKey}`,
+          // No initiating message for ingestion feature-inference. Must be a
+          // UUID or null — `feat-infer:<key>` flooded token_usage's UUID column
+          // (code-27 parse errors) and broke the uuid credit charge.
+          messageId: null,
         },
       }),
     );

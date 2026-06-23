@@ -45,8 +45,52 @@ export interface AskDrawerProps {
 }
 
 export function AskDrawer({ orgSlug, availableWorkspaces, modelConfig }: AskDrawerProps) {
-  const { isAskOpen, closeAsk, fillableForm, entity, _setIsFilling, _setFillResult } = usePageContext();
+  const { isAskOpen, closeAsk, fillableForm, entity, _setIsFilling, _setFillResult, pendingAskText, _clearPendingAskText } = usePageContext();
   const pathname = usePathname();
+
+  // Ref to the inner content div so we can find the composer textarea when
+  // the drawer opens with pendingAskText from a Quick Action invocation.
+  const contentRef = React.useRef<HTMLDivElement>(null);
+
+  // When the drawer opens and there is pending text from a Quick Action,
+  // programmatically seed the composer's textarea and clear the pending state.
+  // We use a short rAF delay to ensure the Suspense-lazy ChatShellClient has
+  // mounted its textarea before we try to populate it.
+  React.useEffect(() => {
+    if (!isAskOpen || !pendingAskText) return;
+    const text = pendingAskText;
+    _clearPendingAskText();
+    let rafId: number;
+    // Poll for the textarea in the Sheet — it's lazy-loaded via Suspense.
+    let attempts = 0;
+    function tryPopulate() {
+      attempts += 1;
+      const textarea = contentRef.current?.querySelector<HTMLTextAreaElement>("textarea[name='content']");
+      if (textarea) {
+        // Use the React-synthetic native value setter so controlled components
+        // that intercept the native `input` event are notified.
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+          window.HTMLTextAreaElement.prototype,
+          "value",
+        )?.set;
+        if (nativeInputValueSetter) {
+          nativeInputValueSetter.call(textarea, text);
+          textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        } else {
+          textarea.value = text;
+        }
+        textarea.focus();
+      } else if (attempts < 20) {
+        // Retry up to ~1s (50ms × 20) waiting for Suspense to resolve.
+        rafId = window.setTimeout(tryPopulate, 50);
+      }
+    }
+    rafId = requestAnimationFrame(() => { rafId = window.setTimeout(tryPopulate, 50); });
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearTimeout(rafId);
+    };
+  }, [isAskOpen, pendingAskText, _clearPendingAskText]);
 
   // Build the serialisable page context from the current PageContext state at
   // send-time. Captured once per send so the closure always has latest values.
@@ -154,7 +198,7 @@ export function AskDrawer({ orgSlug, availableWorkspaces, modelConfig }: AskDraw
           </div>
         </SheetHeader>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+        <div ref={contentRef} className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
           <AskDrawerChatShell
             orgSlug={orgSlug}
             workspaceSlug={activeWorkspaceSlug}

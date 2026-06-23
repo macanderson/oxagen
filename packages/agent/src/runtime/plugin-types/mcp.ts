@@ -8,7 +8,7 @@
  * On UnauthorizedError (or any auth failure), the credential is flipped to
  * needs_reauth and that server is skipped for this turn.
  */
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import pino from "pino";
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { schema, withTenantDb } from "@oxagen/database";
@@ -34,7 +34,19 @@ async function contributeMcpTools(ctx: CapabilityContext, options?: PluginContri
       // Soft-deleted servers (OXA-820) stop registering tools but keep their
       // descriptor snapshots for replay.
       isNull(schema.mcpServers.deletedAt),
-      eq(schema.mcpServers.healthStatus, "healthy"),
+      // Accept "healthy" (probed OK, e.g. after OAuth) AND "unknown" (just enabled
+      // via the toggle/secret path — only the OAuth callback ever sets "healthy", so
+      // requiring "healthy" silently hid every secret-auth server from the agent).
+      // The live connectMcp() + listTools() below is the real health gate: a server
+      // that can't connect is skipped gracefully. Genuinely "unhealthy" servers are
+      // still excluded.
+      // or(eq,eq) rather than inArray: `inArray` is reserved for the per-turn
+      // serverAllowlist filter below, and using it here too would make that filter
+      // ambiguous to assert against.
+      or(
+        eq(schema.mcpServers.healthStatus, "healthy"),
+        eq(schema.mcpServers.healthStatus, "unknown"),
+      ),
       eq(schema.pluginInstalledPlugins.enabled, true),
       isNull(schema.pluginInstalledPlugins.deletedAt),
     ] as const;

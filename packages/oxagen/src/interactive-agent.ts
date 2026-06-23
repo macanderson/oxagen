@@ -25,6 +25,22 @@ export const INTERACTIVE_AGENT_TYPE = "interactive_chat";
 export const INTERACTIVE_AGENT_DESCRIPTION =
   "Interactive question-answering agent grounded in the workspace knowledge graph. Backs the in-app Q&A surface and the MCP server.";
 
+/**
+ * True when an agent's `agentType` marks it as a product-managed (built-in)
+ * agent — currently the interactive `qa-chat` agent. Product-managed agents are
+ * bootstrapped into every workspace and are READ-ONLY to customers: they may be
+ * viewed but never edited, published, deployed, archived, or have their triggers
+ * changed. Enforced at the capability-handler layer (so the API, MCP, and app
+ * surfaces all honor it) and surfaced as `managed` on agent list/get outputs so
+ * the UI can render them clearly as non-configurable.
+ */
+export function isManagedAgentType(agentType: string): boolean {
+  return agentType === INTERACTIVE_AGENT_TYPE;
+}
+
+/** Stable error code thrown when a mutation targets a product-managed agent. */
+export const MANAGED_AGENT_READONLY_CODE = "agent_managed_read_only";
+
 /** The builtin skills the interactive agent loads as agentTools (type "skill").
  *  These mirror the slugs seeded by `pnpm db:seed-skills`. */
 export const INTERACTIVE_AGENT_SKILLS = [

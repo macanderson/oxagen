@@ -181,6 +181,9 @@ import { orgSettingsRead } from "./org.settings.read";
 import { orgSettingsWrite } from "./org.settings.write";
 import { workspaceSettingsRead } from "./workspace.settings.read";
 import { workspaceSettingsWrite } from "./workspace.settings.write";
+import { commandMenuSearch } from "./command.menu.search";
+import { commandMenuSuggest } from "./command.menu.suggest";
+import { skillAuthor } from "./skill.author";
 
 export {
   apiKeyCreate,
@@ -356,6 +359,7 @@ export {
   orgSettingsWrite,
   workspaceSettingsRead,
   workspaceSettingsWrite,
+  skillAuthor,
 };
 
 /**
@@ -540,4 +544,7 @@ export const contracts = [
   orgSettingsWrite,
   workspaceSettingsRead,
   workspaceSettingsWrite,
+  commandMenuSearch,
+  commandMenuSuggest,
+  skillAuthor,
 ] as const;

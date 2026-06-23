@@ -17,6 +17,7 @@
 
 import { randomBytes } from "node:crypto";
 import type { Page } from "@playwright/test";
+import { gotoStable } from "./nav";
 
 export interface FreshUser {
   email: string;
@@ -118,11 +119,13 @@ export async function signUpFreshUser(
     throw new Error(`signUpFreshUser: org creation failed — ${errText}`);
   }
 
-  // Navigate directly to the ask page — /{orgSlug}/default redirects to
-  // /{orgSlug}/default/ask via a server-side 307, which causes Playwright to
-  // throw "navigation interrupted by another navigation". Going straight to /ask
-  // avoids the interrupt entirely.
-  await page.goto(`/${orgSlug}/default/ask`);
+  // Navigate to the ask page. /{orgSlug}/default redirects to
+  // /{orgSlug}/default/ask (server-side 307), and the workspace shell can fire a
+  // further client redirect; under the Next dev server this races the default
+  // `waitUntil: "load"` and throws `net::ERR_ABORTED` / "interrupted by another
+  // navigation". gotoStable navigates with `waitUntil: "commit"` + retry so the
+  // commit is immune to a later redirect/abort and a cold compile is retried.
+  await gotoStable(page, `/${orgSlug}/default/ask`);
 
   // Verify auth gate passed.
   if (page.url().includes("/login")) {

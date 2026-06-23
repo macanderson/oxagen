@@ -1,4 +1,4 @@
-h1:s+VDlerQW4yfTryr85Lx4jJPD0OWMD1e2Tql/CJYge4=
+h1:MXDQRjLxfUbmWbDv5XupSu806VcVPOOctLjj15rbB9Q=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:rkdyIpu+hw+f+fGZHzpXyfm5feAL2GK9qitZROPXTpo=
@@ -15,3 +15,7 @@ h1:s+VDlerQW4yfTryr85Lx4jJPD0OWMD1e2Tql/CJYge4=
 20260619000000_fix_connection_delete_constraints.sql h1:sIHHXn916mtQEpMiIMEjw77SF2odUZYaIw2UW6vllL8=
 20260619043301_skills_active_version_and_usage.sql h1:jLkI+6hmLkQkP+5JqqkdMqUkuK/toIkMEVy5GN+Zwtk=
 20260619152223_external_mcp_consents_and_tool_snapshots.sql h1:n+DYF2Gu5hHubtQVMyuE6p6pnAv+AcRGuJOKXvwGhFE=
+20260621180000_slug_history_tables.sql h1:topJORpu598rF/+HYavi3pCLBt8JplM3TGviEssQ+MI=
+20260622000000_drop_graph_outbox.sql h1:kSIGVq8d0VXzysfQYbdfQXlKhd6RKRfqIveZ3nYbTH0=
+20260622010000_perf_indexes.sql h1:phErsgyXbc454APNVCGzBxvPTsNNcr+jjIxhhFg2Oks=
+20260622020000_role_check_constraints.sql h1:ExI2MjCxxOCGmpGw/U9LALLvehCroROU4ANZ44QnqAo=

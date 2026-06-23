@@ -1,0 +1,118 @@
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+
+metadata:
+  id: google-gmail
+  displayName: Gmail
+  description: Sync email threads and messages from Gmail.
+  icon: gmail
+  category: communication
+  version: "1.0.0"
+  schemaVersion: "1"
+  publisher:
+    name: Oxagen
+    verified: true
+
+auth:
+  schemes:
+    - id: oauth2
+      kind: oauth2_authorization_code
+      displayName: Connect with Google
+      scopes:
+        - https://www.googleapis.com/auth/gmail.readonly
+
+config:
+  fields:
+    - key: labelIds
+      label: Gmail Labels (optional)
+      widget: tag-input
+      description: Restrict sync to specific Gmail label IDs (e.g. INBOX, SENT, Label_123). Leave empty to sync all accessible mail.
+      validation:
+        itemPattern: "^[A-Za-z0-9_\\-]{1,100}$"
+
+    - key: includeSpamTrash
+      label: Include Spam and Trash
+      widget: checkbox
+      description: Sync messages from the Spam and Trash folders. Disabled by default.
+      defaultValue: false
+
+    - key: syncDaysBack
+      label: Initial Sync Depth (days)
+      widget: number
+      description: How many days of past email to pull on the first sync.
+      defaultValue: 30
+      validation:
+        min: 1
+        max: 365
+
+recordTypes:
+  selectionMode: multi
+  defaultAll: false
+  items:
+    - id: thread
+      displayName: Email Threads
+      description: Gmail conversation threads with snippet and message count.
+      defaultEnabled: true
+
+    - id: message
+      displayName: Messages
+      description: Individual email messages with subject, sender, recipients, and body snippet.
+      defaultEnabled: true
+
+filters:
+  pathFilters:
+    enabled: false
+  labelFilters:
+    enabled: true
+    appliesTo:
+      - thread
+      - message
+
+inference:
+  enabled: true
+  defaultEnabled: false
+  toggleLabel: Enable AI relationship inference
+  perRecordType:
+    thread: true
+    message: true
+  confidenceThreshold:
+    defaultValue: 0.75
+    min: 0.50
+    max: 0.99
+  ontologyPrompt: |
+    Infer project context and relationships from Gmail email content.
+
+    Look for:
+    - Email subjects or bodies mentioning product feature names, project codenames, or service names
+    - Threads involving customers or partners (external email domains)
+    - Emails referencing GitHub PR URLs, Linear ticket IDs, or feature flags
+    - Decision announcements or approval emails
+
+    Create edges:
+    - Email -[discusses]-> Feature (when subject or body references a known product feature)
+    - Email -[references]-> PullRequest (when body contains a GitHub PR URL or number)
+    - Email -[involves]-> Person (link sender and recipients to known person nodes)
+    - Thread -[contains]-> Email (thread groups its constituent messages)
+
+    Cross-source links:
+    - If sender email matches a known GitHub or Linear contributor, link to that person node
+    - If body contains a Linear ticket ID (e.g. OXA-123), reference that issue node
+
+sync:
+  delivery: webhook
+  pollingSupported: true
+  polling:
+    defaultIntervalSeconds: 900
+    minIntervalSeconds: 300
+    maxIntervalSeconds: 86400
+
+defaultFieldMappings:
+  thread:
+    snippet: description
+    historyId: externalKey
+  message:
+    subject: title
+    from: author
+    snippet: description
+    date: createdAt
+    threadId: parentId

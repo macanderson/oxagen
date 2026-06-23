@@ -60,7 +60,9 @@ export const graphNodeSearchHandler: CapabilityHandler<typeof graphNodeSearch> =
         {
           query: input.query,
           labels: input.labels ?? [],
-          limit: input.limit,
+          // BigInt forces the Bolt driver to send INTEGER — plain numbers become
+          // Float and Neo4j rejects them for LIMIT.
+          limit: BigInt(input.limit),
         },
       );
 

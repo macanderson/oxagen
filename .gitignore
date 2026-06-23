@@ -119,3 +119,5 @@ storybook-static/
 
 # transient per-package typecheck configs from tools/scripts/typecheck-staged.mjs
 tsconfig.staged-*.json
+nautilus-demo/
+.playwright-mcp/

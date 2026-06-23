@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import Link from "next/link";
 import { useRegisterFillableForm } from "@/lib/page-context";
 import { FieldFillTransition } from "@/components/ui/field-fill-transition";
 import { AvatarUpload } from "@/components/media/avatar-upload";
@@ -11,6 +12,7 @@ import { ConnectedAccounts } from "./connected-accounts";
 import { SetPasswordForm } from "./set-password-form";
 import type { FillableFormSpec, FieldDescriptor } from "@/lib/ask/fill-types";
 import type { ConnectedAccountsState } from "./security-types";
+import { account } from "@/lib/routes";
 
 export interface ProfileFormProps {
   userId: string;
@@ -18,6 +20,8 @@ export interface ProfileFormProps {
   email: string;
   initialAvatarUrl: string;
   connectedAccountsState: ConnectedAccountsState;
+  timezone: string;
+  language: string;
 }
 
 export function ProfileForm({
@@ -26,6 +30,8 @@ export function ProfileForm({
   email,
   initialAvatarUrl,
   connectedAccountsState,
+  timezone,
+  language,
 }: ProfileFormProps) {
   const [displayName, setDisplayName] = React.useState(initialDisplayName);
   const [avatarUrl, setAvatarUrl] = React.useState(initialAvatarUrl);
@@ -150,6 +156,41 @@ export function ProfileForm({
             shape="circle"
             disabled={isSaving}
           />
+        </div>
+
+        {/* Timezone + language — display only; edited on Preferences page */}
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="profile-timezone">Timezone</Label>
+            <Input
+              id="profile-timezone"
+              type="text"
+              value={timezone.replace(/_/g, " ")}
+              readOnly
+              disabled
+              aria-readonly="true"
+              className="cursor-not-allowed opacity-60"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="profile-language">Language</Label>
+            <Input
+              id="profile-language"
+              type="text"
+              value={language}
+              readOnly
+              disabled
+              aria-readonly="true"
+              className="cursor-not-allowed opacity-60"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Timezone and language can be changed in{" "}
+            <Link href={account.preferences()} className="underline underline-offset-2">
+              Preferences
+            </Link>
+            .
+          </p>
         </div>
 
         {/* Errors */}

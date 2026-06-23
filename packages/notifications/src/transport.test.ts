@@ -19,7 +19,7 @@ const FULL_ENV = {
   SMTP_PORT: 587,
   SMTP_USERNAME: "resend",
   SMTP_PASSWORD: "re_secret",
-  SMTP_FROM_EMAIL: "noreply@notifications.oxagen.ai",
+  SMTP_FROM_EMAIL: "noreply@notifications.oxagen.sh",
   SMTP_FROM_NAME: "Oxagen (DO NOT REPLY)",
 };
 
@@ -47,7 +47,7 @@ describe("emailTransport", () => {
     requireEnvMock.mockReturnValue({ ...FULL_ENV, SMTP_FROM_NAME: undefined });
     expect(() => emailTransport()).not.toThrow();
     expect(createSmtpMock).toHaveBeenCalledWith(
-      expect.objectContaining({ fromName: undefined, fromEmail: "noreply@notifications.oxagen.ai" }),
+      expect.objectContaining({ fromName: undefined, fromEmail: "noreply@notifications.oxagen.sh" }),
     );
   });
 
@@ -64,7 +64,7 @@ describe("emailTransport", () => {
       port: 587,
       user: "resend",
       pass: "re_secret",
-      fromEmail: "noreply@notifications.oxagen.ai",
+      fromEmail: "noreply@notifications.oxagen.sh",
       fromName: "Oxagen (DO NOT REPLY)",
     });
   });

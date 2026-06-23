@@ -1,0 +1,14 @@
+id: connect-data-source
+title: Connect a data source
+description: Walk me through connecting a new data source to this workspace's knowledge graph.
+category: configure
+tags: [connector, knowledge, ingestion, setup]
+applicableTo:
+  - routePattern: /{org}/{ws}/knowledge/sources
+  - routePattern: /{org}/{ws}/knowledge
+autoSubmit: false
+variables: []
+body: |
+  Help me connect a new data source to this workspace. Walk me through choosing the right
+  connector, configuring credentials, and setting up the initial sync schedule.
+  Show me what data will flow into the knowledge graph.

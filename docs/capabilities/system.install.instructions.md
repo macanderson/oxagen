@@ -41,8 +41,8 @@ so the result renders inline in chat without any additional wiring.
 
 All commands reference the interim Vercel deployment domains:
 
-- API: `https://oxagen-v2-api.vercel.app`
-- App (API key dashboard): `https://oxagen-v2-app.vercel.app`
+- API: `https://api.oxagen.sh`
+- App (API key dashboard): `https://app.oxagen.sh`
 
 These will be replaced by the `oxagen.ai` domain via an env-var sweep when
 the brand domain is ready — they are centralised in the handler, not scattered

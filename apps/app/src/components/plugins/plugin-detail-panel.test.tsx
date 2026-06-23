@@ -70,9 +70,22 @@ const defaultProps = {
 const mockFetch = vi.fn();
 
 // The component's fetch is async; add a small delay so loading state is visible first.
+// Mirrors a real OK Response: the panel now checks `r.ok`/`r.status` before
+// trusting the body, so the mock must carry them.
 function fetchAfterTimer(data: unknown) {
   return Promise.resolve({
+    ok: true,
+    status: 200,
     json: () => new Promise<unknown>((resolve) => setTimeout(() => resolve(data), 50)),
+  });
+}
+
+/** Mock a non-OK Response carrying an `{ error }` body (e.g. catalog.get 404/500). */
+function fetchError(status: number, body: unknown) {
+  return Promise.resolve({
+    ok: false,
+    status,
+    json: () => new Promise<unknown>((resolve) => setTimeout(() => resolve(body), 50)),
   });
 }
 
@@ -293,5 +306,41 @@ describe("PluginDetailPanel — fetch error", () => {
       () => expect(screen.getByTestId("plugin-detail-error")).toBeInTheDocument(),
       { timeout: 3000 },
     );
+  });
+
+  // Regression: a non-OK response (e.g. catalog.get 500/404) returns `{ error }`,
+  // NOT a CatalogDetail. The panel used to treat that body as detail and crash on
+  // `detail.icons[0]`, taking the whole marketplace down. It must surface the
+  // error message and render the error element instead.
+  it("shows the server error (not a crash) on a 500 response", async () => {
+    mockFetch.mockImplementation(() =>
+      fetchError(500, { error: "no enabled registries for this workspace" }),
+    );
+    render(<PluginDetailPanel {...defaultProps} />);
+    await waitFor(
+      () => expect(screen.getByTestId("plugin-detail-error")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+    expect(screen.getByTestId("plugin-detail-error")).toHaveTextContent(
+      /no enabled registries/i,
+    );
+  });
+
+  it("does not crash and shows an error on a 404 with an error body", async () => {
+    mockFetch.mockImplementation(() =>
+      fetchError(404, { error: "catalog server not found: oxagen/media-image@latest" }),
+    );
+    render(
+      <PluginDetailPanel
+        {...defaultProps}
+        serverName="oxagen/media-image"
+        pluginType="agent_capability"
+      />,
+    );
+    await waitFor(
+      () => expect(screen.getByTestId("plugin-detail-error")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+    expect(screen.getByTestId("plugin-detail-error")).toHaveTextContent(/not found/i);
   });
 });

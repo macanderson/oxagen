@@ -204,7 +204,7 @@ export async function onInvoicePaymentFailed(invoice: BillingInvoice): Promise<v
   // handle is referenced here (its connection is already released to the pool).
   const { orgId, orgName } = notifyCtx;
   try {
-    const appUrl = process.env["APP_URL"] ?? "https://oxagen-v2-app.vercel.app";
+    const appUrl = process.env["APP_URL"] ?? "https://app.oxagen.sh";
     const billingUrl = `${appUrl}/settings/billing`;
     const template = paymentFailedTemplate({ orgName, graceDays: DUNNING_GRACE_DAYS, billingUrl });
     await notifyOrgManagers({

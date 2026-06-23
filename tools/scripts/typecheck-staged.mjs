@@ -4,10 +4,18 @@
 // that extends tsconfig.base.json, so we group the changed files by their
 // nearest owning tsconfig and run `tsc` once per group against a temporary
 // config that extends the package config but narrows `files` to just the
-// changed set (and clears `include`). tsc then loads only those files plus
-// their import closure — fast, local feedback. Workspace packages expose `src`
-// directly (main/types -> ./src/index.ts) and tsconfig.base has skipLibCheck,
-// so no dependency build is required. The temp config must live inside the
+// changed set, with `include` scoped to the package's ambient declaration
+// files (`**/*.d.ts`). tsc then loads the staged files plus their import
+// closure AND the global/ambient type files that nothing imports — chiefly
+// `next-env.d.ts` (which supplies Next's `declare module "server-only"`) and
+// hand-written augmentations like `apps/app/src/types/navigator-ua.d.ts`
+// (`Navigator.userAgentData`). Dropping those (an empty `include`) makes
+// side-effect imports and global augmentations spuriously fail (TS2882 /
+// TS2551) even though the real build — which loads them via its own `include`
+// — is green. `.d.ts` files are declaration-only and `skipLibCheck` is on, so
+// this stays fast. Workspace packages expose `src` directly
+// (main/types -> ./src/index.ts) and tsconfig.base has skipLibCheck, so no
+// dependency build is required. The temp config must live inside the
 // package directory so `extends: ./tsconfig.json`, `types: ["node"]`, and any
 // relative compiler paths resolve exactly as they do for the real build. The
 // authoritative affected-package typecheck still runs in CI
@@ -17,6 +25,15 @@ import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const TS_EXT = /\.(ts|tsx|mts|cts)$/;
+// Root-level tooling config files (vitest.config.ts, tailwind.config.ts,
+// eslint.config.mts, *.config.*) live OUTSIDE a package's compiled source root
+// — package tsconfigs here use `rootDir: "src"` / `include: ["src"]`, so the
+// real `tsc` build never compiles them. Forcing such a file into the temp
+// config's `files` list makes tsc throw TS6059 ("not under rootDir 'src'"),
+// failing the pre-commit hook on an ordinary config edit (e.g. ratcheting a
+// coverage threshold). They are validated by their own tooling at runtime, so
+// skip them here to mirror what the authoritative build typechecks.
+const CONFIG_FILE = /(^|\/)[^/]+\.config\.(c|m)?[jt]sx?$/i;
 const repoRoot = process.cwd();
 const tsc = join(repoRoot, "node_modules", ".bin", "tsc");
 
@@ -33,7 +50,9 @@ function nearestTsconfig(file) {
   return null;
 }
 
-const files = process.argv.slice(2).filter((f) => TS_EXT.test(f));
+const files = process.argv
+  .slice(2)
+  .filter((f) => TS_EXT.test(f) && !CONFIG_FILE.test(f));
 if (files.length === 0) process.exit(0); // nothing typecheckable staged
 
 // Group changed files by their owning tsconfig.
@@ -56,7 +75,11 @@ for (const [tsconfig, absFiles] of groups) {
       extends: "./tsconfig.json",
       compilerOptions: { noEmit: true },
       files: absFiles.map((f) => relative(pkgDir, f)),
-      include: [],
+      // Load only ambient declaration files (next-env.d.ts, src/types/*.d.ts,
+      // etc.) on top of `files` — NOT the whole source tree. Carries the global
+      // module declarations + augmentations that side-effect imports and global
+      // type extensions depend on, without re-typechecking every package file.
+      include: ["**/*.d.ts"],
     }),
   );
   try {

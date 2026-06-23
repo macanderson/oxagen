@@ -1,6 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { agentExecutionRecord } from "@oxagen/oxagen/contracts/agent.execution.record";
 import { schema, withTenantDb } from "@oxagen/database";
+import { emitExecutionSyncEvent } from "./agent.execution.sync-event";
 import { logger } from "./logger";
 
 /**
@@ -12,7 +13,7 @@ export const agentExecutionRecordHandler: CapabilityHandler<typeof agentExecutio
   input,
   ctx,
 ) => {
-  return await withTenantDb(async (tx) => {
+  const result = await withTenantDb(async (tx) => {
     // 1. Insert root execution record
     const [execution] = await tx
       .insert(schema.agentExecutions)
@@ -115,4 +116,26 @@ export const agentExecutionRecordHandler: CapabilityHandler<typeof agentExecutio
       createdAt: execution.createdAt,
     };
   });
+
+  // Mirror the finished run into the knowledge graph as lineage (best-effort,
+  // terminal-only — see emitExecutionSyncEvent). The Postgres row above is the
+  // source of truth; this only enqueues the async Neo4j projection.
+  await emitExecutionSyncEvent({
+    executionId: result.executionId,
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+    status: input.status,
+    originType: input.originType,
+    originId: input.originId,
+    agentId: input.agentId,
+    startedAt: input.startedAt ?? null,
+    completedAt: input.completedAt ?? null,
+    latencyMs: input.latencyMs ?? null,
+    inputTokens: input.inputTokens ?? null,
+    outputTokens: input.outputTokens ?? null,
+    estimatedCostUsd: input.estimatedCostUsd ?? null,
+    steps: input.steps,
+  });
+
+  return result;
 };

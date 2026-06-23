@@ -22,6 +22,13 @@ vi.mock("@oxagen/auth", () => ({
   parseSessionCookie: vi.fn(),
   resolveOrgScope: vi.fn(),
   resolveWorkspaceScope: vi.fn(),
+  // OXA-1753: /health calls this; mock returns false so the email-transport
+  // gate is inert for tests that hit /health for an unrelated reason (cors).
+  isEmailVerificationRequired: vi.fn().mockReturnValue(false),
+}));
+
+vi.mock("@oxagen/notifications", () => ({
+  isEmailTransportConfigured: vi.fn().mockReturnValue(true),
 }));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({
@@ -106,12 +113,12 @@ describe("CORS preflight (OPTIONS)", () => {
   });
 
   it("allows the deployed app origin from APP_URL, normalizing a trailing slash", async () => {
-    vi.stubEnv("APP_URL", "https://oxagen-v2-app.vercel.app/");
+    vi.stubEnv("APP_URL", "https://app.oxagen.sh/");
     const res = await app.fetch(
-      preflight("/v1/acme/main/connections", "https://oxagen-v2-app.vercel.app"),
+      preflight("/v1/acme/main/connections", "https://app.oxagen.sh"),
     );
     expect(res.headers.get("access-control-allow-origin")).toBe(
-      "https://oxagen-v2-app.vercel.app",
+      "https://app.oxagen.sh",
     );
   });
 

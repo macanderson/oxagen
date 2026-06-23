@@ -72,6 +72,10 @@ export const subscriptions = billingSchema.table(
     // Spec §6.13: composite index over (org_id, status) targets the
     // "active subscription for org" hot path.
     orgStatusIdx: index("subscriptions_org_status_idx").on(t.orgId, t.status),
+    // FK → billing.plans. Index the FK so plan mutations don't seq-scan
+    // subscriptions, and so the subscriptions→plans join (tier.ts) has a
+    // covering index on the join key.
+    planIdx: index("subscriptions_plan_idx").on(t.planId),
     billingIntervalCheck: check(
       "subscriptions_billing_interval_check",
       sql`${t.billingInterval} IN ('month','year')`,
@@ -140,6 +144,9 @@ export const invoices = billingSchema.table(
   (t) => ({
     stripeInvIdx: uniqueIndex("invoices_stripe_inv_idx").on(t.stripeInvoiceId),
     orgIdx: index("invoices_org_idx").on(t.orgId, t.status),
+    // FK → billing.subscriptions. Index the FK so a subscription delete/update
+    // doesn't seq-scan invoices to enforce the constraint.
+    subscriptionIdx: index("invoices_subscription_idx").on(t.subscriptionId),
     statusCheck: check("invoices_status_check", sql`${t.status} IN ('draft', 'open', 'paid', 'uncollectible', 'void')`),
   }),
 );

@@ -32,6 +32,7 @@ import type { FieldDescriptor } from "@/lib/ask/fill-types";
 import type { FormFillResult } from "@/lib/ask/fill-types";
 import { interceptFormFillEvents } from "./intercept-form-fill";
 import { ThinkingBubble } from "./thinking-bubble";
+import { MessageFooter } from "./message-footer";
 
 /**
  * Serialisable page context forwarded from the current page to the stream
@@ -794,7 +795,12 @@ export function ChatShellClient({
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            <MessageTree messages={messages} callbacks={callbacks} />
+            <MessageTree
+              messages={messages}
+              callbacks={callbacks}
+              orgSlug={orgSlug}
+              workspaceSlug={workspaceSlug}
+            />
             {/* Live turn: the ordered chain of thought/action, rendered as a
                 connected timeline before the RSC revalidate replaces it with
                 the persisted message. */}

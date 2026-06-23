@@ -1,0 +1,17 @@
+id: open-source-playbook
+title: Open source playbook in editor
+description: Navigate to the playbook editor for the playbook that spawned this run.
+category: configure
+tags: [playbook, editor, navigate, run]
+applicableTo:
+  - routePattern: /{org}/{ws}/activity/runs/:runId
+capability: activity.run.read
+autoSubmit: false
+variables:
+  - name: run_id
+    resolver: param
+    source: params.runId
+    required: true
+body: |
+  Find the playbook that spawned run {{run_id}} and show me a link to open it in the
+  Studio editor so I can review or modify its definition.

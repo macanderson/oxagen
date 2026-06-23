@@ -2,6 +2,12 @@ export { auth } from "./auth";
 export type { Auth, Session } from "./auth";
 export { authClient, signIn, signOut, signUp, useSession, getSession } from "./client";
 
+// Env predicate — mirrors auth.ts requireEmailVerification gating. Surface for
+// callers (e.g. apps/api /health) that need to evaluate the same condition
+// without re-deriving it (OXA-1753).
+export { isEmailVerificationRequired, resolveIsLocalEnv } from "./local-env";
+export type { LocalEnvSignals } from "./local-env";
+
 // Transport-agnostic identity resolvers — §7.3 thin-wrapper surface.
 // API, MCP, and CLI call these; HTTP/transport specifics live in each
 // surface's thin wrapper.

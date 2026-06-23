@@ -129,19 +129,10 @@ vi.mock("@/components/ui/skeleton", () => ({
   ),
 }));
 
-vi.mock("lucide-react", () =>
-  new Proxy(
-    {},
-    {
-      get: (_t, prop) => {
-        if (prop === "__esModule") return true;
-        if (typeof prop === "symbol") return undefined;
-        const Icon = () => <svg aria-hidden="true" data-icon={String(prop)} />;
-        return Icon;
-      },
-    },
-  ),
-);
+vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
+  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
+  has: (_t, prop) => prop !== "then",
+}));
 
 // ---------------------------------------------------------------------------
 // Import under test
@@ -240,7 +231,7 @@ describe("SkillsPanel", () => {
       />,
     );
     // The formatted date should contain "2025" at minimum
-    expect(screen.getByText(/2025/)).toBeInTheDocument();
+    expect(screen.getAllByText(/2025/).length).toBeGreaterThan(0);
   });
 
   // (f) Filter input narrows visible rows

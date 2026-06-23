@@ -1,0 +1,86 @@
+---
+title: skill.author
+description: Author a new skill from a natural-language prompt — model-synthesised .skill.md, validated, installed.
+---
+
+## Overview
+
+`skill.author` lets an agent (or a developer via API/MCP) create a new workspace skill from a
+plain-English description. The handler:
+
+1. Passes the prompt to the model (via `@oxagen/ai` `generateObjectFor`) to synthesise a structured
+   skill definition — name, description, weight, category, and body.
+2. Assembles the `.skill.md` string (YAML frontmatter + markdown body).
+3. Validates the assembled document with `parseSkill` from `@oxagen/skills` — an invalid slug or
+   missing frontmatter throws before anything is written.
+4. Calls `skill.workspace.install` (custom path) to persist the skill transactionally.
+
+The operation is idempotent on slug: if a skill with the generated name already exists, the
+installer returns `installed: false` and no duplicate is created.
+
+## Surfaces
+
+| Surface | Mount |
+|---|---|
+| API | `POST /v1/:org/:workspace/skill/author` |
+| MCP | Tool `skill.author` |
+| Agent | `invoke('skill.author', { prompt, … }, ctx)` |
+
+## Input
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `prompt` | `string` (10–4000 chars) | Yes | Natural-language description of what the skill should teach the agent |
+| `nameHint` | `string` (kebab-case) | No | Preferred slug; derived from the prompt when omitted |
+| `category` | `string` | No | Category label (e.g. `engineering`, `writing`, `meta`) |
+| `activate` | `boolean` | No (default `true`) | Activate the new skill version immediately |
+| `workspace_id` | `string` | No | Target workspace; defaults to the scoped workspace |
+
+## Output
+
+| Field | Type | Description |
+|---|---|---|
+| `publicId` | `string` | Public ID of the installed skill (`skl_…`) |
+| `slug` | `string` | Kebab-case slug |
+| `body` | `string` | The full generated `.skill.md` content (YAML frontmatter + body) |
+| `activeVersion` | `number` | Active version number |
+| `installed` | `boolean` | `true` for a new install; `false` when the slug already existed |
+
+## Permissions
+
+Default effect: **deny**. The following roles are allowed by default:
+
+| Scope | Roles |
+|---|---|
+| Org | Owner, Admin |
+| Workspace | Owner, Admin, Member |
+
+## Example
+
+```json
+POST /v1/acme/default/skill/author
+{
+  "prompt": "Teach the agent how to review pull requests for correctness, test coverage, and readability.",
+  "nameHint": "pr-review",
+  "category": "engineering"
+}
+```
+
+```json
+{
+  "publicId": "skl_AbC123",
+  "slug": "pr-review",
+  "body": "---\nname: pr-review\ndescription: ...\nmetadata:\n  weight: high\n  category: engineering\n---\n\n# PR Review\n...",
+  "activeVersion": 1,
+  "installed": true
+}
+```
+
+## Notes
+
+- `skill.author` is a **builtin agent capability** — it does not appear in the plugin marketplace.
+  It is always available to agents on workspaces where the caller has the appropriate role.
+- The generated skill body follows the canonical `.skill.md` anatomy described in the
+  `skill-builder` builtin skill.
+- Skill generation goes through `@oxagen/ai` `generateObjectFor`, so it is metered, surface-tagged,
+  and included in token usage telemetry like any other LLM call in the platform.

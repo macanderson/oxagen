@@ -204,10 +204,42 @@ export function ThemeProvider({
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
+/**
+ * Inert context returned by {@link useTheme} when no <ThemeProvider> is found in
+ * the tree. The only realistic way to hit this is a dev-mode React Fast Refresh:
+ * hot-swapping this "use client" module can momentarily give the already-mounted
+ * provider and a freshly re-evaluated consumer two different ThemeContext
+ * identities, so `useContext` returns undefined for one render. Throwing there
+ * escalates a transient, self-healing state into a full-screen app crash.
+ *
+ * Falling back to "system"/light with a no-op setter lets that render degrade to
+ * a sane default until the next render realigns the identities. `setTheme` is a
+ * deliberate no-op: with no provider there is no state to update.
+ */
+const FALLBACK_THEME: ThemeContextValue = {
+  theme: "system",
+  resolvedTheme: "light",
+  setTheme: () => {},
+  themes: THEMES,
+};
+
+/**
+ * Read the active theme and setter. Intended to be used under a <ThemeProvider>
+ * (every Oxagen app mounts one in its root layout). If the provider context is
+ * missing it does NOT throw — it returns {@link FALLBACK_THEME} and, in
+ * development only, logs a warning. This keeps a transient Fast Refresh context
+ * mismatch (or any stray render outside the provider) from crashing the app,
+ * while still surfacing a genuinely missing provider to developers.
+ */
 export function useTheme(): ThemeContextValue {
   const ctx = React.useContext(ThemeContext);
-  if (!ctx) {
-    throw new Error("useTheme must be used within a <ThemeProvider>");
+  if (ctx) return ctx;
+  if (process.env.NODE_ENV !== "production") {
+    console.warn(
+      "[useTheme] no <ThemeProvider> ancestor found — returning a default theme. " +
+        "This is expected momentarily during a dev Fast Refresh reload; if it " +
+        "persists, wrap the tree in <ThemeProvider>.",
+    );
   }
-  return ctx;
+  return FALLBACK_THEME;
 }

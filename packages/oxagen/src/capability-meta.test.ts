@@ -41,10 +41,29 @@ describe("inferRecordTypeForField", () => {
     expect(inferRecordTypeForField("fromNodeId")).toBe("graph.node");
     expect(inferRecordTypeForField("toNodeId")).toBe("graph.node");
   });
-  it("maps conversation + asset id fields", () => {
+  it("maps conversation + explicit asset id fields", () => {
     expect(inferRecordTypeForField("conversationId")).toBe("conversation");
-    expect(inferRecordTypeForField("publicId")).toBe("asset");
     expect(inferRecordTypeForField("assetId")).toBe("asset");
+    expect(inferRecordTypeForField("asset_id")).toBe("asset");
+  });
+  // Regression — a bare `publicId` is a UNIVERSAL id field (agents `agt_…`,
+  // conversations `cnv_…`, mcp servers …), not asset-specific. Inferring `asset`
+  // from the field name alone built a dead `/api/v1/assets/agt_…` deep-link for
+  // agent.definition.* outputs that surfaced raw API JSON to the chat surface.
+  describe("publicId is asset-typed only for a generated-asset (`gen_`) value", () => {
+    it("maps a gen_-prefixed publicId to asset", () => {
+      expect(inferRecordTypeForField("publicId", "gen_abc123")).toBe("asset");
+    });
+    it("does NOT map an agent publicId (agt_…) to asset", () => {
+      expect(inferRecordTypeForField("publicId", "agt_ccbpt7mffmqwbtbg1z1sfg")).toBeNull();
+    });
+    it("does NOT map a conversation publicId (cnv_…) or any other prefix to asset", () => {
+      expect(inferRecordTypeForField("publicId", "cnv_xyz")).toBeNull();
+      expect(inferRecordTypeForField("publicId", "wrk_xyz")).toBeNull();
+    });
+    it("does NOT map a publicId to asset when no value is provided", () => {
+      expect(inferRecordTypeForField("publicId")).toBeNull();
+    });
   });
   it("returns null for unrecognized fields", () => {
     expect(inferRecordTypeForField("created")).toBeNull();
@@ -123,6 +142,32 @@ describe("resolveRecordLinks", () => {
   it("returns [] for non-object output", () => {
     expect(resolveRecordLinks("hi", undefined, SLUGS)).toEqual([]);
     expect(resolveRecordLinks(null, undefined, SLUGS)).toEqual([]);
+  });
+  // Regression: agent.definition.get returns a top-level `publicId: "agt_…"`.
+  // It must NOT be turned into an `/api/v1/assets/agt_…` deep-link (the prod
+  // 404 that surfaced the API's "Organization not found" JSON in chat).
+  it("does NOT build an asset link from an agent publicId (agt_…)", () => {
+    const agentOutput = {
+      publicId: "agt_ccbpt7mffmqwbtbg1z1sfg",
+      slug: "my-agent",
+      name: "My Agent",
+      status: "active",
+    };
+    const links = resolveRecordLinks(agentOutput, undefined, SLUGS);
+    expect(links).toEqual([]);
+  });
+  // The legitimate generated-asset case (publicId is a `gen_…` id) still links.
+  it("still builds an asset link from a generated-asset publicId (gen_…)", () => {
+    const links = resolveRecordLinks({ publicId: "gen_abc" }, undefined, SLUGS);
+    expect(links).toEqual([
+      {
+        field: "publicId",
+        recordType: "asset",
+        id: "gen_abc",
+        href: "/api/v1/assets/gen_abc",
+        label: "gen_abc",
+      },
+    ]);
   });
 });
 

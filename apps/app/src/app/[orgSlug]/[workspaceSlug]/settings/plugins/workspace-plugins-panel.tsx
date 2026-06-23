@@ -5,9 +5,10 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MarketplaceModal } from "@/components/plugins/marketplace-modal";
+import { CapabilityIcon } from "@/components/plugins/capability-icon";
 import { isRenderableImageUrl } from "@/lib/plugin-icon";
 import { RegistryManager, type RegistryRow } from "./registry-manager";
-import { ShoppingBag, Trash2, Plug, Package, FileText, Boxes } from "lucide-react";
+import { ShoppingBag, Trash2 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -75,11 +76,29 @@ interface WorkspacePluginsPanelProps {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Per-type colored icon defaults for the installed-plugins table.
+// Matches PLUGIN_TYPE_DEFAULTS in capability-icon.tsx; duplicated here to
+// cover types that exist in installed plugins but not in the marketplace tabs
+// (e.g. "content_tool", generic "capability").
+const INSTALLED_TYPE_ICON: Record<string, { iconName: string; color: string }> = {
+  mcp_server: { iconName: "plug", color: "#3b82f6" },
+  integration: { iconName: "package", color: "#8b5cf6" },
+  agent_capability: { iconName: "brain-circuit", color: "#f59e0b" },
+  capability: { iconName: "brain-circuit", color: "#f59e0b" },
+  agent_skill: { iconName: "sparkles", color: "#10b981" },
+  knowledge_source: { iconName: "book-open", color: "#0ea5e9" },
+  content_tool: { iconName: "file-text", color: "#64748b" },
+};
+
 function pluginTypeIcon(type: string) {
-  if (type === "integration") return <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
-  if (type === "content_tool") return <FileText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
-  if (type === "capability" || type === "agent_capability") return <Boxes className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
-  return <Plug className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
+  const defaults = INSTALLED_TYPE_ICON[type] ?? { iconName: "plug", color: "#3b82f6" };
+  return (
+    <CapabilityIcon
+      iconName={defaults.iconName}
+      color={defaults.color}
+      size={24}
+    />
+  );
 }
 
 function pluginTypeBadgeVariant(type: string): "outline" | "muted" | "secondary" | "info" {

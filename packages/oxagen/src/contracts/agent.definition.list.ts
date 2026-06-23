@@ -34,6 +34,11 @@ export const agentDefinitionList = registerCapability({
         status: z.enum(["draft", "active", "archived"]),
         deploymentStatus: z.enum(["inactive", "active"]),
         latestVersion: z.number().int().nullable(),
+        managed: z
+          .boolean()
+          .describe(
+            "True for product-managed (built-in) agents that are read-only to customers — viewable but not editable, publishable, deployable, or trigger-configurable",
+          ),
       }),
     ),
   }),

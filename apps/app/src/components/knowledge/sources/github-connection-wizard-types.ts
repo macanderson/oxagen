@@ -15,6 +15,15 @@ export interface Installation {
   accountType: string;
   repositorySelection: string;
   avatarUrl: string | null;
+  /** GitHub page for managing which repos this org grants the App. May be null. */
+  htmlUrl: string | null;
+}
+
+/** Response shape of GET /connections/github/installations. */
+export interface InstallationsResponse {
+  installations: Installation[];
+  /** GitHub URL to add/remove which orgs & repos the App is installed into. */
+  manageUrl: string;
 }
 
 export interface Repository {

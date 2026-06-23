@@ -9,15 +9,16 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTab, TabsPanel, TabsIndicator } from "@/components/ui/tabs";
+import { Tabs, TabsPanel } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PluginDetailPanel } from "./plugin-detail-panel";
+import { CapabilityIcon, PLUGIN_TYPE_DEFAULTS, resolveIconEntry } from "./capability-icon";
 import { useToast } from "@/components/ui/toast";
 import { useTenant } from "@/lib/tenant/tenant-context";
-import { Search, Package, Plug, ShoppingBag, BrainCircuit, Sparkles, BookOpen } from "lucide-react";
+import { Search, ShoppingBag } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,7 +27,7 @@ interface CatalogServer {
   name: string;
   title: string | null;
   description: string;
-  icons: Array<{ src: string }>;
+  icons: Array<{ src: string; color?: string }>;
   transportTypes: string[];
   authKind: string;
   categories: string[];
@@ -63,12 +64,52 @@ interface MarketplaceModalProps {
 }
 
 const PLUGIN_TABS = [
-  { value: "mcp_server", label: "MCP Servers", icon: Plug },
-  { value: "integration", label: "Integrations", icon: Package },
-  { value: "agent_capability", label: "Agent Capabilities", icon: BrainCircuit },
-  { value: "agent_skill", label: "Agent Skills", icon: Sparkles },
-  { value: "knowledge_source", label: "Knowledge Sources", icon: BookOpen },
-] as const satisfies ReadonlyArray<{ value: PluginTypeValue; label: string; icon: React.ComponentType<{ className?: string; "aria-hidden"?: "true" }> }>;
+  { value: "mcp_server" as PluginTypeValue, label: "MCP Servers" },
+  { value: "integration" as PluginTypeValue, label: "Integrations" },
+  { value: "agent_capability" as PluginTypeValue, label: "Agent Capabilities" },
+  { value: "agent_skill" as PluginTypeValue, label: "Agent Skills" },
+  { value: "knowledge_source" as PluginTypeValue, label: "Knowledge Sources" },
+] as const satisfies ReadonlyArray<{ value: PluginTypeValue; label: string }>;
+
+// ── ServerIcon — picks between <Image>, <CapabilityIcon>, or per-type default ─
+
+function ServerIcon({
+  icons,
+  pluginType,
+  size = 32,
+}: {
+  icons: Array<{ src: string; color?: string }>;
+  pluginType: PluginTypeValue;
+  size?: number;
+}) {
+  const resolved = resolveIconEntry(icons);
+  if (resolved.type === "image") {
+    return (
+      <Image
+        src={resolved.src}
+        alt=""
+        width={size}
+        height={size}
+        unoptimized
+        className="rounded object-contain flex-shrink-0"
+        style={{ width: size, height: size }}
+        aria-hidden="true"
+      />
+    );
+  }
+  if (resolved.type === "lucide") {
+    return (
+      <CapabilityIcon
+        iconName={resolved.iconName}
+        color={resolved.color ?? PLUGIN_TYPE_DEFAULTS[pluginType].color}
+        size={size}
+      />
+    );
+  }
+  // default — per-type colored icon
+  const { iconName, color } = PLUGIN_TYPE_DEFAULTS[pluginType];
+  return <CapabilityIcon iconName={iconName} color={color} size={size} />;
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -166,10 +207,18 @@ export function MarketplaceModal({
     setBulkPending(true);
     setError(null);
     try {
+      // ── BULK-INSTALL FIX ─────────────────────────────────────────────────────
+      // `selected` stores `srv.id` (the compound catalog id, e.g.
+      // "registryId:serverName:version" for MCP, or a UUID for skills).
+      // The install handler expects the server's *name* / skill *slug*, not the
+      // compound id.  Resolve each selected id back to its srv.name here.
       const result = await installBulkAction({
         orgSlug,
         workspaceId,
-        items: Array.from(selected).map((id) => ({ catalogServerId: id, pluginType: activeTab })),
+        items: Array.from(selected).map((id) => {
+          const srv = servers.find((s) => s.id === id);
+          return { catalogServerId: srv?.name ?? id, pluginType: activeTab };
+        }),
       });
       if (!result.ok) {
         setError(result.error ?? "Bulk install failed");
@@ -200,7 +249,7 @@ export function MarketplaceModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup
-        className="max-w-[1100px] w-[calc(100vw-2rem)] h-[80vh] flex flex-col gap-0 p-0"
+        className="max-w-[1100px] w-[calc(100vw-2rem)] h-[80vh] flex flex-col gap-0 p-0 overflow-hidden"
         data-testid="marketplace-modal"
       >
         <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4 border-b border-border/40">
@@ -213,6 +262,17 @@ export function MarketplaceModal({
           </DialogDescription>
         </DialogHeader>
 
+        {/*
+         * WIDTH CONTAINMENT CHANGES:
+         * 1. Outer flex row has overflow-hidden (prevents any child from
+         *    blowing past the dialog edge).
+         * 2. Left nav is w-52 flex-shrink-0 (fixed; never grows/shrinks).
+         * 3. Right content column has min-w-0 (allows flex to shrink it).
+         * 4. Inner content+detail row also has overflow-hidden + min-w-0.
+         * 5. Detail panel is w-80 flex-shrink-0 (fixed; not w-1/2 which
+         *    could exceed the dialog on smaller viewports).
+         * 6. Filter chip row uses flex-wrap so chips wrap, never overflow.
+         */}
         <Tabs
           value={activeTab}
           onValueChange={(v) => {
@@ -221,275 +281,291 @@ export function MarketplaceModal({
             // Clear server list immediately so the previous type's results never flash.
             setServers([]);
           }}
-          className="flex flex-col flex-1 min-h-0"
+          className="flex flex-row flex-1 min-h-0 overflow-hidden"
         >
-          {/* Tab bar + filter/search — two rows so content never overflows */}
-          <div
-            className="flex-shrink-0 px-6 pt-3 pb-0 border-b border-border/40"
+          {/* ── Vertical left nav ──────────────────────────────────────────── */}
+          <nav
+            className="w-52 flex-shrink-0 flex flex-col border-r border-border/40 overflow-y-auto py-3"
+            aria-label="Plugin type navigation"
             data-testid="marketplace-tab-bar"
           >
-            {/* Row 1: type tabs */}
-            <TabsList variant="underline" className="gap-6 relative">
-              {PLUGIN_TABS.map(({ value, label, icon: Icon }) => (
-                <TabsTab
+            {PLUGIN_TABS.map(({ value, label }) => {
+              const { iconName, color } = PLUGIN_TYPE_DEFAULTS[value];
+              const isActive = activeTab === value;
+              return (
+                <button
                   key={value}
-                  value={value}
-                  className="flex items-center gap-1.5 text-sm"
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => {
+                    setActiveTab(value);
+                    setSelected(new Set());
+                    setServers([]);
+                  }}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 text-sm text-left transition-colors ${
+                    isActive
+                      ? "bg-muted/60 text-foreground font-medium"
+                      : "text-muted-foreground hover:bg-muted/30 hover:text-foreground"
+                  }`}
                   data-testid={`marketplace-tab-${value}`}
                 >
-                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                  {label}
-                </TabsTab>
-              ))}
-              <TabsIndicator />
-            </TabsList>
-
-            {/* Row 2: auth filter chips + search */}
-            <div className="flex items-center gap-2 py-2.5">
-              {/* Auth filter chips — not applicable for agent/knowledge types */}
-              {(activeTab === "mcp_server" || activeTab === "integration") && (["", "oauth", "secret", "none"] as const).map((k) => (
-                <button
-                  key={k || "all"}
-                  type="button"
-                  onClick={() => setAuthFilter(k)}
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
-                    authFilter === k
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border/60 text-muted-foreground hover:border-foreground/40"
-                  }`}
-                  data-testid={`marketplace-filter-auth-${k || "all"}`}
-                >
-                  {k === "" ? "All" : k}
+                  <CapabilityIcon iconName={iconName} color={color} size={22} />
+                  <span>{label}</span>
                 </button>
-              ))}
+              );
+            })}
+          </nav>
 
-              {/* Installed filter chips — applies to every tab; separator shown after auth chips */}
-              {(activeTab === "mcp_server" || activeTab === "integration") && (
-                <span className="mx-1 h-4 w-px bg-border/60" aria-hidden="true" />
-              )}
-              {(
-                [
-                  ["", "All"],
-                  ["yes", "Installed"],
-                  ["no", "Not installed"],
-                ] as const
-              ).map(([k, label]) => (
-                <button
-                  key={`installed-${k || "all"}`}
-                  type="button"
-                  onClick={() => setInstalledFilter(k)}
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
-                    installedFilter === k
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border/60 text-muted-foreground hover:border-foreground/40"
-                  }`}
-                  data-testid={`marketplace-filter-installed-${k || "all"}`}
-                >
-                  {label}
-                </button>
-              ))}
+          {/* ── Right content column ───────────────────────────────────────── */}
+          {/* min-w-0 lets this column shrink so the nav stays at w-52 */}
+          <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+            {/* Filter bar — inside the right column only */}
+            <div
+              className="flex-shrink-0 px-5 py-2.5 border-b border-border/40"
+              data-testid="marketplace-filter-bar"
+            >
+              {/* flex-wrap: chips never push past the column edge */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Auth filter chips — not applicable for agent/knowledge types */}
+                {(activeTab === "mcp_server" || activeTab === "integration") && (
+                  (["", "oauth", "secret", "none"] as const).map((k) => (
+                    <button
+                      key={k || "all"}
+                      type="button"
+                      onClick={() => setAuthFilter(k)}
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
+                        authFilter === k
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border/60 text-muted-foreground hover:border-foreground/40"
+                      }`}
+                      data-testid={`marketplace-filter-auth-${k || "all"}`}
+                    >
+                      {k === "" ? "All" : k}
+                    </button>
+                  ))
+                )}
 
-              <div className="relative ml-auto">
-                <Search
-                  className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <Input
-                  type="search"
-                  placeholder="Search…"
-                  size="sm"
-                  className="pl-7 w-64"
-                  value={search}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  data-testid="marketplace-search-input"
-                />
+                {/* Installed filter chips — applies to every tab */}
+                {(activeTab === "mcp_server" || activeTab === "integration") && (
+                  <span className="h-4 w-px bg-border/60" aria-hidden="true" />
+                )}
+                {(
+                  [
+                    ["", "All"],
+                    ["yes", "Installed"],
+                    ["no", "Not installed"],
+                  ] as const
+                ).map(([k, label]) => (
+                  <button
+                    key={`installed-${k || "all"}`}
+                    type="button"
+                    onClick={() => setInstalledFilter(k)}
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
+                      installedFilter === k
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border/60 text-muted-foreground hover:border-foreground/40"
+                    }`}
+                    data-testid={`marketplace-filter-installed-${k || "all"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+
+                <div className="relative ml-auto">
+                  <Search
+                    className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <Input
+                    type="search"
+                    placeholder="Search…"
+                    size="sm"
+                    className="pl-7 w-56"
+                    value={search}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    data-testid="marketplace-search-input"
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Content panels */}
-          {PLUGIN_TABS.map(({ value }) => (
-            <TabsPanel
-              key={value}
-              value={value}
-              className="flex-1 min-h-0 overflow-auto mt-0"
-              data-testid={`marketplace-panel-${value}`}
-            >
-              <div className="flex h-full">
-                {/* Server grid */}
-                <div
-                  className={`flex-1 overflow-auto p-6 ${detailId ? "border-r border-border/40" : "w-full"}`}
-                >
-                  {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
-                  {loading && servers.length === 0 ? (
-                    <div className="grid grid-cols-2 gap-3" data-testid="marketplace-grid-skeleton">
-                      {Array.from({ length: 6 }).map((_, i) => (
-                        <div
-                          key={i}
-                          className="h-28 rounded-xl border border-border/40 bg-muted/30 animate-pulse"
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <>
-                      <p className="mb-3 text-xs text-muted-foreground">
-                        {total} {value === "agent_capability" || value === "agent_skill" || value === "knowledge_source" ? "plugins" : "servers"}
-                      </p>
-                      <div
-                        className="grid grid-cols-2 gap-3"
-                        data-testid="marketplace-server-grid"
-                      >
-                        {servers.length === 0 && (
-                          <p
-                            className="col-span-2 py-8 text-center text-sm text-muted-foreground"
-                            data-testid="marketplace-no-results"
-                          >
-                            No plugins found.
-                          </p>
-                        )}
-                        {servers.map((srv) => {
-                          const isSelected = selected.has(srv.id);
-                          return (
-                            <button
-                              key={srv.id}
-                              type="button"
-                              onClick={() => setDetailId(srv.id)}
-                              className={`relative flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors ${
-                                isSelected
-                                  ? "border-primary/60 bg-primary/5"
-                                  : "border-border/60 bg-card hover:border-foreground/30 hover:bg-muted/30"
-                              }`}
-                              aria-label={srv.title ?? srv.name}
-                              data-testid={`marketplace-server-card-${srv.id}`}
-                            >
-                              {/* Multi-select checkbox */}
-                              <span
-                                className="absolute top-3 right-3"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                }}
-                                aria-label={isSelected ? "Deselect" : "Select"}
-                              >
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={() => toggleSelect(srv.id)}
-                                  data-testid={`marketplace-select-${srv.id}`}
-                                />
-                              </span>
-
-                              <div className="flex items-start gap-2 pr-6">
-                                {srv.icons[0] ? (
-                                  <Image
-                                    src={srv.icons[0].src}
-                                    alt=""
-                                    width={32}
-                                    height={32}
-                                    // Marketplace icons are arbitrary remote URLs that can't
-                                    // be allowlisted in next.config remotePatterns; route them
-                                    // around Next's optimizer (which would 404 unknown hosts)
-                                    // so the original src renders verbatim.
-                                    unoptimized
-                                    className="h-8 w-8 rounded object-contain flex-shrink-0"
-                                    aria-hidden="true"
-                                  />
-                                ) : (
-                                  <span className="flex h-8 w-8 items-center justify-center rounded bg-muted flex-shrink-0">
-                                    <Plug
-                                      className="h-4 w-4 text-muted-foreground"
-                                      aria-hidden="true"
-                                    />
-                                  </span>
-                                )}
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm font-medium leading-tight">
-                                    {srv.title ?? srv.name}
-                                  </p>
-                                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                                    {srv.description}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="flex flex-wrap gap-1">
-                                {srv.installed && (
-                                  <Badge variant="success" size="sm" data-testid={`marketplace-installed-badge-${srv.id}`}>
-                                    Installed
-                                  </Badge>
-                                )}
-                                {srv.pluginType === "mcp_server" || srv.pluginType === "integration" ? (
-                                  <>
-                                    {srv.transportTypes.slice(0, 2).map((t) => (
-                                      <Badge key={t} variant="outline" size="sm">
-                                        {t}
-                                      </Badge>
-                                    ))}
-                                    <Badge
-                                      variant={
-                                        srv.authKind === "oauth"
-                                          ? "info"
-                                          : srv.authKind === "secret"
-                                            ? "warning"
-                                            : "muted"
-                                      }
-                                      size="sm"
-                                    >
-                                      {srv.authKind}
-                                    </Badge>
-                                  </>
-                                ) : (
-                                  <>
-                                    {srv.categories.slice(0, 2).map((c) => (
-                                      <Badge key={c} variant="outline" size="sm">
-                                        {c}
-                                      </Badge>
-                                    ))}
-                                  </>
-                                )}
-                              </div>
-                            </button>
-                          );
-                        })}
+            {/* Content panels */}
+            {PLUGIN_TABS.map(({ value }) => (
+              <TabsPanel
+                key={value}
+                value={value}
+                className="flex-1 min-h-0 overflow-hidden mt-0"
+                data-testid={`marketplace-panel-${value}`}
+              >
+                {/* overflow-hidden on the row wrapper prevents any child from
+                    blowing past the right content column edge. */}
+                <div className="flex h-full overflow-hidden min-w-0">
+                  {/* Server grid — min-w-0 so it shrinks when panel is open */}
+                  <div
+                    className={`flex-1 min-w-0 overflow-auto p-5 ${detailId ? "border-r border-border/40" : ""}`}
+                  >
+                    {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
+                    {loading && servers.length === 0 ? (
+                      <div className="grid grid-cols-2 gap-3" data-testid="marketplace-grid-skeleton">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                          <div
+                            key={i}
+                            className="h-28 rounded-xl border border-border/40 bg-muted/30 animate-pulse"
+                          />
+                        ))}
                       </div>
+                    ) : (
+                      <>
+                        <p className="mb-3 text-xs text-muted-foreground">
+                          {total} {value === "agent_capability" || value === "agent_skill" || value === "knowledge_source" ? "plugins" : "servers"}
+                        </p>
+                        {/* min-w-0 on the grid prevents grid cells from
+                            overflowing the available column width. */}
+                        <div
+                          className="grid grid-cols-2 gap-3 min-w-0"
+                          data-testid="marketplace-server-grid"
+                        >
+                          {servers.length === 0 && (
+                            <p
+                              className="col-span-2 py-8 text-center text-sm text-muted-foreground"
+                              data-testid="marketplace-no-results"
+                            >
+                              No plugins found.
+                            </p>
+                          )}
+                          {servers.map((srv) => {
+                            const isSelected = selected.has(srv.id);
+                            return (
+                              <button
+                                key={srv.id}
+                                type="button"
+                                onClick={() => setDetailId(srv.id)}
+                                className={`relative flex flex-col gap-2 rounded-xl border p-4 text-left transition-colors min-w-0 overflow-hidden ${
+                                  isSelected
+                                    ? "border-primary/60 bg-primary/5"
+                                    : "border-border/60 bg-card hover:border-foreground/30 hover:bg-muted/30"
+                                }`}
+                                aria-label={srv.title ?? srv.name}
+                                data-testid={`marketplace-server-card-${srv.id}`}
+                              >
+                                {/* Multi-select checkbox */}
+                                <span
+                                  className="absolute top-3 right-3"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                  }}
+                                  aria-label={isSelected ? "Deselect" : "Select"}
+                                >
+                                  <Checkbox
+                                    checked={isSelected}
+                                    onCheckedChange={() => toggleSelect(srv.id)}
+                                    data-testid={`marketplace-select-${srv.id}`}
+                                  />
+                                </span>
 
-                      {nextOffset !== null && (
-                        <div className="mt-4 flex justify-center">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => fetchServers(nextOffset, false)}
-                            disabled={loading}
-                            data-testid="marketplace-load-more"
-                          >
-                            {loading ? "Loading…" : "Load more"}
-                          </Button>
+                                <div className="flex items-start gap-2 pr-6 min-w-0">
+                                  <ServerIcon
+                                    icons={srv.icons}
+                                    pluginType={srv.pluginType}
+                                    size={32}
+                                  />
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium leading-tight">
+                                      {srv.title ?? srv.name}
+                                    </p>
+                                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                                      {srv.description}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-wrap gap-1">
+                                  {srv.installed && (
+                                    <Badge variant="success" size="sm" data-testid={`marketplace-installed-badge-${srv.id}`}>
+                                      Installed
+                                    </Badge>
+                                  )}
+                                  {srv.pluginType === "mcp_server" || srv.pluginType === "integration" ? (
+                                    <>
+                                      {srv.transportTypes.slice(0, 2).map((t) => (
+                                        <Badge key={t} variant="outline" size="sm">
+                                          {t}
+                                        </Badge>
+                                      ))}
+                                      <Badge
+                                        variant={
+                                          srv.authKind === "oauth"
+                                            ? "info"
+                                            : srv.authKind === "secret"
+                                              ? "warning"
+                                              : "muted"
+                                        }
+                                        size="sm"
+                                      >
+                                        {srv.authKind}
+                                      </Badge>
+                                    </>
+                                  ) : (
+                                    <>
+                                      {srv.categories.slice(0, 2).map((c) => (
+                                        <Badge key={c} variant="outline" size="sm">
+                                          {c}
+                                        </Badge>
+                                      ))}
+                                    </>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
                         </div>
-                      )}
-                    </>
+
+                        {nextOffset !== null && (
+                          <div className="mt-4 flex justify-center">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => fetchServers(nextOffset, false)}
+                              disabled={loading}
+                              data-testid="marketplace-load-more"
+                            >
+                              {loading ? "Loading…" : "Load more"}
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Detail panel — fixed width so it doesn't take half the
+                      available space (which could exceed dialog at small sizes).
+                      w-80 / flex-shrink-0 keeps it from growing or shrinking. */}
+                  {detailId && (
+                    <div
+                      className="w-80 flex-shrink-0 overflow-auto"
+                      data-testid="marketplace-detail-panel"
+                    >
+                      {(() => {
+                        const detailServer = servers.find((s) => s.id === detailId);
+                        return (
+                          <PluginDetailPanel
+                            serverName={detailServer?.name ?? detailId}
+                            pluginType={value as PluginTypeValue}
+                            installAction={(input) =>
+                              installAction({ ...input, workspaceId })
+                            }
+                            onInstalled={() => onOpenChange(false)}
+                            onClose={() => setDetailId(null)}
+                          />
+                        );
+                      })()}
+                    </div>
                   )}
                 </div>
-
-                {/* Detail panel */}
-                {detailId && (
-                  <div className="w-1/2 overflow-auto" data-testid="marketplace-detail-panel">
-                    {(() => {
-                      const detailServer = servers.find((s) => s.id === detailId);
-                      return (
-                        <PluginDetailPanel
-                          serverName={detailServer?.name ?? detailId}
-                          pluginType={value as PluginTypeValue}
-                          installAction={(input) =>
-                            installAction({ ...input, workspaceId })
-                          }
-                          onInstalled={() => onOpenChange(false)}
-                          onClose={() => setDetailId(null)}
-                        />
-                      );
-                    })()}
-                  </div>
-                )}
-              </div>
-            </TabsPanel>
-          ))}
+              </TabsPanel>
+            ))}
+          </div>
         </Tabs>
 
         {/* Footer — bulk install */}

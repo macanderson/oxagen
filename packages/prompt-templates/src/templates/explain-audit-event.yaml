@@ -1,0 +1,18 @@
+id: explain-audit-event
+title: Explain this audit event
+description: Plain-English explanation of what happened in this audit event and why it matters.
+category: investigate
+tags: [audit, security, compliance, explain]
+applicableTo:
+  - routePattern: /{org}/{ws}/activity/audit/:eventId
+  - routePattern: /{org}/audit/:eventId
+capability: activity.audit.read
+autoSubmit: true
+variables:
+  - name: event_id
+    resolver: param
+    source: params.eventId
+    required: true
+body: |
+  Explain audit event {{event_id}} in plain English. What action was performed, who performed it,
+  what was changed, and what are the compliance or security implications of this event?

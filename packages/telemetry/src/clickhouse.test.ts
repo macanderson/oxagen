@@ -8,15 +8,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { hashPrompt, providerFromModelId } from "./clickhouse";
 import type {
-  AgentLogRow,
-  ApiKeyEventRow,
   AuditEventRow,
   EventRow,
   ExecutionLogRow,
-  SpanRow,
   TokenUsageRow,
   ToolInvocationRow,
-  TraceRow,
 } from "./clickhouse";
 
 // ---------------------------------------------------------------------------
@@ -268,41 +264,6 @@ describe("insert helpers — insertRows delegation", () => {
     });
   });
 
-  it("insertTraces delegates to traces table", async () => {
-    const row: TraceRow = {
-      trace_id: "t1",
-      execution_id: "e1",
-      org_id: "o1",
-      started_at: new Date().toISOString(),
-      completed_at: null,
-    };
-    await mod.insertTraces([row]);
-    expect(insertMock).toHaveBeenCalledWith({
-      table: "traces",
-      values: [row],
-      format: "JSONEachRow",
-    });
-  });
-
-  it("insertSpans delegates to spans table", async () => {
-    const row: SpanRow = {
-      span_id: "s1",
-      trace_id: "t1",
-      parent_span_id: null,
-      span_type: "llm",
-      org_id: "o1",
-      started_at: new Date().toISOString(),
-      completed_at: null,
-      metadata: "{}",
-    };
-    await mod.insertSpans([row]);
-    expect(insertMock).toHaveBeenCalledWith({
-      table: "spans",
-      values: [row],
-      format: "JSONEachRow",
-    });
-  });
-
   it("insertEvents delegates to events table", async () => {
     const row: EventRow = {
       event_id: "ev1",
@@ -322,27 +283,9 @@ describe("insert helpers — insertRows delegation", () => {
     });
   });
 
-  it("insertApiKeyEvents delegates to api_key_events table", async () => {
-    const row: ApiKeyEventRow = {
-      api_key_id: "ak1",
-      org_id: "o1",
-      ip_address: "1.2.3.4",
-      user_agent: "test-agent",
-      request_path: "/api/v1/test",
-      response_code: 200,
-      created_at: new Date().toISOString(),
-    };
-    await mod.insertApiKeyEvents([row]);
-    expect(insertMock).toHaveBeenCalledWith({
-      table: "api_key_events",
-      values: [row],
-      format: "JSONEachRow",
-    });
-  });
-
   it("insertTokenUsage delegates to token_usage table", async () => {
     const row: TokenUsageRow = {
-      execution_step_id: "es1",
+      execution_step_id: "11111111-1111-1111-1111-111111111111",
       org_id: "o1",
       workspace_id: "w1",
       model: "claude-sonnet-4-6",
@@ -357,11 +300,77 @@ describe("insert helpers — insertRows delegation", () => {
       created_at: new Date().toISOString(),
     };
     await mod.insertTokenUsage([row]);
+    // A real UUID is passed straight through unchanged (no coalescing).
     expect(insertMock).toHaveBeenCalledWith({
       table: "token_usage",
       values: [row],
       format: "JSONEachRow",
     });
+  });
+
+  // Regression: the production CANNOT_PARSE_INPUT_ASSERTION_FAILED (code 27)
+  // flood was caused by non-UUID correlation strings reaching the UUID column.
+  // Callers now express "no execution step" as null; insertTokenUsage must
+  // coalesce null → the nil UUID so the non-nullable UUID key column always
+  // receives a parseable value. These tests fail on the pre-fix code (which
+  // passed the row through verbatim, sending JSON `null` into a UUID column).
+  it("coalesces a null execution_step_id to the nil UUID before inserting", async () => {
+    const row: TokenUsageRow = {
+      execution_step_id: null,
+      org_id: "o1",
+      workspace_id: "w1",
+      model: "text-embedding-3-small",
+      provider: "openai",
+      input_tokens: 7,
+      output_tokens: 0,
+      cached_tokens: 0,
+      cost_usd_micros: 42,
+      duration_ms: 12,
+      surface: "ingestion",
+      prompt_hash: "deadbeefdeadbeef",
+      created_at: new Date().toISOString(),
+    };
+    await mod.insertTokenUsage([row]);
+    expect(insertMock).toHaveBeenCalledTimes(1);
+    const call = insertMock.mock.calls[0]![0] as {
+      table: string;
+      values: TokenUsageRow[];
+      format: string;
+    };
+    expect(call.table).toBe("token_usage");
+    expect(call.values[0]!.execution_step_id).toBe(mod.NIL_UUID);
+    // NIL_UUID must be a valid UUID shape (ClickHouse UUID text parser accepts it).
+    expect(mod.NIL_UUID).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+    // The other fields are preserved verbatim.
+    expect(call.values[0]!.org_id).toBe("o1");
+    expect(call.values[0]!.input_tokens).toBe(7);
+  });
+
+  it("coalesces only the null rows in a mixed batch, leaving real UUIDs intact", async () => {
+    const realUuid = "22222222-2222-2222-2222-222222222222";
+    const base = {
+      org_id: "o1",
+      workspace_id: "w1",
+      model: "m",
+      provider: "openai" as const,
+      input_tokens: 1,
+      output_tokens: 0,
+      cached_tokens: 0,
+      cost_usd_micros: 1,
+      duration_ms: 1,
+      surface: "ingestion" as const,
+      prompt_hash: "h",
+      created_at: new Date().toISOString(),
+    };
+    await mod.insertTokenUsage([
+      { ...base, execution_step_id: null },
+      { ...base, execution_step_id: realUuid },
+    ]);
+    const values = (insertMock.mock.calls[0]![0] as { values: TokenUsageRow[] }).values;
+    expect(values[0]!.execution_step_id).toBe(mod.NIL_UUID);
+    expect(values[1]!.execution_step_id).toBe(realUuid);
   });
 
   it("insertToolInvocation delegates to tool_invocations table with single-element array", async () => {
@@ -392,35 +401,6 @@ describe("insert helpers — insertRows delegation", () => {
       values: [row],
       format: "JSONEachRow",
     });
-  });
-
-  it("insertAgentLogs delegates to agent_logs table", async () => {
-    const row: AgentLogRow = {
-      log_id: "log-1",
-      run_id: "run-1",
-      definition_id: "agt-1",
-      definition_version: "1",
-      org_id: "o1",
-      workspace_id: "w1",
-      entry_id: "entry-1",
-      entry_type: "tool_call",
-      entry_level: "info",
-      entry_message: "called tool",
-      entry_data: "{}",
-      entry_timestamp: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-    };
-    await mod.insertAgentLogs([row]);
-    expect(insertMock).toHaveBeenCalledWith({
-      table: "agent_logs",
-      values: [row],
-      format: "JSONEachRow",
-    });
-  });
-
-  it("no-ops when rows array is empty (insertAgentLogs)", async () => {
-    await mod.insertAgentLogs([]);
-    expect(insertMock).not.toHaveBeenCalled();
   });
 
   it("insertAuditEvent delegates to audit_events table", async () => {
@@ -456,8 +436,7 @@ describe("insert helpers — insertRows delegation", () => {
   });
 
   it("no-ops when rows array is empty (any insert helper)", async () => {
-    await mod.insertTraces([]);
-    await mod.insertSpans([]);
+    await mod.insertExecutionLogs([]);
     await mod.insertEvents([]);
     await mod.insertTokenUsage([]);
     expect(insertMock).not.toHaveBeenCalled();

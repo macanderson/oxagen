@@ -145,6 +145,6 @@ describe("getApiUrl", () => {
 
   it("falls back to prod URL", () => {
     mockExistsSync.mockReturnValue(false);
-    expect(getApiUrl()).toBe("https://oxagen-v2-api.vercel.app");
+    expect(getApiUrl()).toBe("https://api.oxagen.sh");
   });
 });

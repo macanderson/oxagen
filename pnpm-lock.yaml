@@ -98,6 +98,9 @@ importers:
       '@oxagen/inngest-functions':
         specifier: workspace:*
         version: link:../../packages/inngest-functions
+      '@oxagen/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../../packages/oxagen
@@ -207,6 +210,9 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../../packages/plugins
+      '@oxagen/prompt-templates':
+        specifier: workspace:*
+        version: link:../../packages/prompt-templates
       '@oxagen/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -276,6 +282,9 @@ importers:
       reaviz:
         specifier: 16.1.4
         version: 16.1.4(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      server-only:
+        specifier: 0.0.1
+        version: 0.0.1
       shiki:
         specifier: 1.29.2
         version: 1.29.2
@@ -1228,6 +1237,28 @@ importers:
       vitest:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0)
+
+  packages/prompt-templates:
+    dependencies:
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.1
+        version: 25.9.1
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0))
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0)
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
 
   packages/sandbox:
     dependencies:
@@ -9621,6 +9652,9 @@ packages:
   serve-static@2.2.1:
     resolution: {integrity: sha512-xRXBn0pPqQTVQiC8wyQrKs2MOlX24zQ0POGaj0kultvoOCstBQM5yvOhAVSUwOMjQtTvsPWoNCHfPGwaaQJhTw==}
     engines: {node: '>= 18'}
+
+  server-only@0.0.1:
+    resolution: {integrity: sha512-qepMx2JxAa5jjfzxG79yPPq+8BuFToHd1hm7kI+Z4zAq1ftQiP7HcxMhDDItrbtwVeLg/cY2JnKnrcFkmiswNA==}
 
   set-cookie-parser@3.1.0:
     resolution: {integrity: sha512-kjnC1DXBHcxaOaOXBHBeRtltsDG2nUiUni+jP92M9gYdW12rsmx92UsfpH7o5tDRs7I1ZZPSQJQGv3UaRfCiuw==}
@@ -19813,6 +19847,8 @@ snapshots:
       send: 1.2.1
     transitivePeerDependencies:
       - supports-color
+
+  server-only@0.0.1: {}
 
   set-cookie-parser@3.1.0: {}
 

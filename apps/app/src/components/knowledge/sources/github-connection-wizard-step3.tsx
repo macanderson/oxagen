@@ -9,6 +9,7 @@ import * as React from "react";
 import { CheckCircle2 } from "lucide-react";
 import { DialogFooter } from "@oxagen/ui";
 import { type SyncDepth, SYNC_DEPTH_OPTIONS, API_BASE } from "./github-connection-wizard-types";
+import type { SelectedRepoMeta } from "./github-connection-wizard-step2";
 import { Spinner } from "./github-connection-wizard-spinner";
 
 export interface Step3Props {
@@ -16,7 +17,8 @@ export interface Step3Props {
   workspaceSlug: string;
   connectionId: string;
   selectedInstallationId: string;
-  selectedRepos: string[];
+  /** Full repo metadata — needed to forward defaultBranch to the API. */
+  selectedRepos: SelectedRepoMeta[];
   onSuccess: () => void;
 }
 
@@ -36,6 +38,14 @@ export function Step3Confirm({
     setLoading(true);
     setError(null);
     try {
+      // Derive owner/repo/defaultBranch from the first selected repo. The wizard
+      // currently supports selecting multiple repos but ingestion is kicked off
+      // for each repo individually. For the initial sync we use selectedRepos[0]
+      // as the primary; additional repos will be wired in a follow-up.
+      const primaryRepo = selectedRepos[0];
+      const [owner = "", repo = ""] = primaryRepo?.fullName.split("/") ?? [];
+      const defaultBranch = primaryRepo?.defaultBranch ?? "main";
+
       const res = await fetch(
         `${API_BASE}/v1/${orgSlug}/${workspaceSlug}/connections/${connectionId}/mappings`,
         {
@@ -58,8 +68,15 @@ export function Step3Confirm({
             ],
             activateConnection: true,
             installationId: selectedInstallationId,
-            selectedRepos,
+            selectedRepos: selectedRepos.map((r) => r.fullName),
             syncDepthDays: syncDepth,
+            // Explicit delivery config fields — persisted to deliveryConfig by
+            // the handler before the ingestion event is fired. Without these the
+            // handler reads an empty deliveryConfig and fires the event with
+            // owner='' repo='' → GitHub returns 404 → 0 nodes written.
+            owner,
+            repo,
+            defaultBranch,
           }),
         },
       );
@@ -102,12 +119,12 @@ export function Step3Confirm({
         </div>
         {selectedRepos.length > 0 && (
           <ul className="mt-3 flex flex-wrap gap-1.5">
-            {selectedRepos.slice(0, 6).map((repo) => (
+            {selectedRepos.slice(0, 6).map((r) => (
               <li
-                key={repo}
+                key={r.fullName}
                 className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
               >
-                {repo}
+                {r.fullName}
               </li>
             ))}
             {selectedRepos.length > 6 && (

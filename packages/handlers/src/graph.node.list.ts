@@ -50,8 +50,11 @@ export const graphNodeListHandler: CapabilityHandler<typeof graphNodeList> = asy
         labels: input.labels ?? [],
         sourceId: input.sourceId ?? null,
         query: input.query ?? "",
-        limit: input.limit,
-        offset: input.offset,
+        // Neo4j Bolt serialises plain JS numbers as Float; SKIP/LIMIT require
+        // INTEGER. Wrapping with BigInt forces the driver to send an integer
+        // wire type, preventing Neo4jError "0.0 is not a valid value".
+        limit: BigInt(input.limit),
+        offset: BigInt(input.offset),
       };
 
       // Total count for the same filter — drives hasMore and the explorer UI.

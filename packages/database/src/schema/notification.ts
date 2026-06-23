@@ -37,6 +37,13 @@ export const notifications = notificationSchema.table(
     userUnreadIdx: index("notifications_user_unread_idx")
       .on(t.userId, t.unread)
       .where(sql`${t.archived} = false`),
+    // The feed list filters (user_id, org_id, archived=false [, unread=true])
+    // and ORDER BYs created_at DESC (notifications.list). The (user_id, unread)
+    // partial index above covers neither org_id nor the created_at sort; this
+    // partial composite matches the feed predicate and serves the sort.
+    userOrgCreatedIdx: index("notifications_user_org_created_idx")
+      .on(t.userId, t.orgId, t.createdAt)
+      .where(sql`${t.archived} = false`),
     orgIdx: index("notifications_org_idx").on(t.orgId),
     kindCheck: check(
       "notifications_kind_check",

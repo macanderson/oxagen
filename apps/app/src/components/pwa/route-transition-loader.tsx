@@ -1,6 +1,5 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element -- animated GIF spinners (dark/light); next/image freezes and mis-optimizes animated GIFs, so a plain <img> is intentional here. */
 
 /**
  * Route-transition loading indicator for mobile.
@@ -16,6 +15,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname } from "next/navigation";
 import styles from "./route-transition-loader.module.css";
+import Image from "next/image";
 
 export function RouteTransitionLoader() {
   const pathname = usePathname();
@@ -53,26 +53,15 @@ export function RouteTransitionLoader() {
       {imgFailed ? (
         <span className={styles.cssSpinner} aria-hidden="true" />
       ) : (
-        <>
-          <img
-            src="/spinner/oxagen-spinner-assemble-dark.gif"
-            alt=""
-            width={36}
-            height={36}
-            className={styles.spinnerDark}
-            aria-hidden="true"
-            onError={() => setImgFailed(true)}
-          />
-          <img
-            src="/spinner/oxagen-spinner-assemble-light.gif"
-            alt=""
-            width={36}
-            height={36}
-            className={styles.spinnerLight}
-            aria-hidden="true"
-            onError={() => setImgFailed(true)}
-          />
-        </>
+        <Image
+          src="/spinner/oxagen-spinner-assemble.svg"
+          alt=""
+          width={72}
+          height={72}
+          className={styles.spinnerDark}
+          aria-hidden="true"
+          onError={() => setImgFailed(true)}
+        />
       )}
     </div>
   );

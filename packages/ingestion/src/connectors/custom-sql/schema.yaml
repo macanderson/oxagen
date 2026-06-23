@@ -1,0 +1,104 @@
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+
+metadata:
+  id: custom-sql
+  displayName: Custom SQL
+  description: Sync records from any relational database using a connection string and custom SQL queries.
+  icon: database
+  category: developer-tools
+  version: "1.0.0"
+  schemaVersion: "1"
+  publisher:
+    name: Oxagen
+    verified: true
+
+auth:
+  schemes:
+    - id: connection_string
+      kind: api_key
+      displayName: Database Connection String
+      fields:
+        - key: apiKey
+          label: Connection String
+          widget: secret
+          description: "Full database connection string. Examples: postgresql://user:pass@host:5432/db or mysql://user:pass@host:3306/db"
+          validation:
+            required: true
+            pattern: "^(postgresql|postgres|mysql|mssql|mariadb|sqlite)://.+"
+
+config:
+  fields:
+    - key: queries
+      label: SQL Queries
+      widget: code
+      description: >
+        JSON array of query definitions. Each entry must have sourceRecordType (string),
+        query (SQL with optional :cursor placeholder), and idColumn (default "id").
+        Example: [{"sourceRecordType":"order","query":"SELECT * FROM orders WHERE updated_at > :cursor","idColumn":"id","cursorColumn":"updated_at"}]
+      validation:
+        required: true
+
+    - key: pollIntervalSeconds
+      label: Poll Interval (seconds)
+      widget: number
+      description: How often to run the SQL queries and ingest new or updated rows.
+      defaultValue: 900
+      validation:
+        min: 60
+        max: 86400
+
+recordTypes:
+  selectionMode: multi
+  defaultAll: true
+  items:
+    - id: custom
+      displayName: Custom Records
+      description: Records returned by your configured SQL queries. The record type name is set by the sourceRecordType field in each query definition.
+      defaultEnabled: true
+
+filters:
+  pathFilters:
+    enabled: false
+  labelFilters:
+    enabled: false
+
+inference:
+  enabled: true
+  defaultEnabled: false
+  toggleLabel: Enable AI relationship inference
+  perRecordType:
+    custom: true
+  confidenceThreshold:
+    defaultValue: 0.75
+    min: 0.50
+    max: 0.99
+  ontologyPrompt: |
+    Infer business entities and relationships from custom SQL query results.
+
+    Look for:
+    - Records with name/title fields that map to known product features, customers, or projects
+    - Foreign-key-style columns (e.g. account_id, user_id, project_id) that imply relationships
+    - Status fields indicating lifecycle state (open, closed, active, cancelled)
+    - Date fields that establish temporal ordering and causality
+
+    Create edges:
+    - Entity -[related_to]-> Entity (when a foreign-key column references another record type)
+    - Entity -[owned_by]-> Account (when an owner_id or account_id column is present)
+
+sync:
+  delivery: polling
+  pollingSupported: true
+  polling:
+    defaultIntervalSeconds: 900
+    minIntervalSeconds: 60
+    maxIntervalSeconds: 86400
+
+defaultFieldMappings:
+  custom:
+    id: externalId
+    name: title
+    title: title
+    description: description
+    created_at: createdAt
+    updated_at: updatedAt

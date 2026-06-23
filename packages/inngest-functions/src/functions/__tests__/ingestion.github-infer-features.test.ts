@@ -114,7 +114,7 @@ describe("ingestion.github-infer-features Inngest function", () => {
     expect(opts).toMatchObject({
       id: "ingestion-github-infer-features",
       retries: 2,
-      concurrency: expect.objectContaining({ limit: 10, key: "event.data.orgId" }),
+      concurrency: expect.objectContaining({ limit: 5, key: "event.data.orgId" }),
     });
     expect(trigger).toMatchObject({ event: "ingestion/github.infer-features" });
   });
@@ -129,7 +129,10 @@ describe("ingestion.github-infer-features Inngest function", () => {
           orgId: "org-gh-1",
           workspaceId: "ws-gh-1",
           surface: "ingestion",
-          messageId: "feat-infer:github:conn-gh-1:acme/api:src/auth.ts",
+          // OXA-1813: ingestion inference has no initiating message; messageId
+          // must be a UUID or null — a non-UUID string flooded token_usage's
+          // uuid execution_step_id column. The source now passes null.
+          messageId: null,
         }),
       }),
     );

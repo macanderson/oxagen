@@ -57,6 +57,8 @@ export async function translateAgentStream(args: {
   toolNameMap: Record<string, string>;
   orgSlug: string;
   workspaceSlug: string;
+  /** Gateway model id (from modelIdOf(turnModel)) used to compute credits charged. */
+  modelId: string;
   emit: (event: StreamEvent) => void;
   /**
    * Resolved gateway model id for this turn (e.g. "anthropic/claude-sonnet-4.6").
@@ -473,6 +475,19 @@ export async function translateAgentStream(args: {
       });
     } else if (pType === "finish") {
       const part = raw as FinishPart;
+      const inputTokens = part.totalUsage.inputTokens ?? 0;
+      const outputTokens = part.totalUsage.outputTokens ?? 0;
+      const totalTokens = part.totalUsage.totalTokens ?? 0;
+      // Compute credits charged using the billing meter (best-effort: a pricing
+      // lookup failure should never crash the turn — fall back to undefined so
+      // the UI skips the credit display rather than showing a wrong number).
+      let creditsCharged: number | undefined;
+      try {
+        const credits = meterCreditsForUsage({ model: modelId, inputTokens, outputTokens });
+        creditsCharged = Number(credits);
+      } catch {
+        // Pricing lookup failed (e.g. unknown model id) — omit creditsCharged.
+      }
       // Emit usage so the client can show credits consumed this turn.
       const inputTokens = part.totalUsage.inputTokens ?? 0;
       const outputTokens = part.totalUsage.outputTokens ?? 0;

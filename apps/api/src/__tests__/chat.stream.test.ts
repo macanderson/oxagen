@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   resolveOrgScope: vi.fn(),
   resolveWorkspaceScope: vi.fn(),
 
+  invoke: vi.fn(),
+
   streamAgentReply: vi.fn(),
   selectModel: vi.fn(),
   supportsReasoning: vi.fn(),
@@ -74,12 +76,24 @@ vi.mock("@oxagen/database", () => ({
       createdAt: "created_at",
     },
     conversations: { id: "id" },
+    agents: {
+      id: "id",
+      activeVersionId: "active_version_id",
+      workspaceId: "workspace_id",
+      slug: "slug",
+    },
   },
 }));
 
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: mocks.runInTenantScope,
 }));
+
+// The stream's SOC 2 execution-recording block calls invoke("chat.message.execution").
+vi.mock("@oxagen/oxagen/kernel", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/oxagen/kernel")>();
+  return { ...real, invoke: mocks.invoke };
+});
 
 vi.mock("drizzle-orm", async (importOriginal) => {
   const actual = await importOriginal<typeof import("drizzle-orm")>();
@@ -358,6 +372,69 @@ describe("chat stream: conversation history", () => {
     expect(injectedMessages).toHaveLength(1);
     expect(injectedMessages[0]?.role).toBe("user");
     expect(injectedMessages[0]?.content).toBe("Stateless query");
+  });
+});
+
+// ── SOC 2 execution recording ─────────────────────────────────────────────────
+
+describe("chat stream: execution recording (SOC 2 audit trail)", () => {
+  // Make the agent lookup, history load, and message persist all resolve so the
+  // qaAgent && conversationId && assistantMsgId guard is satisfied. One combined
+  // row serves both the agent lookup (id/activeVersionId) and history (role/content).
+  function setupAuditPath() {
+    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) => {
+      const tx = {
+        select: vi.fn().mockReturnThis(),
+        from: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi
+          .fn()
+          .mockResolvedValue([
+            { id: "agt-1", activeVersionId: "agv-1", role: "user", content: "prior" },
+          ]),
+        insert: vi.fn().mockReturnThis(),
+        values: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockResolvedValue([{ id: "asmsg-1" }]),
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+      };
+      return fn(tx);
+    });
+  }
+
+  it("records chat.message.execution when agent, conversation, and persisted message all resolve", async () => {
+    setupAuditPath();
+    mocks.invoke.mockResolvedValue({ ok: true });
+
+    const res = await app.fetch(post({ content: "Audit me", conversationId: "conv-123" }));
+    expect(res.status).toBe(200);
+    await res.text(); // drain so the stream's start() callback (which fires the audit) completes
+
+    const execCall = mocks.invoke.mock.calls.find((c) => c[0] === "chat.message.execution");
+    expect(execCall).toBeDefined();
+    const input = execCall?.[1] as Record<string, unknown>;
+    expect(input.messageId).toBe("asmsg-1");
+    expect(input.agentId).toBe("agt-1");
+    expect(input.agentVersionId).toBe("agv-1");
+    expect(input.originType).toBe("chat");
+    expect(input.status).toBe("completed");
+  });
+
+  it("keeps the stream intact (still emits done) when execution recording throws", async () => {
+    setupAuditPath();
+    mocks.invoke.mockRejectedValue(new Error("clickhouse unavailable"));
+
+    const res = await app.fetch(post({ content: "Audit me", conversationId: "conv-123" }));
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain("[DONE]");
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "chat.message.execution",
+      expect.objectContaining({ messageId: "asmsg-1" }),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 });
 

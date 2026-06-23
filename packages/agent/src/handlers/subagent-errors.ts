@@ -1,0 +1,42 @@
+/**
+ * Shared typed errors for the subagent fanout handlers.
+ *
+ * These live in their own dependency-free module so callers on other surfaces
+ * (e.g. the apps/api route layer) can `instanceof`-match them WITHOUT importing
+ * a full handler module (which would pull in withTenantDb / drizzle / schema).
+ *
+ * Re-exported from the package root (`@oxagen/agent`) so the import path is the
+ * stable public surface, not a deep handler path.
+ */
+
+/**
+ * Thrown when a subagent fanout cannot be resolved for the given public_id in
+ * the current tenant scope — i.e. the swarm/fanout id is unknown, was purged,
+ * or belongs to a different org/workspace (cross-tenant). Surfaces (api/mcp)
+ * should map this to a 404, NOT a 500.
+ *
+ * The `code` discriminant lets a surface match it structurally even across a
+ * module/package boundary where two copies of the class identity could
+ * theoretically exist (bundling edge cases); prefer `instanceof`, fall back to
+ * the code.
+ */
+export class FanoutNotFoundError extends Error {
+  readonly code = "fanout_not_found";
+  readonly fanoutId: string;
+  constructor(fanoutId: string) {
+    super(`Fanout ${fanoutId} not found`);
+    this.name = "FanoutNotFoundError";
+    this.fanoutId = fanoutId;
+  }
+}
+
+/** Structural type guard — matches across a package boundary via the `code`
+ * discriminant even when `instanceof` would fail on a duplicated class identity. */
+export function isFanoutNotFoundError(err: unknown): err is FanoutNotFoundError {
+  return (
+    err instanceof FanoutNotFoundError ||
+    (err instanceof Error &&
+      "code" in err &&
+      (err as { code?: unknown }).code === "fanout_not_found")
+  );
+}

@@ -196,8 +196,8 @@ describe("Auth Package Coverage Tests", () => {
     });
 
     it("validates same-origin requests", () => {
-      const requestOrigin = "https://oxagen.ai";
-      const allowedOrigins = ["https://oxagen.ai", "https://www.oxagen.ai"];
+      const requestOrigin = "https://oxagen.sh";
+      const allowedOrigins = ["https://oxagen.sh", "https://www.oxagen.sh"];
       expect(allowedOrigins).toContain(requestOrigin);
     });
   });

@@ -2,83 +2,186 @@
 /**
  * seed-skills.ts
  *
- * Seeds `agent.skills` + `agent.skill_versions` from the three built-in
- * *.skill.md files in packages/skills/skills/.  Runs are idempotent — a
- * second call leaves existing rows untouched via ON CONFLICT DO NOTHING.
+ * DEPRECATED — this script previously inserted skills into a nil
+ * BUILTIN_ORG_ID / BUILTIN_WORKSPACE_ID that the browse query (real
+ * orgId + workspaceId) never read, so those rows were phantom seeds that
+ * served no user.
+ *
+ * Skills are now seeded per-workspace by:
+ *   1. The workspace-creation Server Actions (new-workspace/actions.ts and
+ *      (onboarding)/new-organization/actions.ts) — every new workspace gets
+ *      builtin skill copies immediately on creation.
+ *   2. The backfill script (backfill-workspace-seeds.ts) — covers all
+ *      existing workspaces created before the Server Actions were updated.
+ *
+ * This script now delegates to `backfill-workspace-seeds` so that `pnpm
+ * db:seed-skills` continues to work and seeds real per-workspace skill rows
+ * instead of phantom builtin rows.
  *
  * Run via:
- *   pnpm db:seed-skills
+ *   pnpm db:seed-skills            (delegates to backfill — dry-run by default)
+ *   pnpm db:seed-skills -- --apply (writes per-workspace skill rows)
  *
- * Requires a running Postgres reachable at DATABASE_URL (from .env.local or
- * doppler / vercel env pull) with a previously migrated schema.
+ * Or use the canonical alias directly:
+ *   pnpm db:backfill-workspace-seeds
+ *   pnpm db:backfill-workspace-seeds -- --apply
  */
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { eq, and } from "drizzle-orm";
+
+import { createInterface } from "node:readline";
+import { URL } from "node:url";
 import kleur from "kleur";
-import { loadEnv } from "@oxagen/config/env";
-import { db, closeDatabase } from "@oxagen/database";
+import { requireEnv } from "@oxagen/config/env";
 import { formatError } from "./lib/format-error";
-import { skills, skillVersions } from "@oxagen/database/schema";
-import { seedSkillsFromFilesystem } from "@oxagen/skills";
-import type { SkillSeedAdapter } from "@oxagen/skills";
+import { db, closeDatabase, schema } from "@oxagen/database";
+import { seedWorkspaceDefaultSkillsSystem } from "@oxagen/handlers/skill-workspace-seed";
 
-// Resolve the skills directory relative to this script's location in the repo.
-// __filename → tools/scripts/seed-skills.ts
-// fsRoot     → packages/skills/skills
-const __filename = fileURLToPath(import.meta.url);
-const repoRoot = resolve(__filename, "../../../");
-const fsRoot = resolve(repoRoot, "packages/skills/skills");
+// ── CLI flags ─────────────────────────────────────────────────────────────────
 
-function buildAdapter(): SkillSeedAdapter {
-  const database = db();
+const args = process.argv.slice(2);
+const DRY_RUN = !args.includes("--apply");
 
-  return {
-    async upsertSkill(row) {
-      await database
-        .insert(skills)
-        .values(row)
-        .onConflictDoNothing();
-    },
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-    async findSkillId(workspaceId, slug) {
-      const rows = await database
-        .select({ id: skills.id })
-        .from(skills)
-        .where(
-          and(
-            eq(skills.workspaceId, workspaceId),
-            eq(skills.slug, slug),
-          ),
-        );
-      return rows[0]?.id;
-    },
-
-    async upsertSkillVersion(row) {
-      await database
-        .insert(skillVersions)
-        .values(row)
-        .onConflictDoNothing();
-    },
-  };
+function sanitizeUrl(raw: string): { host: string; database: string } {
+  try {
+    const u = new URL(raw);
+    return {
+      host: `${u.hostname}:${u.port || "5432"}`,
+      database: u.pathname.replace(/^\//, "") || "(default)",
+    };
+  } catch {
+    return { host: "(unparseable)", database: "(unparseable)" };
+  }
 }
 
+function isLocalHost(host: string): boolean {
+  return /^(localhost|127\.0\.0\.1|::1)(:\d+)?$/.test(host);
+}
+
+async function confirm(question: string): Promise<boolean> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim().toLowerCase() === "y");
+    });
+  });
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
 async function main(): Promise<void> {
-  loadEnv();
+  const start = Date.now();
 
-  console.log(kleur.cyan(`[seed-skills] scanning ${fsRoot}`));
+  const env = requireEnv(["DATABASE_URL"]);
+  const { host, database } = sanitizeUrl(env.DATABASE_URL);
 
-  const result = await seedSkillsFromFilesystem(buildAdapter(), { fsRoot });
+  console.log(kleur.cyan("┌───────────────────────────────────────────────────────────────┐"));
+  console.log(kleur.cyan("│   seed-skills — per-workspace builtin skill seeder (backfill) │"));
+  console.log(kleur.cyan("└───────────────────────────────────────────────────────────────┘"));
+  console.log();
+  console.log(kleur.yellow("NOTE: This script was rewritten to seed skills per-workspace (see"));
+  console.log(kleur.yellow("      skill-workspace-seed.ts). The old nil-UUID builtin seed path"));
+  console.log(kleur.yellow("      produced phantom rows the browse query never read."));
+  console.log(kleur.yellow("      Use `pnpm db:backfill-workspace-seeds` as the canonical alias."));
+  console.log();
+  console.log(`  Target host  : ${kleur.yellow(host)}`);
+  console.log(`  Database     : ${kleur.yellow(database)}`);
+  console.log(`  Mode         : ${DRY_RUN ? kleur.blue("DRY RUN (read-only)") : kleur.red("APPLY (will write)")}`);
+  console.log();
+
+  if (!DRY_RUN && !isLocalHost(host)) {
+    console.log(kleur.red("  ⚠  Non-local database detected in --apply mode."));
+    const ok = await confirm("  Proceed with write to production database? [y/N] ");
+    if (!ok) {
+      console.log(kleur.yellow("  Aborted."));
+      process.exit(0);
+    }
+    console.log();
+  }
+
+  const d = db();
+
+  // Enumerate all workspaces and seed skills for each.
+  const allWorkspaces = await d
+    .select({
+      id: schema.workspaces.id,
+      orgId: schema.workspaces.orgId,
+      name: schema.workspaces.name,
+    })
+    .from(schema.workspaces)
+    .orderBy(schema.workspaces.createdAt);
 
   console.log(
-    kleur.green(`[seed-skills] done — ${result.processed} skills processed`),
+    kleur.cyan(
+      `[seed-skills] ${allWorkspaces.length} workspace(s) found — seeding builtin skills per-workspace…`,
+    ),
   );
+  console.log();
+
+  let totalInserted = 0;
+  let totalScanned = 0;
+  let failed = 0;
+
+  for (const ws of allWorkspaces) {
+    if (DRY_RUN) {
+      console.log(
+        kleur.blue(
+          `  [dry-run] ${ws.name} (${ws.id}) org=${ws.orgId} — WOULD seed builtin skills`,
+        ),
+      );
+      continue;
+    }
+
+    try {
+      const result = await seedWorkspaceDefaultSkillsSystem({
+        orgId: ws.orgId,
+        workspaceId: ws.id,
+      });
+      totalScanned += result.scanned;
+      totalInserted += result.inserted;
+      console.log(
+        kleur.green(
+          `  [seeded] ${ws.name} (${ws.id}) inserted=${result.inserted}/${result.scanned}`,
+        ),
+      );
+    } catch (err: unknown) {
+      failed++;
+      console.log(
+        kleur.red(`  [fail] ${ws.name} (${ws.id}) org=${ws.orgId} — ${formatError(err)}`),
+      );
+    }
+  }
+
+  const totalMs = Date.now() - start;
+
+  console.log();
+  console.log(kleur.cyan("─────────────────────────────────────────────────────────────────"));
+  console.log(kleur.cyan(`[seed-skills] Summary (${totalMs}ms)`));
+  console.log(`  Workspaces scanned  : ${allWorkspaces.length}`);
+  if (!DRY_RUN) {
+    console.log(`  Templates scanned   : ${totalScanned}`);
+    console.log(`  Skills inserted     : ${totalInserted > 0 ? kleur.green(String(totalInserted)) : kleur.dim("0")}`);
+    console.log(`  Failed workspaces   : ${failed > 0 ? kleur.red(String(failed)) : kleur.dim("0")}`);
+  } else {
+    console.log(kleur.blue("  (dry-run — no writes made)"));
+  }
+
+  if (DRY_RUN) {
+    console.log();
+    console.log(kleur.blue("[seed-skills] This was a dry-run. Re-run with --apply to write."));
+  }
+
+  await closeDatabase();
+
+  if (failed > 0) {
+    process.exit(1);
+  }
 }
 
 main()
-  .then(() => closeDatabase())
   .then(() => process.exit(0))
   .catch((err: unknown) => {
-    console.error(kleur.red(formatError(err)));
+    console.error(kleur.red("[seed-skills] Fatal:"), formatError(err));
     process.exit(1);
   });

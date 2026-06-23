@@ -15,7 +15,7 @@
  * mirrors the pattern used by workspace-capability-seed and workspace-registry-seed.
  */
 
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { createSkillRegistry } from "@oxagen/skills";
@@ -27,7 +27,11 @@ import { logger } from "./logger";
 // identical to the one used by skill.workspace.install so that both handlers
 // always see the same template set.
 const __filename = fileURLToPath(import.meta.url);
-const SKILLS_DIR = join(__filename, "../../../../skills/skills");
+// Three `..` traversals: <file> → src → handlers → packages, then + skills/skills
+// lands at packages/skills/skills (the built-in skill registry root). Must match
+// skill.workspace.install.ts exactly — a 4th `..` overshoots to <repo>/skills/skills
+// (nonexistent), silently seeding zero skills.
+const SKILLS_DIR = join(__filename, "../../../skills/skills");
 
 interface SeedArgs {
   orgId: string;
@@ -185,4 +189,22 @@ export async function seedWorkspaceDefaultSkills({
     return runSeed(callerTx, orgId, workspaceId);
   }
   return withTenantDb((tx) => runSeed(tx, orgId, workspaceId));
+}
+
+/**
+ * Variant of `seedWorkspaceDefaultSkills` that opens a `withSystemDb`
+ * (RLS-bypassing) session instead of `withTenantDb`.
+ *
+ * Use this from Server Actions and backfill scripts where there is no ALS
+ * tenant scope — `withTenantDb` throws `TenantScopeError` in those contexts
+ * because the ALS key (org_id / workspace_id) is not set.
+ *
+ * The original `seedWorkspaceDefaultSkills` (tenant variant) is preserved
+ * intact because it is called by handlers that already run inside an ALS scope.
+ */
+export async function seedWorkspaceDefaultSkillsSystem({
+  orgId,
+  workspaceId,
+}: Omit<SeedArgs, "tx">): Promise<SeedWorkspaceSkillsResult> {
+  return withSystemDb((tx) => runSeed(tx, orgId, workspaceId));
 }

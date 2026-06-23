@@ -14,7 +14,11 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
+import { existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
+  BUILT_IN_PLUGIN_IDS,
   loadBuiltInSchema,
   loadSchema,
   validateConfigAgainstSchema,
@@ -114,6 +118,142 @@ describe("loadBuiltInSchema — built-in plugins", () => {
     const schema = loadBuiltInSchema("google-drive");
     expect(schema?.metadata.id).toBe("google-drive");
     expect(schema?.metadata.displayName).toBe("Google Drive");
+  });
+
+  // ── Newly-added built-in connector schemas (OXA-1784) ─────────────────────
+
+  it("loads the google-calendar schema", () => {
+    const schema = loadBuiltInSchema("google-calendar");
+    expect(schema?.metadata.id).toBe("google-calendar");
+    expect(schema?.metadata.displayName).toBe("Google Calendar");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the google-gmail schema", () => {
+    const schema = loadBuiltInSchema("google-gmail");
+    expect(schema?.metadata.id).toBe("google-gmail");
+    expect(schema?.metadata.displayName).toBe("Gmail");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the google-meet schema", () => {
+    const schema = loadBuiltInSchema("google-meet");
+    expect(schema?.metadata.id).toBe("google-meet");
+    expect(schema?.metadata.displayName).toBe("Google Meet");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the google-tasks schema", () => {
+    const schema = loadBuiltInSchema("google-tasks");
+    expect(schema?.metadata.id).toBe("google-tasks");
+    expect(schema?.metadata.displayName).toBe("Google Tasks");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the google-contacts schema", () => {
+    const schema = loadBuiltInSchema("google-contacts");
+    expect(schema?.metadata.id).toBe("google-contacts");
+    expect(schema?.metadata.displayName).toBe("Google Contacts");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the google-bigquery schema", () => {
+    const schema = loadBuiltInSchema("google-bigquery");
+    expect(schema?.metadata.id).toBe("google-bigquery");
+    expect(schema?.metadata.displayName).toBe("Google BigQuery");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the microsoft schema", () => {
+    const schema = loadBuiltInSchema("microsoft");
+    expect(schema?.metadata.id).toBe("microsoft");
+    expect(schema?.metadata.displayName).toBe("Microsoft 365");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the salesforce schema", () => {
+    const schema = loadBuiltInSchema("salesforce");
+    expect(schema?.metadata.id).toBe("salesforce");
+    expect(schema?.metadata.displayName).toBe("Salesforce");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the zoom schema", () => {
+    const schema = loadBuiltInSchema("zoom");
+    expect(schema?.metadata.id).toBe("zoom");
+    expect(schema?.metadata.displayName).toBe("Zoom");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the custom-sql schema", () => {
+    const schema = loadBuiltInSchema("custom-sql");
+    expect(schema?.metadata.id).toBe("custom-sql");
+    expect(schema?.metadata.displayName).toBe("Custom SQL");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the custom-webhook schema", () => {
+    const schema = loadBuiltInSchema("custom-webhook");
+    expect(schema?.metadata.id).toBe("custom-webhook");
+    expect(schema?.metadata.displayName).toBe("Generic Webhook");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the example-saas schema (reference connector)", () => {
+    const schema = loadBuiltInSchema("example-saas");
+    expect(schema?.metadata.id).toBe("example-saas");
+    expect(schema?.metadata.displayName).toBe("ExampleSaaS");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  // Regression: set size must match the number of schema.yaml files on disk,
+  // so this test catches drift in either direction.
+  it("BUILT_IN_PLUGIN_IDS contains the expected 16 connector ids (OXA-1784 coverage)", () => {
+    // Update this count whenever a new connector is added to BUILT_IN_PLUGIN_IDS.
+    // Current set: github, linear, slack, google-drive, google-calendar, google-gmail,
+    // google-meet, google-tasks, google-contacts, google-bigquery, microsoft, salesforce,
+    // zoom, custom-sql, custom-webhook, example-saas = 16.
+    expect(BUILT_IN_PLUGIN_IDS.size).toBe(16);
+  });
+
+  // Regression: every declared built-in MUST have a schema file that resolves
+  // on disk and loads. In prod, apps/api esbuild-bundles this loader (CJS) and
+  // copies these YAMLs next to the function; a built-in id without a matching
+  // file — or a loader that can't find it — 500s the connector "Configure" flow.
+  it("loads every declared built-in plugin id without throwing", () => {
+    for (const id of BUILT_IN_PLUGIN_IDS) {
+      const schema = loadBuiltInSchema(id);
+      expect(schema, `built-in "${id}" should load`).not.toBeNull();
+      expect(schema?.metadata.id).toBe(id);
+      expect(schema?.apiVersion).toBe("oxagen.ai/v1alpha1");
+      expect(schema?.kind).toBe("ConnectorPlugin");
+    }
+  });
+
+  it("resolves each built-in schema file from the loader module directory", () => {
+    // Mirror the loader's primary resolution path (moduleDir() → connectors/<id>).
+    // The bundle copy in apps/api/build.mjs relies on this exact layout, so a
+    // drift here would break prod even while dev/vitest pass via the fallback.
+    const moduleDir = dirname(fileURLToPath(import.meta.url));
+    const connectorsDir = resolve(moduleDir, "..", "connectors");
+    for (const id of BUILT_IN_PLUGIN_IDS) {
+      expect(
+        existsSync(resolve(connectorsDir, id, "schema.yaml")),
+        `connectors/${id}/schema.yaml must exist`,
+      ).toBe(true);
+    }
   });
 
   it("returns null for an unknown plugin id", () => {

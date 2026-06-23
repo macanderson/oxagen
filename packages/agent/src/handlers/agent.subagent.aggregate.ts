@@ -5,6 +5,7 @@ import type {
   AgentSubagentAggregateInput,
   AgentSubagentAggregateOutput,
 } from "@oxagen/oxagen/contracts/agent.subagent.aggregate";
+import { FanoutNotFoundError } from "./subagent-errors";
 
 export type { AgentSubagentAggregateInput, AgentSubagentAggregateOutput };
 
@@ -153,6 +154,19 @@ function deriveAggregateStatus(
   now: number,
 ): AggStatus {
   if (IN_PROGRESS_STATUSES.has(fanout.status)) {
+    // The executor (agent.execute-subagent) is what advances the fan-out row to
+    // running/completed. If it never ran — e.g. the dispatch event was emitted
+    // but no Inngest function picked it up (app not synced / signing-key
+    // mismatch), or the emit failed and marked every child failed — the row is
+    // stuck at `pending`. When every child has already reached a terminal state
+    // we can report the true outcome immediately instead of waiting out the
+    // snapshot window and reporting a misleading `running`/`timed_out`.
+    const terminalCount = completedCount + failedCount;
+    if (fanout.totalChildren > 0 && terminalCount >= fanout.totalChildren) {
+      if (failedCount === 0) return "completed";
+      if (completedCount === 0) return "failed";
+      return "partial";
+    }
     const ageMs = fanout.createdAt ? now - fanout.createdAt.getTime() : 0;
     return ageMs >= timeoutMs ? "timed_out" : "running";
   }
@@ -171,7 +185,10 @@ export async function agentSubagentAggregateHandler(
   // when a caller needs to block until completion, lives in the
   // agent.aggregate-fanout Inngest function (step.waitForEvent).
   const fanout = await loadFanout(input.fanoutId, ctx);
-  if (!fanout) throw new Error(`Fanout ${input.fanoutId} not found`);
+  // Typed error (not a plain Error) so surfaces can structurally map an unknown /
+  // cross-tenant fanout id to a 404 instead of a 500 — and so an unrelated error
+  // whose message merely contains "not found" is never misclassified as a 404.
+  if (!fanout) throw new FanoutNotFoundError(input.fanoutId);
 
   // Child runs are keyed by the fan-out's uuid, not its public_id.
   const runs = await loadRuns(fanout.id, ctx);
@@ -220,7 +237,13 @@ export async function agentSubagentAggregateHandler(
     fanoutId: input.fanoutId,
     status,
     totalChildren: fanout.totalChildren,
-    completedChildren: fanout.completedChildren,
+    // Live count derived from the child runs — NOT fanout.completedChildren,
+    // which the executor only writes once in its final `finalize` step. Reading
+    // the stale column made every in-flight poll report 0 completed, so the
+    // research-swarm / workflow progress bars sat at 0% and only jumped at the
+    // very end (the "progress bar never updates" bug). completedCount reflects
+    // each child the moment its run row flips to "completed".
+    completedChildren: completedCount,
     aggregatedData,
     conflicts,
     timeline,

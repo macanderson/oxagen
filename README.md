@@ -400,10 +400,10 @@ gh run watch                                   # verify CI is green
 
 | Service | Domain | Purpose |
 |---------|--------|---------|
-| **Web App** | `oxagen-v2-app.vercel.app` | Interactive UI |
-| **API** | `oxagen-v2-api.vercel.app` | REST endpoints |
-| **MCP** | `oxagen-v2-mcp.vercel.app` | Tool protocol |
-| **Docs** | `oxagen-v2-docs.vercel.app` | Documentation |
+| **Web App** | `app.oxagen.sh` | Interactive UI |
+| **API** | `api.oxagen.sh` | REST endpoints |
+| **MCP** | `mcp.oxagen.sh` | Tool protocol |
+| **Docs** | `docs.oxagen.sh` | Documentation |
 
 ### Data Architecture
 
@@ -510,7 +510,7 @@ lsof -ti:4100                    # check MCP server status
 
 ### We're building the future, so we'll be ready to meet you when you get there.
 
-[**Web App**](https://oxagen-v2-app.vercel.app) · [**API**](https://oxagen-v2-api.vercel.app) · [**Docs**](https://oxagen-v2-docs.vercel.app) · [**GitHub**](https://github.com/oxagenai/oxagen-monorepo)
+[**Web App**](https://app.oxagen.sh) · [**API**](https://api.oxagen.sh) · [**Docs**](https://docs.oxagen.sh) · [**GitHub**](https://github.com/oxagenai/oxagen-monorepo)
 
 Made with ❤️ by the Oxagen team.
 

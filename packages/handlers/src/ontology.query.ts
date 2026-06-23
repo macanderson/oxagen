@@ -93,7 +93,9 @@ export const ontologyQueryHandler: CapabilityHandler<typeof ontologyQuery> = asy
       // 2) Walk the graph. Every reached node and every relationship along the
       //    path is constrained to the same org + workspace. We fetch one extra
       //    row beyond `limit` to detect truncation.
-      const fetchLimit = input.limit + 1;
+      // BigInt forces the Bolt driver to send INTEGER — plain JS numbers become
+      // Float and Neo4j rejects them for LIMIT.
+      const fetchLimit = BigInt(input.limit + 1);
       const traverseResult = await session.run(
         `MATCH (start:KnowledgeNode {publicId: $startNodeId, orgId: $orgId, workspaceId: $workspaceId})
          MATCH path = ${matchPattern}

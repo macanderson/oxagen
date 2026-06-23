@@ -40,13 +40,9 @@ describe("index.ts barrel exports", () => {
     expect(typeof mod.sumTokenUsage).toBe("function");
     // Insert helpers
     expect(typeof mod.insertExecutionLogs).toBe("function");
-    expect(typeof mod.insertTraces).toBe("function");
-    expect(typeof mod.insertSpans).toBe("function");
     expect(typeof mod.insertEvents).toBe("function");
-    expect(typeof mod.insertApiKeyEvents).toBe("function");
     expect(typeof mod.insertTokenUsage).toBe("function");
     expect(typeof mod.insertToolInvocation).toBe("function");
-    expect(typeof mod.insertAgentLogs).toBe("function");
     expect(typeof mod.insertAuditEvent).toBe("function");
     // Utility
     expect(typeof mod.hashPrompt).toBe("function");

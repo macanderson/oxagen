@@ -18,6 +18,10 @@ const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   verifyStripeSignature: vi.fn(),
   processStripeEvent: vi.fn(),
+  // OXA-1753: /health uses these — keep the gate inert here (this file tests
+  // the request logger, not the email-transport probe).
+  isEmailVerificationRequired: vi.fn().mockReturnValue(false),
+  isEmailTransportConfigured: vi.fn().mockReturnValue(true),
 }));
 
 vi.mock("@oxagen/auth", () => ({
@@ -26,6 +30,11 @@ vi.mock("@oxagen/auth", () => ({
   parseSessionCookie: mocks.parseSessionCookie,
   resolveOrgScope: mocks.resolveOrgScope,
   resolveWorkspaceScope: mocks.resolveWorkspaceScope,
+  isEmailVerificationRequired: mocks.isEmailVerificationRequired,
+}));
+
+vi.mock("@oxagen/notifications", () => ({
+  isEmailTransportConfigured: mocks.isEmailTransportConfigured,
 }));
 
 vi.mock("@oxagen/oxagen/kernel", () => ({

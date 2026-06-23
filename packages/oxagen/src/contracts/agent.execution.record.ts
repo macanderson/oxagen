@@ -1,6 +1,21 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
+/**
+ * Canonical agent-execution origin types. MUST stay in sync with the
+ * `agent_executions_origin_type_check` CHECK constraint in
+ * packages/database/src/schema/agent.ts (and the baseline/0007 migrations).
+ * Tokens use underscores ("workflow_run", not "workflow.run") — a mismatched
+ * value is rejected by Postgres at INSERT.
+ */
+export const AGENT_EXECUTION_ORIGIN_TYPES = [
+  "chat",
+  "event_trigger",
+  "scheduled_job",
+  "mcp_request",
+  "workflow_run",
+] as const;
+
 const executionStepSchema = z.object({
   stepNumber: z.number().int().nonnegative(),
   stepType: z.string(),
@@ -45,7 +60,7 @@ export const agentExecutionRecord = registerCapability({
   input: z.object({
     agentId: z.string().uuid(),
     agentVersionId: z.string().uuid(),
-    originType: z.string(),
+    originType: z.enum(AGENT_EXECUTION_ORIGIN_TYPES),
     originId: z.string().uuid(),
     status: z.enum(["planning", "running", "completed", "failed", "cancelled"]),
     inputPayload: z.unknown(),

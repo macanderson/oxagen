@@ -311,7 +311,8 @@
         "GOOGLE_LOGIN_CLIENT_SECRET",
         "GITHUB_APP_CLIENT_ID",
         "GITHUB_APP_CLIENT_SECRET",
-        "GITHUB_APP_INSTALL_STATE_SECRET"
+        "GITHUB_APP_INSTALL_STATE_SECRET",
+        "GITHUB_APP_SLUG"
       ],
       "passThroughEnv": ["CI"]
     },

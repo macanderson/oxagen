@@ -32,6 +32,7 @@ vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mockInvoke }));
 vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
 vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mockResolveOrg,
+  getOrgRole: vi.fn().mockResolvedValue("owner"),
   assertOrgMember: mockAssertOrgMember,
   assertSecurityManager: mockAssertSecurityManager,
 }));
