@@ -5,7 +5,7 @@ import type {
   AgentDeployOutput,
 } from "@oxagen/oxagen/contracts/agent.deploy";
 import type { CapabilityContext } from "../types";
-import { resolveAgent } from "./_agent-definition";
+import { resolveAgent, assertAgentMutable } from "./_agent-definition";
 
 export type { AgentDeployInput, AgentDeployOutput };
 
@@ -38,6 +38,7 @@ export async function agentDeployHandler(
     if (!agent) {
       throw new Error(`Agent "${input.agentId}" not found in this workspace`);
     }
+    assertAgentMutable(agent);
 
     if (input.deploymentStatus === "active") {
       if (!agent.activeVersionId) {

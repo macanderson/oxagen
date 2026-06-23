@@ -15,18 +15,26 @@ import {
   agentDeployHandler,
   AgentDeployRequiresPublishedVersionError,
 } from "./agent.deploy";
+import { AgentManagedReadOnlyError } from "./_agent-definition";
 import { TEST_CTX as CTX, makeCTX } from "../test-utils/fixtures";
 
 const baseAgent = {
   id: "uuid-1",
   publicId: "agt_1",
-  slug: "qa-chat",
-  name: "QA",
+  slug: "my-agent",
+  name: "My Agent",
   description: null,
-  agentType: "interactive_chat",
+  agentType: "custom",
   status: "active",
   deploymentStatus: "inactive",
   activeVersionId: "ver-1",
+};
+
+const managedAgent = {
+  ...baseAgent,
+  publicId: "agt_builtin",
+  slug: "qa-chat",
+  agentType: "interactive_chat",
 };
 
 beforeEach(() => fake.reset());
@@ -69,6 +77,16 @@ describe("agent.deploy handler", () => {
       CTX,
     );
     expect(out.deploymentStatus).toBe("inactive");
+  });
+
+  it("throws AgentManagedReadOnlyError for a managed agent and performs no mutation", async () => {
+    fake.enqueue([managedAgent]); // resolveAgent → managed
+    const err = await agentDeployHandler(
+      { agentId: "agt_builtin", deploymentStatus: "inactive" },
+      CTX,
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AgentManagedReadOnlyError);
+    expect((err as AgentManagedReadOnlyError).code).toBe("agent_managed_read_only");
   });
 
   it("throws when the agent is not found", async () => {

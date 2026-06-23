@@ -12,18 +12,26 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 import { agentDefinitionPublishHandler } from "./agent.definition.publish";
+import { AgentManagedReadOnlyError } from "./_agent-definition";
 import { TEST_CTX as CTX, makeCTX } from "../test-utils/fixtures";
 
 const AGENT_ROW = {
   id: "uuid-1",
   publicId: "agt_1",
-  slug: "qa-chat",
-  name: "QA",
+  slug: "my-agent",
+  name: "My Agent",
   description: null,
-  agentType: "interactive_chat",
+  agentType: "custom",
   status: "draft",
   deploymentStatus: "inactive",
   activeVersionId: null,
+};
+
+const MANAGED_AGENT_ROW = {
+  ...AGENT_ROW,
+  publicId: "agt_builtin",
+  slug: "qa-chat",
+  agentType: "interactive_chat",
 };
 
 const CONFIG = {
@@ -90,6 +98,16 @@ describe("agent.definition.publish handler", () => {
     await expect(
       agentDefinitionPublishHandler({ agentId: "agt_1" }, CTX),
     ).rejects.toThrow(/no versions/);
+  });
+
+  it("throws AgentManagedReadOnlyError for a managed agent and performs no mutation", async () => {
+    fake.enqueue([MANAGED_AGENT_ROW]); // resolveAgent → managed
+    const err = await agentDefinitionPublishHandler(
+      { agentId: "agt_builtin", version: 1 },
+      CTX,
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AgentManagedReadOnlyError);
+    expect((err as AgentManagedReadOnlyError).code).toBe("agent_managed_read_only");
   });
 
   it("throws without an authenticated user", async () => {

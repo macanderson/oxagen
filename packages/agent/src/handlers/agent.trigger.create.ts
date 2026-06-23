@@ -5,7 +5,7 @@ import type {
   AgentTriggerCreateOutput,
 } from "@oxagen/oxagen/contracts/agent.trigger.create";
 import type { CapabilityContext } from "../types";
-import { resolveAgent } from "./_agent-definition";
+import { resolveAgent, assertAgentMutable } from "./_agent-definition";
 
 export type { AgentTriggerCreateInput, AgentTriggerCreateOutput };
 
@@ -30,6 +30,7 @@ export async function agentTriggerCreateHandler(
     if (!agent) {
       throw new Error(`Agent "${input.agentId}" not found in this workspace`);
     }
+    assertAgentMutable(agent);
 
     const [row] = await tx
       .insert(schema.agentTriggers)

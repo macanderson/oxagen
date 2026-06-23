@@ -19,7 +19,7 @@ describe("agent.definition.list capability", () => {
     ).toThrow();
   });
 
-  it("parses a valid output with a nullable latestVersion", () => {
+  it("parses a valid output with a nullable latestVersion and managed flag", () => {
     const out = agentDefinitionList.output.parse({
       agents: [
         {
@@ -31,6 +31,7 @@ describe("agent.definition.list capability", () => {
           status: "active",
           deploymentStatus: "active",
           latestVersion: 1,
+          managed: true,
         },
         {
           agentId: "agt_2",
@@ -41,11 +42,34 @@ describe("agent.definition.list capability", () => {
           status: "draft",
           deploymentStatus: "inactive",
           latestVersion: null,
+          managed: false,
         },
       ],
     });
     expect(out.agents).toHaveLength(2);
+    expect(out.agents[0]!.managed).toBe(true);
     expect(out.agents[1]!.latestVersion).toBeNull();
+    expect(out.agents[1]!.managed).toBe(false);
+  });
+
+  it("rejects output missing the managed field", () => {
+    expect(() =>
+      agentDefinitionList.output.parse({
+        agents: [
+          {
+            agentId: "agt_1",
+            publicId: "agt_1",
+            slug: "qa-chat",
+            name: "QA",
+            description: null,
+            status: "active",
+            deploymentStatus: "active",
+            latestVersion: 1,
+            // managed intentionally omitted
+          },
+        ],
+      }),
+    ).toThrow();
   });
 
   it("is registered in the capability registry", () => {

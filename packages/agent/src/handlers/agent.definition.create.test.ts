@@ -12,6 +12,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 import { agentDefinitionCreateHandler } from "./agent.definition.create";
+import { AgentManagedReadOnlyError } from "./_agent-definition";
 import { TEST_CTX as CTX, makeCTX } from "../test-utils/fixtures";
 
 const CONFIG = {
@@ -67,5 +68,33 @@ describe("agent.definition.create handler", () => {
         CTX,
       ),
     ).rejects.toThrow();
+  });
+
+  it("throws AgentManagedReadOnlyError when agentType is the reserved 'interactive_chat'", async () => {
+    const err = await agentDefinitionCreateHandler(
+      { ...INPUT, agentType: "interactive_chat" },
+      CTX,
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AgentManagedReadOnlyError);
+    expect((err as AgentManagedReadOnlyError).code).toBe("agent_managed_read_only");
+  });
+
+  it("throws AgentManagedReadOnlyError when slug collides with the built-in 'qa-chat'", async () => {
+    const err = await agentDefinitionCreateHandler(
+      { ...INPUT, slug: "qa-chat" },
+      CTX,
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AgentManagedReadOnlyError);
+    expect((err as AgentManagedReadOnlyError).code).toBe("agent_managed_read_only");
+  });
+
+  it("throws before any DB write when identity is reserved (no fake enqueue needed)", async () => {
+    // Confirm the guard fires before insert — the queue is empty so any DB
+    // call would throw "queue exhausted".  The managed check must short-circuit.
+    const err = await agentDefinitionCreateHandler(
+      { ...INPUT, agentType: "interactive_chat" },
+      CTX,
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AgentManagedReadOnlyError);
   });
 });
