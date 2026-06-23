@@ -58,6 +58,8 @@ import "./contracts/billing.subscription.upgrade.start";
 import "./contracts/brandkit.apply";
 import "./contracts/chat.message.execution";
 import "./contracts/chat.message.send";
+import "./contracts/command.menu.search";
+import "./contracts/command.menu.suggest";
 import "./contracts/connection.create";
 import "./contracts/connection.delete";
 import "./contracts/connection.get";

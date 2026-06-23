@@ -1014,6 +1014,36 @@
       }
     },
     {
+      "name": "command.menu.search",
+      "file": "command.menu.search.ts",
+      "domain": "command",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "command.menu.suggest",
+      "file": "command.menu.suggest.ts",
+      "domain": "command",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true
+      }
+    },
+    {
       "name": "connection.create",
       "file": "connection.create.ts",
       "domain": "connection",
