@@ -2,6 +2,10 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
 
+// Re-export so handlers (which import from `@oxagen/oxagen/contracts/*`, the only
+// oxagen subpath exposed to them) can share the single lexical Cypher guard.
+export { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
+
 export const graphRelationshipUpsert = registerCapability({
   name: "graph.relationship.upsert",
   domain: "graph",

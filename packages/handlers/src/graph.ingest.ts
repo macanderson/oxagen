@@ -3,13 +3,17 @@ import { generateObjectFor } from "@oxagen/ai";
 import type { CapabilityContext, CapabilityHandler } from "@oxagen/oxagen";
 import { graphIngest } from "@oxagen/oxagen/contracts/graph.ingest";
 import type { GraphIngestOutput } from "@oxagen/oxagen/contracts/graph.ingest";
-import { GRAPH_EDGE_TYPES } from "@oxagen/oxagen/contracts/graph.edge.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
 import { invoke } from "@oxagen/oxagen/kernel";
+import { getPinnedSchema } from "./schema.pinned";
 import { logger } from "./logger";
 
-// The LLM extraction shape. Confidence is clamped to [0,1]; edge types are
-// constrained to the graph's declared relationship vocabulary so the model
-// cannot invent edge types the graph.edge.upsert contract would reject.
+// The LLM extraction shape. Confidence is clamped to [0,1]; the relationship
+// type is constrained ONLY to the lexical RELATIONSHIP_TYPE_PATTERN guard
+// (§3.2 — the fixed GRAPH_EDGE_TYPES enum is gone, relationship types are
+// workspace-defined). The pinned active vocabulary (when present) further
+// constrains the type at filter time below; the type is re-validated against
+// the lexical guard before any graph mutation.
 const extractionSchema = z.object({
   entities: z
     .array(
@@ -26,7 +30,7 @@ const extractionSchema = z.object({
       z.object({
         fromName: z.string(),
         toName: z.string(),
-        edgeType: z.enum(GRAPH_EDGE_TYPES),
+        relationshipType: z.string().regex(RELATIONSHIP_TYPE_PATTERN),
         confidence: z.number().min(0).max(1),
       }),
     )
@@ -55,24 +59,36 @@ async function readWorkspacePrompt(ctx: CapabilityContext): Promise<string> {
 export async function extractGraph(args: {
   text: string;
   typeHints: string[];
+  /** Allowed relationship types from the pinned active vocabulary, or null when none pinned. */
+  allowedRelationshipTypes: string[] | null;
   workspacePrompt: string;
   maxEntities: number;
   ctx: CapabilityContext;
 }): Promise<GraphExtraction> {
-  const { text, typeHints, workspacePrompt, maxEntities, ctx } = args;
+  const { text, typeHints, allowedRelationshipTypes, workspacePrompt, maxEntities, ctx } = args;
+
+  // Relationship-type guidance: when the workspace pins a registry, constrain the
+  // model to the active vocabulary's relationship types; otherwise let it propose
+  // any lexically-valid type (uppercase snake). The active vocab is injected as
+  // DATA context, never as executable instructions (§11 prompt-injection posture).
+  const relTypeGuidance =
+    allowedRelationshipTypes && allowedRelationshipTypes.length > 0
+      ? `- Use ONLY these relationship types (the workspace's active schema vocabulary): ${allowedRelationshipTypes.join(", ")}.`
+      : `- Relationship types MUST be UPPERCASE_SNAKE_CASE identifiers (e.g. RELATED_TO, DEPENDS_ON, SIGNED_CONTRACT).`;
+
   const prompt = [
     `Extract entities and relationships from the SOURCE TEXT to grow a knowledge graph.`,
     `Follow these rules (from the workspace's knowledge-graph skills):`,
-    `- Read the graph guidance below FIRST to decide which entity/edge types matter.`,
+    `- Read the graph guidance below FIRST to decide which entity/relationship types matter.`,
     `- Extract with RESTRAINT: only admit entities and relationships the text actually states.`,
     `- Do NOT invent endpoints or infer relationships from mere co-occurrence.`,
     `- Give each entity and relationship a confidence in [0,1].`,
-    `- Use ONLY these edge types: ${GRAPH_EDGE_TYPES.join(", ")}.`,
+    relTypeGuidance,
     `- Produce at most ${maxEntities} entities.`,
     typeHints.length > 0 ? `\nENTITY TYPES TO LOOK FOR: ${typeHints.join(", ")}` : "",
     workspacePrompt ? `\nWORKSPACE GRAPH GUIDANCE:\n${workspacePrompt}` : "",
     `\nSOURCE TEXT:\n${text.slice(0, 100_000)}`,
-    `\nReturn JSON { entities: [{name, type, description?, confidence}], relationships: [{fromName, toName, edgeType, confidence}] }.`,
+    `\nReturn JSON { entities: [{name, type, description?, confidence}], relationships: [{fromName, toName, relationshipType, confidence}] }.`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -97,9 +113,17 @@ export const graphIngestHandler: CapabilityHandler<typeof graphIngest> = async (
   ctx,
 ) => {
   const workspacePrompt = await readWorkspacePrompt(ctx);
+
+  // Resolve the pinned active vocabulary's relationship types (null when no
+  // version is pinned) — the §3.2 allow-list for inferred relationship types.
+  const pinned = await getPinnedSchema(ctx.orgId, ctx.workspaceId);
+  const allowedRelationshipTypes = pinned ? pinned.relationshipTypes.map((r) => r.name) : null;
+  const allowedSet = allowedRelationshipTypes ? new Set(allowedRelationshipTypes) : null;
+
   const extraction = await extractGraph({
     text: input.text,
     typeHints: input.entityTypeHints ?? [],
+    allowedRelationshipTypes,
     workspacePrompt,
     maxEntities: input.maxEntities,
     ctx,
@@ -141,6 +165,11 @@ export const graphIngestHandler: CapabilityHandler<typeof graphIngest> = async (
   // ── Upsert relationships — both endpoints must resolve to a node ────────────
   const relationships: GraphIngestOutput["relationships"] = [];
   for (const r of extraction.relationships) {
+    // §3.2 guards before any graph mutation: lexical guard (always) + active
+    // vocabulary membership (when a registry is pinned).
+    if (!RELATIONSHIP_TYPE_PATTERN.test(r.relationshipType)) continue;
+    if (allowedSet && !allowedSet.has(r.relationshipType)) continue;
+
     const fromId = nodeByName.get(r.fromName.toLowerCase());
     const toId = nodeByName.get(r.toName.toLowerCase());
     if (!fromId || !toId) continue; // skill discipline: no invented endpoints
@@ -150,7 +179,7 @@ export const graphIngestHandler: CapabilityHandler<typeof graphIngest> = async (
         {
           fromNodeId: fromId,
           toNodeId: toId,
-          edgeType: r.edgeType,
+          relationshipType: r.relationshipType,
           properties: { confidence: String(r.confidence) },
         },
         ctx,
@@ -158,16 +187,16 @@ export const graphIngestHandler: CapabilityHandler<typeof graphIngest> = async (
       )) as { edgeId?: string; relationshipId?: string; created: boolean };
       relationships.push({
         // graph.ingest output was renamed edgeId→relationshipId in the schema-registry epic
-        relationshipId: out.relationshipId ?? out.edgeId ?? `${fromId}:${r.edgeType}:${toId}`,
+        relationshipId: out.relationshipId ?? out.edgeId ?? `${fromId}:${r.relationshipType}:${toId}`,
         from: r.fromName,
         to: r.toName,
         // graph.ingest output was renamed edgeType→relationshipType in the schema-registry epic
-        relationshipType: r.edgeType,
+        relationshipType: r.relationshipType,
         confidence: r.confidence,
         created: out.created,
       });
     } catch (err) {
-      logger.warn({ err, from: r.fromName, to: r.toName }, "graph.ingest: edge upsert failed");
+      logger.warn({ err, from: r.fromName, to: r.toName }, "graph.ingest: relationship upsert failed");
     }
   }
 

@@ -1,24 +1,22 @@
-// @deprecated Use graph.relationship.upsert instead — one-release alias (removed in v2)
+// @deprecated Use graph.relationship.upsert instead — one-release alias (removed in v2).
+//
+// The fixed `GRAPH_EDGE_TYPES` enum is GONE (Workspace Schema Registry §3.2):
+// customers define their own relationship types in the registry, and Cypher
+// safety is enforced by the always-on lexical `RELATIONSHIP_TYPE_PATTERN` guard
+// plus the pinned active-vocabulary allow-list. This contract is kept only as a
+// one-release deprecation alias so existing `graph.edge.upsert` callers keep
+// working; it now mirrors the `graph.relationship.upsert` input shape (a
+// regex-validated `relationshipType`) and no longer references any enum.
 import { z } from "zod";
 import { registerCapability } from "../registry";
-
-export const GRAPH_EDGE_TYPES = [
-  "RELATED_TO",
-  "PART_OF",
-  "CAUSED_BY",
-  "REFERENCES",
-  "SIMILAR_TO",
-  "DEPENDS_ON",
-  "CREATED_BY",
-  "MENTIONS",
-] as const;
-
-export type GraphEdgeType = (typeof GRAPH_EDGE_TYPES)[number];
+import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
 
 export const graphEdgeUpsert = registerCapability({
   name: "graph.edge.upsert",
   domain: "graph",
-  description: "MERGE a typed relationship between two KnowledgeNodes. Edge type must be one of the allowed relationship types.",
+  description:
+    "DEPRECATED — use graph.relationship.upsert. MERGE a typed relationship between two " +
+    "KnowledgeNodes. Relationship type must match the RELATIONSHIP_TYPE_PATTERN lexical guard.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -33,12 +31,20 @@ export const graphEdgeUpsert = registerCapability({
   input: z.object({
     fromNodeId: z.string().describe("publicId of the source KnowledgeNode"),
     toNodeId: z.string().describe("publicId of the target KnowledgeNode"),
-    edgeType: z.enum(GRAPH_EDGE_TYPES).describe("Relationship type between the two nodes"),
-    properties: z.record(z.string(), z.string()).optional().describe("Optional string key-value metadata to store on the relationship"),
+    relationshipType: z
+      .string()
+      .regex(RELATIONSHIP_TYPE_PATTERN)
+      .describe("Relationship type — must match [A-Z][A-Z0-9_]{0,62}"),
+    properties: z
+      .record(z.string(), z.string())
+      .optional()
+      .describe("Optional string key-value metadata to store on the relationship"),
   }),
   output: z.object({
-    edgeId: z.string().describe("Composite identifier: fromNodeId:edgeType:toNodeId"),
-    created: z.boolean().describe("True if the edge was newly created, false if it already existed"),
+    edgeId: z
+      .string()
+      .describe("Composite identifier: fromNodeId:relationshipType:toNodeId"),
+    created: z.boolean().describe("True if the relationship was newly created, false if it existed"),
   }),
 });
 

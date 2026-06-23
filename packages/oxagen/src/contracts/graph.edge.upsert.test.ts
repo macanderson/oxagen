@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { graphEdgeUpsert, GRAPH_EDGE_TYPES } from "./graph.edge.upsert";
+import { graphEdgeUpsert } from "./graph.edge.upsert";
 import { getCapability } from "../registry";
 
-describe("graph.edge.upsert capability", () => {
+// graph.edge.upsert is a one-release DEPRECATION ALIAS of graph.relationship.upsert
+// (Workspace Schema Registry §1.2). The fixed GRAPH_EDGE_TYPES enum is GONE (§3.2):
+// the input now carries a regex-validated `relationshipType` (the lexical
+// RELATIONSHIP_TYPE_PATTERN guard), not an enum.
+describe("graph.edge.upsert capability (deprecation alias)", () => {
   // ── input: fromNodeId / toNodeId ──────────────────────────────────────────
 
   it("accepts valid fromNodeId and toNodeId", () => {
     const parsed = graphEdgeUpsert.input.parse({
       fromNodeId: "node_a",
       toNodeId: "node_b",
-      edgeType: "RELATED_TO",
+      relationshipType: "RELATED_TO",
     });
     expect(parsed.fromNodeId).toBe("node_a");
     expect(parsed.toNodeId).toBe("node_b");
@@ -17,52 +21,60 @@ describe("graph.edge.upsert capability", () => {
 
   it("rejects missing fromNodeId", () => {
     expect(() =>
-      graphEdgeUpsert.input.parse({ toNodeId: "node_b", edgeType: "RELATED_TO" }),
+      graphEdgeUpsert.input.parse({ toNodeId: "node_b", relationshipType: "RELATED_TO" }),
     ).toThrow();
   });
 
   it("rejects missing toNodeId", () => {
     expect(() =>
-      graphEdgeUpsert.input.parse({ fromNodeId: "node_a", edgeType: "RELATED_TO" }),
+      graphEdgeUpsert.input.parse({ fromNodeId: "node_a", relationshipType: "RELATED_TO" }),
     ).toThrow();
   });
 
   it("rejects non-string fromNodeId", () => {
     expect(() =>
-      graphEdgeUpsert.input.parse({ fromNodeId: 99, toNodeId: "node_b", edgeType: "RELATED_TO" }),
-    ).toThrow();
-  });
-
-  // ── input: edgeType enum ──────────────────────────────────────────────────
-
-  it("exports GRAPH_EDGE_TYPES with expected members", () => {
-    expect(GRAPH_EDGE_TYPES).toContain("RELATED_TO");
-    expect(GRAPH_EDGE_TYPES).toContain("PART_OF");
-    expect(GRAPH_EDGE_TYPES).toContain("MENTIONS");
-  });
-
-  it("accepts every valid edge type", () => {
-    for (const edgeType of GRAPH_EDGE_TYPES) {
-      const parsed = graphEdgeUpsert.input.parse({
-        fromNodeId: "node_a",
-        toNodeId: "node_b",
-        edgeType,
-      });
-      expect(parsed.edgeType).toBe(edgeType);
-    }
-  });
-
-  it("rejects an unknown edge type", () => {
-    expect(() =>
       graphEdgeUpsert.input.parse({
-        fromNodeId: "node_a",
+        fromNodeId: 99,
         toNodeId: "node_b",
-        edgeType: "KNOWS",
+        relationshipType: "RELATED_TO",
       }),
     ).toThrow();
   });
 
-  it("rejects a missing edgeType", () => {
+  // ── input: relationshipType (regex guard, no enum) ────────────────────────
+
+  it("accepts any workspace-defined relationship type matching the lexical guard", () => {
+    for (const relationshipType of ["RELATED_TO", "SIGNED_CONTRACT", "EMPLOYS", "X"]) {
+      const parsed = graphEdgeUpsert.input.parse({
+        fromNodeId: "node_a",
+        toNodeId: "node_b",
+        relationshipType,
+      });
+      expect(parsed.relationshipType).toBe(relationshipType);
+    }
+  });
+
+  it("rejects a relationship type that fails the lexical guard (injection-shaped)", () => {
+    expect(() =>
+      graphEdgeUpsert.input.parse({
+        fromNodeId: "node_a",
+        toNodeId: "node_b",
+        relationshipType: "`]->()-[:x",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects a lowercase relationship type", () => {
+    expect(() =>
+      graphEdgeUpsert.input.parse({
+        fromNodeId: "node_a",
+        toNodeId: "node_b",
+        relationshipType: "knows",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects a missing relationshipType", () => {
     expect(() =>
       graphEdgeUpsert.input.parse({ fromNodeId: "node_a", toNodeId: "node_b" }),
     ).toThrow();
@@ -74,7 +86,7 @@ describe("graph.edge.upsert capability", () => {
     const parsed = graphEdgeUpsert.input.parse({
       fromNodeId: "node_a",
       toNodeId: "node_b",
-      edgeType: "DEPENDS_ON",
+      relationshipType: "DEPENDS_ON",
     });
     expect(parsed.properties).toBeUndefined();
   });
@@ -83,7 +95,7 @@ describe("graph.edge.upsert capability", () => {
     const parsed = graphEdgeUpsert.input.parse({
       fromNodeId: "node_a",
       toNodeId: "node_b",
-      edgeType: "DEPENDS_ON",
+      relationshipType: "DEPENDS_ON",
       properties: { weight: "high", since: "2024-01-01" },
     });
     expect(parsed.properties?.["weight"]).toBe("high");
@@ -94,7 +106,7 @@ describe("graph.edge.upsert capability", () => {
       graphEdgeUpsert.input.parse({
         fromNodeId: "node_a",
         toNodeId: "node_b",
-        edgeType: "DEPENDS_ON",
+        relationshipType: "DEPENDS_ON",
         properties: { count: 5 },
       }),
     ).toThrow();
