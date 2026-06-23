@@ -13,7 +13,7 @@ describe("agent.execution.record capability", () => {
     const parsed = agentExecutionRecord.input.parse({
       agentId: BASE_UUID_A,
       agentVersionId: BASE_UUID_B,
-      originType: "user",
+      originType: "chat",
       originId: BASE_UUID_C,
       status: "completed",
       inputPayload: { query: "hello" },
@@ -26,7 +26,7 @@ describe("agent.execution.record capability", () => {
     expect(() =>
       agentExecutionRecord.input.parse({
         agentVersionId: BASE_UUID_B,
-        originType: "user",
+        originType: "chat",
         originId: BASE_UUID_C,
         status: "completed",
         inputPayload: {},
@@ -39,7 +39,7 @@ describe("agent.execution.record capability", () => {
       agentExecutionRecord.input.parse({
         agentId: "not-a-uuid",
         agentVersionId: BASE_UUID_B,
-        originType: "user",
+        originType: "chat",
         originId: BASE_UUID_C,
         status: "completed",
         inputPayload: {},
@@ -52,7 +52,7 @@ describe("agent.execution.record capability", () => {
       agentExecutionRecord.input.parse({
         agentId: BASE_UUID_A,
         agentVersionId: BASE_UUID_B,
-        originType: "user",
+        originType: "chat",
         originId: "bad-id",
         status: "completed",
         inputPayload: {},
@@ -66,7 +66,7 @@ describe("agent.execution.record capability", () => {
     const parsed = agentExecutionRecord.input.parse({
       agentId: BASE_UUID_A,
       agentVersionId: BASE_UUID_B,
-      originType: "user",
+      originType: "chat",
       originId: BASE_UUID_C,
       status: "planning",
       inputPayload: {},
@@ -78,7 +78,7 @@ describe("agent.execution.record capability", () => {
     const parsed = agentExecutionRecord.input.parse({
       agentId: BASE_UUID_A,
       agentVersionId: BASE_UUID_B,
-      originType: "user",
+      originType: "chat",
       originId: BASE_UUID_C,
       status: "running",
       inputPayload: {},
@@ -90,7 +90,7 @@ describe("agent.execution.record capability", () => {
     const parsed = agentExecutionRecord.input.parse({
       agentId: BASE_UUID_A,
       agentVersionId: BASE_UUID_B,
-      originType: "user",
+      originType: "chat",
       originId: BASE_UUID_C,
       status: "failed",
       inputPayload: {},
@@ -102,7 +102,7 @@ describe("agent.execution.record capability", () => {
     const parsed = agentExecutionRecord.input.parse({
       agentId: BASE_UUID_A,
       agentVersionId: BASE_UUID_B,
-      originType: "user",
+      originType: "chat",
       originId: BASE_UUID_C,
       status: "cancelled",
       inputPayload: {},
@@ -115,7 +115,7 @@ describe("agent.execution.record capability", () => {
       agentExecutionRecord.input.parse({
         agentId: BASE_UUID_A,
         agentVersionId: BASE_UUID_B,
-        originType: "user",
+        originType: "chat",
         originId: BASE_UUID_C,
         status: "queued",
         inputPayload: {},
@@ -129,7 +129,7 @@ describe("agent.execution.record capability", () => {
     const parsed = agentExecutionRecord.input.parse({
       agentId: BASE_UUID_A,
       agentVersionId: BASE_UUID_B,
-      originType: "user",
+      originType: "chat",
       originId: BASE_UUID_C,
       status: "completed",
       inputPayload: {},
@@ -142,7 +142,7 @@ describe("agent.execution.record capability", () => {
     const parsed = agentExecutionRecord.input.parse({
       agentId: BASE_UUID_A,
       agentVersionId: BASE_UUID_B,
-      originType: "user",
+      originType: "chat",
       originId: BASE_UUID_C,
       status: "failed",
       inputPayload: {},
@@ -155,7 +155,7 @@ describe("agent.execution.record capability", () => {
     const parsed = agentExecutionRecord.input.parse({
       agentId: BASE_UUID_A,
       agentVersionId: BASE_UUID_B,
-      originType: "user",
+      originType: "chat",
       originId: BASE_UUID_C,
       status: "completed",
       inputPayload: {},
@@ -168,7 +168,7 @@ describe("agent.execution.record capability", () => {
     const parsed = agentExecutionRecord.input.parse({
       agentId: BASE_UUID_A,
       agentVersionId: BASE_UUID_B,
-      originType: "user",
+      originType: "chat",
       originId: BASE_UUID_C,
       status: "completed",
       inputPayload: {},
@@ -182,7 +182,7 @@ describe("agent.execution.record capability", () => {
       agentExecutionRecord.input.parse({
         agentId: BASE_UUID_A,
         agentVersionId: BASE_UUID_B,
-        originType: "user",
+        originType: "chat",
         originId: BASE_UUID_C,
         status: "completed",
         inputPayload: {},
@@ -195,7 +195,7 @@ describe("agent.execution.record capability", () => {
     const parsed = agentExecutionRecord.input.parse({
       agentId: BASE_UUID_A,
       agentVersionId: BASE_UUID_B,
-      originType: "user",
+      originType: "chat",
       originId: BASE_UUID_C,
       status: "completed",
       inputPayload: {},
@@ -210,7 +210,7 @@ describe("agent.execution.record capability", () => {
     const parsed = agentExecutionRecord.input.parse({
       agentId: BASE_UUID_A,
       agentVersionId: BASE_UUID_B,
-      originType: "user",
+      originType: "chat",
       originId: BASE_UUID_C,
       status: "completed",
       inputPayload: {},
@@ -244,7 +244,7 @@ describe("agent.execution.record capability", () => {
       agentExecutionRecord.input.parse({
         agentId: BASE_UUID_A,
         agentVersionId: BASE_UUID_B,
-        originType: "user",
+        originType: "chat",
         originId: BASE_UUID_C,
         status: "completed",
         inputPayload: {},
@@ -265,7 +265,7 @@ describe("agent.execution.record capability", () => {
       agentExecutionRecord.input.parse({
         agentId: BASE_UUID_A,
         agentVersionId: BASE_UUID_B,
-        originType: "user",
+        originType: "chat",
         originId: BASE_UUID_C,
         status: "completed",
         inputPayload: {},
