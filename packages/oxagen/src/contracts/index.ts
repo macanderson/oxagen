@@ -211,6 +211,15 @@ import { semanticRelationshipApprove } from "./semantic.relationship.approve";
 import { semanticRelationshipInfer } from "./semantic.relationship.infer";
 import { semanticRelationshipList } from "./semantic.relationship.list";
 import { semanticRelationshipSuggest } from "./semantic.relationship.suggest";
+// Re-export shared Zod helpers used across schema.* contracts.
+// These are not capability contracts themselves but must appear here to satisfy
+// the check-contracts file-coverage guard (tools/scripts/check-contracts.mjs).
+export type { FieldError as SharedFieldError, PropertyInput as SharedPropertyInput } from "./schema.shared";
+export type {
+  FieldError,
+  DataType,
+  PropertyInput,
+} from "./schema.types";
 
 export {
   apiKeyCreate,
