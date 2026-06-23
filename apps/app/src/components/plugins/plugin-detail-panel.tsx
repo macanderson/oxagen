@@ -66,7 +66,22 @@ export function PluginDetailPanel({
       `/api/v1/plugin/catalog/get?name=${encodeURIComponent(serverName)}&version=latest&workspaceId=${encodeURIComponent(workspaceId)}`,
       { signal: controller.signal },
     )
-      .then((r) => r.json() as Promise<CatalogDetail>)
+      .then(async (r) => {
+        // Parse defensively: a non-OK response returns `{ error }`, not a
+        // CatalogDetail. Treating that body as detail (the old behaviour) made
+        // the render crash on `detail.icons[0]` — which took the whole
+        // marketplace panel down. Validate status + shape before committing.
+        const body = (await r.json().catch(() => null)) as
+          | (CatalogDetail & { error?: string })
+          | null;
+        if (!r.ok || body == null || typeof body.error === "string") {
+          throw new Error(
+            (body && typeof body.error === "string" && body.error) ||
+              `Failed to load plugin detail (${r.status})`,
+          );
+        }
+        return body as CatalogDetail;
+      })
       .then((d) => {
         setDetail(d);
         setLoading(false);
@@ -144,7 +159,7 @@ export function PluginDetailPanel({
     <div className="flex h-full flex-col" data-testid="plugin-detail-panel">
       {/* Header */}
       <div className="flex items-start gap-3 border-b border-border/40 p-6">
-        {detail.icons[0] ? (
+        {detail.icons?.[0] ? (
           <Image
             src={detail.icons[0].src}
             alt=""

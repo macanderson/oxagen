@@ -4,7 +4,7 @@ import { getOrgId } from "../lib/config.js";
 
 interface PluginOrgInstallBulkResponse {
   installed: Array<{
-    catalogServerId: string | null;
+    pluginId: string | null;
     orgListingId: string | null;
     error: string | null;
   }>;
@@ -29,7 +29,7 @@ export const pluginOrgInstallBulkCommand = new Command("install-bulk")
       console.log(`✓ Bulk install complete: ${succeeded} succeeded, ${failed} failed`);
       for (const item of data.installed) {
         if (item.error) {
-          console.log(`  ✗ ${item.catalogServerId ?? "custom"}: ${item.error}`);
+          console.log(`  ✗ ${item.pluginId ?? "custom"}: ${item.error}`);
         } else {
           console.log(`  ✓ ${item.orgListingId}`);
         }
