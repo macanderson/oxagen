@@ -57,10 +57,10 @@ test("GitHub connect wizard reaches the OAuth redirect (no failed-to-fetch)", as
     `GET auth-url → ${authUrlRes.status()}: ${await authUrlRes.text().catch(() => "<no body>")}`,
   ).toBe(true);
 
-  // The wizard hands off to GitHub's authorize page with the app client and
-  // an HMAC-signed state param.
-  await page.waitForURL(/github\.com\/login\/oauth\/authorize/);
-  const authorizeUrl = new URL(page.url());
-  expect(authorizeUrl.searchParams.get("client_id")).toBeTruthy();
-  expect(authorizeUrl.searchParams.get("state")).toBeTruthy();
+  // The wizard hands off to the GitHub App *installation* page (so a first-time
+  // user installs the App and GitHub round-trips our HMAC-signed state back to
+  // the callback). The state param carries org/workspace/connection attribution.
+  await page.waitForURL(/github\.com\/apps\/[^/]+\/installations\/new/);
+  const installUrl = new URL(page.url());
+  expect(installUrl.searchParams.get("state")).toBeTruthy();
 });
