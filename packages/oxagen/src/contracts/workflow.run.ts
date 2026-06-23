@@ -30,8 +30,8 @@ export const workflowRun = registerCapability({
       .describe("Maximum concurrent sub-tasks (1-100)"),
   }),
   output: z.object({
-    workflowId: z.string().describe("Internal UUID of the workflow_runs row"),
-    publicId: z.string().describe("wfr_* prefixed public ID"),
+    workflowId: z.string().describe("Internal UUID of the agent_executions row (origin_type=workflow_run)"),
+    publicId: z.string().describe("aex_* prefixed public ID of the agent_executions row"),
     status: z.literal("planning"),
     render: z.object({
       componentId: z.literal("workflow-progress"),

@@ -120,6 +120,114 @@ describe("loadBuiltInSchema — built-in plugins", () => {
     expect(schema?.metadata.displayName).toBe("Google Drive");
   });
 
+  // ── Newly-added built-in connector schemas (OXA-1784) ─────────────────────
+
+  it("loads the google-calendar schema", () => {
+    const schema = loadBuiltInSchema("google-calendar");
+    expect(schema?.metadata.id).toBe("google-calendar");
+    expect(schema?.metadata.displayName).toBe("Google Calendar");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the google-gmail schema", () => {
+    const schema = loadBuiltInSchema("google-gmail");
+    expect(schema?.metadata.id).toBe("google-gmail");
+    expect(schema?.metadata.displayName).toBe("Gmail");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the google-meet schema", () => {
+    const schema = loadBuiltInSchema("google-meet");
+    expect(schema?.metadata.id).toBe("google-meet");
+    expect(schema?.metadata.displayName).toBe("Google Meet");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the google-tasks schema", () => {
+    const schema = loadBuiltInSchema("google-tasks");
+    expect(schema?.metadata.id).toBe("google-tasks");
+    expect(schema?.metadata.displayName).toBe("Google Tasks");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the google-contacts schema", () => {
+    const schema = loadBuiltInSchema("google-contacts");
+    expect(schema?.metadata.id).toBe("google-contacts");
+    expect(schema?.metadata.displayName).toBe("Google Contacts");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the google-bigquery schema", () => {
+    const schema = loadBuiltInSchema("google-bigquery");
+    expect(schema?.metadata.id).toBe("google-bigquery");
+    expect(schema?.metadata.displayName).toBe("Google BigQuery");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the microsoft schema", () => {
+    const schema = loadBuiltInSchema("microsoft");
+    expect(schema?.metadata.id).toBe("microsoft");
+    expect(schema?.metadata.displayName).toBe("Microsoft 365");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the salesforce schema", () => {
+    const schema = loadBuiltInSchema("salesforce");
+    expect(schema?.metadata.id).toBe("salesforce");
+    expect(schema?.metadata.displayName).toBe("Salesforce");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the zoom schema", () => {
+    const schema = loadBuiltInSchema("zoom");
+    expect(schema?.metadata.id).toBe("zoom");
+    expect(schema?.metadata.displayName).toBe("Zoom");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the custom-sql schema", () => {
+    const schema = loadBuiltInSchema("custom-sql");
+    expect(schema?.metadata.id).toBe("custom-sql");
+    expect(schema?.metadata.displayName).toBe("Custom SQL");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the custom-webhook schema", () => {
+    const schema = loadBuiltInSchema("custom-webhook");
+    expect(schema?.metadata.id).toBe("custom-webhook");
+    expect(schema?.metadata.displayName).toBe("Generic Webhook");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  it("loads the example-saas schema (reference connector)", () => {
+    const schema = loadBuiltInSchema("example-saas");
+    expect(schema?.metadata.id).toBe("example-saas");
+    expect(schema?.metadata.displayName).toBe("ExampleSaaS");
+    expect(schema?.auth?.schemes.length).toBeGreaterThan(0);
+    expect(schema?.config?.fields.length).toBeGreaterThan(0);
+  });
+
+  // Regression: set size must match the number of schema.yaml files on disk,
+  // so this test catches drift in either direction.
+  it("BUILT_IN_PLUGIN_IDS contains the expected 16 connector ids (OXA-1784 coverage)", () => {
+    // Update this count whenever a new connector is added to BUILT_IN_PLUGIN_IDS.
+    // Current set: github, linear, slack, google-drive, google-calendar, google-gmail,
+    // google-meet, google-tasks, google-contacts, google-bigquery, microsoft, salesforce,
+    // zoom, custom-sql, custom-webhook, example-saas = 16.
+    expect(BUILT_IN_PLUGIN_IDS.size).toBe(16);
+  });
+
   // Regression: every declared built-in MUST have a schema file that resolves
   // on disk and loads. In prod, apps/api esbuild-bundles this loader (CJS) and
   // copies these YAMLs next to the function; a built-in id without a matching

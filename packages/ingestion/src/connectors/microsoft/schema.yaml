@@ -1,0 +1,186 @@
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+
+metadata:
+  id: microsoft
+  displayName: Microsoft 365
+  description: Sync emails, Teams messages, SharePoint files, OneDrive documents, and calendar events from Microsoft 365.
+  icon: microsoft
+  category: productivity
+  version: "1.0.0"
+  schemaVersion: "1"
+  publisher:
+    name: Oxagen
+    verified: true
+
+auth:
+  schemes:
+    - id: oauth2_client_credentials
+      kind: oauth2_client_credentials
+      displayName: Microsoft 365 (Admin Consent)
+      scopes:
+        - https://graph.microsoft.com/Mail.Read
+        - https://graph.microsoft.com/ChannelMessage.Read.All
+        - https://graph.microsoft.com/Files.Read.All
+        - https://graph.microsoft.com/Calendars.Read
+        - https://graph.microsoft.com/User.Read.All
+
+config:
+  fields:
+    - key: tenantId
+      label: Tenant ID
+      widget: text
+      description: Your Microsoft 365 tenant (directory) ID. Found in Azure Active Directory → Overview.
+      validation:
+        required: true
+        pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+
+    - key: services
+      label: Microsoft 365 Services
+      widget: multi-select
+      description: Which Microsoft 365 services to sync. Select at least one.
+      defaultValue:
+        - outlook
+        - teams
+      options:
+        - label: Outlook (Email)
+          value: outlook
+        - label: Microsoft Teams
+          value: teams
+        - label: SharePoint
+          value: sharepoint
+        - label: OneDrive
+          value: onedrive
+        - label: Calendar
+          value: calendar
+      validation:
+        minItems: 1
+
+    - key: syncDepthDays
+      label: Initial Sync Depth (days)
+      widget: number
+      description: How far back to pull history on the first sync.
+      defaultValue: 90
+      validation:
+        min: 1
+        max: 365
+
+recordTypes:
+  selectionMode: multi
+  defaultAll: false
+  items:
+    - id: email
+      displayName: Emails (Outlook)
+      description: Emails from Outlook including subject, sender, recipients, and body preview.
+      defaultEnabled: true
+
+    - id: teams_message
+      displayName: Teams Messages
+      description: Messages and replies from Microsoft Teams channels.
+      defaultEnabled: true
+
+    - id: sharepoint_file
+      displayName: SharePoint Files
+      description: Files and documents stored in SharePoint document libraries.
+      defaultEnabled: false
+
+    - id: onedrive_file
+      displayName: OneDrive Files
+      description: Files and documents stored in OneDrive for Business.
+      defaultEnabled: false
+
+    - id: calendar_event
+      displayName: Calendar Events
+      description: Calendar events from Outlook calendars including attendees and meeting links.
+      defaultEnabled: false
+
+filters:
+  pathFilters:
+    enabled: true
+    defaultIgnore:
+      - "Drafts/**"
+      - "Trash/**"
+      - "Junk Email/**"
+    appliesTo:
+      - email
+      - sharepoint_file
+      - onedrive_file
+  labelFilters:
+    enabled: false
+
+inference:
+  enabled: true
+  defaultEnabled: true
+  toggleLabel: Enable AI relationship inference
+  perRecordType:
+    email: true
+    teams_message: true
+    sharepoint_file: true
+    onedrive_file: true
+    calendar_event: false
+  confidenceThreshold:
+    defaultValue: 0.75
+    min: 0.50
+    max: 0.99
+  ontologyPrompt: |
+    Infer project context, decisions, and relationships from Microsoft 365 content.
+
+    Look for:
+    - Email threads discussing product features, architectural decisions, or release plans
+    - Teams messages referencing GitHub PRs, Linear issues, or known feature names
+    - SharePoint/OneDrive documents (specs, designs, PRDs) linking to product areas
+    - Calendar events that tie meetings to projects or teams
+
+    Create edges:
+    - Email -[discusses]-> Feature (when subject or body references a product feature)
+    - TeamsMessage -[references]-> PullRequest (when message contains a PR URL or number)
+    - SharePointFile -[specifies]-> Feature (when filename or content references a feature)
+    - CalendarEvent -[involves]-> Person (when attendee email matches a known contributor)
+    - Person -[sent]-> Email (link sender to known users)
+
+    Cross-source links:
+    - If an email mentions a GitHub repository or PR URL, create a reference edge to that GitHub node
+    - If a Teams channel name matches a Linear project, create an ALIAS_OF edge
+
+sync:
+  delivery: webhook
+  pollingSupported: true
+  polling:
+    defaultIntervalSeconds: 900
+    minIntervalSeconds: 300
+    maxIntervalSeconds: 86400
+
+defaultFieldMappings:
+  email:
+    subject: title
+    bodyPreview: description
+    fromEmail: author
+    sentDateTime: createdAt
+    receivedDateTime: updatedAt
+    webLink: sourceUrl
+  teams_message:
+    summary: title
+    body: description
+    fromUserName: author
+    createdDateTime: createdAt
+    webUrl: sourceUrl
+  sharepoint_file:
+    name: title
+    mimeType: contentType
+    createdBy: author
+    createdDateTime: createdAt
+    lastModifiedDateTime: updatedAt
+    webUrl: sourceUrl
+  onedrive_file:
+    name: title
+    mimeType: contentType
+    createdBy: author
+    createdDateTime: createdAt
+    lastModifiedDateTime: updatedAt
+    webUrl: sourceUrl
+  calendar_event:
+    subject: title
+    bodyPreview: description
+    organizer: author
+    start: createdAt
+    webLink: sourceUrl

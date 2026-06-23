@@ -306,6 +306,16 @@ export const agentExecutions = agentSchema.table(
     parentExecutionIdx: index("agent_executions_parent_execution_idx").on(t.parentExecutionId),
     createdAtIdx: index("agent_executions_created_at_idx").on(t.createdAt),
     statusCheck: check("agent_executions_status_check", sql`${t.status} IN ('planning', 'running', 'completed', 'failed', 'cancelled')`),
+    // Mirror of the CHECK constraint that already lives in the baseline/0007
+    // migrations. Declared here so the Drizzle schema can never drift from the
+    // DB again — the omission let workflow.run insert "workflow.run" (dot) and
+    // get rejected at runtime while typecheck/Drizzle-mock tests passed.
+    // Keep in sync with AGENT_EXECUTION_ORIGIN_TYPES in
+    // packages/oxagen/src/contracts/agent.execution.record.ts.
+    originTypeCheck: check(
+      "agent_executions_origin_type_check",
+      sql`${t.originType} IN ('chat', 'event_trigger', 'scheduled_job', 'mcp_request', 'workflow_run')`,
+    ),
   }),
 );
 

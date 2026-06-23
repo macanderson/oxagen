@@ -1,0 +1,110 @@
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+
+metadata:
+  id: google-tasks
+  displayName: Google Tasks
+  description: Sync tasks and task lists from Google Tasks.
+  icon: google-tasks
+  category: productivity
+  version: "1.0.0"
+  schemaVersion: "1"
+  publisher:
+    name: Oxagen
+    verified: true
+
+auth:
+  schemes:
+    - id: oauth2
+      kind: oauth2_authorization_code
+      displayName: Connect with Google
+      scopes:
+        - https://www.googleapis.com/auth/tasks.readonly
+
+config:
+  fields:
+    - key: taskListIds
+      label: Task List IDs (optional)
+      widget: tag-input
+      description: Restrict sync to specific task list IDs. Leave empty to sync all accessible task lists.
+      validation:
+        itemPattern: "^[A-Za-z0-9_\\-]{1,100}$"
+
+    - key: includeCompleted
+      label: Include Completed Tasks
+      widget: checkbox
+      description: Sync tasks that have been marked as completed.
+      defaultValue: true
+
+    - key: syncDaysBack
+      label: Initial Sync Depth (days)
+      widget: number
+      description: How many days of tasks to pull on the first sync.
+      defaultValue: 90
+      validation:
+        min: 1
+        max: 365
+
+recordTypes:
+  selectionMode: multi
+  defaultAll: false
+  items:
+    - id: task
+      displayName: Tasks
+      description: Individual tasks with title, notes, due date, status, and completion date.
+      defaultEnabled: true
+
+    - id: task_list
+      displayName: Task Lists
+      description: Task list metadata including name and last update time.
+      defaultEnabled: false
+
+filters:
+  pathFilters:
+    enabled: false
+  labelFilters:
+    enabled: false
+
+inference:
+  enabled: true
+  defaultEnabled: false
+  toggleLabel: Enable AI relationship inference
+  perRecordType:
+    task: true
+    task_list: false
+  confidenceThreshold:
+    defaultValue: 0.75
+    min: 0.50
+    max: 0.99
+  ontologyPrompt: |
+    Infer work items and project relationships from Google Tasks.
+
+    Look for:
+    - Task titles referencing product features, bug fixes, or project milestones
+    - Task notes containing Linear issue IDs or GitHub PR references
+    - Task list names mapping to team names or project areas
+
+    Create edges:
+    - Task -[part_of]-> TaskList (task belongs to its parent list)
+    - Task -[references]-> LinearIssue (when title or notes contain a Linear ticket ID)
+    - Task -[related_to]-> Feature (when title references a known product feature)
+
+sync:
+  delivery: polling
+  pollingSupported: true
+  polling:
+    defaultIntervalSeconds: 900
+    minIntervalSeconds: 300
+    maxIntervalSeconds: 86400
+
+defaultFieldMappings:
+  task:
+    title: title
+    notes: description
+    status: status
+    due: dueDate
+    completed: closedAt
+    updated: updatedAt
+  task_list:
+    title: title
+    updated: updatedAt

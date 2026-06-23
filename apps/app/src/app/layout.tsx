@@ -26,12 +26,12 @@ import { RouteTransitionLoader } from "@/components/pwa/route-transition-loader"
 
 export const metadata: Metadata = {
   title: "Oxagen",
-  description: "The Oxagen agent platform",
+  description: "Enterprise agent ontologies as a service",
   manifest: "/pwa/manifest.json",
   icons: {
     icon: [
-      { url: "/favicon/favicon.ico", sizes: "any" },
       { url: "/favicon/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon/favicon.ico", sizes: "any" },
       { url: "/favicon/favicon-32.png", sizes: "32x32", type: "image/png" },
       { url: "/favicon/favicon-16.png", sizes: "16x16", type: "image/png" },
     ],
