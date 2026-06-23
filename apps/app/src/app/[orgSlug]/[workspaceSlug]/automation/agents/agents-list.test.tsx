@@ -33,6 +33,7 @@ vi.mock("@/components/ui/button", () => ({
 vi.mock("lucide-react", () => ({
   Bot: () => <svg aria-hidden="true" />,
   Plus: () => <svg aria-hidden="true" />,
+  ShieldCheck: () => <svg aria-hidden="true" data-testid="shield-check-icon" />,
 }));
 
 import { AgentsList, type AgentRow } from "./agents-list";
@@ -50,6 +51,7 @@ const agents: AgentRow[] = [
     deploymentStatus: "active",
     latestVersion: 3,
     triggerCount: 2,
+    managed: false,
   },
   {
     agentId: "agt_2",
@@ -61,6 +63,7 @@ const agents: AgentRow[] = [
     deploymentStatus: "inactive",
     latestVersion: 1,
     triggerCount: 0,
+    managed: false,
   },
 ];
 
@@ -107,5 +110,27 @@ describe("AgentsList", () => {
       "href",
       "/acme/prod/automation/agents/new",
     );
+  });
+
+  it("shows the Managed badge on a managed agent row", () => {
+    const managed: AgentRow = {
+      agentId: "agt_managed",
+      publicId: "agt_managed",
+      slug: "qa-chat",
+      name: "QA Chat",
+      description: "Product-managed QA agent",
+      status: "active",
+      deploymentStatus: "active",
+      latestVersion: 1,
+      triggerCount: 0,
+      managed: true,
+    };
+    render(<AgentsList {...baseProps} agents={[managed]} />);
+    expect(screen.getByText("Managed")).toBeInTheDocument();
+  });
+
+  it("does not show the Managed badge on a non-managed agent row", () => {
+    render(<AgentsList {...baseProps} agents={agents} />);
+    expect(screen.queryByText("Managed")).not.toBeInTheDocument();
   });
 });
