@@ -32,16 +32,36 @@ import { scopedSession } from "@oxagen/ontology/tenant";
 import { embedText } from "@oxagen/ai";
 import type { EntityMutation, DeduplicationResult } from "../types";
 import { ALIAS_THRESHOLD, CONFIRM_THRESHOLD } from "../types";
-import { upsertEntityNode, createAliasEdge } from "../mutations/upsert-entity";
+import {
+  upsertEntityNode,
+  createAliasEdge,
+  type UpsertEntityOptions,
+} from "../mutations/upsert-entity";
+
+/**
+ * A strict-mode non-conformant rejection result (§8). The node is NOT written.
+ */
+function rejectedResult(conformanceScore: number | undefined): DeduplicationResult {
+  return {
+    principalNodeId: null,
+    action: "rejected_nonconformant",
+    confidence: 0,
+    rejected: true,
+    conformanceScore,
+  };
+}
 
 /**
  * Resolve an EntityMutation against the existing graph.
  *
+ * @param opts Optional §8 schema-validation context (pinned active vocabulary
+ *   + source metadata) threaded from the pipeline into the node write.
  * @returns DeduplicationResult describing what happened and which node to embed.
  */
 export async function resolveEntity(
   mutation: EntityMutation,
   orgId: string,
+  opts: UpsertEntityOptions = {},
 ): Promise<DeduplicationResult> {
   // ── Pass A: exact naturalKey lookup ─────────────────────────────────────────
   const session = scopedSession();
@@ -62,12 +82,14 @@ export async function resolveEntity(
 
   if (passANodeId) {
     // Node already exists; upsertEntityNode will update it (ON MATCH SET).
-    await upsertEntityNode(mutation, orgId);
+    const updated = await upsertEntityNode(mutation, orgId, opts);
+    if (updated.rejected) return rejectedResult(updated.conformanceScore);
     return {
       principalNodeId: passANodeId,
       action: "updated_principal",
       confidence: 1.0,
       matchReason: "natural_key_exact",
+      conformanceScore: updated.conformanceScore,
     };
   }
 
@@ -146,7 +168,11 @@ export async function resolveEntity(
 
   if (bestCandidate) {
     // Create new alias node, then link it to the principal.
-    const { nodeId: aliasNodeId } = await upsertEntityNode(mutation, orgId);
+    const aliasUpsert = await upsertEntityNode(mutation, orgId, opts);
+    if (aliasUpsert.rejected || aliasUpsert.nodeId == null) {
+      return rejectedResult(aliasUpsert.conformanceScore);
+    }
+    const aliasNodeId = aliasUpsert.nodeId;
     const tentative = bestCandidate.score < CONFIRM_THRESHOLD;
     await createAliasEdge(aliasNodeId, bestCandidate.nodeId, {
       confidence: bestCandidate.score,
@@ -159,15 +185,20 @@ export async function resolveEntity(
       action: tentative ? "created_alias" : "confirmed_alias",
       confidence: bestCandidate.score,
       matchReason: "name_embedding",
+      conformanceScore: aliasUpsert.conformanceScore,
     };
   }
 
   // No match — create a brand-new principal.
-  const { nodeId: newNodeId } = await upsertEntityNode(mutation, orgId);
+  const created = await upsertEntityNode(mutation, orgId, opts);
+  if (created.rejected || created.nodeId == null) {
+    return rejectedResult(created.conformanceScore);
+  }
   return {
-    principalNodeId: newNodeId,
+    principalNodeId: created.nodeId,
     action: "created_principal",
     confidence: 1.0,
+    conformanceScore: created.conformanceScore,
   };
 }
 

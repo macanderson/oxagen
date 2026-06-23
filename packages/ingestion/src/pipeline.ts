@@ -30,6 +30,7 @@ import {
   shouldRunInference,
   type DeliveryConfig,
 } from "./filters";
+import type { PinnedSchema } from "./validate/schema";
 import type { RawIngestEvent, EntityMutation, PipelineResult, SourceRef } from "./types";
 
 export interface EntityTypeMapping {
@@ -47,6 +48,17 @@ export interface PipelineContext {
   scheduleInference(nodeId: string, entityType: string, snapshot: Record<string, unknown>): Promise<void>;
   /** Optional: connector delivery config to enforce filters. */
   getDeliveryConfig?(connectionId: string): Promise<DeliveryConfig | null>;
+  /**
+   * Resolve the workspace's pinned schema **active vocabulary** (§4.8/§8).
+   * The handler layer implements this via the §4.8 `getPinnedSchema` resolver,
+   * returning the enabled schemas' labels/relationship types/properties; it is
+   * null when no version is pinned (registry inert → today's behavior).
+   *
+   * `runPipeline` loads this once and threads it to the grounding (infer) and
+   * validation (upsert) stages. Optional so callers that predate the registry
+   * (and tests) keep working without it.
+   */
+  getPinnedSchema?(orgId: string, workspaceId: string): Promise<PinnedSchema | null>;
 }
 
 export interface FilteredResult {
@@ -63,6 +75,13 @@ export async function runPipeline(
   // Load delivery config once if the context supports it
   const deliveryConfig: DeliveryConfig | null =
     ctx.getDeliveryConfig ? await ctx.getDeliveryConfig(event.connectionId) : null;
+
+  // §8 step 1: load the pinned schema active vocabulary ONCE (null when no
+  // version is pinned → registry inert). Threaded to the validation seam in
+  // upsertEntityNode (via resolveEntity) and to grounding (scheduleInference).
+  const pinnedSchema: PinnedSchema | null = ctx.getPinnedSchema
+    ? await ctx.getPinnedSchema(event.orgId, event.workspaceId)
+    : null;
 
   // ── Stage 1: Record type filter ───────────────────────────────────────────
   const recordTypeFilters = deliveryConfig?.recordTypeFilters ?? [];
@@ -137,8 +156,27 @@ export async function runPipeline(
     sourceRef,
   };
 
-  // Stage 4: Dedup + alias resolution
-  const dedup = await resolveEntity(mutation, ctx.orgId);
+  // Stage 4: Dedup + alias resolution — §8 schema validation + dual-write runs
+  // inside upsertEntityNode with the pinned active vocabulary.
+  const dedup = await resolveEntity(mutation, ctx.orgId, {
+    pinnedSchema,
+    connectionId: event.connectionId,
+    sourceRecordType: event.sourceRecordType,
+  });
+
+  // strict-mode rejection (§8): the node was NOT written — surface a filtered
+  // result so the caller emits `pipeline:record:filtered` and does not embed/infer.
+  if (dedup.rejected || dedup.principalNodeId == null) {
+    return {
+      filtered: true,
+      reason: "schema_nonconformant",
+      sourceRecordType: event.sourceRecordType,
+      connectionId: event.connectionId,
+    };
+  }
+
+  // The guard above guarantees a written node — capture the non-null id.
+  const principalNodeId = dedup.principalNodeId;
 
   // ── Stage 5: Embed + Inference gate ──────────────────────────────────────
   const inferenceEnabled = shouldRunInference(
@@ -152,7 +190,7 @@ export async function runPipeline(
   if (inferenceEnabled) {
     const text = renderEntityText(mutation.entityType, mutation.displayName, mutation.properties);
     await embedEntity({
-      nodeId: dedup.principalNodeId,
+      nodeId: principalNodeId,
       entityType: mutation.entityType,
       text,
       workspaceId: mutation.workspaceId,
@@ -162,7 +200,7 @@ export async function runPipeline(
     embedded = true;
 
     // Stage 6: Fire async inference (does not block return)
-    await ctx.scheduleInference(dedup.principalNodeId, mutation.entityType, mutation.properties);
+    await ctx.scheduleInference(principalNodeId, mutation.entityType, mutation.properties);
     inferenceQueued = true;
   }
 
@@ -172,5 +210,6 @@ export async function runPipeline(
     dedup,
     embedded,
     inferenceQueued,
+    conformanceScore: dedup.conformanceScore,
   };
 }

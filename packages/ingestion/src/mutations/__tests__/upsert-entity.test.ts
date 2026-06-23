@@ -5,10 +5,15 @@ const mocks = vi.hoisted(() => ({
   sessionRun: vi.fn(),
   sessionClose: vi.fn().mockResolvedValue(undefined),
   scopedSession: vi.fn(),
+  chInsert: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@oxagen/ontology/tenant", () => ({
   scopedSession: mocks.scopedSession,
+}));
+
+vi.mock("@oxagen/telemetry", () => ({
+  chInsert: mocks.chInsert,
 }));
 
 mocks.scopedSession.mockReturnValue({
@@ -61,11 +66,12 @@ describe("upsertEntityNode", () => {
     const mutation = makeMutation();
     const result = await upsertEntityNode(mutation, "org-1");
 
-    expect(result).toEqual({ nodeId: "uuid-node-1" });
+    expect(result.nodeId).toBe("uuid-node-1");
     expect(mocks.sessionRun).toHaveBeenCalledOnce();
 
     const [cypher, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
-    expect(cypher).toContain("MERGE (n:EntityNode");
+    // §3.3 dual-write: the real label (`task`) is PRIMARY, `:EntityNode` secondary.
+    expect(cypher).toContain("MERGE (n:`task`:`EntityNode`");
     expect(cypher).toContain("naturalKey:");
     expect(cypher).toContain("orgId:");
     expect(cypher).toContain("RETURN n.publicId AS nodeId");

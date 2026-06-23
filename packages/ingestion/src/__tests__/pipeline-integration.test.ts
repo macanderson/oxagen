@@ -173,7 +173,7 @@ describe("runPipeline — full 6-stage integration", () => {
     expect(result.embedded).toBe(true);
     expect(result.inferenceQueued).toBe(true);
     expect(typeof result.dedup.principalNodeId).toBe("string");
-    expect(result.dedup.principalNodeId.length).toBeGreaterThan(0);
+    expect(result.dedup.principalNodeId ?? "").not.toBe("");
   });
 
   it("upsertEntityNode is called with correct MERGE params", async () => {
@@ -183,16 +183,19 @@ describe("runPipeline — full 6-stage integration", () => {
 
     await runPipeline(event, ctx);
 
-    // upsertEntityNode runs a MERGE — find the specific call (after Pass A + Pass B session.run)
+    // upsertEntityNode runs a MERGE — find the specific call (after Pass A + Pass B session.run).
+    // §3.3 dual-write: the real label (`code_change`) is PRIMARY, `:EntityNode` secondary.
     const upsertCall = mocks.sessionRun.mock.calls.find(([cypher]) =>
-      typeof cypher === "string" && cypher.includes("MERGE (n:EntityNode") && cypher.includes("RETURN n.publicId AS nodeId"),
+      typeof cypher === "string" &&
+      cypher.includes("MERGE (n:`code_change`:`EntityNode`") &&
+      cypher.includes("RETURN n.publicId AS nodeId"),
     ) as [string, Record<string, unknown>] | undefined;
 
     expect(upsertCall).toBeDefined();
     const [cypher, params] = upsertCall!;
 
     // naturalKey convention: {connectorType}:{connectionId}:{externalId}
-    expect(cypher).toContain("MERGE (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId})");
+    expect(cypher).toContain("MERGE (n:`code_change`:`EntityNode` {naturalKey: $naturalKey, orgId: $orgId})");
     expect(params["naturalKey"]).toBe("github:conn-integration-1:99");
     expect(params["entityType"]).toBe("code_change");
     expect(params["orgId"]).toBeUndefined(); // orgId is in the MERGE pattern, not params
@@ -252,9 +255,9 @@ describe("runPipeline — full 6-stage integration", () => {
 
     await runPipeline(event, ctx);
 
-    // Find the upsertEntityNode MERGE call
+    // Find the upsertEntityNode MERGE call (§3.3 dual-write: `task` PRIMARY label)
     const upsertCall = mocks.sessionRun.mock.calls.find(([cypher]) =>
-      typeof cypher === "string" && cypher.includes("MERGE (n:EntityNode") && cypher.includes("RETURN n.publicId"),
+      typeof cypher === "string" && cypher.includes("MERGE (n:`task`:`EntityNode`") && cypher.includes("RETURN n.publicId"),
     ) as [string, Record<string, unknown>] | undefined;
 
     expect(upsertCall).toBeDefined();

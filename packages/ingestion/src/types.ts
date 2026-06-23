@@ -124,12 +124,21 @@ export type AliasMatchReason =
   | "cross_source_id"      // explicit cross-system ID hint (e.g. GitHub login in Linear profile)
   | "human_confirmed";     // a workspace user approved the alias
 
+export const DeduplicationActionRejectedSchema = z.literal("rejected_nonconformant");
+
 export interface DeduplicationResult {
-  /** Neo4j publicId of the canonical (principal) node. */
-  principalNodeId: string;
+  /** Neo4j publicId of the canonical (principal) node. Null on a strict reject. */
+  principalNodeId: string | null;
   /** Neo4j publicId of a new alias node, if action === "created_alias". */
   aliasNodeId?: string;
-  action: DeduplicationAction;
+  action: DeduplicationAction | "rejected_nonconformant";
+  /**
+   * Set when enforcement_mode='strict' rejected the write as non-conformant
+   * (§8). The node was NOT written; the pipeline surfaces a filtered result.
+   */
+  rejected?: boolean;
+  /** Conformance score (0.0–1.0) when a pinned schema was evaluated (§8). */
+  conformanceScore?: number;
   /**
    * Confidence that this entity IS the same real-world entity as the principal.
    * Range: 0.0–1.0.
@@ -181,6 +190,15 @@ export interface SemanticInferenceJob {
    * commit with only a SHA — hop to the PR and feature for context).
    */
   contextHops?: number;
+  /**
+   * The pinned active vocabulary (§4.8/§8), resolved by the handler/Inngest
+   * worker via `getPinnedSchema`. When present and the entity's label is in it,
+   * the inference prompt is grounded with the label/property descriptions and
+   * the allowed relationship types (with start/end constraints), and inferred
+   * relationship types are constrained to that vocabulary. Null/absent → today's
+   * unconstrained inference (registry inert).
+   */
+  pinnedSchema?: import("./validate/schema").PinnedSchema | null;
 }
 
 /**
@@ -237,4 +255,14 @@ export interface PipelineResult {
   dedup: DeduplicationResult;
   embedded: boolean;
   inferenceQueued: boolean;
+  /** Conformance score (0.0–1.0) of the written node, when a schema was pinned (§8). */
+  conformanceScore?: number;
 }
+
+// Re-export the active-vocabulary contract so pipeline callers thread one type.
+export type {
+  PinnedSchema,
+  PinnedLabel,
+  PinnedRelationshipType,
+  PinnedProperty,
+} from "./validate/schema";
