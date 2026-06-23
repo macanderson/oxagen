@@ -501,6 +501,7 @@ describe("agent.definition.get handler", () => {
       deploymentStatus: "active",
       version: 1,
       isPublished: true,
+      managed: false,
       config: {
         graph: { ontologyId: "o", mode: "read", retrieval: { strategy: "hybrid" }, budget: { maxHops: 1, maxNodes: 1 } },
         agentTools: [],

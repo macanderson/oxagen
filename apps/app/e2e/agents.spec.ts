@@ -59,7 +59,18 @@ test.describe("agents — management lifecycle", () => {
     await page.waitForURL(new RegExp(`/${orgSlug}/${ws}/automation/agents/qa-chat$`), {
       timeout: 15_000,
     });
-    await expect(page.getByText(/managed by oxagen/i)).toBeVisible();
+    // The managed-agent detail page renders the phrase "managed by oxagen" in
+    // two intentional, distinct elements: a compact header badge ("Managed by
+    // Oxagen") and an explanatory read-only callout ("This agent is managed by
+    // Oxagen"). Scope to the callout (role="note", aria-label="Managed agent
+    // notice") so the locator resolves to exactly one element and the assertion
+    // proves the read-only banner is visible.
+    await expect(
+      page.getByRole("note", { name: /managed agent notice/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("note", { name: /managed agent notice/i }).getByText(/managed by oxagen/i),
+    ).toBeVisible();
     // No mutation affordances are rendered for a managed agent.
     await expect(page.getByRole("link", { name: /^Edit$/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /publish latest version/i })).toHaveCount(0);
