@@ -490,6 +490,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           toolNameMap,
           orgSlug,
           workspaceSlug,
+          modelId: modelIdOf(turnModel),
           emit,
         });
 

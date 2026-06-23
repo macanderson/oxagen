@@ -82,6 +82,12 @@ vi.mock("./markdown-message", () => ({
   ),
 }));
 
+// Mock MessageFooter so message-bubble tests are not affected by server-only
+// imports inside message-footer-actions (which uses "use server" / server-only).
+vi.mock("./message-footer", () => ({
+  MessageFooter: () => <div data-testid="message-footer" />,
+}));
+
 describe("MessageBubble", () => {
   const baseMessage = {
     publicId: "msg_1",
