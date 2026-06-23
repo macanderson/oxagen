@@ -119,17 +119,19 @@ export const [ingestionDeleteConnection] = createFunction(
 
           const deletedCount = (deleteResult.records[0]?.get("deleted") as number | undefined) ?? 0;
 
-          // ── Pass 3: Delete the code-graph nodes this connection produced ──
-          // SourceFile + SourceSymbol nodes each carry connectionId and are NOT
-          // part of the EntityNode ALIAS_OF graph, so they're removed
-          // unconditionally. They were skipped before — meaning a "delete data"
-          // left thousands of orphaned :KnowledgeNode files/symbols in the graph
-          // after the connection was gone. DETACH DELETE also drops their
-          // CONTAINS / SOURCED_FROM edges.
+          // ── Pass 3: Delete every other node this connection produced ─────
+          // Catch-all for all NON-EntityNode artifacts stamped with this
+          // connectionId — SourceFile, SourceSymbol, Feature, and any future
+          // connector-derived label. EntityNode is handled in Pass 2 (it carries
+          // ALIAS_OF promotion semantics); everything else is removed
+          // unconditionally. Previously only SourceFile/SourceSymbol were swept,
+          // so :Feature nodes (and others) leaked, leaving thousands of orphans
+          // after a "delete data". DETACH DELETE also drops CONTAINS / SOURCED_FROM
+          // and any other edges.
           const sourceDeleteResult = await session.run(
             `
             MATCH (n {connectionId: $connectionId, orgId: $orgId})
-            WHERE n:SourceFile OR n:SourceSymbol
+            WHERE NOT n:EntityNode
             DETACH DELETE n
             RETURN count(n) AS deleted
             `,
@@ -137,6 +139,27 @@ export const [ingestionDeleteConnection] = createFunction(
           );
           const sourceDeletedCount =
             (sourceDeleteResult.records[0]?.get("deleted") as number | undefined) ?? 0;
+
+          // ── Pass 3b: Sweep inference suggestions left pointing at dead nodes ─
+          // semantic-edge inference records each candidate as an :InferredEdge
+          // node referencing its source via sourceNodeId. Those carry no usable
+          // connectionId, so once Passes 1-3 remove the source entity the edge
+          // referenced, the suggestion is a dangling "pending inference" forever.
+          // Drop any :InferredEdge whose source node no longer exists.
+          const inferredDeleteResult = await session.run(
+            `
+            MATCH (ie:InferredEdge {orgId: $orgId, workspaceId: $workspaceId})
+            WHERE ie.sourceNodeId IS NOT NULL
+              AND NOT EXISTS {
+                MATCH (s {publicId: ie.sourceNodeId, orgId: $orgId})
+              }
+            DETACH DELETE ie
+            RETURN count(ie) AS deleted
+            `,
+            { connectionId, orgId },
+          );
+          const inferredDeletedCount =
+            (inferredDeleteResult.records[0]?.get("deleted") as number | undefined) ?? 0;
 
           // ── Pass 4: Delete the SourceConnection meta-node ────────────────
           await session.run(
@@ -170,13 +193,21 @@ export const [ingestionDeleteConnection] = createFunction(
             (orphanResult.records[0]?.get("deleted") as number | undefined) ?? 0;
 
           logger.info(
-            { connectionId, orgId, deletedCount, sourceDeletedCount, orphanDeletedCount },
-            "ingestion-delete: neo4j nodes deleted (entities + source files/symbols + orphaned concepts + meta)",
+            {
+              connectionId,
+              orgId,
+              deletedCount,
+              sourceDeletedCount,
+              inferredDeletedCount,
+              orphanDeletedCount,
+            },
+            "ingestion-delete: neo4j nodes deleted (entities + connection-stamped + inference suggestions + orphaned concepts + meta)",
           );
 
           return {
             promoted: promotedCount,
-            deleted: deletedCount + sourceDeletedCount + orphanDeletedCount,
+            deleted:
+              deletedCount + sourceDeletedCount + inferredDeletedCount + orphanDeletedCount,
           };
         }),
       );
