@@ -7,11 +7,11 @@
  * action routes to the create flow (owners/admins only).
  */
 import Link from "next/link";
-import { Bot, Plus } from "lucide-react";
+import { Bot, Plus, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { workspace } from "@/lib/routes";
-import { LIFECYCLE_BADGE, DEPLOYMENT_BADGE } from "./agent-ui";
+import { LIFECYCLE_BADGE, DEPLOYMENT_BADGE, MANAGED_BADGE } from "./agent-ui";
 import type { AgentLifecycleStatus, AgentDeploymentStatus } from "./agent-ui";
 
 export interface AgentRow {
@@ -24,6 +24,8 @@ export interface AgentRow {
   deploymentStatus: AgentDeploymentStatus;
   latestVersion: number | null;
   triggerCount: number;
+  /** True for product-managed built-in agents — viewable but not editable. */
+  managed: boolean;
 }
 
 export interface AgentsListProps {
@@ -98,8 +100,19 @@ export function AgentsList({ agents, canEdit, orgSlug, workspaceSlug }: AgentsLi
                         href={workspace.agents.detail(ctx, agent.slug)}
                         className="flex flex-col gap-0.5"
                       >
-                        <span className="font-semibold text-foreground hover:underline">
-                          {agent.name}
+                        <span className="flex items-center gap-2">
+                          <span className="font-semibold text-foreground hover:underline">
+                            {agent.name}
+                          </span>
+                          {agent.managed && (
+                            <Badge variant={MANAGED_BADGE.variant} size="sm">
+                              <ShieldCheck
+                                className="mr-1 h-3 w-3 shrink-0"
+                                aria-hidden="true"
+                              />
+                              {MANAGED_BADGE.label}
+                            </Badge>
+                          )}
                         </span>
                         {agent.description && (
                           <span className="line-clamp-1 text-xs text-muted-foreground">

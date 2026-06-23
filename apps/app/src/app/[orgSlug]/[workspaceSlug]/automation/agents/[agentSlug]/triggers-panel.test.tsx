@@ -7,7 +7,7 @@
  * an incomplete event trigger, editing, and deleting.
  */
 import * as React from "react";
-import { render, screen, waitFor, cleanup, fireEvent, within } from "@testing-library/react";
+import { render, screen, waitFor, cleanup, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const { mockCreate, mockUpdate, mockDelete, mockRefresh, mockAddToast } = vi.hoisted(() => ({
@@ -189,9 +189,13 @@ describe("TriggersPanel", () => {
     expect((mockUpdate.mock.calls[0]![0] as { triggerId: string }).triggerId).toBe("atr_1");
   });
 
-  it("hides edit/add affordances when canEdit is false", () => {
+  it("hides edit/add/delete affordances when canEdit is false but still shows the trigger list", () => {
     render(<TriggersPanel {...baseProps} canEdit={false} triggers={existing} />);
+    // Mutation affordances hidden
     expect(screen.queryByRole("button", { name: /add trigger/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /delete trigger/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /edit trigger/i })).not.toBeInTheDocument();
+    // Trigger list still renders in read-only mode
+    expect(screen.getByText(/github_repo · push/i)).toBeInTheDocument();
   });
 });

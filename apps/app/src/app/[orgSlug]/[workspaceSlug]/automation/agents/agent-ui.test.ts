@@ -8,6 +8,7 @@ import {
   summarizeTrigger,
   LIFECYCLE_BADGE,
   DEPLOYMENT_BADGE,
+  MANAGED_BADGE,
   TOOL_TYPE_LABEL,
   TRIGGER_TYPE_LABEL,
 } from "./agent-ui";
@@ -86,5 +87,10 @@ describe("badge maps", () => {
   it("labels every tool and trigger type", () => {
     expect(TOOL_TYPE_LABEL.mcp_server).toBe("MCP server");
     expect(TRIGGER_TYPE_LABEL.event).toBe("Event");
+  });
+
+  it("MANAGED_BADGE has a label and variant", () => {
+    expect(MANAGED_BADGE.label).toBe("Managed");
+    expect(MANAGED_BADGE.variant).toBe("secondary");
   });
 });

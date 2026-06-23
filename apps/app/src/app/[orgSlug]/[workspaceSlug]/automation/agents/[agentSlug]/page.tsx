@@ -99,6 +99,7 @@ export default async function AgentDetailPage({ params }: PageProps) {
       agent={result.agent}
       triggers={result.triggers}
       canEdit={result.canEdit}
+      managed={result.agent.managed}
       orgSlug={orgSlug}
       workspaceSlug={workspaceSlug}
       agentSlug={agentSlug}

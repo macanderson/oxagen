@@ -16,7 +16,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Pencil, Rocket, UploadCloud } from "lucide-react";
+import { Info, Pencil, Rocket, ShieldCheck, UploadCloud } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -24,6 +24,7 @@ import { workspace } from "@/lib/routes";
 import {
   LIFECYCLE_BADGE,
   DEPLOYMENT_BADGE,
+  MANAGED_BADGE,
   TOOL_TYPE_LABEL,
 } from "../agent-ui";
 import type { AgentDefinitionGetOutput, AgentTriggerListOutput } from "../agent-actions";
@@ -34,6 +35,12 @@ export interface AgentDetailProps {
   agent: AgentDefinitionGetOutput;
   triggers: AgentTriggerListOutput["triggers"];
   canEdit: boolean;
+  /**
+   * When true the agent is product-managed and customers can only view its
+   * config — all mutation affordances (Edit, Publish, Deploy, trigger add/edit/
+   * delete) are suppressed and a clear callout is shown in place of Lifecycle.
+   */
+  managed: boolean;
   orgSlug: string;
   workspaceSlug: string;
   agentSlug: string;
@@ -52,6 +59,7 @@ export function AgentDetail({
   agent,
   triggers,
   canEdit,
+  managed,
   orgSlug,
   workspaceSlug,
   agentSlug,
@@ -129,6 +137,12 @@ export function AgentDetail({
             <Badge variant={deployment.variant} size="sm">
               {deployment.label}
             </Badge>
+            {managed && (
+              <Badge variant={MANAGED_BADGE.variant} size="sm">
+                <ShieldCheck className="mr-1 h-3 w-3 shrink-0" aria-hidden="true" />
+                Managed by Oxagen
+              </Badge>
+            )}
           </div>
           {agent.description && (
             <p className="max-w-prose text-sm text-muted-foreground">{agent.description}</p>
@@ -136,7 +150,7 @@ export function AgentDetail({
           <p className="font-mono text-xs text-muted-foreground">{agent.slug}</p>
         </div>
         <div className="flex items-center gap-2">
-          {canEdit && (
+          {canEdit && !managed && (
             <Button
               render={<Link href={workspace.agents.edit(ctx, agentSlug)} />}
               variant="outline"
@@ -149,51 +163,68 @@ export function AgentDetail({
         </div>
       </div>
 
-      {/* ── Lifecycle controls ─────────────────────────────────────────────── */}
-      {canEdit && (
-        <section
-          aria-labelledby="agent-lifecycle-heading"
-          className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card px-4 py-4"
+      {/* ── Lifecycle controls (non-managed) / Managed callout ────────────── */}
+      {managed ? (
+        <div
+          role="note"
+          aria-label="Managed agent notice"
+          className="flex items-start gap-3 rounded-lg border border-border/60 bg-card px-4 py-4"
         >
-          <p id="agent-lifecycle-heading" className="text-sm font-semibold text-foreground">
-            Lifecycle
-          </p>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handlePublish}
-              disabled={busy !== null}
-              startIcon={<UploadCloud className="h-3.5 w-3.5" aria-hidden="true" />}
-            >
-              {busy === "publish" ? "Publishing…" : "Publish latest version"}
-            </Button>
-            <Button
-              type="button"
-              variant={isDeployed ? "destructive-outline" : "gradient"}
-              size="sm"
-              onClick={handleDeployToggle}
-              disabled={busy !== null}
-              startIcon={<Rocket className="h-3.5 w-3.5" aria-hidden="true" />}
-            >
-              {busy === "deploy"
-                ? "Working…"
-                : isDeployed
-                  ? "Deactivate"
-                  : "Deploy (activate)"}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Activation requires a published version. Publishing makes the latest version immutable
-            and the active version.
-          </p>
-          {checksum && (
-            <p className="font-mono text-xs text-muted-foreground">
-              Published checksum: <span className="text-foreground">{checksum}</span>
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-semibold text-foreground">This agent is managed by Oxagen</p>
+            <p className="text-xs text-muted-foreground">
+              You can review its configuration, but it can&apos;t be edited, published, deployed, or
+              have its triggers changed. Contact support if you need a customised version.
             </p>
-          )}
-        </section>
+          </div>
+        </div>
+      ) : (
+        canEdit && (
+          <section
+            aria-labelledby="agent-lifecycle-heading"
+            className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card px-4 py-4"
+          >
+            <p id="agent-lifecycle-heading" className="text-sm font-semibold text-foreground">
+              Lifecycle
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handlePublish}
+                disabled={busy !== null}
+                startIcon={<UploadCloud className="h-3.5 w-3.5" aria-hidden="true" />}
+              >
+                {busy === "publish" ? "Publishing…" : "Publish latest version"}
+              </Button>
+              <Button
+                type="button"
+                variant={isDeployed ? "destructive-outline" : "gradient"}
+                size="sm"
+                onClick={handleDeployToggle}
+                disabled={busy !== null}
+                startIcon={<Rocket className="h-3.5 w-3.5" aria-hidden="true" />}
+              >
+                {busy === "deploy"
+                  ? "Working…"
+                  : isDeployed
+                    ? "Deactivate"
+                    : "Deploy (activate)"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Activation requires a published version. Publishing makes the latest version immutable
+              and the active version.
+            </p>
+            {checksum && (
+              <p className="font-mono text-xs text-muted-foreground">
+                Published checksum: <span className="text-foreground">{checksum}</span>
+              </p>
+            )}
+          </section>
+        )
       )}
 
       {/* ── Version + state ─────────────────────────────────────────────────── */}
@@ -265,10 +296,11 @@ export function AgentDetail({
       </section>
 
       {/* ── Triggers ────────────────────────────────────────────────────────── */}
+      {/* canEdit is false for managed agents so all mutation affordances are hidden. */}
       <TriggersPanel
         agentId={agent.agentId}
         triggers={triggers}
-        canEdit={canEdit}
+        canEdit={canEdit && !managed}
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
       />
