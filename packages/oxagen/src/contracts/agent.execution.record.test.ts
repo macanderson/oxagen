@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentExecutionRecord } from "./agent.execution.record";
+import { agentExecutionRecord, AGENT_EXECUTION_ORIGIN_TYPES } from "./agent.execution.record";
 import { getCapability } from "../registry";
 
 const BASE_UUID_A = "00000000-0000-0000-0000-000000000001";
@@ -359,6 +359,38 @@ describe("agent.execution.record capability", () => {
       agentExecutionRecord.output.parse({
         executionId: BASE_UUID_A,
         status: "completed",
+      }),
+    ).toThrow();
+  });
+
+  // ── input: originType enum ────────────────────────────────────────────────
+  // Guards against the test drifting out of sync with the canonical origin-type
+  // enum (and the matching Postgres `agent_executions_origin_type_check`
+  // constraint). A stale value like the removed "user" token broke CI silently.
+
+  it.each(AGENT_EXECUTION_ORIGIN_TYPES)(
+    "accepts canonical originType=%s",
+    (originType: (typeof AGENT_EXECUTION_ORIGIN_TYPES)[number]) => {
+    const parsed = agentExecutionRecord.input.parse({
+      agentId: BASE_UUID_A,
+      agentVersionId: BASE_UUID_B,
+      originType,
+      originId: BASE_UUID_C,
+      status: "completed",
+      inputPayload: {},
+    });
+    expect(parsed.originType).toBe(originType);
+  });
+
+  it("rejects an unknown originType", () => {
+    expect(() =>
+      agentExecutionRecord.input.parse({
+        agentId: BASE_UUID_A,
+        agentVersionId: BASE_UUID_B,
+        originType: "user",
+        originId: BASE_UUID_C,
+        status: "completed",
+        inputPayload: {},
       }),
     ).toThrow();
   });
