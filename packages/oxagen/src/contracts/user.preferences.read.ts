@@ -26,6 +26,8 @@ export const userPreferencesRead = registerCapability({
     defaultTextModel: z.string().nullable(),
     defaultImageModel: z.string().nullable(),
     defaultVideoModel: z.string().nullable(),
+    timezone: z.string(),
+    language: z.string(),
   }),
 });
 

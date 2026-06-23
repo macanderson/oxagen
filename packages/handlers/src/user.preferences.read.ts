@@ -15,6 +15,8 @@ const PREF_DEFAULTS = {
   defaultTextModel: null,
   defaultImageModel: null,
   defaultVideoModel: null,
+  timezone: "UTC",
+  language: "en",
 };
 
 export const userPreferencesReadHandler: CapabilityHandler<typeof userPreferencesRead> = async (
@@ -40,6 +42,8 @@ export const userPreferencesReadHandler: CapabilityHandler<typeof userPreference
         defaultTextModel: true,
         defaultImageModel: true,
         defaultVideoModel: true,
+        timezone: true,
+        language: true,
       },
     }),
   );
@@ -66,5 +70,7 @@ export const userPreferencesReadHandler: CapabilityHandler<typeof userPreference
     defaultTextModel: row.defaultTextModel ?? null,
     defaultImageModel: row.defaultImageModel ?? null,
     defaultVideoModel: row.defaultVideoModel ?? null,
+    timezone: row.timezone,
+    language: row.language,
   };
 };

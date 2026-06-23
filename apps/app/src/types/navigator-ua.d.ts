@@ -1,3 +1,10 @@
+// Ambient CSS module declaration — allows `import "…/something.css"` side-effect
+// imports (e.g. react-easy-crop) to type-check without requiring css-modules setup.
+declare module "*.css" {
+  const styles: Record<string, string>;
+  export default styles;
+}
+
 // Ambient typing for the User-Agent Client Hints API (`navigator.userAgentData`),
 // which is not yet part of TypeScript's built-in DOM lib. We only read
 // `platform` (to detect macOS for the ⌘K vs Ctrl+K hint), so the minimal

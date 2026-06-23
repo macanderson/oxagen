@@ -20,6 +20,8 @@ const UPDATED_ROW = {
   defaultTextModel: "anthropic/claude-opus-4.8",
   defaultImageModel: null,
   defaultVideoModel: null,
+  timezone: "America/New_York",
+  language: "en",
 };
 
 mocks.prefsFindFirst.mockResolvedValue(UPDATED_ROW);
@@ -127,5 +129,64 @@ describe("userPreferencesWriteHandler (@oxagen/handlers)", () => {
     const result = await userPreferencesWriteHandler({}, CTX);
     expect(result.fontSize).toBe("large");
     expect(mocks.insertOnConflict).toHaveBeenCalledTimes(1);
+  });
+
+  // ── timezone is persisted and returned ────────────────────────────────────
+
+  it("persists timezone and returns it in the output", async () => {
+    mocks.prefsFindFirst.mockResolvedValueOnce({
+      ...UPDATED_ROW,
+      timezone: "Europe/London",
+      language: "en",
+    });
+    const result = await userPreferencesWriteHandler({ timezone: "Europe/London" }, CTX);
+    expect(result.timezone).toBe("Europe/London");
+  });
+
+  // ── language is persisted and returned ────────────────────────────────────
+
+  it("persists language and returns it in the output", async () => {
+    mocks.prefsFindFirst.mockResolvedValueOnce({
+      ...UPDATED_ROW,
+      timezone: "America/New_York",
+      language: "fr",
+    });
+    const result = await userPreferencesWriteHandler({ language: "fr" }, CTX);
+    expect(result.language).toBe("fr");
+  });
+
+  // ── timezone + language together ──────────────────────────────────────────
+
+  it("persists timezone and language together", async () => {
+    mocks.prefsFindFirst.mockResolvedValueOnce({
+      ...UPDATED_ROW,
+      timezone: "Asia/Tokyo",
+      language: "ja",
+    });
+    const result = await userPreferencesWriteHandler(
+      { timezone: "Asia/Tokyo", language: "ja" },
+      CTX,
+    );
+    expect(result.timezone).toBe("Asia/Tokyo");
+    expect(result.language).toBe("ja");
+  });
+
+  // ── insert defaults: timezone defaults to UTC, language to en ─────────────
+
+  it("uses UTC and en as defaults on first insert when not provided", async () => {
+    mocks.prefsFindFirst.mockResolvedValueOnce({
+      ...UPDATED_ROW,
+      timezone: "UTC",
+      language: "en",
+    });
+    const result = await userPreferencesWriteHandler({ fontSize: "small" }, CTX);
+    // Verify upsert was called (insert sets default timezone/language).
+    expect(mocks.insertValues).toHaveBeenCalledTimes(1);
+    // The insert values carry the default timezone and language on first insert.
+    expect(mocks.insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({ timezone: "UTC", language: "en" }),
+    );
+    expect(result.timezone).toBe("UTC");
+    expect(result.language).toBe("en");
   });
 });

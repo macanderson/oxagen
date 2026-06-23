@@ -26,6 +26,9 @@ export const userPreferencesWrite = registerCapability({
     defaultTextModel: z.string().min(1).nullable().optional(),
     defaultImageModel: z.string().min(1).nullable().optional(),
     defaultVideoModel: z.string().min(1).nullable().optional(),
+    // Account locale / regional settings
+    timezone: z.string().min(1).optional(),
+    language: z.string().min(2).optional(),
   }),
   output: z.object({
     fontSize: z.enum(["small", "medium", "large"]),
@@ -36,6 +39,8 @@ export const userPreferencesWrite = registerCapability({
     defaultTextModel: z.string().nullable(),
     defaultImageModel: z.string().nullable(),
     defaultVideoModel: z.string().nullable(),
+    timezone: z.string(),
+    language: z.string(),
   }),
 });
 
