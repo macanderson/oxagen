@@ -154,10 +154,27 @@ const schemaCache = new Map<string, LoadedConnectorSchema>();
  * Folder name under packages/ingestion/src/connectors/ must match the id.
  */
 export const BUILT_IN_PLUGIN_IDS = new Set([
+  // Core connectors
   "github",
-  "google-drive",
   "linear",
   "slack",
+  // Google Workspace
+  "google-drive",
+  "google-calendar",
+  "google-gmail",
+  "google-meet",
+  "google-tasks",
+  "google-contacts",
+  "google-bigquery",
+  // Enterprise / CRM
+  "microsoft",
+  "salesforce",
+  "zoom",
+  // Custom / generic
+  "custom-sql",
+  "custom-webhook",
+  // Reference / example
+  "example-saas",
 ]);
 
 /**

@@ -1,0 +1,148 @@
+apiVersion: oxagen.ai/v1alpha1
+kind: ConnectorPlugin
+
+metadata:
+  id: custom-webhook
+  displayName: Generic Webhook
+  description: Receive and ingest events from any HTTP webhook source via a configurable endpoint.
+  icon: webhook
+  category: developer-tools
+  version: "1.0.0"
+  schemaVersion: "1"
+  publisher:
+    name: Oxagen
+    verified: true
+
+auth:
+  schemes:
+    - id: hmac_sha256_header
+      kind: api_key
+      displayName: HMAC-SHA256 Signature (recommended)
+      fields:
+        - key: apiKey
+          label: Webhook Secret
+          widget: secret
+          description: Shared secret used to verify the HMAC-SHA256 signature on every inbound request. The signature is expected in the X-Signature header as "sha256=<hex>".
+          validation:
+            required: true
+
+    - id: bearer_token
+      kind: api_key
+      displayName: Bearer Token
+      fields:
+        - key: apiKey
+          label: Bearer Token
+          widget: secret
+          description: Static bearer token that the sending service includes in the Authorization header.
+          validation:
+            required: true
+
+    - id: public
+      kind: none
+      displayName: No Authentication (public endpoint)
+
+config:
+  fields:
+    - key: recordTypes
+      label: Record Type Definitions
+      widget: code
+      description: >
+        JSON array of record type mappings. Each entry requires sourceRecordType (string),
+        eventTypeJsonPath (JSONPath to extract the event type, default "$.event"),
+        and matcher (value or glob that identifies this record type).
+        Example: [{"sourceRecordType":"order.created","eventTypeJsonPath":"$.event","matcher":"order.created"}]
+      validation:
+        required: true
+
+    - key: signatureStrategy
+      label: Signature Verification Strategy
+      widget: multi-select
+      description: How to verify the authenticity of inbound webhook payloads.
+      defaultValue:
+        - hmac_sha256_header
+      options:
+        - label: HMAC-SHA256 Header
+          value: hmac_sha256_header
+        - label: Bearer Token Header
+          value: bearer_token_header
+        - label: Static Secret in Body
+          value: static_secret_body
+        - label: None (public)
+          value: none
+      validation:
+        minItems: 1
+        maxItems: 1
+
+    - key: signatureHeader
+      label: Signature Header Name (optional)
+      widget: text
+      description: Override the default signature header name. Default is "x-signature".
+      validation:
+        pattern: "^[a-zA-Z][a-zA-Z0-9\\-]{0,63}$"
+
+    - key: idJsonPath
+      label: External ID JSONPath
+      widget: text
+      description: JSONPath expression to extract a stable unique identifier from each payload (e.g. "$.id").
+      defaultValue: "$.id"
+      validation:
+        pattern: "^\\$[.\\[].{0,200}$"
+
+    - key: displayNameJsonPath
+      label: Display Name JSONPath (optional)
+      widget: text
+      description: JSONPath to extract a human-readable name from each payload (e.g. "$.name").
+      validation:
+        pattern: "^\\$[.\\[].{0,200}$"
+
+recordTypes:
+  selectionMode: multi
+  defaultAll: true
+  items:
+    - id: webhook_event
+      displayName: Webhook Events
+      description: Events delivered to your Oxagen webhook endpoint. Record types are defined by your sourceRecordType configuration.
+      defaultEnabled: true
+
+filters:
+  pathFilters:
+    enabled: false
+  labelFilters:
+    enabled: false
+
+inference:
+  enabled: true
+  defaultEnabled: false
+  toggleLabel: Enable AI relationship inference
+  perRecordType:
+    webhook_event: true
+  confidenceThreshold:
+    defaultValue: 0.75
+    min: 0.50
+    max: 0.99
+  ontologyPrompt: |
+    Infer entities and relationships from webhook event payloads.
+
+    Look for:
+    - Event type patterns that indicate lifecycle transitions (created, updated, deleted, completed)
+    - Object identifiers that cross-reference other data sources (user IDs, order IDs, feature names)
+    - Timestamp fields that establish temporal ordering
+    - Actor fields (user_id, actor, performed_by) that link events to known users
+
+    Create edges:
+    - WebhookEvent -[triggered_by]-> Actor (when actor or user_id field is present)
+    - WebhookEvent -[affects]-> Entity (when the payload references a known entity by ID or name)
+
+sync:
+  delivery: webhook
+  pollingSupported: false
+  webhookEvents:
+    - "*"
+
+defaultFieldMappings:
+  webhook_event:
+    id: externalId
+    name: title
+    event: tags
+    created_at: createdAt
+    updated_at: updatedAt
