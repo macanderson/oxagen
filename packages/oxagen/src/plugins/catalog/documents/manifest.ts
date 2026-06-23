@@ -10,7 +10,8 @@ export const documentsManifest: OxagenPluginManifest = {
   tier: "free",
   visibility: "ga",
   category: "documents",
-  icon: "file-text",
+  icon: "notebook-pen",
+  color: "#10b981",
   contracts: [
     "documents.generate",
     "documents.pdf.create",

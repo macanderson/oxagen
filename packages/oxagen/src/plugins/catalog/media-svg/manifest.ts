@@ -9,7 +9,8 @@ export const mediaSvgManifest: OxagenPluginManifest = {
   tier: "free",
   visibility: "ga",
   category: "media",
-  icon: "shapes",
+  icon: "pen-tool",
+  color: "#0ea5e9",
   contracts: ["svg.generate"],
   scopes: [],
 };

@@ -8,6 +8,8 @@
  *   - duplicate slug (existing row found) → already-taken error
  *   - slug conflict on insert (23505) → already-taken error
  *   - happy path: returns ok:true with workspaceSlug
+ *   - seeders invoked with correct orgId+workspaceId on success
+ *   - seeder failure does not reject the action (fire-and-log)
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -21,6 +23,10 @@ const {
   mockResolveOrg,
   mockAssertOrgMember,
   mockRunInTenantScope,
+  mockSeedRegistry,
+  mockSeedCapabilities,
+  mockSeedSkills,
+  mockBootstrapAgents,
   dbState,
 } = vi.hoisted(() => {
   interface DbState {
@@ -45,6 +51,10 @@ const {
     mockResolveOrg: vi.fn(),
     mockAssertOrgMember: vi.fn(),
     mockRunInTenantScope: vi.fn((_scope: unknown, fn: () => unknown) => fn()),
+    mockSeedRegistry: vi.fn(),
+    mockSeedCapabilities: vi.fn(),
+    mockSeedSkills: vi.fn(),
+    mockBootstrapAgents: vi.fn(),
     dbState,
   };
 });
@@ -60,6 +70,19 @@ vi.mock("@/lib/resolve-org", () => ({
   assertOrgMember: mockAssertOrgMember,
 }));
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mockRunInTenantScope }));
+
+vi.mock("@oxagen/handlers/workspace-agents", () => ({
+  bootstrapWorkspaceAgents: mockBootstrapAgents,
+}));
+vi.mock("@oxagen/handlers/workspace-registry-seed", () => ({
+  seedWorkspaceDefaultRegistrySystem: mockSeedRegistry,
+}));
+vi.mock("@oxagen/handlers/workspace-capability-seed", () => ({
+  seedWorkspaceDefaultCapabilitiesSystem: mockSeedCapabilities,
+}));
+vi.mock("@oxagen/handlers/skill-workspace-seed", () => ({
+  seedWorkspaceDefaultSkillsSystem: mockSeedSkills,
+}));
 
 // Mock @oxagen/database — withTenantDb tracks call count via dbState.tenantCallIdx
 // (reset in beforeEach). The action calls withTenantDb twice:
@@ -86,7 +109,9 @@ vi.mock("@oxagen/database", () => {
   });
 
   // The workspace insert calls .returning(); workspaceUsers insert does NOT.
-  // Make `.values()` itself a thenable so `await tx.insert(t).values(v)` works.
+  // The action now returns { workspaceId, workspaceSlug } from withSystemDb.
+  // bootstrapWorkspaceAgents is mocked at the module level so the tx mock does
+  // not need to simulate the agent inserts.
   let systemInsertCallIdx = 0;
   const makeSystemTx = () => ({
     insert: (_table: unknown) => ({
@@ -144,6 +169,11 @@ vi.mock("@oxagen/database", () => {
   };
 });
 
+// Silence logger output in tests (seed-failure branches call logger.error).
+vi.mock("@oxagen/handlers/logger", () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
 // Mock the workspace.create contract — minimal input schema validation.
 vi.mock("@oxagen/oxagen/contracts/workspace.create", () => ({
   workspaceCreate: {
@@ -187,6 +217,10 @@ describe("createWorkspaceAction", () => {
     mockGetSession.mockResolvedValue(SESSION);
     mockResolveOrg.mockResolvedValue(ORG);
     mockAssertOrgMember.mockResolvedValue(undefined);
+    mockBootstrapAgents.mockResolvedValue(undefined);
+    mockSeedRegistry.mockResolvedValue("mreg_123");
+    mockSeedCapabilities.mockResolvedValue(undefined);
+    mockSeedSkills.mockResolvedValue({ scanned: 3, inserted: 3 });
   });
 
   it("returns ok:false when the caller's role is member (not owner/admin)", async () => {
@@ -241,5 +275,69 @@ describe("createWorkspaceAction", () => {
     );
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.workspaceSlug).toBe("main");
+  });
+
+  // ── seeder wiring ─────────────────────────────────────────────────────────
+
+  it("calls all three *System seeders with correct orgId and workspaceId on success", async () => {
+    const res = await createWorkspaceAction("acme", form({ name: "Main", slug: "main" }));
+    expect(res.ok).toBe(true);
+
+    expect(mockSeedRegistry).toHaveBeenCalledOnce();
+    expect(mockSeedRegistry).toHaveBeenCalledWith({ orgId: ORG.id, workspaceId: "ws-1" });
+
+    expect(mockSeedCapabilities).toHaveBeenCalledOnce();
+    expect(mockSeedCapabilities).toHaveBeenCalledWith({ orgId: ORG.id, workspaceId: "ws-1" });
+
+    expect(mockSeedSkills).toHaveBeenCalledOnce();
+    expect(mockSeedSkills).toHaveBeenCalledWith({ orgId: ORG.id, workspaceId: "ws-1" });
+  });
+
+  it("calls bootstrapWorkspaceAgents inside the tx with correct args on success", async () => {
+    const res = await createWorkspaceAction("acme", form({ name: "Main", slug: "main" }));
+    expect(res.ok).toBe(true);
+
+    expect(mockBootstrapAgents).toHaveBeenCalledOnce();
+    expect(mockBootstrapAgents).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "ws-1", orgId: ORG.id }),
+    );
+  });
+
+  it("seed failure in seedWorkspaceDefaultRegistrySystem does NOT reject the action", async () => {
+    mockSeedRegistry.mockRejectedValue(new Error("registry seed failed"));
+    const res = await createWorkspaceAction("acme", form({ name: "Main", slug: "main" }));
+    // Workspace was created; seed failure is fire-and-log.
+    expect(res.ok).toBe(true);
+  });
+
+  it("seed failure in seedWorkspaceDefaultCapabilitiesSystem does NOT reject the action", async () => {
+    mockSeedCapabilities.mockRejectedValue(new Error("capabilities seed failed"));
+    const res = await createWorkspaceAction("acme", form({ name: "Main", slug: "main" }));
+    expect(res.ok).toBe(true);
+  });
+
+  it("seed failure in seedWorkspaceDefaultSkillsSystem does NOT reject the action", async () => {
+    mockSeedSkills.mockRejectedValue(new Error("skills seed failed"));
+    const res = await createWorkspaceAction("acme", form({ name: "Main", slug: "main" }));
+    expect(res.ok).toBe(true);
+  });
+
+  it("seeders are NOT called when the action returns ok:false (role gate)", async () => {
+    dbState.membershipRole = "member";
+    const res = await createWorkspaceAction("acme", form({ name: "Main", slug: "main" }));
+    expect(res.ok).toBe(false);
+    expect(mockSeedRegistry).not.toHaveBeenCalled();
+    expect(mockSeedCapabilities).not.toHaveBeenCalled();
+    expect(mockSeedSkills).not.toHaveBeenCalled();
+  });
+
+  it("seeders are NOT called when the insert fails (tx error rolls back workspace)", async () => {
+    const pgErr = Object.assign(new Error("unique violation"), { code: "23505" });
+    dbState.insertError = pgErr;
+    const res = await createWorkspaceAction("acme", form({ name: "Main", slug: "main" }));
+    expect(res.ok).toBe(false);
+    expect(mockSeedRegistry).not.toHaveBeenCalled();
+    expect(mockSeedCapabilities).not.toHaveBeenCalled();
+    expect(mockSeedSkills).not.toHaveBeenCalled();
   });
 });

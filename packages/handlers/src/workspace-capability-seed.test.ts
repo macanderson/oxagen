@@ -69,6 +69,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return {
     ...real,
     withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn({}),
+    withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => fn({}),
   };
 });
 
@@ -79,6 +80,7 @@ vi.mock("./logger", () => ({
 
 import {
   seedWorkspaceDefaultCapabilities,
+  seedWorkspaceDefaultCapabilitiesSystem,
   DEFAULT_SEEDED_CAPABILITY_PLUGIN_IDS,
 } from "./workspace-capability-seed";
 
@@ -172,5 +174,61 @@ describe("seedWorkspaceDefaultCapabilities", () => {
     await expect(
       seedWorkspaceDefaultCapabilities({ orgId, workspaceId }),
     ).rejects.toThrow(/Unknown plugin id/);
+  });
+});
+
+// ── seedWorkspaceDefaultCapabilitiesSystem ───────────────────────────────────
+
+describe("seedWorkspaceDefaultCapabilitiesSystem", () => {
+  const sysOrgId = "org_sys_cap_1";
+  const sysWorkspaceId = "ws_sys_cap_1";
+
+  beforeEach(() => {
+    mocks.upsertCapabilityInstall.mockClear();
+    mocks.getOxagenPlugin.mockClear();
+    mocks.getOxagenPlugin.mockImplementation(
+      (id: string) => FAKE_MANIFESTS[id] ?? undefined,
+    );
+    mocks.upsertCapabilityInstall.mockResolvedValue("installed_plugin_id_stub");
+  });
+
+  it("calls upsertCapabilityInstall exactly 4 times (System variant)", async () => {
+    await seedWorkspaceDefaultCapabilitiesSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
+    expect(mocks.upsertCapabilityInstall).toHaveBeenCalledTimes(4);
+  });
+
+  it("passes the correct orgId and workspaceId to every upsert call (System variant)", async () => {
+    await seedWorkspaceDefaultCapabilitiesSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
+    for (const call of mocks.upsertCapabilityInstall.mock.calls) {
+      const input = call[1] as { orgId: string; workspaceId: string };
+      expect(input.orgId).toBe(sysOrgId);
+      expect(input.workspaceId).toBe(sysWorkspaceId);
+    }
+  });
+
+  it("inserts all 4 default plugin ids (System variant)", async () => {
+    await seedWorkspaceDefaultCapabilitiesSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
+    const calledIds = mocks.upsertCapabilityInstall.mock.calls.map(
+      (call) => (call[1] as { pluginId: string }).pluginId,
+    );
+    expect(calledIds).toEqual(expect.arrayContaining([
+      "oxagen/media-video",
+      "oxagen/media-image",
+      "oxagen/media-svg",
+      "oxagen/documents",
+    ]));
+  });
+
+  it("throws when a plugin id is not in the registry (System variant — guard)", async () => {
+    mocks.getOxagenPlugin.mockReturnValueOnce(undefined);
+    await expect(
+      seedWorkspaceDefaultCapabilitiesSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId }),
+    ).rejects.toThrow(/Unknown plugin id/);
+  });
+
+  it("is idempotent — calling twice upserts once per call (System variant)", async () => {
+    await seedWorkspaceDefaultCapabilitiesSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
+    await seedWorkspaceDefaultCapabilitiesSystem({ orgId: sysOrgId, workspaceId: sysWorkspaceId });
+    expect(mocks.upsertCapabilityInstall).toHaveBeenCalledTimes(8);
   });
 });

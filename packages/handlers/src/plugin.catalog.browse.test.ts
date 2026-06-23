@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   mapServerDetailToCatalogRow: vi.fn(),
   deriveTransportTypes: vi.fn(),
   deriveAuthKind: vi.fn(),
+  seedWorkspaceDefaultRegistry: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -25,6 +26,10 @@ vi.mock("@oxagen/plugins/registry", () => ({
   mapServerDetailToCatalogRow: mocks.mapServerDetailToCatalogRow,
   deriveTransportTypes: mocks.deriveTransportTypes,
   deriveAuthKind: mocks.deriveAuthKind,
+}));
+
+vi.mock("./workspace-registry-seed", () => ({
+  seedWorkspaceDefaultRegistry: mocks.seedWorkspaceDefaultRegistry,
 }));
 
 import { handler, clearRegistryCacheForTests } from "./plugin.catalog.browse";
@@ -51,7 +56,8 @@ const fakeManifests = [
     tier: "premium",
     visibility: "ga",
     category: "media",
-    icon: "clapperboard",
+    icon: "video",
+    color: "#f59e0b",
     contracts: ["video.generate"],
     scopes: [],
   },
@@ -63,7 +69,8 @@ const fakeManifests = [
     tier: "free",
     visibility: "ga",
     category: "media",
-    icon: "image",
+    icon: "image-plus",
+    color: "#6366f1",
     contracts: ["image.generate"],
     scopes: [],
   },
@@ -75,7 +82,8 @@ const fakeManifests = [
     tier: "free",
     visibility: "ga",
     category: "media",
-    icon: "shapes",
+    icon: "pen-tool",
+    color: "#0ea5e9",
     contracts: ["svg.generate"],
     scopes: [],
   },
@@ -87,7 +95,8 @@ const fakeManifests = [
     tier: "free",
     visibility: "ga",
     category: "documents",
-    icon: "file-text",
+    icon: "notebook-pen",
+    color: "#10b981",
     contracts: ["documents.generate"],
     scopes: [],
   },
@@ -100,6 +109,7 @@ const fakeManifests = [
     visibility: "hidden",
     category: "media",
     icon: undefined,
+    color: undefined,
     contracts: ["hidden.do"],
     scopes: [],
   },
@@ -112,6 +122,7 @@ const fakeManifests = [
     visibility: "preview",
     category: "media",
     icon: undefined,
+    color: undefined,
     contracts: ["preview.do"],
     scopes: [],
   },
@@ -269,7 +280,7 @@ describe("plugin.catalog.browse handler — agent_capability path", () => {
     expect(page2.nextOffset).toBe(null);
   });
 
-  it("sets transportTypes:[], authKind:'none', icons:[] for capability entries", async () => {
+  it("sets transportTypes:[], authKind:'none' for capability entries", async () => {
     mockInstalledNames([]);
     const result = (await handler(
       { pluginType: "agent_capability", limit: 30, offset: 0 },
@@ -278,8 +289,59 @@ describe("plugin.catalog.browse handler — agent_capability path", () => {
     for (const s of result.servers) {
       expect(s.transportTypes).toEqual([]);
       expect(s.authKind).toBe("none");
-      expect(s.icons).toEqual([]);
     }
+  });
+
+  it("forwards icon+color from the manifest per the SHARED ICON DATA CONTRACT", async () => {
+    mockInstalledNames([]);
+    const result = (await handler(
+      { pluginType: "agent_capability", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ id: string; icons: Array<{ src: string; color?: string }> }> };
+
+    const video = result.servers.find((s) => s.id === "oxagen/media-video");
+    expect(video!.icons).toEqual([{ src: "video", color: "#f59e0b" }]);
+
+    const image = result.servers.find((s) => s.id === "oxagen/media-image");
+    expect(image!.icons).toEqual([{ src: "image-plus", color: "#6366f1" }]);
+
+    const svg = result.servers.find((s) => s.id === "oxagen/media-svg");
+    expect(svg!.icons).toEqual([{ src: "pen-tool", color: "#0ea5e9" }]);
+
+    const docs = result.servers.find((s) => s.id === "oxagen/documents");
+    expect(docs!.icons).toEqual([{ src: "notebook-pen", color: "#10b981" }]);
+  });
+
+  it("returns icons:[] for a manifest with no icon field", async () => {
+    // Use manifests where some entries have no icon (visibility hidden/preview are
+    // filtered out, but we can inject a ga manifest without an icon directly).
+    const noIconManifests = [
+      {
+        id: "oxagen/no-icon-plugin",
+        name: "No Icon Plugin",
+        description: "A plugin without an icon field.",
+        version: "1.0.0",
+        tier: "free",
+        visibility: "ga",
+        category: "other",
+        icon: undefined,
+        color: undefined,
+        contracts: ["no.icon"],
+        scopes: [],
+      },
+    ];
+    mocks.listOxagenPlugins.mockReturnValue(noIconManifests);
+    mockInstalledNames([]);
+
+    const result = (await handler(
+      { pluginType: "agent_capability", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ icons: unknown[] }> };
+
+    expect(result.servers[0]!.icons).toEqual([]);
+
+    // Restore the standard fake manifests for subsequent tests.
+    mocks.listOxagenPlugins.mockReturnValue(fakeManifests);
   });
 
   it("installed:true returns only installed plugins", async () => {
@@ -659,7 +721,12 @@ describe("plugin.catalog.browse handler — mcp_server path (live registry)", ()
     expect(result.servers[0]!.name).toBe("server-ok");
   });
 
-  it("returns empty when no registries are enabled for the workspace", async () => {
+  it("returns empty when no registries are enabled for the workspace (after lazy-seed finds none)", async () => {
+    // First registries query: empty.
+    mockRegistries([]);
+    // Lazy-seed succeeds (idempotent insert) but re-query still finds nothing.
+    mocks.seedWorkspaceDefaultRegistry.mockResolvedValueOnce("reg-seeded");
+    // Re-query after seed: still empty (e.g. insert rolled back or disabled).
     mockRegistries([]);
 
     const result = (await handler(
@@ -724,5 +791,103 @@ describe("plugin.catalog.browse handler — mcp_server path (live registry)", ()
     // All names pass through — no denylist filtering.
     expect(result.total).toBe(3);
     expect(result.servers.map((s) => s.name).sort()).toEqual(names.sort());
+  });
+
+  // ── Lazy-seed: pre-existing workspaces self-heal ──────────────────────────────
+
+  it("lazy-seeds the default registry when no registries exist, then re-queries and returns results", async () => {
+    // First registries query returns empty (no seed yet).
+    mockRegistries([]);
+    // seedWorkspaceDefaultRegistry succeeds silently.
+    mocks.seedWorkspaceDefaultRegistry.mockResolvedValueOnce("reg-seeded");
+    // Re-query after seed returns the default registry.
+    mockRegistries([fakeRegistry]);
+    // listServers returns a server from the newly seeded registry.
+    mocks.listServers.mockResolvedValue({
+      servers: [makeServerResponse("seeded-server")],
+      nextCursor: undefined,
+    });
+    mockInstalledNames([]);
+
+    const result = (await handler(
+      { pluginType: "mcp_server", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ name: string }>; total: number };
+
+    expect(mocks.seedWorkspaceDefaultRegistry).toHaveBeenCalledWith({
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+    });
+    expect(result.total).toBe(1);
+    expect(result.servers[0]!.name).toBe("seeded-server");
+  });
+
+  it("does NOT call seedWorkspaceDefaultRegistry when registries already exist", async () => {
+    mockRegistries([fakeRegistry]);
+    mocks.listServers.mockResolvedValue({ servers: [], nextCursor: undefined });
+
+    await handler({ pluginType: "mcp_server", limit: 30, offset: 0 }, ctx);
+
+    expect(mocks.seedWorkspaceDefaultRegistry).not.toHaveBeenCalled();
+  });
+
+  it("returns a warning when lazy seed fails, but still returns empty results gracefully", async () => {
+    // First registries query returns empty.
+    mockRegistries([]);
+    // Seed throws.
+    mocks.seedWorkspaceDefaultRegistry.mockRejectedValueOnce(new Error("DB error"));
+
+    const result = (await handler(
+      { pluginType: "mcp_server", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: unknown[]; total: number; warnings?: string[] };
+
+    expect(result.total).toBe(0);
+    expect(result.servers).toHaveLength(0);
+    expect(result.warnings).toBeDefined();
+    expect(result.warnings!.length).toBeGreaterThan(0);
+    expect(result.warnings![0]).toMatch(/seed/i);
+  });
+
+  // ── Warnings: failed registry fetches are surfaced in the output ──────────────
+
+  it("includes a warning entry when a registry fetch fails", async () => {
+    const reg2 = { id: "reg-2", baseUrl: "https://registry2.example.com" };
+    mockRegistries([fakeRegistry, reg2]);
+    mocks.listServers
+      .mockRejectedValueOnce(new Error("connection refused"))
+      .mockResolvedValueOnce({
+        servers: [makeServerResponse("healthy-server")],
+        nextCursor: undefined,
+      });
+    mockInstalledNames([]);
+
+    const result = (await handler(
+      { pluginType: "mcp_server", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ name: string }>; total: number; warnings?: string[] };
+
+    // Results from the healthy registry still come through.
+    expect(result.total).toBe(1);
+    expect(result.servers[0]!.name).toBe("healthy-server");
+    // A warning for the failed registry is included.
+    expect(result.warnings).toBeDefined();
+    expect(result.warnings!.some((w) => w.includes(fakeRegistry.id))).toBe(true);
+  });
+
+  it("omits the warnings field when all registries succeed", async () => {
+    mockRegistries([fakeRegistry]);
+    mocks.listServers.mockResolvedValue({
+      servers: [makeServerResponse("ok-server")],
+      nextCursor: undefined,
+    });
+    mockInstalledNames([]);
+
+    const result = (await handler(
+      { pluginType: "mcp_server", limit: 30, offset: 0 },
+      ctx,
+    )) as { servers: Array<{ name: string }>; warnings?: string[] };
+
+    expect(result.warnings).toBeUndefined();
   });
 });

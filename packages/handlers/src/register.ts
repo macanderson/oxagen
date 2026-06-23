@@ -386,6 +386,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./skill.metrics.read")).skillMetricsReadHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "skill.author",
+    async () =>
+      (await import("./skill.author")).skillAuthorHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "agent.execution.record",
     async () =>
       (await import("./agent.execution.record")).agentExecutionRecordHandler as CapabilityHandlerFn,

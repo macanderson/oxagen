@@ -34,7 +34,13 @@ async function contributeMcpTools(ctx: CapabilityContext, options?: PluginContri
       // Soft-deleted servers (OXA-820) stop registering tools but keep their
       // descriptor snapshots for replay.
       isNull(schema.mcpServers.deletedAt),
-      eq(schema.mcpServers.healthStatus, "healthy"),
+      // Accept "healthy" (probed OK, e.g. after OAuth) AND "unknown" (just enabled
+      // via the toggle/secret path — only the OAuth callback ever sets "healthy", so
+      // requiring "healthy" silently hid every secret-auth server from the agent).
+      // The live connectMcp() + listTools() below is the real health gate: a server
+      // that can't connect is skipped gracefully. Genuinely "unhealthy" servers are
+      // still excluded.
+      inArray(schema.mcpServers.healthStatus, ["healthy", "unknown"]),
       eq(schema.pluginInstalledPlugins.enabled, true),
       isNull(schema.pluginInstalledPlugins.deletedAt),
     ] as const;

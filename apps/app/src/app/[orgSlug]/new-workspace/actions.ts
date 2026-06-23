@@ -6,6 +6,10 @@ import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { logger } from "@oxagen/handlers/logger";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, assertOrgMember } from "@/lib/resolve-org";
+import { bootstrapWorkspaceAgents } from "@oxagen/handlers/workspace-agents";
+import { seedWorkspaceDefaultRegistrySystem } from "@oxagen/handlers/workspace-registry-seed";
+import { seedWorkspaceDefaultCapabilitiesSystem } from "@oxagen/handlers/workspace-capability-seed";
+import { seedWorkspaceDefaultSkillsSystem } from "@oxagen/handlers/skill-workspace-seed";
 
 // Mirrors the workspace.create capability's defaultRoles (org Owner/Admin allow).
 // Re-checked server-side here so the gate can't be bypassed from the client.
@@ -83,7 +87,7 @@ export async function createWorkspaceAction(
       // (RLS bypass) for this bootstrap creation is the correct fix — the
       // workspace and its creator's membership row ARE the objects being
       // created, so there is no prior scope to derive from. — OXA-1515
-      const workspaceSlug = await withSystemDb(async (tx) => {
+      const { workspaceId, workspaceSlug } = await withSystemDb(async (tx) => {
         const [ws] = await tx
           .insert(schema.workspaces)
           .values({
@@ -104,8 +108,47 @@ export async function createWorkspaceAction(
           createdByUserId: session.user.id,
           updatedByUserId: session.user.id,
         });
-        return ws.slug;
+
+        // Bootstrap the built-in qa-chat agent atomically with workspace creation
+        // so the workspace is immediately usable from the ask/chat surface.
+        await bootstrapWorkspaceAgents({
+          workspaceId: ws.id,
+          orgId: org.id,
+          userId: session.user.id,
+          tx,
+        });
+
+        return { workspaceId: ws.id, workspaceSlug: ws.slug };
       });
+
+      // Seed the default MCP registry, capability packs, and builtin skills
+      // outside the transaction (fire-and-log): a seed failure must NOT roll
+      // back the workspace that was just created.
+      try {
+        await seedWorkspaceDefaultRegistrySystem({ orgId: org.id, workspaceId });
+      } catch (seedErr) {
+        logger.error(
+          { err: seedErr, orgId: org.id, workspaceId },
+          "[new-workspace] seedWorkspaceDefaultRegistrySystem failed — workspace was created; seed is recoverable via db:backfill-workspace-seeds",
+        );
+      }
+      try {
+        await seedWorkspaceDefaultCapabilitiesSystem({ orgId: org.id, workspaceId });
+      } catch (seedErr) {
+        logger.error(
+          { err: seedErr, orgId: org.id, workspaceId },
+          "[new-workspace] seedWorkspaceDefaultCapabilitiesSystem failed — workspace was created; seed is recoverable via db:backfill-workspace-seeds",
+        );
+      }
+      try {
+        await seedWorkspaceDefaultSkillsSystem({ orgId: org.id, workspaceId });
+      } catch (seedErr) {
+        logger.error(
+          { err: seedErr, orgId: org.id, workspaceId },
+          "[new-workspace] seedWorkspaceDefaultSkillsSystem failed — workspace was created; seed is recoverable via db:backfill-workspace-seeds",
+        );
+      }
+
       return { ok: true, workspaceSlug };
     } catch (err) {
       if (isUniqueViolation(err)) {
