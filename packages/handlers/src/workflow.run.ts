@@ -22,7 +22,10 @@ export const workflowRunHandler: CapabilityHandler<typeof workflowRun> = async (
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
         // agentId/agentVersionId are null for dynamic (LLM-planned) runs.
-        originType: "workflow.run",
+        // MUST be "workflow_run" (underscore) to satisfy the
+        // agent_executions_origin_type_check CHECK constraint — a "workflow.run"
+        // (dot) value is rejected by Postgres and silently breaks every run.
+        originType: "workflow_run",
         originId: ctx.userId!,
         status: "planning",
         inputPayload: {
