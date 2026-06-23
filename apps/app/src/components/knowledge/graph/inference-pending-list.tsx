@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { ArrowRight, CheckCircle2, XCircle, Eye, RefreshCw, Layers } from "lucide-react";
+import { ArrowRight, CheckCircle2, XCircle, RefreshCw, Layers } from "lucide-react";
 import type { SemanticEdge } from "@oxagen/oxagen/contracts/semantic.edge.list";
+import { NodeRef, sourceNodeRef, targetNodeRef } from "./node-ref";
+import { InferenceDetailsPopover } from "./inference-details-popover";
 
 // ── Display helpers ────────────────────────────────────────────────────────────
 
@@ -25,36 +27,26 @@ interface InferredEdgeRowProps {
   orgSlug: string;
   workspaceSlug: string;
   onAction: (edgeId: string, decision: "approve" | "reject") => void;
-  onSelect: (edge: SemanticEdge) => void;
   processing: Set<string>;
 }
 
-function InferredEdgeRow({
-  edge,
-  onAction,
-  onSelect,
-  processing,
-}: InferredEdgeRowProps) {
+function InferredEdgeRow({ edge, onAction, processing }: InferredEdgeRowProps) {
   const isProcessing = processing.has(edge.id);
 
   return (
     <li className="flex items-start justify-between gap-4 border-b border-border/40 px-4 py-3 last:border-b-0">
-      {/* Edge summary */}
-      <button
-        type="button"
-        className="flex min-w-0 flex-1 items-start gap-3 text-left hover:opacity-80 transition-opacity"
-        onClick={() => onSelect(edge)}
-        aria-label={`View edge from ${edge.sourceNodeId} to ${edge.targetNodeId}`}
-      >
+      {/* Edge summary — both endpoints cited by their human label, each
+          hover/click-inspectable for full properties (never a raw UUID). */}
+      <div className="flex min-w-0 flex-1 items-start gap-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <div className="flex flex-wrap items-center gap-1.5 text-sm">
-            <span className="truncate font-mono text-xs text-muted-foreground">{edge.sourceNodeId}</span>
+            <NodeRef node={sourceNodeRef(edge)} />
             <ArrowRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
             <code className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-semibold text-foreground">
               {edge.type}
             </code>
             <ArrowRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-            <span className="font-medium text-foreground">{edge.targetNodeId}</span>
+            <NodeRef node={targetNodeRef(edge)} />
             <span className="text-[11px] text-muted-foreground">({edge.source.connectorId})</span>
           </div>
           <span
@@ -63,20 +55,11 @@ function InferredEdgeRow({
             {formatConfidence(edge.confidence)} confidence
           </span>
         </div>
-      </button>
+      </div>
 
       {/* Actions */}
       <div className="flex flex-shrink-0 items-center gap-1.5">
-        <button
-          type="button"
-          className="flex items-center gap-1 rounded-md border border-border/60 bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted transition-colors"
-          onClick={() => onSelect(edge)}
-          disabled={isProcessing}
-          aria-label="View edge details"
-        >
-          <Eye className="h-3 w-3" aria-hidden="true" />
-          Details
-        </button>
+        <InferenceDetailsPopover edge={edge} />
         <button
           type="button"
           className="flex items-center gap-1 rounded-md border border-success/40 bg-success/12 px-2 py-1 text-[11px] font-semibold text-success hover:bg-success/20 transition-colors disabled:opacity-50"
@@ -152,7 +135,6 @@ export interface InferencePendingListProps {
   initialSuggestions: SemanticEdge[];
   /** Total matching count from the API response. */
   total: number;
-  onSelectEdge?: (edge: SemanticEdge) => void;
 }
 
 export function InferencePendingList({
@@ -160,7 +142,6 @@ export function InferencePendingList({
   workspaceSlug,
   initialSuggestions,
   total,
-  onSelectEdge,
 }: InferencePendingListProps) {
   const [suggestions, setSuggestions] = React.useState<SemanticEdge[]>(initialSuggestions);
   const [processing, setProcessing] = React.useState<Set<string>>(new Set());
@@ -285,7 +266,6 @@ export function InferencePendingList({
                   orgSlug={orgSlug}
                   workspaceSlug={workspaceSlug}
                   onAction={handleAction}
-                  onSelect={(e) => onSelectEdge?.(e)}
                   processing={processing}
                 />
               ))}
