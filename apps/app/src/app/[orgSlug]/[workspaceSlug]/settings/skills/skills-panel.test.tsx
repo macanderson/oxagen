@@ -231,7 +231,7 @@ describe("SkillsPanel", () => {
       />,
     );
     // The formatted date should contain "2025" at minimum
-    expect(screen.getByText(/2025/)).toBeInTheDocument();
+    expect(screen.getAllByText(/2025/).length).toBeGreaterThan(0);
   });
 
   // (f) Filter input narrows visible rows

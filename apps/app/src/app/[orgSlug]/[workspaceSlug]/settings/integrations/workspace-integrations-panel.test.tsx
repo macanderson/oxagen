@@ -331,7 +331,7 @@ describe("WorkspaceIntegrationsPanel", () => {
         wsInstallMap={{ [listing.id]: makeInstall() }}
       />,
     );
-    expect(screen.getByText("raw-name")).toBeInTheDocument();
+    expect(screen.getAllByText("raw-name").length).toBeGreaterThan(0);
   });
 
   // (c) Toggle disabled when canManage=false

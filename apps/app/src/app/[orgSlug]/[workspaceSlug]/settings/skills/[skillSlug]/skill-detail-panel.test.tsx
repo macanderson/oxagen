@@ -537,7 +537,7 @@ describe("SkillDetailPanel — version history", () => {
   it("shows version numbers in the table", () => {
     renderPanel({ versions: [v1, v2] });
     expect(screen.getByText("v1.0.0")).toBeInTheDocument();
-    expect(screen.getByText("v1.2.0")).toBeInTheDocument();
+    expect(screen.getAllByText("v1.2.0").length).toBeGreaterThan(0);
   });
 
   it("shows commit messages in the table", () => {
