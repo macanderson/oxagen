@@ -50,7 +50,13 @@ export interface GenerateObjectArgs<T> {
     orgId: string;
     workspaceId: string;
     surface: Surface;
-    messageId: string;
+    /**
+     * UUID of the user message that initiated the turn, or `null` when there is
+     * none. Flows into `token_usage.execution_step_id` (UUID) and
+     * `credit_ledger.reference_id` (Postgres uuid) — MUST be a valid UUID or
+     * null, never a free-form string like the literal "unknown".
+     */
+    messageId: string | null;
   };
 }
 
@@ -156,7 +162,8 @@ export async function generateObjectFor<T>(
   try {
     await chargeUsageCredits({
       orgId: args.telemetry.orgId,
-      referenceId: args.telemetry.messageId,
+      // null → undefined → NULL reference_id; never a non-UUID string.
+      referenceId: args.telemetry.messageId ?? undefined,
       ...usage,
     });
   } catch (err) {

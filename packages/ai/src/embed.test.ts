@@ -154,6 +154,33 @@ describe("embedText (@oxagen/ai)", () => {
     expect(v).toHaveLength(1536);
   });
 
+  // Regression: ingestion embeds (embedEntity / dedup resolve / repo-file embed)
+  // have no execution step and now pass executionStepId: null instead of a
+  // synthesized non-UUID string like `embed:<nodeId>`. The null must flow
+  // verbatim into the token_usage row (insertTokenUsage coalesces it to the nil
+  // UUID) and the credit referenceId must become undefined (→ NULL), NEVER a
+  // non-UUID string — otherwise the CH row drops and the credit charge throws &
+  // is swallowed (unbilled embeddings). Fails on the pre-fix code (executionStepId
+  // was typed `string`, callers sent `embed:<nodeId>`).
+  it("passes null execution_step_id through to token_usage when there is no step", async () => {
+    await embedText("ingestion embed", {
+      telemetry: { orgId: "org_1", workspaceId: "ws_1", surface: "ingestion", executionStepId: null },
+    });
+    const rows = (mocks.insertTokenUsage.mock.calls[0] as [Record<string, unknown>[]])[0];
+    expect(rows[0]!.execution_step_id).toBeNull();
+    // It must never be a synthesized correlation string.
+    expect(typeof rows[0]!.execution_step_id).not.toBe("string");
+  });
+
+  it("charges credits with referenceId undefined (not a non-UUID string) when there is no step", async () => {
+    await embedText("ingestion embed", {
+      telemetry: { orgId: "org_1", workspaceId: "ws_1", surface: "ingestion", executionStepId: null },
+    });
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
+    const arg = mocks.chargeUsageCredits.mock.calls[0]![0] as { referenceId?: string };
+    expect(arg.referenceId).toBeUndefined();
+  });
+
   it("warns and bills zero tokens when the embed() response omits usage", async () => {
     mocks.embed.mockImplementationOnce(async () => ({
       embedding: new Array(1536).fill(0),
