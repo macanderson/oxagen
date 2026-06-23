@@ -155,12 +155,14 @@ export const graphIngestHandler: CapabilityHandler<typeof graphIngest> = async (
         },
         ctx,
         { surface: "agent" },
-      )) as { edgeId: string; created: boolean };
+      )) as { edgeId?: string; relationshipId?: string; created: boolean };
       relationships.push({
-        edgeId: out.edgeId,
+        // graph.ingest output was renamed edgeId→relationshipId in the schema-registry epic
+        relationshipId: out.relationshipId ?? out.edgeId ?? `${fromId}:${r.edgeType}:${toId}`,
         from: r.fromName,
         to: r.toName,
-        edgeType: r.edgeType,
+        // graph.ingest output was renamed edgeType→relationshipType in the schema-registry epic
+        relationshipType: r.edgeType,
         confidence: r.confidence,
         created: out.created,
       });

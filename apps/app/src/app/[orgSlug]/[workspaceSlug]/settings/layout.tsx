@@ -23,6 +23,7 @@ export default async function SettingsLayout({
     { label: "Integrations", href: workspace.settings.integrations(ctx) },
     { label: "Prompts", href: workspace.settings.prompts(ctx) },
     { label: "Plugins", href: workspace.settings.plugins(ctx) },
+    { label: "Knowledge", href: workspace.settings.knowledge(ctx) },
   ];
 
   return (

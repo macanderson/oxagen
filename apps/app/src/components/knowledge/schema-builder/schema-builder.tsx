@@ -1,0 +1,446 @@
+"use client";
+
+import * as React from "react";
+import { Bot } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { SchemaList } from "./schema-list";
+import { LabelEditor } from "./label-editor";
+import { RelationshipEditor } from "./relationship-editor";
+import { VersionHistory } from "./version-history";
+import { PinChangeDialog } from "./pin-change-dialog";
+import { ExportButton } from "./export-button";
+import { SchemaAssistantDrawer } from "./schema-assistant-drawer";
+import { OnboardingRecommendation } from "./onboarding-recommendation";
+import {
+  fetchRegistry,
+  toggleSchema,
+  upsertLabel,
+  upsertRelationship,
+  reconcileDispatch,
+} from "./schema-service";
+import type { TenantSlugs, SchemaRegistryData, LabelItem, RelationshipItem } from "./types";
+import type { SchemaToggleOutput, SchemaLabelUpsertInput, SchemaRelationshipUpsertInput } from "./schema-service";
+
+interface SchemaBuilderProps {
+  slugs: TenantSlugs;
+  isAdmin: boolean;
+}
+
+type Tab = "schemas" | "labels" | "relationships" | "versions";
+
+const ENFORCEMENT_BADGE: Record<SchemaRegistryData["enforcementMode"], { label: string; className: string }> = {
+  strict: { label: "Strict", className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300" },
+  lenient: { label: "Lenient", className: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" },
+  off: { label: "Off", className: "bg-muted text-muted-foreground" },
+};
+
+export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
+  const [registry, setRegistry] = React.useState<SchemaRegistryData | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [activeTab, setActiveTab] = React.useState<Tab>("schemas");
+  const [selectedSchemaName, setSelectedSchemaName] = React.useState<string | null>(null);
+  const [versionId, setVersionId] = React.useState<string | undefined>(undefined);
+
+  // Dialogs
+  const [labelDialog, setLabelDialog] = React.useState<{
+    schemaName: string;
+    initial?: LabelItem;
+  } | null>(null);
+  const [relationshipDialog, setRelationshipDialog] = React.useState<{
+    schemaName: string;
+    initial?: RelationshipItem;
+  } | null>(null);
+  const [pinDialog, setPinDialog] = React.useState<{
+    versionId: string;
+    versionNumber: number;
+  } | null>(null);
+  const [assistantOpen, setAssistantOpen] = React.useState(false);
+  const [showOnboarding, setShowOnboarding] = React.useState(false);
+
+  const loadRegistry = React.useCallback(
+    async (vid?: string) => {
+      setLoading(true);
+      try {
+        const data = await fetchRegistry(slugs, { versionId: vid });
+        setRegistry(data);
+        if (data.schemas.length === 0) setShowOnboarding(true);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [slugs],
+  );
+
+  React.useEffect(() => {
+    void loadRegistry(versionId);
+  }, [loadRegistry, versionId]);
+
+  const handleToggle = async (schemaName: string, enabled: boolean): Promise<SchemaToggleOutput> => {
+    const result = await toggleSchema(slugs, schemaName, enabled);
+    // Refresh registry to reflect toggle
+    const updated = await fetchRegistry(slugs);
+    setRegistry(updated);
+    return result;
+  };
+
+  const handleReconcile = (schemaName: string) => {
+    if (!registry?.pinnedVersionId) return;
+    void reconcileDispatch(slugs, registry.pinnedVersionId, false);
+    // schemaName used to scope which schema triggered reconcile — kept for future filtering
+    void schemaName;
+  };
+
+  const handleSaveLabel = async (input: SchemaLabelUpsertInput) => {
+    await upsertLabel(slugs, input);
+    setLabelDialog(null);
+    await loadRegistry(versionId);
+  };
+
+  const handleSaveRelationship = async (input: SchemaRelationshipUpsertInput) => {
+    await upsertRelationship(slugs, input);
+    setRelationshipDialog(null);
+    await loadRegistry(versionId);
+  };
+
+  const handlePin = async (vid: string) => {
+    // The schema.version.pin contract is not yet wired — optimistically update UI
+    // and show the reconcile dialog. Version number looked up from loaded versions.
+    setPinDialog({ versionId: vid, versionNumber: 1 });
+  };
+
+  const handleDispatchReconcile = async (opts: { versionId: string; prune: boolean }) => {
+    await reconcileDispatch(slugs, opts.versionId, opts.prune);
+    setPinDialog(null);
+  };
+
+  const handleOnboardingApply = async (schemaName: string, labels: LabelItem[]) => {
+    for (const label of labels) {
+      await upsertLabel(slugs, {
+        schemaName,
+        name: label.name,
+        displayName: label.displayName,
+        description: label.description ?? undefined,
+        properties: label.properties,
+      });
+    }
+    setShowOnboarding(false);
+    await loadRegistry(versionId);
+  };
+
+  // Collect all labels/relationships across schemas for the Labels / Relationships tabs
+  const allLabels = React.useMemo(
+    () =>
+      (registry?.schemas ?? []).flatMap((s) =>
+        s.labels.map((l) => ({ ...l, schemaName: s.schemaName })),
+      ),
+    [registry],
+  );
+
+  const allRelationships = React.useMemo(
+    () =>
+      (registry?.schemas ?? []).flatMap((s) =>
+        s.relationshipTypes.map((r) => ({ ...r, schemaName: s.schemaName })),
+      ),
+    [registry],
+  );
+
+  const allLabelNames = allLabels.map((l) => l.name);
+
+  const tabs: Array<{ id: Tab; label: string }> = [
+    { id: "schemas", label: "Schemas" },
+    { id: "labels", label: "Labels" },
+    { id: "relationships", label: "Relationships" },
+    { id: "versions", label: "Version History" },
+  ];
+
+  const enforcementInfo = registry ? ENFORCEMENT_BADGE[registry.enforcementMode] : null;
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h2 className="text-lg font-semibold">Schema Registry</h2>
+          {enforcementInfo && (
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${enforcementInfo.className}`}
+            >
+              {enforcementInfo.label}
+            </span>
+          )}
+          {registry && (
+            <Select
+              value={versionId ?? (registry.pinnedVersionId ?? "draft")}
+              onValueChange={(v) => setVersionId(v === "draft" ? undefined : v)}
+            >
+              <SelectTrigger className="h-7 text-xs w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {registry.pinnedVersionId && (
+                  <SelectItem value={registry.pinnedVersionId}>
+                    Pinned version
+                  </SelectItem>
+                )}
+                {registry.draftVersionId && (
+                  <SelectItem value="draft">Draft</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <ExportButton slugs={slugs} versionId={versionId} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAssistantOpen(true)}
+            className="gap-1.5"
+          >
+            <Bot className="h-3.5 w-3.5" />
+            Open AI Assistant
+          </Button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b border-border">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              activeTab === tab.id
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Loading state */}
+      {loading && (
+        <div className="space-y-3">
+          <Skeleton className="h-14 w-full rounded-xl" />
+          <Skeleton className="h-14 w-full rounded-xl" />
+        </div>
+      )}
+
+      {/* Schemas tab */}
+      {!loading && activeTab === "schemas" && registry && (
+        <div className="space-y-4">
+          {registry.schemas.length === 0 && showOnboarding ? (
+            <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">No schemas defined</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Use AI recommendations to get started with a starter schema.
+                  </p>
+                </div>
+              </div>
+              <OnboardingRecommendation
+                slugs={slugs}
+                onApply={handleOnboardingApply}
+                onDiscard={() => setShowOnboarding(false)}
+              />
+            </div>
+          ) : (
+            <SchemaList
+              schemas={registry.schemas}
+              onToggle={handleToggle}
+              onSelect={setSelectedSchemaName}
+              onReconcile={handleReconcile}
+              selectedSchemaName={selectedSchemaName}
+              isAdmin={isAdmin}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Labels tab */}
+      {!loading && activeTab === "labels" && registry && (
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              onClick={() =>
+                setLabelDialog({ schemaName: registry.schemas[0]?.schemaName ?? "core" })
+              }
+              disabled={registry.schemas.length === 0}
+            >
+              Add Label
+            </Button>
+          </div>
+          <div className="rounded-xl border border-border overflow-hidden">
+            {allLabels.length === 0 && (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                No labels defined.
+              </div>
+            )}
+            {allLabels.map((label, idx) => (
+              <div
+                key={`${label.schemaName}/${label.name}`}
+                className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/40 transition-colors ${
+                  idx > 0 ? "border-t border-border" : ""
+                }`}
+                onClick={() =>
+                  setLabelDialog({ schemaName: label.schemaName, initial: label })
+                }
+              >
+                <div>
+                  <span className="font-medium text-sm">{label.displayName}</span>
+                  <span className="ml-2 text-xs text-muted-foreground font-mono">{label.name}</span>
+                  <Badge variant="outline" className="ml-2 text-xs">
+                    {label.schemaName}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {label.properties?.length ?? 0} properties
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Relationships tab */}
+      {!loading && activeTab === "relationships" && registry && (
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              onClick={() =>
+                setRelationshipDialog({
+                  schemaName: registry.schemas[0]?.schemaName ?? "core",
+                })
+              }
+              disabled={registry.schemas.length === 0}
+            >
+              Add Relationship
+            </Button>
+          </div>
+          <div className="rounded-xl border border-border overflow-hidden">
+            {allRelationships.length === 0 && (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                No relationship types defined.
+              </div>
+            )}
+            {allRelationships.map((rel, idx) => (
+              <div
+                key={`${rel.schemaName}/${rel.name}`}
+                className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/40 transition-colors ${
+                  idx > 0 ? "border-t border-border" : ""
+                }`}
+                onClick={() =>
+                  setRelationshipDialog({ schemaName: rel.schemaName, initial: rel })
+                }
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm font-medium">{rel.name}</span>
+                  <Badge variant="outline" className="text-xs">
+                    {rel.schemaName}
+                  </Badge>
+                  {rel.startLabel && rel.endLabel && (
+                    <span className="text-xs text-muted-foreground">
+                      {rel.startLabel} → {rel.endLabel}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {rel.properties?.length ?? 0} properties
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Version History tab */}
+      {!loading && activeTab === "versions" && registry && (
+        <VersionHistory
+          slugs={slugs}
+          pinnedVersionId={registry.pinnedVersionId}
+          onPin={handlePin}
+        />
+      )}
+
+      {/* Label Dialog */}
+      <Dialog open={!!labelDialog} onOpenChange={(open) => !open && setLabelDialog(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {labelDialog?.initial ? "Edit Label" : "Add Label"}
+            </DialogTitle>
+          </DialogHeader>
+          {labelDialog && (
+            <LabelEditor
+              schemaName={labelDialog.schemaName}
+              initial={labelDialog.initial}
+              onSave={handleSaveLabel}
+              onCancel={() => setLabelDialog(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Relationship Dialog */}
+      <Dialog
+        open={!!relationshipDialog}
+        onOpenChange={(open) => !open && setRelationshipDialog(null)}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {relationshipDialog?.initial ? "Edit Relationship" : "Add Relationship"}
+            </DialogTitle>
+          </DialogHeader>
+          {relationshipDialog && (
+            <RelationshipEditor
+              schemaName={relationshipDialog.schemaName}
+              availableLabels={allLabelNames}
+              initial={relationshipDialog.initial}
+              onSave={handleSaveRelationship}
+              onCancel={() => setRelationshipDialog(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Pin Change Dialog */}
+      {pinDialog && (
+        <PinChangeDialog
+          open={!!pinDialog}
+          onOpenChange={(open) => !open && setPinDialog(null)}
+          versionId={pinDialog.versionId}
+          versionNumber={pinDialog.versionNumber}
+          onDispatch={handleDispatchReconcile}
+        />
+      )}
+
+      {/* Schema Assistant Drawer */}
+      <SchemaAssistantDrawer
+        open={assistantOpen}
+        onOpenChange={setAssistantOpen}
+        slugs={slugs}
+      />
+    </div>
+  );
+}

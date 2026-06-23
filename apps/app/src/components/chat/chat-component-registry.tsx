@@ -170,4 +170,12 @@ export const CHAT_COMPONENTS = {
   "graph-ingest-card": lazy(
     () => import("@/components/chat/registry-components/graph-ingest-card"),
   ),
+  // Schema registry mutation — shows a schema add/update/remove action card in chat.
+  "schema-mutation-card": lazy(
+    () => import("@/components/knowledge/schema-builder/registry-components/schema-mutation-card"),
+  ),
+  // Schema label approval — lets the user accept/dismiss an AI-proposed label in chat.
+  "schema-label-approval": lazy(
+    () => import("@/components/knowledge/schema-builder/registry-components/schema-label-approval"),
+  ),
 } as unknown as Record<string, AnyLazy>;

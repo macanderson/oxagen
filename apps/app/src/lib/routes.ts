@@ -169,6 +169,7 @@ export const workspace = {
     prompts: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/prompts`,
     plugins: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/plugins`,
     skills: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/skills`,
+    knowledge: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/knowledge`,
   },
 } as const;
 

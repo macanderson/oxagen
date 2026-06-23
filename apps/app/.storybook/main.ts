@@ -6,7 +6,10 @@ const root = dirname(fileURLToPath(import.meta.url));
 
 const config: StorybookConfig = {
   // Stories for the chat capability render components (the generative-UI layer).
-  stories: ["../src/components/chat/**/*.stories.@(ts|tsx)"],
+  stories: [
+    "../src/components/chat/**/*.stories.@(ts|tsx)",
+    "../src/components/knowledge/**/*.stories.@(ts|tsx)",
+  ],
   framework: { name: "@storybook/react-vite", options: {} },
   core: { disableTelemetry: true },
   viteFinal: async (cfg) => {
