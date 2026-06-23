@@ -99,6 +99,110 @@ describe("upsertEntityNode", () => {
   });
 });
 
+// ── §8 enforcement-mode branches (strict / lenient / off) ────────────────────
+
+import type { PinnedSchema } from "../../validate/schema";
+
+/** A pinned schema requiring a `title` property on the `task` label. */
+function pinnedSchema(mode: PinnedSchema["enforcementMode"], floor = 0.5): PinnedSchema {
+  return {
+    registryId: "scr_1",
+    versionId: "scv_42",
+    versionNumber: 1,
+    enforcementMode: mode,
+    conformanceFloor: floor,
+    labels: [
+      {
+        schemaName: "starter",
+        name: "task",
+        displayName: "Task",
+        description: "a unit of work",
+        naturalKeyProps: [],
+        properties: [
+          {
+            key: "title",
+            dataType: "string",
+            required: true,
+            description: "the task title",
+            enumValues: null,
+            itemType: null,
+            constraints: {},
+            example: null,
+          },
+        ],
+      },
+    ],
+    relationshipTypes: [],
+  };
+}
+
+describe("upsertEntityNode — §8 enforcement modes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.scopedSession.mockReturnValue({
+      run: mocks.sessionRun,
+      close: mocks.sessionClose,
+    });
+    mocks.sessionRun.mockResolvedValue({
+      records: [{ get: vi.fn().mockReturnValue("uuid-node-1") }],
+    });
+  });
+
+  it("strict: a missing-required write is REJECTED (no MERGE) with reason schema_nonconformant", async () => {
+    // `properties` lacks the required `title` → non-conformant.
+    const mutation = makeMutation({ properties: { state: "open" } });
+    const result = await upsertEntityNode(mutation, "org-1", {
+      pinnedSchema: pinnedSchema("strict"),
+    });
+
+    expect(result.nodeId).toBeNull();
+    expect(result.rejected).toBe(true);
+    expect(result.reason).toBe("schema_nonconformant");
+    // No MERGE ran — the node was not written.
+    expect(mocks.sessionRun).not.toHaveBeenCalled();
+    // A rejected conformance event was emitted.
+    const chCalls = mocks.chInsert.mock.calls;
+    expect(chCalls.some(([table]) => table === "schema_conformance_events")).toBe(true);
+  });
+
+  it("lenient: a non-conformant write IS written + scored + stamped with the version id", async () => {
+    const mutation = makeMutation({ properties: { state: "open" } });
+    const result = await upsertEntityNode(mutation, "org-1", {
+      pinnedSchema: pinnedSchema("lenient"),
+    });
+
+    expect(result.nodeId).toBe("uuid-node-1");
+    expect(typeof result.conformanceScore).toBe("number");
+    expect(result.conformanceScore).toBeLessThan(1); // missing required → < 1
+    // The MERGE ran and stamped conformance props.
+    const params = mocks.sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params["conformanceScore"]).toBe(result.conformanceScore);
+    expect(params["schemaVersionId"]).toBe("scv_42");
+    // observed-label + conformance events emitted.
+    const tables = mocks.chInsert.mock.calls.map(([t]) => t);
+    expect(tables).toContain("graph_observed_labels");
+    expect(tables).toContain("schema_conformance_events");
+  });
+
+  it("off: validation is skipped entirely (write proceeds, no conformance props)", async () => {
+    const mutation = makeMutation({ properties: { state: "open" } });
+    const result = await upsertEntityNode(mutation, "org-1", {
+      pinnedSchema: pinnedSchema("off"),
+    });
+
+    expect(result.nodeId).toBe("uuid-node-1");
+    expect(result.conformanceScore).toBeUndefined();
+    const params = mocks.sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    // No schema evaluated → conformance props are null (not stamped).
+    expect(params["conformanceScore"]).toBeNull();
+    expect(params["schemaVersionId"]).toBeNull();
+    // No conformance event (off skips validation); observed-label still emitted.
+    const tables = mocks.chInsert.mock.calls.map(([t]) => t);
+    expect(tables).not.toContain("schema_conformance_events");
+    expect(tables).toContain("graph_observed_labels");
+  });
+});
+
 describe("upsertEmbedding", () => {
   beforeEach(() => {
     vi.clearAllMocks();

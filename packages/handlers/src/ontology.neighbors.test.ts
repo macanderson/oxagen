@@ -16,6 +16,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   run: vi.fn(),
   close: vi.fn(async () => undefined),
+  getPinnedSchema: vi.fn(async (..._a: unknown[]) => null as unknown),
 }));
 
 vi.mock("@oxagen/ontology/tenant", () => ({
@@ -25,6 +26,34 @@ vi.mock("@oxagen/ontology/tenant", () => ({
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: async (_scope: unknown, fn: () => Promise<void>) => fn(),
 }));
+
+// The §3.2 guard resolves the pinned active vocabulary via getPinnedSchema.
+// Default: no version pinned (lexical guard stands alone).
+vi.mock("./schema.pinned", () => ({
+  getPinnedSchema: (...a: unknown[]) => mocks.getPinnedSchema(...a),
+}));
+
+/** Build a minimal PinnedSchema whose active vocabulary has the given rel types. */
+function pinnedWith(relTypes: string[]): unknown {
+  return {
+    registryId: "scr_1",
+    versionId: "scv_1",
+    versionNumber: 1,
+    enforcementMode: "lenient",
+    conformanceFloor: 0.5,
+    labels: [],
+    relationshipTypes: relTypes.map((name) => ({
+      schemaName: "s",
+      name,
+      displayName: name,
+      description: null,
+      startLabel: null,
+      endLabel: null,
+      cardinality: null,
+      properties: [],
+    })),
+  };
+}
 
 import { ontologyNeighborsHandler } from "./ontology.neighbors";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
@@ -42,6 +71,7 @@ const EXISTS = makeRows([{ nodeId: "n-1" }]);
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.run.mockResolvedValue(makeRows([]));
+  mocks.getPinnedSchema.mockResolvedValue(null);
 });
 
 describe("ontologyNeighborsHandler", () => {
@@ -145,5 +175,59 @@ describe("ontologyNeighborsHandler", () => {
       ontologyNeighborsHandler({ nodeId: "n-1", direction: "both", limit: 100 }, CTX),
     ).rejects.toThrow("Neo4j down");
     expect(mocks.close).toHaveBeenCalled();
+  });
+});
+
+describe("ontologyNeighborsHandler — §3.2 Cypher-injection + active-vocabulary guard", () => {
+  it("rejects an injection-shaped relationship type before any Cypher runs", async () => {
+    await expect(
+      ontologyNeighborsHandler(
+        // The classic Cypher-injection payload: break out of the rel-type list.
+        { nodeId: "n-1", edgeTypes: ["`]->()-[:x"], direction: "both", limit: 100 },
+        CTX,
+      ),
+    ).rejects.toThrow(/lexical guard/);
+    // Guard fires before the existence query — no Cypher dispatched at all.
+    expect(mocks.run).not.toHaveBeenCalled();
+  });
+
+  it("rejects a relationship type absent from the pinned active vocabulary", async () => {
+    mocks.getPinnedSchema.mockResolvedValue(pinnedWith(["EMPLOYS", "SIGNED_CONTRACT"]));
+    await expect(
+      ontologyNeighborsHandler(
+        { nodeId: "n-1", edgeTypes: ["KNOWS"], direction: "both", limit: 100 },
+        CTX,
+      ),
+    ).rejects.toThrow(/active vocabulary/);
+    expect(mocks.run).not.toHaveBeenCalled();
+  });
+
+  it("accepts a pinned active-vocabulary relationship type and passes it as a Cypher PARAMETER", async () => {
+    mocks.getPinnedSchema.mockResolvedValue(pinnedWith(["EMPLOYS"]));
+    mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(makeRows([]));
+    await ontologyNeighborsHandler(
+      { nodeId: "n-1", edgeTypes: ["EMPLOYS"], direction: "both", limit: 100 },
+      CTX,
+    );
+    const neighborCypher = mocks.run.mock.calls[1]?.[0] as string;
+    const neighborParams = mocks.run.mock.calls[1]?.[1] as Record<string, unknown>;
+    // The relationship type is filtered via a PARAMETER, never concatenated.
+    expect(neighborCypher).toContain("type(r) IN $edgeTypes");
+    expect(neighborParams["edgeTypes"]).toEqual(["EMPLOYS"]);
+  });
+
+  it("defaults the omitted filter to the pinned active vocabulary, not a static list", async () => {
+    mocks.getPinnedSchema.mockResolvedValue(pinnedWith(["EMPLOYS", "SIGNED_CONTRACT"]));
+    mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(makeRows([]));
+    await ontologyNeighborsHandler({ nodeId: "n-1", direction: "both", limit: 100 }, CTX);
+    const neighborParams = mocks.run.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(neighborParams["edgeTypes"]).toEqual(["EMPLOYS", "SIGNED_CONTRACT"]);
+  });
+
+  it("traverses unconstrained (no rel-type clause) when nothing pinned and no filter", async () => {
+    mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(makeRows([]));
+    await ontologyNeighborsHandler({ nodeId: "n-1", direction: "both", limit: 100 }, CTX);
+    const neighborCypher = mocks.run.mock.calls[1]?.[0] as string;
+    expect(neighborCypher).not.toContain("type(r) IN $edgeTypes");
   });
 });

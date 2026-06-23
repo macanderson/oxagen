@@ -16,6 +16,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   run: vi.fn(),
   close: vi.fn(async () => undefined),
+  getPinnedSchema: vi.fn(async (..._a: unknown[]) => null as unknown),
 }));
 
 vi.mock("@oxagen/ontology/tenant", () => ({
@@ -25,6 +26,32 @@ vi.mock("@oxagen/ontology/tenant", () => ({
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: async (_scope: unknown, fn: () => Promise<void>) => fn(),
 }));
+
+// The §3.2 guard resolves the pinned active vocabulary via getPinnedSchema.
+vi.mock("./schema.pinned", () => ({
+  getPinnedSchema: (...a: unknown[]) => mocks.getPinnedSchema(...a),
+}));
+
+function pinnedWith(relTypes: string[]): unknown {
+  return {
+    registryId: "scr_1",
+    versionId: "scv_1",
+    versionNumber: 1,
+    enforcementMode: "lenient",
+    conformanceFloor: 0.5,
+    labels: [],
+    relationshipTypes: relTypes.map((name) => ({
+      schemaName: "s",
+      name,
+      displayName: name,
+      description: null,
+      startLabel: null,
+      endLabel: null,
+      cardinality: null,
+      properties: [],
+    })),
+  };
+}
 
 import { ontologyQueryHandler } from "./ontology.query";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
@@ -47,6 +74,7 @@ const START_ROW = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.run.mockResolvedValue(makeRows([]));
+  mocks.getPinnedSchema.mockResolvedValue(null);
 });
 
 describe("ontologyQueryHandler", () => {
@@ -163,5 +191,64 @@ describe("ontologyQueryHandler", () => {
       ),
     ).rejects.toThrow("Neo4j down");
     expect(mocks.close).toHaveBeenCalled();
+  });
+});
+
+describe("ontologyQueryHandler — §3.2 Cypher-injection + active-vocabulary guard", () => {
+  it("rejects an injection-shaped relationship type before any Cypher runs", async () => {
+    // ontology.query INTERPOLATES the relationship type into the variable-length
+    // pattern, so the lexical guard here is load-bearing for injection safety.
+    await expect(
+      ontologyQueryHandler(
+        { startNodeId: "start-1", edgeTypes: ["`]->()-[:x"], direction: "out", maxDepth: 2, limit: 100 },
+        CTX,
+      ),
+    ).rejects.toThrow(/lexical guard/);
+    expect(mocks.run).not.toHaveBeenCalled();
+  });
+
+  it("rejects a relationship type absent from the pinned active vocabulary", async () => {
+    mocks.getPinnedSchema.mockResolvedValue(pinnedWith(["EMPLOYS"]));
+    await expect(
+      ontologyQueryHandler(
+        { startNodeId: "start-1", edgeTypes: ["KNOWS"], direction: "out", maxDepth: 2, limit: 100 },
+        CTX,
+      ),
+    ).rejects.toThrow(/active vocabulary/);
+    expect(mocks.run).not.toHaveBeenCalled();
+  });
+
+  it("interpolates ONLY guard-passing, active-vocabulary types into the pattern", async () => {
+    mocks.getPinnedSchema.mockResolvedValue(pinnedWith(["EMPLOYS"]));
+    mocks.run.mockResolvedValueOnce(makeRows([START_ROW])).mockResolvedValueOnce(makeRows([]));
+    await ontologyQueryHandler(
+      { startNodeId: "start-1", edgeTypes: ["EMPLOYS"], direction: "out", maxDepth: 3, limit: 50 },
+      CTX,
+    );
+    const traversalCypher = mocks.run.mock.calls[1]?.[0] as string;
+    expect(traversalCypher).toContain("`EMPLOYS`");
+    expect(traversalCypher).toContain("*1..3");
+  });
+
+  it("defaults the omitted filter to the pinned active vocabulary, not a static list", async () => {
+    mocks.getPinnedSchema.mockResolvedValue(pinnedWith(["EMPLOYS", "SIGNED_CONTRACT"]));
+    mocks.run.mockResolvedValueOnce(makeRows([START_ROW])).mockResolvedValueOnce(makeRows([]));
+    await ontologyQueryHandler(
+      { startNodeId: "start-1", direction: "out", maxDepth: 2, limit: 100 },
+      CTX,
+    );
+    const traversalCypher = mocks.run.mock.calls[1]?.[0] as string;
+    expect(traversalCypher).toContain("`EMPLOYS`|`SIGNED_CONTRACT`");
+  });
+
+  it("traverses unconstrained ([r*1..n], no type selector) when nothing pinned and no filter", async () => {
+    mocks.run.mockResolvedValueOnce(makeRows([START_ROW])).mockResolvedValueOnce(makeRows([]));
+    await ontologyQueryHandler(
+      { startNodeId: "start-1", direction: "out", maxDepth: 2, limit: 100 },
+      CTX,
+    );
+    const traversalCypher = mocks.run.mock.calls[1]?.[0] as string;
+    // No relationship-type selector — the pattern is `[r*1..2]`.
+    expect(traversalCypher).toContain("[r*1..2]");
   });
 });

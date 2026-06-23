@@ -21,8 +21,20 @@ vi.mock("./embed/index", () => ({
 import { runPipeline } from "./pipeline";
 import { resolveEntity } from "./dedup/resolve";
 import { embedEntity } from "./embed/index";
-import type { RawIngestEvent, PipelineResult } from "./types";
-import type { PipelineContext } from "./pipeline";
+import type { RawIngestEvent, PipelineResult, PinnedSchema } from "./types";
+import type { PipelineContext, FilteredResult } from "./pipeline";
+
+function emptyPinned(mode: PinnedSchema["enforcementMode"]): PinnedSchema {
+  return {
+    registryId: "scr_1",
+    versionId: "scv_1",
+    versionNumber: 1,
+    enforcementMode: mode,
+    conformanceFloor: 0.5,
+    labels: [],
+    relationshipTypes: [],
+  };
+}
 
 function makeEvent(overrides: Partial<RawIngestEvent> = {}): RawIngestEvent {
   return {
@@ -180,5 +192,56 @@ describe("runPipeline", () => {
     await expect(runPipeline(event, ctx)).rejects.toThrow(
       'No connector registered for "not-a-real-connector"',
     );
+  });
+});
+
+describe("runPipeline — §8 schema validation seam", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("loads getPinnedSchema once and threads it to the upsert validation seam", async () => {
+    (resolveEntity as ReturnType<typeof vi.fn>).mockResolvedValue({
+      principalNodeId: "node-principal-1",
+      action: "created_principal",
+      confidence: 1.0,
+      conformanceScore: 0.8,
+    });
+    const getPinnedSchema = vi.fn().mockResolvedValue(emptyPinned("lenient"));
+    const ctx: PipelineContext = { ...makeCtx(), getPinnedSchema };
+
+    const result = (await runPipeline(makeEvent(), ctx)) as PipelineResult;
+
+    expect(getPinnedSchema).toHaveBeenCalledOnce();
+    expect(getPinnedSchema).toHaveBeenCalledWith("org-1", "ws-1");
+    // The pinned schema is threaded into resolveEntity's validation opts.
+    const opts = (resolveEntity as ReturnType<typeof vi.fn>).mock.calls[0]?.[2] as {
+      pinnedSchema: PinnedSchema | null;
+    };
+    expect(opts.pinnedSchema?.enforcementMode).toBe("lenient");
+    // Lenient: written + scored; the conformance score travels on the result.
+    expect(result.conformanceScore).toBe(0.8);
+  });
+
+  it("strict reject → returns a filtered result (schema_nonconformant), no embed/infer", async () => {
+    (resolveEntity as ReturnType<typeof vi.fn>).mockResolvedValue({
+      principalNodeId: null,
+      action: "rejected_nonconformant",
+      confidence: 0,
+      rejected: true,
+      conformanceScore: 0.2,
+    });
+    const ctx: PipelineContext = {
+      ...makeCtx(),
+      getPinnedSchema: vi.fn().mockResolvedValue(emptyPinned("strict")),
+    };
+
+    const result = (await runPipeline(makeEvent(), ctx)) as FilteredResult;
+
+    expect(result.filtered).toBe(true);
+    expect(result.reason).toBe("schema_nonconformant");
+    // A rejected write never embeds or schedules inference.
+    expect(embedEntity).not.toHaveBeenCalled();
+    expect(ctx.scheduleInference).not.toHaveBeenCalled();
   });
 });
