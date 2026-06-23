@@ -8,6 +8,7 @@
 // returns the parsed result.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { z } from "zod";
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -77,7 +78,6 @@ describe("schema.registry.get MCP tool", () => {
   });
 
   it("schema accepts optional versionId", () => {
-    const { z } = require("zod");
     const Schema = z.object(schemaRegistryGetSchema);
     expect(() => Schema.parse({})).not.toThrow();
     expect(() => Schema.parse({ versionId: "v-2" })).not.toThrow();
@@ -163,7 +163,7 @@ describe("schema.label.upsert MCP tool", () => {
   });
 
   it("calls invoke with correct args", async () => {
-    await schemaLabelUpsertHandler({ schemaName: "crm", name: "Contact", displayName: "Contact" });
+    await schemaLabelUpsertHandler({ schemaName: "crm", name: "Contact", displayName: "Contact" } as Parameters<typeof schemaLabelUpsertHandler>[0]);
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.label.upsert");
     expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ schemaName: "crm", name: "Contact", displayName: "Contact" });
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
@@ -214,7 +214,7 @@ describe("schema.relationship.upsert MCP tool", () => {
   });
 
   it("calls invoke with correct args", async () => {
-    await schemaRelationshipUpsertHandler({ schemaName: "crm", name: "EMPLOYS", displayName: "Employs" });
+    await schemaRelationshipUpsertHandler({ schemaName: "crm", name: "EMPLOYS", displayName: "Employs" } as Parameters<typeof schemaRelationshipUpsertHandler>[0]);
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.relationship.upsert");
     expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ schemaName: "crm", name: "EMPLOYS", displayName: "Employs" });
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
@@ -265,7 +265,7 @@ describe("schema.property.upsert MCP tool", () => {
   });
 
   it("calls invoke with correct args", async () => {
-    await schemaPropertyUpsertHandler({ ownerKind: "node", ownerName: "Contact", key: "email", dataType: "string", required: false });
+    await schemaPropertyUpsertHandler({ ownerKind: "node", ownerName: "Contact", key: "email", dataType: "string", required: false } as Parameters<typeof schemaPropertyUpsertHandler>[0]);
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.property.upsert");
     expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ ownerKind: "node", key: "email", dataType: "string" });
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
@@ -316,7 +316,7 @@ describe("schema.version.list MCP tool", () => {
   });
 
   it("calls invoke with 'schema.version.list' and surface 'mcp'", async () => {
-    await schemaVersionListHandler({});
+    await schemaVersionListHandler({} as Parameters<typeof schemaVersionListHandler>[0]);
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.version.list");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
   });
@@ -367,7 +367,7 @@ describe("schema.validate.node MCP tool", () => {
   });
 
   it("calls invoke with correct args", async () => {
-    await schemaValidateNodeHandler({ label: "Contact", properties: { name: "Alice" } });
+    await schemaValidateNodeHandler({ label: "Contact", properties: { name: "Alice" } } as unknown as Parameters<typeof schemaValidateNodeHandler>[0]);
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.validate.node");
     expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ label: "Contact" });
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
@@ -453,7 +453,7 @@ describe("graph.relationship.upsert MCP tool", () => {
       fromNodeId: "node-a",
       toNodeId: "node-b",
       relationshipType: "EMPLOYS",
-    });
+    } as Parameters<typeof graphRelationshipUpsertHandler>[0]);
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("graph.relationship.upsert");
     expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ fromNodeId: "node-a", toNodeId: "node-b", relationshipType: "EMPLOYS" });
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
@@ -479,7 +479,7 @@ describe("semantic.relationship.list MCP tool", () => {
   });
 
   it("calls invoke with 'semantic.relationship.list' and surface 'mcp'", async () => {
-    await semanticRelationshipListHandler({});
+    await semanticRelationshipListHandler({} as Parameters<typeof semanticRelationshipListHandler>[0]);
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("semantic.relationship.list");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
   });
@@ -504,7 +504,7 @@ describe("semantic.relationship.approve MCP tool", () => {
   });
 
   it("calls invoke with correct args", async () => {
-    await semanticRelationshipApproveHandler({ edgeId: "edge-1", decision: "approve" });
+    await semanticRelationshipApproveHandler({ edgeId: "edge-1", decision: "approve" } as Parameters<typeof semanticRelationshipApproveHandler>[0]);
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("semantic.relationship.approve");
     expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ edgeId: "edge-1", decision: "approve" });
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
@@ -530,7 +530,7 @@ describe("semantic.relationship.infer MCP tool", () => {
   });
 
   it("calls invoke with correct args", async () => {
-    await semanticRelationshipInferHandler({ semanticEdgePrompt: "Find related entities" });
+    await semanticRelationshipInferHandler({ semanticEdgePrompt: "Find related entities" } as Parameters<typeof semanticRelationshipInferHandler>[0]);
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("semantic.relationship.infer");
     expect(mocks.invoke.mock.calls[0]?.[1]).toMatchObject({ semanticEdgePrompt: "Find related entities" });
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
@@ -556,7 +556,7 @@ describe("semantic.relationship.suggest MCP tool", () => {
   });
 
   it("calls invoke with 'semantic.relationship.suggest' and surface 'mcp'", async () => {
-    await semanticRelationshipSuggestHandler({});
+    await semanticRelationshipSuggestHandler({} as Parameters<typeof semanticRelationshipSuggestHandler>[0]);
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("semantic.relationship.suggest");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "mcp" });
   });

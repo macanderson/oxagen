@@ -100,7 +100,7 @@ export function RelationshipEditor({
       <div className="grid grid-cols-3 gap-4">
         <div className="space-y-1.5">
           <Label>Start Label</Label>
-          <Select value={startLabel || "Any"} onValueChange={(v) => setStartLabel(v === "Any" ? "" : v)}>
+          <Select value={startLabel || "Any"} onValueChange={(v) => setStartLabel(v == null || v === "Any" ? "" : v)}>
             <SelectTrigger>
               <SelectValue placeholder="Any" />
             </SelectTrigger>
@@ -115,7 +115,7 @@ export function RelationshipEditor({
         </div>
         <div className="space-y-1.5">
           <Label>End Label</Label>
-          <Select value={endLabel || "Any"} onValueChange={(v) => setEndLabel(v === "Any" ? "" : v)}>
+          <Select value={endLabel || "Any"} onValueChange={(v) => setEndLabel(v == null || v === "Any" ? "" : v)}>
             <SelectTrigger>
               <SelectValue placeholder="Any" />
             </SelectTrigger>

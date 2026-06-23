@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { render } from "ink";
-import React from "react";
 import { DevStatus } from "./components/DevStatus.js";
 import { version } from "../package.json" with { type: "json" };
 import { authLoginCommand } from "./commands/auth.login.js";
@@ -129,6 +128,16 @@ import { webFetchCommand } from "./commands/web.fetch.js";
 import { researchSwarmStartCommand } from "./commands/research.swarm.start.js";
 import { researchSwarmStatusCommand } from "./commands/research.swarm.status.js";
 import { schemaReconcileCommand } from "./commands/schema/schema.reconcile.js";
+import { schemaListCommand } from "./commands/schema/schema.list.js";
+import { schemaGetCommand } from "./commands/schema/schema.get.js";
+import { schemaConfigCommand } from "./commands/schema/schema.config.js";
+import { schemaEnableCommand } from "./commands/schema/schema.enable.js";
+import { schemaDisableCommand } from "./commands/schema/schema.disable.js";
+import { schemaExportCommand } from "./commands/schema/schema.export.js";
+import { schemaLabelCommand } from "./commands/schema/schema.label.js";
+import { schemaRelCommand } from "./commands/schema/schema.rel.js";
+import { schemaPropCommand } from "./commands/schema/schema.prop.js";
+import { schemaVersionCommand } from "./commands/schema/schema.version.js";
 
 const program = new Command();
 
@@ -395,8 +404,18 @@ researchSwarm.addCommand(researchSwarmStartCommand);
 researchSwarm.addCommand(researchSwarmStatusCommand);
 
 // schema
-const schema = program.command("schema").description("Schema registry commands");
-schema.addCommand(schemaReconcileCommand);
+const schemaCmd = program.command("schema").description("Schema registry commands");
+schemaCmd.addCommand(schemaListCommand);
+schemaCmd.addCommand(schemaGetCommand);
+schemaCmd.addCommand(schemaConfigCommand);
+schemaCmd.addCommand(schemaEnableCommand);
+schemaCmd.addCommand(schemaDisableCommand);
+schemaCmd.addCommand(schemaExportCommand);
+schemaCmd.addCommand(schemaLabelCommand);
+schemaCmd.addCommand(schemaRelCommand);
+schemaCmd.addCommand(schemaPropCommand);
+schemaCmd.addCommand(schemaVersionCommand);
+schemaCmd.addCommand(schemaReconcileCommand);
 
 program.parse(process.argv);
 

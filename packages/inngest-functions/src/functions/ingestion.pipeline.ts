@@ -149,9 +149,25 @@ export const [ingestionPipeline] = createFunction(
       }
 
       // Pass A missed — run full dedup (embedding similarity + alias creation).
-      return runInTenantScope({ orgId, workspaceId }, () =>
+      const resolved = await runInTenantScope({ orgId, workspaceId }, () =>
         resolveEntity(mutation, orgId),
       );
+
+      // A strict-mode rejection means this entity is non-conformant — the
+      // pipeline step cannot return a null principalNodeId (the rest of the
+      // pipeline would have no node to embed). Throw so Inngest retries or
+      // surfaces the failure; the handler upstream logs and filters these.
+      if (resolved.action === "rejected_nonconformant" || resolved.principalNodeId === null) {
+        throw new Error(
+          `ingestion-pipeline: entity rejected as non-conformant (naturalKey=${mutation.naturalKey})`,
+        );
+      }
+
+      return {
+        action: resolved.action,
+        principalNodeId: resolved.principalNodeId,
+        confidence: resolved.confidence,
+      };
     });
 
     // ── Step 4: Upsert entity node in Neo4j ──────────────────────────────────

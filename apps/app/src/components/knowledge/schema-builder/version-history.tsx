@@ -28,7 +28,8 @@ function formatDate(iso: string): string {
 }
 
 function DiffView({ diff }: { diff: VersionDiff }) {
-  const sections: Array<{ title: string; items: string[]; sign: "+" | "-" | "~" }> = [
+  type DiffSection = { title: string; items: string[]; sign: "+" | "-" | "~" };
+  const sections: DiffSection[] = ([
     {
       title: "Schemas Added",
       items: diff.schemasAdded,
@@ -83,7 +84,7 @@ function DiffView({ diff }: { diff: VersionDiff }) {
       ),
       sign: "~",
     },
-  ].filter((s) => s.items.length > 0);
+  ] as DiffSection[]).filter((s) => s.items.length > 0);
 
   if (sections.length === 0) {
     return (

@@ -31,8 +31,8 @@ import {
   toggleSchema,
   upsertLabel,
   upsertRelationship,
-  reconcileDispatch,
 } from "./schema-service";
+import { schemaReconcileDispatchAction } from "./reconcile-actions";
 import type { TenantSlugs, SchemaRegistryData, LabelItem, RelationshipItem } from "./types";
 import type { SchemaToggleOutput, SchemaLabelUpsertInput, SchemaRelationshipUpsertInput } from "./schema-service";
 
@@ -100,7 +100,12 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
 
   const handleReconcile = (schemaName: string) => {
     if (!registry?.pinnedVersionId) return;
-    void reconcileDispatch(slugs, registry.pinnedVersionId, false);
+    void schemaReconcileDispatchAction({
+      orgSlug: slugs.orgSlug,
+      workspaceSlug: slugs.workspaceSlug,
+      versionId: registry.pinnedVersionId,
+      prune: false,
+    });
     // schemaName used to scope which schema triggered reconcile — kept for future filtering
     void schemaName;
   };
@@ -124,8 +129,16 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
   };
 
   const handleDispatchReconcile = async (opts: { versionId: string; prune: boolean }) => {
-    await reconcileDispatch(slugs, opts.versionId, opts.prune);
+    const { executionId } = await schemaReconcileDispatchAction({
+      orgSlug: slugs.orgSlug,
+      workspaceSlug: slugs.workspaceSlug,
+      versionId: opts.versionId,
+      prune: opts.prune,
+    });
     setPinDialog(null);
+    // Poll status until complete (fire-and-forget for now; executionId available for future progress UI)
+    void executionId;
+    // Optionally: start polling schemaReconcileStatusAction(slugs.orgSlug, slugs.workspaceSlug, executionId)
   };
 
   const handleOnboardingApply = async (schemaName: string, labels: LabelItem[]) => {
@@ -186,7 +199,7 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
           {registry && (
             <Select
               value={versionId ?? (registry.pinnedVersionId ?? "draft")}
-              onValueChange={(v) => setVersionId(v === "draft" ? undefined : v)}
+              onValueChange={(v) => setVersionId(v == null || v === "draft" ? undefined : v)}
             >
               <SelectTrigger className="h-7 text-xs w-36">
                 <SelectValue />

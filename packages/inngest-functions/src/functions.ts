@@ -27,6 +27,7 @@ import { ingestionSyncRequested } from "./functions/ingestion.sync-requested";
 import { playbookTriggerMatch } from "./functions/playbook.trigger.match";
 import { playbookRunExecute } from "./functions/playbook.run.execute";
 import { mcpToolSnapshotRetention } from "./functions/mcp.tool-snapshot-retention";
+import { schemaReconcile } from "./functions/schema.reconcile";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -66,4 +67,5 @@ export const functions: any[] = [
   playbookTriggerMatch,
   playbookRunExecute,
   mcpToolSnapshotRetention,
+  schemaReconcile,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);

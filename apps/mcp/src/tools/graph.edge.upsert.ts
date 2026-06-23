@@ -12,8 +12,8 @@ export const schema = {
   toNodeId: graphEdgeUpsert.input.shape.toNodeId.describe(
     "publicId of the target KnowledgeNode",
   ),
-  edgeType: graphEdgeUpsert.input.shape.edgeType.describe(
-    "Relationship type: RELATED_TO | PART_OF | CAUSED_BY | REFERENCES | SIMILAR_TO | DEPENDS_ON | CREATED_BY | MENTIONS",
+  relationshipType: graphEdgeUpsert.input.shape.relationshipType.describe(
+    "Relationship type — must match [A-Z][A-Z0-9_]{0,62} (e.g. RELATED_TO, PART_OF, CAUSED_BY)",
   ),
   properties: graphEdgeUpsert.input.shape.properties.describe(
     "Optional string key-value metadata to store on the relationship",
