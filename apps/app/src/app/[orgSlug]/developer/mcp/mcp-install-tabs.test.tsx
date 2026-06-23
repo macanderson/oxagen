@@ -32,12 +32,9 @@ vi.mock("@/components/ui/tabs", () => ({
   TabsIndicator: () => null,
 }));
 
-vi.mock("lucide-react", () => new Proxy({} as Record<string, unknown>, {
-  get: (_t, prop) => {
-    if (prop === "__esModule") return true;
-    if (typeof prop === "symbol") return undefined;
-    return () => <svg aria-hidden="true" data-icon={String(prop)} />;
-  },
+vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
+  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
+  has: (_t, prop) => prop !== "then",
 }));
 
 // ---------------------------------------------------------------------------

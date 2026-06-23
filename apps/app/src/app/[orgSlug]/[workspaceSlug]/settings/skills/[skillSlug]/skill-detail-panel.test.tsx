@@ -37,7 +37,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
 import { SkillDetailPanel, type SkillDetailData, type SkillVersion } from "./skill-detail-panel";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // The download-flow tests vi.spyOn(document.body, "appendChild"/"removeChild").
+  // Restore them so the mocked appendChild does not leak into later tests/files
+  // (a leaked appendChild mock makes every subsequent render() fail with
+  // "Target container is not a DOM element").
+  vi.restoreAllMocks();
+});
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -47,18 +54,10 @@ vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ add: mockToastAdd }),
 }));
 
-vi.mock("lucide-react", () =>
-  new Proxy(
-    {},
-    {
-      get: (_t, prop) => {
-        if (prop === "__esModule") return true;
-        if (typeof prop === "symbol") return undefined;
-        return () => <svg aria-hidden="true" data-icon={String(prop)} />;
-      },
-    },
-  ),
-);
+vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
+  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
+  has: (_t, prop) => prop !== "then",
+}));
 
 vi.mock("@/components/ui/button", () => ({
   Button: ({

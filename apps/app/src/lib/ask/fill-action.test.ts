@@ -23,6 +23,7 @@ vi.mock("@/lib/session", () => ({
 
 vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: vi.fn(),
+  getOrgRole: vi.fn().mockResolvedValue("owner"),
   resolveWorkspace: vi.fn(),
 }));
 

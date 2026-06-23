@@ -184,21 +184,10 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-vi.mock("lucide-react", () =>
-  new Proxy(
-    {},
-    {
-      get: (_t, prop) => {
-        if (prop === "__esModule") return true;
-        if (typeof prop === "symbol") return undefined;
-        const Icon = ({ "aria-label": ariaLabel }: { "aria-label"?: string }) => (
-          <svg aria-hidden={!ariaLabel} aria-label={ariaLabel} data-icon={String(prop)} />
-        );
-        return Icon;
-      },
-    },
-  ),
-);
+vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
+  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
+  has: (_t, prop) => prop !== "then",
+}));
 
 // ---------------------------------------------------------------------------
 // Import under test

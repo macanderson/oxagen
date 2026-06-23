@@ -103,11 +103,8 @@ vi.mock("@/lib/plugin-icon", () => ({
 }));
 
 vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
-  get: (_t, prop) => {
-    if (prop === "__esModule") return true;
-    if (typeof prop === "symbol") return undefined;
-    return () => <svg aria-hidden="true" data-icon={String(prop)} />;
-  },
+  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
+  has: (_t, prop) => prop !== "then",
 }));
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
