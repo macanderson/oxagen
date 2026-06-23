@@ -133,7 +133,9 @@ describe("ingestion.semantic-edge-infer Inngest function", () => {
           orgId: "org-1",
           workspaceId: "ws-1",
           surface: "ingestion",
-          // messageId is null: non-UUID strings must not flood token_usage.execution_step_id (OXA-1813)
+          // OXA-1813: ingestion inference has no initiating message; messageId
+          // must be a UUID or null — a non-UUID string flooded token_usage's
+          // uuid execution_step_id column. The source now passes null.
           messageId: null,
         }),
       }),
