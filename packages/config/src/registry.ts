@@ -231,6 +231,33 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
+  OAUTH_PROXY_PRODUCTION_URL: {
+    group: "Better Auth",
+    description:
+      "Canonical production origin the shared social-login OAuth app's callback is " +
+      "registered against (OAuth Proxy productionURL). Preview deployments relay social " +
+      "login through this origin. Defaults to the production app URL when unset.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: APP_PROD_URL, production: APP_PROD_URL },
+  },
+  OAUTH_PROXY_SECRET: {
+    group: "Better Auth",
+    description:
+      "Dedicated secret the OAuth Proxy uses to encrypt/decrypt the relay payload " +
+      "between production and preview deployments. MUST be set to the SAME value in " +
+      "production AND preview for preview social login to work (production alone only " +
+      "passes through). Kept separate from BETTER_AUTH_SECRET to limit blast radius. " +
+      "Generate with `openssl rand -base64 32`.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
 
   // ── OAuth providers ─────────────────────────────────────────────────────────
   // Google OAuth is split into a LOGIN client (minimal openid/profile/email,
