@@ -180,12 +180,16 @@ export const [ingestionDeleteConnection] = createFunction(
               WHERE  connection_id = ${connectionId}::uuid
             `);
             // Soft-delete the connection itself so audit history is preserved.
+            // Column is deleted_by_user_id (NOT deleted_by) — the wrong name made
+            // this UPDATE throw "column deleted_by does not exist", so the job
+            // never set deleted_at and the row was stuck at status='deleting'
+            // forever in the UI (connection.list filters deleted_at IS NULL).
             await tx.execute(sql`
               UPDATE ingestion.source_connections
-              SET    status     = 'deleted',
-                     deleted_at = NOW(),
-                     deleted_by = ${requestedBy}::uuid,
-                     updated_at = NOW()
+              SET    status             = 'deleted',
+                     deleted_at         = NOW(),
+                     deleted_by_user_id = ${requestedBy}::uuid,
+                     updated_at         = NOW()
               WHERE  id     = ${connectionId}::uuid
               AND    org_id = ${orgId}::uuid
             `);
