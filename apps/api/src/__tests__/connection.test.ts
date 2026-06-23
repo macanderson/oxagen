@@ -23,6 +23,11 @@ const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   verifyStripeSignature: vi.fn(),
   processStripeEvent: vi.fn(),
+  // The /:id/resync route calls withTenantDb + runInTenantScope + eventClient
+  // directly (not through invoke), so those layers are mocked here.
+  withTenantDb: vi.fn(),
+  runInTenantScope: vi.fn(),
+  eventSend: vi.fn(),
 }));
 
 vi.mock("@oxagen/auth", () => ({
@@ -69,6 +74,40 @@ vi.mock("../middleware/logger", () => ({
   requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
 }));
 
+vi.mock("@oxagen/database", () => ({
+  withTenantDb: mocks.withTenantDb,
+  schema: {
+    sourceConnections: {
+      id: "id",
+      orgId: "org_id",
+      workspaceId: "workspace_id",
+      connectorId: "connector_id",
+      status: "status",
+      deliveryConfig: "delivery_config",
+      publicId: "public_id",
+      deletedAt: "deleted_at",
+    },
+  },
+}));
+
+vi.mock("@oxagen/tenancy", () => ({
+  runInTenantScope: mocks.runInTenantScope,
+}));
+
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...actual,
+    and: vi.fn((...args) => ({ and: args })),
+    eq: vi.fn((col: unknown, val: unknown) => ({ eq: [col, val] })),
+    isNull: vi.fn((col: unknown) => ({ isNull: col })),
+  };
+});
+
+vi.mock("../event-client", () => ({
+  eventClient: { send: mocks.eventSend },
+}));
+
 import { app } from "../app";
 import { makeRequest, bearerHeader, makeApiKeyOk } from "./_helpers";
 
@@ -77,7 +116,22 @@ const BASE = "/v1/test-org/test-ws/connections";
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.resolveApiKey.mockResolvedValue(makeApiKeyOk());
+  // runInTenantScope runs its callback directly; resync tests override the rows
+  // returned by withTenantDb, and eventClient.send resolves by default.
+  mocks.runInTenantScope.mockImplementation((_scope: unknown, fn: () => unknown) => fn());
+  mocks.eventSend.mockResolvedValue(undefined);
 });
+
+// A chainable drizzle tx stub whose terminal .limit() resolves to `rows`.
+function txReturning(rows: unknown[]) {
+  const builder = {
+    select: () => builder,
+    from: () => builder,
+    where: () => builder,
+    limit: () => rows,
+  };
+  mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) => fn(builder));
+}
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -353,5 +407,108 @@ describe("PUT /connections/:id/mappings", () => {
     await put(`${BASE}/con_ABC/mappings`, validMappings);
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.connectionId).toBe("con_ABC");
+  });
+});
+
+// ── POST /connections/:id/resync ──────────────────────────────────────────────
+// This route bypasses invoke() and talks to withTenantDb + eventClient directly.
+
+describe("POST /connections/:id/resync", () => {
+  it("queues an initial-sync event when the connection exists", async () => {
+    txReturning([
+      {
+        id: "uuid-1",
+        orgId: "test-org",
+        workspaceId: "test-ws",
+        connectorId: "github",
+        status: "connected",
+        deliveryConfig: { owner: "acme", repo: "api", defaultBranch: "develop" },
+      },
+    ]);
+    const res = await post(`${BASE}/con_ABC/resync`, {});
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { queued: boolean };
+    expect(body.queued).toBe(true);
+    expect(mocks.eventSend).toHaveBeenCalledTimes(1);
+    const evt = mocks.eventSend.mock.calls[0]?.[0] as {
+      name: string;
+      data: Record<string, unknown>;
+    };
+    expect(evt.name).toBe("ingestion/github.initial-sync");
+    expect(evt.data.connectionId).toBe("uuid-1");
+    expect(evt.data.owner).toBe("acme");
+    expect(evt.data.repo).toBe("api");
+    expect(evt.data.defaultBranch).toBe("develop");
+  });
+
+  it("returns 404 and sends no event when the connection is missing", async () => {
+    txReturning([]);
+    const res = await post(`${BASE}/con_MISSING/resync`, {});
+    expect(res.status).toBe(404);
+    expect(mocks.eventSend).not.toHaveBeenCalled();
+  });
+
+  it("falls back to empty owner/repo and main branch when deliveryConfig is null", async () => {
+    txReturning([
+      {
+        id: "uuid-2",
+        orgId: "test-org",
+        workspaceId: "test-ws",
+        connectorId: "github",
+        status: "connected",
+        deliveryConfig: null,
+      },
+    ]);
+    const res = await post(`${BASE}/con_ABC/resync`, {});
+    expect(res.status).toBe(200);
+    const evt = mocks.eventSend.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    expect(evt.data.owner).toBe("");
+    expect(evt.data.repo).toBe("");
+    expect(evt.data.defaultBranch).toBe("main");
+  });
+});
+
+// ── PATCH /connections/:id ────────────────────────────────────────────────────
+
+describe("PATCH /connections/:id", () => {
+  it("forwards the rename to connection.update with the path id", async () => {
+    mocks.invoke.mockResolvedValue({ connectionId: "con_ABC", displayName: "Renamed" });
+    const res = await app.fetch(
+      makeRequest(`${BASE}/con_ABC`, {
+        method: "PATCH",
+        headers: {
+          authorization: bearerHeader("oxk_key"),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ displayName: "Renamed" }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    const [name, input] = mocks.invoke.mock.calls[0] as [string, Record<string, unknown>];
+    expect(name).toBe("connection.update");
+    expect(input.connectionId).toBe("con_ABC");
+    expect(input.displayName).toBe("Renamed");
+  });
+});
+
+// ── POST /connections/:id/pause ───────────────────────────────────────────────
+
+describe("POST /connections/:id/pause", () => {
+  it("forwards paused=true to connection.pause with the path id", async () => {
+    mocks.invoke.mockResolvedValue({ connectionId: "con_ABC", status: "paused" });
+    const res = await post(`${BASE}/con_ABC/pause`, { paused: true });
+    expect(res.status).toBe(200);
+    const [name, input] = mocks.invoke.mock.calls[0] as [string, Record<string, unknown>];
+    expect(name).toBe("connection.pause");
+    expect(input.connectionId).toBe("con_ABC");
+    expect(input.paused).toBe(true);
+  });
+
+  it("forwards paused=false to resume", async () => {
+    mocks.invoke.mockResolvedValue({ connectionId: "con_ABC", status: "connected" });
+    await post(`${BASE}/con_ABC/pause`, { paused: false });
+    const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(input.paused).toBe(false);
   });
 });

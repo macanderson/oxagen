@@ -88,7 +88,8 @@ describe("graphNodeSearchHandler", () => {
     expect(cypher).toContain("n.label IN $labels");
     expect(params.labels).toEqual(["Issue"]);
     expect(params.query).toBe("x");
-    expect(params.limit).toBe(5);
+    // Handler wraps LIMIT in BigInt so the Bolt driver sends INTEGER, not Float.
+    expect(params.limit).toBe(BigInt(5));
   });
 
   it("closes the session even when run throws", async () => {
