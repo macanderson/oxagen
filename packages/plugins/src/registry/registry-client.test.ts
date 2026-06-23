@@ -59,4 +59,112 @@ describe("registry-client", () => {
     const res = await getServerVersion(BASE, "io.x/a", "latest");
     expect(res.server.version).toBe("2.0.0");
   });
+
+  // ── Null-field tolerance (root cause of "no MCP servers appear") ─────────────
+  // The live MCP Registry (registry.modelcontextprotocol.io) returns `null` for
+  // icons/packages/remotes on servers that haven't declared them. Previously these
+  // fields used `.optional()` which only accepts `undefined`, so the Zod parse
+  // threw and the entire registry fetch was silently dropped.
+
+  it("parses a server with null packages and null remotes without throwing", async () => {
+    mockFetchOnce({
+      servers: [
+        {
+          server: {
+            name: "io.x/nullish",
+            description: "A server with null array fields",
+            version: "1.0.0",
+            packages: null,
+            remotes: null,
+          },
+        },
+      ],
+    });
+    const res = await listServers(BASE, {});
+    expect(res.servers).toHaveLength(1);
+    const sd = res.servers[0]!.server;
+    expect(sd.packages).toBeNull();
+    expect(sd.remotes).toBeNull();
+  });
+
+  it("parses a server with null icons without throwing", async () => {
+    mockFetchOnce({
+      servers: [
+        {
+          server: {
+            name: "io.x/no-icons",
+            description: "A server that has no icons",
+            version: "1.2.0",
+            icons: null,
+          },
+        },
+      ],
+    });
+    const res = await listServers(BASE, {});
+    expect(res.servers).toHaveLength(1);
+    expect(res.servers[0]!.server.icons).toBeNull();
+  });
+
+  it("parses an icon with a non-URL src (Lucide icon name) without throwing", async () => {
+    mockFetchOnce({
+      servers: [
+        {
+          server: {
+            name: "io.x/lucide-icon",
+            description: "Server with a Lucide icon name as src",
+            version: "1.0.0",
+            icons: [{ src: "video", color: "#f59e0b" }],
+          },
+        },
+      ],
+    });
+    const res = await listServers(BASE, {});
+    const icon = res.servers[0]!.server.icons?.[0];
+    expect(icon?.src).toBe("video");
+    expect(icon?.color).toBe("#f59e0b");
+  });
+
+  it("parses an icon with a hex color field", async () => {
+    mockFetchOnce({
+      servers: [
+        {
+          server: {
+            name: "io.x/colored",
+            description: "Server with colored icon",
+            version: "1.0.0",
+            icons: [{ src: "https://example.com/icon.png", color: "#6366f1" }],
+          },
+        },
+      ],
+    });
+    const res = await listServers(BASE, {});
+    const icon = res.servers[0]!.server.icons?.[0];
+    expect(icon?.color).toBe("#6366f1");
+  });
+
+  it("throws a descriptive error (not a ZodError) when listServers response is malformed", async () => {
+    // A response with a server missing required `name` field should fail safeParse
+    // and produce a descriptive thrown error (not a raw ZodError crash).
+    mockFetchOnce({
+      servers: [
+        {
+          server: {
+            // missing: name, description, version
+            title: "Broken Server",
+          },
+        },
+      ],
+    });
+    await expect(listServers(BASE, {})).rejects.toThrow(/failed validation/i);
+  });
+
+  it("throws a descriptive error when getServerVersion response is malformed", async () => {
+    mockFetchOnce({
+      server: {
+        // missing required fields
+        title: "Broken",
+      },
+    });
+    await expect(getServerVersion(BASE, "io.x/a", "1.0.0")).rejects.toThrow(/failed validation/i);
+  });
 });

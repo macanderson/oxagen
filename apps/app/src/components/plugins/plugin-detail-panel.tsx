@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import { useTenant } from "@/lib/tenant/tenant-context";
-import { ExternalLink, X, Plug } from "lucide-react";
+import { CapabilityIcon, PLUGIN_TYPE_DEFAULTS, resolveIconEntry } from "./capability-icon";
+import { ExternalLink, X } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -17,7 +18,7 @@ interface CatalogDetail {
   description: string;
   version: string;
   websiteUrl: string | null;
-  icons: Array<{ src: string }>;
+  icons: Array<{ src: string; color?: string }>;
   packages: unknown[];
   remotes: Array<{ transportType?: string }>;
   transportTypes: string[];
@@ -159,21 +160,34 @@ export function PluginDetailPanel({
     <div className="flex h-full flex-col" data-testid="plugin-detail-panel">
       {/* Header */}
       <div className="flex items-start gap-3 border-b border-border/40 p-6">
-        {detail.icons?.[0] ? (
-          <Image
-            src={detail.icons[0].src}
-            alt=""
-            width={48}
-            height={48}
-            unoptimized
-            className="h-12 w-12 rounded-xl object-contain flex-shrink-0"
-            aria-hidden="true"
-          />
-        ) : (
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted flex-shrink-0">
-            <Plug className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
-          </span>
-        )}
+        {(() => {
+          const resolved = resolveIconEntry(detail.icons);
+          if (resolved.type === "image") {
+            return (
+              <Image
+                src={resolved.src}
+                alt=""
+                width={48}
+                height={48}
+                unoptimized
+                className="h-12 w-12 rounded-xl object-contain flex-shrink-0"
+                aria-hidden="true"
+              />
+            );
+          }
+          if (resolved.type === "lucide") {
+            return (
+              <CapabilityIcon
+                iconName={resolved.iconName}
+                color={resolved.color ?? PLUGIN_TYPE_DEFAULTS[pluginType].color}
+                size={48}
+              />
+            );
+          }
+          // default — per-type colored icon
+          const { iconName, color } = PLUGIN_TYPE_DEFAULTS[pluginType];
+          return <CapabilityIcon iconName={iconName} color={color} size={48} />;
+        })()}
         <div className="min-w-0 flex-1">
           <h3 className="text-base font-semibold" data-testid="plugin-detail-title">
             {detail.title ?? detail.name}

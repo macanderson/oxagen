@@ -7,7 +7,7 @@
  * Critical: registry-client appends /v0.1/servers to base_url at call time,
  * so we store the host root only — no path suffix.
  */
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
@@ -94,4 +94,22 @@ export async function seedWorkspaceDefaultRegistry({
     return runSeed(callerTx, orgId, workspaceId);
   }
   return withTenantDb((tx) => runSeed(tx, orgId, workspaceId));
+}
+
+/**
+ * Variant of `seedWorkspaceDefaultRegistry` that opens a `withSystemDb`
+ * (RLS-bypassing) session instead of `withTenantDb`.
+ *
+ * Use this from Server Actions and backfill scripts where there is no ALS
+ * tenant scope — `withTenantDb` throws `TenantScopeError` in those contexts
+ * because the ALS key (org_id / workspace_id) is not set.
+ *
+ * The original `seedWorkspaceDefaultRegistry` (tenant variant) is preserved
+ * intact because it is called by handlers that already run inside an ALS scope.
+ */
+export async function seedWorkspaceDefaultRegistrySystem({
+  orgId,
+  workspaceId,
+}: Omit<SeedArgs, "tx">): Promise<string> {
+  return withSystemDb((tx) => runSeed(tx, orgId, workspaceId));
 }

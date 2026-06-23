@@ -9,7 +9,8 @@ export const mediaVideoManifest: OxagenPluginManifest = {
   tier: "free",
   visibility: "ga",
   category: "media",
-  icon: "clapperboard",
+  icon: "video",
+  color: "#f59e0b",
   contracts: ["video.generate"],
   scopes: [],
 };

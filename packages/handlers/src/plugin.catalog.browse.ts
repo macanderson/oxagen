@@ -9,6 +9,7 @@ import {
   deriveAuthKind,
 } from "@oxagen/plugins/registry";
 import type { ServerResponse } from "@oxagen/plugins/registry";
+import { seedWorkspaceDefaultRegistry } from "./workspace-registry-seed";
 import { logger } from "./logger";
 
 // ── TTL cache for live registry fetches ──────────────────────────────────────
@@ -39,10 +40,11 @@ async function fetchRegistryServers(
   const hit = registryCache.get(key);
   if (hit && hit.expiresAt > Date.now()) return hit.servers;
 
-  // Fetch up to 200 results per registry in one page; sufficient for an in-memory
-  // sort+paginate. If the registry supports cursor pagination, one page is enough
-  // for marketplace browsing — deep paging happens when search narrows results.
-  const result = await listServers(baseUrl, { limit: 200, search });
+  // Fetch one page per registry; sufficient for an in-memory sort+paginate.
+  // The MCP Registry API caps `limit` at 100 (returns 422 for >100), so 100 is the
+  // max single-page size. One page is enough for marketplace browsing — search
+  // narrows results, and deep paging would use the cursor if ever needed.
+  const result = await listServers(baseUrl, { limit: 100, search });
   const entry: CacheEntry = { servers: result.servers, expiresAt: Date.now() + CACHE_TTL_MS };
   registryCache.set(key, entry);
   return result.servers;
@@ -201,7 +203,9 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         name: m.id,
         title: m.name,
         description: m.description,
-        icons: [],
+        // Forward Lucide icon name + hex accent color per the SHARED ICON DATA CONTRACT.
+        // UI branches: http(s)/data URI → <Image>; plain string → CapabilityIcon(color).
+        icons: m.icon ? [{ src: m.icon, color: m.color }] : [],
         transportTypes: [],
         authKind: "none",
         categories: [m.category],
@@ -224,7 +228,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     name: string;
     title: string | null;
     description: string;
-    icons: Array<{ src: string }>;
+    icons: Array<{ src: string; color?: string }>;
     transportTypes: string[];
     authKind: string;
     categories: string[];
@@ -233,9 +237,11 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     installed: boolean;
   }> = [];
 
+  const warnings: string[] = [];
+
   try {
     // Fetch enabled registries for this org+workspace.
-    const registries = await withTenantDb((tx) =>
+    let registries = await withTenantDb((tx) =>
       tx
         .select({
           id: schema.mcpRegistries.id,
@@ -251,6 +257,40 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         ),
     );
 
+    // Lazy-seed: pre-existing workspaces may not yet have a default registry row.
+    // Idempotently insert the official MCP registry, then re-query, so any
+    // workspace that reaches this path self-heals without manual intervention.
+    if (registries.length === 0 && ctx.orgId) {
+      try {
+        await seedWorkspaceDefaultRegistry({ orgId: ctx.orgId, workspaceId: ctx.workspaceId });
+        registries = await withTenantDb((tx) =>
+          tx
+            .select({
+              id: schema.mcpRegistries.id,
+              baseUrl: schema.mcpRegistries.baseUrl,
+            })
+            .from(schema.mcpRegistries)
+            .where(
+              and(
+                eq(schema.mcpRegistries.orgId, ctx.orgId),
+                eq(schema.mcpRegistries.workspaceId, ctx.workspaceId),
+                eq(schema.mcpRegistries.enabled, true),
+              ),
+            ),
+        );
+        logger.info(
+          { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+          "plugin.catalog.browse: lazy-seeded default registry for pre-existing workspace",
+        );
+      } catch (seedErr) {
+        logger.warn(
+          { seedErr, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+          "plugin.catalog.browse: lazy registry seed failed, proceeding with empty registry list",
+        );
+        warnings.push("Default MCP registry could not be seeded for this workspace.");
+      }
+    }
+
     // Fetch from each registry (with TTL cache) and map to browse row shape.
     const seen = new Set<string>();
     for (const reg of registries) {
@@ -258,7 +298,9 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       try {
         servers = await fetchRegistryServers(reg.id, reg.baseUrl, search);
       } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
         logger.warn({ err, registryId: reg.id }, "plugin.catalog.browse: registry fetch failed, skipping");
+        warnings.push(`Registry ${reg.id} (${reg.baseUrl}) skipped: ${msg}`);
         continue;
       }
 
@@ -276,7 +318,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
           name: s.server.name,
           title: mapped.title,
           description: mapped.description,
-          icons: (mapped.icons as Array<{ src: string }>),
+          icons: (mapped.icons as Array<{ src: string; color?: string }>),
           transportTypes: deriveTransportTypes(s.server),
           authKind: deriveAuthKind(s.server),
           categories: [],
@@ -324,6 +366,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       servers: page,
       nextOffset: offset + page.length < total ? offset + limit : null,
       total,
+      ...(warnings.length > 0 ? { warnings } : {}),
     };
   } catch (err) {
     logger.error({ err, limit, offset }, "plugin.catalog.browse: failed");

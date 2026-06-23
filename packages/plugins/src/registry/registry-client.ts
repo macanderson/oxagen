@@ -32,7 +32,9 @@ export async function listServers(
 ): Promise<ListServersResult> {
   const params = new URLSearchParams();
   if (opts.cursor) params.set("cursor", opts.cursor);
-  if (opts.limit) params.set("limit", String(opts.limit));
+  // The MCP Registry API rejects limit > 100 with HTTP 422; clamp defensively so
+  // a larger caller value can never drop the entire registry fetch.
+  if (opts.limit) params.set("limit", String(Math.min(opts.limit, 100)));
   if (opts.search) params.set("search", opts.search);
   if (opts.updatedSince) params.set("updated_since", opts.updatedSince);
   const qs = params.toString();
@@ -42,8 +44,14 @@ export async function listServers(
   if (!res.ok) {
     throw new Error(`registry list failed: ${res.status} ${await res.text()}`);
   }
-  const parsed = listServersResponseSchema.parse(await res.json());
-  return { servers: parsed.servers, nextCursor: parsed.metadata?.nextCursor };
+  const raw = await res.json();
+  const parsed = listServersResponseSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Error(
+      `registry list response failed validation: ${parsed.error.message}`,
+    );
+  }
+  return { servers: parsed.data.servers, nextCursor: parsed.data.metadata?.nextCursor };
 }
 
 export async function getServerVersion(
@@ -59,5 +67,12 @@ export async function getServerVersion(
   if (!res.ok) {
     throw new Error(`registry get failed: ${res.status} ${await res.text()}`);
   }
-  return serverResponseSchema.parse(await res.json());
+  const raw = await res.json();
+  const parsed = serverResponseSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Error(
+      `registry get response failed validation: ${parsed.error.message}`,
+    );
+  }
+  return parsed.data;
 }

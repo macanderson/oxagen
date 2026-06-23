@@ -118,11 +118,8 @@ export async function installPlugin(
       // template (idempotent on slug). The browse-row id carries the slug.
       const slug = parsed.data.catalogServerId ?? parsed.data.pluginId;
       if (!slug) return { ok: false, error: "skill slug is required" };
-      await invoke(
-        "skill.workspace.install",
-        { slug, workspace_id: ws.id },
-        ctx,
-        { surface: "agent" },
+      await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
+        invoke("skill.workspace.install", { slug, workspace_id: ws.id }, ctx, { surface: "agent" }),
       );
       const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
       revalidatePath(pluginsPath(routeCtx));
@@ -141,11 +138,8 @@ export async function installPlugin(
         };
       }
     }
-    const out = await invoke(
-      "plugin.org.install",
-      installInput,
-      ctx,
-      { surface: "agent" },
+    const out = await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
+      invoke("plugin.org.install", installInput, ctx, { surface: "agent" }),
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(pluginsPath(routeCtx));
@@ -217,7 +211,9 @@ export async function installBulkPlugin(
         continue;
       }
       try {
-        await invoke("skill.workspace.install", { slug, workspace_id: ws.id }, ctx, { surface: "agent" });
+        await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
+          invoke("skill.workspace.install", { slug, workspace_id: ws.id }, ctx, { surface: "agent" }),
+        );
       } catch (e) {
         failures.push(e instanceof Error ? e.message : "skill install failed");
       }
@@ -252,11 +248,8 @@ export async function installBulkPlugin(
 
     if (bulkItems.length > 0) {
       attempted += bulkItems.length;
-      const result = (await invoke(
-        "plugin.org.install_bulk",
-        { items: bulkItems },
-        ctx,
-        { surface: "agent" },
+      const result = (await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
+        invoke("plugin.org.install_bulk", { items: bulkItems }, ctx, { surface: "agent" }),
       )) as { installed: Array<{ pluginId: string | null; orgListingId: string | null; error: string | null }> };
 
       // The handler always returns HTTP 200; partial failures are embedded in the

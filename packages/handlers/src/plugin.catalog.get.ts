@@ -30,7 +30,9 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       version: manifest.version,
       repository: null,
       websiteUrl: null,
-      icons: [],
+      // Forward Lucide icon name + hex accent color per the SHARED ICON DATA CONTRACT.
+      // UI branches: http(s)/data URI → <Image>; plain string → CapabilityIcon(color).
+      icons: manifest.icon ? [{ src: manifest.icon, color: manifest.color }] : [],
       packages: [],
       remotes: [],
       transportTypes: [],

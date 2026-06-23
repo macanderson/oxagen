@@ -50,7 +50,8 @@ const mediaImageManifest = {
   tier: "free" as const,
   visibility: "ga" as const,
   category: "media",
-  icon: "image",
+  icon: "image-plus",
+  color: "#6366f1",
   contracts: ["image.generate"],
   scopes: [],
 };
@@ -73,7 +74,6 @@ describe("plugin.catalog.get handler", () => {
       version: "1.0.0",
       authKind: "none",
       categories: ["media"],
-      icons: [],
       packages: [],
       remotes: [],
       transportTypes: [],
@@ -81,6 +81,25 @@ describe("plugin.catalog.get handler", () => {
     // The registry path must never be reached for a first-party pack.
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
     expect(mocks.listServers).not.toHaveBeenCalled();
+  });
+
+  it("forwards icon+color from the manifest per the SHARED ICON DATA CONTRACT", async () => {
+    mocks.getOxagenPlugin.mockReturnValue(mediaImageManifest);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = (await handler({ name: "oxagen/media-image", version: "latest" }, ctx as any)) as Record<string, unknown>;
+
+    expect(result.icons).toEqual([{ src: "image-plus", color: "#6366f1" }]);
+  });
+
+  it("returns icons:[] for a first-party manifest without an icon field", async () => {
+    const noIconManifest = { ...mediaImageManifest, icon: undefined, color: undefined };
+    mocks.getOxagenPlugin.mockReturnValue(noIconManifest);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = (await handler({ name: "oxagen/media-image", version: "latest" }, ctx as any)) as Record<string, unknown>;
+
+    expect(result.icons).toEqual([]);
   });
 
   it("treats a hidden Oxagen pack as not-found and falls through to registries", async () => {

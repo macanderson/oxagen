@@ -35,6 +35,28 @@ describe("oxagenPluginManifestSchema", () => {
     }
   });
 
+  it("accepts a manifest with an optional color field (hex accent for the marketplace card)", () => {
+    const result = oxagenPluginManifestSchema.safeParse({
+      ...validManifest,
+      icon: "video",
+      color: "#f59e0b",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.color).toBe("#f59e0b");
+    }
+  });
+
+  it("accepts a manifest without a color field (color is fully optional)", () => {
+    // The validManifest fixture has no color — this ensures the schema does not
+    // require it.
+    const result = oxagenPluginManifestSchema.safeParse(validManifest);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.color).toBeUndefined();
+    }
+  });
+
   it("accepts all valid tier values", () => {
     for (const tier of ["free", "premium"] as const) {
       const result = oxagenPluginManifestSchema.safeParse({ ...validManifest, tier });

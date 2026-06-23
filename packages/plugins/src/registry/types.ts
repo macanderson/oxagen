@@ -2,7 +2,12 @@ import { z } from "zod";
 
 /** A sized icon for UI rendering. */
 export const iconSchema = z.object({
-  src: z.string().url(),
+  // Relaxed from z.string().url() so that Lucide icon names (non-URL strings)
+  // do not nuke the entire registry fetch. The SHARED ICON DATA CONTRACT defines
+  // the runtime branch: http(s)/data URI → <Image>; plain string → Lucide icon.
+  src: z.string().min(1),
+  // Hex accent color forwarded from static capability-pack manifests.
+  color: z.string().optional(),
   mimeType: z.string().optional(),
   sizes: z.array(z.string()).optional(),
   theme: z.enum(["light", "dark"]).optional(),
@@ -62,9 +67,13 @@ export const serverDetailSchema = z
     title: z.string().optional(),
     repository: repositorySchema.optional(),
     websiteUrl: z.string().optional(),
-    icons: z.array(iconSchema).optional(),
-    packages: z.array(packageSchema).optional(),
-    remotes: z.array(remoteSchema).optional(),
+    // .nullish() accepts both `undefined` and `null`. The live MCP Registry
+    // (registry.modelcontextprotocol.io) returns `null` for these fields on
+    // servers that haven't declared them; `.optional()` only handles `undefined`
+    // and would throw a ZodError, silently dropping the entire registry fetch.
+    icons: z.array(iconSchema).nullish(),
+    packages: z.array(packageSchema).nullish(),
+    remotes: z.array(remoteSchema).nullish(),
   })
   .passthrough();
 

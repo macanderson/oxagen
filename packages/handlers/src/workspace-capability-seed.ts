@@ -12,7 +12,7 @@
  * uses ON CONFLICT DO UPDATE, making repeated calls fully idempotent.
  */
 
-import { withTenantDb } from "@oxagen/database";
+import { withTenantDb, withSystemDb } from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
 import { getOxagenPlugin } from "@oxagen/oxagen/plugins";
 import { upsertCapabilityInstall } from "./capability-install";
@@ -83,4 +83,22 @@ export async function seedWorkspaceDefaultCapabilities({
     return runSeed(callerTx, orgId, workspaceId);
   }
   return withTenantDb((tx) => runSeed(tx, orgId, workspaceId));
+}
+
+/**
+ * Variant of `seedWorkspaceDefaultCapabilities` that opens a `withSystemDb`
+ * (RLS-bypassing) session instead of `withTenantDb`.
+ *
+ * Use this from Server Actions and backfill scripts where there is no ALS
+ * tenant scope — `withTenantDb` throws `TenantScopeError` in those contexts
+ * because the ALS key (org_id / workspace_id) is not set.
+ *
+ * The original `seedWorkspaceDefaultCapabilities` (tenant variant) is preserved
+ * intact because it is called by handlers that already run inside an ALS scope.
+ */
+export async function seedWorkspaceDefaultCapabilitiesSystem({
+  orgId,
+  workspaceId,
+}: Omit<SeedArgs, "tx">): Promise<void> {
+  return withSystemDb((tx) => runSeed(tx, orgId, workspaceId));
 }

@@ -20,8 +20,9 @@
  *   - Auth filter chip click triggers refetch
  *   - Search input triggers debounced fetchServers
  *   - Selecting a server enables bulk install button and shows selected count
- *   - Bulk install success calls installBulkAction and closes modal
+ *   - Bulk install sends srv.name (not srv.id) as catalogServerId — the bulk-install fix
  *   - Bulk install error displays error message
+ *   - agent_skill bulk install resolves UUID id → slug name as catalogServerId
  *   - Clicking server card opens detail panel
  *   - Load more button triggers paginated fetch
  *   - Server with icon renders img element
@@ -410,13 +411,16 @@ describe("MarketplaceModal — auth filter visibility", () => {
 });
 
 describe("MarketplaceModal — selection and bulk install", () => {
+  // Fixture: id is a compound catalog id (registryId:serverName:version),
+  // name is the bare server name that the install handler expects.
+  // id !== name to exercise the bulk-install fix.
   const serverResponse = {
     ok: true,
     json: () =>
       Promise.resolve({
         servers: [
           {
-            id: "srv-a",
+            id: "reg-uuid:tool-a:1.0",
             name: "tool-a",
             title: "Tool A",
             description: "desc",
@@ -439,11 +443,11 @@ describe("MarketplaceModal — selection and bulk install", () => {
     mockFetch.mockResolvedValue(serverResponse);
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-server-card-srv-a")).toBeInTheDocument(),
+      () => expect(screen.getByTestId("marketplace-server-card-reg-uuid:tool-a:1.0")).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
-    await userEvent.click(screen.getByTestId("marketplace-select-srv-a"));
+    await userEvent.click(screen.getByTestId("marketplace-select-reg-uuid:tool-a:1.0"));
     expect(screen.getByText("1 selected")).toBeInTheDocument();
     expect(screen.getByTestId("marketplace-bulk-install-btn")).not.toBeDisabled();
   });
@@ -452,17 +456,19 @@ describe("MarketplaceModal — selection and bulk install", () => {
     mockFetch.mockResolvedValue(serverResponse);
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-server-card-srv-a")).toBeInTheDocument(),
+      () => expect(screen.getByTestId("marketplace-server-card-reg-uuid:tool-a:1.0")).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
-    const checkbox = screen.getByTestId("marketplace-select-srv-a");
+    const checkbox = screen.getByTestId("marketplace-select-reg-uuid:tool-a:1.0");
     await userEvent.click(checkbox); // select
     await userEvent.click(checkbox); // deselect
     expect(screen.getByText(/select plugins to bulk-install/i)).toBeInTheDocument();
   });
 
-  it("bulk install success calls installBulkAction and closes modal", async () => {
+  it("bulk install resolves compound id to srv.name — sends name not id as catalogServerId", async () => {
+    // This is the bulk-install fix: id="reg-uuid:tool-a:1.0", name="tool-a".
+    // installBulkAction must receive catalogServerId="tool-a", NOT "reg-uuid:tool-a:1.0".
     mockFetch.mockResolvedValue(serverResponse);
     const onOpenChange = vi.fn();
     const bulkAction = vi.fn().mockResolvedValue({ ok: true });
@@ -475,17 +481,18 @@ describe("MarketplaceModal — selection and bulk install", () => {
       />,
     );
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-server-card-srv-a")).toBeInTheDocument(),
+      () => expect(screen.getByTestId("marketplace-server-card-reg-uuid:tool-a:1.0")).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
-    await userEvent.click(screen.getByTestId("marketplace-select-srv-a"));
+    await userEvent.click(screen.getByTestId("marketplace-select-reg-uuid:tool-a:1.0"));
     await userEvent.click(screen.getByTestId("marketplace-bulk-install-btn"));
 
     await waitFor(() => expect(bulkAction).toHaveBeenCalledWith({
       orgSlug: "acme",
       workspaceId: "ws-123",
-      items: [{ catalogServerId: "srv-a", pluginType: "mcp_server" }],
+      // catalogServerId must be the name "tool-a", NOT the compound id
+      items: [{ catalogServerId: "tool-a", pluginType: "mcp_server" }],
     }));
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
@@ -497,11 +504,11 @@ describe("MarketplaceModal — selection and bulk install", () => {
       <MarketplaceModal {...defaultProps} open installBulkAction={bulkAction} />,
     );
     await waitFor(
-      () => expect(screen.getByTestId("marketplace-server-card-srv-a")).toBeInTheDocument(),
+      () => expect(screen.getByTestId("marketplace-server-card-reg-uuid:tool-a:1.0")).toBeInTheDocument(),
       { timeout: 3000 },
     );
 
-    await userEvent.click(screen.getByTestId("marketplace-select-srv-a"));
+    await userEvent.click(screen.getByTestId("marketplace-select-reg-uuid:tool-a:1.0"));
     await userEvent.click(screen.getByTestId("marketplace-bulk-install-btn"));
 
     await waitFor(
@@ -510,7 +517,10 @@ describe("MarketplaceModal — selection and bulk install", () => {
     );
   });
 
-  it("agent_capability bulk install sends catalogServerId", async () => {
+  it("agent_capability bulk install resolves UUID id to slug name as catalogServerId", async () => {
+    // Fixture: id is a UUID (the catalog row PK for capability/skill types);
+    // name is the slug the install handler expects.
+    // id !== name — exercises the fix for non-MCP plugin types.
     const capResponse = {
       ok: true,
       json: () =>
@@ -556,7 +566,63 @@ describe("MarketplaceModal — selection and bulk install", () => {
       expect(bulkAction).toHaveBeenCalledWith(
         expect.objectContaining({
           items: expect.arrayContaining([
-            expect.objectContaining({ pluginType: "agent_capability", catalogServerId: "cap-123" }),
+            // catalogServerId must be the name/slug "oxagen/media-svg", NOT the UUID "cap-123"
+            expect.objectContaining({ pluginType: "agent_capability", catalogServerId: "oxagen/media-svg" }),
+          ]),
+        }),
+      ),
+    );
+  });
+
+  it("agent_skill bulk install resolves UUID id to slug name as catalogServerId", async () => {
+    // Fixture: id is a UUID (skill row pk), name is the skill slug.
+    const skillResponse = {
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          servers: [
+            {
+              id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+              name: "browser-use",
+              title: "Browser Use",
+              description: "Autonomous browser agent skill",
+              icons: [],
+              transportTypes: [],
+              authKind: "none",
+              categories: ["automation"],
+              version: "1.0.0",
+              pluginType: "agent_skill",
+              installed: false,
+            },
+          ],
+          nextOffset: null,
+          total: 1,
+        }),
+      text: () => Promise.resolve(""),
+    };
+    mockFetch.mockResolvedValue(skillResponse);
+
+    const bulkAction = vi.fn().mockResolvedValue({ ok: true });
+    render(
+      <MarketplaceModal {...defaultProps} open installBulkAction={bulkAction} />,
+    );
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+
+    await userEvent.click(screen.getByTestId("marketplace-tab-agent_skill"));
+    await waitFor(
+      () => expect(screen.getByTestId("marketplace-server-card-a1b2c3d4-e5f6-7890-abcd-ef1234567890")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
+
+    await userEvent.click(screen.getByTestId("marketplace-select-a1b2c3d4-e5f6-7890-abcd-ef1234567890"));
+    await userEvent.click(screen.getByTestId("marketplace-bulk-install-btn"));
+
+    await waitFor(() =>
+      expect(bulkAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: expect.arrayContaining([
+            // catalogServerId must be the slug "browser-use", NOT the UUID
+            expect.objectContaining({ pluginType: "agent_skill", catalogServerId: "browser-use" }),
           ]),
         }),
       ),
