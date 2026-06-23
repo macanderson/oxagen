@@ -250,6 +250,18 @@ type" as a friendly synonym for "node label."
 
 ### 2.1 Acceptance criteria
 
+**Two co-equal authoring modes (first-class, neither a fallback).** The schema
+builder ships BOTH a complete **traditional form-based UI** — define every node
+label, relationship type, and property by hand (criterion 4) — AND an
+**agent-assisted setup/config experience** — the AI assistant drawer + recommender
+(criteria 1, 3, 5). Neither is secondary: a user can build and maintain the entire
+registry **purely by hand**, **purely by prompting the agent**, or by **freely
+mixing the two**. Both modes edit the **same shared draft** (§16.3) through the
+**same `schema.*` mutation contracts**, so form edits and agent edits interoperate
+seamlessly — e.g. scaffold with a prompt, then hand-tune a property in the form;
+or hand-build two labels, then ask the agent to fill in the relationships between
+them.
+
 The epic is complete when **all** of the following hold:
 
 1. **AI-drawer prompt → multi-schema scaffold, landing disabled/draft.** A
@@ -270,10 +282,15 @@ The epic is complete when **all** of the following hold:
    labels, relationship types, and properties but **never discards prior work**
    from earlier prompts or manual edits. Verified by a test: prompt B after
    prompt A leaves prompt A's labels intact unless B explicitly changes them.
-4. **Manual authoring works too.** Independent of the AI, the user can define a
-   node label with N typed properties (each `required`, `dataType`, optional
-   `description`), define a relationship type with typed properties and
-   `startLabel`/`endLabel` constraints, and save to the **draft** by hand.
+4. **Full traditional form authoring (co-equal path).** Without ever invoking the
+   AI, a user can build and maintain the **entire** registry through the form UI:
+   create node labels with N typed properties (each `required`, `dataType`,
+   optional `description`), create relationship types with typed properties and
+   `startLabel`/`endLabel` constraints, edit or delete any label / relationship /
+   property, organize them into schemas, and save to the **draft** — all via the
+   same `schema.*` contracts the agent uses. The form builder is a **complete
+   authoring surface on its own**, not a fallback to the agent; everything the AI
+   drawer can produce is also directly editable by hand.
 5. **Graph-derived recommendation.** On first load with an existing graph, the
    builder also offers an AI-recommended starter schema derived from
    `graph.stats` + the `graph_observed_labels` ClickHouse telemetry + sampled
@@ -821,10 +838,23 @@ Surface: **Settings → Knowledge → Schema**, sibling to
 `apps/app/src/components/knowledge/graph-explorer/`. New directory
 `apps/app/src/components/knowledge/schema-builder/`.
 
+**Two co-equal authoring modes in one surface (§2.1).** The builder presents a
+complete **traditional form-based editor** (labels / relationships / properties as
+editable forms and grids) *and* an **agent-assisted drawer**, side by side over
+the same draft. The form editor is fully usable on its own — a user never has to
+touch the agent — and the agent drawer is fully usable on its own. They share the
+draft and the same `schema.*` contracts, so a user can switch between or mix them
+at any point. The form components (`schema-builder`, `schema-list`, `label-editor`,
+`relationship-editor`, `property-table`, `version-history`, `export-button`) and
+the agent components (`schema-assistant-drawer`, `onboarding-recommendation`) are
+both first-class; the drawer is dockable/collapsible so the form remains a
+complete experience with the agent closed.
+
 Components:
 
 - `schema-builder.tsx` — top-level: version selector (pinned/draft), enforcement
-  mode toggle, tabs for Schemas / Labels / Relationships.
+  mode toggle, tabs for Schemas / Labels / Relationships, and a toggle to open the
+  `schema-assistant-drawer`. Works fully with the drawer closed (forms-only).
 - `schema-list.tsx` — the workspace's **schemas list** with an activate/deactivate
   **toggle** per schema (showing source: connector / user / recommended, and
   draft-vs-published state). Toggling calls `schema.toggle`; copy makes clear that
