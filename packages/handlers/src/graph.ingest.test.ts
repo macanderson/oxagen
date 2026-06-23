@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const generateObjectFor = vi.fn();
 vi.mock("@oxagen/ai", () => ({ generateObjectFor: (...a: unknown[]) => generateObjectFor(...a) }));
@@ -6,8 +6,33 @@ vi.mock("@oxagen/ai", () => ({ generateObjectFor: (...a: unknown[]) => generateO
 const invoke = vi.fn();
 vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: (...a: unknown[]) => invoke(...a) }));
 
+// Mock the vocabulary resolver (which reaches Neo4j + Postgres) so the handler
+// unit test stays hermetic. The pure renderers are re-implemented minimally —
+// their real behaviour is covered in graph.ingest-vocabulary.test.ts.
+const { resolveVocab } = vi.hoisted(() => ({ resolveVocab: vi.fn() }));
+type TestVocab = {
+  source: "registry" | "graph" | "none";
+  enforcement: "strict" | "lenient" | "off";
+  labels: { name: string }[];
+  edges: unknown[];
+};
+const EMPTY_VOCAB: TestVocab = { source: "none", enforcement: "off", labels: [], edges: [] };
+vi.mock("./graph.ingest-vocabulary", () => ({
+  resolveIngestVocabulary: resolveVocab,
+  renderVocabularyPrompt: (v: TestVocab) => (v.labels.length ? "VOCAB-PROMPT" : ""),
+  strictAllowedLabels: (v: TestVocab) =>
+    v.enforcement === "strict" && v.source === "registry"
+      ? new Set(v.labels.map((l) => l.name.toLowerCase()))
+      : null,
+}));
+
 import type { CapabilityContext } from "@oxagen/oxagen";
-import { graphIngestHandler, sanitizeLabel } from "./graph.ingest";
+import {
+  graphIngestHandler,
+  sanitizeLabel,
+  sanitizeProperties,
+  propertyPairsToRecord,
+} from "./graph.ingest";
 
 const ctx: CapabilityContext = {
   orgId: "org-1",
@@ -27,6 +52,50 @@ describe("sanitizeLabel", () => {
   });
 });
 
+describe("sanitizeProperties", () => {
+  it("keeps scalar domain props and strips reserved provenance keys + blanks", () => {
+    expect(
+      sanitizeProperties({
+        hull_number: "SSN-571",
+        power_output_mw: 13.5,
+        active: true,
+        confidence: 0.9, // reserved — must be dropped
+        source: "x", // reserved — must be dropped
+        "": "blank-key",
+        empty: "   ",
+      }),
+    ).toEqual({ hull_number: "SSN-571", power_output_mw: 13.5, active: true });
+  });
+
+  it("returns {} for undefined", () => {
+    expect(sanitizeProperties(undefined)).toEqual({});
+  });
+
+  it("caps at 50 keys", () => {
+    const big: Record<string, number> = {};
+    for (let i = 0; i < 80; i++) big[`k${i}`] = i;
+    expect(Object.keys(sanitizeProperties(big))).toHaveLength(50);
+  });
+});
+
+describe("propertyPairsToRecord", () => {
+  it("folds key/value pairs into a record (last write wins)", () => {
+    expect(
+      propertyPairsToRecord([
+        { key: "hull_number", value: "SSN-571" },
+        { key: "year", value: 1954 },
+        { key: "hull_number", value: "SSN-571B" },
+      ]),
+    ).toEqual({ hull_number: "SSN-571B", year: 1954 });
+  });
+
+  it("is defensive about undefined / non-array input", () => {
+    expect(propertyPairsToRecord(undefined)).toEqual({});
+    // a model that wrongly returns an object instead of an array must not throw.
+    expect(propertyPairsToRecord({} as never)).toEqual({});
+  });
+});
+
 function wireInvoke() {
   invoke.mockImplementation(async (cap: string, input: unknown) => {
     if (cap === "prompt.settings.read") return { additionalInstructions: "" };
@@ -40,9 +109,13 @@ function wireInvoke() {
 }
 
 describe("graphIngestHandler", () => {
+  beforeEach(() => {
+    resolveVocab.mockResolvedValue(EMPTY_VOCAB);
+  });
   afterEach(() => {
     generateObjectFor.mockReset();
     invoke.mockReset();
+    resolveVocab.mockReset();
   });
 
   it("upserts extracted entities and only relationships whose endpoints resolved", async () => {
@@ -115,5 +188,80 @@ describe("graphIngestHandler", () => {
     });
     const out = await graphIngestHandler({ text: "x", maxEntities: 25 }, ctx);
     expect(out.entities.map((e) => e.name)).toEqual(["Good"]);
+  });
+
+  it("threads extracted domain properties onto the upserted node (merged with provenance)", async () => {
+    wireInvoke();
+    generateObjectFor.mockResolvedValue({
+      object: {
+        entities: [
+          {
+            name: "USS Nautilus",
+            type: "Submarine",
+            confidence: 0.95,
+            // Extracted as {key,value} pairs — incl. a model attempt to set the
+            // reserved `confidence` key, which must be stripped.
+            properties: [
+              { key: "hull_number", value: "SSN-571" },
+              { key: "commissioning_year", value: 1954 },
+              { key: "confidence", value: 0.1 },
+            ],
+          },
+        ],
+        relationships: [],
+      },
+    });
+
+    await graphIngestHandler(
+      { text: "The USS Nautilus (SSN-571) was commissioned in 1954.", sourceUrl: "https://x", maxEntities: 25 },
+      ctx,
+    );
+
+    const nodeCall = invoke.mock.calls.find((c) => c[0] === "graph.node.upsert");
+    const props = (nodeCall?.[1] as { properties: Record<string, unknown> }).properties;
+    // Domain properties captured…
+    expect(props.hull_number).toBe("SSN-571");
+    expect(props.commissioning_year).toBe(1954);
+    // …and the handler's authoritative provenance wins over any model-supplied confidence.
+    expect(props.confidence).toBe(0.95);
+    expect(props.source).toBe("https://x");
+  });
+
+  it("under strict registry enforcement, drops entities whose label is off-vocabulary", async () => {
+    wireInvoke();
+    resolveVocab.mockResolvedValue({
+      source: "registry",
+      enforcement: "strict",
+      labels: [{ name: "Submarine" }],
+      edges: [],
+    });
+    generateObjectFor.mockResolvedValue({
+      object: {
+        entities: [
+          { name: "USS Nautilus", type: "Submarine", confidence: 0.9, properties: [] },
+          { name: "Some Blog", type: "WebPage", confidence: 0.9, properties: [] }, // off-vocab
+        ],
+        relationships: [],
+      },
+    });
+
+    const out = await graphIngestHandler({ text: "x", maxEntities: 25 }, ctx);
+    expect(out.entities.map((e) => e.name)).toEqual(["USS Nautilus"]);
+    const nodeCalls = invoke.mock.calls.filter((c) => c[0] === "graph.node.upsert");
+    expect(nodeCalls).toHaveLength(1);
+  });
+
+  it("injects the vocabulary guidance into the extraction prompt when present", async () => {
+    wireInvoke();
+    resolveVocab.mockResolvedValue({
+      source: "graph",
+      enforcement: "off",
+      labels: [{ name: "Submarine" }],
+      edges: [],
+    });
+    generateObjectFor.mockResolvedValue({ object: { entities: [], relationships: [] } });
+    await graphIngestHandler({ text: "x", maxEntities: 25 }, ctx);
+    const prompt = (generateObjectFor.mock.calls[0]?.[0] as { prompt: string }).prompt;
+    expect(prompt).toContain("VOCAB-PROMPT");
   });
 });
