@@ -6,8 +6,20 @@ import * as React from "react";
 import { render, screen, cleanup } from "@testing-library/react";
 import { describe, it, expect, afterEach, vi } from "vitest";
 
-// Any icon name resolves to a stub element.
-vi.mock("lucide-react", () => new Proxy({}, { get: () => () => <svg aria-hidden="true" /> }));
+// Any icon name resolves to a stub element. The `has` trap declares every icon
+// as "present" (so named imports resolve) EXCEPT `then`: a catch-all that makes
+// `then` a function turns this mock namespace thenable, so ESM resolution awaits
+// a never-resolving function and hangs vitest when this file shares a worker with
+// another suite — the root cause of the apps/app `test:unit` CI timeout.
+vi.mock("lucide-react", () =>
+  new Proxy(
+    {},
+    {
+      get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" />),
+      has: (_t, prop) => prop !== "then",
+    },
+  ),
+);
 
 import { TaskTable, type RunTask } from "./task-table";
 
