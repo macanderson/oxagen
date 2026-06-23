@@ -163,6 +163,18 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "workflow.playbook_events", policyClass: "standard" },
   { table: "workflow.playbook_approvals", policyClass: "standard" },
 
+  // ── schema_registry.* — Workspace Schema Registry (Spec §4 + §11 RLS).
+  //   All 7 tables carry orgScopeMixin (org_id + workspace_id NOT NULL) → standard.
+  //   schema_versions has no softDeleteMixin (immutable once published) but has
+  //   org_id + workspace_id NN — still standard policy class.
+  { table: "schema_registry.registries", policyClass: "standard" },
+  { table: "schema_registry.schema_versions", policyClass: "standard" },
+  { table: "schema_registry.schemas", policyClass: "standard" },
+  { table: "schema_registry.schema_activations", policyClass: "standard" },
+  { table: "schema_registry.node_labels", policyClass: "standard" },
+  { table: "schema_registry.relationship_types", policyClass: "standard" },
+  { table: "schema_registry.properties", policyClass: "standard" },
+
   // ── workspace.* ───────────────────────────────────────────────────────────
   //   workspaces has org_id NOT NULL but no workspace_id — org_only policy.
   //   workspace_users is the membership table: workspace_id + user_id but NO
