@@ -55,19 +55,19 @@ export function RouteTransitionLoader() {
       ) : (
         <>
           <img
-            src="/spinner/oxagen-spinner-assemble-dark.gif"
+            src="/spinner/oxagen-spinner-assemble.svg"
             alt=""
-            width={36}
-            height={36}
+            width={72}
+            height={72}
             className={styles.spinnerDark}
             aria-hidden="true"
             onError={() => setImgFailed(true)}
           />
           <img
-            src="/spinner/oxagen-spinner-assemble-light.gif"
+            src="/spinner/oxagen-spinner-assemble.svg"
             alt=""
-            width={36}
-            height={36}
+            width={72}
+            height={72}
             className={styles.spinnerLight}
             aria-hidden="true"
             onError={() => setImgFailed(true)}
