@@ -5,6 +5,7 @@ import type {
   AgentSubagentAggregateInput,
   AgentSubagentAggregateOutput,
 } from "@oxagen/oxagen/contracts/agent.subagent.aggregate";
+import { FanoutNotFoundError } from "./subagent-errors";
 
 export type { AgentSubagentAggregateInput, AgentSubagentAggregateOutput };
 
@@ -184,7 +185,10 @@ export async function agentSubagentAggregateHandler(
   // when a caller needs to block until completion, lives in the
   // agent.aggregate-fanout Inngest function (step.waitForEvent).
   const fanout = await loadFanout(input.fanoutId, ctx);
-  if (!fanout) throw new Error(`Fanout ${input.fanoutId} not found`);
+  // Typed error (not a plain Error) so surfaces can structurally map an unknown /
+  // cross-tenant fanout id to a 404 instead of a 500 — and so an unrelated error
+  // whose message merely contains "not found" is never misclassified as a 404.
+  if (!fanout) throw new FanoutNotFoundError(input.fanoutId);
 
   // Child runs are keyed by the fan-out's uuid, not its public_id.
   const runs = await loadRuns(fanout.id, ctx);
