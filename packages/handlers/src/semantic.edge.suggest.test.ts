@@ -53,12 +53,16 @@ function makeEdgeRow(overrides: Record<string, unknown> = {}) {
   return makeRecord({
     id: "edge-uuid-1",
     sourceNodeId: "node-a",
+    sourceDisplayName: "Billing Subscription Streaming",
+    sourceLabel: "Feature",
+    sourceProperties: JSON.stringify({ path: "src/billing.ts", owner: "platform" }),
     targetType: "Feature",
     targetName: "OAuth Login",
     type: "IMPLEMENTS",
     confidence: 0.9,
     connectorId: "github",
     sourceId: "github",
+    llmModel: "ingestion-semantic-edge-infer",
     inferredAt: "2025-01-01T00:00:00.000Z",
     ...overrides,
   });
@@ -117,6 +121,61 @@ describe("semanticEdgeSuggestHandler", () => {
     expect(s.approved).toBe(false);
     expect(s.approvedAt).toBeNull();
     expect(s.approvedBy).toBeNull();
+  });
+
+  it("cites the source node by its resolved label + properties, never a bare UUID", async () => {
+    setupNeo4j([makeEdgeRow()]);
+
+    const result = await semanticEdgeSuggestHandler({ limit: 50 }, CTX);
+    const s = result.suggestions[0]!;
+
+    // Source node resolved to a friendly citation.
+    expect(s.sourceNode).toBeDefined();
+    expect(s.sourceNode!.id).toBe("node-a");
+    expect(s.sourceNode!.label).toBe("Feature");
+    expect(s.sourceNode!.displayName).toBe("Billing Subscription Streaming");
+    expect(s.sourceNode!.properties).toEqual({ path: "src/billing.ts", owner: "platform" });
+
+    // Target described from the inferred edge (not yet materialised → null id).
+    expect(s.targetNode).toBeDefined();
+    expect(s.targetNode!.id).toBeNull();
+    expect(s.targetNode!.label).toBe("Feature");
+    expect(s.targetNode!.displayName).toBe("OAuth Login");
+
+    // Relationship's own inspectable properties.
+    expect(s.relationshipProperties).toMatchObject({
+      relationshipType: "IMPLEMENTS",
+      confidence: 0.9,
+      model: "ingestion-semantic-edge-infer",
+      connector: "github",
+      approvalStatus: "pending",
+    });
+  });
+
+  it("OPTIONAL MATCHes the source node by publicId in the Cypher", async () => {
+    setupNeo4j([makeEdgeRow()]);
+
+    await semanticEdgeSuggestHandler({ limit: 50 }, CTX);
+
+    const [cypher] = mocks.runFn.mock.calls[0] as [string, Record<string, unknown>];
+    expect(cypher).toContain("OPTIONAL MATCH (src:KnowledgeNode {publicId: ie.sourceNodeId");
+    expect(cypher).toContain("sourceDisplayName");
+  });
+
+  it("falls back to the source id when the node has no display fields", async () => {
+    setupNeo4j([
+      makeEdgeRow({
+        sourceDisplayName: null,
+        sourceLabel: null,
+        sourceProperties: null,
+      }),
+    ]);
+
+    const result = await semanticEdgeSuggestHandler({ limit: 50 }, CTX);
+    const s = result.suggestions[0]!;
+    expect(s.sourceNode!.displayName).toBe("node-a");
+    expect(s.sourceNode!.label).toBe("Node");
+    expect(s.sourceNode!.properties).toEqual({});
   });
 
   it("passes confidenceMin and confidenceMax to the Cypher query", async () => {

@@ -1,6 +1,33 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
+/**
+ * A user-facing citation of a knowledge-graph node.
+ *
+ * Anywhere a node is referenced in the UI it must be cited by its human label
+ * (`displayName` + domain `label`) with its full property bag available for
+ * inspection — never by a bare UUID. This is the shared shape that lets every
+ * surface (graph explorer, inference review, lineage) cite a node identically
+ * and offer hover-to-inspect. The raw `id` is retained for copy/deep-link, but
+ * it is never the primary on-screen identifier.
+ */
+export const knowledgeNodeRefSchema = z.object({
+  id: z
+    .string()
+    .nullable()
+    .describe(
+      "publicId of the node, or null when the node is not yet materialised in the graph (e.g. a pending inferred edge's described target)",
+    ),
+  label: z.string().describe("Domain label / type, e.g. 'Feature', 'Repository', 'Issue'"),
+  displayName: z.string().describe("Human-readable name — the node's primary on-screen identifier"),
+  properties: z
+    .record(z.string(), z.unknown())
+    .default({})
+    .describe("Full property bag for the node, for hover/inspect detail"),
+});
+
+export type KnowledgeNodeRef = z.output<typeof knowledgeNodeRefSchema>;
+
 /** Shared schema for a single inferred semantic edge record. */
 export const semanticEdgeSchema = z.object({
   id: z.string().describe("Unique edge identifier"),
@@ -20,6 +47,22 @@ export const semanticEdgeSchema = z.object({
   approved: z.boolean().optional().describe("Whether the edge has been approved by a workspace member"),
   approvedAt: z.string().nullable().optional().describe("ISO-8601 timestamp of approval, null if not yet approved"),
   approvedBy: z.string().nullable().optional().describe("User ID who approved the edge, null if not yet approved"),
+  // ── Citation enrichment ──────────────────────────────────────────────────
+  // Resolved, human-friendly references to both endpoints + the relationship's
+  // own properties, so the UI can cite the edge without ever surfacing a raw
+  // UUID. Optional for backward compatibility with payloads produced before the
+  // endpoints were resolved.
+  sourceNode: knowledgeNodeRefSchema
+    .optional()
+    .describe("Resolved source node (label, displayName, properties) for friendly citation"),
+  targetNode: knowledgeNodeRefSchema
+    .optional()
+    .describe("Resolved/described target node (label, displayName, properties) for friendly citation"),
+  relationshipProperties: z
+    .record(z.string(), z.unknown())
+    .default({})
+    .optional()
+    .describe("Full property bag for the inferred relationship itself (model, connector, inferredAt, status)"),
 });
 
 export const semanticEdgeList = registerCapability({
