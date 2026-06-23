@@ -67,16 +67,21 @@ export const graphNodeListHandler: CapabilityHandler<typeof graphNodeList> = asy
       total = toNumber(countResult.records[0]?.get("total"));
 
       const pageResult = await session.run(
+        // coalesce guards against nodes written without explicit display fields
+        // (e.g. LLM-inferred placeholder concepts carry `type`/`name` instead of
+        // `label`/`displayName`). The output contract requires non-null strings,
+        // so a single such node would otherwise fail validation and blank the
+        // entire explorer. Fall back type→label and name→displayName→publicId.
         `MATCH (n:KnowledgeNode)
          ${whereClause}
          RETURN
-           n.publicId    AS id,
-           n.label       AS label,
-           n.displayName AS displayName,
-           n.properties  AS properties,
-           n.sourceId    AS sourceId,
-           n.createdAt   AS createdAt
-         ORDER BY n.createdAt DESC, n.displayName ASC
+           n.publicId                                      AS id,
+           coalesce(n.label, n.type, 'Node')               AS label,
+           coalesce(n.displayName, n.name, n.publicId)     AS displayName,
+           n.properties                                    AS properties,
+           n.sourceId                                      AS sourceId,
+           n.createdAt                                     AS createdAt
+         ORDER BY n.createdAt DESC, coalesce(n.displayName, n.name, n.publicId) ASC
          SKIP $offset
          LIMIT $limit`,
         params,
