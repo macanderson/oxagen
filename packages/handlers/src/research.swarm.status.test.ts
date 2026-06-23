@@ -160,7 +160,58 @@ describe("researchSwarmStatusHandler", () => {
   it("propagates the aggregate's not-found error for an unknown fanout", async () => {
     // Tenant isolation + unknown-id handling now live in agent.subagent.aggregate
     // (Postgres lookup scoped by org+workspace), so its error surfaces verbatim.
+    // The ROUTE (research.swarm.status.ts in apps/api) catches this error and
+    // maps it to HTTP 404 — the handler itself must not swallow it (the route
+    // needs the message to decide the right status code).
     invoke.mockRejectedValue(new Error("Fanout nope not found"));
     await expect(researchSwarmStatusHandler({ swarmId: "nope" }, ctx)).rejects.toThrow(/not found/);
+  });
+
+  it("returns terminal 'failed' for an orphaned/timed-out swarm (never 500)", async () => {
+    // Regression: a swarm started days ago is past the 5-min aggregate staleness
+    // window → aggregate reports status:'timed_out' → mapStatus maps to 'failed'.
+    // The handler must return a clean terminal payload, never throw.
+    invoke.mockResolvedValue({
+      fanoutId: "fan_old",
+      status: "timed_out",
+      totalChildren: 3,
+      completedChildren: 0,
+      aggregatedData: null,
+      conflicts: [],
+      timeline: [],
+      children: [],
+      firstError: null,
+    });
+
+    const out = await researchSwarmStatusHandler({ swarmId: "fan_old" }, ctx);
+    expect(out.status).toBe("failed");
+    expect(out.completedTasks).toBe(0);
+    expect(out.totalTasks).toBe(3);
+    expect(out.results).toBeUndefined();
+  });
+
+  it("returns terminal 'complete' for a partial fanout (some succeeded, some failed)", async () => {
+    // Aggregate 'partial' (some children completed, some failed) maps to 'complete'
+    // so the agent can still summarise the successful queries instead of hiding them.
+    invoke.mockResolvedValue({
+      fanoutId: "fan_partial",
+      status: "partial",
+      totalChildren: 3,
+      completedChildren: 2,
+      aggregatedData: {},
+      conflicts: [],
+      timeline: [],
+      children: [
+        webSearchChild("success query", [
+          { title: "T", url: "https://x", content: "snippet" },
+        ]),
+      ],
+      firstError: "one child failed",
+    });
+
+    const out = await researchSwarmStatusHandler({ swarmId: "fan_partial" }, ctx);
+    expect(out.status).toBe("complete");
+    expect(out.completedTasks).toBe(2);
+    expect(out.results).toBeDefined();
   });
 });
