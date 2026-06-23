@@ -19,14 +19,15 @@ describe("graph.ingest contract", () => {
   it("declares chain metadata (consumes document.text, produces graph ids)", () => {
     expect(graphIngest.consumes).toContain("document.text");
     expect(graphIngest.produces).toContain("graph.nodeId");
+    expect(graphIngest.produces).toContain("graph.relationshipId");
     expect(graphIngest.render?.componentId).toBe("graph-ingest-card");
   });
 
-  it("accepts a full ingestion result and constrains edgeType to the graph vocabulary", () => {
+  it("accepts a full ingestion result and constrains relationshipType to the RELATIONSHIP_TYPE_PATTERN", () => {
     const out = graphIngest.output.parse({
       entities: [{ nodeId: "n1", name: "USS Nautilus", type: "Vessel", confidence: 0.9, created: true }],
       relationships: [
-        { edgeId: "e1", from: "A", to: "B", edgeType: "CREATED_BY", confidence: 0.7, created: true },
+        { relationshipId: "e1", from: "A", to: "B", relationshipType: "CREATED_BY", confidence: 0.7, created: true },
       ],
       summary: "done",
     });
@@ -34,7 +35,7 @@ describe("graph.ingest contract", () => {
     expect(
       graphIngest.output.safeParse({
         entities: [],
-        relationships: [{ edgeId: "e", from: "A", to: "B", edgeType: "NOT_A_REAL_EDGE", confidence: 1, created: true }],
+        relationships: [{ relationshipId: "e", from: "A", to: "B", relationshipType: "not_valid_lowercase", confidence: 1, created: true }],
         summary: "x",
       }).success,
     ).toBe(false);

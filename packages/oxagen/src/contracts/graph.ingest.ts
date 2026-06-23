@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { GRAPH_EDGE_TYPES } from "./graph.edge.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
 
 /**
  * graph.ingest — turn raw text into knowledge-graph nodes + edges.
@@ -36,7 +36,7 @@ export const graphIngest = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   consumes: ["document.text", "search.results"],
-  produces: ["graph.nodeId", "graph.edgeId"],
+  produces: ["graph.nodeId", "graph.relationshipId"],
   chainHints: ["graph.node.list", "documents.generate"],
   render: { componentId: "graph-ingest-card" },
   input: z.object({
@@ -75,10 +75,10 @@ export const graphIngest = registerCapability({
     ),
     relationships: z.array(
       z.object({
-        edgeId: z.string(),
+        relationshipId: z.string(),
         from: z.string(),
         to: z.string(),
-        edgeType: z.enum(GRAPH_EDGE_TYPES),
+        relationshipType: z.string().regex(RELATIONSHIP_TYPE_PATTERN),
         confidence: z.number(),
         created: z.boolean(),
       }),

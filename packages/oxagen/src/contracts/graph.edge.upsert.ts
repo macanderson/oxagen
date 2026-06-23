@@ -1,3 +1,4 @@
+// @deprecated Use graph.relationship.upsert instead — one-release alias (removed in v2)
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
@@ -43,3 +44,6 @@ export const graphEdgeUpsert = registerCapability({
 
 export type GraphEdgeUpsertInput = z.output<typeof graphEdgeUpsert.input>;
 export type GraphEdgeUpsertOutput = z.output<typeof graphEdgeUpsert.output>;
+
+// @deprecated Use graph.relationship.upsert instead — one-release alias (removed in v2)
+export { graphRelationshipUpsert } from "./graph.relationship.upsert";
