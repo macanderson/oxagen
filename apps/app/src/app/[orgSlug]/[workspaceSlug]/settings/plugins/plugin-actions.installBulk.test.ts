@@ -162,7 +162,7 @@ describe("installBulkPlugin server action", () => {
     expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/settings/plugins");
   });
 
-  it("calls invoke with plugin.org.install_bulk and passes the items array", async () => {
+  it("calls invoke with plugin.org.install_bulk and normalises 'capability' → agent_capability", async () => {
     mockInvoke.mockResolvedValue(
       bulkResult([{ pluginId: "cap-a", orgListingId: "listing-a", error: null }]),
     );
@@ -175,10 +175,108 @@ describe("installBulkPlugin server action", () => {
 
     expect(mockInvoke).toHaveBeenCalledWith(
       "plugin.org.install_bulk",
-      { items: [{ pluginType: "capability", pluginId: "cap-a" }] },
+      { items: [{ pluginType: "agent_capability", pluginId: "cap-a" }] },
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
       { surface: "agent" },
     );
+  });
+
+  // ── per-type marketplace-row mapping (the bug being fixed) ────────────────
+  // The marketplace sends each selected row as { catalogServerId, pluginType }
+  // only — no pluginId, no custom. installOne then threw "pluginId is required
+  // when pluginType is 'agent_capability'" (and "custom is required" for servers)
+  // on every item, so bulk install always failed. The action must map each row:
+  // capability → pluginId; mcp_server/integration/knowledge_source → custom (name
+  // = row id, empty endpoint → registry-resolved); agent_skill → skill install.
+
+  it("maps an agent_capability marketplace row (catalogServerId) → { pluginId }", async () => {
+    mockInvoke.mockResolvedValue(
+      bulkResult([{ pluginId: "oxagen/media-image", orgListingId: "l1", error: null }]),
+    );
+
+    const res = await installBulkPlugin({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      items: [{ pluginType: "agent_capability", catalogServerId: "oxagen/media-image" }],
+    });
+
+    expect(res.ok).toBe(true);
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "plugin.org.install_bulk",
+      { items: [{ pluginType: "agent_capability", pluginId: "oxagen/media-image" }] },
+      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
+      { surface: "agent" },
+    );
+  });
+
+  it("maps an mcp_server marketplace row (catalogServerId) → { custom: { name, empty endpoint } }", async () => {
+    mockInvoke.mockResolvedValue(
+      bulkResult([{ pluginId: null, orgListingId: "l2", error: null }]),
+    );
+
+    await installBulkPlugin({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      items: [{ pluginType: "mcp_server", catalogServerId: "@scope/brave-search" }],
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "plugin.org.install_bulk",
+      {
+        items: [
+          {
+            pluginType: "mcp_server",
+            custom: {
+              name: "@scope/brave-search",
+              endpointUrl: "",
+              transport: "streamable-http",
+              authKind: "none",
+            },
+          },
+        ],
+      },
+      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
+      { surface: "agent" },
+    );
+  });
+
+  it("routes agent_skill rows to skill.workspace.install, not plugin.org.install_bulk", async () => {
+    mockInvoke.mockResolvedValue(undefined);
+
+    const res = await installBulkPlugin({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      items: [{ pluginType: "agent_skill", catalogServerId: "summarize" }],
+    });
+
+    expect(res.ok).toBe(true);
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "skill.workspace.install",
+      { slug: "summarize", workspace_id: "ws-1" },
+      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
+      { surface: "agent" },
+    );
+    // install_bulk is never called when there are no non-skill items.
+    expect(mockInvoke).not.toHaveBeenCalledWith(
+      "plugin.org.install_bulk",
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("surfaces a skill install failure in the failures list", async () => {
+    mockInvoke.mockRejectedValueOnce(new Error("skill not found"));
+
+    const res = await installBulkPlugin({
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      items: [{ pluginType: "agent_skill", catalogServerId: "broken-skill" }],
+    });
+
+    expect(res.ok).toBe(false);
+    expect(res.failures).toEqual(["skill not found"]);
+    expect(mockRevalidatePath).not.toHaveBeenCalled();
   });
 
   // ── partial failure propagation (the bug being fixed) ────────────────────

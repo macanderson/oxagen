@@ -18,6 +18,10 @@ export interface InstallOneInput {
   pluginType: "mcp_server" | "integration" | "agent_skill" | "agent_capability" | "knowledge_source";
   // Required when pluginType === "agent_capability". Ignored for other types.
   pluginId?: string;
+  // Marketplace catalog row id. Bulk callers (and the marketplace UI) identify a
+  // capability by this field; it is accepted as a fallback for `pluginId` so a
+  // bulk install that only carries catalogServerId still resolves the pack.
+  catalogServerId?: string;
   custom?: {
     name: string;
     title?: string;
@@ -41,13 +45,16 @@ export async function installOne(
     throw new Error("[plugin.org.install] workspaceId is required (scoped capability)");
   }
 
-  const { pluginType, pluginId, custom } = input;
+  const { pluginType, custom } = input;
+  // Bulk callers identify a capability by catalogServerId; accept it as a
+  // fallback so install_bulk works without the caller pre-mapping to pluginId.
+  const pluginId = input.pluginId ?? input.catalogServerId;
 
   // ── Oxagen capability pack path ─────────────────────────────────────────────
   if (pluginType === "agent_capability") {
     if (!pluginId) {
       throw new Error(
-        "[plugin.org.install] pluginId is required when pluginType is 'agent_capability'.",
+        "[plugin.org.install] pluginId (or catalogServerId) is required when pluginType is 'agent_capability'.",
       );
     }
     const manifest = getOxagenPlugin(pluginId);

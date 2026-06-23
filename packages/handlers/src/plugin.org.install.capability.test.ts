@@ -103,10 +103,33 @@ describe("installOne — agent_capability path", () => {
     expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
   });
 
-  it("throws when pluginId is missing", async () => {
+  it("throws when neither pluginId nor catalogServerId is present", async () => {
     await expect(
       installOne(ctx, { pluginType: "agent_capability" }),
-    ).rejects.toThrow("pluginId is required when pluginType is 'agent_capability'");
+    ).rejects.toThrow(/is required when pluginType is 'agent_capability'/);
+  });
+
+  it("resolves the capability from catalogServerId when pluginId is absent (bulk path)", async () => {
+    // The marketplace bulk install sends only catalogServerId; installOne must
+    // fall back to it so the pack resolves without the caller pre-mapping to
+    // pluginId. Regression for "pluginId is required" on every bulk capability.
+    mockCapabilityUpsert("porg-from-catalog");
+    const id = await installOne(ctx, {
+      pluginType: "agent_capability",
+      catalogServerId: "oxagen/media-video",
+    });
+    expect(id).toBe("porg-from-catalog");
+    expect(mocks.getOxagenPlugin).toHaveBeenCalledWith("oxagen/media-video");
+  });
+
+  it("prefers pluginId over catalogServerId when both are present", async () => {
+    mockCapabilityUpsert("porg-prefers-pluginid");
+    await installOne(ctx, {
+      pluginType: "agent_capability",
+      pluginId: "oxagen/media-video",
+      catalogServerId: "oxagen/should-be-ignored",
+    });
+    expect(mocks.getOxagenPlugin).toHaveBeenCalledWith("oxagen/media-video");
   });
 
   it("throws when pluginId is not in the registry", async () => {
