@@ -11,6 +11,11 @@ import { shapeInstalledPlugins } from "./plugin-shape";
 import { installPlugin, installBulkPlugin, togglePlugin, uninstallPlugin } from "./plugin-actions";
 import { addRegistry, removeRegistry } from "./plugin-actions";
 import { docsUrl } from "@/lib/docs-url";
+import { GithubMcpCard } from "./github-mcp-card";
+import {
+  installGithubMcp,
+  getGithubMcpInstallStatus,
+} from "./github-mcp-actions";
 
 export const metadata: Metadata = {
   title: "Plugins | Workspace Settings",
@@ -28,6 +33,16 @@ export default async function WorkspacePluginsPage({ params }: PageProps) {
   const org = await resolveOrg(orgSlug);
   const ws = await resolveWorkspace(org.id, workspaceSlug);
   await assertOrgMember(org.id, session.user.id);
+
+  // Fetch GitHub MCP install status (non-fatal: card degrades to not-installed).
+  const githubMcpStatus = await getGithubMcpInstallStatus({ orgSlug, workspaceSlug }).catch(
+    () => ({
+      installed: false,
+      orgListingId: null,
+      connected: false,
+      healthStatus: null,
+    }),
+  );
 
   // Fetch workspace-scoped installed plugins.
   const installedPlugins = await runInTenantScope(
@@ -77,6 +92,26 @@ export default async function WorkspacePluginsPage({ params }: PageProps) {
   const initialPlugins = shapeInstalledPlugins(installedPlugins);
 
   return (
+    <div className="flex flex-col gap-8">
+      {/* ── First-party featured integrations ────────────────────────────────── */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          Featured Integrations
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <GithubMcpCard
+            orgSlug={orgSlug}
+            workspaceSlug={workspaceSlug}
+            installed={githubMcpStatus.installed}
+            orgListingId={githubMcpStatus.orgListingId}
+            connected={githubMcpStatus.connected}
+            healthStatus={githubMcpStatus.healthStatus}
+            installAction={installGithubMcp}
+          />
+        </div>
+      </section>
+
+      {/* ── Installed plugins + registry marketplace ──────────────────────────── */}
     <WorkspacePluginsPanel
       orgSlug={orgSlug}
       workspaceSlug={workspaceSlug}
@@ -92,5 +127,6 @@ export default async function WorkspacePluginsPage({ params }: PageProps) {
       addRegistryAction={addRegistry}
       removeRegistryAction={removeRegistry}
     />
+    </div>
   );
 }
