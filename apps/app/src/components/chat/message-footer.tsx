@@ -1,0 +1,169 @@
+"use client";
+/**
+ * MessageFooter — rendered below every assistant message (live turn + persisted).
+ *
+ * Shows a token / credit summary and three action buttons:
+ *   Copy          — write the assistant's text to the clipboard
+ *   Save as Knowledge — graph.ingest via a scoped server action
+ *   Save as Memory    — agent.memory.write via a scoped server action
+ *
+ * Each button flips to a check icon on success and resets after 2 seconds.
+ * Toast feedback is shown on errors so the user isn't left wondering.
+ */
+
+import * as React from "react";
+import { useState, useCallback } from "react";
+import { Copy, Check, BookOpen, Brain } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast";
+import type { TurnUsage } from "./stream-event-types";
+import { saveAsKnowledgeAction, saveAsMemoryAction } from "./message-footer-actions";
+
+export interface MessageFooterProps {
+  /** The full plain text of the assistant message (for clipboard + save actions). */
+  text: string;
+  /** Token / credit usage summary. Rendered only when present. */
+  usage?: TurnUsage;
+  /** Slug context for server actions (scoped per org + workspace). */
+  orgSlug: string;
+  workspaceSlug: string;
+}
+
+type ButtonId = "copy" | "knowledge" | "memory";
+
+/**
+ * A small icon-button that flips to a check on success.
+ */
+function ActionButton({
+  id,
+  label,
+  icon,
+  successIcon,
+  done,
+  loading,
+  onClick,
+}: {
+  id: ButtonId;
+  label: string;
+  icon: React.ReactNode;
+  successIcon?: React.ReactNode;
+  done: boolean;
+  loading: boolean;
+  onClick: (id: ButtonId) => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={loading}
+      onClick={() => onClick(id)}
+      aria-label={done ? `${label} — done` : label}
+      className={cn(
+        "flex items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors",
+        "text-muted-foreground hover:bg-muted hover:text-foreground",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "disabled:pointer-events-none disabled:opacity-50",
+      )}
+    >
+      {done ? (successIcon ?? <Check className="size-3.5 text-foreground" aria-hidden="true" />) : icon}
+      <span className="sr-only">{label}</span>
+    </button>
+  );
+}
+
+export function MessageFooter({
+  text,
+  usage,
+  orgSlug,
+  workspaceSlug,
+}: MessageFooterProps) {
+  const { add: addToast } = useToast();
+  const [done, setDone] = useState<Set<ButtonId>>(new Set());
+  const [loading, setLoading] = useState<ButtonId | null>(null);
+
+  const markDone = useCallback((id: ButtonId) => {
+    setDone((prev) => new Set(prev).add(id));
+    setTimeout(() => {
+      setDone((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, 2000);
+  }, []);
+
+  const handleClick = useCallback(
+    async (id: ButtonId) => {
+      if (loading) return;
+      setLoading(id);
+      try {
+        if (id === "copy") {
+          await navigator.clipboard.writeText(text);
+          markDone("copy");
+        } else if (id === "knowledge") {
+          const result = await saveAsKnowledgeAction({ orgSlug, workspaceSlug }, text);
+          if (result.ok) {
+            markDone("knowledge");
+          } else {
+            addToast({ title: "Could not save knowledge", description: result.error, type: "error" });
+          }
+        } else if (id === "memory") {
+          const result = await saveAsMemoryAction({ orgSlug, workspaceSlug }, text);
+          if (result.ok) {
+            markDone("memory");
+          } else {
+            addToast({ title: "Could not save memory", description: result.error, type: "error" });
+          }
+        }
+      } catch {
+        addToast({ title: "Action failed", description: "Please try again.", type: "error" });
+      } finally {
+        setLoading(null);
+      }
+    },
+    [loading, text, orgSlug, workspaceSlug, addToast, markDone],
+  );
+
+  return (
+    <div className="mt-2 flex items-center justify-between gap-2">
+      {/* Token / credit summary */}
+      {usage !== undefined ? (
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {usage.totalTokens.toLocaleString()} tokens
+          {usage.creditsCharged !== undefined
+            ? ` · ${usage.creditsCharged} credit${usage.creditsCharged === 1 ? "" : "s"}`
+            : null}
+        </span>
+      ) : (
+        <span aria-hidden="true" />
+      )}
+
+      {/* Action buttons */}
+      <div className="flex items-center gap-0.5">
+        <ActionButton
+          id="copy"
+          label="Copy message"
+          icon={<Copy className="size-3.5" aria-hidden="true" />}
+          done={done.has("copy")}
+          loading={loading === "copy"}
+          onClick={handleClick}
+        />
+        <ActionButton
+          id="knowledge"
+          label="Save as Knowledge"
+          icon={<BookOpen className="size-3.5" aria-hidden="true" />}
+          done={done.has("knowledge")}
+          loading={loading === "knowledge"}
+          onClick={handleClick}
+        />
+        <ActionButton
+          id="memory"
+          label="Save as Memory"
+          icon={<Brain className="size-3.5" aria-hidden="true" />}
+          done={done.has("memory")}
+          loading={loading === "memory"}
+          onClick={handleClick}
+        />
+      </div>
+    </div>
+  );
+}

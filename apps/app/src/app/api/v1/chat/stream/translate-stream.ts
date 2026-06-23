@@ -4,6 +4,7 @@ import type {
   StreamEvent,
 } from "@/components/chat/stream-event-types";
 import { resolveRenderDirective } from "@oxagen/oxagen/capability-meta";
+import { meterCreditsForUsage } from "@oxagen/billing";
 import {
   partType,
   isRecord,
@@ -46,9 +47,11 @@ export async function translateAgentStream(args: {
   toolNameMap: Record<string, string>;
   orgSlug: string;
   workspaceSlug: string;
+  /** Gateway model id (from modelIdOf(turnModel)) used to compute credits charged. */
+  modelId: string;
   emit: (event: StreamEvent) => void;
 }): Promise<TranslatedTurn> {
-  const { fullStream, requestId, toolNameMap, orgSlug, workspaceSlug, emit } = args;
+  const { fullStream, requestId, toolNameMap, orgSlug, workspaceSlug, modelId, emit } = args;
 
   const toolStartedAt: Record<string, number> = {};
   // Accumulate the assistant's text so we can persist the full reply.
@@ -299,13 +302,27 @@ export async function translateAgentStream(args: {
       });
     } else if (pType === "finish") {
       const part = raw as FinishPart;
+      const inputTokens = part.totalUsage.inputTokens ?? 0;
+      const outputTokens = part.totalUsage.outputTokens ?? 0;
+      const totalTokens = part.totalUsage.totalTokens ?? 0;
+      // Compute credits charged using the billing meter (best-effort: a pricing
+      // lookup failure should never crash the turn — fall back to undefined so
+      // the UI skips the credit display rather than showing a wrong number).
+      let creditsCharged: number | undefined;
+      try {
+        const credits = meterCreditsForUsage({ model: modelId, inputTokens, outputTokens });
+        creditsCharged = Number(credits);
+      } catch {
+        // Pricing lookup failed (e.g. unknown model id) — omit creditsCharged.
+      }
       // Emit usage so the client can show credits consumed this turn.
       emit({
         type: "usage",
         usage: {
-          promptTokens: part.totalUsage.inputTokens ?? 0,
-          completionTokens: part.totalUsage.outputTokens ?? 0,
-          totalTokens: part.totalUsage.totalTokens ?? 0,
+          promptTokens: inputTokens,
+          completionTokens: outputTokens,
+          totalTokens,
+          ...(creditsCharged !== undefined ? { creditsCharged } : {}),
         },
       });
     } else if (pType === "error") {

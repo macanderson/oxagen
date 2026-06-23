@@ -86,6 +86,9 @@ vi.mock("./tool-call-card", () => ({ ToolCallCard: () => null }));
 vi.mock("./code-execute-card", () => ({ CodeExecuteCard: () => null }));
 vi.mock("./memory-card", () => ({ MemoryCard: () => null }));
 vi.mock("./subagent-fanout", () => ({ SubagentFanout: () => null }));
+// Mock MessageFooter to avoid pulling in server-only imports from
+// message-footer-actions (which uses "use server" / server-only).
+vi.mock("./message-footer", () => ({ MessageFooter: () => null }));
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
 }));

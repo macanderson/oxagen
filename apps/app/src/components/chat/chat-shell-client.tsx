@@ -30,6 +30,7 @@ import type { FieldDescriptor } from "@/lib/ask/fill-types";
 import type { FormFillResult } from "@/lib/ask/fill-types";
 import { interceptFormFillEvents } from "./intercept-form-fill";
 import { ThinkingBubble } from "./thinking-bubble";
+import { MessageFooter } from "./message-footer";
 
 /**
  * Serialisable page context forwarded from the current page to the stream
@@ -749,7 +750,12 @@ export function ChatShellClient({
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            <MessageTree messages={messages} callbacks={callbacks} />
+            <MessageTree
+              messages={messages}
+              callbacks={callbacks}
+              orgSlug={orgSlug}
+              workspaceSlug={workspaceSlug}
+            />
             {/* Live turn: the ordered chain of thought/action, rendered as a
                 connected timeline before the RSC revalidate replaces it with
                 the persisted message. */}
@@ -785,12 +791,14 @@ export function ChatShellClient({
                   ))}
                 </ActivityTimeline>
                 {turnUsage !== undefined ? (
-                  <div className="mt-1 text-right text-xs tabular-nums text-muted-foreground">
-                    {turnUsage.totalTokens.toLocaleString()} tokens
-                    {turnUsage.creditsCharged !== undefined
-                      ? ` · ${turnUsage.creditsCharged} credit${turnUsage.creditsCharged === 1 ? "" : "s"}`
-                      : null}
-                  </div>
+                  <MessageFooter
+                    text={Object.values(textSegments)
+                      .map((s) => s.text)
+                      .join("")}
+                    usage={turnUsage}
+                    orgSlug={orgSlug}
+                    workspaceSlug={workspaceSlug}
+                  />
                 ) : null}
               </div>
             ) : null}

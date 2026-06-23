@@ -14,6 +14,7 @@ import { ActivityTimeline, TimelineItem, type TimelineItemProps } from "./activi
 import { CHAT_COMPONENTS, logUnknownComponent, UnknownComponentCard } from "./chat-component-registry";
 import type { AssistantContentBlock } from "./stream-event-types";
 import { MarkdownMessage } from "./markdown-message";
+import { MessageFooter } from "./message-footer";
 
 export interface ChatMessage {
   publicId: string;
@@ -50,10 +51,15 @@ export function MessageBubble({
   message,
   callbacks,
   children,
+  orgSlug,
+  workspaceSlug,
 }: {
   message: ChatMessage;
   callbacks?: MessageBubbleCallbacks;
   children?: React.ReactNode;
+  /** Slug context for footer server actions (required for assistant messages). */
+  orgSlug?: string;
+  workspaceSlug?: string;
 }) {
   const isUser = message.role === "user";
   const blocks = message.contentBlocks;
@@ -63,6 +69,18 @@ export function MessageBubble({
   // A lone text block renders plainly, without a rail.
   const useTimeline =
     hasBlocks && (blocks.length > 1 || blocks.some((b) => b.type !== "text"));
+
+  // Collect plain text for the footer's copy / save actions. Content-block text
+  // takes precedence (it is the extracted prose); fall back to message.content.
+  const assistantText = React.useMemo(() => {
+    if (!hasBlocks) return message.content;
+    return blocks!
+      .filter((b) => b.type === "text")
+      .map((b) => (b as { type: "text"; text: string }).text)
+      .join("\n");
+  }, [hasBlocks, blocks, message.content]);
+
+  const showFooter = !isUser && orgSlug !== undefined && workspaceSlug !== undefined;
 
   return (
     <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
@@ -97,6 +115,14 @@ export function MessageBubble({
         ) : (
           <MarkdownMessage>{message.content}</MarkdownMessage>
         )}
+
+        {showFooter ? (
+          <MessageFooter
+            text={assistantText}
+            orgSlug={orgSlug}
+            workspaceSlug={workspaceSlug}
+          />
+        ) : null}
 
         {children}
       </div>

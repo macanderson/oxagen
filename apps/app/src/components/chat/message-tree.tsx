@@ -17,9 +17,13 @@ import { MessageBubble, type ChatMessage, type MessageBubbleCallbacks } from "./
 function MessageTreeImpl({
   messages,
   callbacks,
+  orgSlug,
+  workspaceSlug,
 }: {
   messages: ChatMessage[];
   callbacks?: MessageBubbleCallbacks;
+  orgSlug?: string;
+  workspaceSlug?: string;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -35,7 +39,12 @@ function MessageTreeImpl({
           animate="visible"
           variants={fadeInUp}
         >
-          <MessageBubble message={m} callbacks={callbacks} />
+          <MessageBubble
+            message={m}
+            callbacks={callbacks}
+            orgSlug={orgSlug}
+            workspaceSlug={workspaceSlug}
+          />
         </motion.div>
       ))}
     </div>
