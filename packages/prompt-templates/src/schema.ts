@@ -106,6 +106,14 @@ export const promptTemplateSchema = z.object({
 
 export type PromptTemplate = z.infer<typeof promptTemplateSchema>;
 
+/**
+ * Pre-parse shape of a PromptTemplate: fields with schema defaults (tags,
+ * variables) are optional. This is the type of the statically bundled built-in
+ * template data (built-in-templates.ts), which holds raw authored values before
+ * promptTemplateSchema.parse() applies defaults at registry load.
+ */
+export type PromptTemplateInput = z.input<typeof promptTemplateSchema>;
+
 // ---------------------------------------------------------------------------
 // Page context shape (consumed by getApplicableTemplates)
 // ---------------------------------------------------------------------------
