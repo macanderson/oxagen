@@ -217,7 +217,7 @@ describe("ingestion.github-initial-sync Inngest function", () => {
     const step = makeStep();
     await expect(
       capturedHandler!({ event: { data: { ...BASE_EVENT, owner: "", repo: "" } }, step }),
-    ).rejects.toThrow(/missing owner\/repo/);
+    ).rejects.toThrow(/owner and repo are required/);
   });
 
   it("resolves the repo's real default branch and uses it for the tree fetch", async () => {

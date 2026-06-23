@@ -81,16 +81,21 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
     ? [...input.mappings, ...DEFAULT_GITHUB_MAPPINGS.filter((m) => !userTypes.has(m.sourceRecordType))]
     : input.mappings;
 
-  // Merge the GitHub source-selection into deliveryConfig so the initial sync can
-  // resolve which repos to sync (previously dropped → empty owner/repo → 404).
+  // Merge EVERY GitHub source-selection field the caller supplied into
+  // deliveryConfig so the initial sync can resolve which repos to pull
+  // (previously dropped → empty owner/repo → 404). Covers both the multi-repo
+  // wizard flow (selectedRepos) and a single owner/repo/defaultBranch (OXA-1806).
+  const dcUpdates: Record<string, unknown> = {};
+  if (input.owner !== undefined) dcUpdates["owner"] = input.owner;
+  if (input.repo !== undefined) dcUpdates["repo"] = input.repo;
+  if (input.defaultBranch !== undefined) dcUpdates["defaultBranch"] = input.defaultBranch;
+  if (input.installationId !== undefined) dcUpdates["installationId"] = input.installationId;
+  if (input.syncDepthDays !== undefined) dcUpdates["syncDepthDays"] = input.syncDepthDays;
+  if (input.selectedRepos !== undefined) dcUpdates["selectedRepos"] = input.selectedRepos;
+
   const mergedDeliveryConfig =
-    input.selectedRepos !== undefined || input.installationId !== undefined || input.syncDepthDays !== undefined
-      ? {
-          ...((conn.deliveryConfig as Record<string, unknown> | null) ?? {}),
-          ...(input.selectedRepos !== undefined ? { selectedRepos: input.selectedRepos } : {}),
-          ...(input.installationId !== undefined ? { installationId: input.installationId } : {}),
-          ...(input.syncDepthDays !== undefined ? { syncDepthDays: input.syncDepthDays } : {}),
-        }
+    Object.keys(dcUpdates).length > 0
+      ? { ...((conn.deliveryConfig as Record<string, unknown> | null) ?? {}), ...dcUpdates }
       : undefined;
 
   // Upsert every mapping AND (optionally) the connection status flip inside a
@@ -153,38 +158,22 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
       }
     }
 
-    // Persist the GitHub source-selection into deliveryConfig (independent of
-    // activation) so the sync can resolve which repos to pull.
-    if (mergedDeliveryConfig) {
+    // Persist the merged deliveryConfig and (optionally) flip status — combined
+    // into a single UPDATE when both apply so the row is always consistent.
+    if (willActivate) {
+      await tx
+        .update(schema.sourceConnections)
+        .set({
+          status: "connected",
+          ...(mergedDeliveryConfig ? { deliveryConfig: mergedDeliveryConfig } : {}),
+          updatedAt: now,
+        })
+        .where(eq(schema.sourceConnections.id, conn.id));
+    } else if (mergedDeliveryConfig) {
       await tx
         .update(schema.sourceConnections)
         .set({ deliveryConfig: mergedDeliveryConfig, updatedAt: now })
         .where(eq(schema.sourceConnections.id, conn.id));
-    }
-
-    // Activate the connection if requested and currently in pending_setup —
-    // in the same transaction so mappings + status flip commit together.
-    // Also merge any delivery config fields supplied by the caller (owner,
-    // repo, defaultBranch, installationId, syncDepthDays, selectedRepos)
-    // into the stored deliveryConfig. Merging in the same tx ensures the
-    // config is always consistent with the activation status.
-    if (willActivate) {
-      const existingDc = (conn.deliveryConfig ?? {}) as Record<string, unknown>;
-      const mergedDc: Record<string, unknown> = { ...existingDc };
-      if (input.owner !== undefined) mergedDc["owner"] = input.owner;
-      if (input.repo !== undefined) mergedDc["repo"] = input.repo;
-      if (input.defaultBranch !== undefined) mergedDc["defaultBranch"] = input.defaultBranch;
-      if (input.installationId !== undefined) mergedDc["installationId"] = input.installationId;
-      if (input.syncDepthDays !== undefined) mergedDc["syncDepthDays"] = input.syncDepthDays;
-      if (input.selectedRepos !== undefined) mergedDc["selectedRepos"] = input.selectedRepos;
-
-      await tx
-        .update(schema.sourceConnections)
-        .set({ status: "connected", deliveryConfig: mergedDc, updatedAt: now })
-        .where(eq(schema.sourceConnections.id, conn.id));
-
-      // Expose merged config so the post-tx Inngest event uses the fresh values.
-      conn.deliveryConfig = mergedDc;
     }
 
     return { created: createdCount, updated: updatedCount };
@@ -196,22 +185,26 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
 
     // Fire the GitHub initial-sync Inngest event when activating a GitHub
     // connection — after the transaction commits, never inside it. One sync is
-    // queued per selected repo; the sync resolves the repo's real default branch
-    // itself, so no defaultBranch is passed here.
+    // queued per selected repo. defaultBranch is passed as a hint; the sync still
+    // resolves the repo's real default branch from the GitHub API.
     if (isGithub) {
-      const dc = (mergedDeliveryConfig ?? conn.deliveryConfig) as Record<string, unknown> | null;
+      const dc = ((mergedDeliveryConfig ?? conn.deliveryConfig) as Record<string, unknown> | null) ?? {};
 
+      // Repos to sync: the multi-repo wizard selection, else a single
+      // request/stored owner/repo (legacy + OXA-1806).
       let repos = parseRepos(input.selectedRepos);
       if (repos.length === 0) {
-        // Legacy single-repo connections recorded owner/repo directly.
-        const owner = typeof dc?.["owner"] === "string" ? (dc["owner"] as string) : "";
-        const repo = typeof dc?.["repo"] === "string" ? (dc["repo"] as string) : "";
+        const owner = input.owner ?? (typeof dc["owner"] === "string" ? (dc["owner"] as string) : "");
+        const repo = input.repo ?? (typeof dc["repo"] === "string" ? (dc["repo"] as string) : "");
         if (owner && repo) repos = [{ owner, repo }];
       }
 
+      const defaultBranch =
+        input.defaultBranch ??
+        (typeof dc["defaultBranch"] === "string" ? (dc["defaultBranch"] as string) : "main");
       const syncDepthDays =
         input.syncDepthDays ??
-        (typeof dc?.["syncDepthDays"] === "number" ? (dc["syncDepthDays"] as number) : 90);
+        (typeof dc["syncDepthDays"] === "number" ? (dc["syncDepthDays"] as number) : 90);
 
       if (repos.length === 0) {
         logger.warn(
@@ -229,6 +222,7 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
             workspaceId: ctx.workspaceId,
             owner,
             repo,
+            defaultBranch,
             syncDepthDays,
           },
         });

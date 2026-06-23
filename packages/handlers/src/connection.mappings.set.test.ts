@@ -218,6 +218,7 @@ describe("connectionMappingsSetHandler — GitHub initial-sync event", () => {
         workspaceId: string;
         owner: string;
         repo: string;
+        defaultBranch: string;
         syncDepthDays: number;
       };
     };
@@ -227,8 +228,9 @@ describe("connectionMappingsSetHandler — GitHub initial-sync event", () => {
     expect(sent.data.workspaceId).toBe(CTX.workspaceId);
     expect(sent.data.owner).toBe("acme");
     expect(sent.data.repo).toBe("my-api");
-    // The sync resolves the real default branch itself — none is passed.
-    expect(sent.data).not.toHaveProperty("defaultBranch");
+    // defaultBranch is passed as a hint (from deliveryConfig); the sync still
+    // resolves the repo's real default branch from the GitHub API.
+    expect(sent.data.defaultBranch).toBe("main");
     expect(sent.data.syncDepthDays).toBe(90); // default when unspecified
   });
 
