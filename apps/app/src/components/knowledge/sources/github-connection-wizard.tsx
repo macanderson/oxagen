@@ -22,7 +22,7 @@ import {
 } from "@oxagen/ui";
 import { type WizardStep } from "./github-connection-wizard-types";
 import { Step1Connect } from "./github-connection-wizard-step1";
-import { Step2SelectRepos } from "./github-connection-wizard-step2";
+import { Step2SelectRepos, type SelectedRepoMeta } from "./github-connection-wizard-step2";
 import { Step3Confirm } from "./github-connection-wizard-step3";
 import { SuccessState } from "./github-connection-wizard-success";
 
@@ -71,7 +71,7 @@ export function GitHubConnectionWizard({
     initialConnectionId ?? null,
   );
   const [selectedInstallationId, setSelectedInstallationId] = React.useState<string | null>(null);
-  const [selectedRepos, setSelectedRepos] = React.useState<string[]>([]);
+  const [selectedRepos, setSelectedRepos] = React.useState<SelectedRepoMeta[]>([]);
   const [connectionError, setConnectionError] = React.useState<string | null>(null);
   const [done, setDone] = React.useState(false);
 
@@ -87,7 +87,7 @@ export function GitHubConnectionWizard({
             setConnectionId(null);
           }
           setSelectedInstallationId(null);
-          setSelectedRepos([]);
+          setSelectedRepos([] as SelectedRepoMeta[]);
           setConnectionError(null);
           setDone(false);
         }, 300);
@@ -96,7 +96,7 @@ export function GitHubConnectionWizard({
     [onClose, initialConnectionId],
   );
 
-  const handleReposSelected = (installationId: string, repos: string[]) => {
+  const handleReposSelected = (installationId: string, repos: SelectedRepoMeta[]) => {
     setSelectedInstallationId(installationId);
     setSelectedRepos(repos);
     setStep("confirm");

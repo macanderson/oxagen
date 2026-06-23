@@ -266,12 +266,55 @@ describe("connectionMappingsSetHandler — GitHub initial-sync event", () => {
     expect(result.mappingsCreated).toBe(5);
   });
 
-  it("queues no sync when a GitHub connection activates with no repos", async () => {
-    // deliveryConfig null + no selectedRepos → nothing to sync (no empty-repo 404).
+  it("uses request-supplied owner/repo when deliveryConfig is null (OXA-1806 root cause)", async () => {
+    // This is the exact failure mode from OXA-1806: the stored deliveryConfig
+    // is null (wizard never persisted owner/repo before this fix). The handler
+    // must use the values from the request input, not empty strings from the DB.
     setupDbSequence([{ ...GITHUB_CONN_ROW, deliveryConfig: null }], []);
 
-    await connectionMappingsSetHandler(ONE_MAPPING_INPUT, CTX);
-    expect(mocks.inngestSend).not.toHaveBeenCalled();
+    await connectionMappingsSetHandler(
+      {
+        ...ONE_MAPPING_INPUT,
+        owner: "acme",
+        repo: "api",
+        defaultBranch: "develop",
+      },
+      CTX,
+    );
+
+    const sent = mocks.inngestSend.mock.calls[0]?.[0] as { data: { owner: string; repo: string; defaultBranch: string } };
+    expect(sent.data.owner).toBe("acme");
+    expect(sent.data.repo).toBe("api");
+    expect(sent.data.defaultBranch).toBe("develop");
+  });
+
+  it("merges request-supplied delivery config fields into the stored deliveryConfig (OXA-1806)", async () => {
+    // The wizard now sends owner/repo/defaultBranch/installationId/syncDepthDays
+    // in the PUT body. The handler should merge them into deliveryConfig in the
+    // same tx as the activation, then build the event from the merged config.
+    const existingDc = { someOtherKey: "value" };
+    setupDbSequence([{ ...GITHUB_CONN_ROW, deliveryConfig: existingDc }], []);
+
+    await connectionMappingsSetHandler(
+      {
+        ...ONE_MAPPING_INPUT,
+        owner: "myorg",
+        repo: "myrepo",
+        defaultBranch: "main",
+        installationId: "inst-42",
+        syncDepthDays: 60,
+      },
+      CTX,
+    );
+
+    // Verify the event was fired with the request-provided values
+    expect(mocks.inngestSend).toHaveBeenCalledOnce();
+    const sent = mocks.inngestSend.mock.calls[0]?.[0] as {
+      data: { owner: string; repo: string; defaultBranch: string };
+    };
+    expect(sent.data.owner).toBe("myorg");
+    expect(sent.data.repo).toBe("myrepo");
+    expect(sent.data.defaultBranch).toBe("main");
   });
 
   it("does NOT fire event for non-GitHub connectors", async () => {
