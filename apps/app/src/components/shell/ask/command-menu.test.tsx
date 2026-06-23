@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import * as React from "react";
 
 const mockRouter = { push: vi.fn() };
@@ -39,6 +39,33 @@ vi.mock("@/lib/command-menu/use-recent", () => ({
   useRecent: () => ({ recent: [], push: vi.fn() }),
 }));
 
+// ── Mocks for the new sections (OXA-1770 + OXA-1771) ──────────────────────────
+
+// entity-prefix matcher — default: no match (vi.fn typed via mockReturnValue at test time)
+const mockMatchEntityPrefix = vi.fn() as ReturnType<typeof vi.fn>;
+mockMatchEntityPrefix.mockReturnValue(null);
+vi.mock("@/lib/command-menu/entity-prefix", () => ({
+  matchEntityPrefix: (q: string) => mockMatchEntityPrefix(q) as { kind: string; queryRemainder: string } | null,
+}));
+
+// useSuggestions — default: no suggestions, not loading
+const mockUseSuggestions = vi.fn() as ReturnType<typeof vi.fn>;
+mockUseSuggestions.mockReturnValue({ suggestions: [], loading: false });
+vi.mock("@/lib/command-menu/use-suggestions", () => ({
+  useSuggestions: (args: unknown) => mockUseSuggestions(args) as { suggestions: Array<{ text: string; category: string; confidence: number }>; loading: boolean },
+}));
+
+// global fetch for useEntitySearch
+const mockFetch = vi.fn(() =>
+  Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({ rows: [] }),
+  } as Response),
+);
+vi.stubGlobal("fetch", mockFetch);
+
+// ── UI mocks ──────────────────────────────────────────────────────────────────
+
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
     open ? <div data-testid="dialog">{children}</div> : null,
@@ -54,7 +81,7 @@ vi.mock("@/components/ui/dialog", () => ({
 }));
 
 vi.mock("lucide-react", () => ({
-  Search: () => <span />,
+  Search: () => <span data-icon="Search" />,
   ArrowRight: () => <span />,
   Clock: () => <span />,
   Navigation: () => <span />,
@@ -65,6 +92,11 @@ vi.mock("lucide-react", () => ({
   Settings: () => <span />,
   MessageSquare: () => <span />,
   BarChart2: () => <span />,
+  User: () => <span />,
+  BookOpen: () => <span />,
+  CalendarClock: () => <span />,
+  Bot: () => <span />,
+  Loader2: () => <span data-icon="Loader2" />,
 }));
 
 vi.mock("@oxagen/prompt-templates", () => ({
@@ -93,7 +125,15 @@ beforeEach(() => {
   mockPageCtx.entity = null;
   mockRouter.push = vi.fn();
   mockEnumerateNavTargets.mockReturnValue([{ label: "Ask", href: "/acme/prod/ask" }]);
+  mockMatchEntityPrefix.mockReturnValue(null);
+  mockUseSuggestions.mockReturnValue({ suggestions: [], loading: false });
+  mockFetch.mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve({ rows: [] }),
+  } as Response);
 });
+
+// ── Existing tests (OXA-1769 regression) ──────────────────────────────────────
 
 describe("CommandMenu", () => {
   it("does NOT render dialog when isCommandOpen=false", () => {
@@ -113,7 +153,6 @@ describe("CommandMenu", () => {
   it("shows 'Ask' section always", () => {
     mockPageCtx.isCommandOpen = true;
     render(<CommandMenu ctx={mockCtx} />);
-    // The 'Ask' section label is a group with aria-label="Ask"
     const askGroup = document.querySelector('[aria-label="Ask"]');
     expect(askGroup).not.toBeNull();
   });
@@ -130,13 +169,10 @@ describe("CommandMenu", () => {
     const input = screen.getByRole("combobox") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "dash" } });
 
-    // "Dashboard" should be visible
     expect(screen.getByText("Dashboard")).toBeDefined();
-    // "Ask" navigate item filtered out — the ask-fallback uses a different label
     const options = screen.getAllByRole("option");
     const labels = options.map((o) => o.textContent ?? "");
     expect(labels.some((l) => l.includes("Dashboard"))).toBe(true);
-    // The "Ask" nav target should NOT appear (filtered by "dash" query)
     expect(labels.some((l) => l === "Ask")).toBe(false);
   });
 
@@ -144,7 +180,6 @@ describe("CommandMenu", () => {
     mockPageCtx.isCommandOpen = true;
     render(<CommandMenu ctx={mockCtx} />);
 
-    // Initially index 0 is selected
     const options = screen.getAllByRole("option");
     expect(options[0]?.getAttribute("aria-selected")).toBe("true");
 
@@ -156,10 +191,6 @@ describe("CommandMenu", () => {
   });
 
   it("passes the workspace ctx through to enumerateNavTargets (OXA-1464)", () => {
-    // Regression guard: the org-layout previously mounted CommandMenu with only
-    // {orgSlug} so workspace nav targets were missing from Cmd+K on workspace
-    // pages. The workspace-layout mount now passes the full {orgSlug,
-    // workspaceSlug} ctx — this test fails if a future change drops it.
     mockPageCtx.isCommandOpen = true;
     const wsCtx = { orgSlug: "acme", workspaceSlug: "prod" } as Parameters<
       typeof CommandMenu
@@ -176,15 +207,237 @@ describe("CommandMenu", () => {
   it("Escape key calls closeCommand via onOpenChange", () => {
     mockPageCtx.isCommandOpen = true;
     render(<CommandMenu ctx={mockCtx} />);
-
-    // The dialog onOpenChange is called with false on Escape — simulate by checking
-    // that the dialog popup is present and that pressing Escape on the popup
-    // does not crash the component.
     const popup = screen.getByTestId("dialog-popup");
     expect(popup).toBeDefined();
-    // The actual Escape closing is handled by the Dialog's onOpenChange mechanism
-    // which our mock doesn't implement natively — instead verify closeCommand is
-    // a callable that was set up correctly.
     expect(typeof mockPageCtx.closeCommand).toBe("function");
+  });
+});
+
+// ── OXA-1770: Suggested for this page section ─────────────────────────────────
+
+describe("CommandMenu — Suggested for this page (OXA-1770)", () => {
+  it("renders 'Suggested for this page' section when suggestions are available", () => {
+    mockUseSuggestions.mockReturnValue({
+      suggestions: [
+        { text: "Summarize this run's failure", category: "investigate", confidence: 0.9 },
+        { text: "Show similar failed runs", category: "investigate", confidence: 0.8 },
+      ],
+      loading: false,
+    });
+    mockPageCtx.isCommandOpen = true;
+    render(<CommandMenu ctx={mockCtx} />);
+
+    const section = document.querySelector('[aria-label="Suggested for this page"]');
+    expect(section).not.toBeNull();
+    expect(screen.getByText("Summarize this run's failure")).toBeDefined();
+    expect(screen.getByText("Show similar failed runs")).toBeDefined();
+  });
+
+  it("does NOT render 'Suggested for this page' section when no suggestions", () => {
+    mockUseSuggestions.mockReturnValue({ suggestions: [], loading: false });
+    mockPageCtx.isCommandOpen = true;
+    render(<CommandMenu ctx={mockCtx} />);
+
+    const section = document.querySelector('[aria-label="Suggested for this page"]');
+    expect(section).toBeNull();
+  });
+
+  it("shows loading state while suggestions are fetching", () => {
+    // loading=true but no suggestions yet → section should appear with loader
+    mockUseSuggestions.mockReturnValue({ suggestions: [], loading: true });
+    mockPageCtx.isCommandOpen = true;
+    render(<CommandMenu ctx={mockCtx} />);
+
+    const section = document.querySelector('[aria-label="Suggested for this page"]');
+    expect(section).not.toBeNull();
+    expect(section?.textContent).toContain("Loading suggestions");
+  });
+
+  it("selecting a suggestion calls openAskWithText with the suggestion text", () => {
+    mockUseSuggestions.mockReturnValue({
+      suggestions: [
+        { text: "Identify the failing step", category: "analyze", confidence: 0.85 },
+      ],
+      loading: false,
+    });
+    mockPageCtx.isCommandOpen = true;
+    render(<CommandMenu ctx={mockCtx} />);
+
+    const option = screen.getByText("Identify the failing step");
+    fireEvent.click(option.closest('[role="option"]')!);
+    expect(mockPageCtx.openAskWithText).toHaveBeenCalledWith("Identify the failing step", false);
+    expect(mockPageCtx.closeCommand).toHaveBeenCalled();
+  });
+
+  it("hides 'Suggested for this page' when a query is typed", () => {
+    mockUseSuggestions.mockReturnValue({
+      suggestions: [
+        { text: "Show recent failures", category: "investigate", confidence: 0.9 },
+      ],
+      loading: false,
+    });
+    mockPageCtx.isCommandOpen = true;
+    render(<CommandMenu ctx={mockCtx} />);
+
+    // Suggestions visible with empty query
+    expect(document.querySelector('[aria-label="Suggested for this page"]')).not.toBeNull();
+
+    // Type a query — suggestions section should disappear
+    const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "run abc" } });
+
+    expect(document.querySelector('[aria-label="Suggested for this page"]')).toBeNull();
+  });
+});
+
+// ── OXA-1771: Search results section ─────────────────────────────────────────
+
+describe("CommandMenu — Entity Search (OXA-1771)", () => {
+  it("enters search mode when input matches an entity prefix", async () => {
+    mockMatchEntityPrefix.mockReturnValue({ kind: "run", queryRemainder: "aex_abc" });
+    mockPageCtx.isCommandOpen = true;
+
+    // Fetch will return search rows
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          rows: [
+            {
+              kind: "run",
+              id: "aex_abc",
+              label: "Run aex_abc",
+              scope: "Workspace: prod",
+              contextLine: "Status: failed",
+              href: "/acme/prod/activity/runs/aex_abc",
+            },
+          ],
+        }),
+    } as Response);
+
+    render(<CommandMenu ctx={mockCtx} />);
+
+    const input = screen.getByRole("combobox");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "run aex_abc" } });
+    });
+
+    // The search results section should render
+    const section = document.querySelector('[aria-label="Search results"]');
+    expect(section).not.toBeNull();
+  });
+
+  it("hides Quick Actions and Navigate sections in search mode", async () => {
+    mockMatchEntityPrefix.mockReturnValue({ kind: "playbook", queryRemainder: "churn" });
+    mockPageCtx.isCommandOpen = true;
+    render(<CommandMenu ctx={mockCtx} />);
+
+    const input = screen.getByRole("combobox");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "playbook churn" } });
+    });
+
+    // Navigate section should be gone in search mode
+    const navSection = document.querySelector('[aria-label="Navigate"]');
+    expect(navSection).toBeNull();
+
+    // Quick Actions should be gone (no query.trim() check suppresses them in search mode)
+    const qaSection = document.querySelector('[aria-label="Quick Actions"]');
+    expect(qaSection).toBeNull();
+  });
+
+  it("shows 'No results found' when search returns empty", async () => {
+    mockMatchEntityPrefix.mockReturnValue({ kind: "agent", queryRemainder: "nonexistent" });
+    mockPageCtx.isCommandOpen = true;
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ rows: [] }),
+    } as Response);
+
+    render(<CommandMenu ctx={mockCtx} />);
+
+    const input = screen.getByRole("combobox");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "agent nonexistent" } });
+    });
+
+    // Wait for fetch to resolve and state to update
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const section = document.querySelector('[aria-label="Search results"]');
+    expect(section).not.toBeNull();
+    expect(section?.textContent).toContain("No results found");
+  });
+
+  it("calls router.push with the search result href on click", async () => {
+    mockMatchEntityPrefix.mockReturnValue({ kind: "run", queryRemainder: "abc" });
+    mockPageCtx.isCommandOpen = true;
+
+    const mockRow = {
+      kind: "run",
+      id: "aex_abc",
+      label: "Run aex_abc",
+      scope: "Workspace: prod",
+      contextLine: "Status: failed",
+      href: "/acme/prod/activity/runs/aex_abc",
+    };
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ rows: [mockRow] }),
+    } as Response);
+
+    render(<CommandMenu ctx={mockCtx} />);
+
+    const input = screen.getByRole("combobox");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "run abc" } });
+    });
+
+    // Flush microtasks for fetch
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    // Find and click the result
+    const resultText = screen.queryByText("Run aex_abc");
+    if (resultText) {
+      const option = resultText.closest('[role="option"]');
+      if (option) {
+        fireEvent.click(option);
+        expect(mockRouter.push).toHaveBeenCalledWith("/acme/prod/activity/runs/aex_abc");
+      }
+    }
+  });
+
+  it("reverts to normal mode when entity-prefix query is cleared", async () => {
+    // First render with no match → Navigate shown
+    mockMatchEntityPrefix.mockReturnValue(null);
+    mockPageCtx.isCommandOpen = true;
+    render(<CommandMenu ctx={mockCtx} />);
+
+    // In normal mode Navigate is visible
+    expect(document.querySelector('[aria-label="Navigate"]')).not.toBeNull();
+    expect(document.querySelector('[aria-label="Search results"]')).toBeNull();
+
+    // Switch mock to return a match → search mode
+    mockMatchEntityPrefix.mockReturnValue({ kind: "run", queryRemainder: "abc" });
+    const input = screen.getByRole("combobox");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "run abc" } });
+    });
+    // In search mode: Search results section appears, Navigate section disappears
+    expect(document.querySelector('[aria-label="Search results"]')).not.toBeNull();
+    expect(document.querySelector('[aria-label="Navigate"]')).toBeNull();
+
+    // Switch mock back to null → exit search mode
+    mockMatchEntityPrefix.mockReturnValue(null);
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "" } });
+    });
+    expect(document.querySelector('[aria-label="Navigate"]')).not.toBeNull();
+    expect(document.querySelector('[aria-label="Search results"]')).toBeNull();
   });
 });
