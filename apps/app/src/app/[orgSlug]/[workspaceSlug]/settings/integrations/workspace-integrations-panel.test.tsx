@@ -686,7 +686,9 @@ describe("WorkspaceIntegrationsPanel", () => {
         wsInstallMap={{ [listing.id]: makeInstall() }}
       />,
     );
-    const img = screen.getByRole("img");
+    // Decorative icon (alt="") has ARIA role "presentation", not "img".
+    const img = document.querySelector("img");
+    expect(img).not.toBeNull();
     expect(img).toHaveAttribute("src", "https://cdn.example.com/icon.png");
   });
 });

@@ -450,10 +450,13 @@ describe("SkillDetailPanel — download flow", () => {
       }
       return createElementOriginal(tag);
     });
+    // Render BEFORE stubbing appendChild — RTL's render() attaches its container
+    // via document.body.appendChild, so a no-op appendMock here would make
+    // render() fail with "Target container is not a DOM element".
+    renderPanel();
+
     vi.spyOn(document.body, "appendChild").mockImplementation(appendMock);
     vi.spyOn(document.body, "removeChild").mockImplementation(removeMock);
-
-    renderPanel();
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("skill-download-btn"));

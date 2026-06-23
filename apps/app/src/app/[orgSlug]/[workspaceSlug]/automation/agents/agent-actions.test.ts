@@ -60,7 +60,7 @@ vi.mock("@/lib/routes", () => ({
   workspace: {
     agents: {
       root: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-        `/${orgSlug}/${workspaceSlug}/agents`,
+        `/${orgSlug}/${workspaceSlug}/automation/agents`,
     },
   },
 }));

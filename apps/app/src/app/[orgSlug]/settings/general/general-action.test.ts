@@ -71,6 +71,12 @@ vi.mock("@oxagen/database", () => {
         },
       }),
     }),
+    // The action records slug-change history via tx.insert(orgSlugHistory) — a
+    // no-op insert keeps the slug-change path from throwing "tx.insert is not a
+    // function". (Tests assert on updateValues + revalidatePath, not inserts.)
+    insert: (_t: unknown) => ({
+      values: (_values: Record<string, unknown>) => Promise.resolve(undefined),
+    }),
   });
   return {
     schema: {
