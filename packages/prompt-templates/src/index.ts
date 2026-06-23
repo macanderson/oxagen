@@ -1,8 +1,10 @@
 /**
  * index.ts — prompt-template registry.
  *
- * Loads built-in YAML templates at module-import time (sync, via statically
- * bundled imports — no runtime fs reads required in the browser).
+ * Built-in templates are loaded from a statically bundled data module
+ * (built-in-templates.ts, generated from src/templates/*.yaml). There are NO
+ * runtime `node:fs` reads, so this module bundles cleanly into client chunks —
+ * the Command Menu's Quick Actions imports it directly from a client component.
  *
  * Public API:
  *   getAllTemplates()         — all registered templates
@@ -10,43 +12,9 @@
  *   registerTemplate(t)      — add a runtime-injected template (tests / future)
  */
 
-import { parse as parseYaml } from "yaml";
 import { promptTemplateSchema } from "./schema";
 import type { PromptTemplate, PageContext } from "./schema";
-
-// ---------------------------------------------------------------------------
-// Built-in template YAML sources (statically bundled strings).
-// Keeping them as inline imports avoids fs/path differences between
-// Node (where __dirname is available) and bundlers (where it isn't).
-// ---------------------------------------------------------------------------
-
-// Each raw import returns the file contents as a string (bundler-handled).
-// In Node/Vitest, we use readFileSync via a loader shim; in production Next.js
-// we rely on the `yaml` webpack loader or the static string via `?raw` import
-// notation. To keep the package dependency-light and universally runnable in
-// Node tests, we load them lazily from the filesystem relative to this file.
-
-import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const TEMPLATES_DIR = resolve(__dirname, "templates");
-
-const BUILTIN_TEMPLATE_FILES = [
-  "summarize-run-failure.yaml",
-  "show-similar-failed-runs.yaml",
-  "open-source-playbook.yaml",
-  "create-trigger-for-event.yaml",
-  "connect-data-source.yaml",
-  "invite-teammate.yaml",
-  "explain-audit-event.yaml",
-  "run-this-playbook.yaml",
-  "why-is-trigger-failing.yaml",
-  "summarize-workspace-activity.yaml",
-] as const;
+import { BUILT_IN_TEMPLATES } from "./built-in-templates";
 
 // ---------------------------------------------------------------------------
 // Registry
@@ -55,24 +23,12 @@ const BUILTIN_TEMPLATE_FILES = [
 /** Mutable registry populated at module load and by registerTemplate(). */
 const registry: PromptTemplate[] = [];
 
-function loadBuiltins(): void {
-  for (const file of BUILTIN_TEMPLATE_FILES) {
-    const raw = readFileSync(resolve(TEMPLATES_DIR, file), "utf8");
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- yaml.parse returns unknown; zod validates below
-    const parsed = parseYaml(raw);
-    const template = promptTemplateSchema.parse(parsed);
-    registry.push(template);
-  }
-}
-
-// Load at module-import time (side effect, Node-only).
-// In bundled/browser environments the caller must call loadBuiltins()
-// explicitly or use a bundler-level YAML plugin.
-try {
-  loadBuiltins();
-} catch {
-  // Swallow in environments where fs is unavailable (e.g. Edge runtime, browser).
-  // Registry will be empty until populated by registerTemplate().
+// Seed the registry from the statically bundled built-ins. Each entry is run
+// through promptTemplateSchema.parse() so schema defaults (tags, variables) are
+// applied and a malformed generated file fails loudly at import — identical
+// behaviour to the previous YAML-from-disk path, minus the node:fs dependency.
+for (const template of BUILT_IN_TEMPLATES) {
+  registry.push(promptTemplateSchema.parse(template));
 }
 
 /**
