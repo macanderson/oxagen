@@ -293,6 +293,34 @@ describe("ingestion.github-initial-sync Inngest function", () => {
     );
   });
 
+  it("throws NonRetriableError when owner is empty (OXA-1806 guard)", async () => {
+    // Empty owner → GitHub URL would be /repos///git/trees/main → 404.
+    // The function must abort immediately with NonRetriableError rather than
+    // fetching a doomed URL and burning all 3 retries.
+    const step = makeStep();
+    await expect(
+      capturedHandler!({
+        event: { data: { ...BASE_EVENT, owner: "" } },
+        step,
+      }),
+    ).rejects.toMatchObject({ name: "NonRetriableError" });
+
+    // No GitHub fetch should have been attempted
+    expect(mocks.fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("throws NonRetriableError when repo is empty (OXA-1806 guard)", async () => {
+    const step = makeStep();
+    await expect(
+      capturedHandler!({
+        event: { data: { ...BASE_EVENT, repo: "" } },
+        step,
+      }),
+    ).rejects.toMatchObject({ name: "NonRetriableError" });
+
+    expect(mocks.fetchMock).not.toHaveBeenCalled();
+  });
+
   it("dispatches files in batches when tree has > 50 files", async () => {
     // Build a large tree (75 .ts files, all valid).
     const largeTrees = Array.from({ length: 75 }, (_, i) => ({

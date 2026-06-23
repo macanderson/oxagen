@@ -1,4 +1,4 @@
- 
+import { NonRetriableError } from "@oxagen/functions";
 import { createFunction } from "../create-function";
 import { withSystemDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
@@ -59,6 +59,16 @@ export const [ingestionGithubInitialSync] = createFunction(
       repo: string;
       defaultBranch: string;
     };
+
+    // Guard: if owner or repo is empty the GitHub API call is doomed (404).
+    // Throw NonRetriableError immediately so we don't burn retries and surface
+    // a clear message instead of a cryptic 404.
+    if (!owner || !repo) {
+      throw new NonRetriableError(
+        `ingestion-github-initial-sync: owner and repo are required but received owner="${owner}" repo="${repo}" for connectionId=${connectionId}. ` +
+          "Ensure the GitHub connection wizard sends owner/repo in the connection.mappings.set payload.",
+      );
+    }
 
     // ── Step 1: Fetch access token from Postgres ─────────────────────────────
     const accessToken = await step.run("fetch-access-token", async () => {

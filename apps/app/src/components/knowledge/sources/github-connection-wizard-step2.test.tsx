@@ -231,4 +231,28 @@ describe("Step2SelectRepos — manage installations", () => {
       "noopener,noreferrer",
     );
   });
+
+  it("calls onNext with SelectedRepoMeta[] including defaultBranch (OXA-1806)", async () => {
+    // OXA-1806: Step2 must forward defaultBranch to Step3 so the PUT body
+    // can carry it to the handler — the handler needs it to populate
+    // deliveryConfig before firing the ingestion event.
+    const onNext = vi.fn();
+    renderStep2(onNext);
+
+    // Select the org
+    fireEvent.click(await screen.findByTestId("installation-item-111"));
+
+    // Wait for repos to load and select the first one
+    const repoCheckbox = await screen.findByTestId("repo-checkbox-api");
+    fireEvent.click(repoCheckbox);
+
+    // Click Continue
+    fireEvent.click(screen.getByTestId("select-repos-next-btn"));
+
+    expect(onNext).toHaveBeenCalledOnce();
+    const [installationId, repos] = onNext.mock.calls[0] as [string, Array<{ fullName: string; defaultBranch: string }>];
+    expect(installationId).toBe("111");
+    expect(repos).toHaveLength(1);
+    expect(repos[0]).toMatchObject({ fullName: "acme-org/api", defaultBranch: "main" });
+  });
 });

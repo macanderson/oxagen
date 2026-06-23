@@ -24,11 +24,18 @@ import {
 } from "./github-connection-wizard-types";
 import { Spinner } from "./github-connection-wizard-spinner";
 
+/** Subset of Repository fields passed to the next step so Step3 can send
+ *  owner/repo/defaultBranch in the PUT body without a second fetch. */
+export interface SelectedRepoMeta {
+  fullName: string;
+  defaultBranch: string;
+}
+
 export interface Step2Props {
   orgSlug: string;
   workspaceSlug: string;
   connectionId: string;
-  onNext: (selectedInstallationId: string, selectedRepos: string[]) => void;
+  onNext: (selectedInstallationId: string, repos: SelectedRepoMeta[]) => void;
 }
 
 export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext }: Step2Props) {
@@ -181,7 +188,12 @@ export function Step2SelectRepos({ orgSlug, workspaceSlug, connectionId, onNext 
 
   const handleNext = () => {
     if (selectedInstallationId === null || selectedRepos.size === 0) return;
-    onNext(String(selectedInstallationId), Array.from(selectedRepos));
+    // Include the full repo object so Step3 can forward defaultBranch to the
+    // API without a second round-trip. We already have the Repository list.
+    const repoMetas: SelectedRepoMeta[] = repositories
+      .filter((r) => selectedRepos.has(r.fullName))
+      .map((r) => ({ fullName: r.fullName, defaultBranch: r.defaultBranch }));
+    onNext(String(selectedInstallationId), repoMetas);
   };
 
   return (

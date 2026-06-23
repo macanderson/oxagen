@@ -101,11 +101,27 @@ export const connectionMappingsSetHandler: CapabilityHandler<typeof connectionMa
 
     // Activate the connection if requested and currently in pending_setup —
     // in the same transaction so mappings + status flip commit together.
+    // Also merge any delivery config fields supplied by the caller (owner,
+    // repo, defaultBranch, installationId, syncDepthDays, selectedRepos)
+    // into the stored deliveryConfig. Merging in the same tx ensures the
+    // config is always consistent with the activation status.
     if (willActivate) {
+      const existingDc = (conn.deliveryConfig ?? {}) as Record<string, unknown>;
+      const mergedDc: Record<string, unknown> = { ...existingDc };
+      if (input.owner !== undefined) mergedDc["owner"] = input.owner;
+      if (input.repo !== undefined) mergedDc["repo"] = input.repo;
+      if (input.defaultBranch !== undefined) mergedDc["defaultBranch"] = input.defaultBranch;
+      if (input.installationId !== undefined) mergedDc["installationId"] = input.installationId;
+      if (input.syncDepthDays !== undefined) mergedDc["syncDepthDays"] = input.syncDepthDays;
+      if (input.selectedRepos !== undefined) mergedDc["selectedRepos"] = input.selectedRepos;
+
       await tx
         .update(schema.sourceConnections)
-        .set({ status: "connected", updatedAt: now })
+        .set({ status: "connected", deliveryConfig: mergedDc, updatedAt: now })
         .where(eq(schema.sourceConnections.id, conn.id));
+
+      // Expose merged config so the post-tx Inngest event uses the fresh values.
+      conn.deliveryConfig = mergedDc;
     }
 
     return { created: createdCount, updated: updatedCount };
