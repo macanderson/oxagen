@@ -145,9 +145,10 @@ describe("graphNodeListHandler", () => {
     expect(params.labels).toEqual(["Issue"]);
     expect(params.sourceId).toBe("intg_jira");
     expect(params.query).toBe("auth");
-    // offset/limit are sent as BigInt so the Bolt driver emits INTEGER (not Float) for SKIP/LIMIT
-    expect(params.offset).toBe(10n);
-    expect(params.limit).toBe(25n);
+    // Bolt requires INTEGER for SKIP/LIMIT, so the handler wraps these in
+    // BigInt — a plain JS number serialises as Float and Neo4j rejects it.
+    expect(params.offset).toBe(BigInt(10));
+    expect(params.limit).toBe(BigInt(25));
   });
 
   it("omits optional filter clauses when not supplied", async () => {
