@@ -6,6 +6,7 @@ import {
   type AgentRuntimeFixture,
 } from "./helpers/agent-runtime-fixture";
 import { signUpFreshUser } from "./helpers/signup";
+import { gotoStable } from "./helpers/nav";
 
 // ─── Auth-guard smoke tests (no session required) ───────────────────────────
 
@@ -72,7 +73,7 @@ test.describe("auth — successful sign-in journey", () => {
     await loginWithSession(context, authFixture.sessionToken, baseURL);
 
     // Navigate to the org root — auth gate should pass.
-    await page.goto(`/${AUTH_ORG_SLUG}`);
+    await gotoStable(page, `/${AUTH_ORG_SLUG}`);
 
     // Must NOT redirect to /login.
     await expect(page).not.toHaveURL(/\/login/);
@@ -89,11 +90,11 @@ test.describe("auth — successful sign-in journey", () => {
     await loginWithSession(context, authFixture.sessionToken, baseURL);
 
     // Start at org root.
-    await page.goto(`/${AUTH_ORG_SLUG}`);
+    await gotoStable(page, `/${AUTH_ORG_SLUG}`);
     await expect(page).not.toHaveURL(/\/login/);
 
     // Navigate to the workspace chat — session must carry across the navigation.
-    await page.goto(`/${AUTH_ORG_SLUG}/${AUTH_WS_SLUG}/chat`);
+    await gotoStable(page, `/${AUTH_ORG_SLUG}/${AUTH_WS_SLUG}/chat`);
     await expect(page).not.toHaveURL(/\/login/);
 
     // The URL must still contain both slugs.
@@ -106,7 +107,7 @@ test.describe("auth — successful sign-in journey", () => {
     baseURL,
   }) => {
     await loginWithSession(context, authFixture.sessionToken, baseURL);
-    await page.goto(`/${AUTH_ORG_SLUG}/${AUTH_WS_SLUG}/chat`);
+    await gotoStable(page, `/${AUTH_ORG_SLUG}/${AUTH_WS_SLUG}/chat`);
     await expect(page).not.toHaveURL(/\/login/);
 
     // The org or workspace slug must be visible somewhere in the rendered DOM
