@@ -73,7 +73,10 @@ export const [ingestionGithubInferFeatures] = createFunction(
           orgId,
           workspaceId,
           surface: "ingestion",
-          messageId: `feat-infer:${fileNaturalKey}`,
+          // No initiating message for ingestion feature-inference. Must be a
+          // UUID or null — `feat-infer:<key>` flooded token_usage's UUID column
+          // (code-27 parse errors) and broke the uuid credit charge.
+          messageId: null,
         },
       }),
     );

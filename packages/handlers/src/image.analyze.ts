@@ -98,7 +98,10 @@ export const imageAnalyzeHandler: CapabilityHandler<typeof imageAnalyze> = async
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       surface: ctx.surface,
-      messageId: ctx.messageId ?? ctx.requestId ?? "unknown",
+      // requestId/messageId are UUIDs; null (not "unknown") when neither is
+      // present — this id lands in token_usage's UUID column and credit_ledger's
+      // uuid column.
+      messageId: ctx.messageId ?? ctx.requestId ?? null,
     },
   });
 
