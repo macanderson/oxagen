@@ -152,6 +152,7 @@ import "./contracts/semantic.edge.approve";
 import "./contracts/semantic.edge.infer";
 import "./contracts/semantic.edge.list";
 import "./contracts/semantic.edge.suggest";
+import "./contracts/skill.author";
 import "./contracts/skill.edit";
 import "./contracts/skill.export";
 import "./contracts/skill.metrics.read";

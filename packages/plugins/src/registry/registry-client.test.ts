@@ -46,6 +46,20 @@ describe("registry-client", () => {
     expect(calledUrl).toContain("updated_since=2026-01-01");
   });
 
+  it("clamps limit to 100 — the MCP Registry API returns 422 for limit > 100", async () => {
+    const fetchMock = vi.fn(async (_url: string) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ servers: [] }),
+      text: async () => "{}",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    await listServers(BASE, { limit: 200, search: "supabase" });
+    const calledUrl = String(fetchMock.mock.calls[0]?.[0] ?? "");
+    expect(calledUrl).toContain("limit=100");
+    expect(calledUrl).not.toContain("limit=200");
+  });
+
   it("throws on a non-ok response", async () => {
     mockFetchOnce({ error: "boom" }, false);
     await expect(listServers(BASE, {})).rejects.toThrow(/registry list failed/i);

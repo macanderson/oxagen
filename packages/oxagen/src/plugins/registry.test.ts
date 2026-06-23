@@ -136,21 +136,21 @@ describe("plugin registry invariants — Phase 1 pack assignments", () => {
     const p = getOxagenPlugin("oxagen/media-video");
     expect(p?.tier).toBe("free");
     expect(p?.visibility).toBe("ga");
-    expect(p?.icon).toBe("clapperboard");
+    expect(p?.icon).toBe("video");
   });
 
   it("media-image has tier=free and visibility=ga", () => {
     const p = getOxagenPlugin("oxagen/media-image");
     expect(p?.tier).toBe("free");
     expect(p?.visibility).toBe("ga");
-    expect(p?.icon).toBe("image");
+    expect(p?.icon).toBe("image-plus");
   });
 
   it("media-svg has tier=free and visibility=ga", () => {
     const p = getOxagenPlugin("oxagen/media-svg");
     expect(p?.tier).toBe("free");
     expect(p?.visibility).toBe("ga");
-    expect(p?.icon).toBe("shapes");
+    expect(p?.icon).toBe("pen-tool");
   });
 
   it("documents has tier=free, visibility=ga, and category=documents", () => {
@@ -158,7 +158,7 @@ describe("plugin registry invariants — Phase 1 pack assignments", () => {
     expect(p?.tier).toBe("free");
     expect(p?.visibility).toBe("ga");
     expect(p?.category).toBe("documents");
-    expect(p?.icon).toBe("file-text");
+    expect(p?.icon).toBe("notebook-pen");
   });
 
   it("all Phase 1 plugins have version 1.0.0 and empty scopes", () => {
