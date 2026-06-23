@@ -23,10 +23,13 @@ now=$(date +%s)
 lockdir="${TMPDIR:-/tmp}/oxagen-hook-${lockname}.lock"
 stamp="${TMPDIR:-/tmp}/oxagen-hook-${lockname}.stamp"
 
-# Reap a stale lock whose holder died before releasing (older than 5 min).
+# Reap a stale lock whose holder died before releasing (older than 15 min).
+# Must exceed the slowest guarded command's runtime, or a live holder gets its
+# lock reaped mid-run and the next hook fires a SECOND copy on top of it — which
+# is exactly how concurrent full gates stacked and OOM'd the box (2026-06-23).
 # `find -mmin` has identical syntax on BSD and GNU; `stat -f` does not
 # (GNU `stat -f` means --file-system, which silently breaks this check).
-if [ -d "$lockdir" ] && find "$lockdir" -maxdepth 0 -mmin +5 2>/dev/null | grep -q .; then
+if [ -d "$lockdir" ] && find "$lockdir" -maxdepth 0 -mmin +15 2>/dev/null | grep -q .; then
   rmdir "$lockdir" 2>/dev/null
 fi
 

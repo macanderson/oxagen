@@ -185,9 +185,14 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
                    name: $targetName
                  })
                  ON CREATE SET
-                   tgt.id        = randomUUID(),
-                   tgt.publicId  = randomUUID(),
-                   tgt.createdAt = datetime()
+                   tgt.id          = randomUUID(),
+                   tgt.publicId    = randomUUID(),
+                   tgt.label       = $targetType,
+                   tgt.displayName = $targetName,
+                   tgt.createdAt   = datetime()
+                 SET
+                   tgt.label       = coalesce(tgt.label, $targetType),
+                   tgt.displayName = coalesce(tgt.displayName, $targetName)
                  WITH src, tgt
                  MERGE (src)-[r:SEMANTIC_EDGE {inferredEdgeId: $edgeId}]->(tgt)
                  ON CREATE SET

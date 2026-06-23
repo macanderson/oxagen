@@ -17,6 +17,7 @@ import Parser from "web-tree-sitter";
 import { readFileSync, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { createRequire } from "module";
 
 // Resolve this module's directory LAZILY and in both module systems. This must
 // never run at module scope: esbuild's CJS bundle (apps/api → Vercel function)
@@ -39,18 +40,68 @@ function moduleDir(): string {
 }
 
 /**
+ * A `require` rooted at this module, in both module systems — used to resolve the
+ * tree-sitter packages through pnpm's symlinked store (where the .wasm grammars
+ * actually live, under node_modules/.pnpm). Returns null if neither
+ * import.meta.url (ESM) nor __filename (CJS bundle) is available.
+ */
+function moduleRequire(): NodeRequire | null {
+  try {
+    if (typeof import.meta.url === "string" && import.meta.url.length > 0) {
+      return createRequire(import.meta.url);
+    }
+  } catch {
+    /* fall through */
+  }
+  try {
+    if (typeof __filename === "string") return createRequire(__filename);
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
+/**
  * Locate a tree-sitter .wasm blob. Checks, in order:
  *  1. next to this module (Vercel bundle — build.mjs copies the wasm files
  *     into the function directory),
- *  2. the monorepo node_modules walk-up (dev / vitest, where this file lives
- *     at packages/ingestion/src/parsers/).
+ *  2. require.resolve of the owning package (dev / vitest — resolves through
+ *     pnpm's symlinked store, the only path that works locally),
+ *  3. node_modules walk-ups (package-local and monorepo-root) as a backstop.
+ *
+ * The previous implementation only checked one walk-up — `../../../../../`,
+ * which from packages/ingestion/src/parsers/ lands ABOVE the repo at
+ * ~/node_modules — so dev/vitest never found the grammars and every parse
+ * silently produced zero symbols (no :SourceSymbol nodes in the graph).
  */
 function resolveWasm(pkgRelativePath: string): string {
   const dir = moduleDir();
-  const candidates = [
-    resolve(dir, pkgRelativePath.split("/").pop() ?? pkgRelativePath),
-    resolve(dir, "../../../../../node_modules", pkgRelativePath),
+  const fileName = pkgRelativePath.split("/").pop() ?? pkgRelativePath;
+  const pkgName = pkgRelativePath.slice(0, pkgRelativePath.indexOf("/"));
+
+  const candidates: string[] = [
+    // 1. Vercel bundle: build.mjs copies the wasm next to this module.
+    resolve(dir, fileName),
   ];
+
+  // 2. Resolve through the package itself (handles pnpm's symlinked store).
+  const req = moduleRequire();
+  if (req && pkgName) {
+    try {
+      candidates.push(resolve(dirname(req.resolve(`${pkgName}/package.json`)), fileName));
+    } catch {
+      /* package.json not resolvable from here — fall back to walk-ups */
+    }
+  }
+
+  // 3. node_modules walk-ups: package-local (packages/ingestion/node_modules)
+  //    and monorepo root (oxagen-monorepo/node_modules). pnpm symlinks the
+  //    grammar packages into both.
+  candidates.push(
+    resolve(dir, "../../node_modules", pkgRelativePath),
+    resolve(dir, "../../../../node_modules", pkgRelativePath),
+  );
+
   for (const candidate of candidates) {
     if (existsSync(candidate)) return candidate;
   }
