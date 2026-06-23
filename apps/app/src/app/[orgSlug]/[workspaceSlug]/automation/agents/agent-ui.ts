@@ -28,6 +28,16 @@ export const DEPLOYMENT_BADGE: Record<
 };
 
 /**
+ * Badge descriptor for product-managed (built-in) agents that customers can
+ * view but cannot edit, publish, deploy, or configure triggers for. Consistent
+ * with LIFECYCLE_BADGE / DEPLOYMENT_BADGE patterns.
+ */
+export const MANAGED_BADGE = {
+  label: "Managed",
+  variant: "secondary" as const,
+} satisfies { label: string; variant: "secondary" };
+
+/**
  * Derive a kebab-case slug from a free-text name. Lowercases, replaces runs of
  * non-alphanumerics with a single hyphen, and trims leading/trailing hyphens.
  * Mirrors the create-contract slug regex (^[a-z0-9]+(-[a-z0-9]+)*$).

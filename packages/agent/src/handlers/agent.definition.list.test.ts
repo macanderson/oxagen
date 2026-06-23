@@ -25,6 +25,7 @@ describe("agent.definition.list handler", () => {
         slug: "qa-chat",
         name: "QA",
         description: null,
+        agentType: "interactive_chat",
         status: "active",
         deploymentStatus: "active",
         latestVersion: 1,
@@ -35,6 +36,7 @@ describe("agent.definition.list handler", () => {
         slug: "draft",
         name: "Draft",
         description: "wip",
+        agentType: "custom",
         status: "draft",
         deploymentStatus: "inactive",
         latestVersion: null,
@@ -44,6 +46,42 @@ describe("agent.definition.list handler", () => {
     expect(out.agents).toHaveLength(2);
     expect(out.agents[0]!.agentId).toBe("agt_1");
     expect(out.agents[1]!.latestVersion).toBeNull();
+  });
+
+  it("sets managed=true for an interactive_chat agent", async () => {
+    fake.enqueue([
+      {
+        id: "uuid-1",
+        publicId: "agt_1",
+        slug: "qa-chat",
+        name: "QA",
+        description: null,
+        agentType: "interactive_chat",
+        status: "active",
+        deploymentStatus: "active",
+        latestVersion: 2,
+      },
+    ]);
+    const out = await agentDefinitionListHandler({}, CTX);
+    expect(out.agents[0]!.managed).toBe(true);
+  });
+
+  it("sets managed=false for a custom agent", async () => {
+    fake.enqueue([
+      {
+        id: "uuid-2",
+        publicId: "agt_2",
+        slug: "my-agent",
+        name: "Mine",
+        description: null,
+        agentType: "custom",
+        status: "draft",
+        deploymentStatus: "inactive",
+        latestVersion: null,
+      },
+    ]);
+    const out = await agentDefinitionListHandler({}, CTX);
+    expect(out.agents[0]!.managed).toBe(false);
   });
 
   it("returns an empty list when no agents exist", async () => {

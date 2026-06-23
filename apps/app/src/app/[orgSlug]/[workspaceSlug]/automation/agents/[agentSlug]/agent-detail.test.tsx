@@ -63,10 +63,10 @@ vi.mock("@/components/ui/button", () => ({
     ),
 }));
 
-vi.mock("lucide-react", () => ({
-  Pencil: () => <svg aria-hidden="true" />,
-  Rocket: () => <svg aria-hidden="true" />,
-  UploadCloud: () => <svg aria-hidden="true" />,
+// Auto-stub every icon: avoids breakage when a new icon is imported.
+vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
+  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
+  has: (_t, prop) => prop !== "then",
 }));
 
 // Isolate the detail view from the trigger panel internals.
@@ -88,6 +88,7 @@ const agent: AgentDefinitionGetOutput = {
   deploymentStatus: "inactive",
   version: 1,
   isPublished: false,
+  managed: false,
   config: {
     graph: {
       ontologyId: "wrk_1",
@@ -105,6 +106,7 @@ const baseProps = {
   agent,
   triggers: [],
   canEdit: true,
+  managed: false,
   orgSlug: "acme",
   workspaceSlug: "prod",
   agentSlug: "repo-review",
@@ -224,5 +226,42 @@ describe("AgentDetail", () => {
       ),
     );
     expect(screen.queryByText(/published checksum/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the Managed by Oxagen badge and callout when managed=true", () => {
+    render(<AgentDetail {...baseProps} managed={true} />);
+    // Prominent badge in the header (exact label text)
+    expect(screen.getByText("Managed by Oxagen")).toBeInTheDocument();
+    // Informational callout in place of Lifecycle section
+    expect(screen.getByRole("note", { name: /managed agent notice/i })).toBeInTheDocument();
+    // Callout heading is a distinct paragraph
+    expect(
+      screen.getByText("This agent is managed by Oxagen"),
+    ).toBeInTheDocument();
+  });
+
+  it("hides Edit button and Lifecycle controls when managed=true, even with canEdit=true", () => {
+    render(<AgentDetail {...baseProps} managed={true} canEdit={true} />);
+    expect(screen.queryByRole("link", { name: /edit/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /publish latest version/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /deploy \(activate\)/i })).not.toBeInTheDocument();
+  });
+
+  it("still shows Definition and Version sections when managed=true (config is viewable)", () => {
+    render(<AgentDetail {...baseProps} managed={true} />);
+    expect(screen.getByText("Do the thing")).toBeInTheDocument();
+    expect(screen.getByText(/skill: coding/i)).toBeInTheDocument();
+    expect(screen.getByTestId("triggers-panel")).toBeInTheDocument();
+  });
+
+  it("shows Edit and Lifecycle controls when managed=false and canEdit=true", () => {
+    render(<AgentDetail {...baseProps} managed={false} canEdit={true} />);
+    expect(screen.getByRole("link", { name: /edit/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /publish latest version/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /deploy \(activate\)/i })).toBeInTheDocument();
   });
 });

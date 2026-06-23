@@ -52,6 +52,24 @@ describe("agent.definition.get handler", () => {
     expect(out.config.agentTools).toHaveLength(1);
   });
 
+  it("sets managed=true when agentType is interactive_chat", async () => {
+    fake.enqueue(
+      [ACTIVE_AGENT], // agentType: "interactive_chat"
+      [{ version: 1, isPublished: true, config: CONFIG }],
+    );
+    const out = await agentDefinitionGetHandler({ agentId: "agt_1" }, CTX);
+    expect(out.managed).toBe(true);
+  });
+
+  it("sets managed=false for a custom agentType", async () => {
+    fake.enqueue(
+      [{ ...ACTIVE_AGENT, agentType: "custom" }],
+      [{ version: 1, isPublished: true, config: CONFIG }],
+    );
+    const out = await agentDefinitionGetHandler({ agentId: "agt_1" }, CTX);
+    expect(out.managed).toBe(false);
+  });
+
   it("falls back to the latest version when no active version is set", async () => {
     fake.enqueue(
       [{ ...ACTIVE_AGENT, activeVersionId: null, status: "draft" }], // resolveAgent

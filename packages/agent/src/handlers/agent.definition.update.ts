@@ -6,7 +6,7 @@ import type {
   AgentDefinitionUpdateOutput,
 } from "@oxagen/oxagen/contracts/agent.definition.update";
 import type { CapabilityContext } from "../types";
-import { resolveAgent } from "./_agent-definition";
+import { resolveAgent, assertAgentMutable } from "./_agent-definition";
 
 export type { AgentDefinitionUpdateInput, AgentDefinitionUpdateOutput };
 
@@ -32,6 +32,7 @@ export async function agentDefinitionUpdateHandler(
     if (!agent) {
       throw new Error(`Agent "${input.agentId}" not found in this workspace`);
     }
+    assertAgentMutable(agent);
 
     const [latest] = await tx
       .select({ version: schema.agentVersions.version })

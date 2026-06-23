@@ -5,7 +5,11 @@ import type {
   AgentTriggerDeleteOutput,
 } from "@oxagen/oxagen/contracts/agent.trigger.delete";
 import type { CapabilityContext } from "../types";
-import { resolveTrigger } from "./_agent-definition";
+import {
+  resolveTrigger,
+  AgentManagedReadOnlyError,
+  isManagedAgentType,
+} from "./_agent-definition";
 
 export type { AgentTriggerDeleteInput, AgentTriggerDeleteOutput };
 
@@ -29,6 +33,9 @@ export async function agentTriggerDeleteHandler(
       throw new Error(
         `Trigger "${input.triggerId}" not found in this workspace`,
       );
+    }
+    if (isManagedAgentType(existing.agentType)) {
+      throw new AgentManagedReadOnlyError(existing.publicId);
     }
 
     await tx

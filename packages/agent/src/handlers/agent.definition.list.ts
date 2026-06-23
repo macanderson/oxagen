@@ -5,6 +5,7 @@ import type {
   AgentDefinitionListOutput,
 } from "@oxagen/oxagen/contracts/agent.definition.list";
 import type { CapabilityContext } from "../types";
+import { isManagedAgentType } from "./_agent-definition";
 
 export type { AgentDefinitionListInput, AgentDefinitionListOutput };
 
@@ -24,6 +25,7 @@ export async function agentDefinitionListHandler(
         slug: schema.agents.slug,
         name: schema.agents.name,
         description: schema.agents.description,
+        agentType: schema.agents.agentType,
         status: schema.agents.status,
         deploymentStatus: schema.agents.deploymentStatus,
         latestVersion: sql<number | null>`max(${schema.agentVersions.version})`,
@@ -46,6 +48,7 @@ export async function agentDefinitionListHandler(
         schema.agents.slug,
         schema.agents.name,
         schema.agents.description,
+        schema.agents.agentType,
         schema.agents.status,
         schema.agents.deploymentStatus,
       ),
@@ -61,6 +64,7 @@ export async function agentDefinitionListHandler(
       status: r.status as "draft" | "active" | "archived",
       deploymentStatus: r.deploymentStatus as "inactive" | "active",
       latestVersion: r.latestVersion ?? null,
+      managed: isManagedAgentType(r.agentType),
     })),
   };
 }

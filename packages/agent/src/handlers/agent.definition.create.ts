@@ -5,6 +5,11 @@ import type {
   AgentDefinitionCreateOutput,
 } from "@oxagen/oxagen/contracts/agent.definition.create";
 import type { CapabilityContext } from "../types";
+import {
+  isManagedAgentType,
+  INTERACTIVE_AGENT_SLUG,
+} from "@oxagen/oxagen/interactive-agent";
+import { AgentManagedReadOnlyError } from "./_agent-definition";
 
 export type { AgentDefinitionCreateInput, AgentDefinitionCreateOutput };
 
@@ -20,6 +25,12 @@ export async function agentDefinitionCreateHandler(
   // Validate the config shape before any write so a malformed definition can
   // never be persisted (handlers never trust the column shape).
   const config = agentDefinitionConfigSchema.parse(input.config);
+
+  // Reject attempts to create an agent that masquerades as a product-managed
+  // built-in (either by claiming the reserved agentType or the reserved slug).
+  if (isManagedAgentType(input.agentType) || input.slug === INTERACTIVE_AGENT_SLUG) {
+    throw new AgentManagedReadOnlyError(input.slug);
+  }
 
   if (!ctx.userId) {
     throw new Error("agent.definition.create requires an authenticated user");

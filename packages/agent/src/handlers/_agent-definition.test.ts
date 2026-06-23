@@ -11,7 +11,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-import { isUuid, resolveAgent, resolveTrigger } from "./_agent-definition";
+import {
+  isUuid,
+  resolveAgent,
+  resolveTrigger,
+  AgentManagedReadOnlyError,
+  assertAgentMutable,
+} from "./_agent-definition";
 
 beforeEach(() => fake.reset());
 
@@ -51,15 +57,79 @@ describe("resolveAgent (no-tx path)", () => {
 });
 
 describe("resolveTrigger (no-tx path)", () => {
-  it("resolves by public id", async () => {
-    fake.enqueue([{ id: "t-uuid", publicId: "atr_1", agentId: "uuid-1" }]);
+  it("resolves by public id and includes agentType from the joined agent row", async () => {
+    fake.enqueue([
+      { id: "t-uuid", publicId: "atr_1", agentId: "uuid-1", agentType: "custom" },
+    ]);
     const row = await resolveTrigger("atr_1", "ws_1");
     expect(row?.publicId).toBe("atr_1");
+    expect(row?.agentType).toBe("custom");
+  });
+
+  it("surfaces agentType for a managed (interactive_chat) parent", async () => {
+    fake.enqueue([
+      {
+        id: "t-uuid",
+        publicId: "atr_1",
+        agentId: "uuid-1",
+        agentType: "interactive_chat",
+      },
+    ]);
+    const row = await resolveTrigger("atr_1", "ws_1");
+    expect(row?.agentType).toBe("interactive_chat");
   });
 
   it("returns null when nothing matches", async () => {
     fake.enqueue([]);
     const row = await resolveTrigger("atr_x", "ws_1");
     expect(row).toBeNull();
+  });
+});
+
+describe("AgentManagedReadOnlyError", () => {
+  it("carries the stable error code", () => {
+    const err = new AgentManagedReadOnlyError("agt_1");
+    expect(err.code).toBe("agent_managed_read_only");
+    expect(err.name).toBe("AgentManagedReadOnlyError");
+    expect(err.message).toMatch(/agt_1/);
+  });
+});
+
+describe("assertAgentMutable", () => {
+  it("does not throw for a custom agent", () => {
+    expect(() =>
+      assertAgentMutable({
+        agentType: "custom",
+        publicId: "agt_1",
+        slug: "my-agent",
+      }),
+    ).not.toThrow();
+  });
+
+  it("throws AgentManagedReadOnlyError for a managed agent", () => {
+    expect(() =>
+      assertAgentMutable({
+        agentType: "interactive_chat",
+        publicId: "agt_builtin",
+        slug: "qa-chat",
+      }),
+    ).toThrow(AgentManagedReadOnlyError);
+  });
+
+  it("thrown error has the correct code and message", () => {
+    let caught: unknown;
+    try {
+      assertAgentMutable({
+        agentType: "interactive_chat",
+        publicId: "agt_builtin",
+        slug: "qa-chat",
+      });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(AgentManagedReadOnlyError);
+    const err = caught as AgentManagedReadOnlyError;
+    expect(err.code).toBe("agent_managed_read_only");
+    expect(err.message).toContain("agt_builtin");
   });
 });

@@ -5,6 +5,44 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
+import {
+  isManagedAgentType,
+  MANAGED_AGENT_READONLY_CODE,
+} from "@oxagen/oxagen/interactive-agent";
+
+// ─── Managed-agent guard ─────────────────────────────────────────────────────
+
+/**
+ * Error thrown when a mutation targets a product-managed (built-in) agent.
+ * The stable `.code` lets callers discriminate without string-matching.
+ */
+export class AgentManagedReadOnlyError extends Error {
+  readonly code = MANAGED_AGENT_READONLY_CODE;
+  constructor(identifier: string) {
+    super(
+      `Agent "${identifier}" is managed by Oxagen and cannot be modified.`,
+    );
+    this.name = "AgentManagedReadOnlyError";
+  }
+}
+
+/**
+ * Throw `AgentManagedReadOnlyError` if the agent is product-managed (read-only
+ * to customers). Call this immediately after the null-check on every mutating
+ * handler so API + MCP + app all honour the constraint via the same code path.
+ */
+export function assertAgentMutable(
+  agent: Pick<AgentRow, "agentType" | "publicId" | "slug">,
+): void {
+  if (isManagedAgentType(agent.agentType)) {
+    throw new AgentManagedReadOnlyError(agent.publicId);
+  }
+}
+
+// Re-export so callers can import everything from one place.
+export { isManagedAgentType };
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 /** A UUID v4/v7 in canonical hyphenated form. */
 const UUID_RE =
@@ -74,10 +112,14 @@ export interface TriggerRow {
   id: string;
   publicId: string;
   agentId: string;
+  /** The `agentType` of the parent agent — used to enforce managed-agent guards. */
+  agentType: string;
 }
 
 /**
  * Resolve a trigger by public id (atr_…) or UUID — workspace-scoped, live only.
+ * Joins the parent `agents` row to surface `agentType` so mutating handlers can
+ * call the managed-agent guard without an extra round-trip.
  */
 export async function resolveTrigger(
   identifier: string,
@@ -94,8 +136,16 @@ export async function resolveTrigger(
         id: schema.agentTriggers.id,
         publicId: schema.agentTriggers.publicId,
         agentId: schema.agentTriggers.agentId,
+        agentType: schema.agents.agentType,
       })
       .from(schema.agentTriggers)
+      .innerJoin(
+        schema.agents,
+        and(
+          eq(schema.agentTriggers.agentId, schema.agents.id),
+          isNull(schema.agents.deletedAt),
+        ),
+      )
       .where(
         and(
           eq(schema.agentTriggers.workspaceId, workspaceId),
