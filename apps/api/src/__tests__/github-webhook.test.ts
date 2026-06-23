@@ -149,10 +149,37 @@ afterEach(() => {
 });
 
 describe("github app webhook – configuration & signature", () => {
-  it("returns 503 when GITHUB_APP_WEBHOOK_SECRET is missing", async () => {
+  it("returns 500 (not 503) when GITHUB_APP_WEBHOOK_SECRET is missing", async () => {
+    // 503 is "transient — please retry": GitHub retries 503s aggressively,
+    // turning a missing env-var into an infinite webhook flood.
+    // A missing secret is a permanent misconfiguration → must be 500 so GitHub
+    // does not add the delivery to its automatic retry queue.
     delete process.env.GITHUB_APP_WEBHOOK_SECRET;
     const res = await app.fetch(signedPost("pull_request", { installation: { id: 555 } }));
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(500);
+    // Must not be 503 — that triggers GitHub's infinite retry policy.
+    expect(res.status).not.toBe(503);
+  });
+
+  it("does NOT return 503 for a well-formed signed webhook (regression: OXA-webhook-flood)", async () => {
+    // This is the key regression guard: a properly-signed webhook with the
+    // secret configured must never return 503. The 503 → GitHub retry flood
+    // was caused by missing GITHUB_APP_WEBHOOK_SECRET in prod.
+    // Pre-condition: secret IS set (beforeEach sets process.env.GITHUB_APP_WEBHOOK_SECRET).
+    expect(process.env.GITHUB_APP_WEBHOOK_SECRET).toBeDefined();
+    const res = await app.fetch(
+      signedPost("pull_request", {
+        action: "opened",
+        installation: { id: 555 },
+        repository: { full_name: "acme/widgets" },
+        pull_request: { number: 7 },
+      }),
+    );
+    expect(res.status).not.toBe(503);
+    // A valid, matched webhook should dispatch and return 200.
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { dispatched: number };
+    expect(body.dispatched).toBeGreaterThan(0);
   });
 
   it("returns 401 when the signature header is absent", async () => {

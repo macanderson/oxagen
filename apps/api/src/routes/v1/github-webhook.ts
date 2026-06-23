@@ -73,9 +73,14 @@ function recordKey(record: unknown): string {
 githubAppWebhookRoute.post("/", async (c) => {
   const { GITHUB_APP_WEBHOOK_SECRET: secret } = requireEnv(["GITHUB_APP_WEBHOOK_SECRET"] as const);
   if (!secret) {
+    // 500 (not 503): this is a permanent misconfiguration, not a transient outage.
+    // GitHub retries 503s aggressively, which turns a missing env-var into an
+    // infinite flood.  A 500 tells GitHub the request failed but does NOT trigger
+    // its automatic retry policy the way 503 does.  The real fix is to set
+    // GITHUB_APP_WEBHOOK_SECRET in the Vercel production environment.
     return c.json(
       { error: "GitHub App webhooks are not configured — GITHUB_APP_WEBHOOK_SECRET missing" },
-      503,
+      500,
     );
   }
 
