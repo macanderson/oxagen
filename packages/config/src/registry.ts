@@ -360,6 +360,85 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
   },
 
+  // ── Ingestion OAuth DATA client credentials ──────────────────────────────────
+  // Per-provider OAuth client pairs used exclusively by the ingestion
+  // oauth-refresh Inngest cron (packages/inngest-functions).  All are optional —
+  // the cron skips a provider with a clear log when the env is absent.
+  // Slack: token rotation MUST be enabled in the Slack app settings before
+  // deploying SLACK_DATA_CLIENT_* (without it Slack rejects the refresh request).
+  SLACK_DATA_CLIENT_ID: {
+    group: "Ingestion",
+    description: "Slack DATA OAuth client id for token refresh (ingestion cron). Token rotation must be enabled in the Slack app.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  SLACK_DATA_CLIENT_SECRET: {
+    group: "Ingestion",
+    description: "Slack DATA OAuth client secret for token refresh (ingestion cron).",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  ZOOM_DATA_CLIENT_ID: {
+    group: "Ingestion",
+    description: "Zoom DATA OAuth client id for token refresh (ingestion cron). Zoom rotates the refresh token on each use.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  ZOOM_DATA_CLIENT_SECRET: {
+    group: "Ingestion",
+    description: "Zoom DATA OAuth client secret for token refresh (ingestion cron).",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  SALESFORCE_DATA_CLIENT_ID: {
+    group: "Ingestion",
+    description: "Salesforce DATA OAuth client id for token refresh (ingestion cron).",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  SALESFORCE_DATA_CLIENT_SECRET: {
+    group: "Ingestion",
+    description: "Salesforce DATA OAuth client secret for token refresh (ingestion cron).",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  MICROSOFT_DATA_CLIENT_ID: {
+    group: "Ingestion",
+    description: "Microsoft DATA OAuth client id for token refresh (ingestion cron; MS Graph offline_access).",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  MICROSOFT_DATA_CLIENT_SECRET: {
+    group: "Ingestion",
+    description: "Microsoft DATA OAuth client secret for token refresh (ingestion cron).",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
   // ── Stripe ──────────────────────────────────────────────────────────────────
   STRIPE_SECRET_KEY: {
     group: "Stripe",
