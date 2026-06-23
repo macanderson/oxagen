@@ -25,8 +25,17 @@ export interface EmbedTextOpts {
     orgId: string;
     workspaceId: string;
     surface: Surface;
-    /** Correlation key — usually the message/request id that initiated the turn. */
-    executionStepId: string;
+    /**
+     * UUID of the execution step that initiated this embedding, or `null` when
+     * there is no step (e.g. fire-and-forget ingestion embeddings). It flows
+     * verbatim into `token_usage.execution_step_id` (a UUID column) and
+     * `credit_ledger.reference_id` (a Postgres `uuid` column) — so it MUST be a
+     * valid UUID or `null`. Passing a human-readable string like
+     * `embed:<nodeId>` breaks BOTH writes (ClickHouse row dropped, credit charge
+     * thrown-and-swallowed → unbilled). Use a separate field for any such
+     * correlation key.
+     */
+    executionStepId: string | null;
   };
 }
 
@@ -88,8 +97,11 @@ export async function embedText(text: string, opts: EmbedTextOpts): Promise<numb
   try {
     await chargeUsageCredits({
       orgId,
+      // referenceId is the credit_ledger.reference_id Postgres `uuid` column;
+      // pass undefined (→ NULL) when there is no execution step rather than a
+      // non-UUID string, which would throw and silently leave the call unbilled.
+      referenceId: executionStepId ?? undefined,
       model: MODEL,
-      referenceId: executionStepId,
       inputTokens,
       outputTokens: 0,
       cachedTokens: 0,

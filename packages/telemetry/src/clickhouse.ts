@@ -151,7 +151,15 @@ export type Provider =
   | "";
 
 export interface TokenUsageRow {
-  execution_step_id: string;
+  /**
+   * UUID of the execution step that drove this LLM/embedding call, or `null`
+   * when there is no step (e.g. fire-and-forget ingestion embeddings). `null`
+   * is coalesced to the nil UUID at the insert boundary (see `insertTokenUsage`
+   * / `NIL_UUID`) because the underlying ClickHouse column is a non-nullable
+   * sorting-key `UUID`. NEVER pass a non-UUID correlation string here — it makes
+   * ClickHouse abort the whole row (CANNOT_PARSE_INPUT_ASSERTION_FAILED).
+   */
+  execution_step_id: string | null;
   org_id: string;
   workspace_id: string;
   model: string;
@@ -175,11 +183,38 @@ async function insertRows<T>(table: string, rows: readonly T[]): Promise<void> {
   await clickhouse().insert({ table, values: rows, format: "JSONEachRow" });
 }
 
+/**
+ * The all-zeroes UUID. `token_usage.execution_step_id` is a NON-nullable `UUID`
+ * column AND part of the table's sorting key `(org_id, created_at,
+ * execution_step_id)`. ClickHouse forbids converting a key column to
+ * `Nullable` after creation — `ALTER TABLE token_usage MODIFY COLUMN
+ * execution_step_id Nullable(UUID)` fails with `ALTER_OF_COLUMN_IS_FORBIDDEN`
+ * (code 524) even with `allow_nullable_key = 1`, so the only route to a true
+ * Nullable key would be a full rebuild of this 365-day-retention billing table.
+ *
+ * That rebuild buys nothing here: no query joins or filters on
+ * `execution_step_id` (it is purely a tertiary tie-breaker in the sort), so the
+ * nil UUID is an equivalent "no execution step" sentinel — already the
+ * established pattern for `workspace_id` (DEFAULT toUUID('0…0')). Callers
+ * therefore express "no step" as `null`/`undefined`, and we coalesce to the nil
+ * UUID here, at the single insert boundary, so a non-UUID string can never reach
+ * the column. This is what eliminated the `CANNOT_PARSE_INPUT_ASSERTION_FAILED`
+ * (code 27) flood: ingestion callers used to synthesize ids like
+ * `embed:<nodeId>` / `dedup:<key>` / `embed-file:<key>` / the literal
+ * `"unknown"`, which the UUID text parser over-read on and aborted the whole row.
+ */
+export const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+
 export const insertExecutionLogs = (rows: readonly ExecutionLogRow[]) =>
   insertRows("execution_logs", rows);
 export const insertEvents = (rows: readonly EventRow[]) => insertRows("events", rows);
 export const insertTokenUsage = (rows: readonly TokenUsageRow[]) =>
-  insertRows("token_usage", rows);
+  insertRows(
+    "token_usage",
+    // Coalesce the "no execution step" sentinel (null/undefined) to the nil UUID
+    // so the non-nullable UUID key column always receives a parseable value.
+    rows.map((r) => (r.execution_step_id == null ? { ...r, execution_step_id: NIL_UUID } : r)),
+  );
 
 // Agent runtime epic (spec §9). One row per tool invocation. Analytics
 // mirror of execution.tool_calls; durable record stays in Postgres.

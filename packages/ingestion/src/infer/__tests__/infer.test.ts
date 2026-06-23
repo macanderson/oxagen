@@ -92,12 +92,15 @@ describe("inferSemanticEdges", () => {
 
     expect(mocks.generateObjectFor).toHaveBeenCalledOnce();
     const callArgs = mocks.generateObjectFor.mock.calls[0]![0] as {
-      telemetry: { orgId: string; workspaceId: string; surface: string; messageId: string };
+      telemetry: { orgId: string; workspaceId: string; surface: string; messageId: string | null };
     };
     expect(callArgs.telemetry.orgId).toBe("org-1");
     expect(callArgs.telemetry.workspaceId).toBe("ws-1");
     expect(callArgs.telemetry.surface).toBe("ingestion");
-    expect(callArgs.telemetry.messageId).toContain("infer:node-uuid-1");
+    // No initiating message for ingestion-time inference → null, never a
+    // synthesized `infer:<nodeId>` string. That non-UUID value flooded the
+    // token_usage UUID column (CANNOT_PARSE_INPUT_ASSERTION_FAILED).
+    expect(callArgs.telemetry.messageId).toBeNull();
 
     // target node not in graph → no edges written, return empty
     expect(result.inferredEdges).toHaveLength(0);

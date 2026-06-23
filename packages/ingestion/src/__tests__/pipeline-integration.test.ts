@@ -217,10 +217,13 @@ describe("runPipeline — full 6-stage integration", () => {
     expect(mocks.embedText).toHaveBeenCalledTimes(2);
 
     // The first call is for dedup — telemetry surface must be "ingestion"
-    const [_text1, opts1] = mocks.embedText.mock.calls[0] as [string, { telemetry: { surface: string; orgId: string; executionStepId: string } }];
+    const [_text1, opts1] = mocks.embedText.mock.calls[0] as [string, { telemetry: { surface: string; orgId: string; executionStepId: string | null } }];
     expect(opts1.telemetry.surface).toBe("ingestion");
     expect(opts1.telemetry.orgId).toBe("org-integration");
-    expect(opts1.telemetry.executionStepId).toMatch(/^dedup:/);
+    // No execution step for ingestion dedup embeds: executionStepId must be null,
+    // never a synthesized `dedup:<key>` string (that non-UUID value flooded the
+    // token_usage UUID column with CANNOT_PARSE_INPUT_ASSERTION_FAILED).
+    expect(opts1.telemetry.executionStepId).toBeNull();
   });
 
   it("scheduleInference is called with the principal node ID + entity type", async () => {

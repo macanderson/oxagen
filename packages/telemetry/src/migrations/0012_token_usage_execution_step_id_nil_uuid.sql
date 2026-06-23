@@ -1,0 +1,50 @@
+-- 0012_token_usage_execution_step_id_nil_uuid.sql
+--
+-- token_usage.execution_step_id stays a NON-nullable `UUID`. This migration is
+-- intentionally a NO-OP (comment-only) and exists to document, in the migration
+-- history, the fix for the production flood of:
+--
+--   [ERROR][@clickhouse/client] Insert: HTTP request error.
+--   Caused by: Cannot parse input: expected '"' before: '…'
+--     (while reading the value of key execution_step_id):
+--     CANNOT_PARSE_INPUT_ASSERTION_FAILED (code 27)
+--
+-- ROOT CAUSE
+--   Ingestion + image callers synthesized HUMAN-READABLE correlation strings
+--   (`embed:<nodeId>`, `dedup:<key>`, `embed-file:<key>`, `infer:<nodeId>`,
+--   `feat-infer:<key>`, `semantic-edge-infer:<nodeId>`, and the literal
+--   "unknown") into a `UUID` column. ClickHouse's UUID text parser over-reads
+--   on the first non-hex char into the following column and aborts the WHOLE
+--   row, so every such token_usage insert was dropped — hundreds/min on
+--   POST /api/inngest. The same string was also passed as
+--   credit_ledger.reference_id (a Postgres `uuid`), so those ingestion-embedding
+--   credit charges threw and were swallowed → embeddings went UNBILLED.
+--
+-- WHY NOT Nullable(UUID) (the obvious mirror of 0004)
+--   0004 made execution_logs.step_id Nullable because step_id is NOT in that
+--   table's sorting key. token_usage.execution_step_id IS in the sorting key
+--   `ORDER BY (org_id, created_at, execution_step_id)`. ClickHouse forbids
+--   converting a key column to Nullable after creation:
+--     ALTER TABLE token_usage MODIFY COLUMN execution_step_id Nullable(UUID);
+--     -> Code 524 ALTER_OF_COLUMN_IS_FORBIDDEN
+--        "ALTER of key column … is not safe … can change the representation of
+--         primary key"
+--   This holds EVEN after `MODIFY SETTING allow_nullable_key = 1` (verified
+--   against ClickHouse 24.8). The only path to a Nullable key would be a full
+--   rebuild of this 365-day-retention billing table (CREATE … allow_nullable_key
+--   + INSERT … SELECT + RENAME) — heavy, risky, and pointless: nothing reads or
+--   joins on execution_step_id, it is purely a tertiary sort tie-breaker.
+--
+-- THE FIX (code, no DDL)
+--   Callers now pass `null`/`undefined` for "no execution step", and
+--   @oxagen/telemetry's `insertTokenUsage` coalesces null -> the nil UUID
+--   ('00000000-0000-0000-0000-000000000000', `NIL_UUID`) at the single insert
+--   boundary — already the established sentinel pattern for
+--   token_usage.workspace_id DEFAULT toUUID('0…0'). The billing referenceId is
+--   passed as undefined (-> NULL) instead of a non-UUID string.
+--
+-- If a human-readable correlation key is ever genuinely needed, add a SEPARATE
+-- `String` column via a new forward migration — never widen this UUID key column.
+--
+-- No statements below: splitStatements() strips comment lines, so this file
+-- applies cleanly as a zero-statement no-op on every migrate() run.

@@ -76,7 +76,10 @@ export const imageCreateHandler: CapabilityHandler<typeof imageCreate> = async (
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       surface: ctx.surface,
-      messageId: ctx.requestId ?? ctx.messageId ?? "unknown",
+      // requestId/messageId are UUIDs; null (not the literal "unknown", which is
+      // not a UUID) when neither is set — this id lands in token_usage's UUID
+      // column and credit_ledger's uuid column.
+      messageId: ctx.requestId ?? ctx.messageId ?? null,
     },
   });
 
@@ -89,7 +92,10 @@ export const imageCreateHandler: CapabilityHandler<typeof imageCreate> = async (
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       surface: ctx.surface,
-      executionStepId: ctx.requestId ?? ctx.messageId ?? "unknown",
+      // requestId/messageId are UUIDs; null (not the literal "unknown") when
+      // neither is present so the UUID token_usage column / uuid credit_ledger
+      // column receive a valid value or NULL.
+      executionStepId: ctx.requestId ?? ctx.messageId ?? null,
     },
   });
 
