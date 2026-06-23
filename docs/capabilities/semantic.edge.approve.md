@@ -1,5 +1,7 @@
 # semantic.edge.approve
 
+> **Deprecated** — `semantic.edge.approve` is a one-release alias for [`semantic.relationship.approve`](semantic.relationship.approve.md), which will be the canonical name from v2 onward. Migrate now: the capability name is the only change; input, output, and API path are identical.
+
 **Domain:** semantic
 **Mode:** sync
 **Scope:** tenant + workspace

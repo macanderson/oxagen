@@ -1,5 +1,7 @@
 # graph.edge.upsert
 
+> **Deprecated** — `graph.edge.upsert` is a one-release alias for [`graph.relationship.upsert`](graph.relationship.upsert.md), which will be the canonical name from v2 onward. Migrate now: rename `edgeType` → `relationshipType` (now open-vocabulary, not a fixed enum) and `edgeId` → `relationshipId` in the output.
+
 **Domain:** graph
 **Mode:** sync
 **Scope:** tenant + workspace
