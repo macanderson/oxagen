@@ -1,12 +1,10 @@
-// swap USE_FIXTURES = false when API route is live.
-const USE_FIXTURES = true;
+// API route is live — fixtures are off.
+const USE_FIXTURES = false;
 
 import type {
   TenantSlugs,
   SchemaRegistryData,
   SchemaItem,
-  LabelItem,
-  RelationshipItem,
   PropertyItem,
   VersionItem,
   VersionDiff,
@@ -511,4 +509,27 @@ export async function configRegistry(
     };
   }
   return post<SchemaRegistryConfigOutput>("registry/config", { ...slugs, ...input });
+}
+
+export interface SchemaChatOutput {
+  assistantMessage: string;
+  proposedMutations?: Array<{ capability: string; input: Record<string, unknown> }>;
+  conversationId: string;
+}
+
+export async function schemaChat(
+  slugs: TenantSlugs,
+  message: string,
+): Promise<SchemaChatOutput> {
+  return post<SchemaChatOutput>("chat", { ...slugs, message });
+}
+
+export async function applyMutation(
+  slugs: TenantSlugs,
+  capability: string,
+  input: unknown,
+): Promise<unknown> {
+  // maps "schema.label.upsert" → path "label/upsert"
+  const path = capability.replace(/^schema\./, "").replace(/\./g, "/");
+  return post(path, { ...slugs, ...(input as Record<string, unknown>) });
 }

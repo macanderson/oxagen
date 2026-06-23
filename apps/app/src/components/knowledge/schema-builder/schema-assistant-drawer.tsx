@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { schemaChat, applyMutation } from "./schema-service";
 import type { TenantSlugs } from "./types";
 
 interface Message {
@@ -22,16 +23,18 @@ interface SchemaAssistantDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   slugs: TenantSlugs;
+  onApplied?: () => void;
 }
 
 export function SchemaAssistantDrawer({
   open,
   onOpenChange,
   slugs,
+  onApplied,
 }: SchemaAssistantDrawerProps) {
   const [prompt, setPrompt] = React.useState("");
   const [messages, setMessages] = React.useState<Message[]>([]);
-  const [streaming, setStreaming] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -46,89 +49,58 @@ export function SchemaAssistantDrawer({
 
   const handleSend = async () => {
     const text = prompt.trim();
-    if (!text || streaming) return;
+    if (!text || loading) return;
     setPrompt("");
 
     const userMsg: Message = { role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
-    setStreaming(true);
-
-    const assistantMsg: Message = { role: "assistant", content: "" };
-    setMessages((prev) => [...prev, assistantMsg]);
+    setLoading(true);
 
     try {
-      const res = await fetch("/api/v1/chat/stream", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          orgSlug: slugs.orgSlug,
-          workspaceSlug: slugs.workspaceSlug,
-          message: text,
-          schemaContext: true,
-        }),
-      });
+      // Call schema.chat handler — returns assistantMessage + optional proposedMutations
+      const result = await schemaChat(slugs, text);
 
-      if (!res.ok || !res.body) {
-        const errText = `Stream error (${res.status})`;
-        setMessages((prev) => {
-          const next = [...prev];
-          const last = next[next.length - 1];
-          if (last && last.role === "assistant") {
-            next[next.length - 1] = { ...last, content: errText };
-          }
-          return next;
-        });
-        return;
-      }
+      // Append the assistant's explanation
+      setMessages((prev) => [...prev, { role: "assistant", content: result.assistantMessage }]);
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let accumulated = "";
+      // Apply proposed mutations sequentially
+      const mutations = result.proposedMutations ?? [];
+      if (mutations.length > 0) {
+        const successes: string[] = [];
+        const failures: string[] = [];
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const raw = line.slice(6).trim();
-            if (raw === "[DONE]") break;
-            try {
-              const parsed = JSON.parse(raw) as { type?: string; text?: string; content?: string };
-              if (parsed.type === "component") {
-                // Render component events as JSON dump for now
-                accumulated += `\n[component: ${JSON.stringify(parsed)}]\n`;
-              } else {
-                const delta = parsed.text ?? parsed.content ?? "";
-                accumulated += delta;
-              }
-            } catch {
-              accumulated += raw;
-            }
+        for (const mutation of mutations) {
+          try {
+            await applyMutation(slugs, mutation.capability, mutation.input);
+            successes.push(mutation.capability);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            failures.push(`${mutation.capability}: ${msg}`);
           }
         }
-        setMessages((prev) => {
-          const next = [...prev];
-          const last = next[next.length - 1];
-          if (last && last.role === "assistant") {
-            next[next.length - 1] = { ...last, content: accumulated };
-          }
-          return next;
-        });
+
+        // Build a summary message
+        const lines: string[] = [];
+        if (successes.length > 0) {
+          lines.push(`Applied ${successes.length} mutation(s): ${successes.join(", ")}.`);
+        }
+        if (failures.length > 0) {
+          lines.push(`Failed ${failures.length} mutation(s): ${failures.join("; ")}.`);
+        }
+        if (lines.length > 0) {
+          setMessages((prev) => [...prev, { role: "assistant", content: lines.join("\n") }]);
+        }
+
+        // Notify the builder to re-fetch if at least one mutation succeeded
+        if (successes.length > 0) {
+          onApplied?.();
+        }
       }
     } catch (e) {
       const errText = e instanceof Error ? e.message : "Unknown error";
-      setMessages((prev) => {
-        const next = [...prev];
-        const last = next[next.length - 1];
-        if (last && last.role === "assistant") {
-          next[next.length - 1] = { ...last, content: `Error: ${errText}` };
-        }
-        return next;
-      });
+      setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${errText}` }]);
     } finally {
-      setStreaming(false);
+      setLoading(false);
     }
   };
 
@@ -158,15 +130,20 @@ export function SchemaAssistantDrawer({
             <div
               key={idx}
               className={cn(
-                "rounded-xl px-4 py-3 text-sm",
+                "rounded-xl px-4 py-3 text-sm whitespace-pre-wrap",
                 msg.role === "user"
                   ? "bg-primary text-primary-foreground ml-8"
                   : "bg-muted text-muted-foreground mr-8",
               )}
             >
-              {msg.content || (streaming && msg.role === "assistant" ? "…" : "")}
+              {msg.content || (loading && msg.role === "assistant" ? "…" : "")}
             </div>
           ))}
+          {loading && (
+            <div className="rounded-xl px-4 py-3 text-sm bg-muted text-muted-foreground mr-8 animate-pulse">
+              Thinking…
+            </div>
+          )}
         </div>
         <div className="px-4 py-4 border-t border-border space-y-2">
           <Textarea
@@ -176,12 +153,12 @@ export function SchemaAssistantDrawer({
             placeholder="Ask the AI about your schema… (Ctrl+Enter to send)"
             rows={3}
             className="resize-none"
-            disabled={streaming}
+            disabled={loading}
           />
           <div className="flex justify-end">
             <Button
               onClick={() => void handleSend()}
-              disabled={streaming || !prompt.trim()}
+              disabled={loading || !prompt.trim()}
               className="gap-1.5"
             >
               <Send className="h-3.5 w-3.5" />

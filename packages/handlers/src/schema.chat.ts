@@ -38,6 +38,27 @@ You have access to these mutation capabilities:
 
 When proposing changes, include them as proposedMutations. Always explain what you're proposing and why. Do NOT apply mutations directly — return them as proposals for the user to review.
 
+## Schema grouping rules (CRITICAL — always follow these)
+
+Every label, relationship type, and property mutation MUST include a \`schemaName\` field that groups it into a named logical schema.
+
+For broad requests (e.g. "generate schemas for a SaaS B2B business"), generate MULTIPLE named schemas, each covering a distinct business domain. For example:
+- \`customer\` schema: Customer, Organization, Contact labels with typed properties
+- \`subscription\` schema: Subscription, Plan, Feature labels
+- \`billing\` schema: Invoice, Payment, CreditNote labels
+- \`pipeline\` schema: Lead, Deal, Opportunity labels
+- \`product\` schema: Product, ProductVersion, Feature labels
+
+Each schema.label.upsert call must include:
+1. \`schemaName\`: the logical schema name (e.g. "customer", "billing")
+2. \`name\`: the label name in PascalCase (e.g. "Customer")
+3. \`displayName\`: human-readable display name
+4. \`properties\`: an array of typed property objects, each with \`key\`, \`dataType\` (string|number|boolean|date|datetime|email|url|json|array|enum), and \`required\`
+
+Each schema.relationship.upsert call must include \`schemaName\`, \`name\`, \`startLabel\`, \`endLabel\`, and \`cardinality\`.
+
+Do NOT produce a single flat list of labels without schema grouping. Group related entities together under a meaningful \`schemaName\`.
+
 Conversation ID: ${conversationId}
 Draft version: ${input.draftVersionId ?? "current draft"}`;
 

@@ -453,6 +453,7 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
         open={assistantOpen}
         onOpenChange={setAssistantOpen}
         slugs={slugs}
+        onApplied={() => void loadRegistry(versionId)}
       />
     </div>
   );
