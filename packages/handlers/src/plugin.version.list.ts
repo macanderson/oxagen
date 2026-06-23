@@ -40,20 +40,42 @@ export const pluginVersionListHandler: CapabilityHandler<typeof pluginVersionLis
     throw new HTTPException(404, { message: `Unknown plugin: ${input.pluginId}` });
   }
 
-  const { historyRows, isInstalled } = await withTenantDb(async (tx) => {
-    const historyRows = await tx
-      .select({
-        pluginVersion: schema.connectorSchemas.pluginVersion,
-        schemaVersion: schema.connectorSchemas.schemaVersion,
-        cachedAt: schema.connectorSchemas.cachedAt,
-        schema: schema.connectorSchemas.schema,
-      })
-      .from(schema.connectorSchemas)
-      .where(eq(schema.connectorSchemas.pluginId, input.pluginId))
-      .orderBy(desc(schema.connectorSchemas.cachedAt))
-      .limit(input.limit);
+  // `ingestion.connector_schemas` is a shared/system catalog (no org_id) read
+  // here through the non-superuser `oxagen_app` role. Where that role lacks
+  // grants on it (Atlas re-baselines drop non-Drizzle GRANTs) the read throws
+  // "permission denied" — so it is guarded and degrades to empty history rather
+  // than 500ing the request. `currentVersion` (from the bundled YAML) and the
+  // `isInstalled` check (a tenant table the role can always read) are unaffected.
+  // Mirrors the resilience fix in plugin.schema.get.
+  let historyRows: {
+    pluginVersion: string;
+    schemaVersion: string;
+    cachedAt: Date;
+    schema: unknown;
+  }[] = [];
+  try {
+    historyRows = await withTenantDb((tx) =>
+      tx
+        .select({
+          pluginVersion: schema.connectorSchemas.pluginVersion,
+          schemaVersion: schema.connectorSchemas.schemaVersion,
+          cachedAt: schema.connectorSchemas.cachedAt,
+          schema: schema.connectorSchemas.schema,
+        })
+        .from(schema.connectorSchemas)
+        .where(eq(schema.connectorSchemas.pluginId, input.pluginId))
+        .orderBy(desc(schema.connectorSchemas.cachedAt))
+        .limit(input.limit),
+    );
+  } catch (err) {
+    logger.warn(
+      { err, pluginId: input.pluginId },
+      "plugin.version.list: connector_schemas read failed (non-fatal)",
+    );
+  }
 
-    const installed = await tx
+  const installed = await withTenantDb((tx) =>
+    tx
       .select({ id: schema.sourceConnections.id })
       .from(schema.sourceConnections)
       .where(
@@ -64,10 +86,9 @@ export const pluginVersionListHandler: CapabilityHandler<typeof pluginVersionLis
           isNull(schema.sourceConnections.deletedAt),
         ),
       )
-      .limit(1);
-
-    return { historyRows, isInstalled: installed.length > 0 };
-  });
+      .limit(1),
+  );
+  const isInstalled = installed.length > 0;
 
   const versions = historyRows.map((r) => {
     const meta = (r.schema as { metadata?: { changelog?: string; minimumPlatformVersion?: string } } | null)

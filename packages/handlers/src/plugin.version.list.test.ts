@@ -173,4 +173,26 @@ describe("plugin.version.list handler", () => {
     );
     expect(out.currentVersion).toBe("3.0.0");
   });
+
+  it("returns empty history (not a 500) when the connector_schemas read is denied", async () => {
+    // connector_schemas is a shared catalog the oxagen_app role may lack grants on
+    // in some envs; the denied read must degrade to empty history, not throw.
+    mocks.loadBuiltInSchema.mockReturnValue({ metadata: { version: "2.1.0", schemaVersion: "v1" } });
+    mocks.getOxagenPlugin.mockReturnValue(undefined);
+    mocks.withTenantDb
+      .mockRejectedValueOnce(new Error("permission denied for table connector_schemas"))
+      .mockImplementationOnce((fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          select: () => ({ from: () => ({ where: () => ({ limit: () => Promise.resolve([]) }) }) }),
+        }),
+      );
+
+    const out = await pluginVersionListHandler(
+      { pluginId: "github", limit: 20, includeChangelog: false },
+      CTX,
+    );
+    expect(out.currentVersion).toBe("2.1.0");
+    expect(out.versions).toEqual([]);
+    expect(out.installedVersion).toBeNull();
+  });
 });
