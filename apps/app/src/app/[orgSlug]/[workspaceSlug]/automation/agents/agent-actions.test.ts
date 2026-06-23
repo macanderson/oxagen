@@ -43,6 +43,7 @@ const {
 vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
 vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mockResolveOrg,
+  getOrgRole: vi.fn().mockResolvedValue("owner"),
   resolveWorkspace: mockResolveWorkspace,
   assertOrgMember: mockAssertOrgMember,
 }));
@@ -59,7 +60,7 @@ vi.mock("@/lib/routes", () => ({
   workspace: {
     agents: {
       root: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-        `/${orgSlug}/${workspaceSlug}/agents`,
+        `/${orgSlug}/${workspaceSlug}/automation/agents`,
     },
   },
 }));

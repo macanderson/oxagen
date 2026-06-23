@@ -242,7 +242,11 @@ export const [ingestionGithubParseFile] = createFunction(
           orgId,
           workspaceId,
           surface: "ingestion",
-          executionStepId: `embed-file:${naturalKey}`,
+          // No execution step for repo-file embeds. Must be a UUID or null — a
+          // synthesized `embed-file:<naturalKey>` string broke the ClickHouse
+          // UUID insert (flooded POST /api/inngest with code-27 parse errors)
+          // and the Postgres uuid credit charge. See @oxagen/telemetry NIL_UUID.
+          executionStepId: null,
         },
       }),
     );

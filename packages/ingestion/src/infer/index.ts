@@ -101,7 +101,10 @@ export async function inferSemanticEdges(
       orgId,
       workspaceId,
       surface: "ingestion",
-      messageId: `infer:${nodeId}`,
+      // No initiating message for ingestion-time inference. Must be a UUID or
+      // null — `infer:<nodeId>` would land in token_usage's UUID column and
+      // credit_ledger's uuid column, dropping the row and unbilling the call.
+      messageId: null,
     },
   });
 

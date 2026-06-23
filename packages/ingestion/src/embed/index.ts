@@ -27,7 +27,11 @@ export async function embedEntity(req: EmbedRequest): Promise<void> {
       orgId: req.orgId,
       workspaceId: req.workspaceId,
       surface: "ingestion",
-      executionStepId: `embed:${req.nodeId}`,
+      // No execution step for fire-and-forget ingestion embeds. Must be a UUID
+      // or null — `execution_step_id` is a ClickHouse UUID column and
+      // `credit_ledger.reference_id` a Postgres uuid; a synthesized string like
+      // `embed:<nodeId>` broke both writes (dropped CH row + unbilled charge).
+      executionStepId: null,
     },
   });
   await upsertEmbedding(req.nodeId, vector, EMBED_MODEL, req.orgId);

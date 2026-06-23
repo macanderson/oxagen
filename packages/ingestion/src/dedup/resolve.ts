@@ -88,7 +88,11 @@ export async function resolveEntity(
       orgId: mutation.orgId,
       workspaceId: mutation.workspaceId,
       surface: "ingestion",
-      executionStepId: `dedup:${mutation.naturalKey}`,
+      // No execution step for dedup-resolution embeds. Must be a UUID or null —
+      // a synthesized `dedup:<naturalKey>` string broke the ClickHouse UUID
+      // insert (CANNOT_PARSE_INPUT_ASSERTION_FAILED) and the Postgres uuid
+      // credit charge. See @oxagen/telemetry NIL_UUID.
+      executionStepId: null,
     },
   });
 

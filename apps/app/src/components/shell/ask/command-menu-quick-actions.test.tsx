@@ -71,18 +71,9 @@ vi.mock("@/components/ui/dialog", () => ({
   ),
 }));
 
-vi.mock("lucide-react", () => ({
-  Search: () => <span data-icon="search" />,
-  ArrowRight: () => <span data-icon="arrow-right" />,
-  Clock: () => <span data-icon="clock" />,
-  Navigation: () => <span data-icon="navigation" />,
-  Sparkles: () => <span data-icon="sparkles" />,
-  Zap: () => <span data-icon="zap" />,
-  PlusCircle: () => <span data-icon="plus-circle" />,
-  ScanSearch: () => <span data-icon="scan-search" />,
-  Settings: () => <span data-icon="settings" />,
-  MessageSquare: () => <span data-icon="message-square" />,
-  BarChart2: () => <span data-icon="bar-chart-2" />,
+vi.mock("lucide-react", () => new Proxy({} as Record<string | symbol, unknown>, {
+  get: (_t, prop) => (prop === "then" ? undefined : () => <svg aria-hidden="true" data-icon={String(prop)} />),
+  has: (_t, prop) => prop !== "then",
 }));
 
 vi.mock("@/lib/utils", () => ({

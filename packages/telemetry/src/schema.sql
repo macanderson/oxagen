@@ -41,6 +41,13 @@ ORDER BY (org_id, event_type, emitted_at)
 TTL toDateTime(emitted_at) + INTERVAL 90 DAY;
 
 CREATE TABLE IF NOT EXISTS token_usage (
+  -- Non-nullable UUID AND part of the sorting key below, so it CANNOT be made
+  -- Nullable after creation (ALTER_OF_COLUMN_IS_FORBIDDEN, code 524 — even with
+  -- allow_nullable_key=1; would need a full table rebuild). "No execution step"
+  -- is therefore the nil UUID ('0…0'), coalesced from null at the insert
+  -- boundary in @oxagen/telemetry (insertTokenUsage / NIL_UUID). NEVER write a
+  -- non-UUID correlation string here — it aborts the whole row insert with
+  -- CANNOT_PARSE_INPUT_ASSERTION_FAILED. See migration 0012.
   execution_step_id UUID,
   org_id UUID,
   workspace_id UUID DEFAULT toUUID('00000000-0000-0000-0000-000000000000'),

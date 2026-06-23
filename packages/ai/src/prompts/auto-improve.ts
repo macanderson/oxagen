@@ -45,7 +45,11 @@ export interface EnhancePromptArgs {
   kind: string;
   /** Resolved toggle — pass `config.autoImprovePrompts ?? true` (default ON). */
   autoImprove: boolean;
-  telemetry: { orgId: string; workspaceId: string; surface: Surface; messageId: string };
+  // messageId is the UUID of the initiating message, or null when there is none
+  // — it flows verbatim into token_usage.execution_step_id (UUID) via
+  // generateObjectFor, so it must be a valid UUID or null, never a free-form
+  // string like "unknown".
+  telemetry: { orgId: string; workspaceId: string; surface: Surface; messageId: string | null };
 }
 
 export interface EnhancePromptResult {

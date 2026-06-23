@@ -49,7 +49,7 @@ const {
 vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
 vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mockResolveOrg,
-  assertSecurityManager: mockAssertSecurityManager,
+  getOrgRole: vi.fn().mockResolvedValue("owner"),  assertSecurityManager: mockAssertSecurityManager,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
 vi.mock("@oxagen/handlers/logger", () => ({

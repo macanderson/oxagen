@@ -42,7 +42,7 @@ const SENTINEL = vi.hoisted(() => ({
 vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
 vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: mockResolveOrg,
-  assertOrgMember: mockAssertOrgMember,
+  getOrgRole: vi.fn().mockResolvedValue("owner"),  assertOrgMember: mockAssertOrgMember,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mockRevalidatePath }));
 vi.mock("@oxagen/tenancy", () => ({
@@ -70,6 +70,12 @@ vi.mock("@oxagen/database", () => {
           return Promise.resolve(undefined);
         },
       }),
+    }),
+    // The action records slug-change history via tx.insert(orgSlugHistory) — a
+    // no-op insert keeps the slug-change path from throwing "tx.insert is not a
+    // function". (Tests assert on updateValues + revalidatePath, not inserts.)
+    insert: (_t: unknown) => ({
+      values: (_values: Record<string, unknown>) => Promise.resolve(undefined),
     }),
   });
   return {
