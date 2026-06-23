@@ -118,12 +118,41 @@ export const [ingestionDeleteConnection] = createFunction(
           );
 
           const deletedCount = (deleteResult.records[0]?.get("deleted") as number | undefined) ?? 0;
-          logger.info(
-            { connectionId, orgId, deletedCount },
-            "ingestion-delete: neo4j entity nodes deleted",
+
+          // ── Pass 3: Delete the code-graph nodes this connection produced ──
+          // SourceFile + SourceSymbol nodes each carry connectionId and are NOT
+          // part of the EntityNode ALIAS_OF graph, so they're removed
+          // unconditionally. They were skipped before — meaning a "delete data"
+          // left thousands of orphaned :KnowledgeNode files/symbols in the graph
+          // after the connection was gone. DETACH DELETE also drops their
+          // CONTAINS / SOURCED_FROM edges.
+          const sourceDeleteResult = await session.run(
+            `
+            MATCH (n {connectionId: $connectionId, orgId: $orgId})
+            WHERE n:SourceFile OR n:SourceSymbol
+            DETACH DELETE n
+            RETURN count(n) AS deleted
+            `,
+            { connectionId, orgId },
+          );
+          const sourceDeletedCount =
+            (sourceDeleteResult.records[0]?.get("deleted") as number | undefined) ?? 0;
+
+          // ── Pass 4: Delete the SourceConnection meta-node ────────────────
+          await session.run(
+            `
+            MATCH (sc:SourceConnection {id: $connectionId, orgId: $orgId})
+            DETACH DELETE sc
+            `,
+            { connectionId, orgId },
           );
 
-          return { promoted: promotedCount, deleted: deletedCount };
+          logger.info(
+            { connectionId, orgId, deletedCount, sourceDeletedCount },
+            "ingestion-delete: neo4j nodes deleted (entities + source files/symbols + meta)",
+          );
+
+          return { promoted: promotedCount, deleted: deletedCount + sourceDeletedCount };
         }),
       );
     }

@@ -4,6 +4,17 @@
  * All ingested entity nodes live 100% in Neo4j — no Postgres dual-write.
  * The :EntityNode primary label is universal; entityType is a string property.
  * Credentials and connection config live in Postgres (encrypted).
+ *
+ * Every ingested node ALSO carries the :KnowledgeNode label and the display
+ * fields (`label`, `displayName`, `sourceId`, `properties`, `createdAt`,
+ * `updatedAt`) that the knowledge-graph read layer requires. The explorer's
+ * capabilities — graph.node.list / graph.node.search / graph.stats /
+ * ontology.neighbors / graph.node.get — all filter on `:KnowledgeNode` scoped
+ * by orgId + workspaceId, so without that label every ingested node is invisible
+ * in the graph UI even though it exists in Neo4j. The MERGE key stays on
+ * :EntityNode (internal dedup/alias/embedding queries match that label and there
+ * is no historical :EntityNode-only data to migrate); the trailing SET adds the
+ * universal :KnowledgeNode label + display fields on every write.
  */
 
 import { scopedSession } from "@oxagen/ontology/tenant";
@@ -19,24 +30,31 @@ export async function upsertEntityNode(
       `MERGE (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId})
        ON CREATE SET
          n.publicId         = randomUUID(),
-         n.entityType       = $entityType,
-         n.sourceRecordType = $sourceRecordType,
-         n.displayName      = $displayName,
-         n.connectionId     = $connectionId,
-         n.workspaceId      = $workspaceId,
-         n.properties       = $properties,
          n.createdAt        = datetime()
        ON MATCH SET
-         n.displayName      = $displayName,
-         n.properties       = $properties,
-         n.sourceRecordType = $sourceRecordType,
          n.syncedAt         = datetime()
+       SET
+         n:KnowledgeNode,
+         n.entityType       = $entityType,
+         n.sourceRecordType = $sourceRecordType,
+         n.label            = $label,
+         n.displayName      = $displayName,
+         n.connectionId     = $connectionId,
+         n.sourceId         = $connectionId,
+         n.workspaceId      = $workspaceId,
+         n.properties       = $properties,
+         n.updatedAt        = datetime()
        RETURN n.publicId AS nodeId`,
       {
         naturalKey: mutation.naturalKey,
         entityType: mutation.entityType,
         sourceRecordType: mutation.sourceRecordType,
-        displayName: mutation.displayName ?? null,
+        // `label` is the type chip the explorer groups + filters on. Use the
+        // domain entityType (e.g. "issue", "pull_request", "source_repository").
+        label: mutation.entityType,
+        // displayName must be non-null — the explorer renders it directly. Fall
+        // back to the naturalKey so a node never shows as empty/"null".
+        displayName: mutation.displayName ?? mutation.naturalKey,
         connectionId: mutation.connectionId,
         workspaceId: mutation.workspaceId,
         properties: JSON.stringify(mutation.properties),
