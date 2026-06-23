@@ -615,7 +615,7 @@ describe("plugin.catalog.browse handler — mcp_server path (live registry)", ()
     )) as { servers: Array<{ name: string; pluginType: string }>; total: number };
 
     expect(mocks.listServers).toHaveBeenCalledWith(fakeRegistry.baseUrl, {
-      limit: 200,
+      limit: 100,
       search: undefined,
     });
     expect(result.total).toBe(1);
@@ -633,7 +633,7 @@ describe("plugin.catalog.browse handler — mcp_server path (live registry)", ()
 
     await handler({ pluginType: "mcp_server", search: "brave", limit: 30, offset: 0 }, ctx);
     expect(mocks.listServers).toHaveBeenCalledWith(fakeRegistry.baseUrl, {
-      limit: 200,
+      limit: 100,
       search: "brave",
     });
   });

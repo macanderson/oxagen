@@ -8,7 +8,7 @@
  * On UnauthorizedError (or any auth failure), the credential is flipped to
  * needs_reauth and that server is skipped for this turn.
  */
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import pino from "pino";
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { schema, withTenantDb } from "@oxagen/database";
@@ -40,7 +40,12 @@ async function contributeMcpTools(ctx: CapabilityContext, options?: PluginContri
       // The live connectMcp() + listTools() below is the real health gate: a server
       // that can't connect is skipped gracefully. Genuinely "unhealthy" servers are
       // still excluded.
-      inArray(schema.mcpServers.healthStatus, ["healthy", "unknown"]),
+      // Note: or() is used here so that inArray() remains exclusively the per-turn
+      // serverAllowlist filter, keeping spy-based allowlist tests unambiguous.
+      or(
+        eq(schema.mcpServers.healthStatus, "healthy"),
+        eq(schema.mcpServers.healthStatus, "unknown"),
+      ),
       eq(schema.pluginInstalledPlugins.enabled, true),
       isNull(schema.pluginInstalledPlugins.deletedAt),
     ] as const;
