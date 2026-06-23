@@ -41,14 +41,19 @@ describe("TaskTable", () => {
   it("renders a row per task with title, status label and duration", () => {
     render(
       <TaskTable
-        tasks={[task(), task({ id: "t2", title: "Summarize report", status: "completed" })]}
+        tasks={[
+          task(),
+          task({ id: "t2", title: "Summarize report", status: "completed", durationLabel: "5m 0s" }),
+        ]}
       />,
     );
     expect(screen.getByText("Profile all F500 CEOs")).toBeInTheDocument();
     expect(screen.getByText("Summarize report")).toBeInTheDocument();
     expect(screen.getByText("Running")).toBeInTheDocument();
     expect(screen.getByText("Completed")).toBeInTheDocument();
+    // Each row renders its own duration cell.
     expect(screen.getByText("2m 1s")).toBeInTheDocument();
+    expect(screen.getByText("5m 0s")).toBeInTheDocument();
   });
 
   it("falls back to an em dash when the title is empty", () => {
