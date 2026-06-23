@@ -596,14 +596,22 @@ export async function invoke(
 
       // ── Billing admission gate ───────────────────────────────────────────────
       // Runs after IAM (so admin/billing capabilities bypass the credit check).
-      // Only fires when orgId is present AND noBillingGate is not true on the
-      // contract. Capabilities tagged noBillingGate:true (API key creation,
-      // member management, settings, etc.) skip the gate — they don't consume
-      // AI tokens and must not be blocked by a zero credit balance.
-      // assertOrgCanConsume uses withTenantDb, so the scope must be active — OXA-1697.
-      // Gate throws BillingSuspendedError or InsufficientCreditsError to refuse.
+      // Only fires when orgId is present, noBillingGate is not true on the
+      // contract, AND the capability is SCOPED. Capabilities tagged
+      // noBillingGate:true (API key creation, member management, settings, etc.)
+      // skip the gate — they don't consume AI tokens and must not be blocked by a
+      // zero credit balance.
+      //
+      // The gate's assertOrgCanConsume / effectiveBalance use withTenantDb, which
+      // requires an active tenant scope. The kernel only establishes that scope
+      // (runInTenantScope above) for SCOPED capabilities — so running the gate for
+      // an UNSCOPED capability (cap.scoped === false, e.g. plugin.schema.get) threw
+      // "No active tenant scope" and 500'd the call before the handler ran (this
+      // broke the connector Configure form). Unscoped capabilities are global,
+      // read-only fetches — never metered AI turns — so skipping the gate for them
+      // is correct as well as necessary. — OXA-1697.
       const skipBilling = (cap as { noBillingGate?: boolean }).noBillingGate === true;
-      if (_billingGate !== null && ctx.orgId && !skipBilling) {
+      if (_billingGate !== null && ctx.orgId && !skipBilling && isScoped) {
         await _billingGate(ctx.orgId);
       }
       // ── End billing admission gate ───────────────────────────────────────────
