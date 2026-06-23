@@ -17,6 +17,7 @@ import { schema, withSystemDb } from '@oxagen/database';
 import { DbOAuthClientProvider } from '@oxagen/plugins';
 import { getSession } from '@/lib/session';
 import { resolveOrg, assertMcpManager } from '@/lib/resolve-org';
+import { authDenialStatus, isNextRedirectError } from '@/lib/auth-denial';
 import { logger } from '@oxagen/handlers/logger';
 import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js';
 
@@ -47,7 +48,53 @@ const safeFetch: FetchLike = async (input, init) => {
   return resp;
 };
 
-export async function GET(req: NextRequest) {
+/**
+ * GET wrapper — converts every thrown value into a real HTTP Response so the
+ * serverless function can NEVER crash with an unhandled exception (which Vercel
+ * surfaces as FUNCTION_INVOCATION_FAILED / HTTP 502, with no JSON body).
+ *
+ * Three thrown shapes are handled here:
+ *  - A Next.js access-control fallback (`notFound()` from a resolve-org gate):
+ *    Route Handlers have no not-found render boundary, so this would otherwise
+ *    escape uncaught and 502. We map it to a clean 4xx JSON (404 = unknown org /
+ *    non-manager caller — the deliberate info-hiding status used elsewhere here).
+ *  - A Next.js redirect sentinel (`permanentRedirect()` from a stale-slug helper):
+ *    re-thrown so Next can turn it into the redirect response.
+ *  - Anything else (DB outage, registry/SDK bug, unexpected reject): logged as a
+ *    structured error and returned as a clean 500 JSON.
+ */
+export async function GET(req: NextRequest): Promise<Response> {
+  try {
+    return await handleAuthorize(req);
+  } catch (err) {
+    if (isNextRedirectError(err)) {
+      // A valid redirect signalled via throw — let Next produce the response.
+      throw err;
+    }
+    const denialStatus = authDenialStatus(err);
+    if (denialStatus !== null) {
+      // Org/role gate denied (notFound). In a route handler this is not caught
+      // by a render boundary, so we answer it ourselves as a handled response.
+      return NextResponse.json(
+        { error: 'not found or not permitted' },
+        { status: denialStatus },
+      );
+    }
+    logger.error(
+      {
+        err: String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      },
+      'mcp-oauth: authorize handler threw an unhandled error',
+    );
+    return NextResponse.json(
+      { error: 'internal error' },
+      { status: 500 },
+    );
+  }
+}
+
+async function handleAuthorize(req: NextRequest): Promise<Response> {
   const session = await getSession();
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

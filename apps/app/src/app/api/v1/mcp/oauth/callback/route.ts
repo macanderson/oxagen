@@ -18,6 +18,7 @@ import { eq, sql } from "drizzle-orm";
 import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { schema, withSystemDb } from "@oxagen/database";
 import { DbOAuthClientProvider, loadOAuthState, deleteOAuthState } from "@oxagen/plugins";
+import { isNextRedirectError } from "@/lib/auth-denial";
 import { logger } from "@oxagen/handlers/logger";
 
 export const runtime = "nodejs"; // MCP SDK auth uses Node crypto — edge-unsafe.
@@ -40,7 +41,31 @@ const safeFetch: FetchLike = async (input, init) => {
   return resp;
 };
 
-export async function GET(req: NextRequest) {
+/**
+ * GET wrapper — guarantees the serverless function never crashes with an
+ * unhandled exception (FUNCTION_INVOCATION_FAILED / HTTP 502). The pre-token-
+ * exchange steps (loadOAuthState, the listing lookup, deleteOAuthState, and the
+ * install upsert) each touch the DB and can reject; on a DB outage that would
+ * otherwise escape uncaught and 502. We catch it and return a clean 500 JSON,
+ * re-throwing only genuine Next redirect sentinels.
+ */
+export async function GET(req: NextRequest): Promise<Response> {
+  try {
+    return await handleCallback(req);
+  } catch (err) {
+    if (isNextRedirectError(err)) throw err;
+    logger.error(
+      {
+        err: String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      },
+      "mcp-oauth: callback handler threw an unhandled error",
+    );
+    return NextResponse.json({ error: "internal error" }, { status: 500 });
+  }
+}
+
+async function handleCallback(req: NextRequest): Promise<Response> {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
