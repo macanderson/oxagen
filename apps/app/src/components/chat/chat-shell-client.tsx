@@ -761,7 +761,13 @@ export function ChatShellClient({
 
       <div
         ref={scrollContainerRef}
-        className="min-h-0 flex-1 overflow-y-auto pr-2"
+        // `relative` is load-bearing: it makes this scroll container the
+        // containing block for its absolutely-positioned descendants (e.g. the
+        // `.sr-only` labels inside message-footer icon buttons). Without it
+        // those abs elements anchor to the initial containing block, escape this
+        // container's `overflow` clipping, and inflate the document height —
+        // letting the whole page scroll past the composer on mobile and desktop.
+        className="relative min-h-0 flex-1 overflow-y-auto pr-2"
         onScroll={handleScroll}
       >
         {messages.length === 0 && !hasLiveContent ? (
