@@ -52,7 +52,13 @@ export interface GenerateImageForArgs {
     orgId: string;
     workspaceId: string;
     surface: Surface;
-    executionStepId: string;
+    /**
+     * UUID of the request/message that initiated the turn, or `null` when there
+     * is none. Flows into `token_usage.execution_step_id` (UUID) and
+     * `credit_ledger.reference_id` (Postgres uuid) — MUST be a valid UUID or
+     * null, never a free-form string.
+     */
+    executionStepId: string | null;
   };
 }
 
@@ -146,7 +152,8 @@ export async function generateImageFor(
   try {
     await chargeImageCredits({
       orgId: args.telemetry.orgId,
-      referenceId: args.telemetry.executionStepId,
+      // null → undefined → NULL reference_id; never a non-UUID string.
+      referenceId: args.telemetry.executionStepId ?? undefined,
       model: modelId,
       imageCount,
       size,

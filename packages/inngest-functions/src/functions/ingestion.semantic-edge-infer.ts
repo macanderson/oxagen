@@ -84,7 +84,10 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
           orgId,
           workspaceId,
           surface: "ingestion",
-          messageId: `semantic-edge-infer:${nodeId}`,
+          // No initiating message for ingestion-time semantic-edge inference.
+          // Must be a UUID or null — `semantic-edge-infer:<nodeId>` flooded
+          // token_usage's UUID column and broke the uuid credit charge.
+          messageId: null,
         },
       }),
     );

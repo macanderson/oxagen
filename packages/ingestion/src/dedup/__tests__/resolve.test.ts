@@ -174,7 +174,10 @@ describe("resolveEntity — Pass B: no natural key match → new principal", () 
           orgId: "org-1",
           workspaceId: "ws-1",
           surface: "ingestion",
-          executionStepId: expect.stringContaining("dedup:"),
+          // No execution step for dedup embeds → null, never a synthesized
+          // `dedup:<naturalKey>` string. The non-UUID value broke the ClickHouse
+          // token_usage UUID insert and the Postgres uuid credit charge.
+          executionStepId: null,
         }),
       }),
     );
