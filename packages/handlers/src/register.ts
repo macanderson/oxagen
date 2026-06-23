@@ -692,4 +692,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "schema.setup",
     async () => (await import("./schema.setup")).schemaSetupHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "schema.reconcile.dispatch",
+    async () =>
+      (await import("./schema.reconcile.dispatch")).schemaReconcileDispatchHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.reconcile.status",
+    async () =>
+      (await import("./schema.reconcile.status")).schemaReconcileStatusHandler as CapabilityHandlerFn,
+  );
 });

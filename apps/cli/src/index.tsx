@@ -128,6 +128,7 @@ import { webSearchCommand } from "./commands/web.search.js";
 import { webFetchCommand } from "./commands/web.fetch.js";
 import { researchSwarmStartCommand } from "./commands/research.swarm.start.js";
 import { researchSwarmStatusCommand } from "./commands/research.swarm.status.js";
+import { schemaReconcileCommand } from "./commands/schema/schema.reconcile.js";
 
 const program = new Command();
 
@@ -392,6 +393,10 @@ const research = program.command("research").description("Research swarm command
 const researchSwarm = research.command("swarm").description("Research swarm management");
 researchSwarm.addCommand(researchSwarmStartCommand);
 researchSwarm.addCommand(researchSwarmStatusCommand);
+
+// schema
+const schema = program.command("schema").description("Schema registry commands");
+schema.addCommand(schemaReconcileCommand);
 
 program.parse(process.argv);
 
