@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+/// <reference types="@testing-library/jest-dom" />
 /**
  * preferences-form.test.tsx — component tests for PreferencesForm.
  *
@@ -139,6 +140,44 @@ vi.mock("@/components/ui/label", () => ({
   }) => <label id={id} htmlFor={htmlFor}>{children}</label>,
 }));
 
+vi.mock("@/components/ui/select", () => ({
+  Select: ({
+    children,
+    value,
+    onValueChange,
+    disabled: _d,
+  }: {
+    children: React.ReactNode;
+    value?: string;
+    onValueChange?: (v: string | null) => void;
+    disabled?: boolean;
+  }) => (
+    <div data-testid="select-root" data-value={value}>
+      {React.Children.map(children, (child) => {
+        if (!React.isValidElement(child)) return child;
+        return React.cloneElement(child as React.ReactElement<{ onValueChange?: (v: string | null) => void }>, { onValueChange });
+      })}
+    </div>
+  ),
+  SelectTrigger: ({ children }: { children: React.ReactNode; id?: string; "aria-labelledby"?: string }) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
+  SelectPopup: ({ children }: { children: React.ReactNode; className?: string }) => <div>{children}</div>,
+  SelectGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectItem: ({ children, value: _v }: { children: React.ReactNode; value: string }) => <div>{children}</div>,
+}));
+
+// Locale constants — use a minimal stub to avoid the Intl.supportedValuesOf call in jsdom
+vi.mock("./locale-constants", () => ({
+  TIMEZONE_OPTIONS: [
+    { value: "UTC", label: "UTC (GMT+0)" },
+    { value: "America/New_York", label: "America/New York (GMT-5)" },
+  ],
+  LANGUAGE_OPTIONS: [
+    { value: "en", label: "English" },
+    { value: "es", label: "Spanish — Español" },
+  ],
+}));
+
 import { PreferencesForm } from "./preferences-form";
 
 // ---------------------------------------------------------------------------
@@ -154,6 +193,8 @@ const initialProps: React.ComponentProps<typeof PreferencesForm>["initial"] = {
   defaultTextModel: "claude-3-sonnet",
   defaultImageModel: null,
   defaultVideoModel: null,
+  timezone: "America/New_York",
+  language: "en",
 };
 
 // ---------------------------------------------------------------------------

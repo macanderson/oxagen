@@ -28,6 +28,8 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
     density: input.density ?? "comfortable",
     enterToSubmit: input.enterToSubmit ?? false,
     pendingPromptBehavior: input.pendingPromptBehavior ?? "queue",
+    timezone: input.timezone ?? "UTC",
+    language: input.language ?? "en",
     // Nullable model columns: undefined → not set on first insert (column default NULL).
     ...("defaultTextTier" in input ? { defaultTextTier: input.defaultTextTier } : {}),
     ...("defaultTextModel" in input ? { defaultTextModel: input.defaultTextModel } : {}),
@@ -46,6 +48,8 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
   if (input.enterToSubmit !== undefined) updateSet.enterToSubmit = input.enterToSubmit;
   if (input.pendingPromptBehavior !== undefined)
     updateSet.pendingPromptBehavior = input.pendingPromptBehavior;
+  if (input.timezone !== undefined) updateSet.timezone = input.timezone;
+  if (input.language !== undefined) updateSet.language = input.language;
   if ("defaultTextTier" in input) updateSet.defaultTextTier = input.defaultTextTier;
   if ("defaultTextModel" in input) updateSet.defaultTextModel = input.defaultTextModel;
   if ("defaultImageModel" in input) updateSet.defaultImageModel = input.defaultImageModel;
@@ -74,6 +78,8 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
         defaultTextModel: true,
         defaultImageModel: true,
         defaultVideoModel: true,
+        timezone: true,
+        language: true,
       },
     }),
   );
@@ -97,5 +103,7 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
     defaultTextModel: row.defaultTextModel ?? null,
     defaultImageModel: row.defaultImageModel ?? null,
     defaultVideoModel: row.defaultVideoModel ?? null,
+    timezone: row.timezone,
+    language: row.language,
   };
 };

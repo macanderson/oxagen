@@ -76,6 +76,8 @@ const validInput = {
   defaultTextModel: "claude-3-sonnet",
   defaultImageModel: null,
   defaultVideoModel: null,
+  timezone: "America/New_York",
+  language: "en",
 };
 
 // ---------------------------------------------------------------------------
@@ -152,6 +154,8 @@ describe("updatePreferencesAction", () => {
       defaultTextModel: null,
       defaultImageModel: "flux-2-max",
       defaultVideoModel: null,
+      timezone: "UTC",
+      language: "es",
     });
     expect(result.ok).toBe(true);
   });

@@ -40,6 +40,8 @@ const FULL_ROW = {
   defaultTextModel: "anthropic/claude-opus-4.8",
   defaultImageModel: "bfl/flux-2-max",
   defaultVideoModel: "google/veo-3.0-generate-001",
+  timezone: "America/New_York",
+  language: "en",
 };
 
 describe("userPreferencesReadHandler (@oxagen/handlers)", () => {
@@ -69,6 +71,8 @@ describe("userPreferencesReadHandler (@oxagen/handlers)", () => {
     expect(result.defaultTextModel).toBe("anthropic/claude-opus-4.8");
     expect(result.defaultImageModel).toBe("bfl/flux-2-max");
     expect(result.defaultVideoModel).toBe("google/veo-3.0-generate-001");
+    expect(result.timezone).toBe("America/New_York");
+    expect(result.language).toBe("en");
   });
 
   // ── no row — schema defaults ──────────────────────────────────────────────
@@ -84,6 +88,8 @@ describe("userPreferencesReadHandler (@oxagen/handlers)", () => {
     expect(result.defaultTextModel).toBeNull();
     expect(result.defaultImageModel).toBeNull();
     expect(result.defaultVideoModel).toBeNull();
+    expect(result.timezone).toBe("UTC");
+    expect(result.language).toBe("en");
   });
 
   // ── nullable model fields ─────────────────────────────────────────────────
@@ -108,5 +114,18 @@ describe("userPreferencesReadHandler (@oxagen/handlers)", () => {
   it("queries using the userId from context (not from input)", async () => {
     await userPreferencesReadHandler({}, CTX);
     expect(mocks.prefsFindFirst).toHaveBeenCalledTimes(1);
+  });
+
+  // ── timezone and language are included in the result ─────────────────────
+
+  it("returns timezone and language from the stored row", async () => {
+    mocks.prefsFindFirst.mockResolvedValueOnce({
+      ...FULL_ROW,
+      timezone: "Europe/Berlin",
+      language: "de",
+    });
+    const result = await userPreferencesReadHandler({}, CTX);
+    expect(result.timezone).toBe("Europe/Berlin");
+    expect(result.language).toBe("de");
   });
 });

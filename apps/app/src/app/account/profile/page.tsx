@@ -4,15 +4,28 @@ import { withSystemDb, schema } from "@oxagen/database";
 import { getSessionOrRedirect } from "@/lib/session";
 import { ProfileForm } from "./profile-form";
 import { fetchConnectedAccountsState } from "./security-action";
+import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
+import type { CapabilityContext } from "@oxagen/oxagen";
 
 export default async function AccountProfilePage() {
   const session = await getSessionOrRedirect();
 
-  // Fetch profile data and linked accounts in parallel.
+  // Fetch profile data, linked accounts, and preferences in parallel.
   // auth.users is global (no tenant scope) — withSystemDb bypasses RLS
   // deliberately. — OXA-1515
   const reqHeaders = await headers();
-  const [rows, connectedAccountsState] = await Promise.all([
+
+  const prefCtx: CapabilityContext = {
+    orgId: "",
+    workspaceId: "",
+    userId: session.user.id,
+    apiKeyId: null,
+    requestId: crypto.randomUUID(),
+    surface: "app",
+    messageId: null,
+  };
+
+  const [rows, connectedAccountsState, prefs] = await Promise.all([
     withSystemDb((tx) =>
       tx
         .select({
@@ -25,6 +38,7 @@ export default async function AccountProfilePage() {
         .limit(1),
     ),
     fetchConnectedAccountsState(session.user.id, reqHeaders),
+    userPreferencesReadHandler({}, prefCtx),
   ]);
 
   const user = rows[0];
@@ -42,6 +56,8 @@ export default async function AccountProfilePage() {
       email={user.email}
       initialAvatarUrl={user.avatarUrl ?? ""}
       connectedAccountsState={connectedAccountsState}
+      timezone={prefs.timezone}
+      language={prefs.language}
     />
   );
 }

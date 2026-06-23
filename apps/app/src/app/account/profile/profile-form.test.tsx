@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+/// <reference types="@testing-library/jest-dom" />
 /**
  * profile-form.test.tsx — component tests for ProfileForm.
  *
@@ -120,6 +121,19 @@ vi.mock("@/components/ui/label", () => ({
   }) => <label htmlFor={htmlFor}>{children}</label>,
 }));
 
+vi.mock("next/link", () => ({
+  default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => (
+    <a href={href} className={className}>{children}</a>
+  ),
+}));
+
+vi.mock("@/lib/routes", () => ({
+  account: {
+    preferences: () => "/account/preferences",
+    root: () => "/account",
+  },
+}));
+
 import { ProfileForm } from "./profile-form";
 
 // ---------------------------------------------------------------------------
@@ -141,6 +155,8 @@ const defaultProps = {
   email: "alice@example.com",
   initialAvatarUrl: "https://example.com/avatar.png",
   connectedAccountsState: makeState({ hasPassword: true }),
+  timezone: "America/New_York",
+  language: "en",
 };
 
 // ---------------------------------------------------------------------------
