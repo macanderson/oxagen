@@ -3,6 +3,11 @@
 // rendered inline against the assistant message identified by
 // `messageId` / `toolCallId` / `approvalId` / `planId` / `fanoutId`.
 
+// Reuse the background-task status union defined by the tray so the inline
+// streaming card and the tray never drift (queued|running|completed|failed|cancelled).
+import type { BackgroundTaskStatus } from "./background-task-tray";
+export type { BackgroundTaskStatus };
+
 export type RiskLevel = "low" | "medium" | "high";
 
 /**
@@ -189,6 +194,20 @@ export type StreamEvent =
     }
   | {
       /**
+       * Emitted when the agent starts or advances a long-running background
+       * task via agent.task.background.start. Drives the inline
+       * BackgroundTaskCard and links to the BackgroundTaskTray.
+       */
+      type: "background-task-progress";
+      taskId: string;
+      kind: string;
+      label?: string;
+      status: BackgroundTaskStatus;
+      inngestRunId?: string;
+      progressPct?: number;
+    }
+  | {
+      /**
        * Emitted when a tool result contains a `render` field. The client
        * renders CHAT_COMPONENTS[componentId] with the given props, wrapped
        * in a React Suspense boundary.
@@ -322,6 +341,19 @@ export interface ComponentContentBlock {
   props: Record<string, unknown>;
 }
 
+/**
+ * A persisted background-task block — the terminal form of a
+ * "background-task-progress" event written to `chat.messages.content_blocks`.
+ */
+export interface BackgroundTaskContentBlock {
+  type: "background-task";
+  taskId: string;
+  kind: string;
+  label?: string;
+  status: BackgroundTaskStatus;
+  inngestRunId?: string;
+}
+
 export type AssistantContentBlock =
   | TextContentBlock
   | ReasoningContentBlock
@@ -332,4 +364,5 @@ export type AssistantContentBlock =
   | PlanContentBlock
   | SubagentFanoutContentBlock
   | MemoryRecallContentBlock
+  | BackgroundTaskContentBlock
   | ComponentContentBlock;

@@ -35,7 +35,9 @@ import { meterCreditsForUsage } from "@oxagen/billing";
 type Part =
   | { type: "text-delta"; text: string }
   | { type: "finish"; totalUsage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } }
-  | { type: "error"; error: string };
+  | { type: "error"; error: string }
+  | { type: "tool-call"; toolCallId: string; toolName: string; input: unknown }
+  | { type: "tool-result"; toolCallId: string; output: unknown };
 
 async function* makeStream(parts: Part[]): AsyncIterable<unknown> {
   for (const part of parts) yield part;
@@ -153,5 +155,69 @@ describe("translateAgentStream — usage event + credits", () => {
     });
 
     expect(assistantText).toBe("Hello world");
+  });
+});
+
+describe("translateAgentStream — background-task lifecycle (OXA-1469)", () => {
+  it("emits background-task-progress + persists a block when agent.task.background.start returns", async () => {
+    const events: StreamEvent[] = [];
+    const parts: Part[] = [
+      {
+        type: "tool-call",
+        toolCallId: "tc-1",
+        toolName: "agent.task.background.start",
+        input: { kind: "graph.ingest", label: "Ingest doc", payload: {} },
+      },
+      {
+        type: "tool-result",
+        toolCallId: "tc-1",
+        output: { taskId: "task-99", inngestRunId: "run-77" },
+      },
+    ];
+
+    const { persistedBlocks } = await translateAgentStream({
+      ...BASE_ARGS,
+      // toolName IS the capability when toolNameMap has no entry.
+      fullStream: makeStream(parts),
+      emit: (e) => events.push(e),
+    });
+
+    const bg = collectEvents(events, "background-task-progress") as Extract<
+      StreamEvent,
+      { type: "background-task-progress" }
+    >[];
+    expect(bg).toHaveLength(1);
+    expect(bg[0]!.taskId).toBe("task-99");
+    expect(bg[0]!.kind).toBe("graph.ingest");
+    expect(bg[0]!.label).toBe("Ingest doc");
+    expect(bg[0]!.status).toBe("pending");
+    expect(bg[0]!.inngestRunId).toBe("run-77");
+
+    // A terminal background-task block is persisted so the card survives refresh.
+    const block = persistedBlocks.find((b) => b.type === "background-task");
+    expect(block).toBeTruthy();
+    expect(block).toMatchObject({ taskId: "task-99", kind: "graph.ingest", status: "pending" });
+  });
+
+  it("emits nothing when the start result has no taskId (graceful)", async () => {
+    const events: StreamEvent[] = [];
+    const parts: Part[] = [
+      {
+        type: "tool-call",
+        toolCallId: "tc-2",
+        toolName: "agent.task.background.start",
+        input: { kind: "agent.task", payload: {} },
+      },
+      { type: "tool-result", toolCallId: "tc-2", output: {} },
+    ];
+
+    const { persistedBlocks } = await translateAgentStream({
+      ...BASE_ARGS,
+      fullStream: makeStream(parts),
+      emit: (e) => events.push(e),
+    });
+
+    expect(collectEvents(events, "background-task-progress")).toHaveLength(0);
+    expect(persistedBlocks.find((b) => b.type === "background-task")).toBeUndefined();
   });
 });
