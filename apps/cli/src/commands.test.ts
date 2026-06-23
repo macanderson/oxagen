@@ -2014,7 +2014,7 @@ describe("plugin credential set_secret", () => {
 describe("plugin org install bulk", () => {
   it("bulk installs plugins", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockApiRequest.mockResolvedValueOnce({ installed: [{ catalogServerId: "srv1", orgListingId: "listing1", error: null }] });
+    mockApiRequest.mockResolvedValueOnce({ installed: [{ pluginId: "srv1", orgListingId: "listing1", error: null }] });
     await pluginOrgInstallBulkCommand.parseAsync(["node", "cli", "--items", '[{"catalogServerId":"srv1"}]']);
     expect(mockApiRequest).toHaveBeenCalledWith("/plugin/org/install_bulk", expect.objectContaining({ method: "POST" }));
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("1 succeeded"));
@@ -2023,9 +2023,10 @@ describe("plugin org install bulk", () => {
 
   it("reports partial failures", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockApiRequest.mockResolvedValueOnce({ installed: [{ catalogServerId: "srv1", orgListingId: null, error: "Not found" }] });
+    mockApiRequest.mockResolvedValueOnce({ installed: [{ pluginId: "srv1", orgListingId: null, error: "Not found" }] });
     await pluginOrgInstallBulkCommand.parseAsync(["node", "cli", "--items", '[{"catalogServerId":"srv1"}]']);
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("0 succeeded, 1 failed"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("srv1: Not found"));
     consoleSpy.mockRestore();
   });
 

@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { schema, withSystemDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
+import { getOxagenPlugin } from "@oxagen/oxagen/plugins";
 import {
   listServers,
   getServerVersion,
@@ -11,6 +12,32 @@ import { logger } from "./logger";
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
   const { name, version = "latest" } = input as { name: string; version?: string };
+
+  // ── First-party Oxagen capability packs ─────────────────────────────────────
+  // Capability packs (agent_capability / knowledge_source / integration) live in
+  // the in-repo Oxagen plugin registry, NOT in MCP registries. Resolve them here
+  // so the marketplace detail panel works for ids like "oxagen/media-image"
+  // WITHOUT requiring any enabled MCP registry. Before this, catalog.get always
+  // hit the registry path and threw (→ 500) for every first-party pack, which
+  // crashed the marketplace detail panel. Hidden packs are treated as not-found.
+  const manifest = getOxagenPlugin(name);
+  if (manifest && manifest.visibility !== "hidden") {
+    logger.info({ name, version: manifest.version }, "plugin.catalog.get: oxagen plugin ok");
+    return {
+      name: manifest.id,
+      title: manifest.name,
+      description: manifest.description,
+      version: manifest.version,
+      repository: null,
+      websiteUrl: null,
+      icons: [],
+      packages: [],
+      remotes: [],
+      transportTypes: [],
+      authKind: "none",
+      categories: [manifest.category],
+    };
+  }
 
   // Load enabled registries for this workspace to search across.
   const registries = await withSystemDb((tx) =>
@@ -29,8 +56,11 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       ),
   );
 
+  // Not a first-party pack and no registries to search → genuinely not found.
+  // Surface as a not-found error (route maps this to 404, not a 500) so the
+  // marketplace renders a clean "not found" instead of crashing.
   if (registries.length === 0) {
-    throw new Error("no enabled registries for this workspace");
+    throw new Error(`catalog server not found: ${name}@${version}`);
   }
 
   // Try each registry until we find the server. For "latest", list and pick the
