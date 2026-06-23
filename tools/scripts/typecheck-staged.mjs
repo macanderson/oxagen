@@ -20,11 +20,20 @@
 // relative compiler paths resolve exactly as they do for the real build. The
 // authoritative affected-package typecheck still runs in CI
 // (`turbo run typecheck --filter=...[origin/main]`).
-import { existsSync, readdirSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, writeFileSync, rmSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const TS_EXT = /\.(ts|tsx|mts|cts)$/;
+// Root-level tooling config files (vitest.config.ts, tailwind.config.ts,
+// eslint.config.mts, *.config.*) live OUTSIDE a package's compiled source root
+// — package tsconfigs here use `rootDir: "src"` / `include: ["src"]`, so the
+// real `tsc` build never compiles them. Forcing such a file into the temp
+// config's `files` list makes tsc throw TS6059 ("not under rootDir 'src'"),
+// failing the pre-commit hook on an ordinary config edit (e.g. ratcheting a
+// coverage threshold). They are validated by their own tooling at runtime, so
+// skip them here to mirror what the authoritative build typechecks.
+const CONFIG_FILE = /(^|\/)[^/]+\.config\.(c|m)?[jt]sx?$/i;
 const repoRoot = process.cwd();
 const tsc = join(repoRoot, "node_modules", ".bin", "tsc");
 
@@ -41,7 +50,9 @@ function nearestTsconfig(file) {
   return null;
 }
 
-const files = process.argv.slice(2).filter((f) => TS_EXT.test(f));
+const files = process.argv
+  .slice(2)
+  .filter((f) => TS_EXT.test(f) && !CONFIG_FILE.test(f));
 if (files.length === 0) process.exit(0); // nothing typecheckable staged
 
 // Group changed files by their owning tsconfig.
@@ -53,31 +64,11 @@ for (const file of files) {
   groups.get(tsconfig).push(resolve(repoRoot, file));
 }
 
-// Ambient .d.ts files that live at the package root (e.g. Next.js's
-// `next-env.d.ts`) carry `/// <reference types="..." />` directives that bring
-// in framework-wide ambient types — JSX, `server-only`, route types, etc.
-// Without them the temp `files` config misses those references and a staged
-// file that imports `server-only` (or uses JSX) gets phantom errors. Pull in
-// every top-level `*.d.ts` so the resolution matches the real build.
-function ambientDtsFiles(pkgDir) {
-  try {
-    return readdirSync(pkgDir, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".d.ts"))
-      .map((entry) => entry.name);
-  } catch {
-    return [];
-  }
-}
-
 let failed = false;
 for (const [tsconfig, absFiles] of groups) {
   const pkgDir = dirname(tsconfig);
   // Temp config beside the real one so extends/types/paths resolve identically.
   const tempPath = join(pkgDir, `tsconfig.staged-${process.pid}.json`);
-  const stagedRelFiles = absFiles.map((f) => relative(pkgDir, f));
-  const ambientRelFiles = ambientDtsFiles(pkgDir).filter(
-    (name) => !stagedRelFiles.includes(name),
-  );
   writeFileSync(
     tempPath,
     JSON.stringify({

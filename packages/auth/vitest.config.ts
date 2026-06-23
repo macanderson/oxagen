@@ -9,13 +9,15 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // lines floor 49 (measured 52.17); auth.ts is Better Auth config (not unit-testable)
-      // branches floor 90 (reduced from 94 for CI stability)
+      // lines/statements floor 53 (measured 55.81 after OXA-1789 oauth-proxy-config
+      // tests; auth.ts is Better Auth config and stays 0% / not unit-testable).
+      // functions floor 89 (measured 92). branches floor 90 (measured 97.27;
+      // capped at 90). All keep ≥2.5% headroom below the measured value.
       thresholds: {
-        lines: 49,
+        lines: 53,
         branches: 90,
-        functions: 85,
-        statements: 49,
+        functions: 89,
+        statements: 53,
       },
     },
   },

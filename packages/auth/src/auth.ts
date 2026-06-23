@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { buildOAuthProxyPlugins } from "./oauth-proxy-config";
 import { eq } from "drizzle-orm";
 import { db } from "@oxagen/database/client";
 import { schema, withSystemDb } from "@oxagen/database";
@@ -184,6 +185,48 @@ const trustedOrigins: string[] = [
   ...envTrustedOrigins,
 ];
 
+// ---------------------------------------------------------------------------
+// OXA-1789: Multi-environment social login via Better Auth's OAuth Proxy.
+//
+// A GitHub OAuth App (and a Google OAuth client) allows only ONE callback host.
+// We share a SINGLE login OAuth app across production (app.oxagen.sh) and every
+// preview deployment (preview-app.oxagen.sh, …), so a naive setup can satisfy
+// only ONE host — the other 403s with GitHub's "The redirect_uri is not
+// associated with this application" (the exact prod break after the oxagen.sh
+// domain migration).
+//
+// oAuthProxy resolves this. The OAuth app is registered with the PRODUCTION
+// callback ONLY — `${OAUTH_PROXY_PRODUCTION_URL}/api/auth/callback/<provider>`:
+//   • Production: the proxy detects currentURL origin === productionURL origin
+//     and SKIPS entirely — a pure passthrough, identical to today's behavior
+//     (the shared secret is never even read on this path).
+//   • Preview: the proxy rewrites the outgoing redirect_uri to the production
+//     callback, lets production exchange the OAuth `code`, then relays the
+//     authenticated session back to the preview origin inside a payload
+//     encrypted with the shared secret — so the cookie lands on the preview
+//     host. Preview origins must be trusted (preview-app.oxagen.sh is in
+//     PROD_ORIGINS); access previews via that stable alias for OAuth.
+//
+// PREVIEW REQUIREMENTS (production needs neither — it only passes through):
+//   1. The login OAuth app callback URL = `${OAUTH_PROXY_PRODUCTION_URL}/api/auth/callback/<provider>`.
+//   2. OAUTH_PROXY_SECRET set to the SAME value in production AND preview, so
+//      production can encrypt and preview can decrypt the relay payload. It is
+//      a DEDICATED secret (not BETTER_AUTH_SECRET) so a key shared across
+//      environments cannot forge sessions or decrypt anything protected by the
+//      main secret. We fall back to BETTER_AUTH_SECRET only so the plugin can
+//      boot; cross-environment relay needs the dedicated shared secret set.
+//
+// DISABLED in local dev: local uses a separate dev OAuth app with a localhost
+// callback, and proxying localhost through production would break local sign-in.
+// The pure, unit-tested implementation lives in ./oauth-proxy-config.
+// ---------------------------------------------------------------------------
+const oauthProxyPlugins = buildOAuthProxyPlugins({
+  isLocalEnv,
+  productionUrlEnv: process.env.OAUTH_PROXY_PRODUCTION_URL,
+  proxySecretEnv: process.env.OAUTH_PROXY_SECRET,
+  betterAuthSecret: env.BETTER_AUTH_SECRET,
+});
+
 export const auth = betterAuth({
   // tenancy: unscoped seam (identity resolution before a tenant scope exists) — OXA-1515
   // The Drizzle adapter is handed the global db() connection so Better Auth can
@@ -219,6 +262,10 @@ export const auth = betterAuth({
   // trusted by Better Auth; these additional origins cover the app surfaces and
   // dev localhost. See PROD_ORIGINS / DEV_ORIGINS constants above.
   trustedOrigins,
+  // OXA-1789: OAuth Proxy — passthrough in production, relays preview social
+  // logins through the production callback. Empty in local dev. See the
+  // oauthProxyPlugins note above.
+  plugins: oauthProxyPlugins,
   user: {
     fields: {
       name: "displayName",
