@@ -118,12 +118,97 @@ export const [ingestionDeleteConnection] = createFunction(
           );
 
           const deletedCount = (deleteResult.records[0]?.get("deleted") as number | undefined) ?? 0;
-          logger.info(
-            { connectionId, orgId, deletedCount },
-            "ingestion-delete: neo4j entity nodes deleted",
+
+          // ── Pass 3: Delete every other node this connection produced ─────
+          // Catch-all for all NON-EntityNode artifacts stamped with this
+          // connectionId — SourceFile, SourceSymbol, Feature, and any future
+          // connector-derived label. EntityNode is handled in Pass 2 (it carries
+          // ALIAS_OF promotion semantics); everything else is removed
+          // unconditionally. Previously only SourceFile/SourceSymbol were swept,
+          // so :Feature nodes (and others) leaked, leaving thousands of orphans
+          // after a "delete data". DETACH DELETE also drops CONTAINS / SOURCED_FROM
+          // and any other edges.
+          const sourceDeleteResult = await session.run(
+            `
+            MATCH (n {connectionId: $connectionId, orgId: $orgId})
+            WHERE NOT n:EntityNode
+            DETACH DELETE n
+            RETURN count(n) AS deleted
+            `,
+            { connectionId, orgId },
+          );
+          const sourceDeletedCount =
+            (sourceDeleteResult.records[0]?.get("deleted") as number | undefined) ?? 0;
+
+          // ── Pass 3b: Sweep inference suggestions left pointing at dead nodes ─
+          // semantic-edge inference records each candidate as an :InferredEdge
+          // node referencing its source via sourceNodeId. Those carry no usable
+          // connectionId, so once Passes 1-3 remove the source entity the edge
+          // referenced, the suggestion is a dangling "pending inference" forever.
+          // Drop any :InferredEdge whose source node no longer exists.
+          const inferredDeleteResult = await session.run(
+            `
+            MATCH (ie:InferredEdge {orgId: $orgId, workspaceId: $workspaceId})
+            WHERE ie.sourceNodeId IS NOT NULL
+              AND NOT EXISTS {
+                MATCH (s {publicId: ie.sourceNodeId, orgId: $orgId})
+              }
+            DETACH DELETE ie
+            RETURN count(ie) AS deleted
+            `,
+            { connectionId, orgId },
+          );
+          const inferredDeletedCount =
+            (inferredDeleteResult.records[0]?.get("deleted") as number | undefined) ?? 0;
+
+          // ── Pass 4: Delete the SourceConnection meta-node ────────────────
+          await session.run(
+            `
+            MATCH (sc:SourceConnection {id: $connectionId, orgId: $orgId})
+            DETACH DELETE sc
+            `,
+            { connectionId, orgId },
           );
 
-          return { promoted: promotedCount, deleted: deletedCount };
+          // ── Pass 5: Sweep concept placeholders this source's deletion orphaned
+          // Semantic-edge inference MERGEs lightweight :KnowledgeNode concept
+          // targets (carrying type/name, NOT connectionId or naturalKey) and links
+          // source entities to them. They are intentionally connection-agnostic so
+          // a concept seen by several sources survives — so they're matched here
+          // ONLY when they have no remaining relationships after Passes 1–3, i.e.
+          // nothing else references them. naturalKey-keyed nodes (ingested entities,
+          // graph.node.upsert, web-search) are excluded so only inferred orphans go.
+          const orphanResult = await session.run(
+            `
+            MATCH (n:KnowledgeNode {orgId: $orgId, workspaceId: $workspaceId})
+            WHERE n.connectionId IS NULL
+              AND n.naturalKey IS NULL
+              AND NOT (n)--()
+            DELETE n
+            RETURN count(n) AS deleted
+            `,
+            { connectionId, orgId },
+          );
+          const orphanDeletedCount =
+            (orphanResult.records[0]?.get("deleted") as number | undefined) ?? 0;
+
+          logger.info(
+            {
+              connectionId,
+              orgId,
+              deletedCount,
+              sourceDeletedCount,
+              inferredDeletedCount,
+              orphanDeletedCount,
+            },
+            "ingestion-delete: neo4j nodes deleted (entities + connection-stamped + inference suggestions + orphaned concepts + meta)",
+          );
+
+          return {
+            promoted: promotedCount,
+            deleted:
+              deletedCount + sourceDeletedCount + inferredDeletedCount + orphanDeletedCount,
+          };
         }),
       );
     }
@@ -151,12 +236,16 @@ export const [ingestionDeleteConnection] = createFunction(
               WHERE  connection_id = ${connectionId}::uuid
             `);
             // Soft-delete the connection itself so audit history is preserved.
+            // Column is deleted_by_user_id (NOT deleted_by) — the wrong name made
+            // this UPDATE throw "column deleted_by does not exist", so the job
+            // never set deleted_at and the row was stuck at status='deleting'
+            // forever in the UI (connection.list filters deleted_at IS NULL).
             await tx.execute(sql`
               UPDATE ingestion.source_connections
-              SET    status     = 'deleted',
-                     deleted_at = NOW(),
-                     deleted_by = ${requestedBy}::uuid,
-                     updated_at = NOW()
+              SET    status             = 'deleted',
+                     deleted_at         = NOW(),
+                     deleted_by_user_id = ${requestedBy}::uuid,
+                     updated_at         = NOW()
               WHERE  id     = ${connectionId}::uuid
               AND    org_id = ${orgId}::uuid
             `);

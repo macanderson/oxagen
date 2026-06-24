@@ -129,21 +129,31 @@ export const [ingestionGithubParseFile] = createFunction(
         const session = scopedSession();
         try {
           const result = await session.run(
+            // Carries the universal :KnowledgeNode label + display fields
+            // (label/displayName/sourceId/properties) so the file shows up in the
+            // graph explorer, which filters every read on :KnowledgeNode scoped by
+            // orgId + workspaceId. The MERGE key stays on :SourceFile so the
+            // CONTAINS/SOURCED_FROM traversals below keep matching that label.
             `MERGE (f:SourceFile {naturalKey: $naturalKey, orgId: $orgId})
              ON CREATE SET
                f.publicId    = randomUUID(),
+               f.createdAt   = datetime()
+             ON MATCH SET
+               f.syncedAt   = datetime()
+             SET
+               f:KnowledgeNode,
                f.path        = $path,
                f.language    = $language,
                f.repo        = $repo,
                f.owner       = $owner,
                f.connectionId = $connectionId,
+               f.sourceId    = $connectionId,
                f.workspaceId = $workspaceId,
                f.sha         = $sha,
-               f.createdAt   = datetime()
-             ON MATCH SET
-               f.sha        = $sha,
-               f.language   = $language,
-               f.syncedAt   = datetime()
+               f.label       = 'SourceFile',
+               f.displayName = $path,
+               f.properties  = $properties,
+               f.updatedAt   = datetime()
              RETURN f.publicId AS fileId`,
             {
               naturalKey,
@@ -155,6 +165,13 @@ export const [ingestionGithubParseFile] = createFunction(
               connectionId,
               workspaceId,
               sha,
+              properties: JSON.stringify({
+                path,
+                language: parseResult.language,
+                repo,
+                owner,
+                sha,
+              }),
             },
           );
           const record = result.records[0];
@@ -184,22 +201,31 @@ export const [ingestionGithubParseFile] = createFunction(
                 const symbolNaturalKey =
                   `github:${connectionId}:${owner}/${repo}:${path}:${symbol.kind}:${symbol.name}`;
                 await session.run(
+                  // Same dual-label pattern as SourceFile: MERGE on :SourceSymbol
+                  // (keeps the CONTAINS edge match below), then SET adds the
+                  // universal :KnowledgeNode label + display fields so symbols are
+                  // visible/traversable in the graph explorer (label = symbol kind,
+                  // displayName = symbol name).
                   `MERGE (s:SourceSymbol {naturalKey: $naturalKey, orgId: $orgId})
                    ON CREATE SET
                      s.publicId    = randomUUID(),
+                     s.createdAt   = datetime()
+                   ON MATCH SET
+                     s.syncedAt   = datetime()
+                   SET
+                     s:KnowledgeNode,
                      s.name        = $name,
                      s.kind        = $kind,
+                     s.label       = $kind,
+                     s.displayName = $name,
                      s.startLine   = $startLine,
                      s.endLine     = $endLine,
                      s.fileNaturalKey = $fileNaturalKey,
                      s.connectionId = $connectionId,
+                     s.sourceId    = $connectionId,
                      s.workspaceId = $workspaceId,
-                     s.orgId       = $orgId,
-                     s.createdAt   = datetime()
-                   ON MATCH SET
-                     s.startLine  = $startLine,
-                     s.endLine    = $endLine,
-                     s.syncedAt   = datetime()
+                     s.properties  = $properties,
+                     s.updatedAt   = datetime()
                    WITH s
                    MATCH (f:SourceFile {naturalKey: $fileNaturalKey, orgId: $orgId})
                    MERGE (f)-[:CONTAINS]->(s)`,
@@ -213,6 +239,13 @@ export const [ingestionGithubParseFile] = createFunction(
                     fileNaturalKey: naturalKey,
                     connectionId,
                     workspaceId,
+                    properties: JSON.stringify({
+                      kind: symbol.kind,
+                      name: symbol.name,
+                      startLine: symbol.startLine,
+                      endLine: symbol.endLine,
+                      path,
+                    }),
                   },
                 );
               }

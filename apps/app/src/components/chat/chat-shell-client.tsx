@@ -12,6 +12,7 @@ import { ConsentCard } from "./consent-card";
 import { ToolCallCard } from "./tool-call-card";
 import { CodeExecuteCard } from "./code-execute-card";
 import { MemoryCard } from "./memory-card";
+import { BackgroundTaskCard } from "./background-task-card";
 import { SubagentFanout } from "./subagent-fanout";
 import { CHAT_COMPONENTS, logUnknownComponent, UnknownComponentCard } from "./chat-component-registry";
 import { StreamingText } from "./streaming-text";
@@ -131,6 +132,7 @@ export function ChatShellClient({
     memoryWrites,
     activeFanouts,
     components: liveComponents,
+    backgroundTasks,
     order,
     turnUsage,
     consume,
@@ -711,6 +713,33 @@ export function ChatShellClient({
           active: false,
         };
       }
+      case "bgtask": {
+        const t = backgroundTasks[id];
+        if (!t) return null;
+        const tone: TimelineTone =
+          t.status === "completed"
+            ? "done"
+            : t.status === "failed"
+              ? "failed"
+              : t.status === "cancelled"
+                ? "idle"
+                : "running";
+        const active = t.status === "pending" || t.status === "running";
+        return {
+          node: (
+            <BackgroundTaskCard
+              taskId={t.taskId}
+              kind={t.kind}
+              label={t.label}
+              status={t.status}
+              inngestRunId={t.inngestRunId}
+              progressPct={t.progressPct}
+            />
+          ),
+          tone,
+          active,
+        };
+      }
       default:
         return null;
     }
@@ -732,7 +761,13 @@ export function ChatShellClient({
 
       <div
         ref={scrollContainerRef}
-        className="min-h-0 flex-1 overflow-y-auto pr-2"
+        // `relative` is load-bearing: it makes this scroll container the
+        // containing block for its absolutely-positioned descendants (e.g. the
+        // `.sr-only` labels inside message-footer icon buttons). Without it
+        // those abs elements anchor to the initial containing block, escape this
+        // container's `overflow` clipping, and inflate the document height —
+        // letting the whole page scroll past the composer on mobile and desktop.
+        className="relative min-h-0 flex-1 overflow-y-auto pr-2"
         onScroll={handleScroll}
       >
         {messages.length === 0 && !hasLiveContent ? (

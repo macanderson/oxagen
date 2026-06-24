@@ -83,6 +83,8 @@ vi.mock("@oxagen/ingestion/connectors", () => ({
 
 import { app } from "../app";
 import { makeRequest } from "./_helpers";
+// The same mocked logger instance the route imports — assert ack-and-drop logs.
+import { logger } from "../middleware/logger";
 
 const SECRET = "test-webhook-secret";
 const PATH = "/webhooks/github/app";
@@ -149,10 +151,45 @@ afterEach(() => {
 });
 
 describe("github app webhook – configuration & signature", () => {
-  it("returns 503 when GITHUB_APP_WEBHOOK_SECRET is missing", async () => {
+  it("acks with 200 and logs an error when GITHUB_APP_WEBHOOK_SECRET is missing", async () => {
+    // GitHub records EVERY non-2xx delivery (4xx and 5xx alike) as failed and
+    // re-queues it, so any error status on a server misconfiguration produces an
+    // infinite retry flood. A missing webhook secret is a server-side config
+    // problem the request can't fix, so we ACK with 200 (drop the event) to stop
+    // GitHub retrying, and log loudly so operators catch the misconfiguration.
+    // The real fix is setting GITHUB_APP_WEBHOOK_SECRET in Vercel.
     delete process.env.GITHUB_APP_WEBHOOK_SECRET;
     const res = await app.fetch(signedPost("pull_request", { installation: { id: 555 } }));
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { received: boolean; dispatched: number; reason?: string };
+    expect(body.received).toBe(true);
+    expect(body.dispatched).toBe(0);
+    // Operators must see the misconfiguration — assert it was logged at error.
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: "github_app_webhook_secret_missing" }),
+      expect.stringContaining("GITHUB_APP_WEBHOOK_SECRET"),
+    );
+    // Nothing is dispatched when we cannot verify the signature.
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
+  });
+
+  it("returns 200 with dispatched>0 for a well-formed signed webhook (no retry flood)", async () => {
+    // Regression guard for the webhook-flood incident: a properly-signed webhook
+    // with the secret configured must return a 2xx ack (so GitHub does not retry)
+    // and dispatch the event. Pre-condition: secret IS set (beforeEach).
+    expect(process.env.GITHUB_APP_WEBHOOK_SECRET).toBeDefined();
+    const res = await app.fetch(
+      signedPost("pull_request", {
+        action: "opened",
+        installation: { id: 555 },
+        repository: { full_name: "acme/widgets" },
+        pull_request: { number: 7 },
+      }),
+    );
+    // 2xx ack is what stops GitHub's retry queue.
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { dispatched: number };
+    expect(body.dispatched).toBeGreaterThan(0);
   });
 
   it("returns 401 when the signature header is absent", async () => {

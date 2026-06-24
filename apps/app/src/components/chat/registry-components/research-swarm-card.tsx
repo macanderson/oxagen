@@ -155,6 +155,12 @@ export default function ResearchSwarmCard(
       polls += 1;
       try {
         const res = await fetch(url, { headers: { "Content-Type": "application/json" } });
+        // 404 → the swarmId is unknown (never existed or cross-tenant).  Stop
+        // polling immediately — retrying will never produce a different result.
+        if (res.status === 404) {
+          if (!cancelled) setLive({ ...readSwarm(null), status: "failed" });
+          return;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json: unknown = await res.json();
         if (cancelled) return;

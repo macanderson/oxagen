@@ -98,10 +98,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/tools/scripts/hook-guard.sh\" gate 5 'if [[ \"$BASH_COMMAND\" == *\"git push\"* || \"$BASH_COMMAND\" == *\"git commit\"* ]]; then echo \"Pre-push verification: running full CI gate...\"; NODE_OPTIONS=--max-old-space-size=4096 pnpm gate --silent 2>&1 | tail -20 || echo \"⚠ CI gate check failed — review output above\"; fi'",
-            "timeout": 120,
-            "statusMessage": "Verifying CI gate before push...",
-            "async": false
+            "command": "echo 'ℹ CI runs the authoritative full gate on every push/PR (GitHub Actions). The local pre-commit/push full-gate hook is intentionally disabled — running turbo test:coverage+build on every commit across concurrent sessions saturated RAM and ballooned swap/compressor to ~100GB. Run `pnpm gate` manually before marking a body of work ready to merge.'",
+            "timeout": 5,
+            "statusMessage": "CI gate runs on push/PR (local full-gate hook disabled)...",
+            "async": true
           },
           {
             "type": "command",

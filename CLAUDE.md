@@ -290,6 +290,16 @@ Never import `generateText` / `streamText` / `generateObject` directly from `ai`
 
 Enforcement: `no-restricted-imports` in `eslint.next.mjs`. Exceptions: the re-export files themselves, plus `@oxagen/ui` barrel, `@oxagen/ui/styles/*`, `@oxagen/ui/lib/*`.
 
+## Citing nodes & edges in the UI
+
+**Never display a node's or edge's UUID as its primary on-screen identifier.** A raw id (`913d6df1-…`) is meaningless to a user. Whenever the UI references a graph node or relationship, cite it by its **human label** (`displayName` + domain `label`) and make the citation **inspectable** — hovering/clicking reveals the full property bag (and a copyable id, which is the only place the raw id belongs).
+
+- **Use the shared citation components**, don't hand-roll a `<span>{id}</span>`:
+  - `NodeRef` (`apps/app/src/components/knowledge/graph/node-ref.tsx`) — a colour-coded node chip with a hover/click property popover. Derive its input from an edge with `sourceNodeRef(edge)` / `targetNodeRef(edge)`.
+  - The graph-explorer detail/hover panels (`PropertyList`, `ConfidenceMeter`, `CopyableId`, `colorForLabel`) are the canonical primitives — reuse them; there is exactly one implementation of "show a node/edge nicely".
+- **Resolve the label server-side.** A capability that returns an edge/relationship must resolve each endpoint to the `knowledgeNodeRef` shape (`{ id, label, displayName, properties }`) in its handler — `semantic.edge.suggest`/`semantic.edge.list` OPTIONAL MATCH the node by `publicId` and coalesce `displayName→name→publicId`. Don't ship a bare id to the client and hope the UI has a label for it.
+- A node that isn't materialised yet (e.g. a pending inferred edge's target) carries `id: null` and is shown as a described candidate, never a UUID.
+
 ## Infrastructure boundaries
 
 Authoritative. Document architectural decisions in `docs/adr/`.

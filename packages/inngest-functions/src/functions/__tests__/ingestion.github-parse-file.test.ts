@@ -211,6 +211,26 @@ describe("ingestion.github-parse-file Inngest function", () => {
     );
   });
 
+  it("labels the SourceFile node :KnowledgeNode with display fields so it shows in the graph explorer", async () => {
+    // Regression: SourceFile/SourceSymbol were written only under their domain
+    // labels, but the graph explorer reads :KnowledgeNode — so an ingested repo's
+    // files/symbols never appeared in the graph.
+    const step = makeStep();
+    await capturedHandler!({ event: { data: BASE_EVENT }, step });
+
+    const fileCall = mocks.scopedSessionRun.mock.calls.find(
+      (c: unknown[]) => typeof c[0] === "string" && (c[0] as string).includes("MERGE (f:SourceFile"),
+    );
+    expect(fileCall).toBeDefined();
+    const [cypher, params] = fileCall as [string, Record<string, unknown>];
+    expect(cypher).toContain("f:KnowledgeNode");
+    expect(cypher).toContain("f.label");
+    expect(cypher).toContain("f.displayName");
+    expect(cypher).toContain("f.sourceId");
+    expect(params["path"]).toBe("src/auth.ts");
+    expect(typeof params["properties"]).toBe("string");
+  });
+
   it("calls scopedSession to MERGE SourceSymbol nodes when symbols exist", async () => {
     const step = makeStep();
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
@@ -219,6 +239,14 @@ describe("ingestion.github-parse-file Inngest function", () => {
       typeof c[0] === "string" && (c[0] as string).includes("MERGE (s:SourceSymbol"),
     );
     expect(mergeSymbolCalls.length).toBeGreaterThanOrEqual(2);
+    // Each symbol carries :KnowledgeNode + label/displayName so it's graph-visible.
+    const [cypher, params] = mergeSymbolCalls[0] as [string, Record<string, unknown>];
+    expect(cypher).toContain("s:KnowledgeNode");
+    expect(cypher).toContain("s.label");
+    expect(cypher).toContain("s.displayName");
+    expect(cypher).toContain("s.sourceId");
+    expect(params["name"]).toBe("login");
+    expect(params["kind"]).toBe("function");
   });
 
   it("uses correct symbol natural key format", async () => {

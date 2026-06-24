@@ -113,10 +113,17 @@ export async function upsertEntityNode(
       `MERGE (n:${labelClause} {naturalKey: $naturalKey, orgId: $orgId})
        ON CREATE SET
          n.publicId         = randomUUID(),
+         n.createdAt        = datetime()
+       ON MATCH SET
+         n.syncedAt         = datetime()
+       SET
+         n:KnowledgeNode,
          n.entityType       = $entityType,
          n.sourceRecordType = $sourceRecordType,
+         n.label            = $label,
          n.displayName      = $displayName,
          n.connectionId     = $connectionId,
+         n.sourceId         = $connectionId,
          n.workspaceId      = $workspaceId,
          n.properties       = $properties,
          n.conformanceScore = $conformanceScore,
@@ -134,7 +141,12 @@ export async function upsertEntityNode(
         naturalKey: mutation.naturalKey,
         entityType: mutation.entityType,
         sourceRecordType: mutation.sourceRecordType,
-        displayName: mutation.displayName ?? null,
+        // `label` is the type chip the explorer groups + filters on. Use the
+        // domain entityType (e.g. "issue", "pull_request", "source_repository").
+        label: mutation.entityType,
+        // displayName must be non-null — the explorer renders it directly. Fall
+        // back to the naturalKey so a node never shows as empty/"null".
+        displayName: mutation.displayName ?? mutation.naturalKey,
         connectionId: mutation.connectionId,
         workspaceId: mutation.workspaceId,
         properties: JSON.stringify(mutation.properties),
