@@ -39,6 +39,7 @@ export interface AutoReloadSettingsProps {
   settings: OrgBillingSettings;
   methods: PaymentMethodView[];
   canManage: boolean;
+  hasActiveSubscription?: boolean;
 }
 
 export function AutoReloadSettings({
@@ -46,6 +47,7 @@ export function AutoReloadSettings({
   settings,
   methods,
   canManage,
+  hasActiveSubscription = true,
 }: AutoReloadSettingsProps) {
   const toast = useToast();
 
@@ -114,9 +116,21 @@ export function AutoReloadSettings({
   });
 
   const disabled = !canManage;
+  const noSubscription = !hasActiveSubscription;
+  const toggleDisabled = disabled || noSubscription;
   const inputsDisabled = disabled || !enabled;
 
   async function handleSave() {
+    if (enabled && !hasActiveSubscription) {
+      toast.add({
+        title: "Subscription required",
+        description: "You must have an active subscription to enable automatic reload.",
+        type: "error",
+      });
+      setEnabled(false);
+      return;
+    }
+
     const thresholdCents = parseDollarsToCents(threshold);
     const amountCents = parseDollarsToCents(amount);
 
@@ -164,12 +178,17 @@ export function AutoReloadSettings({
             <p className="text-xs text-muted-foreground">
               Automatically buy credits when your balance runs low.
             </p>
+            {noSubscription && (
+              <p className="text-xs text-destructive">
+                Active subscription required to enable automatic reload.
+              </p>
+            )}
           </div>
           <Switch
             id="autoreload-switch"
             checked={enabled}
             onCheckedChange={setEnabled}
-            disabled={disabled}
+            disabled={toggleDisabled}
           />
         </div>
 
@@ -216,7 +235,18 @@ export function AutoReloadSettings({
                   disabled={inputsDisabled}
                 >
                   <SelectTrigger id="autoreload-card" size="default">
-                    <SelectValue placeholder="Select a card" />
+                    <SelectValue>
+                      {paymentMethodId
+                        ? (() => {
+                            const selected = methods.find((m) => m.stripePaymentMethodId === paymentMethodId);
+                            if (!selected) return "Select a card";
+                            const brand = selected.brand
+                              ? selected.brand.charAt(0).toUpperCase() + selected.brand.slice(1).toLowerCase()
+                              : "Card";
+                            return `${brand} •• ${selected.last4 ?? ""}${selected.isDefault ? " (default)" : ""}`;
+                          })()
+                        : "Select a card"}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectPopup alignItemWithTrigger={false}>
                     {methods.map((m) => (

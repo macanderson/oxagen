@@ -269,6 +269,7 @@ export async function BillingSubscriptionBody({ orgSlug }: { orgSlug: string }) 
           settings={billingSettings}
           methods={paymentMethods}
           canManage={canManageBilling}
+          hasActiveSubscription={!!subscriptionRow}
         />
       ) : null}
     </div>
