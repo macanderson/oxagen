@@ -1,25 +1,38 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { schemaChat } from "@oxagen/oxagen/contracts/schema.chat";
-import { generateObjectFor } from "@oxagen/ai";
+import { generateObjectFor, selectModel } from "@oxagen/ai";
 import { z } from "zod";
 import { schema as db, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
 import { getOrCreateRegistry } from "./schema.versioning";
 import { logger } from "./logger";
 
+interface DraftSchema {
+  name: string;
+  labels: string[];
+  rels: string[];
+}
+
 // Compact summary of the current draft so the model edits additively against
 // the real schema/label/relationship names instead of guessing (drops, property
-// adds, and "don't wipe prior work" all depend on this grounding).
-async function loadDraftSummary(orgId: string, workspaceId: string, userId: string | null): Promise<string> {
+// adds, and "don't wipe prior work" all depend on this grounding). Returns both
+// the prompt text AND the structured schemas, which the deterministic intent
+// layer matches against.
+async function loadDraft(
+  orgId: string,
+  workspaceId: string,
+  userId: string | null,
+): Promise<{ text: string; schemas: DraftSchema[] }> {
   const registry = await getOrCreateRegistry(orgId, workspaceId, userId);
-  if (!registry.draftVersionId) return "The registry draft is currently EMPTY (no schemas yet).";
+  const empty = { text: "The registry draft is currently EMPTY (no schemas yet).", schemas: [] as DraftSchema[] };
+  if (!registry.draftVersionId) return empty;
   const draftVersionId = registry.draftVersionId;
   return withTenantDb(async (tx) => {
-    const schemas = await tx
+    const schemaRows = await tx
       .select({ id: db.schemas.id, name: db.schemas.name })
       .from(db.schemas)
       .where(and(eq(db.schemas.versionId, draftVersionId), isNull(db.schemas.deletedAt)));
-    if (schemas.length === 0) return "The registry draft is currently EMPTY (no schemas yet).";
+    if (schemaRows.length === 0) return empty;
     const labels = await tx
       .select({ schemaId: db.nodeLabels.schemaId, name: db.nodeLabels.name })
       .from(db.nodeLabels)
@@ -28,13 +41,17 @@ async function loadDraftSummary(orgId: string, workspaceId: string, userId: stri
       .select({ schemaId: db.relationshipTypes.schemaId, name: db.relationshipTypes.name })
       .from(db.relationshipTypes)
       .where(and(eq(db.relationshipTypes.versionId, draftVersionId), isNull(db.relationshipTypes.deletedAt)));
-    const bySchema = new Map(schemas.map((s) => [s.id, { name: s.name, labels: [] as string[], rels: [] as string[] }]));
+    const bySchema = new Map(schemaRows.map((s) => [s.id, { name: s.name, labels: [] as string[], rels: [] as string[] }]));
     for (const l of labels) bySchema.get(l.schemaId)?.labels.push(l.name);
     for (const r of rels) bySchema.get(r.schemaId)?.rels.push(r.name);
-    const lines = [...bySchema.values()].map(
+    const schemas = [...bySchema.values()];
+    const lines = schemas.map(
       (s) => `- schema "${s.name}": labels [${s.labels.join(", ") || "none"}]; relationshipTypes [${s.rels.join(", ") || "none"}]`,
     );
-    return `Current draft schemas (edit these additively — use these EXACT names):\n${lines.join("\n")}`;
+    return {
+      text: `Current draft schemas (edit these additively — use these EXACT names):\n${lines.join("\n")}`,
+      schemas,
+    };
   });
 }
 
@@ -94,11 +111,35 @@ const chatResponseSchema = z.object({
 
 export const schemaChatHandler: CapabilityHandler<typeof schemaChat> = async (input, ctx) => {
   const conversationId = input.conversationId ?? crypto.randomUUID();
-  const draftSummary = await loadDraftSummary(ctx.orgId, ctx.workspaceId, ctx.userId);
+  const draft = await loadDraft(ctx.orgId, ctx.workspaceId, ctx.userId);
+
+  // Deterministic intent layer: simple single-op edits (drop/disable/enable a
+  // schema, add a property) are parsed straight to contract mutations, so they
+  // NEVER depend on the probabilistic model choosing to populate `mutations`.
+  // The LLM still handles open-ended/multi-step asks (e.g. "generate schemas
+  // for a B2B SaaS company"). Both sets are merged + deduped below.
+  const deterministicMutations = detectSimpleIntents(input.message, draft.schemas);
+
+  // Fast path: a clear single-op edit (drop/disable/enable/add-property) that is
+  // NOT also a create/scaffold request is handled entirely by the deterministic
+  // layer — skip the (slow, precise-tier) LLM call. Instant + 100% reliable.
+  const wantsCreate =
+    /\b(generate|scaffold|build|design)\b/i.test(input.message) ||
+    // "add/create a LABEL or RELATIONSHIP" is a structural create (LLM path);
+    // "add a FIELD/PROPERTY" is NOT — it's handled deterministically (fast path).
+    /\b(create|add)\b.*\b(label|relationship|node type|ontolog)/i.test(input.message) ||
+    /\bschemas?\b.*\b(for a|capturing|ontology of)\b/i.test(input.message);
+  if (deterministicMutations.length > 0 && !wantsCreate) {
+    logger.info(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId, conversationId, mutationCount: deterministicMutations.length },
+      "schema.chat: deterministic fast-path",
+    );
+    return { assistantMessage: describeMutations(deterministicMutations), proposedMutations: deterministicMutations, conversationId };
+  }
 
   const system = `You are an expert knowledge graph schema designer for a workspace schema registry. You speak the canonical Neo4j vocabulary: node labels, relationship types, properties.
 
-${draftSummary}
+${draft.text}
 
 CRITICAL EXECUTION RULE: You are an EXECUTOR, not an advisor. When the user asks to drop / delete / remove / rename / add / change / enable / disable anything, you MUST emit the mutation(s) that perform it in this same response. NEVER reply with only an acknowledgement or a question. Use the EXACT existing names from the draft summary above. Worked examples:
 - "drop the support schema" -> mutations: [{ "capability": "schema.delete", "input": { "schemaName": "support" } }]
@@ -128,6 +169,9 @@ Draft version: ${input.draftVersionId ?? "current draft"}`;
     schema: chatResponseSchema,
     prompt: input.message,
     system,
+    // Precise tier (claude-opus-4.8): reliable structured tool/mutation emission
+    // for schema authoring — the balanced default routinely under-emitted edits.
+    model: selectModel({ tier: "precise" }),
     telemetry: {
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
@@ -136,20 +180,31 @@ Draft version: ${input.draftVersionId ?? "current draft"}`;
     },
   });
 
-  const proposedMutations = buildProposedMutations(object);
+  // Deterministic mutations win (they're guaranteed-correct for the parsed
+  // intent); the LLM's mutations + scaffold fill in the rest, deduped.
+  const proposedMutations = dedupeMutations([
+    ...deterministicMutations,
+    ...buildProposedMutations(object),
+  ]);
 
   logger.info(
     {
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
       conversationId,
+      deterministicCount: deterministicMutations.length,
       mutationCount: proposedMutations.length,
     },
     "schema.chat: generated response",
   );
 
+  const assistantMessage =
+    deterministicMutations.length > 0 && !object.assistantMessage
+      ? `Applying ${deterministicMutations.length} change(s).`
+      : object.assistantMessage;
+
   return {
-    assistantMessage: object.assistantMessage,
+    assistantMessage,
     proposedMutations,
     conversationId,
   };
@@ -170,6 +225,131 @@ const VALID_DATA_TYPES = new Set([
 ]);
 
 type Mutation = { capability: string; input: Record<string, unknown> };
+
+// ── Deterministic intent layer ──────────────────────────────────────────────
+// Maps clear single-op user intents to contract mutations without relying on
+// the LLM. Conservative: only fires when an intent verb AND a real draft schema
+// name are both present; otherwise returns [] and the LLM path handles it.
+
+function singularize(w: string): string {
+  if (w.endsWith("ies")) return w.slice(0, -3) + "y";
+  if (w.endsWith("ses")) return w.slice(0, -2);
+  if (w.endsWith("s") && !w.endsWith("ss")) return w.slice(0, -1);
+  return w;
+}
+
+/** Find a draft schema whose name is mentioned in the text (plural-tolerant). */
+function matchSchema(text: string, schemas: DraftSchema[]): DraftSchema | undefined {
+  const words = text.toLowerCase().match(/[a-z][a-z0-9_]*/g) ?? [];
+  const wordSet = new Set([...words, ...words.map(singularize)]);
+  // Longest schema name first so "subscription" wins over a stray "sub".
+  for (const s of [...schemas].sort((a, b) => b.name.length - a.name.length)) {
+    const n = s.name.toLowerCase();
+    if (wordSet.has(n) || wordSet.has(singularize(n))) return s;
+  }
+  return undefined;
+}
+
+/** Pick the label on a schema a property should attach to (prefer the one matching the schema name). */
+function pickLabel(schema: DraftSchema): string | undefined {
+  if (schema.labels.length === 0) return undefined;
+  const sn = singularize(schema.name.toLowerCase());
+  const match = schema.labels.find((l) => l.toLowerCase() === sn || singularize(l.toLowerCase()) === sn);
+  return match ?? schema.labels[0];
+}
+
+/** Extract snake_case-ish field identifiers from the user's add-property message. */
+function extractFieldNames(message: string): string[] {
+  const stop = new Set(["schema", "schemas", "field", "fields", "property", "properties", "column", "columns", "attribute", "attributes"]);
+  const ids = message.match(/`?\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b`?/gi) ?? [];
+  return [...new Set(ids.map((s) => s.replace(/`/g, "").toLowerCase()).filter((s) => !stop.has(s)))];
+}
+
+function inferDataType(key: string): string {
+  const k = key.toLowerCase();
+  if (/(^|_)(is|has|can|should)_|_flag$/.test(k)) return "boolean";
+  if (/_at$|_date$|_since$|_on$|^date_|_day$/.test(k)) return "date";
+  if (/_time$|_timestamp$|_datetime$/.test(k)) return "datetime";
+  if (/^number_of_|_count$|_qty$|_quantity$|_licenses$|_seats$|_age$|_year$/.test(k)) return "integer";
+  if (/_amount$|_price$|_cost$|_total$|_rate$|_percent$|_score$/.test(k)) return "number";
+  if (/_email$|^email$/.test(k)) return "email";
+  if (/_url$|_link$|^url$/.test(k)) return "url";
+  return "string";
+}
+
+export function detectSimpleIntents(message: string, schemas: DraftSchema[]): Mutation[] {
+  if (schemas.length === 0) return [];
+  const m = message.toLowerCase();
+  const out: Mutation[] = [];
+
+  // ADD PROPERTY — "add a number_of_licenses field to the subscriptions schema"
+  if (/\badd\b/.test(m) && /\b(field|propert|column|attribute)/.test(m)) {
+    const schema = matchSchema(m, schemas);
+    const ownerName = schema && pickLabel(schema);
+    const fields = extractFieldNames(message);
+    if (schema && ownerName && fields.length > 0) {
+      for (const key of fields) {
+        out.push({
+          capability: "schema.property.upsert",
+          input: { schemaName: schema.name, ownerKind: "node", ownerName, key, dataType: inferDataType(key), required: false },
+        });
+      }
+      return out; // unambiguous add-property intent
+    }
+  }
+
+  // DROP / DELETE / REMOVE a whole schema
+  if (/\b(drop|delete|remove)\b/.test(m) && /\bschema\b/.test(m)) {
+    const schema = matchSchema(m, schemas);
+    if (schema) return [{ capability: "schema.delete", input: { schemaName: schema.name } }];
+  }
+
+  // DISABLE / DEACTIVATE / TURN OFF
+  if (/\b(disable|deactivate|inactivate)\b|\bturn\s+off\b/.test(m)) {
+    const schema = matchSchema(m, schemas);
+    if (schema) return [{ capability: "schema.toggle", input: { schemaName: schema.name, enabled: false } }];
+  }
+
+  // ENABLE / ACTIVATE / TURN ON
+  if (/\b(enable|activate)\b|\bturn\s+on\b/.test(m)) {
+    const schema = matchSchema(m, schemas);
+    if (schema) return [{ capability: "schema.toggle", input: { schemaName: schema.name, enabled: true } }];
+  }
+
+  return out;
+}
+
+/** Human-readable summary of fast-path mutations for the assistant reply. */
+export function describeMutations(muts: Mutation[]): string {
+  const parts: string[] = [];
+  const props = muts.filter((m) => m.capability === "schema.property.upsert");
+  if (props.length > 0) {
+    const schemaName = props[0]?.input.schemaName;
+    const keys = props.map((p) => `\`${String(p.input.key)}\``).join(", ");
+    parts.push(`Added ${props.length} propert${props.length === 1 ? "y" : "ies"} (${keys}) to the ${schemaName} schema.`);
+  }
+  for (const m of muts) {
+    if (m.capability === "schema.delete") parts.push(`Dropped the ${m.input.schemaName} schema.`);
+    else if (m.capability === "schema.toggle") {
+      parts.push(`${m.input.enabled ? "Activated" : "Deactivated"} the ${m.input.schemaName} schema.`);
+    } else if (m.capability === "schema.label.delete") parts.push(`Removed the ${m.input.name} label from ${m.input.schemaName}.`);
+  }
+  return parts.join(" ") || "Applied the requested change.";
+}
+
+/** Drop later duplicates of the same logical mutation (deterministic ones come first). */
+export function dedupeMutations(muts: Mutation[]): Mutation[] {
+  const seen = new Set<string>();
+  const out: Mutation[] = [];
+  for (const mu of muts) {
+    const i = mu.input;
+    const key = [mu.capability, i.schemaName, i.name, i.ownerName, i.key].filter(Boolean).join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(mu);
+  }
+  return out;
+}
 
 function humanize(name: string): string {
   return name
@@ -205,7 +385,7 @@ function normalizeCardinality(c: unknown): string | undefined {
   return VALID_CARDINALITY.has(v) ? v : undefined;
 }
 
-function buildProposedMutations(object: z.infer<typeof chatResponseSchema>): Mutation[] {
+export function buildProposedMutations(object: z.infer<typeof chatResponseSchema>): Mutation[] {
   const out: Mutation[] = [];
 
   for (const schema of object.schemas ?? []) {
