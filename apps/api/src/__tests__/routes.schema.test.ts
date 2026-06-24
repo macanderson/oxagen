@@ -507,6 +507,139 @@ describe("schema.validate.node route", () => {
   });
 });
 
+// ── schema.validate.relationship ──────────────────────────────────────────────
+
+describe("schema.validate.relationship route", () => {
+  const PATH = "/schema/validate/relationship";
+  const VALID_BODY = {
+    type: "EMPLOYS",
+    startLabel: "Company",
+    endLabel: "Person",
+    properties: { since: "2020" },
+  };
+
+  it("happy path POST: returns 200 with invoke result", async () => {
+    const invokeResult = { valid: true, conformanceScore: 1.0, errors: [], missingRequired: [], outcome: "accepted" };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await authPost(PATH, VALID_BODY);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke with 'schema.validate.relationship' and surface 'api'", async () => {
+    await authPost(PATH, VALID_BODY);
+    expect(mocks.invoke).toHaveBeenCalledOnce();
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.validate.relationship");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+  });
+
+  it("passes type, startLabel, endLabel, properties to invoke", async () => {
+    await authPost(PATH, VALID_BODY);
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.type).toBe("EMPLOYS");
+    expect(body.startLabel).toBe("Company");
+    expect(body.endLabel).toBe("Person");
+    expect(body.properties).toEqual({ since: "2020" });
+  });
+
+  it("missing type → 400, invoke not called", async () => {
+    const res = await authPost(PATH, { startLabel: "Company", endLabel: "Person", properties: {} });
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── schema.chat ───────────────────────────────────────────────────────────────
+
+describe("schema.chat route", () => {
+  const PATH = "/schema/chat";
+  const VALID_BODY = { message: "Add a Customer label with a name property" };
+
+  it("happy path POST: returns 200 with invoke result", async () => {
+    const invokeResult = { assistantMessage: "Done.", proposedMutations: [], conversationId: "conv-1" };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await authPost(PATH, VALID_BODY);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke with 'schema.chat' and surface 'api'", async () => {
+    await authPost(PATH, VALID_BODY);
+    expect(mocks.invoke).toHaveBeenCalledOnce();
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.chat");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+  });
+
+  it("passes message (and optional ids) to invoke", async () => {
+    await authPost(PATH, { ...VALID_BODY, conversationId: "conv-9", draftVersionId: "ver-2" });
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.message).toBe("Add a Customer label with a name property");
+    expect(body.conversationId).toBe("conv-9");
+    expect(body.draftVersionId).toBe("ver-2");
+  });
+
+  it("empty message → 400, invoke not called", async () => {
+    const res = await authPost(PATH, { message: "" });
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── schema.recommend ──────────────────────────────────────────────────────────
+
+describe("schema.recommend route", () => {
+  const PATH = "/schema/recommend";
+
+  it("happy path GET: returns 200 with invoke result", async () => {
+    const invokeResult = { schemas: [], rationale: "no data yet" };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await authGet(PATH);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke with 'schema.recommend' and surface 'api'", async () => {
+    await authGet(PATH);
+    expect(mocks.invoke).toHaveBeenCalledOnce();
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.recommend");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+  });
+
+  it("?sampleLimit=50 → parsed and passed to invoke as a number", async () => {
+    await authGet(`${PATH}?sampleLimit=50`);
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.sampleLimit).toBe(50);
+  });
+});
+
+// ── schema.setup ──────────────────────────────────────────────────────────────
+
+describe("schema.setup route", () => {
+  const PATH = "/schema/setup";
+
+  it("happy path POST: returns 200 with invoke result", async () => {
+    const invokeResult = { applied: false, recommendation: { schemas: [] } };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await authPost(PATH, {});
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke with 'schema.setup' and surface 'api'", async () => {
+    await authPost(PATH, {});
+    expect(mocks.invoke).toHaveBeenCalledOnce();
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.setup");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+  });
+
+  it("passes enforcement + noInteractive to invoke", async () => {
+    await authPost(PATH, { enforcement: "lenient", noInteractive: true });
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.enforcement).toBe("lenient");
+    expect(body.noInteractive).toBe(true);
+  });
+});
+
 // ── schema.reconcile.dispatch ─────────────────────────────────────────────────
 
 describe("schema.reconcile.dispatch route", () => {
