@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { useParams } from 'next/navigation';
 import { AgentPanel } from '@/components/agent/agent-panel';
 import { useAgentPanelConfig } from '@/hooks/use-agent-panel-config';
 
@@ -33,10 +34,16 @@ interface AgentPanelProviderProps {
  * Wraps the application and manages the open/closed state of the floating agent panel.
  * Renders the AgentPanel component internally when open.
  *
+ * Automatically derives workspaceSlug from URL params if workspaceId is not provided.
+ *
  * @param children - The child components to wrap
- * @param workspaceId - The workspace ID to pass to AgentPanel for position storage
+ * @param workspaceId - The workspace ID to pass to AgentPanel for position storage (auto-derived from URL if not provided)
  */
-export function AgentPanelProvider({ children, workspaceId }: AgentPanelProviderProps) {
+export function AgentPanelProvider({ children, workspaceId: propWorkspaceId }: AgentPanelProviderProps) {
+  const params = useParams<{ orgSlug?: string; workspaceSlug?: string }>();
+  // Use provided workspaceId or derive from URL params
+  const workspaceId = propWorkspaceId || params?.workspaceSlug;
+
   const [isOpen, setIsOpen] = useState(false);
   // Get panel config (for potential future use)
   useAgentPanelConfig('lower-right');
