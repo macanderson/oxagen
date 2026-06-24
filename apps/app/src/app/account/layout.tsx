@@ -4,7 +4,6 @@ import { getSessionOrRedirect } from "@/lib/session";
 import { AppShell } from "@/components/shell/app-shell";
 import type { ShellNavData } from "@/components/shell/shell-nav-slots";
 import { PageContextProvider } from "@/lib/page-context";
-import { AskDrawer } from "@/components/shell/ask/ask-drawer";
 import { CommandMenu } from "@/components/shell/ask/command-menu";
 import { FillOverlay } from "@/components/shell/ask/fill-overlay";
 import type { ResolvedOrg } from "@/lib/resolve-org";
@@ -79,13 +78,6 @@ export default async function AccountLayout({
       >
         {children}
       </AppShell>
-
-      {/* Ask drawer — mounted at the account shell boundary. */}
-      <AskDrawer
-        orgSlug={primaryOrg.slug}
-        availableWorkspaces={[]}
-        modelConfig={resolvedTierCatalog()}
-      />
 
       {/* Command menu — Cmd+K overlay */}
       <CommandMenu ctx={ctx} />
