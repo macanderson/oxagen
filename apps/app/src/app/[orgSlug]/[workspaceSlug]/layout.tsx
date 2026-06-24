@@ -6,7 +6,6 @@ import {
 } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { TenantProvider } from "@/lib/tenant/tenant-context";
-import { resolvedTierCatalog } from "@oxagen/ai";
 import { CommandMenu } from "@/components/shell/ask/command-menu";
 
 // Local mirror of parseRequestUrl in [orgSlug]/layout.tsx. Inlined (not

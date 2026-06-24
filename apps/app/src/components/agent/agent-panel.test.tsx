@@ -26,12 +26,12 @@ describe('AgentPanel', () => {
       setPosition: vi.fn(),
       onPointerDown: vi.fn(),
       isInitialized: true,
-    } as any);
+    } as ReturnType<typeof positionHooks.useAgentPanelPosition>);
 
     vi.mocked(configHooks.useAgentPanelConfig).mockReturnValue({
       buttonLocation: 'lower-right',
       setButtonLocation: vi.fn(),
-    } as any);
+    } as ReturnType<typeof configHooks.useAgentPanelConfig>);
   });
 
   it('should not render when isOpen is false', () => {
@@ -137,7 +137,7 @@ describe('AgentPanel', () => {
       setPosition: vi.fn(),
       onPointerDown: vi.fn(),
       isInitialized: false,
-    } as any);
+    } as ReturnType<typeof positionHooks.useAgentPanelPosition>);
 
     const { container } = render(
       <AgentPanel

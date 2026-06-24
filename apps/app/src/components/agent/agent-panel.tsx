@@ -30,8 +30,8 @@ export function AgentPanel({ workspaceId, isOpen, onClose }: AgentPanelProps) {
   // Get position state and drag handlers from the position hook
   const { x, y, onPointerDown, isInitialized } = useAgentPanelPosition(workspaceId);
 
-  // Get configuration (for future use, currently tracks button location)
-  const { buttonLocation } = useAgentPanelConfig('lower-right');
+  // Get configuration (for future use)
+  useAgentPanelConfig('lower-right');
 
   // Don't render if closed or not initialized yet
   if (!isOpen || !isInitialized) {

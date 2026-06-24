@@ -7,7 +7,6 @@ import { PageContextProvider } from "@/lib/page-context";
 import { CommandMenu } from "@/components/shell/ask/command-menu";
 import { FillOverlay } from "@/components/shell/ask/fill-overlay";
 import type { ResolvedOrg } from "@/lib/resolve-org";
-import { resolvedTierCatalog } from "@oxagen/ai";
 
 export default async function AccountLayout({
   children,
