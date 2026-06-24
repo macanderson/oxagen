@@ -16,6 +16,12 @@ export const runtime = "nodejs";
 // explicit IAM (apps/app does not bootstrap IAM).
 //
 // Capabilities that require the caller to hold owner or admin role.
+// Capabilities whose contract surfaces are agent-only (no "api" surface): the
+// kernel rejects them over surface "api", so the in-app proxy must invoke them
+// over "agent". e.g. schema.delete ships ["agent"] to keep route/tool parity
+// truthful, but the schema-builder drawer still needs to drive it.
+const AGENT_SURFACE_CAPABILITIES = new Set(["schema.delete"]);
+
 const ADMIN_ONLY_CAPABILITIES = new Set([
   "schema.toggle",
   "schema.registry.config",
@@ -86,7 +92,10 @@ export async function POST(
   try {
     const result = await runInTenantScope(
       { orgId: tenant.id, workspaceId: workspace.id },
-      () => invoke(capability, input, capCtx, { surface: "api" }),
+      () =>
+        invoke(capability, input, capCtx, {
+          surface: AGENT_SURFACE_CAPABILITIES.has(capability) ? "agent" : "api",
+        }),
     );
     return NextResponse.json(result ?? {});
   } catch (err) {
