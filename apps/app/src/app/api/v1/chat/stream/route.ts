@@ -28,6 +28,7 @@ import type { StreamEvent } from "@/components/chat/stream-event-types";
 import { autoTitleConversation } from "./auto-title";
 import { streamMediaGeneration } from "./media-generation";
 import { translateAgentStream } from "./translate-stream";
+import { formatStreamError } from "./stream-parts";
 
 // Side-effect imports: bind every handler into the shared kernel BEFORE
 // materializeTools runs so invoke() can resolve both agent.* and all
@@ -557,9 +558,17 @@ export async function POST(request: NextRequest): Promise<Response> {
         // in server logs and ClickHouse — an operator can't tell a transient
         // rate-limit from a recurring code defect.
         logger.error({ err, requestId }, "[chat/stream] turn error");
-        // Surface stream errors as a text event so the client can show them.
-        const message = err instanceof Error ? err.message : "Stream error";
-        emit({ type: "text", messageId: requestId, text: `\n\n[Error: ${message}]` });
+        // Surface stream errors as a structured `error` event so the client can
+        // show a readable toast. `formatStreamError` unwraps an API error
+        // envelope (e.g. a 402 insufficient_credits body) into a clean
+        // code+message — never a raw JSON string rendered inline on the page.
+        const { code, message } = formatStreamError(err);
+        emit({
+          type: "error",
+          messageId: requestId,
+          message,
+          ...(code !== undefined ? { code } : {}),
+        });
       } finally {
         try {
           controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));

@@ -158,6 +158,59 @@ describe("translateAgentStream — usage event + credits", () => {
   });
 });
 
+describe("translateAgentStream — error part surfaces a structured error event", () => {
+  it("emits an `error` event (not text) with parsed code+message for a billing envelope", async () => {
+    const envelope = JSON.stringify({
+      error: {
+        code: "insufficient_credits",
+        message: "Insufficient credits: your balance is empty. Please add credits to continue.",
+      },
+      requestId: "req-err-1",
+    });
+
+    const events: StreamEvent[] = [];
+    const parts: Part[] = [{ type: "error", error: envelope }];
+
+    const { assistantText } = await translateAgentStream({
+      ...BASE_ARGS,
+      fullStream: makeStream(parts),
+      emit: (e) => events.push(e),
+    });
+
+    // No text event — the raw JSON must never reach the inline timeline.
+    expect(collectEvents(events, "text")).toHaveLength(0);
+
+    const errEvents = collectEvents(events, "error") as Extract<StreamEvent, { type: "error" }>[];
+    expect(errEvents).toHaveLength(1);
+    expect(errEvents[0]!.code).toBe("insufficient_credits");
+    expect(errEvents[0]!.message).toBe(
+      "Insufficient credits: your balance is empty. Please add credits to continue.",
+    );
+    expect(errEvents[0]!.message).not.toContain("{");
+    expect(errEvents[0]!.messageId).toBe(BASE_ARGS.requestId);
+
+    // The error is not folded into the persisted assistant reply.
+    expect(assistantText).toBe("");
+  });
+
+  it("emits an `error` event with a plain message for a non-envelope error part", async () => {
+    const events: StreamEvent[] = [];
+    const parts: Part[] = [{ type: "error", error: "Gateway timeout" }];
+
+    await translateAgentStream({
+      ...BASE_ARGS,
+      fullStream: makeStream(parts),
+      emit: (e) => events.push(e),
+    });
+
+    const errEvents = collectEvents(events, "error") as Extract<StreamEvent, { type: "error" }>[];
+    expect(errEvents).toHaveLength(1);
+    expect(errEvents[0]!.message).toBe("Gateway timeout");
+    expect(errEvents[0]!.code).toBeUndefined();
+    expect(collectEvents(events, "text")).toHaveLength(0);
+  });
+});
+
 describe("translateAgentStream — background-task lifecycle (OXA-1469)", () => {
   it("emits background-task-progress + persists a block when agent.task.background.start returns", async () => {
     const events: StreamEvent[] = [];

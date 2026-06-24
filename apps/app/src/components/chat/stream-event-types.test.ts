@@ -953,4 +953,31 @@ describe("StreamEvent union — member shapes", () => {
       expect(evt.capability).toBe("file.read");
     }
   });
+
+  it("'error' event has messageId, message, and optional code", () => {
+    const evt: StreamEvent = {
+      type: "error",
+      messageId: "msg-err",
+      message: "Insufficient credits: your balance is empty.",
+      code: "insufficient_credits",
+    };
+    expect(evt.type).toBe("error");
+    if (evt.type === "error") {
+      expect(evt.messageId).toBe("msg-err");
+      expect(evt.message).toBe("Insufficient credits: your balance is empty.");
+      expect(evt.code).toBe("insufficient_credits");
+    }
+  });
+
+  it("'error' event code is optional", () => {
+    const evt: StreamEvent = {
+      type: "error",
+      messageId: "msg-err-2",
+      message: "Gateway timeout",
+    };
+    expect(evt.type).toBe("error");
+    if (evt.type === "error") {
+      expect(evt.code).toBeUndefined();
+    }
+  });
 });

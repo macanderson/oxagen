@@ -44,6 +44,7 @@ vi.mock("./use-tool-stream", () => ({
     components: {},
     order: [],
     turnUsage: undefined,
+    turnError: undefined,
     consume: vi.fn(),
     reset: vi.fn(),
     hasBlockingApproval: false,
@@ -98,6 +99,15 @@ vi.mock("@/lib/use-latest-ref", () => ({
     ref.current = val;
     return ref;
   },
+}));
+
+// ── Toast manager stub ───────────────────────────────────────────────────────
+// The component calls useToast() to surface turn-level errors. Stub it so the
+// existing render tests don't need a real ToastProvider, and so the turnError
+// test can assert what got enqueued.
+const toastAdd = vi.hoisted(() => vi.fn());
+vi.mock("@/components/ui/toast", () => ({
+  useToast: () => ({ add: toastAdd }),
 }));
 
 // ── Minimal modelConfig stub ─────────────────────────────────────────────────
@@ -388,5 +398,48 @@ describe("ChatShellClient — live-timeline unknown componentId fallback", () =>
     expect(screen.getByTestId("unknown-component-card")).toHaveTextContent(
       "bogus-live-component",
     );
+  });
+});
+
+describe("ChatShellClient — turn error surfaces a toast (not inline JSON)", () => {
+  beforeEach(() => {
+    toastAdd.mockClear();
+    mockStream.overrides = {};
+  });
+  afterEach(() => {
+    mockStream.overrides = {};
+  });
+
+  it("raises an error toast with a friendly title + message for a billing turnError", async () => {
+    mockStream.overrides = {
+      turnError: {
+        code: "insufficient_credits",
+        message: "Insufficient credits: your balance is empty. Please add credits to continue.",
+      },
+    };
+    await renderClient();
+    expect(toastAdd).toHaveBeenCalledTimes(1);
+    expect(toastAdd).toHaveBeenCalledWith({
+      type: "error",
+      title: "Insufficient credits",
+      description: "Insufficient credits: your balance is empty. Please add credits to continue.",
+    });
+  });
+
+  it("uses a generic title when the turnError carries no recognized code", async () => {
+    mockStream.overrides = { turnError: { message: "Gateway timeout" } };
+    await renderClient();
+    expect(toastAdd).toHaveBeenCalledTimes(1);
+    expect(toastAdd).toHaveBeenCalledWith({
+      type: "error",
+      title: "Request failed",
+      description: "Gateway timeout",
+    });
+  });
+
+  it("does not toast when there is no turnError", async () => {
+    mockStream.overrides = {};
+    await renderClient();
+    expect(toastAdd).not.toHaveBeenCalled();
   });
 });
