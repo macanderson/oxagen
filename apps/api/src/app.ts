@@ -154,6 +154,8 @@ import { webFetchRoute } from "./routes/v1/web.fetch";
 import { researchSwarmStartRoute } from "./routes/v1/research.swarm.start";
 import { researchSwarmStatusRoute } from "./routes/v1/research.swarm.status";
 import { semanticEdgeRoute } from "./routes/v1/semantic-edge";
+import { semanticRelationshipRoute } from "./routes/v1/semantic-relationship";
+import { graphRelationshipUpsertRoute } from "./routes/v1/graph.relationship.upsert";
 import { repoRoute } from "./routes/v1/repo";
 import { integrationRoute } from "./routes/v1/integration";
 import { schemaRoute } from "./routes/v1/schema";
@@ -353,6 +355,9 @@ orgScoped.route("/graph/node/delete", graphNodeDeleteRoute);
 orgScoped.route("/graph/node/search", graphNodeSearchRoute);
 orgScoped.route("/graph/edge/upsert", graphEdgeUpsertRoute);
 orgScoped.route("/graph/edge/delete", graphEdgeDeleteRoute);
+// graph.relationship.upsert is the renamed graph.edge.upsert (schema-registry
+// epic). Flat path, consistent with the other /graph/* routes above.
+orgScoped.route("/graph/relationship/upsert", graphRelationshipUpsertRoute);
 orgScoped.route("/graph/cypher", graphCypherRoute);
 orgScoped.route("/graph/ingest", graphIngestRoute);
 orgScoped.route("/web/search", webSearchRoute);
@@ -360,6 +365,9 @@ orgScoped.route("/web/fetch", webFetchRoute);
 orgScoped.route("/research/swarm/start", researchSwarmStartRoute);
 orgScoped.route("/research/swarm/status", researchSwarmStatusRoute);
 orgScoped.route("/semantic-edges", semanticEdgeRoute);
+// semantic.relationship.* is the renamed semantic.edge.* (schema-registry
+// epic). REST path mirroring /semantic-edges exactly.
+orgScoped.route("/semantic-relationships", semanticRelationshipRoute);
 orgScoped.route("/repos", repoRoute);
 orgScoped.route("/integrations", integrationRoute);
 orgScoped.route("/schema", schemaRoute);

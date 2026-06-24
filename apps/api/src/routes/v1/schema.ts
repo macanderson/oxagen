@@ -50,6 +50,7 @@ import { schemaValidateNode } from "@oxagen/oxagen/contracts/schema.validate.nod
 import { schemaValidateRelationship } from "@oxagen/oxagen/contracts/schema.validate.relationship";
 import { schemaReconcileDispatch } from "@oxagen/oxagen/contracts/schema.reconcile.dispatch";
 import { schemaReconcileStatus } from "@oxagen/oxagen/contracts/schema.reconcile.status";
+import { schemaChat } from "@oxagen/oxagen/contracts/schema.chat";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
@@ -299,5 +300,19 @@ schemaRoute.get("/reconcile/status", async (c) => {
   });
   const ctx = capabilityContext(c);
   const out = await invoke(schemaReconcileStatus.name, body, ctx, { surface: "api" });
+  return c.json(out);
+});
+
+// ── AI builder chat ─────────────────────────────────────────────────────────
+
+// POST /schema/chat — one iterative-builder turn: takes conversation + current
+// draft, returns the assistant message + proposed mutation tool calls. The app's
+// /api/schema/chat proxy drives this same capability in-process; this route gives
+// it a first-class API surface (and satisfies route–contract parity).
+schemaRoute.post("/chat", async (c) => {
+  const json = (await c.req.json()) as Record<string, unknown>;
+  const body = schemaChat.input.parse(json);
+  const ctx = capabilityContext(c);
+  const out = await invoke(schemaChat.name, body, ctx, { surface: "api" });
   return c.json(out);
 });

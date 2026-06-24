@@ -123,6 +123,27 @@ function contractNameToPathSegment(name: string): string {
     "privacy.data": "privacy",
     // Domains whose routes use hyphenated plurals or differ from the dot-path
     "semantic.edge": "semantic-edges",
+    // Workspace Schema Registry routes (mounted at /schema). REST shape, mirroring
+    // the connection/integration/semantic-edge precedent — NOT flat capability
+    // paths. Each prefix maps to a substring of the real mounted path.
+    "schema.registry": "schema/registry",
+    "schema.version": "versions",
+    "schema.label": "labels",
+    "schema.relationship": "relationships",
+    "schema.property": "properties",
+    "schema.reconcile": "schema/reconcile",
+    "schema.validate": "schema/validate",
+    "schema.export": "schema/export",
+    "schema.recommend": "schema/recommend",
+    "schema.setup": "schema/setup",
+    "schema.toggle": "toggle",
+    "schema.chat": "schema/chat",
+    "schema.list": "schema",
+    // graph.relationship.upsert is the renamed graph.edge.upsert — flat path like
+    // the other /graph/* routes. semantic.relationship.* mirrors semantic-edge →
+    // the /semantic-relationships REST collection.
+    "graph.relationship": "graph/relationship",
+    "semantic.relationship": "semantic-relationships",
     "plugin.schema": "plugin-schema",
     "plugin.version": "plugin-versions",
     repo: "repos",
