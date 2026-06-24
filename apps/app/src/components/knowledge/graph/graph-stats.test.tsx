@@ -25,7 +25,7 @@ describe("GraphStatsBoxes", () => {
     expect(getByText("Sources")).toBeInTheDocument();
   });
 
-  it("shows a last-updated caption only when lastModifiedAt is present", () => {
+  it("shows a last-updated caption only when lastModifiedAt is a valid timestamp", () => {
     const { queryByText, rerender } = render(
       <GraphStatsBoxes
         stats={{ nodeCount: 0, edgeCount: 0, inferredEdgeCount: 0, sourceCount: 0 }}
@@ -33,6 +33,21 @@ describe("GraphStatsBoxes", () => {
     );
     expect(queryByText(/Last updated/)).not.toBeInTheDocument();
 
+    // Epoch timestamp (0) should not display
+    rerender(
+      <GraphStatsBoxes
+        stats={{
+          nodeCount: 0,
+          edgeCount: 0,
+          inferredEdgeCount: 0,
+          sourceCount: 0,
+          lastModifiedAt: "1970-01-01T00:00:00Z",
+        }}
+      />,
+    );
+    expect(queryByText(/Last updated/)).not.toBeInTheDocument();
+
+    // Valid timestamp should display
     rerender(
       <GraphStatsBoxes
         stats={{

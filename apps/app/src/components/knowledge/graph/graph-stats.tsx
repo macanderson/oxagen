@@ -58,7 +58,7 @@ export function GraphStatsBoxes({
           </div>
         ))}
       </div>
-      {stats.lastModifiedAt ? (
+      {stats.lastModifiedAt && new Date(stats.lastModifiedAt).getTime() > 0 ? (
         <p className="text-[11px] text-muted-foreground">
           Last updated {new Date(stats.lastModifiedAt).toLocaleString()}
         </p>

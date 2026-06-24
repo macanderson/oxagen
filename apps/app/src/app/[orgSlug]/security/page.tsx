@@ -385,16 +385,6 @@ export default async function SecurityOverviewPage({
               </span>
               <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             </Link>
-            <Link
-              href={org.security.incidents(ctx)}
-              className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <span className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                Incidents
-              </span>
-              <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            </Link>
           </div>
         </Panel>
       </div>

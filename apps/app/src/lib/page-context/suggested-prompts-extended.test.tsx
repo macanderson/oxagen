@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * suggested-prompts-extended.test.tsx — covers the remaining sections of
- * deriveSuggestions (automation, activity, studio, members, developer) and the
+ * deriveSuggestions (automation, activity, members, developer) and the
  * useSuggestedPrompts hook (requires jsdom + PageContextProvider + usePathname mock).
  */
 import { describe, it, expect, vi } from "vitest";
@@ -59,22 +59,6 @@ describe("deriveSuggestions — activity route", () => {
   it("prompts are activity-specific", () => {
     const texts = prompts.map((p) => p.prompt.toLowerCase()).join(" ");
     expect(texts).toMatch(/activity|run|fail/i);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Studio route
-// ---------------------------------------------------------------------------
-describe("deriveSuggestions — studio route", () => {
-  const prompts = deriveSuggestions(ctx("/acme/prod/studio/compose"));
-
-  it("returns exactly 3 prompts", () => {
-    expect(prompts).toHaveLength(3);
-  });
-
-  it("prompts are studio-specific", () => {
-    const texts = prompts.map((p) => p.prompt.toLowerCase()).join(" ");
-    expect(texts).toMatch(/tool|studio|library/i);
   });
 });
 

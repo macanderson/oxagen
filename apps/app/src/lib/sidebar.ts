@@ -69,8 +69,7 @@ export type SidebarConfig = {
 // /{org}/{ws}/... — daily operational surface
 //
 // Groups:  primary (ask, knowledge, automation, activity)
-//          tools   (studio, marketplace — visually de-emphasised)
-//          footer  (settings — pinned to bottom)
+//          footer  (marketplace, settings — pinned to bottom)
 //
 // Agents live under Automation (a tab), all run kinds live under Activity →
 // Runs, and "Workflows" is gone (folded into Activity → Runs; the word is a
@@ -462,7 +461,6 @@ export function enumerateNavTargets(
   targets.push({ label: "Security · MFA", href: org.security.mfa(ctx), parent: "security" });
   targets.push({ label: "Security · Audit", href: org.security.audit(ctx), parent: "security" });
   targets.push({ label: "Security · Compliance", href: org.security.compliance(ctx), parent: "security" });
-  targets.push({ label: "Security · Incidents", href: org.security.incidents(ctx), parent: "security" });
 
   // Billing tabs
   targets.push({ label: "Billing · Subscription", href: org.billing.subscription(ctx), parent: "billing" });

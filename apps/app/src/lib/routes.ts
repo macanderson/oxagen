@@ -56,7 +56,6 @@ export const org = {
     mfa: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/mfa`,
     audit: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/audit`,
     compliance: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/compliance`,
-    incidents: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/incidents`,
     trust: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/trust`,
   },
 
@@ -150,13 +149,6 @@ export const workspace = {
     audit: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/activity/audit`,
   },
 
-  // Studio — workspace-scoped content studio (flattened from the old /tools/ group)
-  studio: {
-    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/studio`,
-    compose: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/studio/compose`,
-    library: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/studio/library`,
-  },
-
   // Settings
   settings: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings`,
@@ -188,7 +180,6 @@ export const defaultTab: Record<string, string> = {
   knowledge: "sources",
   automation: "playbooks",
   activity: "runs",
-  studio: "compose",
   settings: "general",
 
   // Org-scope parents
