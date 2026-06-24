@@ -150,6 +150,7 @@ import "./contracts/repo.sync";
 import "./contracts/research.swarm.start";
 import "./contracts/research.swarm.status";
 import "./contracts/schema.chat";
+import "./contracts/schema.delete";
 import "./contracts/schema.export";
 import "./contracts/schema.label.delete";
 import "./contracts/schema.label.upsert";

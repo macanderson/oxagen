@@ -626,6 +626,10 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./schema.label.delete")).schemaLabelDeleteHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "schema.delete",
+    async () => (await import("./schema.delete")).schemaDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "schema.relationship.upsert",
     async () =>
       (
