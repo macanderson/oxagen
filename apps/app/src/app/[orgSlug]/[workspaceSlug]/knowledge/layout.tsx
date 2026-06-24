@@ -17,6 +17,7 @@ export default async function KnowledgeLayout({
   const tabs = [
     { label: "Sources", href: workspace.knowledge.sources(ctx) },
     { label: "Graph", href: workspace.knowledge.graph(ctx) },
+    { label: "Explore", href: workspace.explore(ctx) },
     { label: "Memories", href: workspace.knowledge.memories(ctx) },
   ];
 
