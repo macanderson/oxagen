@@ -145,16 +145,16 @@ describe("schema.registry.config route", () => {
   });
 
   it("calls invoke with 'schema.registry.config' and surface 'api'", async () => {
-    await authPut(PATH, { enforcementMode: "warn" });
+    await authPut(PATH, { enforcementMode: "lenient" });
     expect(mocks.invoke).toHaveBeenCalledOnce();
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.registry.config");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
   it("passes enforcementMode and conformanceFloor to invoke", async () => {
-    await authPut(PATH, { enforcementMode: "enforce", conformanceFloor: 0.8 });
+    await authPut(PATH, { enforcementMode: "strict", conformanceFloor: 0.8 });
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.enforcementMode).toBe("enforce");
+    expect(body.enforcementMode).toBe("strict");
     expect(body.conformanceFloor).toBe(0.8);
   });
 });
@@ -167,13 +167,13 @@ describe("schema.list route", () => {
   it("happy path GET: returns 200 with invoke result", async () => {
     const invokeResult = { schemas: [{ schemaName: "crm", enabled: true }] };
     mocks.invoke.mockResolvedValue(invokeResult);
-    const res = await authGet(PATH + "/");
+    const res = await authGet(PATH);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(invokeResult);
   });
 
   it("calls invoke with 'schema.list' and surface 'api'", async () => {
-    await authGet(PATH + "/");
+    await authGet(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.list");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
@@ -630,20 +630,20 @@ describe("semantic.relationship.list route", () => {
   it("happy path GET: returns 200 with invoke result", async () => {
     const invokeResult = { edges: [], total: 0, limit: 50, offset: 0 };
     mocks.invoke.mockResolvedValue(invokeResult);
-    const res = await authGet(PATH + "/");
+    const res = await authGet(PATH);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(invokeResult);
   });
 
   it("calls invoke with 'semantic.relationship.list' and surface 'api'", async () => {
-    await authGet(PATH + "/");
+    await authGet(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("semantic.relationship.list");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
   it("?type=RELATED_TO&confidenceMin=0.5&limit=20&offset=5 → parsed to invoke", async () => {
-    await authGet(`${PATH}/?type=RELATED_TO&confidenceMin=0.5&limit=20&offset=5`);
+    await authGet(`${PATH}?type=RELATED_TO&confidenceMin=0.5&limit=20&offset=5`);
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.type).toBe("RELATED_TO");
     expect(body.confidenceMin).toBe(0.5);

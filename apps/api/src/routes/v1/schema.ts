@@ -26,6 +26,7 @@
  *   schema.validate.relationship POST /schema/validate/relationship
  *   schema.reconcile.dispatch POST /schema/reconcile/dispatch
  *   schema.reconcile.status GET  /schema/reconcile/status
+ *   schema.chat             POST /schema/chat
  */
 
 import { Hono } from "hono";
@@ -50,6 +51,7 @@ import { schemaValidateNode } from "@oxagen/oxagen/contracts/schema.validate.nod
 import { schemaValidateRelationship } from "@oxagen/oxagen/contracts/schema.validate.relationship";
 import { schemaReconcileDispatch } from "@oxagen/oxagen/contracts/schema.reconcile.dispatch";
 import { schemaReconcileStatus } from "@oxagen/oxagen/contracts/schema.reconcile.status";
+import { schemaChat } from "@oxagen/oxagen/contracts/schema.chat";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
@@ -299,5 +301,17 @@ schemaRoute.get("/reconcile/status", async (c) => {
   });
   const ctx = capabilityContext(c);
   const out = await invoke(schemaReconcileStatus.name, body, ctx, { surface: "api" });
+  return c.json(out);
+});
+
+// ── Chat (AI iterative builder turn) ───────────────────────────────────────────
+
+// POST /schema/chat — one assistant turn: message + draft → reply + proposed mutations.
+// apps/app also serves this in-process for streaming; this is the canonical REST surface.
+schemaRoute.post("/chat", async (c) => {
+  const json = (await c.req.json()) as Record<string, unknown>;
+  const body = schemaChat.input.parse(json);
+  const ctx = capabilityContext(c);
+  const out = await invoke(schemaChat.name, body, ctx, { surface: "api" });
   return c.json(out);
 });

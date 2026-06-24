@@ -157,6 +157,8 @@ import { semanticEdgeRoute } from "./routes/v1/semantic-edge";
 import { repoRoute } from "./routes/v1/repo";
 import { integrationRoute } from "./routes/v1/integration";
 import { schemaRoute } from "./routes/v1/schema";
+import { semanticRelationshipRoute } from "./routes/v1/semantic-relationship";
+import { graphRelationshipUpsertRoute } from "./routes/v1/graph.relationship.upsert";
 import { pluginSchemaRoute, pluginVersionRoute } from "./routes/v1/plugin-schema";
 import { graphNodeListRoute } from "./routes/v1/graph.node.list";
 import { graphStatsRoute } from "./routes/v1/graph.stats";
@@ -363,6 +365,11 @@ orgScoped.route("/semantic-edges", semanticEdgeRoute);
 orgScoped.route("/repos", repoRoute);
 orgScoped.route("/integrations", integrationRoute);
 orgScoped.route("/schema", schemaRoute);
+// Canonical semantic.relationship.* routes (semantic-edge.ts at /semantic-edges
+// remains a deprecation alias during the rename window).
+orgScoped.route("/semantic-relationships", semanticRelationshipRoute);
+// graph.relationship.upsert (canonical) — /graph/edge/upsert stays as alias.
+orgScoped.route("/graph/relationship/upsert", graphRelationshipUpsertRoute);
 orgScoped.route("/plugin-schema", pluginSchemaRoute);
 orgScoped.route("/plugin-versions", pluginVersionRoute);
 orgScoped.route("/graph/nodes", graphNodeListRoute);
