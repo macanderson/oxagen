@@ -18,14 +18,13 @@ export default async function SecurityLayout({
     { label: "Audit", href: org.security.audit(ctx) },
     { label: "Compliance", href: org.security.compliance(ctx) },
     { label: "Trust", href: org.security.trust(ctx) },
-    { label: "Incidents", href: org.security.incidents(ctx) },
   ];
 
   return (
     <div className="flex flex-col gap-0">
       <PageHeader
         title="Security"
-        description="MFA, audit, compliance, trust, and incidents."
+        description="MFA, audit, compliance, and trust."
       />
       <PageTabs tabs={tabs} className="mb-6" />
       {children}

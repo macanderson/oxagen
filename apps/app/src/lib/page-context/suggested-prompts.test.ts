@@ -217,7 +217,6 @@ describe("classifyRoute", () => {
     ["/acme/prod/agents/repo-review", "agents"],
     ["/acme/prod/automation/agents", "automation"],
     ["/acme/prod/activity/runs", "activity"],
-    ["/acme/prod/studio/compose", "studio"],
     ["/account/profile", "account"],
     ["/acme/members", "members"],
     ["/acme/developer/mcp", "developer"],

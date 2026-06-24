@@ -60,7 +60,6 @@ type RouteSection =
   | "agents"
   | "automation"
   | "activity"
-  | "studio"
   | "account"
   | "members"
   | "developer"
@@ -82,7 +81,6 @@ export function classifyRoute(pathname: string): RouteSection {
   if (p.includes("/automation")) return "automation";
   if (p.includes("/agents")) return "agents";
   if (p.includes("/activity")) return "activity";
-  if (p.includes("/studio")) return "studio";
   if (p.startsWith("/account")) return "account";
   if (p.includes("/members")) return "members";
   if (p.includes("/developer")) return "developer";
@@ -226,17 +224,6 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
       suggestions.push({
         label: "Failed Runs",
         prompt: "Show me any failed automation runs and help me understand why they failed.",
-      });
-      break;
-
-    case "studio":
-      suggestions.push({
-        label: "Create a Tool",
-        prompt: "Help me compose a new tool in Studio. What kind of tool would be most useful for this workspace?",
-      });
-      suggestions.push({
-        label: "Review My Tools",
-        prompt: "Review the tools in my library and identify any that are redundant, outdated, or need updating.",
       });
       break;
 

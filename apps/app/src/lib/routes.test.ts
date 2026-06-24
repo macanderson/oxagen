@@ -45,7 +45,7 @@ describe("defaultTab — config-derived completeness", () => {
   it("contains all expected top-level workspace parent keys", () => {
     // These are the parents defined in the IA spec §5 rule 3.
     // Derived from the object — no hardcoded count.
-    const workspaceParents = ["knowledge", "automation", "activity", "studio", "settings"];
+    const workspaceParents = ["knowledge", "automation", "activity", "settings"];
     for (const k of workspaceParents) {
       expect(defaultTab).toHaveProperty(k);
     }
@@ -92,7 +92,6 @@ describe("defaultTab — known mappings", () => {
   it("knowledge → sources", () => expect(defaultTab["knowledge"]).toBe("sources"));
   it("automation → playbooks", () => expect(defaultTab["automation"]).toBe("playbooks"));
   it("activity → runs", () => expect(defaultTab["activity"]).toBe("runs"));
-  it("studio → compose", () => expect(defaultTab["studio"]).toBe("compose"));
   it("settings → general", () => expect(defaultTab["settings"]).toBe("general"));
   it("access → grants", () => expect(defaultTab["access"]).toBe("grants"));
   it("security → audit", () => expect(defaultTab["security"]).toBe("audit"));
@@ -143,7 +142,6 @@ describe("workspace route builders", () => {
   it("activity.runs → /{org}/{ws}/activity/runs", () => expect(workspace.activity.runs(wsCtx)).toBe("/acme/prod/activity/runs"));
   // All run kinds (incl. subagent fan-outs) drill down under Activity → Runs.
   it("activity.run → /{org}/{ws}/activity/runs/:id", () => expect(workspace.activity.run(wsCtx, "fan-123")).toBe("/acme/prod/activity/runs/fan-123"));
-  it("studio.root → /{org}/{ws}/studio", () => expect(workspace.studio.root(wsCtx)).toBe("/acme/prod/studio"));
   it("settings.root → /{org}/{ws}/settings", () => expect(workspace.settings.root(wsCtx)).toBe("/acme/prod/settings"));
   it("settings.modelKeys → /{org}/{ws}/settings/model-keys", () => expect(workspace.settings.modelKeys(wsCtx)).toBe("/acme/prod/settings/model-keys"));
 });
