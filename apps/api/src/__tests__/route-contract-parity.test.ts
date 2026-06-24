@@ -123,6 +123,11 @@ function contractNameToPathSegment(name: string): string {
     "privacy.data": "privacy",
     // Domains whose routes use hyphenated plurals or differ from the dot-path
     "semantic.edge": "semantic-edges",
+    // Canonical semantic.relationship.* routes are mounted at /semantic-relationships.
+    "semantic.relationship": "semantic-relationships",
+    // All schema.* capabilities are served by the combined schema.ts route mounted
+    // at /schema (REST sub-resources, so dot-paths don't derive mechanically).
+    schema: "schema",
     "plugin.schema": "plugin-schema",
     "plugin.version": "plugin-versions",
     repo: "repos",

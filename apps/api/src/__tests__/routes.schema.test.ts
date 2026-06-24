@@ -145,16 +145,16 @@ describe("schema.registry.config route", () => {
   });
 
   it("calls invoke with 'schema.registry.config' and surface 'api'", async () => {
-    await authPut(PATH, { enforcementMode: "warn" });
+    await authPut(PATH, { enforcementMode: "lenient" });
     expect(mocks.invoke).toHaveBeenCalledOnce();
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.registry.config");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
   it("passes enforcementMode and conformanceFloor to invoke", async () => {
-    await authPut(PATH, { enforcementMode: "enforce", conformanceFloor: 0.8 });
+    await authPut(PATH, { enforcementMode: "strict", conformanceFloor: 0.8 });
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.enforcementMode).toBe("enforce");
+    expect(body.enforcementMode).toBe("strict");
     expect(body.conformanceFloor).toBe(0.8);
   });
 });
@@ -167,13 +167,13 @@ describe("schema.list route", () => {
   it("happy path GET: returns 200 with invoke result", async () => {
     const invokeResult = { schemas: [{ schemaName: "crm", enabled: true }] };
     mocks.invoke.mockResolvedValue(invokeResult);
-    const res = await authGet(PATH + "/");
+    const res = await authGet(PATH);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(invokeResult);
   });
 
   it("calls invoke with 'schema.list' and surface 'api'", async () => {
-    await authGet(PATH + "/");
+    await authGet(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.list");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
@@ -575,6 +575,192 @@ describe("schema.reconcile.status route", () => {
   });
 });
 
+// ── schema.property.upsert ────────────────────────────────────────────────────
+
+describe("schema.property.upsert route", () => {
+  const PATH = "/schema/crm/properties/node/Contact/email";
+
+  it("happy path PUT: returns 200 with invoke result", async () => {
+    const invokeResult = { propertyId: "prop-1", created: true };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await authPut(PATH, { dataType: "string" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke with 'schema.property.upsert' and surface 'api'", async () => {
+    await authPut(PATH, { dataType: "string" });
+    expect(mocks.invoke).toHaveBeenCalledOnce();
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.property.upsert");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+  });
+
+  it("passes ownerKind, ownerName, key from path params and dataType from body", async () => {
+    await authPut(PATH, { dataType: "email", required: true });
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.ownerKind).toBe("node");
+    expect(body.ownerName).toBe("Contact");
+    expect(body.key).toBe("email");
+    expect(body.dataType).toBe("email");
+    expect(body.required).toBe(true);
+  });
+
+  it("missing dataType → 400, invoke not called", async () => {
+    const res = await authPut(PATH, {});
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── schema.property.delete ────────────────────────────────────────────────────
+
+describe("schema.property.delete route", () => {
+  const PATH = "/schema/crm/properties/node/Contact/email";
+
+  it("happy path DELETE: returns 200 with invoke result", async () => {
+    const invokeResult = { deleted: true, key: "email" };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await authDelete(PATH);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke with 'schema.property.delete' and passes path params", async () => {
+    await authDelete(PATH);
+    expect(mocks.invoke).toHaveBeenCalledOnce();
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.property.delete");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.ownerKind).toBe("node");
+    expect(body.ownerName).toBe("Contact");
+    expect(body.key).toBe("email");
+  });
+});
+
+// ── schema.recommend ──────────────────────────────────────────────────────────
+
+describe("schema.recommend route", () => {
+  const PATH = "/schema/recommend";
+
+  it("happy path GET: returns 200 with invoke result", async () => {
+    const invokeResult = { labels: [], relationshipTypes: [] };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await authGet(PATH);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke with 'schema.recommend' and surface 'api'", async () => {
+    await authGet(PATH);
+    expect(mocks.invoke).toHaveBeenCalledOnce();
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.recommend");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+  });
+
+  it("?sampleLimit=500 → passes parsed number to invoke", async () => {
+    await authGet(`${PATH}?sampleLimit=500`);
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.sampleLimit).toBe(500);
+  });
+});
+
+// ── schema.setup ──────────────────────────────────────────────────────────────
+
+describe("schema.setup route", () => {
+  const PATH = "/schema/setup";
+
+  it("happy path POST: returns 200 with invoke result", async () => {
+    const invokeResult = { applied: true, registryId: "reg-1" };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await authPost(PATH, { enforcement: "lenient" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke with 'schema.setup' and passes fields", async () => {
+    await authPost(PATH, { enforcement: "strict", noInteractive: true });
+    expect(mocks.invoke).toHaveBeenCalledOnce();
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.setup");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.enforcement).toBe("strict");
+    expect(body.noInteractive).toBe(true);
+  });
+});
+
+// ── schema.validate.relationship ──────────────────────────────────────────────
+
+describe("schema.validate.relationship route", () => {
+  const PATH = "/schema/validate/relationship";
+  const VALID_BODY = { type: "EMPLOYS", startLabel: "Company", endLabel: "Person", properties: { since: "2024" } };
+
+  it("happy path POST: returns 200 with invoke result", async () => {
+    const invokeResult = { valid: true, errors: [], outcome: "accepted" };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await authPost(PATH, VALID_BODY);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke with 'schema.validate.relationship' and passes fields", async () => {
+    await authPost(PATH, VALID_BODY);
+    expect(mocks.invoke).toHaveBeenCalledOnce();
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.validate.relationship");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.type).toBe("EMPLOYS");
+    expect(body.startLabel).toBe("Company");
+    expect(body.endLabel).toBe("Person");
+  });
+
+  it("missing startLabel → 400, invoke not called", async () => {
+    const res = await authPost(PATH, { type: "EMPLOYS", endLabel: "Person", properties: {} });
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── schema.chat ───────────────────────────────────────────────────────────────
+
+describe("schema.chat route", () => {
+  const PATH = "/schema/chat";
+
+  it("happy path POST: returns 200 with invoke result", async () => {
+    const invokeResult = { assistantMessage: "Added a Contact label.", conversationId: "conv-1" };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await authPost(PATH, { message: "Add a Contact label" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke with 'schema.chat' and surface 'api'", async () => {
+    await authPost(PATH, { message: "hello" });
+    expect(mocks.invoke).toHaveBeenCalledOnce();
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.chat");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+  });
+
+  it("passes message, conversationId and draftVersionId to invoke", async () => {
+    await authPost(PATH, { message: "next turn", conversationId: "conv-9", draftVersionId: "ver-3" });
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.message).toBe("next turn");
+    expect(body.conversationId).toBe("conv-9");
+    expect(body.draftVersionId).toBe("ver-3");
+  });
+
+  it("missing message → 400, invoke not called", async () => {
+    const res = await authPost(PATH, {});
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("empty message → 400, invoke not called", async () => {
+    const res = await authPost(PATH, { message: "" });
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
 // ── graph.relationship.upsert ─────────────────────────────────────────────────
 
 describe("graph.relationship.upsert route", () => {
@@ -630,20 +816,20 @@ describe("semantic.relationship.list route", () => {
   it("happy path GET: returns 200 with invoke result", async () => {
     const invokeResult = { edges: [], total: 0, limit: 50, offset: 0 };
     mocks.invoke.mockResolvedValue(invokeResult);
-    const res = await authGet(PATH + "/");
+    const res = await authGet(PATH);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(invokeResult);
   });
 
   it("calls invoke with 'semantic.relationship.list' and surface 'api'", async () => {
-    await authGet(PATH + "/");
+    await authGet(PATH);
     expect(mocks.invoke).toHaveBeenCalledOnce();
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("semantic.relationship.list");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
   it("?type=RELATED_TO&confidenceMin=0.5&limit=20&offset=5 → parsed to invoke", async () => {
-    await authGet(`${PATH}/?type=RELATED_TO&confidenceMin=0.5&limit=20&offset=5`);
+    await authGet(`${PATH}?type=RELATED_TO&confidenceMin=0.5&limit=20&offset=5`);
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.type).toBe("RELATED_TO");
     expect(body.confidenceMin).toBe(0.5);
