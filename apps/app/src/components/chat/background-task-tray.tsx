@@ -5,13 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "./tool-call-card";
+import type { BackgroundTaskStatus } from "./background-task-types";
 
-export type BackgroundTaskStatus =
-  | "pending"
-  | "running"
-  | "completed"
-  | "failed"
-  | "cancelled";
+// Re-exported so existing importers (`./background-task-tray`) keep working; the
+// canonical definition lives in the .ts types module so pure type consumers
+// don't pull this .tsx component into their typecheck closure.
+export type { BackgroundTaskStatus };
 
 export interface BackgroundTaskSnapshot {
   taskId: string;

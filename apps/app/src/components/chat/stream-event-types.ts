@@ -5,7 +5,7 @@
 
 // Reuse the background-task status union defined by the tray so the inline
 // streaming card and the tray never drift (queued|running|completed|failed|cancelled).
-import type { BackgroundTaskStatus } from "./background-task-tray";
+import type { BackgroundTaskStatus } from "./background-task-types";
 export type { BackgroundTaskStatus };
 
 export type RiskLevel = "low" | "medium" | "high";
