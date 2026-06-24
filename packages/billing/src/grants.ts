@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { deterministicUuid } from "./internal/deterministic-uuid";
 import { billingProvider } from "./client";
 import { syncSubscriptionFromStripe } from "./subscriptions";
+import { syncInvoiceFromStripe } from "./invoices";
 import { CREDIT_REASONS } from "./constants";
 import { logger } from "./logger";
 import type { BillingCheckoutSession, BillingInvoice } from "./provider";
@@ -190,6 +191,20 @@ export async function grantPlanCreditsForInvoicePaid(invoice: BillingInvoice): P
 
   // Make sure our subscriptions row exists before resolving the plan.
   await syncSubscriptionFromStripe(invoice.subscriptionId);
+
+  // Make sure our local invoice row exists before we key the grant on it.
+  // Stripe does not guarantee webhook ordering and the API processes events
+  // concurrently, so invoice.paid can be handled BEFORE subscription.created /
+  // invoice.created. When that happens the earlier syncInvoiceFromStripe in the
+  // webhook dispatch bailed: a subscription invoice carries no org_id metadata
+  // (only subscription_data.metadata does), so it could not resolve a tenant
+  // until the subscription row existed — leaving no local invoice row and
+  // silently dropping the plan's included-credit grant (the user upgrades free
+  // → paid and never receives their credits). Now that the subscription is
+  // synced above, re-sync the invoice so its row — and thus our idempotency
+  // reference id — is guaranteed present regardless of event ordering. This
+  // mirrors the self-healing syncSubscriptionFromStripe call above. — OXA-1611
+  await syncInvoiceFromStripe(invoice.providerInvoiceId);
 
   let granted = false;
 

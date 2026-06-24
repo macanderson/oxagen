@@ -537,6 +537,30 @@ describe("StripeProvider", () => {
       const invoice = await provider.getInvoice("in_bad_status");
       expect(invoice.status).toBe("draft");
     });
+
+    it("resolves subscriptionId + orgId from Basil-era parent.subscription_details (OXA-1611)", async () => {
+      // Stripe Basil (2025-03-31+) removed the top-level invoice.subscription and
+      // invoice-level org metadata; both now live under parent.subscription_details.
+      // Reading only the legacy fields nulled subscriptionId/orgId in prod, which
+      // made grantPlanCreditsForInvoicePaid silently skip the upgrade credit grant.
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        makeStripeInvoice({
+          subscription: null, // top-level field gone on Basil
+          metadata: {}, // org_id no longer stamped on the invoice itself
+          billing_reason: "subscription_create",
+          parent: {
+            subscription_details: {
+              subscription: "sub_basil_001",
+              metadata: { org_id: "org-basil" },
+            },
+          },
+        }),
+      );
+      const invoice = await provider.getInvoice("in_basil_001");
+      expect(invoice.subscriptionId).toBe("sub_basil_001");
+      expect(invoice.orgId).toBe("org-basil");
+      expect(invoice.billingReason).toBe("subscription_create");
+    });
   });
 
   // ── Checkout ─────────────────────────────────────────────────────────────────

@@ -40,6 +40,14 @@ vi.mock("./subscriptions", () => ({
   syncSubscriptionFromStripe: syncSubscriptionMock,
 }));
 
+// grantPlanCreditsForInvoicePaid self-heals the local invoice row before keying
+// the grant on it (webhook events can arrive out of order). Default no-op; the
+// out-of-order test overrides it to materialise the invoice row.
+const syncInvoiceMock = vi.fn().mockResolvedValue(undefined);
+vi.mock("./invoices", () => ({
+  syncInvoiceFromStripe: syncInvoiceMock,
+}));
+
 // billingProvider mock — only getCheckoutSessionCreditPacks is used in grants.
 const getCheckoutSessionCreditPacksMock = vi.fn().mockResolvedValue([]);
 vi.mock("./client", () => ({
@@ -226,10 +234,43 @@ describe("grantPlanCreditsForInvoicePaid", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     syncSubscriptionMock.mockResolvedValue(undefined);
+    syncInvoiceMock.mockReset().mockResolvedValue(undefined);
     // Reset logger mocks.
     loggerWarnMock.mockReset();
     loggerInfoMock.mockReset();
     loggerDebugMock.mockReset();
+  });
+
+  it("out-of-order webhook (invoice row not yet synced) — re-syncs invoice, then grants", async () => {
+    // Regression for OXA-1611: invoice.paid handled before subscription.created /
+    // invoice.created. The invoice carries NO org_id metadata (subscription
+    // checkouts only stamp subscription_data.metadata), so the dispatch-time
+    // syncInvoiceFromStripe bailed and no local invoice row exists yet. Before
+    // the fix the grant exited at "no local invoice row" and the upgrade's
+    // credits were silently dropped. The grant must now re-sync the invoice
+    // (after syncing the subscription) and deposit the plan credits.
+    const txMock = makeTx(false);
+    // No local invoice row until syncInvoiceFromStripe runs.
+    const invoicesFindFirst = vi.fn().mockResolvedValue(undefined);
+    dbState.instance = makeDb(txMock, {
+      subscriptions: vi.fn().mockResolvedValue({ orgId: "org-abc", planId: "plan-001" }),
+      plans: vi.fn().mockResolvedValue({ includedCreditCents: 2400 }),
+      invoices: invoicesFindFirst,
+    });
+    // syncInvoiceFromStripe materialises the local invoice row.
+    syncInvoiceMock.mockImplementation(async () => {
+      invoicesFindFirst.mockResolvedValue({ id: "invoice-uuid-late" });
+    });
+
+    // orgId: null mirrors the real subscription-invoice payload (no metadata).
+    await grantPlanCreditsForInvoicePaid(
+      makeInvoice({ orgId: null, billingReason: "subscription_create" }),
+    );
+
+    expect(syncSubscriptionMock).toHaveBeenCalledWith("sub_test_001");
+    expect(syncInvoiceMock).toHaveBeenCalledWith("in_test_001");
+    expect(txMock._lotInsertCalled).toBe(true);
+    expect(txMock._balanceUpsertCalled).toBe(true);
   });
 
   it("subscription_create billing reason — grants plan credits via withSystemDb", async () => {

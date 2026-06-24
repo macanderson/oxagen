@@ -170,6 +170,51 @@ function resolveSubscriptionRef(ref: string | Stripe.Subscription | null | undef
   return typeof ref === "string" ? ref : ref.id;
 }
 
+/**
+ * Stripe's Basil-era API (2025-03-31+) REMOVED the top-level `Invoice.subscription`
+ * field; an invoice's subscription reference and the subscription's metadata now
+ * live under `invoice.parent.subscription_details`. A Stripe account renders
+ * webhook payloads (and REST responses) at its OWN default API version regardless
+ * of the SDK's pinned `apiVersion`, so once the account is on Basil+, invoices
+ * arrive in the new shape even though the pinned stripe-node types (acacia) still
+ * expose the legacy `subscription` field.
+ *
+ * Reading only `invoice.subscription` therefore yields null in production: that
+ * nulls `BillingInvoice.subscriptionId`, which makes `grantPlanCreditsForInvoicePaid`
+ * return at its `!invoice.subscriptionId` guard and `syncInvoiceFromStripe` fail to
+ * resolve a tenant — so a free→paid upgrade's included credits are silently never
+ * granted. Resolve the subscription id and the org id from BOTH shapes. — OXA-1611
+ */
+interface InvoiceSubscriptionParent {
+  subscription_details?: {
+    subscription?: string | { id: string } | null;
+    metadata?: Record<string, string> | null;
+  } | null;
+}
+
+function invoiceParent(invoice: Stripe.Invoice): InvoiceSubscriptionParent | null {
+  return (invoice as unknown as { parent?: InvoiceSubscriptionParent | null }).parent ?? null;
+}
+
+function resolveInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  // Legacy top-level field (≤ acacia) first…
+  const top = resolveSubscriptionRef(invoice.subscription);
+  if (top) return top;
+  // …then the Basil-era parent.subscription_details.subscription (string | {id}).
+  const parentSub = invoiceParent(invoice)?.subscription_details?.subscription ?? null;
+  if (!parentSub) return null;
+  return typeof parentSub === "string" ? parentSub : parentSub.id;
+}
+
+function resolveInvoiceOrgId(invoice: Stripe.Invoice): string | null {
+  const direct = (invoice.metadata?.org_id as string | undefined) ?? null;
+  if (direct) return direct;
+  // Subscription invoices stamp org_id on subscription_data.metadata, which now
+  // surfaces here as parent.subscription_details.metadata — resolving it lets the
+  // invoice bind to its tenant even before the subscription row is synced.
+  return invoiceParent(invoice)?.subscription_details?.metadata?.org_id ?? null;
+}
+
 function stripeInvoiceToNeutral(invoice: Stripe.Invoice): BillingInvoice {
   const ALLOWED_INV_STATUSES = new Set(["draft", "open", "paid", "void", "uncollectible"]);
   const status = ALLOWED_INV_STATUSES.has(invoice.status ?? "") ? (invoice.status as string) : "draft";
@@ -183,8 +228,8 @@ function stripeInvoiceToNeutral(invoice: Stripe.Invoice): BillingInvoice {
     metadata: (line.metadata as Record<string, string>) ?? {},
   }));
 
-  const orgId = (invoice.metadata?.org_id as string | undefined) ?? null;
-  const subId = resolveSubscriptionRef(invoice.subscription);
+  const orgId = resolveInvoiceOrgId(invoice);
+  const subId = resolveInvoiceSubscriptionId(invoice);
 
   return {
     id: invoice.id,
