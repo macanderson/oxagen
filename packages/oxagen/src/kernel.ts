@@ -4,6 +4,15 @@ import { getCapability, listCapabilities } from "./registry";
 import { pluginForContract } from "./plugins/registry";
 import { runInTenantScope } from "@oxagen/tenancy";
 
+// Matches runInTenantScope's own uuid guard: we only enter a tenant scope when
+// both tenant ids are valid uuids, otherwise runInTenantScope() fail-closes.
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuid(value: string): boolean {
+  return UUID_RE.test(value);
+}
+
 // ── Billing admission gate (injected at bootstrap) ───────────────────────────
 //
 // The kernel accepts a pluggable billing gate so it carries no direct
@@ -499,11 +508,25 @@ export async function invoke(
   // resolve the active scope. For UNSCOPED capabilities (cap.scoped === false,
   // e.g. user.preferences.write) we must NOT wrap — the ids are empty and
   // runInTenantScope would throw TenantScopeError (OXA-1515). — OXA-1697
+  //
+  // BUT: "unscoped" describes the handler's data ownership, not the IAM gate.
+  // The IAM check (checkIAM → fetchAuthz → withTenantDb) ALWAYS needs an active
+  // tenant scope when it runs the enterprise resolver — and some unscoped
+  // handlers also read through withTenantDb (e.g. plugin.schema.get's
+  // connector_schemas cache). An unscoped capability that still carries real
+  // tenant ids (e.g. plugin.schema.get, invoked with a concrete org+workspace)
+  // therefore MUST enter a scope, or fetchAuthz throws TenantScopeError and the
+  // kernel fail-closes with "IAM check errored … failing closed". So we enter a
+  // scope whenever the capability is scoped OR both tenant ids are valid uuids;
+  // we only skip the wrap for the empty/invalid-id case (user.preferences.write,
+  // MCP session-token path), where runInTenantScope would reject the ids.
   const isScoped = cap.scoped !== false;
-  const withScope = isScoped
-    ? <T>(fn: () => Promise<T>): Promise<T> =>
-        runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, fn)
-    : <T>(fn: () => Promise<T>): Promise<T> => fn();
+  const hasTenantIds = isUuid(ctx.orgId) && isUuid(ctx.workspaceId);
+  const withScope =
+    isScoped || hasTenantIds
+      ? <T>(fn: () => Promise<T>): Promise<T> =>
+          runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, fn)
+      : <T>(fn: () => Promise<T>): Promise<T> => fn();
 
   // ── IAM + billing + handler (all inside scope for scoped caps) ───────────
   let output: unknown;
