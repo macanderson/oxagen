@@ -89,7 +89,9 @@ export async function extractGraph(args: {
   maxEntities: number;
   ctx: CapabilityContext;
 }): Promise<GraphExtraction> {
-  const { text, typeHints, allowedRelationshipTypes, workspacePrompt, maxEntities, ctx } = args;
+  const { text, typeHints, allowedRelationshipTypes, workspacePrompt, vocab, maxEntities, ctx } =
+    args;
+  const vocabularyPrompt = renderVocabularyPrompt(vocab);
 
   // Relationship-type guidance: when the workspace pins a registry, constrain the
   // model to the active vocabulary's relationship types; otherwise let it propose
@@ -117,7 +119,7 @@ export async function extractGraph(args: {
     typeHints.length > 0 ? `\nADDITIONAL ENTITY TYPES TO LOOK FOR: ${typeHints.join(", ")}` : "",
     workspacePrompt ? `\nWORKSPACE GRAPH GUIDANCE:\n${workspacePrompt}` : "",
     `\nSOURCE TEXT:\n${text.slice(0, 100_000)}`,
-    `\nReturn JSON { entities: [{name, type, description?, confidence}], relationships: [{fromName, toName, relationshipType, confidence}] }.`,
+    `\nReturn JSON { entities: [{name, type, description?, confidence, properties: [{key, value}]}], relationships: [{fromName, toName, relationshipType, confidence}] }.`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -184,6 +186,10 @@ export const graphIngestHandler: CapabilityHandler<typeof graphIngest> = async (
   ctx,
 ) => {
   const workspacePrompt = await readWorkspacePrompt(ctx);
+  // Ground extraction in the workspace's configured schema registry (when pinned)
+  // and the labels already in its graph, so the model reuses real types/keys
+  // instead of inventing inconsistent labels and empty nodes.
+  const vocab = await resolveIngestVocabulary(ctx);
 
   // Resolve the pinned active vocabulary's relationship types (null when no
   // version is pinned) — the §3.2 allow-list for inferred relationship types.

@@ -128,14 +128,7 @@ export async function upsertEntityNode(
          n.properties       = $properties,
          n.conformanceScore = $conformanceScore,
          n.schemaVersionId  = $schemaVersionId,
-         n.createdAt        = datetime()
-       ON MATCH SET
-         n.displayName      = $displayName,
-         n.properties       = $properties,
-         n.sourceRecordType = $sourceRecordType,
-         n.conformanceScore = $conformanceScore,
-         n.schemaVersionId  = $schemaVersionId,
-         n.syncedAt         = datetime()
+         n.updatedAt        = datetime()
        RETURN n.publicId AS nodeId`,
       {
         naturalKey: mutation.naturalKey,

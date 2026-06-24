@@ -11,6 +11,26 @@ vi.mock("./schema.pinned", () => ({
   getPinnedSchema: (...a: unknown[]) => getPinnedSchema(...a),
 }));
 
+// Mock the vocabulary resolver (which reaches Neo4j + Postgres) so the handler
+// unit test stays hermetic. The pure renderers are re-implemented minimally —
+// their real behaviour is covered in graph.ingest-vocabulary.test.ts.
+const { resolveVocab } = vi.hoisted(() => ({ resolveVocab: vi.fn() }));
+type TestVocab = {
+  source: "registry" | "graph" | "none";
+  enforcement: "strict" | "lenient" | "off";
+  labels: { name: string }[];
+  edges: unknown[];
+};
+const EMPTY_VOCAB: TestVocab = { source: "none", enforcement: "off", labels: [], edges: [] };
+vi.mock("./graph.ingest-vocabulary", () => ({
+  resolveIngestVocabulary: resolveVocab,
+  renderVocabularyPrompt: (v: TestVocab) => (v.labels.length ? "VOCAB-PROMPT" : ""),
+  strictAllowedLabels: (v: TestVocab) =>
+    v.enforcement === "strict" && v.source === "registry"
+      ? new Set(v.labels.map((l) => l.name.toLowerCase()))
+      : null,
+}));
+
 function pinnedWith(relTypes: string[]): unknown {
   return {
     registryId: "scr_1",
@@ -117,11 +137,13 @@ function wireInvoke() {
 describe("graphIngestHandler", () => {
   beforeEach(() => {
     getPinnedSchema.mockResolvedValue(null);
+    resolveVocab.mockResolvedValue(EMPTY_VOCAB);
   });
   afterEach(() => {
     generateObjectFor.mockReset();
     invoke.mockReset();
     getPinnedSchema.mockReset();
+    resolveVocab.mockReset();
   });
 
   it("upserts extracted entities and only relationships whose endpoints resolved", async () => {

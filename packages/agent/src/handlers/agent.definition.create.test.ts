@@ -88,13 +88,13 @@ describe("agent.definition.create handler", () => {
     expect((err as AgentManagedReadOnlyError).code).toBe("agent_managed_read_only");
   });
 
-  it("throws before any DB write when identity is reserved (no fake enqueue needed)", async () => {
-    // Confirm the guard fires before insert — the queue is empty so any DB
-    // call would throw "queue exhausted".  The managed check must short-circuit.
+  it("throws before any DB write when identity is reserved", async () => {
     const err = await agentDefinitionCreateHandler(
       { ...INPUT, agentType: "interactive_chat" },
       CTX,
     ).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AgentManagedReadOnlyError);
+    // The guard short-circuits before any write — no insert was issued.
+    expect(fake.mutations).toEqual({ insert: 0, update: 0, delete: 0 });
   });
 });
