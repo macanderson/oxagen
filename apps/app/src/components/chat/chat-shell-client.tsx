@@ -32,6 +32,30 @@ import type { FormFillResult } from "@/lib/ask/fill-types";
 import { interceptFormFillEvents } from "./intercept-form-fill";
 import { ThinkingBubble } from "./thinking-bubble";
 import { MessageFooter } from "./message-footer";
+import { useToast } from "@/components/ui/toast";
+
+/**
+ * Friendly toast title for a turn-level error, keyed off the machine `code`
+ * parsed from the error envelope. Falls back to a generic title for unknown or
+ * absent codes. The full human message goes in the toast description.
+ */
+function errorToastTitle(code: string | undefined): string {
+  switch (code) {
+    case "insufficient_credits":
+    case "credit_balance_empty":
+      return "Insufficient credits";
+    case "billing_suspended":
+      return "Billing suspended";
+    case "rate_limited":
+    case "rate_limit_exceeded":
+      return "Rate limited";
+    case "unauthorized":
+    case "forbidden":
+      return "Access denied";
+    default:
+      return "Request failed";
+  }
+}
 
 /**
  * Serialisable page context forwarded from the current page to the stream
@@ -135,6 +159,7 @@ export function ChatShellClient({
     backgroundTasks,
     order,
     turnUsage,
+    turnError,
     consume,
     reset,
     hasBlockingApproval,
@@ -142,6 +167,26 @@ export function ChatShellClient({
     signalApprovalResolved,
     signalConsentResolved,
   } = useToolStream();
+
+  // Toast manager for surfacing turn-level errors (see the turnError effect
+  // below). Read through a stable ref so the effect depends only on turnError.
+  const toast = useToast();
+  const toastRef = useLatestRef(toast);
+
+  // Surface a turn-level failure (provider/gateway error, billing block such as
+  // insufficient_credits, or an unexpected server throw) as a toast — instead of
+  // letting the raw error envelope render inline as unreadable JSON. `turnError`
+  // changes reference only when a NEW error arrives (and becomes undefined on
+  // reset), so this fires exactly once per failed turn.
+  React.useEffect(() => {
+    if (turnError === undefined) return;
+    toastRef.current.add({
+      type: "error",
+      title: errorToastTitle(turnError.code),
+      description: turnError.message,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- toast read via stable ref; re-toast only when a new turnError lands
+  }, [turnError]);
 
   const router = useRouter();
   const pathname = usePathname();

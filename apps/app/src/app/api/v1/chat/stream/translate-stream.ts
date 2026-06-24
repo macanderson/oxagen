@@ -9,6 +9,7 @@ import {
   partType,
   isRecord,
   errorMessageOf,
+  formatStreamError,
   type TextDeltaPart,
   type ReasoningDeltaPart,
   type ReasoningBoundaryPart,
@@ -368,20 +369,20 @@ export async function translateAgentStream(args: {
       });
     } else if (pType === "error") {
       // streamText surfaces provider/gateway failures (e.g. a 400 from a bad
-      // request, auth, or rate limit) as an `error` PART rather than throwing.
-      // If we don't forward it the turn produces zero output and the user sees
-      // nothing. Surface it as a text event (same shape the outer catch uses).
-      const errVal = (raw as { error?: unknown }).error;
-      const message =
-        errVal instanceof Error
-          ? errVal.message
-          : typeof errVal === "string"
-            ? errVal
-            : "Stream error";
-      // Show the failure live but do NOT fold it into assistantText — persisting
-      // "[Error: …]" as the assistant reply would feed the error back into the
+      // request, auth, rate limit, or an insufficient-credits envelope) as an
+      // `error` PART rather than throwing. If we don't forward it the turn
+      // produces zero output and the user sees nothing. Emit a structured
+      // `error` event (NOT a text event) so the client shows a readable toast
+      // instead of rendering the raw JSON envelope inline. We never fold it into
+      // assistantText either — persisting it would feed the error back into the
       // next turn's history context.
-      emit({ type: "text", messageId: requestId, text: `\n\n[Error: ${message}]` });
+      const { code, message } = formatStreamError((raw as { error?: unknown }).error);
+      emit({
+        type: "error",
+        messageId: requestId,
+        message,
+        ...(code !== undefined ? { code } : {}),
+      });
     }
     // tool-input-end, source, raw, abort — intentionally not forwarded.
   }

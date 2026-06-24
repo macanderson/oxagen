@@ -226,6 +226,20 @@ export type StreamEvent =
        */
       type: "usage";
       usage: TurnUsage;
+    }
+  | {
+      /**
+       * A turn-level failure — a provider/gateway error, a billing block
+       * (e.g. insufficient_credits), or an unexpected server throw. Carries a
+       * human-readable `message` (and optional machine `code`) already parsed
+       * out of the error envelope, so the client surfaces it as a TOAST. It is
+       * NEVER folded into assistant text: that would render a raw JSON envelope
+       * inline on the page and poison the next turn's history context.
+       */
+      type: "error";
+      messageId: string;
+      message: string;
+      code?: string;
     };
 
 // Content-block shapes persisted on `chat.messages.content_blocks` and

@@ -523,6 +523,64 @@ describe("usage event", () => {
 });
 
 // ---------------------------------------------------------------------------
+// error event (turn-level failure → toast, never inline text)
+// ---------------------------------------------------------------------------
+
+describe("error event", () => {
+  it("stores turnError without touching textSegments or messages", () => {
+    const s = reducer(INITIAL_STATE, event({
+      type: "error",
+      messageId: MSG_ID,
+      code: "insufficient_credits",
+      message: "Insufficient credits: your balance is empty.",
+    }));
+    expect(s.turnError).toEqual({
+      code: "insufficient_credits",
+      message: "Insufficient credits: your balance is empty.",
+    });
+    // Crucially: the error must NOT render inline — no text segment, no message,
+    // no timeline order entry.
+    expect(Object.keys(s.textSegments)).toHaveLength(0);
+    expect(Object.keys(s.messages)).toHaveLength(0);
+    expect(s.order).toHaveLength(0);
+    expect(s.activeTextKey).toBeNull();
+  });
+
+  it("stores turnError without a code when none is provided", () => {
+    const s = reducer(INITIAL_STATE, event({
+      type: "error",
+      messageId: MSG_ID,
+      message: "Gateway timeout",
+    }));
+    expect(s.turnError).toEqual({ message: "Gateway timeout" });
+    expect(s.turnError?.code).toBeUndefined();
+  });
+
+  it("breaks the active text segment so trailing prose is not appended to it", () => {
+    let s = reducer(INITIAL_STATE, event({ type: "text", messageId: MSG_ID, text: "partial" }));
+    expect(s.activeTextKey).not.toBeNull();
+    s = reducer(s, event({ type: "error", messageId: MSG_ID, message: "boom" }));
+    expect(s.activeTextKey).toBeNull();
+    // Prior partial text is preserved; the error is held separately.
+    expect(s.textSegments[`text:${MSG_ID}:0`]?.text).toBe("partial");
+    expect(s.turnError?.message).toBe("boom");
+  });
+
+  it("a new error event replaces the prior turnError", () => {
+    let s = reducer(INITIAL_STATE, event({ type: "error", messageId: MSG_ID, message: "first" }));
+    s = reducer(s, event({ type: "error", messageId: MSG_ID, code: "rate_limited", message: "second" }));
+    expect(s.turnError).toEqual({ code: "rate_limited", message: "second" });
+  });
+
+  it("reset clears turnError", () => {
+    let s = reducer(INITIAL_STATE, event({ type: "error", messageId: MSG_ID, message: "boom" }));
+    expect(s.turnError).toBeDefined();
+    s = reducer(s, { type: "reset" });
+    expect(s.turnError).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // reasoning-start / reasoning-delta / reasoning-end
 // ---------------------------------------------------------------------------
 

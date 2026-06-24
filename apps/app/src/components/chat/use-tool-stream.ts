@@ -136,6 +136,16 @@ export interface LiveComponent {
   props: Record<string, unknown>;
 }
 
+/**
+ * A turn-level failure surfaced from an "error" stream event. Held off to the
+ * side (NOT in `textSegments`) so the UI can show it as a toast rather than
+ * rendering a raw JSON error envelope inline in the assistant timeline.
+ */
+export interface LiveTurnError {
+  message: string;
+  code?: string;
+}
+
 /** A live background task dispatched this turn, surfaced as an inline card. */
 export interface LiveBackgroundTask {
   taskId: string;
@@ -180,6 +190,12 @@ export interface ToolStreamState {
   activeTextKey: string | null;
   /** Usage summary from the turn's "usage" event; undefined until the event arrives. */
   turnUsage: TurnUsage | undefined;
+  /**
+   * Turn-level failure from an "error" event; undefined until one arrives. The
+   * shell watches this and raises a toast — the error is deliberately NOT added
+   * to `textSegments`, so it never renders as inline JSON.
+   */
+  turnError: LiveTurnError | undefined;
 }
 
 export const INITIAL_STATE: ToolStreamState = {
@@ -199,6 +215,7 @@ export const INITIAL_STATE: ToolStreamState = {
   order: [],
   activeTextKey: null,
   turnUsage: undefined,
+  turnError: undefined,
 };
 
 /** Append a timeline key in first-appearance order (idempotent). */
@@ -567,6 +584,16 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
     }
     case "usage": {
       return { ...state, turnUsage: e.usage };
+    }
+    case "error": {
+      // Stash the failure for the shell to toast. Crucially we do NOT touch
+      // textSegments/messages — a turn error must never render inline (that is
+      // exactly the raw-JSON-on-the-page bug this event type exists to kill).
+      return {
+        ...state,
+        turnError: { message: e.message, ...(e.code !== undefined ? { code: e.code } : {}) },
+        activeTextKey: null,
+      };
     }
     default:
       return state;

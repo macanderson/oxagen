@@ -8,6 +8,7 @@ import {
 import { persistGeneratedAsset, createPendingGeneratedAsset } from "@oxagen/handlers";
 import { eventClient } from "@/event-client";
 import type { StreamEvent } from "@/components/chat/stream-event-types";
+import { formatStreamError } from "./stream-parts";
 
 /**
  * Stream a media-generation turn as text/event-stream, mirroring the text path's
@@ -141,8 +142,15 @@ export function streamMediaGeneration(args: {
           });
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Generation error";
-        emit({ type: "text", messageId: toolCallId, text: `\n\n[Error: ${message}]` });
+        // Emit a structured `error` event so a media-generation failure shows as
+        // a readable toast, never a raw envelope rendered inline in the chat.
+        const { code, message } = formatStreamError(err);
+        emit({
+          type: "error",
+          messageId: toolCallId,
+          message,
+          ...(code !== undefined ? { code } : {}),
+        });
       } finally {
         try {
           controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));
