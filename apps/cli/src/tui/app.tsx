@@ -71,8 +71,10 @@ export function App(props: { program: Command; version: string; onExit?: () => v
       if (sel.runnable) push({ kind: "form", node: sel });
       else push({ kind: "list", node: sel });
     } else if (key.backspace || key.delete) {
+      setCursor(0);
       setFilter((f) => f.slice(0, -1));
     } else if (input && !key.ctrl && !key.meta && input >= " ") {
+      setCursor(0);
       setFilter((f) => f + input);
     }
   });
@@ -85,7 +87,12 @@ export function App(props: { program: Command; version: string; onExit?: () => v
         onCancel={pop}
         onSubmit={async (values: FormValues) => {
           const argv = assembleArgv(formNode, values);
-          const { code } = await runCommand(formNode, argv);
+          let code: number;
+          try {
+            ({ code } = await runCommand(formNode, argv));
+          } catch {
+            code = 1;
+          }
           setStack((s) => [...s.slice(0, -1), { kind: "result", node: formNode, code }]);
         }}
       />
