@@ -57,16 +57,22 @@ export function CommandForm(props: {
     props.onSubmit(values);
   };
 
+  // @inkjs/ui TextInput and PasswordInput consume their own character input and
+  // report changes via `onChange` only — they do NOT fire an `onSubmit` event
+  // that reaches this `useInput` handler. All navigation (Enter, Esc, arrows)
+  // is handled exclusively here. Do NOT wire a conflicting `onSubmit` prop on
+  // the @inkjs/ui inputs; it would create a second, uncoordinated submit path.
   useInput((input, key) => {
     if (key.escape) return props.onCancel();
     if (key.downArrow || key.tab) setActive((i) => Math.min(i + 1, fields.length - 1));
     else if (key.upArrow) setActive((i) => Math.max(i - 1, 0));
     else if (key.return) {
-      const f = fields[active];
-      if (f?.kind === "bool") setValues((v) => ({ ...v, [f.key]: !v[f.key] }));
-      else if (active === fields.length - 1) trySubmit();
+      // Enter on the last field always submits (regardless of field kind).
+      // Enter on any other field advances focus to the next field.
+      if (active === fields.length - 1) trySubmit();
       else setActive((i) => Math.min(i + 1, fields.length - 1));
     } else if (input === " ") {
+      // Space is the sole toggle key for boolean fields.
       const f = fields[active];
       if (f?.kind === "bool") setValues((v) => ({ ...v, [f.key]: !v[f.key] }));
     }
