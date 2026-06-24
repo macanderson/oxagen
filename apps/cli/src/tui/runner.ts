@@ -20,7 +20,7 @@ export function assembleArgv(node: CommandNode, values: FormValues): string[] {
     if (opt.isBoolean) {
       if (v === true) tokens.push(opt.long);
     } else if (typeof v === "string" && v.trim() !== "") {
-      tokens.push(opt.long, v);
+      tokens.push(`${opt.long}=${v}`);
     }
   }
 
