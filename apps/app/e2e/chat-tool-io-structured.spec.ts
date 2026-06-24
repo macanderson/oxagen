@@ -75,8 +75,10 @@ test.describe("chat.tool-io — tool calls render typed UI, never raw JSON", () 
     // The tool-call card appears (collapsed). Expand it.
     const toolCard = page.locator('[data-component="tool-call-card"]').first();
     await expect(toolCard).toBeVisible({ timeout: 12_000 });
+    // The card renders collapsed (defaultOpen=false) — expand it deterministically.
     const expandBtn = toolCard.getByRole("button", { name: /expand tool call details/i });
-    if (await expandBtn.count()) await expandBtn.click();
+    await expect(expandBtn).toBeVisible();
+    await expandBtn.click();
 
     // Humanized labels — not raw camelCase JSON keys.
     await expect(toolCard.getByText("Search depth")).toBeVisible({ timeout: 8_000 });

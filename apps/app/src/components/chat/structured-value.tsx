@@ -44,24 +44,35 @@ export interface StructuredValueProps {
 // ── value classification ────────────────────────────────────────────────────
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// Prefixed opaque ids: `fan_p48e66…`, `mcs_abc123`, `org_…`.
-const PREFIXED_ID_RE = /^[a-z][a-z0-9]*_[A-Za-z0-9-]{6,}$/;
+// Prefixed ids: `fan_p48e66…`, `mcs_abc123`, `org_…`. The suffix is captured so
+// we can require it to look OPAQUE (see isOpaqueToken) — otherwise plain status
+// enums shaped like `in_progress` / `not_started` would be mistaken for ids.
+const PREFIXED_ID_RE = /^[a-z][a-z0-9]*_([A-Za-z0-9-]{6,})$/;
 // A long opaque token with no whitespace (hashes, tokens, slugs).
 const OPAQUE_TOKEN_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{19,}$/;
 // A single short token suitable for a pill (enum/status), no whitespace.
-const ENUM_RE = /^[A-Za-z][A-Za-z0-9 _-]{0,23}$/;
+const ENUM_RE = /^[A-Za-z][A-Za-z0-9_-]{0,23}$/;
 const KEY_IS_ID_RE = /(^|[_\b])ids?$|Id$|ID$|uuid$/i;
+
+/** An opaque token contains a digit or is long — real ids look random, while a
+ *  word like "progress"/"started" does not. */
+function isOpaqueToken(token: string): boolean {
+  return /[0-9]/.test(token) || token.length >= 12;
+}
 
 /** A copyable identifier, by value shape or by an `…Id` key hint. */
 export function looksLikeId(value: string, keyHint?: string): boolean {
-  if (UUID_RE.test(value) || PREFIXED_ID_RE.test(value)) return true;
+  if (UUID_RE.test(value)) return true;
+  const prefixed = PREFIXED_ID_RE.exec(value);
+  if (prefixed && isOpaqueToken(prefixed[1] ?? "")) return true;
   if (keyHint && KEY_IS_ID_RE.test(keyHint) && /^[A-Za-z0-9_-]{6,}$/.test(value)) return true;
-  return OPAQUE_TOKEN_RE.test(value) && !value.includes(" ");
+  return OPAQUE_TOKEN_RE.test(value);
 }
 
-/** A short, single-token string that reads as an enum/status → render as a pill. */
+/** A short, single-token string that reads as an enum/status → render as a pill.
+ *  (The regex already excludes whitespace and caps length at 24.) */
 export function looksLikeEnum(value: string): boolean {
-  return ENUM_RE.test(value) && !value.includes(" ") && value.length <= 24;
+  return ENUM_RE.test(value);
 }
 
 /** Tone dot color for known lifecycle/status words; undefined = neutral enum. */

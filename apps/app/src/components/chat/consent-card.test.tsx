@@ -74,10 +74,6 @@ vi.mock("lucide-react", async (importOriginal) => {
   };
 });
 
-vi.mock("./tool-call-card", () => ({
-  safeJson: (v: unknown) => JSON.stringify(v, null, 2),
-}));
-
 const FUTURE = new Date(Date.now() + 60_000).toISOString();
 
 const baseProps = {
@@ -95,6 +91,14 @@ describe("ConsentCard", () => {
     // tool name appears in both the badge and the descriptive sentence.
     expect(screen.getAllByText("list_prs").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("srv_1")).toBeInTheDocument();
+  });
+
+  it("renders the sample input as a typed tree, never raw JSON", () => {
+    const { container } = render(<ConsentCard {...baseProps} />);
+    expect(screen.getByText("Sample input")).toBeInTheDocument();
+    expect(screen.getByText("Repo")).toBeInTheDocument(); // humanized key
+    expect(screen.getByText("oxagen")).toBeInTheDocument(); // value
+    expect(container.textContent ?? "").not.toContain('"repo"');
   });
 
   it("renders Allow and Deny buttons when unresolved", () => {

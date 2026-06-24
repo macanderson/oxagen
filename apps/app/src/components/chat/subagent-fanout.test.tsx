@@ -38,10 +38,6 @@ vi.mock("lucide-react", async (importOriginal) => {
   };
 });
 
-vi.mock("./tool-call-card", () => ({
-  safeJson: (v: unknown) => JSON.stringify(v),
-}));
-
 const BASE_SUBAGENTS = [
   {
     childMessageId: "child-1",
@@ -129,9 +125,9 @@ describe("SubagentFanout", () => {
     // No error — passes if no exception thrown
   });
 
-  it("renders aggregated results section when status is not running and results exist", () => {
+  it("renders aggregated results as a typed tree, not raw JSON", () => {
     const results = [{ childMessageId: "child-1", output: { found: true } }];
-    render(
+    const { container } = render(
       <SubagentFanout
         fanoutId="fan-1"
         parentMessageId="msg-1"
@@ -141,6 +137,10 @@ describe("SubagentFanout", () => {
       />,
     );
     expect(screen.getByText("Aggregated result")).toBeInTheDocument();
+    // The output object renders structured (humanized key + Yes/No), not JSON.
+    expect(screen.getByText("Found")).toBeInTheDocument();
+    expect(screen.getByText("Yes")).toBeInTheDocument();
+    expect(container.textContent ?? "").not.toContain("{");
   });
 
   it("does not render aggregated results when status is running", () => {

@@ -60,6 +60,17 @@ describe("looksLikeId", () => {
     expect(looksLikeId("running")).toBe(false);
     expect(looksLikeId("basic", "searchDepth")).toBe(false);
   });
+
+  it("does NOT mistake word_word status enums for prefixed ids", () => {
+    // Regression: PREFIXED_ID_RE used to match these (prefix_+6 letters); a
+    // prefixed id's suffix must look opaque (digits or long), unlike a word.
+    expect(looksLikeId("in_progress")).toBe(false);
+    expect(looksLikeId("in_review")).toBe(false);
+    expect(looksLikeId("not_started")).toBe(false);
+    // …but a real prefixed id (digits in the suffix) still matches.
+    expect(looksLikeId("fan_p48e66xt6jag15rqg0t10y")).toBe(true);
+    expect(looksLikeId("mcs_abc123def")).toBe(true);
+  });
 });
 
 describe("looksLikeEnum", () => {
@@ -68,6 +79,7 @@ describe("looksLikeEnum", () => {
     expect(looksLikeEnum("basic")).toBe(true);
     expect(looksLikeEnum("running")).toBe(true);
     expect(looksLikeEnum("in_progress")).toBe(true);
+    expect(looksLikeEnum("not_started")).toBe(true);
     expect(looksLikeEnum("Topic")).toBe(true);
   });
 
@@ -152,6 +164,20 @@ describe("StructuredValue — typed scalars", () => {
     expect(screen.getByText("—")).toBeInTheDocument();
   });
 
+  it("renders a word_word status as a pill, NOT an id copy chip", () => {
+    render(<StructuredValue value={{ phase: "in_progress" }} />);
+    expect(screen.getByText("in_progress")).toBeInTheDocument();
+    // A misclassified id would render a CopyableId button.
+    expect(screen.queryByRole("button", { name: /in_progress/i })).not.toBeInTheDocument();
+  });
+
+  it("renders an ISO date as a localized value, not the raw ISO string", () => {
+    render(<StructuredValue value={{ createdAt: "2024-01-15T12:00:00Z" }} />);
+    const cell = screen.getByText(/2024/);
+    // Localized output drops the ISO 'T' separator.
+    expect(cell.textContent ?? "").not.toContain("T12:00");
+  });
+
   it("renders a url as a link", () => {
     render(<StructuredValue value={{ docs: "https://example.com/guide" }} />);
     const link = screen.getByRole("link");
@@ -171,6 +197,18 @@ describe("StructuredValue — nested + arrays", () => {
     expect(screen.getByText("alpha")).toBeInTheDocument();
     expect(screen.getByText("gamma")).toBeInTheDocument();
     expect(container.textContent ?? "").not.toContain("[");
+  });
+
+  it("renders an array of objects as numbered records, never [object Object] or JSON", () => {
+    const { container } = render(
+      <StructuredValue value={{ rows: [{ name: "a", score: 1 }, { name: "b", score: 2 }] }} />,
+    );
+    // Each object renders as its own humanized record.
+    expect(screen.getAllByText("Name")).toHaveLength(2);
+    expect(screen.getAllByText("Score")).toHaveLength(2);
+    const text = container.textContent ?? "";
+    expect(text).not.toContain("[object Object]");
+    expect(text).not.toContain("{");
   });
 
   it("renders an empty array and empty object as readable hints", () => {
