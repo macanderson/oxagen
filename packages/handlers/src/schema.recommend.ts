@@ -5,7 +5,7 @@
  * graph signal. Reading raw `graph_observed_labels` from ClickHouse is deferred
  * to a future iteration (graph.stats is sufficient for initial onboarding).
  */
-import type { CapabilityHandler, CapabilitySurface } from "@oxagen/oxagen";
+import type { CapabilityHandler } from "@oxagen/oxagen";
 import { schemaRecommend } from "@oxagen/oxagen/contracts/schema.recommend";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { generateObjectFor } from "@oxagen/ai";
@@ -63,26 +63,36 @@ export const schemaRecommendHandler: CapabilityHandler<typeof schemaRecommend> =
 ) => {
   const sampleLimit = input.sampleLimit ?? 200;
 
-  // Read graph stats for context
+  // Read graph stats for context. graph.stats's contract only exposes the
+  // api/mcp/agent surfaces, but the caller's surface can be "app" or "runner"
+  // (e.g. the in-app onboarding proxy) — passing those straight through made the
+  // kernel reject this nested invoke, and the swallowed error degraded every
+  // recommendation to a generic, graph-blind proposal. This is an internal read,
+  // so always invoke it over "api" (a surface graph.stats always supports); the
+  // tenant scope rides on `ctx`, independent of this surface gate.
   let graphStats: Record<string, unknown> = {};
   try {
     graphStats = (await invoke("graph.stats", { includeByType: true }, ctx, {
-      surface: ctx.surface as CapabilitySurface,
+      surface: "api",
     })) as Record<string, unknown>;
-  } catch {
-    logger.warn({ workspaceId: ctx.workspaceId }, "schema.recommend: graph.stats unavailable");
+  } catch (err) {
+    logger.warn(
+      { workspaceId: ctx.workspaceId, err: err instanceof Error ? err.message : String(err) },
+      "schema.recommend: graph.stats unavailable",
+    );
   }
 
   const nodeCount = (graphStats.nodeCount as number | undefined) ?? 0;
-  const relCount = (graphStats.relationshipCount as number | undefined) ?? 0;
-  const byType = graphStats.byType as Record<string, number> | undefined;
-  const topTypes = byType
-    ? Object.entries(byType)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, sampleLimit)
-        .map(([t, c]) => `${t}: ${c}`)
-        .join(", ")
-    : "no type data available";
+  const relCount = (graphStats.edgeCount as number | undefined) ?? 0;
+  const byType = graphStats.nodesByLabel as Record<string, number> | undefined;
+  const topTypes =
+    byType && Object.keys(byType).length > 0
+      ? Object.entries(byType)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, sampleLimit)
+          .map(([t, c]) => `${t}: ${c}`)
+          .join(", ")
+      : "no type data available";
 
   const prompt = `You are a knowledge graph schema expert. Based on the following graph statistics, propose a well-structured schema registry for this workspace.
 
