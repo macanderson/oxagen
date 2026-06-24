@@ -4,7 +4,7 @@ import { Check, ShieldAlert, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RiskBadge } from "./risk-badge";
-import { safeJson } from "./tool-call-card";
+import { StructuredField } from "./structured-value";
 import type { ApprovalResolution, RiskLevel } from "./stream-event-types";
 
 export interface ApprovalCardProps {
@@ -68,14 +68,7 @@ export function ApprovalCard({
         </span>
       </div>
 
-      <div>
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Proposed input
-        </div>
-        <pre className="overflow-x-auto rounded-lg bg-muted/40 p-2 font-mono text-xs">
-          {safeJson(inputPreview)}
-        </pre>
-      </div>
+      <StructuredField label="Proposed input" value={inputPreview} />
 
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
 

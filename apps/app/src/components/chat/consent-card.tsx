@@ -4,7 +4,7 @@ import { Check, Plug, ShieldCheck, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { safeJson } from "./tool-call-card";
+import { StructuredField } from "./structured-value";
 import type { ConsentResolution } from "./stream-event-types";
 
 export interface ConsentCardProps {
@@ -88,14 +88,7 @@ export function ConsentCard({
         <span className="font-mono">{capability}</span>
       </div>
 
-      <div>
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Sample input
-        </div>
-        <pre className="overflow-x-auto rounded-lg bg-muted/40 p-2 font-mono text-xs">
-          {safeJson(inputPreview)}
-        </pre>
-      </div>
+      <StructuredField label="Sample input" value={inputPreview} />
 
       {!settled && !expired ? (
         <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">

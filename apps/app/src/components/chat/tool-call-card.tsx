@@ -1,9 +1,10 @@
 "use client";
 import * as React from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { RiskBadge } from "./risk-badge";
 import { StatusIcon } from "./status-icon";
+import { StructuredField } from "./structured-value";
 import type { RiskLevel, ToolCallStatus } from "./stream-event-types";
 
 export interface ToolCallCardProps {
@@ -73,26 +74,22 @@ export function ToolCallCard(props: ToolCallCardProps) {
       </button>
       {open ? (
         <div className="space-y-3 border-t px-3 py-3">
-          <Section label={status === "pending" ? "Composing input…" : "Input"}>
-            <pre className="overflow-x-auto rounded-lg bg-muted/40 p-2 font-mono text-xs">
-              {/* While args stream in, inputPreview is the partial JSON string —
-                  render it raw (with a caret) rather than re-encoding it. */}
-              {typeof inputPreview === "string" ? (
-                inputPreview.length > 0 ? (
-                  <>
-                    {inputPreview}
-                    {status === "pending" ? (
-                      <span className="stream-caret ml-0.5" aria-hidden="true" />
-                    ) : null}
-                  </>
-                ) : (
-                  <span className="text-muted-foreground">Composing arguments…</span>
-                )
-              ) : (
-                safeJson(inputPreview)
-              )}
-            </pre>
-          </Section>
+          {/* While the model is still streaming the call's arguments the input
+              is an unparsed partial — show a clean composing indicator rather
+              than raw partial JSON. Once parsed it renders as a typed tree. */}
+          {status === "pending" ? (
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Input
+              </span>
+              <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                Composing arguments…
+              </div>
+            </div>
+          ) : (
+            <StructuredField label="Input" value={inputPreview} />
+          )}
           {(stdout || stderr || status === "running") && (
             <Section label="Output stream">
               <div
@@ -110,11 +107,7 @@ export function ToolCallCard(props: ToolCallCardProps) {
             </Section>
           )}
           {output !== undefined && status === "completed" ? (
-            <Section label="Result">
-              <pre className="overflow-x-auto rounded-lg bg-muted/40 p-2 font-mono text-xs">
-                {safeJson(output)}
-              </pre>
-            </Section>
+            <StructuredField label="Result" value={output} />
           ) : null}
           {status === "failed" && errorReason ? (
             <Section label="Error">
