@@ -125,6 +125,9 @@ export const imageCreateHandler: CapabilityHandler<typeof imageCreate> = async (
     mimeType: "image/png",
     prompt: effectivePrompt,
     model: gatewayModelId,
+    // Link to the chat turn so the asset surfaces in the Conversation Files
+    // panel (persist resolves conversation_id from this message). — OXA files fix
+    messageId: ctx.messageId ?? undefined,
   });
 
   return {

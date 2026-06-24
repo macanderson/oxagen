@@ -68,6 +68,9 @@ export const videoGenerateHandler: CapabilityHandler<typeof videoGenerate> = asy
     mimeType: "video/mp4",
     prompt: input.prompt,
     model,
+    // Link to the chat turn so the asset surfaces in the Conversation Files
+    // panel (persist resolves conversation_id from this message).
+    messageId: ctx.messageId ?? undefined,
   });
 
   // Dispatch the async render job. The worker generates, uploads to blob, and

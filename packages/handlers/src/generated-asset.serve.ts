@@ -20,6 +20,11 @@ import { storage, StorageNotFoundError } from "@oxagen/storage";
 import { insertEvents } from "@oxagen/telemetry";
 import { randomUUID } from "node:crypto";
 import { logger } from "./logger";
+import {
+  assetDisplayName,
+  assetDispositionType,
+  contentDispositionHeader,
+} from "./lib/asset-filename";
 
 export class GeneratedAssetNotFoundError extends Error {
   readonly notFound = true as const;
@@ -52,20 +57,14 @@ export interface AssetServeResult {
   body: ReadableStream<Uint8Array>;
   mimeType: string;
   sizeBytes: bigint | null;
-  contentDisposition: "inline" | "attachment";
-}
-
-/**
- * Generated assets are image/video only, both render-safe inline. SVG is never
- * produced by this path (svg.generate renders inline markup, not a stored blob),
- * so an image/* or video/* type is served inline; anything else is forced to
- * attachment as a defensive default.
- */
-function safeContentDisposition(mimeType: string): "inline" | "attachment" {
-  const type = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
-  if (type.startsWith("image/") && type !== "image/svg+xml") return "inline";
-  if (type.startsWith("video/") || type.startsWith("audio/")) return "inline";
-  return "attachment";
+  /**
+   * The complete Content-Disposition header value, including the human-readable
+   * `filename` (and RFC 5987 `filename*`). The disposition itself is `inline`
+   * for browser-renderable types (images, video, audio, PDF, text/markdown) so
+   * clicking a filename DISPLAYS the document; other binaries are `attachment`.
+   * Either way the browser names the file from the slug, never the `gen_…` id.
+   */
+  contentDisposition: string;
 }
 
 /** Whether `principal` may read an asset under the given access policy. */
@@ -189,10 +188,31 @@ export async function serveGeneratedAsset(
     }
   })();
 
+  // Name the served file by its human-readable slug (identical to the name shown
+  // in the Conversation Files panel) so downloads carry a recognisable filename
+  // + extension instead of the opaque `gen_…` public id.
+  const filename = assetDisplayName({
+    prompt: asset.prompt,
+    kind: asset.kind,
+    mimeType: asset.mimeType,
+    publicId: asset.publicId,
+    displayName: metadataDisplayName(asset.metadata),
+  });
+  const disposition = assetDispositionType(asset.mimeType);
+
   return {
     body: obj.body,
     mimeType: asset.mimeType,
     sizeBytes: asset.sizeBytes,
-    contentDisposition: safeContentDisposition(asset.mimeType),
+    contentDisposition: contentDispositionHeader(disposition, filename),
   };
+}
+
+/** Pull a generator-supplied clean title out of the asset's metadata bag. */
+function metadataDisplayName(metadata: unknown): string | null {
+  if (metadata && typeof metadata === "object" && "displayName" in metadata) {
+    const value = (metadata as { displayName?: unknown }).displayName;
+    if (typeof value === "string" && value.trim().length > 0) return value;
+  }
+  return null;
 }

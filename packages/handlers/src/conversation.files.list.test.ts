@@ -185,46 +185,124 @@ describe("conversationFilesListHandler (@oxagen/handlers)", () => {
     expect(result.files).toHaveLength(1);
   });
 
-  // ── name derivation ───────────────────────────────────────────────────────
+  // ── name derivation (url-friendly slug WITH a file extension) ──────────────
+  //
+  // The user requires human-readable, lowercase-hyphenated filenames that always
+  // carry the full extension. Derivation lives in lib/asset-filename.ts (unit-
+  // tested there); these assert the handler wires the prompt/kind/mime/metadata
+  // through to it correctly.
 
-  it("derives name from prompt for an image (no extension)", async () => {
+  it("renders a lowercase-hyphenated slug + mimeType extension for an image", async () => {
     mocks.convSelect.mockResolvedValueOnce([CONV_ROW]);
     mocks.assetSelect.mockResolvedValueOnce([
-      makeAssetRow({ kind: "image", prompt: "A sunset over the ocean" }),
+      makeAssetRow({ kind: "image", mimeType: "image/png", prompt: "A sunset over the ocean" }),
     ]);
     const result = await conversationFilesListHandler(BASE_INPUT, TEST_CTX);
-    expect(result.files[0]?.name).toBe("A sunset over the ocean");
+    expect(result.files[0]?.name).toBe("a-sunset-over-the-ocean.png");
   });
 
-  it("appends .pdf extension for pdf kind", async () => {
+  it("uses the precise mimeType extension over the kind fallback (.webp)", async () => {
     mocks.convSelect.mockResolvedValueOnce([CONV_ROW]);
     mocks.assetSelect.mockResolvedValueOnce([
-      makeAssetRow({ kind: "pdf", prompt: "Quarterly report" }),
+      makeAssetRow({ kind: "image", mimeType: "image/webp", prompt: "A sunset over the ocean" }),
     ]);
     const result = await conversationFilesListHandler(BASE_INPUT, TEST_CTX);
-    expect(result.files[0]?.name).toBe("Quarterly report.pdf");
+    expect(result.files[0]?.name).toBe("a-sunset-over-the-ocean.webp");
   });
 
-  it("falls back to 'kind-<last 8 chars of publicId>' name when prompt is empty", async () => {
+  it("strips a leading instruction verb from the prompt (.md)", async () => {
+    mocks.convSelect.mockResolvedValueOnce([CONV_ROW]);
+    mocks.assetSelect.mockResolvedValueOnce([
+      makeAssetRow({
+        kind: "document",
+        mimeType: "text/markdown",
+        prompt: "Generate markdown: USS Nautilus: The First Nuclear Submarine",
+      }),
+    ]);
+    const result = await conversationFilesListHandler(BASE_INPUT, TEST_CTX);
+    expect(result.files[0]?.name).toBe("uss-nautilus-the-first-nuclear-submarine.md");
+  });
+
+  it("prefers a clean metadata.displayName over the noisy prompt", async () => {
+    mocks.convSelect.mockResolvedValueOnce([CONV_ROW]);
+    mocks.assetSelect.mockResolvedValueOnce([
+      makeAssetRow({
+        kind: "document",
+        mimeType: "text/markdown",
+        prompt: "Generate markdown: ignore me",
+        metadata: { displayName: "Polar Crossing Report" },
+      }),
+    ]);
+    const result = await conversationFilesListHandler(BASE_INPUT, TEST_CTX);
+    expect(result.files[0]?.name).toBe("polar-crossing-report.md");
+  });
+
+  it("slugs office document mimeTypes with the right extension", async () => {
+    mocks.convSelect.mockResolvedValueOnce([CONV_ROW]);
+    mocks.assetSelect.mockResolvedValueOnce([
+      makeAssetRow({
+        publicId: "gen_doc1",
+        kind: "document",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        prompt: "Onboarding checklist",
+      }),
+      makeAssetRow({
+        publicId: "gen_sheet1",
+        kind: "spreadsheet",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        prompt: "Budget plan",
+        createdAt: new Date("2024-06-01T11:00:00.000Z"),
+      }),
+      makeAssetRow({
+        publicId: "gen_deck1",
+        kind: "presentation",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        prompt: "Kickoff deck",
+        createdAt: new Date("2024-06-01T10:00:00.000Z"),
+      }),
+    ]);
+    const result = await conversationFilesListHandler(BASE_INPUT, TEST_CTX);
+    const names = result.files.map((f) => f.name);
+    expect(names).toContain("onboarding-checklist.docx");
+    expect(names).toContain("budget-plan.xlsx");
+    expect(names).toContain("kickoff-deck.pptx");
+  });
+
+  it("falls back to the kind extension when the mimeType is unknown", async () => {
+    mocks.convSelect.mockResolvedValueOnce([CONV_ROW]);
+    mocks.assetSelect.mockResolvedValueOnce([
+      makeAssetRow({ kind: "archive", mimeType: "application/octet-stream", prompt: "Project export" }),
+    ]);
+    const result = await conversationFilesListHandler(BASE_INPUT, TEST_CTX);
+    // archive kind → .zip fallback.
+    expect(result.files[0]?.name).toBe("project-export.zip");
+  });
+
+  it("falls back to 'kind-<last 8 chars of publicId>.<ext>' when prompt is empty", async () => {
     mocks.convSelect.mockResolvedValueOnce([CONV_ROW]);
     mocks.assetSelect.mockResolvedValueOnce([
       // publicId "gen_image_abc12345" → last 8 chars = "_abc12345".slice(-8) = "abc12345".
-      makeAssetRow({ kind: "image", prompt: "", publicId: "gen_image_abc12345" }),
+      makeAssetRow({ kind: "image", mimeType: "image/png", prompt: "", publicId: "gen_image_abc12345" }),
     ]);
     const result = await conversationFilesListHandler(BASE_INPUT, TEST_CTX);
-    expect(result.files[0]?.name).toBe("image-abc12345");
+    expect(result.files[0]?.name).toBe("image-abc12345.png");
   });
 
-  it("truncates long prompts to ≤60 chars with ellipsis", async () => {
+  it("truncates a long prompt slug to ≤60 chars, then appends the extension", async () => {
     mocks.convSelect.mockResolvedValueOnce([CONV_ROW]);
-    const longPrompt = "A".repeat(80);
+    const longPrompt = "word ".repeat(40);
     mocks.assetSelect.mockResolvedValueOnce([
-      makeAssetRow({ kind: "image", prompt: longPrompt }),
+      makeAssetRow({ kind: "image", mimeType: "image/png", prompt: longPrompt }),
     ]);
     const result = await conversationFilesListHandler(BASE_INPUT, TEST_CTX);
-    // 57 chars + "…" = 58 visible chars (well under 60)
-    expect(result.files[0]?.name.length).toBeLessThanOrEqual(60);
-    expect(result.files[0]?.name.endsWith("…")).toBe(true);
+    const name = result.files[0]!.name;
+    expect(name.endsWith(".png")).toBe(true);
+    const base = name.slice(0, name.length - ".png".length);
+    expect(base.length).toBeLessThanOrEqual(60);
+    expect(base.endsWith("-")).toBe(false);
   });
 
   // ── pagination ────────────────────────────────────────────────────────────

@@ -18,16 +18,28 @@ const honoApiBase = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000")
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Proxy /api/v1/* requests to the Hono API so browser calls stay same-origin
-  // and the Better Auth session cookie is forwarded server-side. Next.js
-  // filesystem routes (e.g. /api/v1/chat/stream) take precedence — only paths
-  // without a local handler fall through to this rewrite.
+  // and the Better Auth session cookie is forwarded server-side. Only paths
+  // WITHOUT a local App Router handler should fall through to this rewrite.
+  //
+  // This MUST live in the `fallback` phase, not a bare array. A bare array is
+  // treated as `afterFiles`, which Next.js evaluates *before dynamic routes*.
+  // That shadowed our dynamic handlers (`/api/v1/conversations/[id]/assets`,
+  // `/api/v1/assets/[id]`): the catch-all matched first and proxied them to the
+  // Hono API as `/v1/conversations/...`, where the org-scoped router read
+  // org="conversations" and 404'd with "Organization not found" — the
+  // Conversation Files panel's "HTTP 404". `fallback` runs *after* both static
+  // and dynamic filesystem routes, so every local handler (static like
+  // `/api/v1/chat/stream` or dynamic like the asset routes) wins, and only
+  // genuinely unhandled paths proxy to the API.
   async rewrites() {
-    return [
-      {
-        source: "/api/v1/:path*",
-        destination: `${honoApiBase}/v1/:path*`,
-      },
-    ];
+    return {
+      fallback: [
+        {
+          source: "/api/v1/:path*",
+          destination: `${honoApiBase}/v1/:path*`,
+        },
+      ],
+    };
   },
   reactStrictMode: true,
   transpilePackages: ["@oxagen/auth", "@oxagen/ai", "@oxagen/config", "@oxagen/database", "@oxagen/oxagen", "@oxagen/ui"],

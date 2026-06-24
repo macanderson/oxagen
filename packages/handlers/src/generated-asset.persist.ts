@@ -9,7 +9,8 @@
 // identically by apps/app, apps/api, and the inngest workers.
 
 import { randomUUID } from "node:crypto";
-import { schema, withSystemDb } from "@oxagen/database";
+import { eq } from "drizzle-orm";
+import { schema, withSystemDb, type Tx } from "@oxagen/database";
 import { storage } from "@oxagen/storage";
 
 export type AssetKind =
@@ -42,6 +43,13 @@ export interface PersistGeneratedAssetArgs {
   prompt: string;
   /** The resolved gateway model id (provenance). */
   model: string;
+  /**
+   * A clean, human-readable title for the asset (e.g. the document title),
+   * persisted to `metadata.displayName` and preferred over the prompt when
+   * deriving the user-facing filename. Optional — image generators leave this
+   * unset and let the prompt drive the name.
+   */
+  displayName?: string | null;
   /** Optional linkage to the chat turn that produced the asset. */
   conversationId?: string | null;
   messageId?: string | null;
@@ -90,6 +98,48 @@ function extFor(mimeType: string): string {
 }
 
 /**
+ * Build the `metadata` jsonb for an asset row. Stores the generator-supplied
+ * clean title under `displayName` so the serving route + Conversation Files
+ * panel can render a human-readable filename without re-deriving it from the
+ * noisy prompt. Returns undefined (column default) when there's nothing to set.
+ */
+function buildMetadata(displayName: string | null | undefined): { displayName: string } | undefined {
+  const name = displayName?.trim();
+  return name ? { displayName: name } : undefined;
+}
+
+/**
+ * Resolve the conversation an asset belongs to so the Conversation Files panel
+ * (`conversation.files.list`, which filters `generated_assets.conversation_id`)
+ * can find it.
+ *
+ * The chat composer's image/video path passes `conversationId` directly, but the
+ * agent-tool generators (documents/markdown/archive/image.create/video.generate)
+ * only carry `ctx.messageId` — never the conversation id. Without this seam those
+ * assets were written with `conversation_id = NULL` and never appeared in the
+ * panel. Resolving the message's conversation here, in the single persistence
+ * chokepoint, fixes every generator at once (no per-handler plumbing).
+ *
+ * Returns the explicit `conversationId` when supplied; otherwise the message's
+ * conversation; otherwise null. Never throws — a generation must not fail just
+ * because the linkage can't be resolved.
+ */
+async function resolveConversationId(
+  tx: Tx,
+  conversationId: string | null | undefined,
+  messageId: string | null | undefined,
+): Promise<string | null> {
+  if (conversationId) return conversationId;
+  if (!messageId) return null;
+  const [msg] = await tx
+    .select({ conversationId: schema.messages.conversationId })
+    .from(schema.messages)
+    .where(eq(schema.messages.id, messageId))
+    .limit(1);
+  return msg?.conversationId ?? null;
+}
+
+/**
  * Upload `bytes` to blob storage and insert a `generated_assets` row referencing
  * it (status `ready`). Returns the ids + the access-controlled serving URL the
  * UI should render. Throws if the upload or insert fails — the caller decides
@@ -115,8 +165,13 @@ export async function persistGeneratedAsset(
   // this OUTSIDE any runInTenantScope — the image/video generation happens in a
   // ReadableStream callback that is not wrapped by the kernel or tenant scope;
   // orgId/workspaceId are carried explicitly in args as defense-in-depth) — OXA-1515
-  const [row] = await withSystemDb((tx) =>
-    tx
+  const [row] = await withSystemDb(async (tx) => {
+    const conversationId = await resolveConversationId(
+      tx,
+      args.conversationId,
+      args.messageId,
+    );
+    return tx
       .insert(schema.generatedAssets)
       .values({
         orgId: args.orgId,
@@ -134,11 +189,12 @@ export async function persistGeneratedAsset(
         sizeBytes: BigInt(bytes),
         prompt: args.prompt,
         model: args.model,
-        conversationId: args.conversationId ?? undefined,
+        metadata: buildMetadata(args.displayName),
+        conversationId: conversationId ?? undefined,
         messageId: args.messageId ?? undefined,
       })
-      .returning({ id: schema.generatedAssets.id, publicId: schema.generatedAssets.publicId }),
-  );
+      .returning({ id: schema.generatedAssets.id, publicId: schema.generatedAssets.publicId });
+  });
 
   if (!row) throw new Error("generated_assets insert failed");
 
@@ -163,6 +219,8 @@ export interface CreatePendingGeneratedAssetArgs {
   mimeType: string;
   prompt: string;
   model: string;
+  /** Clean human-readable title persisted to `metadata.displayName` (see persist). */
+  displayName?: string | null;
   conversationId?: string | null;
   messageId?: string | null;
 }
@@ -190,8 +248,13 @@ export async function createPendingGeneratedAsset(
   // tenancy: system bypass via withSystemDb (same rationale as
   // persistGeneratedAsset — called from the chat stream route outside any
   // runInTenantScope; orgId/workspaceId are explicit in args) — OXA-1515
-  const [row] = await withSystemDb((tx) =>
-    tx
+  const [row] = await withSystemDb(async (tx) => {
+    const conversationId = await resolveConversationId(
+      tx,
+      args.conversationId,
+      args.messageId,
+    );
+    return tx
       .insert(schema.generatedAssets)
       .values({
         orgId: args.orgId,
@@ -207,11 +270,12 @@ export async function createPendingGeneratedAsset(
         mimeType: args.mimeType,
         prompt: args.prompt,
         model: args.model,
-        conversationId: args.conversationId ?? undefined,
+        metadata: buildMetadata(args.displayName),
+        conversationId: conversationId ?? undefined,
         messageId: args.messageId ?? undefined,
       })
-      .returning({ id: schema.generatedAssets.id, publicId: schema.generatedAssets.publicId }),
-  );
+      .returning({ id: schema.generatedAssets.id, publicId: schema.generatedAssets.publicId });
+  });
 
   if (!row) throw new Error("generated_assets pending insert failed");
 
