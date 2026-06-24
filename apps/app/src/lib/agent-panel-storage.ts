@@ -58,3 +58,27 @@ export function setAgentPanelPosition(
   const position: Position = { x, y };
   localStorage.setItem(key, JSON.stringify(position));
 }
+
+/**
+ * Clamp x,y coordinates to the viewport bounds.
+ * Ensures the draggable panel stays within the visible window.
+ * @param x - The x coordinate to clamp
+ * @param y - The y coordinate to clamp
+ * @param panelWidth - Width of the panel (used to clamp right edge)
+ * @param panelHeight - Height of the panel (used to clamp bottom edge)
+ * @returns Clamped position coordinates
+ */
+export function clampToViewport(
+  x: number,
+  y: number,
+  panelWidth: number,
+  panelHeight: number,
+): Position {
+  // Clamp x to viewport width (0 to window.innerWidth - panelWidth)
+  const clampedX = Math.max(0, Math.min(x, window.innerWidth - panelWidth));
+
+  // Clamp y to viewport height (0 to window.innerHeight - panelHeight)
+  const clampedY = Math.max(0, Math.min(y, window.innerHeight - panelHeight));
+
+  return { x: clampedX, y: clampedY };
+}
