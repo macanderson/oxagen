@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { StructuredValue } from "../structured-value";
 
 /**
  * capability-chain-card — renders agent.compose output: the synthesized summary,
@@ -90,14 +91,6 @@ const STATUS_META: Record<
   skipped: { Icon: MinusCircle, cls: "text-muted-foreground", label: "Skipped" },
 };
 
-function safeJson(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
 function StepRow({ step, index }: { step: ChainStep; index: number }): React.ReactElement {
   const [open, setOpen] = React.useState(false);
   const { Icon, cls, label } = STATUS_META[step.status];
@@ -151,9 +144,9 @@ function StepRow({ step, index }: { step: ChainStep; index: number }): React.Rea
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Input
                 </div>
-                <pre className="mt-0.5 overflow-x-auto rounded-lg bg-muted/40 p-2 font-mono text-[11px]">
-                  {safeJson(step.input)}
-                </pre>
+                <div className="mt-0.5 overflow-x-auto rounded-lg border border-border/60 bg-muted/30 p-2 text-[11px]">
+                  <StructuredValue value={step.input} />
+                </div>
               </div>
             ) : null}
             {step.output !== undefined ? (
@@ -161,9 +154,9 @@ function StepRow({ step, index }: { step: ChainStep; index: number }): React.Rea
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Output
                 </div>
-                <pre className="mt-0.5 max-h-48 overflow-auto rounded-lg bg-muted/40 p-2 font-mono text-[11px]">
-                  {safeJson(step.output)}
-                </pre>
+                <div className="mt-0.5 max-h-48 overflow-auto rounded-lg border border-border/60 bg-muted/30 p-2 text-[11px]">
+                  <StructuredValue value={step.output} />
+                </div>
               </div>
             ) : null}
             {step.error ? (

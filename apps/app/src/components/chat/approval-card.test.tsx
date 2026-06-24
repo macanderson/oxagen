@@ -10,7 +10,7 @@
  *   - Shows error message when resolution fails
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApprovalCard } from "./approval-card";
@@ -62,10 +62,6 @@ vi.mock("./risk-badge", () => ({
   RiskBadge: ({ risk }: { risk: string }) => <span data-testid="risk-badge">{risk}</span>,
 }));
 
-vi.mock("./tool-call-card", () => ({
-  safeJson: (v: unknown) => JSON.stringify(v, null, 2),
-}));
-
 // future date — ensures countdown doesn't immediately expire
 const FUTURE = new Date(Date.now() + 60_000).toISOString();
 
@@ -81,6 +77,22 @@ describe("ApprovalCard", () => {
       />,
     );
     expect(screen.getByText("files.delete")).toBeInTheDocument();
+  });
+
+  it("renders the proposed input as a typed tree, never raw JSON", () => {
+    const { container } = render(
+      <ApprovalCard
+        approvalId="a1"
+        capability="files.delete"
+        inputPreview={{ path: "/tmp/test" }}
+        riskLevel="high"
+        expiresAt={FUTURE}
+      />,
+    );
+    expect(screen.getByText("Proposed input")).toBeInTheDocument();
+    expect(screen.getByText("Path")).toBeInTheDocument(); // humanized key
+    expect(screen.getByText("/tmp/test")).toBeInTheDocument(); // value
+    expect(container.textContent ?? "").not.toContain('"path"');
   });
 
   it("renders risk badge", () => {

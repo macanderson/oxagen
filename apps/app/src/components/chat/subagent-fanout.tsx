@@ -3,7 +3,7 @@ import * as React from "react";
 import { Check, Loader2, Users, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { safeJson } from "./tool-call-card";
+import { StructuredField } from "./structured-value";
 import type { SubagentChild, SubagentStatus } from "./stream-event-types";
 
 export interface SubagentFanoutProps {
@@ -51,14 +51,10 @@ export function SubagentFanout({
       </div>
 
       {status !== "running" && results && results.length > 0 ? (
-        <div>
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Aggregated result
-          </div>
-          <pre className="overflow-x-auto rounded-lg bg-muted/40 p-2 font-mono text-xs">
-            {safeJson(results)}
-          </pre>
-        </div>
+        <StructuredField
+          label="Aggregated result"
+          value={results.map((r) => r.output)}
+        />
       ) : null}
     </div>
   );
