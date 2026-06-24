@@ -23,6 +23,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { PwaSplash } from "@/components/pwa/pwa-splash";
 import { InstallPrompt } from "@/components/pwa/install-prompt";
 import { RouteTransitionLoader } from "@/components/pwa/route-transition-loader";
+import { AgentPanelProvider } from "@/providers/agent-panel-provider";
 
 export const metadata: Metadata = {
   title: "Oxagen",
@@ -137,23 +138,25 @@ export default async function RootLayout({ children }: { children: React.ReactNo
            * prefers-reduced-motion kill-switch in @oxagen/ui globals.
            */}
           <MotionProvider>
-            <TooltipProvider>
-              <ToastProvider>
-                {children}
-                <ToastViewport />
-              </ToastProvider>
-            </TooltipProvider>
-            {/*
-             * Route-transition loader: spinner during navigation, mobile-only
-             * (gated at max-width:768px). Respects prefers-reduced-motion.
-             */}
-            <RouteTransitionLoader />
-            {/*
-             * Install prompt: deferred install CTA for Chrome/Android; manual
-             * instructions for iOS. Never shown when already installed or
-             * dismissed.
-             */}
-            <InstallPrompt />
+            <AgentPanelProvider>
+              <TooltipProvider>
+                <ToastProvider>
+                  {children}
+                  <ToastViewport />
+                </ToastProvider>
+              </TooltipProvider>
+              {/*
+               * Route-transition loader: spinner during navigation, mobile-only
+               * (gated at max-width:768px). Respects prefers-reduced-motion.
+               */}
+              <RouteTransitionLoader />
+              {/*
+               * Install prompt: deferred install CTA for Chrome/Android; manual
+               * instructions for iOS. Never shown when already installed or
+               * dismissed.
+               */}
+              <InstallPrompt />
+            </AgentPanelProvider>
           </MotionProvider>
         </ThemeProvider>
       </body>

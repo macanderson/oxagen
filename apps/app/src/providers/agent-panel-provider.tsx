@@ -25,7 +25,7 @@ const AgentPanelContext = createContext<AgentPanelContextValue | undefined>(unde
  */
 interface AgentPanelProviderProps {
   children: ReactNode;
-  workspaceId: string;
+  workspaceId?: string;
 }
 
 /**
@@ -72,7 +72,7 @@ export function AgentPanelProvider({ children, workspaceId }: AgentPanelProvider
   return (
     <AgentPanelContext.Provider value={value}>
       {children}
-      <AgentPanel workspaceId={workspaceId} isOpen={isOpen} onClose={close} />
+      {workspaceId && <AgentPanel workspaceId={workspaceId} isOpen={isOpen} onClose={close} />}
     </AgentPanelContext.Provider>
   );
 }
