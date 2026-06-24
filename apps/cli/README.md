@@ -340,15 +340,62 @@ oxagen auth logout && oxagen auth login
 
 ## Development
 
+### Install the `oxagen` binary onto your PATH (live, auto-rebuilding)
+
+Run this once from the **repo root** and leave it running:
+
 ```bash
-pnpm -C apps/cli dev -- auth whoami   # run from source with tsx
-pnpm -C apps/cli build                # compile to dist/
+pnpm cli:dev
+```
+
+This builds the package, installs an `oxagen` binary onto your PATH, then watches
+`apps/cli/src/**` and rebuilds on every save. After it prints `watching for
+changes…`, open a second terminal and use `oxagen` like a published binary — every
+source edit is live on the next invocation, with no reinstall step:
+
+```bash
+oxagen --version
+oxagen --help
+oxagen auth whoami
+```
+
+**How it works.** The installed binary is a symlink from a PATH directory
+(`~/.local/bin/oxagen` when that's on your PATH) into the package's build output
+(`apps/cli/dist/index.js`). `tsc --watch` rewrites `dist/` in place on every change,
+and because a symlink always resolves to its target's current contents, the on-PATH
+`oxagen` is always the freshly-built code — the "reinstall" is automatic.
+
+Want a one-shot install without the watcher (build once, link, exit)?
+
+```bash
+pnpm cli:install
+```
+
+If `cli:dev` warns that the chosen directory isn't on your PATH, add it to your shell
+profile (the script prints the exact line), e.g.:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+To uninstall the dev binary, remove the symlink: `rm "$(command -v oxagen)"`.
+
+### Other workflows
+
+```bash
+pnpm -C apps/cli dev -- auth whoami   # run a single command from source with tsx
+pnpm -C apps/cli build                # compile to dist/ once
 pnpm -C apps/cli test:unit            # run unit tests
 pnpm -C apps/cli lint                 # lint (zero warnings enforced)
 pnpm -C apps/cli typecheck            # type-check
 ```
 
 Releases are managed monorepo-wide via `pnpm release:patch|minor|major`, which bumps all packages to the same version and syncs to Vercel.
+
+### Known gaps
+
+See [`GAPS.md`](./GAPS.md) for the tracked completeness, capability-parity, and `--help`
+documentation gaps and their prioritized fix plan.
 
 ---
 
