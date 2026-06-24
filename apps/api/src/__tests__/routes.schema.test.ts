@@ -327,6 +327,62 @@ describe("schema.relationship.delete route", () => {
   });
 });
 
+// ── schema.property.upsert ────────────────────────────────────────────────────
+
+describe("schema.property.upsert route", () => {
+  const PATH = "/schema/crm/properties/node/Contact/email";
+
+  it("happy path PUT: returns 200 with invoke result", async () => {
+    const invokeResult = { propertyId: "prop-1", created: true };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await authPut(PATH, { dataType: "email", required: true });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke with 'schema.property.upsert' and surface 'api'", async () => {
+    await authPut(PATH, { dataType: "email", required: true });
+    expect(mocks.invoke).toHaveBeenCalledOnce();
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.property.upsert");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+  });
+
+  it("passes ownerKind, ownerName, key from path params and dataType from body", async () => {
+    await authPut(PATH, { dataType: "email", required: true });
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.ownerKind).toBe("node");
+    expect(body.ownerName).toBe("Contact");
+    expect(body.key).toBe("email");
+    expect(body.dataType).toBe("email");
+    expect(body.required).toBe(true);
+  });
+});
+
+// ── schema.property.delete ────────────────────────────────────────────────────
+
+describe("schema.property.delete route", () => {
+  const PATH = "/schema/crm/properties/node/Contact/email";
+
+  it("happy path DELETE: returns 200 with invoke result", async () => {
+    const invokeResult = { deleted: true, key: "email" };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await authDelete(PATH);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke with 'schema.property.delete' and passes ownerKind/ownerName/key from path", async () => {
+    await authDelete(PATH);
+    expect(mocks.invoke).toHaveBeenCalledOnce();
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("schema.property.delete");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.ownerKind).toBe("node");
+    expect(body.ownerName).toBe("Contact");
+    expect(body.key).toBe("email");
+  });
+});
+
 // ── schema.version.list ───────────────────────────────────────────────────────
 
 describe("schema.version.list route", () => {
