@@ -87,6 +87,38 @@ describe("kernel tenant scope", () => {
     expect(out).toEqual({ scope: "NONE" });
   });
 
+  it("enters a tenant scope for unscoped capabilities that carry real tenant ids", async () => {
+    // Regression (hotfix): plugin.schema.get is scoped:false but is invoked from
+    // the API with a concrete org+workspace. Its IAM check (checkIAM →
+    // fetchAuthz → withTenantDb) and parts of its handler read through
+    // withTenantDb, which require an active tenant scope. The kernel used to skip
+    // runInTenantScope for ALL scoped:false capabilities, so on enterprise orgs
+    // (the only tier that runs the IAM resolver) fetchAuthz threw
+    // TenantScopeError and the kernel fail-closed with "IAM check errored …
+    // failing closed", breaking "Edit configuration" on connectors. An unscoped
+    // capability with valid tenant ids must now run inside the request's scope.
+    registerCapability({
+      name: "test.unscoped.scoped",
+      domain: "test",
+      description: "unscoped but tenant-bound",
+      mode: "sync",
+      surfaces: ["api"],
+      layers: ["unit"],
+      sensitivity: "low",
+      defaultEffect: "allow",
+      defaultRoles: { org: {}, workspace: {} },
+      scoped: false,
+      input: z.object({}),
+      output: z.object({ org: z.string() }),
+    });
+    registerHandler("test.unscoped.scoped", async () => async () => {
+      const s = getScope();
+      return { org: s?.orgId ?? "NONE" };
+    });
+    const out = await invoke("test.unscoped.scoped", {}, ctx());
+    expect(out).toEqual({ org: ORG });
+  });
+
   it("fails closed when orgId is empty (MCP session-token path)", async () => {
     registerCapability({
       name: "test.echo2",
