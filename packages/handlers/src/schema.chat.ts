@@ -100,6 +100,11 @@ export const schemaChatHandler: CapabilityHandler<typeof schemaChat> = async (in
 
 ${draftSummary}
 
+CRITICAL EXECUTION RULE: You are an EXECUTOR, not an advisor. When the user asks to drop / delete / remove / rename / add / change / enable / disable anything, you MUST emit the mutation(s) that perform it in this same response. NEVER reply with only an acknowledgement or a question. Use the EXACT existing names from the draft summary above. Worked examples:
+- "drop the support schema" -> mutations: [{ "capability": "schema.delete", "input": { "schemaName": "support" } }]
+- "add a number_of_licenses field to the subscriptions schema" -> mutations: [{ "capability": "schema.property.upsert", "input": { "schemaName": "subscription", "ownerKind": "node", "ownerName": "Subscription", "key": "number_of_licenses", "dataType": "integer", "required": false } }]
+- "disable the billing schema" -> mutations: [{ "capability": "schema.toggle", "input": { "schemaName": "billing", "enabled": false } }]
+
 
 Return your answer in TWO parts:
 
