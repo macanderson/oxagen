@@ -7,7 +7,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { isSeatLimitError, assertSeatAvailable } from "@oxagen/billing";
 import { sendEmail, invitationEmailTemplate } from "@oxagen/notifications";
-import { loadEnv } from "@oxagen/config/env";
+import { requireEnv } from "@oxagen/config/env";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, getOrgRole } from "@/lib/resolve-org";
 import { logger, maskEmail } from "@oxagen/handlers/logger";
@@ -137,7 +137,7 @@ export async function inviteMemberAction(
       // SMTP is unconfigured, e.g. local dev — the invite still succeeds).
       try {
         if (!inserted) throw new Error("invitation insert returned no row");
-        const env = loadEnv();
+        const env = requireEnv(["NEXT_PUBLIC_APP_URL"] as const);
         const inviteUrl = `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/members/accept?invitation=${inserted.publicId}`;
         const inviterName = session.user.name ?? session.user.email;
         const { subject, text, html } = invitationEmailTemplate({

@@ -92,6 +92,12 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 });
 
 vi.mock("@oxagen/config/env", () => ({
+  // The billing actions use requireEnv (scoped to NEXT_PUBLIC_APP_URL) — NOT
+  // loadEnv (full-schema). loadEnv is kept here only to assert it is never
+  // called (regression for the page-wipe, digest 812344190).
+  requireEnv: vi.fn(() => ({
+    NEXT_PUBLIC_APP_URL: "https://app.example.com",
+  })),
   loadEnv: vi.fn(() => ({
     NEXT_PUBLIC_APP_URL: "https://app.example.com",
   })),
@@ -122,6 +128,7 @@ import {
   reactivateSubscriptionAction,
   setSeatsAction,
   buyCreditsAction,
+  changePlanAction,
   updateAutoReloadAction,
   removePaymentMethodAction,
   setDefaultPaymentMethodAction,
@@ -135,7 +142,9 @@ import {
   setSubscriptionSeats,
   isSeatLimitError,
   createUsageCreditCheckout,
+  changeOrgPlan,
 } from "@oxagen/billing";
+import { requireEnv, loadEnv } from "@oxagen/config/env";
 import { emitSecurityEvent } from "@oxagen/database/security";
 
 const mockEmitSecurityEvent = vi.mocked(emitSecurityEvent);
@@ -505,5 +514,63 @@ describe("security event emission — billing.payment_method_added on setup-inte
     const event = mockEmitSecurityEvent.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
     expect(event.eventType).toBe("billing.payment_method_added");
     expect(event.outcome).toBe("success");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. Env validation is scoped + caught — regression for the billing page-wipe
+//    (prod STRIPE_WEBHOOK_SECRET="" made loadEnv() throw an UNCAUGHT server-
+//    action rejection outside the try, wiping the page; digest 812344190).
+//    Guarantees: (a) these actions validate ONLY NEXT_PUBLIC_APP_URL, never the
+//    whole monorepo schema, so an unrelated malformed var can't break them; and
+//    (b) any env-validation failure degrades to {ok:false}, never a throw.
+// ---------------------------------------------------------------------------
+
+describe("env validation scope + resilience (regression: page-wipe 812344190)", () => {
+  beforeEach(() => {
+    setRole("owner");
+  });
+
+  it("buyCreditsAction validates ONLY NEXT_PUBLIC_APP_URL (never full loadEnv)", async () => {
+    vi.mocked(createUsageCreditCheckout).mockResolvedValue({
+      url: "https://checkout.stripe.com/pay/cs_test",
+      grantCents: 500,
+      priceCents: 500,
+      percent: 0,
+    } as never);
+
+    await buyCreditsAction({ orgSlug: "acme", amountUsd: 5 });
+
+    expect(requireEnv).toHaveBeenCalledWith(["NEXT_PUBLIC_APP_URL"]);
+    expect(loadEnv).not.toHaveBeenCalled();
+  });
+
+  it("changePlanAction validates ONLY NEXT_PUBLIC_APP_URL (never full loadEnv)", async () => {
+    vi.mocked(changeOrgPlan).mockResolvedValue(null as never);
+
+    await changePlanAction({ orgSlug: "acme", targetPlanSlug: "scale-v2", interval: "month" });
+
+    expect(requireEnv).toHaveBeenCalledWith(["NEXT_PUBLIC_APP_URL"]);
+    expect(loadEnv).not.toHaveBeenCalled();
+  });
+
+  it("buyCreditsAction returns {ok:false} (no throw) when env validation fails", async () => {
+    vi.mocked(requireEnv).mockImplementationOnce(() => {
+      throw new Error(
+        'Invalid environment (required: NEXT_PUBLIC_APP_URL):\n  - STRIPE_WEBHOOK_SECRET: Invalid input: must start with "whsec_"',
+      );
+    });
+
+    const result = await buyCreditsAction({ orgSlug: "acme", amountUsd: 5 });
+    expect(result.ok).toBe(false);
+  });
+
+  it("changePlanAction returns {ok:false} (no throw) when env validation fails", async () => {
+    vi.mocked(requireEnv).mockImplementationOnce(() => {
+      throw new Error("Invalid environment");
+    });
+
+    const result = await changePlanAction({ orgSlug: "acme", targetPlanSlug: "scale-v2", interval: "month" });
+    expect(result.ok).toBe(false);
   });
 });

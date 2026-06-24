@@ -138,6 +138,9 @@ vi.mock("@oxagen/notifications", () => ({
   invitationEmailTemplate: mockInvitationEmailTemplate,
 }));
 vi.mock("@oxagen/config/env", () => ({
+  // inviteMemberAction now uses requireEnv(["NEXT_PUBLIC_APP_URL"]) (scoped) —
+  // not loadEnv. Both resolve to the same fixture so the invite-email path works.
+  requireEnv: mockLoadEnv,
   loadEnv: mockLoadEnv,
 }));
 
