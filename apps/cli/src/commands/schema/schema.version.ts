@@ -49,7 +49,7 @@ export const schemaVersionPinCommand = new Command("pin")
   .description("Point the workspace at a published version")
   .argument("<version-id>", "The versionId to pin")
   .option("--json", "Output raw JSON")
-  .action(async (versionId: string, options: VersionPinOptions) => {
+  .action(async (versionId: string, _options: VersionPinOptions) => {
     requireAuth();
     try {
       const data = await apiRequest("/schema/versions/pin", {
@@ -91,7 +91,7 @@ export const schemaVersionDiffCommand = new Command("diff")
   .argument("<from-version-id>", "Version ID to diff from")
   .argument("<to-version-id>", "Version ID to diff to")
   .option("--json", "Output raw JSON")
-  .action(async (fromVersionId: string, toVersionId: string, options: VersionDiffOptions) => {
+  .action(async (fromVersionId: string, toVersionId: string, _options: VersionDiffOptions) => {
     requireAuth();
     try {
       const data = await apiRequest("/schema/versions/diff", {

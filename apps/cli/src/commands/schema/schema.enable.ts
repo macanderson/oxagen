@@ -9,7 +9,7 @@ export const schemaEnableCommand = new Command("enable")
   .description("Enable a schema (auto-publishes draft and pins the resulting version)")
   .argument("<schema-name>", "Schema name to enable")
   .option("--json", "Output raw JSON")
-  .action(async (schemaName: string, options: SchemaEnableOptions) => {
+  .action(async (schemaName: string, _options: SchemaEnableOptions) => {
     requireAuth();
     try {
       const data = await apiRequest("/schema/toggle", {

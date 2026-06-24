@@ -9,7 +9,7 @@ export const schemaDisableCommand = new Command("disable")
   .description("Disable a schema")
   .argument("<schema-name>", "Schema name to disable")
   .option("--json", "Output raw JSON")
-  .action(async (schemaName: string, options: SchemaDisableOptions) => {
+  .action(async (schemaName: string, _options: SchemaDisableOptions) => {
     requireAuth();
     try {
       const data = await apiRequest("/schema/toggle", {
