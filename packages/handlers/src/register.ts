@@ -448,6 +448,19 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () => (await import("./graph.node.upsert")).graphNodeUpsertHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "graph.node.label.add",
+    async () => (await import("./graph.node.label.add")).graphNodeLabelAddHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "graph.node.label.remove",
+    async () =>
+      (await import("./graph.node.label.remove")).graphNodeLabelRemoveHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "graph.node.labels.get",
+    async () => (await import("./graph.node.labels.get")).graphNodeLabelsGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "graph.node.get",
     async () => (await import("./graph.node.get")).graphNodeGetHandler as CapabilityHandlerFn,
   );

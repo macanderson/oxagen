@@ -1596,6 +1596,45 @@
       }
     },
     {
+      "name": "graph.node.label.add",
+      "file": "graph.node.label.add.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "unit": false
+      }
+    },
+    {
+      "name": "graph.node.label.remove",
+      "file": "graph.node.label.remove.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "unit": false
+      }
+    },
+    {
+      "name": "graph.node.labels.get",
+      "file": "graph.node.labels.get.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "unit": false
+      }
+    },
+    {
       "name": "graph.node.list",
       "file": "graph.node.list.ts",
       "domain": "graph",

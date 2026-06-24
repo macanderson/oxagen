@@ -137,6 +137,9 @@ import { privacyDataErase } from "./privacy.data.erase";
 import { researchSwarmStart } from "./research.swarm.start";
 import { researchSwarmStatus } from "./research.swarm.status";
 import { graphNodeUpsert } from "./graph.node.upsert";
+import { graphNodeLabelAdd } from "./graph.node.label.add";
+import { graphNodeLabelRemove } from "./graph.node.label.remove";
+import { graphNodeLabelsGet } from "./graph.node.labels.get";
 import { graphNodeGet } from "./graph.node.get";
 import { graphNodeDelete } from "./graph.node.delete";
 import { graphNodeSearch } from "./graph.node.search";
@@ -352,6 +355,9 @@ export {
   researchSwarmStart,
   researchSwarmStatus,
   graphNodeUpsert,
+  graphNodeLabelAdd,
+  graphNodeLabelRemove,
+  graphNodeLabelsGet,
   graphNodeGet,
   graphNodeDelete,
   graphNodeSearch,
@@ -567,6 +573,9 @@ export const contracts = [
   researchSwarmStart,
   researchSwarmStatus,
   graphNodeUpsert,
+  graphNodeLabelAdd,
+  graphNodeLabelRemove,
+  graphNodeLabelsGet,
   graphNodeGet,
   graphNodeDelete,
   graphNodeSearch,
