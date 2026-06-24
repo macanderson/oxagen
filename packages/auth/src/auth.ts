@@ -8,6 +8,7 @@ import { emitSecurityEvent } from "@oxagen/database/security";
 import { requireEnv } from "@oxagen/config/env";
 import { createLocalKmsAdapter, loadMasterKey } from "@oxagen/crypto/kms";
 import { buildAccountTokenHooks, buildStripOnlyAccountHooks } from "./token-encryption";
+import { withTrustedLinkHardening } from "./account-linking";
 import { resolveIsLocalEnv } from "./local-env";
 import {
   sendEmailFireAndForget,
@@ -379,10 +380,26 @@ export const auth = betterAuth({
   // instead of creating a second account. After linking, the user can sign in
   // with email/password (if set), Google, or GitHub interchangeably. GitHub can
   // expose multiple emails — Better Auth matches on the primary verified email.
+  //
+  // requireLocalEmailVerified: false — without this, Better Auth REFUSES to link
+  // a trusted provider into an existing local account whose email is still
+  // unverified, surfacing as `account_not_linked` (better-auth
+  // `oauth2/link-account.mjs`: `requireLocalEmailVerified && !user.emailVerified`).
+  // That blocks the common, legitimate flow "I signed up with a password, never
+  // verified, now I sign in with Google" and forces a duplicate-or-dead-end. We
+  // accept the trusted provider's verified email as proof of ownership and link.
+  //
+  // SECURITY: relaxing this alone would open an account pre-hijacking vector
+  // (an attacker pre-registers victim@x with a password they choose; the
+  // victim's later Google sign-in links + verifies that row, enabling the
+  // attacker's password). That hole is closed by withTrustedLinkHardening below,
+  // which revokes any stale credential password when a trusted provider links
+  // into a previously-unverified account. See ./account-linking.ts.
   account: {
     accountLinking: {
       enabled: true,
       trustedProviders: ["google", "github"],
+      requireLocalEmailVerified: false,
     },
   },
   session: {
@@ -444,9 +461,17 @@ export const auth = betterAuth({
     // AUTH_TOKEN_ENCRYPTION_KEY is present (preview/prod, enforced by the
     // startup guard) the tokens are additionally encrypted into the *_enc
     // columns; locally without the key they're simply not persisted.
-    account: kmsAdapter
-      ? buildAccountTokenHooks(kmsAdapter, TOKEN_KEY_ID)
-      : buildStripOnlyAccountHooks(),
+    //
+    // withTrustedLinkHardening composes onto that base hook: after the token
+    // transform, it revokes any stale credential password when a trusted social
+    // provider links into a previously-unverified local account (closes the
+    // account pre-hijacking vector opened by requireLocalEmailVerified:false —
+    // see the accountLinking note above and ./account-linking.ts).
+    account: withTrustedLinkHardening(
+      kmsAdapter
+        ? buildAccountTokenHooks(kmsAdapter, TOKEN_KEY_ID)
+        : buildStripOnlyAccountHooks(),
+    ),
     session: {
       create: {
         after: async (session) => {
