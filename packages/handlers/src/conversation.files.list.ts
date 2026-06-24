@@ -4,6 +4,7 @@ import type { ConversationAssetKind } from "@oxagen/oxagen/contracts/conversatio
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { logger } from "./logger";
+import { assetDisplayName } from "./lib/asset-filename";
 
 // All asset kinds supported by generated_assets_kind_check.
 const ALL_KINDS: ConversationAssetKind[] = [
@@ -16,36 +17,13 @@ const ALL_KINDS: ConversationAssetKind[] = [
   "archive",
 ];
 
-/**
- * Derive a human-readable display name for a generated asset.
- * Uses the first sentence of the generation prompt (≤60 chars) with a
- * kind-specific extension suffix. Falls back to "<kind>-<publicId-suffix>".
- */
-function deriveAssetName(
-  kind: string,
-  prompt: string,
-  publicId: string,
-): string {
-  if (prompt.trim().length > 0) {
-    const sentence = prompt.split(/[.!?\n]/)[0]?.trim() ?? prompt;
-    const label = sentence.length > 60 ? `${sentence.slice(0, 57)}…` : sentence;
-    if (label.length > 0) {
-      const ext = kindExtension(kind);
-      return ext ? `${label}${ext}` : label;
-    }
+/** Pull a generator-supplied clean title out of the asset's metadata bag. */
+function metadataDisplayName(metadata: unknown): string | null {
+  if (metadata && typeof metadata === "object" && "displayName" in metadata) {
+    const value = (metadata as { displayName?: unknown }).displayName;
+    if (typeof value === "string" && value.trim().length > 0) return value;
   }
-  return `${kind}-${publicId.slice(-8)}`;
-}
-
-function kindExtension(kind: string): string {
-  switch (kind) {
-    case "pdf": return ".pdf";
-    case "document": return ".docx";
-    case "spreadsheet": return ".xlsx";
-    case "presentation": return ".pptx";
-    case "archive": return ".zip";
-    default: return "";
-  }
+  return null;
 }
 
 export const conversationFilesListHandler: CapabilityHandler<
@@ -119,6 +97,7 @@ export const conversationFilesListHandler: CapabilityHandler<
         accessPolicy: schema.generatedAssets.accessPolicy,
         userId: schema.generatedAssets.userId,
         prompt: schema.generatedAssets.prompt,
+        metadata: schema.generatedAssets.metadata,
         createdAt: schema.generatedAssets.createdAt,
       })
       .from(schema.generatedAssets)
@@ -163,7 +142,13 @@ export const conversationFilesListHandler: CapabilityHandler<
     files: page.map((a) => ({
       publicId: a.publicId,
       kind: a.kind as ConversationAssetKind,
-      name: deriveAssetName(a.kind, a.prompt, a.publicId),
+      name: assetDisplayName({
+        prompt: a.prompt,
+        kind: a.kind,
+        mimeType: a.mimeType,
+        publicId: a.publicId,
+        displayName: metadataDisplayName(a.metadata),
+      }),
       mimeType: a.mimeType,
       sizeBytes: a.sizeBytes !== null ? Number(a.sizeBytes) : null,
       status: a.status,

@@ -8,6 +8,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { markdownGenerate, type MarkdownGenerateInput } from "@oxagen/oxagen/contracts/markdown.generate";
 import { logger } from "./logger";
 import { persistGeneratedAsset } from "./generated-asset.persist";
+import { assetDisplayName } from "./lib/asset-filename";
 
 // ── Markdown assembly ─────────────────────────────────────────────────────────
 
@@ -86,6 +87,9 @@ export const markdownGenerateHandler: CapabilityHandler<typeof markdownGenerate>
     // Record the operation name and "local" as the model token (no LLM call).
     prompt: `Generate markdown: ${title}`,
     model: "local",
+    // Persist the clean document title so the Conversation Files panel and the
+    // download filename render "<title>.md", not the instruction-prefixed prompt.
+    displayName: title,
     messageId: ctx.messageId ?? undefined,
     accessPolicy: "org",
   });
@@ -100,7 +104,15 @@ export const markdownGenerateHandler: CapabilityHandler<typeof markdownGenerate>
     "markdown.generate: complete",
   );
 
-  const filename = `${title}.md`;
+  // URL-friendly slug filename, identical to what the Conversation Files panel
+  // and the asset serving route produce (single source of truth).
+  const filename = assetDisplayName({
+    prompt: `Generate markdown: ${title}`,
+    kind: "document",
+    mimeType,
+    publicId: asset.publicId,
+    displayName: title,
+  });
 
   return {
     assetId: asset.id,

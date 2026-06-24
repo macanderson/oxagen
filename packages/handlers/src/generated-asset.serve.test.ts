@@ -73,6 +73,10 @@ function asset(overrides: Record<string, unknown> = {}) {
     storageUrl: "https://store/abc.png",
     mimeType: "image/png",
     sizeBytes: 2048n,
+    // The serve handler derives the Content-Disposition filename from these.
+    kind: "image",
+    prompt: "A test image",
+    metadata: null,
     ...overrides,
   };
 }
@@ -137,7 +141,10 @@ describe("serveGeneratedAsset", () => {
     mocks.dbSelect.mockReturnValueOnce(makeSelectBuilder([asset({ accessPolicy: "public" })]));
     const result = await serveGeneratedAsset("gen_T1", { surface: "app" });
     expect(result.body).toBe(STREAM_BODY);
-    expect(result.contentDisposition).toBe("inline");
+    // Inline disposition + a human-readable slug filename (never the gen_ id).
+    expect(result.contentDisposition).toBe(
+      `inline; filename="a-test-image.png"; filename*=UTF-8''a-test-image.png`,
+    );
   });
 
   // ── org policy ──
@@ -206,13 +213,63 @@ describe("serveGeneratedAsset", () => {
     );
   });
 
-  it("video assets serve inline", async () => {
+  it("video assets serve inline with a slug filename", async () => {
     mocks.dbSelect.mockReturnValueOnce(
-      makeSelectBuilder([asset({ kind: "video", mimeType: "video/mp4" })]),
+      makeSelectBuilder([asset({ kind: "video", mimeType: "video/mp4", prompt: "Ocean waves" })]),
     );
     const result = await serveGeneratedAsset("gen_T1", apiPrincipal());
-    expect(result.contentDisposition).toBe("inline");
+    expect(result.contentDisposition).toBe(
+      `inline; filename="ocean-waves.mp4"; filename*=UTF-8''ocean-waves.mp4`,
+    );
     expect(result.mimeType).toBe("video/mp4");
+  });
+
+  it("markdown serves INLINE so clicking the name displays it (.md slug)", async () => {
+    mocks.dbSelect.mockReturnValueOnce(
+      makeSelectBuilder([
+        asset({
+          kind: "document",
+          mimeType: "text/markdown",
+          prompt: "Generate markdown: USS Nautilus Polar Crossing",
+        }),
+      ]),
+    );
+    const result = await serveGeneratedAsset("gen_T1", apiPrincipal());
+    expect(result.contentDisposition).toBe(
+      `inline; filename="uss-nautilus-polar-crossing.md"; filename*=UTF-8''uss-nautilus-polar-crossing.md`,
+    );
+  });
+
+  it("office documents serve as a downloadable ATTACHMENT (.docx slug)", async () => {
+    mocks.dbSelect.mockReturnValueOnce(
+      makeSelectBuilder([
+        asset({
+          kind: "document",
+          mimeType:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          prompt: "Onboarding checklist",
+        }),
+      ]),
+    );
+    const result = await serveGeneratedAsset("gen_T1", apiPrincipal());
+    expect(result.contentDisposition).toBe(
+      `attachment; filename="onboarding-checklist.docx"; filename*=UTF-8''onboarding-checklist.docx`,
+    );
+  });
+
+  it("prefers a clean metadata.displayName for the filename", async () => {
+    mocks.dbSelect.mockReturnValueOnce(
+      makeSelectBuilder([
+        asset({
+          kind: "document",
+          mimeType: "text/markdown",
+          prompt: "Generate markdown: ignore me",
+          metadata: { displayName: "Polar Crossing Report" },
+        }),
+      ]),
+    );
+    const result = await serveGeneratedAsset("gen_T1", apiPrincipal());
+    expect(result.contentDisposition).toContain(`filename="polar-crossing-report.md"`);
   });
 
   it("telemetry failure does not break the response", async () => {

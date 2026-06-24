@@ -85,7 +85,7 @@ describe("markdownGenerateHandler — raw markdown source", () => {
     expect(result.serveUrl).toBe(FAKE_ASSET.serveUrl);
   });
 
-  it("emits a file-attachment render directive with .md filename", async () => {
+  it("emits a file-attachment render directive with a url-friendly .md slug", async () => {
     const result = await markdownGenerateHandler(
       { title: "My Report", markdown: "# My Report" },
       CTX,
@@ -93,10 +93,20 @@ describe("markdownGenerateHandler — raw markdown source", () => {
 
     expect(result.render.componentId).toBe("file-attachment");
     expect(result.render.props.kind).toBe("markdown");
-    expect(result.render.props.name).toBe("My Report.md");
+    // Lowercase-hyphenated slug + extension (matches the panel + download name).
+    expect(result.render.props.name).toBe("my-report.md");
     expect(result.render.props.mimeType).toBe("text/markdown");
     expect(result.render.props.url).toBe(FAKE_ASSET.serveUrl);
     expect(result.render.props.sizeBytes).toBe(FAKE_ASSET.sizeBytes);
+  });
+
+  it("persists the clean title as displayName for a human-readable filename", async () => {
+    await markdownGenerateHandler(
+      { title: "USS Nautilus: Polar Crossing", markdown: "# x" },
+      CTX,
+    );
+    const arg = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.displayName).toBe("USS Nautilus: Polar Crossing");
   });
 });
 

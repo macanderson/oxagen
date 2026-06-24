@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   insert: vi.fn(),
   values: vi.fn(),
   returning: vi.fn(),
+  // resolveConversationId's message lookup: tx.select().from().where().limit().
+  msgSelect: vi.fn(),
 }));
 
 vi.mock("@oxagen/storage", () => ({
@@ -19,14 +21,26 @@ vi.mock("@oxagen/storage", () => ({
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
+  // A fake tx exposing both the insert chain (the asset row) and a select chain
+  // (resolveConversationId's message → conversation lookup).
+  const tx = {
+    insert: mocks.insert,
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: mocks.msgSelect,
+        }),
+      }),
+    }),
+  };
   return {
     ...real,
-  db: () => ({ insert: mocks.insert }),
+  db: () => tx,
   // withSystemDb passthrough: the handler uses withSystemDb for both
   // persistGeneratedAsset and createPendingGeneratedAsset inserts (OXA-1515).
-  // Forward fn to a fake tx that exposes the same insert mock.
+  // Forward fn to a fake tx that exposes the insert + select mocks.
   withSystemDb: async (fn: (tx: Record<string, unknown>) => Promise<unknown>) =>
-    fn({ insert: mocks.insert } as unknown as Record<string, unknown>),
+    fn(tx as unknown as Record<string, unknown>),
 
   };
 });
@@ -56,6 +70,8 @@ beforeEach(() => {
   mocks.returning.mockResolvedValue([{ id: "asset-uuid", publicId: "gen_ABC" }]);
   mocks.values.mockReturnValue({ returning: mocks.returning });
   mocks.insert.mockReturnValue({ values: mocks.values });
+  // Default: no message row → resolveConversationId returns null.
+  mocks.msgSelect.mockResolvedValue([]);
 });
 
 describe("persistGeneratedAsset", () => {
@@ -155,6 +171,131 @@ describe("persistGeneratedAsset", () => {
         mimeType: "image/png",
       }),
     ).rejects.toThrow("generated_assets insert failed");
+  });
+});
+
+describe("displayName → metadata", () => {
+  it("stores a clean displayName under metadata.displayName", async () => {
+    await persistGeneratedAsset({
+      ...BASE,
+      kind: "document",
+      bytes: new Uint8Array([1]),
+      mimeType: "text/markdown",
+      displayName: "USS Nautilus Polar Crossing",
+    });
+    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(row.metadata).toEqual({ displayName: "USS Nautilus Polar Crossing" });
+  });
+
+  it("leaves metadata undefined when no displayName is supplied", async () => {
+    await persistGeneratedAsset({
+      ...BASE,
+      kind: "image",
+      bytes: new Uint8Array([1]),
+      mimeType: "image/png",
+    });
+    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(row.metadata).toBeUndefined();
+  });
+
+  it("trims and ignores a blank displayName", async () => {
+    await persistGeneratedAsset({
+      ...BASE,
+      kind: "image",
+      bytes: new Uint8Array([1]),
+      mimeType: "image/png",
+      displayName: "   ",
+    });
+    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(row.metadata).toBeUndefined();
+  });
+
+  it("stores displayName for a pending (video) asset too", async () => {
+    const { createPendingGeneratedAsset } = await import("./generated-asset.persist");
+    await createPendingGeneratedAsset({
+      ...BASE,
+      kind: "video",
+      accessPolicy: "org",
+      mimeType: "video/mp4",
+      displayName: "Arctic Transit Animation",
+    });
+    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(row.metadata).toEqual({ displayName: "Arctic Transit Animation" });
+  });
+});
+
+describe("conversation linkage (resolveConversationId)", () => {
+  it("uses an explicit conversationId without a message lookup", async () => {
+    await persistGeneratedAsset({
+      ...BASE,
+      kind: "image",
+      bytes: new Uint8Array([1]),
+      mimeType: "image/png",
+      conversationId: "conv-explicit",
+      messageId: "msg-1",
+    });
+    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(row.conversationId).toBe("conv-explicit");
+    // An explicit conversationId short-circuits — the message lookup is skipped.
+    expect(mocks.msgSelect).not.toHaveBeenCalled();
+  });
+
+  it("resolves conversationId from the message when only messageId is given", async () => {
+    // The agent-tool generators (image.create/video.generate/documents) carry
+    // only messageId — the panel filter is on conversation_id, so we backfill it.
+    mocks.msgSelect.mockResolvedValueOnce([{ conversationId: "conv-from-msg" }]);
+    await persistGeneratedAsset({
+      ...BASE,
+      kind: "image",
+      bytes: new Uint8Array([1]),
+      mimeType: "image/png",
+      messageId: "msg-42",
+    });
+    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(mocks.msgSelect).toHaveBeenCalledTimes(1);
+    expect(row.conversationId).toBe("conv-from-msg");
+    expect(row.messageId).toBe("msg-42");
+  });
+
+  it("leaves conversationId undefined when neither id is supplied", async () => {
+    await persistGeneratedAsset({
+      ...BASE,
+      kind: "image",
+      bytes: new Uint8Array([1]),
+      mimeType: "image/png",
+    });
+    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(row.conversationId).toBeUndefined();
+    expect(mocks.msgSelect).not.toHaveBeenCalled();
+  });
+
+  it("leaves conversationId undefined when the message has no conversation", async () => {
+    mocks.msgSelect.mockResolvedValueOnce([]); // message not found / no conversation
+    await persistGeneratedAsset({
+      ...BASE,
+      kind: "image",
+      bytes: new Uint8Array([1]),
+      mimeType: "image/png",
+      messageId: "msg-orphan",
+    });
+    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(mocks.msgSelect).toHaveBeenCalledTimes(1);
+    expect(row.conversationId).toBeUndefined();
+  });
+
+  it("resolves conversationId from messageId for a pending (video) asset too", async () => {
+    mocks.msgSelect.mockResolvedValueOnce([{ conversationId: "conv-video" }]);
+    const { createPendingGeneratedAsset } = await import("./generated-asset.persist");
+    await createPendingGeneratedAsset({
+      ...BASE,
+      kind: "video",
+      accessPolicy: "org",
+      mimeType: "video/mp4",
+      messageId: "msg-vid",
+    });
+    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(row.conversationId).toBe("conv-video");
+    expect(row.messageId).toBe("msg-vid");
   });
 });
 
