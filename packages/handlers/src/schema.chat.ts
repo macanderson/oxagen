@@ -320,7 +320,7 @@ export function detectSimpleIntents(message: string, schemas: DraftSchema[]): Mu
 }
 
 /** Human-readable summary of fast-path mutations for the assistant reply. */
-function describeMutations(muts: Mutation[]): string {
+export function describeMutations(muts: Mutation[]): string {
   const parts: string[] = [];
   const props = muts.filter((m) => m.capability === "schema.property.upsert");
   if (props.length > 0) {
@@ -338,7 +338,7 @@ function describeMutations(muts: Mutation[]): string {
 }
 
 /** Drop later duplicates of the same logical mutation (deterministic ones come first). */
-function dedupeMutations(muts: Mutation[]): Mutation[] {
+export function dedupeMutations(muts: Mutation[]): Mutation[] {
   const seen = new Set<string>();
   const out: Mutation[] = [];
   for (const mu of muts) {
@@ -385,7 +385,7 @@ function normalizeCardinality(c: unknown): string | undefined {
   return VALID_CARDINALITY.has(v) ? v : undefined;
 }
 
-function buildProposedMutations(object: z.infer<typeof chatResponseSchema>): Mutation[] {
+export function buildProposedMutations(object: z.infer<typeof chatResponseSchema>): Mutation[] {
   const out: Mutation[] = [];
 
   for (const schema of object.schemas ?? []) {
