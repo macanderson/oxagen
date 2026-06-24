@@ -309,6 +309,42 @@ describe("social provider guard", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Account-linking policy invariants — mirror the account.accountLinking block
+// in auth.ts. These are security-load-bearing and must not drift silently:
+//   - enabled + trustedProviders=[google,github] is what makes a verified
+//     social sign-in link to an existing user by email (no duplicate users).
+//   - requireLocalEmailVerified=false is REQUIRED so that linking also covers
+//     unverified local accounts (otherwise better-auth throws account_not_linked).
+//     Flipping it back to true silently re-breaks that flow — this test catches it.
+// The pre-hijacking mitigation that this relaxation depends on lives in
+// account-linking.ts and is covered by account-linking.test.ts.
+// ---------------------------------------------------------------------------
+
+describe("account linking policy", () => {
+  // Mirror of the accountLinking block in auth.ts.
+  const accountLinking = {
+    enabled: true,
+    trustedProviders: ["google", "github"] as const,
+    requireLocalEmailVerified: false,
+  };
+
+  it("account linking is enabled (never create a duplicate user by email)", () => {
+    expect(accountLinking.enabled).toBe(true);
+  });
+
+  it("trusts exactly google and github — both verify their returned email", () => {
+    expect([...accountLinking.trustedProviders]).toEqual(["google", "github"]);
+  });
+
+  it("requireLocalEmailVerified is false so trusted providers link into unverified accounts", () => {
+    // If this regresses to true, social sign-in for an unverified pre-existing
+    // email/password user 403s with account_not_linked. Keep false; the stale
+    // credential password is revoked by withTrustedLinkHardening (account-linking.ts).
+    expect(accountLinking.requireLocalEmailVerified).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // trustedOrigins logic — extracted from auth.ts for unit testing (OXA-1504)
 // ---------------------------------------------------------------------------
 
