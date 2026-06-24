@@ -202,6 +202,7 @@ import { schemaExport } from "./schema.export";
 import { schemaRecommend } from "./schema.recommend";
 import { schemaSetup } from "./schema.setup";
 import { schemaChat } from "./schema.chat";
+import { schemaDelete } from "./schema.delete";
 import { schemaValidateNode } from "./schema.validate.node";
 import { schemaValidateRelationship } from "./schema.validate.relationship";
 import { schemaReconcileDispatch } from "./schema.reconcile.dispatch";
@@ -416,6 +417,7 @@ export {
   schemaRecommend,
   schemaSetup,
   schemaChat,
+  schemaDelete,
   schemaValidateNode,
   schemaValidateRelationship,
   schemaReconcileDispatch,
@@ -630,6 +632,7 @@ export const contracts = [
   schemaRecommend,
   schemaSetup,
   schemaChat,
+  schemaDelete,
   schemaValidateNode,
   schemaValidateRelationship,
   schemaReconcileDispatch,
