@@ -21,3 +21,4 @@ h1:FeE0Gxx4qAw7+xFwAFh+tAHtFjxkR4AzQLxMFQ7KWh8=
 20260622020000_role_check_constraints.sql h1:ExI2MjCxxOCGmpGw/U9LALLvehCroROU4ANZ44QnqAo=
 20260623120000_schema_registry.sql h1:qtj/ox8qhDOvmJQNhiDio/ZUa/uA0T4AjsAiQjrkODQ=
 20260623140000_backfill_generated_assets_conversation_id.sql h1:y61oeQmvQdjW6r1JP/dgNcm8Lq3ioXpZEQUc6DFgmBc=
+20260624000000_add_agent_panel_button_location.sql h1:AfhMF2aowZFVEvs+iSETKssQGlnwkV+cakWManyFU7Q=

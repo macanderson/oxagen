@@ -41,6 +41,14 @@ export const modelTierEnum = authSchema.enum("model_tier", [
   "precise",
 ]);
 
+/** Agent panel button location preference. */
+export const agentPanelButtonLocationEnum = authSchema.enum("agent_panel_button_location", [
+  "lower-right",
+  "topnav",
+  "sidebar",
+  "command-palette-only",
+]);
+
 export const users = authSchema.table(
   "users",
   {
@@ -252,6 +260,10 @@ export const userPreferences = authSchema.table(
     notificationSettings: jsonb("notification_settings")
       .notNull()
       .default(sql`'{}'::jsonb`),
+    // Agent panel UI preferences
+    agentPanelButtonLocation: agentPanelButtonLocationEnum("agent_panel_button_location")
+      .notNull()
+      .default("lower-right"),
   },
   (t) => ({
     // Enforces the 1:1 relationship — one preferences row per user.

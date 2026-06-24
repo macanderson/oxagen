@@ -29,6 +29,8 @@ export const userPreferencesWrite = registerCapability({
     // Account locale / regional settings
     timezone: z.string().min(1).optional(),
     language: z.string().min(2).optional(),
+    // Agent panel UI preferences
+    agentPanelButtonLocation: z.enum(["lower-right", "topnav", "sidebar", "command-palette-only"]).optional(),
   }),
   output: z.object({
     fontSize: z.enum(["small", "medium", "large"]),
@@ -41,6 +43,7 @@ export const userPreferencesWrite = registerCapability({
     defaultVideoModel: z.string().nullable(),
     timezone: z.string(),
     language: z.string(),
+    agentPanelButtonLocation: z.enum(["lower-right", "topnav", "sidebar", "command-palette-only"]),
   }),
 });
 

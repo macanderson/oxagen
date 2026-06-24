@@ -396,6 +396,7 @@ describe("user.preferences.write handler", () => {
       defaultVideoModel: undefined,
       timezone: undefined,
       language: undefined,
+      agentPanelButtonLocation: undefined,
     };
     await handler_userPreferencesWrite(args);
 
