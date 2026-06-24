@@ -10,7 +10,7 @@ import {
 // runtime. Without this, invoke() throws "No handler registered" (the type
 // system cannot catch a missing side-effect import). Mirrors models-action.ts.
 import "@oxagen/handlers/register";
-import { loadEnv } from "@oxagen/config/env";
+import { requireEnv } from "@oxagen/config/env";
 import { logger } from "@oxagen/handlers/logger";
 import { getSession } from "@/lib/session";
 import { resolveOrg, assertBillingManager } from "@/lib/resolve-org";
@@ -32,7 +32,10 @@ export async function POST(req: Request) {
   const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const env = loadEnv();
+  // Only this route's own key (app origin) — a full loadEnv() would couple the
+  // checkout path to every unrelated monorepo env var (e.g. an empty
+  // STRIPE_WEBHOOK_SECRET), 500-ing checkout for an irrelevant reason.
+  const env = requireEnv(["NEXT_PUBLIC_APP_URL"] as const);
   const body = BodySchema.safeParse(await req.json().catch(() => ({})));
   if (!body.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 

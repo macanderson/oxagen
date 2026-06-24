@@ -23,7 +23,7 @@ import type {
   PlanChangePreview,
   OrgBillingSettings,
 } from "@oxagen/billing";
-import { loadEnv } from "@oxagen/config/env";
+import { requireEnv } from "@oxagen/config/env";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg } from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
@@ -178,9 +178,16 @@ export async function changePlanAction(
   const { orgSlug, targetPlanSlug, interval } = parsed.data;
   const managed = await resolveManagedOrg(orgSlug);
   if (!managed) return { ok: false, error: NOT_AUTHORIZED };
-  const env = loadEnv();
 
   try {
+    // Validate ONLY the env key this action needs (the app origin). A previous
+    // version called loadEnv() — which validates the WHOLE monorepo schema — here
+    // and OUTSIDE this try/catch, so an unrelated malformed prod var (e.g. an
+    // empty STRIPE_WEBHOOK_SECRET) threw an uncaught server-action rejection that
+    // wiped the entire billing page with "Something went wrong". Scoping to the
+    // one key + keeping it inside the try means any env fault degrades to an
+    // actionable toast, never a page crash. (OXA: digest 812344190)
+    const env = requireEnv(["NEXT_PUBLIC_APP_URL"] as const);
     const result = await runInTenantScope({ orgId: managed.orgId, workspaceId: ORG_ONLY_WS }, () =>
       changeOrgPlan(managed.orgId, targetPlanSlug, interval, {
         successUrl: `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/billing/subscription?status=success`,
@@ -310,9 +317,12 @@ export async function buyCreditsAction(
   const { orgSlug, amountUsd } = parsed.data;
   const managed = await resolveManagedOrg(orgSlug);
   if (!managed) return { ok: false, error: NOT_AUTHORIZED };
-  const env = loadEnv();
 
   try {
+    // Scope env validation to the one key used (app origin) and keep it INSIDE
+    // the try — a full loadEnv() outside the try previously let an unrelated bad
+    // prod var (empty STRIPE_WEBHOOK_SECRET) crash the whole page. (OXA: 812344190)
+    const env = requireEnv(["NEXT_PUBLIC_APP_URL"] as const);
     // Call the billing function directly (mirrors changePlanAction → changeOrgPlan).
     // The previous implementation did a server-side fetch() to the internal
     // /api/v1/stripe/credits route WITHOUT forwarding the session cookie, so that
