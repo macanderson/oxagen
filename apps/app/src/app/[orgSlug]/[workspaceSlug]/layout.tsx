@@ -6,8 +6,6 @@ import {
 } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { TenantProvider } from "@/lib/tenant/tenant-context";
-import { resolvedTierCatalog } from "@oxagen/ai";
-import { AskDrawer } from "@/components/shell/ask/ask-drawer";
 import { CommandMenu } from "@/components/shell/ask/command-menu";
 
 // Local mirror of parseRequestUrl in [orgSlug]/layout.tsx. Inlined (not
@@ -58,19 +56,15 @@ export default async function WorkspaceLayout({
   // notFound() — consistent with assertOrgMember above. — OXA-1515
   await assertWorkspaceMember(workspace.id, session.user.id);
 
-  // Workspace-scoped CommandMenu + AskDrawer mounts (OXA-1464).
+  // Workspace-scoped CommandMenu mount (OXA-1464).
   //
-  // The org layout also mounts these two overlays, but with only `{orgSlug}`
+  // The org layout also mounts this overlay, but with only `{orgSlug}`
   // context — which causes `enumerateNavTargets` to omit every workspace
   // route (Knowledge, Studio, Settings, …). Mounting here with the full
   // `{orgSlug, workspaceSlug}` ctx restores the workspace nav surface on
   // `/{org}/{ws}/...` paths. `OrgOnlyMount` in the parent layout suppresses
-  // the org-only copies on workspace paths so only one set renders.
+  // the org-only copy on workspace paths so only one set renders.
   const ctx = { orgSlug, workspaceSlug };
-  const modelConfig = resolvedTierCatalog();
-  const availableWorkspaces = [
-    { slug: workspace.slug, name: workspace.name, publicId: workspace.publicId },
-  ];
 
   // Seed the active tenant once so every client component under this route can
   // read it via useTenant() — no prop-drilling of orgId/workspaceId.
@@ -86,11 +80,6 @@ export default async function WorkspaceLayout({
       }}
     >
       {children}
-      <AskDrawer
-        orgSlug={orgSlug}
-        availableWorkspaces={availableWorkspaces}
-        modelConfig={modelConfig}
-      />
       <CommandMenu ctx={ctx} />
     </TenantProvider>
   );

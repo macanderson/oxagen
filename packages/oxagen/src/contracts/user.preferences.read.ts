@@ -28,6 +28,7 @@ export const userPreferencesRead = registerCapability({
     defaultVideoModel: z.string().nullable(),
     timezone: z.string(),
     language: z.string(),
+    agentPanelButtonLocation: z.enum(["lower-right", "topnav", "sidebar", "command-palette-only"]),
   }),
 });
 

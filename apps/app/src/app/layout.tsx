@@ -23,6 +23,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { PwaSplash } from "@/components/pwa/pwa-splash";
 import { InstallPrompt } from "@/components/pwa/install-prompt";
 import { RouteTransitionLoader } from "@/components/pwa/route-transition-loader";
+import { AgentPanelProvider } from "@/providers/agent-panel-provider";
+import { LowerRightLauncher } from "@/components/agent/lower-right-launcher";
 
 export const metadata: Metadata = {
   title: "Oxagen",
@@ -137,23 +139,31 @@ export default async function RootLayout({ children }: { children: React.ReactNo
            * prefers-reduced-motion kill-switch in @oxagen/ui globals.
            */}
           <MotionProvider>
-            <TooltipProvider>
-              <ToastProvider>
-                {children}
-                <ToastViewport />
-              </ToastProvider>
-            </TooltipProvider>
-            {/*
-             * Route-transition loader: spinner during navigation, mobile-only
-             * (gated at max-width:768px). Respects prefers-reduced-motion.
-             */}
-            <RouteTransitionLoader />
-            {/*
-             * Install prompt: deferred install CTA for Chrome/Android; manual
-             * instructions for iOS. Never shown when already installed or
-             * dismissed.
-             */}
-            <InstallPrompt />
+            <AgentPanelProvider>
+              <TooltipProvider>
+                <ToastProvider>
+                  {children}
+                  <ToastViewport />
+                </ToastProvider>
+              </TooltipProvider>
+              {/*
+               * Route-transition loader: spinner during navigation, mobile-only
+               * (gated at max-width:768px). Respects prefers-reduced-motion.
+               */}
+              <RouteTransitionLoader />
+              {/*
+               * Install prompt: deferred install CTA for Chrome/Android; manual
+               * instructions for iOS. Never shown when already installed or
+               * dismissed.
+               */}
+              <InstallPrompt />
+              {/*
+               * Agent panel launcher (lower-right): floating button variant.
+               * Rendered at the root to ensure it's available on all pages.
+               * Only visible when buttonLocation is 'lower-right'.
+               */}
+              <LowerRightLauncher />
+            </AgentPanelProvider>
           </MotionProvider>
         </ThemeProvider>
       </body>

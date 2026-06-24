@@ -102,6 +102,33 @@ vi.mock("@/lib/utils", () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// Mock: @/components/agent/agent-panel-launcher
+// ---------------------------------------------------------------------------
+vi.mock("@/components/agent/agent-panel-launcher", () => ({
+  AgentPanelLauncher: () => <div data-testid="agent-panel-launcher" />,
+}));
+
+// ---------------------------------------------------------------------------
+// Mock: @/providers/agent-panel-provider
+// ---------------------------------------------------------------------------
+vi.mock("@/providers/agent-panel-provider", () => ({
+  useAgentPanel: vi.fn(() => ({
+    isOpen: false,
+    toggle: vi.fn(),
+  })),
+}));
+
+// ---------------------------------------------------------------------------
+// Mock: @/hooks/use-agent-panel-config
+// ---------------------------------------------------------------------------
+vi.mock("@/hooks/use-agent-panel-config", () => ({
+  useAgentPanelConfig: vi.fn(() => ({
+    buttonLocation: "lower-right",
+    setButtonLocation: vi.fn(),
+  })),
+}));
+
+// ---------------------------------------------------------------------------
 // Mock: @/components/shell/sidebar-item
 // ---------------------------------------------------------------------------
 vi.mock("@/components/shell/sidebar-item", () => ({

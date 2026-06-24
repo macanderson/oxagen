@@ -30,6 +30,7 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
     pendingPromptBehavior: input.pendingPromptBehavior ?? "queue",
     timezone: input.timezone ?? "UTC",
     language: input.language ?? "en",
+    agentPanelButtonLocation: input.agentPanelButtonLocation ?? "lower-right",
     // Nullable model columns: undefined → not set on first insert (column default NULL).
     ...("defaultTextTier" in input ? { defaultTextTier: input.defaultTextTier } : {}),
     ...("defaultTextModel" in input ? { defaultTextModel: input.defaultTextModel } : {}),
@@ -50,6 +51,8 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
     updateSet.pendingPromptBehavior = input.pendingPromptBehavior;
   if (input.timezone !== undefined) updateSet.timezone = input.timezone;
   if (input.language !== undefined) updateSet.language = input.language;
+  if (input.agentPanelButtonLocation !== undefined)
+    updateSet.agentPanelButtonLocation = input.agentPanelButtonLocation;
   if ("defaultTextTier" in input) updateSet.defaultTextTier = input.defaultTextTier;
   if ("defaultTextModel" in input) updateSet.defaultTextModel = input.defaultTextModel;
   if ("defaultImageModel" in input) updateSet.defaultImageModel = input.defaultImageModel;
@@ -80,6 +83,7 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
         defaultVideoModel: true,
         timezone: true,
         language: true,
+        agentPanelButtonLocation: true,
       },
     }),
   );
@@ -105,5 +109,6 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
     defaultVideoModel: row.defaultVideoModel ?? null,
     timezone: row.timezone,
     language: row.language,
+    agentPanelButtonLocation: row.agentPanelButtonLocation,
   };
 };

@@ -59,7 +59,10 @@ vi.mock("next/image", () => ({
     unoptimized?: boolean;
     className?: string;
     [key: string]: unknown;
-  }) => <img src={src} alt={alt} {...(rest as object)} />,
+  }) => (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt={alt} {...(rest as object)} />
+  ),
 }));
 
 vi.mock("@/components/ui/switch", () => ({

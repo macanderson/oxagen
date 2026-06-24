@@ -1,0 +1,10 @@
+{
+  "browser": {
+    "browserName": "chromium",
+    "launchOptions": {
+      "executablePath": "/home/macanderson/.cache/ms-playwright/chromium-1226/chrome-linux64/chrome",
+      "headless": true,
+      "args": ["--no-sandbox"]
+    }
+  }
+}

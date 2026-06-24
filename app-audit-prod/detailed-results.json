@@ -1,0 +1,98 @@
+[
+  {
+    "label": "ws-set-general",
+    "path": "/thomas-anderson-mac/default/settings/general",
+    "status": "OK",
+    "mocks": null,
+    "console": null,
+    "forms": 2,
+    "textPreview": "Skip to main content\noxagen\n\nWORKSPACE\n\nAsk\nKnowledge\nAutomation\nActivity\nMarketplace\nSettings\nThomas Anderson (Mac)\nmacanderson.usa@gmail.com\nThomas Anderson (Mac)\nBuild\n/\nDefault\nCtrl+K\n$4.71\ndefault\nSettings\nSettings\n\nWorkspace configuration, members, and integrations.\n\nGeneral\nMembers\nModels\nModel Keys\nBrand Kits\nIntegrations\nPrompts\nPlugins\nKnowledge\nWorkspace name*\n\nVisible to all workspace members.\n\nWorkspace slug*\n\nUsed in this workspace’s URL. Lowercase letters, numbers, and hyphens onl"
+  },
+  {
+    "label": "ws-set-knowledge",
+    "path": "/thomas-anderson-mac/default/settings/knowledge",
+    "status": "OK",
+    "mocks": null,
+    "console": null,
+    "forms": 0,
+    "textPreview": "Skip to main content\noxagen\n\nWORKSPACE\n\nAsk\nKnowledge\nAutomation\nActivity\nMarketplace\nSettings\nThomas Anderson (Mac)\nmacanderson.usa@gmail.com\nThomas Anderson (Mac)\nBuild\n/\nDefault\nCtrl+K\n$4.71\ndefault\nSettings\nSettings\n\nWorkspace configuration, members, and integrations.\n\nGeneral\nMembers\nModels\nModel Keys\nBrand Kits\nIntegrations\nPrompts\nPlugins\nKnowledge\nSchema Registry\nLenient\ndraft\nExport schema\nOpen AI Assistant\nSchemas\nLabels\nRelationships\nVersion History\n\nNo schemas defined\n\nUse AI recomme"
+  },
+  {
+    "label": "ws-set-integrations",
+    "path": "/thomas-anderson-mac/default/settings/integrations",
+    "status": "OK",
+    "mocks": null,
+    "console": null,
+    "forms": 0,
+    "textPreview": "Skip to main content\noxagen\n\nWORKSPACE\n\nAsk\nKnowledge\nAutomation\nActivity\nMarketplace\nSettings\nThomas Anderson (Mac)\nmacanderson.usa@gmail.com\nThomas Anderson (Mac)\nBuild\n/\nDefault\nCtrl+K\n$4.71\ndefault\nSettings\nSettings\n\nWorkspace configuration, members, and integrations.\n\nGeneral\nMembers\nModels\nModel Keys\nBrand Kits\nIntegrations\nPrompts\nPlugins\nKnowledge\n\nNo integrations yet\n\nYour org admin hasn't installed any plugins yet. Ask them to browse the marketplace from Org Settings → Plugins."
+  },
+  {
+    "label": "ws-set-model-keys",
+    "path": "/thomas-anderson-mac/default/settings/model-keys",
+    "status": "OK",
+    "mocks": [
+      "preview",
+      "not yet"
+    ],
+    "console": null,
+    "forms": 0,
+    "textPreview": "Skip to main content\noxagen\n\nWORKSPACE\n\nAsk\nKnowledge\nAutomation\nActivity\nMarketplace\nSettings\nThomas Anderson (Mac)\nmacanderson.usa@gmail.com\nThomas Anderson (Mac)\nBuild\n/\nDefault\nCtrl+K\n$4.71\ndefault\nSettings\nSettings\n\nWorkspace configuration, members, and integrations.\n\nGeneral\nMembers\nModels\nModel Keys\nBrand Kits\nIntegrations\nPrompts\nPlugins\nKnowledge\nPreview · not yet wired to live data\n\nModel keys\n\nBring your own keys (BYOK) at workspace scope. Keys override the Oxagen AI Gateway for every"
+  },
+  {
+    "label": "ws-set-plugins",
+    "path": "/thomas-anderson-mac/default/settings/plugins",
+    "status": "OK",
+    "mocks": null,
+    "console": null,
+    "forms": 0,
+    "textPreview": "Skip to main content\noxagen\n\nWORKSPACE\n\nAsk\nKnowledge\nAutomation\nActivity\nMarketplace\nSettings\nThomas Anderson (Mac)\nmacanderson.usa@gmail.com\nThomas Anderson (Mac)\nBuild\n/\nDefault\nCtrl+K\n$4.71\ndefault\nSettings\nSettings\n\nWorkspace configuration, members, and integrations.\n\nGeneral\nMembers\nModels\nModel Keys\nBrand Kits\nIntegrations\nPrompts\nPlugins\nKnowledge\nFEATURED INTEGRATIONS\nGitHub MCP\nmcp server\noauth\n\nRead repositories, create branches, open pull requests, list and comment on issues — all vi"
+  },
+  {
+    "label": "ws-set-brand-kits",
+    "path": "/thomas-anderson-mac/default/settings/brand-kits",
+    "status": "OK",
+    "mocks": [
+      "preview",
+      "not yet"
+    ],
+    "console": null,
+    "forms": 0,
+    "textPreview": "Skip to main content\noxagen\n\nWORKSPACE\n\nAsk\nKnowledge\nAutomation\nActivity\nMarketplace\nSettings\nThomas Anderson (Mac)\nmacanderson.usa@gmail.com\nThomas Anderson (Mac)\nBuild\n/\nDefault\nCtrl+K\n$4.71\ndefault\nSettings\nSettings\n\nWorkspace configuration, members, and integrations.\n\nGeneral\nMembers\nModels\nModel Keys\nBrand Kits\nIntegrations\nPrompts\nPlugins\nKnowledge\nPreview · not yet wired to live data\n\nBrand kits\n\nStyle configurations that constrain Studio output — voice, tone, color, and typography. Appl"
+  },
+  {
+    "label": "ws-set-skills",
+    "path": "/thomas-anderson-mac/default/settings/skills",
+    "status": "OK",
+    "mocks": null,
+    "console": null,
+    "forms": 0,
+    "textPreview": "Skip to main content\noxagen\n\nWORKSPACE\n\nAsk\nKnowledge\nAutomation\nActivity\nMarketplace\nSettings\nThomas Anderson (Mac)\nmacanderson.usa@gmail.com\nThomas Anderson (Mac)\nBuild\n/\nDefault\nCtrl+K\n$4.71\ndefault\nSettings\nSettings\n\nWorkspace configuration, members, and integrations.\n\nGeneral\nMembers\nModels\nModel Keys\nBrand Kits\nIntegrations\nPrompts\nPlugins\nKnowledge\nInstalled Skills\n\nAgent skills available in this workspace. Skills extend what agents can do by providing reusable prompt definitions and tool"
+  },
+  {
+    "label": "ws-set-models",
+    "path": "/thomas-anderson-mac/default/settings/models",
+    "status": "OK",
+    "mocks": null,
+    "console": null,
+    "forms": 2,
+    "textPreview": "Skip to main content\noxagen\n\nWORKSPACE\n\nAsk\nKnowledge\nAutomation\nActivity\nMarketplace\nSettings\nThomas Anderson (Mac)\nmacanderson.usa@gmail.com\nThomas Anderson (Mac)\nBuild\n/\nDefault\nCtrl+K\n$4.71\ndefault\nSettings\nSettings\n\nWorkspace configuration, members, and integrations.\n\nGeneral\nMembers\nModels\nModel Keys\nBrand Kits\nIntegrations\nPrompts\nPlugins\nKnowledge\n\nAI model defaults\n\nThe default text tier and image/video models applied to every agent run and Studio generation in this workspace. Workspace"
+  },
+  {
+    "label": "ws-set-prompts",
+    "path": "/thomas-anderson-mac/default/settings/prompts",
+    "status": "OK",
+    "mocks": null,
+    "console": null,
+    "forms": 2,
+    "textPreview": "Skip to main content\noxagen\n\nWORKSPACE\n\nAsk\nKnowledge\nAutomation\nActivity\nMarketplace\nSettings\nThomas Anderson (Mac)\nmacanderson.usa@gmail.com\nThomas Anderson (Mac)\nBuild\n/\nDefault\nCtrl+K\n$4.71\ndefault\nSettings\nSettings\n\nWorkspace configuration, members, and integrations.\n\nGeneral\nMembers\nModels\nModel Keys\nBrand Kits\nIntegrations\nPrompts\nPlugins\nKnowledge\n\nPROMPT ENHANCEMENT\n\nAuto-improve prompts\nBeta\n\nA model judges whether your prompt is sufficient as-is; if not, an attempt will be made to enh"
+  },
+  {
+    "label": "ws-set-members",
+    "path": "/thomas-anderson-mac/default/settings/members",
+    "status": "OK",
+    "mocks": null,
+    "console": null,
+    "forms": 0,
+    "textPreview": "Skip to main content\noxagen\n\nWORKSPACE\n\nAsk\nKnowledge\nAutomation\nActivity\nMarketplace\nSettings\nThomas Anderson (Mac)\nmacanderson.usa@gmail.com\nThomas Anderson (Mac)\nBuild\n/\nDefault\nCtrl+K\n$4.59\ndefault\nSettings\nSettings\n\nWorkspace configuration, members, and integrations.\n\nGeneral\nMembers\nModels\nModel Keys\nBrand Kits\nIntegrations\nPrompts\nPlugins\nKnowledge\nWorkspace members\n\nMembers with access to Default. To manage org-level membership and roles, visit Organization Members.\n\nThomas Anderson (Mac"
+  }
+]

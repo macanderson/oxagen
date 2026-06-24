@@ -17,6 +17,7 @@ const PREF_DEFAULTS = {
   defaultVideoModel: null,
   timezone: "UTC",
   language: "en",
+  agentPanelButtonLocation: "lower-right" as const,
 };
 
 export const userPreferencesReadHandler: CapabilityHandler<typeof userPreferencesRead> = async (
@@ -44,6 +45,7 @@ export const userPreferencesReadHandler: CapabilityHandler<typeof userPreference
         defaultVideoModel: true,
         timezone: true,
         language: true,
+        agentPanelButtonLocation: true,
       },
     }),
   );
@@ -72,5 +74,6 @@ export const userPreferencesReadHandler: CapabilityHandler<typeof userPreference
     defaultVideoModel: row.defaultVideoModel ?? null,
     timezone: row.timezone,
     language: row.language,
+    agentPanelButtonLocation: row.agentPanelButtonLocation,
   };
 };

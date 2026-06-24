@@ -13,7 +13,6 @@ import { isLowBalance } from "@oxagen/billing";
 import { AppShell } from "@/components/shell/app-shell";
 import type { ShellNavData } from "@/components/shell/shell-nav-slots";
 import { PageContextProvider } from "@/lib/page-context";
-import { AskDrawer } from "@/components/shell/ask/ask-drawer";
 import { CommandMenu } from "@/components/shell/ask/command-menu";
 import { FillOverlay } from "@/components/shell/ask/fill-overlay";
 import { OrgOnlyMount } from "@/components/shell/ask/org-only-mount";
@@ -22,31 +21,6 @@ import { WandButton, WandPanel } from "@/components/shell/wand";
 import type { PlanTier } from "@oxagen/oxagen/types";
 
 type ModelConfig = ReturnType<typeof resolvedTierCatalog>;
-
-/**
- * AskDrawer needs the workspace list, which lives in the deferred navDataPromise.
- * It is an overlay (hidden until opened), so awaiting the promise inside a
- * <Suspense fallback={null}> mounts it after nav data lands with no visible
- * flash — and crucially without blocking the shell frame or page children.
- */
-async function AskDrawerStreamed({
-  orgSlug,
-  navDataPromise,
-  modelConfig,
-}: {
-  orgSlug: string;
-  navDataPromise: Promise<ShellNavData>;
-  modelConfig: ModelConfig;
-}) {
-  const { availableWorkspaces } = await navDataPromise;
-  return (
-    <AskDrawer
-      orgSlug={orgSlug}
-      availableWorkspaces={availableWorkspaces}
-      modelConfig={modelConfig}
-    />
-  );
-}
 
 /** Wand panel — same deferral as AskDrawer (overlay, needs the workspace list). */
 async function WandPanelStreamed({
@@ -227,22 +201,15 @@ export default async function OrgLayout({
       </AppShell>
 
       {/*
-        AskDrawer + CommandMenu at the org boundary serve org-only routes
+        CommandMenu at the org boundary serves org-only routes
         (`/{org}`, `/{org}/settings`, `/{org}/members`, …). On workspace pages
-        the nested `[workspaceSlug]/layout.tsx` mounts the same pair with the
+        the nested `[workspaceSlug]/layout.tsx` mounts it with the
         full `{orgSlug, workspaceSlug}` context, so `enumerateNavTargets`
-        surfaces workspace-scoped routes. `OrgOnlyMount` suppresses these
-        copies on workspace paths to keep a single set of overlays in the
-        tree (acceptance: "No double-mount of CommandMenu or AskDrawer").
+        surfaces workspace-scoped routes. `OrgOnlyMount` suppresses the
+        copy on workspace paths to keep a single set of overlays in the
+        tree (acceptance: "No double-mount of CommandMenu").
       */}
       <OrgOnlyMount orgSlug={orgSlug}>
-        <Suspense fallback={null}>
-          <AskDrawerStreamed
-            orgSlug={orgSlug}
-            navDataPromise={navDataPromise}
-            modelConfig={modelConfig}
-          />
-        </Suspense>
         <CommandMenu ctx={ctx} />
       </OrgOnlyMount>
 

@@ -1,0 +1,78 @@
+[
+  {
+    "label": "ws-set-general",
+    "path": "/thomas-anderson-mac/default/settings/general",
+    "status": "OK",
+    "mocks": null,
+    "hasContent": true
+  },
+  {
+    "label": "ws-set-knowledge",
+    "path": "/thomas-anderson-mac/default/settings/knowledge",
+    "status": "OK",
+    "mocks": null,
+    "hasContent": true
+  },
+  {
+    "label": "ws-set-integrations",
+    "path": "/thomas-anderson-mac/default/settings/integrations",
+    "status": "OK",
+    "mocks": null,
+    "hasContent": true
+  },
+  {
+    "label": "ws-set-model-keys",
+    "path": "/thomas-anderson-mac/default/settings/model-keys",
+    "status": "OK",
+    "mocks": [
+      "preview",
+      "not yet"
+    ],
+    "hasContent": true
+  },
+  {
+    "label": "ws-set-plugins",
+    "path": "/thomas-anderson-mac/default/settings/plugins",
+    "status": "OK",
+    "mocks": null,
+    "hasContent": true
+  },
+  {
+    "label": "ws-set-brand-kits",
+    "path": "/thomas-anderson-mac/default/settings/brand-kits",
+    "status": "OK",
+    "mocks": [
+      "preview",
+      "not yet"
+    ],
+    "hasContent": true
+  },
+  {
+    "label": "ws-set-skills",
+    "path": "/thomas-anderson-mac/default/settings/skills",
+    "status": "OK",
+    "mocks": null,
+    "hasContent": true
+  },
+  {
+    "label": "ws-set-models",
+    "path": "/thomas-anderson-mac/default/settings/models",
+    "status": "OK",
+    "mocks": null,
+    "hasContent": true
+  },
+  {
+    "label": "ws-set-prompts",
+    "path": "/thomas-anderson-mac/default/settings/prompts",
+    "status": "OK",
+    "mocks": null,
+    "hasContent": true
+  },
+  {
+    "label": "ws-set-members",
+    "path": "/thomas-anderson-mac/default/settings/members",
+    "status": "OK",
+    "mocks": null,
+    "hasContent": true
+  }
+]
