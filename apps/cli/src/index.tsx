@@ -425,8 +425,18 @@ schemaCmd.addCommand(schemaPropCommand);
 schemaCmd.addCommand(schemaVersionCommand);
 schemaCmd.addCommand(schemaReconcileCommand);
 
-program.parse(process.argv);
+async function main(): Promise<void> {
+  const noCommand = process.argv.slice(2).length === 0;
+  const wantsTui =
+    noCommand && Boolean(process.stdout.isTTY) && !process.env.OXAGEN_NO_TUI;
 
-if (program.args.length === 0) {
-  program.outputHelp();
+  if (wantsTui) {
+    // Lazy-load Ink so the ~134 non-interactive commands never pay for it.
+    const { launchTui } = await import("./tui/app.js");
+    await launchTui(program, version);
+  } else {
+    await program.parseAsync(process.argv);
+  }
 }
+
+void main();
