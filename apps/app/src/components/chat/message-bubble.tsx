@@ -8,6 +8,7 @@ import { ConsentCard } from "./consent-card";
 import { PlanCard, type AgentCapability } from "./plan-card";
 import { SubagentFanout } from "./subagent-fanout";
 import { MemoryCard } from "./memory-card";
+import { BackgroundTaskCard } from "./background-task-card";
 import { CodeExecuteCard } from "./code-execute-card";
 import { ReasoningCard } from "./reasoning-card";
 import { ActivityTimeline, TimelineItem, type TimelineItemProps } from "./activity-timeline";
@@ -240,6 +241,17 @@ function renderBlock(
       );
     case "memory-recall":
       return <MemoryCard key={`memory:${block.queryId}`} queryId={block.queryId} memories={block.memories} />;
+    case "background-task":
+      return (
+        <BackgroundTaskCard
+          key={`bgtask:${block.taskId}`}
+          taskId={block.taskId}
+          kind={block.kind}
+          label={block.label}
+          status={block.status}
+          inngestRunId={block.inngestRunId}
+        />
+      );
     case "component": {
       const Component = CHAT_COMPONENTS[block.componentId];
       if (!Component) {
@@ -313,6 +325,12 @@ function blockTone(
         : block.status === "running"
           ? "running"
           : "failed";
+    case "background-task":
+      return block.status === "running"
+        ? "running"
+        : block.status === "failed"
+          ? "failed"
+          : "done";
     default: {
       const _exhaustive: never = block;
       return _exhaustive;
@@ -342,6 +360,8 @@ function blockKey(block: AssistantContentBlock, idx: number): string {
       return `fanout:${block.fanoutId}`;
     case "memory-recall":
       return `memory:${block.queryId}`;
+    case "background-task":
+      return `bgtask:${block.taskId}`;
     case "text":
       return `text-${idx}`;
     default: {

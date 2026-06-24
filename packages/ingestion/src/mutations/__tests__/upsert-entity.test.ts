@@ -83,6 +83,39 @@ describe("upsertEntityNode", () => {
     expect(JSON.parse(params["properties"] as string)).toMatchObject({ title: "Fix the bug" });
   });
 
+  it("also sets the :KnowledgeNode label + graph display fields so the node is visible in the explorer", async () => {
+    // Regression: ingestion wrote only :EntityNode while every graph read
+    // (graph.node.list/search/stats, ontology.neighbors) filters on
+    // :KnowledgeNode — so ingested entities were invisible in the graph UI.
+    mocks.sessionRun.mockResolvedValueOnce({
+      records: [{ get: vi.fn().mockReturnValue("uuid-node-1") }],
+    });
+
+    const [cypher, params] = await (async () => {
+      await upsertEntityNode(makeMutation(), "org-1");
+      return mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    })();
+
+    // The universal display label is added on every write.
+    expect(cypher).toContain("n:KnowledgeNode");
+    // The read layer reads n.label / n.displayName / n.sourceId.
+    expect(cypher).toContain("n.label");
+    expect(cypher).toContain("n.sourceId");
+    expect(params["label"]).toBe("task"); // label = entityType
+    expect(params["displayName"]).toBe("Fix the bug");
+    expect(params["connectionId"]).toBe("conn-1"); // becomes n.sourceId
+  });
+
+  it("falls back displayName to naturalKey when the connector supplied none (never null in the graph)", async () => {
+    mocks.sessionRun.mockResolvedValueOnce({
+      records: [{ get: vi.fn().mockReturnValue("uuid-node-2") }],
+    });
+
+    await upsertEntityNode(makeMutation({ displayName: undefined }), "org-1");
+    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(params["displayName"]).toBe("github:conn-1:42");
+  });
+
   it("closes session even on error", async () => {
     mocks.sessionRun.mockRejectedValueOnce(new Error("Neo4j down"));
 

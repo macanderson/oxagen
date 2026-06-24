@@ -3,12 +3,15 @@
  *
  * Drives the full lifecycle through the real UI against the running app + API +
  * Postgres stack:
- *   1. Sign up a fresh owner → navigate to /agents (empty state).
- *   2. Create an agent (name, instructions, a skill tool) → land on detail.
- *   3. See it listed on the agents list.
- *   4. Edit it (new version) and publish the version.
- *   5. Toggle deploy (activate).
- *   6. Add an event trigger (GitHub repo source change).
+ *   1. Sign up a fresh owner → /agents lists the built-in, product-managed
+ *      `qa-chat` agent (no empty state) and badges it "Managed".
+ *   2. Open the managed agent → it is read-only: no Edit / Publish / Deploy
+ *      controls, and a "Managed by Oxagen" callout explains why.
+ *   3. Create a user agent (name, instructions, a skill tool) → land on detail.
+ *   4. See it listed alongside the managed agent.
+ *   5. Edit it (new version) and publish the version.
+ *   6. Toggle deploy (activate).
+ *   7. Add an event trigger (GitHub repo source change).
  *
  * Screenshots of key success states go to apps/app/e2e/screenshots/ (gitignored).
  * The directory is deleted + recreated at the start of the run.
@@ -33,19 +36,52 @@ test.describe("agents — management lifecycle", () => {
     fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
   });
 
-  test("create → list → edit → publish → deploy → add trigger", async ({ page }) => {
+  test("managed agent is read-only → create → list → edit → publish → deploy → add trigger", async ({
+    page,
+  }) => {
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "agents" });
     const ws = "default";
 
-    // ── 1. Empty state ──────────────────────────────────────────────────────
+    // ── 1. The built-in managed agent is listed (no empty state) ────────────
+    // Every fresh workspace is bootstrapped with the product-managed `qa-chat`
+    // interactive agent, so the list is never empty and the agent is badged
+    // "Managed".
     await page.goto(`/${orgSlug}/${ws}/automation/agents`);
     await expect(page).not.toHaveURL(/\/login/);
     await expect(page.getByRole("heading", { name: /^Automation$/ })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(/no agents yet/i)).toBeVisible();
-    await shot(page, "01-empty");
+    const managedRow = page.getByRole("link", { name: /qa chat agent/i });
+    await expect(managedRow).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Managed", { exact: true }).first()).toBeVisible();
+    await shot(page, "01-list-with-managed-agent");
 
-    // ── 2. Create an agent ──────────────────────────────────────────────────
-    await page.getByRole("link", { name: /create agent/i }).click();
+    // ── 2. The managed agent is read-only ───────────────────────────────────
+    await managedRow.click();
+    await page.waitForURL(new RegExp(`/${orgSlug}/${ws}/automation/agents/qa-chat$`), {
+      timeout: 15_000,
+    });
+    // The managed-agent detail page renders the phrase "managed by oxagen" in
+    // two intentional, distinct elements: a compact header badge ("Managed by
+    // Oxagen") and an explanatory read-only callout ("This agent is managed by
+    // Oxagen"). Scope to the callout (role="note", aria-label="Managed agent
+    // notice") so the locator resolves to exactly one element and the assertion
+    // proves the read-only banner is visible.
+    await expect(
+      page.getByRole("note", { name: /managed agent notice/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("note", { name: /managed agent notice/i }).getByText(/managed by oxagen/i),
+    ).toBeVisible();
+    // No mutation affordances are rendered for a managed agent.
+    await expect(page.getByRole("link", { name: /^Edit$/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /publish latest version/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /deploy \(activate\)/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^deactivate$/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /add trigger/i })).toHaveCount(0);
+    await shot(page, "02-managed-readonly");
+
+    // ── 3. Create a user agent ──────────────────────────────────────────────
+    await page.goto(`/${orgSlug}/${ws}/automation/agents`);
+    await page.getByRole("link", { name: /new agent/i }).click();
     await expect(page).toHaveURL(new RegExp(`/${orgSlug}/${ws}/automation/agents/new`));
     await expect(page.getByRole("form", { name: /agent editor/i })).toBeVisible();
 
@@ -58,7 +94,7 @@ test.describe("agents — management lifecycle", () => {
     await page.getByRole("button", { name: /add tool/i }).click();
     await page.fill("#tool-ref-0", "coding");
 
-    await shot(page, "02-create-form");
+    await shot(page, "03-create-form");
 
     await page.getByRole("button", { name: /create agent/i }).click();
 
@@ -68,15 +104,15 @@ test.describe("agents — management lifecycle", () => {
     });
     await expect(page.getByRole("heading", { name: /repo review agent/i })).toBeVisible();
     await expect(page.getByText(/skill: coding/i)).toBeVisible();
-    await shot(page, "03-detail-after-create");
+    await shot(page, "04-detail-after-create");
 
-    // ── 3. See it listed ────────────────────────────────────────────────────
+    // ── 4. See it listed ────────────────────────────────────────────────────
     await page.goto(`/${orgSlug}/${ws}/automation/agents`);
     const row = page.getByRole("link", { name: /repo review agent/i });
     await expect(row).toBeVisible();
-    await shot(page, "04-list-populated");
+    await shot(page, "05-list-populated");
 
-    // ── 4. Edit → publish ───────────────────────────────────────────────────
+    // ── 5. Edit → publish ───────────────────────────────────────────────────
     await row.click();
     await page.waitForURL(new RegExp(`/${orgSlug}/${ws}/automation/agents/repo-review-agent$`));
     await page.getByRole("link", { name: /^Edit$/ }).click();
@@ -93,15 +129,15 @@ test.describe("agents — management lifecycle", () => {
     // Publish the latest version → checksum appears.
     await page.getByRole("button", { name: /publish latest version/i }).click();
     await expect(page.getByText(/published checksum/i)).toBeVisible({ timeout: 15_000 });
-    await shot(page, "05-published");
+    await shot(page, "06-published");
 
-    // ── 5. Deploy (activate) ────────────────────────────────────────────────
+    // ── 6. Deploy (activate) ────────────────────────────────────────────────
     await page.getByRole("button", { name: /deploy \(activate\)/i }).click();
     // After activation the toggle flips to Deactivate.
     await expect(page.getByRole("button", { name: /deactivate/i })).toBeVisible({ timeout: 15_000 });
-    await shot(page, "06-deployed");
+    await shot(page, "07-deployed");
 
-    // ── 6. Add an event trigger (GitHub repo source change) ─────────────────
+    // ── 7. Add an event trigger (GitHub repo source change) ─────────────────
     await page.getByRole("button", { name: /add trigger/i }).click();
     await page.selectOption("#trigger-editor-type", "event");
     await page.fill("#trigger-editor-source", "github_repo");
@@ -111,6 +147,6 @@ test.describe("agents — management lifecycle", () => {
     await page.getByRole("button", { name: /save trigger/i }).click();
 
     await expect(page.getByText(/github_repo · push/i)).toBeVisible({ timeout: 15_000 });
-    await shot(page, "07-trigger-added");
+    await shot(page, "08-trigger-added");
   });
 });

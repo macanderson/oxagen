@@ -273,6 +273,47 @@ export async function translateAgentStream(args: {
           });
         }
       }
+      // Background-task lifecycle (OXA-1469): when the agent dispatches a
+      // long-running Inngest job via agent.task.background.start, surface a live
+      // BackgroundTaskCard and persist a terminal block so the task is visible
+      // inline (and linked to the BackgroundTaskTray), not only after a refresh.
+      if (capabilityForResult === "agent.task.background.start") {
+        const startOut = isRecord(rawResult) ? rawResult : null;
+        const taskId =
+          startOut !== null && typeof startOut.taskId === "string" ? startOut.taskId : null;
+        if (taskId !== null) {
+          const inngestRunId =
+            startOut !== null && typeof startOut.inngestRunId === "string"
+              ? startOut.inngestRunId
+              : undefined;
+          // kind (required) + label (optional) come from the tool input recorded
+          // on the reserved tool-call block for this call.
+          const reserved = blocks[toolBlockIndex[part.toolCallId] ?? -1];
+          const inputPreview =
+            reserved !== undefined && reserved.type === "tool-call"
+              ? reserved.inputPreview
+              : undefined;
+          const ip = isRecord(inputPreview) ? inputPreview : {};
+          const kind = typeof ip.kind === "string" ? ip.kind : "agent.task";
+          const label = typeof ip.label === "string" ? ip.label : undefined;
+          blocks.push({
+            type: "background-task",
+            taskId,
+            kind,
+            status: "pending",
+            ...(label !== undefined ? { label } : {}),
+            ...(inngestRunId !== undefined ? { inngestRunId } : {}),
+          });
+          emit({
+            type: "background-task-progress",
+            taskId,
+            kind,
+            status: "pending",
+            ...(label !== undefined ? { label } : {}),
+            ...(inngestRunId !== undefined ? { inngestRunId } : {}),
+          });
+        }
+      }
     } else if (pType === "tool-error") {
       // A tool whose execute() THREW surfaces as a `tool-error` part (not
       // `tool-result`). Without this arm the client's tool card would spin

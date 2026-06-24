@@ -13,6 +13,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 import { withTenantDb } from "@oxagen/database";
 import { agentSubagentAggregateHandler } from "./agent.subagent.aggregate";
+import { FanoutNotFoundError } from "./subagent-errors";
 
 // ---- Test helpers -----------------------------------------------------------
 
@@ -308,11 +309,24 @@ describe("agent.subagent.aggregate handler", () => {
     expect(result.aggregatedData).toMatchObject({ a: 1, b: 2 });
   });
 
-  it("throws when fanout is not found", async () => {
+  it("throws a typed FanoutNotFoundError when the fanout is not found", async () => {
     setupMocks(null, []);
 
-    await expect(
-      agentSubagentAggregateHandler({ fanoutId: "fan_missing", timeoutMs: 100 }, CTX),
-    ).rejects.toThrow("Fanout fan_missing not found");
+    // Typed error (not a plain Error) so surfaces can map an unknown / cross-tenant
+    // fanout id to a 404 via instanceof rather than a brittle message regex.
+    // Capture the rejection ONCE (setupMocks arms the query mock for a single
+    // call) and assert both the type and the message off the same error.
+    const err = await agentSubagentAggregateHandler(
+      { fanoutId: "fan_missing", timeoutMs: 100 },
+      CTX,
+    ).then(
+      () => {
+        throw new Error("expected handler to reject");
+      },
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(FanoutNotFoundError);
+    expect((err as FanoutNotFoundError).code).toBe("fanout_not_found");
+    expect((err as Error).message).toBe("Fanout fan_missing not found");
   });
 });

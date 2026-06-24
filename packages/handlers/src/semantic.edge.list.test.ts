@@ -51,12 +51,16 @@ function makeEdgeRow(overrides: Record<string, unknown> = {}) {
   return makeRecord({
     id: "edge-uuid-1",
     sourceNodeId: "node-a",
+    sourceDisplayName: "Billing Subscription Streaming",
+    sourceLabel: "Feature",
+    sourceProperties: JSON.stringify({ path: "src/billing.ts" }),
     targetName: "OAuth Login",
     targetType: "Feature",
     type: "IMPLEMENTS",
     confidence: 0.85,
     connectorId: "github",
     sourceId: "github",
+    llmModel: "ingestion-semantic-edge-infer",
     approvalStatus: "approved",
     approvedAt: "2025-01-01T12:00:00.000Z",
     approvedBy: "user-1",
@@ -117,6 +121,28 @@ describe("semanticEdgeListHandler", () => {
     expect(e.approved).toBe(true);
     expect(e.approvedAt).toBe("2025-01-01T12:00:00.000Z");
     expect(e.approvedBy).toBe("user-1");
+  });
+
+  it("cites the source node by its resolved label + properties, never a bare UUID", async () => {
+    setupNeo4j([makeEdgeRow()]);
+
+    const result = await semanticEdgeListHandler({ limit: 50, offset: 0 }, CTX);
+    const e = result.edges[0]!;
+
+    expect(e.sourceNode).toBeDefined();
+    expect(e.sourceNode!.id).toBe("node-a");
+    expect(e.sourceNode!.label).toBe("Feature");
+    expect(e.sourceNode!.displayName).toBe("Billing Subscription Streaming");
+    expect(e.sourceNode!.properties).toEqual({ path: "src/billing.ts" });
+    expect(e.targetNode!.displayName).toBe("OAuth Login");
+    expect(e.relationshipProperties).toMatchObject({
+      relationshipType: "IMPLEMENTS",
+      approvalStatus: "approved",
+      model: "ingestion-semantic-edge-infer",
+    });
+
+    const [cypher] = mocks.runFn.mock.calls[0] as [string, Record<string, unknown>];
+    expect(cypher).toContain("OPTIONAL MATCH (src:KnowledgeNode {publicId: ie.sourceNodeId");
   });
 
   it("marks edge as approved=false when approvalStatus is pending", async () => {
