@@ -1,8 +1,9 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { ontologyQuery } from "@oxagen/oxagen/contracts/ontology.query";
-import { GRAPH_EDGE_TYPES, type GraphEdgeType } from "@oxagen/oxagen/contracts/graph.edge.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { getPinnedSchema } from "./schema.pinned";
 import { logger } from "./logger";
 
 interface TraversedNode {
@@ -16,23 +17,62 @@ interface TraversedNode {
 interface TraversedEdge {
   fromNodeId: string;
   toNodeId: string;
-  edgeType: GraphEdgeType;
+  edgeType: string;
+}
+
+/**
+ * Resolve the relationship-type filter for the traversal (§3.2 two-layer guard).
+ *
+ * Returns the concrete list of relationship types to constrain the variable-length
+ * pattern to, or `null` for an unconstrained traversal (no filter + no pin).
+ *
+ * Layer 1 — lexical guard (ALWAYS on): every type must match
+ *   RELATIONSHIP_TYPE_PATTERN before it is interpolated into the Cypher pattern.
+ *   Here the type IS interpolated (Cypher has no parameter form for a
+ *   variable-length relationship-type pattern), so the guard is load-bearing.
+ * Layer 2 — registry allow-list (when pinned): a supplied type must also be in
+ *   the pinned active vocabulary; an omitted filter defaults to the active
+ *   vocabulary's relationship types (NOT the old static GRAPH_EDGE_TYPES list).
+ */
+function resolveRelationshipTypes(
+  requested: readonly string[] | undefined,
+  activeVocab: readonly string[] | null,
+): string[] | null {
+  if (requested && requested.length > 0) {
+    for (const t of requested) {
+      if (!RELATIONSHIP_TYPE_PATTERN.test(t)) {
+        throw new Error(`ontology.query: relationship type "${t}" fails the lexical guard`);
+      }
+      if (activeVocab && !activeVocab.includes(t)) {
+        throw new Error(
+          `ontology.query: relationship type "${t}" is not in the pinned active vocabulary`,
+        );
+      }
+    }
+    return [...requested];
+  }
+
+  if (activeVocab) {
+    return activeVocab.filter((t) => RELATIONSHIP_TYPE_PATTERN.test(t));
+  }
+  return null;
 }
 
 /**
  * Build the safe `:TYPE1|TYPE2` relationship-type pattern for a Cypher
- * variable-length match. Every value is validated against GRAPH_EDGE_TYPES
- * (the fixed allow-list) before it reaches here, so this is never a Cypher
- * injection surface — we additionally re-assert membership defensively.
+ * variable-length match. Every value has already passed
+ * RELATIONSHIP_TYPE_PATTERN in resolveRelationshipTypes — we re-assert here as
+ * defense-in-depth so no caller path can interpolate an unguarded type. Returns
+ * an empty string for an unconstrained traversal (`relTypes === null`).
  */
-function relTypePattern(edgeTypes: readonly GraphEdgeType[] | undefined): string {
-  const types = edgeTypes && edgeTypes.length > 0 ? edgeTypes : GRAPH_EDGE_TYPES;
-  for (const t of types) {
-    if (!GRAPH_EDGE_TYPES.includes(t)) {
-      throw new Error(`ontology.query: unsupported edgeType "${t}"`);
+function relTypePattern(relTypes: string[] | null): string {
+  if (relTypes === null) return "";
+  for (const t of relTypes) {
+    if (!RELATIONSHIP_TYPE_PATTERN.test(t)) {
+      throw new Error(`ontology.query: relationship type "${t}" fails the lexical guard`);
     }
   }
-  return types.map((t) => `\`${t}\``).join("|");
+  return relTypes.map((t) => `\`${t}\``).join("|");
 }
 
 /** Compose the directional variable-length relationship pattern. */
@@ -42,7 +82,9 @@ function buildMatchPattern(
   maxDepth: number,
 ): string {
   // maxDepth is validated to an integer in [1,5] by the contract — safe to inline.
-  const variable = `[r:${relTypes}*1..${maxDepth}]`;
+  // When relTypes is empty (unconstrained), the pattern is `[r*1..n]`.
+  const typeSelector = relTypes.length > 0 ? `:${relTypes}` : "";
+  const variable = `[r${typeSelector}*1..${maxDepth}]`;
   switch (direction) {
     case "out":
       return `(start)-${variable}->(reached:KnowledgeNode)`;
@@ -56,7 +98,12 @@ function buildMatchPattern(
 export const ontologyQueryHandler: CapabilityHandler<typeof ontologyQuery> = async (input, ctx) => {
   const { orgId, workspaceId } = ctx;
 
-  const relTypes = relTypePattern(input.edgeTypes);
+  // Resolve the pinned active vocabulary (null when no version is pinned), then
+  // the §3.2 two-layer relationship-type guard.
+  const pinned = await getPinnedSchema(orgId, workspaceId);
+  const activeVocab = pinned ? pinned.relationshipTypes.map((r) => r.name) : null;
+  const relTypeList = resolveRelationshipTypes(input.edgeTypes, activeVocab);
+  const relTypes = relTypePattern(relTypeList);
   const matchPattern = buildMatchPattern(input.direction, relTypes, input.maxDepth);
 
   let startNode: TraversedNode | null = null;
@@ -148,7 +195,7 @@ export const ontologyQueryHandler: CapabilityHandler<typeof ontologyQuery> = asy
         for (let i = 0; i < relTypesAlong.length; i += 1) {
           const a = pathNodeIds[i];
           const b = pathNodeIds[i + 1];
-          const edgeType = relTypesAlong[i] as GraphEdgeType;
+          const edgeType = relTypesAlong[i] as string;
           if (a == null || b == null) continue;
           const [from, to] = input.direction === "in" ? [b, a] : [a, b];
           if (!edges.some((e) => e.fromNodeId === from && e.toNodeId === to && e.edgeType === edgeType)) {

@@ -128,7 +128,7 @@ describe("tenant policy manifest", () => {
     expect(unique.size).toBe(tables.length);
   });
 
-  it("covers exactly the 66 policied tables of the v0.4.x schema", () => {
+  it("covers exactly the 73 policied tables of the v0.4.x schema", () => {
     // Intentional ratchet: adding a tenant-owned table means updating BOTH the
     // manifest and this count (and regenerating the Atlas RLS migration).
     // 62 = 63 baseline − plugin.org_denylist (removed 2026-06-17 workspace-scoping rebuild).
@@ -138,7 +138,10 @@ describe("tenant policy manifest", () => {
     //      outbox/projection_checkpoints tables were never wired).
     // 66 = 64 + org.org_slug_history + workspace.workspace_slug_history
     //      (OXA-1779 slug-rename redirect history).
-    expect(POLICY_MANIFEST.length).toBe(66);
+    // 73 = 66 + 7 schema_registry.* tables (Workspace Schema Registry, §4 + §11):
+    //      registries, schema_versions, schemas, schema_activations, node_labels,
+    //      relationship_types, properties — all `standard` (org_id + workspace_id NN).
+    expect(POLICY_MANIFEST.length).toBe(73);
   });
 
   it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {

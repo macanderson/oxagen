@@ -184,6 +184,43 @@ import { workspaceSettingsWrite } from "./workspace.settings.write";
 import { commandMenuSearch } from "./command.menu.search";
 import { commandMenuSuggest } from "./command.menu.suggest";
 import { skillAuthor } from "./skill.author";
+import { schemaRegistryGet } from "./schema.registry.get";
+import { schemaRegistryConfig } from "./schema.registry.config";
+import { schemaList } from "./schema.list";
+import { schemaToggle } from "./schema.toggle";
+import { schemaLabelUpsert } from "./schema.label.upsert";
+import { schemaLabelDelete } from "./schema.label.delete";
+import { schemaRelationshipUpsert } from "./schema.relationship.upsert";
+import { schemaRelationshipDelete } from "./schema.relationship.delete";
+import { schemaPropertyUpsert } from "./schema.property.upsert";
+import { schemaPropertyDelete } from "./schema.property.delete";
+import { schemaVersionCreate } from "./schema.version.create";
+import { schemaVersionPin } from "./schema.version.pin";
+import { schemaVersionList } from "./schema.version.list";
+import { schemaVersionDiff } from "./schema.version.diff";
+import { schemaExport } from "./schema.export";
+import { schemaRecommend } from "./schema.recommend";
+import { schemaSetup } from "./schema.setup";
+import { schemaChat } from "./schema.chat";
+import { schemaDelete } from "./schema.delete";
+import { schemaValidateNode } from "./schema.validate.node";
+import { schemaValidateRelationship } from "./schema.validate.relationship";
+import { schemaReconcileDispatch } from "./schema.reconcile.dispatch";
+import { schemaReconcileStatus } from "./schema.reconcile.status";
+import { graphRelationshipUpsert } from "./graph.relationship.upsert";
+import { semanticRelationshipApprove } from "./semantic.relationship.approve";
+import { semanticRelationshipInfer } from "./semantic.relationship.infer";
+import { semanticRelationshipList } from "./semantic.relationship.list";
+import { semanticRelationshipSuggest } from "./semantic.relationship.suggest";
+// Re-export shared Zod helpers used across schema.* contracts.
+// These are not capability contracts themselves but must appear here to satisfy
+// the check-contracts file-coverage guard (tools/scripts/check-contracts.mjs).
+export type { FieldError as SharedFieldError, PropertyInput as SharedPropertyInput } from "./schema.shared";
+export type {
+  FieldError,
+  DataType,
+  PropertyInput,
+} from "./schema.types";
 
 export {
   apiKeyCreate,
@@ -359,7 +396,37 @@ export {
   orgSettingsWrite,
   workspaceSettingsRead,
   workspaceSettingsWrite,
+  commandMenuSearch,
+  commandMenuSuggest,
   skillAuthor,
+  schemaRegistryGet,
+  schemaRegistryConfig,
+  schemaList,
+  schemaToggle,
+  schemaLabelUpsert,
+  schemaLabelDelete,
+  schemaRelationshipUpsert,
+  schemaRelationshipDelete,
+  schemaPropertyUpsert,
+  schemaPropertyDelete,
+  schemaVersionCreate,
+  schemaVersionPin,
+  schemaVersionList,
+  schemaVersionDiff,
+  schemaExport,
+  schemaRecommend,
+  schemaSetup,
+  schemaChat,
+  schemaDelete,
+  schemaValidateNode,
+  schemaValidateRelationship,
+  schemaReconcileDispatch,
+  schemaReconcileStatus,
+  graphRelationshipUpsert,
+  semanticRelationshipApprove,
+  semanticRelationshipInfer,
+  semanticRelationshipList,
+  semanticRelationshipSuggest,
 };
 
 /**
@@ -547,4 +614,32 @@ export const contracts = [
   commandMenuSearch,
   commandMenuSuggest,
   skillAuthor,
+  schemaRegistryGet,
+  schemaRegistryConfig,
+  schemaList,
+  schemaToggle,
+  schemaLabelUpsert,
+  schemaLabelDelete,
+  schemaRelationshipUpsert,
+  schemaRelationshipDelete,
+  schemaPropertyUpsert,
+  schemaPropertyDelete,
+  schemaVersionCreate,
+  schemaVersionPin,
+  schemaVersionList,
+  schemaVersionDiff,
+  schemaExport,
+  schemaRecommend,
+  schemaSetup,
+  schemaChat,
+  schemaDelete,
+  schemaValidateNode,
+  schemaValidateRelationship,
+  schemaReconcileDispatch,
+  schemaReconcileStatus,
+  graphRelationshipUpsert,
+  semanticRelationshipApprove,
+  semanticRelationshipInfer,
+  semanticRelationshipList,
+  semanticRelationshipSuggest,
 ] as const;

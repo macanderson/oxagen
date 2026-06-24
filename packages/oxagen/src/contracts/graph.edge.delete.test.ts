@@ -57,12 +57,34 @@ describe("graph.edge.delete capability", () => {
     }
   });
 
-  it("rejects an unknown edge type", () => {
+  // The fixed enum is gone (§3.2) — any lexically-valid relationship type is now
+  // accepted (the registry active-vocabulary allow-list is enforced at the handler,
+  // not the contract). The contract only rejects types that fail the lexical guard.
+  it("accepts a workspace-defined relationship type matching the lexical guard", () => {
+    const parsed = graphEdgeDelete.input.parse({
+      fromNodeId: "node_a",
+      toNodeId: "node_b",
+      edgeType: "SIGNED_CONTRACT",
+    });
+    expect(parsed.edgeType).toBe("SIGNED_CONTRACT");
+  });
+
+  it("rejects a relationship type that fails the lexical guard (injection-shaped)", () => {
     expect(() =>
       graphEdgeDelete.input.parse({
         fromNodeId: "node_a",
         toNodeId: "node_b",
-        edgeType: "UNKNOWN_RELATION",
+        edgeType: "`]->()-[:x",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects a lowercase relationship type", () => {
+    expect(() =>
+      graphEdgeDelete.input.parse({
+        fromNodeId: "node_a",
+        toNodeId: "node_b",
+        edgeType: "signed_contract",
       }),
     ).toThrow();
   });

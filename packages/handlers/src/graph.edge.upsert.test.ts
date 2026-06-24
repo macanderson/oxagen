@@ -1,17 +1,20 @@
 /**
- * graph.edge.upsert handler tests.
+ * graph.edge.upsert handler tests (deprecation alias of graph.relationship.upsert).
+ *
+ * The fixed GRAPH_EDGE_TYPES enum is gone (§3.2): the relationship type is now
+ * any workspace-defined string, validated by the always-on lexical
+ * RELATIONSHIP_TYPE_PATTERN guard before it is interpolated into Cypher.
  *
  * Strategy: mock scopedSession() to avoid real Neo4j. Verify:
- *   - Each allowed edge type dispatches the correct static Cypher query
+ *   - Each relationship type dispatches a guarded Cypher query with the literal type
  *   - Returns edgeId in the expected composite format
  *   - Returns created=true on creation, created=false on match
  *   - Throws when no record is returned (missing nodes)
  *   - JSON-encodes properties before passing to Cypher
- *   - Unknown edge type throws immediately (never reaches Neo4j)
+ *   - An injection-shaped relationship type is rejected before any Cypher runs
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { GRAPH_EDGE_TYPES } from "@oxagen/oxagen/contracts/graph.edge.upsert";
 
 const mocks = vi.hoisted(() => ({
   run: vi.fn(),
@@ -36,6 +39,15 @@ import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 const FROM = "from-node-uuid";
 const TO = "to-node-uuid";
+
+// Representative mix of canonical + workspace-defined relationship types.
+const RELATIONSHIP_TYPES = [
+  "RELATED_TO",
+  "PART_OF",
+  "MENTIONS",
+  "SIGNED_CONTRACT",
+  "EMPLOYS",
+] as const;
 
 function makeRecord(wasCreated: boolean) {
   return {
@@ -62,7 +74,7 @@ beforeEach(() => {
 describe("graphEdgeUpsertHandler — happy path", () => {
   it("returns composite edgeId and created=true", async () => {
     const result = await graphEdgeUpsertHandler(
-      { fromNodeId: FROM, toNodeId: TO, edgeType: "RELATED_TO" },
+      { fromNodeId: FROM, toNodeId: TO, relationshipType: "RELATED_TO" },
       CTX,
     );
     expect(result.edgeId).toBe(`${FROM}:RELATED_TO:${TO}`);
@@ -72,7 +84,7 @@ describe("graphEdgeUpsertHandler — happy path", () => {
   it("returns created=false on match", async () => {
     mocks.run.mockResolvedValueOnce(makeRecord(false));
     const result = await graphEdgeUpsertHandler(
-      { fromNodeId: FROM, toNodeId: TO, edgeType: "PART_OF" },
+      { fromNodeId: FROM, toNodeId: TO, relationshipType: "PART_OF" },
       CTX,
     );
     expect(result.created).toBe(false);
@@ -83,7 +95,7 @@ describe("graphEdgeUpsertHandler — happy path", () => {
       {
         fromNodeId: FROM,
         toNodeId: TO,
-        edgeType: "REFERENCES",
+        relationshipType: "REFERENCES",
         properties: { source: "doc-1", page: "5" },
       },
       CTX,
@@ -95,7 +107,7 @@ describe("graphEdgeUpsertHandler — happy path", () => {
 
   it("passes null for properties when none provided", async () => {
     await graphEdgeUpsertHandler(
-      { fromNodeId: FROM, toNodeId: TO, edgeType: "SIMILAR_TO" },
+      { fromNodeId: FROM, toNodeId: TO, relationshipType: "SIMILAR_TO" },
       CTX,
     );
     const params = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
@@ -103,20 +115,44 @@ describe("graphEdgeUpsertHandler — happy path", () => {
   });
 });
 
-describe("graphEdgeUpsertHandler — all edge types dispatch static Cypher", () => {
-  for (const edgeType of GRAPH_EDGE_TYPES) {
-    it(`dispatches a static Cypher query for ${edgeType}`, async () => {
+describe("graphEdgeUpsertHandler — relationship types dispatch guarded Cypher", () => {
+  for (const relationshipType of RELATIONSHIP_TYPES) {
+    it(`dispatches a guarded Cypher query for ${relationshipType}`, async () => {
       mocks.run.mockResolvedValueOnce(makeRecord(true));
       const result = await graphEdgeUpsertHandler(
-        { fromNodeId: FROM, toNodeId: TO, edgeType },
+        { fromNodeId: FROM, toNodeId: TO, relationshipType },
         CTX,
       );
-      // The Cypher string must contain the literal relationship type
+      // The Cypher string must contain the literal relationship type (safe: it
+      // passed the lexical guard).
       const cypher = mocks.run.mock.calls[0]?.[0] as string;
-      expect(cypher).toContain(edgeType);
-      expect(result.edgeId).toBe(`${FROM}:${edgeType}:${TO}`);
+      expect(cypher).toContain(`:${relationshipType}]`);
+      expect(result.edgeId).toBe(`${FROM}:${relationshipType}:${TO}`);
     });
   }
+});
+
+describe("graphEdgeUpsertHandler — Cypher-injection guard (§3.2/§13)", () => {
+  it("rejects an injection-shaped relationship type before any Cypher runs", async () => {
+    await expect(
+      graphEdgeUpsertHandler(
+        { fromNodeId: FROM, toNodeId: TO, relationshipType: "`]->()-[:x" },
+        CTX,
+      ),
+    ).rejects.toThrow(/lexical guard/);
+    // No query dispatched — the guard fires before the session opens.
+    expect(mocks.run).not.toHaveBeenCalled();
+  });
+
+  it("rejects a lowercase relationship type before any Cypher runs", async () => {
+    await expect(
+      graphEdgeUpsertHandler(
+        { fromNodeId: FROM, toNodeId: TO, relationshipType: "knows" },
+        CTX,
+      ),
+    ).rejects.toThrow(/lexical guard/);
+    expect(mocks.run).not.toHaveBeenCalled();
+  });
 });
 
 describe("graphEdgeUpsertHandler — error paths", () => {
@@ -124,7 +160,7 @@ describe("graphEdgeUpsertHandler — error paths", () => {
     mocks.run.mockResolvedValueOnce({ records: [] });
     await expect(
       graphEdgeUpsertHandler(
-        { fromNodeId: "missing-from", toNodeId: "missing-to", edgeType: "DEPENDS_ON" },
+        { fromNodeId: "missing-from", toNodeId: "missing-to", relationshipType: "DEPENDS_ON" },
         CTX,
       ),
     ).rejects.toThrow("no record returned");
@@ -134,7 +170,7 @@ describe("graphEdgeUpsertHandler — error paths", () => {
     mocks.run.mockRejectedValueOnce(new Error("Neo4j down"));
     await expect(
       graphEdgeUpsertHandler(
-        { fromNodeId: FROM, toNodeId: TO, edgeType: "MENTIONS" },
+        { fromNodeId: FROM, toNodeId: TO, relationshipType: "MENTIONS" },
         CTX,
       ),
     ).rejects.toThrow("Neo4j down");

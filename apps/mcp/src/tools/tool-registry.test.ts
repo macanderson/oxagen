@@ -192,6 +192,34 @@ import { metadata as skillEditMetadata } from "./skill.edit";
 import { metadata as skillExportMetadata } from "./skill.export";
 import { metadata as skillMetricsReadMetadata } from "./skill.metrics.read";
 import { metadata as skillAuthorMetadata } from "./skill.author";
+// Workspace Schema Registry + graph relationship tools (these tool files exist
+// and are mounted; this parity list just hadn't imported them yet).
+import { metadata as graphRelationshipUpsertMetadata } from "./graph.relationship.upsert";
+import { metadata as schemaExportMetadata } from "./schema.export";
+import { metadata as schemaLabelDeleteMetadata } from "./schema.label.delete";
+import { metadata as schemaLabelUpsertMetadata } from "./schema.label.upsert";
+import { metadata as schemaListMetadata } from "./schema.list";
+import { metadata as schemaPropertyDeleteMetadata } from "./schema.property.delete";
+import { metadata as schemaPropertyUpsertMetadata } from "./schema.property.upsert";
+import { metadata as schemaRecommendMetadata } from "./schema.recommend";
+import { metadata as schemaReconcileDispatchMetadata } from "./schema.reconcile.dispatch";
+import { metadata as schemaReconcileStatusMetadata } from "./schema.reconcile.status";
+import { metadata as schemaRegistryConfigMetadata } from "./schema.registry.config";
+import { metadata as schemaRegistryGetMetadata } from "./schema.registry.get";
+import { metadata as schemaRelationshipDeleteMetadata } from "./schema.relationship.delete";
+import { metadata as schemaRelationshipUpsertMetadata } from "./schema.relationship.upsert";
+import { metadata as schemaSetupMetadata } from "./schema.setup";
+import { metadata as schemaToggleMetadata } from "./schema.toggle";
+import { metadata as schemaValidateNodeMetadata } from "./schema.validate.node";
+import { metadata as schemaValidateRelationshipMetadata } from "./schema.validate.relationship";
+import { metadata as schemaVersionCreateMetadata } from "./schema.version.create";
+import { metadata as schemaVersionDiffMetadata } from "./schema.version.diff";
+import { metadata as schemaVersionListMetadata } from "./schema.version.list";
+import { metadata as schemaVersionPinMetadata } from "./schema.version.pin";
+import { metadata as semanticRelationshipApproveMetadata } from "./semantic.relationship.approve";
+import { metadata as semanticRelationshipInferMetadata } from "./semantic.relationship.infer";
+import { metadata as semanticRelationshipListMetadata } from "./semantic.relationship.list";
+import { metadata as semanticRelationshipSuggestMetadata } from "./semantic.relationship.suggest";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -369,6 +397,32 @@ const allToolMetadata = [
   skillExportMetadata,
   skillMetricsReadMetadata,
   skillAuthorMetadata,
+  graphRelationshipUpsertMetadata,
+  schemaExportMetadata,
+  schemaLabelDeleteMetadata,
+  schemaLabelUpsertMetadata,
+  schemaListMetadata,
+  schemaPropertyDeleteMetadata,
+  schemaPropertyUpsertMetadata,
+  schemaRecommendMetadata,
+  schemaReconcileDispatchMetadata,
+  schemaReconcileStatusMetadata,
+  schemaRegistryConfigMetadata,
+  schemaRegistryGetMetadata,
+  schemaRelationshipDeleteMetadata,
+  schemaRelationshipUpsertMetadata,
+  schemaSetupMetadata,
+  schemaToggleMetadata,
+  schemaValidateNodeMetadata,
+  schemaValidateRelationshipMetadata,
+  schemaVersionCreateMetadata,
+  schemaVersionDiffMetadata,
+  schemaVersionListMetadata,
+  schemaVersionPinMetadata,
+  semanticRelationshipApproveMetadata,
+  semanticRelationshipInferMetadata,
+  semanticRelationshipListMetadata,
+  semanticRelationshipSuggestMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────

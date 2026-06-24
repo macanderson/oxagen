@@ -420,8 +420,8 @@ describe("graph.edge.delete route", () => {
     expect(body.edgeType).toBe("RELATED_TO");
   });
 
-  it("invalid edgeType → 400, invoke not called", async () => {
-    const res = await authDelete(PATH, { ...VALID_BODY, edgeType: "INVALID_EDGE" });
+  it("lowercase edgeType fails RELATIONSHIP_TYPE_PATTERN → 400, invoke not called", async () => {
+    const res = await authDelete(PATH, { ...VALID_BODY, edgeType: "invalid_edge" });
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -432,7 +432,7 @@ describe("graph.edge.delete route", () => {
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
-  it("each valid GRAPH_EDGE_TYPE is accepted", async () => {
+  it("each relationship type matching RELATIONSHIP_TYPE_PATTERN is accepted", async () => {
     const edgeTypes = [
       "RELATED_TO",
       "PART_OF",
@@ -467,12 +467,12 @@ describe("graph.edge.upsert route", () => {
   const VALID_BODY = {
     fromNodeId: "node-from-2",
     toNodeId: "node-to-2",
-    edgeType: "DEPENDS_ON",
+    relationshipType: "DEPENDS_ON",
     properties: { weight: "0.9" },
   };
 
   it("happy path POST: returns 201 with invoke result", async () => {
-    const invokeResult = { edgeId: "edge-new-1", edgeType: "DEPENDS_ON" };
+    const invokeResult = { edgeId: "edge-new-1", created: false };
     mocks.invoke.mockResolvedValue(invokeResult);
 
     const res = await authPost(PATH, VALID_BODY);
@@ -487,17 +487,17 @@ describe("graph.edge.upsert route", () => {
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
-  it("passes fromNodeId, toNodeId, edgeType, properties to invoke", async () => {
+  it("passes fromNodeId, toNodeId, relationshipType, properties to invoke", async () => {
     await authPost(PATH, VALID_BODY);
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.fromNodeId).toBe("node-from-2");
     expect(body.toNodeId).toBe("node-to-2");
-    expect(body.edgeType).toBe("DEPENDS_ON");
+    expect(body.relationshipType).toBe("DEPENDS_ON");
     expect(body.properties).toEqual({ weight: "0.9" });
   });
 
-  it("invalid edgeType → 400, invoke not called", async () => {
-    const res = await authPost(PATH, { ...VALID_BODY, edgeType: "NOT_A_TYPE" });
+  it("Cypher-injection relationshipType fails RELATIONSHIP_TYPE_PATTERN → 400, invoke not called", async () => {
+    const res = await authPost(PATH, { ...VALID_BODY, relationshipType: "]->()-[:x" });
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -505,7 +505,7 @@ describe("graph.edge.upsert route", () => {
   it("missing toNodeId → 400, invoke not called", async () => {
     const res = await authPost(PATH, {
       fromNodeId: "node-from-2",
-      edgeType: "DEPENDS_ON",
+      relationshipType: "DEPENDS_ON",
     });
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
@@ -515,7 +515,7 @@ describe("graph.edge.upsert route", () => {
     const res = await authPost(PATH, {
       fromNodeId: "node-from-2",
       toNodeId: "node-to-2",
-      edgeType: "MENTIONS",
+      relationshipType: "MENTIONS",
     });
     expect(res.status).toBe(201);
     expect(mocks.invoke).toHaveBeenCalledOnce();

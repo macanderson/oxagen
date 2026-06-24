@@ -117,22 +117,23 @@ contract-first design, IAM enforcement, and instrumentation.
 - [form.fill](form.fill.md) — Generatively fill or suggest values for page-level form fields based on context
 - [form.submit](form.submit.md) — Submit a response to a form
 
-## Graph (9)
+## Graph (10)
 
-| Capability          | Notes                                                       |
-| ------------------- | ----------------------------------------------------------- |
-| `graph.node.list`   | Paginated browse of all nodes in the workspace graph.       |
-| `graph.node.upsert` | Create or update a graph node by externalId.                |
-| `graph.node.get`    | Retrieve a graph node by externalId.                        |
-| `graph.node.delete` | Delete a graph node and its relationships.                  |
-| `graph.node.search` | Vector + full-text search over graph nodes.                 |
-| `graph.edge.upsert` | Create or update a directed relationship between two nodes. |
-| `graph.edge.delete` | Delete a directed relationship between two nodes.           |
-| `graph.cypher`      | Execute a read-only Cypher query against the tenant graph.  |
-| `graph.ingest`      | Extract entities + relationships from text and commit them to the graph with confidence. |
-| `graph.stats`       | Workspace graph statistics: node/edge counts by type.       |
-| `ontology.query`     | Typed multi-hop traversal from a start node over named relationship types. |
-| `ontology.neighbors` | One-hop neighborhood of a node, filtered by type and direction.            |
+| Capability                   | Notes                                                                                                                                                          |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `graph.node.list`            | Paginated browse of all nodes in the workspace graph.                                                                                                          |
+| `graph.node.upsert`          | Create or update a graph node by externalId.                                                                                                                   |
+| `graph.node.get`             | Retrieve a graph node by externalId.                                                                                                                           |
+| `graph.node.delete`          | Delete a graph node and its relationships.                                                                                                                     |
+| `graph.node.search`          | Vector + full-text search over graph nodes.                                                                                                                    |
+| `graph.relationship.upsert`  | Create or update a directed typed relationship between two KnowledgeNodes (open-vocabulary type, replaces graph.edge.upsert).                                  |
+| `graph.edge.upsert`          | **Deprecated** — one-release alias for `graph.relationship.upsert`; removed in v2.                                                                            |
+| `graph.edge.delete`          | Delete a directed relationship between two nodes.                                                                                                              |
+| `graph.cypher`               | Execute a read-only Cypher query against the tenant graph.                                                                                                     |
+| `graph.ingest`               | Extract entities + relationships from text and commit them to the graph with confidence.                                                                        |
+| `graph.stats`                | Workspace graph statistics: node/edge counts by type.                                                                                                          |
+| `ontology.query`             | Typed multi-hop traversal from a start node over named relationship types.                                                                                     |
+| `ontology.neighbors`         | One-hop neighborhood of a node, filtered by type and direction.                                                                                                |
 
 ## Image (4)
 
@@ -220,12 +221,41 @@ contract-first design, IAM enforcement, and instrumentation.
 - [research.swarm.start](research.swarm.start.md) — Fan out parallel web searches for a topic with diverse query variations; returns a swarmId to poll
 - [research.swarm.status](research.swarm.status.md) — Poll the status of a running research swarm; returns task progress and partial results
 
-## Semantic (4)
+## Schema (22)
 
-- [semantic.edge.approve](semantic.edge.approve.md) — Approve or reject an inferred semantic edge candidate; approved edges become permanent Neo4j relationships
-- [semantic.edge.infer](semantic.edge.infer.md) — Run LLM inference to discover cross-source relationships (async)
-- [semantic.edge.list](semantic.edge.list.md) — Paginated browse of inferred semantic edges with filtering
-- [semantic.edge.suggest](semantic.edge.suggest.md) — Return unapproved edge candidates for human review
+- [schema.registry.get](schema.registry.get.md) — Resolve the workspace registry: pinned version, enforcement mode, and the full label/relationship/property tree
+- [schema.registry.config](schema.registry.config.md) — Set enforcement mode and conformance floor for the workspace schema registry
+- [schema.list](schema.list.md) — List workspace schemas with per-schema enabled state (lightweight listing without full tree)
+- [schema.toggle](schema.toggle.md) — Enable/disable a schema; activation auto-publishes the draft and pins the resulting version
+- [schema.label.upsert](schema.label.upsert.md) — Create or update a node label on a schema within the current draft version
+- [schema.label.delete](schema.label.delete.md) — Remove a node label and all its properties from the current draft
+- [schema.relationship.upsert](schema.relationship.upsert.md) — Create or update a relationship type on a schema within the current draft version
+- [schema.relationship.delete](schema.relationship.delete.md) — Remove a relationship type from the current draft
+- [schema.property.upsert](schema.property.upsert.md) — Create or update a property on a node label or relationship type in the current draft
+- [schema.property.delete](schema.property.delete.md) — Remove a property from the current draft
+- [schema.version.create](schema.version.create.md) — Freeze the current draft into an immutable published version and open a fresh draft
+- [schema.version.pin](schema.version.pin.md) — Pin the workspace to a specific published schema version
+- [schema.version.list](schema.version.list.md) — List all schema versions with status, label, and change summary
+- [schema.version.diff](schema.version.diff.md) — Structural diff of two schema versions: added/removed/changed schemas, labels, types, and properties
+- [schema.export](schema.export.md) — Export a schema version as a downloadable ZIP grouped by schema
+- [schema.recommend](schema.recommend.md) — AI-generated schema recommendation based on existing graph structure and observed labels
+- [schema.setup](schema.setup.md) — Interactive LLM-assisted schema setup wizard: recommend → Q&A → apply → activate
+- [schema.chat](schema.chat.md) — AI iterative builder turn: takes conversation and draft, returns assistant message and proposed mutations
+- [schema.validate.node](schema.validate.node.md) — Validate a node's properties against the workspace schema; returns conformance score and field errors
+- [schema.validate.relationship](schema.validate.relationship.md) — Validate a relationship's type and properties against the workspace schema
+- [schema.reconcile.dispatch](schema.reconcile.dispatch.md) — Dispatch an async job to re-label existing graph nodes and relationships against the pinned schema version
+- [schema.reconcile.status](schema.reconcile.status.md) — Poll the progress and outcome of a schema reconciliation job
+
+## Semantic (8)
+
+- [semantic.relationship.approve](semantic.relationship.approve.md) — Approve or reject an inferred semantic relationship candidate; approved relationships become permanent Neo4j relationships
+- [semantic.relationship.infer](semantic.relationship.infer.md) — Run LLM inference to discover cross-source relationships (async)
+- [semantic.relationship.list](semantic.relationship.list.md) — Paginated browse of inferred semantic relationships with filtering
+- [semantic.relationship.suggest](semantic.relationship.suggest.md) — Return unapproved relationship candidates for human review
+- [semantic.edge.approve](semantic.edge.approve.md) — **Deprecated alias** for `semantic.relationship.approve`; removed in v2
+- [semantic.edge.infer](semantic.edge.infer.md) — **Deprecated alias** for `semantic.relationship.infer`; removed in v2
+- [semantic.edge.list](semantic.edge.list.md) — **Deprecated alias** for `semantic.relationship.list`; removed in v2
+- [semantic.edge.suggest](semantic.edge.suggest.md) — **Deprecated alias** for `semantic.relationship.suggest`; removed in v2
 
 ## Skill (9)
 

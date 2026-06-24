@@ -1,5 +1,7 @@
 # semantic.edge.list
 
+> **Deprecated** — `semantic.edge.list` is a one-release alias for [`semantic.relationship.list`](semantic.relationship.list.md), which will be the canonical name from v2 onward. Migrate now: the capability name is the only change; input, output, and API path are identical.
+
 Paginated browse of inferred semantic edges for a workspace. Supports filtering by relationship type, connector source, and confidence band.
 
 ## Mode

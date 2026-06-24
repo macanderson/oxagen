@@ -1,59 +1,31 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { graphEdgeDelete } from "@oxagen/oxagen/contracts/graph.edge.delete";
-import type { GraphEdgeType } from "@oxagen/oxagen/contracts/graph.edge.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { emitGraphDeletionTelemetry } from "./graph.telemetry";
 import { logger } from "./logger";
 
-// Static map mirrors EDGE_TYPE_QUERIES in graph.edge.upsert — same pattern,
-// DELETE variant. One query per relationship type so the Cypher planner sees
-// a static relationship type in every case.
+// The fixed GRAPH_EDGE_TYPES enum is GONE (Workspace Schema Registry §3.2): the
+// relationship type is now any workspace-defined string. The DELETE template is
+// built dynamically — but ONLY after the type is re-asserted against the
+// always-on lexical RELATIONSHIP_TYPE_PATTERN guard (`^[A-Z][A-Z0-9_]{0,62}$`),
+// which permits no backticks, brackets, whitespace, or Cypher metacharacters,
+// so a type that passes is safe to interpolate. (The contract already rejects
+// non-conforming types; this is defense-in-depth.)
 //
-// Both endpoints are scoped by BOTH orgId AND workspaceId. Org-only scoping
-// (the previous behaviour) let an edge between same-publicId nodes in another
-// workspace of the same org be deleted — a tenant-isolation breach (policy §0).
-const EDGE_DELETE_QUERIES: Record<GraphEdgeType, string> = {
-  RELATED_TO: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})-[r:RELATED_TO]->(to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
-               WITH r, count(r) AS found
-               DELETE r
-               RETURN found > 0 AS wasDeleted`,
-
-  PART_OF: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})-[r:PART_OF]->(to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
-             WITH r, count(r) AS found
-             DELETE r
-             RETURN found > 0 AS wasDeleted`,
-
-  CAUSED_BY: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})-[r:CAUSED_BY]->(to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
-               WITH r, count(r) AS found
-               DELETE r
-               RETURN found > 0 AS wasDeleted`,
-
-  REFERENCES: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})-[r:REFERENCES]->(to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
-                WITH r, count(r) AS found
-                DELETE r
-                RETURN found > 0 AS wasDeleted`,
-
-  SIMILAR_TO: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})-[r:SIMILAR_TO]->(to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
-                WITH r, count(r) AS found
-                DELETE r
-                RETURN found > 0 AS wasDeleted`,
-
-  DEPENDS_ON: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})-[r:DEPENDS_ON]->(to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
-                WITH r, count(r) AS found
-                DELETE r
-                RETURN found > 0 AS wasDeleted`,
-
-  CREATED_BY: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})-[r:CREATED_BY]->(to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
-                WITH r, count(r) AS found
-                DELETE r
-                RETURN found > 0 AS wasDeleted`,
-
-  MENTIONS: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})-[r:MENTIONS]->(to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
-              WITH r, count(r) AS found
-              DELETE r
-              RETURN found > 0 AS wasDeleted`,
-};
+// Both endpoints are scoped by BOTH orgId AND workspaceId (tenant isolation §0).
+function buildDeleteQuery(relationshipType: string): string {
+  if (!RELATIONSHIP_TYPE_PATTERN.test(relationshipType)) {
+    throw new Error(
+      `graph.edge.delete: relationship type "${relationshipType}" fails the lexical guard`,
+    );
+  }
+  return `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})-[r:${relationshipType}]->(to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
+          WITH r, count(r) AS found
+          DELETE r
+          RETURN found > 0 AS wasDeleted`;
+}
 
 export const graphEdgeDeleteHandler: CapabilityHandler<typeof graphEdgeDelete> = async (
   input,
@@ -62,12 +34,7 @@ export const graphEdgeDeleteHandler: CapabilityHandler<typeof graphEdgeDelete> =
   const { orgId, workspaceId } = ctx;
   const startedAt = Date.now();
 
-  const query = EDGE_DELETE_QUERIES[input.edgeType];
-  if (!query) {
-    throw new Error(
-      `graph.edge.delete: unsupported edgeType "${input.edgeType}". Allowed: ${Object.keys(EDGE_DELETE_QUERIES).join(", ")}`,
-    );
-  }
+  const query = buildDeleteQuery(input.edgeType);
 
   let deleted = false;
 
@@ -95,7 +62,7 @@ export const graphEdgeDeleteHandler: CapabilityHandler<typeof graphEdgeDelete> =
       orgId,
       workspaceId,
     },
-    "graph.edge.delete: edge deletion attempted",
+    "graph.edge.delete: relationship deletion attempted",
   );
 
   // Destructive op — emit a ClickHouse tool-invocation row via the shared

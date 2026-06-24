@@ -14,7 +14,17 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { GRAPH_EDGE_TYPES } from "@oxagen/oxagen/contracts/graph.edge.upsert";
+
+// The fixed GRAPH_EDGE_TYPES enum is gone (§3.2): relationship types are now
+// workspace-defined. We exercise a representative mix of canonical + custom
+// types — all must build a static, tenant-scoped DELETE with the literal type.
+const RELATIONSHIP_TYPES = [
+  "RELATED_TO",
+  "PART_OF",
+  "MENTIONS",
+  "SIGNED_CONTRACT",
+  "EMPLOYS",
+] as const;
 
 const mocks = vi.hoisted(() => ({
   run: vi.fn(),
@@ -80,13 +90,13 @@ describe("graphEdgeDeleteHandler — happy path", () => {
   });
 });
 
-describe("graphEdgeDeleteHandler — all edge types are scoped and static", () => {
-  for (const edgeType of GRAPH_EDGE_TYPES) {
-    it(`dispatches a static, tenant-scoped query for ${edgeType}`, async () => {
+describe("graphEdgeDeleteHandler — relationship types are scoped and guard-checked", () => {
+  for (const edgeType of RELATIONSHIP_TYPES) {
+    it(`dispatches a guarded, tenant-scoped query for ${edgeType}`, async () => {
       mocks.run.mockResolvedValueOnce(makeDeleteRecord(true));
       await graphEdgeDeleteHandler({ fromNodeId: FROM, toNodeId: TO, edgeType }, CTX);
       const cypher = mocks.run.mock.calls[0]?.[0] as string;
-      // literal relationship type
+      // literal relationship type interpolated (safe: passed the lexical guard)
       expect(cypher).toContain(`:${edgeType}]`);
       // BOTH endpoints scoped by orgId + workspaceId (tenant-isolation guard)
       const orgScopes = cypher.match(/orgId: \$orgId/g) ?? [];
@@ -95,6 +105,17 @@ describe("graphEdgeDeleteHandler — all edge types are scoped and static", () =
       expect(wsScopes.length).toBe(2);
     });
   }
+
+  it("rejects an injection-shaped relationship type before any Cypher runs", async () => {
+    await expect(
+      graphEdgeDeleteHandler(
+        { fromNodeId: FROM, toNodeId: TO, edgeType: "`]->()-[:x" },
+        CTX,
+      ),
+    ).rejects.toThrow(/lexical guard/);
+    // No query was dispatched — rejection happens before the session opens.
+    expect(mocks.run).not.toHaveBeenCalled();
+  });
 });
 
 describe("graphEdgeDeleteHandler — telemetry", () => {

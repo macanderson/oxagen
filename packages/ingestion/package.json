@@ -15,7 +15,8 @@
     "./embed": "./src/embed/index.ts",
     "./mutations": "./src/mutations/upsert-entity.ts",
     "./dedup": "./src/dedup/resolve.ts",
-    "./parsers": "./src/parsers/index.ts"
+    "./parsers": "./src/parsers/index.ts",
+    "./validate": "./src/validate/schema.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

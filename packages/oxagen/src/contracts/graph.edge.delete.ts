@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { GRAPH_EDGE_TYPES } from "./graph.edge.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
 
 export const graphEdgeDelete = registerCapability({
   name: "graph.edge.delete",
@@ -20,7 +20,10 @@ export const graphEdgeDelete = registerCapability({
   input: z.object({
     fromNodeId: z.string().describe("publicId of the source KnowledgeNode"),
     toNodeId: z.string().describe("publicId of the target KnowledgeNode"),
-    edgeType: z.enum(GRAPH_EDGE_TYPES).describe("Type of relationship to delete"),
+    edgeType: z
+      .string()
+      .regex(RELATIONSHIP_TYPE_PATTERN)
+      .describe("Relationship type to delete — must match [A-Z][A-Z0-9_]{0,62}"),
   }),
   output: z.object({
     deleted: z.boolean().describe("True if the relationship was found and deleted; false if it did not exist"),

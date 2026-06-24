@@ -20,3 +20,4 @@ export const ingestionSchema = pgSchema("ingestion");
 export const iamSchema = pgSchema("iam");
 export const privacySchema = pgSchema("privacy");
 export const graphSchema = pgSchema("graph");
+export const schemaRegistrySchema = pgSchema("schema_registry");

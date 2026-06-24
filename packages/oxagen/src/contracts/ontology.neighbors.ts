@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { GRAPH_EDGE_TYPES } from "./graph.edge.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
 
 /**
  * ontology.neighbors — the one-hop neighborhood of a node. A focused, cheap
@@ -21,7 +21,10 @@ const neighborEntry = z.object({
   label: z.string().describe("Domain label of the neighbor"),
   displayName: z.string(),
   description: z.string().nullable(),
-  edgeType: z.enum(GRAPH_EDGE_TYPES).describe("Relationship type connecting the node to this neighbor"),
+  edgeType: z
+    .string()
+    .regex(RELATIONSHIP_TYPE_PATTERN)
+    .describe("Relationship type connecting the node to this neighbor"),
   direction: z
     .enum(["out", "in"])
     .describe("'out' if the edge points from the node to this neighbor; 'in' if from the neighbor to the node"),
@@ -47,9 +50,12 @@ export const ontologyNeighbors = registerCapability({
   input: z.object({
     nodeId: z.string().describe("publicId of the node whose neighbors to fetch"),
     edgeTypes: z
-      .array(z.enum(GRAPH_EDGE_TYPES))
+      .array(z.string().regex(RELATIONSHIP_TYPE_PATTERN))
       .optional()
-      .describe("Relationship type(s) to include. When omitted, all relationship types are included."),
+      .describe(
+        "Relationship type(s) to include. Each must match [A-Z][A-Z0-9_]{0,62}. When omitted, " +
+          "the pinned schema's active-vocabulary relationship types are used (or all types when none pinned).",
+      ),
     direction: ontologyDirection.default("both"),
     limit: z
       .number()

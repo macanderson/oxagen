@@ -1,88 +1,41 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { graphEdgeUpsert } from "@oxagen/oxagen/contracts/graph.edge.upsert";
-import type { GraphEdgeType } from "@oxagen/oxagen/contracts/graph.edge.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "./logger";
 
-// Static map: each allowed edge type has its own MERGE template.
-// No dynamic Cypher — the edge type selector pattern prevents injection and
-// keeps the query planner happy with static relationship types.
+// graph.edge.upsert is the one-release DEPRECATION ALIAS of graph.relationship.upsert
+// (Workspace Schema Registry §1.2). The fixed GRAPH_EDGE_TYPES enum is GONE (§3.2):
+// the relationship type is now any workspace-defined string, validated by the
+// always-on lexical RELATIONSHIP_TYPE_PATTERN guard (`^[A-Z][A-Z0-9_]{0,62}$`).
 //
-// Both endpoints are scoped by BOTH orgId AND workspaceId. Org-only scoping
-// (the previous behaviour) let a caller in one workspace MERGE an edge against
-// a same-publicId node in another workspace of the same org — a tenant-isolation
-// breach (policy §0). This mirrors the fix already applied to graph.edge.delete.
-const EDGE_TYPE_QUERIES: Record<GraphEdgeType, string> = {
-  RELATED_TO: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
-               MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
-               MERGE (from)-[r:RELATED_TO]->(to)
-               ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
-               ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
-               RETURN r._created AS wasCreated`,
-
-  PART_OF: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
-             MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
-             MERGE (from)-[r:PART_OF]->(to)
-             ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
-             ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
-             RETURN r._created AS wasCreated`,
-
-  CAUSED_BY: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
-               MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
-               MERGE (from)-[r:CAUSED_BY]->(to)
-               ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
-               ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
-               RETURN r._created AS wasCreated`,
-
-  REFERENCES: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
-                MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
-                MERGE (from)-[r:REFERENCES]->(to)
-                ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
-                ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
-                RETURN r._created AS wasCreated`,
-
-  SIMILAR_TO: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
-                MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
-                MERGE (from)-[r:SIMILAR_TO]->(to)
-                ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
-                ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
-                RETURN r._created AS wasCreated`,
-
-  DEPENDS_ON: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
-                MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
-                MERGE (from)-[r:DEPENDS_ON]->(to)
-                ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
-                ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
-                RETURN r._created AS wasCreated`,
-
-  CREATED_BY: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
-                MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
-                MERGE (from)-[r:CREATED_BY]->(to)
-                ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
-                ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
-                RETURN r._created AS wasCreated`,
-
-  MENTIONS: `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
-              MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
-              MERGE (from)-[r:MENTIONS]->(to)
-              ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
-              ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
-              RETURN r._created AS wasCreated`,
-};
+// Because the type can no longer be a static map key, the MERGE template is built
+// dynamically — but ONLY after the type is re-asserted against the lexical guard,
+// which permits no backticks, brackets, whitespace, or Cypher metacharacters. A
+// type that passes the guard is therefore safe to interpolate into the relationship
+// pattern (defense-in-depth: the contract already rejects non-conforming types).
+// Both endpoints are scoped by BOTH orgId AND workspaceId (tenant isolation §0).
+function buildUpsertQuery(relationshipType: string): string {
+  if (!RELATIONSHIP_TYPE_PATTERN.test(relationshipType)) {
+    throw new Error(
+      `graph.edge.upsert: relationship type "${relationshipType}" fails the lexical guard`,
+    );
+  }
+  return `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
+          MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
+          MERGE (from)-[r:${relationshipType}]->(to)
+          ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
+          ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
+          RETURN r._created AS wasCreated`;
+}
 
 export const graphEdgeUpsertHandler: CapabilityHandler<typeof graphEdgeUpsert> = async (
   input,
   ctx,
 ) => {
   const { orgId, workspaceId } = ctx;
-
-  const query = EDGE_TYPE_QUERIES[input.edgeType];
-  if (!query) {
-    throw new Error(
-      `graph.edge.upsert: unsupported edgeType "${input.edgeType}". Allowed: ${Object.keys(EDGE_TYPE_QUERIES).join(", ")}`,
-    );
-  }
+  const query = buildUpsertQuery(input.relationshipType);
 
   const propertiesJson = input.properties ? JSON.stringify(input.properties) : null;
 
@@ -109,12 +62,12 @@ export const graphEdgeUpsertHandler: CapabilityHandler<typeof graphEdgeUpsert> =
     }
   });
 
-  // Stable composite edge identifier for the caller.
-  const edgeId = `${input.fromNodeId}:${input.edgeType}:${input.toNodeId}`;
+  // Stable composite relationship identifier for the caller.
+  const edgeId = `${input.fromNodeId}:${input.relationshipType}:${input.toNodeId}`;
 
   logger.info(
-    { edgeId, created, edgeType: input.edgeType, orgId, workspaceId },
-    "graph.edge.upsert: edge upserted",
+    { edgeId, created, relationshipType: input.relationshipType, orgId, workspaceId },
+    "graph.edge.upsert: relationship upserted",
   );
 
   return { edgeId, created };

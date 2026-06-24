@@ -596,4 +596,114 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./command.menu.suggest")).commandMenuSuggestHandler as CapabilityHandlerFn,
   );
+  // ── Schema Registry ───────────────────────────────────────────────────────────
+  registerHandler(
+    "schema.registry.get",
+    async () =>
+      (await import("./schema.registry.get")).schemaRegistryGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.registry.config",
+    async () =>
+      (await import("./schema.registry.config")).schemaRegistryConfigHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.list",
+    async () => (await import("./schema.list")).schemaListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.toggle",
+    async () => (await import("./schema.toggle")).schemaToggleHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.label.upsert",
+    async () =>
+      (await import("./schema.label.upsert")).schemaLabelUpsertHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.label.delete",
+    async () =>
+      (await import("./schema.label.delete")).schemaLabelDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.delete",
+    async () => (await import("./schema.delete")).schemaDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.relationship.upsert",
+    async () =>
+      (
+        await import("./schema.relationship.upsert")
+      ).schemaRelationshipUpsertHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.relationship.delete",
+    async () =>
+      (
+        await import("./schema.relationship.delete")
+      ).schemaRelationshipDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.property.upsert",
+    async () =>
+      (
+        await import("./schema.property.upsert")
+      ).schemaPropertyUpsertHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.property.delete",
+    async () =>
+      (
+        await import("./schema.property.delete")
+      ).schemaPropertyDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.version.create",
+    async () =>
+      (
+        await import("./schema.version.create")
+      ).schemaVersionCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.version.pin",
+    async () =>
+      (await import("./schema.version.pin")).schemaVersionPinHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.version.list",
+    async () =>
+      (await import("./schema.version.list")).schemaVersionListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.version.diff",
+    async () =>
+      (await import("./schema.version.diff")).schemaVersionDiffHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.export",
+    async () => (await import("./schema.export")).schemaExportHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.recommend",
+    async () =>
+      (await import("./schema.recommend")).schemaRecommendHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.chat",
+    async () => (await import("./schema.chat")).schemaChatHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.setup",
+    async () => (await import("./schema.setup")).schemaSetupHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.reconcile.dispatch",
+    async () =>
+      (await import("./schema.reconcile.dispatch")).schemaReconcileDispatchHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.reconcile.status",
+    async () =>
+      (await import("./schema.reconcile.status")).schemaReconcileStatusHandler as CapabilityHandlerFn,
+  );
 });

@@ -302,6 +302,21 @@ type Events = {
     };
   };
 
+  // ── Schema reconciliation ─────────────────────────────────────────────────
+  // Fired by schema.reconcile.dispatch handler to kick off an async reconcile job.
+  // Workers coerce existing KnowledgeNode/relationship properties to the target schema version.
+  "schema/reconcile.start": {
+    data: {
+      orgId: string;
+      workspaceId: string;
+      /** Internal UUID of the agent_executions row tracking this job. */
+      executionId: string;
+      /** Public ID (scv_…) of the target schema version. */
+      versionId: string;
+      /** When true, properties NOT in the target schema are pruned from existing nodes. */
+      prune: boolean;
+    };
+  };
   // ── Web-search → knowledge-graph ingestion ──────────────────────────────────
   // Fired by the web.search handler after every search that returns hits (chat
   // agent, research swarm, API, MCP, CLI — all route through the same handler).

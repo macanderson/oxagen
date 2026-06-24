@@ -1,33 +1,116 @@
 /**
  * Neo4j mutations for the ingestion pipeline.
  *
- * All ingested entity nodes live 100% in Neo4j — no Postgres dual-write.
- * The :EntityNode primary label is universal; entityType is a string property.
- * Credentials and connection config live in Postgres (encrypted).
+ * Ingested nodes live 100% in Neo4j — no Postgres dual-write of the instance.
  *
- * Every ingested node ALSO carries the :KnowledgeNode label and the display
- * fields (`label`, `displayName`, `sourceId`, `properties`, `createdAt`,
- * `updatedAt`) that the knowledge-graph read layer requires. The explorer's
- * capabilities — graph.node.list / graph.node.search / graph.stats /
- * ontology.neighbors / graph.node.get — all filter on `:KnowledgeNode` scoped
- * by orgId + workspaceId, so without that label every ingested node is invisible
- * in the graph UI even though it exists in Neo4j. The MERGE key stays on
- * :EntityNode (internal dedup/alias/embedding queries match that label and there
- * is no historical :EntityNode-only data to migrate); the trailing SET adds the
- * universal :KnowledgeNode label + display fields on every write.
+ * §3.3 dual-write (Workspace Schema Registry): the MERGE now writes the REAL
+ * label as the PRIMARY label (`(n:`Customer` { … })`) while transitionally
+ * retaining the generic `:EntityNode` secondary label + `entityType` property
+ * for back-compat. Readers prefer the real label; the §3.3 batch relabel (v2)
+ * removes the secondary label later.
+ *
+ * §8 property-level validation: before the MERGE, when a workspace pins a schema
+ * version, `validateNodeAgainstSchema` runs and the write branches on the
+ * workspace `enforcement_mode` (strict / lenient / off). Conformance telemetry
+ * and observed-label signals are emitted to ClickHouse (§4.9, §4.10).
  */
 
 import { scopedSession } from "@oxagen/ontology/tenant";
+import { chInsert } from "@oxagen/telemetry";
+import { randomUUID } from "node:crypto";
 import type { EntityMutation } from "../types";
+import {
+  validateNodeAgainstSchema,
+  type PinnedSchema,
+  type SchemaValidationResult,
+} from "../validate/schema";
+
+/** The relationship-type lexical guard (mirrors RELATIONSHIP_TYPE_PATTERN, §3.2). */
+const NEO4J_LABEL_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,62}$/;
+
+/**
+ * Options threaded from the pipeline into the node write. All optional so
+ * pre-registry callers (and tests) keep working unchanged.
+ */
+export interface UpsertEntityOptions {
+  /** The pinned active vocabulary (null/absent → validation skipped). */
+  pinnedSchema?: PinnedSchema | null;
+  /** Source connection for observation/conformance telemetry. */
+  connectionId?: string;
+  /** Connector record type for telemetry rationale. */
+  sourceRecordType?: string;
+}
+
+/** Outcome of an entity-node write, carrying the §8 conformance result. */
+export interface UpsertEntityResult {
+  /** The node publicId, or null when a strict-mode write was rejected. */
+  nodeId: string | null;
+  /**
+   * True when enforcement_mode='strict' and the payload was non-conformant —
+   * the node was NOT written. The pipeline surfaces this as a `filtered`-style
+   * rejection with reason `schema_nonconformant`.
+   */
+  rejected?: boolean;
+  /** Rejection reason when `rejected` is true. */
+  reason?: "schema_nonconformant";
+  /** Conformance score (0.0–1.0) when a schema was evaluated. */
+  conformanceScore?: number;
+}
+
+/**
+ * Derive the first-class Neo4j label from the mutation's entityType (§3.3).
+ * Falls back to the generic `EntityNode` when the entityType is not a valid
+ * Neo4j label identifier, so a malformed customer type can never be
+ * interpolated into Cypher.
+ */
+export function resolveNodeLabel(entityType: string): string {
+  const trimmed = entityType.trim();
+  return NEO4J_LABEL_PATTERN.test(trimmed) ? trimmed : "EntityNode";
+}
 
 export async function upsertEntityNode(
   mutation: EntityMutation,
   _orgId: string,
-): Promise<{ nodeId: string }> {
+  opts: UpsertEntityOptions = {},
+): Promise<UpsertEntityResult> {
+  const pinnedSchema = opts.pinnedSchema ?? null;
+
+  // ── §8 property-level validation (before the MERGE) ─────────────────────────
+  let validation: SchemaValidationResult | null = null;
+  if (pinnedSchema && pinnedSchema.enforcementMode !== "off") {
+    validation = validateNodeAgainstSchema(
+      { label: mutation.entityType, properties: mutation.properties },
+      pinnedSchema,
+    );
+
+    if (pinnedSchema.enforcementMode === "strict" && !validation.valid) {
+      // strict: DO NOT write. Emit a rejected conformance event and bail.
+      await emitConformanceEvent(mutation, pinnedSchema, validation, "rejected", null, opts);
+      return {
+        nodeId: null,
+        rejected: true,
+        reason: "schema_nonconformant",
+        conformanceScore: validation.conformanceScore,
+      };
+    }
+  }
+
+  // ── §3.3 dual-write: real label PRIMARY + :EntityNode secondary ─────────────
+  const label = resolveNodeLabel(mutation.entityType);
+  // The label passed NEO4J_LABEL_PATTERN above → safe to interpolate. When it is
+  // already "EntityNode", don't double-apply the secondary label.
+  const labelClause = label === "EntityNode" ? "`EntityNode`" : `\`${label}\`:\`EntityNode\``;
+
+  // Conformance props are attached on lenient writes (§8). undefined when no
+  // schema was evaluated, so existing nodes are not stamped spuriously.
+  const conformanceScore = validation ? validation.conformanceScore : null;
+  const schemaVersionId = validation ? pinnedSchema!.versionId : null;
+
   const session = scopedSession();
+  let nodeId: string;
   try {
     const result = await session.run(
-      `MERGE (n:EntityNode {naturalKey: $naturalKey, orgId: $orgId})
+      `MERGE (n:${labelClause} {naturalKey: $naturalKey, orgId: $orgId})
        ON CREATE SET
          n.publicId         = randomUUID(),
          n.createdAt        = datetime()
@@ -43,6 +126,8 @@ export async function upsertEntityNode(
          n.sourceId         = $connectionId,
          n.workspaceId      = $workspaceId,
          n.properties       = $properties,
+         n.conformanceScore = $conformanceScore,
+         n.schemaVersionId  = $schemaVersionId,
          n.updatedAt        = datetime()
        RETURN n.publicId AS nodeId`,
       {
@@ -58,16 +143,128 @@ export async function upsertEntityNode(
         connectionId: mutation.connectionId,
         workspaceId: mutation.workspaceId,
         properties: JSON.stringify(mutation.properties),
+        conformanceScore,
+        schemaVersionId,
       },
     );
     const record = result.records[0];
     if (!record) {
       throw new Error(`upsertEntityNode: no record returned for naturalKey=${mutation.naturalKey}`);
     }
-    return { nodeId: record.get("nodeId") as string };
+    nodeId = record.get("nodeId") as string;
   } finally {
     await session.close();
   }
+
+  // ── §4.9 observed-labels signal (every written node) ────────────────────────
+  await emitObservedLabel(mutation, label, opts);
+
+  // ── §4.10 conformance event + §8 below-floor signal (lenient writes) ────────
+  if (validation && pinnedSchema) {
+    const belowFloor = validation.conformanceScore < pinnedSchema.conformanceFloor;
+    await emitConformanceEvent(
+      mutation,
+      pinnedSchema,
+      validation,
+      belowFloor ? "written_below_floor" : "accepted",
+      nodeId,
+      opts,
+    );
+    if (belowFloor) {
+      // Best-effort low-conformance alert event (does not block the write).
+      await emitConformanceLowEvent(mutation, pinnedSchema, validation, nodeId, opts);
+    }
+  }
+
+  return {
+    nodeId,
+    conformanceScore: validation ? validation.conformanceScore : undefined,
+  };
+}
+
+// ── ClickHouse emit helpers (best-effort; never fail the write) ───────────────
+
+/**
+ * Emit a `graph_observed_labels` row (§4.9). Append-only observation read by
+ * `schema.recommend`. Best-effort: a telemetry failure is swallowed.
+ */
+async function emitObservedLabel(
+  mutation: EntityMutation,
+  label: string,
+  opts: UpsertEntityOptions,
+): Promise<void> {
+  try {
+    // chInsert stamps org_id/workspace_id from the active tenant scope.
+    await chInsert("graph_observed_labels", [
+      {
+        event_id: randomUUID(),
+        target_kind: "node",
+        label_or_type: label,
+        property_keys: Object.keys(mutation.properties),
+        connection_id: opts.connectionId ?? null,
+        source_record_type: opts.sourceRecordType ?? mutation.sourceRecordType ?? "",
+        occurred_at: new Date().toISOString(),
+      },
+    ]);
+  } catch {
+    // observation telemetry must never break ingestion.
+  }
+}
+
+/**
+ * Emit a `schema_conformance_events` row (§4.10). Best-effort.
+ *
+ * NOTE: description/error text originates from the registry + payload and is
+ * stored as DATA only — never interpreted as instructions (§11 posture).
+ */
+async function emitConformanceEvent(
+  mutation: EntityMutation,
+  pinnedSchema: PinnedSchema,
+  validation: SchemaValidationResult,
+  outcome: "accepted" | "rejected" | "written_below_floor" | "pruned",
+  nodeId: string | null,
+  opts: UpsertEntityOptions,
+): Promise<void> {
+  try {
+    await chInsert("schema_conformance_events", [
+      {
+        event_id: randomUUID(),
+        version_id: pinnedSchema.versionId,
+        target_kind: "node",
+        node_id: nodeId,
+        relationship_key: null,
+        node_label: mutation.entityType,
+        enforcement_mode: pinnedSchema.enforcementMode,
+        outcome,
+        conformance_score: validation.conformanceScore,
+        missing_required: validation.missingRequired,
+        type_errors: validation.errors
+          .filter((e) => e.code === "type")
+          .map((e) => e.message),
+        connection_id: opts.connectionId ?? null,
+        source_record_type: opts.sourceRecordType ?? mutation.sourceRecordType ?? "",
+        occurred_at: new Date().toISOString(),
+      },
+    ]);
+  } catch {
+    // conformance telemetry must never break ingestion.
+  }
+}
+
+/**
+ * Emit a low-conformance alert as a distinct `written_below_floor` marker row
+ * (§8 `schema.conformance.low`). Reuses the conformance-events table with the
+ * below-floor outcome so the alerting pipeline can subscribe. Best-effort.
+ */
+async function emitConformanceLowEvent(
+  mutation: EntityMutation,
+  pinnedSchema: PinnedSchema,
+  validation: SchemaValidationResult,
+  nodeId: string,
+  opts: UpsertEntityOptions,
+): Promise<void> {
+  // Distinct event_id keeps the alert row separate from the primary outcome row.
+  await emitConformanceEvent(mutation, pinnedSchema, validation, "written_below_floor", nodeId, opts);
 }
 
 export interface AliasEdgeProps {

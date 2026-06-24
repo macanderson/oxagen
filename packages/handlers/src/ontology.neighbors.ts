@@ -1,8 +1,9 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { ontologyNeighbors } from "@oxagen/oxagen/contracts/ontology.neighbors";
-import { GRAPH_EDGE_TYPES, type GraphEdgeType } from "@oxagen/oxagen/contracts/graph.edge.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { getPinnedSchema } from "./schema.pinned";
 import { logger } from "./logger";
 
 interface NeighborEntry {
@@ -10,23 +11,57 @@ interface NeighborEntry {
   label: string;
   displayName: string;
   description: string | null;
-  edgeType: GraphEdgeType;
+  edgeType: string;
   direction: "out" | "in";
 }
 
 /**
- * Resolve the relationship-type allow-list. Every value is validated against
- * GRAPH_EDGE_TYPES (the fixed allow-list) so the value passed as a Cypher
- * parameter can never widen the type set beyond what the schema permits.
+ * Resolve the relationship-type allow-list for the traversal (§3.2 two-layer guard).
+ *
+ * Returns either:
+ *  - a concrete list of relationship types to constrain the traversal to, OR
+ *  - `null` meaning "do not constrain by relationship type" (unconstrained
+ *    traversal — only used when the caller passed no filter AND no version is
+ *    pinned, i.e. today's "all types" behavior, but injection-safe).
+ *
+ * Layer 1 — lexical guard (ALWAYS on): every relationship type must match
+ *   RELATIONSHIP_TYPE_PATTERN before it can reach Cypher. This closes the
+ *   injection vector regardless of the registry.
+ * Layer 2 — registry allow-list (when pinned): a supplied type must also be a
+ *   relationship type in the pinned version's ACTIVE VOCABULARY. When the filter
+ *   is omitted, the default "all types" becomes the active vocabulary's
+ *   relationship types — NOT the old static GRAPH_EDGE_TYPES list.
  */
-function resolveEdgeTypes(edgeTypes: readonly GraphEdgeType[] | undefined): GraphEdgeType[] {
-  const types = edgeTypes && edgeTypes.length > 0 ? [...edgeTypes] : [...GRAPH_EDGE_TYPES];
-  for (const t of types) {
-    if (!GRAPH_EDGE_TYPES.includes(t)) {
-      throw new Error(`ontology.neighbors: unsupported edgeType "${t}"`);
+function resolveRelationshipTypes(
+  requested: readonly string[] | undefined,
+  activeVocab: readonly string[] | null,
+): string[] | null {
+  // Caller supplied an explicit filter.
+  if (requested && requested.length > 0) {
+    for (const t of requested) {
+      // Layer 1: lexical guard — reject before any Cypher interpolation.
+      if (!RELATIONSHIP_TYPE_PATTERN.test(t)) {
+        throw new Error(`ontology.neighbors: relationship type "${t}" fails the lexical guard`);
+      }
+      // Layer 2: when a registry is pinned, the type must be in the active vocab.
+      if (activeVocab && !activeVocab.includes(t)) {
+        throw new Error(
+          `ontology.neighbors: relationship type "${t}" is not in the pinned active vocabulary`,
+        );
+      }
     }
+    return [...requested];
   }
-  return types;
+
+  // No explicit filter: default to the pinned active vocabulary (when pinned),
+  // else unconstrained traversal (null → no relationship-type filter in Cypher).
+  if (activeVocab) {
+    // Active-vocab names came from the registry; they still must pass the lexical
+    // guard before reaching Cypher (defense-in-depth — a malformed registry row
+    // can never widen the injection surface).
+    return activeVocab.filter((t) => RELATIONSHIP_TYPE_PATTERN.test(t));
+  }
+  return null;
 }
 
 export const ontologyNeighborsHandler: CapabilityHandler<typeof ontologyNeighbors> = async (
@@ -34,7 +69,11 @@ export const ontologyNeighborsHandler: CapabilityHandler<typeof ontologyNeighbor
   ctx,
 ) => {
   const { orgId, workspaceId } = ctx;
-  const edgeTypes = resolveEdgeTypes(input.edgeTypes);
+
+  // Resolve the pinned active vocabulary (null when no version is pinned).
+  const pinned = await getPinnedSchema(orgId, workspaceId);
+  const activeVocab = pinned ? pinned.relationshipTypes.map((r) => r.name) : null;
+  const edgeTypes = resolveRelationshipTypes(input.edgeTypes, activeVocab);
 
   let found = false;
   const neighbors: NeighborEntry[] = [];
@@ -65,6 +104,12 @@ export const ontologyNeighborsHandler: CapabilityHandler<typeof ontologyNeighbor
             ? "AND endNode(r) = n"
             : "";
 
+      // Relationship-type filter — `type(r) IN $edgeTypes` is a PARAMETER (never
+      // concatenated), so this is safe even before the lexical guard; when
+      // `edgeTypes` is null (no filter + no pin) the clause is omitted entirely
+      // for an unconstrained traversal.
+      const relTypeClause = edgeTypes ? "AND type(r) IN $edgeTypes" : "";
+
       // Fetch one extra row beyond the cap so we can flag truncation honestly.
       // BigInt forces the driver to send INTEGER on the Bolt wire — a plain JS
       // number would be serialised as Float and Neo4j rejects it for LIMIT.
@@ -73,7 +118,7 @@ export const ontologyNeighborsHandler: CapabilityHandler<typeof ontologyNeighbor
         `MATCH (n:KnowledgeNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
          MATCH (n)-[r]-(m:KnowledgeNode)
          WHERE m.orgId = $orgId AND m.workspaceId = $workspaceId
-           AND type(r) IN $edgeTypes
+           ${relTypeClause}
            ${directionClause}
          RETURN
            m.publicId    AS nodeId,
@@ -97,7 +142,7 @@ export const ontologyNeighborsHandler: CapabilityHandler<typeof ontologyNeighbor
           label: record.get("label") as string,
           displayName: record.get("displayName") as string,
           description: record.get("description") as string | null,
-          edgeType: record.get("edgeType") as GraphEdgeType,
+          edgeType: record.get("edgeType") as string,
           direction: record.get("direction") as "out" | "in",
         });
       }

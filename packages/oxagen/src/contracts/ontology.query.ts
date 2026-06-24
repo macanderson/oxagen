@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { GRAPH_EDGE_TYPES } from "./graph.edge.upsert";
+import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
 
 /**
  * ontology.query — first-class, typed multi-hop traversal over the knowledge
@@ -28,7 +28,10 @@ const traversedNode = z.object({
 const traversedEdge = z.object({
   fromNodeId: z.string().describe("publicId of the source node"),
   toNodeId: z.string().describe("publicId of the target node"),
-  edgeType: z.enum(GRAPH_EDGE_TYPES).describe("Relationship type of this edge"),
+  edgeType: z
+    .string()
+    .regex(RELATIONSHIP_TYPE_PATTERN)
+    .describe("Relationship type of this edge"),
 });
 
 export const ontologyQuery = registerCapability({
@@ -51,10 +54,11 @@ export const ontologyQuery = registerCapability({
   input: z.object({
     startNodeId: z.string().describe("publicId of the node to start the traversal from"),
     edgeTypes: z
-      .array(z.enum(GRAPH_EDGE_TYPES))
+      .array(z.string().regex(RELATIONSHIP_TYPE_PATTERN))
       .optional()
       .describe(
-        "Relationship type(s) to follow. When omitted, every known relationship type is traversed.",
+        "Relationship type(s) to follow. Each must match [A-Z][A-Z0-9_]{0,62}. When omitted, the " +
+          "pinned schema's active-vocabulary relationship types are traversed (or all types when none pinned).",
       ),
     direction: ontologyDirection.default("out"),
     maxDepth: z
