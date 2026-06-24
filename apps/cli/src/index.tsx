@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { render } from "ink";
-import { DevStatus } from "./components/DevStatus.js";
-import { version } from "../package.json" with { type: "json" };
+// JSON modules expose only a default export under Node's ESM loader; a named
+// `{ version }` import compiles under tsx but crashes the built binary at runtime.
+import pkg from "../package.json" with { type: "json" };
+
+const { version } = pkg;
 import { authLoginCommand } from "./commands/auth.login.js";
 import { authLogoutCommand } from "./commands/auth.logout.js";
 import { authWhoamiCommand } from "./commands/auth.whoami.js";
@@ -149,7 +151,13 @@ program
 program
   .command("dev")
   .description("Show the current dev stack status")
-  .action(() => {
+  .action(async () => {
+    // Lazy-load the Ink/React TUI so the React reconciler is only initialised
+    // for this one command — the other ~134 commands start without paying for it.
+    const [{ render }, { DevStatus }] = await Promise.all([
+      import("ink"),
+      import("./components/DevStatus.js"),
+    ]);
     render(<DevStatus />);
   });
 

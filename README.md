@@ -379,6 +379,31 @@ pnpm gate                                      # full verification
 gh run watch                                   # verify CI is green
 ```
 
+### CLI (`oxagen`) — local development binary
+
+Install the `oxagen` CLI onto your PATH from the working tree, with live rebuilds.
+Run once from the repo root and leave it running:
+
+```bash
+pnpm cli:dev          # build → install `oxagen` to PATH → watch + auto-rebuild on change
+pnpm cli:install      # one-shot: build + install once, no watcher
+```
+
+`cli:dev` symlinks an `oxagen` binary from a PATH directory (`~/.local/bin/oxagen`
+when it's on your PATH) into `apps/cli/dist/index.js` and keeps `tsc --watch` running,
+so every edit under `apps/cli/src/**` is immediately live under `oxagen` — no reinstall:
+
+```bash
+oxagen --help
+oxagen --version
+oxagen auth whoami
+```
+
+If the script warns that the target directory isn't on your PATH, add the printed
+line to your shell profile (e.g. `export PATH="$HOME/.local/bin:$PATH"`). To uninstall:
+`rm "$(command -v oxagen)"`. See [`apps/cli/README.md`](apps/cli/README.md) for the full
+command reference and [`apps/cli/GAPS.md`](apps/cli/GAPS.md) for tracked gaps.
+
 ---
 
 ## Documentation
@@ -472,6 +497,8 @@ We believe in:
 ```bash
 # Development
 pnpm dev                         # start all apps + Docker
+pnpm cli:dev                     # install `oxagen` to PATH + watch/auto-rebuild
+pnpm cli:install                 # install `oxagen` to PATH once (no watcher)
 pnpm kill                        # stop everything
 pnpm gate                        # full CI locally
 
