@@ -24,10 +24,14 @@ import { invoke } from "@oxagen/oxagen";
 import { formFill } from "@oxagen/oxagen/contracts/form.fill";
 import { fieldDescriptorSchema } from "@oxagen/oxagen/contracts/form.fill";
 import { randomUUID } from "node:crypto";
-import type { StreamEvent } from "@/components/chat/stream-event-types";
+import type {
+  StreamEvent,
+  AssistantContentBlock,
+} from "@/components/chat/stream-event-types";
 import { autoTitleConversation } from "./auto-title";
 import { streamMediaGeneration } from "./media-generation";
 import { translateAgentStream } from "./translate-stream";
+import { buildHistoryMessages } from "./history";
 
 // Side-effect imports: bind every handler into the shared kernel BEFORE
 // materializeTools runs so invoke() can resolve both agent.* and all
@@ -101,9 +105,6 @@ const BodySchema = z.object({
 // conversations. The newest HISTORY_LIMIT messages are taken (DESC + LIMIT,
 // then reversed so the model sees them chronologically oldest→newest).
 const HISTORY_LIMIT = 50;
-
-// Valid CoreMessage roles. Guards against malformed DB rows reaching the SDK.
-const VALID_ROLES = new Set(["user", "assistant", "system"]);
 
 // POST /api/v1/chat/stream
 //
@@ -269,6 +270,11 @@ export async function POST(request: NextRequest): Promise<Response> {
             .select({
               role: schema.messages.role,
               content: schema.messages.content,
+              // content_blocks carries the assistant turn's real output (tool
+              // calls, generated files, code runs). Without it, tool-only turns
+              // (empty text) were dropped from history and the model re-ran every
+              // prior tool call on each new turn — see buildHistoryMessages.
+              contentBlocks: schema.messages.contentBlocks,
             })
             .from(schema.messages)
             .where(
@@ -283,10 +289,17 @@ export async function POST(request: NextRequest): Promise<Response> {
         ),
     );
 
-    historyMessages = rows
-      .filter((r) => VALID_ROLES.has(r.role) && r.content.trim().length > 0)
-      .map((r) => ({ role: r.role as "user" | "assistant" | "system", content: r.content }))
-      .reverse();
+    // Reconstruct history so assistant turns carry a summary of the actions they
+    // ALREADY completed (marked DONE), so the model never re-fires finished tool
+    // calls. Rows arrive newest-first; buildHistoryMessages reverses to
+    // chronological order.
+    historyMessages = buildHistoryMessages(
+      rows.map((r) => ({
+        role: r.role,
+        content: r.content,
+        contentBlocks: r.contentBlocks as AssistantContentBlock[] | null,
+      })),
+    );
   }
 
   // Append the current user message unless sendMessageAction (running
