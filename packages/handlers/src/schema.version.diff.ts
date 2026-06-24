@@ -4,26 +4,6 @@ import { schema as db, withTenantDb } from "@oxagen/database";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { logger } from "./logger";
 
-type LabelRow = {
-  id: string;
-  schemaId: string;
-  name: string;
-  displayName: string;
-  description: string | null;
-  naturalKeyProps: string[];
-};
-
-type RelRow = {
-  id: string;
-  schemaId: string;
-  name: string;
-  displayName: string;
-  description: string | null;
-  startLabel: string | null;
-  endLabel: string | null;
-  cardinality: string | null;
-};
-
 type PropRow = {
   id: string;
   nodeLabelId: string | null;
@@ -36,7 +16,7 @@ type PropRow = {
 
 export const schemaVersionDiffHandler: CapabilityHandler<typeof schemaVersionDiff> = async (
   input,
-  ctx,
+  _ctx,
 ) => {
   const { fromVersionId, toVersionId } = input;
 
@@ -124,12 +104,8 @@ export const schemaVersionDiffHandler: CapabilityHandler<typeof schemaVersionDif
         : Promise.resolve([]),
     ]);
 
-    // Load properties
-    const fromLabelIds = fromLabels.map((l) => l.id);
-    const toLabelIds = toLabels.map((l) => l.id);
-    const fromRelIds = fromRels.map((r) => r.id);
-    const toRelIds = toRels.map((r) => r.id);
-
+    // Load properties (scoped by versionId; the property query filters on the
+    // version directly, so no per-label/per-rel id lists are needed here).
     const [fromProps, toProps] = await Promise.all([
       tx.select().from(db.schemaProperties).where(
         and(

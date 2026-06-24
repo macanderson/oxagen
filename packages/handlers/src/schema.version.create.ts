@@ -1,7 +1,5 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { schemaVersionCreate } from "@oxagen/oxagen/contracts/schema.version.create";
-import { schema as db, withTenantDb } from "@oxagen/database";
-import { eq, and, isNull } from "drizzle-orm";
 import { getOrCreateRegistry, publishDraft } from "./schema.versioning";
 import { invalidatePinnedSchemaCache } from "./schema.pinned";
 import { logger } from "./logger";

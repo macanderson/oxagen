@@ -2,7 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { schemaExport } from "@oxagen/oxagen/contracts/schema.export";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { schema as db, withTenantDb } from "@oxagen/database";
-import { eq, and, isNull, inArray } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { getOrCreateRegistry } from "./schema.versioning";
 import { logger } from "./logger";
 
@@ -22,7 +22,7 @@ export const schemaExportHandler: CapabilityHandler<typeof schemaExport> = async
     throw new Error("No version available to export");
   }
 
-  const { schemas, labels, rels, props, versionNumber, internalVersionId } =
+  const { schemas, labels, rels, props, versionNumber } =
     await withTenantDb(async (tx) => {
       // Resolve internal id from publicId
       const [versionRow] = await tx

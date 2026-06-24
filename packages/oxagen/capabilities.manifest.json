@@ -2641,13 +2641,11 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp",
         "agent"
       ],
       "layers": {
         "schema": true,
         "api": false,
-        "mcp": false,
         "unit": false,
         "docs": true
       }
@@ -2658,16 +2656,10 @@
       "domain": "schema",
       "mode": "sync",
       "surfaces": [
-        "api",
-        "mcp",
-        "cli"
+        "agent"
       ],
       "layers": {
-        "schema": true,
-        "api": false,
-        "mcp": false,
-        "unit": false,
-        "docs": false
+        "schema": true
       }
     },
     {

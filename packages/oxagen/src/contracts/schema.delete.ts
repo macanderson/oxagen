@@ -6,8 +6,11 @@ export const schemaDelete = registerCapability({
   domain: "schema",
   description: "Drop an entire named schema from the draft — its labels, relationship types, and properties.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"] as const,
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  // Agent-surface only: schema.delete is invoked by the schema chat agent
+  // (draft-state grounding), not yet exposed as an API route / MCP tool / CLI
+  // command. Keep surfaces truthful so the MCP tool-registry parity guard holds.
+  surfaces: ["agent"] as const,
+  layers: ["schema"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "schema" },
   sensitivity: "high",
