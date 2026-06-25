@@ -23,6 +23,18 @@ pnpm -C apps/cli build
 node apps/cli/dist/index.js --version
 ```
 
+## Interactive mode
+
+Run `oxagen` with no arguments in a terminal to open the interactive TUI: an
+ASCII banner and a keyboard-navigable menu of every command group and command.
+
+- `↑/↓` move · `↵` select · `Esc` back · `q` quit · type to filter
+- Selecting a command opens a form for its arguments and flags, then runs it.
+- Secret inputs (passwords, tokens) are masked.
+
+Disable it (always print help instead) with `OXAGEN_NO_TUI=1`. Non-interactive
+usage — `oxagen <command> …`, pipes, and CI — is unaffected.
+
 ## Authentication
 
 ```bash

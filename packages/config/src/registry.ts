@@ -1167,6 +1167,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: { development: "http://localhost:4000", production: "https://api.oxagen.sh" },
   },
+  OXAGEN_NO_TUI: {
+    group: "CLI",
+    description:
+      "Set to any value to disable the interactive TUI in `oxagen` and always print classic help. " +
+      "Unset or empty = TUI enabled (when running interactively in a terminal).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",
     description: "Credential encryption backend for ingestion: 'env' (AES-256-GCM via INGESTION_ENCRYPTION_KEY) or 'kms' (AWS KMS).",

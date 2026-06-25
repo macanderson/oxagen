@@ -65,6 +65,7 @@ describe("user.preferences.write capability", () => {
       defaultVideoModel: null,
       timezone: "UTC",
       language: "en",
+      agentPanelButtonLocation: "lower-right",
     });
     expect(parsed.fontSize).toBe("medium");
     expect(parsed.defaultTextTier).toBeNull();

@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 import net from "node:net";
 import { useEffect, useState } from "react";
+import { theme } from "../tui/theme.js";
 
 // Services the dev stack exposes. Port values must stay in sync with the
 // turbo dev task config (apps/*/project.json + apps/*/next.config.ts).
@@ -73,8 +74,8 @@ export function DevStatus() {
     <Box flexDirection="column" paddingX={1}>
       <Text>
         {/* Brand banner: cyan ring glyph + violet "Oxagen" wordmark (Oxagen jewel palette). */}
-        <Text color="#7CE8F4">◯ </Text>
-        <Text color="#7C5AED" bold>
+        <Text color={theme.cyan}>{theme.ring} </Text>
+        <Text color={theme.violet} bold>
           Oxagen
         </Text>
         <Text dimColor> dev stack</Text>

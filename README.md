@@ -381,6 +381,10 @@ gh run watch                                   # verify CI is green
 
 ### CLI (`oxagen`) — local development binary
 
+Running `oxagen` with no args in a terminal opens an interactive TUI (banner +
+menu + argument forms); `OXAGEN_NO_TUI=1` or any subcommand/pipe keeps the
+classic non-interactive behavior.
+
 Install the `oxagen` CLI onto your PATH from the working tree, with live rebuilds.
 Run once from the repo root and leave it running:
 

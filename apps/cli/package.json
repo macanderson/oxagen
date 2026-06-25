@@ -34,6 +34,7 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
+    "@inkjs/ui": "2.0.0",
     "@oxagen/config": "workspace:*",
     "commander": "12.1.0",
     "ink": "7.1.0",
@@ -43,6 +44,7 @@
     "@types/node": "25.9.1",
     "@types/react": "19.2.15",
     "@vitest/coverage-v8": "2.1.9",
+    "ink-testing-library": "4.0.0",
     "tsx": "4.22.3",
     "typescript": "6.0.3",
     "vitest": "2.1.9"
