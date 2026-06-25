@@ -1,5 +1,5 @@
 // documents.handlers.test.ts — handler invocation tests for document/media/asset
-// tools: archive.create, asset.upload, brandkit.apply, documents.generate,
+// tools: archive.create, asset.upload, documents.generate,
 // documents.pdf.create, image.generate, svg.generate, video.generate, form.fill.
 //
 // Pattern: vi.mock the kernel `invoke` and context seam `buildContext`.
@@ -29,7 +29,6 @@ const fakeCtx = {
   clientIp: null,
 };
 
-
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.buildContext.mockResolvedValue(fakeCtx);
@@ -58,7 +57,16 @@ describe("archive.create handler", () => {
       sizeBytes: 1024,
       url: "https://blob.example.com/archive.zip",
       serveUrl: "https://app.example.com/api/v1/assets/gen_pub_1",
-      render: { componentId: "file-attachment", props: { url: "https://blob.example.com/archive.zip", name: "my-archive.zip", kind: "archive", mimeType: "application/zip", sizeBytes: 1024 } },
+      render: {
+        componentId: "file-attachment",
+        props: {
+          url: "https://blob.example.com/archive.zip",
+          name: "my-archive.zip",
+          kind: "archive",
+          mimeType: "application/zip",
+          sizeBytes: 1024,
+        },
+      },
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
@@ -69,19 +77,19 @@ describe("archive.create handler", () => {
     const result = await handler_archiveCreate(args);
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "archive.create",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("archive.create", args, fakeCtx, {
+      surface: "mcp",
+    });
     expect(result).toMatchObject({ assetId: "gen_1" });
   });
 
   it("propagates invoke errors", async () => {
     mocks.invoke.mockRejectedValue(new Error("archive failed"));
     await expect(
-      handler_archiveCreate({ archiveName: "x", entries: [{ name: "f.txt", text: "t" }] }),
+      handler_archiveCreate({
+        archiveName: "x",
+        entries: [{ name: "f.txt", text: "t" }],
+      }),
     ).rejects.toThrow("archive failed");
   });
 });
@@ -108,48 +116,16 @@ describe("asset.upload handler", () => {
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { sourceUrl: "https://example.com/image.png", kind: "image" as const, filename: undefined };
+    const args = {
+      sourceUrl: "https://example.com/image.png",
+      kind: "image" as const,
+      filename: undefined,
+    };
     await handler_assetUpload(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "asset.upload",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
-  });
-});
-
-// ── brandkit.apply ────────────────────────────────────────────────────────────
-
-import handler_brandkitApply, {
-  schema as brandkitApplySchema,
-  metadata as brandkitApplyMetadata,
-} from "./brandkit.apply";
-
-describe("brandkit.apply handler", () => {
-  it("exports schema and metadata", () => {
-    expect(brandkitApplySchema).toBeDefined();
-    expect(brandkitApplyMetadata.name).toBe("brandkit.apply");
-  });
-
-  it("calls invoke with brandkit args", async () => {
-    const fakeOutput = { stub: true as const, applied: false as const, brandKitId: "bk_1", targetFileId: "file_1" };
-    mocks.invoke.mockResolvedValue(fakeOutput);
-
-    const args = {
-      workspaceId: "ws_test",
-      brandKitId: "bk_1",
-      targetFileId: "file_1",
-    };
-    await handler_brandkitApply(args);
-
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "brandkit.apply",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("asset.upload", args, fakeCtx, {
+      surface: "mcp",
+    });
   });
 });
 
@@ -171,11 +147,22 @@ describe("documents.generate handler", () => {
       assetId: "gen_doc_1",
       publicId: "gen_pub_doc_1",
       kind: "document" as const,
-      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       sizeBytes: 2048,
       url: "https://blob.example.com/report.docx",
       serveUrl: "https://app.example.com/api/v1/assets/gen_pub_doc_1",
-      render: { componentId: "file-attachment", props: { url: "https://blob.example.com/report.docx", name: "My Report.docx", kind: "document", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", sizeBytes: 2048 } },
+      render: {
+        componentId: "file-attachment",
+        props: {
+          url: "https://blob.example.com/report.docx",
+          name: "My Report.docx",
+          kind: "document",
+          mimeType:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          sizeBytes: 2048,
+        },
+      },
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
@@ -183,7 +170,12 @@ describe("documents.generate handler", () => {
       kind: "document" as const,
       title: "My Report",
       content: {
-        sections: [{ heading: "Intro" as string | undefined, paragraphs: ["Hello world."] }],
+        sections: [
+          {
+            heading: "Intro" as string | undefined,
+            paragraphs: ["Hello world."],
+          },
+        ],
         headers: undefined,
         rows: undefined,
         slides: undefined,
@@ -223,14 +215,28 @@ describe("documents.pdf.create handler", () => {
       sizeBytes: 3072,
       url: "https://blob.example.com/my-pdf.pdf",
       serveUrl: "https://app.example.com/api/v1/assets/gen_pub_pdf_1",
-      render: { componentId: "file-attachment", props: { url: "https://blob.example.com/my-pdf.pdf", name: "My PDF.pdf", kind: "pdf", mimeType: "application/pdf", sizeBytes: 3072 } },
+      render: {
+        componentId: "file-attachment",
+        props: {
+          url: "https://blob.example.com/my-pdf.pdf",
+          name: "My PDF.pdf",
+          kind: "pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 3072,
+        },
+      },
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = {
       title: "My PDF",
       content: {
-        sections: [{ heading: "Intro" as string | undefined, paragraphs: ["Content here."] }],
+        sections: [
+          {
+            heading: "Intro" as string | undefined,
+            paragraphs: ["Content here."],
+          },
+        ],
       },
       brandColors: undefined,
     };
@@ -262,20 +268,27 @@ describe("image.generate handler", () => {
     const fakeOutput = {
       alt: "A red fox in snow",
       placeholder: false,
-      render: { componentId: "image-preview", props: { alt: "A red fox in snow" } },
+      render: {
+        componentId: "image-preview",
+        props: { alt: "A red fox in snow" },
+      },
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { prompt: "A red fox in snow", alt: undefined, size: "1024x1024" as "1024x1024" | "1792x1024" | "1024x1792" | undefined };
+    const args = {
+      prompt: "A red fox in snow",
+      alt: undefined,
+      size: "1024x1024" as "1024x1024" | "1792x1024" | "1024x1792" | undefined,
+    };
     const result = await handler_imageGenerate(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "image.generate",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
-    expect(result).toMatchObject({ alt: "A red fox in snow", placeholder: false });
+    expect(mocks.invoke).toHaveBeenCalledWith("image.generate", args, fakeCtx, {
+      surface: "mcp",
+    });
+    expect(result).toMatchObject({
+      alt: "A red fox in snow",
+      placeholder: false,
+    });
   });
 });
 
@@ -296,19 +309,24 @@ describe("svg.generate handler", () => {
     const fakeOutput = {
       svg: "<svg><rect width='100' height='100'/></svg>",
       title: "A simple house icon",
-      render: { componentId: "svg-preview", props: { title: "A simple house icon" } },
+      render: {
+        componentId: "svg-preview",
+        props: { title: "A simple house icon" },
+      },
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { prompt: "A simple house icon", title: undefined, width: 400 as number | undefined, height: 400 as number | undefined };
+    const args = {
+      prompt: "A simple house icon",
+      title: undefined,
+      width: 400 as number | undefined,
+      height: 400 as number | undefined,
+    };
     await handler_svgGenerate(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "svg.generate",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("svg.generate", args, fakeCtx, {
+      surface: "mcp",
+    });
   });
 });
 
@@ -332,7 +350,10 @@ describe("video.generate handler", () => {
       serveUrl: "https://app.example.com/api/v1/assets/vid_1",
       render: {
         componentId: "video-result" as const,
-        props: { url: "https://app.example.com/api/v1/assets/vid_1", prompt: "A sunset over mountains" },
+        props: {
+          url: "https://app.example.com/api/v1/assets/vid_1",
+          prompt: "A sunset over mountains",
+        },
       },
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
@@ -342,16 +363,12 @@ describe("video.generate handler", () => {
       durationSeconds: 5 as number | undefined,
       aspectRatio: undefined,
       style: undefined,
-      brandKitId: undefined,
     };
     await handler_videoGenerate(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "video.generate",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("video.generate", args, fakeCtx, {
+      surface: "mcp",
+    });
   });
 });
 
@@ -370,7 +387,9 @@ describe("form.fill handler", () => {
 
   it("calls invoke with form fill args", async () => {
     const fakeOutput = {
-      fields: [{ name: "project_name", current: "", proposed: "Acme", changed: true }],
+      fields: [
+        { name: "project_name", current: "", proposed: "Acme", changed: true },
+      ],
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
@@ -379,16 +398,20 @@ describe("form.fill handler", () => {
       entitySummary: undefined,
       instruction: "Set project name to Acme",
       fields: [
-        { name: "project_name", label: "Project Name", type: "text" as const, current: "", options: undefined, required: true as boolean | undefined },
+        {
+          name: "project_name",
+          label: "Project Name",
+          type: "text" as const,
+          current: "",
+          options: undefined,
+          required: true as boolean | undefined,
+        },
       ],
     };
     await handler_formFill(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "form.fill",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("form.fill", args, fakeCtx, {
+      surface: "mcp",
+    });
   });
 });

@@ -53,8 +53,6 @@ import { imageListCommand } from "./commands/image.list.js";
 import { imageAnalyzeCommand } from "./commands/image.analyze.js";
 import { documentListCommand } from "./commands/document.list.js";
 import { documentReadCommand } from "./commands/document.read.js";
-import { formCreateCommand } from "./commands/form.create.js";
-import { formSubmitCommand } from "./commands/form.submit.js";
 import { automationCreateCommand } from "./commands/automation.create.js";
 import { automationUpdateCommand } from "./commands/automation.update.js";
 import { automationTriggerCommand } from "./commands/automation.trigger.js";
@@ -92,7 +90,6 @@ import { agentTaskBackgroundStartCommand } from "./commands/agent.task.backgroun
 import { agentTaskBackgroundCancelCommand } from "./commands/agent.task.background.cancel.js";
 import { assetUploadCommand } from "./commands/asset.upload.js";
 import { billingSubscriptionUpgradeStartCommand } from "./commands/billing.subscription.upgrade.start.js";
-import { brandkitApplyCommand } from "./commands/brandkit.apply.js";
 import { conversationPurgeCommand } from "./commands/conversation.purge.js";
 import { conversationFilesListCommand } from "./commands/conversation.files.list.js";
 import { documentsPdfCreateCommand } from "./commands/documents.pdf.create.js";
@@ -143,10 +140,7 @@ import { schemaVersionCommand } from "./commands/schema/schema.version.js";
 
 const program = new Command();
 
-program
-  .name("oxagen")
-  .description("Oxagen developer CLI")
-  .version(version);
+program.name("oxagen").description("Oxagen developer CLI").version(version);
 
 program
   .command("dev")
@@ -176,13 +170,17 @@ const orgMember = org.command("member").description("Org member management");
 orgMember.addCommand(orgMemberAddCommand);
 orgMember.addCommand(orgMemberRemoveCommand);
 orgMember.addCommand(orgMemberRoleChangeCommand);
-const orgMemberInvite = orgMember.command("invite").description("Org member invitations");
+const orgMemberInvite = orgMember
+  .command("invite")
+  .description("Org member invitations");
 orgMemberInvite.addCommand(orgMemberInviteAcceptCommand);
 orgMemberInvite.addCommand(orgMemberInviteDeclineCommand);
 org.addCommand(organizationCreateCommand);
 
 // workspace
-const workspace = program.command("workspace").description("Workspace commands");
+const workspace = program
+  .command("workspace")
+  .description("Workspace commands");
 workspace.addCommand(workspaceListCommand);
 workspace.addCommand(workspaceCreateCommand);
 
@@ -191,7 +189,9 @@ const chat = program.command("chat").description("Chat and messaging commands");
 chat.addCommand(chatSendCommand);
 
 // conversation
-const conversation = program.command("conversation").description("Conversation management");
+const conversation = program
+  .command("conversation")
+  .description("Conversation management");
 conversation.addCommand(conversationListCommand);
 conversation.addCommand(conversationDeleteCommand);
 conversation.addCommand(conversationArchiveCommand);
@@ -203,41 +203,57 @@ apiKey.addCommand(apiKeyCreateCommand);
 apiKey.addCommand(apiKeyRevokeCommand);
 
 // notifications
-const notifications = program.command("notifications").description("Notification management");
+const notifications = program
+  .command("notifications")
+  .description("Notification management");
 notifications.addCommand(notificationsListCommand);
 notifications.addCommand(notificationsMarkCommand);
 
 // plugin
-const plugin = program.command("plugin").description("Plugin marketplace commands");
+const plugin = program
+  .command("plugin")
+  .description("Plugin marketplace commands");
 plugin.addCommand(pluginListCommand);
 plugin.addCommand(pluginInstallCommand);
 plugin.addCommand(pluginUninstallCommand);
-const pluginOrg = plugin.command("org").description("Plugin organization management");
+const pluginOrg = plugin
+  .command("org")
+  .description("Plugin organization management");
 pluginOrg.addCommand(pluginOrgInstallCommand);
 pluginOrg.addCommand(pluginOrgUninstallCommand);
 const pluginCatalog = plugin.command("catalog").description("Plugin catalog");
 pluginCatalog.addCommand(pluginCatalogGetCommand);
 pluginCatalog.addCommand(pluginCatalogBrowseCommand);
-const pluginRegistry = plugin.command("registry").description("Plugin registry management");
+const pluginRegistry = plugin
+  .command("registry")
+  .description("Plugin registry management");
 pluginRegistry.addCommand(pluginRegistryListCommand);
 pluginRegistry.addCommand(pluginRegistryAddCommand);
 pluginRegistry.addCommand(pluginRegistryRemoveCommand);
-const pluginCredential = plugin.command("credential").description("Plugin credential management");
+const pluginCredential = plugin
+  .command("credential")
+  .description("Plugin credential management");
 pluginCredential.addCommand(pluginCredentialReauthCommand);
 pluginCredential.addCommand(pluginCredentialSetSecretCommand);
 pluginOrg.addCommand(pluginOrgInstallBulkCommand);
 pluginOrg.addCommand(pluginOrgListCommand);
 pluginOrg.addCommand(pluginOrgSetEnabledCommand);
-const pluginSettings = plugin.command("settings").description("Plugin settings");
+const pluginSettings = plugin
+  .command("settings")
+  .description("Plugin settings");
 pluginSettings.addCommand(pluginSettingsSetAuthAlertsCommand);
 pluginOrg.addCommand(pluginWorkspaceSetEnabledCommand);
 
 // billing
-const billing = program.command("billing").description("Billing and subscription commands");
+const billing = program
+  .command("billing")
+  .description("Billing and subscription commands");
 billing.addCommand(billingStatusCommand);
 billing.addCommand(billingCreditsPurchaseCommand);
 billing.addCommand(billingSubscriptionReadCommand);
-const billingSubscription = billing.command("subscription").description("Subscription management");
+const billingSubscription = billing
+  .command("subscription")
+  .description("Subscription management");
 billingSubscription.addCommand(billingSubscriptionUpgradeStartCommand);
 
 // agent
@@ -248,22 +264,30 @@ const agentSkill = agent.command("skill").description("Agent skill management");
 agentSkill.addCommand(agentSkillListCommand);
 const agentTool = agent.command("tool").description("Agent tool management");
 agentTool.addCommand(agentToolListCommand);
-const agentApproval = agent.command("approval").description("Agent approval management");
+const agentApproval = agent
+  .command("approval")
+  .description("Agent approval management");
 agentApproval.addCommand(agentApprovalResolveCommand);
-const agentMemory = agent.command("memory").description("Agent memory management");
+const agentMemory = agent
+  .command("memory")
+  .description("Agent memory management");
 agentMemory.addCommand(agentMemoryRecallCommand);
 agentMemory.addCommand(agentMemoryWriteCommand);
 agentMcp.addCommand(agentMcpRegisterCommand);
 agentMcp.addCommand(agentMcpSetEnabledCommand);
 agentMcp.addCommand(agentMcpDeleteCommand);
-const agentMcpConsent = agentMcp.command("consent").description("External MCP tool consent grants");
+const agentMcpConsent = agentMcp
+  .command("consent")
+  .description("External MCP tool consent grants");
 agentMcpConsent.addCommand(agentMcpConsentResolveCommand);
 agentMcpConsent.addCommand(agentMcpConsentListCommand);
 const agentPlan = agent.command("plan").description("Agent plan management");
 agentPlan.addCommand(agentPlanApproveCommand);
 agentPlan.addCommand(agentPlanCreateCommand);
 const agentTask = agent.command("task").description("Agent task management");
-const agentTaskBackground = agentTask.command("background").description("Background task management");
+const agentTaskBackground = agentTask
+  .command("background")
+  .description("Background task management");
 agentTaskBackground.addCommand(agentTaskBackgroundReadCommand);
 agentTaskBackground.addCommand(agentTaskBackgroundStartCommand);
 agentTaskBackground.addCommand(agentTaskBackgroundCancelCommand);
@@ -275,10 +299,6 @@ archive.addCommand(archiveCreateCommand);
 // asset
 const asset = program.command("asset").description("Asset management");
 asset.addCommand(assetUploadCommand);
-
-// brandkit
-const brandkit = program.command("brandkit").description("Brand kit commands");
-brandkit.addCommand(brandkitApplyCommand);
 
 // workflow
 const workflow = program.command("workflow").description("Workflow automation");
@@ -292,19 +312,29 @@ system.addCommand(systemInstallInstructionsCommand);
 
 // user
 const user = program.command("user").description("User account commands");
-const userPreferences = user.command("preferences").description("User preference management");
+const userPreferences = user
+  .command("preferences")
+  .description("User preference management");
 userPreferences.addCommand(userPreferencesGetCommand);
 userPreferences.addCommand(userPreferencesUpdateCommand);
 userPreferences.addCommand(userPreferencesReadCommand);
 userPreferences.addCommand(userPreferencesWriteCommand);
 
 // workspace member + invite
-const workspaceMember = workspace.command("member").description("Workspace member management");
+const workspaceMember = workspace
+  .command("member")
+  .description("Workspace member management");
 workspaceMember.addCommand(workspaceMemberListCommand);
-const workspaceInvite = workspace.command("invite").description("Workspace invitation management");
+const workspaceInvite = workspace
+  .command("invite")
+  .description("Workspace invitation management");
 workspaceInvite.addCommand(workspaceInviteSendCommand);
-const workspaceModel = workspace.command("model").description("Workspace model settings");
-const workspaceModelSettings = workspaceModel.command("settings").description("Model settings management");
+const workspaceModel = workspace
+  .command("model")
+  .description("Workspace model settings");
+const workspaceModelSettings = workspaceModel
+  .command("settings")
+  .description("Model settings management");
 workspaceModelSettings.addCommand(workspaceModelSettingsReadCommand);
 workspaceModelSettings.addCommand(workspaceModelSettingsWriteCommand);
 
@@ -321,21 +351,29 @@ image.addCommand(imageAnalyzeCommand);
 image.addCommand(imageGenerateCommand);
 
 // document
-const document = program.command("document").description("Document management commands");
+const document = program
+  .command("document")
+  .description("Document management commands");
 document.addCommand(documentCreateCommand);
 document.addCommand(documentListCommand);
 document.addCommand(documentReadCommand);
-const documents = program.command("documents").description("Document generation commands");
+const documents = program
+  .command("documents")
+  .description("Document generation commands");
 documents.addCommand(documentsGenerateCommand);
 documents.addCommand(documentsPdfCreateCommand);
 documents.addCommand(markdownGenerateCommand);
 
 // mermaid (diagram generation — top-level group like svg/video)
-const mermaid = program.command("mermaid").description("Mermaid diagram generation commands");
+const mermaid = program
+  .command("mermaid")
+  .description("Mermaid diagram generation commands");
 mermaid.addCommand(mermaidGenerateCommand);
 
 // automation
-const automation = program.command("automation").description("Automation management commands");
+const automation = program
+  .command("automation")
+  .description("Automation management commands");
 automation.addCommand(automationListCommand);
 automation.addCommand(automationCreateCommand);
 automation.addCommand(automationUpdateCommand);
@@ -345,16 +383,18 @@ automation.addCommand(automationTriggerCommand);
 
 // form
 const form = program.command("form").description("Form management commands");
-form.addCommand(formCreateCommand);
-form.addCommand(formSubmitCommand);
 form.addCommand(formFillCommand);
 
 // skill
 const skill = program.command("skill").description("Skill management commands");
-const skillWorkspace = skill.command("workspace").description("Workspace skill management");
+const skillWorkspace = skill
+  .command("workspace")
+  .description("Workspace skill management");
 skillWorkspace.addCommand(skillWorkspaceListCommand);
 skillWorkspace.addCommand(skillWorkspaceInstallCommand);
-const skillVersion = skill.command("version").description("Skill version management");
+const skillVersion = skill
+  .command("version")
+  .description("Skill version management");
 skillVersion.addCommand(skillVersionListCommand);
 skillVersion.addCommand(skillVersionGetCommand);
 skillVersion.addCommand(skillVersionUploadCommand);
@@ -372,7 +412,9 @@ const svg = program.command("svg").description("SVG generation commands");
 svg.addCommand(svgGenerateCommand);
 
 // privacy (GDPR Art.17 erasure + Art.20 portability)
-const privacy = program.command("privacy").description("GDPR privacy rights — data export and erasure");
+const privacy = program
+  .command("privacy")
+  .description("GDPR privacy rights — data export and erasure");
 privacy.addCommand(privacyExportCommand);
 privacy.addCommand(privacyEraseCommand);
 
@@ -397,7 +439,9 @@ ontology.addCommand(ontologyNeighborsCommand);
 
 // audit
 const audit = program.command("audit").description("Audit-log commands");
-const auditLog = audit.command("log").description("Query the security & automation audit spines");
+const auditLog = audit
+  .command("log")
+  .description("Query the security & automation audit spines");
 auditLog.addCommand(auditLogQueryCommand);
 
 // web
@@ -406,13 +450,19 @@ web.addCommand(webSearchCommand);
 web.addCommand(webFetchCommand);
 
 // research
-const research = program.command("research").description("Research swarm commands");
-const researchSwarm = research.command("swarm").description("Research swarm management");
+const research = program
+  .command("research")
+  .description("Research swarm commands");
+const researchSwarm = research
+  .command("swarm")
+  .description("Research swarm management");
 researchSwarm.addCommand(researchSwarmStartCommand);
 researchSwarm.addCommand(researchSwarmStatusCommand);
 
 // schema
-const schemaCmd = program.command("schema").description("Schema registry commands");
+const schemaCmd = program
+  .command("schema")
+  .description("Schema registry commands");
 schemaCmd.addCommand(schemaListCommand);
 schemaCmd.addCommand(schemaGetCommand);
 schemaCmd.addCommand(schemaConfigCommand);

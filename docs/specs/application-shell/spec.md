@@ -26,14 +26,14 @@ This spec adopts that model and adds two refinements specific to Oxagen:
 
 ## 2. Design principles
 
-| Principle | Implication |
-|---|---|
-| **Single source of nav truth: the URL** | Sidebar highlighting, tab activation, mode switching, and breadcrumb state all derive from the route. No client-only nav state. |
-| **Two levels, never three** | Level 1 = sidebar. Level 2 = top tabs. If a feature needs three levels, the third level is *inside the page*, not in chrome. |
-| **Scoped sidebars** | Workspace mode shows workspace items only. Org mode shows org items only. Account mode shows personal items only. Switchers move you between modes. |
-| **Generative > navigable for the long tail** | The static nav covers daily-use surfaces. Rare filter/list views are produced on-demand by the Ask bar and pinnable. |
-| **Mobile is first-class, not a degradation** | Sidebar → drawer; tabs → horizontal scroll; Ask bar collapses to icon; switchers move to the drawer header. |
-| **One sub-nav idiom** | Every level-2 page uses the same horizontal tab component. No bespoke per-page tabs, accordions, or pickers in the chrome. |
+| Principle                                    | Implication                                                                                                                                         |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Single source of nav truth: the URL**      | Sidebar highlighting, tab activation, mode switching, and breadcrumb state all derive from the route. No client-only nav state.                     |
+| **Two levels, never three**                  | Level 1 = sidebar. Level 2 = top tabs. If a feature needs three levels, the third level is _inside the page_, not in chrome.                        |
+| **Scoped sidebars**                          | Workspace mode shows workspace items only. Org mode shows org items only. Account mode shows personal items only. Switchers move you between modes. |
+| **Generative > navigable for the long tail** | The static nav covers daily-use surfaces. Rare filter/list views are produced on-demand by the Ask bar and pinnable.                                |
+| **Mobile is first-class, not a degradation** | Sidebar → drawer; tabs → horizontal scroll; Ask bar collapses to icon; switchers move to the drawer header.                                         |
+| **One sub-nav idiom**                        | Every level-2 page uses the same horizontal tab component. No bespoke per-page tabs, accordions, or pickers in the chrome.                          |
 
 ---
 
@@ -51,11 +51,13 @@ URL prefix                                   Mode         Sidebar shows
 ```
 
 Mode determines:
+
 - Which sidebar items render
 - Which switcher slots are visible in the topbar
 - Which breadcrumb structure is used
 
 Transitions between modes happen via:
+
 - The **org switcher** (top-bar slot 2) — pick a different org, mode stays the same scope-class.
 - The **workspace switcher** (slot 3) — pick a different workspace, or pick the org-root which drops you into Org mode.
 - The **avatar dropdown** (slot 6) — "Account" entry drops you into Account mode.
@@ -153,21 +155,21 @@ Every level-1 destination that contains sub-sections renders them as a horizonta
 
 ### Per-destination tab inventory
 
-| Sidebar item | Tabs | Notes |
-|---|---|---|
-| **Ask** | none | Single-surface page (conversation list + chat panel). |
-| **Knowledge** | Sources · Graph · Memories | |
-| **Automation** | Agents · Playbooks · Events · Triggers | |
-| **Activity** | Runs · Approvals · Audit | `Approvals` carries a count badge. |
-| **Studio** | Compose · Library | History lives in Activity/Runs; Library is the gallery view. |
-| **Settings** (workspace) | General · Members · Model Keys · Brand Kits · Integrations | |
-| **Workspaces** (org mode) | none | Picker page, single surface. |
-| **Members** (org) | People · Pending · Invitations | `Pending` carries a count badge. |
-| **Access** | Grants · Roles · Policies · Requests · Sessions · Identities | `Requests` carries a count badge. `Identities` has internal sub-tabs (Humans · Agents · Service) rendered as **filter chips inside the tab**, not as nested tabs. |
-| **Security** | SSO · SCIM · MFA · Audit · Compliance · Incidents | |
-| **Billing** | Subscription · Usage · Invoices · Plans | |
-| **Developer** | MCP · Webhooks · Docs · Tokens | |
-| **Profile / Security / Cases / Notifications / Privacy** (Account) | none | Each is a single surface. |
+| Sidebar item                                                       | Tabs                                                         | Notes                                                                                                                                                             |
+| ------------------------------------------------------------------ | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Ask**                                                            | none                                                         | Single-surface page (conversation list + chat panel).                                                                                                             |
+| **Knowledge**                                                      | Sources · Graph · Memories                                   |                                                                                                                                                                   |
+| **Automation**                                                     | Agents · Playbooks · Events · Triggers                       |                                                                                                                                                                   |
+| **Activity**                                                       | Runs · Approvals · Audit                                     | `Approvals` carries a count badge.                                                                                                                                |
+| **Studio**                                                         | Compose · Library                                            | History lives in Activity/Runs; Library is the gallery view.                                                                                                      |
+| **Settings** (workspace)                                           | General · Members · Model Keys · Integrations                |                                                                                                                                                                   |
+| **Workspaces** (org mode)                                          | none                                                         | Picker page, single surface.                                                                                                                                      |
+| **Members** (org)                                                  | People · Pending · Invitations                               | `Pending` carries a count badge.                                                                                                                                  |
+| **Access**                                                         | Grants · Roles · Policies · Requests · Sessions · Identities | `Requests` carries a count badge. `Identities` has internal sub-tabs (Humans · Agents · Service) rendered as **filter chips inside the tab**, not as nested tabs. |
+| **Security**                                                       | SSO · SCIM · MFA · Audit · Compliance · Incidents            |                                                                                                                                                                   |
+| **Billing**                                                        | Subscription · Usage · Invoices · Plans                      |                                                                                                                                                                   |
+| **Developer**                                                      | MCP · Webhooks · Docs · Tokens                               |                                                                                                                                                                   |
+| **Profile / Security / Cases / Notifications / Privacy** (Account) | none                                                         | Each is a single surface.                                                                                                                                         |
 
 Total: **11 sidebar items with tabs, 4 without.** Pages average 4 tabs each.
 
@@ -175,8 +177,8 @@ Total: **11 sidebar items with tabs, 4 without.** Pages average 4 tabs each.
 
 A short decision tree to keep idioms consistent:
 
-- **Tabs** when sub-sections are *distinct concerns* with their own URL (Sources is not Graph).
-- **Filter chips** inside one tab when slicing the *same data* by attribute (Identities: Humans / Agents / Service show different rows of the same principal table).
+- **Tabs** when sub-sections are _distinct concerns_ with their own URL (Sources is not Graph).
+- **Filter chips** inside one tab when slicing the _same data_ by attribute (Identities: Humans / Agents / Service show different rows of the same principal table).
 - **Split layout** (left pane list + right pane detail) when the surface is intrinsically master-detail (a Run's detail panel, a Trigger's edit form).
 
 ---
@@ -190,14 +192,14 @@ A short decision tree to keep idioms consistent:
    1            2            3              4               5  6
 ```
 
-| Slot | Element | Visibility | Behavior |
-|---|---|---|---|
-| **1** | Brand mark | Always | Click returns to last-viewed workspace (or workspace picker if none). |
-| **2** | Org switcher | Always | Dropdown lists all orgs the user belongs to. Footer: "New organization" link. Selecting an org navigates to `/{org}` (org mode root). |
-| **3** | Workspace switcher | Workspace mode only | Dropdown lists workspaces in the current org. Footer: "New workspace" link, "Manage workspaces" link → org-mode Workspaces. Selecting a workspace navigates to `/{org}/{ws}`. |
-| **4** | Ask bar | Always (collapses to icon at <768px) | Universal intent input. Routes by intent — see §7. |
-| **5** | Notifications bell | Always | Opens drawer. Badge for unread. |
-| **6** | Avatar dropdown | Always | Items: Profile (→ `/account/profile`), Theme submenu, Help, Sign out. |
+| Slot  | Element            | Visibility                           | Behavior                                                                                                                                                                      |
+| ----- | ------------------ | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | Brand mark         | Always                               | Click returns to last-viewed workspace (or workspace picker if none).                                                                                                         |
+| **2** | Org switcher       | Always                               | Dropdown lists all orgs the user belongs to. Footer: "New organization" link. Selecting an org navigates to `/{org}` (org mode root).                                         |
+| **3** | Workspace switcher | Workspace mode only                  | Dropdown lists workspaces in the current org. Footer: "New workspace" link, "Manage workspaces" link → org-mode Workspaces. Selecting a workspace navigates to `/{org}/{ws}`. |
+| **4** | Ask bar            | Always (collapses to icon at <768px) | Universal intent input. Routes by intent — see §7.                                                                                                                            |
+| **5** | Notifications bell | Always                               | Opens drawer. Badge for unread.                                                                                                                                               |
+| **6** | Avatar dropdown    | Always                               | Items: Profile (→ `/account/profile`), Theme submenu, Help, Sign out.                                                                                                         |
 
 ### Switcher specifics
 
@@ -229,12 +231,12 @@ The Ask bar replaces command palette + search + chat launcher.
 
 When the user types and presses Enter (or clicks a suggestion), the input is routed by intent:
 
-| Intent | Trigger | Behavior |
-|---|---|---|
-| **Navigate** | Input matches a known route or destination name (`go to billing`, `members`, `knowledge graph`) | Push the route. |
-| **Search** | Input matches an entity prefix (`run #4221`, `playbook churn-`, `@alice@acme.com`) | Open inline result list. Selecting an item pushes the route. |
-| **Action** | Input matches a capability trigger (`create trigger`, `invite alice@…`, `revoke token tk_abc`) | Open the action UI pre-filled. The action runs through the contract check, audit logged. |
-| **Ask** | Default / question-shaped input (`why did this run fail?`, `what's our churn rate?`) | Opens the Ask drawer with the current page entity as context. |
+| Intent       | Trigger                                                                                         | Behavior                                                                                 |
+| ------------ | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Navigate** | Input matches a known route or destination name (`go to billing`, `members`, `knowledge graph`) | Push the route.                                                                          |
+| **Search**   | Input matches an entity prefix (`run #4221`, `playbook churn-`, `@alice@acme.com`)              | Open inline result list. Selecting an item pushes the route.                             |
+| **Action**   | Input matches a capability trigger (`create trigger`, `invite alice@…`, `revoke token tk_abc`)  | Open the action UI pre-filled. The action runs through the contract check, audit logged. |
+| **Ask**      | Default / question-shaped input (`why did this run fail?`, `what's our churn rate?`)            | Opens the Ask drawer with the current page entity as context.                            |
 
 Routing is determined client-side by lightweight pattern matching plus a server-side LLM fallback when client patterns don't match.
 
@@ -269,13 +271,14 @@ Every detail page (a Run, a Playbook, a Trigger, an OntologyNode, etc.) renders 
 
 Breakpoints aligned to Tailwind defaults:
 
-| Breakpoint | Sidebar | Tabs | Topbar |
-|---|---|---|---|
-| `lg` (≥1024px) | Persistent column, 240px | Horizontal row | Full layout |
-| `md` (768–1023px) | Persistent narrow rail (icons only, hover-expand) | Horizontal scroll | Ask bar full width |
-| `<md` | Off-canvas drawer (hamburger) | Horizontal scroll, edge-fade | Brand + Org chip + Ask icon + avatar |
+| Breakpoint        | Sidebar                                           | Tabs                         | Topbar                               |
+| ----------------- | ------------------------------------------------- | ---------------------------- | ------------------------------------ |
+| `lg` (≥1024px)    | Persistent column, 240px                          | Horizontal row               | Full layout                          |
+| `md` (768–1023px) | Persistent narrow rail (icons only, hover-expand) | Horizontal scroll            | Ask bar full width                   |
+| `<md`             | Off-canvas drawer (hamburger)                     | Horizontal scroll, edge-fade | Brand + Org chip + Ask icon + avatar |
 
 On `<md`:
+
 - Sidebar drawer header contains the switchers (so they're still reachable).
 - The Ask bar collapses to an icon; tapping opens a full-sheet input.
 - Tab bars become horizontally scroll-snapped.
@@ -286,20 +289,20 @@ On `<md`:
 
 ### Source of truth
 
-| State | Source |
-|---|---|
-| Current mode (workspace / org / account) | URL prefix |
-| Active sidebar item | URL segment |
-| Active tab | URL segment |
-| Switcher selections | URL params (org slug, workspace slug) |
-| Ask drawer open/closed | `?ask=open` query param OR ephemeral client state — TBD in plan |
-| Sidebar collapsed/expanded (on `md`) | `localStorage`, per device |
-| Last-viewed workspace per org | `localStorage`, used by org switcher and brand-mark click |
+| State                                    | Source                                                          |
+| ---------------------------------------- | --------------------------------------------------------------- |
+| Current mode (workspace / org / account) | URL prefix                                                      |
+| Active sidebar item                      | URL segment                                                     |
+| Active tab                               | URL segment                                                     |
+| Switcher selections                      | URL params (org slug, workspace slug)                           |
+| Ask drawer open/closed                   | `?ask=open` query param OR ephemeral client state — TBD in plan |
+| Sidebar collapsed/expanded (on `md`)     | `localStorage`, per device                                      |
+| Last-viewed workspace per org            | `localStorage`, used by org switcher and brand-mark click       |
 
 ### Loading / suspense
 
 - Sidebar items are rendered server-side from the session — no skeleton needed; the shell is ready before content.
-- Tab bars render immediately; tab *content* uses Suspense with a skeleton sized to the tab's typical layout.
+- Tab bars render immediately; tab _content_ uses Suspense with a skeleton sized to the tab's typical layout.
 - Switcher dropdowns lazy-load their data on open.
 
 ---
@@ -318,13 +321,13 @@ On `<md`:
 
 ## 12. Performance budgets
 
-| Asset | Budget |
-|---|---|
-| Initial shell render (TTFB → first paint) | ≤ 200ms on mid-tier laptop, ≤ 500ms on mid-tier mobile |
-| Sidebar + topbar JS bundle (gzipped) | ≤ 35KB |
-| Switcher dropdown open → interactive | ≤ 100ms |
-| Tab click → new tab content visible (no skeleton overlap) | ≤ 150ms |
-| Ask drawer open animation | 200ms, single composited transform |
+| Asset                                                     | Budget                                                 |
+| --------------------------------------------------------- | ------------------------------------------------------ |
+| Initial shell render (TTFB → first paint)                 | ≤ 200ms on mid-tier laptop, ≤ 500ms on mid-tier mobile |
+| Sidebar + topbar JS bundle (gzipped)                      | ≤ 35KB                                                 |
+| Switcher dropdown open → interactive                      | ≤ 100ms                                                |
+| Tab click → new tab content visible (no skeleton overlap) | ≤ 150ms                                                |
+| Ask drawer open animation                                 | 200ms, single composited transform                     |
 
 Server-rendered shell. No client-side route guards.
 
@@ -347,41 +350,42 @@ Inherits all design tokens from `@oxagen/ui/styles/tokens.css` (per IA spec §13
 
 Concrete React components the shell needs. Lives in `apps/app/src/components/shell/` (existing folder) and the shared `@oxagen/ui` for any reusable primitives.
 
-| Component | Location | Notes |
-|---|---|---|
-| `AppShell` | `apps/app` | Mode-aware layout root. Reads URL, picks sidebar config, renders. |
-| `Topbar` | `apps/app` | Brand + switchers + Ask + bell + avatar. |
-| `OrgSwitcher` | `apps/app` | Already exists as `TenantSwitcher`; rename. |
-| `WorkspaceSwitcher` | `apps/app` | Exists. Add "Manage workspaces" footer link. |
-| `Sidebar` | `apps/app` | Mode-aware. Reads sidebar config for current mode. |
-| `SidebarItem` | `@oxagen/ui` | Reusable. Active state, badge, icon, optional ↗/↩ indicator. |
-| `AskBar` | `apps/app` | New. Intent router + suggestion list. |
-| `AskDrawer` | `apps/app` | New. Wraps existing `ChatShellClient`. |
-| `NotificationsBell` | `apps/app` | New. Drawer-based. |
-| `AvatarMenu` | `apps/app` | New. Dropdown with Profile / Theme / Help / Sign out. |
-| `PageTabs` | `@oxagen/ui` | Reusable. WAI-ARIA tabs, URL-driven active state. |
-| `PageHeader` | `@oxagen/ui` | Title + breadcrumb + actions slot + "Ask about this" affordance. |
-| `Breadcrumb` | `@oxagen/ui` | Reusable. Reads from a route → label config. |
+| Component           | Location     | Notes                                                             |
+| ------------------- | ------------ | ----------------------------------------------------------------- |
+| `AppShell`          | `apps/app`   | Mode-aware layout root. Reads URL, picks sidebar config, renders. |
+| `Topbar`            | `apps/app`   | Brand + switchers + Ask + bell + avatar.                          |
+| `OrgSwitcher`       | `apps/app`   | Already exists as `TenantSwitcher`; rename.                       |
+| `WorkspaceSwitcher` | `apps/app`   | Exists. Add "Manage workspaces" footer link.                      |
+| `Sidebar`           | `apps/app`   | Mode-aware. Reads sidebar config for current mode.                |
+| `SidebarItem`       | `@oxagen/ui` | Reusable. Active state, badge, icon, optional ↗/↩ indicator.      |
+| `AskBar`            | `apps/app`   | New. Intent router + suggestion list.                             |
+| `AskDrawer`         | `apps/app`   | New. Wraps existing `ChatShellClient`.                            |
+| `NotificationsBell` | `apps/app`   | New. Drawer-based.                                                |
+| `AvatarMenu`        | `apps/app`   | New. Dropdown with Profile / Theme / Help / Sign out.             |
+| `PageTabs`          | `@oxagen/ui` | Reusable. WAI-ARIA tabs, URL-driven active state.                 |
+| `PageHeader`        | `@oxagen/ui` | Title + breadcrumb + actions slot + "Ask about this" affordance.  |
+| `Breadcrumb`        | `@oxagen/ui` | Reusable. Reads from a route → label config.                      |
 
 ### Sidebar config shape
 
 The sidebar definition is data, not JSX. Stored as a typed config so it can be:
+
 - Rendered by the sidebar component
 - Walked by the Ask bar for navigation intents
 - Audited (every nav surface is enumerable)
 
 ```ts
-type SidebarMode = 'workspace' | 'org' | 'account';
+type SidebarMode = "workspace" | "org" | "account";
 
 type SidebarItem = {
   id: string;
   label: string;
   icon: LucideIcon;
-  href: (ctx: ScopeContext) => string;   // computes /{org}/{ws}/... etc
-  group?: 'primary' | 'tools' | 'footer'; // visual grouping
+  href: (ctx: ScopeContext) => string; // computes /{org}/{ws}/... etc
+  group?: "primary" | "tools" | "footer"; // visual grouping
   badge?: (ctx: ScopeContext) => number | null;
-  external?: boolean;                     // shows ↗
-  isReturn?: boolean;                     // shows ↩ — for the "Back to app" item
+  external?: boolean; // shows ↗
+  isReturn?: boolean; // shows ↩ — for the "Back to app" item
 };
 
 type SidebarConfig = {
@@ -396,14 +400,14 @@ A single registry in `apps/app/src/lib/sidebar.ts` holds all three configs. The 
 
 ## 15. Edge cases
 
-| Case | Behavior |
-|---|---|
-| User signs in but has no org | Onboarding flow (`/(onboarding)/new-organization`). No shell. |
-| Org exists but no workspaces | Org mode. Sidebar shows org items. The "Workspaces" item shows an empty state with a "New workspace" CTA. |
-| User is Owner of zero orgs and Member of one | Org switcher renders, but "New organization" link is disabled with tooltip explaining seat policy. (Configurable per billing tier.) |
-| Workspace deleted while user is viewing it | Page returns 404; shell catches and redirects to workspace picker. Toast: "Workspace was deleted." |
-| Permission denied on a level-1 destination | Sidebar item is hidden (not greyed). Direct URL access shows a 403 page with an "Ask for access" button (routes to `/{org}/access/requests/new`). |
-| Permission denied on a tab | Tab is hidden from the tab bar. Direct URL shows 403 inside the tab content area, with the rest of the tab bar still functional. |
+| Case                                         | Behavior                                                                                                                                          |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| User signs in but has no org                 | Onboarding flow (`/(onboarding)/new-organization`). No shell.                                                                                     |
+| Org exists but no workspaces                 | Org mode. Sidebar shows org items. The "Workspaces" item shows an empty state with a "New workspace" CTA.                                         |
+| User is Owner of zero orgs and Member of one | Org switcher renders, but "New organization" link is disabled with tooltip explaining seat policy. (Configurable per billing tier.)               |
+| Workspace deleted while user is viewing it   | Page returns 404; shell catches and redirects to workspace picker. Toast: "Workspace was deleted."                                                |
+| Permission denied on a level-1 destination   | Sidebar item is hidden (not greyed). Direct URL access shows a 403 page with an "Ask for access" button (routes to `/{org}/access/requests/new`). |
+| Permission denied on a tab                   | Tab is hidden from the tab bar. Direct URL shows 403 inside the tab content area, with the rest of the tab bar still functional.                  |
 
 Hiding-vs-disabling permission UI: **hide for navigation, show 403 with context for deep links.** This avoids exposing the org's capability structure to under-privileged users.
 

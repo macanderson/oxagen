@@ -52,7 +52,6 @@ import { metadata as assetUploadMetadata } from "./asset.upload";
 import { metadata as billingCreditsPurchaseMetadata } from "./billing.credits.purchase";
 import { metadata as billingSubscriptionReadMetadata } from "./billing.subscription.read";
 import { metadata as billingSubscriptionUpgradeStartMetadata } from "./billing.subscription.upgrade.start";
-import { metadata as brandkitApplyMetadata } from "./brandkit.apply";
 import { metadata as chatMessageExecutionMetadata } from "./chat.message.execution";
 import { metadata as chatMessageSendMetadata } from "./chat.message.send";
 import { metadata as conversationArchiveMetadata } from "./conversation.archive";
@@ -110,8 +109,6 @@ import { metadata as conversationChatMetadata } from "./conversation.chat";
 import { metadata as documentCreateMetadata } from "./document.create";
 import { metadata as documentListMetadata } from "./document.list";
 import { metadata as documentReadMetadata } from "./document.read";
-import { metadata as formCreateMetadata } from "./form.create";
-import { metadata as formSubmitMetadata } from "./form.submit";
 import { metadata as imageAnalyzeMetadata } from "./image.analyze";
 import { metadata as imageCreateMetadata } from "./image.create";
 import { metadata as imageListMetadata } from "./image.list";
@@ -260,7 +257,6 @@ const allToolMetadata = [
   billingCreditsPurchaseMetadata,
   billingSubscriptionReadMetadata,
   billingSubscriptionUpgradeStartMetadata,
-  brandkitApplyMetadata,
   chatMessageExecutionMetadata,
   chatMessageSendMetadata,
   conversationArchiveMetadata,
@@ -318,8 +314,6 @@ const allToolMetadata = [
   documentCreateMetadata,
   documentListMetadata,
   documentReadMetadata,
-  formCreateMetadata,
-  formSubmitMetadata,
   imageAnalyzeMetadata,
   imageCreateMetadata,
   imageListMetadata,
@@ -428,7 +422,9 @@ const allToolMetadata = [
 // ── Derive expected tool set from contracts ───────────────────────────────────
 
 /** Names derived from the contracts array for the "mcp" surface (sorted). */
-const contractMcpNames = (contracts as ReadonlyArray<{ name: string; surfaces: readonly string[] }>)
+const contractMcpNames = (
+  contracts as ReadonlyArray<{ name: string; surfaces: readonly string[] }>
+)
   .filter((c) => c.surfaces.includes("mcp"))
   .map((c) => c.name)
   .sort();
@@ -446,7 +442,12 @@ describe("tool-registry parity", () => {
   it("each tool metadata.name matches the corresponding contract name (no copy-paste drift)", () => {
     // Build a map: contract name -> contract for O(1) lookup.
     const contractByName = new Map(
-      (contracts as ReadonlyArray<{ name: string; surfaces: readonly string[] }>)
+      (
+        contracts as ReadonlyArray<{
+          name: string;
+          surfaces: readonly string[];
+        }>
+      )
         .filter((c) => c.surfaces.includes("mcp"))
         .map((c) => [c.name, c]),
     );

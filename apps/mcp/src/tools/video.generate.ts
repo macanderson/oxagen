@@ -23,9 +23,6 @@ export const schema = {
   style: videoGenerate.input.shape.style.describe(
     'Free-text style hint for the rendering model (e.g. "cinematic", "animated")',
   ),
-  brandKitId: videoGenerate.input.shape.brandKitId.describe(
-    "Optional brand-kit ID to apply to the generated video",
-  ),
 };
 
 export const metadata: ToolMetadata = {
@@ -38,8 +35,12 @@ export const metadata: ToolMetadata = {
   },
 };
 
-export default async function videoGenerateTool(args: InferSchema<typeof schema>) {
+export default async function videoGenerateTool(
+  args: InferSchema<typeof schema>,
+) {
   const ctx = await buildContext(headers());
-  const output = await invoke(videoGenerate.name, args, ctx, { surface: "mcp" });
+  const output = await invoke(videoGenerate.name, args, ctx, {
+    surface: "mcp",
+  });
   return videoGenerate.output.parse(output);
 }

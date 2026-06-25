@@ -793,15 +793,4 @@ Form fill dynamically builds a Zod schema from field specifications (select=enum
 
 ---
 
-### Invariant: Brand kit apply is a wired stub; returns applied=false
-
-<!-- entities: Asset -->
-<!-- enforced: brandkit.apply.ts -->
-
-brandkit.apply() is a non-throwing stub (policy §0.5). No brand kit table, no asset mutation engine, and no document-rendering subsystem exist yet. Handler logs stub invocation and returns `stub: true, applied: false`.
-
-> Last verified: 2026-06-20 (commit 2f628504)
-
----
-
 <!-- uncertainty: The exact test coverage for each handler is not tracked by the mined files; test: anchors are inferred from docstring signals only and should be verified against packages/handlers/src/*.test.ts files if they exist. -->

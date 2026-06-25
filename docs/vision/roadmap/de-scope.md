@@ -7,11 +7,11 @@
 
 ## Decision Framework
 
-| Category | Definition | Action |
-|---|---|---|
-| **Sunset** | Remove from platform. Delete code, drop schemas, remove from surfaces. | Active removal |
-| **Freeze** | No new investment. Maintain for existing users only. No bug fixes beyond critical. | Passive maintenance |
-| **Realign** | Keep but refactor toward the vision. Becomes a consumer of Engram. | Active transformation |
+| Category    | Definition                                                                         | Action                |
+| ----------- | ---------------------------------------------------------------------------------- | --------------------- |
+| **Sunset**  | Remove from platform. Delete code, drop schemas, remove from surfaces.             | Active removal        |
+| **Freeze**  | No new investment. Maintain for existing users only. No bug fixes beyond critical. | Passive maintenance   |
+| **Realign** | Keep but refactor toward the vision. Becomes a consumer of Engram.                 | Active transformation |
 
 ---
 
@@ -24,6 +24,7 @@
 **Why sunset**: Form generation is a standalone product feature unrelated to agent context or memory. It was an early experiment that never gained traction. No active users depend on it as a core workflow.
 
 **Action**:
+
 - Remove capability contracts: `packages/oxagen/src/contracts/form.*`
 - Remove handlers: `packages/handlers/src/form.*`
 - Drop Postgres schema: `form.*` tables via migration
@@ -38,6 +39,7 @@
 **Why sunset**: Content generation ≠ context engineering. Video generation is a commodity API wrapper that adds no moat and distracts from the memory substrate work.
 
 **Action**:
+
 - Remove capability contracts and handlers
 - Remove from AI package (`packages/ai/src/generate-video.ts`)
 - Remove related UI in web app
@@ -50,6 +52,7 @@
 **Why sunset**: Same reasoning as video — content creation, not context engineering.
 
 **Action**:
+
 - Remove `image.generate` capability (keep `image.upload` for asset management)
 - Remove `packages/ai/src/generate-image.ts`
 - Timeline: Phase A
@@ -61,6 +64,7 @@
 **Why sunset**: Dead code. Has never returned real data. The entire approach (inject raw graph context into prompt) is superseded by `engram.compile()`.
 
 **Action**:
+
 - Delete `readWorkspaceContext` function
 - Remove feature flag `KNOWLEDGE_GRAPH_ENABLED` logic
 - Remove the `injectContext` helper (replaced by Engram's layout system)
@@ -78,6 +82,7 @@
 **Why freeze**: The playbook system is a proto-agent-workflow that predates the context engine vision. It triggers actions based on events but doesn't use memory, doesn't learn, and duplicates what a memory-aware agent can do natively. However, existing customers may depend on configured playbooks.
 
 **Freeze rules**:
+
 - No new playbook features
 - Critical bug fixes only (security, data loss)
 - Existing playbooks continue to run
@@ -86,17 +91,17 @@
 
 **Future**: In Phase D, evaluate whether playbook triggers can be expressed as procedural memory records that fire the consolidation pipeline or agent workflows.
 
-### 6. Content Schema (`content.documents`, `content.assets`, `content.brand_kits`)
+### 6. Content Schema (`content.documents`, `content.assets`)
 
-**What**: Generic document/asset storage system. Brand kits, document templates, content management.
+**What**: Generic document/asset storage system. Document templates, content management.
 
 **Why freeze**: Content storage is not memory. Documents that matter will be ingested through the ingestion pipeline and represented as entity/relational memory in the graph. The `content.*` schema is a CMS feature, not a context engine feature.
 
 **Freeze rules**:
+
 - No new content management features
 - Existing documents remain accessible
 - Assets (blob storage) continue to work
-- Brand kits are frozen in current state
 
 **Future**: In Phase C, evaluate whether `content.assets` should become blob references in Engram records.
 
@@ -107,6 +112,7 @@
 **Why freeze** (not sunset): Diagram generation for agent planning has some context value (visual representation of plans), but it's not on the critical path for the context engine.
 
 **Freeze rules**:
+
 - Keep existing diagram capabilities working
 - No new diagram types or providers
 - No performance optimization
@@ -118,6 +124,7 @@
 **Why freeze**: The workflow schema was an early attempt at agent orchestration state that now conflicts with `agent.agent_executions` and will be superseded by Engram's event-sourced sessions.
 
 **Freeze rules**:
+
 - No new workflow features
 - Existing workflow runs complete normally
 - No schema changes
@@ -212,27 +219,27 @@
 
 ## Impact Summary
 
-| Category | Count | Effort | Risk |
-|---|---|---|---|
-| Sunset | 4 features | Low (delete code) | Low (unused features) |
-| Freeze | 4 features | Zero (stop investing) | Low (existing users unaffected) |
-| Realign | 7 features | Medium (incremental over phases) | Medium (migration complexity) |
+| Category | Count      | Effort                           | Risk                            |
+| -------- | ---------- | -------------------------------- | ------------------------------- |
+| Sunset   | 4 features | Low (delete code)                | Low (unused features)           |
+| Freeze   | 4 features | Zero (stop investing)            | Low (existing users unaffected) |
+| Realign  | 7 features | Medium (incremental over phases) | Medium (migration complexity)   |
 
 ### Code Reduction Estimate
 
-| Sunset Target | Approximate Lines | Packages Affected |
-|---|---|---|
-| Form generation | ~2,000 LOC | oxagen, handlers, cli, mcp, database |
-| Video generation | ~500 LOC | ai, oxagen, handlers |
-| Image generation | ~300 LOC | ai, oxagen, handlers |
-| readWorkspaceContext | ~80 LOC | agent |
-| **Total removed** | **~2,880 LOC** | |
+| Sunset Target        | Approximate Lines | Packages Affected                    |
+| -------------------- | ----------------- | ------------------------------------ |
+| Form generation      | ~2,000 LOC        | oxagen, handlers, cli, mcp, database |
+| Video generation     | ~500 LOC          | ai, oxagen, handlers                 |
+| Image generation     | ~300 LOC          | ai, oxagen, handlers                 |
+| readWorkspaceContext | ~80 LOC           | agent                                |
+| **Total removed**    | **~2,880 LOC**    |                                      |
 
 ### Schema Tables Dropped
 
-| Schema | Tables | Notes |
-|---|---|---|
-| `form.*` | ~4 tables | Full schema drop |
+| Schema       | Tables    | Notes                   |
+| ------------ | --------- | ----------------------- |
+| `form.*`     | ~4 tables | Full schema drop        |
 | `workflow.*` | ~3 tables | After Phase C migration |
 
 ---

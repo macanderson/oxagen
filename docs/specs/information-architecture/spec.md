@@ -8,14 +8,14 @@ Status: **proposed**, locked by product. Implementation tracked under `docs/epic
 
 ## 1. Principles
 
-| Principle | Implication |
-|---|---|
-| **AI is the substrate, not a page** | Persistent "Ask" affordance from every screen; chat is a drawer first, a route second. |
-| **Contracts are the spine** | Every governable action is a contract in `@oxagen/oxagen`. The contract registry drives the sidebar, the ACL matrix, the agent capability list, the audit log, and the auto-generated docs. There is no path to action that bypasses it. |
-| **One principal model** | Humans, agents, and service accounts are all principals with the same shape. One matrix governs all three. |
-| **Three scopes, no more** | Personal (the user) → Org (governance) → Workspace (operations). URL, nav, and audit trails all reflect those three. |
-| **Generative over enumerative** | Long-tail list/filter views are produced on demand by agents and pinnable, not pre-built as routes. Static nav is reserved for daily operational surfaces. |
-| **Inherited-with-override IAM** | Org sets the rails; workspace owners can tighten within those rails. Workspaces can never expand what org has locked. |
+| Principle                           | Implication                                                                                                                                                                                                                              |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AI is the substrate, not a page** | Persistent "Ask" affordance from every screen; chat is a drawer first, a route second.                                                                                                                                                   |
+| **Contracts are the spine**         | Every governable action is a contract in `@oxagen/oxagen`. The contract registry drives the sidebar, the ACL matrix, the agent capability list, the audit log, and the auto-generated docs. There is no path to action that bypasses it. |
+| **One principal model**             | Humans, agents, and service accounts are all principals with the same shape. One matrix governs all three.                                                                                                                               |
+| **Three scopes, no more**           | Personal (the user) → Org (governance) → Workspace (operations). URL, nav, and audit trails all reflect those three.                                                                                                                     |
+| **Generative over enumerative**     | Long-tail list/filter views are produced on demand by agents and pinnable, not pre-built as routes. Static nav is reserved for daily operational surfaces.                                                                               |
+| **Inherited-with-override IAM**     | Org sets the rails; workspace owners can tighten within those rails. Workspaces can never expand what org has locked.                                                                                                                    |
 
 ---
 
@@ -61,14 +61,14 @@ URL shape:
 
 ### Topbar slots — left to right
 
-| Slot | Element | Notes |
-|---|---|---|
-| 1 | Brand mark | Returns to workspace home. |
-| 2 | **Org switcher** | Dropdown listing all orgs the user belongs to. "New organization" link in footer. |
-| 3 | **Workspace switcher** | Dropdown listing workspaces in the current org. "New workspace" link in footer. Hidden when no workspace is active (org-scoped pages). |
-| 4 | **Ask bar** (center) | Universal input. Routes by intent: question → chat drawer, action → execute, navigation → push route. Replaces the legacy `⌘K` command palette. |
-| 5 | **Notifications bell** | Drawer; system + workflow notifications. No standalone `/notifications` route. |
-| 6 | **User avatar** | Dropdown: Profile, Sign out, Theme, Help. Profile entry deep-links to `/account/profile`. |
+| Slot | Element                | Notes                                                                                                                                           |
+| ---- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Brand mark             | Returns to workspace home.                                                                                                                      |
+| 2    | **Org switcher**       | Dropdown listing all orgs the user belongs to. "New organization" link in footer.                                                               |
+| 3    | **Workspace switcher** | Dropdown listing workspaces in the current org. "New workspace" link in footer. Hidden when no workspace is active (org-scoped pages).          |
+| 4    | **Ask bar** (center)   | Universal input. Routes by intent: question → chat drawer, action → execute, navigation → push route. Replaces the legacy `⌘K` command palette. |
+| 5    | **Notifications bell** | Drawer; system + workflow notifications. No standalone `/notifications` route.                                                                  |
+| 6    | **User avatar**        | Dropdown: Profile, Sign out, Theme, Help. Profile entry deep-links to `/account/profile`.                                                       |
 
 ### Sidebar
 
@@ -102,7 +102,6 @@ Workspace
     ├─ General           /general
     ├─ Members           /members                          workspace ACL (scoped grants editor)
     ├─ Model Keys        /model-keys                       BYOK at workspace scope
-    ├─ Brand Kits        /brand-kits                       style configs for Studio
     └─ Integrations      /integrations                     workspace webhooks
 
 Tools                                                       ← visually de-emphasized
@@ -147,56 +146,55 @@ Organization
 
 ## 5. Workspace zones
 
-### Ask — *"How do I get something done?"*
+### Ask — _"How do I get something done?"_
 
 Front door. Chat surface + conversation list. Also reachable as the right-side drawer from any page.
 
-### Knowledge — *"What do my agents know?"*
+### Knowledge — _"What do my agents know?"_
 
-| Tab | Purpose | First-class objects |
-|---|---|---|
-| **Sources** | Authenticated data connections; ingest pipelines; catalog dialog for adding new sources | `Connection`, `Connector` (catalog) |
-| **Graph** | Ontology explorer (2D/3D), node detail, merge policy panel | `OntologyNode`, `Edge`, `MergePolicy` |
-| **Memories** | Workspace-scoped rules + facts + agent-proposed suggestions | `Memory{kind: rule\|fact\|note}` |
+| Tab          | Purpose                                                                                 | First-class objects                   |
+| ------------ | --------------------------------------------------------------------------------------- | ------------------------------------- |
+| **Sources**  | Authenticated data connections; ingest pipelines; catalog dialog for adding new sources | `Connection`, `Connector` (catalog)   |
+| **Graph**    | Ontology explorer (2D/3D), node detail, merge policy panel                              | `OntologyNode`, `Edge`, `MergePolicy` |
+| **Memories** | Workspace-scoped rules + facts + agent-proposed suggestions                             | `Memory{kind: rule\|fact\|note}`      |
 
 Memories are **workspace-scoped only**. No cross-workspace promotion path in v2.
 
-### Automation — *"What can my agents do — and when?"*
+### Automation — _"What can my agents do — and when?"_
 
-| Tab | Purpose | First-class objects |
-|---|---|---|
-| **Agents** | Agent configurations. Each agent has a principal — links to Access for grants. | `Agent` (also a `Principal`) |
-| **Playbooks** | Authoring, versioning, parameter schemas, approval-required flag | `Playbook`, `PlaybookVersion` |
-| **Events** | Saved filters over the ontology; observable signals; reusable across triggers | `EventDef` |
-| **Triggers** | Cause → effect. Cause is `event`, `schedule`, `webhook`, or `manual`. | `Trigger` |
+| Tab           | Purpose                                                                        | First-class objects           |
+| ------------- | ------------------------------------------------------------------------------ | ----------------------------- |
+| **Agents**    | Agent configurations. Each agent has a principal — links to Access for grants. | `Agent` (also a `Principal`)  |
+| **Playbooks** | Authoring, versioning, parameter schemas, approval-required flag               | `Playbook`, `PlaybookVersion` |
+| **Events**    | Saved filters over the ontology; observable signals; reusable across triggers  | `EventDef`                    |
+| **Triggers**  | Cause → effect. Cause is `event`, `schedule`, `webhook`, or `manual`.          | `Trigger`                     |
 
 Schedules are not a separate tab. Schedule is a `cause.kind` on a Trigger. See §10 for the Trigger model.
 
-### Activity — *"What did my agents do?"*
+### Activity — _"What did my agents do?"_
 
-| Tab | Purpose | First-class objects |
-|---|---|---|
-| **Runs** | All agent runs (chat + triggered + scheduled + Studio generations). Filter chips by kind. | `Run` |
-| **Approvals** | Human-in-the-loop queue for plan approvals and `require-approval` capabilities | `Approval` |
-| **Audit** | Workspace-filtered view of the org-wide audit log | `AuditEvent` |
+| Tab           | Purpose                                                                                   | First-class objects |
+| ------------- | ----------------------------------------------------------------------------------------- | ------------------- |
+| **Runs**      | All agent runs (chat + triggered + scheduled + Studio generations). Filter chips by kind. | `Run`               |
+| **Approvals** | Human-in-the-loop queue for plan approvals and `require-approval` capabilities            | `Approval`          |
+| **Audit**     | Workspace-filtered view of the org-wide audit log                                         | `AuditEvent`        |
 
 ### Settings — workspace config
 
-| Tab | Purpose |
-|---|---|
-| **General** | Workspace name, archive, hard delete |
-| **Members** | Workspace ACL editor — scoped grants, role assignments within this workspace |
-| **Model Keys** | BYOK at workspace scope |
-| **Brand Kits** | Style configs that constrain Studio output |
-| **Integrations** | Workspace-level webhook destinations |
+| Tab              | Purpose                                                                      |
+| ---------------- | ---------------------------------------------------------------------------- |
+| **General**      | Workspace name, archive, hard delete                                         |
+| **Members**      | Workspace ACL editor — scoped grants, role assignments within this workspace |
+| **Model Keys**   | BYOK at workspace scope                                                      |
+| **Integrations** | Workspace-level webhook destinations                                         |
 
 Workspace **Members** is a real ACL surface, not just a roster — it shows the grants matrix filtered to this workspace, with org-locked cells indicated. See §9 (Resolution order) and §13 (UI for inherited-with-override).
 
 ### Tools (de-emphasized group)
 
-| Item | Purpose |
-|---|---|
-| **Studio** | Compose UX for content generation (prompt → preview → library). Runs surface in `Activity/Runs`; brand kit selection pulls from `Settings/Brand Kits`. |
+| Item       | Purpose                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------ |
+| **Studio** | Compose UX for content generation (prompt → preview → library). Runs surface in `Activity/Runs`. |
 
 Future tools (dataset labeler, evaluation harness) land here. Keeps optional surfaces from competing visually with the three operational zones.
 
@@ -212,25 +210,25 @@ People roster. Per-row: name, email, role assignments, status (active / pending 
 
 The spine of the IAM model. Tabs:
 
-| Tab | Purpose |
-|---|---|
-| **Grants** | Capability × principal matrix. Rows grouped by domain (`knowledge.*`, `automation.*`, `activity.*`, `admin.*`). Cell states: `granted`, `inherited`, `denied`, `require-approval`. Columns toggleable: roles / humans / agents / services. Scope toggle: `Org-wide` (default) / `Per workspace`. |
-| **Roles** | Custom role builder + role versioning. Default role set described in §11. IdP groups (from SCIM) map to roles. |
-| **Policies** | Conditional grants — time windows, IP allowlists, attribute predicates. Sensitivity tags applied to capabilities; tag-based default policies (e.g., "all `destructive: true` capabilities require approval"). Policies carry an `enforced` flag (workspace cannot override) vs `default` (workspace can tighten). |
-| **Requests** | JIT access request queue. Submit a request → routed by policy → granted with TTL → auto-expired. |
-| **Sessions** | Active sessions across all principals; force-revoke; session policies (max age, idle timeout, geographic limits). |
-| **Identities** | The principal directory. Sub-tabs: Humans, Agents, Service. API tokens live here as scoped credentials of a service identity. |
+| Tab            | Purpose                                                                                                                                                                                                                                                                                                           |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Grants**     | Capability × principal matrix. Rows grouped by domain (`knowledge.*`, `automation.*`, `activity.*`, `admin.*`). Cell states: `granted`, `inherited`, `denied`, `require-approval`. Columns toggleable: roles / humans / agents / services. Scope toggle: `Org-wide` (default) / `Per workspace`.                  |
+| **Roles**      | Custom role builder + role versioning. Default role set described in §11. IdP groups (from SCIM) map to roles.                                                                                                                                                                                                    |
+| **Policies**   | Conditional grants — time windows, IP allowlists, attribute predicates. Sensitivity tags applied to capabilities; tag-based default policies (e.g., "all `destructive: true` capabilities require approval"). Policies carry an `enforced` flag (workspace cannot override) vs `default` (workspace can tighten). |
+| **Requests**   | JIT access request queue. Submit a request → routed by policy → granted with TTL → auto-expired.                                                                                                                                                                                                                  |
+| **Sessions**   | Active sessions across all principals; force-revoke; session policies (max age, idle timeout, geographic limits).                                                                                                                                                                                                 |
+| **Identities** | The principal directory. Sub-tabs: Humans, Agents, Service. API tokens live here as scoped credentials of a service identity.                                                                                                                                                                                     |
 
 ### Security
 
-| Tab | Purpose |
-|---|---|
-| **SSO** | SAML 2.0 + OIDC IdP configuration. Group claim mapping → role assignment. |
-| **SCIM** | SCIM 2.0 provisioning status, attribute mapping, sync history. |
-| **MFA** | Enforcement policy (required / optional / by-role), accepted factors, passkey config. |
-| **Audit** | Append-only audit stream. Filterable. SIEM export (Splunk / Datadog / S3 / generic JSONL webhook). |
-| **Compliance** | SOC2 + ISO 27001 control coverage dashboards. Capability coverage report. Export-ready. |
-| **Incidents** | Break-glass procedure log. Incident routing rules. Alert subscriptions. |
+| Tab            | Purpose                                                                                            |
+| -------------- | -------------------------------------------------------------------------------------------------- |
+| **SSO**        | SAML 2.0 + OIDC IdP configuration. Group claim mapping → role assignment.                          |
+| **SCIM**       | SCIM 2.0 provisioning status, attribute mapping, sync history.                                     |
+| **MFA**        | Enforcement policy (required / optional / by-role), accepted factors, passkey config.              |
+| **Audit**      | Append-only audit stream. Filterable. SIEM export (Splunk / Datadog / S3 / generic JSONL webhook). |
+| **Compliance** | SOC2 + ISO 27001 control coverage dashboards. Capability coverage report. Export-ready.            |
+| **Incidents**  | Break-glass procedure log. Incident routing rules. Alert subscriptions.                            |
 
 ### Billing
 
@@ -238,12 +236,12 @@ Subscription summary, credit balance, usage chart, plan grid, invoice list. Live
 
 ### Developer
 
-| Tab | Purpose |
-|---|---|
-| **MCP** | Unified install for Claude Code, Cursor, Claude Desktop, Codex, VS Code, ChatGPT, Windsurf. |
-| **Webhooks** | Outbound webhook routing — events / runs / audit → external systems. |
-| **Docs** | Capability catalog auto-generated from the contract registry. Stable URLs per capability for support escalations and audit log click-throughs. |
-| **Tokens** | Convenience deep-link into `/access/identities/service` with a "Create API key" CTA. |
+| Tab          | Purpose                                                                                                                                        |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MCP**      | Unified install for Claude Code, Cursor, Claude Desktop, Codex, VS Code, ChatGPT, Windsurf.                                                    |
+| **Webhooks** | Outbound webhook routing — events / runs / audit → external systems.                                                                           |
+| **Docs**     | Capability catalog auto-generated from the contract registry. Stable URLs per capability for support escalations and audit log click-throughs. |
+| **Tokens**   | Convenience deep-link into `/access/identities/service` with a "Create API key" CTA.                                                           |
 
 ---
 
@@ -268,12 +266,12 @@ Display name, primary email, phone (optional, security-only), pronouns, photo, t
 
 ### Security
 
-| Section | Contents |
-|---|---|
-| **Passwords** | Change password; passkey enrollment; passwordless toggle |
-| **MFA** | Active factors, recovery codes regeneration |
-| **Linked accounts** | Google, GitHub, Microsoft, custom OIDC linkages; unlink |
-| **Sessions** | All active sessions (device, IP, last activity, location); revoke individual; revoke all-other-sessions; sign-out everywhere |
+| Section             | Contents                                                                                                                     |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Passwords**       | Change password; passkey enrollment; passwordless toggle                                                                     |
+| **MFA**             | Active factors, recovery codes regeneration                                                                                  |
+| **Linked accounts** | Google, GitHub, Microsoft, custom OIDC linkages; unlink                                                                      |
+| **Sessions**        | All active sessions (device, IP, last activity, location); revoke individual; revoke all-other-sessions; sign-out everywhere |
 
 Personal session controls coexist with org-wide `/access/sessions`. The org view shows every session across every principal; the personal view shows only the current user's sessions and is self-service.
 
@@ -287,12 +285,12 @@ Per-topic and per-channel preferences. Topics: workflow events, approval request
 
 ### Privacy — GDPR-grade controls
 
-| Control | Behavior |
-|---|---|
-| **Export data** | Generates a complete JSON archive of all personal data: profile, sessions, cases, audit events scoped to the user, memories the user authored, conversations they participated in, notification history. Asynchronous job; email delivery of signed download link; 7-day expiry. |
-| **Delete personal data** | Initiates account deletion flow. Two-step confirmation. 30-day soft-delete window (cancelable). On hard-delete: PII removed, audit events anonymized to `<deleted-user>` with stable user-id hash retained for referential integrity. Cannot be deleted if user is the sole **Owner** of an org — must transfer ownership first. |
-| **Consent settings** | Per-purpose consent toggles (product analytics, error telemetry, model training opt-out). Default: model training opt-out is ON. |
-| **Data retention preview** | "Your data is retained for X days after deletion / Y days for audit / Z days for billing" — shows the operative retention policy so users can make informed decisions. |
+| Control                    | Behavior                                                                                                                                                                                                                                                                                                                         |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Export data**            | Generates a complete JSON archive of all personal data: profile, sessions, cases, audit events scoped to the user, memories the user authored, conversations they participated in, notification history. Asynchronous job; email delivery of signed download link; 7-day expiry.                                                 |
+| **Delete personal data**   | Initiates account deletion flow. Two-step confirmation. 30-day soft-delete window (cancelable). On hard-delete: PII removed, audit events anonymized to `<deleted-user>` with stable user-id hash retained for referential integrity. Cannot be deleted if user is the sole **Owner** of an org — must transfer ownership first. |
+| **Consent settings**       | Per-purpose consent toggles (product analytics, error telemetry, model training opt-out). Default: model training opt-out is ON.                                                                                                                                                                                                 |
+| **Data retention preview** | "Your data is retained for X days after deletion / Y days for audit / Z days for billing" — shows the operative retention policy so users can make informed decisions.                                                                                                                                                           |
 
 GDPR export + delete are also exposed as capabilities (`privacy.export.create`, `privacy.delete.initiate`) so they appear in the audit log and the ACL matrix. A user always has the grant for their own data. Admin-initiated exports on behalf of a user (e.g., for legal hold) require an explicit grant and route through the approval queue.
 
@@ -300,15 +298,15 @@ GDPR export + delete are also exposed as capabilities (`privacy.export.create`, 
 
 ## 8. AI-driven affordances
 
-The IA above describes the *structure*. AI changes how users *traverse* it.
+The IA above describes the _structure_. AI changes how users _traverse_ it.
 
-| Affordance | Behavior |
-|---|---|
-| **Ask bar (topbar)** | Universal entry. Routes questions to chat, actions to execution, nav requests to push. Carries current page context implicitly. |
-| **Ask drawer** | Right-side slide-in opened from any page. Auto-scoped to the page's entity. Persists across navigation within a session. |
-| **Page-level "Ask about this"** | On every detail page (a Run, a Playbook, an OntologyNode). Opens the drawer pre-loaded with that entity. |
-| **Generative views** | When the user asks for a filtered list that doesn't map to a static route ("show me playbooks that failed last week with cost > $5"), the agent generates the view inline. Pinnable as a saved view; pinned views surface in the relevant Activity tab. |
-| **Capability handoff** | Inside chat, when an agent wants to invoke a capability the current user lacks, it submits an Access Request automatically. The request appears in `/:org/access/requests` for the approver and in `/account/cases` for the requester. |
+| Affordance                      | Behavior                                                                                                                                                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Ask bar (topbar)**            | Universal entry. Routes questions to chat, actions to execution, nav requests to push. Carries current page context implicitly.                                                                                                                         |
+| **Ask drawer**                  | Right-side slide-in opened from any page. Auto-scoped to the page's entity. Persists across navigation within a session.                                                                                                                                |
+| **Page-level "Ask about this"** | On every detail page (a Run, a Playbook, an OntologyNode). Opens the drawer pre-loaded with that entity.                                                                                                                                                |
+| **Generative views**            | When the user asks for a filtered list that doesn't map to a static route ("show me playbooks that failed last week with cost > $5"), the agent generates the view inline. Pinnable as a saved view; pinned views surface in the relevant Activity tab. |
+| **Capability handoff**          | Inside chat, when an agent wants to invoke a capability the current user lacks, it submits an Access Request automatically. The request appears in `/:org/access/requests` for the approver and in `/account/cases` for the requester.                  |
 
 ---
 
@@ -442,20 +440,20 @@ All default roles use **single-word labels**, mirroring the conventions in Googl
 
 ### Org-scoped roles
 
-| Role | What it can do |
-|---|---|
-| **Owner** | Everything, including transfer-ownership, billing, delete-org |
-| **Admin** | Everything except destructive org-level ops |
+| Role           | What it can do                                                                                                  |
+| -------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Owner**      | Everything, including transfer-ownership, billing, delete-org                                                   |
+| **Admin**      | Everything except destructive org-level ops                                                                     |
 | **Compliance** | IAM, SSO/SCIM, audit, and security configuration only; read-only on operational surfaces (separation of duties) |
-| **Billing** | Billing, subscription, invoices, usage; no IAM, no operational access |
+| **Billing**    | Billing, subscription, invoices, usage; no IAM, no operational access                                           |
 
 ### Workspace-scoped roles
 
-| Role | What it can do |
-|---|---|
-| **Owner** | Manage grants within this workspace; manage workspace settings; full operational access |
-| **Member** | Run agents, approve, edit playbooks, edit memories, configure triggers |
-| **Viewer** | Read-only across the workspace |
+| Role       | What it can do                                                                          |
+| ---------- | --------------------------------------------------------------------------------------- |
+| **Owner**  | Manage grants within this workspace; manage workspace settings; full operational access |
+| **Member** | Run agents, approve, edit playbooks, edit memories, configure triggers                  |
+| **Viewer** | Read-only across the workspace                                                          |
 
 Workspace roles use exactly these three labels — **Owner**, **Member**, **Viewer**. No "Operator", "Analyst", "Editor" or other taxonomy. Custom roles remain available via the role builder for customers who need finer divisions.
 
@@ -478,7 +476,7 @@ When `contract.invoke(rawCtx, input)` evaluates a request (via the pure `resolve
 
 Two load-bearing properties:
 
-- **Workspace can never *expand* what org has locked.** The `enforced` flag on an org policy is the locking primitive.
+- **Workspace can never _expand_ what org has locked.** The `enforced` flag on an org policy is the locking primitive.
 - **Workspace CAN tighten.** If org defaults to allowing `knowledge.export`, a sensitive workspace can override to `deny` or `require-approval`. Defense-in-depth flows downward.
 
 The resolver returns a structured trace alongside the decision; the trace is what powers "why was this denied?" inspections in the audit UI.
@@ -529,29 +527,29 @@ This is what makes "agents that automate businesses" defensible to a CISO. Every
 
 ## 16. v1 → v2 route migration
 
-| v1 surface | v2 destination |
-|---|---|
-| `chat` | `ask` (also drawer-accessible everywhere) |
-| `explore` | `knowledge/graph` |
-| `sources` / `connections` / `connectors` / `enrichment` | `knowledge/sources` |
-| `memories` (was `⌘K`-only) | `knowledge/memories` |
-| `events` (super-page) | split into `automation/events`, `automation/triggers`, `activity/runs`, `activity/audit` |
-| `automation` (redirect) | `automation` (real) |
-| `merges` (redirect) | `knowledge/graph` merge policy panel |
-| `learning-log` (redirect) | `activity/audit` |
-| `content-studio` | `tools/studio` (de-emphasized) |
-| `settings/models` | `:ws/settings/model-keys` |
-| `settings/mcp` | `:org/developer/mcp` |
-| `settings/config` | killed for end users; `:org/developer/docs` |
-| `/audit/soc2` (was `⌘K`-only) | `:org/security/compliance` |
-| `/api-keys` | `:org/access/identities/service` |
-| `/install-mcp`, `/setup/claude-code` | unified at `:org/developer/mcp` |
-| `/notifications` | topbar drawer (no route) |
-| `/profile` | `/account/profile` |
-| `/billing/locked` | gate inside `:org/billing` |
-| `/black-tab` | removed from product (internal-only) |
-| `/share/*` | unchanged |
-| Scheduled agents | folded into `:ws/automation/triggers` (cause: schedule) |
+| v1 surface                                              | v2 destination                                                                           |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `chat`                                                  | `ask` (also drawer-accessible everywhere)                                                |
+| `explore`                                               | `knowledge/graph`                                                                        |
+| `sources` / `connections` / `connectors` / `enrichment` | `knowledge/sources`                                                                      |
+| `memories` (was `⌘K`-only)                              | `knowledge/memories`                                                                     |
+| `events` (super-page)                                   | split into `automation/events`, `automation/triggers`, `activity/runs`, `activity/audit` |
+| `automation` (redirect)                                 | `automation` (real)                                                                      |
+| `merges` (redirect)                                     | `knowledge/graph` merge policy panel                                                     |
+| `learning-log` (redirect)                               | `activity/audit`                                                                         |
+| `content-studio`                                        | `tools/studio` (de-emphasized)                                                           |
+| `settings/models`                                       | `:ws/settings/model-keys`                                                                |
+| `settings/mcp`                                          | `:org/developer/mcp`                                                                     |
+| `settings/config`                                       | killed for end users; `:org/developer/docs`                                              |
+| `/audit/soc2` (was `⌘K`-only)                           | `:org/security/compliance`                                                               |
+| `/api-keys`                                             | `:org/access/identities/service`                                                         |
+| `/install-mcp`, `/setup/claude-code`                    | unified at `:org/developer/mcp`                                                          |
+| `/notifications`                                        | topbar drawer (no route)                                                                 |
+| `/profile`                                              | `/account/profile`                                                                       |
+| `/billing/locked`                                       | gate inside `:org/billing`                                                               |
+| `/black-tab`                                            | removed from product (internal-only)                                                     |
+| `/share/*`                                              | unchanged                                                                                |
+| Scheduled agents                                        | folded into `:ws/automation/triggers` (cause: schedule)                                  |
 
 301 redirects ship for every changed route — v1 customers migrating shouldn't hit dead bookmarks.
 
@@ -575,12 +573,12 @@ Items 4 + 5 + 8 are the IAM ship. They have to land together or the enterprise p
 
 ## 18. Open questions still pinned
 
-| Question | Default | Notes |
-|---|---|---|
-| Multi-cause triggers (event OR schedule on one trigger)? | **No, single cause day-1.** Duplicate the trigger if you need both. | Schema migration to `causes: Cause[]` is non-breaking when we want it. |
-| Studio in v2? | **Yes, but de-emphasized** under Tools. | Brand kits move to workspace Settings; generations route through Activity/Runs. |
-| BYOK scope? | **Workspace.** | Org-level BYOK can be added later under `/:org/developer` or `/:org/security` if needed. |
-| Workspace ACL editor read-write or read-only at launch? | **Read-write.** Workspace Owners need to tighten. | Org `enforced` policies prevent expansion. |
+| Question                                                 | Default                                                             | Notes                                                                                    |
+| -------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Multi-cause triggers (event OR schedule on one trigger)? | **No, single cause day-1.** Duplicate the trigger if you need both. | Schema migration to `causes: Cause[]` is non-breaking when we want it.                   |
+| Studio in v2?                                            | **Yes, but de-emphasized** under Tools.                             | Generations route through Activity/Runs.                                                 |
+| BYOK scope?                                              | **Workspace.**                                                      | Org-level BYOK can be added later under `/:org/developer` or `/:org/security` if needed. |
+| Workspace ACL editor read-write or read-only at launch?  | **Read-write.** Workspace Owners need to tighten.                   | Org `enforced` policies prevent expansion.                                               |
 
 ---
 
@@ -588,18 +586,18 @@ Items 4 + 5 + 8 are the IAM ship. They have to land together or the enterprise p
 
 Words that appear in the product, locked:
 
-| Concept | Word | Never |
-|---|---|---|
-| Top-level customer entity | **Organization** | "Tenant", "Account", "Workspace" (workspace is the sub-unit) |
-| Sub-unit inside an org | **Workspace** | "Project", "Team" |
-| Workspace roles | **Owner / Member / Viewer** | "Operator", "Analyst", "Editor", "Contributor" |
-| Org roles | **Owner / Admin / Compliance / Billing** | "Super Admin", "Root", "Manager", "Security Admin" |
-| Authentication identity | **Principal** | "Account", "Identity", "User" (in role/grant contexts) |
-| Capability invocation unit | **Capability** | "Permission", "Action", "Verb" (in nav text) |
-| Cause of an automation run | **Trigger** | "Automation", "Workflow", "Job" |
-| Reusable graph filter that fires | **Event** | "Signal", "Listener", "Subscription" |
-| A unit of automated work | **Run** | "Job", "Task", "Execution" (was v1's term — dropped) |
-| What agents know | **Memories** | "Notes", "Knowledge items", "Facts" (fact is a *kind* of memory) |
+| Concept                          | Word                                     | Never                                                            |
+| -------------------------------- | ---------------------------------------- | ---------------------------------------------------------------- |
+| Top-level customer entity        | **Organization**                         | "Tenant", "Account", "Workspace" (workspace is the sub-unit)     |
+| Sub-unit inside an org           | **Workspace**                            | "Project", "Team"                                                |
+| Workspace roles                  | **Owner / Member / Viewer**              | "Operator", "Analyst", "Editor", "Contributor"                   |
+| Org roles                        | **Owner / Admin / Compliance / Billing** | "Super Admin", "Root", "Manager", "Security Admin"               |
+| Authentication identity          | **Principal**                            | "Account", "Identity", "User" (in role/grant contexts)           |
+| Capability invocation unit       | **Capability**                           | "Permission", "Action", "Verb" (in nav text)                     |
+| Cause of an automation run       | **Trigger**                              | "Automation", "Workflow", "Job"                                  |
+| Reusable graph filter that fires | **Event**                                | "Signal", "Listener", "Subscription"                             |
+| A unit of automated work         | **Run**                                  | "Job", "Task", "Execution" (was v1's term — dropped)             |
+| What agents know                 | **Memories**                             | "Notes", "Knowledge items", "Facts" (fact is a _kind_ of memory) |
 
 ---
 
