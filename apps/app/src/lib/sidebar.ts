@@ -295,7 +295,10 @@ export const ORG_SCOPE_ROUTES = new Set([
  * Returns the sidebar config for the given mode.
  * Filters enterprise-only items (e.g. "access") for non-enterprise orgs.
  */
-export function getSidebarConfig(mode: SidebarMode, planTier?: PlanTier): SidebarConfig {
+export function getSidebarConfig(
+  mode: SidebarMode,
+  planTier?: PlanTier,
+): SidebarConfig {
   const isEnterprise = planTier === "enterprise";
   switch (mode) {
     case "workspace":
@@ -303,7 +306,10 @@ export function getSidebarConfig(mode: SidebarMode, planTier?: PlanTier): Sideba
     case "org": {
       return isEnterprise
         ? orgConfig
-        : { ...orgConfig, items: orgConfig.items.filter((item) => item.id !== "access") };
+        : {
+            ...orgConfig,
+            items: orgConfig.items.filter((item) => item.id !== "access"),
+          };
     }
     case "account":
       return accountConfig;
@@ -326,7 +332,10 @@ export function getSidebarConfig(mode: SidebarMode, planTier?: PlanTier): Sideba
  *
  * Pathname must be the raw Next.js `pathname` string (no query params).
  */
-export function resolveSidebarMode(pathname: string, ctx: ScopeContext): SidebarMode {
+export function resolveSidebarMode(
+  pathname: string,
+  ctx: ScopeContext,
+): SidebarMode {
   if (pathname.startsWith("/account")) {
     return "account";
   }
@@ -357,7 +366,10 @@ export function resolveSidebarMode(pathname: string, ctx: ScopeContext): Sidebar
  * hrefs resolve to real workspace routes. Returns ctx unchanged when it already
  * has a workspaceSlug or the mode is not workspace.
  */
-export function resolveSidebarCtx(pathname: string, ctx: ScopeContext): ScopeContext {
+export function resolveSidebarCtx(
+  pathname: string,
+  ctx: ScopeContext,
+): ScopeContext {
   if (ctx.workspaceSlug) return ctx;
   if (resolveSidebarMode(pathname, ctx) !== "workspace") return ctx;
   const workspaceSlug = pathname.split("/").filter(Boolean)[1];
@@ -371,10 +383,14 @@ export function resolveSidebarCtx(pathname: string, ctx: ScopeContext): ScopeCon
  * at `/{org}`) from staying highlighted on every descendant page (`/{org}/...`)
  * — only the deepest matching item is active. Returns null when nothing matches.
  */
-export function activeHrefFor(pathname: string, hrefs: string[]): string | null {
+export function activeHrefFor(
+  pathname: string,
+  hrefs: string[],
+): string | null {
   let best: string | null = null;
   for (const href of hrefs) {
-    const matches = pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
+    const matches =
+      pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
     if (matches && (best === null || href.length > best.length)) {
       best = href;
     }
@@ -408,76 +424,263 @@ export function enumerateNavTargets(
 
     // Sidebar-level items
     targets.push({ label: "Ask", href: workspace.ask(wsCtx), parent: "ask" });
-    targets.push({ label: "Explore", href: workspace.explore(wsCtx), parent: "ask" });
-    targets.push({ label: "Knowledge", href: workspace.knowledge.root(wsCtx), parent: "knowledge" });
-    targets.push({ label: "Automation", href: workspace.automation.root(wsCtx), parent: "automation" });
-    targets.push({ label: "Activity", href: workspace.activity.root(wsCtx), parent: "activity" });
-    targets.push({ label: "Settings", href: workspace.settings.root(wsCtx), parent: "settings" });
+    targets.push({
+      label: "Knowledge",
+      href: workspace.knowledge.root(wsCtx),
+      parent: "knowledge",
+    });
+    targets.push({
+      label: "Automation",
+      href: workspace.automation.root(wsCtx),
+      parent: "automation",
+    });
+    targets.push({
+      label: "Activity",
+      href: workspace.activity.root(wsCtx),
+      parent: "activity",
+    });
+    targets.push({
+      label: "Settings",
+      href: workspace.settings.root(wsCtx),
+      parent: "settings",
+    });
 
     // Knowledge tabs
-    targets.push({ label: "Knowledge · Sources", href: workspace.knowledge.sources(wsCtx), parent: "knowledge" });
-    targets.push({ label: "Knowledge · Graph", href: workspace.knowledge.graph(wsCtx), parent: "knowledge" });
-    targets.push({ label: "Knowledge · Memories", href: workspace.knowledge.memories(wsCtx), parent: "knowledge" });
+    targets.push({
+      label: "Knowledge · Sources",
+      href: workspace.knowledge.sources(wsCtx),
+      parent: "knowledge",
+    });
+    targets.push({
+      label: "Knowledge · Graph",
+      href: workspace.knowledge.graph(wsCtx),
+      parent: "knowledge",
+    });
+    targets.push({
+      label: "Knowledge · Explore",
+      href: workspace.knowledge.explore(wsCtx),
+      parent: "knowledge",
+    });
+    targets.push({
+      label: "Knowledge · Memories",
+      href: workspace.knowledge.memories(wsCtx),
+      parent: "knowledge",
+    });
 
     // Automation tabs
-    targets.push({ label: "Automation · Agents", href: workspace.automation.agents(wsCtx), parent: "automation" });
-    targets.push({ label: "Automation · Agents · New", href: workspace.agents.create(wsCtx), parent: "automation" });
-    targets.push({ label: "Automation · Playbooks", href: workspace.automation.playbooks(wsCtx), parent: "automation" });
-    targets.push({ label: "Automation · Event Sources", href: workspace.automation.eventSources(wsCtx), parent: "automation" });
-    targets.push({ label: "Automation · Triggers", href: workspace.automation.triggers(wsCtx), parent: "automation" });
+    targets.push({
+      label: "Automation · Agents",
+      href: workspace.automation.agents(wsCtx),
+      parent: "automation",
+    });
+    targets.push({
+      label: "Automation · Agents · New",
+      href: workspace.agents.create(wsCtx),
+      parent: "automation",
+    });
+    targets.push({
+      label: "Automation · Playbooks",
+      href: workspace.automation.playbooks(wsCtx),
+      parent: "automation",
+    });
+    targets.push({
+      label: "Automation · Event Sources",
+      href: workspace.automation.eventSources(wsCtx),
+      parent: "automation",
+    });
+    targets.push({
+      label: "Automation · Triggers",
+      href: workspace.automation.triggers(wsCtx),
+      parent: "automation",
+    });
 
     // Activity tabs
-    targets.push({ label: "Activity · Runs", href: workspace.activity.runs(wsCtx), parent: "activity" });
-    targets.push({ label: "Activity · Approvals", href: workspace.activity.approvals(wsCtx), parent: "activity" });
-    targets.push({ label: "Activity · Audit", href: workspace.activity.audit(wsCtx), parent: "activity" });
+    targets.push({
+      label: "Activity · Runs",
+      href: workspace.activity.runs(wsCtx),
+      parent: "activity",
+    });
+    targets.push({
+      label: "Activity · Approvals",
+      href: workspace.activity.approvals(wsCtx),
+      parent: "activity",
+    });
+    targets.push({
+      label: "Activity · Audit",
+      href: workspace.activity.audit(wsCtx),
+      parent: "activity",
+    });
 
     // Settings tabs
-    targets.push({ label: "Settings · General", href: workspace.settings.general(wsCtx), parent: "settings" });
-    targets.push({ label: "Settings · Members", href: workspace.settings.members(wsCtx), parent: "settings" });
-    targets.push({ label: "Settings · Models", href: workspace.settings.models(wsCtx), parent: "settings" });
-    targets.push({ label: "Settings · Model Keys", href: workspace.settings.modelKeys(wsCtx), parent: "settings" });
-    targets.push({ label: "Settings · Brand Kits", href: workspace.settings.brandKits(wsCtx), parent: "settings" });
-    targets.push({ label: "Settings · Integrations", href: workspace.settings.integrations(wsCtx), parent: "settings" });
+    targets.push({
+      label: "Settings · General",
+      href: workspace.settings.general(wsCtx),
+      parent: "settings",
+    });
+    targets.push({
+      label: "Settings · Members",
+      href: workspace.settings.members(wsCtx),
+      parent: "settings",
+    });
+    targets.push({
+      label: "Settings · Models",
+      href: workspace.settings.models(wsCtx),
+      parent: "settings",
+    });
+    targets.push({
+      label: "Settings · Model Keys",
+      href: workspace.settings.modelKeys(wsCtx),
+      parent: "settings",
+    });
+    targets.push({
+      label: "Settings · Integrations",
+      href: workspace.settings.integrations(wsCtx),
+      parent: "settings",
+    });
   }
 
   // -- Org mode --
-  targets.push({ label: "Workspaces", href: org.root(ctx), parent: "workspaces" });
+  targets.push({
+    label: "Workspaces",
+    href: org.root(ctx),
+    parent: "workspaces",
+  });
   targets.push({ label: "Members", href: org.members(ctx), parent: "members" });
-  targets.push({ label: "Access", href: org.access.root(ctx), parent: "access" });
-  targets.push({ label: "Security", href: org.security.root(ctx), parent: "security" });
-  targets.push({ label: "Billing", href: org.billing.root(ctx), parent: "billing" });
-  targets.push({ label: "Developer", href: org.developer.root(ctx), parent: "developer" });
-  targets.push({ label: "Settings · General", href: org.settings.general(ctx), parent: "org-settings" });
+  targets.push({
+    label: "Access",
+    href: org.access.root(ctx),
+    parent: "access",
+  });
+  targets.push({
+    label: "Security",
+    href: org.security.root(ctx),
+    parent: "security",
+  });
+  targets.push({
+    label: "Billing",
+    href: org.billing.root(ctx),
+    parent: "billing",
+  });
+  targets.push({
+    label: "Developer",
+    href: org.developer.root(ctx),
+    parent: "developer",
+  });
+  targets.push({
+    label: "Settings · General",
+    href: org.settings.general(ctx),
+    parent: "org-settings",
+  });
 
   // Access tabs
-  targets.push({ label: "Access · Grants", href: org.access.grants(ctx), parent: "access" });
-  targets.push({ label: "Access · Roles", href: org.access.roles(ctx), parent: "access" });
-  targets.push({ label: "Access · Policies", href: org.access.policies(ctx), parent: "access" });
-  targets.push({ label: "Access · Requests", href: org.access.requests(ctx), parent: "access" });
-  targets.push({ label: "Access · Sessions", href: org.access.sessions(ctx), parent: "access" });
-  targets.push({ label: "Access · Principals", href: org.access.principals(ctx), parent: "access" });
+  targets.push({
+    label: "Access · Grants",
+    href: org.access.grants(ctx),
+    parent: "access",
+  });
+  targets.push({
+    label: "Access · Roles",
+    href: org.access.roles(ctx),
+    parent: "access",
+  });
+  targets.push({
+    label: "Access · Policies",
+    href: org.access.policies(ctx),
+    parent: "access",
+  });
+  targets.push({
+    label: "Access · Requests",
+    href: org.access.requests(ctx),
+    parent: "access",
+  });
+  targets.push({
+    label: "Access · Sessions",
+    href: org.access.sessions(ctx),
+    parent: "access",
+  });
+  targets.push({
+    label: "Access · Principals",
+    href: org.access.principals(ctx),
+    parent: "access",
+  });
 
   // Security tabs (SSO + SCIM hidden from nav until their contracts ship)
-  targets.push({ label: "Security · MFA", href: org.security.mfa(ctx), parent: "security" });
-  targets.push({ label: "Security · Audit", href: org.security.audit(ctx), parent: "security" });
-  targets.push({ label: "Security · Compliance", href: org.security.compliance(ctx), parent: "security" });
+  targets.push({
+    label: "Security · MFA",
+    href: org.security.mfa(ctx),
+    parent: "security",
+  });
+  targets.push({
+    label: "Security · Audit",
+    href: org.security.audit(ctx),
+    parent: "security",
+  });
+  targets.push({
+    label: "Security · Compliance",
+    href: org.security.compliance(ctx),
+    parent: "security",
+  });
 
   // Billing tabs
-  targets.push({ label: "Billing · Subscription", href: org.billing.subscription(ctx), parent: "billing" });
-  targets.push({ label: "Billing · Usage", href: org.billing.usage(ctx), parent: "billing" });
-  targets.push({ label: "Billing · Invoices", href: org.billing.invoices(ctx), parent: "billing" });
+  targets.push({
+    label: "Billing · Subscription",
+    href: org.billing.subscription(ctx),
+    parent: "billing",
+  });
+  targets.push({
+    label: "Billing · Usage",
+    href: org.billing.usage(ctx),
+    parent: "billing",
+  });
+  targets.push({
+    label: "Billing · Invoices",
+    href: org.billing.invoices(ctx),
+    parent: "billing",
+  });
 
   // Developer tabs
-  targets.push({ label: "Developer · MCP", href: org.developer.mcp(ctx), parent: "developer" });
-  targets.push({ label: "Developer · Webhooks", href: org.developer.webhooks(ctx), parent: "developer" });
-  targets.push({ label: "Developer · Docs", href: org.developer.docs(ctx), parent: "developer" });
-  targets.push({ label: "Developer · Tokens", href: org.developer.tokens(ctx), parent: "developer" });
+  targets.push({
+    label: "Developer · MCP",
+    href: org.developer.mcp(ctx),
+    parent: "developer",
+  });
+  targets.push({
+    label: "Developer · Webhooks",
+    href: org.developer.webhooks(ctx),
+    parent: "developer",
+  });
+  targets.push({
+    label: "Developer · Docs",
+    href: org.developer.docs(ctx),
+    parent: "developer",
+  });
+  targets.push({
+    label: "Developer · Tokens",
+    href: org.developer.tokens(ctx),
+    parent: "developer",
+  });
 
   // -- Account mode --
-  targets.push({ label: "Profile", href: account.profile(), parent: "profile" });
-  targets.push({ label: "Preferences", href: account.preferences(), parent: "preferences" });
-  targets.push({ label: "Security", href: account.security(), parent: "security" });
-  targets.push({ label: "Privacy", href: account.privacy(), parent: "privacy" });
+  targets.push({
+    label: "Profile",
+    href: account.profile(),
+    parent: "profile",
+  });
+  targets.push({
+    label: "Preferences",
+    href: account.preferences(),
+    parent: "preferences",
+  });
+  targets.push({
+    label: "Security",
+    href: account.security(),
+    parent: "security",
+  });
+  targets.push({
+    label: "Privacy",
+    href: account.privacy(),
+    parent: "privacy",
+  });
 
   return targets;
 }

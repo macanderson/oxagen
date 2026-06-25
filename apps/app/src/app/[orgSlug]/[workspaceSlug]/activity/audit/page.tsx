@@ -7,7 +7,17 @@
  * Every capability invocation is recorded with principal, outcome, and a
  * tamper-evident hash. This page shows a workspace-scoped slice.
  */
-import { Info, ScrollText, User, Bot, Key, CheckCircle2, XCircle, Hash, type LucideIcon } from "lucide-react";
+import {
+  Info,
+  ScrollText,
+  User,
+  Bot,
+  Key,
+  CheckCircle2,
+  XCircle,
+  Hash,
+  type LucideIcon,
+} from "lucide-react";
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
 
@@ -62,17 +72,6 @@ const MOCK_AUDIT: MockAuditEvent[] = [
   },
   {
     id: "aud-04",
-    capability: "workspace.brandKits.create",
-    principalKind: "user",
-    principalName: "Mac Anderson",
-    outcome: "success",
-    durationMs: 28,
-    eventHash: "f45a9e12",
-    occurredAt: "2026-06-06 11:00",
-    detail: null,
-  },
-  {
-    id: "aud-05",
     capability: "workspace.members.invite",
     principalKind: "api_key",
     principalName: "CI Pipeline Key",
@@ -83,7 +82,7 @@ const MOCK_AUDIT: MockAuditEvent[] = [
     detail: "Insufficient role — required: admin, caller: viewer",
   },
   {
-    id: "aud-06",
+    id: "aud-05",
     capability: "conversation.message.create",
     principalKind: "user",
     principalName: "Mac Anderson",
@@ -97,7 +96,10 @@ const MOCK_AUDIT: MockAuditEvent[] = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const OUTCOME_CONFIG: Record<AuditOutcome, { icon: LucideIcon; className: string; label: string }> = {
+const OUTCOME_CONFIG: Record<
+  AuditOutcome,
+  { icon: LucideIcon; className: string; label: string }
+> = {
   success: {
     icon: CheckCircle2,
     className: "text-success",
@@ -144,7 +146,9 @@ function AuditRow({ event }: { event: MockAuditEvent }) {
         aria-label={outcome.label}
       />
       <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-        <code className="text-xs font-mono font-medium text-foreground">{event.capability}</code>
+        <code className="text-xs font-mono font-medium text-foreground">
+          {event.capability}
+        </code>
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1">
             <PrincipalIcon className="h-3 w-3" aria-hidden="true" />
@@ -184,12 +188,16 @@ export default function ActivityAuditPage() {
 
       {/* Section heading */}
       <div className="flex items-start gap-3">
-        <ScrollText className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+        <ScrollText
+          className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
         <div>
           <p className="text-sm font-semibold text-foreground">Audit log</p>
           <p className="text-xs text-muted-foreground">
-            Workspace-scoped slice of the org-wide audit log. Every capability invocation is
-            recorded with principal, outcome, duration, and a tamper-evident hash.
+            Workspace-scoped slice of the org-wide audit log. Every capability
+            invocation is recorded with principal, outcome, duration, and a
+            tamper-evident hash.
           </p>
         </div>
       </div>
@@ -197,25 +205,40 @@ export default function ActivityAuditPage() {
       {/* Stats strip */}
       <div className="grid grid-cols-3 gap-3">
         <div className="flex flex-col gap-0.5 rounded-lg border border-border/60 bg-card px-4 py-3">
-          <span className="text-xs text-muted-foreground">Successful (24h)</span>
-          <span className="text-xl font-semibold tabular-nums text-foreground">{successCount}</span>
+          <span className="text-xs text-muted-foreground">
+            Successful (24h)
+          </span>
+          <span className="text-xl font-semibold tabular-nums text-foreground">
+            {successCount}
+          </span>
         </div>
         <div className="flex flex-col gap-0.5 rounded-lg border border-border/60 bg-card px-4 py-3">
           <span className="text-xs text-muted-foreground">Denied (24h)</span>
-          <span className="text-xl font-semibold tabular-nums text-foreground">{deniedCount}</span>
+          <span className="text-xl font-semibold tabular-nums text-foreground">
+            {deniedCount}
+          </span>
         </div>
         <div className="flex flex-col gap-0.5 rounded-lg border border-border/60 bg-card px-4 py-3">
           <span className="text-xs text-muted-foreground">Errors (24h)</span>
-          <span className="text-xl font-semibold tabular-nums text-foreground">{errorCount}</span>
+          <span className="text-xl font-semibold tabular-nums text-foreground">
+            {errorCount}
+          </span>
         </div>
       </div>
 
       {/* Audit table */}
       <div className="rounded-lg border border-border/60">
         <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
-          <ScrollText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          <span className="text-sm font-semibold text-foreground">Recent events</span>
-          <span className="ml-auto text-xs text-muted-foreground">Last 24 hours</span>
+          <ScrollText
+            className="h-4 w-4 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <span className="text-sm font-semibold text-foreground">
+            Recent events
+          </span>
+          <span className="ml-auto text-xs text-muted-foreground">
+            Last 24 hours
+          </span>
         </div>
         <ul>
           {MOCK_AUDIT.map((event) => (
@@ -225,8 +248,9 @@ export default function ActivityAuditPage() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Audit logs are retained for 1 year on all plans. Event hashes are SHA-256 (first 8 hex chars shown).
-        Export to SIEM via the API or the audit.events.export capability.
+        Audit logs are retained for 1 year on all plans. Event hashes are
+        SHA-256 (first 8 hex chars shown). Export to SIEM via the API or the
+        audit.events.export capability.
       </p>
     </div>
   );
