@@ -24,6 +24,9 @@ import { BrandMark, OxagenWordmark } from "@/components/ui/brand";
 import { useSidebar } from "./sidebar-context";
 import { cn } from "@/lib/utils";
 import type { ScopeContext } from "@/lib/scope";
+import { AgentPanelLauncher } from "@/components/agent/agent-panel-launcher";
+import { useAgentPanel } from "@/providers/agent-panel-provider";
+import { useAgentPanelConfig } from "@/hooks/use-agent-panel-config";
 
 import type { PlanTier } from "@oxagen/oxagen/types";
 
@@ -49,6 +52,8 @@ function GroupLabel({ children, collapsed }: { children: React.ReactNode; collap
 export function Sidebar({ ctx, user, planTier }: SidebarProps) {
   const pathname = usePathname();
   const { collapsed } = useSidebar();
+  const { isOpen, toggle } = useAgentPanel();
+  const { buttonLocation } = useAgentPanelConfig();
 
   // Recover the workspace slug from the URL (the org layout doesn't supply it),
   // then resolve the single active href as the most specific match.
@@ -125,6 +130,14 @@ export function Sidebar({ ctx, user, planTier }: SidebarProps) {
       {/* Footer nav items + account control, pinned to the bottom. */}
       <div className="flex flex-col gap-0.5 border-t border-sidebar-border p-2">
         {footer.map(renderItem)}
+        {buttonLocation === "sidebar" && (
+          <AgentPanelLauncher
+            variant="sidebar"
+            isOpen={isOpen}
+            onClick={toggle}
+            label={collapsed ? undefined : "Agent"}
+          />
+        )}
         <UserSwitcher
           user={user}
           variant={collapsed ? "avatar" : "full"}
