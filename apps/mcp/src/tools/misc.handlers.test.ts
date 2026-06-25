@@ -342,6 +342,7 @@ describe("user.preferences.read handler", () => {
       defaultVideoModel: null,
       timezone: "UTC",
       language: "en",
+      agentPanelButtonLocation: "lower-right",
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
@@ -382,6 +383,7 @@ describe("user.preferences.write handler", () => {
       defaultVideoModel: null,
       timezone: "America/New_York",
       language: "en",
+      agentPanelButtonLocation: "lower-right" as const,
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
