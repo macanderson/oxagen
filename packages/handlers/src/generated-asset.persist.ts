@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { schema, withSystemDb, type Tx } from "@oxagen/database";
 import { storage } from "@oxagen/storage";
+import { emitGeneratedAssetSyncEvent } from "./generated-asset.sync-event";
 
 export type AssetKind =
   | "image"
@@ -83,9 +84,11 @@ const EXT_BY_MIME: Record<string, string> = {
   "video/mp4": "mp4",
   "video/webm": "webm",
   // document kinds
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    "docx",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+    "pptx",
   "application/pdf": "pdf",
   "application/zip": "zip",
   "text/markdown": "md",
@@ -103,7 +106,9 @@ function extFor(mimeType: string): string {
  * panel can render a human-readable filename without re-deriving it from the
  * noisy prompt. Returns undefined (column default) when there's nothing to set.
  */
-function buildMetadata(displayName: string | null | undefined): { displayName: string } | undefined {
+function buildMetadata(
+  displayName: string | null | undefined,
+): { displayName: string } | undefined {
   const name = displayName?.trim();
   return name ? { displayName: name } : undefined;
 }
@@ -153,7 +158,11 @@ export async function persistGeneratedAsset(
   // Store as private blobs; the CDN URL must never be publicly guessable.
   // Access is served exclusively through the auth-gated /api/v1/assets/[publicId]
   // proxy which enforces the asset's access policy before returning the blob.
-  const { url, key: storageKey, bytes } = await store.put({
+  const {
+    url,
+    key: storageKey,
+    bytes,
+  } = await store.put({
     key,
     body: args.bytes,
     contentType: args.mimeType,
@@ -193,10 +202,32 @@ export async function persistGeneratedAsset(
         conversationId: conversationId ?? undefined,
         messageId: args.messageId ?? undefined,
       })
-      .returning({ id: schema.generatedAssets.id, publicId: schema.generatedAssets.publicId });
+      .returning({
+        id: schema.generatedAssets.id,
+        publicId: schema.generatedAssets.publicId,
+      });
   });
 
   if (!row) throw new Error("generated_assets insert failed");
+
+  // Fire-and-forget: emit the graph sync event so the Inngest worker mirrors
+  // this asset into Neo4j as a Document node. Best-effort — failure is logged
+  // but does not block the caller. The syncedToGraphAt stamp stays NULL for a
+  // sweep to retry.
+  void emitGeneratedAssetSyncEvent({
+    assetId: row.id,
+    publicId: row.publicId,
+    orgId: args.orgId,
+    workspaceId: args.workspaceId,
+    kind: args.kind,
+    mimeType: args.mimeType,
+    prompt: args.prompt,
+    model: args.model,
+    displayName: args.displayName,
+    conversationId: args.conversationId,
+    messageId: args.messageId,
+    userId: args.userId,
+  });
 
   return {
     id: row.id,
@@ -274,10 +305,17 @@ export async function createPendingGeneratedAsset(
         conversationId: conversationId ?? undefined,
         messageId: args.messageId ?? undefined,
       })
-      .returning({ id: schema.generatedAssets.id, publicId: schema.generatedAssets.publicId });
+      .returning({
+        id: schema.generatedAssets.id,
+        publicId: schema.generatedAssets.publicId,
+      });
   });
 
   if (!row) throw new Error("generated_assets pending insert failed");
 
-  return { id: row.id, publicId: row.publicId, serveUrl: `/api/v1/assets/${row.publicId}` };
+  return {
+    id: row.id,
+    publicId: row.publicId,
+    serveUrl: `/api/v1/assets/${row.publicId}`,
+  };
 }

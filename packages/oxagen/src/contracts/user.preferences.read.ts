@@ -14,7 +14,12 @@ export const userPreferencesRead = registerCapability({
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow", Member: "allow", Viewer: "allow" },
-    workspace: { Owner: "allow", Admin: "allow", Member: "allow", Viewer: "allow" },
+    workspace: {
+      Owner: "allow",
+      Admin: "allow",
+      Member: "allow",
+      Viewer: "allow",
+    },
   },
   input: z.object({}),
   output: z.object({
@@ -28,9 +33,12 @@ export const userPreferencesRead = registerCapability({
     defaultVideoModel: z.string().nullable(),
     timezone: z.string(),
     language: z.string(),
-    agentPanelButtonLocation: z.enum(["lower-right", "topnav", "sidebar", "command-palette-only"]),
   }),
 });
 
-export type UserPreferencesReadInput = z.output<typeof userPreferencesRead.input>;
-export type UserPreferencesReadOutput = z.output<typeof userPreferencesRead.output>;
+export type UserPreferencesReadInput = z.output<
+  typeof userPreferencesRead.input
+>;
+export type UserPreferencesReadOutput = z.output<
+  typeof userPreferencesRead.output
+>;

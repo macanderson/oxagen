@@ -30,7 +30,6 @@ const fakeCtx = {
   clientIp: null,
 };
 
-
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.buildContext.mockResolvedValue(fakeCtx);
@@ -92,7 +91,11 @@ describe("notifications.mark handler", () => {
     const fakeOutput = { ok: true };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { id: "ntf_1", read: true as boolean | undefined, archived: undefined };
+    const args = {
+      id: "ntf_1",
+      read: true as boolean | undefined,
+      archived: undefined,
+    };
     await handler_notificationsMark(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -118,18 +121,21 @@ describe("org.member.add handler", () => {
   });
 
   it("calls invoke with add member args", async () => {
-    const fakeOutput = { invitationId: "inv_1", email: "user@example.com", role: "Member", status: "pending", expiresAt: null };
+    const fakeOutput = {
+      invitationId: "inv_1",
+      email: "user@example.com",
+      role: "Member",
+      status: "pending",
+      expiresAt: null,
+    };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { email: "user@example.com", role: "Member" };
     await handler_orgMemberAdd(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "org.member.add",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("org.member.add", args, fakeCtx, {
+      surface: "mcp",
+    });
   });
 });
 
@@ -147,7 +153,12 @@ describe("org.member.invite.accept handler", () => {
   });
 
   it("calls invoke with invite accept args", async () => {
-    const fakeOutput = { orgUserId: "oru_1", orgId: "org_test", role: "Member", joinedAt: "2026-01-01T00:00:00.000Z" };
+    const fakeOutput = {
+      orgUserId: "oru_1",
+      orgId: "org_test",
+      role: "Member",
+      joinedAt: "2026-01-01T00:00:00.000Z",
+    };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { invitationPublicId: "inv_1" };
@@ -172,7 +183,9 @@ import handler_orgMemberInviteDecline, {
 describe("org.member.invite.decline handler", () => {
   it("exports schema and metadata", () => {
     expect(orgMemberInviteDeclineSchema).toBeDefined();
-    expect(orgMemberInviteDeclineMetadata.name).toBe("org.member.invite.decline");
+    expect(orgMemberInviteDeclineMetadata.name).toBe(
+      "org.member.invite.decline",
+    );
   });
 
   it("calls invoke with invite decline args", async () => {
@@ -205,7 +218,11 @@ describe("org.member.remove handler", () => {
   });
 
   it("calls invoke with remove member args", async () => {
-    const fakeOutput = { removed: true, targetUserId: "user_1", orgId: "org_test" };
+    const fakeOutput = {
+      removed: true,
+      targetUserId: "user_1",
+      orgId: "org_test",
+    };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { targetUserId: "user_1" };
@@ -234,7 +251,13 @@ describe("org.member.role.change handler", () => {
   });
 
   it("calls invoke with role change args", async () => {
-    const fakeOutput = { changed: true, targetUserId: "user_1", orgId: "org_test", previousRole: "Member", newRole: "Admin" };
+    const fakeOutput = {
+      changed: true,
+      targetUserId: "user_1",
+      orgId: "org_test",
+      previousRole: "Member",
+      newRole: "Admin",
+    };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { targetUserId: "user_1", newRole: "Admin" };
@@ -263,7 +286,13 @@ describe("organization.create handler", () => {
   });
 
   it("calls invoke with create args", async () => {
-    const fakeOutput = { publicId: "org_new", name: "Acme Corp", slug: "acme-corp", type: "business", createdAt: "2026-01-01T00:00:00.000Z" };
+    const fakeOutput = {
+      publicId: "org_new",
+      name: "Acme Corp",
+      slug: "acme-corp",
+      type: "business",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = {
@@ -302,7 +331,13 @@ describe("workspace.create handler", () => {
   });
 
   it("calls invoke with workspace create args", async () => {
-    const fakeOutput = { publicId: "ws_new", name: "My Workspace", slug: "my-workspace", orgSlug: "acme-corp", createdAt: "2026-01-01T00:00:00.000Z" };
+    const fakeOutput = {
+      publicId: "ws_new",
+      name: "My Workspace",
+      slug: "my-workspace",
+      orgSlug: "acme-corp",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = { name: "My Workspace", slug: "my-workspace" };
@@ -342,7 +377,6 @@ describe("user.preferences.read handler", () => {
       defaultVideoModel: null,
       timezone: "UTC",
       language: "en",
-      agentPanelButtonLocation: "lower-right",
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
@@ -383,7 +417,6 @@ describe("user.preferences.write handler", () => {
       defaultVideoModel: null,
       timezone: "America/New_York",
       language: "en",
-      agentPanelButtonLocation: "lower-right" as const,
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
@@ -398,7 +431,6 @@ describe("user.preferences.write handler", () => {
       defaultVideoModel: undefined,
       timezone: undefined,
       language: undefined,
-      agentPanelButtonLocation: undefined,
     };
     await handler_userPreferencesWrite(args);
 
@@ -421,7 +453,9 @@ import handler_workspaceModelSettingsRead, {
 describe("workspace.model.settings.read handler", () => {
   it("exports schema and metadata", () => {
     expect(workspaceModelSettingsReadSchema).toBeDefined();
-    expect(workspaceModelSettingsReadMetadata.name).toBe("workspace.model.settings.read");
+    expect(workspaceModelSettingsReadMetadata.name).toBe(
+      "workspace.model.settings.read",
+    );
   });
 
   it("calls invoke with empty args for read", async () => {
@@ -454,7 +488,9 @@ import handler_workspaceModelSettingsWrite, {
 describe("workspace.model.settings.write handler", () => {
   it("exports schema and metadata", () => {
     expect(workspaceModelSettingsWriteSchema).toBeDefined();
-    expect(workspaceModelSettingsWriteMetadata.name).toBe("workspace.model.settings.write");
+    expect(workspaceModelSettingsWriteMetadata.name).toBe(
+      "workspace.model.settings.write",
+    );
   });
 
   it("calls invoke with settings write args", async () => {
@@ -493,18 +529,26 @@ import handler_systemInstallInstructions, {
 describe("system.install.instructions handler", () => {
   it("exports schema and metadata", () => {
     expect(systemInstallInstructionsSchema).toBeDefined();
-    expect(systemInstallInstructionsMetadata.name).toBe("system.install.instructions");
+    expect(systemInstallInstructionsMetadata.name).toBe(
+      "system.install.instructions",
+    );
   });
 
   it("calls invoke with install instructions args", async () => {
     const fakeOutput = {
       client: "claude-code" as const,
       steps: [{ label: "Run the install command" }],
-      render: { componentId: "install-instructions", props: { client: "claude-code" } },
+      render: {
+        componentId: "install-instructions",
+        props: { client: "claude-code" },
+      },
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { client: "claude-code" as const, workspaceSlug: "my-workspace" };
+    const args = {
+      client: "claude-code" as const,
+      workspaceSlug: "my-workspace",
+    };
     await handler_systemInstallInstructions(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -534,19 +578,24 @@ describe("workflow.run handler", () => {
       workflowId: "uuid-wfr-1",
       publicId: "wfr_1",
       status: "planning" as const,
-      render: { componentId: "workflow-progress" as const, props: { workflowId: "uuid-wfr-1" } },
+      render: {
+        componentId: "workflow-progress" as const,
+        props: { workflowId: "uuid-wfr-1" },
+      },
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { goal: "Profile Fortune 500 CEOs", title: undefined, outputFormat: "json" as const, maxParallelism: 10 };
+    const args = {
+      goal: "Profile Fortune 500 CEOs",
+      title: undefined,
+      outputFormat: "json" as const,
+      maxParallelism: 10,
+    };
     await handler_workflowRun(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith(
-      "workflow.run",
-      args,
-      fakeCtx,
-      { surface: "mcp" },
-    );
+    expect(mocks.invoke).toHaveBeenCalledWith("workflow.run", args, fakeCtx, {
+      surface: "mcp",
+    });
   });
 });
 

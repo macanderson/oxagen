@@ -32,7 +32,12 @@ type Events = {
     };
   };
   "agent/subagent.dispatch": {
-    data: { orgId: string; workspaceId: string; fanoutId: string; depth?: number };
+    data: {
+      orgId: string;
+      workspaceId: string;
+      fanoutId: string;
+      depth?: number;
+    };
   };
   "agent/subagent.fanout.completed": {
     data: {
@@ -45,14 +50,25 @@ type Events = {
     };
   };
   "agent/subagent.aggregate.requested": {
-    data: { orgId: string; workspaceId: string; fanoutId: string; timeoutMs?: number };
+    data: {
+      orgId: string;
+      workspaceId: string;
+      fanoutId: string;
+      timeoutMs?: number;
+    };
   };
   "agent/subagent.aggregated": {
     data: {
       orgId: string;
       workspaceId: string;
       fanoutId: string;
-      status: "pending" | "running" | "completed" | "partial" | "failed" | "timed_out";
+      status:
+        | "pending"
+        | "running"
+        | "completed"
+        | "partial"
+        | "failed"
+        | "timed_out";
       totalChildren: number;
       completedChildren: number;
     };
@@ -302,6 +318,26 @@ type Events = {
     };
   };
 
+  // Fired by persistGeneratedAsset() after a generated_assets row is committed.
+  // The Inngest worker mirrors the asset into Neo4j as a Document node with
+  // PRODUCED edges from the originating Conversation/Message.
+  "agent/generated-asset.sync": {
+    data: {
+      assetId: string;
+      publicId: string;
+      orgId: string;
+      workspaceId: string;
+      kind: string;
+      mimeType: string;
+      prompt: string;
+      model: string;
+      displayName?: string | null;
+      conversationId?: string | null;
+      messageId?: string | null;
+      userId: string;
+    };
+  };
+
   // ── Schema reconciliation ─────────────────────────────────────────────────
   // Fired by schema.reconcile.dispatch handler to kick off an async reconcile job.
   // Workers coerce existing KnowledgeNode/relationship properties to the target schema version.
@@ -343,15 +379,25 @@ type Events = {
 // and the Inngest instance is created on first `.send()` / `.createFunction()`
 // call (i.e. at actual runtime, not import time).
 function resolveInngestEnv() {
-  const base = requireEnv(["INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY", "NODE_ENV"] as const);
+  const base = requireEnv([
+    "INNGEST_EVENT_KEY",
+    "INNGEST_SIGNING_KEY",
+    "NODE_ENV",
+  ] as const);
   if (base.NODE_ENV === "production") {
     const prodSchema = z.object({
-      INNGEST_EVENT_KEY: z.string().min(1, "INNGEST_EVENT_KEY required when NODE_ENV=production"),
-      INNGEST_SIGNING_KEY: z.string().min(1, "INNGEST_SIGNING_KEY required when NODE_ENV=production"),
+      INNGEST_EVENT_KEY: z
+        .string()
+        .min(1, "INNGEST_EVENT_KEY required when NODE_ENV=production"),
+      INNGEST_SIGNING_KEY: z
+        .string()
+        .min(1, "INNGEST_SIGNING_KEY required when NODE_ENV=production"),
     });
     const parsed = prodSchema.safeParse(normalizeEnv(process.env));
     if (!parsed.success) {
-      const issues = parsed.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n");
+      const issues = parsed.error.issues
+        .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
+        .join("\n");
       throw new Error(`Invalid environment:\n${issues}`);
     }
   }
@@ -384,11 +430,17 @@ function getInngest(): ConcreteInngestClient {
 // flows into all createFunction() handlers without `any`.
 export const inngest = new Proxy({} as ConcreteInngestClient, {
   get(_target, prop) {
-    const instance = getInngest() as unknown as Record<string | symbol, unknown>;
+    const instance = getInngest() as unknown as Record<
+      string | symbol,
+      unknown
+    >;
     return instance[prop];
   },
   set(_target, prop, value) {
-    const instance = getInngest() as unknown as Record<string | symbol, unknown>;
+    const instance = getInngest() as unknown as Record<
+      string | symbol,
+      unknown
+    >;
     instance[prop] = value;
     return true;
   },

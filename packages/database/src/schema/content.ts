@@ -1,7 +1,21 @@
-import { bigint, check, index, jsonb, text, uuid } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  check,
+  index,
+  jsonb,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { contentSchema } from "./_schemas";
-import { auditMixin, citext, idMixin, orgScopeMixin, softDeleteMixin } from "./_mixins";
+import {
+  auditMixin,
+  citext,
+  idMixin,
+  orgScopeMixin,
+  softDeleteMixin,
+} from "./_mixins";
 
 // AI-generated media assets (image / video) produced from the in-app agent.
 // The blob bytes live in file storage (Vercel Blob behind @oxagen/storage); this
@@ -41,20 +55,25 @@ export const generatedAssets = contentSchema.table(
     // Optional linkage to the chat turn that produced the asset.
     conversationId: uuid("conversation_id"),
     messageId: uuid("message_id"),
-    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+    metadata: jsonb("metadata")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    // NULL until the async Inngest job syncs this asset to Neo4j as a Document node.
+    syncedToGraphAt: timestamp("synced_to_graph_at", { withTimezone: true }),
   },
   (t) => ({
     orgIdx: index("generated_assets_org_idx").on(t.orgId, t.workspaceId),
     userIdx: index("generated_assets_user_idx").on(t.userId),
-    conversationIdx: index("generated_assets_conversation_idx").on(t.conversationId),
+    conversationIdx: index("generated_assets_conversation_idx").on(
+      t.conversationId,
+    ),
     // conversation.files.list filters conversation_id (+ deleted_at IS NULL,
     // status='ready') and keyset-paginates on created_at DESC. The bare
     // conversation_idx above doesn't cover the created_at keyset/sort; this
     // composite serves the keyset scan directly.
-    conversationCreatedIdx: index("generated_assets_conversation_created_idx").on(
-      t.conversationId,
-      t.createdAt,
-    ),
+    conversationCreatedIdx: index(
+      "generated_assets_conversation_created_idx",
+    ).on(t.conversationId, t.createdAt),
     kindCheck: check(
       "generated_assets_kind_check",
       sql`${t.kind} IN ('image', 'video', 'document', 'spreadsheet', 'presentation', 'pdf', 'archive')`,
@@ -82,7 +101,9 @@ export const documents = contentSchema.table(
     ...softDeleteMixin(),
     title: text("title").notNull(),
     content: text("content").notNull().default(""),
-    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+    metadata: jsonb("metadata")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
   },
   (t) => ({
     orgIdx: index("documents_org_idx").on(t.orgId, t.workspaceId),
@@ -98,7 +119,9 @@ export const forms = contentSchema.table(
     ...orgScopeMixin(),
     ...softDeleteMixin(),
     title: text("title").notNull(),
-    fields: jsonb("fields").notNull().default(sql`'[]'::jsonb`),
+    fields: jsonb("fields")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
   },
   (t) => ({
     orgIdx: index("forms_org_idx").on(t.orgId, t.workspaceId),
@@ -113,7 +136,9 @@ export const formSubmissions = contentSchema.table(
     ...auditMixin(),
     ...orgScopeMixin(),
     formId: uuid("form_id").notNull(),
-    responses: jsonb("responses").notNull().default(sql`'{}'::jsonb`),
+    responses: jsonb("responses")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     status: citext("status").notNull().default("submitted"),
   },
   (t) => ({
@@ -125,5 +150,3 @@ export const formSubmissions = contentSchema.table(
     ),
   }),
 );
-
-

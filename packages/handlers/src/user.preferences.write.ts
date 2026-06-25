@@ -6,10 +6,9 @@ import type { NewUserPreferences } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
-export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferencesWrite> = async (
-  input,
-  ctx,
-) => {
+export const userPreferencesWriteHandler: CapabilityHandler<
+  typeof userPreferencesWrite
+> = async (input, ctx) => {
   if (!ctx.userId) {
     logger.warn({}, "user.preferences.write: rejected — no authenticated user");
     throw new Error("user.preferences.write requires an authenticated user");
@@ -30,12 +29,19 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
     pendingPromptBehavior: input.pendingPromptBehavior ?? "queue",
     timezone: input.timezone ?? "UTC",
     language: input.language ?? "en",
-    agentPanelButtonLocation: input.agentPanelButtonLocation ?? "lower-right",
     // Nullable model columns: undefined → not set on first insert (column default NULL).
-    ...("defaultTextTier" in input ? { defaultTextTier: input.defaultTextTier } : {}),
-    ...("defaultTextModel" in input ? { defaultTextModel: input.defaultTextModel } : {}),
-    ...("defaultImageModel" in input ? { defaultImageModel: input.defaultImageModel } : {}),
-    ...("defaultVideoModel" in input ? { defaultVideoModel: input.defaultVideoModel } : {}),
+    ...("defaultTextTier" in input
+      ? { defaultTextTier: input.defaultTextTier }
+      : {}),
+    ...("defaultTextModel" in input
+      ? { defaultTextModel: input.defaultTextModel }
+      : {}),
+    ...("defaultImageModel" in input
+      ? { defaultImageModel: input.defaultImageModel }
+      : {}),
+    ...("defaultVideoModel" in input
+      ? { defaultVideoModel: input.defaultVideoModel }
+      : {}),
   };
 
   // Build the partial update set — only update fields that were explicitly provided.
@@ -46,26 +52,26 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
 
   if (input.fontSize !== undefined) updateSet.fontSize = input.fontSize;
   if (input.density !== undefined) updateSet.density = input.density;
-  if (input.enterToSubmit !== undefined) updateSet.enterToSubmit = input.enterToSubmit;
+  if (input.enterToSubmit !== undefined)
+    updateSet.enterToSubmit = input.enterToSubmit;
   if (input.pendingPromptBehavior !== undefined)
     updateSet.pendingPromptBehavior = input.pendingPromptBehavior;
   if (input.timezone !== undefined) updateSet.timezone = input.timezone;
   if (input.language !== undefined) updateSet.language = input.language;
-  if (input.agentPanelButtonLocation !== undefined)
-    updateSet.agentPanelButtonLocation = input.agentPanelButtonLocation;
-  if ("defaultTextTier" in input) updateSet.defaultTextTier = input.defaultTextTier;
-  if ("defaultTextModel" in input) updateSet.defaultTextModel = input.defaultTextModel;
-  if ("defaultImageModel" in input) updateSet.defaultImageModel = input.defaultImageModel;
-  if ("defaultVideoModel" in input) updateSet.defaultVideoModel = input.defaultVideoModel;
+  if ("defaultTextTier" in input)
+    updateSet.defaultTextTier = input.defaultTextTier;
+  if ("defaultTextModel" in input)
+    updateSet.defaultTextModel = input.defaultTextModel;
+  if ("defaultImageModel" in input)
+    updateSet.defaultImageModel = input.defaultImageModel;
+  if ("defaultVideoModel" in input)
+    updateSet.defaultVideoModel = input.defaultVideoModel;
 
   await withSystemDb((tx) =>
-    tx
-      .insert(schema.userPreferences)
-      .values(insertValues)
-      .onConflictDoUpdate({
-        target: schema.userPreferences.userId,
-        set: updateSet,
-      }),
+    tx.insert(schema.userPreferences).values(insertValues).onConflictDoUpdate({
+      target: schema.userPreferences.userId,
+      set: updateSet,
+    }),
   );
 
   // Re-read the full row to return canonical post-upsert state.
@@ -83,14 +89,15 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
         defaultVideoModel: true,
         timezone: true,
         language: true,
-        agentPanelButtonLocation: true,
       },
     }),
   );
 
   if (!row) {
     // Should never happen — we just upserted.
-    throw new Error("user.preferences.write: upserted row not found on re-read");
+    throw new Error(
+      "user.preferences.write: upserted row not found on re-read",
+    );
   }
 
   logger.info(
@@ -109,6 +116,5 @@ export const userPreferencesWriteHandler: CapabilityHandler<typeof userPreferenc
     defaultVideoModel: row.defaultVideoModel ?? null,
     timezone: row.timezone,
     language: row.language,
-    agentPanelButtonLocation: row.agentPanelButtonLocation,
   };
 };

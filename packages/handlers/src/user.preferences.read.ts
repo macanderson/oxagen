@@ -17,13 +17,11 @@ const PREF_DEFAULTS = {
   defaultVideoModel: null,
   timezone: "UTC",
   language: "en",
-  agentPanelButtonLocation: "lower-right" as const,
 };
 
-export const userPreferencesReadHandler: CapabilityHandler<typeof userPreferencesRead> = async (
-  _input,
-  ctx,
-) => {
+export const userPreferencesReadHandler: CapabilityHandler<
+  typeof userPreferencesRead
+> = async (_input, ctx) => {
   if (!ctx.userId) {
     logger.warn({}, "user.preferences.read: rejected — no authenticated user");
     throw new Error("user.preferences.read requires an authenticated user");
@@ -45,7 +43,6 @@ export const userPreferencesReadHandler: CapabilityHandler<typeof userPreference
         defaultVideoModel: true,
         timezone: true,
         language: true,
-        agentPanelButtonLocation: true,
       },
     }),
   );
@@ -74,6 +71,5 @@ export const userPreferencesReadHandler: CapabilityHandler<typeof userPreference
     defaultVideoModel: row.defaultVideoModel ?? null,
     timezone: row.timezone,
     language: row.language,
-    agentPanelButtonLocation: row.agentPanelButtonLocation,
   };
 };

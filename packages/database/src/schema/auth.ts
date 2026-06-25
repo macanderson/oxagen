@@ -1,7 +1,24 @@
-import { bigint, boolean, index, integer, text, timestamp, uniqueIndex, uuid, jsonb } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  boolean,
+  index,
+  integer,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+  jsonb,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { authSchema } from "./_schemas";
-import { auditMixin, bytea, citext, idMixin, softDeleteMixin, orgScopeMixin } from "./_mixins";
+import {
+  auditMixin,
+  bytea,
+  citext,
+  idMixin,
+  softDeleteMixin,
+  orgScopeMixin,
+} from "./_mixins";
 
 // ── User-preference enums ────────────────────────────────────────────────────
 // Declared in the auth schema so the type lives next to the table that owns it.
@@ -25,10 +42,10 @@ export const densityEnum = authSchema.enum("density", [
  * What to do when the user submits a new prompt while the agent is responding.
  * queue = buffer it; interrupt = cancel the in-flight response immediately.
  */
-export const pendingPromptBehaviorEnum = authSchema.enum("pending_prompt_behavior", [
-  "queue",
-  "interrupt",
-]);
+export const pendingPromptBehaviorEnum = authSchema.enum(
+  "pending_prompt_behavior",
+  ["queue", "interrupt"],
+);
 
 /**
  * Oxagen model-tier alias. Maps to a quality/cost tier rather than a specific
@@ -39,14 +56,6 @@ export const modelTierEnum = authSchema.enum("model_tier", [
   "fast",
   "balanced",
   "precise",
-]);
-
-/** Agent panel button location preference. */
-export const agentPanelButtonLocationEnum = authSchema.enum("agent_panel_button_location", [
-  "lower-right",
-  "topnav",
-  "sidebar",
-  "command-palette-only",
 ]);
 
 export const users = authSchema.table(
@@ -63,8 +72,14 @@ export const users = authSchema.table(
     // Better Auth tracks email verification as a boolean; we also track the
     // verification timestamp for our own audit purposes.
     emailVerified: boolean("email_verified").notNull().default(false),
-    emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true, mode: "date" }),
-    lastLoginAt: timestamp("last_login_at", { withTimezone: true, mode: "date" }),
+    emailVerifiedAt: timestamp("email_verified_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    lastLoginAt: timestamp("last_login_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
   },
   (t) => ({
     emailIdx: uniqueIndex("users_email_idx").on(t.email),
@@ -121,11 +136,18 @@ export const sessions = authSchema.table(
     id: text("id").primaryKey(),
     userId: uuid("user_id").notNull(),
     token: text("token").notNull(),
-    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
   },
   (t) => ({
     tokenIdx: uniqueIndex("sessions_token_idx").on(t.token),
@@ -163,15 +185,28 @@ export const accounts = authSchema.table(
     // per-row key rotation is possible without re-querying config.
     tokenKmsKeyId: text("token_kms_key_id"),
 
-    accessTokenExpiresAt: timestamp("access_token_expires_at", { withTimezone: true, mode: "date" }),
-    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { withTimezone: true, mode: "date" }),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     scope: text("scope"),
     password: text("password"),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
   },
   (t) => ({
-    providerAccountIdx: uniqueIndex("accounts_provider_account_idx").on(t.providerId, t.accountId),
+    providerAccountIdx: uniqueIndex("accounts_provider_account_idx").on(
+      t.providerId,
+      t.accountId,
+    ),
     userIdx: index("accounts_user_idx").on(t.userId),
   }),
 );
@@ -182,9 +217,16 @@ export const verifications = authSchema.table(
     id: text("id").primaryKey(),
     identifier: text("identifier").notNull(),
     value: text("value").notNull(),
-    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
   },
   (t) => ({
     identifierIdx: index("verifications_identifier_idx").on(t.identifier),
@@ -260,14 +302,9 @@ export const userPreferences = authSchema.table(
     notificationSettings: jsonb("notification_settings")
       .notNull()
       .default(sql`'{}'::jsonb`),
-    // Agent panel UI preferences
-    agentPanelButtonLocation: agentPanelButtonLocationEnum("agent_panel_button_location")
-      .notNull()
-      .default("lower-right"),
   },
   (t) => ({
     // Enforces the 1:1 relationship — one preferences row per user.
     userIdIdx: uniqueIndex("user_preferences_user_id_idx").on(t.userId),
   }),
 );
-

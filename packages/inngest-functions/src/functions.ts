@@ -7,14 +7,24 @@ import { agentExecuteSubagent } from "./functions/agent.execute-subagent";
 import { agentAggregateFanout } from "./functions/agent.aggregate-fanout";
 import { webSearchIngestGraph } from "./functions/web.search.ingest-graph";
 import { agentBackgroundTaskExecute } from "./functions/agent.background-task.execute";
-import { agentVideoRender, agentVideoRenderOnFailure } from "./functions/agent.video-render";
+import {
+  agentVideoRender,
+  agentVideoRenderOnFailure,
+} from "./functions/agent.video-render";
 import { securityAuditPartitionRollover } from "./functions/security.audit-partition-rollover";
 import { pluginOauthRefreshWatcher } from "./functions/plugin.oauth-refresh-watcher";
 import { agentWorkflowSupervisor } from "./functions/agent.workflow.supervisor";
 import { agentWorkflowTaskExecute } from "./functions/agent.workflow.task.execute";
 import { agentSyncExecutionToGraph } from "./functions/agent.sync-execution-to-graph";
-import { privacyExportProcess, privacyExportProcessOnFailure } from "./functions/privacy.export.process";
-import { privacyErasureExecute, privacyErasureExecuteOnFailure } from "./functions/privacy.erasure.execute";
+import { agentSyncGeneratedAssetToGraph } from "./functions/agent.sync-generated-asset-to-graph";
+import {
+  privacyExportProcess,
+  privacyExportProcessOnFailure,
+} from "./functions/privacy.export.process";
+import {
+  privacyErasureExecute,
+  privacyErasureExecuteOnFailure,
+} from "./functions/privacy.erasure.execute";
 import { authSessionExpiryAudit } from "./functions/auth.session-expiry-audit";
 import { ingestionPipeline } from "./functions/ingestion.pipeline";
 import { ingestionDeleteConnection } from "./functions/ingestion.delete";
@@ -51,6 +61,7 @@ export const functions: any[] = [
   agentWorkflowSupervisor,
   agentWorkflowTaskExecute,
   agentSyncExecutionToGraph,
+  agentSyncGeneratedAssetToGraph,
   privacyExportProcess,
   privacyExportProcessOnFailure,
   privacyErasureExecute,

@@ -26,7 +26,6 @@ describe("user.preferences.read capability", () => {
       defaultVideoModel: "google/veo-3.0-generate-001",
       timezone: "America/New_York",
       language: "en",
-      agentPanelButtonLocation: "lower-right",
     });
     expect(parsed.fontSize).toBe("large");
     expect(parsed.defaultTextTier).toBe("precise");
@@ -44,7 +43,6 @@ describe("user.preferences.read capability", () => {
       defaultVideoModel: null,
       timezone: "UTC",
       language: "en",
-      agentPanelButtonLocation: "topnav",
     });
     expect(parsed.defaultTextTier).toBeNull();
     expect(parsed.defaultTextModel).toBeNull();
