@@ -26,7 +26,6 @@ import { agentTriggerDelete } from "./agent.trigger.delete";
 import { agentTriggerList } from "./agent.trigger.list";
 import { agentExecutionRecord } from "./agent.execution.record";
 import { agentUiRender } from "./agent.ui.render";
-import { brandkitApply } from "./brandkit.apply";
 import { documentsGenerate } from "./documents.generate";
 import { documentsPdfCreate } from "./documents.pdf.create";
 import { markdownGenerate } from "./markdown.generate";
@@ -104,8 +103,6 @@ import { imageAnalyze } from "./image.analyze";
 import { documentCreate } from "./document.create";
 import { documentList } from "./document.list";
 import { documentRead } from "./document.read";
-import { formCreate } from "./form.create";
-import { formSubmit } from "./form.submit";
 import { automationList } from "./automation.list";
 import { automationCreate } from "./automation.create";
 import { automationTrigger } from "./automation.trigger";
@@ -218,12 +215,11 @@ import { semanticRelationshipSuggest } from "./semantic.relationship.suggest";
 // Re-export shared Zod helpers used across schema.* contracts.
 // These are not capability contracts themselves but must appear here to satisfy
 // the check-contracts file-coverage guard (tools/scripts/check-contracts.mjs).
-export type { FieldError as SharedFieldError, PropertyInput as SharedPropertyInput } from "./schema.shared";
 export type {
-  FieldError,
-  DataType,
-  PropertyInput,
-} from "./schema.types";
+  FieldError as SharedFieldError,
+  PropertyInput as SharedPropertyInput,
+} from "./schema.shared";
+export type { FieldError, DataType, PropertyInput } from "./schema.types";
 
 export {
   apiKeyCreate,
@@ -244,7 +240,6 @@ export {
   agentTriggerList,
   agentExecutionRecord,
   agentUiRender,
-  brandkitApply,
   documentsGenerate,
   documentsPdfCreate,
   markdownGenerate,
@@ -322,8 +317,6 @@ export {
   documentCreate,
   documentList,
   documentRead,
-  formCreate,
-  formSubmit,
   automationList,
   automationCreate,
   automationTrigger,
@@ -461,7 +454,6 @@ export const contracts = [
   agentTriggerDelete,
   agentTriggerList,
   agentUiRender,
-  brandkitApply,
   documentsGenerate,
   documentsPdfCreate,
   markdownGenerate,
@@ -539,8 +531,6 @@ export const contracts = [
   documentCreate,
   documentList,
   documentRead,
-  formCreate,
-  formSubmit,
   automationList,
   automationCreate,
   automationTrigger,

@@ -5,12 +5,13 @@ describe("video.generate capability", () => {
   // ── input validation ────────────────────────────────────────────────────────
 
   it("parses a minimal valid input (prompt only)", () => {
-    const parsed = videoGenerate.input.parse({ prompt: "A sunset over the ocean" });
+    const parsed = videoGenerate.input.parse({
+      prompt: "A sunset over the ocean",
+    });
     expect(parsed.prompt).toBe("A sunset over the ocean");
     expect(parsed.durationSeconds).toBeUndefined();
     expect(parsed.aspectRatio).toBeUndefined();
     expect(parsed.style).toBeUndefined();
-    expect(parsed.brandKitId).toBeUndefined();
   });
 
   it("parses a fully-populated input", () => {
@@ -19,17 +20,18 @@ describe("video.generate capability", () => {
       durationSeconds: 15,
       aspectRatio: "16:9",
       style: "cinematic",
-      brandKitId: "bk_abc123",
     });
     expect(parsed.durationSeconds).toBe(15);
     expect(parsed.aspectRatio).toBe("16:9");
     expect(parsed.style).toBe("cinematic");
-    expect(parsed.brandKitId).toBe("bk_abc123");
   });
 
   it("accepts all valid aspect ratios", () => {
     for (const ar of ["16:9", "9:16", "1:1"] as const) {
-      const parsed = videoGenerate.input.parse({ prompt: "test", aspectRatio: ar });
+      const parsed = videoGenerate.input.parse({
+        prompt: "test",
+        aspectRatio: ar,
+      });
       expect(parsed.aspectRatio).toBe(ar);
     }
   });
@@ -98,7 +100,10 @@ describe("video.generate capability", () => {
         status: "queued",
         jobId: "gen_abc",
         serveUrl: "/api/v1/assets/gen_abc",
-        render: { componentId: "svg-preview", props: { url: "/u", prompt: "p" } },
+        render: {
+          componentId: "svg-preview",
+          props: { url: "/u", prompt: "p" },
+        },
       }),
     ).toThrow();
   });
@@ -108,7 +113,10 @@ describe("video.generate capability", () => {
       videoGenerate.output.parse({
         status: "queued",
         serveUrl: "/api/v1/assets/gen_abc",
-        render: { componentId: "video-result", props: { url: "/u", prompt: "p" } },
+        render: {
+          componentId: "video-result",
+          props: { url: "/u", prompt: "p" },
+        },
       }),
     ).toThrow();
   });
@@ -118,7 +126,10 @@ describe("video.generate capability", () => {
       videoGenerate.output.parse({
         status: "queued",
         jobId: "gen_abc",
-        render: { componentId: "video-result", props: { url: "/u", prompt: "p" } },
+        render: {
+          componentId: "video-result",
+          props: { url: "/u", prompt: "p" },
+        },
       }),
     ).toThrow();
   });

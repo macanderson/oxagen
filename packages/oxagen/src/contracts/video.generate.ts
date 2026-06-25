@@ -35,8 +35,6 @@ export const videoGenerate = registerCapability({
     aspectRatio: z.enum(["16:9", "9:16", "1:1"]).optional(),
     /** Free-text style hint passed to the rendering model (e.g. "cinematic", "animated"). */
     style: z.string().optional(),
-    /** Optional brand-kit ID to apply to the generated video. */
-    brandKitId: z.string().optional(),
   }),
   output: z.object({
     /** Current lifecycle status — always "queued" for an async render. */

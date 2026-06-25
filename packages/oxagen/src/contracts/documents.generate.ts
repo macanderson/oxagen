@@ -63,7 +63,9 @@ export const documentsGenerate = registerCapability({
          * is a 2-D array of cell values (string | number | boolean).
          */
         headers: z.array(z.string()).optional(),
-        rows: z.array(z.array(z.union([z.string(), z.number(), z.boolean()]))).optional(),
+        rows: z
+          .array(z.array(z.union([z.string(), z.number(), z.boolean()])))
+          .optional(),
         /**
          * For presentations: an array of slides. Each slide has a title and
          * optional bullet lines.
@@ -78,7 +80,7 @@ export const documentsGenerate = registerCapability({
           .optional(),
       })
       .optional(),
-    /** Optional brand-kit colors to thread through the document. */
+    /** Optional brand colors to thread through the document. */
     brandColors: z
       .object({
         primary: z.string().optional(),
