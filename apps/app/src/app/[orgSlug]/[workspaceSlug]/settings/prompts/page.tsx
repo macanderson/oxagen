@@ -10,10 +10,12 @@ import { and, eq } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
+import { resolvePrompt, chatSystemPrompt } from "@oxagen/ai";
 import "@oxagen/handlers/register";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { PromptSettingsForm } from "./prompt-settings-form";
+import { SystemPromptReadonly } from "./system-prompt-readonly";
 import type { PromptSettingsReadOutput } from "./prompt-settings-action";
 
 export const dynamic = "force-dynamic";
@@ -81,8 +83,24 @@ export default async function WorkspacePromptsPage({ params }: PageProps) {
     },
   );
 
+  // Render the workspace's effective system prompt read-only for transparency.
+  // The baseline chat.system prompt is a pure function of workspace context;
+  // resolvePrompt appends the workspace's saved Additional instructions exactly
+  // as the chat runtime does, so what admins see here is what the agent runs.
+  const effectiveSystemPrompt = resolvePrompt({
+    key: "chat.system",
+    baseline: chatSystemPrompt({
+      orgSlug,
+      workspaceSlug,
+      orgName: org.name,
+      workspaceName: ws.name,
+    }),
+    config: { additionalInstructions: settings.additionalInstructions },
+  });
+
   return (
     <div className="flex flex-col gap-8 max-w-2xl">
+      <SystemPromptReadonly prompt={effectiveSystemPrompt} />
       <PromptSettingsForm
         initial={settings}
         canEdit={canEdit}
