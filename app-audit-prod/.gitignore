@@ -1,4 +1,0 @@
-# Secrets — never commit the saved production session cookie
-auth.json
-# playwright-cli scratch
-.playwright-cli/

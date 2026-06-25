@@ -1,4 +1,3 @@
- 
 import { createFunction } from "../create-function";
 import { withSystemDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
@@ -10,8 +9,8 @@ import { parseSourceFile } from "@oxagen/ingestion/parsers";
 import type { ParsedSymbol } from "@oxagen/ingestion/parsers";
 import { logger } from "../logger";
 
-// Skip files larger than 500 KB — too expensive to parse + embed.
-const MAX_CONTENT_BYTES = 500 * 1024;
+// Skip files larger than 1000 KB — too expensive to parse + embed.
+const MAX_CONTENT_BYTES = 1000 * 1024;
 // Batch size for symbol upsert to keep Neo4j sessions bounded.
 const SYMBOL_BATCH_SIZE = 20;
 
@@ -32,15 +31,16 @@ export const [ingestionGithubParseFile] = createFunction(
   },
   { event: "ingestion/github.parse-file" },
   async ({ event, step }) => {
-    const { connectionId, orgId, workspaceId, owner, repo, sha, path } = event.data as {
-      connectionId: string;
-      orgId: string;
-      workspaceId: string;
-      owner: string;
-      repo: string;
-      sha: string;
-      path: string;
-    };
+    const { connectionId, orgId, workspaceId, owner, repo, sha, path } =
+      event.data as {
+        connectionId: string;
+        orgId: string;
+        workspaceId: string;
+        owner: string;
+        repo: string;
+        sha: string;
+        path: string;
+      };
 
     // ── Step 1: Fetch access token ─────────────────────────────────────────────
     const accessToken = await step.run("fetch-token", async () => {
@@ -61,7 +61,9 @@ export const [ingestionGithubParseFile] = createFunction(
 
       const row = rows[0];
       if (!row?.access_token_enc) {
-        throw new Error(`ingestion-github-parse-file: no oauth token for connectionId=${connectionId}`);
+        throw new Error(
+          `ingestion-github-parse-file: no oauth token for connectionId=${connectionId}`,
+        );
       }
 
       const cryptoAdapter = createIngestionCryptoAdapter();
@@ -69,7 +71,9 @@ export const [ingestionGithubParseFile] = createFunction(
       const decrypted: unknown = await decrypt(cipherBuf, cryptoAdapter.keyId, {
         adapter: cryptoAdapter.adapter,
       });
-      return Buffer.isBuffer(decrypted) ? decrypted.toString("utf8") : String(decrypted);
+      return Buffer.isBuffer(decrypted)
+        ? decrypted.toString("utf8")
+        : String(decrypted);
     });
 
     // ── Step 2: Fetch raw file content ────────────────────────────────────────
@@ -91,15 +95,23 @@ export const [ingestionGithubParseFile] = createFunction(
       }
 
       // Check Content-Length before reading body.
-      const contentLength = Number(response.headers.get("content-length") ?? "0");
+      const contentLength = Number(
+        response.headers.get("content-length") ?? "0",
+      );
       if (contentLength > MAX_CONTENT_BYTES) {
-        logger.info({ path, connectionId, orgId, contentLength }, "ingestion-github-parse-file: file too large, skipping");
+        logger.info(
+          { path, connectionId, orgId, contentLength },
+          "ingestion-github-parse-file: file too large, skipping",
+        );
         return null;
       }
 
       const text = await response.text();
       if (text.length > MAX_CONTENT_BYTES) {
-        logger.info({ path, connectionId, orgId, size: text.length }, "ingestion-github-parse-file: file too large, skipping");
+        logger.info(
+          { path, connectionId, orgId, size: text.length },
+          "ingestion-github-parse-file: file too large, skipping",
+        );
         return null;
       }
 
@@ -117,7 +129,11 @@ export const [ingestionGithubParseFile] = createFunction(
     );
 
     logger.debug(
-      { path, language: parseResult.language, symbolCount: parseResult.symbols.length },
+      {
+        path,
+        language: parseResult.language,
+        symbolCount: parseResult.symbols.length,
+      },
       "ingestion-github-parse-file: parsed",
     );
 
@@ -175,7 +191,10 @@ export const [ingestionGithubParseFile] = createFunction(
             },
           );
           const record = result.records[0];
-          if (!record) throw new Error(`upsert-source-file: no record returned for ${naturalKey}`);
+          if (!record)
+            throw new Error(
+              `upsert-source-file: no record returned for ${naturalKey}`,
+            );
           return record.get("fileId") as string;
         } finally {
           await session.close();
@@ -198,8 +217,7 @@ export const [ingestionGithubParseFile] = createFunction(
             const session = scopedSession();
             try {
               for (const symbol of batch) {
-                const symbolNaturalKey =
-                  `github:${connectionId}:${owner}/${repo}:${path}:${symbol.kind}:${symbol.name}`;
+                const symbolNaturalKey = `github:${connectionId}:${owner}/${repo}:${path}:${symbol.kind}:${symbol.name}`;
                 await session.run(
                   // Same dual-label pattern as SourceFile: MERGE on :SourceSymbol
                   // (keeps the CONTAINS edge match below), then SET adds the
@@ -207,28 +225,28 @@ export const [ingestionGithubParseFile] = createFunction(
                   // visible/traversable in the graph explorer (label = symbol kind,
                   // displayName = symbol name).
                   `MERGE (s:SourceSymbol {naturalKey: $naturalKey, orgId: $orgId})
-                   ON CREATE SET
-                     s.publicId    = randomUUID(),
-                     s.createdAt   = datetime()
-                   ON MATCH SET
-                     s.syncedAt   = datetime()
-                   SET
-                     s:KnowledgeNode,
-                     s.name        = $name,
-                     s.kind        = $kind,
-                     s.label       = $kind,
-                     s.displayName = $name,
-                     s.startLine   = $startLine,
-                     s.endLine     = $endLine,
-                     s.fileNaturalKey = $fileNaturalKey,
-                     s.connectionId = $connectionId,
-                     s.sourceId    = $connectionId,
-                     s.workspaceId = $workspaceId,
-                     s.properties  = $properties,
-                     s.updatedAt   = datetime()
-                   WITH s
-                   MATCH (f:SourceFile {naturalKey: $fileNaturalKey, orgId: $orgId})
-                   MERGE (f)-[:CONTAINS]->(s)`,
+                    ON CREATE SET
+                      s.publicId    = randomUUID(),
+                      s.createdAt   = datetime()
+                    ON MATCH SET
+                      s.syncedAt   = datetime()
+                    SET
+                      s:KnowledgeNode,
+                      s.name        = $name,
+                      s.kind        = $kind,
+                      s.label       = $kind,
+                      s.displayName = $name,
+                      s.startLine   = $startLine,
+                      s.endLine     = $endLine,
+                      s.fileNaturalKey = $fileNaturalKey,
+                      s.connectionId = $connectionId,
+                      s.sourceId    = $connectionId,
+                      s.workspaceId = $workspaceId,
+                      s.properties  = $properties,
+                      s.updatedAt   = datetime()
+                    WITH s
+                    MATCH (f:SourceFile {naturalKey: $fileNaturalKey, orgId: $orgId})
+                    MERGE (f)-[:CONTAINS]->(s)`,
                   {
                     naturalKey: symbolNaturalKey,
                     orgId,
@@ -253,8 +271,8 @@ export const [ingestionGithubParseFile] = createFunction(
               // After all symbols: MERGE SourceFile → SourceConnection edge.
               await session.run(
                 `MATCH (f:SourceFile {naturalKey: $fileNaturalKey, orgId: $orgId})
-                 MERGE (sc:SourceConnection {id: $connectionId, orgId: $orgId})
-                 MERGE (f)-[:SOURCED_FROM]->(sc)`,
+                  MERGE (sc:SourceConnection {id: $connectionId, orgId: $orgId})
+                  MERGE (f)-[:SOURCED_FROM]->(sc)`,
                 { fileNaturalKey: naturalKey, orgId, connectionId },
               );
             } finally {
@@ -291,7 +309,7 @@ export const [ingestionGithubParseFile] = createFunction(
         try {
           await session.run(
             `MATCH (f:SourceFile {naturalKey: $naturalKey, orgId: $orgId})
-             SET f.embedding = $embedding, f.embeddingUpdatedAt = datetime()`,
+              SET f.embedding = $embedding, f.embeddingUpdatedAt = datetime()`,
             { naturalKey, orgId, embedding },
           );
         } finally {
@@ -315,7 +333,12 @@ export const [ingestionGithubParseFile] = createFunction(
     }
 
     logger.info(
-      { path, language: parseResult.language, symbolCount: parseResult.symbols.length, orgId },
+      {
+        path,
+        language: parseResult.language,
+        symbolCount: parseResult.symbols.length,
+        orgId,
+      },
       "ingestion-github-parse-file: completed",
     );
 
