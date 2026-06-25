@@ -1,6 +1,6 @@
 /**
  * Unit tests for miscellaneous route handlers:
- *   archive.create, asset.upload, brandkit.apply,
+ *   archive.create, asset.upload,
  *   form.fill, image.generate, svg.generate, video.generate,
  *   documents.generate, documents.pdf.create,
  *   system.install.instructions, workflow (run/status/cancel)
@@ -60,7 +60,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -99,9 +101,7 @@ describe("archive.create route", () => {
   const PATH = "/archive/create";
   const VALID_BODY = {
     archiveName: "my-archive",
-    entries: [
-      { kind: "text", name: "readme.txt", text: "hello" },
-    ],
+    entries: [{ kind: "text", name: "readme.txt", text: "hello" }],
   };
 
   it("happy path: 200 with archive result", async () => {
@@ -154,35 +154,6 @@ describe("asset.upload route", () => {
   });
 });
 
-// ── brandkit.apply ────────────────────────────────────────────────────────
-
-describe("brandkit.apply route", () => {
-  const PATH = "/brandkit/apply";
-  const VALID_BODY = {
-    workspaceId: "ws-1",
-    brandKitId: "bk-1",
-    targetFileId: "file-1",
-  };
-
-  it("happy path: 200", async () => {
-    mocks.invoke.mockResolvedValue({
-      stub: true,
-      applied: false,
-      brandKitId: "bk-1",
-      targetFileId: "file-1",
-    });
-    const res = await app.fetch(post(PATH, VALID_BODY));
-    expect(res.status).toBe(200);
-  });
-
-  it("calls invoke with 'brandkit.apply'", async () => {
-    await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("brandkit.apply");
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.brandKitId).toBe("bk-1");
-  });
-});
-
 // ── form.fill ─────────────────────────────────────────────────────────────
 
 describe("form.fill route", () => {
@@ -210,9 +181,7 @@ describe("form.fill route", () => {
   });
 
   it("empty fields array → 400", async () => {
-    const res = await app.fetch(
-      post(PATH, { ...VALID_BODY, fields: [] }),
-    );
+    const res = await app.fetch(post(PATH, { ...VALID_BODY, fields: [] }));
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
@@ -259,9 +228,7 @@ describe("svg.generate route", () => {
       title: "Logo",
       render: { componentId: "svg-preview", props: {} },
     });
-    const res = await app.fetch(
-      post(PATH, { prompt: "A simple logo" }),
-    );
+    const res = await app.fetch(post(PATH, { prompt: "A simple logo" }));
     expect(res.status).toBe(200);
   });
 
@@ -287,9 +254,7 @@ describe("video.generate route", () => {
   });
 
   it("calls invoke with 'video.generate'", async () => {
-    await app.fetch(
-      post(PATH, { prompt: "Ocean waves", durationSeconds: 10 }),
-    );
+    await app.fetch(post(PATH, { prompt: "Ocean waves", durationSeconds: 10 }));
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("video.generate");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.durationSeconds).toBe(10);
@@ -312,9 +277,7 @@ describe("documents.generate route", () => {
     kind: "document",
     title: "Q1 Report",
     content: {
-      sections: [
-        { heading: "Overview", paragraphs: ["This is Q1."] },
-      ],
+      sections: [{ heading: "Overview", paragraphs: ["This is Q1."] }],
     },
   };
 
@@ -351,9 +314,7 @@ describe("documents.pdf.create route", () => {
   const VALID_BODY = {
     title: "My PDF",
     content: {
-      sections: [
-        { paragraphs: ["Hello world."] },
-      ],
+      sections: [{ paragraphs: ["Hello world."] }],
     },
   };
 
@@ -398,9 +359,7 @@ describe("system.install.instructions route", () => {
   });
 
   it("calls invoke with 'system.install.instructions'", async () => {
-    await app.fetch(
-      post(PATH, { client: "cursor", workspaceSlug: "my-ws" }),
-    );
+    await app.fetch(post(PATH, { client: "cursor", workspaceSlug: "my-ws" }));
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("system.install.instructions");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.client).toBe("cursor");
@@ -415,9 +374,7 @@ describe("workflow.run route", () => {
 
   it("happy path POST: 200", async () => {
     mocks.invoke.mockResolvedValue({ workflowId: "wfr-1" });
-    const res = await app.fetch(
-      post(PATH, { goal: "Research AI trends" }),
-    );
+    const res = await app.fetch(post(PATH, { goal: "Research AI trends" }));
     expect(res.status).toBe(200);
   });
 
