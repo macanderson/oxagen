@@ -1,10 +1,10 @@
 "use client";
 /**
- * WandPanel — the floating AI agent drawer panel.
+ * WandPanel — the floating AI agent panel.
  *
- * Opens as a right-side Sheet when the WandButton is clicked. Renders
- * ChatShellClient (lazily imported, mirroring AskDrawer) wired to the
- * real workspace-scoped wandSendAction.
+ * Opens as a floating, draggable panel (id="wand-panel") when the
+ * WandButton is clicked. Renders ChatShellClient (lazily imported,
+ * mirroring AskDrawer) wired to the real workspace-scoped wandSendAction.
  *
  * Workspace resolution:
  *   The panel is mounted at the [orgSlug] layout boundary, which has no
@@ -190,6 +190,7 @@ export function WandPanel({ orgSlug, availableWorkspaces, modelConfig }: WandPan
 
   return (
     <div
+      id="wand-panel"
       ref={panelRef}
       onPointerDown={handlePointerDown}
       className="fixed z-40 w-[480px] rounded-lg border border-white/15 shadow-2xl flex flex-col overflow-hidden"

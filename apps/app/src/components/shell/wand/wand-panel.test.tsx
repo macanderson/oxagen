@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
 import * as React from "react";
 
 vi.mock("next/navigation", () => ({
@@ -35,16 +35,6 @@ vi.mock("next/link", () => ({
   default: ({ href, children, ...props }: { href: string; children: React.ReactNode; [k: string]: unknown }) => (
     <a href={href} {...(props as React.AnchorHTMLAttributes<HTMLAnchorElement>)}>{children}</a>
   ),
-}));
-
-vi.mock("@/components/ui/sheet", () => ({
-  Sheet: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
-    open ? <div data-testid="sheet">{children}</div> : null,
-  SheetPopup: ({ children, ...rest }: { children: React.ReactNode; [k: string]: unknown }) => (
-    <div>{children}</div>
-  ),
-  SheetHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SheetTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -86,6 +76,7 @@ vi.mock("lucide-react", () => ({
   ArrowUpRight: () => <span />,
   Wand2: () => <span />,
   Sparkles: () => <span />,
+  X: () => <span />,
 }));
 
 vi.mock("@/lib/utils", () => ({
@@ -113,27 +104,34 @@ beforeEach(() => {
 });
 
 describe("WandPanel", () => {
-  it("does NOT render sheet when isWandOpen=false", () => {
+  it("does NOT render the panel when isWandOpen=false", () => {
     mockPageCtx.isWandOpen = false;
     render(<WandPanel {...defaultProps} />);
-    expect(screen.queryByTestId("sheet")).toBeNull();
+    expect(document.getElementById("wand-panel")).toBeNull();
+    expect(screen.queryByText("Oxagen AI")).toBeNull();
   });
 
-  it("renders 'Oxagen AI' title when isWandOpen=true", async () => {
+  it("renders the floating #wand-panel with 'Oxagen AI' title when isWandOpen=true", () => {
     mockPageCtx.isWandOpen = true;
     render(<WandPanel {...defaultProps} />);
-    await waitFor(() => {
-      expect(screen.getByTestId("sheet")).toBeDefined();
-    });
+    // The panel root carries id="wand-panel" — the anchor wand-button's
+    // aria-controls and the form-fill e2e specs both rely on.
+    expect(document.getElementById("wand-panel")).not.toBeNull();
     expect(screen.getByText("Oxagen AI")).toBeDefined();
   });
 
-  it("'Open in full chat' link href is correctly built", async () => {
+  it("renders a Close button inside the panel", () => {
     mockPageCtx.isWandOpen = true;
     render(<WandPanel {...defaultProps} />);
-    await waitFor(() => {
-      expect(screen.getByTestId("sheet")).toBeDefined();
-    });
+    const panel = document.getElementById("wand-panel");
+    expect(panel).not.toBeNull();
+    const closeButton = screen.getByRole("button", { name: /close/i });
+    expect(panel?.contains(closeButton)).toBe(true);
+  });
+
+  it("'Open in full chat' link href is correctly built", () => {
+    mockPageCtx.isWandOpen = true;
+    render(<WandPanel {...defaultProps} />);
     const link = screen.getByRole("link", { name: /open in full chat/i }) as HTMLAnchorElement;
     expect(link.href).toContain("/acme/prod/ask");
   });
