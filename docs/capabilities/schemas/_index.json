@@ -386,14 +386,6 @@
       "consumes": []
     },
     {
-      "name": "brandkit.apply",
-      "domain": "brandkit",
-      "surfaces": ["api", "mcp", "agent"],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
       "name": "chat.message.execution",
       "domain": "chat",
       "surfaces": ["api", "mcp"],

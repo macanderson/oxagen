@@ -67,10 +67,6 @@ contract-first design, IAM enforcement, and instrumentation.
 - [billing.subscription.read](billing.subscription.read.md) — Return the active subscription, plan slug, current period bounds, and available credits
 - [billing.subscription.upgrade.start](billing.subscription.upgrade.start.md) — Begin a plan change via Stripe Checkout; returns a URL for the user to complete
 
-## Brandkit (1)
-
-- [brandkit.apply](brandkit.apply.md) — Apply a workspace brand kit (colours, fonts, logos) to an existing cloud file (stub)
-
 ## Chat (2)
 
 - [chat.message.execution](chat.message.execution.md) — Record an agent execution that originated from a chat message; atomically links execution to message for observability

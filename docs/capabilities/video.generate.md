@@ -8,36 +8,35 @@
 ## Intent
 
 Generate a short video from a natural-language prompt. The capability accepts
-optional duration, aspect-ratio, style, and brand-kit parameters. It returns a
+optional duration, aspect-ratio, and style parameters. It returns a
 typed queued-job reference and a render directive that tells the chat UI to
 immediately display the `make-video-form` component so the user can review,
 edit, and re-submit the request once generation is live.
 
 ## Input
 
-| Field             | Type                                    | Notes                                                                   |
-| ----------------- | --------------------------------------- | ----------------------------------------------------------------------- |
-| `prompt`          | `string` (min 1)                        | Natural-language description of the video to generate.                  |
-| `durationSeconds` | `integer` 1–60 (optional)              | Duration of the output video in whole seconds.                          |
-| `aspectRatio`     | `"16:9" \| "9:16" \| "1:1"` (optional) | Target aspect ratio for the output.                                     |
-| `style`           | `string` (optional)                     | Free-text style hint for the rendering model (e.g. "cinematic", "animated"). |
-| `brandKitId`      | `string` (optional)                     | Optional brand-kit ID to apply to the generated video.                  |
+| Field             | Type                                   | Notes                                                                        |
+| ----------------- | -------------------------------------- | ---------------------------------------------------------------------------- |
+| `prompt`          | `string` (min 1)                       | Natural-language description of the video to generate.                       |
+| `durationSeconds` | `integer` 1–60 (optional)              | Duration of the output video in whole seconds.                               |
+| `aspectRatio`     | `"16:9" \| "9:16" \| "1:1"` (optional) | Target aspect ratio for the output.                                          |
+| `style`           | `string` (optional)                    | Free-text style hint for the rendering model (e.g. "cinematic", "animated"). |
 
 ## Output
 
-| Field    | Type                           | Notes                                                              |
-| -------- | ------------------------------ | ------------------------------------------------------------------ |
-| `stub`   | `true` (literal)               | Always `true` for the stub implementation.                         |
-| `status` | `"queued"` (literal)           | Always `"queued"` for the stub.                                    |
-| `jobId`  | `string`                       | Opaque job identifier for future polling once the pipeline is live. |
-| `render` | `RenderDirective`              | Instructs the chat stream route to render `make-video-form`.       |
+| Field    | Type                 | Notes                                                               |
+| -------- | -------------------- | ------------------------------------------------------------------- |
+| `stub`   | `true` (literal)     | Always `true` for the stub implementation.                          |
+| `status` | `"queued"` (literal) | Always `"queued"` for the stub.                                     |
+| `jobId`  | `string`             | Opaque job identifier for future polling once the pipeline is live. |
+| `render` | `RenderDirective`    | Instructs the chat stream route to render `make-video-form`.        |
 
 ### RenderDirective
 
-| Field         | Type                       | Notes                                        |
-| ------------- | -------------------------- | -------------------------------------------- |
-| `componentId` | `"make-video-form"`        | Stable registry key — never rename.          |
-| `props`       | `MakeVideoFormProps`       | Pre-populated form props echoed from input.  |
+| Field         | Type                 | Notes                                       |
+| ------------- | -------------------- | ------------------------------------------- |
+| `componentId` | `"make-video-form"`  | Stable registry key — never rename.         |
+| `props`       | `MakeVideoFormProps` | Pre-populated form props echoed from input. |
 
 ## Chat component
 
@@ -70,11 +69,11 @@ None — stub logs intent to stdout. No DB write, no job queue, no billing charg
 The handler does not throw. On validation failure, the Hono route returns
 `400 Bad Request`; the server action returns `{ ok: false, error: string }`.
 
-| Code              | Meaning                                                     |
-| ----------------- | ----------------------------------------------------------- |
-| `400 Bad Request` | Input failed Zod validation (empty prompt, invalid ratio, etc.) |
-| `401 Unauthorized`| No valid session or API key.                                |
-| `403 Forbidden`   | Caller lacks `video.generate` permission for the org/workspace. |
+| Code               | Meaning                                                         |
+| ------------------ | --------------------------------------------------------------- |
+| `400 Bad Request`  | Input failed Zod validation (empty prompt, invalid ratio, etc.) |
+| `401 Unauthorized` | No valid session or API key.                                    |
+| `403 Forbidden`    | Caller lacks `video.generate` permission for the org/workspace. |
 
 ## SPEC references
 

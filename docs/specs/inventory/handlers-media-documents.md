@@ -1,7 +1,7 @@
 # Spec: handlers-media-documents
 
 > Auto-extracted by spec-miner. Last mined: 2026-06-20.
-> Source: image.generate, image.create, image.analyze, image.list, video.generate, svg.generate, markdown.generate, mermaid.generate, brandkit.apply, asset.upload, generated-asset.persist, generated-asset.serve, document.create, document.read, document.list, documents.generate, documents.pdf.create, form.fill, archive.create
+> Source: image.generate, image.create, image.analyze, image.list, video.generate, svg.generate, markdown.generate, mermaid.generate, asset.upload, generated-asset.persist, generated-asset.serve, document.create, document.read, document.list, documents.generate, documents.pdf.create, form.fill, archive.create
 > Last verified: 2026-06-20 (commit 2f628504)
 
 ---
