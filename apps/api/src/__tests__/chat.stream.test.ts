@@ -28,8 +28,6 @@ const mocks = vi.hoisted(() => ({
   loadWorkspacePromptConfig: vi.fn(),
 
   materializeTools: vi.fn(),
-  readWorkspaceContext: vi.fn(),
-  injectContext: vi.fn(),
 
   withTenantDb: vi.fn(),
   runInTenantScope: vi.fn(),
@@ -60,8 +58,6 @@ vi.mock("@oxagen/ai", () => ({
 
 vi.mock("@oxagen/agent", () => ({
   materializeTools: mocks.materializeTools,
-  readWorkspaceContext: mocks.readWorkspaceContext,
-  injectContext: mocks.injectContext,
 }));
 
 vi.mock("@oxagen/database", () => ({
@@ -107,7 +103,9 @@ vi.mock("drizzle-orm", async (importOriginal) => {
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -165,14 +163,16 @@ beforeEach(() => {
   mocks.selectModel.mockReturnValue("balanced-model");
   mocks.modelIdOf.mockReturnValue("anthropic/claude-sonnet");
   mocks.supportsReasoning.mockReturnValue(false);
-  mocks.loadEffectiveModelDefaults.mockRejectedValue(new Error("not configured"));
+  mocks.loadEffectiveModelDefaults.mockRejectedValue(
+    new Error("not configured"),
+  );
   mocks.chatSystemPrompt.mockReturnValue("You are a helpful assistant.");
   mocks.resolvePrompt.mockReturnValue("You are a helpful assistant.");
   mocks.loadWorkspacePromptConfig.mockResolvedValue({});
-  mocks.readWorkspaceContext.mockResolvedValue([]);
-  mocks.injectContext.mockImplementation((msgs: unknown[]) => msgs);
   mocks.materializeTools.mockResolvedValue({ tools: {}, nameMap: {} });
-  mocks.streamAgentReply.mockReturnValue({ fullStream: textStream("Hello world") });
+  mocks.streamAgentReply.mockReturnValue({
+    fullStream: textStream("Hello world"),
+  });
 
   // runInTenantScope executes its callback directly
   mocks.runInTenantScope.mockImplementation(
@@ -257,7 +257,9 @@ describe("chat stream: happy path", () => {
   it("emits text event for text-delta parts", async () => {
     const res = await app.fetch(post({ content: "Hello" }));
     const events = await readSseEvents(res);
-    const textEvents = events.filter((e) => (e as { type: string }).type === "text");
+    const textEvents = events.filter(
+      (e) => (e as { type: string }).type === "text",
+    );
     expect(textEvents).toHaveLength(1);
     expect((textEvents[0] as { text: string }).text).toBe("Hello world");
   });
@@ -265,8 +267,17 @@ describe("chat stream: happy path", () => {
   it("emits usage event for finish part", async () => {
     const res = await app.fetch(post({ content: "Hello" }));
     const events = await readSseEvents(res);
-    const usageEvent = events.find((e) => (e as { type: string }).type === "usage") as
-      | { type: string; usage: { promptTokens: number; completionTokens: number; totalTokens: number } }
+    const usageEvent = events.find(
+      (e) => (e as { type: string }).type === "usage",
+    ) as
+      | {
+          type: string;
+          usage: {
+            promptTokens: number;
+            completionTokens: number;
+            totalTokens: number;
+          };
+        }
       | undefined;
     expect(usageEvent).toBeDefined();
     expect(usageEvent?.usage.totalTokens).toBe(15);
@@ -284,7 +295,10 @@ describe("chat stream: happy path", () => {
   it("calls streamAgentReply with resolved model and coreMessages", async () => {
     await app.fetch(post({ content: "Hi agent" }));
     expect(mocks.streamAgentReply).toHaveBeenCalledOnce();
-    const args = mocks.streamAgentReply.mock.calls[0]?.[0] as Record<string, unknown>;
+    const args = mocks.streamAgentReply.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
     expect(args.model).toBe("balanced-model");
     const messages = args.messages as Array<{ role: string; content: string }>;
     const userMsg = messages.find((m) => m.role === "user");
@@ -298,7 +312,10 @@ describe("chat stream: MCP server allowlist", () => {
   it("passes undefined serverAllowlist when activeServerIds is empty", async () => {
     await app.fetch(post({ content: "Hi", activeServerIds: [] }));
     expect(mocks.materializeTools).toHaveBeenCalledOnce();
-    const opts = mocks.materializeTools.mock.calls[0]?.[1] as Record<string, unknown>;
+    const opts = mocks.materializeTools.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
     expect(opts.serverAllowlist).toBeUndefined();
   });
 
@@ -307,7 +324,10 @@ describe("chat stream: MCP server allowlist", () => {
       post({ content: "Hi", activeServerIds: ["srv_abc", "srv_xyz"] }),
     );
     expect(mocks.materializeTools).toHaveBeenCalledOnce();
-    const opts = mocks.materializeTools.mock.calls[0]?.[1] as Record<string, unknown>;
+    const opts = mocks.materializeTools.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
     expect(opts.serverAllowlist).toBeInstanceOf(Set);
     const set = opts.serverAllowlist as Set<string>;
     expect(set.has("srv_abc")).toBe(true);
@@ -316,7 +336,10 @@ describe("chat stream: MCP server allowlist", () => {
 
   it("loads all workspace MCPs when activeServerIds is omitted from body", async () => {
     await app.fetch(post({ content: "Hi" }));
-    const opts = mocks.materializeTools.mock.calls[0]?.[1] as Record<string, unknown>;
+    const opts = mocks.materializeTools.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
     expect(opts.serverAllowlist).toBeUndefined();
   });
 });
@@ -349,12 +372,11 @@ describe("chat stream: conversation history", () => {
       post({ content: "New question", conversationId: "conv-123" }),
     );
 
-    // injectContext should receive the history + current message
-    const injectedMessages = mocks.injectContext.mock.calls[0]?.[0] as Array<{
-      role: string;
-      content: string;
-    }>;
-    const userMessages = injectedMessages.filter((m) => m.role === "user");
+    // streamAgentReply should receive the history + current message
+    const streamCall = mocks.streamAgentReply.mock.calls[0]?.[0] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const userMessages = streamCall.messages.filter((m) => m.role === "user");
     // Both previous + current user messages should be present
     expect(userMessages.length).toBeGreaterThanOrEqual(2);
     expect(userMessages.at(-1)?.content).toBe("New question");
@@ -362,16 +384,13 @@ describe("chat stream: conversation history", () => {
 
   it("skips history loading when conversationId is null", async () => {
     await app.fetch(post({ content: "Stateless query" }));
-    // withTenantDb is still called for materializeTools, but the select
-    // for history messages should only run when conversationId is set.
-    // Verify that messages are injected without history rows.
-    const injectedMessages = mocks.injectContext.mock.calls[0]?.[0] as Array<{
-      role: string;
-      content: string;
-    }>;
-    expect(injectedMessages).toHaveLength(1);
-    expect(injectedMessages[0]?.role).toBe("user");
-    expect(injectedMessages[0]?.content).toBe("Stateless query");
+    // Verify that messages are passed without history rows.
+    const streamCall = mocks.streamAgentReply.mock.calls[0]?.[0] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(streamCall.messages).toHaveLength(1);
+    expect(streamCall.messages[0]?.role).toBe("user");
+    expect(streamCall.messages[0]?.content).toBe("Stateless query");
   });
 });
 
@@ -388,11 +407,14 @@ describe("chat stream: execution recording (SOC 2 audit trail)", () => {
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockReturnThis(),
-        limit: vi
-          .fn()
-          .mockResolvedValue([
-            { id: "agt-1", activeVersionId: "agv-1", role: "user", content: "prior" },
-          ]),
+        limit: vi.fn().mockResolvedValue([
+          {
+            id: "agt-1",
+            activeVersionId: "agv-1",
+            role: "user",
+            content: "prior",
+          },
+        ]),
         insert: vi.fn().mockReturnThis(),
         values: vi.fn().mockReturnThis(),
         returning: vi.fn().mockResolvedValue([{ id: "asmsg-1" }]),
@@ -407,11 +429,15 @@ describe("chat stream: execution recording (SOC 2 audit trail)", () => {
     setupAuditPath();
     mocks.invoke.mockResolvedValue({ ok: true });
 
-    const res = await app.fetch(post({ content: "Audit me", conversationId: "conv-123" }));
+    const res = await app.fetch(
+      post({ content: "Audit me", conversationId: "conv-123" }),
+    );
     expect(res.status).toBe(200);
     await res.text(); // drain so the stream's start() callback (which fires the audit) completes
 
-    const execCall = mocks.invoke.mock.calls.find((c) => c[0] === "chat.message.execution");
+    const execCall = mocks.invoke.mock.calls.find(
+      (c) => c[0] === "chat.message.execution",
+    );
     expect(execCall).toBeDefined();
     const input = execCall?.[1] as Record<string, unknown>;
     expect(input.messageId).toBe("asmsg-1");
@@ -425,7 +451,9 @@ describe("chat stream: execution recording (SOC 2 audit trail)", () => {
     setupAuditPath();
     mocks.invoke.mockRejectedValue(new Error("clickhouse unavailable"));
 
-    const res = await app.fetch(post({ content: "Audit me", conversationId: "conv-123" }));
+    const res = await app.fetch(
+      post({ content: "Audit me", conversationId: "conv-123" }),
+    );
     expect(res.status).toBe(200);
     const text = await res.text();
     expect(text).toContain("[DONE]");
@@ -455,7 +483,10 @@ describe("chat stream: tool-call events", () => {
       output: { stdout: "hi\n", exitCode: 0 },
     };
     yield { type: "text-delta", text: "Done." };
-    yield { type: "finish", totalUsage: { inputTokens: 5, outputTokens: 3, totalTokens: 8 } };
+    yield {
+      type: "finish",
+      totalUsage: { inputTokens: 5, outputTokens: 3, totalTokens: 8 },
+    };
   }
 
   beforeEach(() => {
@@ -515,9 +546,14 @@ describe("chat stream: error handling", () => {
     async function* providerErrorStream() {
       yield { type: "text-delta", text: "partial " };
       yield { type: "error", error: new Error("rate limited") };
-      yield { type: "finish", totalUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } };
+      yield {
+        type: "finish",
+        totalUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      };
     }
-    mocks.streamAgentReply.mockReturnValue({ fullStream: providerErrorStream() });
+    mocks.streamAgentReply.mockReturnValue({
+      fullStream: providerErrorStream(),
+    });
 
     const res = await app.fetch(post({ content: "check errors" }));
     const events = await readSseEvents(res);
@@ -541,9 +577,14 @@ describe("chat stream: error handling", () => {
     async function* providerErrorStream() {
       yield { type: "text-delta", text: "partial answer" };
       yield { type: "error", error: new Error("context overflow") };
-      yield { type: "finish", totalUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } };
+      yield {
+        type: "finish",
+        totalUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      };
     }
-    mocks.streamAgentReply.mockReturnValue({ fullStream: providerErrorStream() });
+    mocks.streamAgentReply.mockReturnValue({
+      fullStream: providerErrorStream(),
+    });
 
     const insertSpy = vi.fn().mockReturnThis();
     mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) => {
@@ -571,7 +612,9 @@ describe("chat stream: error handling", () => {
   it("logs (does not silently swallow) a message-persistence failure", async () => {
     const { logger } = await import("../middleware/logger");
     const errorSpy = vi.mocked(logger.error);
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
 
     // History select succeeds (empty), but the persistence insert rejects.
     let callCount = 0;
@@ -604,8 +647,9 @@ describe("chat stream: error handling", () => {
     expect(res.status).toBe(200);
     // …but the failure was logged, not silently swallowed.
     const logged =
-      consoleErrorSpy.mock.calls.some((c) => String(c[0]).includes("persistence failed")) ||
-      errorSpy.mock.calls.length > 0;
+      consoleErrorSpy.mock.calls.some((c) =>
+        String(c[0]).includes("persistence failed"),
+      ) || errorSpy.mock.calls.length > 0;
     expect(logged).toBe(true);
 
     consoleErrorSpy.mockRestore();

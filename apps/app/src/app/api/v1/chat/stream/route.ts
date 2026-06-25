@@ -2,7 +2,11 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
 import {
   streamAgentReply,
@@ -17,7 +21,7 @@ import {
   type ToolSet,
   type ModelMessage,
 } from "@oxagen/ai";
-import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
+import { materializeTools } from "@oxagen/agent";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
@@ -172,7 +176,10 @@ export async function POST(request: NextRequest): Promise<Response> {
     await assertOrgMember(tenant.id, session.user.id);
     workspace = await resolveWorkspace(tenant.id, workspaceSlug);
   } catch {
-    return NextResponse.json({ error: "Org or workspace not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Org or workspace not found" },
+      { status: 404 },
+    );
   }
 
   // Resolve the language model for this turn from the picker selection. An
@@ -197,13 +204,18 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   const turnModel = selectModel({
-    ...(resolvedModel ? { model: resolvedModel } : resolvedTier ? { tier: resolvedTier } : {}),
+    ...(resolvedModel
+      ? { model: resolvedModel }
+      : resolvedTier
+        ? { tier: resolvedTier }
+        : {}),
   });
 
   // Reasoning effort is only valid on reasoning-capable models. Re-check
   // server-side against the catalog (keyed by the resolved gateway model id) so
   // a stray `effort` for a non-reasoning model is dropped rather than forwarded.
-  const turnEffort = effort && supportsReasoning(modelIdOf(turnModel)) ? effort : undefined;
+  const turnEffort =
+    effort && supportsReasoning(modelIdOf(turnModel)) ? effort : undefined;
 
   // ── Media-generation branch ───────────────────────────────────────────────
   // When the composer requests image/video generation, this turn does NOT run
@@ -243,17 +255,6 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   // Load conversation history from Postgres so the model has context for every
   // prior turn (without this the model has SSE amnesia, OXA-1509).
-  //
-  // Knowledge-graph context injection: readWorkspaceContext is a no-op seam
-  // today (returns []) when KNOWLEDGE_GRAPH_ENABLED is not set or Neo4j is not
-  // configured; injectContext prepends a system message only when blocks is
-  // non-empty. Both exist so the wiring is in place for the next phase.
-  const contextBlocks = await readWorkspaceContext({
-    orgId: tenant.id,
-    workspaceId: workspace.id,
-    userId: session.user.id,
-  });
-
   let historyMessages: ModelMessage[] = [];
   if (conversationId) {
     // Fetch the most-recent HISTORY_LIMIT rows (DESC + LIMIT), then reverse in
@@ -308,15 +309,15 @@ export async function POST(request: NextRequest): Promise<Response> {
   // model would receive the current turn twice in the same request.
   const lastHistory = historyMessages[historyMessages.length - 1];
   const currentAlreadyInHistory =
-    lastHistory !== undefined && lastHistory.role === "user" && lastHistory.content === content;
+    lastHistory !== undefined &&
+    lastHistory.role === "user" &&
+    lastHistory.content === content;
 
   const messagesWithCurrent: ModelMessage[] = currentAlreadyInHistory
     ? historyMessages
     : [...historyMessages, { role: "user", content }];
 
-  // Inject knowledge-graph context as a leading system message (no-op when
-  // blocks is empty, the default until Neo4j is configured).
-  const coreMessages: ModelMessage[] = injectContext(messagesWithCurrent, contextBlocks);
+  const coreMessages: ModelMessage[] = messagesWithCurrent;
 
   const requestId = randomUUID();
 
@@ -335,7 +336,9 @@ export async function POST(request: NextRequest): Promise<Response> {
   const responseStream = new ReadableStream<Uint8Array>({
     async start(controller) {
       function emit(event: StreamEvent): void {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
+        );
       }
 
       try {
@@ -360,12 +363,15 @@ export async function POST(request: NextRequest): Promise<Response> {
         };
 
         const [{ tools: agentTools, nameMap: toolNameMap }, promptConfig] =
-          await runInTenantScope({ orgId: tenant.id, workspaceId: workspace.id }, () =>
-            Promise.all([
-              materializeTools(
-                capCtx,
-                {
-                  serverAllowlist: activeServerIds.length > 0 ? new Set(activeServerIds) : undefined,
+          await runInTenantScope(
+            { orgId: tenant.id, workspaceId: workspace.id },
+            () =>
+              Promise.all([
+                materializeTools(capCtx, {
+                  serverAllowlist:
+                    activeServerIds.length > 0
+                      ? new Set(activeServerIds)
+                      : undefined,
                   onApprovalRequired: (approvalEvent) => {
                     emit({
                       type: "approval-required",
@@ -376,10 +382,9 @@ export async function POST(request: NextRequest): Promise<Response> {
                       expiresAt: approvalEvent.expiresAt,
                     });
                   },
-                },
-              ),
-              loadWorkspacePromptConfig(workspace.id).catch(() => ({})),
-            ]),
+                }),
+                loadWorkspacePromptConfig(workspace.id).catch(() => ({})),
+              ]),
           );
 
         // ── Page-form-fill tool (request-scoped) ────────────────────────────
@@ -392,8 +397,13 @@ export async function POST(request: NextRequest): Promise<Response> {
         let pageFormFillSystemSuffix = "";
 
         if (pageContext?.fillableForm) {
-          const { route: pcRoute, entitySummary: pcEntitySummary } = pageContext;
-          const { formId: pcFormId, title: pcFormTitle, fields: pcFields } = pageContext.fillableForm;
+          const { route: pcRoute, entitySummary: pcEntitySummary } =
+            pageContext;
+          const {
+            formId: pcFormId,
+            title: pcFormTitle,
+            fields: pcFields,
+          } = pageContext.fillableForm;
 
           // Build a compact field list for the system prompt.
           const fieldLines = pcFields.map((f) => {
@@ -402,9 +412,10 @@ export async function POST(request: NextRequest): Promise<Response> {
                 ? ` options=[${f.options.map((o) => `"${o.label}"`).join(", ")}]`
                 : "";
             const reqPart = f.required ? " required" : "";
-            const curPart = f.current !== null && f.current !== undefined && f.current !== ""
-              ? ` current="${String(f.current)}"`
-              : "";
+            const curPart =
+              f.current !== null && f.current !== undefined && f.current !== ""
+                ? ` current="${String(f.current)}"`
+                : "";
             return `  - ${f.name} (${f.label}) type=${f.type}${reqPart}${curPart}${optPart}`;
           });
 
@@ -434,9 +445,12 @@ export async function POST(request: NextRequest): Promise<Response> {
                 "Pass a clear natural-language instruction describing the desired changes. " +
                 "If the request is ambiguous, ask a clarifying question instead.",
               inputSchema: z.object({
-                instruction: z.string().min(1).describe(
-                  "Natural-language instruction describing the desired form changes.",
-                ),
+                instruction: z
+                  .string()
+                  .min(1)
+                  .describe(
+                    "Natural-language instruction describing the desired form changes.",
+                  ),
               }),
               execute: async (input: { instruction: string }) => {
                 const { instruction } = input;
@@ -511,7 +525,10 @@ export async function POST(request: NextRequest): Promise<Response> {
         // Persist the assistant reply so it survives a refresh and is included
         // in the next turn's history (OXA-1509). Best-effort: a DB failure here
         // must NOT corrupt the SSE response the client already consumed.
-        if (conversationId && (assistantText.length > 0 || persistedBlocks.length > 0)) {
+        if (
+          conversationId &&
+          (assistantText.length > 0 || persistedBlocks.length > 0)
+        ) {
           try {
             await runInTenantScope(
               { orgId: tenant.id, workspaceId: workspace.id },
@@ -542,13 +559,19 @@ export async function POST(request: NextRequest): Promise<Response> {
                     // reply so the next turn threads from here.
                     await tx
                       .update(schema.conversations)
-                      .set({ activeLeafMessageId: assistantMsg.id, updatedAt: new Date() })
+                      .set({
+                        activeLeafMessageId: assistantMsg.id,
+                        updatedAt: new Date(),
+                      })
                       .where(eq(schema.conversations.id, conversationId));
                   }
                 }),
             );
           } catch (persistErr) {
-            logger.error({ err: persistErr }, "[chat/stream] failed to persist assistant reply");
+            logger.error(
+              { err: persistErr },
+              "[chat/stream] failed to persist assistant reply",
+            );
           }
         }
 
