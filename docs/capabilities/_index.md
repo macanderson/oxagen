@@ -57,9 +57,9 @@ contract-first design, IAM enforcement, and instrumentation.
 
 ## Audit (1)
 
-| Capability         | Notes                                                                       |
-| ------------------ | --------------------------------------------------------------------------- |
-| `audit.log.query`  | Query security + automation audit spines (org-scoped); admin-only, read-only. |
+| Capability        | Notes                                                                         |
+| ----------------- | ----------------------------------------------------------------------------- |
+| `audit.log.query` | Query security + automation audit spines (org-scoped); admin-only, read-only. |
 
 ## Billing (3)
 
@@ -111,29 +111,27 @@ contract-first design, IAM enforcement, and instrumentation.
 - [documents.pdf.create](documents.pdf.create.md) — Render a PDF from either raw HTML or an existing cloud file (stub)
 - [markdown.generate](markdown.generate.md) — Persist a Markdown document as a first-class generated asset (blob storage, file-attachment render directive)
 
-## Form (3)
+## Form (1)
 
-- [form.create](form.create.md) — Create a new form with optional field definitions
 - [form.fill](form.fill.md) — Generatively fill or suggest values for page-level form fields based on context
-- [form.submit](form.submit.md) — Submit a response to a form
 
 ## Graph (10)
 
-| Capability                   | Notes                                                                                                                                                          |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `graph.node.list`            | Paginated browse of all nodes in the workspace graph.                                                                                                          |
-| `graph.node.upsert`          | Create or update a graph node by externalId.                                                                                                                   |
-| `graph.node.get`             | Retrieve a graph node by externalId.                                                                                                                           |
-| `graph.node.delete`          | Delete a graph node and its relationships.                                                                                                                     |
-| `graph.node.search`          | Vector + full-text search over graph nodes.                                                                                                                    |
-| `graph.relationship.upsert`  | Create or update a directed typed relationship between two KnowledgeNodes (open-vocabulary type, replaces graph.edge.upsert).                                  |
-| `graph.edge.upsert`          | **Deprecated** — one-release alias for `graph.relationship.upsert`; removed in v2.                                                                            |
-| `graph.edge.delete`          | Delete a directed relationship between two nodes.                                                                                                              |
-| `graph.cypher`               | Execute a read-only Cypher query against the tenant graph.                                                                                                     |
-| `graph.ingest`               | Extract entities + relationships from text and commit them to the graph with confidence.                                                                        |
-| `graph.stats`                | Workspace graph statistics: node/edge counts by type.                                                                                                          |
-| `ontology.query`             | Typed multi-hop traversal from a start node over named relationship types.                                                                                     |
-| `ontology.neighbors`         | One-hop neighborhood of a node, filtered by type and direction.                                                                                                |
+| Capability                  | Notes                                                                                                                         |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `graph.node.list`           | Paginated browse of all nodes in the workspace graph.                                                                         |
+| `graph.node.upsert`         | Create or update a graph node by externalId.                                                                                  |
+| `graph.node.get`            | Retrieve a graph node by externalId.                                                                                          |
+| `graph.node.delete`         | Delete a graph node and its relationships.                                                                                    |
+| `graph.node.search`         | Vector + full-text search over graph nodes.                                                                                   |
+| `graph.relationship.upsert` | Create or update a directed typed relationship between two KnowledgeNodes (open-vocabulary type, replaces graph.edge.upsert). |
+| `graph.edge.upsert`         | **Deprecated** — one-release alias for `graph.relationship.upsert`; removed in v2.                                            |
+| `graph.edge.delete`         | Delete a directed relationship between two nodes.                                                                             |
+| `graph.cypher`              | Execute a read-only Cypher query against the tenant graph.                                                                    |
+| `graph.ingest`              | Extract entities + relationships from text and commit them to the graph with confidence.                                      |
+| `graph.stats`               | Workspace graph statistics: node/edge counts by type.                                                                         |
+| `ontology.query`            | Typed multi-hop traversal from a start node over named relationship types.                                                    |
+| `ontology.neighbors`        | One-hop neighborhood of a node, filtered by type and direction.                                                               |
 
 ## Image (4)
 
@@ -317,13 +315,14 @@ The platform fetches, validates, and caches partner schemas transparently —
 the `plugin.schema.get` and `integration.install` capabilities handle both
 paths without separate APIs.
 
-| Resource | Description |
-| -------- | ----------- |
+| Resource                                                      | Description                                                                                                                                         |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Connector Authoring Guide](../guides/connector-authoring.md) | How to author a `schema.yaml` for a partner connector — schema sections, field widgets, validation patterns, AI prompt best practices, and testing. |
-| [Partner Registration](../guides/partner-registration.md) | Registration workflow, marketplace listing requirements, security checklist, and support SLA. |
-| `packages/ingestion/src/connectors/example-saas/schema.yaml` | Fully annotated reference schema demonstrating every section and field type. |
+| [Partner Registration](../guides/partner-registration.md)     | Registration workflow, marketplace listing requirements, security checklist, and support SLA.                                                       |
+| `packages/ingestion/src/connectors/example-saas/schema.yaml`  | Fully annotated reference schema demonstrating every section and field type.                                                                        |
 
 To install a partner connector by schema URL:
+
 ```bash
 oxagen integrations install \
   --plugin-id my-platform \

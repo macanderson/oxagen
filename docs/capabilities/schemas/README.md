@@ -18,7 +18,7 @@ per capability with its input + output JSON Schema, chain metadata
 - **conversation** (6): conversation.archive, conversation.chat, conversation.delete, conversation.list, conversation.purge, conversation.rename
 - **document** (3): document.create, document.list, document.read
 - **documents** (3): archive.create, documents.generate, documents.pdf.create
-- **form** (3): form.create, form.fill, form.submit
+- **form** (1): form.fill
 - **graph** (10): graph.cypher, graph.edge.delete, graph.edge.upsert, graph.ingest, graph.node.delete, graph.node.get, graph.node.list, graph.node.search, graph.node.upsert, graph.stats
 - **image** (4): image.analyze, image.create, image.generate, image.list
 - **integration** (7): integration.configure, integration.delete, integration.get, integration.install, integration.list, integration.metrics, integration.sync
