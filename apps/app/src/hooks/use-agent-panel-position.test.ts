@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type * as React from 'react';
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useAgentPanelPosition } from './use-agent-panel-position';
@@ -104,7 +105,7 @@ describe('useAgentPanelPosition', () => {
     Object.defineProperty(event, 'target', { value: mockElement, enumerable: true });
 
     act(() => {
-      result.current.onPointerDown(event as any);
+      result.current.onPointerDown(event as unknown as React.PointerEvent<HTMLElement>);
     });
 
     // Should not call setPosition since there's no drag handle

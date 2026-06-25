@@ -27,11 +27,10 @@
  */
 
 import * as React from "react";
-import { Suspense, useRef, useEffect, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Wand2, X } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
 import { usePageContext } from "@/lib/page-context";
 import { resolveSidebarCtx } from "@/lib/sidebar";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
@@ -69,7 +68,6 @@ export function WandPanel({ orgSlug, availableWorkspaces, modelConfig }: WandPan
   const { isWandOpen, closeWand, fillableForm, entity, _setIsFilling, _setFillResult } = usePageContext();
   const pathname = usePathname();
   const panelRef = useRef<HTMLDivElement>(null);
-  const dragStartRef = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
 
   // Build the serialisable page context from current PageContext state at send-time.
@@ -157,48 +155,43 @@ export function WandPanel({ orgSlug, availableWorkspaces, modelConfig }: WandPan
     [orgSlug, activeWorkspaceSlug],
   );
 
-  // Drag handler
+  // Drag handler. Starts a drag only when the press lands on the header
+  // ([data-drag-handle]); the move/up listeners are attached to the document
+  // for the duration of the gesture and torn down on release so a drag that
+  // leaves the panel still tracks the cursor.
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     if (!target.closest("[data-drag-handle]")) return;
     e.preventDefault();
-    dragStartRef.current = {
+    const start = {
       x: e.clientX,
       y: e.clientY,
       offsetX: position.x,
       offsetY: position.y,
     };
-  };
 
-  useEffect(() => {
-    if (!dragStartRef.current) return;
-
-    const handlePointerMove = (e: PointerEvent) => {
-      if (!dragStartRef.current) return;
-      const dx = e.clientX - dragStartRef.current.x;
-      const dy = e.clientY - dragStartRef.current.y;
-      const newX = dragStartRef.current.offsetX + dx;
-      const newY = dragStartRef.current.offsetY + dy;
-      setPosition({ x: newX, y: newY });
+    const handlePointerMove = (ev: PointerEvent) => {
+      setPosition({
+        x: start.offsetX + (ev.clientX - start.x),
+        y: start.offsetY + (ev.clientY - start.y),
+      });
     };
 
     const handlePointerUp = () => {
-      dragStartRef.current = null;
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", handlePointerUp);
     };
 
     document.addEventListener("pointermove", handlePointerMove);
     document.addEventListener("pointerup", handlePointerUp);
-    return () => {
-      document.removeEventListener("pointermove", handlePointerMove);
-      document.removeEventListener("pointerup", handlePointerUp);
-    };
-  }, []);
+  };
 
   if (!isWandOpen) return null;
 
   return (
     <div
       ref={panelRef}
+      onPointerDown={handlePointerDown}
       className="fixed z-40 w-[480px] rounded-lg border border-white/15 shadow-2xl flex flex-col overflow-hidden"
       style={{
         left: `${position.x}px`,
