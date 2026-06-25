@@ -45,15 +45,41 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "E2E_TEST",
   "PLAYWRIGHT_BASE_URL",
   // Legacy E2E aliases for canonical schema names (e2e fixtures only)
-  "NEO4J_URL",   // alias for NEO4J_URI
-  "NEO4J_USER",  // alias for NEO4J_USERNAME
+  "NEO4J_URL", // alias for NEO4J_URI
+  "NEO4J_USER", // alias for NEO4J_USERNAME
+]);
+
+// ── Schema-exempt keys ────────────────────────────────────────────────────────
+// These are intentionally in ENV_REGISTRY (documented + deployed by env-manager)
+// but deliberately NOT promoted to baseEnvSchema. They are CLI-only, dev-tooling,
+// or operator-local vars that never run through loadEnv() validation. Listing
+// them here silences the "promote to schema" warning without polluting the
+// runtime Zod schema with vars that deployed services never validate.
+export const SCHEMA_EXEMPT = new Set<string>([
+  // CLI-only — read via process.env in apps/cli; services: []
+  "OXAGEN_NO_TUI",
+  "OXAGEN_API_TOKEN",
+  "OXAGEN_ORG_ID",
+  "OXAGEN_WORKSPACE_ID",
+  "OXAGEN_API_URL",
+  // Dev-tooling signal — set by tools/scripts/dev.ts; services: []
+  "OXAGEN_LOCAL_DEV",
 ]);
 
 // ── File walker ───────────────────────────────────────────────────────────────
 
 const SKIP_DIRS = new Set<string>([
-  "node_modules", ".next", "dist", ".xmcp", "coverage",
-  "e2e", "__tests__", ".turbo", "out", "build", ".vercel",
+  "node_modules",
+  ".next",
+  "dist",
+  ".xmcp",
+  "coverage",
+  "e2e",
+  "__tests__",
+  ".turbo",
+  "out",
+  "build",
+  ".vercel",
 ]);
 
 function walkSourceFiles(dir: string, results: string[] = []): string[] {
@@ -126,7 +152,9 @@ export function scanSourceReferences(roots: string[]): ScanResult {
           if (RE_KEY.test(m[1]!)) record(m[1]!, loc);
         }
         // process.env["KEY"] or process.env['KEY']
-        for (const m of line.matchAll(/\bprocess\.env\[['"]([A-Z][A-Z0-9_]+)['"]\]/g)) {
+        for (const m of line.matchAll(
+          /\bprocess\.env\[['"]([A-Z][A-Z0-9_]+)['"]\]/g,
+        )) {
           if (RE_KEY.test(m[1]!)) record(m[1]!, loc);
         }
       }
@@ -205,17 +233,25 @@ export function reconcile({
     if (PLATFORM_ALLOWLIST.has(key)) continue;
     if (schemaKeySet.has(key)) {
       report.ok.push({ key, locations, reason: "schema-validated" });
+    } else if (SCHEMA_EXEMPT.has(key)) {
+      report.ok.push({
+        key,
+        locations,
+        reason: "schema-exempt (intentionally unvalidated)",
+      });
     } else if (registryKeySet.has(key)) {
       report.warnUnvalidated.push({
         key,
         locations,
-        reason: "in ENV_REGISTRY but not in baseEnvSchema — promote to schema (tracked)",
+        reason:
+          "in ENV_REGISTRY but not in baseEnvSchema — promote to schema (tracked)",
       });
     } else {
       report.fail.push({
         key,
         locations,
-        reason: "referenced in source but absent from ENV_REGISTRY — add it or allowlist it",
+        reason:
+          "referenced in source but absent from ENV_REGISTRY — add it or allowlist it",
       });
     }
   }
@@ -254,15 +290,22 @@ function printReport(report: EnvCheckReport, exampleDrift: boolean): void {
   }
 
   if (report.warnUnvalidated.length > 0) {
-    console.log(kleur.yellow("\n⚠ WARN — in registry, not yet in baseEnvSchema"));
+    console.log(
+      kleur.yellow("\n⚠ WARN — in registry, not yet in baseEnvSchema"),
+    );
     for (const f of report.warnUnvalidated) {
       console.log(kleur.yellow(`  ${f.key}`) + ` — ${f.reason}`);
-      for (const loc of (f.locations ?? []).slice(0, 3)) console.log(kleur.dim(`    ${loc}`));
+      for (const loc of (f.locations ?? []).slice(0, 3))
+        console.log(kleur.dim(`    ${loc}`));
     }
   }
 
   if (report.warnDead.length > 0) {
-    console.log(kleur.yellow("\n⚠ WARN — possibly dead (in registry, no source reference)"));
+    console.log(
+      kleur.yellow(
+        "\n⚠ WARN — possibly dead (in registry, no source reference)",
+      ),
+    );
     for (const f of report.warnDead) {
       console.log(kleur.yellow(`  ${f.key}`) + ` — ${f.reason}`);
     }
@@ -305,7 +348,13 @@ function main(): void {
     Object.entries(ENV_REGISTRY).map(([k, m]) => [k, [...m.services]]),
   );
 
-  const report = reconcile({ referenced, registryKeySet, schemaKeySet, registryServiceMap, loadEnvFound });
+  const report = reconcile({
+    referenced,
+    registryKeySet,
+    schemaKeySet,
+    registryServiceMap,
+    loadEnvFound,
+  });
 
   // Check .env.example drift
   let exampleDrift = false;

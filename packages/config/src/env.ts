@@ -4,7 +4,9 @@ import { z } from "zod";
 // Spec §11: missing required vars fail closed, no silent defaults beyond
 // what's marked optional here.
 export const baseEnvSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  NODE_ENV: z
+    .enum(["development", "test", "production"])
+    .default("development"),
 
   DATABASE_URL: z.string().url(),
 
@@ -20,6 +22,14 @@ export const baseEnvSchema = z.object({
 
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
+
+  // OAuth Proxy — preview deployments relay social login through the production
+  // origin because OAuth providers only allow one registered callback. The proxy
+  // encrypts the relay payload with OAUTH_PROXY_SECRET. Both are optional in the
+  // base schema: local dev bypasses the proxy entirely, and production only needs
+  // these when preview social login is enabled.
+  OAUTH_PROXY_PRODUCTION_URL: z.string().url().optional(),
+  OAUTH_PROXY_SECRET: z.string().min(32).optional(),
 
   // OAuth providers are each split into two distinct clients (same provider
   // app/project) so a broad data-scope client never gates plain login:
@@ -107,7 +117,9 @@ export const baseEnvSchema = z.object({
   // resolves them via imageTierModelId / videoTierModelId.
   OXAGEN_LLM_IMAGE_BASIC: z.string().default("openai/gpt-image-1"),
   OXAGEN_LLM_IMAGE_ADVANCED: z.string().default("bfl/flux-2-max"),
-  OXAGEN_LLM_VIDEO_BASIC: z.string().default("google/veo-3.0-fast-generate-001"),
+  OXAGEN_LLM_VIDEO_BASIC: z
+    .string()
+    .default("google/veo-3.0-fast-generate-001"),
   OXAGEN_LLM_VIDEO_ADVANCED: z.string().default("google/veo-3.0-generate-001"),
 
   // ── Email (transactional, via @oxagen/notifications SMTP transport) ──
@@ -153,7 +165,9 @@ export const baseEnvSchema = z.object({
   // Observability / feature flags — read raw via process.env in services and
   // libraries; declared here so env-check validates them against the registry.
   BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
-  LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).optional(),
+  LOG_LEVEL: z
+    .enum(["trace", "debug", "info", "warn", "error", "fatal"])
+    .optional(),
   KNOWLEDGE_GRAPH_ENABLED: z.enum(["true", "false"]).optional(),
   MCP_PORT: z.string().optional(),
 
@@ -247,7 +261,9 @@ export const baseEnvSchema = z.object({
 
 // The exact set of keys this schema validates. `normalizeEnv` only ever
 // touches these — never arbitrary env vars another tool may have set.
-const KNOWN_ENV_KEYS: ReadonlySet<string> = new Set(Object.keys(baseEnvSchema.shape));
+const KNOWN_ENV_KEYS: ReadonlySet<string> = new Set(
+  Object.keys(baseEnvSchema.shape),
+);
 
 /**
  * Strip one balanced surrounding double-quote pair from a string.
@@ -257,7 +273,9 @@ const KNOWN_ENV_KEYS: ReadonlySet<string> = new Set(Object.keys(baseEnvSchema.sh
  * @internal Not intended for public API use outside this package.
  */
 export function stripOneQuotePair(s: string): string {
-  return s.length >= 2 && s.startsWith('"') && s.endsWith('"') ? s.slice(1, -1) : s;
+  return s.length >= 2 && s.startsWith('"') && s.endsWith('"')
+    ? s.slice(1, -1)
+    : s;
 }
 
 export type Env = z.infer<typeof baseEnvSchema>;
@@ -276,7 +294,9 @@ let cached: Env | null = null;
  * another tool set — and (b) warn once, listing exactly what was stripped, so
  * a legitimately-quoted value isn't silently mutated.
  */
-export function normalizeEnv(source: NodeJS.ProcessEnv): Record<string, string | undefined> {
+export function normalizeEnv(
+  source: NodeJS.ProcessEnv,
+): Record<string, string | undefined> {
   const out: Record<string, string | undefined> = {};
   const stripped: string[] = [];
   for (const [key, value] of Object.entries(source)) {
@@ -349,7 +369,9 @@ export function requireEnv<K extends EnvKey>(
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
       .join("\n");
-    throw new Error(`Invalid environment (required: ${keys.join(", ")}):\n${issues}`);
+    throw new Error(
+      `Invalid environment (required: ${keys.join(", ")}):\n${issues}`,
+    );
   }
   return parsed.data as Pick<Env, K>;
 }

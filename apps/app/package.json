@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "next dev --port 3000 & storybook dev -p 6007 --no-open & wait",
+    "kill": "lsof -ti tcp:3000,6007 | xargs kill -9 2>/dev/null; true",
     "build": "next build",
     "start": "next start --port 3000",
     "lint": "eslint .",
