@@ -126,6 +126,34 @@ describe("chatSystemPrompt — resource-link guidance (no fabricated /api/v1 URL
   });
 });
 
+describe("chatSystemPrompt — tools/skills/MCP/plugins discoverability", () => {
+  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+
+  it("documents the discoverability section header", () => {
+    expect(chatSystemPrompt(CTX)).toContain("## Capabilities, Skills, MCP servers & Plugins");
+  });
+
+  it("tells the agent to discover and load skills via the skill contracts", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("agent.skill.list");
+    expect(prompt).toContain("agent.skill.load");
+  });
+
+  it("tells the agent MCP servers are available and how to list them", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("agent.mcp.list");
+    expect(prompt).toMatch(/MCP server/i);
+    // External MCP tools surface with the mcp. prefix.
+    expect(prompt).toContain("`mcp.`");
+  });
+
+  it("tells the agent installed plugins add tools and how to enumerate the live toolset", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toMatch(/installed capability plugins/i);
+    expect(prompt).toContain("agent.tool.list");
+  });
+});
+
 describe("chatSystemPrompt — page form fill guidance", () => {
   const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
 
