@@ -27,13 +27,20 @@
  */
 
 import * as React from "react";
-import { Suspense, useRef, useState } from "react";
+import { Suspense } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Wand2, X } from "lucide-react";
+import { ArrowUpRight, Wand2 } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { usePageContext } from "@/lib/page-context";
 import { resolveSidebarCtx } from "@/lib/sidebar";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
+import {
+  Sheet,
+  SheetPopup,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { wandSendAction, wandResolveApprovalAction, wandResolveConsentAction, wandResolvePlanAction } from "@/app/[orgSlug]/shell-actions";
 import type { ComposerAction } from "@/components/chat/message-composer";
@@ -67,8 +74,6 @@ export interface WandPanelProps {
 export function WandPanel({ orgSlug, availableWorkspaces, modelConfig }: WandPanelProps) {
   const { isWandOpen, closeWand, fillableForm, entity, _setIsFilling, _setFillResult } = usePageContext();
   const pathname = usePathname();
-  const panelRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
 
   // Build the serialisable page context from current PageContext state at send-time.
   const buildPageContext = React.useCallback((): ChatPageContext | null => {
@@ -155,103 +160,62 @@ export function WandPanel({ orgSlug, availableWorkspaces, modelConfig }: WandPan
     [orgSlug, activeWorkspaceSlug],
   );
 
-  // Drag handler. Starts a drag only when the press lands on the header
-  // ([data-drag-handle]); the move/up listeners are attached to the document
-  // for the duration of the gesture and torn down on release so a drag that
-  // leaves the panel still tracks the cursor.
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement;
-    if (!target.closest("[data-drag-handle]")) return;
-    e.preventDefault();
-    const start = {
-      x: e.clientX,
-      y: e.clientY,
-      offsetX: position.x,
-      offsetY: position.y,
-    };
-
-    const handlePointerMove = (ev: PointerEvent) => {
-      setPosition({
-        x: start.offsetX + (ev.clientX - start.x),
-        y: start.offsetY + (ev.clientY - start.y),
-      });
-    };
-
-    const handlePointerUp = () => {
-      document.removeEventListener("pointermove", handlePointerMove);
-      document.removeEventListener("pointerup", handlePointerUp);
-    };
-
-    document.addEventListener("pointermove", handlePointerMove);
-    document.addEventListener("pointerup", handlePointerUp);
-  };
-
-  if (!isWandOpen) return null;
-
   return (
-    <div
-      ref={panelRef}
-      onPointerDown={handlePointerDown}
-      className="fixed z-40 w-[480px] rounded-lg border border-white/15 shadow-2xl flex flex-col overflow-hidden"
-      style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-        backgroundColor: "rgba(255, 255, 255, 0.92)",
-        backdropFilter: "blur(10px)",
-      }}
+    <Sheet
+      open={isWandOpen}
+      onOpenChange={(open) => !open && closeWand()}
+      disablePointerDismissal
     >
-      {/* Header — draggable */}
-      <div
-        data-drag-handle
-        className="flex flex-row items-center justify-between border-b border-white/20 px-4 py-3 cursor-grab active:cursor-grabbing"
+      <SheetPopup
+        id="wand-panel"
+        side="right"
+        className={cn(
+          "flex flex-col p-0",
+          "w-full sm:w-[480px] sm:max-w-[480px]",
+          "[&]:sm:max-w-[480px]",
+        )}
       >
-        <div className="flex items-center gap-2">
-          <span
-            className="inline-flex size-7 items-center justify-center rounded-lg border border-border bg-muted"
-            aria-hidden="true"
-          >
-            <Wand2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          </span>
-          <span className="text-sm font-medium">Oxagen AI</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            render={<Link href={chatHref} onClick={closeWand} />}
-            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            aria-label="Open in full chat"
-          >
-            <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={closeWand}
-            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
+        {/* Header */}
+        <SheetHeader className="flex flex-row items-center justify-between border-b px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span
+              className="inline-flex size-7 items-center justify-center rounded-lg border border-border bg-muted"
+              aria-hidden="true"
+            >
+              <Wand2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            </span>
+            <SheetTitle className="text-sm font-medium">Oxagen AI</SheetTitle>
+          </div>
+          <div className="flex items-center gap-1 pr-6">
+            <Button
+              variant="ghost"
+              size="icon"
+              render={<Link href={chatHref} onClick={closeWand} />}
+              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+              aria-label="Open in full chat"
+            >
+              <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
+        </SheetHeader>
 
-      {/* Chat shell */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4" style={{ minHeight: "500px" }}>
-        <WandChatShell
-          orgSlug={orgSlug}
-          workspaceSlug={activeWorkspaceSlug}
-          sendAction={scopedSendAction}
-          resolveApprovalAction={scopedResolveApprovalAction}
-          resolveConsentAction={scopedResolveConsentAction}
-          resolvePlanAction={scopedResolvePlanAction}
-          modelConfig={modelConfig}
-          buildPageContext={buildPageContext}
-          onFormFillStart={handleFormFillStart}
-          onFormFillEnd={handleFormFillEnd}
-        />
-      </div>
-    </div>
+        {/* Chat shell */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+          <WandChatShell
+            orgSlug={orgSlug}
+            workspaceSlug={activeWorkspaceSlug}
+            sendAction={scopedSendAction}
+            resolveApprovalAction={scopedResolveApprovalAction}
+            resolveConsentAction={scopedResolveConsentAction}
+            resolvePlanAction={scopedResolvePlanAction}
+            modelConfig={modelConfig}
+            buildPageContext={buildPageContext}
+            onFormFillStart={handleFormFillStart}
+            onFormFillEnd={handleFormFillEnd}
+          />
+        </div>
+      </SheetPopup>
+    </Sheet>
   );
 }
 
