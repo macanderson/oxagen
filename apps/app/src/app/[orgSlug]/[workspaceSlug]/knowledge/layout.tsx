@@ -3,7 +3,6 @@ import { PageTabs } from "@/components/ui/page-tabs";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
-import { TopnavLauncher } from "@/components/agent/topnav-launcher";
 
 export default async function KnowledgeLayout({
   children,
@@ -37,7 +36,6 @@ export default async function KnowledgeLayout({
             />
           }
         />
-        <TopnavLauncher initialButtonLocation="topnav" />
       </div>
       <PageTabs tabs={tabs} className="mb-6" />
       {children}

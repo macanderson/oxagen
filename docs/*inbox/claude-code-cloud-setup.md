@@ -6,11 +6,11 @@ works end-to-end on this repo. Verified against the official docs
 
 ## How the cloud sandbox reads config
 
-| Source | Where | Carries to cloud? |
-| --- | --- | --- |
-| `.claude/settings.json`, `.claude/{skills,agents,commands}/`, `CLAUDE.md`, `.mcp.json` | repo clone | ✅ committed → auto-loaded |
-| **Setup script**, **environment variables**, **network allowlist** | claude.ai/code → Environment UI | ⚙️ UI-only, server-side (no repo file) |
-| `~/.claude/*` (user-scope settings, skills, CLAUDE.md, `~/.claude.json` MCP) | local machine | ❌ never reaches cloud |
+| Source                                                                                 | Where                           | Carries to cloud?                      |
+| -------------------------------------------------------------------------------------- | ------------------------------- | -------------------------------------- |
+| `.claude/settings.json`, `.claude/{skills,agents,commands}/`, `CLAUDE.md`, `.mcp.json` | repo clone                      | ✅ committed → auto-loaded             |
+| **Setup script**, **environment variables**, **network allowlist**                     | claude.ai/code → Environment UI | ⚙️ UI-only, server-side (no repo file) |
+| `~/.claude/*` (user-scope settings, skills, CLAUDE.md, `~/.claude.json` MCP)           | local machine                   | ❌ never reaches cloud                 |
 
 So the repo already gives a cloud session its skills, agents, commands, hooks, MCP
 declarations, and CLAUDE.md for free. The only things you set in the **web UI** are the
@@ -86,7 +86,7 @@ contents of root `.env.local`** (it already targets the in-sandbox Docker datast
   `vercel` MCP servers. `linear` (`mcp-remote`) and `vercel` use **interactive OAuth** and
   will **not** auto-authenticate in a cloud session. The `github` MCP needs
   `GITHUB_PERSONAL_ACCESS_TOKEN` set as an env var. Repo scripts that use `LINEAR_API_KEY`
-  (REST) still work — only the Linear *MCP* is affected.
+  (REST) still work — only the Linear _MCP_ is affected.
 - **Datastores per session.** Run `pnpm dev` (or the `oxagen-run` skill) to bring up Postgres
   :5433, Neo4j :7687, ClickHouse :8123 and all apps; the first compile is slow. `pnpm kill`
   tears it down.
@@ -98,11 +98,13 @@ contents of root `.env.local`** (it already targets the in-sandbox Docker datast
   stays manual (Mac, one push at a time, because the pre-push hook runs the unit-test gate).
 - **Optional:** to auto-start datastores on every cloud session, add a `SessionStart` hook
   guarded by `CLAUDE_CODE_REMOTE` (set to `true` only in cloud) so it never fires locally:
+
   ```json
   "SessionStart": [{ "hooks": [{ "type": "command",
     "command": "[ \"$CLAUDE_CODE_REMOTE\" = \"true\" ] && pnpm dev >/dev/null 2>&1 & disown || true",
     "timeout": 30, "async": true }] }]
   ```
+
   Most workflows don't need this — the agent runs `pnpm dev` when it needs the stack.
 
 ## Verify the environment

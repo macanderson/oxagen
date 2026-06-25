@@ -17,14 +17,18 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import "./globals.css";
-import { ThemeProvider, THEME_COOKIE_NAME, parseTheme, themeClass, MotionProvider } from "@oxagen/ui";
+import {
+  ThemeProvider,
+  THEME_COOKIE_NAME,
+  parseTheme,
+  themeClass,
+  MotionProvider,
+} from "@oxagen/ui";
 import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PwaSplash } from "@/components/pwa/pwa-splash";
 import { InstallPrompt } from "@/components/pwa/install-prompt";
 import { RouteTransitionLoader } from "@/components/pwa/route-transition-loader";
-import { AgentPanelProvider } from "@/providers/agent-panel-provider";
-import { LowerRightLauncher } from "@/components/agent/lower-right-launcher";
 
 export const metadata: Metadata = {
   title: "Oxagen",
@@ -52,7 +56,14 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Oxagen",
     description: "The Oxagen agent platform",
-    images: [{ url: "/social/og-image-dark-1200x630.png", width: 1200, height: 630, alt: "Oxagen — governed context infrastructure for enterprise agents" }],
+    images: [
+      {
+        url: "/social/og-image-dark-1200x630.png",
+        width: 1200,
+        height: 630,
+        alt: "Oxagen — governed context infrastructure for enterprise agents",
+      },
+    ],
     type: "website",
   },
   twitter: {
@@ -92,12 +103,19 @@ function parseFontSize(raw: string | undefined): "small" | "medium" | "large" {
 }
 
 /** Valid density cookie values; default 'comfortable' when absent/invalid. */
-function parseDensity(raw: string | undefined): "compact" | "comfortable" | "spacious" {
-  if (raw === "compact" || raw === "comfortable" || raw === "spacious") return raw;
+function parseDensity(
+  raw: string | undefined,
+): "compact" | "comfortable" | "spacious" {
+  if (raw === "compact" || raw === "comfortable" || raw === "spacious")
+    return raw;
   return "comfortable";
 }
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   // No-flash theming with no inline <script>: read the preference cookie on the
   // server and render the resolved class straight onto <html>. "system" renders
   // no class and is resolved by CSS @media (prefers-color-scheme) — see
@@ -139,31 +157,23 @@ export default async function RootLayout({ children }: { children: React.ReactNo
            * prefers-reduced-motion kill-switch in @oxagen/ui globals.
            */}
           <MotionProvider>
-            <AgentPanelProvider>
-              <TooltipProvider>
-                <ToastProvider>
-                  {children}
-                  <ToastViewport />
-                </ToastProvider>
-              </TooltipProvider>
-              {/*
-               * Route-transition loader: spinner during navigation, mobile-only
-               * (gated at max-width:768px). Respects prefers-reduced-motion.
-               */}
-              <RouteTransitionLoader />
-              {/*
-               * Install prompt: deferred install CTA for Chrome/Android; manual
-               * instructions for iOS. Never shown when already installed or
-               * dismissed.
-               */}
-              <InstallPrompt />
-              {/*
-               * Agent panel launcher (lower-right): floating button variant.
-               * Rendered at the root to ensure it's available on all pages.
-               * Only visible when buttonLocation is 'lower-right'.
-               */}
-              <LowerRightLauncher />
-            </AgentPanelProvider>
+            <TooltipProvider>
+              <ToastProvider>
+                {children}
+                <ToastViewport />
+              </ToastProvider>
+            </TooltipProvider>
+            {/*
+             * Route-transition loader: spinner during navigation, mobile-only
+             * (gated at max-width:768px). Respects prefers-reduced-motion.
+             */}
+            <RouteTransitionLoader />
+            {/*
+             * Install prompt: deferred install CTA for Chrome/Android; manual
+             * instructions for iOS. Never shown when already installed or
+             * dismissed.
+             */}
+            <InstallPrompt />
           </MotionProvider>
         </ThemeProvider>
       </body>

@@ -17,13 +17,16 @@ import { CommandMenu } from "@/components/shell/ask/command-menu";
 import { FillOverlay } from "@/components/shell/ask/fill-overlay";
 import { OrgOnlyMount } from "@/components/shell/ask/org-only-mount";
 import { resolvedTierCatalog } from "@oxagen/ai";
-import { WandButton, WandPanel } from "@/components/shell/wand";
+import {
+  AgentPanelStoreProvider,
+  InAppAgentPanel,
+} from "@/components/agent-panel";
 import type { PlanTier } from "@oxagen/oxagen/types";
 
 type ModelConfig = ReturnType<typeof resolvedTierCatalog>;
 
-/** Wand panel — same deferral as AskDrawer (overlay, needs the workspace list). */
-async function WandPanelStreamed({
+/** Agent panel — same deferral as the old WandPanel (overlay, needs the workspace list). */
+async function AgentPanelStreamed({
   orgSlug,
   navDataPromise,
   modelConfig,
@@ -34,7 +37,7 @@ async function WandPanelStreamed({
 }) {
   const { availableWorkspaces } = await navDataPromise;
   return (
-    <WandPanel
+    <InAppAgentPanel
       orgSlug={orgSlug}
       availableWorkspaces={availableWorkspaces}
       modelConfig={modelConfig}
@@ -125,7 +128,10 @@ export default async function OrgLayout({
             subscriptionTier: schema.plans.tier,
           })
           .from(schema.orgUsers)
-          .innerJoin(schema.organizations, eq(schema.organizations.id, schema.orgUsers.orgId))
+          .innerJoin(
+            schema.organizations,
+            eq(schema.organizations.id, schema.orgUsers.orgId),
+          )
           .leftJoin(
             schema.subscriptions,
             and(
@@ -133,14 +139,16 @@ export default async function OrgLayout({
               eq(schema.subscriptions.status, "active"),
             ),
           )
-          .leftJoin(schema.plans, eq(schema.plans.id, schema.subscriptions.planId))
+          .leftJoin(
+            schema.plans,
+            eq(schema.plans.id, schema.subscriptions.planId),
+          )
           .where(eq(schema.orgUsers.userId, session.user.id)),
       ),
       // Org-scoped workspace list — sentinel workspace id (org_only table). — OXA-1515
-      runInTenantScope(
-        { orgId: org.id, workspaceId: ORG_ONLY_WS },
-        () =>
-          withTenantDb((tx) =>
+      runInTenantScope({ orgId: org.id, workspaceId: ORG_ONLY_WS }, () =>
+        withTenantDb(
+          (tx) =>
             tx
               .select({
                 publicId: schema.workspaces.publicId,
@@ -150,7 +158,7 @@ export default async function OrgLayout({
               .from(schema.workspaces)
               .where(eq(schema.workspaces.orgId, org.id))
               .limit(100), // cap for picker UX; search/scroll needed beyond this
-          ),
+        ),
       ),
       // Always-visible credit balance for the shell header. credit_lots is org_only
       // under RLS → tenant scope. Degrade to null (pill hidden) on any failure so a
@@ -191,44 +199,43 @@ export default async function OrgLayout({
 
   return (
     <PageContextProvider>
-      <AppShell
-        org={org}
-        navDataPromise={navDataPromise}
-        user={user}
-        planTier={planTier}
-      >
-        {children}
-      </AppShell>
-
-      {/*
-        CommandMenu at the org boundary serves org-only routes
-        (`/{org}`, `/{org}/settings`, `/{org}/members`, …). On workspace pages
-        the nested `[workspaceSlug]/layout.tsx` mounts it with the
-        full `{orgSlug, workspaceSlug}` context, so `enumerateNavTargets`
-        surfaces workspace-scoped routes. `OrgOnlyMount` suppresses the
-        copy on workspace paths to keep a single set of overlays in the
-        tree (acceptance: "No double-mount of CommandMenu").
-      */}
-      <OrgOnlyMount orgSlug={orgSlug}>
-        <CommandMenu ctx={ctx} />
-      </OrgOnlyMount>
-
-      {/* Fill overlay — renders AI form-fill suggestions from AskBar */}
-      <FillOverlay />
-
-      {/* Floating wand AI agent button — fixed bottom-right of the viewport. */}
-      <WandButton />
-
-      {/* Wand panel — the AI agent chat drawer; workspace list streams.
-          Mounted once at the org layout boundary so it persists across navigation.
-          The panel resolves the active workspace from the URL on each send. */}
-      <Suspense fallback={null}>
-        <WandPanelStreamed
-          orgSlug={orgSlug}
+      <AgentPanelStoreProvider>
+        <AppShell
+          org={org}
           navDataPromise={navDataPromise}
-          modelConfig={modelConfig}
-        />
-      </Suspense>
+          user={user}
+          planTier={planTier}
+        >
+          {children}
+        </AppShell>
+
+        {/*
+          CommandMenu at the org boundary serves org-only routes
+          (`/{org}`, `/{org}/settings`, `/{org}/members`, …). On workspace pages
+          the nested `[workspaceSlug]/layout.tsx` mounts it with the
+          full `{orgSlug, workspaceSlug}` context, so `enumerateNavTargets`
+          surfaces workspace-scoped routes. `OrgOnlyMount` suppresses the
+          copy on workspace paths to keep a single set of overlays in the
+          tree (acceptance: "No double-mount of CommandMenu").
+        */}
+        <OrgOnlyMount orgSlug={orgSlug}>
+          <CommandMenu ctx={ctx} />
+        </OrgOnlyMount>
+
+        {/* Fill overlay — renders AI form-fill suggestions from AskBar */}
+        <FillOverlay />
+
+        {/* Unified in-app agent panel — Linear-style overlay.
+            Mounted once at the org layout boundary so it persists across navigation.
+            The panel resolves the active workspace from the URL on each send. */}
+        <Suspense fallback={null}>
+          <AgentPanelStreamed
+            orgSlug={orgSlug}
+            navDataPromise={navDataPromise}
+            modelConfig={modelConfig}
+          />
+        </Suspense>
+      </AgentPanelStoreProvider>
     </PageContextProvider>
   );
 }

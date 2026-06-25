@@ -17,16 +17,21 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { activeHrefFor, getSidebarConfig, resolveSidebarCtx, resolveSidebarMode } from "@/lib/sidebar";
+import {
+  activeHrefFor,
+  getSidebarConfig,
+  resolveSidebarCtx,
+  resolveSidebarMode,
+} from "@/lib/sidebar";
 import { SidebarItem } from "@/components/shell/sidebar-item";
-import { UserSwitcher, type SessionUser } from "@/components/shell/user-switcher";
+import {
+  UserSwitcher,
+  type SessionUser,
+} from "@/components/shell/user-switcher";
 import { BrandMark, OxagenWordmark } from "@/components/ui/brand";
 import { useSidebar } from "./sidebar-context";
 import { cn } from "@/lib/utils";
 import type { ScopeContext } from "@/lib/scope";
-import { AgentPanelLauncher } from "@/components/agent/agent-panel-launcher";
-import { useAgentPanel } from "@/providers/agent-panel-provider";
-import { useAgentPanelConfig } from "@/hooks/use-agent-panel-config";
 
 import type { PlanTier } from "@oxagen/oxagen/types";
 
@@ -39,7 +44,13 @@ export interface SidebarProps {
 }
 
 /** Uppercase group heading shown above a sidebar section (a spacer in rail mode). */
-function GroupLabel({ children, collapsed }: { children: React.ReactNode; collapsed: boolean }) {
+function GroupLabel({
+  children,
+  collapsed,
+}: {
+  children: React.ReactNode;
+  collapsed: boolean;
+}) {
   if (collapsed) return <div className="h-2" aria-hidden="true" />;
   return (
     <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-nav-label-fg">
@@ -52,17 +63,20 @@ function GroupLabel({ children, collapsed }: { children: React.ReactNode; collap
 export function Sidebar({ ctx, user, planTier }: SidebarProps) {
   const pathname = usePathname();
   const { collapsed } = useSidebar();
-  const { isOpen, toggle } = useAgentPanel();
-  const { buttonLocation } = useAgentPanelConfig();
 
   // Recover the workspace slug from the URL (the org layout doesn't supply it),
   // then resolve the single active href as the most specific match.
   const effectiveCtx = resolveSidebarCtx(pathname, ctx);
   const mode = resolveSidebarMode(pathname, ctx);
   const config = getSidebarConfig(mode, planTier);
-  const activeHref = activeHrefFor(pathname, config.items.map((item) => item.href(effectiveCtx)));
+  const activeHref = activeHrefFor(
+    pathname,
+    config.items.map((item) => item.href(effectiveCtx)),
+  );
 
-  const primary = config.items.filter((item) => (item.group ?? "primary") === "primary");
+  const primary = config.items.filter(
+    (item) => (item.group ?? "primary") === "primary",
+  );
   const tools = config.items.filter((item) => item.group === "tools");
   const footer = config.items.filter((item) => item.group === "footer");
 
@@ -106,22 +120,44 @@ export function Sidebar({ ctx, user, planTier }: SidebarProps) {
         aria-hidden="true"
       />
       {/* Brand header */}
-      <div className={cn("flex h-14 shrink-0 items-center px-3", collapsed && "justify-center px-0")}>
-        <Link href={homeHref} aria-label="Oxagen home" className="flex items-center gap-2">
+      <div
+        className={cn(
+          "flex h-14 shrink-0 items-center px-3",
+          collapsed && "justify-center px-0",
+        )}
+      >
+        <Link
+          href={homeHref}
+          aria-label="Oxagen home"
+          className="flex items-center gap-2"
+        >
           <BrandMark />
-          {!collapsed && <OxagenWordmark className="text-2xl text-foreground" />}
+          {!collapsed && (
+            <OxagenWordmark className="text-2xl text-foreground" />
+          )}
         </Link>
       </div>
 
       {/* Primary + tools */}
-      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2" aria-label="Workspace navigation">
-        {config.groupLabel && <GroupLabel collapsed={collapsed}>{config.groupLabel}</GroupLabel>}
+      <nav
+        className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2"
+        aria-label="Workspace navigation"
+      >
+        {config.groupLabel && (
+          <GroupLabel collapsed={collapsed}>{config.groupLabel}</GroupLabel>
+        )}
         {primary.map(renderItem)}
 
         {tools.length > 0 && (
           <>
-            <div className="mx-2 my-2 h-px bg-sidebar-border" role="separator" aria-hidden="true" />
-            {config.toolsLabel && <GroupLabel collapsed={collapsed}>{config.toolsLabel}</GroupLabel>}
+            <div
+              className="mx-2 my-2 h-px bg-sidebar-border"
+              role="separator"
+              aria-hidden="true"
+            />
+            {config.toolsLabel && (
+              <GroupLabel collapsed={collapsed}>{config.toolsLabel}</GroupLabel>
+            )}
             {tools.map(renderItem)}
           </>
         )}
@@ -130,14 +166,6 @@ export function Sidebar({ ctx, user, planTier }: SidebarProps) {
       {/* Footer nav items + account control, pinned to the bottom. */}
       <div className="flex flex-col gap-0.5 border-t border-sidebar-border p-2">
         {footer.map(renderItem)}
-        {buttonLocation === "sidebar" && (
-          <AgentPanelLauncher
-            variant="sidebar"
-            isOpen={isOpen}
-            onClick={toggle}
-            label={collapsed ? undefined : "Agent"}
-          />
-        )}
         <UserSwitcher
           user={user}
           variant={collapsed ? "avatar" : "full"}

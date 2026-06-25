@@ -24,6 +24,7 @@ import { PanelLeft } from "lucide-react";
 import { Sidebar } from "./sidebar";
 import { resolveSidebarCtx } from "@/lib/sidebar";
 import { AskBar } from "@/components/shell/ask/ask-bar";
+import { AgentBottomBar } from "@/components/agent-panel/agent-bottom-bar";
 import { NotificationsBell } from "./notifications-bell";
 import { SupportMenu } from "./support-menu";
 import {
@@ -142,14 +143,25 @@ export function ShellFrame({
             <Suspense fallback={null}>
               <BalanceSlot orgSlug={org.slug} navDataPromise={navDataPromise} />
             </Suspense>
-            <SupportMenu orgSlug={ctx.orgSlug} workspaceSlug={ctx.workspaceSlug} />
+            <SupportMenu
+              orgSlug={ctx.orgSlug}
+              workspaceSlug={ctx.workspaceSlug}
+            />
             <NotificationsBell />
           </div>
         </header>
 
-        <main id="main-content" className="flex-1 overflow-y-auto p-4 max-md:pb-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap)+env(safe-area-inset-bottom))] md:p-6 md:pb-6">
+        <main
+          id="main-content"
+          className="flex-1 overflow-y-auto p-4 max-md:pb-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap)+env(safe-area-inset-bottom))] md:p-6 md:pb-6"
+        >
           {children}
         </main>
+
+        {/* Agent bottom bar — persistent across all pages (desktop only). */}
+        <div className="hidden md:block">
+          <AgentBottomBar />
+        </div>
       </div>
     </div>
   );
