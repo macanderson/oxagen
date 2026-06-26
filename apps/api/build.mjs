@@ -47,6 +47,8 @@ await build({
     "aws-sdk",
     "nock",
     "mock-aws-s3",
+    "@mapbox/node-pre-gyp",
+    "duckdb",
   ],
   logLevel: "info",
   // createDockerSandbox (packages/sandbox) uses createRequire(import.meta.url)
