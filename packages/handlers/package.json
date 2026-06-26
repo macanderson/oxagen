@@ -25,7 +25,6 @@
     "@oxagen/database": "workspace:*",
     "@oxagen/functions": "workspace:*",
     "@oxagen/inngest-functions": "workspace:*",
-    "@oxagen/inngest-functions": "workspace:*",
     "@oxagen/notifications": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",

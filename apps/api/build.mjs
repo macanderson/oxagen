@@ -40,7 +40,14 @@ await build({
   // createDockerSandbox loads dockerode lazily — so the external require is
   // never resolved at runtime here. Externalizing it keeps the native bindings
   // out of the bundle.
-  external: ["pg-native", "better-sqlite3", "dockerode"],
+  external: [
+    "pg-native",
+    "better-sqlite3",
+    "dockerode",
+    "aws-sdk",
+    "nock",
+    "mock-aws-s3",
+  ],
   logLevel: "info",
   // createDockerSandbox (packages/sandbox) uses createRequire(import.meta.url)
   // to lazily load the externalized `dockerode`. esbuild warns that import.meta

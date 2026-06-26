@@ -58,6 +58,7 @@ const nextConfig = {
     "@oxagen/sandbox",
     "@oxagen/agent",
     "@oxagen/engram",
+    "blake3",
     "duckdb",
     "dockerode",
     "ssh2",
@@ -87,6 +88,14 @@ const nextConfig = {
   // `.ts`/`.tsx` source natively for TypeScript projects — no custom
   // resolveExtensions override (which only *appends* extensions for
   // extensionless imports and suppresses the built-in `.js`→`.ts` remap).
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Ensure blake3 native module is never bundled — it's Node-only.
+      config.externals = config.externals || [];
+      config.externals.push("blake3");
+    }
+    return config;
+  },
 };
 
 export default nextConfig;

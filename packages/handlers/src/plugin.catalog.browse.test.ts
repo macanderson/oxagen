@@ -152,8 +152,13 @@ function makeServerResponse(name: string, version = "1.0.0") {
 
 // ── withTenantDb helpers ─────────────────────────────────────────────────────
 
-/** Mock a single withTenantDb call that returns registries. */
-function mockRegistries(regs: (typeof fakeRegistry)[]) {
+/** Mock a single withTenantDb call that returns registries.
+ * When registries are non-empty, also queues a catalog-rows mock (empty by
+ * default) because the handler queries mcp.catalog_servers immediately after. */
+function mockRegistries(
+  regs: (typeof fakeRegistry)[],
+  catalogRows: unknown[] = [],
+) {
   mocks.withTenantDb.mockImplementationOnce(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
@@ -162,6 +167,9 @@ function mockRegistries(regs: (typeof fakeRegistry)[]) {
         }),
       }),
   );
+  if (regs.length > 0) {
+    mockCatalogRows(catalogRows);
+  }
 }
 
 /** Mock a single withTenantDb call that returns catalog server rows (empty = fall through to live fetch). */
