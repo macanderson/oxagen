@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { matchGlob, evaluatePermission, filterToolVisibility, getNonDeniedTools } from "./permissions";
-import type { Permissions } from "./schema";
+import {
+  matchGlob,
+  evaluatePermission,
+  filterToolVisibility,
+  getNonDeniedTools,
+} from "./permissions.ts";
+import type { Permissions } from "./schema.ts";
 
 describe("matchGlob", () => {
   it("matches exact names", () => {
@@ -84,7 +89,9 @@ describe("filterToolVisibility", () => {
   });
 
   it("filters to include only matching tools", () => {
-    const result = filterToolVisibility(tools, { include: ["get_*", "list_*"] });
+    const result = filterToolVisibility(tools, {
+      include: ["get_*", "list_*"],
+    });
     expect(result).toEqual(["get_user", "list_repos"]);
   });
 

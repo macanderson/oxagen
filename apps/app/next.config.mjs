@@ -13,7 +13,9 @@ const serverActionsAllowedOrigins = [
   .filter((origin) => Boolean(origin) && origin !== "");
 
 // Hono API base — strips trailing slash so the rewrite destination path is clean.
-const honoApiBase = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").replace(/\/$/, "");
+const honoApiBase = (
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
+).replace(/\/$/, "");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -42,10 +44,24 @@ const nextConfig = {
     };
   },
   reactStrictMode: true,
-  transpilePackages: ["@oxagen/auth", "@oxagen/ai", "@oxagen/config", "@oxagen/database", "@oxagen/oxagen", "@oxagen/ui"],
+  transpilePackages: [
+    "@oxagen/auth",
+    "@oxagen/ai",
+    "@oxagen/config",
+    "@oxagen/database",
+    "@oxagen/oxagen",
+    "@oxagen/ui",
+  ],
   // Server-only packages with native deps (docker, ssh2) must stay external
   // so webpack doesn't try to bundle their .node binaries into the client.
-  serverExternalPackages: ["@oxagen/sandbox", "@oxagen/agent", "dockerode", "ssh2"],
+  serverExternalPackages: [
+    "@oxagen/sandbox",
+    "@oxagen/agent",
+    "@oxagen/engram",
+    "duckdb",
+    "dockerode",
+    "ssh2",
+  ],
   images: {
     // Vercel Blob public URLs (see @oxagen/storage adapter). Scoped to the
     // shared Vercel Blob domain; the single-segment `*` matches the store id so

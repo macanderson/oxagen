@@ -26,7 +26,7 @@ export {
   type ToolVisibility,
   type ManagedConfig,
   type ManagedPolicy,
-} from "./schema";
+} from "./schema.ts";
 
 // File resolution and merge
 export {
@@ -37,7 +37,7 @@ export {
   type ResolveOptions,
   type ResolvedConfig,
   type ResolvedScope,
-} from "./resolve";
+} from "./resolve.ts";
 
 // Credential management
 export {
@@ -52,7 +52,7 @@ export {
   type ResolvedCredential,
   type ResolveCredentialOptions,
   type RefreshResult,
-} from "./credentials";
+} from "./credentials.ts";
 
 // Permissions evaluation
 export {
@@ -64,7 +64,7 @@ export {
   type PermissionDecision,
   type PermissionResult,
   type ToolVisibilityConfig,
-} from "./permissions";
+} from "./permissions.ts";
 
 // Managed policy enforcement
 export {
@@ -78,4 +78,4 @@ export {
   isManagedServer,
   formatViolation,
   type PolicyViolation,
-} from "./managed";
+} from "./managed.ts";

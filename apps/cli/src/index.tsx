@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env tsx
 import { Command } from "commander";
 // JSON modules expose only a default export under Node's ESM loader; a named
 // `{ version }` import compiles under tsx but crashes the built binary at runtime.

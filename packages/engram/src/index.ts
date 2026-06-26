@@ -270,3 +270,87 @@ export type {
   TurnEndData,
 } from "./session/types";
 export type { ReplayStep, ReplayResult } from "./session/replay";
+
+// ---------------------------------------------------------------------------
+// Phase E: Multi-Agent Blackboard
+// ---------------------------------------------------------------------------
+
+export { BlackboardBus } from "./blackboard/bus";
+export {
+  enforceAccess,
+  hasAccess,
+  defaultAgentPermissions,
+  NamespaceAccessError as BlackboardAccessError,
+} from "./blackboard/access-control";
+export type {
+  AgentPermissions,
+  NamespaceGrant,
+} from "./blackboard/access-control";
+export { IntentLedger } from "./blackboard/intent";
+export type { Intent, IntentStatus, ClaimResult } from "./blackboard/intent";
+export { LeaseManager } from "./blackboard/lease";
+export type { Lease, LeaseResult } from "./blackboard/lease";
+export { AgentCoordinator } from "./blackboard/coordinator";
+export type {
+  WorkDecision,
+  CoordinationResult,
+} from "./blackboard/coordinator";
+export {
+  traceLineage,
+  findDerived,
+  agentContributionStats,
+} from "./blackboard/lineage";
+export type { LineageNode, LineageChain } from "./blackboard/lineage";
+export type {
+  BlackboardConfig,
+  AgentRegistration,
+  BlackboardEvent,
+  BlackboardEventType,
+  BlackboardPriority,
+  SubscriptionPattern,
+} from "./blackboard/types";
+
+// ---------------------------------------------------------------------------
+// Phase F: Sync, CRDTs, and Eval
+// ---------------------------------------------------------------------------
+
+// CRDTs
+export { tick, mergeClock, compareClock, generateTag } from "./sync/crdt";
+export type { VectorClock } from "./sync/crdt";
+export { ORSet } from "./sync/or-set";
+export { PNCounter } from "./sync/pn-counter";
+export { mergeRecordSets } from "./sync/merge";
+export type { MergeResult, MergeConflict } from "./sync/merge";
+
+// Merkle sync
+export {
+  buildMerkleTree,
+  diffMerkleTrees,
+  collectRecordIds,
+} from "./sync/merkle";
+export type { MerkleNode } from "./sync/merkle";
+export { syncWithPeer } from "./sync/protocol";
+export type {
+  SyncPeer,
+  SyncResult,
+  SyncRequest,
+  SyncResponse,
+} from "./sync/protocol";
+export { prioritizeForSync, batchByPriority } from "./sync/priority";
+
+// Eval harness
+export { runEvalSuite } from "./eval/harness";
+export type { EvalRunResult, EvalSuiteResult } from "./eval/harness";
+export { detectRegressions, DEFAULT_THRESHOLDS } from "./eval/metrics";
+export type {
+  EvalMetrics,
+  MetricThresholds,
+  MetricRegression,
+} from "./eval/metrics";
+export { validateTurn } from "./eval/golden-traces";
+export type {
+  GoldenTrace,
+  GoldenTurn,
+  TurnValidation,
+} from "./eval/golden-traces";
+export { generateTextReport, generateJsonReport } from "./eval/report";

@@ -14,7 +14,7 @@
  * This mirrors Claude Code's permission model where deny always wins over
  * allow at the same scope level, and more specific rules override defaults.
  */
-import type { Permissions, ServerPermission } from "./schema";
+import type { Permissions, ServerPermission } from "./schema.ts";
 
 export type PermissionDecision = "allow" | "deny" | "ask";
 
@@ -76,10 +76,14 @@ export function evaluatePermission(
   permissions: Permissions | undefined,
 ): PermissionResult {
   if (!permissions) {
-    return { decision: "ask", reason: "no permissions configured; defaulting to ask" };
+    return {
+      decision: "ask",
+      reason: "no permissions configured; defaulting to ask",
+    };
   }
 
-  const serverPerms: ServerPermission | undefined = permissions.mcpServers?.[serverName];
+  const serverPerms: ServerPermission | undefined =
+    permissions.mcpServers?.[serverName];
 
   if (serverPerms) {
     // 1. Check deny rules first (deny always wins at same scope)
@@ -159,7 +163,8 @@ export function filterToolVisibility(
   // Apply exclude filter (blacklist)
   if (visibility.exclude && visibility.exclude.length > 0) {
     filtered = filtered.filter(
-      (tool) => !visibility.exclude!.some((pattern) => matchGlob(pattern, tool)),
+      (tool) =>
+        !visibility.exclude!.some((pattern) => matchGlob(pattern, tool)),
     );
   }
 

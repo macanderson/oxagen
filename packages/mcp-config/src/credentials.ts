@@ -24,7 +24,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import type { McpServerConfig } from "./schema";
+import type { McpServerConfig } from "./schema.ts";
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
