@@ -38,9 +38,11 @@
   "dependencies": {
     "@inkjs/ui": "2.0.0",
     "@oxagen/engram": "workspace:*",
+    "ai": "6.0.197",
     "commander": "12.1.0",
     "ink": "7.1.0",
-    "react": "19.2.6"
+    "react": "19.2.6",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "25.9.1",

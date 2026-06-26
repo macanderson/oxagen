@@ -10,9 +10,10 @@
  * Like Claude Code, but with Engram memory visible.
  */
 import { Box, Text, useApp, useInput } from "ink";
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
+import type { ModelMessage } from "ai";
 import { theme } from "../tui/theme.js";
-import { getApiUrl, getToken } from "../lib/config.js";
+import { runAgent } from "../agent/loop.js";
 import pkg from "../../package.json" with { type: "json" };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -151,6 +152,13 @@ function StatusLine({ stats }: { stats: MemoryStats }): React.ReactElement {
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 
+function summarizeInput(input: unknown): string {
+  if (input == null) return "";
+  const text =
+    typeof input === "object" ? JSON.stringify(input) : String(input);
+  return text.length > 100 ? text.slice(0, 100) + "…" : text;
+}
+
 function ReplApp(): React.ReactElement {
   const { exit } = useApp();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -162,6 +170,17 @@ function ReplApp(): React.ReactElement {
     cacheHitRate: 0,
   });
 
+  // Source-of-truth message list (the state mirror), so streaming updates can be
+  // computed synchronously without racing React's batched setState.
+  const allRef = useRef<Message[]>([]);
+  // Multi-turn conversation history fed back to the model each turn.
+  const historyRef = useRef<ModelMessage[]>([]);
+
+  const commit = useCallback((next: Message[]) => {
+    allRef.current = next;
+    setMessages(next);
+  }, []);
+
   useInput((_input, key) => {
     if (key.ctrl && _input === "c") {
       exit();
@@ -172,6 +191,8 @@ function ReplApp(): React.ReactElement {
     async (text: string) => {
       // Handle slash commands
       if (text === "/clear") {
+        allRef.current = [];
+        historyRef.current = [];
         setMessages([]);
         return;
       }
@@ -184,47 +205,79 @@ function ReplApp(): React.ReactElement {
         return;
       }
 
-      // Add user message
       const userMsg: Message = {
         role: "user",
         content: text,
         timestamp: Date.now(),
       };
-      setMessages((prev) => [...prev, userMsg]);
+      const base = [...allRef.current, userMsg];
+      commit(base);
       setIsStreaming(true);
 
-      try {
-        const response = await sendPrompt(text);
-        const assistantMsg: Message = {
-          role: "assistant",
-          content: response.content,
-          timestamp: Date.now(),
-        };
-        setMessages((prev) => [...prev, assistantMsg]);
+      // This turn's streamed messages (tool annotations + assistant text).
+      const turn: Message[] = [];
+      let assistantOpen = false;
+      const render = (): void => commit([...base, ...turn]);
 
-        // Update stats from response metadata
-        if (response.meta) {
-          const meta = response.meta;
-          setStats((prev) => ({
-            ...prev,
-            recordsThisTurn: meta.memoryWrites ?? 0,
-            totalRecords: prev.totalRecords + (meta.memoryWrites ?? 0),
-            compileMs: meta.compileMs ?? prev.compileMs,
-            cacheHitRate: meta.cacheHitRate ?? prev.cacheHitRate,
-          }));
+      try {
+        const result = await runAgent({
+          prompt: text,
+          history: historyRef.current,
+          onToolCall: (name, input) => {
+            turn.push({
+              role: "tool",
+              toolName: name,
+              content: summarizeInput(input),
+              timestamp: Date.now(),
+            });
+            assistantOpen = false;
+            render();
+          },
+          onText: (delta) => {
+            if (!assistantOpen) {
+              turn.push({
+                role: "assistant",
+                content: "",
+                streaming: true,
+                timestamp: Date.now(),
+              });
+              assistantOpen = true;
+            }
+            const last = turn[turn.length - 1] as Message;
+            turn[turn.length - 1] = { ...last, content: last.content + delta };
+            render();
+          },
+        });
+
+        if (assistantOpen) {
+          const last = turn[turn.length - 1] as Message;
+          turn[turn.length - 1] = { ...last, streaming: false };
+        } else {
+          turn.push({
+            role: "assistant",
+            content: result.text || "(done)",
+            timestamp: Date.now(),
+          });
         }
+        render();
+        historyRef.current = result.messages;
+        setStats((prev) => ({
+          ...prev,
+          recordsThisTurn: result.steps,
+          totalRecords: prev.totalRecords + result.steps,
+        }));
       } catch (err) {
-        const errorMsg: Message = {
+        turn.push({
           role: "assistant",
           content: `Error: ${err instanceof Error ? err.message : String(err)}`,
           timestamp: Date.now(),
-        };
-        setMessages((prev) => [...prev, errorMsg]);
+        });
+        render();
       } finally {
         setIsStreaming(false);
       }
     },
-    [exit],
+    [exit, commit],
   );
 
   return (
@@ -262,46 +315,6 @@ function ReplApp(): React.ReactElement {
       <PromptInput onSubmit={handleSubmit} disabled={isStreaming} />
     </Box>
   );
-}
-
-// ── API ───────────────────────────────────────────────────────────────────────
-
-interface PromptResponse {
-  content: string;
-  meta?: {
-    memoryWrites?: number;
-    compileMs?: number;
-    cacheHitRate?: number;
-  };
-}
-
-async function sendPrompt(text: string): Promise<PromptResponse> {
-  const token = getToken();
-  const apiUrl = getApiUrl();
-
-  if (!token) {
-    return {
-      content:
-        "No API token configured. Run `oxagen config token <your-token>` to set one,\n" +
-        "or set OXAGEN_API_TOKEN environment variable.",
-    };
-  }
-
-  const response = await fetch(`${apiUrl}/chat/send`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ message: text }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status} ${response.statusText}`);
-  }
-
-  const data = (await response.json()) as PromptResponse;
-  return data;
 }
 
 // ── Launch ────────────────────────────────────────────────────────────────────

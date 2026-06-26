@@ -1,49 +1,44 @@
 /**
- * One-shot mode — run a single prompt, stream the response, exit.
+ * One-shot mode — run a single prompt through the local agent loop, stream the
+ * response to stdout, exit.
  *
  * Usage:
  *   oxagen "fix the login bug"
  *   echo "explain this code" | oxagen
+ *
+ * The agent operates on the current working directory using local coding tools
+ * (read/write/edit/grep/glob/bash). Model calls go through the Vercel AI Gateway.
  */
-import { getApiUrl, getToken } from "../lib/config.js";
+import { runAgent, MissingGatewayKeyError } from "../agent/loop.js";
 
 export async function runOneShot(prompt: string): Promise<void> {
-  const token = getToken();
-  const apiUrl = getApiUrl();
-
-  if (!token) {
-    process.stderr.write(
-      "Error: No API token configured.\n" +
-        "Run `oxagen config token <your-token>` or set OXAGEN_API_TOKEN.\n",
-    );
-    process.exitCode = 1;
-    return;
-  }
-
   try {
-    const response = await fetch(`${apiUrl}/chat/send`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+    let streamed = false;
+    await runAgent({
+      prompt,
+      onText: (delta) => {
+        streamed = true;
+        process.stdout.write(delta);
       },
-      body: JSON.stringify({ message: prompt }),
+      // Tool activity goes to stderr so stdout stays the clean final answer
+      // (pipeable). e.g. `oxagen "..." > out.md` captures only the answer.
+      onToolCall: (name, input) => {
+        const summary =
+          typeof input === "object" && input !== null
+            ? JSON.stringify(input).slice(0, 120)
+            : String(input);
+        process.stderr.write(`  · ${name} ${summary}\n`);
+      },
     });
-
-    if (!response.ok) {
-      process.stderr.write(
-        `Error: API returned ${response.status} ${response.statusText}\n`,
-      );
-      process.exitCode = 1;
-      return;
-    }
-
-    const data = (await response.json()) as { content: string };
-    process.stdout.write(data.content + "\n");
+    if (streamed) process.stdout.write("\n");
   } catch (err) {
-    process.stderr.write(
-      `Error: ${err instanceof Error ? err.message : String(err)}\n`,
-    );
+    if (err instanceof MissingGatewayKeyError) {
+      process.stderr.write(`Error: ${err.message}\n`);
+    } else {
+      process.stderr.write(
+        `Error: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+    }
     process.exitCode = 1;
   }
 }

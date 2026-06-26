@@ -8,6 +8,8 @@ export interface CliConfig {
   workspaceSlug?: string;
   apiUrl?: string;
   model?: string;
+  /** Vercel AI Gateway key for the local agent loop (falls back to env / .env.local). */
+  gatewayKey?: string;
 }
 
 const CONFIG_DIR = join(homedir(), ".config", "oxagen");
