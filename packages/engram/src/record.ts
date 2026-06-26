@@ -5,8 +5,14 @@
  * blake3. Identical (kind + namespace + body) always produces the same ID,
  * giving us natural deduplication at the storage layer.
  */
-import { createHash } from "blake3";
-import type { MemoryRecord, Namespace, Provenance, RecordBody, RecordKind } from "./types";
+import { contentHash } from "./hash";
+import type {
+  MemoryRecord,
+  Namespace,
+  Provenance,
+  RecordBody,
+  RecordKind,
+} from "./types";
 
 /**
  * Compute a content-addressed record ID.
@@ -51,7 +57,11 @@ export interface CreateRecordParams {
  * to ensure the ID is consistent.
  */
 export function createRecord(params: CreateRecordParams): MemoryRecord {
-  const id = computeRecordId(params.kind, params.namespace, params.body as RecordBody);
+  const id = computeRecordId(
+    params.kind,
+    params.namespace,
+    params.body as RecordBody,
+  );
   return {
     id,
     kind: params.kind,
