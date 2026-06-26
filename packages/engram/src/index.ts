@@ -4,6 +4,9 @@
  * Public API surface. All consumers import from this barrel.
  */
 
+// Hash (blake3 with SHA-256 fallback for bundled environments)
+export { initHash, contentHash } from "./hash";
+
 // Core types
 export type {
   RecordKind,
