@@ -224,9 +224,10 @@ Parse pasted text → upsert keys + set values for chosen target (default values
 - Returns a **preview** (parsed rows + which are new vs override) so the UI can confirm before commit.
 
 ### 7.5 Grid UX (Vercel-style)
-- Columns: **Key · Value** (masked; reveal/copy for authorized, logged) **· Sensitive** (toggle, default on) **· Memo · Environments** (which envs have overrides; per-env value editor) **· Default value**.
-- **Paste `.env`** → parsed preview → choose target (defaults or environment) → import.
-- **Export** (per environment → `.env`) and **Reveal** actions (Owner/Admin, logged).
+- **Layout = matrix** (decided — §18.7): rows are **keys**, columns are **Default value + one per environment**. Each value cell is the `(key, environment)` override; `‹inherit›` (muted) where no override falls back to Default. Inheritance is visible in one view — chosen over per-environment tabs because workspaces have few environments (3–5) and cross-env comparison is the common task. (Full IA + mockups: §16.)
+- Row header columns: **Key · Sensitive** (toggle, default on) **· Memo**. Value columns: **Default · ‹each env›**, masked with **reveal/copy** for authorized principals (logged).
+- **Paste `.env`** → parsed preview (`KEY · VALUE(masked) · NEW|OVERRIDE · target`) → choose target (defaults or a specific environment) → import.
+- **Export** (per environment → `.env`) and **Reveal** actions (Owner/Admin, logged), each echoed with a visible "recorded" affordance (the Google-Secret-Manager posture, §7.3).
 - Empty-state seeds nothing; the grid is per-workspace and shared across environments via the override model.
 
 ---
@@ -354,7 +355,59 @@ New files `workspace-environment-seed.ts` / `workspace-sandbox-template-seed.ts`
 
 ---
 
-## 16. Testing
+## 16. UI surfaces (web + TUI)
+
+The vault + environments feature presents through **one web settings page** and **two CLI command groups**. Both surfaces call the *same* contracts (§13) — no drift. OXA-1848/1849/1850 are backend-only; **OXA-1853** builds the web UI from this section. Secrets never travel to a client in plaintext: pages render masked placeholders and `reveal` is a separate, audited round-trip.
+
+### 16.1 Web — `settings/environments`
+- **Route:** `apps/app/src/app/[orgSlug]/[workspaceSlug]/settings/environments/` — server `page.tsx` (resolve org+ws, role-check, fetch masked rows via `runInTenantScope`+`invoke`) → client `environments-panel.tsx` (state) → `environments-actions.ts` server actions (`"use server"`, re-check Owner/Admin, `invoke()`, `revalidatePath`). New declarative entry in `settings/layout.tsx`'s `SettingsNav`. Primitives from `@/components/ui/*` (Button, Input, Switch, Badge, Textarea); hand-rolled `<table>` matrix (matches the integrations-panel convention).
+- **Environments bar** (top): chips per environment, the workspace default marked **★**. A **Manage environments** drawer lists each env with `[Set default]` (→ `environment.set_default`) and a `⋯` menu (Rename/Deactivate/Delete via `environment.update`/`delete`). On the ★ default, Deactivate/Delete are **disabled** with the tooltip *"Promote another environment to default first."* — the promote-before-remove guard taught at the affordance, not via a post-click error.
+
+```
+SECRETS                            [ + Add key ]  [ Paste .env ]  [ Export ▾ ]
+ ┌──────────────┬──────┬────────────┬──────────┬──────────┬──────────┬─────────┐
+ │ KEY          │ SENS │ MEMO       │ DEFAULT  │ DEV      │ PREVIEW  │ PROD    │
+ ├──────────────┼──────┼────────────┼──────────┼──────────┼──────────┼─────────┤
+ │ DATABASE_URL │  ●   │ primary pg │ •••••• 👁│ ‹inherit›│ •••••• 👁│ ••••• 👁│
+ │ LOG_LEVEL    │  ○   │ debug|info │ info     │ debug    │ ‹inherit›│ warn    │
+ └──────────────┴──────┴────────────┴──────────┴──────────┴──────────┴─────────┘
+   ● sensitive (encrypted, masked)  ○ plain config  👁 reveal (logged)  ‹inherit›→Default
+```
+
+- **Cell = (key, environment) override.** Click a value cell → inline editor (`secret.value.set`/`unset`); `‹inherit›` cells offer "Set override for ‹env›". The **Default** column edits `secret_keys.default_value` (`secret.key.upsert`). Row-header cells (Key/SENS/Memo) → key editor; toggling `sensitive` re-stores the row (encrypted ↔ plaintext).
+- **Paste `.env`** → dialog: paste box → `secret.import_env` returns a **preview** (new vs override, per-target) → confirm → commit. **Export ▾** (`secret.export`, per env → `.env`) and per-cell **👁 reveal** (`secret.reveal`) are Owner/Admin-only and surface a "recorded" toast.
+
+### 16.2 TUI — `oxagen env` + `oxagen secret`
+Flag-driven first (agents/scripts drive these with few tokens — the CLI-over-MCP rationale); `--json` on every read for scripting; Ink only for an optional interactive editor. `fetch()` → `/api/v1/<capability>` with the Bearer token + org/ws scope from `apps/cli/src/lib/config.ts`. New files `apps/cli/src/commands/env.ts` + `secret.ts` (mirror `config.ts`), wired as Commander noun→verb groups in `index.tsx`.
+
+```
+$ oxagen env list                     # → environment.list
+  NAME         SLUG        DEFAULT  ACTIVE  TEMPLATES
+  Default      default     ★        yes     1
+  Production   production           yes     2
+
+$ oxagen env set-default production   # → environment.set_default (atomic swap)
+  ✓ default environment: Development → Production
+
+$ oxagen secret list --env production # → secret.key.list (resolved per env)
+  KEY           SENS  VALUE      SOURCE     MEMO
+  DATABASE_URL  ●     ••••••••   override   primary pg
+  REDIS_URL     ●     ‹unset›    —          (no default, no override)
+
+$ oxagen secret set LOG_LEVEL debug --env dev --sensitive=false   # key.upsert + value.set
+$ oxagen secret import --env prod -f .env.prod                    # import_env → preview; --yes commits
+$ oxagen secret reveal DATABASE_URL --env prod                    # reveal  (⚠ recorded)
+$ oxagen secret export --env prod -o .env.prod                    # export  (⚠ recorded)
+```
+
+- **Verb→contract:** `env list/get/create/rename/rm/set-default` → `environment.*`; `secret list/get/set/unset/import/reveal/export/rm` → `secret.*`. `import` prints a preview and requires `--yes` to commit (mirrors the web preview-then-import); `reveal`/`export` echo `⚠ recorded` (mirrors the web "recorded" toast). `‹unset›`/`‹inherit›` render the resolution rule (§5.5) in the terminal.
+
+### 16.3 Empty state (what OXA-1848 seeding buys)
+A brand-new workspace already shows **one ★ Default environment** and an **empty secrets grid** — never blank-and-broken — because seeding (§15) creates the default env up front. The grid's first row appears on first `Add key` / `Paste .env` / `oxagen secret set`.
+
+---
+
+## 17. Testing
 
 - **Default invariants:** can't create two defaults; can't delete/deactivate the default env/template; promoting another then deleting works; partial-unique blocks races.
 - **Resolution:** value(key,E) = override ?? default ?? unset; per-environment correctness; sensitive→encrypted, non-sensitive→plaintext.
@@ -368,7 +421,7 @@ New files `workspace-environment-seed.ts` / `workspace-sandbox-template-seed.ts`
 
 ---
 
-## 17. Phasing
+## 18. Phasing
 
 - **Phase 0 — Vault + Environments core.** Tables, crypto service, seeding, `secret.*` + `environment.*` contracts, the Vercel-style grid + `.env` import + reveal/export. (No sandbox changes yet — immediately useful for model-keys/config.)
 - **Phase 1 — Sandbox Templates + binding + trusted injection.** Templates (provider/resources/network=`public`/secret selection), preloaded tools, agent bindings, the §11/§12 provisioning path. `static_egress` shipped (publish egress IPs).
@@ -378,7 +431,7 @@ New files `workspace-environment-seed.ts` / `workspace-sandbox-template-seed.ts`
 
 ---
 
-## 18. Open decisions (recommendation in **bold**)
+## 19. Open decisions (recommendation in **bold**)
 
 1. **Default-sandbox scope:** **per-environment** (each environment has its own default template; "system default sandbox" = default env's default template). Alt: one workspace-wide default (doesn't fit "config by environment").
 2. **Where the workspace default-env pointer lives:** **rely on `environments.is_default`** (single source of truth) and surface it in settings; mirror into `workspace.settings` only if the UI needs a cheap read. Alt: store `defaultEnvironmentId` on the workspace row.
@@ -386,9 +439,10 @@ New files `workspace-environment-seed.ts` / `workspace-sandbox-template-seed.ts`
 4. **Schema home:** **new `environments` schema**. Alt: fold into `agent.*` (closer to bindings, but secrets are broader than agents).
 5. **Non-sensitive value storage:** **plaintext column** (it's config). Alt: encrypt everything uniformly (simpler code, heavier, and weakens the meaning of `sensitive`).
 6. **Reveal/export authority:** **Owner/Admin + audit**. Confirm whether a narrower "secrets manager" role is wanted later.
+7. **Secrets grid layout:** **matrix** (keys × [Default + environments]; `‹inherit›` where no override) — DECIDED. Chosen over per-environment tabs: few environments per workspace make the matrix readable, and cross-env comparison (the common task) needs no tab switching. Mockups in §16.1.
 
 ---
 
-## 19. Net recommendation
+## 20. Net recommendation
 
 Build Environments, Sandbox Templates, and the Vault as three workspace primitives on top of `@oxagen/crypto`, the workspace-seeding pattern, the `agent_versions` config, and the `@oxagen/sandbox` drivers. Keep **exactly one default** environment (and one default template per environment) with DB-enforced invariants and promote-before-remove semantics. Make the vault the single secret store — workspace-root keys + default value + per-environment overrides, `sensitive` (default true) → encrypted, **with deliberate, audited plaintext export** unlike Vercel. Inject vault secrets into sandboxes through a **trusted channel** that bypasses the model-facing denylist without weakening it. And answer private-network reachability with a **tiered network model** — `static_egress` for allowlistable cloud DBs, `aws_privatelink`/`gcp_psc` for private cloud, and an outbound-only **reverse-tunnel Network Agent** for in-house firewalls — selected per sandbox template. This is the substrate that lets agents and connectors reach a customer's databases wherever they live.

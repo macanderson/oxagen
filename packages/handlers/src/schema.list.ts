@@ -8,8 +8,10 @@ import { logger } from "./logger";
 export const schemaListHandler: CapabilityHandler<typeof schemaList> = async (_input, ctx) => {
   const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
 
-  // Use pinned version for reads; fall back to draft
-  const versionInternalId = registry.pinnedVersionId ?? registry.draftVersionId;
+  // List the DRAFT (the working copy) first — it is a superset of the pinned
+  // version, so newly created/scaffolded schemas list immediately; the `enabled`
+  // flag still distinguishes active schemas. Fall back to pinned if no draft.
+  const versionInternalId = registry.draftVersionId ?? registry.pinnedVersionId;
 
   if (!versionInternalId) {
     return { schemas: [] };

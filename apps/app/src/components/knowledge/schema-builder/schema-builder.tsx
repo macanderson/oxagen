@@ -198,7 +198,7 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
           )}
           {registry && (
             <Select
-              value={versionId ?? (registry.pinnedVersionId ?? "draft")}
+              value={versionId ?? (registry.draftVersionId ? "draft" : registry.pinnedVersionId ?? "draft")}
               onValueChange={(v) => setVersionId(v == null || v === "draft" ? undefined : v)}
             >
               <SelectTrigger className="h-7 text-xs w-36">

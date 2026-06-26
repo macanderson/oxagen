@@ -11,8 +11,14 @@ export const schemaRegistryGetHandler: CapabilityHandler<typeof schemaRegistryGe
 ) => {
   const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
 
-  // Determine which version to load
-  const versionId = input.versionId ?? registry.pinnedVersionId ?? registry.draftVersionId;
+  // Determine which version to load. The builder is an editing surface, so the
+  // default view must be the DRAFT (the working copy where every agent + manual
+  // edit lands), not the pinned published version — otherwise newly scaffolded /
+  // edited schemas are invisible until published. The draft is a superset of the
+  // pinned version (publishing copies the draft forward), so this never hides
+  // active schemas; the `enabled` flag distinguishes active ones. An explicit
+  // `versionId` (e.g. selecting "Pinned version") still wins.
+  const versionId = input.versionId ?? registry.draftVersionId ?? registry.pinnedVersionId;
 
   const schemas = await withTenantDb(async (tx) => {
     if (!versionId) return [];
