@@ -49,7 +49,6 @@ import { documentsGenerateRoute } from "./routes/v1/documents.generate";
 import { documentsPdfCreateRoute } from "./routes/v1/documents.pdf.create";
 import { markdownGenerateRoute } from "./routes/v1/markdown.generate";
 import { mermaidGenerateRoute } from "./routes/v1/mermaid.generate";
-import { brandkitApplyRoute } from "./routes/v1/brandkit.apply";
 import { videoGenerateRoute } from "./routes/v1/video.generate";
 import { svgGenerateRoute } from "./routes/v1/svg.generate";
 import { imageGenerateRoute } from "./routes/v1/image.generate";
@@ -105,8 +104,6 @@ import { imageAnalyzeRoute } from "./routes/v1/image.analyze";
 import { documentCreateRoute } from "./routes/v1/document.create";
 import { documentListRoute } from "./routes/v1/document.list";
 import { documentReadRoute } from "./routes/v1/document.read";
-import { formCreateRoute } from "./routes/v1/form.create";
-import { formSubmitRoute } from "./routes/v1/form.submit";
 import { automationListRoute } from "./routes/v1/automation.list";
 import { automationCreateRoute } from "./routes/v1/automation.create";
 import { automationUpdateRoute } from "./routes/v1/automation.update";
@@ -139,7 +136,10 @@ import { privacyDataExportRoute } from "./routes/v1/privacy.data.export";
 import { privacyDataEraseRoute } from "./routes/v1/privacy.data.erase";
 import { connectionRoute } from "./routes/v1/connection";
 import { webhookRoute } from "./routes/v1/webhook";
-import { githubOauthRoute, githubOauthCallbackRoute } from "./routes/v1/github-oauth";
+import {
+  githubOauthRoute,
+  githubOauthCallbackRoute,
+} from "./routes/v1/github-oauth";
 import { githubAppWebhookRoute } from "./routes/v1/github-webhook";
 import { graphNodeUpsertRoute } from "./routes/v1/graph.node.upsert";
 import { graphNodeGetRoute } from "./routes/v1/graph.node.get";
@@ -159,7 +159,10 @@ import { integrationRoute } from "./routes/v1/integration";
 import { schemaRoute } from "./routes/v1/schema";
 import { semanticRelationshipRoute } from "./routes/v1/semantic-relationship";
 import { graphRelationshipUpsertRoute } from "./routes/v1/graph.relationship.upsert";
-import { pluginSchemaRoute, pluginVersionRoute } from "./routes/v1/plugin-schema";
+import {
+  pluginSchemaRoute,
+  pluginVersionRoute,
+} from "./routes/v1/plugin-schema";
 import { graphNodeListRoute } from "./routes/v1/graph.node.list";
 import { graphStatsRoute } from "./routes/v1/graph.stats";
 import { ontologyQueryRoute } from "./routes/v1/ontology.query";
@@ -214,7 +217,10 @@ const orgScoped = new Hono<AppEnv>();
 orgScoped.use("*", authMiddleware, orgMiddleware, workspaceMiddleware);
 orgScoped.route("/workspaces", workspaceCreateRoute);
 orgScoped.route("/billing/subscription", billingSubscriptionReadRoute);
-orgScoped.route("/billing/subscription/upgrade/start", billingSubscriptionUpgradeStartRoute);
+orgScoped.route(
+  "/billing/subscription/upgrade/start",
+  billingSubscriptionUpgradeStartRoute,
+);
 orgScoped.route("/billing/credits/purchase", billingCreditsPurchaseRoute);
 orgScoped.route("/chat/messages", chatMessageSendRoute);
 orgScoped.route("/chat/messages/execution", chatMessageExecutionRoute);
@@ -278,7 +284,6 @@ orgScoped.route("/documents/generate", documentsGenerateRoute);
 orgScoped.route("/documents/pdf", documentsPdfCreateRoute);
 orgScoped.route("/markdown/generate", markdownGenerateRoute);
 orgScoped.route("/mermaid/generate", mermaidGenerateRoute);
-orgScoped.route("/brandkit/apply", brandkitApplyRoute);
 orgScoped.route("/video/generate", videoGenerateRoute);
 orgScoped.route("/svg/generate", svgGenerateRoute);
 orgScoped.route("/image/generate", imageGenerateRoute);
@@ -307,12 +312,21 @@ orgScoped.route("/plugin/org/install", pluginOrgInstallRoute);
 orgScoped.route("/plugin/org/install-bulk", pluginOrgInstallBulkRoute);
 orgScoped.route("/plugin/org/uninstall", pluginOrgUninstallRoute);
 orgScoped.route("/plugin/org/set-enabled", pluginOrgSetEnabledRoute);
-orgScoped.route("/plugin/workspace/set-enabled", pluginWorkspaceSetEnabledRoute);
-orgScoped.route("/plugin/credential/set-secret", pluginCredentialSetSecretRoute);
+orgScoped.route(
+  "/plugin/workspace/set-enabled",
+  pluginWorkspaceSetEnabledRoute,
+);
+orgScoped.route(
+  "/plugin/credential/set-secret",
+  pluginCredentialSetSecretRoute,
+);
 orgScoped.route("/plugin/credential/reauth", pluginCredentialReauthRoute);
 orgScoped.route("/notifications", notificationsListRoute);
 orgScoped.route("/notifications/mark", notificationsMarkRoute);
-orgScoped.route("/plugin/settings/auth-alerts", pluginSettingsSetAuthAlertsRoute);
+orgScoped.route(
+  "/plugin/settings/auth-alerts",
+  pluginSettingsSetAuthAlertsRoute,
+);
 orgScoped.route("/api-keys", apiKeyCreateRoute);
 orgScoped.route("/api-keys/revoke", apiKeyRevokeRoute);
 orgScoped.route("/api-keys/rotate", apiKeyRotateRoute);
@@ -326,8 +340,6 @@ orgScoped.route("/image/analyze", imageAnalyzeRoute);
 orgScoped.route("/document/create", documentCreateRoute);
 orgScoped.route("/document/list", documentListRoute);
 orgScoped.route("/document/read", documentReadRoute);
-orgScoped.route("/form/create", formCreateRoute);
-orgScoped.route("/form/submit", formSubmitRoute);
 orgScoped.route("/automation/list", automationListRoute);
 orgScoped.route("/automation/create", automationCreateRoute);
 orgScoped.route("/automation/update", automationUpdateRoute);

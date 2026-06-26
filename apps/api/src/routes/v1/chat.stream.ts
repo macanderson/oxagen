@@ -11,7 +11,7 @@ import {
   chatSystemPrompt,
   loadWorkspacePromptConfig,
 } from "@oxagen/ai";
-import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
+import { materializeTools } from "@oxagen/agent";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen/kernel";
@@ -59,10 +59,37 @@ type ApiStreamEvent =
   | { type: "step-finish"; stepIndex: number }
   | { type: "tool-input-start"; toolCallId: string; capability: string }
   | { type: "tool-input-delta"; toolCallId: string; delta: string }
-  | { type: "tool-call-start"; toolCallId: string; capability: string; inputPreview: unknown; riskLevel: string }
-  | { type: "tool-call-end"; toolCallId: string; status: "completed" | "failed"; output?: unknown; errorReason?: string; durationMs: number }
-  | { type: "approval-required"; approvalId: string; capability: string; inputPreview: unknown; riskLevel: string; expiresAt: string }
-  | { type: "usage"; usage: { promptTokens: number; completionTokens: number; totalTokens: number } }
+  | {
+      type: "tool-call-start";
+      toolCallId: string;
+      capability: string;
+      inputPreview: unknown;
+      riskLevel: string;
+    }
+  | {
+      type: "tool-call-end";
+      toolCallId: string;
+      status: "completed" | "failed";
+      output?: unknown;
+      errorReason?: string;
+      durationMs: number;
+    }
+  | {
+      type: "approval-required";
+      approvalId: string;
+      capability: string;
+      inputPreview: unknown;
+      riskLevel: string;
+      expiresAt: string;
+    }
+  | {
+      type: "usage";
+      usage: {
+        promptTokens: number;
+        completionTokens: number;
+        totalTokens: number;
+      };
+    }
   | { type: "error"; message: string };
 
 // Collected token + step data returned by consumeStream for execution recording.
@@ -138,8 +165,10 @@ async function consumeStream(
       emit({ type: "reasoning-delta", reasoningId: id, text });
     } else if (pType === "reasoning-end") {
       const { id } = raw as { id: string };
-      const durationMs = reasoningStartedAt[id] !== undefined
-        ? Date.now() - (reasoningStartedAt[id] as number) : 0;
+      const durationMs =
+        reasoningStartedAt[id] !== undefined
+          ? Date.now() - (reasoningStartedAt[id] as number)
+          : 0;
       emit({ type: "reasoning-end", reasoningId: id, durationMs });
     } else if (pType === "start-step") {
       stepIndex += 1;
@@ -147,8 +176,10 @@ async function consumeStream(
       emit({ type: "step-start", stepIndex });
     } else if (pType === "finish-step") {
       if (stepIndex >= 0) {
-        const latencyMs = stepStartedAt[stepIndex] !== undefined
-          ? Date.now() - (stepStartedAt[stepIndex] as number) : 0;
+        const latencyMs =
+          stepStartedAt[stepIndex] !== undefined
+            ? Date.now() - (stepStartedAt[stepIndex] as number)
+            : 0;
         // Collect all tool calls that were emitted for this step.
         const stepToolCalls = Object.values(collectedToolCalls).filter(
           (tc) => toolCallToStep[tc.toolCallId] === stepIndex,
@@ -174,7 +205,11 @@ async function consumeStream(
       const { id, delta } = raw as { id: string; delta: string };
       emit({ type: "tool-input-delta", toolCallId: id, delta });
     } else if (pType === "tool-call") {
-      const { toolCallId, toolName, input } = raw as { toolCallId: string; toolName: string; input: unknown };
+      const { toolCallId, toolName, input } = raw as {
+        toolCallId: string;
+        toolName: string;
+        input: unknown;
+      };
       toolStartedAt[toolCallId] = Date.now();
       // Associate this tool call with the current step.
       toolCallToStep[toolCallId] = stepIndex;
@@ -193,32 +228,60 @@ async function consumeStream(
         riskLevel: "low",
       });
     } else if (pType === "tool-result") {
-      const { toolCallId, output } = raw as { toolCallId: string; output: unknown };
-      const durationMs = toolStartedAt[toolCallId] !== undefined
-        ? Date.now() - (toolStartedAt[toolCallId] as number) : 0;
+      const { toolCallId, output } = raw as {
+        toolCallId: string;
+        output: unknown;
+      };
+      const durationMs =
+        toolStartedAt[toolCallId] !== undefined
+          ? Date.now() - (toolStartedAt[toolCallId] as number)
+          : 0;
       if (collectedToolCalls[toolCallId]) {
         collectedToolCalls[toolCallId] = {
-          ...collectedToolCalls[toolCallId] as CollectedExecutionToolCall,
+          ...(collectedToolCalls[toolCallId] as CollectedExecutionToolCall),
           output,
           status: "completed",
           durationMs,
         };
       }
-      emit({ type: "tool-call-end", toolCallId, status: "completed", output, durationMs });
+      emit({
+        type: "tool-call-end",
+        toolCallId,
+        status: "completed",
+        output,
+        durationMs,
+      });
     } else if (pType === "tool-error") {
-      const { toolCallId, error } = raw as { toolCallId: string; error: unknown };
-      const durationMs = toolStartedAt[toolCallId] !== undefined
-        ? Date.now() - (toolStartedAt[toolCallId] as number) : 0;
+      const { toolCallId, error } = raw as {
+        toolCallId: string;
+        error: unknown;
+      };
+      const durationMs =
+        toolStartedAt[toolCallId] !== undefined
+          ? Date.now() - (toolStartedAt[toolCallId] as number)
+          : 0;
       if (collectedToolCalls[toolCallId]) {
         collectedToolCalls[toolCallId] = {
-          ...collectedToolCalls[toolCallId] as CollectedExecutionToolCall,
+          ...(collectedToolCalls[toolCallId] as CollectedExecutionToolCall),
           status: "failed",
           durationMs,
         };
       }
-      emit({ type: "tool-call-end", toolCallId, status: "failed", errorReason: errorMessageOf(error), durationMs });
+      emit({
+        type: "tool-call-end",
+        toolCallId,
+        status: "failed",
+        errorReason: errorMessageOf(error),
+        durationMs,
+      });
     } else if (pType === "finish") {
-      const { totalUsage } = raw as { totalUsage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } };
+      const { totalUsage } = raw as {
+        totalUsage: {
+          inputTokens?: number;
+          outputTokens?: number;
+          totalTokens?: number;
+        };
+      };
       collectedInputTokens = totalUsage.inputTokens ?? 0;
       collectedOutputTokens = totalUsage.outputTokens ?? 0;
       emit({
@@ -237,8 +300,12 @@ async function consumeStream(
       // log it so model-layer failures are visible to monitoring. Do not inject
       // the error into assistantText: that would corrupt the persisted turn.
       const errVal = (raw as { error?: unknown }).error;
-      const message = errVal instanceof Error ? errVal.message
-        : typeof errVal === "string" ? errVal : "Stream error";
+      const message =
+        errVal instanceof Error
+          ? errVal.message
+          : typeof errVal === "string"
+            ? errVal
+            : "Stream error";
       streamErrored = true;
       console.error("[chat.stream] LLM stream error part:", message);
       emit({ type: "error", message });
@@ -274,10 +341,14 @@ chatStreamRoute.post("/", async (c) => {
 
   const parsed = BodySchema.safeParse(rawBody);
   if (!parsed.success) {
-    return c.json({ error: parsed.error.issues[0]?.message ?? "Invalid body" }, 400);
+    return c.json(
+      { error: parsed.error.issues[0]?.message ?? "Invalid body" },
+      400,
+    );
   }
 
-  const { content, conversationId, activeServerIds, tier, model, effort } = parsed.data;
+  const { content, conversationId, activeServerIds, tier, model, effort } =
+    parsed.data;
   const ctx = capabilityContext(c);
 
   // Resolve language model: explicit > tier > workspace/user defaults > system default.
@@ -296,16 +367,14 @@ chatStreamRoute.post("/", async (c) => {
     }
   }
   const turnModel = selectModel({
-    ...(resolvedModel ? { model: resolvedModel } : resolvedTier ? { tier: resolvedTier } : {}),
+    ...(resolvedModel
+      ? { model: resolvedModel }
+      : resolvedTier
+        ? { tier: resolvedTier }
+        : {}),
   });
-  const turnEffort = effort && supportsReasoning(modelIdOf(turnModel)) ? effort : undefined;
-
-  // Load knowledge-graph context (no-op seam until Neo4j is configured).
-  const contextBlocks = await readWorkspaceContext({
-    orgId: ctx.orgId,
-    workspaceId: ctx.workspaceId,
-    userId: ctx.userId ?? "",
-  });
+  const turnEffort =
+    effort && supportsReasoning(modelIdOf(turnModel)) ? effort : undefined;
 
   // Load conversation history for multi-turn context.
   let historyMessages: ModelMessage[] = [];
@@ -315,7 +384,10 @@ chatStreamRoute.post("/", async (c) => {
       () =>
         withTenantDb((tx) =>
           tx
-            .select({ role: schema.messages.role, content: schema.messages.content })
+            .select({
+              role: schema.messages.role,
+              content: schema.messages.content,
+            })
             .from(schema.messages)
             .where(
               and(
@@ -330,19 +402,24 @@ chatStreamRoute.post("/", async (c) => {
     );
     historyMessages = rows
       .filter((r) => VALID_ROLES.has(r.role) && r.content.trim().length > 0)
-      .map((r) => ({ role: r.role as "user" | "assistant" | "system", content: r.content }))
+      .map((r) => ({
+        role: r.role as "user" | "assistant" | "system",
+        content: r.content,
+      }))
       .reverse();
   }
 
   // Append current user message (guard against duplicate if already trailing).
   const lastHistory = historyMessages[historyMessages.length - 1];
   const alreadyInHistory =
-    lastHistory !== undefined && lastHistory.role === "user" && lastHistory.content === content;
+    lastHistory !== undefined &&
+    lastHistory.role === "user" &&
+    lastHistory.content === content;
   const messagesWithCurrent: ModelMessage[] = alreadyInHistory
     ? historyMessages
     : [...historyMessages, { role: "user", content }];
 
-  const coreMessages: ModelMessage[] = injectContext(messagesWithCurrent, contextBlocks);
+  const coreMessages: ModelMessage[] = messagesWithCurrent;
 
   // Look up the qa-chat agent for execution recording (SOC 2 audit trail).
   // Graceful degradation: if not found, the stream still proceeds.
@@ -370,7 +447,10 @@ chatStreamRoute.post("/", async (c) => {
           ),
       );
       if (agentRow?.activeVersionId) {
-        qaAgent = { id: agentRow.id, activeVersionId: agentRow.activeVersionId };
+        qaAgent = {
+          id: agentRow.id,
+          activeVersionId: agentRow.activeVersionId,
+        };
       } else {
         console.warn(
           `[chat.stream] qa-chat agent not found or missing activeVersionId for workspace ${ctx.workspaceId} — execution will not be recorded`,
@@ -389,7 +469,9 @@ chatStreamRoute.post("/", async (c) => {
   const responseStream = new ReadableStream<Uint8Array>({
     async start(controller) {
       function emit(event: ApiStreamEvent): void {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
+        );
       }
 
       // Track turn start time for latency measurement.
@@ -401,35 +483,40 @@ chatStreamRoute.post("/", async (c) => {
 
       try {
         const [{ tools: agentTools, nameMap: toolNameMap }, promptConfig] =
-          await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, () =>
-            Promise.all([
-              materializeTools(
-                {
-                  orgId: ctx.orgId,
-                  workspaceId: ctx.workspaceId,
-                  userId: ctx.userId ?? "",
-                  apiKeyId: ctx.apiKeyId,
-                  requestId: ctx.requestId,
-                  surface: "api",
-                  messageId: ctx.requestId,
-                  clientIp: ctx.clientIp,
-                },
-                {
-                  serverAllowlist: activeServerIds.length > 0 ? new Set(activeServerIds) : undefined,
-                  onApprovalRequired: (approvalEvent) => {
-                    emit({
-                      type: "approval-required",
-                      approvalId: approvalEvent.approvalId,
-                      capability: approvalEvent.capability,
-                      inputPreview: approvalEvent.inputPreview,
-                      riskLevel: approvalEvent.riskLevel,
-                      expiresAt: approvalEvent.expiresAt,
-                    });
+          await runInTenantScope(
+            { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+            () =>
+              Promise.all([
+                materializeTools(
+                  {
+                    orgId: ctx.orgId,
+                    workspaceId: ctx.workspaceId,
+                    userId: ctx.userId ?? "",
+                    apiKeyId: ctx.apiKeyId,
+                    requestId: ctx.requestId,
+                    surface: "api",
+                    messageId: ctx.requestId,
+                    clientIp: ctx.clientIp,
                   },
-                },
-              ),
-              loadWorkspacePromptConfig(ctx.workspaceId).catch(() => ({})),
-            ]),
+                  {
+                    serverAllowlist:
+                      activeServerIds.length > 0
+                        ? new Set(activeServerIds)
+                        : undefined,
+                    onApprovalRequired: (approvalEvent) => {
+                      emit({
+                        type: "approval-required",
+                        approvalId: approvalEvent.approvalId,
+                        capability: approvalEvent.capability,
+                        inputPreview: approvalEvent.inputPreview,
+                        riskLevel: approvalEvent.riskLevel,
+                        expiresAt: approvalEvent.expiresAt,
+                      });
+                    },
+                  },
+                ),
+                loadWorkspacePromptConfig(ctx.workspaceId).catch(() => ({})),
+              ]),
           );
 
         const result = streamAgentReply({
@@ -455,7 +542,11 @@ chatStreamRoute.post("/", async (c) => {
           },
         });
 
-        const { assistantText, execution: collectedExecution, streamErrored } = await consumeStream(
+        const {
+          assistantText,
+          execution: collectedExecution,
+          streamErrored,
+        } = await consumeStream(
           result.fullStream as AsyncIterable<unknown>,
           toolNameMap,
           emit,
@@ -464,7 +555,11 @@ chatStreamRoute.post("/", async (c) => {
         // Persist user message + assistant reply for conversation threading.
         // Skip persistence on a mid-stream model error: the assistantText is
         // partial/untrustworthy and must not be written as a successful turn.
-        if (!streamErrored && conversationId && (assistantText.length > 0 || content.length > 0)) {
+        if (
+          !streamErrored &&
+          conversationId &&
+          (assistantText.length > 0 || content.length > 0)
+        ) {
           try {
             await runInTenantScope(
               { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
@@ -505,7 +600,10 @@ chatStreamRoute.post("/", async (c) => {
                     assistantMsgId = assistantMsg.id;
                     await tx
                       .update(schema.conversations)
-                      .set({ activeLeafMessageId: assistantMsg.id, updatedAt: new Date() })
+                      .set({
+                        activeLeafMessageId: assistantMsg.id,
+                        updatedAt: new Date(),
+                      })
                       .where(eq(schema.conversations.id, conversationId));
                   }
                 }),
@@ -514,7 +612,10 @@ chatStreamRoute.post("/", async (c) => {
             // Persistence failure must not corrupt the already-sent SSE response,
             // but it is silent data loss (conversation history dropped) unless we
             // log it. Surface to monitoring; do not rethrow into the SSE stream.
-            const message = persistErr instanceof Error ? persistErr.message : String(persistErr);
+            const message =
+              persistErr instanceof Error
+                ? persistErr.message
+                : String(persistErr);
             console.error(
               `[chat.stream] message persistence failed for conversation ${conversationId} (org ${ctx.orgId}, workspace ${ctx.workspaceId}):`,
               message,
@@ -537,7 +638,13 @@ chatStreamRoute.post("/", async (c) => {
                 originId: assistantMsgId,
                 status: "completed",
                 inputPayload: { content, conversationId },
-                outputPayload: { text: collectedExecution.inputTokens > 0 || collectedExecution.outputTokens > 0 ? "[streamed]" : null },
+                outputPayload: {
+                  text:
+                    collectedExecution.inputTokens > 0 ||
+                    collectedExecution.outputTokens > 0
+                      ? "[streamed]"
+                      : null,
+                },
                 startedAt: turnStartedAt,
                 completedAt: new Date(),
                 latencyMs: Date.now() - turnStartMs,
@@ -568,7 +675,8 @@ chatStreamRoute.post("/", async (c) => {
             // response, but this is the SOC 2 audit trail (CC6/CC7) — a silent
             // gap is a compliance defect. Log so the missing audit record is
             // visible to monitoring; do not rethrow into the SSE stream.
-            const message = execErr instanceof Error ? execErr.message : String(execErr);
+            const message =
+              execErr instanceof Error ? execErr.message : String(execErr);
             console.error(
               `[chat.stream] execution recording failed for message ${assistantMsgId} (org ${ctx.orgId}, workspace ${ctx.workspaceId}):`,
               message,

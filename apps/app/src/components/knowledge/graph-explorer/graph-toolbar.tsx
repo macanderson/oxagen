@@ -3,8 +3,8 @@
  *
  * Left: natural-language search over the node vector store. Right: the 2D / 3D /
  * Table view switch and (for the canvas views) auto-layout/fit, zoom, drag
- * toggle, screenshot download, and reload. Canvas-only actions disable in the
- * table view.
+ * toggle, pause/play animation, screenshot download, and reload.
+ * Canvas-only actions disable in the table view.
  */
 
 "use client";
@@ -22,10 +22,17 @@ import {
   Camera,
   RefreshCw,
   Move,
+  Plus,
+  GitBranch,
+  Play,
+  Pause,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { SegmentedControl, SegmentedControlItem } from "@/components/ui/segmented-control";
+import {
+  SegmentedControl,
+  SegmentedControlItem,
+} from "@/components/ui/segmented-control";
 import { cn } from "@/lib/utils";
 import type { ExploreView, ExplorerStats } from "./types";
 
@@ -40,11 +47,15 @@ export interface GraphToolbarProps {
   draggable: boolean;
   onToggleDraggable: () => void;
   canvasReady: boolean;
+  animated: boolean;
+  onToggleAnimated: () => void;
   onFit: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onScreenshot: () => void;
   onReload: () => void;
+  onCreateNode: () => void;
+  onCreateEdge: () => void;
 }
 
 export function GraphToolbar(props: GraphToolbarProps) {
@@ -60,11 +71,20 @@ export function GraphToolbar(props: GraphToolbarProps) {
 
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2.5">
-      <form onSubmit={submit} className="relative min-w-[14rem] flex-1 sm:max-w-md">
+      <form
+        onSubmit={submit}
+        className="relative min-w-[14rem] flex-1 sm:max-w-md"
+      >
         {props.searching ? (
-          <Loader2 className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" aria-hidden="true" />
+          <Loader2
+            className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
+            aria-hidden="true"
+          />
         ) : (
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Search
+            className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
         )}
         <Input
           value={query}
@@ -76,27 +96,50 @@ export function GraphToolbar(props: GraphToolbarProps) {
       </form>
 
       {props.stats && (
-        <div className="hidden items-center gap-1 text-xs text-muted-foreground md:flex" aria-live="polite">
-          <span className="tabular-nums">{props.inViewNodeCount.toLocaleString()}</span>
+        <div
+          className="hidden items-center gap-1 text-xs text-muted-foreground md:flex"
+          aria-live="polite"
+        >
+          <span className="tabular-nums">
+            {props.inViewNodeCount.toLocaleString()}
+          </span>
           <span>/</span>
-          <span className="tabular-nums">{props.stats.nodeCount.toLocaleString()} nodes</span>
+          <span className="tabular-nums">
+            {props.stats.nodeCount.toLocaleString()} nodes
+          </span>
           <span className="mx-1 text-border">·</span>
-          <span className="tabular-nums">{props.inViewEdgeCount.toLocaleString()}</span>
+          <span className="tabular-nums">
+            {props.inViewEdgeCount.toLocaleString()}
+          </span>
           <span>/</span>
-          <span className="tabular-nums">{props.stats.edgeCount.toLocaleString()} edges</span>
+          <span className="tabular-nums">
+            {props.stats.edgeCount.toLocaleString()} edges
+          </span>
         </div>
       )}
 
       <div className="ml-auto flex items-center gap-2">
         {!isTable && (
           <div className="flex items-center gap-0.5">
-            <IconAction label="Fit to view" onClick={props.onFit} disabled={canvasDisabled}>
+            <IconAction
+              label="Fit to view"
+              onClick={props.onFit}
+              disabled={canvasDisabled}
+            >
               <Maximize2 className="size-4" />
             </IconAction>
-            <IconAction label="Zoom in" onClick={props.onZoomIn} disabled={canvasDisabled}>
+            <IconAction
+              label="Zoom in"
+              onClick={props.onZoomIn}
+              disabled={canvasDisabled}
+            >
               <ZoomIn className="size-4" />
             </IconAction>
-            <IconAction label="Zoom out" onClick={props.onZoomOut} disabled={canvasDisabled}>
+            <IconAction
+              label="Zoom out"
+              onClick={props.onZoomOut}
+              disabled={canvasDisabled}
+            >
               <ZoomOut className="size-4" />
             </IconAction>
             <IconAction
@@ -107,16 +150,59 @@ export function GraphToolbar(props: GraphToolbarProps) {
             >
               <Move className="size-4" />
             </IconAction>
-            <IconAction label="Download screenshot" onClick={props.onScreenshot} disabled={canvasDisabled}>
+            <IconAction
+              label="Download screenshot"
+              onClick={props.onScreenshot}
+              disabled={canvasDisabled}
+            >
               <Camera className="size-4" />
+            </IconAction>
+            <IconAction
+              label={props.animated ? "Pause animation" : "Resume animation"}
+              onClick={props.onToggleAnimated}
+              disabled={canvasDisabled}
+              active={props.animated}
+            >
+              {props.animated ? (
+                <Pause className="size-4" />
+              ) : (
+                <Play className="size-4" />
+              )}
             </IconAction>
           </div>
         )}
+
+        {/* Create actions */}
+        <div className="flex items-center gap-0.5">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={props.onCreateNode}
+            className="gap-1.5"
+          >
+            <Plus className="size-3.5" />
+            <span className="hidden sm:inline">Node</span>
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={props.onCreateEdge}
+            className="gap-1.5"
+          >
+            <GitBranch className="size-3.5" />
+            <span className="hidden sm:inline">Edge</span>
+          </Button>
+        </div>
+
         <IconAction label="Reload graph" onClick={props.onReload}>
           <RefreshCw className="size-4" />
         </IconAction>
 
-        <SegmentedControl value={props.view} onValueChange={(v) => props.onViewChange(v as ExploreView)} aria-label="View mode">
+        <SegmentedControl
+          value={props.view}
+          onValueChange={(v) => props.onViewChange(v as ExploreView)}
+          aria-label="View mode"
+        >
           <SegmentedControlItem value="2d" aria-label="2D graph">
             <Network className="size-4" />
           </SegmentedControlItem>

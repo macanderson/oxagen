@@ -109,6 +109,7 @@ oxagen agent mcp list
 The Oxagen platform itself is an MCP server. Connect Claude Code, Claude Desktop, or Cursor to it using an API key.
 
 **Claude Code**
+
 ```bash
 oxagen api-key create   # copy the key that's printed
 
@@ -119,6 +120,7 @@ claude mcp add oxagen \
 ```
 
 **Claude Desktop** — add to `claude_desktop_config.json`:
+
 ```json
 {
   "mcpServers": {
@@ -132,6 +134,7 @@ claude mcp add oxagen \
 ```
 
 You can also retrieve connection instructions directly:
+
 ```bash
 oxagen system install instructions
 ```
@@ -272,7 +275,6 @@ oxagen document create / list / read
 oxagen archive create
 oxagen asset upload
 oxagen form create / fill / submit
-oxagen brandkit apply
 
 oxagen org create / list
 oxagen org member add / remove / role change / invite accept / invite decline
@@ -338,12 +340,14 @@ oxagen auth login --email you@example.com --password yourpassword
 ## Troubleshooting
 
 **`command not found: oxagen`** — ensure global install succeeded:
+
 ```bash
 npm list -g @oxagen/cli
 npm install -g @oxagen/cli
 ```
 
 **Auth failures** — clear and re-authenticate:
+
 ```bash
 oxagen auth logout && oxagen auth login
 ```

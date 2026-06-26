@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./credentials": "./src/credentials/credential-service.ts",
-    "./registry": "./src/registry/index.ts"
+    "./registry": "./src/registry/index.ts",
+    "./catalog-sync": "./src/catalog-sync.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -19,23 +20,24 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
     "@oxagen/crypto": "workspace:*",
-    "@oxagen/oxagen": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/notifications": "workspace:*",
+    "@oxagen/oxagen": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "drizzle-orm": "0.45.2",
-    "zod": "3.25.76",
-    "unified": "11.0.5",
-    "remark-parse": "11.0.0",
-    "remark-gfm": "4.0.1",
-    "remark-rehype": "11.1.2",
+    "pino": "9.14.0",
     "rehype-sanitize": "6.0.0",
-    "rehype-stringify": "10.0.1"
+    "rehype-stringify": "10.0.1",
+    "remark-gfm": "4.0.1",
+    "remark-parse": "11.0.0",
+    "remark-rehype": "11.1.2",
+    "unified": "11.0.5",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "25.9.1",
-    "typescript": "6.0.3",
     "@vitest/coverage-v8": "2.1.9",
+    "typescript": "6.0.3",
     "vitest": "2.1.9"
   }
 }

@@ -51,7 +51,7 @@ export const documentsPdfCreate = registerCapability({
           .optional(),
       })
       .optional(),
-    /** Optional brand-kit colors. */
+    /** Optional brand colors. */
     brandColors: z
       .object({
         primary: z.string().optional(),
@@ -72,4 +72,6 @@ export const documentsPdfCreate = registerCapability({
 });
 
 export type DocumentsPdfCreateInput = z.output<typeof documentsPdfCreate.input>;
-export type DocumentsPdfCreateOutput = z.output<typeof documentsPdfCreate.output>;
+export type DocumentsPdfCreateOutput = z.output<
+  typeof documentsPdfCreate.output
+>;

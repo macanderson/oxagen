@@ -23,12 +23,6 @@ Generates a PDF from a prompt or from existing content. Supports cover pages, he
 
 Usage: "Create a PDF version of our Q2 executive summary with the company header."
 
-### `brandkit.apply`
-
-Applies a workspace brand kit (colors, fonts, logo, approved terminology) to any generated document. Brand kits are configured at **Workspace → Settings → Brand Kits**.
-
-Usage: "Generate the proposal using the Oxagen brand kit."
-
 ## Images and graphics
 
 ### `image.generate`
@@ -79,11 +73,11 @@ Authorization: Bearer oxk_live_…
 
 ## Billing
 
-| Generation type | Credit charge |
-|---|---|
-| Documents (Markdown, HTML, DOCX, PDF) | Metered at the LLM token rate of the underlying model call |
-| Image generation | Per-image flat fee (rate depends on model; see pricing table) |
-| SVG generation | Metered at LLM token rate |
-| Video generation | Per-second video rate (model-dependent) |
+| Generation type                       | Credit charge                                                 |
+| ------------------------------------- | ------------------------------------------------------------- |
+| Documents (Markdown, HTML, DOCX, PDF) | Metered at the LLM token rate of the underlying model call    |
+| Image generation                      | Per-image flat fee (rate depends on model; see pricing table) |
+| SVG generation                        | Metered at LLM token rate                                     |
+| Video generation                      | Per-second video rate (model-dependent)                       |
 
 Generated files do not incur ongoing storage charges — blob storage is included in the subscription.

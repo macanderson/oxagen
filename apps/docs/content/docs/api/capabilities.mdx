@@ -23,124 +23,123 @@ The following capabilities are available in the current release, grouped by doma
 
 ### Agent
 
-| Capability | Surfaces | Risk |
-|---|---|---|
-| `agent.tool.list` | API, MCP, agent | Low |
-| `agent.skill.list` | API, MCP, agent | Low |
-| `agent.skill.load` | Agent | Low |
-| `agent.mcp.list` | API, MCP, agent | Low |
-| `agent.mcp.register` | API, MCP | Medium |
-| `agent.plan.create` | Agent | Low |
-| `agent.plan.approve` | API, agent | Low |
-| `agent.approval.resolve` | API, agent | Low |
-| `agent.subagent.dispatch` | Agent | Medium |
-| `agent.subagent.aggregate` | Agent | Low |
-| `agent.code.execute` | Agent | High |
-| `agent.memory.recall` | API, MCP, agent | Low |
-| `agent.memory.write` | API, MCP, agent | Low |
-| `agent.task.background.start` | API, MCP, agent | Medium |
-| `agent.task.background.read` | API, MCP, agent | Low |
+| Capability                     | Surfaces        | Risk   |
+| ------------------------------ | --------------- | ------ |
+| `agent.tool.list`              | API, MCP, agent | Low    |
+| `agent.skill.list`             | API, MCP, agent | Low    |
+| `agent.skill.load`             | Agent           | Low    |
+| `agent.mcp.list`               | API, MCP, agent | Low    |
+| `agent.mcp.register`           | API, MCP        | Medium |
+| `agent.plan.create`            | Agent           | Low    |
+| `agent.plan.approve`           | API, agent      | Low    |
+| `agent.approval.resolve`       | API, agent      | Low    |
+| `agent.subagent.dispatch`      | Agent           | Medium |
+| `agent.subagent.aggregate`     | Agent           | Low    |
+| `agent.code.execute`           | Agent           | High   |
+| `agent.memory.recall`          | API, MCP, agent | Low    |
+| `agent.memory.write`           | API, MCP, agent | Low    |
+| `agent.task.background.start`  | API, MCP, agent | Medium |
+| `agent.task.background.read`   | API, MCP, agent | Low    |
 | `agent.task.background.cancel` | API, MCP, agent | Medium |
 
 ### Chat and conversations
 
-| Capability | Surfaces | Risk |
-|---|---|---|
-| `chat.message.send` | API, MCP, agent | Low |
-| `conversation.list` | API, MCP, agent | Low |
-| `conversation.archive` | API, MCP, agent | Low |
-| `conversation.rename` | API, MCP, agent | Low |
-| `conversation.delete` | API, MCP, agent | Medium |
-| `conversation.purge` | API, MCP, agent | High |
+| Capability             | Surfaces        | Risk   |
+| ---------------------- | --------------- | ------ |
+| `chat.message.send`    | API, MCP, agent | Low    |
+| `conversation.list`    | API, MCP, agent | Low    |
+| `conversation.archive` | API, MCP, agent | Low    |
+| `conversation.rename`  | API, MCP, agent | Low    |
+| `conversation.delete`  | API, MCP, agent | Medium |
+| `conversation.purge`   | API, MCP, agent | High   |
 
 ### Knowledge and assets
 
-| Capability | Surfaces | Risk |
-|---|---|---|
-| `asset.upload` | API, MCP, agent | Low |
+| Capability     | Surfaces        | Risk |
+| -------------- | --------------- | ---- |
+| `asset.upload` | API, MCP, agent | Low  |
 
 ### Content generation
 
-| Capability | Surfaces | Risk |
-|---|---|---|
-| `documents.generate` | API, MCP, agent | Low |
-| `documents.pdf.create` | API, MCP, agent | Low |
-| `image.generate` | API, MCP, agent | Low |
-| `svg.generate` | API, MCP, agent | Low |
-| `video.generate` | API, MCP, agent | Medium |
-| `brandkit.apply` | API, MCP, agent | Low |
-| `form.fill` | API, MCP, agent | Low |
+| Capability             | Surfaces        | Risk   |
+| ---------------------- | --------------- | ------ |
+| `documents.generate`   | API, MCP, agent | Low    |
+| `documents.pdf.create` | API, MCP, agent | Low    |
+| `image.generate`       | API, MCP, agent | Low    |
+| `svg.generate`         | API, MCP, agent | Low    |
+| `video.generate`       | API, MCP, agent | Medium |
+| `form.fill`            | API, MCP, agent | Low    |
 
 ### Organization and workspace
 
-| Capability | Surfaces | Risk |
-|---|---|---|
-| `organization.create` | API, MCP, agent | Medium |
-| `org.member.add` | API, MCP | Medium |
-| `org.member.remove` | API, MCP | High |
-| `org.member.role.change` | API, MCP | High |
-| `org.member.invite.accept` | API, MCP | Low |
-| `org.member.invite.decline` | API, MCP | Low |
-| `workspace.create` | API, MCP, agent | Medium |
-| `workspace.model.settings.read` | API, MCP, agent | Low |
-| `workspace.model.settings.write` | API, MCP | Medium |
+| Capability                       | Surfaces        | Risk   |
+| -------------------------------- | --------------- | ------ |
+| `organization.create`            | API, MCP, agent | Medium |
+| `org.member.add`                 | API, MCP        | Medium |
+| `org.member.remove`              | API, MCP        | High   |
+| `org.member.role.change`         | API, MCP        | High   |
+| `org.member.invite.accept`       | API, MCP        | Low    |
+| `org.member.invite.decline`      | API, MCP        | Low    |
+| `workspace.create`               | API, MCP, agent | Medium |
+| `workspace.model.settings.read`  | API, MCP, agent | Low    |
+| `workspace.model.settings.write` | API, MCP        | Medium |
 
 ### Billing
 
-| Capability | Surfaces | Risk |
-|---|---|---|
-| `billing.subscription.read` | API, MCP, agent | Low |
-| `billing.subscription.upgrade.start` | API | High |
-| `billing.credits.purchase` | API | High |
+| Capability                           | Surfaces        | Risk |
+| ------------------------------------ | --------------- | ---- |
+| `billing.subscription.read`          | API, MCP, agent | Low  |
+| `billing.subscription.upgrade.start` | API             | High |
+| `billing.credits.purchase`           | API             | High |
 
 ### Notifications
 
-| Capability | Surfaces | Risk |
-|---|---|---|
-| `notifications.list` | API, MCP, agent | Low |
-| `notifications.mark` | API, MCP, agent | Low |
+| Capability           | Surfaces        | Risk |
+| -------------------- | --------------- | ---- |
+| `notifications.list` | API, MCP, agent | Low  |
+| `notifications.mark` | API, MCP, agent | Low  |
 
 ### User preferences
 
-| Capability | Surfaces | Risk |
-|---|---|---|
-| `user.preferences.read` | API, MCP, agent | Low |
-| `user.preferences.write` | API, MCP, agent | Low |
+| Capability               | Surfaces        | Risk |
+| ------------------------ | --------------- | ---- |
+| `user.preferences.read`  | API, MCP, agent | Low  |
+| `user.preferences.write` | API, MCP, agent | Low  |
 
 ### API keys
 
-| Capability | Surfaces | Risk |
-|---|---|---|
+| Capability       | Surfaces | Risk |
+| ---------------- | -------- | ---- |
 | `api.key.create` | API, MCP | High |
 | `api.key.revoke` | API, MCP | High |
 
 ### Plugins
 
-| Capability | Surfaces | Risk |
-|---|---|---|
-| `plugin.catalog.browse` | API, MCP, agent | Low |
-| `plugin.catalog.get` | API, MCP, agent | Low |
-| `plugin.org.install` | API, MCP | High |
-| `plugin.org.install_bulk` | API, MCP | High |
-| `plugin.org.uninstall` | API, MCP | High |
-| `plugin.org.list` | API, MCP, agent | Low |
-| `plugin.org.set_enabled` | API, MCP | Medium |
-| `plugin.workspace.set_enabled` | API, MCP | Medium |
-| `plugin.denylist.add` | API, MCP | High |
-| `plugin.denylist.remove` | API, MCP | High |
-| `plugin.registry.add` | API, MCP | High |
-| `plugin.registry.remove` | API, MCP | High |
-| `plugin.registry.list` | API, MCP, agent | Low |
-| `plugin.registry.sync` | API, MCP | Medium |
-| `plugin.credential.reauth` | API, MCP | Medium |
-| `plugin.credential.set_secret` | API, MCP | High |
-| `plugin.settings.set_auth_alerts` | API, MCP | Low |
+| Capability                        | Surfaces        | Risk   |
+| --------------------------------- | --------------- | ------ |
+| `plugin.catalog.browse`           | API, MCP, agent | Low    |
+| `plugin.catalog.get`              | API, MCP, agent | Low    |
+| `plugin.org.install`              | API, MCP        | High   |
+| `plugin.org.install_bulk`         | API, MCP        | High   |
+| `plugin.org.uninstall`            | API, MCP        | High   |
+| `plugin.org.list`                 | API, MCP, agent | Low    |
+| `plugin.org.set_enabled`          | API, MCP        | Medium |
+| `plugin.workspace.set_enabled`    | API, MCP        | Medium |
+| `plugin.denylist.add`             | API, MCP        | High   |
+| `plugin.denylist.remove`          | API, MCP        | High   |
+| `plugin.registry.add`             | API, MCP        | High   |
+| `plugin.registry.remove`          | API, MCP        | High   |
+| `plugin.registry.list`            | API, MCP, agent | Low    |
+| `plugin.registry.sync`            | API, MCP        | Medium |
+| `plugin.credential.reauth`        | API, MCP        | Medium |
+| `plugin.credential.set_secret`    | API, MCP        | High   |
+| `plugin.settings.set_auth_alerts` | API, MCP        | Low    |
 
 ### System
 
-| Capability | Surfaces | Risk |
-|---|---|---|
-| `system.install.instructions` | API, MCP, agent | Low |
+| Capability                    | Surfaces        | Risk |
+| ----------------------------- | --------------- | ---- |
+| `system.install.instructions` | API, MCP, agent | Low  |
 
 ## REST route convention
 

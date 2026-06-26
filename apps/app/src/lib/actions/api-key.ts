@@ -3,23 +3,22 @@
 import "@oxagen/handlers/register";
 import { invoke } from "@oxagen/oxagen";
 import { apiKeyCreate } from "@oxagen/oxagen/contracts/api.key.create";
+import { apiKeyRevoke } from "@oxagen/oxagen/contracts/api.key.revoke";
+import { apiKeyRotate } from "@oxagen/oxagen/contracts/api.key.rotate";
 import type { ApiKeyCreateOutput } from "@oxagen/oxagen/contracts/api.key.create";
+import type { ApiKeyRevokeOutput } from "@oxagen/oxagen/contracts/api.key.revoke";
+import type { ApiKeyRotateOutput } from "@oxagen/oxagen/contracts/api.key.rotate";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg } from "@/lib/resolve-org";
+import { revalidatePath } from "next/cache";
 
-export async function createApiKeyAction(input: {
-  orgSlug: string;
-  name: string;
-  expiresAt?: string;
-}): Promise<ApiKeyCreateOutput> {
+// API keys are org-scoped. Sentinel workspace ID for org-only routes. — OXA-1515
+const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
+
+async function buildApiKeyCtx(orgSlug: string) {
   const session = await getSessionOrRedirect();
-  const org = await resolveOrg(input.orgSlug);
-
-  // API keys are org-scoped. Use sentinel workspace ID for org-only routes.
-  // See OXA-1515 for context on org-only workspace scoping.
-  const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
-
-  const ctx = {
+  const org = await resolveOrg(orgSlug);
+  return {
     orgId: org.id,
     workspaceId: ORG_ONLY_WS,
     userId: session.user.id,
@@ -28,12 +27,53 @@ export async function createApiKeyAction(input: {
     surface: "app" as const,
     messageId: null as string | null,
   };
+}
 
+export async function createApiKeyAction(input: {
+  orgSlug: string;
+  name: string;
+  expiresAt?: string;
+}): Promise<ApiKeyCreateOutput> {
+  const ctx = await buildApiKeyCtx(input.orgSlug);
   const parsedInput = apiKeyCreate.input.parse({
     name: input.name,
     expiresAt: input.expiresAt,
   });
-
-  const result = await invoke(apiKeyCreate.name, parsedInput, ctx, { surface: "agent" });
+  const result = await invoke(apiKeyCreate.name, parsedInput, ctx, {
+    surface: "agent",
+  });
+  revalidatePath(`/${input.orgSlug}/developer/tokens`);
   return apiKeyCreate.output.parse(result);
+}
+
+export async function revokeApiKeyAction(input: {
+  orgSlug: string;
+  keyPublicId: string;
+}): Promise<ApiKeyRevokeOutput> {
+  const ctx = await buildApiKeyCtx(input.orgSlug);
+  const parsedInput = apiKeyRevoke.input.parse({
+    keyPublicId: input.keyPublicId,
+  });
+  const result = await invoke(apiKeyRevoke.name, parsedInput, ctx, {
+    surface: "agent",
+  });
+  revalidatePath(`/${input.orgSlug}/developer/tokens`);
+  return apiKeyRevoke.output.parse(result);
+}
+
+export async function rotateApiKeyAction(input: {
+  orgSlug: string;
+  keyPublicId: string;
+  name?: string;
+}): Promise<ApiKeyRotateOutput> {
+  const ctx = await buildApiKeyCtx(input.orgSlug);
+  const parsedInput = apiKeyRotate.input.parse({
+    keyPublicId: input.keyPublicId,
+    name: input.name,
+  });
+  const result = await invoke(apiKeyRotate.name, parsedInput, ctx, {
+    surface: "agent",
+  });
+  revalidatePath(`/${input.orgSlug}/developer/tokens`);
+  return apiKeyRotate.output.parse(result);
 }

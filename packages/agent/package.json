@@ -26,6 +26,8 @@
     "@oxagen/ai": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
+    "@oxagen/engram": "workspace:*",
+    "@oxagen/mcp-config": "workspace:*",
     "@oxagen/ontology": "workspace:*",
     "@oxagen/plugins": "workspace:*",
     "@oxagen/sandbox": "workspace:*",

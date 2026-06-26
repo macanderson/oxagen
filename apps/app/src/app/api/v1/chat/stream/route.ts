@@ -1,8 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import {
+  resolveOrg,
+  resolveWorkspace,
+  assertOrgMember,
+} from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
 import {
   streamAgentReply,
@@ -16,8 +20,9 @@ import {
   tool,
   type ToolSet,
   type ModelMessage,
+  type SkillIndexEntry,
 } from "@oxagen/ai";
-import { materializeTools, readWorkspaceContext, injectContext } from "@oxagen/agent";
+import { materializeTools } from "@oxagen/agent";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
@@ -73,6 +78,10 @@ const BodySchema = z.object({
   // Per-turn MCP server allowlist: publicIds of servers the user has activated
   // in the chat composer. When non-empty, only those servers' tools are loaded.
   activeServerIds: z.array(z.string()).optional().default([]),
+  // Session-level skill pinning: skill slugs to pre-load into the system prompt.
+  // Pinned skills are injected directly (no tool call needed), so the model
+  // applies them from the first turn. Capped at 5 to bound prompt bloat.
+  skills: z.array(z.string().min(1).max(64)).max(5).optional().default([]),
   // Optional page context forwarded from the client at send-time. Carries the
   // current route and, when a fillable form is registered, its field list so
   // the agent can propose fill values via the `page_form_fill` tool.
@@ -159,6 +168,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     mediaModel,
     newConversation,
     activeServerIds,
+    skills: pinnedSkillSlugs,
     pageContext,
   } = parsed.data;
 
@@ -172,7 +182,10 @@ export async function POST(request: NextRequest): Promise<Response> {
     await assertOrgMember(tenant.id, session.user.id);
     workspace = await resolveWorkspace(tenant.id, workspaceSlug);
   } catch {
-    return NextResponse.json({ error: "Org or workspace not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Org or workspace not found" },
+      { status: 404 },
+    );
   }
 
   // Resolve the language model for this turn from the picker selection. An
@@ -197,13 +210,18 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   const turnModel = selectModel({
-    ...(resolvedModel ? { model: resolvedModel } : resolvedTier ? { tier: resolvedTier } : {}),
+    ...(resolvedModel
+      ? { model: resolvedModel }
+      : resolvedTier
+        ? { tier: resolvedTier }
+        : {}),
   });
 
   // Reasoning effort is only valid on reasoning-capable models. Re-check
   // server-side against the catalog (keyed by the resolved gateway model id) so
   // a stray `effort` for a non-reasoning model is dropped rather than forwarded.
-  const turnEffort = effort && supportsReasoning(modelIdOf(turnModel)) ? effort : undefined;
+  const turnEffort =
+    effort && supportsReasoning(modelIdOf(turnModel)) ? effort : undefined;
 
   // ── Media-generation branch ───────────────────────────────────────────────
   // When the composer requests image/video generation, this turn does NOT run
@@ -243,17 +261,6 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   // Load conversation history from Postgres so the model has context for every
   // prior turn (without this the model has SSE amnesia, OXA-1509).
-  //
-  // Knowledge-graph context injection: readWorkspaceContext is a no-op seam
-  // today (returns []) when KNOWLEDGE_GRAPH_ENABLED is not set or Neo4j is not
-  // configured; injectContext prepends a system message only when blocks is
-  // non-empty. Both exist so the wiring is in place for the next phase.
-  const contextBlocks = await readWorkspaceContext({
-    orgId: tenant.id,
-    workspaceId: workspace.id,
-    userId: session.user.id,
-  });
-
   let historyMessages: ModelMessage[] = [];
   if (conversationId) {
     // Fetch the most-recent HISTORY_LIMIT rows (DESC + LIMIT), then reverse in
@@ -308,15 +315,15 @@ export async function POST(request: NextRequest): Promise<Response> {
   // model would receive the current turn twice in the same request.
   const lastHistory = historyMessages[historyMessages.length - 1];
   const currentAlreadyInHistory =
-    lastHistory !== undefined && lastHistory.role === "user" && lastHistory.content === content;
+    lastHistory !== undefined &&
+    lastHistory.role === "user" &&
+    lastHistory.content === content;
 
   const messagesWithCurrent: ModelMessage[] = currentAlreadyInHistory
     ? historyMessages
     : [...historyMessages, { role: "user", content }];
 
-  // Inject knowledge-graph context as a leading system message (no-op when
-  // blocks is empty, the default until Neo4j is configured).
-  const coreMessages: ModelMessage[] = injectContext(messagesWithCurrent, contextBlocks);
+  const coreMessages: ModelMessage[] = messagesWithCurrent;
 
   const requestId = randomUUID();
 
@@ -335,7 +342,9 @@ export async function POST(request: NextRequest): Promise<Response> {
   const responseStream = new ReadableStream<Uint8Array>({
     async start(controller) {
       function emit(event: StreamEvent): void {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
+        );
       }
 
       try {
@@ -359,28 +368,92 @@ export async function POST(request: NextRequest): Promise<Response> {
           clientIp,
         };
 
-        const [{ tools: agentTools, nameMap: toolNameMap }, promptConfig] =
-          await runInTenantScope({ orgId: tenant.id, workspaceId: workspace.id }, () =>
+        const [
+          { tools: agentTools, nameMap: toolNameMap },
+          promptConfig,
+          skillIndex,
+          pinnedSkillBodies,
+        ] = await runInTenantScope(
+          { orgId: tenant.id, workspaceId: workspace.id },
+          () =>
             Promise.all([
-              materializeTools(
-                capCtx,
-                {
-                  serverAllowlist: activeServerIds.length > 0 ? new Set(activeServerIds) : undefined,
-                  onApprovalRequired: (approvalEvent) => {
-                    emit({
-                      type: "approval-required",
-                      approvalId: approvalEvent.approvalId,
-                      capability: approvalEvent.capability,
-                      inputPreview: approvalEvent.inputPreview,
-                      riskLevel: approvalEvent.riskLevel,
-                      expiresAt: approvalEvent.expiresAt,
-                    });
-                  },
+              materializeTools(capCtx, {
+                serverAllowlist:
+                  activeServerIds.length > 0
+                    ? new Set(activeServerIds)
+                    : undefined,
+                onApprovalRequired: (approvalEvent) => {
+                  emit({
+                    type: "approval-required",
+                    approvalId: approvalEvent.approvalId,
+                    capability: approvalEvent.capability,
+                    inputPreview: approvalEvent.inputPreview,
+                    riskLevel: approvalEvent.riskLevel,
+                    expiresAt: approvalEvent.expiresAt,
+                  });
                 },
-              ),
+              }),
               loadWorkspacePromptConfig(workspace.id).catch(() => ({})),
+              // Skill index for progressive disclosure: fetch enabled skills
+              // so the prompt shows available slugs (~15 tokens each).
+              withTenantDb((tx) =>
+                tx
+                  .select({
+                    slug: schema.skills.slug,
+                    description: schema.skills.description,
+                  })
+                  .from(schema.skills)
+                  .where(
+                    and(
+                      eq(schema.skills.orgId, tenant.id),
+                      eq(schema.skills.workspaceId, workspace.id),
+                      eq(schema.skills.enabled, true),
+                      isNull(schema.skills.deletedAt),
+                    ),
+                  ),
+              )
+                .then((rows): SkillIndexEntry[] =>
+                  rows.map((r) => ({
+                    slug: r.slug,
+                    description: r.description ?? "",
+                  })),
+                )
+                .catch((): SkillIndexEntry[] => []),
+              // Session-level pinned skills: resolve bodies for requested slugs.
+              // Only loads enabled, non-deleted skills the user explicitly pinned.
+              pinnedSkillSlugs.length > 0
+                ? withTenantDb((tx) =>
+                    tx
+                      .select({
+                        slug: schema.skills.slug,
+                        body: schema.skillVersions.body,
+                      })
+                      .from(schema.skills)
+                      .innerJoin(
+                        schema.skillVersions,
+                        eq(
+                          schema.skillVersions.id,
+                          schema.skills.activeVersionId,
+                        ),
+                      )
+                      .where(
+                        and(
+                          eq(schema.skills.orgId, tenant.id),
+                          eq(schema.skills.workspaceId, workspace.id),
+                          eq(schema.skills.enabled, true),
+                          isNull(schema.skills.deletedAt),
+                          sql`${schema.skills.slug} = ANY(${pinnedSkillSlugs})`,
+                        ),
+                      ),
+                  )
+                    .then(
+                      (rows): Array<{ slug: string; body: string }> =>
+                        rows.map((r) => ({ slug: r.slug, body: r.body })),
+                    )
+                    .catch((): Array<{ slug: string; body: string }> => [])
+                : Promise.resolve([] as Array<{ slug: string; body: string }>),
             ]),
-          );
+        );
 
         // ── Page-form-fill tool (request-scoped) ────────────────────────────
         // When the client sends a fillableForm in pageContext, register a
@@ -392,8 +465,13 @@ export async function POST(request: NextRequest): Promise<Response> {
         let pageFormFillSystemSuffix = "";
 
         if (pageContext?.fillableForm) {
-          const { route: pcRoute, entitySummary: pcEntitySummary } = pageContext;
-          const { formId: pcFormId, title: pcFormTitle, fields: pcFields } = pageContext.fillableForm;
+          const { route: pcRoute, entitySummary: pcEntitySummary } =
+            pageContext;
+          const {
+            formId: pcFormId,
+            title: pcFormTitle,
+            fields: pcFields,
+          } = pageContext.fillableForm;
 
           // Build a compact field list for the system prompt.
           const fieldLines = pcFields.map((f) => {
@@ -402,9 +480,10 @@ export async function POST(request: NextRequest): Promise<Response> {
                 ? ` options=[${f.options.map((o) => `"${o.label}"`).join(", ")}]`
                 : "";
             const reqPart = f.required ? " required" : "";
-            const curPart = f.current !== null && f.current !== undefined && f.current !== ""
-              ? ` current="${String(f.current)}"`
-              : "";
+            const curPart =
+              f.current !== null && f.current !== undefined && f.current !== ""
+                ? ` current="${String(f.current)}"`
+                : "";
             return `  - ${f.name} (${f.label}) type=${f.type}${reqPart}${curPart}${optPart}`;
           });
 
@@ -434,9 +513,12 @@ export async function POST(request: NextRequest): Promise<Response> {
                 "Pass a clear natural-language instruction describing the desired changes. " +
                 "If the request is ambiguous, ask a clarifying question instead.",
               inputSchema: z.object({
-                instruction: z.string().min(1).describe(
-                  "Natural-language instruction describing the desired form changes.",
-                ),
+                instruction: z
+                  .string()
+                  .min(1)
+                  .describe(
+                    "Natural-language instruction describing the desired form changes.",
+                  ),
               }),
               execute: async (input: { instruction: string }) => {
                 const { instruction } = input;
@@ -484,6 +566,8 @@ export async function POST(request: NextRequest): Promise<Response> {
                 workspaceSlug,
                 orgName: tenant.name,
                 workspaceName: workspace.name,
+                skillIndex,
+                pinnedSkillBodies,
               }) + pageFormFillSystemSuffix,
             config: promptConfig,
           }),
@@ -511,7 +595,10 @@ export async function POST(request: NextRequest): Promise<Response> {
         // Persist the assistant reply so it survives a refresh and is included
         // in the next turn's history (OXA-1509). Best-effort: a DB failure here
         // must NOT corrupt the SSE response the client already consumed.
-        if (conversationId && (assistantText.length > 0 || persistedBlocks.length > 0)) {
+        if (
+          conversationId &&
+          (assistantText.length > 0 || persistedBlocks.length > 0)
+        ) {
           try {
             await runInTenantScope(
               { orgId: tenant.id, workspaceId: workspace.id },
@@ -542,13 +629,19 @@ export async function POST(request: NextRequest): Promise<Response> {
                     // reply so the next turn threads from here.
                     await tx
                       .update(schema.conversations)
-                      .set({ activeLeafMessageId: assistantMsg.id, updatedAt: new Date() })
+                      .set({
+                        activeLeafMessageId: assistantMsg.id,
+                        updatedAt: new Date(),
+                      })
                       .where(eq(schema.conversations.id, conversationId));
                   }
                 }),
             );
           } catch (persistErr) {
-            logger.error({ err: persistErr }, "[chat/stream] failed to persist assistant reply");
+            logger.error(
+              { err: persistErr },
+              "[chat/stream] failed to persist assistant reply",
+            );
           }
         }
 

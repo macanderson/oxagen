@@ -19,6 +19,7 @@ export const PLUGIN_TYPES = [
   "agent_skill",
   "agent_capability",
   "mcp_server",
+  "mcp_server_local",
   "knowledge_source",
   "integration",
 ] as const;
@@ -51,9 +52,13 @@ export const pluginInstalledPlugins = pluginSchema.table(
     endpointUrl: text("endpoint_url"),
     transport: text("transport"),
     authKind: text("auth_kind").notNull(), // oauth | secret | none
-    authConfig: jsonb("auth_config").notNull().default(sql`'{}'::jsonb`),
+    authConfig: jsonb("auth_config")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     enabled: boolean("enabled").notNull().default(false),
-    config: jsonb("config").notNull().default(sql`'{}'::jsonb`),
+    config: jsonb("config")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
   },
   (t) => ({
     uniqueName: uniqueIndex("installed_plugins_org_ws_type_name_uniq").on(
@@ -62,7 +67,11 @@ export const pluginInstalledPlugins = pluginSchema.table(
       t.pluginType,
       t.name,
     ),
-    orgTypeIdx: index("installed_plugins_org_ws_type_idx").on(t.orgId, t.workspaceId, t.pluginType),
+    orgTypeIdx: index("installed_plugins_org_ws_type_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.pluginType,
+    ),
     typeCheck: check(
       "installed_plugins_type_check",
       sql`${t.pluginType} IN ('agent_skill','agent_capability','mcp_server','knowledge_source','integration')`,

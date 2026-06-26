@@ -1,7 +1,7 @@
 export * from "./runtime/materialize-tools";
 export * from "./runtime/approval";
 export * from "./runtime/stream-events";
-export * from "./runtime/knowledge-graph";
+export { isKnowledgeGraphEnabled } from "./runtime/knowledge-graph";
 export * from "./dispatch/subagent";
 export * from "./dispatch/mcp-client";
 export * from "./memory/neo4j";

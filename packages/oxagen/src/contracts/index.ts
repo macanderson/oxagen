@@ -26,7 +26,6 @@ import { agentTriggerDelete } from "./agent.trigger.delete";
 import { agentTriggerList } from "./agent.trigger.list";
 import { agentExecutionRecord } from "./agent.execution.record";
 import { agentUiRender } from "./agent.ui.render";
-import { brandkitApply } from "./brandkit.apply";
 import { documentsGenerate } from "./documents.generate";
 import { documentsPdfCreate } from "./documents.pdf.create";
 import { markdownGenerate } from "./markdown.generate";
@@ -82,6 +81,7 @@ import { notificationsList } from "./notifications.list";
 import { notificationsMark } from "./notifications.mark";
 import { pluginCatalogBrowse } from "./plugin.catalog.browse";
 import { pluginCatalogGet } from "./plugin.catalog.get";
+import { pluginCatalogSync } from "./plugin.catalog.sync";
 import { pluginCredentialReauth } from "./plugin.credential.reauth";
 import { pluginCredentialSetSecret } from "./plugin.credential.set_secret";
 import { pluginOrgInstall } from "./plugin.org.install";
@@ -104,8 +104,6 @@ import { imageAnalyze } from "./image.analyze";
 import { documentCreate } from "./document.create";
 import { documentList } from "./document.list";
 import { documentRead } from "./document.read";
-import { formCreate } from "./form.create";
-import { formSubmit } from "./form.submit";
 import { automationList } from "./automation.list";
 import { automationCreate } from "./automation.create";
 import { automationTrigger } from "./automation.trigger";
@@ -122,6 +120,8 @@ import { skillVersionActivate } from "./skill.version.activate";
 import { skillEdit } from "./skill.edit";
 import { skillExport } from "./skill.export";
 import { skillMetricsRead } from "./skill.metrics.read";
+import { skillCreate } from "./skill.create";
+import { skillEnable } from "./skill.enable";
 import { agentSubagentAggregate } from "./agent.subagent.aggregate";
 import { agentSubagentDispatch } from "./agent.subagent.dispatch";
 import { connectionList } from "./connection.list";
@@ -218,12 +218,11 @@ import { semanticRelationshipSuggest } from "./semantic.relationship.suggest";
 // Re-export shared Zod helpers used across schema.* contracts.
 // These are not capability contracts themselves but must appear here to satisfy
 // the check-contracts file-coverage guard (tools/scripts/check-contracts.mjs).
-export type { FieldError as SharedFieldError, PropertyInput as SharedPropertyInput } from "./schema.shared";
 export type {
-  FieldError,
-  DataType,
-  PropertyInput,
-} from "./schema.types";
+  FieldError as SharedFieldError,
+  PropertyInput as SharedPropertyInput,
+} from "./schema.shared";
+export type { FieldError, DataType, PropertyInput } from "./schema.types";
 
 export {
   apiKeyCreate,
@@ -244,7 +243,6 @@ export {
   agentTriggerList,
   agentExecutionRecord,
   agentUiRender,
-  brandkitApply,
   documentsGenerate,
   documentsPdfCreate,
   markdownGenerate,
@@ -300,6 +298,7 @@ export {
   notificationsMark,
   pluginCatalogBrowse,
   pluginCatalogGet,
+  pluginCatalogSync,
   pluginCredentialReauth,
   pluginCredentialSetSecret,
   pluginOrgInstall,
@@ -322,8 +321,6 @@ export {
   documentCreate,
   documentList,
   documentRead,
-  formCreate,
-  formSubmit,
   automationList,
   automationCreate,
   automationTrigger,
@@ -340,6 +337,8 @@ export {
   skillEdit,
   skillExport,
   skillMetricsRead,
+  skillCreate,
+  skillEnable,
   agentSubagentAggregate,
   agentSubagentDispatch,
   connectionList,
@@ -461,7 +460,6 @@ export const contracts = [
   agentTriggerDelete,
   agentTriggerList,
   agentUiRender,
-  brandkitApply,
   documentsGenerate,
   documentsPdfCreate,
   markdownGenerate,
@@ -517,6 +515,7 @@ export const contracts = [
   notificationsMark,
   pluginCatalogBrowse,
   pluginCatalogGet,
+  pluginCatalogSync,
   pluginCredentialReauth,
   pluginCredentialSetSecret,
   pluginOrgInstall,
@@ -539,8 +538,6 @@ export const contracts = [
   documentCreate,
   documentList,
   documentRead,
-  formCreate,
-  formSubmit,
   automationList,
   automationCreate,
   automationTrigger,
@@ -557,6 +554,8 @@ export const contracts = [
   skillEdit,
   skillExport,
   skillMetricsRead,
+  skillCreate,
+  skillEnable,
   agentExecutionRecord,
   agentSubagentAggregate,
   agentSubagentDispatch,

@@ -44,7 +44,6 @@ export default defineConfig({
         // document / media / asset tools
         "src/tools/archive.create.ts",
         "src/tools/asset.upload.ts",
-        "src/tools/brandkit.apply.ts",
         "src/tools/documents.generate.ts",
         "src/tools/documents.pdf.create.ts",
         "src/tools/form.fill.ts",

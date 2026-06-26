@@ -14,7 +14,9 @@ overrides:
 
 onlyBuiltDependencies:
   - "@swc/core"
+  - blake3
   - cpu-features
+  - duckdb
   - esbuild
   - inngest-cli
   - lefthook
@@ -30,8 +32,10 @@ ignoredBuiltDependencies:
   - "@swc/core"
 
 allowBuilds:
-  '@swc/core': true
+  "@swc/core": true
+  blake3: true
   cpu-features: true
+  duckdb: true
   esbuild: true
   inngest-cli: true
   lefthook: true

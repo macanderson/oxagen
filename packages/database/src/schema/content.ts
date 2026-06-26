@@ -11,7 +11,7 @@ import { sql } from "drizzle-orm";
 import { contentSchema } from "./_schemas";
 import {
   auditMixin,
-  citext,
+  // citext,
   idMixin,
   orgScopeMixin,
   softDeleteMixin,
@@ -107,46 +107,5 @@ export const documents = contentSchema.table(
   },
   (t) => ({
     orgIdx: index("documents_org_idx").on(t.orgId, t.workspaceId),
-  }),
-);
-
-// Workspace forms — a titled collection of field definitions. Backs form.create.
-export const forms = contentSchema.table(
-  "forms",
-  {
-    ...idMixin("frm"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    ...softDeleteMixin(),
-    title: text("title").notNull(),
-    fields: jsonb("fields")
-      .notNull()
-      .default(sql`'[]'::jsonb`),
-  },
-  (t) => ({
-    orgIdx: index("forms_org_idx").on(t.orgId, t.workspaceId),
-  }),
-);
-
-// Submitted responses to a form. Immutable records (no soft-delete). Backs form.submit.
-export const formSubmissions = contentSchema.table(
-  "form_submissions",
-  {
-    ...idMixin("fsb"),
-    ...auditMixin(),
-    ...orgScopeMixin(),
-    formId: uuid("form_id").notNull(),
-    responses: jsonb("responses")
-      .notNull()
-      .default(sql`'{}'::jsonb`),
-    status: citext("status").notNull().default("submitted"),
-  },
-  (t) => ({
-    formIdx: index("form_submissions_form_idx").on(t.formId),
-    orgIdx: index("form_submissions_org_idx").on(t.orgId, t.workspaceId),
-    statusCheck: check(
-      "form_submissions_status_check",
-      sql`${t.status} IN ('submitted', 'reviewed', 'archived')`,
-    ),
   }),
 );

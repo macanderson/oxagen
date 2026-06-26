@@ -23,7 +23,9 @@ const noopStats: ExplorerStats = {
   edgesByType: [],
 };
 
-function makeProps(overrides: Partial<GraphToolbarProps> = {}): GraphToolbarProps {
+function makeProps(
+  overrides: Partial<GraphToolbarProps> = {},
+): GraphToolbarProps {
   return {
     view: "2d",
     onViewChange: vi.fn(),
@@ -35,11 +37,15 @@ function makeProps(overrides: Partial<GraphToolbarProps> = {}): GraphToolbarProp
     draggable: false,
     onToggleDraggable: vi.fn(),
     canvasReady: true,
+    animated: true,
+    onToggleAnimated: vi.fn(),
     onFit: vi.fn(),
     onZoomIn: vi.fn(),
     onZoomOut: vi.fn(),
     onScreenshot: vi.fn(),
     onReload: vi.fn(),
+    onCreateNode: vi.fn(),
+    onCreateEdge: vi.fn(),
     ...overrides,
   };
 }
@@ -47,7 +53,9 @@ function makeProps(overrides: Partial<GraphToolbarProps> = {}): GraphToolbarProp
 describe("GraphToolbar — search", () => {
   it("renders a search input with aria-label", () => {
     render(<GraphToolbar {...makeProps()} />);
-    expect(screen.getByRole("textbox", { name: /search the graph/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: /search the graph/i }),
+    ).toBeInTheDocument();
   });
 
   it("submitting the form with a non-empty query calls onSearch with trimmed value", () => {
@@ -96,8 +104,12 @@ describe("GraphToolbar — stats display", () => {
 describe("GraphToolbar — view segmented control", () => {
   it("renders 2D graph, 3D graph, Table view items", () => {
     render(<GraphToolbar {...makeProps()} />);
-    expect(screen.getByRole("button", { name: /2d graph/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /3d graph/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /2d graph/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /3d graph/i }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /table/i })).toBeInTheDocument();
   });
 
@@ -126,37 +138,61 @@ describe("GraphToolbar — view segmented control", () => {
 describe("GraphToolbar — canvas action buttons (2d/3d view)", () => {
   it("renders Fit, Zoom in/out, Dragging, Screenshot buttons in 2d view", () => {
     render(<GraphToolbar {...makeProps({ view: "2d", canvasReady: true })} />);
-    expect(screen.getByRole("button", { name: /fit to view/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /zoom in/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /zoom out/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /download screenshot/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /fit to view/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /zoom in/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /zoom out/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /download screenshot/i }),
+    ).toBeInTheDocument();
   });
 
   it("clicking 'Fit to view' calls onFit", () => {
     const onFit = vi.fn();
-    render(<GraphToolbar {...makeProps({ onFit, view: "2d", canvasReady: true })} />);
+    render(
+      <GraphToolbar {...makeProps({ onFit, view: "2d", canvasReady: true })} />,
+    );
     fireEvent.click(screen.getByRole("button", { name: /fit to view/i }));
     expect(onFit).toHaveBeenCalledOnce();
   });
 
   it("clicking 'Zoom in' calls onZoomIn", () => {
     const onZoomIn = vi.fn();
-    render(<GraphToolbar {...makeProps({ onZoomIn, view: "2d", canvasReady: true })} />);
+    render(
+      <GraphToolbar
+        {...makeProps({ onZoomIn, view: "2d", canvasReady: true })}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: /zoom in/i }));
     expect(onZoomIn).toHaveBeenCalledOnce();
   });
 
   it("clicking 'Zoom out' calls onZoomOut", () => {
     const onZoomOut = vi.fn();
-    render(<GraphToolbar {...makeProps({ onZoomOut, view: "2d", canvasReady: true })} />);
+    render(
+      <GraphToolbar
+        {...makeProps({ onZoomOut, view: "2d", canvasReady: true })}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: /zoom out/i }));
     expect(onZoomOut).toHaveBeenCalledOnce();
   });
 
   it("clicking 'Download screenshot' calls onScreenshot", () => {
     const onScreenshot = vi.fn();
-    render(<GraphToolbar {...makeProps({ onScreenshot, view: "2d", canvasReady: true })} />);
-    fireEvent.click(screen.getByRole("button", { name: /download screenshot/i }));
+    render(
+      <GraphToolbar
+        {...makeProps({ onScreenshot, view: "2d", canvasReady: true })}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /download screenshot/i }),
+    );
     expect(onScreenshot).toHaveBeenCalledOnce();
   });
 
@@ -168,16 +204,24 @@ describe("GraphToolbar — canvas action buttons (2d/3d view)", () => {
 
   it("canvas action buttons are not rendered in table view", () => {
     render(<GraphToolbar {...makeProps({ view: "table" })} />);
-    expect(screen.queryByRole("button", { name: /fit to view/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /zoom in/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /download screenshot/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /fit to view/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /zoom in/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /download screenshot/i }),
+    ).not.toBeInTheDocument();
   });
 });
 
 describe("GraphToolbar — reload", () => {
   it("renders the Reload graph button", () => {
     render(<GraphToolbar {...makeProps()} />);
-    expect(screen.getByRole("button", { name: /reload graph/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /reload graph/i }),
+    ).toBeInTheDocument();
   });
 
   it("clicking Reload calls onReload", () => {
@@ -191,7 +235,11 @@ describe("GraphToolbar — reload", () => {
 describe("GraphToolbar — draggable toggle", () => {
   it("clicking the Dragging button calls onToggleDraggable", () => {
     const onToggleDraggable = vi.fn();
-    render(<GraphToolbar {...makeProps({ onToggleDraggable, view: "2d", canvasReady: true })} />);
+    render(
+      <GraphToolbar
+        {...makeProps({ onToggleDraggable, view: "2d", canvasReady: true })}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: /dragging/i }));
     expect(onToggleDraggable).toHaveBeenCalledOnce();
   });

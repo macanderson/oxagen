@@ -27,13 +27,19 @@ export interface UpsertCapabilityInstallInput {
  *
  * - Runs inside the provided `tx` (caller-owned transaction).
  * - Returns the installed plugin row id (new or existing).
- * - iconUrl is intentionally left null: capability packs use Lucide icon names
- *   (not URLs) so setting it would create a broken next/image src.
+ * - iconUrl stores a structured Lucide reference ("lucide:<name>:<color>") so
+ *   the installed-plugins panel can render the correct icon without a manifest
+ *   lookup at render time.
  */
 export async function upsertCapabilityInstall(
   tx: Tx,
   { orgId, workspaceId, pluginId, manifest }: UpsertCapabilityInstallInput,
 ): Promise<string> {
+  // Build icon reference: "lucide:<iconName>:<color>" or null.
+  const iconUrl = manifest.icon
+    ? `lucide:${manifest.icon}:${manifest.color ?? ""}`
+    : null;
+
   const [row] = await tx
     .insert(schema.pluginInstalledPlugins)
     .values({
@@ -44,8 +50,7 @@ export async function upsertCapabilityInstall(
       name: pluginId,
       title: manifest.name,
       description: manifest.description,
-      // iconUrl: Lucide icon name on capability packs — not a URL, leave null.
-      iconUrl: null,
+      iconUrl,
       endpointUrl: null,
       transport: null,
       authKind: "none",
@@ -58,7 +63,13 @@ export async function upsertCapabilityInstall(
         schema.pluginInstalledPlugins.pluginType,
         schema.pluginInstalledPlugins.name,
       ],
-      set: { updatedAt: sql`now()` },
+      set: {
+        // Update icon on re-install in case the manifest changed.
+        iconUrl: sql`EXCLUDED.icon_url`,
+        title: sql`EXCLUDED.title`,
+        description: sql`EXCLUDED.description`,
+        updatedAt: sql`now()`,
+      },
     })
     .returning({ id: schema.pluginInstalledPlugins.id });
 

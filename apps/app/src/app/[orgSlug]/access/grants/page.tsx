@@ -1,141 +1,101 @@
-/**
- * Grants tab — static mock UI.
- *
- * Displays a high-fidelity table of capability grants (principal → capability).
- * ZERO server data dependencies — all data is inline mock constants.
- * Will be wired to live IAM data in OXA-XXXX (see parent ticket).
- */
-
-import {
-  Shield,
-  XCircle,
-  AlertTriangle,
-} from "lucide-react";
+import { Plus, MoreHorizontal } from "lucide-react";
 import { Panel } from "@/components/ui/panel";
-import { Badge } from "@/components/ui/badge";
 
 // ---------------------------------------------------------------------------
-// Mock data — realistic, hardcoded. Replace with DB query when wired.
+// Static mock — no DB dependency (pure presentational; OXA-XXXX to wire)
 // ---------------------------------------------------------------------------
 
-type GrantEffect = "allow" | "deny" | "require_approval";
-type ScopeKind = "org" | "workspace" | "global";
-
-interface MockGrant {
+interface Grant {
   id: string;
-  principal: string;
-  principalKind: "user" | "service" | "agent";
-  capabilityId: string;
-  scope: ScopeKind;
-  effect: GrantEffect;
+  principalName: string;
+  principalType: "user" | "service" | "agent";
+  capability: string;
+  effect: "allow" | "deny";
+  scope: string;
   grantedBy: string;
   grantedAt: string;
   expiresAt: string | null;
 }
 
-const MOCK_GRANTS: MockGrant[] = [
+const MOCK_GRANTS: Grant[] = [
   {
-    id: "grn_01j9xk2p3q4r5s6t",
-    principal: "Sarah Chen",
-    principalKind: "user",
-    capabilityId: "agent.run",
-    scope: "org",
+    id: "grt_01",
+    principalName: "alice@acme.co",
+    principalType: "user",
+    capability: "chat.message.send",
     effect: "allow",
-    grantedBy: "Mac Anderson",
-    grantedAt: "May 28, 2026",
+    scope: "workspace:ws_prod",
+    grantedBy: "admin@acme.co",
+    grantedAt: "2025-12-01",
     expiresAt: null,
   },
   {
-    id: "grn_02j9xk2p3q4r5s7u",
-    principal: "data-sync-worker",
-    principalKind: "service",
-    capabilityId: "knowledge.ingest",
-    scope: "workspace",
+    id: "grt_02",
+    principalName: "ci-deploy-bot",
+    principalType: "service",
+    capability: "automation.agent.execute",
     effect: "allow",
-    grantedBy: "Mac Anderson",
-    grantedAt: "May 30, 2026",
-    expiresAt: "Jun 30, 2026",
+    scope: "org:acme",
+    grantedBy: "admin@acme.co",
+    grantedAt: "2025-11-15",
+    expiresAt: "2026-11-15",
   },
   {
-    id: "grn_03j9xk2p3q4r5s8v",
-    principal: "James Park",
-    principalKind: "user",
-    capabilityId: "billing.manage",
-    scope: "org",
+    id: "grt_03",
+    principalName: "research-agent",
+    principalType: "agent",
+    capability: "knowledge.source.create",
     effect: "allow",
-    grantedBy: "Mac Anderson",
-    grantedAt: "Jun 1, 2026",
+    scope: "workspace:ws_research",
+    grantedBy: "bob@acme.co",
+    grantedAt: "2026-01-08",
     expiresAt: null,
   },
   {
-    id: "grn_04j9xk2p3q4r5s9w",
-    principal: "research-agent-v2",
-    principalKind: "agent",
-    capabilityId: "web.search",
-    scope: "workspace",
-    effect: "allow",
-    grantedBy: "Sarah Chen",
-    grantedAt: "Jun 2, 2026",
-    expiresAt: "Jun 16, 2026",
-  },
-  {
-    id: "grn_05j9xk2p3q4r5sax",
-    principal: "Priya Nair",
-    principalKind: "user",
-    capabilityId: "content.generate",
-    scope: "org",
-    effect: "require_approval",
-    grantedBy: "Mac Anderson",
-    grantedAt: "Jun 3, 2026",
-    expiresAt: null,
-  },
-  {
-    id: "grn_06j9xk2p3q4r5sby",
-    principal: "ci-deploy-bot",
-    principalKind: "service",
-    capabilityId: "infra.deploy",
-    scope: "global",
+    id: "grt_04",
+    principalName: "intern@acme.co",
+    principalType: "user",
+    capability: "billing.subscription.update",
     effect: "deny",
-    grantedBy: "Mac Anderson",
-    grantedAt: "Jun 4, 2026",
+    scope: "org:acme",
+    grantedBy: "admin@acme.co",
+    grantedAt: "2026-02-20",
+    expiresAt: null,
+  },
+  {
+    id: "grt_05",
+    principalName: "support-agent",
+    principalType: "agent",
+    capability: "chat.message.send",
+    effect: "allow",
+    scope: "workspace:ws_support",
+    grantedBy: "alice@acme.co",
+    grantedAt: "2026-03-10",
+    expiresAt: "2026-09-10",
+  },
+  {
+    id: "grt_06",
+    principalName: "data-pipeline-svc",
+    principalType: "service",
+    capability: "knowledge.source.ingest",
+    effect: "allow",
+    scope: "org:acme",
+    grantedBy: "admin@acme.co",
+    grantedAt: "2026-04-01",
     expiresAt: null,
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const EFFECT_LABEL: Record<GrantEffect, string> = {
-  allow: "Allow",
-  deny: "Deny",
-  require_approval: "Require approval",
+const PRINCIPAL_TYPE_BADGE: Record<Grant["principalType"], string> = {
+  user: "bg-blue-500/10 text-blue-600",
+  service: "bg-purple-500/10 text-purple-600",
+  agent: "bg-amber-500/10 text-amber-600",
 };
 
-const PRINCIPAL_KIND_LABEL: Record<MockGrant["principalKind"], string> = {
-  user: "User",
-  service: "Service",
-  agent: "Agent",
+const EFFECT_BADGE: Record<Grant["effect"], string> = {
+  allow: "bg-success/10 text-success",
+  deny: "bg-destructive/10 text-destructive",
 };
-
-function EffectBadge({ effect }: { effect: GrantEffect }) {
-  const variant =
-    effect === "allow"
-      ? ("default" as const)
-      : effect === "deny"
-        ? ("destructive" as const)
-        : ("muted" as const);
-
-  const Icon =
-    effect === "allow" ? Shield : effect === "deny" ? XCircle : AlertTriangle;
-
-  return (
-    <Badge variant={variant} className="shrink-0 text-xs">
-      <Icon className="mr-1 h-3 w-3" aria-hidden="true" />
-      {EFFECT_LABEL[effect]}
-    </Badge>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Page
@@ -144,75 +104,111 @@ function EffectBadge({ effect }: { effect: GrantEffect }) {
 export default function AccessGrantsPage() {
   return (
     <div className="flex flex-col gap-6">
-      {/* Preview pill */}
-      <p className="text-[11px] text-muted-foreground/60 font-medium">
-        Preview &middot; not yet wired to live data
-      </p>
+      {/* OXA-XXXX indicator */}
+      <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-border/40 bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
+        <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
+        OXA-XXXX · not yet wired to live data
+      </div>
 
-      <Panel title="Capability grants">
+      <Panel
+        title="Capability Grants"
+        actions={
+          <button
+            type="button"
+            disabled
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground opacity-60 cursor-not-allowed"
+            aria-label="Create grant (coming soon)"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            Create Grant
+          </button>
+        }
+      >
         <p className="mb-4 text-sm text-muted-foreground">
-          Direct principal-to-capability grants outside of roles. These
-          supplement role-based access for specific principals.
+          Direct principal-to-capability grants. Each grant gives or denies a
+          specific capability to a principal within a scope.
         </p>
 
-        {/* Table header */}
-        <div className="mb-2 hidden grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_80px_80px_100px_100px] gap-4 px-4 sm:grid">
-          {["Principal", "Capability", "Scope", "Effect", "Granted by", "Expires"].map(
-            (h) => (
-              <span
-                key={h}
-                className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-              >
-                {h}
-              </span>
-            ),
-          )}
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          {MOCK_GRANTS.map((g) => (
-            <div
-              key={g.id}
-              className="grid rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm
-                  grid-cols-1 gap-y-1
-                  sm:grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_80px_80px_100px_100px] sm:gap-4 sm:items-center"
-            >
-              {/* Principal */}
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="font-medium text-foreground truncate">
-                  {g.principal}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {PRINCIPAL_KIND_LABEL[g.principalKind]}
-                </span>
-              </div>
-
-              {/* Capability */}
-              <span className="font-mono text-xs text-foreground truncate">
-                {g.capabilityId}
-              </span>
-
-              {/* Scope */}
-              <Badge variant="outline" className="w-fit text-xs capitalize">
-                {g.scope}
-              </Badge>
-
-              {/* Effect */}
-              <EffectBadge effect={g.effect} />
-
-              {/* Granted by */}
-              <span className="text-xs text-muted-foreground truncate">
-                {g.grantedBy}
-                <br />
-                <span className="text-muted-foreground/60">{g.grantedAt}</span>
-              </span>
-
-              {/* Expires */}
-              <span className="text-xs text-muted-foreground">
-                {g.expiresAt ?? "Never"}
-              </span>
-            </div>
-          ))}
+        <div className="overflow-hidden rounded-lg border border-border/60">
+          <table className="w-full text-sm" aria-label="Capability grants">
+            <thead>
+              <tr className="border-b border-border/60 bg-muted/30">
+                <th className="py-2.5 pl-4 pr-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Principal
+                </th>
+                <th className="py-2.5 px-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Capability
+                </th>
+                <th className="py-2.5 px-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Effect
+                </th>
+                <th className="py-2.5 px-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Scope
+                </th>
+                <th className="py-2.5 px-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Granted
+                </th>
+                <th className="py-2.5 px-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Expires
+                </th>
+                <th className="py-2.5 pl-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {MOCK_GRANTS.map((grant) => (
+                <tr
+                  key={grant.id}
+                  className="border-b border-border/40 last:border-b-0 hover:bg-muted/20 transition-colors"
+                >
+                  <td className="py-3 pl-4 pr-3">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-sm font-medium text-foreground">
+                        {grant.principalName}
+                      </span>
+                      <span
+                        className={`inline-flex w-fit items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${PRINCIPAL_TYPE_BADGE[grant.principalType]}`}
+                      >
+                        {grant.principalType}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-3">
+                    <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
+                      {grant.capability}
+                    </code>
+                  </td>
+                  <td className="py-3 px-3">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${EFFECT_BADGE[grant.effect]}`}
+                    >
+                      {grant.effect}
+                    </span>
+                  </td>
+                  <td className="py-3 px-3 text-xs text-muted-foreground font-mono">
+                    {grant.scope}
+                  </td>
+                  <td className="py-3 px-3 text-xs text-muted-foreground whitespace-nowrap">
+                    {grant.grantedAt}
+                  </td>
+                  <td className="py-3 px-3 text-xs text-muted-foreground whitespace-nowrap">
+                    {grant.expiresAt ?? "—"}
+                  </td>
+                  <td className="py-3 pl-3 pr-4">
+                    <button
+                      type="button"
+                      disabled
+                      className="rounded p-1 text-muted-foreground opacity-50 cursor-not-allowed"
+                      aria-label="Grant actions"
+                    >
+                      <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Panel>
     </div>

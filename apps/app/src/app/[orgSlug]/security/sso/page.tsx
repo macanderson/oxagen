@@ -1,29 +1,25 @@
-import { Panel } from "@/components/ui/panel";
+import { KeyRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-export default async function SecuritySsoPage({
-  params: _params,
-}: {
-  params: Promise<{ orgSlug: string }>;
-}) {
+export default function SecuritySsoPage() {
   return (
-    <div className="flex flex-col gap-6">
-      <Panel title="Single Sign-On">
-        <p className="mb-4 text-sm text-muted-foreground">
-          Configure SAML 2.0 or OIDC identity providers to let your organization authenticate
-          through a corporate IdP — enforcing centralized access control and supporting SSO
-          mandates required for SOC 2 Type II.
+    <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-border/40 bg-muted/20 px-6 py-16 text-center">
+      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+        <KeyRound
+          className="h-6 w-6 text-muted-foreground"
+          aria-hidden="true"
+        />
+      </span>
+      <div className="flex flex-col items-center gap-2">
+        <Badge variant="outline" className="text-xs">
+          Coming soon
+        </Badge>
+        <p className="text-sm font-medium text-foreground">Single Sign-On</p>
+        <p className="max-w-sm text-xs text-muted-foreground">
+          SSO configuration is in development. SAML 2.0 and OIDC provider setup,
+          IdP-initiated flows, and forced-SSO enforcement are planned.
         </p>
-        <div className="flex items-center gap-3 rounded-xl border border-dashed border-border/60 bg-muted/20 px-5 py-4">
-          <Badge variant="outline" className="shrink-0 text-xs">
-            Coming soon
-          </Badge>
-          <p className="text-sm text-muted-foreground">
-            SSO configuration will be available in an upcoming release. SAML and OIDC providers,
-            IdP-initiated flows, and forced-SSO enforcement are planned.
-          </p>
-        </div>
-      </Panel>
+      </div>
     </div>
   );
 }

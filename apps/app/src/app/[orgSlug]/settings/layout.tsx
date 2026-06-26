@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/ui/page-header";
-import { PageTabs } from "@/components/ui/page-tabs";
+import { SettingsNav } from "@/components/ui/settings-nav";
 import { org } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 
@@ -13,7 +13,7 @@ export default async function OrgSettingsLayout({
   const { orgSlug } = await params;
   const ctx: ScopeContext = { orgSlug };
 
-  const tabs = [
+  const navItems = [
     { label: "General", href: org.settings.general(ctx) },
     { label: "Privacy", href: org.settings.privacy(ctx) },
   ];
@@ -24,8 +24,12 @@ export default async function OrgSettingsLayout({
         title="Organization Settings"
         description="Configure your organization, manage plugins, and govern third-party integrations."
       />
-      <PageTabs tabs={tabs} className="mb-6" />
-      {children}
+      <div className="flex gap-8">
+        <aside className="w-48 shrink-0">
+          <SettingsNav items={navItems} />
+        </aside>
+        <main className="min-w-0 flex-1">{children}</main>
+      </div>
     </div>
   );
 }

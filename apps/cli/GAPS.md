@@ -11,19 +11,20 @@ The CLI is in generally good shape: 134 command source files exist, all are impo
 
 **Headline numbers:**
 
-| Metric | Count |
-|--------|-------|
-| Command files on disk (in `src/commands/**/*.ts`, excl. test files) | 134 |
-| Commands registered in `index.tsx` | 134 (100%) |
-| Orphaned command files (disk but not registered) | 0 |
-| Broken imports (import but file missing) | 0 |
-| Contracts with `cli` in `surfaces[]` but no CLI command | ~15 |
-| Commands missing `requireAuth()` call | ~100 of 134 |
-| Commands with `--json` output flag | 15 of 134 |
-| Commands with usage examples (`.addHelpText`) | 1 of 134 |
-| Commands identified as stubs | 1 explicit (`brandkit.apply`) |
+| Metric                                                              | Count       |
+| ------------------------------------------------------------------- | ----------- |
+| Command files on disk (in `src/commands/**/*.ts`, excl. test files) | 134         |
+| Commands registered in `index.tsx`                                  | 134 (100%)  |
+| Orphaned command files (disk but not registered)                    | 0           |
+| Broken imports (import but file missing)                            | 0           |
+| Contracts with `cli` in `surfaces[]` but no CLI command             | ~15         |
+| Commands missing `requireAuth()` call                               | ~100 of 134 |
+| Commands with `--json` output flag                                  | 15 of 134   |
+| Commands with usage examples (`.addHelpText`)                       | 1 of 134    |
+| Commands identified as stubs                                        | 0           |
 
 **Top-5 gaps:**
+
 1. No `integration.*` CLI commands despite 6 contracts with `cli` in surfaces.
 2. No `repo.*` CLI commands despite 4 contracts with `cli` in surfaces.
 3. `graph edge upsert` targets the deprecated `graph.edge.upsert` contract with a hardcoded 8-type enum; the live contract is `graph.relationship.upsert` with a regex-validated free type.
@@ -40,13 +41,13 @@ The Glob on `src/commands/**/*.ts` returns 135 paths (including 1 test file, `__
 
 **Structural notes on grouping:**
 
-| Group | Nesting | Note |
-|-------|---------|------|
-| `org create` vs `org create-org` | Both under `org` | **Duplicate.** `org.create.ts` (name: `"create"`, calls `/organizations`) and `organization.create.ts` (name: `"create-org"`, calls `/organization/create`) both sit under the `org` command. Two separate commands with overlapping purpose — one should be removed or the other renamed as the canonical flow. |
-| `user preferences` | get/update/read/write — all four under `user preferences` | **Duplication of intent.** `user.preferences.get` + `user.preferences.update` predate `user.preferences.read` + `user.preferences.write`. The latter pair maps to the live contracts (`user.preferences.read`, `user.preferences.write`). The former pair (`get`/`update`) hits different API endpoints (`/user/preferences/get`, `/user/preferences/update`) and carry different fields. Only the `read`/`write` pair is contract-matched; the `get`/`update` pair appears to be legacy/drift. |
-| `graph edge` sub-group | `graph.command("edge")` → `edge-upsert` + `delete` | `graphEdgeUpsertCommand.name()` is `"edge-upsert"` — so the full path is `oxagen graph edge edge-upsert` (redundant word). Should be `oxagen graph edge upsert`. |
-| `schema` sub-group | `schemaLabelCommand` contains both `upsert` and `delete`; same for `rel` and `prop` | Multi-command files. These work correctly but the nesting is correct. |
-| `plugin.workspace.set_enabled` | Registered under `pluginOrg` (line 225 of `index.tsx`): `pluginOrg.addCommand(pluginWorkspaceSetEnabledCommand)` | **Misrouted.** This is a workspace-level operation but sits under `plugin org`. It should live under a `plugin workspace` subcommand group. |
+| Group                            | Nesting                                                                                                          | Note                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `org create` vs `org create-org` | Both under `org`                                                                                                 | **Duplicate.** `org.create.ts` (name: `"create"`, calls `/organizations`) and `organization.create.ts` (name: `"create-org"`, calls `/organization/create`) both sit under the `org` command. Two separate commands with overlapping purpose — one should be removed or the other renamed as the canonical flow.                                                                                                                                                                                |
+| `user preferences`               | get/update/read/write — all four under `user preferences`                                                        | **Duplication of intent.** `user.preferences.get` + `user.preferences.update` predate `user.preferences.read` + `user.preferences.write`. The latter pair maps to the live contracts (`user.preferences.read`, `user.preferences.write`). The former pair (`get`/`update`) hits different API endpoints (`/user/preferences/get`, `/user/preferences/update`) and carry different fields. Only the `read`/`write` pair is contract-matched; the `get`/`update` pair appears to be legacy/drift. |
+| `graph edge` sub-group           | `graph.command("edge")` → `edge-upsert` + `delete`                                                               | `graphEdgeUpsertCommand.name()` is `"edge-upsert"` — so the full path is `oxagen graph edge edge-upsert` (redundant word). Should be `oxagen graph edge upsert`.                                                                                                                                                                                                                                                                                                                                |
+| `schema` sub-group               | `schemaLabelCommand` contains both `upsert` and `delete`; same for `rel` and `prop`                              | Multi-command files. These work correctly but the nesting is correct.                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `plugin.workspace.set_enabled`   | Registered under `pluginOrg` (line 225 of `index.tsx`): `pluginOrg.addCommand(pluginWorkspaceSetEnabledCommand)` | **Misrouted.** This is a workspace-level operation but sits under `plugin org`. It should live under a `plugin workspace` subcommand group.                                                                                                                                                                                                                                                                                                                                                     |
 
 ---
 
@@ -58,14 +59,14 @@ The parity rule requires: contract → API route → MCP tool → CLI command. T
 
 All 6 contracts below have `surfaces: ["api", "mcp", "cli", "agent"]`:
 
-| Contract | Expected CLI path |
-|----------|------------------|
-| `integration.list` | `oxagen integration list` |
-| `integration.get` | `oxagen integration get` |
-| `integration.install` | `oxagen integration install` |
+| Contract                | Expected CLI path              |
+| ----------------------- | ------------------------------ |
+| `integration.list`      | `oxagen integration list`      |
+| `integration.get`       | `oxagen integration get`       |
+| `integration.install`   | `oxagen integration install`   |
 | `integration.configure` | `oxagen integration configure` |
-| `integration.delete` | `oxagen integration delete` |
-| `integration.sync` | `oxagen integration sync` |
+| `integration.delete`    | `oxagen integration delete`    |
+| `integration.sync`      | `oxagen integration sync`      |
 
 Source: `packages/oxagen/src/contracts/integration.*.ts`, all declare `surfaces: ["api", "mcp", "cli", "agent"]`.
 
@@ -73,12 +74,12 @@ Source: `packages/oxagen/src/contracts/integration.*.ts`, all declare `surfaces:
 
 All 4 contracts have `surfaces: ["api", "mcp", "cli", "agent"]`:
 
-| Contract | Expected CLI path |
-|----------|------------------|
-| `repo.sync` | `oxagen repo sync` |
+| Contract         | Expected CLI path       |
+| ---------------- | ----------------------- |
+| `repo.sync`      | `oxagen repo sync`      |
 | `repo.configure` | `oxagen repo configure` |
-| `repo.pause` | `oxagen repo pause` |
-| `repo.resume` | `oxagen repo resume` |
+| `repo.pause`     | `oxagen repo pause`     |
+| `repo.resume`    | `oxagen repo resume`    |
 
 Source: `packages/oxagen/src/contracts/repo.*.ts`.
 
@@ -90,11 +91,11 @@ Status: **No CLI command.** The existing `graph edge upsert` command is mapped t
 
 ### Missing: Schema setup/recommend/validate (~4 commands)
 
-| Contract | Surfaces include `cli`? | Expected CLI path |
-|----------|------------------------|------------------|
-| `schema.setup` | Yes (`packages/oxagen/src/contracts/schema.setup.ts:10`) | `oxagen schema setup` |
-| `schema.recommend` | Yes (`packages/oxagen/src/contracts/schema.recommend.ts:10`) | `oxagen schema recommend` |
-| `schema.validate.node` | Yes (`packages/oxagen/src/contracts/schema.validate.node.ts:10`) | `oxagen schema validate node` |
+| Contract                       | Surfaces include `cli`?                                                  | Expected CLI path                     |
+| ------------------------------ | ------------------------------------------------------------------------ | ------------------------------------- |
+| `schema.setup`                 | Yes (`packages/oxagen/src/contracts/schema.setup.ts:10`)                 | `oxagen schema setup`                 |
+| `schema.recommend`             | Yes (`packages/oxagen/src/contracts/schema.recommend.ts:10`)             | `oxagen schema recommend`             |
+| `schema.validate.node`         | Yes (`packages/oxagen/src/contracts/schema.validate.node.ts:10`)         | `oxagen schema validate node`         |
 | `schema.validate.relationship` | Yes (`packages/oxagen/src/contracts/schema.validate.relationship.ts:10`) | `oxagen schema validate relationship` |
 
 ### Approximate total CLI-surfaced gap count
@@ -128,6 +129,7 @@ These are lower priority but should be resolved: either add `"cli"` to the `surf
 `requireAuth()` is called in only 34 of 134 command files. The remaining ~100 make `apiRequest()` directly without first validating that a token is configured. `apiRequest()` does not exit early on missing tokens — it sends the request and the server returns a 401/403. The user sees a raw HTTP error rather than the actionable message: `"Error: not authenticated. Run \`oxagen auth login\` first."`.
 
 **Affected pattern (representative examples, not exhaustive):**
+
 - `apps/cli/src/commands/graph.node.upsert.ts` — no `requireAuth()` call
 - `apps/cli/src/commands/graph.node.get.ts` — no `requireAuth()` call
 - `apps/cli/src/commands/agent.memory.recall.ts` — no `requireAuth()` call
@@ -148,6 +150,7 @@ Every other command uses a verb name (`"upsert"`, `"delete"`, `"list"`) when nes
 ### 4. Inconsistent error message formatting
 
 Two patterns appear:
+
 - **Pattern A (preferred):** `const msg = err instanceof ApiError ? err.message : String(err); console.error(\`Error: ${msg}\`);` — used in ~80 commands.
 - **Pattern B (non-standard):** `console.error("Failed to get graph node:", error);` — used in graph commands (`graph.node.get.ts:17`, `graph.node.upsert.ts:34`, `graph.node.search.ts`, `agent.memory.recall.ts:20`, `video.generate.ts:24`, etc.). This pattern logs the raw Error object and skips the `ApiError` check, producing verbose stack-trace output on errors.
 
@@ -156,9 +159,11 @@ Two patterns appear:
 ### 5. Inline error handler on single line — `auth.whoami.ts:22`, `auth.login.ts:34`, `billing.status.ts:34`, `org.create.ts:22`, `api-key.create.ts:34`
 
 Several files have the error handler collapsed onto one line:
+
 ```
 const _msg = err instanceof ApiError ? err.message : String(err); console.error(`Error: ${_msg}`);
 ```
+
 This is a linting concern (multiple statements per line) and makes the code harder to read. Should be split across lines.
 
 ### 6. Root program description is minimal
@@ -169,6 +174,7 @@ This is a linting concern (multiple statements per line) and makes the code hard
 ### 7. Group commands lack rich descriptions
 
 Several group commands have terse descriptions:
+
 - `agent`: `"Agent commands"` — too generic
 - `skill`: `"Skill management commands"` — acceptable but could note the skill.md format
 - `documents`: `"Document generation commands"` — duplicate of `document` (singular); the distinction is unclear from help text
@@ -177,12 +183,11 @@ Several group commands have terse descriptions:
 
 ## Stubs and Incomplete Commands
 
-| File | Issue | Severity |
-|------|-------|----------|
-| `apps/cli/src/commands/brandkit.apply.ts` | Response interface declares `stub: true; applied: false`. Console output explicitly prints `"Brand kit apply submitted (stub — backing not yet wired)"` (line 29). The action calls `apiRequest` so there is a network round-trip, but the API endpoint returns a hardcoded stub response. | Medium — misleads users and CI scripts |
-| `apps/cli/src/commands/graph.edge.upsert.ts` | Uses a hardcoded 8-type enum (`RELATED_TO`, `PART_OF`, etc.) and sends `edgeType` to `/graph/edges`. The live `graph.edge.upsert` contract is marked `@deprecated` in `packages/oxagen/src/contracts/graph.edge.upsert.ts:1` with a comment to use `graph.relationship.upsert` instead. The CLI command targets the deprecated contract and would reject valid workspace-defined relationship types. | High — functional regression for users with custom relationship types |
-| `apps/cli/src/commands/user.preferences.get.ts` + `user.preferences.update.ts` | These predate the `user.preferences.read` / `user.preferences.write` contracts (which map to distinct API endpoints). Both the old and new commands are registered under `user preferences`, creating four overlapping subcommands (`get`, `update`, `read`, `write`). The `get`/`update` pair hits `/user/preferences/get` and `/user/preferences/update`; the `read`/`write` pair hits `/user/preferences/read` and `/user/preferences/write`. It is unclear which pair is authoritative. | Medium — UX confusion, potential endpoint drift |
-| `apps/cli/src/commands/organization.create.ts` | Exposes `oxagen org create-org` alongside `oxagen org create`. Both create an organization. The `org.create.ts` command hits `/organizations` (Better Auth path); `organization.create.ts` hits `/organization/create` (Oxagen API path). These appear to be duplicate coverage of the same user action with no differentiation in `--help`. | Medium — confusing duplication |
+| File                                                                           | Issue                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Severity                                                              |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `apps/cli/src/commands/graph.edge.upsert.ts`                                   | Uses a hardcoded 8-type enum (`RELATED_TO`, `PART_OF`, etc.) and sends `edgeType` to `/graph/edges`. The live `graph.edge.upsert` contract is marked `@deprecated` in `packages/oxagen/src/contracts/graph.edge.upsert.ts:1` with a comment to use `graph.relationship.upsert` instead. The CLI command targets the deprecated contract and would reject valid workspace-defined relationship types.                                                                                        | High — functional regression for users with custom relationship types |
+| `apps/cli/src/commands/user.preferences.get.ts` + `user.preferences.update.ts` | These predate the `user.preferences.read` / `user.preferences.write` contracts (which map to distinct API endpoints). Both the old and new commands are registered under `user preferences`, creating four overlapping subcommands (`get`, `update`, `read`, `write`). The `get`/`update` pair hits `/user/preferences/get` and `/user/preferences/update`; the `read`/`write` pair hits `/user/preferences/read` and `/user/preferences/write`. It is unclear which pair is authoritative. | Medium — UX confusion, potential endpoint drift                       |
+| `apps/cli/src/commands/organization.create.ts`                                 | Exposes `oxagen org create-org` alongside `oxagen org create`. Both create an organization. The `org.create.ts` command hits `/organizations` (Better Auth path); `organization.create.ts` hits `/organization/create` (Oxagen API path). These appear to be duplicate coverage of the same user action with no differentiation in `--help`.                                                                                                                                                | Medium — confusing duplication                                        |
 
 ---
 
@@ -198,7 +203,7 @@ Only 15 command files support `--json` output (all 11 in `schema/`, plus `web.fe
 
 `config.ts` reads `OXAGEN_ORG_ID` and `OXAGEN_WORKSPACE_ID` from the environment (and `orgSlug`/`workspaceSlug` from the config file). However, there is no global `-o, --org <slug>` or `-w, --workspace <slug>` flag on the root `program` object that would override the current context for a single command invocation.
 
-Each individual command that needs an org/workspace ID re-implements its own local `--org` or `-w, --workspace` option (e.g. `workflow.run.ts:15`, `brandkit.apply.ts:17`, `billing.status.ts:18`), with inconsistent flag names and inconsistent defaults. Some commands use `getOrgId()` as a fallback, some hardcode a query param, some omit the option entirely.
+Each individual command that needs an org/workspace ID re-implements its own local `--org` or `-w, --workspace` option (e.g. `workflow.run.ts:15`, `billing.status.ts:18`), with inconsistent flag names and inconsistent defaults. Some commands use `getOrgId()` as a fallback, some hardcode a query param, some omit the option entirely.
 
 **Recommended fix:** Add `--org <slug>` and `--workspace <slug>` as global options on `program` in `index.tsx`, and have them populate env vars (`OXAGEN_ORG_ID`, `OXAGEN_WORKSPACE_ID`) before command dispatch. Remove per-command duplicates.
 
@@ -226,32 +231,31 @@ Users working across multiple orgs and workspaces have no way to maintain named 
 
 ### P0 — Correctness / Breaking
 
-| # | What | Where | Effort |
-|---|------|-------|--------|
-| P0-1 | Replace deprecated `graph.edge.upsert` CLI command with a `graph relationship upsert` command targeting the live `graph.relationship.upsert` contract and `/graph/relationship/upsert` endpoint. Remove the hardcoded 8-type enum. Fix the command name from `"edge-upsert"` to `"upsert"`. | `apps/cli/src/commands/graph.edge.upsert.ts` → rename to `graph.relationship.upsert.ts`; update `index.tsx` lines 378–380 | S |
-| P0-2 | Add `requireAuth()` as the first call in every command `.action()` that was missing it (~100 files). Consistent early-exit with actionable message. | Every command file not in the list of 34 that already calls it | M |
+| #    | What                                                                                                                                                                                                                                                                                        | Where                                                                                                                     | Effort |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------ |
+| P0-1 | Replace deprecated `graph.edge.upsert` CLI command with a `graph relationship upsert` command targeting the live `graph.relationship.upsert` contract and `/graph/relationship/upsert` endpoint. Remove the hardcoded 8-type enum. Fix the command name from `"edge-upsert"` to `"upsert"`. | `apps/cli/src/commands/graph.edge.upsert.ts` → rename to `graph.relationship.upsert.ts`; update `index.tsx` lines 378–380 | S      |
+| P0-2 | Add `requireAuth()` as the first call in every command `.action()` that was missing it (~100 files). Consistent early-exit with actionable message.                                                                                                                                         | Every command file not in the list of 34 that already calls it                                                            | M      |
 
 ### P1 — Parity / User-Facing Gaps
 
-| # | What | Where | Effort |
-|---|------|-------|--------|
-| P1-1 | Add 6 `integration.*` CLI commands (`integration list`, `get`, `install`, `configure`, `delete`, `sync`) | New files: `apps/cli/src/commands/integration.*.ts`; register in `index.tsx` | M |
-| P1-2 | Add 4 `repo.*` CLI commands (`repo sync`, `configure`, `pause`, `resume`) | New files: `apps/cli/src/commands/repo.*.ts`; register in `index.tsx` | S |
-| P1-3 | Add `graph relationship upsert` CLI command (separate from the deprecated edge command) | `apps/cli/src/commands/graph.relationship.upsert.ts`; register under `graph.command("relationship")` in `index.tsx` | XS |
-| P1-4 | Add `schema setup`, `schema recommend`, `schema validate node`, `schema validate relationship` CLI commands | `apps/cli/src/commands/schema/schema.setup.ts` etc.; register in `index.tsx` schema block | S |
-| P1-5 | Add `--json` flag to all data-returning commands. Priority order: org list, workspace list, conversation list/delete, graph node get/search, billing status, workflow status, audit log query (the audit log query already has `--json` via MCP contract), agent skill list, api-key commands. | ~40 high-priority command files | L |
+| #    | What                                                                                                                                                                                                                                                                                           | Where                                                                                                               | Effort |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------ |
+| P1-1 | Add 6 `integration.*` CLI commands (`integration list`, `get`, `install`, `configure`, `delete`, `sync`)                                                                                                                                                                                       | New files: `apps/cli/src/commands/integration.*.ts`; register in `index.tsx`                                        | M      |
+| P1-2 | Add 4 `repo.*` CLI commands (`repo sync`, `configure`, `pause`, `resume`)                                                                                                                                                                                                                      | New files: `apps/cli/src/commands/repo.*.ts`; register in `index.tsx`                                               | S      |
+| P1-3 | Add `graph relationship upsert` CLI command (separate from the deprecated edge command)                                                                                                                                                                                                        | `apps/cli/src/commands/graph.relationship.upsert.ts`; register under `graph.command("relationship")` in `index.tsx` | XS     |
+| P1-4 | Add `schema setup`, `schema recommend`, `schema validate node`, `schema validate relationship` CLI commands                                                                                                                                                                                    | `apps/cli/src/commands/schema/schema.setup.ts` etc.; register in `index.tsx` schema block                           | S      |
+| P1-5 | Add `--json` flag to all data-returning commands. Priority order: org list, workspace list, conversation list/delete, graph node get/search, billing status, workflow status, audit log query (the audit log query already has `--json` via MCP contract), agent skill list, api-key commands. | ~40 high-priority command files                                                                                     | L      |
 
 ### P2 — Quality / Developer Experience
 
-| # | What | Where | Effort |
-|---|------|-------|--------|
-| P2-1 | Resolve `org create` / `org create-org` duplication. Keep one authoritative command, remove the other. | `apps/cli/src/commands/org.create.ts` and `organization.create.ts`; `index.tsx` line 174 | XS |
-| P2-2 | Resolve `user preferences get`/`update` vs `read`/`write` duplication. Determine which pair is contract-authoritative, deprecate or remove the other. | `apps/cli/src/commands/user.preferences.{get,update,read,write}.ts`; `index.tsx` lines 288–291 | XS |
-| P2-3 | Move `plugin.workspace.set_enabled` from under `plugin org` to a `plugin workspace` group. | `index.tsx` line 225 (`pluginOrg.addCommand(pluginWorkspaceSetEnabledCommand)` → `pluginWorkspace.addCommand(...)`) | XS |
-| P2-4 | Standardize error handling across all commands: replace Pattern B (`console.error("Failed to X:", error)`) with Pattern A (ApiError check + `Error: ${msg}`). | `apps/cli/src/commands/graph.node.*.ts`, `agent.memory.recall.ts`, `video.generate.ts`, and ~10 others | XS |
-| P2-5 | Add usage examples via `.addHelpText("after", ...)` to all commands, starting with complex ones: `graph node upsert`, `automation create`, `schema reconcile`, `research swarm start`. | All command files | L |
-| P2-6 | Add global `--org <slug>` and `--workspace <slug>` options to the root `program`; remove per-command duplicates. Update `config.ts` to consume them. | `apps/cli/src/index.tsx`; `apps/cli/src/lib/config.ts`; all per-command `--org`/`--workspace` options | M |
-| P2-7 | Mark `brandkit.apply.ts` stub clearly (`@deprecated` until backing exists, print warning) or wire the actual API endpoint. | `apps/cli/src/commands/brandkit.apply.ts` | XS |
-| P2-8 | Expand test coverage: add unit tests for at minimum the top-20 most-used commands, following the `privacy.erase.test.ts` pattern (mock `apiRequest`/`requireAuth`, assert request shape and output). | New test files alongside each command | L |
-| P2-9 | Update contracts that have CLI commands but don't list `"cli"` in `surfaces[]`: add `"cli"` to `api.key.create`, `api.key.revoke`, and any others. | `packages/oxagen/src/contracts/api.key.create.ts:22`; `api.key.revoke.ts:16` | XS |
-| P2-10 | Enrich root program description and add a getting-started `addHelpText` block for first-time users. | `apps/cli/src/index.tsx` lines 144–147 | XS |
+| #    | What                                                                                                                                                                                                 | Where                                                                                                               | Effort |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------ |
+| P2-1 | Resolve `org create` / `org create-org` duplication. Keep one authoritative command, remove the other.                                                                                               | `apps/cli/src/commands/org.create.ts` and `organization.create.ts`; `index.tsx` line 174                            | XS     |
+| P2-2 | Resolve `user preferences get`/`update` vs `read`/`write` duplication. Determine which pair is contract-authoritative, deprecate or remove the other.                                                | `apps/cli/src/commands/user.preferences.{get,update,read,write}.ts`; `index.tsx` lines 288–291                      | XS     |
+| P2-3 | Move `plugin.workspace.set_enabled` from under `plugin org` to a `plugin workspace` group.                                                                                                           | `index.tsx` line 225 (`pluginOrg.addCommand(pluginWorkspaceSetEnabledCommand)` → `pluginWorkspace.addCommand(...)`) | XS     |
+| P2-4 | Standardize error handling across all commands: replace Pattern B (`console.error("Failed to X:", error)`) with Pattern A (ApiError check + `Error: ${msg}`).                                        | `apps/cli/src/commands/graph.node.*.ts`, `agent.memory.recall.ts`, `video.generate.ts`, and ~10 others              | XS     |
+| P2-5 | Add usage examples via `.addHelpText("after", ...)` to all commands, starting with complex ones: `graph node upsert`, `automation create`, `schema reconcile`, `research swarm start`.               | All command files                                                                                                   | L      |
+| P2-6 | Add global `--org <slug>` and `--workspace <slug>` options to the root `program`; remove per-command duplicates. Update `config.ts` to consume them.                                                 | `apps/cli/src/index.tsx`; `apps/cli/src/lib/config.ts`; all per-command `--org`/`--workspace` options               | M      |
+| P2-7 | Expand test coverage: add unit tests for at minimum the top-20 most-used commands, following the `privacy.erase.test.ts` pattern (mock `apiRequest`/`requireAuth`, assert request shape and output). | New test files alongside each command                                                                               | L      |
+| P2-8 | Update contracts that have CLI commands but don't list `"cli"` in `surfaces[]`: add `"cli"` to `api.key.create`, `api.key.revoke`, and any others.                                                   | `packages/oxagen/src/contracts/api.key.create.ts:22`; `api.key.revoke.ts:16`                                        | XS     |
+| P2-9 | Enrich root program description and add a getting-started `addHelpText` block for first-time users.                                                                                                  | `apps/cli/src/index.tsx` lines 144–147                                                                              | XS     |

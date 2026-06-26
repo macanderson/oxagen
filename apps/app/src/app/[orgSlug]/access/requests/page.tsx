@@ -1,131 +1,135 @@
-/**
- * Requests tab — static mock UI.
- *
- * Displays JIT access request rows with requester, capability, reason, status,
- * and requested-at. Replaces the previous empty-state-only implementation.
- * ZERO server data dependencies — all data is inline mock constants.
- * Will be wired to live IAM data in OXA-XXXX (see parent ticket).
- */
-
-import {
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  Hourglass,
-} from "lucide-react";
+import { Hourglass, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Static mock — no DB dependency (pure presentational; OXA-XXXX to wire)
 // ---------------------------------------------------------------------------
 
-type RequestStatus = "pending" | "approved" | "denied" | "expired";
-type ScopeKind = "org" | "workspace" | "global";
-
-interface MockRequest {
+interface AccessRequest {
   id: string;
-  requester: string;
-  requesterEmail: string;
-  capabilityId: string;
-  scope: ScopeKind;
-  reason: string;
-  status: RequestStatus;
-  ttlHours: number | null;
+  requesterName: string;
+  requesterEmail: string | null;
+  capability: string;
+  scope: string;
+  justification: string;
+  status: "pending" | "approved" | "denied" | "expired";
+  duration: string;
   requestedAt: string;
-  resolvedAt: string | null;
-  resolvedBy: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
 }
 
-const MOCK_REQUESTS: MockRequest[] = [
+const MOCK_REQUESTS: AccessRequest[] = [
   {
-    id: "req_01j9xtpa",
-    requester: "Priya Nair",
-    requesterEmail: "priya@acme.io",
-    capabilityId: "billing.manage",
-    scope: "org",
-    reason:
-      "Need to update the payment method before our renewal on Jun 15.",
+    id: "req_01",
+    requesterName: "Carol Martinez",
+    requesterEmail: "carol@acme.co",
+    capability: "billing.invoice.export",
+    scope: "org:acme",
+    justification: "Need to pull Q2 invoices for finance audit.",
     status: "pending",
-    ttlHours: 24,
-    requestedAt: "Jun 5, 2026 · 09:14 AM",
-    resolvedAt: null,
-    resolvedBy: null,
+    duration: "4 hours",
+    requestedAt: "2026-06-25T09:14:00Z",
+    reviewedBy: null,
+    reviewedAt: null,
   },
   {
-    id: "req_02j9xtpb",
-    requester: "James Park",
-    requesterEmail: "james@acme.io",
-    capabilityId: "infra.deploy",
-    scope: "workspace",
-    reason:
-      "Emergency hotfix deployment for the API rate-limit regression — CI is blocked.",
+    id: "req_02",
+    requesterName: "Dan Williams",
+    requesterEmail: "dan@acme.co",
+    capability: "knowledge.source.delete",
+    scope: "workspace:ws_staging",
+    justification: "Cleaning up stale test sources before sprint demo.",
+    status: "pending",
+    duration: "1 hour",
+    requestedAt: "2026-06-25T08:30:00Z",
+    reviewedBy: null,
+    reviewedAt: null,
+  },
+  {
+    id: "req_03",
+    requesterName: "Bob Chen",
+    requesterEmail: "bob@acme.co",
+    capability: "automation.agent.execute",
+    scope: "workspace:ws_prod",
+    justification: "Need to run the quarterly report agent manually.",
     status: "approved",
-    ttlHours: 4,
-    requestedAt: "Jun 4, 2026 · 03:45 PM",
-    resolvedAt: "Jun 4, 2026 · 03:52 PM",
-    resolvedBy: "Mac Anderson",
+    duration: "2 hours",
+    requestedAt: "2026-06-24T14:00:00Z",
+    reviewedBy: "alice@acme.co",
+    reviewedAt: "2026-06-24T14:12:00Z",
   },
   {
-    id: "req_03j9xtpc",
-    requester: "data-sync-worker",
-    requesterEmail: "svc:data-sync-worker",
-    capabilityId: "knowledge.ingest",
-    scope: "workspace",
-    reason:
-      "Batch re-ingest for the Notion connector after schema migration.",
-    status: "approved",
-    ttlHours: 8,
-    requestedAt: "Jun 3, 2026 · 11:00 AM",
-    resolvedAt: "Jun 3, 2026 · 11:03 AM",
-    resolvedBy: "Sarah Chen",
-  },
-  {
-    id: "req_04j9xtpd",
-    requester: "Lena Brandt",
-    requesterEmail: "lena@acme.io",
-    capabilityId: "content.generate",
-    scope: "org",
-    reason:
-      "Creating a product launch kit with video generation for the Q2 campaign.",
+    id: "req_04",
+    requesterName: "intern@acme.co",
+    requesterEmail: "intern@acme.co",
+    capability: "settings.org.update",
+    scope: "org:acme",
+    justification: "Want to update the org display name.",
     status: "denied",
-    ttlHours: null,
-    requestedAt: "Jun 2, 2026 · 02:30 PM",
-    resolvedAt: "Jun 2, 2026 · 05:10 PM",
-    resolvedBy: "Mac Anderson",
+    duration: "30 minutes",
+    requestedAt: "2026-06-23T11:00:00Z",
+    reviewedBy: "alice@acme.co",
+    reviewedAt: "2026-06-23T11:45:00Z",
   },
   {
-    id: "req_05j9xtpe",
-    requester: "research-agent-v2",
-    requesterEmail: "agent:research-agent-v2",
-    capabilityId: "web.search",
-    scope: "workspace",
-    reason:
-      "Competitive analysis run — needs live web access for the market-research playbook.",
+    id: "req_05",
+    requesterName: "Carol Martinez",
+    requesterEmail: "carol@acme.co",
+    capability: "knowledge.source.create",
+    scope: "workspace:ws_research",
+    justification:
+      "Adding competitor analysis documents to research workspace.",
+    status: "approved",
+    duration: "8 hours",
+    requestedAt: "2026-06-22T10:00:00Z",
+    reviewedBy: "bob@acme.co",
+    reviewedAt: "2026-06-22T10:05:00Z",
+  },
+  {
+    id: "req_06",
+    requesterName: "data-pipeline-svc",
+    requesterEmail: null,
+    capability: "knowledge.source.ingest",
+    scope: "workspace:ws_prod",
+    justification: "Emergency re-ingest after pipeline failure.",
     status: "expired",
-    ttlHours: 2,
-    requestedAt: "May 31, 2026 · 08:00 AM",
-    resolvedAt: null,
-    resolvedBy: null,
+    duration: "1 hour",
+    requestedAt: "2026-06-20T16:00:00Z",
+    reviewedBy: null,
+    reviewedAt: null,
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 const STATUS_CONFIG: Record<
-  RequestStatus,
+  AccessRequest["status"],
   {
+    icon: React.ComponentType<{ className?: string }>;
+    badgeClass: string;
     label: string;
-    variant: "default" | "destructive" | "muted" | "outline" | "warning";
-    icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   }
 > = {
-  pending: { label: "Pending", variant: "warning", icon: Hourglass },
-  approved: { label: "Approved", variant: "default", icon: CheckCircle2 },
-  denied: { label: "Denied", variant: "destructive", icon: XCircle },
-  expired: { label: "Expired", variant: "outline", icon: AlertTriangle },
+  pending: {
+    icon: Clock,
+    badgeClass: "bg-warning/10 text-warning",
+    label: "Pending",
+  },
+  approved: {
+    icon: CheckCircle2,
+    badgeClass: "bg-success/10 text-success",
+    label: "Approved",
+  },
+  denied: {
+    icon: XCircle,
+    badgeClass: "bg-destructive/10 text-destructive",
+    label: "Denied",
+  },
+  expired: {
+    icon: Hourglass,
+    badgeClass: "bg-muted text-muted-foreground",
+    label: "Expired",
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -133,103 +137,167 @@ const STATUS_CONFIG: Record<
 // ---------------------------------------------------------------------------
 
 export default function AccessRequestsPage() {
-  const pending = MOCK_REQUESTS.filter((r) => r.status === "pending");
-  const past = MOCK_REQUESTS.filter((r) => r.status !== "pending");
+  const pendingRequests = MOCK_REQUESTS.filter((r) => r.status === "pending");
+  const resolvedRequests = MOCK_REQUESTS.filter((r) => r.status !== "pending");
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Preview pill */}
-      <p className="text-[11px] text-muted-foreground/60 font-medium">
-        Preview &middot; not yet wired to live data
-      </p>
+      {/* OXA-XXXX indicator */}
+      <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-border/40 bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
+        <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
+        OXA-XXXX · not yet wired to live data
+      </div>
 
       {/* Pending requests */}
-      {pending.length > 0 && (
-        <Panel
-          title={
-            <>
-              Pending requests{" "}
-              <span className="ml-1.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
-                {pending.length}
-              </span>
-            </>
-          }
-        >
-          <p className="mb-4 text-sm text-muted-foreground">
-            JIT access requests awaiting your review.
-          </p>
-          <div className="flex flex-col gap-2">
-            {pending.map((r) => (
-              <RequestRow key={r.id} request={r} />
+      <Panel title={`Pending Requests (${pendingRequests.length})`}>
+        <p className="mb-4 text-sm text-muted-foreground">
+          Time-bound capability requests awaiting review. Approve or deny to
+          grant just-in-time access.
+        </p>
+
+        {pendingRequests.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No pending requests.</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {pendingRequests.map((req) => (
+              <RequestCard key={req.id} request={req} />
             ))}
           </div>
-        </Panel>
-      )}
+        )}
+      </Panel>
 
       {/* History */}
-      <Panel title="Request history">
-        <p className="mb-4 text-sm text-muted-foreground">
-          Past JIT access requests — approved, denied, and expired.
-        </p>
-        <div className="flex flex-col gap-2">
-          {past.map((r) => (
-            <RequestRow key={r.id} request={r} />
-          ))}
+      <Panel title="History">
+        <div className="overflow-hidden rounded-lg border border-border/60">
+          <table className="w-full text-sm" aria-label="Access request history">
+            <thead>
+              <tr className="border-b border-border/60 bg-muted/30">
+                <th className="py-2.5 pl-4 pr-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Requester
+                </th>
+                <th className="py-2.5 px-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Capability
+                </th>
+                <th className="py-2.5 px-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Status
+                </th>
+                <th className="py-2.5 px-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Duration
+                </th>
+                <th className="py-2.5 px-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Reviewed By
+                </th>
+                <th className="py-2.5 pl-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Requested
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {resolvedRequests.map((req) => {
+                const cfg = STATUS_CONFIG[req.status];
+                const StatusIcon = cfg.icon;
+                return (
+                  <tr
+                    key={req.id}
+                    className="border-b border-border/40 last:border-b-0 hover:bg-muted/20 transition-colors"
+                  >
+                    <td className="py-3 pl-4 pr-3">
+                      <span className="text-sm font-medium text-foreground">
+                        {req.requesterName}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground">
+                        {req.capability}
+                      </code>
+                    </td>
+                    <td className="py-3 px-3">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${cfg.badgeClass}`}
+                      >
+                        <StatusIcon className="h-3 w-3" aria-hidden="true" />
+                        {cfg.label}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-xs text-muted-foreground">
+                      {req.duration}
+                    </td>
+                    <td className="py-3 px-3 text-xs text-muted-foreground">
+                      {req.reviewedBy ?? "—"}
+                    </td>
+                    <td className="py-3 pl-3 pr-4 text-xs text-muted-foreground whitespace-nowrap">
+                      {new Date(req.requestedAt).toLocaleDateString()}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </Panel>
     </div>
   );
 }
 
-function RequestRow({ request: r }: { request: MockRequest }) {
-  const cfg = STATUS_CONFIG[r.status];
-  const StatusIcon = cfg.icon;
+// ---------------------------------------------------------------------------
+// Pending request card (expanded view with justification + action buttons)
+// ---------------------------------------------------------------------------
 
+function RequestCard({ request }: { request: AccessRequest }) {
   return (
-    <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3">
-      <div className="flex flex-wrap items-start gap-3">
-        {/* Left: requester + capability + reason */}
-        <div className="flex flex-1 flex-col gap-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
+    <div className="rounded-xl border border-warning/30 bg-warning/5 px-4 py-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-1.5 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium text-foreground">
-              {r.requester}
+              {request.requesterName}
             </span>
             <span className="text-xs text-muted-foreground">
-              {r.requesterEmail}
+              {request.requesterEmail}
             </span>
           </div>
-          <p className="font-mono text-xs text-muted-foreground">
-            {r.capabilityId}{" "}
-            <span className="font-sans capitalize text-muted-foreground/70">
-              ({r.scope})
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground">
+              {request.capability}
+            </code>
+            <span className="text-xs text-muted-foreground font-mono">
+              {request.scope}
             </span>
-            {r.ttlHours != null && (
-              <span className="font-sans text-muted-foreground/70">
-                {" "}
-                &middot; TTL {r.ttlHours}h
-              </span>
-            )}
-          </p>
-          <p className="text-xs text-muted-foreground/80 italic leading-snug mt-0.5">
-            &ldquo;{r.reason}&rdquo;
-          </p>
-          <p className="text-[11px] text-muted-foreground/60 mt-0.5">
-            Requested {r.requestedAt}
-            {r.resolvedAt && r.resolvedBy && (
-              <>
-                {" "}
-                &middot; {cfg.label.toLowerCase()} by {r.resolvedBy} at{" "}
-                {r.resolvedAt}
-              </>
-            )}
+            <Badge variant="outline" className="text-[10px]">
+              {request.duration}
+            </Badge>
+          </div>
+
+          <p className="mt-1 text-xs text-muted-foreground leading-snug">
+            <span className="font-medium text-foreground/80">
+              Justification:
+            </span>{" "}
+            {request.justification}
           </p>
         </div>
 
-        {/* Right: status badge */}
-        <Badge variant={cfg.variant} className="shrink-0 text-xs mt-0.5">
-          <StatusIcon className="mr-1 h-3 w-3" aria-hidden="true" />
-          {cfg.label}
-        </Badge>
+        {/* Action buttons (disabled for mock) */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            disabled
+            className="inline-flex items-center gap-1 rounded-md border border-success/40 bg-success/10 px-2.5 py-1 text-[11px] font-medium text-success opacity-60 cursor-not-allowed"
+            aria-label="Approve request"
+          >
+            <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+            Approve
+          </button>
+          <button
+            type="button"
+            disabled
+            className="inline-flex items-center gap-1 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1 text-[11px] font-medium text-destructive opacity-60 cursor-not-allowed"
+            aria-label="Deny request"
+          >
+            <XCircle className="h-3 w-3" aria-hidden="true" />
+            Deny
+          </button>
+        </div>
       </div>
     </div>
   );

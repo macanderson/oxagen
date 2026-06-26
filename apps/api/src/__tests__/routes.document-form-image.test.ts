@@ -1,7 +1,6 @@
 /**
- * Unit tests for document, form, and image route handlers:
+ * Unit tests for document and image route handlers:
  *   document.create, document.list, document.read,
- *   form.create, form.submit,
  *   image.create, image.list, image.analyze
  *
  * Pattern: mock at the adapter seam (@oxagen/auth, @oxagen/oxagen/kernel,
@@ -69,7 +68,9 @@ vi.mock("@oxagen/handlers", () => ({
 
 vi.mock("../middleware/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) => next()),
+  requestLogger: vi.fn(async (_c: unknown, next: () => Promise<void>) =>
+    next(),
+  ),
 }));
 
 import { app } from "../app";
@@ -116,7 +117,9 @@ describe("document.create route", () => {
     };
     mocks.invoke.mockResolvedValue(invokeResult);
 
-    const res = await app.fetch(post(PATH, { title: "My Doc", content: "Hello" }));
+    const res = await app.fetch(
+      post(PATH, { title: "My Doc", content: "Hello" }),
+    );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(invokeResult);
   });
@@ -129,7 +132,9 @@ describe("document.create route", () => {
   });
 
   it("forwards parsed body fields to invoke", async () => {
-    await app.fetch(post(PATH, { title: "Design Doc", content: "Detailed content" }));
+    await app.fetch(
+      post(PATH, { title: "Design Doc", content: "Detailed content" }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.title).toBe("Design Doc");
     expect(body.content).toBe("Detailed content");
@@ -215,94 +220,6 @@ describe("document.read route", () => {
   });
 });
 
-// ── form.create ────────────────────────────────────────────────────────────
-
-describe("form.create route", () => {
-  const PATH = "/form/create";
-
-  it("happy path: invoke called once, returns 200 JSON result", async () => {
-    const invokeResult = {
-      form_id: "form-1",
-      title: "Contact Form",
-      created_at: "2024-01-01T00:00:00Z",
-    };
-    mocks.invoke.mockResolvedValue(invokeResult);
-
-    const res = await app.fetch(post(PATH, { title: "Contact Form" }));
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(invokeResult);
-  });
-
-  it("calls invoke with contract name 'form.create' and surface 'api'", async () => {
-    await app.fetch(post(PATH, { title: "Feedback Form" }));
-    expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("form.create");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-  });
-
-  it("forwards title and fields to invoke", async () => {
-    const fields = [{ label: "Name", type: "text" }, { label: "Email", type: "email" }];
-    await app.fetch(post(PATH, { title: "Sign-up Form", fields }));
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.title).toBe("Sign-up Form");
-    expect(body.fields).toEqual(fields);
-  });
-
-  it("empty title (min 1 violation) → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { title: "" }));
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-
-  it("missing title → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { fields: [] }));
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-});
-
-// ── form.submit ────────────────────────────────────────────────────────────
-
-describe("form.submit route", () => {
-  const PATH = "/form/submit";
-
-  it("happy path: invoke called once, returns 200 JSON result", async () => {
-    const invokeResult = {
-      submission_id: "sub-1",
-      status: "submitted",
-      created_at: "2024-01-01T00:00:00Z",
-    };
-    mocks.invoke.mockResolvedValue(invokeResult);
-
-    const res = await app.fetch(
-      post(PATH, { form_id: "form-abc", responses: { name: "Alice" } }),
-    );
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(invokeResult);
-  });
-
-  it("calls invoke with contract name 'form.submit' and surface 'api'", async () => {
-    await app.fetch(post(PATH, { form_id: "form-abc" }));
-    expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("form.submit");
-    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
-  });
-
-  it("forwards form_id and responses to invoke", async () => {
-    const responses = { question1: "yes", question2: 42 };
-    await app.fetch(post(PATH, { form_id: "form-xyz", responses }));
-    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.form_id).toBe("form-xyz");
-    expect(body.responses).toEqual(responses);
-  });
-
-  it("missing form_id → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { responses: { q: "a" } }));
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
-  });
-});
-
 // ── image.create ───────────────────────────────────────────────────────────
 
 describe("image.create route", () => {
@@ -316,7 +233,9 @@ describe("image.create route", () => {
     };
     mocks.invoke.mockResolvedValue(invokeResult);
 
-    const res = await app.fetch(post(PATH, { prompt: "A sunset over the ocean" }));
+    const res = await app.fetch(
+      post(PATH, { prompt: "A sunset over the ocean" }),
+    );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(invokeResult);
   });
@@ -329,7 +248,9 @@ describe("image.create route", () => {
   });
 
   it("forwards prompt and model to invoke", async () => {
-    await app.fetch(post(PATH, { prompt: "A blue sphere", model: "flux-2-max" }));
+    await app.fetch(
+      post(PATH, { prompt: "A blue sphere", model: "flux-2-max" }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.prompt).toBe("A blue sphere");
     expect(body.model).toBe("flux-2-max");
@@ -342,7 +263,9 @@ describe("image.create route", () => {
   });
 
   it("invalid model enum → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { prompt: "test", model: "dall-e-3" }));
+    const res = await app.fetch(
+      post(PATH, { prompt: "test", model: "dall-e-3" }),
+    );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });

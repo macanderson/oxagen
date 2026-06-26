@@ -1,0 +1,163 @@
+---
+title: File-based configuration
+description: Configure MCP servers using settings.json files — offline-first, version-controllable, and CLI-friendly.
+---
+
+The file-based configuration system lets you define MCP servers, permissions, and tool visibility in JSON files. It works offline, supports version control, and mirrors the layered settings approach used by Claude Code.
+
+## File hierarchy
+
+Settings are loaded from three scopes, with later scopes overriding earlier ones:
+
+| Scope | Path | VCS | Purpose |
+|-------|------|-----|---------|
+| User (global) | `~/.config/oxagen/settings.json` | No | Personal defaults, global MCP servers |
+| Project (shared) | `.oxagen/settings.json` | Yes | Team-wide servers, shared permissions |
+| Local (personal) | `.oxagen/settings.local.json` | No (gitignored) | Developer overrides, secrets |
+
+**Merge order:** user &lt; project &lt; local (local wins).
+
+## Settings schema
+
+```json
+{
+  "$schema": "https://oxagen.sh/schemas/settings.v1.json",
+
+  "mcpServers": {
+    "github": {
+      "transport": "streamable-http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "auth": "oauth",
+      "oauthServerUrl": "https://api.githubcopilot.com/mcp/",
+      "scopes": ["repo", "read:org"]
+    },
+    "linear": {
+      "transport": "sse",
+      "url": "https://mcp.linear.app/sse",
+      "auth": "bearer",
+      "envToken": "LINEAR_MCP_TOKEN"
+    },
+    "filesystem": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "./src"]
+    }
+  },
+
+  "permissions": {
+    "defaultMcpPolicy": "ask",
+    "mcpServers": {
+      "github": {
+        "defaultPolicy": "allow",
+        "deny": ["delete_repository"]
+      }
+    }
+  },
+
+  "toolVisibility": {
+    "github": {
+      "include": ["create_pull_request", "list_issues", "get_file_contents"]
+    }
+  }
+}
+```
+
+## Server definition fields
+
+### HTTP-based servers (streamable-http, sse, websocket)
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `transport` | `"streamable-http"` \| `"sse"` \| `"websocket"` | Yes | Transport protocol |
+| `url` | string | Yes | Server endpoint URL |
+| `auth` | `"none"` \| `"bearer"` \| `"header"` \| `"oauth"` | No | Auth strategy (default: `"none"`) |
+| `envToken` | string | No | Env var name holding the bearer token |
+| `headers` | object | No | Static headers (supports `${VAR}` expansion) |
+| `oauthServerUrl` | string | No | OAuth authorization server URL |
+| `scopes` | string[] | No | OAuth scopes to request |
+| `env` | object | No | Additional env vars for the transport |
+| `disabled` | boolean | No | Present but not loaded |
+
+### stdio servers
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `transport` | `"stdio"` | Yes | Always `"stdio"` |
+| `command` | string | Yes | Command to spawn |
+| `args` | string[] | No | Arguments (supports `${VAR}` expansion) |
+| `env` | object | No | Env vars for the spawned process |
+| `cwd` | string | No | Working directory (default: project root) |
+| `disabled` | boolean | No | Present but not loaded |
+
+## Merge semantics
+
+| Section | Merge behavior |
+|---------|---------------|
+| `mcpServers` | Keyed by name. Later scope replaces entire server entry (no deep-merge within a server). |
+| `permissions.defaultMcpPolicy` | Later scope wins. |
+| `permissions.mcpServers` | Keyed by server name. `deny`/`allow` lists **append**; `defaultPolicy` **overwrites**. |
+| `toolVisibility` | Keyed by server name. Later scope fully replaces that server's visibility. |
+
+## Environment variable expansion
+
+All string values in the settings support `${VAR}` expansion:
+
+```json
+{
+  "mcpServers": {
+    "internal": {
+      "transport": "streamable-http",
+      "url": "https://mcp.internal.${COMPANY_DOMAIN}/v1",
+      "auth": "header",
+      "headers": { "X-API-Key": "${INTERNAL_MCP_KEY}" }
+    }
+  }
+}
+```
+
+Missing env vars resolve to an empty string and produce a warning on stderr. The server is skipped if the URL becomes empty.
+
+## Disabling a server
+
+Set `"disabled": true` to keep a server in the config without loading it:
+
+```json
+{
+  "mcpServers": {
+    "expensive-server": {
+      "transport": "streamable-http",
+      "url": "https://expensive.example.com/mcp",
+      "auth": "bearer",
+      "envToken": "EXPENSIVE_TOKEN",
+      "disabled": true
+    }
+  }
+}
+```
+
+Disabled servers appear in `oxagen mcp list` but are not connected or probed.
+
+## Project root detection
+
+The CLI finds the project root by walking up from the current directory looking for an `.oxagen/` directory. If none is found, the current working directory is used.
+
+```bash
+# These all work from any subdirectory of the project:
+cd my-project/src/deep/nested
+oxagen mcp list  # finds my-project/.oxagen/settings.json
+```
+
+## Initializing a project
+
+```bash
+mkdir -p .oxagen
+echo '{}' > .oxagen/settings.json
+echo 'settings.local.json' >> .oxagen/.gitignore
+```
+
+Or use the `add` command which creates the directory and file automatically:
+
+```bash
+oxagen mcp add my-server --url https://example.com/mcp
+# Creates .oxagen/settings.json if it doesn't exist
+```

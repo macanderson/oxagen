@@ -44,7 +44,8 @@ export const org = {
     policies: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/policies`,
     requests: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/requests`,
     sessions: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/sessions`,
-    principals: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/principals`,
+    principals: (ctx: ScopeContext): string =>
+      `/${ctx.orgSlug}/access/principals`,
     reviews: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/reviews`,
   },
 
@@ -55,14 +56,16 @@ export const org = {
     scim: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/scim`,
     mfa: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/mfa`,
     audit: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/audit`,
-    compliance: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/compliance`,
+    compliance: (ctx: ScopeContext): string =>
+      `/${ctx.orgSlug}/security/compliance`,
     trust: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/trust`,
   },
 
   // Billing — promoted from legacy settings/billing
   billing: {
     root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/billing`,
-    subscription: (ctx: ScopeContext): string => `/${ctx.orgSlug}/billing/subscription`,
+    subscription: (ctx: ScopeContext): string =>
+      `/${ctx.orgSlug}/billing/subscription`,
     usage: (ctx: ScopeContext): string => `/${ctx.orgSlug}/billing/usage`,
     invoices: (ctx: ScopeContext): string => `/${ctx.orgSlug}/billing/invoices`,
   },
@@ -71,8 +74,9 @@ export const org = {
   developer: {
     root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer`,
     mcp: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/mcp`,
-    webhooks: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/webhooks`,
     docs: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/docs`,
+    webhooks: (ctx: ScopeContext): string =>
+      `/${ctx.orgSlug}/developer/webhooks`,
     tokens: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/tokens`,
   },
 
@@ -102,15 +106,17 @@ export const workspace = {
   // Ask — the front door (full-page ask/chat surface).
   ask: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/ask`,
 
-  // Explore — the read-only knowledge-graph explorer, a sibling tab of Ask.
-  explore: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/explore`,
-
   // Knowledge
   knowledge: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/knowledge`,
-    sources: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/knowledge/sources`,
-    graph: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/knowledge/graph`,
-    memories: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/knowledge/memories`,
+    sources: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/sources`,
+    graph: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/graph`,
+    explore: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/explore`,
+    memories: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/memories`,
     // Inspectable detail page for a single KnowledgeNode. Mirrors the
     // capability-meta RECORD_LINK_ROUTES["graph.node"] template so chat
     // deep-links and in-app navigation resolve to the same URL.
@@ -121,8 +127,10 @@ export const workspace = {
   // Agents — IA spec §4/§5: agents are a tab of Automation. Canonical path is
   // /automation/agents/*. Legacy /agents/* 301-redirects here via proxy.ts.
   agents: {
-    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation/agents`,
-    create: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation/agents/new`,
+    root: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/automation/agents`,
+    create: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/automation/agents/new`,
     detail: (ctx: Required<ScopeContext>, agentSlug: string): string =>
       `${wsBase(ctx)}/automation/agents/${agentSlug}`,
     edit: (ctx: Required<ScopeContext>, agentSlug: string): string =>
@@ -132,36 +140,51 @@ export const workspace = {
   // Automation
   automation: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation`,
-    agents: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation/agents`,
-    playbooks: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation/playbooks`,
-    eventSources: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation/event-sources`,
-    triggers: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation/triggers`,
+    agents: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/automation/agents`,
+    playbooks: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/automation/playbooks`,
+    eventSources: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/automation/event-sources`,
+    triggers: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/automation/triggers`,
   },
 
   // Activity — IA spec §5: Runs is the single home for ALL run kinds (subagent
   // fan-outs, parallel tasks, chat/API/MCP runs). `run` is the per-fan-out drill-down.
   activity: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/activity`,
-    runs: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/activity/runs`,
+    runs: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/activity/runs`,
     run: (ctx: Required<ScopeContext>, fanoutId: string): string =>
       `${wsBase(ctx)}/activity/runs/${fanoutId}`,
-    approvals: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/activity/approvals`,
-    audit: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/activity/audit`,
+    approvals: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/activity/approvals`,
+    audit: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/activity/audit`,
   },
 
   // Settings
   settings: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings`,
-    general: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/general`,
-    members: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/members`,
-    models: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/models`,
-    modelKeys: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/model-keys`,
-    brandKits: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/brand-kits`,
-    integrations: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/integrations`,
-    prompts: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/prompts`,
-    plugins: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/plugins`,
-    skills: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/skills`,
-    knowledge: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings/knowledge`,
+    general: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/general`,
+    members: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/members`,
+    models: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/models`,
+    modelKeys: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/model-keys`,
+    integrations: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/integrations`,
+    prompts: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/prompts`,
+    plugins: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/plugins`,
+    skills: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/skills`,
+    knowledge: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/knowledge`,
   },
 } as const;
 

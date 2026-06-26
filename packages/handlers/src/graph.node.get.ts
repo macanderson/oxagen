@@ -4,10 +4,9 @@ import { scopedSession } from "@oxagen/ontology/tenant";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "./logger";
 
-export const graphNodeGetHandler: CapabilityHandler<typeof graphNodeGet> = async (
-  input,
-  ctx,
-) => {
+export const graphNodeGetHandler: CapabilityHandler<
+  typeof graphNodeGet
+> = async (input, ctx) => {
   const { orgId, workspaceId } = ctx;
 
   type NodeResult = {
@@ -39,7 +38,7 @@ export const graphNodeGetHandler: CapabilityHandler<typeof graphNodeGet> = async
            n.properties  AS properties,
            n.createdAt   AS createdAt,
            n.updatedAt   AS updatedAt`,
-        { nodeId: input.nodeId },
+        { nodeId: input.nodeId, orgId, workspaceId },
       );
 
       const record = result.records[0];
@@ -50,9 +49,14 @@ export const graphNodeGetHandler: CapabilityHandler<typeof graphNodeGet> = async
           label: record.get("label") as string,
           displayName: record.get("displayName") as string,
           description: record.get("description") as string | null,
-          properties: rawProperties ? (JSON.parse(rawProperties) as Record<string, unknown>) : null,
+          properties: rawProperties
+            ? (JSON.parse(rawProperties) as Record<string, unknown>)
+            : null,
           createdAt: String(record.get("createdAt")),
-          updatedAt: record.get("updatedAt") != null ? String(record.get("updatedAt")) : null,
+          updatedAt:
+            record.get("updatedAt") != null
+              ? String(record.get("updatedAt"))
+              : null,
         };
       }
     } finally {

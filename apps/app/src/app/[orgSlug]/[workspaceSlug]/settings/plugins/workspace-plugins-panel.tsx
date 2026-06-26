@@ -37,7 +37,14 @@ interface WorkspacePluginsPanelProps {
     workspaceSlug: string;
     workspaceId: string;
     catalogServerId: string;
-    pluginType: "mcp_server" | "integration" | "content_tool" | "capability" | "agent_skill" | "agent_capability" | "knowledge_source";
+    pluginType:
+      | "mcp_server"
+      | "integration"
+      | "content_tool"
+      | "capability"
+      | "agent_skill"
+      | "agent_capability"
+      | "knowledge_source";
     pluginId?: string;
   }) => Promise<{ ok: boolean; orgListingId?: string; error?: string }>;
   installBulkAction: (input: {
@@ -46,7 +53,14 @@ interface WorkspacePluginsPanelProps {
     workspaceId: string;
     items: Array<{
       catalogServerId?: string;
-      pluginType: "mcp_server" | "integration" | "content_tool" | "capability" | "agent_skill" | "agent_capability" | "knowledge_source";
+      pluginType:
+        | "mcp_server"
+        | "integration"
+        | "content_tool"
+        | "capability"
+        | "agent_skill"
+        | "agent_capability"
+        | "knowledge_source";
       pluginId?: string;
     }>;
   }) => Promise<{ ok: boolean; error?: string }>;
@@ -66,7 +80,12 @@ interface WorkspacePluginsPanelProps {
     workspaceSlug: string;
     name: string;
     baseUrl: string;
-  }) => Promise<{ ok: boolean; registryId?: string; isDefault?: boolean; error?: string }>;
+  }) => Promise<{
+    ok: boolean;
+    registryId?: string;
+    isDefault?: boolean;
+    error?: string;
+  }>;
   removeRegistryAction: (input: {
     orgSlug: string;
     workspaceSlug: string;
@@ -80,18 +99,22 @@ interface WorkspacePluginsPanelProps {
 // Matches PLUGIN_TYPE_DEFAULTS in capability-icon.tsx; duplicated here to
 // cover types that exist in installed plugins but not in the marketplace tabs
 // (e.g. "content_tool", generic "capability").
-const INSTALLED_TYPE_ICON: Record<string, { iconName: string; color: string }> = {
-  mcp_server: { iconName: "plug", color: "#3b82f6" },
-  integration: { iconName: "package", color: "#8b5cf6" },
-  agent_capability: { iconName: "brain-circuit", color: "#f59e0b" },
-  capability: { iconName: "brain-circuit", color: "#f59e0b" },
-  agent_skill: { iconName: "sparkles", color: "#10b981" },
-  knowledge_source: { iconName: "book-open", color: "#0ea5e9" },
-  content_tool: { iconName: "file-text", color: "#64748b" },
-};
+const INSTALLED_TYPE_ICON: Record<string, { iconName: string; color: string }> =
+  {
+    mcp_server: { iconName: "plug", color: "#3b82f6" },
+    integration: { iconName: "package", color: "#8b5cf6" },
+    agent_capability: { iconName: "brain-circuit", color: "#f59e0b" },
+    capability: { iconName: "brain-circuit", color: "#f59e0b" },
+    agent_skill: { iconName: "sparkles", color: "#10b981" },
+    knowledge_source: { iconName: "book-open", color: "#0ea5e9" },
+    content_tool: { iconName: "file-text", color: "#64748b" },
+  };
 
 function pluginTypeIcon(type: string) {
-  const defaults = INSTALLED_TYPE_ICON[type] ?? { iconName: "plug", color: "#3b82f6" };
+  const defaults = INSTALLED_TYPE_ICON[type] ?? {
+    iconName: "plug",
+    color: "#3b82f6",
+  };
   return (
     <CapabilityIcon
       iconName={defaults.iconName}
@@ -101,7 +124,9 @@ function pluginTypeIcon(type: string) {
   );
 }
 
-function pluginTypeBadgeVariant(type: string): "outline" | "muted" | "secondary" | "info" {
+function pluginTypeBadgeVariant(
+  type: string,
+): "outline" | "muted" | "secondary" | "info" {
   if (type === "integration") return "muted";
   if (type === "content_tool") return "secondary";
   if (type === "capability" || type === "agent_capability") return "info";
@@ -131,6 +156,54 @@ export function WorkspacePluginsPanel({
   const [pendingIds, setPendingIds] = React.useState<Set<string>>(new Set());
   const [errors, setErrors] = React.useState<Record<string, string>>({});
 
+  // Re-fetch installed plugins from the API (called after marketplace install).
+  const refreshPlugins = React.useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ workspaceId });
+      const res = await fetch(`/api/v1/plugin/org/list?${params.toString()}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        listings: Array<{
+          id: string;
+          name: string;
+          title: string | null;
+          description: string | null;
+          iconUrl: string | null;
+          pluginType: string;
+          authKind: string;
+          enabled: boolean;
+        }>;
+      };
+      setPlugins(
+        data.listings.map((row) => ({
+          id: row.id,
+          name: row.name,
+          title: row.title,
+          description: row.description,
+          iconUrl: row.iconUrl,
+          pluginType: row.pluginType,
+          authKind: row.authKind,
+          enabled: row.enabled,
+          wsEnabled: row.enabled,
+        })),
+      );
+    } catch {
+      // Non-fatal: the list will refresh on next page load.
+    }
+  }, [workspaceId]);
+
+  // When the marketplace modal closes, refresh the plugin list to show new installs.
+  const handleMarketplaceOpenChange = React.useCallback(
+    (open: boolean) => {
+      setMarketplaceOpen(open);
+      if (!open) {
+        // Modal just closed — refresh to pick up any new installs.
+        void refreshPlugins();
+      }
+    },
+    [refreshPlugins],
+  );
+
   const setError = (id: string, msg: string | null) =>
     setErrors((prev) => {
       const next = { ...prev };
@@ -144,7 +217,9 @@ export function WorkspacePluginsPanel({
     setError(plugin.id, null);
     // Optimistic update
     setPlugins((prev) =>
-      prev.map((p) => (p.id === plugin.id ? { ...p, wsEnabled: enabled, enabled } : p)),
+      prev.map((p) =>
+        p.id === plugin.id ? { ...p, wsEnabled: enabled, enabled } : p,
+      ),
     );
     const result = await toggleAction({
       orgSlug,
@@ -161,7 +236,9 @@ export function WorkspacePluginsPanel({
       // Revert
       setPlugins((prev) =>
         prev.map((p) =>
-          p.id === plugin.id ? { ...p, wsEnabled: !enabled, enabled: !enabled } : p,
+          p.id === plugin.id
+            ? { ...p, wsEnabled: !enabled, enabled: !enabled }
+            : p,
         ),
       );
       setError(plugin.id, result.error ?? "Update failed");
@@ -210,7 +287,9 @@ export function WorkspacePluginsPanel({
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Installed Plugins</h3>
+            <h3 className="text-sm font-semibold text-foreground">
+              Installed Plugins
+            </h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
               Plugins enabled for this workspace.
             </p>
@@ -229,8 +308,8 @@ export function WorkspacePluginsPanel({
         {plugins.length === 0 ? (
           <div className="rounded-lg border border-border/40 bg-muted/20 px-6 py-10 text-center">
             <p className="text-sm text-muted-foreground">
-              No plugins installed. Browse the marketplace to add MCP servers, integrations, and
-              capabilities to this workspace.
+              No plugins installed. Browse the marketplace to add MCP servers,
+              integrations, and capabilities to this workspace.
             </p>
             <Button
               variant="outline"
@@ -263,21 +342,51 @@ export function WorkspacePluginsPanel({
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          {isRenderableImageUrl(plugin.iconUrl) ? (
-                            <Image
-                              src={plugin.iconUrl!}
-                              alt=""
-                              width={24}
-                              height={24}
-                              unoptimized
-                              className="h-6 w-6 rounded object-contain flex-shrink-0"
-                              aria-hidden="true"
-                            />
-                          ) : (
-                            <span className="flex h-6 w-6 items-center justify-center rounded bg-muted flex-shrink-0">
-                              {pluginTypeIcon(plugin.pluginType)}
-                            </span>
-                          )}
+                          {(() => {
+                            const iconUrl = plugin.iconUrl;
+                            if (!iconUrl) {
+                              return (
+                                <span className="flex h-6 w-6 items-center justify-center rounded bg-muted flex-shrink-0">
+                                  {pluginTypeIcon(plugin.pluginType)}
+                                </span>
+                              );
+                            }
+                            if (iconUrl.startsWith("lucide:")) {
+                              const parts = iconUrl.split(":");
+                              const iconName = parts[1] ?? "brain-circuit";
+                              const color =
+                                parts[2] ||
+                                INSTALLED_TYPE_ICON[plugin.pluginType]?.color ||
+                                "#6b7280";
+                              return (
+                                <span className="flex h-6 w-6 items-center justify-center rounded flex-shrink-0">
+                                  <CapabilityIcon
+                                    iconName={iconName}
+                                    color={color}
+                                    size={24}
+                                  />
+                                </span>
+                              );
+                            }
+                            if (isRenderableImageUrl(iconUrl)) {
+                              return (
+                                <Image
+                                  src={iconUrl}
+                                  alt=""
+                                  width={24}
+                                  height={24}
+                                  unoptimized
+                                  className="h-6 w-6 rounded object-contain flex-shrink-0"
+                                  aria-hidden="true"
+                                />
+                              );
+                            }
+                            return (
+                              <span className="flex h-6 w-6 items-center justify-center rounded bg-muted flex-shrink-0">
+                                {pluginTypeIcon(plugin.pluginType)}
+                              </span>
+                            );
+                          })()}
                           <div>
                             <p
                               className="font-medium"
@@ -286,7 +395,9 @@ export function WorkspacePluginsPanel({
                               {plugin.title ?? plugin.name}
                             </p>
                             {plugin.title && plugin.title !== plugin.name && (
-                              <p className="text-xs text-muted-foreground">{plugin.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {plugin.name}
+                              </p>
                             )}
                             {plugin.description && (
                               <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
@@ -297,14 +408,19 @@ export function WorkspacePluginsPanel({
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <Badge variant={pluginTypeBadgeVariant(plugin.pluginType)} size="sm">
+                        <Badge
+                          variant={pluginTypeBadgeVariant(plugin.pluginType)}
+                          size="sm"
+                        >
                           {plugin.pluginType.replace(/_/g, " ")}
                         </Badge>
                       </td>
                       <td className="px-4 py-3">
                         <Switch
                           checked={plugin.wsEnabled}
-                          onCheckedChange={(checked) => handleToggle(plugin, checked)}
+                          onCheckedChange={(checked) =>
+                            handleToggle(plugin, checked)
+                          }
                           disabled={pendingIds.has(plugin.id)}
                           aria-label={`${plugin.wsEnabled ? "Disable" : "Enable"} ${plugin.title ?? plugin.name}`}
                           data-testid={`ws-plugin-toggle-${plugin.id}`}
@@ -326,7 +442,9 @@ export function WorkspacePluginsPanel({
                     {errors[plugin.id] && (
                       <tr>
                         <td colSpan={4} className="px-4 pb-2">
-                          <p className="text-xs text-destructive">{errors[plugin.id]}</p>
+                          <p className="text-xs text-destructive">
+                            {errors[plugin.id]}
+                          </p>
                         </td>
                       </tr>
                     )}
@@ -340,7 +458,7 @@ export function WorkspacePluginsPanel({
 
       <MarketplaceModal
         open={marketplaceOpen}
-        onOpenChange={setMarketplaceOpen}
+        onOpenChange={handleMarketplaceOpenChange}
         installAction={(input) =>
           installAction({ ...input, workspaceSlug, workspaceId })
         }
