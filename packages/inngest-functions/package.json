@@ -27,7 +27,6 @@
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
     "@oxagen/engram": "workspace:*",
-    "@oxagen/handlers": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",
     "@oxagen/storage": "workspace:*",
