@@ -1167,6 +1167,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: { development: "http://localhost:4000", production: "https://api.oxagen.sh" },
   },
+  OXAGEN_MODEL: {
+    group: "CLI",
+    description:
+      "Vercel AI Gateway model slug used by the CLI's local agent loop (e.g. " +
+      "anthropic/claude-sonnet-4.5). Falls back to the value in ~/.config/oxagen/config.json, then a default.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_NO_TUI: {
     group: "CLI",
     description:
