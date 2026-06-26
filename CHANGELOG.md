@@ -1,5 +1,194 @@
 # Changelog
 
+## What's new in Oxagen v0.5.0
+
+This is the largest release since the platform's initial public launch. v0.5.0 lands a full workspace-scoped knowledge schema registry, an interactive CLI with a terminal UI, a floating AI agent panel, first-party GitHub MCP integration, a complete PWA experience, vendor-decoupled durable functions and storage, rich tool I/O rendering in chat, and a sweeping expansion of agent lifecycle and skill management capabilities — alongside dozens of stability, CI, and tenancy fixes.
+
+---
+
+### Features
+
+**Schema Registry (Stream R)**
+- Added 22 `schema.*` capability contracts covering label/property/relationship CRUD, versioning, export, validation, reconciliation, and enforcement (`a24042aa`, `9dd84c40`, `ce7308e0`)
+- Schema reconcile workers: Inngest `schema.reconcile` function applies registry changes to the live Neo4j graph (`e7379a92`, `509fd6fd`)
+- Two-layer Cypher injection guard on all schema mutations (`8b0fdcb6`)
+- Deterministic intent layer in the chat agent for reliable AI-driven schema edits — `schema.chat` with drop/property/toggle intents (`a24042aa`, `e46578e5`)
+- Schema Registry UI wired end-to-end to the live backend; AI drawer removed from fixtures (`7c6a5c16`, `149a4375`)
+- `schema_registry` Postgres schema + ClickHouse DDL migration (`42de67b3`)
+- Shared `PinnedSchema` validator + named-constant weights for ingestion conformance (§16.2) (`0ce90512`)
+
+**Ingestion**
+- `graph.ingest` capability: text→graph ingestion pipeline with schema-vocabulary enforcement (`68e5c0e4`, `9b74e5a4`)
+- Ingested GitHub repository nodes now carry `:KnowledgeNode` and `:Feature` labels (`affb7aca`, `aaead3ae`)
+- Per-provider OAuth token refresh for Google, Slack, Zoom, Salesforce, and Microsoft connectors (`91c15c59`)
+- `schema.yaml` connector coverage for all major providers; `check:connector-schemas` CI gate added (`e867a01a`)
+- Multi-repo GitHub initial sync enabled (`efaaabf9`)
+- `graph.ingest` persists web-search and agent run results into the knowledge graph (`f733bfca`, `8d1f543f`)
+- Full source deletion now purges orphaned `:Feature` and `:InferredEdge` nodes (`c55ad815`)
+
+**CLI & TUI** (`apps/cli`)
+- Interactive TUI with ASCII banner, menu launcher, and argument forms (`3d450ece`, `5ec1448f`)
+- `cli:dev` PATH watcher + daemon ADR (`32276fe7`, `ccc195ea`)
+- Background daemon with Unix-socket IPC, code-graph builder/watcher, and lifecycle management (`aa66c1e9`)
+- `schema` command group exposed in the CLI
+
+**Agent Panel & Chat UI**
+- Floating, glassmorphism, draggable AI agent panel replaces the Sheet drawer (`6b3e8f9e`); reverted to stable drawer after regressions, then re-implemented cleanly (`1252abc5`, `a2346715`)
+- Tool calls render as typed UI components (never raw JSON) (`f8a31a0c`)
+- Live background-task streaming cards in chat (`a9f9a503`)
+- Conversation files: downloads fixed, completed tool calls no longer re-execute (`e0038fd8`)
+- Chat error toasts deduplicated; turn errors surface as toasts instead of raw JSON inline (`025cef84`, `cfa926e5`)
+- `NodeRef` citation with Details popover for pending graph inferences (`9b2d9e4b`, `4289fa07`)
+- Message footer with Copy/Save actions and credits display (`1038cb24`)
+- Claude-Code-style prompt queue management (`5170c732`)
+- Agent-generated assets now persist to the knowledge graph (`26033af8`)
+
+**Marketplace & Plugins**
+- Plugin install, list, and enable scoped to workspace; org-level denylist removed (`7c6a5c16`)
+- Single-default registry state machine: one default MCP registry per workspace, seeded automatically (`e1a80ba6`, `db17f97d`)
+- Live HTTP registry browse/get — synced catalog table and catalog-sync cron removed (`717101b3`, `93c90445`)
+- Marketplace modal redesigned with 5 plugin-type tabs (`73bfaf75`)
+- First-party GitHub MCP server integration (`d36b116f`)
+- `plugin.denylist.*` capabilities retired; `plugin.workspace.set_enabled` added
+- Capability-pack `pluginType` field added to manifest schema (`3cb87ace`)
+- MCP catalog servers table + `pg_trgm` trigram index migration (`7157aca9`)
+
+**Command Menu**
+- Entity search section + LLM suggestions in Command Menu (`00d53005`)
+- Prompt-template registry + Quick Actions panel (`f31aaa35`)
+- `command.menu.search` and `command.menu.suggest` API routes wired (`306c1ae9`)
+
+**Auth & Security**
+- OAuth Proxy for multi-environment social login (`23204aa9`)
+- Trusted social sign-in linked to existing account by email (no duplicates) (`2b4718f5`)
+- Deterministic `isLocalEnv` check prevents intermittent local 403s (`5ffa16b0`)
+- Health gate + boot probe for SMTP transport (`c29c377b`)
+
+**Billing**
+- Free→paid upgrade now grants plan credits correctly (Stripe Basil invoice shape) (`e059281e`)
+- Auto-reload requires an active subscription (`728cd813`)
+- Payment method label surfaced in the billing UI (`728cd813`)
+- Billing/member server actions scope env validation so a bad prod var can't wipe the page (`e464db06`)
+
+**PWA**
+- Full PWA install prompt + standalone splash screen + route-transition loader (`44a4e2b2`)
+- iOS standalone gate for PWA splash (`501a647b`)
+- PWA install nudge suppressed on desktop; dismissal is sticky (`38af33a3`)
+
+**Knowledge Graph Explorer**
+- Full graph explorer in the Ask/Explore tab with canvas view, table view, toolbar, node/edge detail panels, and create/edit dialogs (`0f29cc2c`)
+- Graph stats boxes on the Knowledge → Graph page (`381d9b2e`)
+- Inference Details popover; explorer no longer blanks on LLM-inferred placeholder nodes (`1c4a3b17`)
+
+**Agent Lifecycle**
+- Product-managed agents visible in the UI as read-only; handler-layer enforcement (`4ad9c40e`, `f0d3ccaa`)
+- `agent.definition.*` CRUD, versioning, publish, deploy, and trigger contracts + handlers (`7cd5a104`)
+- `agent.subagent.logs` — downloadable per-subagent logfile (`62146541`)
+- `agent.subagent.cancel` with CRUD leg and hardened dispatch input validation (`5eba258c`)
+- Subagent fan-out viewer with read capabilities and live monitor (`c4e986bd`)
+- Agent management UI: list, detail, create, edit, version, deploy, triggers (`6d43f430`)
+- Skills, MCP servers, and plugins now discoverable in the agent system prompt; workspace system prompt exposed read-only in Settings (`1c31e4aa`)
+- Capability composition engine (`agent.compose`) — plan + execute chains (`ed647bff`)
+
+**Notifications & Email**
+- Comprehensive SaaS transactional email templates: verification, invitation, low-balance alert, payment failed, payment receipt (`68dfa9a6`)
+- Email failures now observable (`5a50173b`)
+
+**Infrastructure & Vendor Independence**
+- Durable functions abstracted via `packages/functions` — Inngest vendor lock-in removed (`23e900a3`)
+- Storage driver abstracted; Vercel Blob vendor lock-in removed (`56e42b48`)
+- AWS KMS DEK-wrapping adapter + OpenTofu infra scaffold (`b9b87719`)
+
+**Workspace IA & Settings**
+- Workspace plugins settings page with registry self-service UI and help popover (`2c3e954b`)
+- Tenant-scope seams: `useTenant()` context + `resolveWorkspaceScope()` helper (`d22cb9cf`)
+- Workspace settings read/write (`kernel`-routed) (`a3c8c4bf`)
+- Org settings read/write (`kernel`-routed) (`89d68d40`)
+- Timezone + language surfaces in account preferences and profile (`2d6464bc`)
+
+**`packages/engram`** (new package)
+- In-process episodic memory store with DuckDB and ClickHouse adapters, CRDT sync, context compiler, consolidation pipeline, salience scoring, and a Neo4j migration path
+
+**Design System**
+- Graphite reskin with updated mesh background, gradient CTAs, and auth polish (`381d9b2e`, `b0f2b46f`)
+- Storybook set up for `@oxagen/ui` with stories for every component; launched via `pnpm dev` (`ec5c1cb1`, `4b082638`)
+- Space Grotesk variable font bundled; design token layer consolidated
+
+---
+
+### Fixes
+
+**P0 / Critical**
+- Kernel: enter tenant scope for unscoped caps with real tenant IDs (P0 regression) (`42749cf5`)
+- Billing: grant plan credits on free→paid upgrade was broken (`e059281e`)
+- App build: agent-panel files dropped by revert war restored (P0 prod build broken) (`82f01451`)
+- RLS tenant-isolation lost in Atlas re-baseline restored (`4a0c2cbd`)
+- API cold-start crash + `agent.ui.render` handler crash (`4451057b`)
+- `oxagen_app` Postgres grants lost in Atlas baseline rebuild restored (`b46ca3d6`)
+- GitHub source connect was dead end-to-end (CORS, payload drift, unwired connector registry, missing crypto key) (`386c2f8b`)
+- Research swarm progress bar 404 — poll org/workspace-scoped plural URL (`2ef47757`)
+- Subagent fan-out hanging silently instead of failing loudly (`e3fbee0f`)
+
+**Migrations & Database**
+- `pg_trgm` extension added to `init-postgres.sql` so the GIN trigram index can be created (`7157aca9`)
+- `DuckDBEpisodicStore.ready` awaited in `close()` to prevent unhandled rejections (`7157aca9`)
+- Out-of-order backfill migration removed; Atlas `atlas.sum` re-hashed (`64071d01`, `9bc89452`)
+- `graph.outbox` / `projection_checkpoints` tables never wired — dropped to unblock main (`4dc4cad8`)
+- Stale delete constraint checks fixed (`02380253`)
+
+**Chat & Conversation**
+- Conversation file downloads returned 404; completed tool calls re-executed — both fixed (`e0038fd8`)
+- Chat agent stopped fabricating `/api/v1/assets/` URLs for agent outputs (`559b827e`, `84214e37`)
+- `sr-only` composer labels caused page scroll overflow; contained (`c8ffb7a7`)
+- Mobile composer bottom padding fixed (`36a6fea3`, `133b7bcc`)
+
+**MCP & Plugins**
+- 13 missing MCP-surfaced tools registered; plugin registry mock outputs fixed (`9ca4b99c`)
+- MCP OAuth `authorize`/`callback` route handlers no longer 502 on `notFound()` (`a2b5147f`)
+- MCP live endpoint resolved from workspace registries on install (no more empty-endpoint listings) (`c43fb242`)
+- `plugin.org.install_bulk` per-type row mapping fixed (`dcd508ee`)
+- Workspace plugin install and marketplace detail (`catalog.get` 500) unbroken (`4b3e59fd`)
+
+**Ingestion**
+- Pipeline steps 4 & 5 wrapped in `runInTenantScope` (`681f4e8c`)
+- `deliveryConfig` owner/repo/defaultBranch populated before firing GitHub ingestion event (`d93f2318`)
+- Tree-sitter WASM grammars resolved in local dev (was producing zero code-graph symbols) (`6c1a824d`)
+- Source deletion unstuck — wrong column name left sources in `deleting` state forever (`cce1167f`)
+- `connection.mappings.set` reconciliation and `repoBase` restored after breakage (`5281fc33`)
+
+**Auth**
+- `workspaceMiddleware` now enforces workspace membership (fixes e2e isolation) (`044bfc30`)
+- `ontologyPrompt` + `semanticEdgePrompt` persisted in `integration.configure` (`2199f7b7`)
+- Research swarm status cross-process 500 fixed (`7babf109`)
+
+**Telemetry**
+- Non-UUID strings flooding `token_usage.execution_step_id` stopped (`cd7c9c91`)
+- Telemetry sync was silently broken since Jun 9 (stale shell env + tsx cold-boot timeout) (`438d58e1`, `6cc7ac83`)
+
+**CI**
+- Inngest function concurrency limits capped at 5 (plan cap); unblocked app sync (`615efe04`)
+- `.github/workflows/ci.yml` replaced with `pipeline.yml` to force fresh workflow registration; multiple workflow compile errors fixed (`1ab42fd7`, `2170f3c1`)
+- Atlas version pinned; dedicated validate job; pre-commit hook added (`1f93b256`)
+- `GITHUB_APP_SLUG` provided to e2e environment (`abd43205`)
+- `STORAGE_DRIVER` env registry entry + dynamic skill-seed counts (`8e6926ca`)
+
+---
+
+### Internal
+
+- `packages/engram` — new first-party episodic memory substrate (DuckDB/ClickHouse, CRDT sync, context compiler, consolidation, salience, Neo4j migration) (`aa66c1e9`)
+- `packages/functions` — vendor-agnostic durable-function abstraction replacing direct Inngest imports (`23e900a3`)
+- `packages/mcp-config` — MCP credential, permission, managed-policy, and server-resolution utilities extracted into dedicated package
+- `packages/prompt-templates` — built-in YAML prompt template registry; static data bundle (no `node:fs` in client build) (`f31aaa35`, `628839fb`)
+- Biome formatter adopted; `lefthook` pre-push import-graph gate (ADR-015) (`cfab4afa`)
+- pnpm bumped to 11; workspace config consolidated (`89d4cc4d`)
+- Stale Studio, mock security/incidents pages, and org-level plugin pages deleted (`18c606e2`, `d3772eef`)
+- Agent auditor definitions refactored to `eval-*` naming with shared evaluator output protocol
+- Per-capability JSON Schema generated and published to `docs/capabilities/schemas/` (`a2aa53e1`)
+- `docs/brand/` consolidated with full PWA icon set, social images, and spinner assets
+- `docs/specs/inventory/` — comprehensive handler/function/route inventory documents added
+- ADR-013 (Oxagen Plugins), ADR-014 (workspace-scoped MCP registry), ADR-015 (Biome/git hooks), ADR-016 (CLI daemon + live code graph) published
+
 ## v0.4.0
 
 This release delivers a significant expansion of the Oxagen platform: 20 new capability contracts spanning repo management, integrations, plugin schemas, semantic edges, and graph operations are now fully wired from API routes through MCP tools to CLI commands. A new `/chat/stream` SSE endpoint brings MCP-aware streaming to both the API and the app's chat shell. The ingestion pipeline gains schema-driven connector support (GitHub, Google Drive, Slack, Linear), filter enforcement, sync cadence scheduling, and an Inngest-backed semantic edge inference and approval flow. Across the board, substantial test coverage was added — including a new `packages/web` utility library, 30+ new handler tests, and ratcheted coverage thresholds.
