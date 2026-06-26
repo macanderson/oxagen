@@ -10,6 +10,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS ltree;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- uuid_generate_v7(): try pg_uuidv7 first (Postgres 17+ has it natively).
 -- On Postgres 16, create a v4 stub so Atlas and migrations parse cleanly.

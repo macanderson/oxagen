@@ -21,7 +21,9 @@ function recordToRow(record: MemoryRecord): unknown[] {
     record.namespace.session ?? null,
     record.namespace.agent ?? null,
     JSON.stringify(record.body),
-    record.embedding ? Buffer.from(record.embedding.buffer).toString("base64") : null,
+    record.embedding
+      ? Buffer.from(record.embedding.buffer).toString("base64")
+      : null,
     record.salience,
     record.confidence,
     JSON.stringify(record.provenance),
@@ -54,7 +56,9 @@ function rowToRecord(row: Record<string, unknown>): MemoryRecord {
     embedding,
     salience: row["salience"] as number,
     confidence: row["confidence"] as number,
-    provenance: JSON.parse(row["provenance"] as string) as MemoryRecord["provenance"],
+    provenance: JSON.parse(
+      row["provenance"] as string,
+    ) as MemoryRecord["provenance"],
     causality: JSON.parse(row["causality"] as string) as string[],
     ttl: (row["ttl"] as number | null) ?? undefined,
     createdAt: row["created_at"] as number,
@@ -129,12 +133,19 @@ export class DuckDBEpisodicStore implements EpisodicStore {
     });
   }
 
-  private querySql(sql: string, params: unknown[] = []): Promise<Record<string, unknown>[]> {
+  private querySql(
+    sql: string,
+    params: unknown[] = [],
+  ): Promise<Record<string, unknown>[]> {
     return new Promise((resolve, reject) => {
-      this.conn.all(sql, ...params, (err: Error | null, rows: Record<string, unknown>[]) => {
-        if (err) reject(err);
-        else resolve(rows ?? []);
-      });
+      this.conn.all(
+        sql,
+        ...params,
+        (err: Error | null, rows: Record<string, unknown>[]) => {
+          if (err) reject(err);
+          else resolve(rows ?? []);
+        },
+      );
     });
   }
 
@@ -251,6 +262,9 @@ export class DuckDBEpisodicStore implements EpisodicStore {
   }
 
   async close(): Promise<void> {
+    // Ensure initialization has settled before tearing down so that native
+    // DuckDB callbacks don't fire on a closed connection.
+    await this.ready.catch(() => {});
     return new Promise((resolve, reject) => {
       this.conn.close((err) => {
         if (err) return reject(err);
