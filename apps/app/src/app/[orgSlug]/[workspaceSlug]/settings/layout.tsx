@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/ui/page-header";
-import { PageTabs } from "@/components/ui/page-tabs";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { SettingsNav } from "@/components/ui/settings-nav";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 
@@ -14,7 +14,7 @@ export default async function SettingsLayout({
   const { orgSlug, workspaceSlug } = await params;
   const ctx: Required<ScopeContext> = { orgSlug, workspaceSlug };
 
-  const tabs = [
+  const navItems = [
     { label: "General", href: workspace.settings.general(ctx) },
     { label: "Members", href: workspace.settings.members(ctx) },
     { label: "Models", href: workspace.settings.models(ctx) },
@@ -22,6 +22,7 @@ export default async function SettingsLayout({
     { label: "Integrations", href: workspace.settings.integrations(ctx) },
     { label: "Prompts", href: workspace.settings.prompts(ctx) },
     { label: "Plugins", href: workspace.settings.plugins(ctx) },
+    { label: "Skills", href: workspace.settings.skills(ctx) },
     { label: "Knowledge", href: workspace.settings.knowledge(ctx) },
   ];
 
@@ -39,8 +40,12 @@ export default async function SettingsLayout({
           />
         }
       />
-      <PageTabs tabs={tabs} className="mb-6" />
-      {children}
+      <div className="flex gap-8">
+        <aside className="w-48 shrink-0">
+          <SettingsNav items={navItems} />
+        </aside>
+        <main className="min-w-0 flex-1">{children}</main>
+      </div>
     </div>
   );
 }

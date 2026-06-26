@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
 import {
   resolveOrg,
@@ -20,6 +20,7 @@ import {
   tool,
   type ToolSet,
   type ModelMessage,
+  type SkillIndexEntry,
 } from "@oxagen/ai";
 import { materializeTools } from "@oxagen/agent";
 import { withTenantDb, schema } from "@oxagen/database";
@@ -77,6 +78,10 @@ const BodySchema = z.object({
   // Per-turn MCP server allowlist: publicIds of servers the user has activated
   // in the chat composer. When non-empty, only those servers' tools are loaded.
   activeServerIds: z.array(z.string()).optional().default([]),
+  // Session-level skill pinning: skill slugs to pre-load into the system prompt.
+  // Pinned skills are injected directly (no tool call needed), so the model
+  // applies them from the first turn. Capped at 5 to bound prompt bloat.
+  skills: z.array(z.string().min(1).max(64)).max(5).optional().default([]),
   // Optional page context forwarded from the client at send-time. Carries the
   // current route and, when a fillable form is registered, its field list so
   // the agent can propose fill values via the `page_form_fill` tool.
@@ -163,6 +168,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     mediaModel,
     newConversation,
     activeServerIds,
+    skills: pinnedSkillSlugs,
     pageContext,
   } = parsed.data;
 
@@ -362,30 +368,92 @@ export async function POST(request: NextRequest): Promise<Response> {
           clientIp,
         };
 
-        const [{ tools: agentTools, nameMap: toolNameMap }, promptConfig] =
-          await runInTenantScope(
-            { orgId: tenant.id, workspaceId: workspace.id },
-            () =>
-              Promise.all([
-                materializeTools(capCtx, {
-                  serverAllowlist:
-                    activeServerIds.length > 0
-                      ? new Set(activeServerIds)
-                      : undefined,
-                  onApprovalRequired: (approvalEvent) => {
-                    emit({
-                      type: "approval-required",
-                      approvalId: approvalEvent.approvalId,
-                      capability: approvalEvent.capability,
-                      inputPreview: approvalEvent.inputPreview,
-                      riskLevel: approvalEvent.riskLevel,
-                      expiresAt: approvalEvent.expiresAt,
-                    });
-                  },
-                }),
-                loadWorkspacePromptConfig(workspace.id).catch(() => ({})),
-              ]),
-          );
+        const [
+          { tools: agentTools, nameMap: toolNameMap },
+          promptConfig,
+          skillIndex,
+          pinnedSkillBodies,
+        ] = await runInTenantScope(
+          { orgId: tenant.id, workspaceId: workspace.id },
+          () =>
+            Promise.all([
+              materializeTools(capCtx, {
+                serverAllowlist:
+                  activeServerIds.length > 0
+                    ? new Set(activeServerIds)
+                    : undefined,
+                onApprovalRequired: (approvalEvent) => {
+                  emit({
+                    type: "approval-required",
+                    approvalId: approvalEvent.approvalId,
+                    capability: approvalEvent.capability,
+                    inputPreview: approvalEvent.inputPreview,
+                    riskLevel: approvalEvent.riskLevel,
+                    expiresAt: approvalEvent.expiresAt,
+                  });
+                },
+              }),
+              loadWorkspacePromptConfig(workspace.id).catch(() => ({})),
+              // Skill index for progressive disclosure: fetch enabled skills
+              // so the prompt shows available slugs (~15 tokens each).
+              withTenantDb((tx) =>
+                tx
+                  .select({
+                    slug: schema.skills.slug,
+                    description: schema.skills.description,
+                  })
+                  .from(schema.skills)
+                  .where(
+                    and(
+                      eq(schema.skills.orgId, tenant.id),
+                      eq(schema.skills.workspaceId, workspace.id),
+                      eq(schema.skills.enabled, true),
+                      isNull(schema.skills.deletedAt),
+                    ),
+                  ),
+              )
+                .then((rows): SkillIndexEntry[] =>
+                  rows.map((r) => ({
+                    slug: r.slug,
+                    description: r.description ?? "",
+                  })),
+                )
+                .catch((): SkillIndexEntry[] => []),
+              // Session-level pinned skills: resolve bodies for requested slugs.
+              // Only loads enabled, non-deleted skills the user explicitly pinned.
+              pinnedSkillSlugs.length > 0
+                ? withTenantDb((tx) =>
+                    tx
+                      .select({
+                        slug: schema.skills.slug,
+                        body: schema.skillVersions.body,
+                      })
+                      .from(schema.skills)
+                      .innerJoin(
+                        schema.skillVersions,
+                        eq(
+                          schema.skillVersions.id,
+                          schema.skills.activeVersionId,
+                        ),
+                      )
+                      .where(
+                        and(
+                          eq(schema.skills.orgId, tenant.id),
+                          eq(schema.skills.workspaceId, workspace.id),
+                          eq(schema.skills.enabled, true),
+                          isNull(schema.skills.deletedAt),
+                          sql`${schema.skills.slug} = ANY(${pinnedSkillSlugs})`,
+                        ),
+                      ),
+                  )
+                    .then(
+                      (rows): Array<{ slug: string; body: string }> =>
+                        rows.map((r) => ({ slug: r.slug, body: r.body })),
+                    )
+                    .catch((): Array<{ slug: string; body: string }> => [])
+                : Promise.resolve([] as Array<{ slug: string; body: string }>),
+            ]),
+        );
 
         // ── Page-form-fill tool (request-scoped) ────────────────────────────
         // When the client sends a fillableForm in pageContext, register a
@@ -498,6 +566,8 @@ export async function POST(request: NextRequest): Promise<Response> {
                 workspaceSlug,
                 orgName: tenant.name,
                 workspaceName: workspace.name,
+                skillIndex,
+                pinnedSkillBodies,
               }) + pageFormFillSystemSuffix,
             config: promptConfig,
           }),

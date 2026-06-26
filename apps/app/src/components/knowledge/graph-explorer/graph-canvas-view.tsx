@@ -44,12 +44,16 @@ export interface GraphCanvasViewProps {
   actives: string[];
   view: "2d" | "3d";
   draggable: boolean;
+  animated: boolean;
   isDark: boolean;
   onSelectNode: (id: string) => void;
   onSelectEdge: (id: string) => void;
   onClearSelection: () => void;
   onExpandNode: (id: string) => void;
-  onEdgeHover: (edge: ExplorerEdge | null, pos: { x: number; y: number } | null) => void;
+  onEdgeHover: (
+    edge: ExplorerEdge | null,
+    pos: { x: number; y: number } | null,
+  ) => void;
   onApiReady: (api: GraphCanvasApi | null) => void;
 }
 
@@ -66,6 +70,7 @@ export default function GraphCanvasView({
   actives,
   view,
   draggable,
+  animated,
   isDark,
   onSelectNode,
   onSelectEdge,
@@ -76,7 +81,10 @@ export default function GraphCanvasView({
 }: GraphCanvasViewProps) {
   const ref = React.useRef<GraphCanvasRef | null>(null);
   const cursor = React.useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const edgeById = React.useMemo(() => new Map(edges.map((e) => [e.id, e])), [edges]);
+  const edgeById = React.useMemo(
+    () => new Map(edges.map((e) => [e.id, e])),
+    [edges],
+  );
 
   const graphNodes: GraphNode[] = React.useMemo(
     () =>
@@ -103,7 +111,10 @@ export default function GraphCanvasView({
     [edges],
   );
 
-  const selections = React.useMemo(() => (selectedId ? [selectedId] : []), [selectedId]);
+  const selections = React.useMemo(
+    () => (selectedId ? [selectedId] : []),
+    [selectedId],
+  );
 
   // Publish the imperative API once the canvas ref is attached; tear it down on
   // unmount (e.g. switching to the table view) so stale handles never fire.
@@ -144,7 +155,7 @@ export default function GraphCanvasView({
         labelType="auto"
         edgeArrowPosition="end"
         theme={isDark ? darkTheme : lightTheme}
-        animated
+        animated={animated}
         onNodeClick={(node: InternalGraphNode) => onSelectNode(node.id)}
         onNodeDoubleClick={(node: InternalGraphNode) => onExpandNode(node.id)}
         onEdgeClick={(edge: InternalGraphEdge) => onSelectEdge(edge.id)}

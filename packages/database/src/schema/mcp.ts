@@ -10,7 +10,13 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { mcpSchema } from "./_schemas";
-import { auditMixin, bytea, idMixin, orgScopeMixin, softDeleteMixin } from "./_mixins";
+import {
+  auditMixin,
+  bytea,
+  idMixin,
+  orgScopeMixin,
+  softDeleteMixin,
+} from "./_mixins";
 
 /**
  * mcp.registries — registry sources an org+workspace can use. Every row is now
@@ -39,11 +45,22 @@ export const mcpRegistries = mcpSchema.table(
     baseUrl: text("base_url").notNull(),
     enabled: boolean("enabled").notNull().default(true),
     isDefault: boolean("is_default").notNull().default(false),
+    /** When the catalog was last synced from this registry. Null = never synced. */
+    lastSyncedAt: timestamp("last_synced_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    /** Cursor for incremental sync — resume from this position next sync. */
+    lastSyncedCursor: text("last_synced_cursor"),
   },
   (t) => ({
     orgIdx: index("registries_org_idx").on(t.orgId, t.workspaceId),
     // Composite unique: one registry URL per org+workspace.
-    urlUniq: uniqueIndex("registries_org_ws_url_uniq").on(t.orgId, t.workspaceId, t.baseUrl),
+    urlUniq: uniqueIndex("registries_org_ws_url_uniq").on(
+      t.orgId,
+      t.workspaceId,
+      t.baseUrl,
+    ),
     // Partial unique: at most one default registry per org+workspace.
     // The SQL migration creates this as a real partial unique index; Drizzle
     // expresses the WHERE predicate via .where() mirroring mcpServers.wsListingUniq.
@@ -73,10 +90,16 @@ export const mcpCredentials = mcpSchema.table(
     oauthClientSecretEnc: bytea("oauth_client_secret_enc"),
     tokenKmsKeyId: text("token_kms_key_id"),
     oauthClientId: text("oauth_client_id"),
-    scopes: text("scopes").array().notNull().default(sql`'{}'::text[]`),
+    scopes: text("scopes")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
     status: text("status").notNull().default("active"), // active | needs_reauth | revoked
-    lastRefreshedAt: timestamp("last_refreshed_at", { withTimezone: true, mode: "date" }),
+    lastRefreshedAt: timestamp("last_refreshed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
   },
   (t) => ({
     uniqueListingWs: uniqueIndex("credentials_workspace_listing_uniq").on(
@@ -116,10 +139,17 @@ export const mcpServers = mcpSchema.table(
     transportType: text("transport_type").notNull(),
     endpointUrl: text("endpoint_url").notNull(),
     authStrategy: text("auth_strategy").notNull(),
-    authConfig: jsonb("auth_config").notNull().default(sql`'{}'::jsonb`),
+    authConfig: jsonb("auth_config")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     healthStatus: text("health_status").notNull(),
-    lastHealthcheckAt: timestamp("last_healthcheck_at", { withTimezone: true, mode: "date" }),
-    discoveredTools: jsonb("discovered_tools").notNull().default(sql`'[]'::jsonb`),
+    lastHealthcheckAt: timestamp("last_healthcheck_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    discoveredTools: jsonb("discovered_tools")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     enabled: boolean("enabled").notNull().default(true),
   },
   (t) => ({
@@ -183,6 +213,86 @@ export const mcpConsents = mcpSchema.table(
       "consents_status_check",
       sql`${t.status} IN ('granted','denied')`,
     ),
+  }),
+);
+
+/**
+ * mcp.catalog_servers — locally-synced registry server entries for instant
+ * marketplace browse. Populated by the plugin.catalog-sync Inngest cron job
+ * (every 6 hours) and on-demand via the plugin.catalog.sync capability.
+ *
+ * This table eliminates the live-fetch dependency on registry.modelcontextprotocol.io
+ * for the marketplace browse page. The browse handler reads from here when no
+ * search query is provided, giving instant results on page load.
+ *
+ * Scope: per-registry (the registryId links to mcp.registries which is workspace-scoped).
+ * Uniqueness: (registry_id, name, version) — one row per server version per registry.
+ */
+export const mcpCatalogServers = mcpSchema.table(
+  "catalog_servers",
+  {
+    ...idMixin("mcat"),
+    ...auditMixin(),
+    registryId: uuid("registry_id").notNull(),
+    /** Server name as published in the registry (e.g. "github/github-mcp-server"). */
+    name: text("name").notNull(),
+    version: text("version").notNull(),
+    isLatest: boolean("is_latest").notNull().default(false),
+    title: text("title"),
+    description: text("description").notNull(),
+    /** Icon entries as JSON — matches the SHARED ICON DATA CONTRACT. */
+    icons: jsonb("icons")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** Local package install descriptors from the registry. */
+    packages: jsonb("packages")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** Remote transport descriptors (hosted endpoints). */
+    remotes: jsonb("remotes")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** Derived transport types (e.g. ["streamable-http", "stdio"]). */
+    transportTypes: text("transport_types")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    /** Derived auth kind: oauth | secret | none. */
+    authKind: text("auth_kind").notNull().default("none"),
+    /** Repository URL (optional). */
+    repositoryUrl: text("repository_url"),
+    /** Website URL (optional). */
+    websiteUrl: text("website_url"),
+    /** Registry-managed status: active | deprecated | deleted. */
+    status: text("status").notNull().default("active"),
+    /** When this entry was published in the registry. */
+    publishedAt: timestamp("published_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    /** When the registry last updated this entry's metadata. */
+    upstreamUpdatedAt: timestamp("upstream_updated_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    /** When this row was last synced from the upstream registry. */
+    syncedAt: timestamp("synced_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    // Unique: one row per (registry, server name, version).
+    registryNameVersionUniq: uniqueIndex(
+      "catalog_servers_registry_name_version_uniq",
+    ).on(t.registryId, t.name, t.version),
+    // Browse query: latest entries for a registry, ordered by name.
+    browseIdx: index("catalog_servers_browse_idx").on(
+      t.registryId,
+      t.isLatest,
+      t.name,
+    ),
+    // Full-text search on name + title + description (GIN trigram).
+    // Created as a raw SQL index in the migration for pg_trgm support.
   }),
 );
 

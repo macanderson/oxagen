@@ -1,0 +1,272 @@
+/**
+ * @oxagen/engram — Memory substrate for the Oxagen agent platform.
+ *
+ * Public API surface. All consumers import from this barrel.
+ */
+
+// Core types
+export type {
+  RecordKind,
+  Namespace,
+  Provenance,
+  EpisodicBody,
+  SemanticBody,
+  ProceduralBody,
+  EntityBody,
+  EdgeBody,
+  RecordBody,
+  MemoryRecord,
+  WriteOpts,
+} from "./types";
+
+export {
+  RecordKindSchema,
+  NamespaceSchema,
+  ProvenanceSchema,
+  EpisodicBodySchema,
+  SemanticBodySchema,
+  ProceduralBodySchema,
+  EntityBodySchema,
+  EdgeBodySchema,
+  MemoryRecordSchema,
+} from "./types";
+
+// Record creation and content addressing
+export { createRecord, computeRecordId, verifyRecordIntegrity } from "./record";
+export type { CreateRecordParams } from "./record";
+
+// Namespace utilities
+export {
+  validateNamespace,
+  namespaceKey,
+  isWithinNamespace,
+  workspaceNamespace,
+  sessionNamespace,
+  NamespaceScopeError,
+} from "./namespace";
+
+// Salience
+export { computeSalience } from "./salience";
+
+// Store
+export { createStore } from "./store/index";
+export type { EpisodicStore, EpisodicQuery } from "./store/episodic";
+export type { StoreConfig } from "./store/index";
+
+// Write API
+export { remember } from "./api/remember";
+export { assert } from "./api/assert";
+export { relate } from "./api/relate";
+export { pin, unpin } from "./api/pin";
+
+// Migration
+export { migrateMemories, convertLegacyRow } from "./migration/neo4j-to-engram";
+export type {
+  MigrationResult,
+  MigrationError,
+  MigrationOptions,
+} from "./migration/neo4j-to-engram";
+export type { LegacyMemoryRow } from "./migration/types";
+export {
+  mapKind,
+  mapBody,
+  mapNamespace,
+  mapProvenance,
+  WEIGHT_TO_SALIENCE,
+  parseCreatedAt,
+} from "./migration/types";
+
+// Graph sync
+export {
+  emitGraphSync,
+  emitEmbedEvent,
+  setGraphSyncClient,
+  clearGraphSyncClientForTests,
+} from "./graph/emit-sync";
+export type {
+  GraphSyncEvent,
+  EmbedEvent,
+  GraphSyncEventClient,
+} from "./graph/emit-sync";
+
+// ---------------------------------------------------------------------------
+// Engram facade — convenience object wrapping all write operations with a
+// shared store instance.
+// ---------------------------------------------------------------------------
+import type { EpisodicStore } from "./store/episodic";
+import type {
+  EpisodicBody,
+  SemanticBody,
+  ProceduralBody,
+  WriteOpts,
+} from "./types";
+import { remember as _remember } from "./api/remember";
+import { assert as _assert } from "./api/assert";
+import { relate as _relate } from "./api/relate";
+import { pin as _pin, unpin as _unpin } from "./api/pin";
+
+export interface Engram {
+  remember(event: EpisodicBody, opts: WriteOpts): Promise<string>;
+  assert(
+    fact: SemanticBody,
+    confidence: number,
+    opts: WriteOpts,
+  ): Promise<string>;
+  relate(
+    source: string,
+    edgeType: string,
+    target: string,
+    opts: WriteOpts,
+    properties?: Record<string, unknown>,
+  ): Promise<string>;
+  pin(rule: ProceduralBody, opts: WriteOpts): Promise<string>;
+  unpin(id: string, opts: WriteOpts): Promise<void>;
+  close(): Promise<void>;
+}
+
+/**
+ * Create an Engram instance wrapping a store.
+ * This is the recommended high-level API for most callers.
+ */
+export function createEngram(store: EpisodicStore): Engram {
+  return {
+    remember: (event, opts) => _remember(store, event, opts),
+    assert: (fact, confidence, opts) => _assert(store, fact, confidence, opts),
+    relate: (source, edgeType, target, opts, properties) =>
+      _relate(store, source, edgeType, target, opts, properties),
+    pin: (rule, opts) => _pin(store, rule, opts),
+    unpin: (id, opts) => _unpin(store, id, opts),
+    close: () => store.close(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Phase B: Context Compiler
+// ---------------------------------------------------------------------------
+
+// Retrieval
+export type {
+  RetrievalCandidate,
+  RetrievalEngine,
+  RetrievalQuery,
+  TaskFrame,
+} from "./retrieval/types";
+export { TemporalRetrievalEngine } from "./retrieval/temporal";
+export { GraphRetrievalEngine } from "./retrieval/graph";
+export type { GraphQueryFn } from "./retrieval/graph";
+export { VectorRetrievalEngine } from "./retrieval/vector";
+export type { EmbedFn, VectorQueryFn } from "./retrieval/vector";
+export { LexicalRetrievalEngine } from "./retrieval/lexical";
+export type { LexicalSearchFn } from "./retrieval/lexical";
+export { fuseAndRank, DEFAULT_WEIGHTS } from "./retrieval/fusion";
+export type { FusionWeights } from "./retrieval/fusion";
+
+// Compiler
+export { compile, computeBudget } from "./compiler/compile";
+export type { CompileOptions } from "./compiler/compile";
+export { pack } from "./compiler/packer";
+export type {
+  TokenBudget,
+  PackerInput,
+  PackResult,
+  TokenUsage,
+} from "./compiler/packer";
+export { getTokenizer, countTokens } from "./compiler/tokenizer";
+export type { Tokenizer } from "./compiler/tokenizer";
+export { compressRecord } from "./compiler/compress";
+export type { CompressedItem } from "./compiler/compress";
+export { buildLayout } from "./compiler/layout";
+export type {
+  ContextWindow,
+  CompileMetadata,
+  LayoutInput,
+} from "./compiler/layout";
+export type { ContextSection, SectionType } from "./compiler/sections";
+export { SECTION_POSITIONS, SECTION_STABILITY } from "./compiler/sections";
+
+// Telemetry
+export {
+  emitCompileTelemetry,
+  setCompileTelemetrySink,
+  clearCompileTelemetrySinkForTests,
+} from "./compiler/telemetry";
+export type {
+  CompileTelemetryEvent,
+  TelemetrySink,
+} from "./compiler/telemetry";
+
+// Embedding
+export { embedRecord, extractEmbeddingText } from "./embed/pipeline";
+export type { EmbedResult, EmbedOpts } from "./embed/pipeline";
+export { quantizeToInt8, dequantizeFromInt8 } from "./embed/quantize";
+
+// ---------------------------------------------------------------------------
+// Phase D: Consolidation & Learning
+// ---------------------------------------------------------------------------
+
+// Decay
+export {
+  effectiveSalience,
+  identifyEvictionCandidates,
+  computeDecayedSaliences,
+  DEFAULT_DECAY_CONFIG,
+} from "./decay";
+export type { DecayConfig } from "./decay";
+
+// Reinforcement
+export { ReinforcementTracker } from "./reinforcement";
+export type { ReinforcementStats } from "./reinforcement";
+
+// Consolidation
+export {
+  distill,
+  clusterEvents,
+  extractFactFromCluster,
+  DEFAULT_DISTILLATION_CONFIG,
+} from "./consolidation/distill";
+export type {
+  DistillationConfig,
+  DistillationResult,
+} from "./consolidation/distill";
+export { deduplicateSemanticRecords } from "./consolidation/dedup";
+export type { DedupResult } from "./consolidation/dedup";
+export { detectContradiction, resolveConflict } from "./consolidation/resolve";
+export type {
+  ConflictRecord,
+  ConflictResolution,
+} from "./consolidation/resolve";
+export { detectPatterns, extractToolSequences } from "./consolidation/patterns";
+export type { ActionPattern, PatternConfig } from "./consolidation/patterns";
+export { promotePatterns } from "./consolidation/promote";
+export type {
+  PromotionCandidate,
+  PromotionConfig,
+} from "./consolidation/promote";
+
+// ---------------------------------------------------------------------------
+// Phase C: Event-Sourced Sessions
+// ---------------------------------------------------------------------------
+
+export {
+  createSession,
+  appendEvent,
+  getEventsForTurn,
+  getEventsUpTo,
+  getTurnCount,
+  getTurnIds,
+  endSession,
+} from "./session/event-log";
+export { forkSession, getFullHistory } from "./session/fork";
+export { analyzeReplay, extractTurnMetrics } from "./session/replay";
+export type {
+  Session,
+  SessionEvent,
+  SessionEventType,
+  TurnStartData,
+  ContextCompiledData,
+  ToolCallData,
+  ToolResultData,
+  MemoryWriteData,
+  TurnEndData,
+} from "./session/types";
+export type { ReplayStep, ReplayResult } from "./session/replay";

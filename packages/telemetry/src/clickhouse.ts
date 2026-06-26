@@ -75,8 +75,8 @@ export async function sumTokenUsage(args: {
     `,
     query_params: {
       orgId: args.orgId,
-      periodStart: args.periodStart.toISOString().replace('Z', ''),
-      periodEnd: args.periodEnd.toISOString().replace('Z', ''),
+      periodStart: args.periodStart.toISOString().replace("Z", ""),
+      periodEnd: args.periodEnd.toISOString().replace("Z", ""),
     },
     format: "JSONEachRow",
   });
@@ -97,12 +97,28 @@ export async function sumTokenUsage(args: {
   };
   const totalCost = BigInt(row.cost_micros);
   return [
-    { metric: "tokens_input", quantity: Number(row.input_tokens), costMicros: 0n },
-    { metric: "tokens_output", quantity: Number(row.output_tokens), costMicros: 0n },
-    { metric: "tokens_cached", quantity: Number(row.cached_tokens), costMicros: 0n },
+    {
+      metric: "tokens_input",
+      quantity: Number(row.input_tokens),
+      costMicros: 0n,
+    },
+    {
+      metric: "tokens_output",
+      quantity: Number(row.output_tokens),
+      costMicros: 0n,
+    },
+    {
+      metric: "tokens_cached",
+      quantity: Number(row.cached_tokens),
+      costMicros: 0n,
+    },
     // Total cost attributed to executions metric; per-metric cost requires
     // model-aware pricing that lands with the agent epic.
-    { metric: "executions", quantity: Number(row.row_count), costMicros: totalCost },
+    {
+      metric: "executions",
+      quantity: Number(row.row_count),
+      costMicros: totalCost,
+    },
   ];
 }
 
@@ -133,7 +149,14 @@ export interface EventRow {
   emitted_at: string;
 }
 
-export type Surface = "api" | "mcp" | "app" | "runner" | "ingestion" | "";
+export type Surface =
+  | "api"
+  | "mcp"
+  | "app"
+  | "agent"
+  | "runner"
+  | "ingestion"
+  | "";
 // The provider that billed us for a call. Text models are Anthropic/OpenAI;
 // image & video generation reach Google, Black Forest Labs (bfl), and xAI
 // through the gateway, so the label set spans every vendor @oxagen/ai can route
@@ -207,13 +230,16 @@ export const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
 export const insertExecutionLogs = (rows: readonly ExecutionLogRow[]) =>
   insertRows("execution_logs", rows);
-export const insertEvents = (rows: readonly EventRow[]) => insertRows("events", rows);
+export const insertEvents = (rows: readonly EventRow[]) =>
+  insertRows("events", rows);
 export const insertTokenUsage = (rows: readonly TokenUsageRow[]) =>
   insertRows(
     "token_usage",
     // Coalesce the "no execution step" sentinel (null/undefined) to the nil UUID
     // so the non-nullable UUID key column always receives a parseable value.
-    rows.map((r) => (r.execution_step_id == null ? { ...r, execution_step_id: NIL_UUID } : r)),
+    rows.map((r) =>
+      r.execution_step_id == null ? { ...r, execution_step_id: NIL_UUID } : r,
+    ),
   );
 
 // Agent runtime epic (spec §9). One row per tool invocation. Analytics
@@ -294,7 +320,12 @@ export function providerFromModelId(modelId: string): Provider {
   ) {
     return "openai";
   }
-  if (id.startsWith("gemini") || id.startsWith("veo") || id.startsWith("imagen")) return "google";
+  if (
+    id.startsWith("gemini") ||
+    id.startsWith("veo") ||
+    id.startsWith("imagen")
+  )
+    return "google";
   if (id.startsWith("flux")) return "bfl";
   if (id.startsWith("grok")) return "xai";
   return "";

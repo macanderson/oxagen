@@ -367,6 +367,44 @@ type Events = {
       results: Array<{ title?: string; url?: string; content?: string }>;
     };
   };
+
+  // ── Engram memory graph sync ────────────────────────────────────────────────
+  // Fired by the engram writer after a memory record is appended to the
+  // episodic store. The async worker writes :REMEMBERS and :ABOUT edges into
+  // Neo4j so the memory is anchored to its related entities in the graph.
+  // Eventually consistent: the record in DuckDB/ClickHouse is the source of
+  // truth; graph edges are best-effort with 24 h retry.
+  "engram/memory.graph-sync": {
+    data: {
+      /** Content-addressed record ID (blake3 hex). */
+      recordId: string;
+      orgId: string;
+      workspaceId: string;
+      /** Graph node reference this memory is about (creates :REMEMBERS edge). */
+      nodeRef?: string | null;
+      /** KnowledgeNode IDs this memory relates to (creates :ABOUT edges). */
+      entityRefs?: string[] | null;
+      /** The lesson/fact text for the memory node label. */
+      body: string;
+      /** Record kind (episodic, semantic, procedural, entity, edge). */
+      kind: string;
+      /** Salience score 0–1. */
+      salience: number;
+    };
+  };
+
+  // ── Engram embedding pipeline ───────────────────────────────────────────────
+  // Fired after a memory record is written. The async worker generates a vector
+  // embedding and stores it back on the record for vector retrieval.
+  "engram/memory.embed": {
+    data: {
+      recordId: string;
+      orgId: string;
+      workspaceId: string;
+      kind: string;
+      body: string;
+    };
+  };
 };
 
 // OXA-1349: INNGEST keys are optional in the base schema (not every service

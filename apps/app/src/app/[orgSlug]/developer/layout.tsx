@@ -15,7 +15,6 @@ export default async function DeveloperLayout({
   const tabs = [
     { label: "MCP", href: org.developer.mcp(ctx) },
     { label: "Webhooks", href: org.developer.webhooks(ctx) },
-    { label: "Docs", href: org.developer.docs(ctx) },
     { label: "Tokens", href: org.developer.tokens(ctx) },
   ];
 

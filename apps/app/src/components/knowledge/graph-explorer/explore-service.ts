@@ -33,7 +33,17 @@ import type {
   ExplorerNodeDetailPayload,
   ExplorerNodesPayload,
   ExplorerSearchPayload,
+  ExplorerUpsertNodePayload,
+  ExplorerDeleteNodePayload,
+  ExplorerUpsertEdgePayload,
+  ExplorerDeleteEdgePayload,
+  ExplorerVocabPayload,
+  ExplorerSimilaritySearchPayload,
 } from "./types";
+import type { GraphNodeUpsertOutput } from "@oxagen/oxagen/contracts/graph.node.upsert";
+import type { GraphNodeDeleteOutput } from "@oxagen/oxagen/contracts/graph.node.delete";
+import type { GraphEdgeUpsertOutput } from "@oxagen/oxagen/contracts/graph.edge.upsert";
+import type { GraphEdgeDeleteOutput } from "@oxagen/oxagen/contracts/graph.edge.delete";
 import {
   edgeFromSemantic,
   edgesFromNeighbors,
@@ -70,6 +80,12 @@ export async function dispatchExplore(
   | ExplorerNodesPayload
   | ExplorerSearchPayload
   | ExplorerNodeDetailPayload
+  | ExplorerUpsertNodePayload
+  | ExplorerDeleteNodePayload
+  | ExplorerUpsertEdgePayload
+  | ExplorerDeleteEdgePayload
+  | ExplorerVocabPayload
+  | ExplorerSimilaritySearchPayload
 > {
   const { orgId, workspaceId } = ctx;
   return runInTenantScope({ orgId, workspaceId }, async () => {
@@ -84,6 +100,18 @@ export async function dispatchExplore(
         return searchNodes(req, ctx);
       case "node":
         return getNodeDetail(req.nodeId, ctx);
+      case "upsertNode":
+        return upsertNode(req, ctx);
+      case "deleteNode":
+        return deleteNode(req.nodeId, ctx);
+      case "upsertEdge":
+        return upsertEdge(req, ctx);
+      case "deleteEdge":
+        return deleteEdge(req, ctx);
+      case "vocab":
+        return getVocab(ctx);
+      case "similaritySearch":
+        return similaritySearch(req, ctx);
     }
   });
 }
@@ -96,16 +124,38 @@ async function buildGraph(
   const seedLimit = clamp(req.limit ?? SEED_LIMIT, 1, MAX_NODES);
 
   const [stats, seed, semantic] = await Promise.all([
-    invoke("graph.stats", { includeByType: true }, ctx, AGENT_SURFACE) as Promise<GraphStatsOutput>,
+    invoke(
+      "graph.stats",
+      { includeByType: true },
+      ctx,
+      AGENT_SURFACE,
+    ) as Promise<GraphStatsOutput>,
     invoke(
       "graph.node.list",
-      { ...(req.labels ? { labels: req.labels } : {}), limit: seedLimit, offset: 0 },
+      {
+        ...(req.labels ? { labels: req.labels } : {}),
+        limit: seedLimit,
+        offset: 0,
+      },
       ctx,
       AGENT_SURFACE,
     ) as Promise<GraphNodeListOutput>,
     (
-      invoke("semantic.edge.list", { limit: SEMANTIC_LIMIT, offset: 0 }, ctx, AGENT_SURFACE) as Promise<SemanticEdgeListOutput>
-    ).catch(() => ({ edges: [], total: 0, limit: SEMANTIC_LIMIT, offset: 0 }) as SemanticEdgeListOutput),
+      invoke(
+        "semantic.edge.list",
+        { limit: SEMANTIC_LIMIT, offset: 0 },
+        ctx,
+        AGENT_SURFACE,
+      ) as Promise<SemanticEdgeListOutput>
+    ).catch(
+      () =>
+        ({
+          edges: [],
+          total: 0,
+          limit: SEMANTIC_LIMIT,
+          offset: 0,
+        }) as SemanticEdgeListOutput,
+    ),
   ]);
 
   let nodes: ExplorerNode[] = seed.nodes.map(nodeFromListed);
@@ -134,7 +184,10 @@ async function buildGraph(
     if (!hood || !anchorId || !hood.found) continue;
     if (nodes.length < MAX_NODES) {
       const room = MAX_NODES - nodes.length;
-      nodes = mergeNodes(nodes, hood.neighbors.slice(0, room).map(nodeFromNeighbor));
+      nodes = mergeNodes(
+        nodes,
+        hood.neighbors.slice(0, room).map(nodeFromNeighbor),
+      );
     }
     edges = mergeEdges(edges, edgesFromNeighbors(anchorId, hood.neighbors));
   }
@@ -159,7 +212,10 @@ async function buildGraph(
 }
 
 /** One node's neighborhood — merged into the live graph client-side. */
-async function expandNode(nodeId: string, ctx: CapabilityContext): Promise<ExplorerExpandPayload> {
+async function expandNode(
+  nodeId: string,
+  ctx: CapabilityContext,
+): Promise<ExplorerExpandPayload> {
   const hood = (await invoke(
     "ontology.neighbors",
     { nodeId, direction: "both", limit: EXPAND_LIMIT },
@@ -210,7 +266,11 @@ async function searchNodes(
 ): Promise<ExplorerSearchPayload> {
   const result = (await invoke(
     "graph.node.search",
-    { query: req.query, ...(req.labels ? { labels: req.labels } : {}), limit: SEARCH_LIMIT },
+    {
+      query: req.query,
+      ...(req.labels ? { labels: req.labels } : {}),
+      limit: SEARCH_LIMIT,
+    },
     ctx,
     AGENT_SURFACE,
   )) as GraphNodeSearchOutput;
@@ -232,7 +292,12 @@ async function getNodeDetail(
   ctx: CapabilityContext,
 ): Promise<ExplorerNodeDetailPayload> {
   const [detail, hood] = await Promise.all([
-    invoke("graph.node.get", { nodeId }, ctx, AGENT_SURFACE) as Promise<GraphNodeGetOutput>,
+    invoke(
+      "graph.node.get",
+      { nodeId },
+      ctx,
+      AGENT_SURFACE,
+    ) as Promise<GraphNodeGetOutput>,
     (
       invoke(
         "ontology.neighbors",
@@ -240,7 +305,15 @@ async function getNodeDetail(
         ctx,
         AGENT_SURFACE,
       ) as Promise<OntologyNeighborsOutput>
-    ).catch(() => ({ nodeId, found: false, neighbors: [], truncated: false }) as OntologyNeighborsOutput),
+    ).catch(
+      () =>
+        ({
+          nodeId,
+          found: false,
+          neighbors: [],
+          truncated: false,
+        }) as OntologyNeighborsOutput,
+    ),
   ]);
 
   if (!detail.node) return { node: null, neighbors: [] };
@@ -269,4 +342,135 @@ async function getNodeDetail(
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+// ---------------------------------------------------------------------------
+// Mutation ops — CRUD through the kernel so IAM/metering/audit all fire.
+// ---------------------------------------------------------------------------
+
+/** Create or update a node. */
+async function upsertNode(
+  req: Extract<ExploreRequest, { op: "upsertNode" }>,
+  ctx: CapabilityContext,
+): Promise<ExplorerUpsertNodePayload> {
+  const result = (await invoke(
+    "graph.node.upsert",
+    {
+      label: req.label,
+      displayName: req.displayName,
+      ...(req.description ? { description: req.description } : {}),
+      ...(req.properties ? { properties: req.properties } : {}),
+      ...(req.externalId ? { externalId: req.externalId } : {}),
+    },
+    ctx,
+    AGENT_SURFACE,
+  )) as GraphNodeUpsertOutput;
+
+  return { nodeId: result.nodeId, created: result.created };
+}
+
+/** Delete a node and all its relationships. */
+async function deleteNode(
+  nodeId: string,
+  ctx: CapabilityContext,
+): Promise<ExplorerDeleteNodePayload> {
+  const result = (await invoke(
+    "graph.node.delete",
+    { nodeId },
+    ctx,
+    AGENT_SURFACE,
+  )) as GraphNodeDeleteOutput;
+
+  return { deleted: result.deleted };
+}
+
+/** Create or update a relationship between two nodes. */
+async function upsertEdge(
+  req: Extract<ExploreRequest, { op: "upsertEdge" }>,
+  ctx: CapabilityContext,
+): Promise<ExplorerUpsertEdgePayload> {
+  const result = (await invoke(
+    "graph.edge.upsert",
+    {
+      fromNodeId: req.fromNodeId,
+      toNodeId: req.toNodeId,
+      relationshipType: req.relationshipType,
+      ...(req.properties ? { properties: req.properties } : {}),
+    },
+    ctx,
+    AGENT_SURFACE,
+  )) as GraphEdgeUpsertOutput;
+
+  return { edgeId: result.edgeId, created: result.created };
+}
+
+/** Delete a specific relationship between two nodes. */
+async function deleteEdge(
+  req: Extract<ExploreRequest, { op: "deleteEdge" }>,
+  ctx: CapabilityContext,
+): Promise<ExplorerDeleteEdgePayload> {
+  const result = (await invoke(
+    "graph.edge.delete",
+    {
+      fromNodeId: req.fromNodeId,
+      toNodeId: req.toNodeId,
+      edgeType: req.edgeType,
+    },
+    ctx,
+    AGENT_SURFACE,
+  )) as GraphEdgeDeleteOutput;
+
+  return { deleted: result.deleted };
+}
+
+/**
+ * Vocabulary: distinct node labels and relationship types already in the
+ * workspace graph. Drives the select lists in create/edit dialogs so the user
+ * can pick from what already exists or type a new one.
+ */
+async function getVocab(ctx: CapabilityContext): Promise<ExplorerVocabPayload> {
+  const stats = (await invoke(
+    "graph.stats",
+    { includeByType: true },
+    ctx,
+    AGENT_SURFACE,
+  )) as GraphStatsOutput;
+
+  const labels = stats.nodesByLabel
+    ? Object.keys(stats.nodesByLabel).sort()
+    : [];
+  const relationshipTypes = stats.edgesByType
+    ? Object.keys(stats.edgesByType).sort()
+    : [];
+
+  return { labels, relationshipTypes };
+}
+
+const SIMILARITY_LIMIT = 15;
+
+/**
+ * Similarity search: uses the existing graph.node.search capability (fuzzy text
+ * match on displayName/description). Returns lightweight node stubs for use in
+ * edge endpoint pickers.
+ */
+async function similaritySearch(
+  req: Extract<ExploreRequest, { op: "similaritySearch" }>,
+  ctx: CapabilityContext,
+): Promise<ExplorerSimilaritySearchPayload> {
+  const limit = clamp(req.limit ?? SIMILARITY_LIMIT, 1, 50);
+  const result = (await invoke(
+    "graph.node.search",
+    { query: req.query, limit },
+    ctx,
+    AGENT_SURFACE,
+  )) as GraphNodeSearchOutput;
+
+  return {
+    nodes: result.nodes.map((n) => ({
+      nodeId: n.nodeId,
+      label: n.label,
+      displayName: n.displayName,
+      score: n.score,
+    })),
+  };
 }

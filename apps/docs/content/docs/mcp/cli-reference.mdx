@@ -1,0 +1,274 @@
+---
+title: CLI reference
+description: Complete reference for the oxagen mcp CLI commands — add, remove, list, permit, auth, and check.
+---
+
+The `oxagen mcp` command group manages file-based MCP server configuration. These commands work offline and read/write settings files directly — no platform API calls required.
+
+## oxagen mcp add
+
+Add an MCP server to the file-based configuration.
+
+```bash
+oxagen mcp add <name> [options]
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `name` | Name for this server (used as the key in settings.json) |
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--url <url>` | (required for HTTP) | Server endpoint URL |
+| `--transport <type>` | `streamable-http` | Transport: `streamable-http`, `sse`, `stdio`, `websocket` |
+| `--auth <strategy>` | `none` | Auth strategy: `none`, `bearer`, `header`, `oauth` |
+| `--env-token <varName>` | | Env var name holding the bearer token |
+| `--oauth-server-url <url>` | | OAuth authorization server URL |
+| `--scopes <scopes>` | | OAuth scopes (comma-separated) |
+| `--command <cmd>` | | Command to spawn (required for stdio) |
+| `--args <args>` | | Arguments for stdio command (comma-separated) |
+| `--scope <scope>` | `project` | Config scope: `user`, `project`, `local` |
+| `--disabled` | | Add server in disabled state |
+
+### Examples
+
+```bash
+# HTTP server with bearer auth
+oxagen mcp add linear --url https://mcp.linear.app/sse --transport sse --auth bearer --env-token LINEAR_TOKEN
+
+# OAuth server
+oxagen mcp add github --url https://api.githubcopilot.com/mcp/ --auth oauth --scopes "repo,read:org"
+
+# Local stdio server
+oxagen mcp add fs --transport stdio --command npx --args "-y,@modelcontextprotocol/server-filesystem,."
+
+# Add to user scope (global, all projects)
+oxagen mcp add memory --scope user --transport stdio --command "npx" --args "-y,@anthropic/mcp-memory"
+
+# Add disabled (configure later)
+oxagen mcp add expensive --url https://expensive.example.com/mcp --auth bearer --disabled
+```
+
+---
+
+## oxagen mcp remove
+
+Remove an MCP server from file-based configuration.
+
+```bash
+oxagen mcp remove <name> [options]
+```
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--scope <scope>` | `project` | Scope to remove from: `user`, `project`, `local` |
+| `--keep-credentials` | | Do not delete stored credentials |
+
+### Examples
+
+```bash
+# Remove from project scope (default)
+oxagen mcp remove linear
+
+# Remove from user scope
+oxagen mcp remove memory --scope user
+
+# Remove server but keep stored tokens
+oxagen mcp remove github --keep-credentials
+```
+
+Managed servers (provisioned by the org) cannot be removed.
+
+---
+
+## oxagen mcp list
+
+List effective MCP servers (merged across all scopes).
+
+```bash
+oxagen mcp list [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--verbose` | Show file paths and detailed configuration |
+| `--json` | Output as JSON |
+
+### Example output
+
+```
+MCP Servers:
+
+  NAME        TRANSPORT         SCOPE       AUTH
+  ────        ─────────         ─────       ────
+  github      streamable-http   project     authenticated
+  linear      sse               project     expired
+  filesystem  stdio             local       none
+  memory      stdio             user        none
+  company-jira streamable-http  managed     org-managed
+```
+
+With `--verbose`:
+
+```
+Settings files:
+  User:    /Users/you/.config/oxagen/settings.json
+  Project: /Users/you/project/.oxagen/settings.json
+  Local:   /Users/you/project/.oxagen/settings.local.json
+  Managed: synced 2026-06-25T10:00:00Z (org: org_abc123)
+```
+
+---
+
+## oxagen mcp permit
+
+Set permission rules for an MCP server's tools.
+
+```bash
+oxagen mcp permit <server> [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--allow <patterns>` | Glob patterns for tools to allow (comma-separated) |
+| `--deny <patterns>` | Glob patterns for tools to deny (comma-separated) |
+| `--allow-all` | Set `defaultPolicy` to `allow` |
+| `--deny-all` | Set `defaultPolicy` to `deny` |
+| `--ask-all` | Reset `defaultPolicy` to `ask` |
+| `--default <policy>` | Set server `defaultPolicy`: `allow`, `deny`, `ask` |
+| `--scope <scope>` | Config scope: `user`, `project`, `local` (default: `project`) |
+| `--clear` | Remove all permission rules for this server |
+
+### Examples
+
+```bash
+# Trust all tools from a server
+oxagen mcp permit github --allow-all
+
+# Trust all except destructive
+oxagen mcp permit github --allow-all --deny "delete_*,force_push"
+
+# Only allow read operations
+oxagen mcp permit api --allow "query_*,get_*,list_*"
+
+# Block everything by default, allow specific tools
+oxagen mcp permit untrusted --deny-all --allow "safe_read,safe_list"
+
+# Add rules to local scope
+oxagen mcp permit dev-server --allow-all --scope local
+
+# Clear all rules
+oxagen mcp permit github --clear
+```
+
+---
+
+## oxagen mcp auth
+
+Authenticate an MCP server — store credentials locally.
+
+```bash
+oxagen mcp auth <server> [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--token <token>` | Bearer token (avoids interactive prompt) |
+| `--stdin` | Read token from stdin (for piping) |
+| `--status` | Show current auth status without changing anything |
+
+### Examples
+
+```bash
+# Interactive token prompt
+oxagen mcp auth linear
+# Enter bearer token for "linear": _
+
+# Non-interactive
+oxagen mcp auth linear --token "lin_api_abc123"
+
+# From a secret manager
+vault read -field=token secret/linear | oxagen mcp auth linear --stdin
+
+# Check status
+oxagen mcp auth github --status
+# github: authenticated
+#   Expires: 2026-07-01T12:00:00.000Z
+#   Refresh token: available
+#   Last updated: 2026-06-25T10:30:00.000Z
+```
+
+---
+
+## oxagen mcp check
+
+Health check all configured MCP servers.
+
+```bash
+oxagen mcp check [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--json` | Output results as JSON |
+| `--server <name>` | Check only this server |
+
+### Example output
+
+```
+MCP Server Health:
+
+  ● github: healthy (89ms)
+  ● filesystem: healthy
+  ◐ linear: auth_required — token expired
+  ✕ internal: unreachable — ECONNREFUSED (2104ms)
+  ○ expensive: disabled
+
+  3/4 servers healthy
+```
+
+### Status icons
+
+| Icon | Status | Meaning |
+|------|--------|---------|
+| `●` | healthy | Server responded successfully |
+| `◐` | auth_required | Server reachable but credentials missing or expired |
+| `✕` | unreachable | Connection failed (network error, DNS, timeout) |
+| `○` | disabled | Server is in config but disabled |
+
+### JSON output
+
+```bash
+oxagen mcp check --json
+```
+
+```json
+[
+  { "name": "github", "transport": "streamable-http", "status": "healthy", "latencyMs": 89 },
+  { "name": "linear", "transport": "sse", "status": "auth_required", "error": "token expired" }
+]
+```
+
+---
+
+## Scope summary
+
+| Scope | File | Use case |
+|-------|------|----------|
+| `user` | `~/.config/oxagen/settings.json` | Servers available in all projects (personal tools) |
+| `project` | `.oxagen/settings.json` | Team-shared servers (committed to VCS) |
+| `local` | `.oxagen/settings.local.json` | Personal overrides, dev servers (gitignored) |

@@ -15,7 +15,12 @@ import { upsertCapabilityInstall } from "./capability-install";
 import { logger } from "./logger";
 
 export interface InstallOneInput {
-  pluginType: "mcp_server" | "integration" | "agent_skill" | "agent_capability" | "knowledge_source";
+  pluginType:
+    | "mcp_server"
+    | "integration"
+    | "agent_skill"
+    | "agent_capability"
+    | "knowledge_source";
   // Required when pluginType === "agent_capability". Ignored for other types.
   pluginId?: string;
   // Marketplace catalog row id. Bulk callers (and the marketplace UI) identify a
@@ -42,7 +47,9 @@ export async function installOne(
   input: InstallOneInput,
 ): Promise<string> {
   if (!ctx.workspaceId) {
-    throw new Error("[plugin.org.install] workspaceId is required (scoped capability)");
+    throw new Error(
+      "[plugin.org.install] workspaceId is required (scoped capability)",
+    );
   }
 
   const { pluginType, custom } = input;
@@ -150,7 +157,13 @@ export async function installOne(
         authKind = deriveAuthKind(sd) as AuthKind;
         resolved = true;
         logger.info(
-          { registryId: reg.id, serverName: name, endpointUrl, transport, authKind },
+          {
+            registryId: reg.id,
+            serverName: name,
+            endpointUrl,
+            transport,
+            authKind,
+          },
           "plugin.org.install: resolved endpoint from registry",
         );
         break;
@@ -171,6 +184,34 @@ export async function installOne(
     }
   }
 
+  // Resolve icon URL from the catalog_servers table (if synced) for a richer
+  // installed-plugins display. Falls back to null if no catalog entry exists.
+  let resolvedIconUrl: string | null = null;
+  try {
+    const catalogRow = await withTenantDb(async (tx) => {
+      const rows = await tx
+        .select({ icons: schema.mcpCatalogServers.icons })
+        .from(schema.mcpCatalogServers)
+        .where(
+          and(
+            eq(schema.mcpCatalogServers.name, name),
+            eq(schema.mcpCatalogServers.isLatest, true),
+          ),
+        )
+        .limit(1);
+      return rows[0] ?? null;
+    });
+    if (catalogRow?.icons) {
+      const icons = catalogRow.icons as Array<{ src?: string }>;
+      const firstIcon = icons[0]?.src;
+      if (firstIcon && /^https?:\/\//.test(firstIcon)) {
+        resolvedIconUrl = firstIcon;
+      }
+    }
+  } catch {
+    // Non-fatal — icon lookup failure must never block install.
+  }
+
   // Upsert the listing (enabled: true — all plugins are free, enable on install).
   // ON CONFLICT on the (org_id, workspace_id, plugin_type, name) unique index returns
   // the existing row's id — making install idempotent when the listing already exists.
@@ -185,7 +226,7 @@ export async function installOne(
         name,
         title: title ?? null,
         description: description ?? null,
-        iconUrl: null,
+        iconUrl: resolvedIconUrl,
         endpointUrl,
         transport,
         authKind,
@@ -198,7 +239,10 @@ export async function installOne(
           schema.pluginInstalledPlugins.pluginType,
           schema.pluginInstalledPlugins.name,
         ],
-        set: { updatedAt: sql`now()` },
+        set: {
+          iconUrl: sql`EXCLUDED.icon_url`,
+          updatedAt: sql`now()`,
+        },
       })
       .returning({ id: schema.pluginInstalledPlugins.id });
     return row ?? null;
@@ -216,7 +260,15 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
   try {
     orgListingId = await installOne(ctx, typed);
   } catch (err) {
-    logger.error({ err, orgId: ctx.orgId, workspaceId: ctx.workspaceId, pluginType: typed.pluginType }, "plugin.org.install: failed");
+    logger.error(
+      {
+        err,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        pluginType: typed.pluginType,
+      },
+      "plugin.org.install: failed",
+    );
     throw err;
   }
 
@@ -233,6 +285,14 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     requestId: ctx.requestId ?? null,
   });
 
-  logger.info({ orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId, pluginType: typed.pluginType }, "plugin.org.install: ok");
+  logger.info(
+    {
+      orgListingId,
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      pluginType: typed.pluginType,
+    },
+    "plugin.org.install: ok",
+  );
   return { orgListingId };
 };

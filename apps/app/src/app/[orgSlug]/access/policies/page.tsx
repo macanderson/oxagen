@@ -1,159 +1,96 @@
-/**
- * Policies tab — static mock UI.
- *
- * Displays policy rules (allow/deny, resource, condition).
- * ZERO server data dependencies — all data is inline mock constants.
- * Will be wired to live IAM data in OXA-XXXX (see parent ticket).
- */
-
-import {
-  Shield,
-  XCircle,
-  AlertTriangle,
-  Lock,
-  Tag,
-} from "lucide-react";
+import { Plus, MoreHorizontal } from "lucide-react";
 import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Static mock — no DB dependency (pure presentational; OXA-XXXX to wire)
 // ---------------------------------------------------------------------------
 
-type PolicyEffect = "allow" | "deny" | "require_approval";
-type ScopeKind = "org" | "workspace" | "global";
-type SensitivityTag = "public" | "internal" | "confidential" | "restricted";
-
-interface MockPolicy {
+interface Policy {
   id: string;
   name: string;
-  capabilityId: string;
-  effect: PolicyEffect;
-  enforced: boolean;
-  scope: ScopeKind;
-  sensitivityTag: SensitivityTag | null;
+  description: string;
+  effect: "allow" | "deny";
+  capabilities: string[];
   condition: string | null;
+  priority: number;
+  attachedTo: string[];
   createdAt: string;
+  updatedAt: string;
 }
 
-const MOCK_POLICIES: MockPolicy[] = [
+const MOCK_POLICIES: Policy[] = [
   {
-    id: "pol_01j9xpqa",
-    name: "Block external data exfiltration",
-    capabilityId: "data.export",
+    id: "pol_01",
+    name: "workspace-chat-allow",
+    description:
+      "Allow all members to send chat messages within their workspace.",
+    effect: "allow",
+    capabilities: ["chat.message.send", "chat.message.list"],
+    condition: "resource.workspaceId == principal.workspaceId",
+    priority: 100,
+    attachedTo: ["role:Member"],
+    createdAt: "2025-10-01",
+    updatedAt: "2025-10-01",
+  },
+  {
+    id: "pol_02",
+    name: "deny-billing-non-admin",
+    description: "Deny billing mutations for non-admin roles.",
     effect: "deny",
-    enforced: true,
-    scope: "org",
-    sensitivityTag: "confidential",
-    condition: "principal.kind == 'agent' && !principal.verified",
-    createdAt: "May 25, 2026",
+    capabilities: [
+      "billing.subscription.update",
+      "billing.subscription.cancel",
+    ],
+    condition: '!principal.roles.exists(r, r in ["Owner", "Admin"])',
+    priority: 200,
+    attachedTo: ["role:Member", "role:Viewer"],
+    createdAt: "2025-11-12",
+    updatedAt: "2026-01-05",
   },
   {
-    id: "pol_02j9xpqb",
-    name: "Allow knowledge ingestion for workspace agents",
-    capabilityId: "knowledge.ingest",
+    id: "pol_03",
+    name: "agent-knowledge-read",
+    description: "Allow agents to read knowledge sources but not mutate them.",
     effect: "allow",
-    enforced: true,
-    scope: "workspace",
-    sensitivityTag: "internal",
-    condition: "resource.workspace_id == principal.workspace_id",
-    createdAt: "May 28, 2026",
+    capabilities: ["knowledge.source.list", "knowledge.source.get"],
+    condition: 'principal.type == "agent"',
+    priority: 150,
+    attachedTo: ["role:Agent"],
+    createdAt: "2026-01-20",
+    updatedAt: "2026-01-20",
   },
   {
-    id: "pol_03j9xpqc",
-    name: "Require approval for high-cost model runs",
-    capabilityId: "agent.run",
-    effect: "require_approval",
-    enforced: true,
-    scope: "org",
-    sensitivityTag: null,
-    condition: "model.tier == 'premium' && credits.estimated > 50",
-    createdAt: "May 30, 2026",
-  },
-  {
-    id: "pol_04j9xpqd",
-    name: "Public read-only for docs workspace",
-    capabilityId: "workspace.read",
+    id: "pol_04",
+    name: "time-bound-access",
+    description: "Allow access only during business hours (Mon-Fri 9-17 UTC).",
     effect: "allow",
-    enforced: false,
-    scope: "workspace",
-    sensitivityTag: "public",
+    capabilities: ["*"],
+    condition:
+      "request.time.getDayOfWeek() in [1,2,3,4,5] && request.time.getHours() >= 9 && request.time.getHours() < 17",
+    priority: 50,
+    attachedTo: ["role:Contractor"],
+    createdAt: "2026-02-14",
+    updatedAt: "2026-03-01",
+  },
+  {
+    id: "pol_05",
+    name: "deny-destructive-ops",
+    description: "Deny all delete operations for viewers.",
+    effect: "deny",
+    capabilities: ["*.delete", "*.remove", "*.destroy"],
     condition: null,
-    createdAt: "Jun 1, 2026",
-  },
-  {
-    id: "pol_05j9xpqe",
-    name: "Deny billing access from non-owner roles",
-    capabilityId: "billing.manage",
-    effect: "deny",
-    enforced: true,
-    scope: "org",
-    sensitivityTag: "restricted",
-    condition: "principal.role not in ['owner', 'billing']",
-    createdAt: "Jun 2, 2026",
-  },
-  {
-    id: "pol_06j9xpqf",
-    name: "Allow web search for all members",
-    capabilityId: "web.search",
-    effect: "allow",
-    enforced: false,
-    scope: "org",
-    sensitivityTag: null,
-    condition: null,
-    createdAt: "Jun 3, 2026",
-  },
-  {
-    id: "pol_07j9xpqg",
-    name: "Restrict infra operations to service accounts",
-    capabilityId: "infra.deploy",
-    effect: "deny",
-    enforced: true,
-    scope: "global",
-    sensitivityTag: "restricted",
-    condition: "principal.kind != 'service'",
-    createdAt: "Jun 5, 2026",
+    priority: 300,
+    attachedTo: ["role:Viewer"],
+    createdAt: "2026-03-22",
+    updatedAt: "2026-03-22",
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const EFFECT_LABEL: Record<PolicyEffect, string> = {
-  allow: "Allow",
-  deny: "Deny",
-  require_approval: "Require approval",
+const EFFECT_BADGE: Record<Policy["effect"], string> = {
+  allow: "bg-success/10 text-success",
+  deny: "bg-destructive/10 text-destructive",
 };
-
-const SENSITIVITY_VARIANT: Record<
-  SensitivityTag,
-  "default" | "muted" | "warning" | "destructive" | "outline"
-> = {
-  public: "outline",
-  internal: "muted",
-  confidential: "warning",
-  restricted: "destructive",
-};
-
-function EffectBadge({ effect }: { effect: PolicyEffect }) {
-  const variant =
-    effect === "allow"
-      ? ("default" as const)
-      : effect === "deny"
-        ? ("destructive" as const)
-        : ("muted" as const);
-
-  const Icon =
-    effect === "allow" ? Shield : effect === "deny" ? XCircle : AlertTriangle;
-
-  return (
-    <Badge variant={variant} className="shrink-0 text-xs">
-      <Icon className="mr-1 h-3 w-3" aria-hidden="true" />
-      {EFFECT_LABEL[effect]}
-    </Badge>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Page
@@ -162,72 +99,109 @@ function EffectBadge({ effect }: { effect: PolicyEffect }) {
 export default function AccessPoliciesPage() {
   return (
     <div className="flex flex-col gap-6">
-      {/* Preview pill */}
-      <p className="text-[11px] text-muted-foreground/60 font-medium">
-        Preview &middot; not yet wired to live data
-      </p>
+      {/* OXA-XXXX indicator */}
+      <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-border/40 bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
+        <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
+        OXA-XXXX · not yet wired to live data
+      </div>
 
-      <Panel title="Conditional policies">
+      <Panel
+        title="Access Policies"
+        actions={
+          <button
+            type="button"
+            disabled
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground opacity-60 cursor-not-allowed"
+            aria-label="Create policy (coming soon)"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            Create Policy
+          </button>
+        }
+      >
         <p className="mb-4 text-sm text-muted-foreground">
-          Enforced capability policies with optional CEL conditions and
-          sensitivity tags. Evaluated after role grants.
+          Conditional allow/deny rules evaluated by the IAM kernel. Policies
+          attach to roles and use CEL expressions for fine-grained conditions.
         </p>
 
-        <div className="flex flex-col gap-2">
-          {MOCK_POLICIES.map((p) => (
+        <div className="flex flex-col gap-4">
+          {MOCK_POLICIES.map((policy) => (
             <div
-              key={p.id}
-              className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3"
+              key={policy.id}
+              className="rounded-xl border border-border/60 bg-muted/10 px-4 py-3.5 transition-colors hover:bg-muted/20"
             >
-              <div className="flex flex-wrap items-start gap-3">
-                {/* Left: name + capability + condition */}
-                <div className="flex flex-1 flex-col gap-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-medium text-foreground">
-                      {p.name}
-                    </p>
-                    {p.enforced && (
-                      <Badge variant="destructive" className="text-[10px]">
-                        <Lock
-                          className="mr-1 h-2.5 w-2.5"
-                          aria-hidden="true"
-                        />
-                        Enforced
-                      </Badge>
-                    )}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-1.5 min-w-0">
+                  {/* Header row */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-foreground">
+                      {policy.name}
+                    </span>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${EFFECT_BADGE[policy.effect]}`}
+                    >
+                      {policy.effect}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                      priority: {policy.priority}
+                    </span>
                   </div>
-                  <p className="font-mono text-xs text-muted-foreground">
-                    {p.capabilityId}
+
+                  {/* Description */}
+                  <p className="text-xs text-muted-foreground leading-snug">
+                    {policy.description}
                   </p>
-                  {p.condition && (
-                    <p className="font-mono text-[11px] text-muted-foreground/70 bg-muted/40 rounded-md px-2 py-1 mt-0.5 truncate">
-                      if {p.condition}
-                    </p>
+
+                  {/* Capabilities */}
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {policy.capabilities.map((cap) => (
+                      <code
+                        key={cap}
+                        className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground"
+                      >
+                        {cap}
+                      </code>
+                    ))}
+                  </div>
+
+                  {/* Condition */}
+                  {policy.condition && (
+                    <div className="mt-1.5">
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                        Condition (CEL)
+                      </span>
+                      <pre className="mt-0.5 rounded bg-muted/60 px-2 py-1 font-mono text-[11px] text-foreground overflow-x-auto">
+                        {policy.condition}
+                      </pre>
+                    </div>
                   )}
-                  <p className="text-[11px] text-muted-foreground/60 mt-0.5">
-                    Created {p.createdAt}
-                  </p>
+
+                  {/* Attached roles */}
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                      Attached to:
+                    </span>
+                    {policy.attachedTo.map((target) => (
+                      <Badge
+                        key={target}
+                        variant="outline"
+                        className="text-[10px]"
+                      >
+                        {target}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Right: badges */}
-                <div className="flex shrink-0 flex-wrap items-center gap-2 mt-0.5">
-                  <Badge variant="outline" className="text-xs capitalize">
-                    {p.scope}
-                  </Badge>
-                  {p.sensitivityTag && (
-                    <Badge
-                      variant={SENSITIVITY_VARIANT[p.sensitivityTag]}
-                      className="text-xs capitalize"
-                    >
-                      <Tag
-                        className="mr-1 h-2.5 w-2.5"
-                        aria-hidden="true"
-                      />
-                      {p.sensitivityTag}
-                    </Badge>
-                  )}
-                  <EffectBadge effect={p.effect} />
-                </div>
+                {/* Actions */}
+                <button
+                  type="button"
+                  disabled
+                  className="rounded p-1 text-muted-foreground opacity-50 cursor-not-allowed shrink-0"
+                  aria-label="Policy actions"
+                >
+                  <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                </button>
               </div>
             </div>
           ))}

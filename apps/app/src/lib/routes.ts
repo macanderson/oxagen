@@ -74,9 +74,9 @@ export const org = {
   developer: {
     root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer`,
     mcp: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/mcp`,
+    docs: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/docs`,
     webhooks: (ctx: ScopeContext): string =>
       `/${ctx.orgSlug}/developer/webhooks`,
-    docs: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/docs`,
     tokens: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/tokens`,
   },
 

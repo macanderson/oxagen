@@ -46,7 +46,12 @@ vi.mock("reagraph", () => ({
       // JSX spread (React 19 passes ref as a regular prop when using `ref=` on a
       // non-forwardRef component, but in React 18 it does NOT forward it).
       // We cover both cases: store from explicit `ref` arg AND from `props.ref`.
-      const refCb = typeof ref === "function" ? ref : (typeof props.ref === "function" ? props.ref : null);
+      const refCb =
+        typeof ref === "function"
+          ? ref
+          : typeof props.ref === "function"
+            ? props.ref
+            : null;
       storedRefCallback = refCb;
       return null;
     },
@@ -100,6 +105,7 @@ const defaultProps = {
   actives: [] as string[],
   view: "2d" as const,
   draggable: false,
+  animated: true,
   isDark: false,
   onSelectNode: vi.fn(),
   onSelectEdge: vi.fn(),
@@ -153,7 +159,11 @@ describe("GraphCanvasView — node mapping", () => {
 describe("GraphCanvasView — edge mapping", () => {
   it("maps ExplorerEdge id, source, and target", () => {
     render(<GraphCanvasView {...defaultProps} />);
-    const graphEdges = storedProps?.edges as Array<{ id: string; source: string; target: string }>;
+    const graphEdges = storedProps?.edges as Array<{
+      id: string;
+      source: string;
+      target: string;
+    }>;
     const inferred = graphEdges.find((e) => e.id === "node-1->node-2:REL");
     expect(inferred).toBeDefined();
     expect(inferred?.source).toBe("node-1");
@@ -162,21 +172,30 @@ describe("GraphCanvasView — edge mapping", () => {
 
   it("marks inferred edges as dashed=true", () => {
     render(<GraphCanvasView {...defaultProps} />);
-    const graphEdges = storedProps?.edges as Array<{ id: string; dashed: boolean }>;
+    const graphEdges = storedProps?.edges as Array<{
+      id: string;
+      dashed: boolean;
+    }>;
     const inferred = graphEdges.find((e) => e.id === "node-1->node-2:REL");
     expect(inferred?.dashed).toBe(true);
   });
 
   it("marks confirmed edges as dashed=false", () => {
     render(<GraphCanvasView {...defaultProps} />);
-    const graphEdges = storedProps?.edges as Array<{ id: string; dashed: boolean }>;
+    const graphEdges = storedProps?.edges as Array<{
+      id: string;
+      dashed: boolean;
+    }>;
     const confirmed = graphEdges.find((e) => e.id === "node-1->node-3:KNOWS");
     expect(confirmed?.dashed).toBe(false);
   });
 
   it("assigns different fill colours to inferred vs confirmed edges", () => {
     render(<GraphCanvasView {...defaultProps} />);
-    const graphEdges = storedProps?.edges as Array<{ id: string; fill: string }>;
+    const graphEdges = storedProps?.edges as Array<{
+      id: string;
+      fill: string;
+    }>;
     const inferred = graphEdges.find((e) => e.id === "node-1->node-2:REL");
     const confirmed = graphEdges.find((e) => e.id === "node-1->node-3:KNOWS");
     expect(inferred?.fill).not.toBe(confirmed?.fill);

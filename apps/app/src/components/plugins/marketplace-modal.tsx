@@ -15,10 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PluginDetailPanel } from "./plugin-detail-panel";
-import { CapabilityIcon, PLUGIN_TYPE_DEFAULTS, resolveIconEntry } from "./capability-icon";
+import {
+  CapabilityIcon,
+  PLUGIN_TYPE_DEFAULTS,
+  resolveIconEntry,
+} from "./capability-icon";
 import { useToast } from "@/components/ui/toast";
 import { useTenant } from "@/lib/tenant/tenant-context";
-import { Search, ShoppingBag } from "lucide-react";
+import { Search, ShoppingBag, RefreshCw } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -32,13 +36,23 @@ interface CatalogServer {
   authKind: string;
   categories: string[];
   version: string;
-  pluginType: "mcp_server" | "integration" | "agent_capability" | "agent_skill" | "knowledge_source";
+  pluginType:
+    | "mcp_server"
+    | "integration"
+    | "agent_capability"
+    | "agent_skill"
+    | "knowledge_source";
   /** Returned by the API but not rendered in the UI */
   tier?: "free" | "premium";
   installed?: boolean;
 }
 
-type PluginTypeValue = "mcp_server" | "integration" | "agent_capability" | "agent_skill" | "knowledge_source";
+type PluginTypeValue =
+  | "mcp_server"
+  | "integration"
+  | "agent_capability"
+  | "agent_skill"
+  | "knowledge_source";
 
 interface MarketplaceModalProps {
   open: boolean;
@@ -121,11 +135,16 @@ export function MarketplaceModal({
 }: MarketplaceModalProps) {
   const toast = useToast();
   const { orgSlug, workspaceId } = useTenant();
-  const [activeTab, setActiveTab] = React.useState<PluginTypeValue>("mcp_server");
+  const [activeTab, setActiveTab] =
+    React.useState<PluginTypeValue>("mcp_server");
   const [search, setSearch] = React.useState("");
-  const [authFilter, setAuthFilter] = React.useState<"" | "oauth" | "secret" | "none">("");
+  const [authFilter, setAuthFilter] = React.useState<
+    "" | "oauth" | "secret" | "none"
+  >("");
   // Installed filter: "" = all, "yes" = installed only, "no" = not installed only.
-  const [installedFilter, setInstalledFilter] = React.useState<"" | "yes" | "no">("");
+  const [installedFilter, setInstalledFilter] = React.useState<
+    "" | "yes" | "no"
+  >("");
   const [servers, setServers] = React.useState<CatalogServer[]>([]);
   const [total, setTotal] = React.useState(0);
   const [nextOffset, setNextOffset] = React.useState<number | null>(null);
@@ -151,14 +170,18 @@ export function MarketplaceModal({
         if (installedFilter === "yes") params.set("installed", "true");
         else if (installedFilter === "no") params.set("installed", "false");
         if (workspaceId) params.set("workspaceId", workspaceId);
-        const res = await fetch(`/api/v1/plugin/catalog/browse?${params.toString()}`);
+        const res = await fetch(
+          `/api/v1/plugin/catalog/browse?${params.toString()}`,
+        );
         if (!res.ok) throw new Error(await res.text());
         const data = (await res.json()) as {
           servers: CatalogServer[];
           nextOffset: number | null;
           total: number;
         };
-        setServers((prev) => (replace ? data.servers : [...prev, ...data.servers]));
+        setServers((prev) =>
+          replace ? data.servers : [...prev, ...data.servers],
+        );
         setNextOffset(data.nextOffset);
         setTotal(data.total);
       } catch (e) {
@@ -184,7 +207,8 @@ export function MarketplaceModal({
   }, [open, activeTab, authFilter, installedFilter, fetchServers]);
 
   // Debounce search input
-  const searchTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+  const searchTimeoutRef =
+    React.useRef<ReturnType<typeof setTimeout>>(undefined);
   // Clear any pending debounce when the modal unmounts so the callback cannot
   // fire against an already-unmounted component.
   React.useEffect(() => () => clearTimeout(searchTimeoutRef.current), []);
@@ -240,7 +264,11 @@ export function MarketplaceModal({
     } catch (e) {
       const message = e instanceof Error ? e.message : "Bulk install failed";
       setError(message);
-      toast.add({ title: "Install failed", description: message, type: "error" });
+      toast.add({
+        title: "Install failed",
+        description: message,
+        type: "error",
+      });
     } finally {
       setBulkPending(false);
     }
@@ -254,11 +282,15 @@ export function MarketplaceModal({
       >
         <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-4 border-b border-border/40">
           <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
-            <ShoppingBag className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+            <ShoppingBag
+              className="h-5 w-5 text-muted-foreground"
+              aria-hidden="true"
+            />
             Plugin Marketplace
           </DialogTitle>
           <DialogDescription>
-            Browse and install MCP servers, integrations, agent capabilities, agent skills, and knowledge sources for your workspace.
+            Browse and install MCP servers, integrations, agent capabilities,
+            agent skills, and knowledge sources for your workspace.
           </DialogDescription>
         </DialogHeader>
 
@@ -328,7 +360,7 @@ export function MarketplaceModal({
               {/* flex-wrap: chips never push past the column edge */}
               <div className="flex flex-wrap items-center gap-2">
                 {/* Auth filter chips — not applicable for agent/knowledge types */}
-                {(activeTab === "mcp_server" || activeTab === "integration") && (
+                {(activeTab === "mcp_server" || activeTab === "integration") &&
                   (["", "oauth", "secret", "none"] as const).map((k) => (
                     <button
                       key={k || "all"}
@@ -343,11 +375,11 @@ export function MarketplaceModal({
                     >
                       {k === "" ? "All" : k}
                     </button>
-                  ))
-                )}
+                  ))}
 
                 {/* Installed filter chips — applies to every tab */}
-                {(activeTab === "mcp_server" || activeTab === "integration") && (
+                {(activeTab === "mcp_server" ||
+                  activeTab === "integration") && (
                   <span className="h-4 w-px bg-border/60" aria-hidden="true" />
                 )}
                 {(
@@ -387,6 +419,41 @@ export function MarketplaceModal({
                     data-testid="marketplace-search-input"
                   />
                 </div>
+
+                {/* Refresh catalog button — triggers immediate sync */}
+                {activeTab === "mcp_server" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        await fetch("/api/v1/plugin/catalog/sync", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ fullSync: false }),
+                        });
+                        toast.add({
+                          title: "Catalog refresh started",
+                          description: "New servers will appear shortly.",
+                          type: "success",
+                        });
+                        // Re-fetch after a brief delay to show new results
+                        setTimeout(() => fetchServers(0, true), 2000);
+                      } catch {
+                        toast.add({
+                          title: "Refresh failed",
+                          description: "Could not sync the registry catalog.",
+                          type: "error",
+                        });
+                      }
+                    }}
+                    className="flex-shrink-0"
+                    aria-label="Refresh server catalog"
+                    data-testid="marketplace-refresh-btn"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -405,9 +472,14 @@ export function MarketplaceModal({
                   <div
                     className={`flex-1 min-w-0 overflow-auto p-5 ${detailId ? "border-r border-border/40" : ""}`}
                   >
-                    {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
+                    {error && (
+                      <p className="mb-4 text-sm text-destructive">{error}</p>
+                    )}
                     {loading && servers.length === 0 ? (
-                      <div className="grid grid-cols-2 gap-3" data-testid="marketplace-grid-skeleton">
+                      <div
+                        className="grid grid-cols-2 gap-3"
+                        data-testid="marketplace-grid-skeleton"
+                      >
                         {Array.from({ length: 6 }).map((_, i) => (
                           <div
                             key={i}
@@ -418,7 +490,12 @@ export function MarketplaceModal({
                     ) : (
                       <>
                         <p className="mb-3 text-xs text-muted-foreground">
-                          {total} {value === "agent_capability" || value === "agent_skill" || value === "knowledge_source" ? "plugins" : "servers"}
+                          {total}{" "}
+                          {value === "agent_capability" ||
+                          value === "agent_skill" ||
+                          value === "knowledge_source"
+                            ? "plugins"
+                            : "servers"}
                         </p>
                         {/* min-w-0 on the grid prevents grid cells from
                             overflowing the available column width. */}
@@ -455,7 +532,9 @@ export function MarketplaceModal({
                                   onClick={(e) => {
                                     e.stopPropagation();
                                   }}
-                                  aria-label={isSelected ? "Deselect" : "Select"}
+                                  aria-label={
+                                    isSelected ? "Deselect" : "Select"
+                                  }
                                 >
                                   <Checkbox
                                     checked={isSelected}
@@ -482,17 +561,28 @@ export function MarketplaceModal({
 
                                 <div className="flex flex-wrap gap-1">
                                   {srv.installed && (
-                                    <Badge variant="success" size="sm" data-testid={`marketplace-installed-badge-${srv.id}`}>
+                                    <Badge
+                                      variant="success"
+                                      size="sm"
+                                      data-testid={`marketplace-installed-badge-${srv.id}`}
+                                    >
                                       Installed
                                     </Badge>
                                   )}
-                                  {srv.pluginType === "mcp_server" || srv.pluginType === "integration" ? (
+                                  {srv.pluginType === "mcp_server" ||
+                                  srv.pluginType === "integration" ? (
                                     <>
-                                      {srv.transportTypes.slice(0, 2).map((t) => (
-                                        <Badge key={t} variant="outline" size="sm">
-                                          {t}
-                                        </Badge>
-                                      ))}
+                                      {srv.transportTypes
+                                        .slice(0, 2)
+                                        .map((t) => (
+                                          <Badge
+                                            key={t}
+                                            variant="outline"
+                                            size="sm"
+                                          >
+                                            {t}
+                                          </Badge>
+                                        ))}
                                       <Badge
                                         variant={
                                           srv.authKind === "oauth"
@@ -509,7 +599,11 @@ export function MarketplaceModal({
                                   ) : (
                                     <>
                                       {srv.categories.slice(0, 2).map((c) => (
-                                        <Badge key={c} variant="outline" size="sm">
+                                        <Badge
+                                          key={c}
+                                          variant="outline"
+                                          size="sm"
+                                        >
                                           {c}
                                         </Badge>
                                       ))}
@@ -547,7 +641,9 @@ export function MarketplaceModal({
                       data-testid="marketplace-detail-panel"
                     >
                       {(() => {
-                        const detailServer = servers.find((s) => s.id === detailId);
+                        const detailServer = servers.find(
+                          (s) => s.id === detailId,
+                        );
                         return (
                           <PluginDetailPanel
                             serverName={detailServer?.name ?? detailId}
@@ -590,7 +686,9 @@ export function MarketplaceModal({
             onClick={handleBulkInstall}
             data-testid="marketplace-bulk-install-btn"
           >
-            {bulkPending ? "Installing…" : `Install selected (${selected.size})`}
+            {bulkPending
+              ? "Installing…"
+              : `Install selected (${selected.size})`}
           </Button>
         </DialogFooter>
       </DialogPopup>

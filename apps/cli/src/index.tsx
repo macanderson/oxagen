@@ -34,6 +34,7 @@ import { billingCreditsPurchaseCommand } from "./commands/billing.credits.purcha
 import { billingSubscriptionReadCommand } from "./commands/billing.subscription.read.js";
 import { agentMcpListCommand } from "./commands/agent.mcp.list.js";
 import { agentSkillListCommand } from "./commands/agent.skill.list.js";
+import { agentSkillLoadCommand } from "./commands/agent.skill.load.js";
 import { agentToolListCommand } from "./commands/agent.tool.list.js";
 import { agentApprovalResolveCommand } from "./commands/agent.approval.resolve.js";
 import { orgMemberRoleChangeCommand } from "./commands/org.member.role.change.js";
@@ -65,6 +66,8 @@ import { skillVersionActivateCommand } from "./commands/skill.version.activate.j
 import { skillEditCommand } from "./commands/skill.edit.js";
 import { skillExportCommand } from "./commands/skill.export.js";
 import { skillMetricsReadCommand } from "./commands/skill.metrics.read.js";
+import { skillCreateCommand } from "./commands/skill.create.js";
+import { skillEnableCommand } from "./commands/skill.enable.js";
 import { agentMemoryRecallCommand } from "./commands/agent.memory.recall.js";
 import { agentMemoryWriteCommand } from "./commands/agent.memory.write.js";
 import { videoGenerateCommand } from "./commands/video.generate.js";
@@ -83,6 +86,12 @@ import { agentMcpSetEnabledCommand } from "./commands/agent.mcp.set_enabled.js";
 import { agentMcpDeleteCommand } from "./commands/agent.mcp.delete.js";
 import { agentMcpConsentResolveCommand } from "./commands/agent.mcp.consent.resolve.js";
 import { agentMcpConsentListCommand } from "./commands/agent.mcp.consent.list.js";
+import { mcpAddCommand } from "./commands/mcp.add.js";
+import { mcpRemoveCommand } from "./commands/mcp.remove.js";
+import { mcpListLocalCommand } from "./commands/mcp.list.js";
+import { mcpPermitCommand } from "./commands/mcp.permit.js";
+import { mcpAuthCommand } from "./commands/mcp.auth.js";
+import { mcpCheckCommand } from "./commands/mcp.check.js";
 import { agentPlanApproveCommand } from "./commands/agent.plan.approve.js";
 import { agentPlanCreateCommand } from "./commands/agent.plan.create.js";
 import { agentTaskBackgroundReadCommand } from "./commands/agent.task.background.read.js";
@@ -262,6 +271,7 @@ const agentMcp = agent.command("mcp").description("MCP server management");
 agentMcp.addCommand(agentMcpListCommand);
 const agentSkill = agent.command("skill").description("Agent skill management");
 agentSkill.addCommand(agentSkillListCommand);
+agentSkill.addCommand(agentSkillLoadCommand);
 const agentTool = agent.command("tool").description("Agent tool management");
 agentTool.addCommand(agentToolListCommand);
 const agentApproval = agent
@@ -402,6 +412,8 @@ skillVersion.addCommand(skillVersionActivateCommand);
 skill.addCommand(skillEditCommand);
 skill.addCommand(skillExportCommand);
 skill.addCommand(skillMetricsReadCommand);
+skill.addCommand(skillCreateCommand);
+skill.addCommand(skillEnableCommand);
 
 // video
 const video = program.command("video").description("Video generation commands");
@@ -410,6 +422,17 @@ video.addCommand(videoGenerateCommand);
 // svg
 const svg = program.command("svg").description("SVG generation commands");
 svg.addCommand(svgGenerateCommand);
+
+// mcp (file-based local configuration — separate from `agent mcp` remote API)
+const mcp = program
+  .command("mcp")
+  .description("MCP server configuration (file-based, offline-first)");
+mcp.addCommand(mcpAddCommand);
+mcp.addCommand(mcpRemoveCommand);
+mcp.addCommand(mcpListLocalCommand);
+mcp.addCommand(mcpPermitCommand);
+mcp.addCommand(mcpAuthCommand);
+mcp.addCommand(mcpCheckCommand);
 
 // privacy (GDPR Art.17 erasure + Art.20 portability)
 const privacy = program

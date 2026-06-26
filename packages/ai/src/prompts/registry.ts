@@ -14,11 +14,21 @@
  *    only the appended instructions take effect.
  */
 
+/** Lightweight skill descriptor for the prompt skill index (progressive disclosure). */
+export interface SkillIndexEntry {
+  slug: string;
+  description: string;
+}
+
 export interface SystemPromptContext {
   orgSlug: string;
   workspaceSlug: string;
   orgName: string;
   workspaceName: string;
+  /** Optional skill index to inject into the prompt for progressive disclosure. */
+  skillIndex?: SkillIndexEntry[];
+  /** Optional pre-loaded skill bodies (for session-level pinning). */
+  pinnedSkillBodies?: Array<{ slug: string; body: string }>;
 }
 
 /** Every prompt the platform owns. */
@@ -42,7 +52,9 @@ export const OVERRIDABLE_PROMPT_KEYS = [
 ] as const;
 export type OverridablePromptKey = (typeof OVERRIDABLE_PROMPT_KEYS)[number];
 
-export function isOverridablePromptKey(key: PromptKey): key is OverridablePromptKey {
+export function isOverridablePromptKey(
+  key: PromptKey,
+): key is OverridablePromptKey {
   return (OVERRIDABLE_PROMPT_KEYS as readonly string[]).includes(key);
 }
 
@@ -94,13 +106,52 @@ export function resolvePrompt(args: {
   return system;
 }
 
+// ── Skill index helpers ───────────────────────────────────────────────────────
+
+/**
+ * Build the inline skill index for progressive disclosure. Each entry is
+ * ~15 tokens; for 5 built-in skills this adds ~75 cached tokens to the prompt.
+ */
+function buildSkillIndexSection(index?: SkillIndexEntry[]): string {
+  if (!index || index.length === 0) return "";
+  const lines = index.map((s) => `  - \`${s.slug}\`: ${s.description}`);
+  return [
+    "",
+    "**Available skills** — call \`agent.skill.load({ skillSlug })\` to load the relevant one:",
+    ...lines,
+  ].join("\n");
+}
+
+/**
+ * Render pre-loaded (pinned) skill bodies into the prompt so the model sees
+ * them immediately without needing a tool call. Placed after the static prompt
+ * prefix to preserve prompt-cache efficiency.
+ */
+function buildPinnedSkillsSection(
+  pinned?: Array<{ slug: string; body: string }>,
+): string {
+  if (!pinned || pinned.length === 0) return "";
+  const sections = pinned.map((s) => `### Skill: ${s.slug}\n\n${s.body}`);
+  return (
+    "\n\n---\n\n## Pinned Skills (active for this session)\n\n" +
+    sections.join("\n\n---\n\n")
+  );
+}
+
 // ── Baseline builders ────────────────────────────────────────────────────────
 // The canonical text of every platform prompt lives here so optimization,
 // review, and override-diffing all have one source of truth.
 
 /** Core chat agent orchestration prompt (append-only — structural contracts). */
 export function chatSystemPrompt(ctx: SystemPromptContext): string {
-  const { orgSlug, workspaceSlug, orgName, workspaceName } = ctx;
+  const {
+    orgSlug,
+    workspaceSlug,
+    orgName,
+    workspaceName,
+    skillIndex,
+    pinnedSkillBodies,
+  } = ctx;
 
   return `You are Oxagen, an interactive AI assistant for the "${workspaceName}" workspace in the "${orgName}" organization (org: ${orgSlug}, workspace: ${workspaceSlug}).
 
@@ -193,10 +244,11 @@ For **2–9 parallel tasks**, use \`agent.subagent.dispatch\` directly — it is
 Your toolset is assembled per-workspace and is broader than the built-ins. Discover and use everything available before telling the user something can't be done.
 
 - **Capabilities & installed plugins.** The tools you can see already include this workspace's built-in capabilities plus any **installed capability plugins** (they appear automatically once an admin installs them). Call \`agent.tool.list\` when you need the authoritative list of what is callable right now.
-- **Skills.** Skills are reusable expert playbooks for specialized work. Call \`agent.skill.list\` to see what's available, then \`agent.skill.load\` to load the relevant one BEFORE doing the specialized task — don't improvise when a skill already exists for it.
+- **Skills.** Skills are reusable expert playbooks for specialized work. Call \`agent.skill.load\` to load the relevant one BEFORE doing the specialized task — don't improvise when a skill already exists for it.
 - **MCP servers.** This workspace may be connected to external **MCP servers**; their tools appear with an \`mcp.\` prefix. Call \`agent.mcp.list\` to see connected servers and what they expose. The first time you use a given external MCP tool the user is asked to approve it — invoke it normally and the consent prompt is handled for you; don't refuse to try.
 
 Prefer a purpose-built capability, plugin, skill, or MCP tool over a generic workaround. If the right tool isn't installed, tell the user what to install rather than guessing.
+${buildSkillIndexSection(skillIndex)}${buildPinnedSkillsSection(pinnedSkillBodies)}
 
 ---
 

@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, inArray, ilike, or } from "drizzle-orm";
 import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { listOxagenPlugins } from "@oxagen/oxagen/plugins";
@@ -45,7 +45,10 @@ async function fetchRegistryServers(
   // max single-page size. One page is enough for marketplace browsing — search
   // narrows results, and deep paging would use the cursor if ever needed.
   const result = await listServers(baseUrl, { limit: 100, search });
-  const entry: CacheEntry = { servers: result.servers, expiresAt: Date.now() + CACHE_TTL_MS };
+  const entry: CacheEntry = {
+    servers: result.servers,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  };
   registryCache.set(key, entry);
   return result.servers;
 }
@@ -61,16 +64,14 @@ const STATIC_PLUGIN_TYPES = new Set([
 ]);
 
 export const handler: CapabilityHandlerFn = async (input, ctx) => {
-  const {
-    search,
-    pluginType,
-    authKind,
-    installed,
-    limit,
-    offset,
-  } = input as {
+  const { search, pluginType, authKind, installed, limit, offset } = input as {
     search?: string;
-    pluginType?: "mcp_server" | "agent_capability" | "agent_skill" | "knowledge_source" | "integration";
+    pluginType?:
+      | "mcp_server"
+      | "agent_capability"
+      | "agent_skill"
+      | "knowledge_source"
+      | "integration";
     categories?: string[];
     transportTypes?: string[];
     authKind?: string;
@@ -124,7 +125,10 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     const total = rows.length;
     const page = rows.slice(offset, offset + limit);
 
-    logger.info({ limit, offset, total, orgId: ctx.orgId }, "plugin.catalog.browse agent_skill: ok");
+    logger.info(
+      { limit, offset, total, orgId: ctx.orgId },
+      "plugin.catalog.browse agent_skill: ok",
+    );
 
     return {
       servers: page.map((r) => ({
@@ -189,13 +193,18 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
       return new Set(rows.map((r) => r.name));
     });
 
-    if (installed === true) manifests = manifests.filter((m) => installedNames.has(m.id));
-    else if (installed === false) manifests = manifests.filter((m) => !installedNames.has(m.id));
+    if (installed === true)
+      manifests = manifests.filter((m) => installedNames.has(m.id));
+    else if (installed === false)
+      manifests = manifests.filter((m) => !installedNames.has(m.id));
 
     const total = manifests.length;
     const page = manifests.slice(offset, offset + limit);
 
-    logger.info({ limit, offset, total, orgId: ctx.orgId, pluginType }, "plugin.catalog.browse static: ok");
+    logger.info(
+      { limit, offset, total, orgId: ctx.orgId, pluginType },
+      "plugin.catalog.browse static: ok",
+    );
 
     return {
       servers: page.map((m) => ({
@@ -219,9 +228,11 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     };
   }
 
-  // ── MCP server path — live registry fetch ────────────────────────────────────
-  // Load the workspace's enabled registries, fetch live from each, merge results,
-  // then apply search/authKind/pagination in memory.
+  // ── MCP server path — local catalog + live fallback ──────────────────────────
+  // Priority: read from the locally-synced mcp.catalog_servers table for instant
+  // results. If no synced entries exist (first visit), trigger a lazy sync and
+  // fall back to a live fetch. Search queries use the local trigram index when
+  // the catalog is populated, or fall through to the live API.
 
   let liveRows: Array<{
     id: string;
@@ -246,6 +257,7 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
         .select({
           id: schema.mcpRegistries.id,
           baseUrl: schema.mcpRegistries.baseUrl,
+          lastSyncedAt: schema.mcpRegistries.lastSyncedAt,
         })
         .from(schema.mcpRegistries)
         .where(
@@ -258,16 +270,18 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     );
 
     // Lazy-seed: pre-existing workspaces may not yet have a default registry row.
-    // Idempotently insert the official MCP registry, then re-query, so any
-    // workspace that reaches this path self-heals without manual intervention.
     if (registries.length === 0 && ctx.orgId) {
       try {
-        await seedWorkspaceDefaultRegistry({ orgId: ctx.orgId, workspaceId: ctx.workspaceId });
+        await seedWorkspaceDefaultRegistry({
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+        });
         registries = await withTenantDb((tx) =>
           tx
             .select({
               id: schema.mcpRegistries.id,
               baseUrl: schema.mcpRegistries.baseUrl,
+              lastSyncedAt: schema.mcpRegistries.lastSyncedAt,
             })
             .from(schema.mcpRegistries)
             .where(
@@ -287,45 +301,140 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
           { seedErr, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
           "plugin.catalog.browse: lazy registry seed failed, proceeding with empty registry list",
         );
-        warnings.push("Default MCP registry could not be seeded for this workspace.");
+        warnings.push(
+          "Default MCP registry could not be seeded for this workspace.",
+        );
       }
     }
 
-    // Fetch from each registry (with TTL cache) and map to browse row shape.
-    const seen = new Set<string>();
-    for (const reg of registries) {
-      let servers: ServerResponse[];
-      try {
-        servers = await fetchRegistryServers(reg.id, reg.baseUrl, search);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.warn({ err, registryId: reg.id }, "plugin.catalog.browse: registry fetch failed, skipping");
-        warnings.push(`Registry ${reg.id} (${reg.baseUrl}) skipped: ${msg}`);
-        continue;
+    const registryIds = registries.map((r) => r.id);
+
+    // ── Try local catalog first ───────────────────────────────────────────────
+    // Query mcp.catalog_servers for the workspace's registries. This is instant
+    // (indexed) and works offline / when the upstream registry is slow.
+    if (registryIds.length > 0) {
+      const catalogConditions = [
+        inArray(schema.mcpCatalogServers.registryId, registryIds),
+        eq(schema.mcpCatalogServers.isLatest, true),
+      ];
+
+      // Apply text search via trigram ILIKE when search is provided.
+      if (search) {
+        catalogConditions.push(
+          or(
+            ilike(schema.mcpCatalogServers.name, `%${search}%`),
+            ilike(schema.mcpCatalogServers.title, `%${search}%`),
+            ilike(schema.mcpCatalogServers.description, `%${search}%`),
+          )!,
+        );
       }
 
-      for (const s of servers) {
-        if (seen.has(s.server.name)) continue; // deduplicate across registries
-        seen.add(s.server.name);
+      // Apply authKind filter.
+      if (authKind) {
+        catalogConditions.push(eq(schema.mcpCatalogServers.authKind, authKind));
+      }
 
-        const mapped = mapServerDetailToCatalogRow(s.server, s._meta, reg.id);
+      const catalogRows = await withTenantDb(
+        (tx) =>
+          tx
+            .select({
+              id: schema.mcpCatalogServers.id,
+              registryId: schema.mcpCatalogServers.registryId,
+              name: schema.mcpCatalogServers.name,
+              title: schema.mcpCatalogServers.title,
+              description: schema.mcpCatalogServers.description,
+              icons: schema.mcpCatalogServers.icons,
+              transportTypes: schema.mcpCatalogServers.transportTypes,
+              authKind: schema.mcpCatalogServers.authKind,
+              version: schema.mcpCatalogServers.version,
+            })
+            .from(schema.mcpCatalogServers)
+            .where(and(...catalogConditions))
+            .orderBy(schema.mcpCatalogServers.name)
+            .limit(limit + offset + 1), // fetch one extra to detect more pages
+      );
 
-        // Apply authKind filter in-memory.
-        if (authKind && mapped.authKind !== authKind) continue;
+      if (catalogRows.length > 0) {
+        // Catalog has data — use it as the primary source.
+        const seen = new Set<string>();
+        for (const row of catalogRows) {
+          if (seen.has(row.name)) continue;
+          seen.add(row.name);
+          liveRows.push({
+            id: `${row.registryId}:${row.name}:${row.version}`,
+            name: row.name,
+            title: row.title,
+            description: row.description,
+            icons: (row.icons ?? []) as Array<{ src: string; color?: string }>,
+            transportTypes: (row.transportTypes ?? []) as string[],
+            authKind: (row.authKind ?? "none") as string,
+            categories: [],
+            version: row.version,
+            pluginType: "mcp_server" as const,
+            installed: false,
+          });
+        }
+      } else {
+        // Catalog is empty — either never synced or search has no results.
+        // If never synced, trigger a lazy sync in the background and fall back
+        // to the live fetch for this request.
+        const neverSynced = registries.some((r) => !r.lastSyncedAt);
 
-        liveRows.push({
-          id: `${reg.id}:${s.server.name}:${s.server.version}`,
-          name: s.server.name,
-          title: mapped.title,
-          description: mapped.description,
-          icons: (mapped.icons as Array<{ src: string; color?: string }>),
-          transportTypes: deriveTransportTypes(s.server),
-          authKind: deriveAuthKind(s.server),
-          categories: [],
-          version: mapped.version,
-          pluginType: "mcp_server" as const,
-          installed: false, // overlaid below
-        });
+        if (neverSynced) {
+          // Fire-and-forget: trigger sync so next request is instant.
+          import("@oxagen/plugins/catalog-sync").then(({ syncAllRegistries }) =>
+            syncAllRegistries({
+              orgId: ctx.orgId,
+              workspaceId: ctx.workspaceId,
+              fullSync: true,
+            }).catch((err) => logger.warn({ err }, "lazy catalog sync failed")),
+          );
+        }
+
+        // Fall back to live fetch for this request.
+        const seen = new Set<string>();
+        for (const reg of registries) {
+          let servers: ServerResponse[];
+          try {
+            servers = await fetchRegistryServers(reg.id, reg.baseUrl, search);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger.warn(
+              { err, registryId: reg.id },
+              "plugin.catalog.browse: registry fetch failed, skipping",
+            );
+            warnings.push(
+              `Registry ${reg.id} (${reg.baseUrl}) skipped: ${msg}`,
+            );
+            continue;
+          }
+
+          for (const s of servers) {
+            if (seen.has(s.server.name)) continue;
+            seen.add(s.server.name);
+
+            const mapped = mapServerDetailToCatalogRow(
+              s.server,
+              s._meta,
+              reg.id,
+            );
+            if (authKind && mapped.authKind !== authKind) continue;
+
+            liveRows.push({
+              id: `${reg.id}:${s.server.name}:${s.server.version}`,
+              name: s.server.name,
+              title: mapped.title,
+              description: mapped.description,
+              icons: mapped.icons as Array<{ src: string; color?: string }>,
+              transportTypes: deriveTransportTypes(s.server),
+              authKind: deriveAuthKind(s.server),
+              categories: [],
+              version: mapped.version,
+              pluginType: "mcp_server" as const,
+              installed: false,
+            });
+          }
+        }
       }
     }
 
@@ -351,7 +460,8 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
 
       // Apply installed filter after overlaying state.
       if (installed === true) liveRows = liveRows.filter((r) => r.installed);
-      else if (installed === false) liveRows = liveRows.filter((r) => !r.installed);
+      else if (installed === false)
+        liveRows = liveRows.filter((r) => !r.installed);
     } else if (installed === true) {
       // No org context — nothing is installed.
       liveRows = [];
@@ -360,7 +470,10 @@ export const handler: CapabilityHandlerFn = async (input, ctx) => {
     const total = liveRows.length;
     const page = liveRows.slice(offset, offset + limit);
 
-    logger.info({ limit, offset, total, registryCount: registries.length }, "plugin.catalog.browse mcp_server: ok");
+    logger.info(
+      { limit, offset, total, registryCount: registries.length },
+      "plugin.catalog.browse mcp_server: ok",
+    );
 
     return {
       servers: page,

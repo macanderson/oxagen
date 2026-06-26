@@ -81,6 +81,7 @@ import { notificationsList } from "./notifications.list";
 import { notificationsMark } from "./notifications.mark";
 import { pluginCatalogBrowse } from "./plugin.catalog.browse";
 import { pluginCatalogGet } from "./plugin.catalog.get";
+import { pluginCatalogSync } from "./plugin.catalog.sync";
 import { pluginCredentialReauth } from "./plugin.credential.reauth";
 import { pluginCredentialSetSecret } from "./plugin.credential.set_secret";
 import { pluginOrgInstall } from "./plugin.org.install";
@@ -119,6 +120,8 @@ import { skillVersionActivate } from "./skill.version.activate";
 import { skillEdit } from "./skill.edit";
 import { skillExport } from "./skill.export";
 import { skillMetricsRead } from "./skill.metrics.read";
+import { skillCreate } from "./skill.create";
+import { skillEnable } from "./skill.enable";
 import { agentSubagentAggregate } from "./agent.subagent.aggregate";
 import { agentSubagentDispatch } from "./agent.subagent.dispatch";
 import { connectionList } from "./connection.list";
@@ -295,6 +298,7 @@ export {
   notificationsMark,
   pluginCatalogBrowse,
   pluginCatalogGet,
+  pluginCatalogSync,
   pluginCredentialReauth,
   pluginCredentialSetSecret,
   pluginOrgInstall,
@@ -333,6 +337,8 @@ export {
   skillEdit,
   skillExport,
   skillMetricsRead,
+  skillCreate,
+  skillEnable,
   agentSubagentAggregate,
   agentSubagentDispatch,
   connectionList,
@@ -509,6 +515,7 @@ export const contracts = [
   notificationsMark,
   pluginCatalogBrowse,
   pluginCatalogGet,
+  pluginCatalogSync,
   pluginCredentialReauth,
   pluginCredentialSetSecret,
   pluginOrgInstall,
@@ -547,6 +554,8 @@ export const contracts = [
   skillEdit,
   skillExport,
   skillMetricsRead,
+  skillCreate,
+  skillEnable,
   agentExecutionRecord,
   agentSubagentAggregate,
   agentSubagentDispatch,

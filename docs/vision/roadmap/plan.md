@@ -8,14 +8,14 @@
 
 ## Phase Overview
 
-| Phase | Name | Core Deliverable | Duration | Depends On |
-|---|---|---|---|---|
-| **A** | Memory Substrate | `packages/engram` with typed records, content addressing, episodic store | 4–6 weeks | — |
-| **B** | Context Compiler | `engram.compile()` with hybrid retrieval, knapsack packing, cache-aware layout | 4–6 weeks | A |
-| **C** | Cortex Harness | Context daemon, incremental code graph, event-sourced sessions, CLI evolution | 6–8 weeks | B |
-| **D** | Consolidation | Background "sleep" job, salience/decay, reinforcement, procedural promotion | 4–6 weeks | B |
-| **E** | Multi-Agent Blackboard | Shared scoped memory bus, namespace enforcement, intent ledger | 4–6 weeks | B, D |
-| **F** | Performance & Sync | CRDT records, Merkle sync, Rust interface spec, eval harness | 6–8 weeks | D, E |
+| Phase | Name                   | Core Deliverable                                                               | Duration  | Depends On |
+| ----- | ---------------------- | ------------------------------------------------------------------------------ | --------- | ---------- |
+| **A** | Memory Substrate       | `packages/engram` with typed records, content addressing, episodic store       | 4–6 weeks | —          |
+| **B** | Context Compiler       | `engram.compile()` with hybrid retrieval, knapsack packing, cache-aware layout | 4–6 weeks | A          |
+| **C** | Cortex Harness         | Context daemon, incremental code graph, event-sourced sessions, CLI evolution  | 6–8 weeks | B          |
+| **D** | Consolidation          | Background "sleep" job, salience/decay, reinforcement, procedural promotion    | 4–6 weeks | B          |
+| **E** | Multi-Agent Blackboard | Shared scoped memory bus, namespace enforcement, intent ledger                 | 4–6 weeks | B, D       |
+| **F** | Performance & Sync     | CRDT records, Merkle sync, Rust interface spec, eval harness                   | 6–8 weeks | D, E       |
 
 **Total estimated duration: 28–40 weeks with parallelism (see dependency graph below)**
 
@@ -80,7 +80,7 @@
 - `packages/engram` package with build/test/lint passing in monorepo CI
 - `MemoryRecord` type with content addressing (blake3 WASM)
 - Episodic event log (DuckDB local, ClickHouse cloud adapter)
-- Write API integrated into `packages/agent` runtime (behind feature flag)
+- Write API integrated into `packages/agent` runtime (always-on)
 - Migration script: Neo4j AgentMemory → Engram episodic records
 
 ### Success Criteria
@@ -88,7 +88,7 @@
 - `pnpm gate` passes with `packages/engram` included
 - Records are content-addressed (identical content → identical ID)
 - Write latency < 100µs for episodic append (local DuckDB)
-- Existing agent flows unaffected (feature-flagged)
+- All agent turns emit episodic events to Engram
 
 ### Exit Criteria → Phase B
 
@@ -104,7 +104,7 @@
 
 ### Parallel Tracks
 
-1. **Retrieval engines** — Vector (Neo4j ANN), BM25 (tantivy-wasm or lunr), graph neighborhood, temporal/recency
+1. **Retrieval engines** — Vector (Neo4j ANN), BM25 (DuckDB FTS), graph neighborhood (dual-write edges), temporal/recency
 2. **Packing algorithm** — Knapsack optimizer with diversity constraints, token counting, budget enforcement
 3. **Layout optimizer** — Cache-stable prefix ordering, section arrangement, compression for cold items
 4. **Integration** — Wire `compile()` into `packages/agent/src/runtime`, replace `readWorkspaceContext`
@@ -115,7 +115,8 @@
 - Hybrid retrieval with Reciprocal Rank Fusion
 - Budget-constrained knapsack packing (not top-k)
 - Cache-aware layout with stable prefix
-- Agent runtime integration (opt-in, feature-flagged)
+- Agent runtime integration (always-on, error fallback to legacy)
+- Compile telemetry to ClickHouse
 
 ### Success Criteria
 
@@ -290,6 +291,7 @@ Week:  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24
 ```
 
 **Ship 1 value milestone per phase:**
+
 - Phase A → "agent remembers structured events"
 - Phase B → "agent context is compiled, not assembled"
 - Phase C → "CLI is instant and persistent"
@@ -301,12 +303,12 @@ Week:  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24
 
 ## Risk Register
 
-| Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|
-| blake3 WASM performance insufficient | Low | Medium | Fallback to sha256; benchmark early in Phase A |
-| DuckDB WASM too large for CLI bundle | Medium | Low | Use native DuckDB binary; lazy-load |
-| Neo4j vector search too slow for p50 < 5ms | Medium | High | Add usearch/hnswlib local index; Neo4j becomes cold tier |
-| Differential context breaks provider compatibility | Low | High | Feature-flag per provider; fallback to full context |
-| Consolidation job produces low-quality semantic records | Medium | Medium | Start with conservative extraction; human review in Phase D |
-| Rust rewrite scope creep | High | High | Strict interface-only spec in Phase F; no implementation |
-| Multi-agent coordination deadlocks | Low | Medium | Timeout + fallback to independent execution |
+| Risk                                                    | Likelihood | Impact | Mitigation                                                  |
+| ------------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------- |
+| blake3 WASM performance insufficient                    | Low        | Medium | Fallback to sha256; benchmark early in Phase A              |
+| DuckDB WASM too large for CLI bundle                    | Medium     | Low    | Use native DuckDB binary; lazy-load                         |
+| Neo4j vector search too slow for p50 < 5ms              | Medium     | High   | Add usearch/hnswlib local index; Neo4j becomes cold tier    |
+| Differential context breaks provider compatibility      | Low        | High   | Feature-flag per provider; fallback to full context         |
+| Consolidation job produces low-quality semantic records | Medium     | Medium | Start with conservative extraction; human review in Phase D |
+| Rust rewrite scope creep                                | High       | High   | Strict interface-only spec in Phase F; no implementation    |
+| Multi-agent coordination deadlocks                      | Low        | Medium | Timeout + fallback to independent execution                 |

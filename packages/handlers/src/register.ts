@@ -297,6 +297,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./plugin.catalog.browse")).handler as CapabilityHandlerFn,
   );
   registerHandler(
+    "plugin.catalog.sync",
+    async () =>
+      (await import("./plugin.catalog.sync.handler"))
+        .handler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "plugin.org.list",
     async () =>
       (await import("./plugin.org.list")).handler as CapabilityHandlerFn,
@@ -526,6 +532,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./skill.author"))
         .skillAuthorHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "skill.create",
+    async () =>
+      (await import("./skill.create"))
+        .skillCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "skill.enable",
+    async () =>
+      (await import("./skill.enable"))
+        .skillEnableHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "agent.execution.record",

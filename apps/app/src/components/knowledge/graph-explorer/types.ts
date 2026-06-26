@@ -106,6 +106,48 @@ export interface ExplorerNodeDetailPayload {
 }
 
 // ---------------------------------------------------------------------------
+// Mutation payloads — responses from CRUD operations.
+// ---------------------------------------------------------------------------
+
+/** Response for the `upsertNode` op — create or update a node. */
+export interface ExplorerUpsertNodePayload {
+  nodeId: string;
+  created: boolean;
+}
+
+/** Response for the `deleteNode` op. */
+export interface ExplorerDeleteNodePayload {
+  deleted: boolean;
+}
+
+/** Response for the `upsertEdge` op — create or update an edge. */
+export interface ExplorerUpsertEdgePayload {
+  edgeId: string;
+  created: boolean;
+}
+
+/** Response for the `deleteEdge` op. */
+export interface ExplorerDeleteEdgePayload {
+  deleted: boolean;
+}
+
+/** Response for `vocab` op — distinct labels and relationship types in the workspace graph. */
+export interface ExplorerVocabPayload {
+  labels: string[];
+  relationshipTypes: string[];
+}
+
+/** Response for `similaritySearch` op — embedding-based node search for edge endpoint pickers. */
+export interface ExplorerSimilaritySearchPayload {
+  nodes: Array<{
+    nodeId: string;
+    label: string;
+    displayName: string;
+    score: number;
+  }>;
+}
+
+// ---------------------------------------------------------------------------
 // Request bodies (discriminated by `op`). orgSlug/workspaceSlug identify the
 // tenant; the route handler still asserts membership before honouring them.
 // ---------------------------------------------------------------------------
@@ -119,9 +161,39 @@ export type ExploreRequest = BaseRequest &
   (
     | { op: "graph"; labels?: string[]; limit?: number }
     | { op: "expand"; nodeId: string }
-    | { op: "nodes"; labels?: string[]; query?: string; limit?: number; offset?: number }
+    | {
+        op: "nodes";
+        labels?: string[];
+        query?: string;
+        limit?: number;
+        offset?: number;
+      }
     | { op: "search"; query: string; labels?: string[] }
     | { op: "node"; nodeId: string }
+    | {
+        op: "upsertNode";
+        label: string;
+        displayName: string;
+        description?: string;
+        properties?: Record<string, unknown>;
+        externalId?: string;
+      }
+    | { op: "deleteNode"; nodeId: string }
+    | {
+        op: "upsertEdge";
+        fromNodeId: string;
+        toNodeId: string;
+        relationshipType: string;
+        properties?: Record<string, string>;
+      }
+    | {
+        op: "deleteEdge";
+        fromNodeId: string;
+        toNodeId: string;
+        edgeType: string;
+      }
+    | { op: "vocab" }
+    | { op: "similaritySearch"; query: string; limit?: number }
   );
 
 export type ExploreView = "2d" | "3d" | "table";

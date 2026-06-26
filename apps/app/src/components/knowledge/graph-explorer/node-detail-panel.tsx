@@ -4,19 +4,28 @@
  * Lazily fetches the node's properties (`graph.node.get`) and its directly
  * connected neighbors (`ontology.neighbors`) when the selection changes. Shows
  * the human label + display name up top, a copyable id, the full property list,
- * and a clickable list of related entities grouped by relationship. Read-only.
+ * and a clickable list of related entities grouped by relationship.
  */
 
 "use client";
 
 import * as React from "react";
-import { Loader2, X, Boxes, ArrowRight, ArrowLeft, Plus } from "lucide-react";
+import {
+  Loader2,
+  X,
+  Boxes,
+  ArrowRight,
+  ArrowLeft,
+  Plus,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CopyableId } from "./copyable-id";
 import { PropertyList } from "./property-list";
-import { fetchNodeDetail, type TenantSlugs } from "./api-client";
+import { fetchNodeDetail, deleteNode, type TenantSlugs } from "./api-client";
 import type { ExplorerNeighbor, ExplorerNode } from "./types";
 import { colorForLabel } from "./lib/colors";
 
@@ -28,6 +37,8 @@ export interface NodeDetailPanelProps {
   onSelectNode: (nodeId: string) => void;
   onExpand: (nodeId: string) => void;
   onClose: () => void;
+  onEditNode?: (node: ExplorerNode) => void;
+  onDeleteNode?: (nodeId: string) => void;
 }
 
 interface DetailState {
@@ -36,8 +47,22 @@ interface DetailState {
   neighbors: ExplorerNeighbor[];
 }
 
-export function NodeDetailPanel({ tenant, nodeId, fallback, onSelectNode, onExpand, onClose }: NodeDetailPanelProps) {
-  const [state, setState] = React.useState<DetailState>({ status: "loading", node: null, neighbors: [] });
+export function NodeDetailPanel({
+  tenant,
+  nodeId,
+  fallback,
+  onSelectNode,
+  onExpand,
+  onClose,
+  onEditNode,
+  onDeleteNode,
+}: NodeDetailPanelProps) {
+  const [state, setState] = React.useState<DetailState>({
+    status: "loading",
+    node: null,
+    neighbors: [],
+  });
+  const [deleting, setDeleting] = React.useState(false);
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -46,7 +71,11 @@ export function NodeDetailPanel({ tenant, nodeId, fallback, onSelectNode, onExpa
     fetchNodeDetail(tenant, nodeId, controller.signal)
       .then((payload) => {
         if (!active) return;
-        setState({ status: "ready", node: payload.node, neighbors: payload.neighbors });
+        setState({
+          status: "ready",
+          node: payload.node,
+          neighbors: payload.neighbors,
+        });
       })
       .catch(() => {
         if (!active || controller.signal.aborted) return;
@@ -59,17 +88,68 @@ export function NodeDetailPanel({ tenant, nodeId, fallback, onSelectNode, onExpa
   }, [tenant, nodeId]);
 
   const label = state.node?.label ?? fallback?.label ?? "Node";
-  const displayName = state.node?.displayName ?? fallback?.displayName ?? nodeId;
+  const displayName =
+    state.node?.displayName ?? fallback?.displayName ?? nodeId;
+
+  const handleDelete = async () => {
+    if (
+      !confirm(
+        `Delete "${displayName}" and all its relationships? This cannot be undone.`,
+      )
+    )
+      return;
+    setDeleting(true);
+    try {
+      await deleteNode(tenant, nodeId);
+      onDeleteNode?.(nodeId);
+    } catch {
+      // Deletion failure is non-fatal; leave the panel intact.
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="flex h-full flex-col">
-      <DetailHeader label={label} displayName={displayName} nodeId={nodeId} onClose={onClose} />
+      <DetailHeader
+        label={label}
+        displayName={displayName}
+        nodeId={nodeId}
+        onClose={onClose}
+      />
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" startIcon={<Plus className="size-3.5" />} onClick={() => onExpand(nodeId)}>
+          <Button
+            size="sm"
+            variant="outline"
+            startIcon={<Plus className="size-3.5" />}
+            onClick={() => onExpand(nodeId)}
+          >
             Expand neighbours
           </Button>
+          {onEditNode && state.node && (
+            <Button
+              size="sm"
+              variant="outline"
+              startIcon={<Pencil className="size-3.5" />}
+              onClick={() => onEditNode(state.node!)}
+            >
+              Edit
+            </Button>
+          )}
+          {onDeleteNode && (
+            <Button
+              size="sm"
+              variant="outline"
+              startIcon={<Trash2 className="size-3.5" />}
+              onClick={handleDelete}
+              disabled={deleting}
+              className="text-destructive hover:text-destructive"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          )}
         </div>
 
         <section>
@@ -77,9 +157,14 @@ export function NodeDetailPanel({ tenant, nodeId, fallback, onSelectNode, onExpa
           {state.status === "loading" ? (
             <PanelSpinner label="Loading properties" />
           ) : state.status === "error" ? (
-            <p className="text-xs text-destructive">Failed to load node detail.</p>
+            <p className="text-xs text-destructive">
+              Failed to load node detail.
+            </p>
           ) : (
-            <PropertyList properties={state.node?.properties ?? {}} omit={["displayName", "publicId"]} />
+            <PropertyList
+              properties={state.node?.properties ?? {}}
+              omit={["displayName", "publicId"]}
+            />
           )}
         </section>
 
@@ -95,11 +180,17 @@ export function NodeDetailPanel({ tenant, nodeId, fallback, onSelectNode, onExpa
           {state.status === "loading" ? (
             <PanelSpinner label="Loading relationships" />
           ) : state.neighbors.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No connected entities.</p>
+            <p className="text-xs text-muted-foreground">
+              No connected entities.
+            </p>
           ) : (
             <ul className="flex flex-col gap-1">
               {state.neighbors.map((n) => (
-                <NeighborRow key={`${n.nodeId}:${n.edgeType}:${n.direction}`} neighbor={n} onSelect={() => onSelectNode(n.nodeId)} />
+                <NeighborRow
+                  key={`${n.nodeId}:${n.edgeType}:${n.direction}`}
+                  neighbor={n}
+                  onSelect={() => onSelectNode(n.nodeId)}
+                />
               ))}
             </ul>
           )}
@@ -133,19 +224,32 @@ function DetailHeader({
             {label}
           </Badge>
         </div>
-        <h2 className="mt-1 break-words text-sm font-semibold leading-snug text-foreground">{displayName}</h2>
+        <h2 className="mt-1 break-words text-sm font-semibold leading-snug text-foreground">
+          {displayName}
+        </h2>
         <div className="mt-1.5">
           <CopyableId value={nodeId} label="ID" max={22} />
         </div>
       </div>
-      <Button size="icon" variant="ghost" aria-label="Close detail" onClick={onClose}>
+      <Button
+        size="icon"
+        variant="ghost"
+        aria-label="Close detail"
+        onClick={onClose}
+      >
         <X className="size-4" />
       </Button>
     </div>
   );
 }
 
-function NeighborRow({ neighbor, onSelect }: { neighbor: ExplorerNeighbor; onSelect: () => void }) {
+function NeighborRow({
+  neighbor,
+  onSelect,
+}: {
+  neighbor: ExplorerNeighbor;
+  onSelect: () => void;
+}) {
   return (
     <li>
       <button
@@ -154,27 +258,48 @@ function NeighborRow({ neighbor, onSelect }: { neighbor: ExplorerNeighbor; onSel
         className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/60"
       >
         {neighbor.direction === "out" ? (
-          <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-label="outgoing" />
+          <ArrowRight
+            className="size-3.5 shrink-0 text-muted-foreground"
+            aria-label="outgoing"
+          />
         ) : (
-          <ArrowLeft className="size-3.5 shrink-0 text-muted-foreground" aria-label="incoming" />
+          <ArrowLeft
+            className="size-3.5 shrink-0 text-muted-foreground"
+            aria-label="incoming"
+          />
         )}
-        <Boxes className="size-3.5 shrink-0" style={{ color: colorForLabel(neighbor.label) }} aria-hidden="true" />
-        <span className="min-w-0 flex-1 truncate text-foreground" title={neighbor.displayName}>
+        <Boxes
+          className="size-3.5 shrink-0"
+          style={{ color: colorForLabel(neighbor.label) }}
+          aria-hidden="true"
+        />
+        <span
+          className="min-w-0 flex-1 truncate text-foreground"
+          title={neighbor.displayName}
+        >
           {neighbor.displayName}
         </span>
-        <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">{neighbor.edgeType}</span>
+        <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+          {neighbor.edgeType}
+        </span>
       </button>
     </li>
   );
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="mb-2 flex items-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">{children}</h3>;
+  return (
+    <h3 className="mb-2 flex items-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      {children}
+    </h3>
+  );
 }
 
 function PanelSpinner({ label }: { label: string }) {
   return (
-    <div className={cn("flex items-center gap-2 text-xs text-muted-foreground")}>
+    <div
+      className={cn("flex items-center gap-2 text-xs text-muted-foreground")}
+    >
       <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
       {label}…
     </div>

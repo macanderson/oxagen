@@ -3,6 +3,13 @@
   "pages": [
     "overview",
     "connecting",
-    "tools"
+    "tools",
+    "---",
+    "external-servers",
+    "file-config",
+    "permissions",
+    "credentials",
+    "managed-policy",
+    "cli-reference"
   ]
 }
