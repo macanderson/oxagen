@@ -21,6 +21,14 @@ vi.mock("@oxagen/oxagen", () => ({
 
 vi.mock("@oxagen/handlers/register", () => ({}));
 
+// revalidatePath touches Next's static-generation store, which only exists
+// during a request. In a unit test it throws "Invariant: static generation
+// store missing" — mock it to a no-op so the action's cache-busting side
+// effect doesn't break the capability-invocation assertions.
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+}));
+
 vi.mock("@oxagen/oxagen/contracts/api.key.create", () => ({
   apiKeyCreate: {
     name: "api.key.create",
