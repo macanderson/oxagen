@@ -75,7 +75,17 @@ export default defineConfig({
   // of the deterministic CI suite (the mocked equivalent, e.g.
   // ask-drawer-form-fill.spec.ts, provides CI coverage). Excluding them keeps
   // the sharded CI run green; run them locally with a real gateway key.
-  testIgnore: ["**/helpers/**", "**/*-verify.spec.ts"],
+  //
+  // `screenshots-capture.spec.ts` is a LOCAL screenshot tool driven by the
+  // gitignored root `creds.json` (see e2e/screenshots.config.ts). It reads
+  // creds.json at module load, which throws ENOENT in CI where the file is
+  // absent — failing collection for the whole shard. It has its own config, so
+  // exclude it from the main deterministic suite.
+  testIgnore: [
+    "**/helpers/**",
+    "**/*-verify.spec.ts",
+    "**/screenshots-capture.spec.ts",
+  ],
   timeout: 60_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
