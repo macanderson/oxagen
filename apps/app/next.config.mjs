@@ -83,6 +83,21 @@ const nextConfig = {
   experimental: {
     serverActions: { allowedOrigins: serverActionsAllowedOrigins },
   },
+  // Turbopack's NodePreGypConfigReference parser requires `napi_versions` in
+  // the `binary` field of package.json. Packages like duckdb and blake3 use
+  // the older node-pre-gyp build system and omit that field, causing a fatal
+  // parse error even though they're in serverExternalPackages. Aliasing them
+  // to a throwing stub prevents Turbopack from ever resolving into these
+  // packages. At runtime:
+  //   - blake3: dynamic import in @oxagen/engram/hash.ts catches and falls
+  //     back to SHA-256
+  //   - duckdb: only used server-side via @oxagen/engram store (external)
+  turbopack: {
+    resolveAlias: {
+      blake3: "./src/lib/native-addon-stub.js",
+      duckdb: "./src/lib/native-addon-stub.js",
+    },
+  },
   // Workspace packages use NodeNext-style `import "./foo.js"` from `.ts`
   // source. Turbopack (Next 16 default) maps `.js` import specifiers to the
   // `.ts`/`.tsx` source natively for TypeScript projects — no custom
