@@ -87,8 +87,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "chat.messages", policyClass: "standard" },
   { table: "content.generated_assets", policyClass: "standard" },
   { table: "content.documents", policyClass: "standard" },
-  { table: "content.forms", policyClass: "standard" },
-  { table: "content.form_submissions", policyClass: "standard" },
 
   // ── graph.* — the transactional-outbox tables (graph.outbox,
   //   graph.projection_checkpoints) were dropped 2026-06-21: never wired
@@ -99,7 +97,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   //   principals and principal_role_assignments have nullable workspace_id
   //   (NULL = org-wide principal/assignment); the rest are org-keyed.
   { table: "iam.principals", policyClass: "workspace_nullable" },
-  { table: "iam.principal_role_assignments", policyClass: "workspace_nullable" },
+  {
+    table: "iam.principal_role_assignments",
+    policyClass: "workspace_nullable",
+  },
   { table: "iam.roles", policyClass: "org_only" },
   { table: "iam.role_grants", policyClass: "org_only" },
   { table: "iam.access_requests", policyClass: "org_only" },

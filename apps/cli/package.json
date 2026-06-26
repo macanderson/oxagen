@@ -1,7 +1,7 @@
 {
   "name": "@oxagen/cli",
-  "version": "0.4.0",
-  "description": "Oxagen CLI - Command-line interface for the Oxagen platform",
+  "version": "0.5.0",
+  "description": "Oxagen — agentic coding assistant powered by the Engram context engine",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -14,10 +14,12 @@
   "keywords": [
     "oxagen",
     "cli",
-    "command-line",
+    "agentic",
+    "coding",
     "ai",
     "agent",
-    "platform"
+    "engram",
+    "context-engine"
   ],
   "homepage": "https://github.com/oxagen/oxagen-monorepo#readme",
   "repository": {
@@ -35,9 +37,7 @@
   },
   "dependencies": {
     "@inkjs/ui": "2.0.0",
-    "@oxagen/config": "workspace:*",
     "@oxagen/engram": "workspace:*",
-    "@oxagen/mcp-config": "workspace:*",
     "commander": "12.1.0",
     "ink": "7.1.0",
     "react": "19.2.6"

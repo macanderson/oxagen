@@ -142,18 +142,42 @@ function makeServerResponse(name: string, version = "1.0.0") {
       packages: [],
       remotes: [],
     },
-    _meta: { isLatest: true, status: "active", publishedAt: "2024-01-01T00:00:00Z" },
+    _meta: {
+      isLatest: true,
+      status: "active",
+      publishedAt: "2024-01-01T00:00:00Z",
+    },
   };
 }
 
 // ── withTenantDb helpers ─────────────────────────────────────────────────────
 
 /** Mock a single withTenantDb call that returns registries. */
-function mockRegistries(regs: typeof fakeRegistry[]) {
+function mockRegistries(regs: (typeof fakeRegistry)[]) {
   mocks.withTenantDb.mockImplementationOnce(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
-        select: () => ({ from: () => ({ where: () => Promise.resolve(regs) }) }),
+        select: () => ({
+          from: () => ({ where: () => Promise.resolve(regs) }),
+        }),
+      }),
+  );
+}
+
+/** Mock a single withTenantDb call that returns catalog server rows (empty = fall through to live fetch). */
+function mockCatalogRows(rows: unknown[] = []) {
+  mocks.withTenantDb.mockImplementationOnce(
+    async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              orderBy: () => ({
+                limit: () => Promise.resolve(rows),
+              }),
+            }),
+          }),
+        }),
       }),
   );
 }
@@ -188,9 +212,15 @@ describe("plugin.catalog.browse handler — agent_capability path", () => {
     )) as { servers: Array<{ id: string; pluginType: string }>; total: number };
     expect(result.total).toBe(4);
     expect(result.servers).toHaveLength(4);
-    expect(result.servers.every((s) => s.pluginType === "agent_capability")).toBe(true);
-    expect(result.servers.map((s) => s.id)).not.toContain("oxagen/hidden-plugin");
-    expect(result.servers.map((s) => s.id)).not.toContain("oxagen/preview-plugin");
+    expect(
+      result.servers.every((s) => s.pluginType === "agent_capability"),
+    ).toBe(true);
+    expect(result.servers.map((s) => s.id)).not.toContain(
+      "oxagen/hidden-plugin",
+    );
+    expect(result.servers.map((s) => s.id)).not.toContain(
+      "oxagen/preview-plugin",
+    );
   });
 
   it("maps name to plugin id (stable install key), title to manifest.name", async () => {
@@ -198,7 +228,9 @@ describe("plugin.catalog.browse handler — agent_capability path", () => {
     const result = (await handler(
       { pluginType: "agent_capability", limit: 30, offset: 0 },
       ctx,
-    )) as { servers: Array<{ id: string; name: string; title: string; tier: string }> };
+    )) as {
+      servers: Array<{ id: string; name: string; title: string; tier: string }>;
+    };
     const video = result.servers.find((s) => s.id === "oxagen/media-video");
     expect(video).toBeDefined();
     expect(video!.name).toBe("oxagen/media-video"); // stable install key
@@ -222,13 +254,14 @@ describe("plugin.catalog.browse handler — agent_capability path", () => {
 
   it("org-less browse reports nothing installed and skips the DB query", async () => {
     const selectSpy = vi.fn();
-    mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({
-        select: () => {
-          selectSpy();
-          return { from: () => ({ where: () => Promise.resolve([]) }) };
-        },
-      }),
+    mocks.withTenantDb.mockImplementationOnce(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          select: () => {
+            selectSpy();
+            return { from: () => ({ where: () => Promise.resolve([]) }) };
+          },
+        }),
     );
     const result = (await handler(
       { pluginType: "agent_capability", limit: 30, offset: 0 },
@@ -254,7 +287,12 @@ describe("plugin.catalog.browse handler — agent_capability path", () => {
   it("search is case-insensitive", async () => {
     mockInstalledNames([]);
     const result = (await handler(
-      { pluginType: "agent_capability", search: "DOCUMENT", limit: 30, offset: 0 },
+      {
+        pluginType: "agent_capability",
+        search: "DOCUMENT",
+        limit: 30,
+        offset: 0,
+      },
       ctx,
     )) as { servers: Array<{ id: string }>; total: number };
     expect(result.total).toBe(1);
@@ -285,7 +323,13 @@ describe("plugin.catalog.browse handler — agent_capability path", () => {
     const result = (await handler(
       { pluginType: "agent_capability", limit: 30, offset: 0 },
       ctx,
-    )) as { servers: Array<{ transportTypes: string[]; authKind: string; icons: unknown[] }> };
+    )) as {
+      servers: Array<{
+        transportTypes: string[];
+        authKind: string;
+        icons: unknown[];
+      }>;
+    };
     for (const s of result.servers) {
       expect(s.transportTypes).toEqual([]);
       expect(s.authKind).toBe("none");
@@ -297,7 +341,12 @@ describe("plugin.catalog.browse handler — agent_capability path", () => {
     const result = (await handler(
       { pluginType: "agent_capability", limit: 30, offset: 0 },
       ctx,
-    )) as { servers: Array<{ id: string; icons: Array<{ src: string; color?: string }> }> };
+    )) as {
+      servers: Array<{
+        id: string;
+        icons: Array<{ src: string; color?: string }>;
+      }>;
+    };
 
     const video = result.servers.find((s) => s.id === "oxagen/media-video");
     expect(video!.icons).toEqual([{ src: "video", color: "#f59e0b" }]);
@@ -361,7 +410,12 @@ describe("plugin.catalog.browse handler — agent_capability path", () => {
   it("installed:false returns only not-installed plugins", async () => {
     mockInstalledNames(["oxagen/media-video", "oxagen/documents"]);
     const result = (await handler(
-      { pluginType: "agent_capability", installed: false, limit: 30, offset: 0 },
+      {
+        pluginType: "agent_capability",
+        installed: false,
+        limit: 30,
+        offset: 0,
+      },
       ctx,
     )) as { servers: Array<{ id: string; installed: boolean }>; total: number };
     expect(result.total).toBe(2);
@@ -375,7 +429,12 @@ describe("plugin.catalog.browse handler — agent_capability path", () => {
   it("returns empty results when search matches nothing", async () => {
     mockInstalledNames([]);
     const result = (await handler(
-      { pluginType: "agent_capability", search: "xyznotfound", limit: 30, offset: 0 },
+      {
+        pluginType: "agent_capability",
+        search: "xyznotfound",
+        limit: 30,
+        offset: 0,
+      },
       ctx,
     )) as { servers: unknown[]; total: number; nextOffset: null };
     expect(result.total).toBe(0);
@@ -453,7 +512,9 @@ describe("plugin.catalog.browse handler — agent_skill path", () => {
     expect(webResearch).toBeDefined();
     expect(webResearch!.id).toBe("skl-uuid-1");
     expect(webResearch!.title).toBe("Web Research");
-    expect(webResearch!.description).toBe("Search the web and extract structured information.");
+    expect(webResearch!.description).toBe(
+      "Search the web and extract structured information.",
+    );
     expect(webResearch!.pluginType).toBe("agent_skill");
     expect(webResearch!.installed).toBe(true);
     expect(webResearch!.transportTypes).toEqual([]);
@@ -494,7 +555,11 @@ describe("plugin.catalog.browse handler — agent_skill path", () => {
     // withTenantDb returns [] for missing orgId (handler short-circuits).
     mocks.withTenantDb.mockImplementationOnce(
       async (fn: (tx: unknown) => Promise<unknown>) =>
-        fn({ select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }) }),
+        fn({
+          select: () => ({
+            from: () => ({ where: () => Promise.resolve([]) }),
+          }),
+        }),
     );
     const result = (await handler(
       { pluginType: "agent_skill", limit: 30, offset: 0 },
@@ -529,7 +594,11 @@ describe("plugin.catalog.browse handler — agent_skill path", () => {
     const page1 = (await handler(
       { pluginType: "agent_skill", limit: 1, offset: 0 },
       ctx,
-    )) as { servers: Array<{ name: string }>; total: number; nextOffset: number | null };
+    )) as {
+      servers: Array<{ name: string }>;
+      total: number;
+      nextOffset: number | null;
+    };
     expect(page1.total).toBe(2);
     expect(page1.servers).toHaveLength(1);
     expect(page1.servers[0]!.name).toBe("web-research");
@@ -539,7 +608,11 @@ describe("plugin.catalog.browse handler — agent_skill path", () => {
     const page2 = (await handler(
       { pluginType: "agent_skill", limit: 1, offset: 1 },
       ctx,
-    )) as { servers: Array<{ name: string }>; total: number; nextOffset: number | null };
+    )) as {
+      servers: Array<{ name: string }>;
+      total: number;
+      nextOffset: number | null;
+    };
     expect(page2.servers).toHaveLength(1);
     expect(page2.servers[0]!.name).toBe("code-review");
     expect(page2.nextOffset).toBe(null);
@@ -578,7 +651,17 @@ describe("plugin.catalog.browse handler — mcp_server path (live registry)", ()
     mocks.deriveTransportTypes.mockImplementation(() => ["sse"]);
     mocks.deriveAuthKind.mockImplementation(() => "none");
     mocks.mapServerDetailToCatalogRow.mockImplementation(
-      (sd: { name: string; description: string; version: string; title?: string; icons?: unknown[] }, _meta: unknown, registryId: string) => ({
+      (
+        sd: {
+          name: string;
+          description: string;
+          version: string;
+          title?: string;
+          icons?: unknown[];
+        },
+        _meta: unknown,
+        registryId: string,
+      ) => ({
         registryId,
         name: sd.name,
         description: sd.description,
@@ -612,7 +695,10 @@ describe("plugin.catalog.browse handler — mcp_server path (live registry)", ()
     const result = (await handler(
       { pluginType: "mcp_server", limit: 30, offset: 0 },
       ctx,
-    )) as { servers: Array<{ name: string; pluginType: string }>; total: number };
+    )) as {
+      servers: Array<{ name: string; pluginType: string }>;
+      total: number;
+    };
 
     expect(mocks.listServers).toHaveBeenCalledWith(fakeRegistry.baseUrl, {
       limit: 100,
@@ -631,7 +717,10 @@ describe("plugin.catalog.browse handler — mcp_server path (live registry)", ()
     });
     mockInstalledNames([]);
 
-    await handler({ pluginType: "mcp_server", search: "brave", limit: 30, offset: 0 }, ctx);
+    await handler(
+      { pluginType: "mcp_server", search: "brave", limit: 30, offset: 0 },
+      ctx,
+    );
     expect(mocks.listServers).toHaveBeenCalledWith(fakeRegistry.baseUrl, {
       limit: 100,
       search: "brave",
@@ -644,11 +733,17 @@ describe("plugin.catalog.browse handler — mcp_server path (live registry)", ()
     // Both registries return the same server name — second should be deduplicated.
     mocks.listServers
       .mockResolvedValueOnce({
-        servers: [makeServerResponse("server-a"), makeServerResponse("server-b")],
+        servers: [
+          makeServerResponse("server-a"),
+          makeServerResponse("server-b"),
+        ],
         nextCursor: undefined,
       })
       .mockResolvedValueOnce({
-        servers: [makeServerResponse("server-b"), makeServerResponse("server-c")],
+        servers: [
+          makeServerResponse("server-b"),
+          makeServerResponse("server-c"),
+        ],
         nextCursor: undefined,
       });
     mockInstalledNames([]);
@@ -694,7 +789,10 @@ describe("plugin.catalog.browse handler — mcp_server path (live registry)", ()
     const result = (await handler(
       { pluginType: "mcp_server", installed: true, limit: 30, offset: 0 },
       ctx,
-    )) as { servers: Array<{ name: string; installed: boolean }>; total: number };
+    )) as {
+      servers: Array<{ name: string; installed: boolean }>;
+      total: number;
+    };
 
     expect(result.total).toBe(1);
     expect(result.servers[0]!.name).toBe("server-a");
@@ -754,7 +852,11 @@ describe("plugin.catalog.browse handler — mcp_server path (live registry)", ()
     const page1 = (await handler(
       { pluginType: "mcp_server", limit: 2, offset: 0 },
       ctx,
-    )) as { servers: Array<{ name: string }>; total: number; nextOffset: number | null };
+    )) as {
+      servers: Array<{ name: string }>;
+      total: number;
+      nextOffset: number | null;
+    };
     expect(page1.total).toBe(3);
     expect(page1.servers).toHaveLength(2);
     expect(page1.nextOffset).toBe(2);
@@ -835,7 +937,9 @@ describe("plugin.catalog.browse handler — mcp_server path (live registry)", ()
     // First registries query returns empty.
     mockRegistries([]);
     // Seed throws.
-    mocks.seedWorkspaceDefaultRegistry.mockRejectedValueOnce(new Error("DB error"));
+    mocks.seedWorkspaceDefaultRegistry.mockRejectedValueOnce(
+      new Error("DB error"),
+    );
 
     const result = (await handler(
       { pluginType: "mcp_server", limit: 30, offset: 0 },
@@ -865,14 +969,20 @@ describe("plugin.catalog.browse handler — mcp_server path (live registry)", ()
     const result = (await handler(
       { pluginType: "mcp_server", limit: 30, offset: 0 },
       ctx,
-    )) as { servers: Array<{ name: string }>; total: number; warnings?: string[] };
+    )) as {
+      servers: Array<{ name: string }>;
+      total: number;
+      warnings?: string[];
+    };
 
     // Results from the healthy registry still come through.
     expect(result.total).toBe(1);
     expect(result.servers[0]!.name).toBe("healthy-server");
     // A warning for the failed registry is included.
     expect(result.warnings).toBeDefined();
-    expect(result.warnings!.some((w) => w.includes(fakeRegistry.id))).toBe(true);
+    expect(result.warnings!.some((w) => w.includes(fakeRegistry.id))).toBe(
+      true,
+    );
   });
 
   it("omits the warnings field when all registries succeed", async () => {

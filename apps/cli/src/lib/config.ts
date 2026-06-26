@@ -7,6 +7,7 @@ export interface CliConfig {
   orgSlug?: string;
   workspaceSlug?: string;
   apiUrl?: string;
+  model?: string;
 }
 
 const CONFIG_DIR = join(homedir(), ".config", "oxagen");
@@ -24,7 +25,7 @@ export function readConfig(): CliConfig {
     const detail = err instanceof Error ? err.message : String(err);
     process.stderr.write(
       `Warning: failed to read config file ${CONFIG_FILE}: ${detail}\n` +
-      `Run \`oxagen auth login\` to re-authenticate.\n`,
+        `Run \`oxagen auth login\` to re-authenticate.\n`,
     );
     return {};
   }
@@ -38,7 +39,11 @@ export function writeConfig(patch: Partial<CliConfig>): void {
 }
 
 export function clearConfig(): void {
-  writeConfig({ token: undefined, orgSlug: undefined, workspaceSlug: undefined });
+  writeConfig({
+    token: undefined,
+    orgSlug: undefined,
+    workspaceSlug: undefined,
+  });
 }
 
 export function getToken(): string | undefined {
@@ -54,5 +59,9 @@ export function getWorkspaceId(): string | undefined {
 }
 
 export function getApiUrl(): string {
-  return process.env["OXAGEN_API_URL"] ?? readConfig().apiUrl ?? "https://api.oxagen.sh";
+  return (
+    process.env["OXAGEN_API_URL"] ??
+    readConfig().apiUrl ??
+    "https://api.oxagen.sh"
+  );
 }

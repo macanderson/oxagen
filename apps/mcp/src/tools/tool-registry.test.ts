@@ -70,6 +70,7 @@ import { metadata as researchSwarmStatusMetadata } from "./research.swarm.status
 import { metadata as organizationCreateMetadata } from "./organization.create";
 import { metadata as pluginCatalogBrowseMetadata } from "./plugin.catalog.browse";
 import { metadata as pluginCatalogGetMetadata } from "./plugin.catalog.get";
+import { metadata as pluginCatalogSyncMetadata } from "./plugin.catalog.sync";
 import { metadata as pluginCredentialReauthMetadata } from "./plugin.credential.reauth";
 import { metadata as pluginCredentialSetSecretMetadata } from "./plugin.credential.set_secret";
 import { metadata as pluginOrgInstallMetadata } from "./plugin.org.install";
@@ -189,6 +190,8 @@ import { metadata as skillEditMetadata } from "./skill.edit";
 import { metadata as skillExportMetadata } from "./skill.export";
 import { metadata as skillMetricsReadMetadata } from "./skill.metrics.read";
 import { metadata as skillAuthorMetadata } from "./skill.author";
+import { metadata as skillCreateMetadata } from "./skill.create";
+import { metadata as skillEnableMetadata } from "./skill.enable";
 // Workspace Schema Registry + graph relationship tools (these tool files exist
 // and are mounted; this parity list just hadn't imported them yet).
 import { metadata as graphRelationshipUpsertMetadata } from "./graph.relationship.upsert";
@@ -280,6 +283,7 @@ const allToolMetadata = [
   orgMemberRoleChangeMetadata,
   pluginCatalogBrowseMetadata,
   pluginCatalogGetMetadata,
+  pluginCatalogSyncMetadata,
   pluginCredentialReauthMetadata,
   pluginCredentialSetSecretMetadata,
   pluginOrgInstallMetadata,
@@ -391,6 +395,8 @@ const allToolMetadata = [
   skillExportMetadata,
   skillMetricsReadMetadata,
   skillAuthorMetadata,
+  skillCreateMetadata,
+  skillEnableMetadata,
   graphRelationshipUpsertMetadata,
   schemaExportMetadata,
   schemaLabelDeleteMetadata,
