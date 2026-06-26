@@ -60,6 +60,9 @@ const nextConfig = {
     "@oxagen/engram",
     "blake3",
     "duckdb",
+    "@mapbox/node-pre-gyp",
+    "nock",
+    "mock-aws-s3",
     "dockerode",
     "ssh2",
   ],
@@ -82,6 +85,26 @@ const nextConfig = {
   },
   experimental: {
     serverActions: { allowedOrigins: serverActionsAllowedOrigins },
+  },
+  // Ensure webpack doesn't attempt to bundle native addons reached transitively
+  // through workspace packages (pnpm workspace:* links resolve to source, so
+  // serverExternalPackages alone may not catch transitive native deps).
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals = config.externals || [];
+      config.externals.push({
+        // duckdb and its node-pre-gyp mock deps
+        duckdb: "commonjs duckdb",
+        "mock-aws-s3": "commonjs mock-aws-s3",
+        nock: "commonjs nock",
+        "@mapbox/node-pre-gyp": "commonjs @mapbox/node-pre-gyp",
+        // Native .node addons
+        blake3: "commonjs blake3",
+        ssh2: "commonjs ssh2",
+        dockerode: "commonjs dockerode",
+      });
+    }
+    return config;
   },
   // Turbopack's NodePreGypConfigReference parser requires `napi_versions` in
   // the `binary` field of package.json. Packages like duckdb and blake3 use
