@@ -43,6 +43,16 @@ vi.mock("@/lib/sidebar", () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// Mock: @/components/agent-panel/agent-bottom-bar
+// ShellFrame renders <AgentBottomBar />, which calls useAgentPanelStore and
+// requires an AgentPanelStoreProvider. Mock it so these layout tests don't
+// need to wrap the tree in the agent-panel store provider.
+// ---------------------------------------------------------------------------
+vi.mock("@/components/agent-panel/agent-bottom-bar", () => ({
+  AgentBottomBar: () => <div data-testid="agent-bottom-bar" />,
+}));
+
+// ---------------------------------------------------------------------------
 // Mock: ./notifications-bell
 // ---------------------------------------------------------------------------
 vi.mock("./notifications-bell", () => ({
