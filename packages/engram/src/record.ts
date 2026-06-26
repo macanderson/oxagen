@@ -28,9 +28,7 @@ export function computeRecordId(
   body: RecordBody,
 ): string {
   const content = JSON.stringify({ kind, namespace, body });
-  const hash = createHash();
-  hash.update(content);
-  return hash.digest("hex") as string;
+  return contentHash(content);
 }
 
 /**
