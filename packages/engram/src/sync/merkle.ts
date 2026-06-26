@@ -4,7 +4,7 @@
  *
  * Transfer cost is proportional to the number of changes, not corpus size.
  */
-import { createHash } from "blake3";
+import { contentHash } from "../hash";
 
 export interface MerkleNode {
   hash: string;
@@ -50,7 +50,10 @@ function buildLevel(ids: string[], level: number): MerkleNode {
 /**
  * Diff two Merkle trees. Returns record IDs present in `remote` but missing in `local`.
  */
-export function diffMerkleTrees(local: MerkleNode, remote: MerkleNode): string[] {
+export function diffMerkleTrees(
+  local: MerkleNode,
+  remote: MerkleNode,
+): string[] {
   if (local.hash === remote.hash) return []; // Subtrees identical
 
   // If remote is a leaf, return its record IDs that aren't in local
@@ -96,13 +99,9 @@ export function collectRecordIds(node: MerkleNode): string[] {
 }
 
 function hashLeaf(content: string): string {
-  const h = createHash();
-  h.update(content);
-  return h.digest("hex") as string;
+  return contentHash(content);
 }
 
 function hashChildren(childHashes: string[]): string {
-  const h = createHash();
-  h.update(childHashes.join(":"));
-  return h.digest("hex") as string;
+  return contentHash(childHashes.join(":"));
 }
