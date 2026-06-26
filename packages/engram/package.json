@@ -17,12 +17,14 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "blake3": "2.1.7",
-    "duckdb": "1.3.0",
     "@clickhouse/client": "1.19.0",
     "@oxagen/config": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "zod": "3.25.76"
+  },
+  "optionalDependencies": {
+    "blake3": "2.1.7",
+    "duckdb": "1.3.0"
   },
   "devDependencies": {
     "typescript": "6.0.3",
