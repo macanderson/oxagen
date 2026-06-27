@@ -186,6 +186,33 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     staticValue: { "*": "neo4j" },
   },
 
+  // ── OpenTelemetry (distributed tracing) ─────────────────────────────────────
+  OTEL_EXPORTER_OTLP_ENDPOINT: {
+    group: "OpenTelemetry",
+    description:
+      "OTLP HTTP collector URL (e.g. https://otel.example.com/v1/traces). " +
+      "When unset the SDK does not start and all spans are no-ops — safe for all envs. " +
+      "Rollback = leave unset.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "https://otel.example.com/v1/traces",
+  },
+  OTEL_SERVICE_NAME: {
+    group: "OpenTelemetry",
+    description:
+      "Service name tag on OTEL span resources (default: oxagen). " +
+      "Optional — leave unset to use the default.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "oxagen",
+  },
+
   // ── Better Auth ─────────────────────────────────────────────────────────────
   BETTER_AUTH_SECRET: {
     group: "Better Auth",
