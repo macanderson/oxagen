@@ -34,6 +34,8 @@ import pkg from "../../package.json" with { type: "json" };
 export interface ReplOptions {
   model?: string;
   readOnly?: boolean;
+  /** Start with the eval→enhance→judge pipeline disabled (bare agent). */
+  bare?: boolean;
 }
 
 // ── Main App ──────────────────────────────────────────────────────────────────
@@ -72,8 +74,8 @@ export function ReplApp({
   const pumpingRef = useRef(false);
 
   // Whether the eval→enhance→judge pipeline is active (vs. the bare agent).
-  const [pipelineOn, setPipelineOn] = useState(true);
-  const bareRef = useRef(false);
+  const [pipelineOn, setPipelineOn] = useState(!options.bare);
+  const bareRef = useRef(options.bare ?? false);
 
   const cwd = process.cwd();
   // Project rules (CLAUDE.md/AGENTS.md) loaded once for the session.

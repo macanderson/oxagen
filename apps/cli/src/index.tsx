@@ -38,13 +38,21 @@ program
     "Read-only mode: read/search/explain only — no file edits or commands",
     false,
   )
+  .option(
+    "--no-pipeline",
+    "Skip prompt evaluation, context injection, and completeness judging",
+  )
   .action(
     async (
       promptWords: string[],
-      opts: { model?: string; readonly?: boolean },
+      opts: { model?: string; readonly?: boolean; pipeline?: boolean },
     ) => {
       const prompt = promptWords.join(" ").trim();
-      const runOpts = { model: opts.model, readOnly: opts.readonly };
+      const runOpts = {
+        model: opts.model,
+        readOnly: opts.readonly,
+        bare: opts.pipeline === false,
+      };
 
       if (prompt) {
         // One-shot mode: run prompt, stream response, exit
@@ -123,6 +131,18 @@ daemon
   .action(async () => {
     const { daemonStatus } = await import("./daemon/lifecycle.js");
     await daemonStatus();
+  });
+
+// ── replay: inspect how a past turn was handled ───────────────────────────────
+
+program
+  .command("replay")
+  .description("Show how a past turn was handled (prompt, scores, context, model, judge)")
+  .argument("[turn]", "Turn index (1 = most recent) or id; omit for the latest")
+  .option("--list", "List recent turns instead of replaying one", false)
+  .action(async (turn: string | undefined, opts: { list?: boolean }) => {
+    const { handleReplay } = await import("./commands/replay.js");
+    await handleReplay(turn, opts);
   });
 
 // ── config: local configuration ───────────────────────────────────────────────
