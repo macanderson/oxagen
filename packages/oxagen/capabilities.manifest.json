@@ -1682,6 +1682,23 @@
       }
     },
     {
+      "name": "graph.export",
+      "file": "graph.export.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
       "name": "graph.ingest",
       "file": "graph.ingest.ts",
       "domain": "graph",
