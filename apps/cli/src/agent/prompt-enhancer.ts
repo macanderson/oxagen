@@ -93,10 +93,19 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
   const resolved: string[] = [];
 
   try {
-    // Mine candidates from the prompt plus any evaluator-supplied hints. The hints
-    // sharpen retrieval without polluting the visible prompt text.
-    const minedFrom = [prompt, ...(opts.extraQueries ?? [])].join(" \n ");
-    const { symbols, paths } = extractCandidates(minedFrom);
+    const { symbols, paths } = extractCandidates(prompt);
+    // Evaluator-supplied hints are authoritative — the model explicitly named them
+    // — so classify each directly (like a backticked span) rather than mining it
+    // from prose. They sharpen retrieval without polluting the visible prompt text.
+    const symSet = new Set(symbols);
+    const pathSet = new Set(paths);
+    for (const q of opts.extraQueries ?? []) {
+      const t = q.trim();
+      if (!t) continue;
+      if (t.includes("/") || CODEY_EXT.test(t)) pathSet.add(t.replace(/^\.\//, ""));
+      else if (/^[\w.$]+$/.test(t)) symSet.add(t);
+      // Multi-word topics that aren't identifiers are skipped — they won't resolve.
+    }
 
     // Symbol definitions — "where is X defined".
     for (const sym of [...symSet].slice(0, max)) {
