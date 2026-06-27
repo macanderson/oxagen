@@ -1178,6 +1178,16 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_DEBUG: {
+    group: "CLI",
+    description:
+      "When set, the CLI prints extra diagnostics (e.g. context-engine memory open failures) to stderr.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_NO_TUI: {
     group: "CLI",
     description:
