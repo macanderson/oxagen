@@ -1,4 +1,5 @@
 import { getSandbox, isSandboxAvailable } from "@oxagen/sandbox";
+import { validateWorkspaceFiles } from "@oxagen/sandbox/workspace";
 import { insertEvents } from "@oxagen/telemetry";
 import type { CapabilityContext } from "../types";
 import {
@@ -19,10 +20,13 @@ export async function agentCodeExecuteHandler(
     );
   }
 
-  // Defense in depth: the contract already allowlists env, but a direct handler
-  // caller (internal code, tests) bypasses the zod transform — re-sanitize at
-  // the sandbox boundary so reserved keys can never reach the sandbox process.
+  // Defense in depth: the contract already allowlists env and confines file
+  // paths, but a direct handler caller (internal code, tests) bypasses the zod
+  // transform — re-sanitize the env and re-validate the workspace files at the
+  // sandbox boundary so reserved env keys and path-traversal escapes can never
+  // reach the sandbox process.
   const env = sanitizeSandboxEnv(input.env);
+  const files = input.files ? validateWorkspaceFiles(input.files) : undefined;
 
   const sandbox = getSandbox();
   const result = await sandbox.run({
@@ -30,6 +34,7 @@ export async function agentCodeExecuteHandler(
     code: input.code,
     stdin: input.stdin,
     env,
+    files,
     timeoutMs: input.timeoutMs,
     memoryMb: input.memoryMb,
     network: input.network,
