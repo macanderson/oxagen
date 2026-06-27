@@ -39,6 +39,21 @@ describe("DuckDBEpisodicStore — failed connection is non-fatal", () => {
     // Flush microtasks + a macrotask so any floating rejection would fire.
     await new Promise((r) => setTimeout(r, 100));
 
+    // Non-vacuous: confirm the connection genuinely failed. Either construction
+    // threw synchronously, or a consumer awaiting `ready` observes the rejection
+    // (getById only awaits ready then queries — a clean signal, no record munging).
+    let failed = !store;
+    if (store) {
+      await store.getById("x").then(
+        () => {},
+        () => {
+          failed = true;
+        },
+      );
+    }
+    expect(failed).toBe(true);
+
+    // The guarantee: that failure never escaped as an unhandled rejection.
     expect(captured).toEqual([]);
 
     await store?.close().catch(() => {});
