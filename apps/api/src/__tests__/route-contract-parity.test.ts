@@ -145,6 +145,9 @@ function contractNameToPathSegment(name: string): string {
     // get at the singular resource with an :fanoutId param.
     "agent.subagent.fanout.list": "agent/subagent/fanouts",
     "agent.subagent.fanout.get": "agent/subagent/fanout",
+    // Vault routes use kebab-case for underscore-containing action names.
+    "environment.set_default": "environment/set-default",
+    "secret.import_env": "secret/import-env",
   };
 
   // Try progressively shorter prefixes
