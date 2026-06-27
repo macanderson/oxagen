@@ -298,4 +298,52 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     expect(arg.system).toBe("You are a geography expert.");
     expect(arg.messages).toBe(messages);
   });
+
+  it("forwards a caller-supplied abortSignal so a stalled call can be bounded", async () => {
+    const signal = AbortSignal.timeout(30_000);
+    await generateObjectFor({
+      schema: SCHEMA,
+      prompt: "bounded?",
+      telemetry: TELEMETRY,
+      abortSignal: signal,
+    });
+
+    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.abortSignal).toBe(signal);
+  });
+
+  it("forwards maxRetries when provided (e.g. 0 when an outer system owns retries)", async () => {
+    await generateObjectFor({
+      schema: SCHEMA,
+      prompt: "no retries",
+      telemetry: TELEMETRY,
+      maxRetries: 0,
+    });
+
+    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.maxRetries).toBe(0);
+  });
+
+  it("omits abortSignal and maxRetries entirely when the caller does not set them", async () => {
+    await generateObjectFor({ schema: SCHEMA, prompt: "defaults", telemetry: TELEMETRY });
+
+    const arg = mocks.generateObject.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect("abortSignal" in arg).toBe(false);
+    expect("maxRetries" in arg).toBe(false);
+  });
+
+  it("propagates an AbortError when the underlying call is aborted", async () => {
+    mocks.generateObject.mockRejectedValueOnce(
+      Object.assign(new Error("The operation was aborted"), { name: "TimeoutError" }),
+    );
+
+    await expect(
+      generateObjectFor({
+        schema: SCHEMA,
+        prompt: "will abort",
+        telemetry: TELEMETRY,
+        abortSignal: AbortSignal.timeout(1),
+      }),
+    ).rejects.toThrow(/aborted/i);
+  });
 });

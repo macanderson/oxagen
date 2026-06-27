@@ -67,6 +67,13 @@ export function parseNodeProps(raw: unknown): Record<string, unknown> {
 
 const BATCH_SIZE = 50;
 
+// Per-node / per-relationship AI derivation wall-clock cap. The AI gateway can
+// stall indefinitely; without a bound the whole reconcile step hangs and the
+// job is stuck "running" forever (the try/catch around the call cannot rescue a
+// hang — only a throw). AbortSignal.timeout turns a stall into an AbortError the
+// existing catch handles, letting the worker skip that node and continue.
+const AI_DERIVE_TIMEOUT_MS = 30_000;
+
 // ── Reconcile state shape ─────────────────────────────────────────────────────
 
 interface ReconcileState {
@@ -416,6 +423,9 @@ Return only the derived property key-value pairs in the derivedProps field.`,
                     surface: "runner" as const,
                     messageId: null,
                   },
+                  // Bound the call so a stalled gateway can't hang the worker.
+                  abortSignal: AbortSignal.timeout(AI_DERIVE_TIMEOUT_MS),
+                  maxRetries: 0, // Inngest owns the retry policy for this step.
                 });
                 if (object.derivedProps && typeof object.derivedProps === "object") {
                   newProps = { ...newProps, ...object.derivedProps };
@@ -529,6 +539,9 @@ Return only the derived property key-value pairs in the derivedProps field.`,
                     surface: "runner" as const,
                     messageId: null,
                   },
+                  // Bound the call so a stalled gateway can't hang the worker.
+                  abortSignal: AbortSignal.timeout(AI_DERIVE_TIMEOUT_MS),
+                  maxRetries: 0, // Inngest owns the retry policy for this step.
                 });
                 if (object.derivedProps && typeof object.derivedProps === "object") {
                   newProps = { ...newProps, ...object.derivedProps };

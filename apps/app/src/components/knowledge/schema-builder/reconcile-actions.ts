@@ -40,7 +40,11 @@ export async function schemaReconcileDispatchAction(opts: {
       surface: "app" as const,
       messageId: null,
     },
-    { surface: "agent" },
+    // schema.reconcile.dispatch exposes surfaces ["api","mcp","cli"] — NOT
+    // "agent". The kernel matches the *contract* surface here, so we must pass a
+    // surface the contract actually exposes; "api" mirrors the in-app proxy
+    // route (AGENT_SURFACE_CAPABILITIES only contains schema.delete).
+    { surface: "api" },
   );
   return result as { executionId: string };
 }
@@ -80,7 +84,9 @@ export async function schemaReconcileStatusAction(
       surface: "app" as const,
       messageId: null,
     },
-    { surface: "agent" },
+    // schema.reconcile.status exposes surfaces ["api","mcp","cli"] — NOT "agent".
+    // Same reasoning as schemaReconcileDispatchAction above.
+    { surface: "api" },
   );
   return result as Awaited<ReturnType<typeof schemaReconcileStatusAction>>;
 }
