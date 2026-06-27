@@ -3,7 +3,10 @@ import { schemaRegistryGet } from "@oxagen/oxagen/contracts/schema.registry.get"
 import { schema as db, withTenantDb } from "@oxagen/database";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { getOrCreateRegistry } from "./schema.versioning";
+import type { DataType } from "@oxagen/oxagen/contracts/schema.types";
 import { logger } from "./logger";
+
+type Cardinality = "one_to_one" | "one_to_many" | "many_to_many";
 
 export const schemaRegistryGetHandler: CapabilityHandler<typeof schemaRegistryGet> = async (
   input,
@@ -11,8 +14,14 @@ export const schemaRegistryGetHandler: CapabilityHandler<typeof schemaRegistryGe
 ) => {
   const registry = await getOrCreateRegistry(ctx.orgId, ctx.workspaceId, ctx.userId);
 
-  // Determine which version to load
-  const versionId = input.versionId ?? registry.pinnedVersionId ?? registry.draftVersionId;
+  // Determine which version to load. The builder is an editing surface, so the
+  // default view must be the DRAFT (the working copy where every agent + manual
+  // edit lands), not the pinned published version — otherwise newly scaffolded /
+  // edited schemas are invisible until published. The draft is a superset of the
+  // pinned version (publishing copies the draft forward), so this never hides
+  // active schemas; the `enabled` flag distinguishes active ones. An explicit
+  // `versionId` (e.g. selecting "Pinned version") still wins.
+  const versionId = input.versionId ?? registry.draftVersionId ?? registry.pinnedVersionId;
 
   const schemas = await withTenantDb(async (tx) => {
     if (!versionId) return [];
@@ -79,6 +88,34 @@ export const schemaRegistryGetHandler: CapabilityHandler<typeof schemaRegistryGe
         ),
       );
 
+    // Load properties for this version (attached to labels OR relationship types).
+    // The contract returns the full label/relationship/property tree; omitting
+    // these made every label show "0 properties" in the builder even though the
+    // agent scaffold / form authoring had defined them.
+    const propRows = await tx
+      .select()
+      .from(db.schemaProperties)
+      .where(
+        and(
+          eq(db.schemaProperties.versionId, resolvedVersionId),
+          isNull(db.schemaProperties.deletedAt),
+        ),
+      );
+
+    const mapProp = (p: (typeof propRows)[number]) => {
+      const constraints = (p.constraints ?? {}) as Record<string, number | string>;
+      return {
+        key: p.key,
+        dataType: p.dataType as DataType,
+        required: p.required,
+        description: p.description ?? undefined,
+        enumValues: p.enumValues ?? undefined,
+        itemType: p.itemType ?? undefined,
+        constraints: Object.keys(constraints).length > 0 ? constraints : undefined,
+        example: p.example ?? undefined,
+      };
+    };
+
     return schemaRows.map((s) => ({
       schemaName: s.name,
       displayName: s.displayName,
@@ -91,6 +128,8 @@ export const schemaRegistryGetHandler: CapabilityHandler<typeof schemaRegistryGe
           name: l.name,
           displayName: l.displayName,
           description: l.description,
+          naturalKeyProps: l.naturalKeyProps ?? [],
+          properties: propRows.filter((p) => p.nodeLabelId === l.id).map(mapProp),
         })),
       relationshipTypes: rels
         .filter((r) => r.schemaId === s.id)
@@ -99,6 +138,8 @@ export const schemaRegistryGetHandler: CapabilityHandler<typeof schemaRegistryGe
           displayName: r.displayName,
           startLabel: r.startLabel,
           endLabel: r.endLabel,
+          cardinality: (r.cardinality as Cardinality | null) ?? null,
+          properties: propRows.filter((p) => p.relationshipTypeId === r.id).map(mapProp),
         })),
     }));
   });
