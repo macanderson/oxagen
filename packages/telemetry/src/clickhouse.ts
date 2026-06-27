@@ -416,6 +416,30 @@ export interface AuditEventRow {
 export const insertAuditEvent = (row: AuditEventRow): Promise<void> =>
   insertRows("audit_events", [row]);
 
+// ── Memory decay / reinforcement events (OXA-1374) ────────────────────────────
+//
+// One row per confidence change to an AgentMemory node. Callers write
+// fire-and-forget; the table is append-only with a 365-day TTL.
+
+export interface MemoryChangeRow {
+  change_id: string;
+  org_id: string;
+  workspace_id: string;
+  memory_id: string;
+  node_ref: string;
+  cause: "reinforced" | "decayed" | "manually_promoted" | "manually_forgotten";
+  confidence_before: number;
+  confidence_after: number;
+  occurred_at: string;
+}
+
+/**
+ * Insert a single memory-change event. Caller is responsible for fire-and-forget
+ * semantics (not awaiting unless auditing is in the critical path).
+ */
+export const insertMemoryChange = (row: MemoryChangeRow): Promise<void> =>
+  insertRows("memory_changes", [row]);
+
 /**
  * Read the most recent chain_hash for a given (org_id, capability) pair so the
  * next event can chain off it. Returns an empty string when no prior events
