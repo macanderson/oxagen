@@ -14,6 +14,10 @@ import { buildTools } from "./tools.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 import { resolveModelId } from "./model.js";
 import { ensureGatewayKey, MissingGatewayKeyError } from "./env.js";
+import { loadSettings } from "../settings/resolve.js";
+import { wrapToolsWithGate } from "../settings/gate.js";
+import { runHooks } from "../settings/hooks.js";
+import type { OxagenSettings } from "../settings/schema.js";
 import type { ProjectContext } from "./project-context.js";
 import type { SessionMemory } from "./memory.js";
 
@@ -40,6 +44,13 @@ export interface RunAgentOptions {
   onText?: (delta: string) => void;
   /** Fired when the model invokes a tool. */
   onToolCall?: (name: string, input: unknown) => void;
+  /** Fired when a tool is blocked by a permission rule or PreToolUse hook. */
+  onToolBlocked?: (name: string, reason: string) => void;
+  /**
+   * Resolved `settings.json` for this turn (permissions, hooks). Defaults to the
+   * settings resolved from `cwd`. Injectable so callers (and tests) can override.
+   */
+  settings?: OxagenSettings;
 }
 
 export interface RunAgentResult {
@@ -100,6 +111,9 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   const cwd = opts.cwd ?? process.cwd();
   if (!ensureGatewayKey(cwd)) throw new MissingGatewayKeyError();
 
+  // settings.json drives this turn's tool permissions and lifecycle hooks.
+  const settings = opts.settings ?? loadSettings({ cwd }).settings;
+
   // Recall relevant project memory and write the incoming prompt (best-effort).
   const recalled = opts.memory ? await opts.memory.recallContext() : "";
   void opts.memory?.remember("user_prompt", opts.prompt);
@@ -115,10 +129,31 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
       recalled;
   }
 
+  // SessionStart hooks may print context (sprint, on-call notes, changelog) to
+  // stdout; append it to the system prompt so the model sees it this turn.
+  const sessionStart = await runHooks(
+    settings.hooks,
+    { event: "SessionStart", cwd },
+    opts.signal,
+  );
+  if (sessionStart.output) {
+    system += "\n\n## Session context (from SessionStart hooks)\n" + sessionStart.output;
+  }
+
   const messages: ModelMessage[] = [
     ...(opts.history ?? []),
     { role: "user", content: opts.prompt },
   ];
+
+  // Gate every tool with the settings-driven permission rules and Pre/PostToolUse
+  // hooks. A denied call or a blocking hook returns a string the model reads.
+  const tools = wrapToolsWithGate(buildTools(cwd, { readOnly: opts.readOnly }), {
+    cwd,
+    permissions: settings.permissions,
+    hooks: settings.hooks,
+    signal: opts.signal,
+    onBlocked: opts.onToolBlocked,
+  });
 
   // Capture the underlying stream error ourselves. Supplying onError replaces
   // the AI SDK default (which dumps the whole error object to the console), so
@@ -129,7 +164,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     model: resolveModelId(opts.model),
     system,
     messages,
-    tools: buildTools(cwd, { readOnly: opts.readOnly }),
+    tools,
     stopWhen: stepCountIs(opts.maxSteps ?? 32),
     abortSignal: opts.signal,
     onError: ({ error }) => {
