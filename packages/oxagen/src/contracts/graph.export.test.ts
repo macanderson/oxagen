@@ -76,6 +76,6 @@ describe("graph.export capability", () => {
     expect(cap).toBeDefined();
     expect(cap?.scoped).toBe(true);
     expect(cap?.surfaces).toEqual(["api", "mcp"]);
-    expect(cap?.agent.category).toBe("read");
+    expect(cap?.agent?.category).toBe("read");
   });
 });
