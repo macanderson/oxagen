@@ -60,6 +60,48 @@ export class MissingGatewayKeyError extends Error {
   }
 }
 
+/** Best-effort extraction of the human-readable cause from an AI Gateway error. */
+function gatewayMessage(error: unknown): string {
+  // AI SDK gateway errors carry the provider JSON on `.responseBody`.
+  const body = (error as { responseBody?: unknown })?.responseBody;
+  if (typeof body === "string") {
+    try {
+      const parsed = JSON.parse(body) as { error?: { message?: string } };
+      if (parsed.error?.message) return parsed.error.message;
+    } catch {
+      /* not JSON */
+    }
+  }
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+/**
+ * Turn a raw streaming/gateway error into one clean, actionable Error. Keeps the
+ * common dogfooding failures (no credits, bad key, rate limit) legible instead
+ * of leaking the AI SDK's internal error object to the terminal.
+ *
+ * Exported for tests.
+ */
+export function normalizeAgentError(error: unknown): Error {
+  const msg = gatewayMessage(error);
+  if (/insufficient_funds|positive credit balance/i.test(msg)) {
+    return new Error(
+      "AI Gateway has no credit balance — every request (including BYOK) needs " +
+        "credits. Add them to your Vercel AI Gateway account, then retry.",
+    );
+  }
+  if (/\b401\b|unauthorized|invalid.*api.?key/i.test(msg)) {
+    return new Error(
+      "AI Gateway rejected the request (401). Check that AI_GATEWAY_API_KEY is set and valid.",
+    );
+  }
+  if (/\b429\b|rate.?limit/i.test(msg)) {
+    return new Error("AI Gateway rate-limited the request (429). Wait a moment and retry.");
+  }
+  return error instanceof Error ? error : new Error(msg);
+}
+
 export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   const cwd = opts.cwd ?? process.cwd();
   if (!ensureGatewayKey(cwd)) throw new MissingGatewayKeyError();
@@ -84,6 +126,11 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     { role: "user", content: opts.prompt },
   ];
 
+  // Capture the underlying stream error ourselves. Supplying onError replaces
+  // the AI SDK default (which dumps the whole error object to the console), so
+  // gateway failures surface as one clean, actionable line instead of a wall of
+  // internal fields.
+  let streamError: unknown = null;
   const result = streamText({
     model: resolveModelId(opts.model),
     system,
@@ -91,6 +138,9 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     tools: buildTools(cwd, { readOnly: opts.readOnly }),
     stopWhen: stepCountIs(opts.maxSteps ?? 32),
     abortSignal: opts.signal,
+    onError: ({ error }) => {
+      streamError = error;
+    },
     onStepFinish: ({ toolCalls }) => {
       for (const tc of toolCalls ?? []) {
         const call = tc as { toolName: string; input?: unknown; args?: unknown };
@@ -105,10 +155,16 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   });
 
   let text = "";
-  for await (const delta of result.textStream) {
-    text += delta;
-    opts.onText?.(delta);
+  try {
+    for await (const delta of result.textStream) {
+      text += delta;
+      opts.onText?.(delta);
+    }
+  } catch (err) {
+    streamError ??= err;
   }
+
+  if (streamError) throw normalizeAgentError(streamError);
 
   const steps = (await result.steps).length;
   const usage = await result.usage;
