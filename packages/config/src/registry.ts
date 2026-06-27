@@ -700,6 +700,30 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: { "*": "anthropic/claude-opus-4.8" },
   },
+  OXAGEN_LLM_EVALUATOR: {
+    group: "AI providers",
+    description:
+      "Optional override for the oxagen CLI pipeline's evaluator model (the quick " +
+      "eval pass that scores a draft). Unset by default — falls back in-code to the " +
+      "fast tier. CLI-local; not injected into any deployed service.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_LLM_ADVISOR: {
+    group: "AI providers",
+    description:
+      "Optional override for the oxagen CLI pipeline's advisor/judge model. Unset by " +
+      "default — falls back in-code to the precise tier (or balanced when the executor " +
+      "is already the precise model). CLI-local; not injected into any deployed service.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_LLM_IMAGE_BASIC: {
     group: "AI providers",
     description:
