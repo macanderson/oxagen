@@ -110,6 +110,14 @@ export class DuckDBEpisodicStore implements EpisodicStore {
     this.db = new duckdb.Database(opts.path);
     this.conn = this.db.connect();
     this.ready = this.initialize();
+    // DuckDB opens the file as a single writer. If another oxagen process (the
+    // context daemon, or a second TUI) already holds it, the connection can't be
+    // established and `initialize()` rejects with a DUCKDB_NODEJS_ERROR
+    // ("Connection was never established or has been closed already"). Attach a
+    // no-op catch so that rejection never escapes as an *unhandled* promise
+    // rejection that crashes the host process — every consumer still observes it
+    // via its own `await this.ready` and degrades to best-effort (memory off).
+    void this.ready.catch(() => {});
   }
 
   private initialize(): Promise<void> {
