@@ -1,9 +1,8 @@
 import { createFunction } from "../create-function";
 import { withSystemDb, schema } from "@oxagen/database";
 import { asc, eq, gt } from "drizzle-orm";
-import { scopedSession } from "@oxagen/ontology";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { applyDecayToMemory } from "@oxagen/agent/memory/neo4j";
+import { applyDecayToMemory, listDecayableMemories } from "@oxagen/agent/memory/neo4j";
 import { insertMemoryChange } from "@oxagen/telemetry";
 import { logger } from "../logger";
 
@@ -95,83 +94,45 @@ export const [memoryDecayPass] = createFunction(
               const policy = policyRows[0] ?? DEFAULTS;
 
               // Query all decayable memories from Neo4j for this workspace.
-              // We run inside runInTenantScope so scopedSession picks up the
-              // correct (orgId, workspaceId) tenant context from the ALS store.
-              const records = await runInTenantScope(
+              // listDecayableMemories returns fully typed projections (the raw
+              // neo4j-driver records stay inside @oxagen/agent), and runs inside
+              // runInTenantScope so scopedSession picks up the correct
+              // (orgId, workspaceId) tenant context from the ALS store.
+              const memories = await runInTenantScope(
                 { orgId, workspaceId },
-                async () => {
-                  const sess = scopedSession();
-                  try {
-                    const memResult = await sess.run(
-                      /* cypher */ `
-                        MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})
-                        WHERE m.weight <> 'critical'
-                          AND coalesce(m.confidence, 1.0) > 0
-                        RETURN
-                          m.id            AS id,
-                          m.weight        AS weight,
-                          coalesce(m.confidence, 1.0) AS confidence,
-                          toString(m.lastReinforcedAt) AS lastReinforcedAt,
-                          toString(m.createdAt)        AS createdAt,
-                          coalesce(m.nodeRef, '')      AS nodeRef
-                      `,
-                      { orgId, workspaceId },
-                    );
-                    return memResult.records;
-                  } finally {
-                    await sess.close();
-                  }
-                },
+                () => listDecayableMemories(),
               );
 
-              for (const r of records) {
-                // neo4j-driver records are typed as `any` at the driver level;
-                // we extract typed values via the get() accessor below.
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const rec = r as any;
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-                const id: string = rec.get("id") as string;
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-                const weight: string = rec.get("weight") as string;
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-                const confidence: number = Number(rec.get("confidence") ?? 1.0);
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-                const lastReinforcedAt: string | null =
-                  (rec.get("lastReinforcedAt") as string | null) ?? null;
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-                const createdAt: string = rec.get("createdAt") as string;
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-                const nodeRef: string = (rec.get("nodeRef") as string) ?? "";
-
+              for (const memory of memories) {
                 const halfLifeDays = halfLifeForWeight(
-                  weight,
+                  memory.weight,
                   policy.halfLifeLowDays ?? DEFAULTS.halfLifeLowDays,
                   policy.halfLifeHighDays ?? DEFAULTS.halfLifeHighDays,
                 );
                 if (halfLifeDays === null) continue;
 
                 const newConfidence = calcNewConfidence(
-                  confidence,
+                  memory.confidence,
                   halfLifeDays,
-                  lastReinforcedAt,
-                  createdAt,
+                  memory.lastReinforcedAt,
+                  memory.createdAt,
                 );
                 // Skip if change is below the precision epsilon.
-                if (Math.abs(newConfidence - confidence) < 0.001) continue;
+                if (Math.abs(newConfidence - memory.confidence) < 0.001) continue;
 
                 // Apply the decay update and record the change event.
                 // Both writes are scoped to the correct tenant.
                 await runInTenantScope({ orgId, workspaceId }, async () => {
-                  await applyDecayToMemory({ memoryId: id, newConfidence });
+                  await applyDecayToMemory({ memoryId: memory.id, newConfidence });
                   // Fire-and-forget: telemetry failure must not abort the sweep.
                   void insertMemoryChange({
                     change_id: crypto.randomUUID(),
                     org_id: orgId,
                     workspace_id: workspaceId,
-                    memory_id: id,
-                    node_ref: nodeRef,
+                    memory_id: memory.id,
+                    node_ref: memory.nodeRef,
                     cause: "decayed",
-                    confidence_before: confidence,
+                    confidence_before: memory.confidence,
                     confidence_after: newConfidence,
                     occurred_at: now.toISOString(),
                   });
