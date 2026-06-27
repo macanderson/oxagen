@@ -72,6 +72,28 @@ program
     launchAgentView();
   });
 
+// ── agents: the agents screen (fleet) ─────────────────────────────────────────
+
+program
+  .command("agents")
+  .description("Launch the agents screen — plan a goal, dispatch a fleet, watch it work")
+  .argument("[goal...]", "Goal to plan into tasks and run immediately")
+  .option("--concurrency <n>", "Max agents running at once", (v) => parseInt(v, 10), 4)
+  .option(
+    "--readonly",
+    "Read-only agents: read/search/explain only — no file edits or commands",
+    false,
+  )
+  .action(async (goal: string[], opts: { concurrency: number; readonly: boolean }) => {
+    const { launchFleetView } = await import("./tui/fleet-view/index.js");
+    await launchFleetView({
+      cwd: process.cwd(),
+      goal: goal.join(" ").trim() || undefined,
+      concurrency: opts.concurrency,
+      readOnly: opts.readonly,
+    });
+  });
+
 // ── daemon: context daemon lifecycle ──────────────────────────────────────────
 
 const daemon = program

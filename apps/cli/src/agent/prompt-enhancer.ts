@@ -93,7 +93,10 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
   const resolved: string[] = [];
 
   try {
-    const { symbols, paths } = extractCandidates(prompt);
+    // Mine candidates from the prompt plus any evaluator-supplied hints. The hints
+    // sharpen retrieval without polluting the visible prompt text.
+    const minedFrom = [prompt, ...(opts.extraQueries ?? [])].join(" \n ");
+    const { symbols, paths } = extractCandidates(minedFrom);
 
     // Symbol definitions — "where is X defined".
     for (const sym of symbols.slice(0, max)) {
