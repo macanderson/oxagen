@@ -120,8 +120,10 @@ export interface RouteDecision {
 
 // Domains that demand the precise tier regardless of size: a wrong call here is
 // expensive (security/data correctness), so we never under-spend on them.
+// NOTE: bare "token" is deliberately excluded — it collides with lexer/parser
+// "tokens". Auth work is caught by the unambiguous terms below.
 const PRECISE_DOMAINS =
-  /\b(auth|authn|authz|login|session|password|token|secret|credential|oauth|saml|sso|billing|payment|invoice|stripe|charge|refund|security|crypto|encrypt|decrypt|rls|tenant|migration|schema change|architecture|architect|data model|storage boundary|production incident|outage|race condition)\b/i;
+  /\b(auth|authn|authz|login|session|password|secret|credential|oauth|saml|sso|billing|payment|invoice|stripe|charge|refund|security|crypto|encrypt|decrypt|rls|tenant|migration|schema change|architecture|architect|data model|storage boundary|production incident|outage|race condition)\b/i;
 
 // Words that signal genuine design / non-trivial reasoning → at least balanced.
 const DESIGN_SIGNALS =

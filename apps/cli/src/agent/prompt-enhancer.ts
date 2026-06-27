@@ -24,6 +24,13 @@ export interface EnhanceOptions {
   memory?: FleetMemory | null;
   /** Max distinct symbols/paths to look up (default 6). */
   maxSymbols?: number;
+  /**
+   * Extra retrieval hints (e.g. the evaluator's `contextQueries`): symbol names,
+   * file paths, or topics. They are mined for candidates and looked up in the code
+   * graph, but never appended to the visible prompt text — only what they resolve
+   * to is injected.
+   */
+  extraQueries?: string[];
 }
 
 export interface EnhanceResult {

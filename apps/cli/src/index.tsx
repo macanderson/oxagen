@@ -5,6 +5,7 @@
  * Usage:
  *   oxagen                     Interactive REPL (default)
  *   oxagen "fix the login bug" One-shot prompt
+ *   oxagen agents [goal...]    Agents screen — plan, dispatch & watch a fleet
  *   oxagen view                Agent dashboard (memory, compile, sessions)
  *   oxagen daemon start|stop|status
  *   oxagen config [key] [value]
