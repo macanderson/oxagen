@@ -30,6 +30,7 @@ export const HELP = [
   "  /replay [n|id] show how a turn was handled (default: last turn)",
   "  /traces        list recent turns you can /replay",
   "  /pipeline [on|off]  toggle prompt evaluation + completeness judging",
+  "  /verbose [on|off]   per-phase timing, model+token+cost breakdown, tool results",
   "  /clear         reset the conversation",
   "  /exit, /quit   quit",
   "Esc / Ctrl-C     cancel the current turn (Ctrl-C quits when idle)",
@@ -206,6 +207,7 @@ export function StatusLine({
   inputTokens,
   outputTokens,
   pipelineOn,
+  verboseOn,
 }: {
   model: string;
   readOnly: boolean;
@@ -214,6 +216,8 @@ export function StatusLine({
   outputTokens: number;
   /** Whether the eval→enhance→judge pipeline is active (undefined = don't show). */
   pipelineOn?: boolean;
+  /** Whether verbose telemetry capture is active (undefined = don't show). */
+  verboseOn?: boolean;
 }): React.ReactElement {
   const total = inputTokens + outputTokens;
   return (
@@ -238,6 +242,7 @@ export function StatusLine({
             </Text>
           </Text>
         )}
+        {verboseOn && <Text color={theme.cyan}>verbose</Text>}
         {readOnly && <Text color="#FBBF24">read-only</Text>}
       </Box>
       <Box gap={2}>

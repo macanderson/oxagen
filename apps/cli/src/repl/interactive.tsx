@@ -20,6 +20,9 @@ import { loadProjectContext } from "../agent/project-context.js";
 import { openSessionMemory, type SessionMemory } from "../agent/memory.js";
 import { openFleetMemory } from "../agent/fleet/memory.js";
 import { openTraceStore } from "../agent/trace-store.js";
+import { appendVerboseLog } from "../agent/verbose-log.js";
+import { formatVerboseSection } from "../agent/trace-format.js";
+import { readConfig } from "../lib/config.js";
 import {
   HELP,
   MessageView,
@@ -36,6 +39,8 @@ export interface ReplOptions {
   readOnly?: boolean;
   /** Start with the eval→enhance→judge pipeline disabled (bare agent). */
   bare?: boolean;
+  /** Start in verbose mode: capture + emit full per-turn telemetry. */
+  verbose?: boolean;
 }
 
 // ── Main App ──────────────────────────────────────────────────────────────────
@@ -76,6 +81,12 @@ export function ReplApp({
   // Whether the eval→enhance→judge pipeline is active (vs. the bare agent).
   const [pipelineOn, setPipelineOn] = useState(!options.bare);
   const bareRef = useRef(options.bare ?? false);
+
+  // Verbose telemetry: capture per-phase timing/model/cost + tool results, write
+  // the JSONL stream, and show the breakdown inline. Defaults from config.
+  const initialVerbose = options.verbose ?? readConfig().verbose ?? false;
+  const [verboseOn, setVerboseOn] = useState(initialVerbose);
+  const verboseRef = useRef(initialVerbose);
 
   const cwd = process.cwd();
   // Project rules (CLAUDE.md/AGENTS.md) loaded once for the session.
@@ -208,6 +219,25 @@ export function ReplApp({
         }
         return;
       }
+      if (text.startsWith("/verbose")) {
+        const arg = text.slice("/verbose".length).trim().toLowerCase();
+        if (arg === "off") {
+          verboseRef.current = false;
+          setVerboseOn(false);
+          pushAssistant("Verbose OFF.");
+        } else if (arg === "on" || arg === "") {
+          verboseRef.current = true;
+          setVerboseOn(true);
+          pushAssistant(
+            "Verbose ON — each turn now reports per-phase timing, the model + tokens + " +
+              "cost for enhance / work / review, tool calls + results, and the injected " +
+              "context. Structured records also stream to the verbose JSONL log.",
+          );
+        } else {
+          pushAssistant(`Verbose is ${verboseRef.current ? "ON" : "OFF"}. Use /verbose on|off.`);
+        }
+        return;
+      }
       if (text === "/exit" || text === "/quit") {
         void memoryRef.current?.close();
         exit();
@@ -241,6 +271,7 @@ export function ReplApp({
           model: modelRef.current,
           readOnly: options.readOnly,
           bare: bareRef.current,
+          verbose: verboseRef.current,
           projectContext: projectContextRef.current,
           memory: memoryRef.current,
           fleetMemory: fleetMemoryRef.current,
@@ -296,6 +327,17 @@ export function ReplApp({
         historyRef.current = result.messages;
         // Persist the turn trace so /replay can show how it was handled.
         traceStoreRef.current.record(result.trace);
+        // Verbose: stream the structured record to the JSONL log and show the
+        // per-phase / per-model / cost breakdown inline.
+        if (verboseRef.current) {
+          appendVerboseLog(cwd, result.trace);
+          turn.push({
+            role: "assistant",
+            content: formatVerboseSection(result.trace).join("\n"),
+            timestamp: Date.now(),
+          });
+          render();
+        }
         setTurns((n) => n + 1);
         setUsage((u) => ({
           input: u.input + (result.usage.inputTokens ?? 0),
@@ -417,6 +459,7 @@ export function ReplApp({
         inputTokens={usage.input}
         outputTokens={usage.output}
         pipelineOn={pipelineOn}
+        verboseOn={verboseOn}
       />
 
       {/* Input — stays live during a turn; submissions queue instead of blocking */}
