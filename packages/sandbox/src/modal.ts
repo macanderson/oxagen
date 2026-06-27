@@ -37,6 +37,11 @@ interface ModalRunRequest {
   code: string;
   stdin?: string;
   env?: Record<string, string>;
+  // Extra workspace files (relative path → contents) landed before the
+  // entrypoint runs. The Modal runner shim (ops/modal/runner.py) writes them
+  // into the sandbox workdir; older shims that ignore the field simply run with
+  // the entrypoint alone. Paths are pre-confined to the workspace upstream.
+  files?: Record<string, string>;
   timeout_ms: number;
   memory_mb: number;
   network: "allow" | "deny";
@@ -63,6 +68,7 @@ function toRunnerBody(req: SandboxRequest): ModalRunRequest {
     code: req.code,
     stdin: req.stdin,
     env: req.env,
+    files: req.files,
     timeout_ms: req.timeoutMs,
     memory_mb: req.memoryMb,
     network: req.network,

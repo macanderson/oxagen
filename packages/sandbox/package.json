@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./types": "./src/types.ts",
+    "./workspace": "./src/workspace.ts",
     "./docker": "./src/docker.ts",
     "./vercel": "./src/vercel.ts"
   },
