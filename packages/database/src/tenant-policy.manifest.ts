@@ -188,4 +188,11 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // standard. Resolver reads via withSystemDb (bypass) — workspace slugs are
   // only unique within an org, so the read filters on (org_id, old_slug).
   { table: "workspace.workspace_slug_history", policyClass: "standard" },
+
+  // ── environments.* — Agent Environments & Credential Vault (Phase 0, Spec §5).
+  //   All four carry org_id + workspace_id NOT NULL → standard tenant_isolation.
+  { table: "environments.environments", policyClass: "standard" },
+  { table: "environments.secret_keys", policyClass: "standard" },
+  { table: "environments.secret_values", policyClass: "standard" },
+  { table: "environments.secret_access_log", policyClass: "standard" },
 ];
