@@ -278,6 +278,9 @@ Evidence the changed code works at **runtime**, not merely typechecks (`logs/09-
   (EPIPE-safe hook runner) pass at runtime.
 - **Fix #5** — MCP tool-registry parity (219 mcp-surfaced contracts == 219 registered tools) at runtime.
 - App-level runtime proof: 4 captured screenshots of the running app + 12/12 core e2e flows.
+- **Live-stack proof** (`logs/10-live-api-proof.log`) — against the reused running `:4000` API:
+  `GET /health` → `200 {"status":"ok"}`; `POST /v1/:org/:ws/graph/export` → `401` (auth-gated, **not
+  404**) → the graph.export route is **mounted and serving end-to-end** on the live API.
 
 **The only thing keeping `main`'s GitHub status red is the external org Actions spending cap
 (OXA-1877) — an admin billing action, the one deferral the prime directive allows.** Once it
