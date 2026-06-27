@@ -326,11 +326,11 @@ describe("ingestion.github-parse-file Inngest function", () => {
     expect(sendEvent).not.toHaveBeenCalled();
   });
 
-  it("returns { skipped: true } when file content exceeds 500KB", async () => {
+  it("returns { skipped: true } when file content exceeds 1000KB", async () => {
     mocks.fetchMock.mockResolvedValueOnce({
       ok: true,
-      headers: { get: (_k: string) => "600000" },
-      text: () => Promise.resolve("x".repeat(600001)),
+      headers: { get: (_k: string) => "1100000" },
+      text: () => Promise.resolve("x".repeat(1100001)),
     });
 
     const step = makeStep();
