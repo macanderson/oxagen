@@ -47,16 +47,16 @@ const HELP = [
 
 function PromptInput({
   onSubmit,
-  disabled,
+  busy,
 }: {
   onSubmit: (text: string) => void;
-  disabled: boolean;
+  /** A turn is in flight. The input stays live — submissions queue (Claude
+   *  Code-style) instead of being blocked — but the glyph shows the busy state. */
+  busy: boolean;
 }): React.ReactElement {
   const [value, setValue] = useState("");
 
   useInput((input, key) => {
-    if (disabled) return;
-
     if (key.return && !key.shift) {
       if (value.trim()) {
         onSubmit(value.trim());
@@ -76,15 +76,15 @@ function PromptInput({
   return (
     <Box
       borderStyle="round"
-      borderColor={disabled ? theme.dim : theme.cyan}
+      borderColor={busy ? "#FBBF24" : theme.cyan}
       paddingX={1}
     >
-      <Text color={theme.cyan} bold>
-        {disabled ? "⟳ " : "❯ "}
+      <Text color={busy ? "#FBBF24" : theme.cyan} bold>
+        {busy ? "⧗ " : "❯ "}
       </Text>
       <Text>
         {value}
-        {!disabled && <Text color={theme.cyan}>█</Text>}
+        <Text color={theme.cyan}>█</Text>
       </Text>
     </Box>
   );
@@ -166,12 +166,22 @@ function summarizeInput(input: unknown): string {
   return text.length > 100 ? text.slice(0, 100) + "…" : text;
 }
 
-function ReplApp({ options }: { options: ReplOptions }): React.ReactElement {
+export function ReplApp({
+  options,
+}: {
+  options: ReplOptions;
+}): React.ReactElement {
   const { exit } = useApp();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [model, setModel] = useState<string>(resolveModelId(options.model));
   const [turns, setTurns] = useState(0);
+  // Prompts submitted while a turn is in flight wait here and run FIFO when the
+  // current turn finishes (Claude Code-style prompt queue). `queued` drives the
+  // visible list; `queueRef` is the synchronous source of truth the pump reads.
+  const [queued, setQueued] = useState<string[]>([]);
+  const queueRef = useRef<string[]>([]);
+  const pumpingRef = useRef(false);
 
   const cwd = process.cwd();
   // Project rules (CLAUDE.md/AGENTS.md) loaded once for the session.
@@ -217,6 +227,9 @@ function ReplApp({ options }: { options: ReplOptions }): React.ReactElement {
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
       if (streamingRef.current && abortRef.current) {
+        // Cancel the in-flight turn and drop anything queued behind it.
+        queueRef.current = [];
+        setQueued([]);
         abortRef.current.abort();
       } else {
         void memoryRef.current?.close();
@@ -339,6 +352,40 @@ function ReplApp({ options }: { options: ReplOptions }): React.ReactElement {
     [exit, commit, pushAssistant, cwd, options.readOnly],
   );
 
+  // The pump reads the latest handleSubmit via a ref so it never closes over a
+  // stale version, while staying a stable callback itself.
+  const handleSubmitRef = useRef(handleSubmit);
+  handleSubmitRef.current = handleSubmit;
+
+  // Single sequential consumer: drains the queue one prompt at a time, awaiting
+  // each turn before starting the next. Re-entrancy is guarded so submissions
+  // that arrive mid-drain just extend the queue the running pump is reading.
+  const pump = useCallback(async () => {
+    if (pumpingRef.current) return;
+    pumpingRef.current = true;
+    try {
+      while (queueRef.current.length > 0) {
+        const next = queueRef.current[0] as string;
+        queueRef.current = queueRef.current.slice(1);
+        setQueued(queueRef.current);
+        await handleSubmitRef.current(next);
+      }
+    } finally {
+      pumpingRef.current = false;
+    }
+  }, []);
+
+  // Every submission goes through the queue. When idle, the pump picks it up
+  // immediately; when a turn is in flight, it waits its turn (FIFO).
+  const enqueue = useCallback(
+    (text: string) => {
+      queueRef.current = [...queueRef.current, text];
+      setQueued(queueRef.current);
+      void pump();
+    },
+    [pump],
+  );
+
   return (
     <Box flexDirection="column" height="100%">
       {/* Header */}
@@ -373,6 +420,20 @@ function ReplApp({ options }: { options: ReplOptions }): React.ReactElement {
         )}
       </Box>
 
+      {/* Queued prompts (submitted while a turn is running) */}
+      {queued.length > 0 && (
+        <Box flexDirection="column" paddingX={1}>
+          {queued.map((q, i) => (
+            <Box key={i}>
+              <Text color="#FBBF24">{"⧗ queued: "}</Text>
+              <Text dimColor wrap="truncate">
+                {q}
+              </Text>
+            </Box>
+          ))}
+        </Box>
+      )}
+
       {/* Status line */}
       <StatusLine
         model={model}
@@ -380,8 +441,8 @@ function ReplApp({ options }: { options: ReplOptions }): React.ReactElement {
         turns={turns}
       />
 
-      {/* Input */}
-      <PromptInput onSubmit={handleSubmit} disabled={isStreaming} />
+      {/* Input — stays live during a turn; submissions queue instead of blocking */}
+      <PromptInput onSubmit={enqueue} busy={isStreaming} />
     </Box>
   );
 }
