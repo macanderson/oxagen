@@ -255,6 +255,34 @@ describe("createDockerSandbox — run()", () => {
     expect(result.oomKilled).toBe(false);
   });
 
+  it("packs extra workspace files (and their parent dirs) into the /work archive", async () => {
+    const { docker, container, attachEmitter } = makeMockDockerSetup();
+    container.start = vi.fn().mockImplementation(async () => {
+      setImmediate(() => {
+        attachEmitter.emit("data", dockerFrame(1, "ok\n"));
+        attachEmitter.emit("end");
+      });
+    });
+
+    const sandbox = createDockerSandbox(() => docker);
+    await sandbox.run(
+      makeReq({
+        code: "require('./util')",
+        files: { "util.js": "module.exports = 1", "src/lib.js": "1" },
+      }),
+    );
+
+    expect(container.putArchive).toHaveBeenCalledTimes(1);
+    const archive = container.putArchive.mock.calls[0]![0] as Buffer;
+    const asText = archive.toString("latin1");
+    // tar headers store entry names as plaintext; the entrypoint and every extra
+    // file (plus the implied `src` directory) must be present in the archive.
+    expect(asText).toContain("main.js");
+    expect(asText).toContain("util.js");
+    expect(asText).toContain("src/lib.js");
+    expect(asText).toContain("src/");
+  });
+
   it("does not hang when the stream 'end' fires before container.wait() resolves", async () => {
     const { docker, container, attachEmitter } = makeMockDockerSetup();
 
