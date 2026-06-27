@@ -11,10 +11,13 @@ import {
 import { pluginSchema } from "./_schemas";
 import { auditMixin, idMixin, softDeleteMixin } from "./_mixins";
 
-/** The five installable plugin types. The discriminator stored in
+/** The six installable plugin types. The discriminator stored in
  *  plugin.installed_plugins.plugin_type and used by the runtime PluginType registry.
  *  `content_tool` and `capability` were collapsed into `agent_capability` in the
- *  workspace-scoping migration (2026-06-17). */
+ *  workspace-scoping migration (2026-06-17). `mcp_server_local` (the local-file
+ *  MCP runtime type, packages/agent/.../file-mcp.ts) is included in PLUGIN_TYPES
+ *  and the in-code CHECK; a forward migration to widen the LIVE installed_plugins
+ *  CHECK belongs to the local-MCP feature when those plugins are persisted. */
 export const PLUGIN_TYPES = [
   "agent_skill",
   "agent_capability",
@@ -74,7 +77,7 @@ export const pluginInstalledPlugins = pluginSchema.table(
     ),
     typeCheck: check(
       "installed_plugins_type_check",
-      sql`${t.pluginType} IN ('agent_skill','agent_capability','mcp_server','knowledge_source','integration')`,
+      sql`${t.pluginType} IN ('agent_skill','agent_capability','mcp_server','mcp_server_local','knowledge_source','integration')`,
     ),
     sourceCheck: check(
       "installed_plugins_source_check",
