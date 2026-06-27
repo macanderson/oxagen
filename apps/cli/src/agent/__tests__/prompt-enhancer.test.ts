@@ -95,6 +95,21 @@ describe("enhancePrompt", () => {
     expect(res.context).toContain("must keep its default export");
   });
 
+  it("resolves context from extraQueries even when the prompt names nothing", async () => {
+    const res = await enhancePrompt({
+      prompt: "do the thing",
+      cwd: root,
+      memory: noMemory,
+      extraQueries: ["computeAlpha", "beta.ts"],
+    });
+    expect(res.resolved).toContain("computeAlpha");
+    expect(res.resolved).toContain("beta.ts");
+    expect(res.context).toContain("Relevant code context");
+    // extraQueries sharpen retrieval but never pollute the visible prompt text.
+    expect(res.prompt.startsWith("do the thing")).toBe(true);
+    expect(res.prompt).not.toContain("computeAlpha\n");
+  });
+
   it("is a no-op when nothing is found", async () => {
     const res = await enhancePrompt({ prompt: "hello there friend", cwd: root, memory: noMemory });
     expect(res.context).toBe("");
