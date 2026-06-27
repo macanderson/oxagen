@@ -7,10 +7,12 @@
  * Each is an AI SDK `tool()` whose `execute` operates on the local working
  * directory and returns a string the model can read.
  *
- * Safety note (v1): tools execute without an interactive permission prompt. The
- * user invoked `oxagen` against their own repo, so this mirrors a developer
- * running commands. Per-tool approval gating is a planned enhancement (it maps
- * onto the same approval flow the platform already has for risky capabilities).
+ * Safety: the mutating tools (`write_file`, `edit_file`, `bash`) are routed
+ * through a {@link PermissionBroker} when one is supplied — each call is checked
+ * (and, in `ask` mode, approved by the human) before it runs. `--readonly`
+ * withholds them entirely. With no broker the tools run ungated (the fleet
+ * orchestrator runs its own policy), so callers that face a user — the REPL and
+ * one-shot — always supply one.
  */
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
@@ -19,6 +21,7 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { resolve, relative, join, isAbsolute } from "node:path";
 import { queryCodeGraph } from "./code-graph.js";
+import { isMutatingTool, toRequest, type PermissionBroker } from "./permissions.js";
 
 const execAsync = promisify(exec);
 
@@ -96,7 +99,7 @@ async function* walk(
 
 export function buildTools(
   cwd: string,
-  opts: { readOnly?: boolean } = {},
+  opts: { readOnly?: boolean; broker?: PermissionBroker } = {},
 ): ToolSet {
   const tools: ToolSet = {
     read_file: tool({
@@ -324,6 +327,34 @@ export function buildTools(
     delete tools["write_file"];
     delete tools["edit_file"];
     delete tools["bash"];
+    return tools;
   }
+
+  // Otherwise, gate each mutating tool through the permission broker (if any).
+  // The broker decides allow/deny (prompting the human in `ask` mode); a denial
+  // is surfaced to the model as a tool result so it can adapt rather than crash.
+  const broker = opts.broker;
+  if (broker) {
+    for (const name of Object.keys(tools)) {
+      if (!isMutatingTool(name)) continue;
+      const original = tools[name];
+      const innerExecute = original?.execute;
+      if (!original || typeof innerExecute !== "function") continue;
+      tools[name] = {
+        ...original,
+        execute: async (input: unknown, options: unknown) => {
+          const req = toRequest(name, input, cwd);
+          if (req) {
+            const decision = await broker.check(req);
+            if (decision.decision === "deny") {
+              return `Permission denied (${decision.reason}). The user did not approve this ${name} call; do not retry it — explain or choose another approach.`;
+            }
+          }
+          return (innerExecute as (i: unknown, o: unknown) => unknown).call(original, input, options);
+        },
+      };
+    }
+  }
+
   return tools;
 }
