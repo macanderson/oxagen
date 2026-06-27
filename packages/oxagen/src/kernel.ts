@@ -3,6 +3,7 @@ import { getSurfaces } from "./types";
 import { getCapability, listCapabilities } from "./registry";
 import { pluginForContract } from "./plugins/registry";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { trace, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 
 // Matches runInTenantScope's own uuid guard: we only enter a tenant scope when
 // both tenant ids are valid uuids, otherwise runInTenantScope() fail-closes.
@@ -426,11 +427,61 @@ export interface InvokeOptions {
  * throw). The emit is fire-and-forget; the capability response is never
  * delayed by the audit write.
  */
+/**
+ * The one dispatch path. Starts an OpenTelemetry span for the invocation and
+ * delegates to _invokeCore which contains the full IAM → billing → handler
+ * pipeline. The span is "active" for the entire invocation, so child async
+ * operations (ClickHouse inserts, AI calls) can read it via
+ * trace.getActiveSpan() → currentTraceIds() for log↔trace correlation.
+ *
+ * No-op when the OTEL SDK is not initialised (global NoopTracer).
+ */
 export async function invoke(
   name: string,
   rawInput: unknown,
   ctx: CapabilityContext,
   opts: InvokeOptions = {},
+): Promise<unknown> {
+  return trace.getTracer("oxagen.kernel").startActiveSpan(
+    "kernel.invoke",
+    {
+      kind: SpanKind.INTERNAL,
+      attributes: {
+        "capability.name": name,
+        "capability.surface": opts.surface ?? ctx.surface ?? "",
+        "tenant.org_id": ctx.orgId,
+        "tenant.workspace_id": ctx.workspaceId,
+        "request.id": ctx.requestId,
+      },
+    },
+    async (span) => {
+      try {
+        const result = await _invokeCore(name, rawInput, ctx, opts);
+        span.setStatus({ code: SpanStatusCode.OK });
+        span.end();
+        return result;
+      } catch (err) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        span.end();
+        throw err;
+      }
+    },
+  );
+}
+
+/**
+ * Core invocation logic: resolve contract, validate input, run IAM + billing
+ * + entitlement gates, invoke handler, validate output. Called by invoke()
+ * inside an active OTEL span so trace context propagates to all child ops.
+ */
+async function _invokeCore(
+  name: string,
+  rawInput: unknown,
+  ctx: CapabilityContext,
+  opts: InvokeOptions,
 ): Promise<unknown> {
   const startMs = Date.now();
   const cap = getCapability(name);

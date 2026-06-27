@@ -5,6 +5,7 @@ import {
   insertToolInvocation,
   type ToolInvocationRow,
 } from "@oxagen/telemetry";
+import { trace, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 import type { CapabilityContext } from "../types";
 import { invoke, authorizeExternalCapability } from "@oxagen/oxagen/kernel";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -588,11 +589,33 @@ export async function materializeTools(
             }
             // ── End consent gate ────────────────────────────────────────────
 
+            // ── OTEL span: covers external MCP tool call duration ──────────
+            // Started inside any active kernel/stream span so the parent
+            // context propagates automatically. Attributes are PII-safe:
+            // tool name only, no input/output content.
+            const _otelToolSpan = trace.getTracer("oxagen.agent.tools").startSpan(
+              "tool.external",
+              {
+                kind: SpanKind.CLIENT,
+                attributes: {
+                  "tool.name": capturedKey,
+                  "tool.risk_level": "low",
+                },
+              },
+            );
             try {
               const result = await capturedExecute(input, {
                 toolCallId: invocationId,
                 messages: [],
               });
+              _otelToolSpan.setAttributes({
+                "tool.status": "completed",
+                "tool.latency_ms": Date.now() - startedAt,
+                "tool.input_size_bytes": byteSize(input),
+                "tool.output_size_bytes": byteSize(result),
+              });
+              _otelToolSpan.setStatus({ code: SpanStatusCode.OK });
+              _otelToolSpan.end();
               try {
                 await insertToolInvocation(
                   buildInvocationPayload(
@@ -615,6 +638,12 @@ export async function materializeTools(
               }
               return result;
             } catch (err) {
+              _otelToolSpan.setAttributes({ "tool.status": "failed" });
+              _otelToolSpan.setStatus({
+                code: SpanStatusCode.ERROR,
+                message: err instanceof Error ? err.message : String(err),
+              });
+              _otelToolSpan.end();
               try {
                 await insertToolInvocation(
                   buildInvocationPayload(

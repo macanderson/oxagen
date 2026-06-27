@@ -10,7 +10,7 @@ import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";
 import { bootstrapEntitlementRuntime } from "@oxagen/plugins";
 import { setSecurityEventEmitter } from "@oxagen/oxagen/kernel";
-import { recordSecurityEvent } from "@oxagen/telemetry";
+import { initTracer, recordSecurityEvent } from "@oxagen/telemetry";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { assertRlsConnectionSafe } from "@oxagen/database";
 import { extractBearerToken } from "./context";
@@ -19,6 +19,10 @@ import { extractBearerToken } from "./context";
 // silently bypasses RLS (superuser or BYPASSRLS), which would make all
 // tenant isolation policies dead weight.
 await assertRlsConnectionSafe();
+
+// Bootstrap OpenTelemetry SDK. No-op when OTEL_EXPORTER_OTLP_ENDPOINT is
+// unset — all spans degrade to no-ops without any perf overhead.
+initTracer();
 
 // Wire the real IAM enforcement runtime at MCP surface startup.
 // xmcp has no lifecycle hook — this module-level call runs once when the

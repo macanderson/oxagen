@@ -186,6 +186,33 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     staticValue: { "*": "neo4j" },
   },
 
+  // ── OpenTelemetry (distributed tracing) ─────────────────────────────────────
+  OTEL_EXPORTER_OTLP_ENDPOINT: {
+    group: "OpenTelemetry",
+    description:
+      "OTLP HTTP collector URL (e.g. https://otel.example.com/v1/traces). " +
+      "When unset the SDK does not start and all spans are no-ops — safe for all envs. " +
+      "Rollback = leave unset.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "https://otel.example.com/v1/traces",
+  },
+  OTEL_SERVICE_NAME: {
+    group: "OpenTelemetry",
+    description:
+      "Service name tag on OTEL span resources (default: oxagen). " +
+      "Optional — leave unset to use the default.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "oxagen",
+  },
+
   // ── Better Auth ─────────────────────────────────────────────────────────────
   BETTER_AUTH_SECRET: {
     group: "Better Auth",
@@ -1202,10 +1229,54 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_LLM_EVALUATOR: {
+    group: "CLI",
+    description:
+      "Vercel AI Gateway model slug for the CLI turn pipeline's evaluator stage " +
+      "(scores prompts/responses). Optional; falls back to the CLI default model.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_LLM_ADVISOR: {
+    group: "CLI",
+    description:
+      "Vercel AI Gateway model slug for the CLI turn pipeline's advisor/judge stage " +
+      "(completeness critique). Optional; falls back to the CLI default model.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_DEBUG: {
     group: "CLI",
     description:
       "When set, the CLI prints extra diagnostics (e.g. context-engine memory open failures) to stderr.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_LLM_EVALUATOR: {
+    group: "CLI",
+    description:
+      "Gateway model slug the CLI turn pipeline uses to evaluate each prompt (completeness " +
+      "+ complexity scoring, context hints, refined rewrite). Defaults to the fast tier (Haiku).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_LLM_ADVISOR: {
+    group: "CLI",
+    description:
+      "Gateway model slug the CLI uses as the completeness-judge advisor — always distinct from " +
+      "the executor so work is never graded by the model that produced it. Defaults to the precise tier (Opus).",
     secret: false,
     clientExposed: false,
     services: [],
