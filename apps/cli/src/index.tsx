@@ -109,15 +109,23 @@ program
     "Read-only agents: read/search/explain only — no file edits or commands",
     false,
   )
-  .action(async (goal: string[], opts: { concurrency: number; readonly: boolean }) => {
-    const { launchFleetView } = await import("./tui/fleet-view/index.js");
-    await launchFleetView({
-      cwd: process.cwd(),
-      goal: goal.join(" ").trim() || undefined,
-      concurrency: opts.concurrency,
-      readOnly: opts.readonly,
-    });
-  });
+  .option(
+    "--isolate",
+    "Run each agent in its own git worktree; commit + merge work back (no clobbering)",
+    false,
+  )
+  .action(
+    async (goal: string[], opts: { concurrency: number; readonly: boolean; isolate: boolean }) => {
+      const { launchFleetView } = await import("./tui/fleet-view/index.js");
+      await launchFleetView({
+        cwd: process.cwd(),
+        goal: goal.join(" ").trim() || undefined,
+        concurrency: opts.concurrency,
+        readOnly: opts.readonly,
+        isolate: opts.isolate,
+      });
+    },
+  );
 
 // ── daemon: context daemon lifecycle ──────────────────────────────────────────
 
@@ -161,6 +169,34 @@ program
     const { handleReplay } = await import("./commands/replay.js");
     await handleReplay(turn, opts);
   });
+
+// ── graph: knowledge-graph search ─────────────────────────────────────────────
+
+const graph = program.command("graph").description("Query the knowledge graph");
+graph
+  .command("search")
+  .description("Unified semantic (vector) search across the entire knowledge graph")
+  .requiredOption("-q, --query <text>", "Natural-language query to search by vector similarity")
+  .option(
+    "-k, --kinds <kinds>",
+    "Comma-separated node kinds (entity,file,symbol,chunk,memory,execution,document,message)",
+  )
+  .option("-l, --labels <labels>", "Comma-separated domain labels (e.g. Person,SourceFile)")
+  .option("-n, --limit <n>", "Maximum number of results (1–50)", "10")
+  .option("--system", "Only return product-owned (system) nodes")
+  .option("--no-system", "Only return customer nodes (exclude system nodes)")
+  .action(
+    async (opts: {
+      query: string;
+      kinds?: string;
+      labels?: string;
+      limit?: string;
+      system?: boolean;
+    }) => {
+      const { handleGraphSearch } = await import("./commands/graph.search.js");
+      await handleGraphSearch(opts);
+    },
+  );
 
 // ── config: local configuration ───────────────────────────────────────────────
 

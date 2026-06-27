@@ -3,7 +3,7 @@ import { graphNodeLabelsGet } from "@oxagen/oxagen/contracts/graph.node.labels.g
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { runInTenantScope } from "@oxagen/tenancy";
 
-const BASE_LABEL = "KnowledgeNode";
+const BASE_LABEL = "GraphNode";
 
 export const graphNodeLabelsGetHandler: CapabilityHandler<typeof graphNodeLabelsGet> = async (
   input,
@@ -16,7 +16,7 @@ export const graphNodeLabelsGetHandler: CapabilityHandler<typeof graphNodeLabels
     const session = scopedSession();
     try {
       const result = await session.run(
-        `MATCH (n:KnowledgeNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
+        `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
          RETURN labels(n) AS labels`,
         { nodeId: input.nodeId },
       );

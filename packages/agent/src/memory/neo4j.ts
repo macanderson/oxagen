@@ -111,6 +111,11 @@ export async function writeMemory(
         })
         ON CREATE SET
           m.id = randomUUID(),
+          m.publicId = randomUUID(),
+          m:GraphNode,
+          m.is_system = true,
+          m.label = 'AgentMemory',
+          m.displayName = left($lesson, 200),
           m.weight = $weight,
           m.kind = $kind,
           m.source = $source,
@@ -119,6 +124,11 @@ export async function writeMemory(
           m.lastReinforcedAt = datetime(),
           m.createdAt = datetime()
         ON MATCH SET
+          m:GraphNode,
+          m.is_system = true,
+          m.label = 'AgentMemory',
+          m.displayName = left($lesson, 200),
+          m.publicId = coalesce(m.publicId, randomUUID()),
           m.weight = $weight,
           m.kind = $kind,
           m.source = $source,
@@ -127,15 +137,17 @@ export async function writeMemory(
         WITH m
         OPTIONAL MATCH (target { id: $nodeRef, orgId: $orgId })
         FOREACH (_ IN CASE WHEN target IS NULL THEN [] ELSE [1] END |
-          MERGE (target)-[:REMEMBERS]->(m)
+          MERGE (target)-[rr:REMEMBERS]->(m)
+          SET rr.is_system = true
         )
         WITH m
         CALL {
           WITH m
           UNWIND $relatedNodeIds AS nid
-          OPTIONAL MATCH (kn:KnowledgeNode {publicId: nid, orgId: $orgId})
+          OPTIONAL MATCH (kn:GraphNode {publicId: nid, orgId: $orgId})
           FOREACH (_ IN CASE WHEN kn IS NULL THEN [] ELSE [1] END |
-            MERGE (m)-[:ABOUT]->(kn)
+            MERGE (m)-[ra:ABOUT]->(kn)
+            SET ra.is_system = true
           )
           RETURN count(kn) AS edgesCreated
         }
@@ -194,6 +206,57 @@ export async function reinforceMemory(args: {
     const confidence = Number(result.records[0]?.get("confidence") ?? 1.0);
      
     return { confidence };
+  } finally {
+    await s.close();
+  }
+}
+
+/** A decayable AgentMemory projection, scoped to the active tenant. */
+export interface DecayableMemory {
+  id: string;
+  weight: "low" | "high" | "critical";
+  confidence: number;
+  lastReinforcedAt: string | null;
+  createdAt: string;
+  nodeRef: string;
+}
+
+/**
+ * List all decayable (non-critical, confidence > 0) AgentMemory nodes for the
+ * active tenant scope. Returns plain typed objects — the raw neo4j-driver
+ * records never leave this package, so callers (e.g. the decay-pass Inngest
+ * function) get a fully typed projection with no `any` boundary.
+ *
+ * orgId/workspaceId are injected automatically by scopedSession() from the
+ * active tenant scope.
+ */
+export async function listDecayableMemories(): Promise<DecayableMemory[]> {
+  const s = scopedSession();
+  try {
+    const result = await s.run(
+      /* cypher */ `
+        MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})
+        WHERE m.weight <> 'critical'
+          AND coalesce(m.confidence, 1.0) > 0
+        RETURN
+          m.id            AS id,
+          m.weight        AS weight,
+          coalesce(m.confidence, 1.0)  AS confidence,
+          toString(m.lastReinforcedAt) AS lastReinforcedAt,
+          toString(m.createdAt)        AS createdAt,
+          coalesce(m.nodeRef, '')      AS nodeRef
+      `,
+    );
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment -- neo4j-driver Record.get() is typed as `any`; shape is guaranteed by the Cypher projection above. */
+    return result.records.map((r) => ({
+      id: r.get("id"),
+      weight: r.get("weight"),
+      confidence: Number(r.get("confidence") ?? 1.0),
+      lastReinforcedAt: r.get("lastReinforcedAt") ?? null,
+      createdAt: r.get("createdAt"),
+      nodeRef: r.get("nodeRef") ?? "",
+    }));
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
   } finally {
     await s.close();
   }

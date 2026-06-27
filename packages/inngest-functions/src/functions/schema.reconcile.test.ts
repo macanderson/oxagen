@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPrunedProperties } from "./schema.reconcile";
+import { buildPrunedProperties, parseNodeProps } from "./schema.reconcile";
 
 describe("buildPrunedProperties (schema.reconcile pure helper)", () => {
   it("keeps all properties that are present in the schema", () => {
@@ -79,5 +79,38 @@ describe("buildPrunedProperties (schema.reconcile pure helper)", () => {
 
     expect(pruned).toEqual({ name: null, description: undefined, count: 0 });
     expect(removedKeys).toHaveLength(0);
+  });
+});
+
+describe("parseNodeProps (schema.reconcile — canonical JSON-string property bag)", () => {
+  it("parses the JSON string that graph.node.upsert stores in n.properties", () => {
+    // This is the real shape: n.properties is JSON.stringify(bag), not a map.
+    const raw = JSON.stringify({ summary: "a customer", number_of_licenses: 5 });
+    expect(parseNodeProps(raw)).toEqual({ summary: "a customer", number_of_licenses: 5 });
+  });
+
+  it("returns {} for null/undefined (node never had properties)", () => {
+    expect(parseNodeProps(null)).toEqual({});
+    expect(parseNodeProps(undefined)).toEqual({});
+  });
+
+  it("returns {} for malformed JSON or non-object JSON (never throws)", () => {
+    expect(parseNodeProps("{not valid json")).toEqual({});
+    expect(parseNodeProps('"a string"')).toEqual({});
+    expect(parseNodeProps("[1,2,3]")).toEqual({});
+    expect(parseNodeProps("42")).toEqual({});
+  });
+
+  it("tolerates a legacy raw object value", () => {
+    expect(parseNodeProps({ a: 1 })).toEqual({ a: 1 });
+    expect(parseNodeProps([1, 2])).toEqual({});
+  });
+
+  it("round-trips with JSON.stringify (the write path) so heal/prune persist", () => {
+    // Read existing → merge derived → write back as a JSON string → read again.
+    const existing = parseNodeProps(JSON.stringify({ name: "foo" }));
+    const healed = { ...existing, summary: "derived" };
+    const written = JSON.stringify(healed); // mirrors the SET n.properties = $properties write
+    expect(parseNodeProps(written)).toEqual({ name: "foo", summary: "derived" });
   });
 });

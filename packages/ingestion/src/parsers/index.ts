@@ -8,20 +8,20 @@
 
 import { extname } from "path";
 import { getParser } from "./loader";
-import type { ParseResult, ParsedSymbol, SymbolKind } from "./types";
+import { parseMarkdown } from "./markdown";
+import type { ParseResult, ParsedSymbol, ParsedLanguage, SymbolKind } from "./types";
 
-export type { ParseResult, ParsedSymbol, SymbolKind };
+export type { ParseResult, ParsedSymbol, ParsedLanguage, SymbolKind };
 
 // ---------------------------------------------------------------------------
 // Language detection
 // ---------------------------------------------------------------------------
 
-function detectLanguage(
-  filePath: string,
-): "typescript" | "python" | "unknown" {
+function detectLanguage(filePath: string): ParsedLanguage {
   const ext = extname(filePath).toLowerCase();
   if (ext === ".ts" || ext === ".tsx") return "typescript";
   if (ext === ".py") return "python";
+  if (ext === ".md" || ext === ".mdx" || ext === ".markdown") return "markdown";
   return "unknown";
 }
 
@@ -171,15 +171,94 @@ function runArrowQuery(
 }
 
 // ---------------------------------------------------------------------------
+// Symbol enrichment — code slice, signature, leading doc comment
+// ---------------------------------------------------------------------------
+
+// Cap the stored source slice per symbol so a giant class/function doesn't bloat
+// the node or the embedding input. Most symbols are far smaller; oversized ones
+// are truncated (the chunk index still covers the full file body).
+const MAX_SYMBOL_CODE_CHARS = 4000;
+
+/** The raw source for a symbol, from its 0-indexed line range (inclusive). */
+function sliceCode(lines: string[], startLine: number, endLine: number): string {
+  const slice = lines.slice(startLine, endLine + 1).join("\n");
+  return slice.length > MAX_SYMBOL_CODE_CHARS
+    ? `${slice.slice(0, MAX_SYMBOL_CODE_CHARS)}\n… (truncated)`
+    : slice;
+}
+
+/** A one-line signature: the symbol's declaration line, trimmed and capped. */
+function firstSignificantLine(lines: string[], startLine: number, endLine: number): string {
+  for (let i = startLine; i <= endLine && i < lines.length; i++) {
+    const t = lines[i]!.trim();
+    if (t.length > 0) return t.slice(0, 300);
+  }
+  return "";
+}
+
+/**
+ * Leading documentation immediately above a symbol: a contiguous block of `//`,
+ * `/* … *​/`, `*`, or `#` comment lines directly preceding the declaration. For
+ * Python def/class, also captures a triple-quoted docstring on the first body line.
+ */
+function extractDocComment(lines: string[], startLine: number): string | undefined {
+  const collected: string[] = [];
+  // Clamp to the last real line — a symbol's reported startLine can exceed the
+  // file's line count (e.g. synthetic/parser-reported ranges), and indexing past
+  // the end yields `undefined`.
+  const from = Math.min(startLine - 1, lines.length - 1);
+  for (let i = from; i >= 0; i--) {
+    const t = (lines[i] ?? "").trim();
+    if (t.length === 0) {
+      if (collected.length > 0) break; // blank line ends the comment block
+      continue;
+    }
+    if (
+      t.startsWith("//") ||
+      t.startsWith("/*") ||
+      t.startsWith("*") ||
+      t.endsWith("*/") ||
+      t.startsWith("#")
+    ) {
+      collected.unshift(t.replace(/^\/\*\*?|\*\/$|^\*\s?|^\/\/\s?|^#\s?/g, "").trim());
+    } else {
+      break;
+    }
+  }
+  const doc = collected.join("\n").trim();
+  return doc.length > 0 ? doc.slice(0, 1000) : undefined;
+}
+
+/** Attach code slice, signature, and leading doc comment to each parsed symbol. */
+function enrichSymbols(symbols: ParsedSymbol[], content: string): ParsedSymbol[] {
+  const lines = content.split("\n");
+  return symbols.map((s) => {
+    const code = sliceCode(lines, s.startLine, s.endLine);
+    const signature = firstSignificantLine(lines, s.startLine, s.endLine);
+    const docComment = s.docComment ?? extractDocComment(lines, s.startLine);
+    return {
+      ...s,
+      ...(code ? { code } : {}),
+      ...(signature ? { signature } : {}),
+      ...(docComment ? { docComment } : {}),
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
- * Parse a source file and return a structured list of symbols.
+ * Parse a source file and return a structured list of symbols, each enriched with
+ * its signature, leading doc comment, and raw source slice for embedding.
+ *
+ * Markdown/MDX is parsed into heading-delimited sections (kind "heading"); code is
+ * parsed via tree-sitter (TypeScript/Python).
  *
  * @param filePath - Absolute or relative file path (used only for language
  *   detection via extension; the file is NOT read from disk).
- * @param content  - Source file contents as a string.
+ * @param content  - File contents as a string.
  */
 export async function parseSourceFile(
   filePath: string,
@@ -189,6 +268,11 @@ export async function parseSourceFile(
 
   if (language === "unknown") {
     return { language: "unknown", symbols: [] };
+  }
+
+  if (language === "markdown") {
+    const { title, symbols } = parseMarkdown(content);
+    return { language, symbols, ...(title ? { title } : {}) };
   }
 
   try {
@@ -218,7 +302,7 @@ export async function parseSourceFile(
       return true;
     });
 
-    return { language, symbols: deduped };
+    return { language, symbols: enrichSymbols(deduped, content) };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     // Log at error level so WASM init failures and tree-sitter errors are

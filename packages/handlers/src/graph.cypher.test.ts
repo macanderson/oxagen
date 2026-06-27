@@ -56,7 +56,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.run.mockResolvedValue(makeNeoResult([]));
   mocks.generateObjectFor.mockResolvedValue({
-    object: { cypher: "MATCH (n:KnowledgeNode) WHERE n.orgId = $orgId RETURN n.publicId AS nodeId LIMIT 5", params: {} },
+    object: { cypher: "MATCH (n:GraphNode) WHERE n.orgId = $orgId RETURN n.publicId AS nodeId LIMIT 5", params: {} },
     usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
   });
 });
@@ -74,7 +74,7 @@ describe("graphCypherHandler — raw Cypher mode (nlQuery=false)", () => {
 
     const result = await graphCypherHandler(
       {
-        query: "MATCH (n:KnowledgeNode) WHERE n.orgId = $orgId RETURN n.publicId AS nodeId, n.label AS label",
+        query: "MATCH (n:GraphNode) WHERE n.orgId = $orgId RETURN n.publicId AS nodeId, n.label AS label",
         nlQuery: false,
       },
       CTX,
@@ -89,7 +89,7 @@ describe("graphCypherHandler — raw Cypher mode (nlQuery=false)", () => {
     mocks.run.mockResolvedValueOnce(makeNeoResult([]));
     const result = await graphCypherHandler(
       {
-        query: "MATCH (n:KnowledgeNode) WHERE n.orgId = $orgId AND 1=0 RETURN n",
+        query: "MATCH (n:GraphNode) WHERE n.orgId = $orgId AND 1=0 RETURN n",
         nlQuery: false,
       },
       CTX,
@@ -112,7 +112,7 @@ describe("graphCypherHandler — raw Cypher mode (nlQuery=false)", () => {
     await expect(
       graphCypherHandler(
         {
-          query: "MATCH (n:KnowledgeNode) WHERE n.orgId = $orgId DELETE n",
+          query: "MATCH (n:GraphNode) WHERE n.orgId = $orgId DELETE n",
           nlQuery: false,
         },
         CTX,
@@ -136,7 +136,7 @@ describe("graphCypherHandler — raw Cypher mode (nlQuery=false)", () => {
     await expect(
       graphCypherHandler(
         {
-          query: "MATCH (n:KnowledgeNode) WHERE n.orgId = $orgId SET n.foo = 1",
+          query: "MATCH (n:GraphNode) WHERE n.orgId = $orgId SET n.foo = 1",
           nlQuery: false,
         },
         CTX,
@@ -147,7 +147,7 @@ describe("graphCypherHandler — raw Cypher mode (nlQuery=false)", () => {
   it("rejects CREATE keyword", async () => {
     await expect(
       graphCypherHandler(
-        { query: "CREATE (n:KnowledgeNode {orgId: $orgId})", nlQuery: false },
+        { query: "CREATE (n:GraphNode {orgId: $orgId})", nlQuery: false },
         CTX,
       ),
     ).rejects.toThrow("destructive or mutating keywords");
@@ -156,7 +156,7 @@ describe("graphCypherHandler — raw Cypher mode (nlQuery=false)", () => {
   it("rejects MERGE keyword", async () => {
     await expect(
       graphCypherHandler(
-        { query: "MERGE (n:KnowledgeNode {orgId: $orgId})", nlQuery: false },
+        { query: "MERGE (n:GraphNode {orgId: $orgId})", nlQuery: false },
         CTX,
       ),
     ).rejects.toThrow("destructive or mutating keywords");
@@ -176,7 +176,7 @@ describe("graphCypherHandler — raw Cypher mode (nlQuery=false)", () => {
     await expect(
       graphCypherHandler(
         {
-          query: "MATCH (n:KnowledgeNode) WHERE n.orgId = $orgId RETURN n",
+          query: "MATCH (n:GraphNode) WHERE n.orgId = $orgId RETURN n",
           nlQuery: false,
         },
         CTX,
@@ -191,7 +191,7 @@ describe("graphCypherHandler — raw Cypher mode (nlQuery=false)", () => {
 describe("graphCypherHandler — NL query mode (nlQuery=true)", () => {
   it("calls generateObjectFor and executes the translated Cypher", async () => {
     const translatedCypher =
-      "MATCH (n:KnowledgeNode) WHERE n.orgId = $orgId AND n.label = 'Person' RETURN n.publicId AS nodeId LIMIT 10";
+      "MATCH (n:GraphNode) WHERE n.orgId = $orgId AND n.label = 'Person' RETURN n.publicId AS nodeId LIMIT 10";
     mocks.generateObjectFor.mockResolvedValueOnce({
       object: { cypher: translatedCypher, params: {} },
       usage: { promptTokens: 15, completionTokens: 25, totalTokens: 40 },
@@ -212,7 +212,7 @@ describe("graphCypherHandler — NL query mode (nlQuery=true)", () => {
   it("does not call generateObjectFor in raw Cypher mode", async () => {
     await graphCypherHandler(
       {
-        query: "MATCH (n:KnowledgeNode) WHERE n.orgId = $orgId RETURN n",
+        query: "MATCH (n:GraphNode) WHERE n.orgId = $orgId RETURN n",
         nlQuery: false,
       },
       CTX,
@@ -239,7 +239,7 @@ describe("graphCypherHandler — NL query mode (nlQuery=true)", () => {
 
   it("merges caller params with LLM-generated params", async () => {
     const translatedCypher =
-      "MATCH (n:KnowledgeNode) WHERE n.orgId = $orgId AND n.label = $label RETURN n LIMIT $limit";
+      "MATCH (n:GraphNode) WHERE n.orgId = $orgId AND n.label = $label RETURN n LIMIT $limit";
     mocks.generateObjectFor.mockResolvedValueOnce({
       object: { cypher: translatedCypher, params: { label: "Person" } },
       usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },

@@ -31,6 +31,15 @@ export const graphNodeListHandler: CapabilityHandler<typeof graphNodeList> = asy
       const labelFilter =
         input.labels && input.labels.length > 0 ? "AND n.label IN $labels" : "";
       const sourceFilter = input.sourceId ? "AND n.sourceId = $sourceId" : "";
+      // Ownership filter. A node written before the is_system backfill may lack the
+      // property; coalesce(false) treats unflagged nodes as customer data so they
+      // are never silently hidden from the default (unfiltered) view.
+      const systemFilter =
+        input.isSystem === undefined
+          ? ""
+          : input.isSystem
+            ? "AND coalesce(n.is_system, false) = true"
+            : "AND coalesce(n.is_system, false) = false";
       const textFilter = input.query
         ? `AND (
              toLower(n.displayName) CONTAINS toLower($query)
@@ -42,6 +51,7 @@ export const graphNodeListHandler: CapabilityHandler<typeof graphNodeList> = asy
            AND n.workspaceId = $workspaceId
            ${labelFilter}
            ${sourceFilter}
+           ${systemFilter}
            ${textFilter}`;
 
       const params = {
@@ -59,7 +69,7 @@ export const graphNodeListHandler: CapabilityHandler<typeof graphNodeList> = asy
 
       // Total count for the same filter — drives hasMore and the explorer UI.
       const countResult = await session.run(
-        `MATCH (n:KnowledgeNode)
+        `MATCH (n:GraphNode)
          ${whereClause}
          RETURN count(n) AS total`,
         params,
@@ -72,7 +82,7 @@ export const graphNodeListHandler: CapabilityHandler<typeof graphNodeList> = asy
         // `label`/`displayName`). The output contract requires non-null strings,
         // so a single such node would otherwise fail validation and blank the
         // entire explorer. Fall back type→label and name→displayName→publicId.
-        `MATCH (n:KnowledgeNode)
+        `MATCH (n:GraphNode)
          ${whereClause}
          RETURN
            n.publicId                                      AS id,

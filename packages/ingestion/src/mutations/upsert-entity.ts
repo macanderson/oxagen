@@ -117,7 +117,7 @@ export async function upsertEntityNode(
        ON MATCH SET
          n.syncedAt         = datetime()
        SET
-         n:KnowledgeNode,
+         n:GraphNode,
          n.entityType       = $entityType,
          n.sourceRecordType = $sourceRecordType,
          n.label            = $label,
@@ -126,6 +126,7 @@ export async function upsertEntityNode(
          n.sourceId         = $connectionId,
          n.workspaceId      = $workspaceId,
          n.properties       = $properties,
+         n.is_system        = false,
          n.conformanceScore = $conformanceScore,
          n.schemaVersionId  = $schemaVersionId,
          n.updatedAt        = datetime()
@@ -289,6 +290,7 @@ export async function createAliasEdge(
          r.confidence  = $confidence,
          r.matchReason = $matchReason,
          r.tentative   = $tentative,
+         r.is_system   = true,
          r.createdAt   = datetime()
        ON MATCH SET
          r.confidence  = $confidence,
@@ -387,22 +389,22 @@ const EDGE_TYPE_QUERIES: Record<string, string> = {
   INFERRED_FROM: `MATCH (from:EntityNode {publicId: $fromNodeId, orgId: $orgId})
                   MATCH (to:EntityNode {publicId: $toNodeId, orgId: $orgId})
                   MERGE (from)-[r:INFERRED_FROM]->(to)
-                  ON CREATE SET r.confidence = $confidence, r.inferred = true, r.createdAt = datetime()
+                  ON CREATE SET r.confidence = $confidence, r.inferred = true, r.is_system = true, r.createdAt = datetime()
                   ON MATCH SET  r.confidence = $confidence, r.updatedAt = datetime()`,
   REFERENCES:    `MATCH (from:EntityNode {publicId: $fromNodeId, orgId: $orgId})
                   MATCH (to:EntityNode {publicId: $toNodeId, orgId: $orgId})
                   MERGE (from)-[r:REFERENCES]->(to)
-                  ON CREATE SET r.confidence = $confidence, r.inferred = true, r.createdAt = datetime()
+                  ON CREATE SET r.confidence = $confidence, r.inferred = true, r.is_system = true, r.createdAt = datetime()
                   ON MATCH SET  r.confidence = $confidence, r.updatedAt = datetime()`,
   SIMILAR_TO:    `MATCH (from:EntityNode {publicId: $fromNodeId, orgId: $orgId})
                   MATCH (to:EntityNode {publicId: $toNodeId, orgId: $orgId})
                   MERGE (from)-[r:SIMILAR_TO]->(to)
-                  ON CREATE SET r.confidence = $confidence, r.inferred = true, r.createdAt = datetime()
+                  ON CREATE SET r.confidence = $confidence, r.inferred = true, r.is_system = true, r.createdAt = datetime()
                   ON MATCH SET  r.confidence = $confidence, r.updatedAt = datetime()`,
   PART_OF:       `MATCH (from:EntityNode {publicId: $fromNodeId, orgId: $orgId})
                   MATCH (to:EntityNode {publicId: $toNodeId, orgId: $orgId})
                   MERGE (from)-[r:PART_OF]->(to)
-                  ON CREATE SET r.confidence = $confidence, r.inferred = true, r.createdAt = datetime()
+                  ON CREATE SET r.confidence = $confidence, r.inferred = true, r.is_system = true, r.createdAt = datetime()
                   ON MATCH SET  r.confidence = $confidence, r.updatedAt = datetime()`,
 };
 

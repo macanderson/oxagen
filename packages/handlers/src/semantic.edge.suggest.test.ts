@@ -158,7 +158,7 @@ describe("semanticEdgeSuggestHandler", () => {
     await semanticEdgeSuggestHandler({ limit: 50 }, CTX);
 
     const [cypher] = mocks.runFn.mock.calls[0] as [string, Record<string, unknown>];
-    expect(cypher).toContain("OPTIONAL MATCH (src:KnowledgeNode {publicId: ie.sourceNodeId");
+    expect(cypher).toContain("OPTIONAL MATCH (src:GraphNode {publicId: ie.sourceNodeId");
     expect(cypher).toContain("sourceDisplayName");
   });
 

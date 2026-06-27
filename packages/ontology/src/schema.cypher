@@ -16,6 +16,8 @@ CREATE CONSTRAINT playbook_public_id IF NOT EXISTS FOR (n:Playbook) REQUIRE n.pu
 CREATE CONSTRAINT playbook_version_public_id IF NOT EXISTS FOR (n:PlaybookVersion) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT execution_public_id IF NOT EXISTS FOR (n:Execution) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT document_public_id IF NOT EXISTS FOR (n:Document) REQUIRE n.publicId IS UNIQUE;
+CREATE CONSTRAINT generated_file_public_id IF NOT EXISTS FOR (n:GeneratedFile) REQUIRE n.publicId IS UNIQUE;
+CREATE INDEX generated_file_org IF NOT EXISTS FOR (n:GeneratedFile) ON (n.orgId);
 CREATE CONSTRAINT agent_memory_public_id IF NOT EXISTS FOR (n:AgentMemory) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT conversation_public_id IF NOT EXISTS FOR (n:Conversation) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT message_public_id IF NOT EXISTS FOR (n:Message) REQUIRE n.publicId IS UNIQUE;
@@ -99,3 +101,66 @@ OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`
 CREATE VECTOR INDEX feature_embedding_index IF NOT EXISTS
 FOR (n:Feature) ON (n.embedding)
 OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
+// --- Universal graph node anchor (:GraphNode) ----------------------------------
+// Every tenant graph node — customer ontology AND product-owned (executions, code,
+// memories, messages, documents) — carries the neutral :GraphNode anchor label IN
+// ADDITION to its real domain label (:Submarine, :Execution, :SourceFile, ...).
+// The anchor exists ONLY to back per-label indexes/constraints: Neo4j cannot
+// parameterize labels (MATCH (n:$label) is illegal) nor index across arbitrary
+// runtime-defined customer labels, so id-lookup, scope filtering and the universal
+// vector index need one fixed label to anchor. All "system vs customer" filtering
+// is done via the `is_system` boolean property on nodes AND relationships, never a
+// label (relationships cannot be multi-labeled). The legacy :KnowledgeNode marker
+// is superseded. See memory: graph-node-anchor-and-is-system-model.
+CREATE CONSTRAINT graph_node_public_id IF NOT EXISTS FOR (n:GraphNode) REQUIRE n.publicId IS UNIQUE;
+CREATE INDEX graph_node_scope IF NOT EXISTS FOR (n:GraphNode) ON (n.orgId, n.workspaceId);
+CREATE INDEX graph_node_label IF NOT EXISTS FOR (n:GraphNode) ON (n.label);
+
+// One universal vector index over ALL embedded graph nodes — a single
+// db.index.vector.queryNodes('graph_node_embedding_index', ...) call performs
+// natural-language semantic search across customer data, source code, agent
+// memories, executions, messages and documents at once, post-filtered by
+// orgId/workspaceId + optional is_system/label. 1536 dims = text-embedding-3-small.
+CREATE VECTOR INDEX graph_node_embedding_index IF NOT EXISTS
+FOR (n:GraphNode) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
+// --- Source code chunks (full-content embedding for similarity search) ----------
+// A SourceFile body is split into overlapping :SourceChunk nodes, each embedded, so
+// large files are fully searchable by content (not just by symbol name). Chunks
+// carry the :GraphNode anchor + is_system=true and link via
+// (:SourceFile)-[:HAS_CHUNK]->(:SourceChunk).
+CREATE CONSTRAINT source_chunk_public_id IF NOT EXISTS FOR (n:SourceChunk) REQUIRE n.publicId IS UNIQUE;
+CREATE INDEX source_chunk_natural_key IF NOT EXISTS FOR (n:SourceChunk) ON (n.naturalKey);
+CREATE INDEX source_chunk_org IF NOT EXISTS FOR (n:SourceChunk) ON (n.orgId);
+CREATE INDEX source_chunk_file IF NOT EXISTS FOR (n:SourceChunk) ON (n.fileNaturalKey);
+CREATE VECTOR INDEX source_chunk_embedding_index IF NOT EXISTS
+FOR (n:SourceChunk) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
+// --- Execution searchability ----------------------------------------------------
+// Agent/workflow executions are first-class searchable graph nodes: this vector
+// index powers NL recall over run summaries (prompt, tools used, outcome).
+CREATE VECTOR INDEX execution_embedding_index IF NOT EXISTS
+FOR (n:Execution) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
+// --- One-time relabel: :KnowledgeNode -> :GraphNode + is_system backfill ---------
+// Each statement is gated `WHERE NOT n:GraphNode` so it scans only un-migrated nodes
+// and no-ops on every subsequent migrate (naturally idempotent). Product-owned types
+// are migrated first (is_system=true) so the trailing :KnowledgeNode catch-all only
+// captures genuine customer ontology nodes (is_system=false). publicId is backfilled
+// where missing so executions/memories/messages/documents are id-addressable.
+MATCH (n:SourceFile)   WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true REMOVE n:KnowledgeNode;
+MATCH (n:SourceSymbol) WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true REMOVE n:KnowledgeNode;
+MATCH (n:Feature)      WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true REMOVE n:KnowledgeNode;
+MATCH (n:Execution)    WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true, n.publicId = coalesce(n.publicId, n.id, randomUUID());
+MATCH (n:AgentMemory)  WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true, n.publicId = coalesce(n.publicId, n.id, randomUUID());
+MATCH (n:Message)      WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true, n.publicId = coalesce(n.publicId, n.id, randomUUID());
+MATCH (n:Document)     WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true, n.publicId = coalesce(n.publicId, n.id, randomUUID());
+MATCH (n:KnowledgeNode) WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = false REMOVE n:KnowledgeNode;
+// Final unconditional sweep: retire the legacy :KnowledgeNode label everywhere,
+// including nodes already promoted to :GraphNode by an earlier statement above
+// (preserves whatever is_system they were assigned). No-ops once none remain.
+MATCH (n:KnowledgeNode) SET n:GraphNode, n.is_system = coalesce(n.is_system, false) REMOVE n:KnowledgeNode;

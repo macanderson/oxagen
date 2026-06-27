@@ -248,12 +248,12 @@ describe("ingestion.semantic-edge-infer Inngest function", () => {
     expect(mocks.scopedSessionClose).toHaveBeenCalledOnce();
   });
 
-  it("uses KnowledgeNode as the target label for new target nodes", async () => {
+  it("uses the :GraphNode anchor label for new target nodes", async () => {
     const step = makeStep();
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
     const relMergeCalls = mocks.scopedSessionRun.mock.calls.filter((c: unknown[]) =>
-      typeof c[0] === "string" && (c[0] as string).includes("KnowledgeNode"),
+      typeof c[0] === "string" && (c[0] as string).includes("GraphNode"),
     );
     expect(relMergeCalls.length).toBeGreaterThan(0);
   });

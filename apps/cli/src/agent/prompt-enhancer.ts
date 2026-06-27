@@ -93,19 +93,18 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
   const resolved: string[] = [];
 
   try {
-    // Mine candidates from the prompt prose; then add any evaluator-supplied
-    // hints (extraQueries) directly as trusted candidates — a hint may be a real
-    // symbol/path that the prose heuristics would skip (e.g. a lowercase
-    // function name). Hints sharpen retrieval but never pollute the visible
-    // prompt text.
-    const mined = extractCandidates(prompt);
-    const symSet = new Set(mined.symbols);
-    const pathSet = new Set(mined.paths);
-    for (const hint of opts.extraQueries ?? []) {
-      const h = hint.trim();
-      if (!h) continue;
-      if (h.includes("/") || CODEY_EXT.test(h)) pathSet.add(h.replace(/^\.\//, ""));
-      else symSet.add(h);
+    const { symbols, paths } = extractCandidates(prompt);
+    // Evaluator-supplied hints are authoritative — the model explicitly named them
+    // — so classify each directly (like a backticked span) rather than mining it
+    // from prose. They sharpen retrieval without polluting the visible prompt text.
+    const symSet = new Set(symbols);
+    const pathSet = new Set(paths);
+    for (const q of opts.extraQueries ?? []) {
+      const t = q.trim();
+      if (!t) continue;
+      if (t.includes("/") || CODEY_EXT.test(t)) pathSet.add(t.replace(/^\.\//, ""));
+      else if (/^[\w.$]+$/.test(t)) symSet.add(t);
+      // Multi-word topics that aren't identifiers are skipped — they won't resolve.
     }
 
     // Symbol definitions — "where is X defined".

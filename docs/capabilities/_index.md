@@ -126,7 +126,7 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [form.fill](form.fill.md) — Generatively fill or suggest values for page-level form fields based on context
 
-## Graph (10)
+## Graph (11)
 
 | Capability                  | Notes                                                                                                                         |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -135,6 +135,7 @@ contract-first design, IAM enforcement, and instrumentation.
 | `graph.node.get`            | Retrieve a graph node by externalId.                                                                                          |
 | `graph.node.delete`         | Delete a graph node and its relationships.                                                                                    |
 | `graph.node.search`         | Vector + full-text search over graph nodes.                                                                                   |
+| `graph.search`              | Unified natural-language semantic (vector) search across the entire knowledge graph by embedding similarity.                  |
 | `graph.relationship.upsert` | Create or update a directed typed relationship between two KnowledgeNodes (open-vocabulary type, replaces graph.edge.upsert). |
 | `graph.edge.upsert`         | **Deprecated** — one-release alias for `graph.relationship.upsert`; removed in v2.                                            |
 | `graph.edge.delete`         | Delete a directed relationship between two nodes.                                                                             |

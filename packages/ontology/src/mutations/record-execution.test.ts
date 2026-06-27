@@ -30,6 +30,8 @@ const BASE_INPUT: RecordExecutionInput = {
   toolCalls: [{ toolName: "web.search", toolType: "builtin" }],
 };
 
+const FAKE_EMBEDDING = new Array(1536).fill(0.1);
+
 describe("recordExecutionInGraph", () => {
   let mockNeoRun: ReturnType<typeof vi.fn>;
   let mockNeoClose: ReturnType<typeof vi.fn>;
@@ -39,6 +41,154 @@ describe("recordExecutionInGraph", () => {
     mockNeoClose = vi.fn().mockResolvedValue(undefined);
     mockScopedSession.mockReturnValue({ run: mockNeoRun, close: mockNeoClose });
   });
+
+  // ── GraphNode anchor + is_system on the node ─────────────────────────────
+
+  it("adds :GraphNode anchor label in the MERGE Cypher", async () => {
+    await recordExecutionInGraph(BASE_INPUT);
+
+    const firstCall = mockNeoRun.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    const cypher = firstCall![0] as string;
+    expect(cypher).toContain("e:GraphNode");
+  });
+
+  it("sets is_system = true on the Execution node in both ON CREATE and ON MATCH", async () => {
+    await recordExecutionInGraph(BASE_INPUT);
+
+    const cypher = mockNeoRun.mock.calls[0]![0] as string;
+    // is_system must appear in both SET blocks, not just one
+    const matches = cypher.match(/is_system\s*=\s*true/g);
+    expect(matches).not.toBeNull();
+    expect(matches!.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("sets label = 'Execution' on the node", async () => {
+    await recordExecutionInGraph(BASE_INPUT);
+
+    const cypher = mockNeoRun.mock.calls[0]![0] as string;
+    expect(cypher).toContain("e.label");
+    expect(cypher).toContain("'Execution'");
+  });
+
+  it("sets publicId = executionId on CREATE", async () => {
+    await recordExecutionInGraph(BASE_INPUT);
+
+    const cypher = mockNeoRun.mock.calls[0]![0] as string;
+    expect(cypher).toContain("e.publicId");
+    expect(cypher).toContain("$executionId");
+  });
+
+  it("sets displayName from input when provided", async () => {
+    await recordExecutionInGraph({ ...BASE_INPUT, displayName: "chat execution by agt-001" });
+
+    const params = mockNeoRun.mock.calls[0]![1] as Record<string, unknown>;
+    expect(params.displayName).toBe("chat execution by agt-001");
+  });
+
+  it("falls back to '<originType> execution' as displayName when not provided", async () => {
+    await recordExecutionInGraph({ ...BASE_INPUT, displayName: undefined });
+
+    const params = mockNeoRun.mock.calls[0]![1] as Record<string, unknown>;
+    expect(params.displayName).toBe("chat execution");
+  });
+
+  it("sets properties as a JSON string containing status and originType", async () => {
+    await recordExecutionInGraph(BASE_INPUT);
+
+    const params = mockNeoRun.mock.calls[0]![1] as Record<string, unknown>;
+    expect(typeof params.properties).toBe("string");
+    const parsed = JSON.parse(params.properties as string) as Record<string, unknown>;
+    expect(parsed.status).toBe("completed");
+    expect(parsed.originType).toBe("chat");
+  });
+
+  it("includes toolNames in the properties bag when toolCalls are provided", async () => {
+    await recordExecutionInGraph(BASE_INPUT);
+
+    const params = mockNeoRun.mock.calls[0]![1] as Record<string, unknown>;
+    const parsed = JSON.parse(params.properties as string) as Record<string, unknown>;
+    expect(parsed.toolNames).toEqual(["web.search"]);
+  });
+
+  it("sets summary when provided", async () => {
+    const summary = "chat execution by agent agt-001: completed, 1 tool call, 200 output tokens";
+    await recordExecutionInGraph({ ...BASE_INPUT, summary });
+
+    const params = mockNeoRun.mock.calls[0]![1] as Record<string, unknown>;
+    expect(params.summary).toBe(summary);
+  });
+
+  // ── Embedding (conditional FOREACH guard) ────────────────────────────────
+
+  it("includes FOREACH embedding guard in the Cypher", async () => {
+    await recordExecutionInGraph({ ...BASE_INPUT, embedding: FAKE_EMBEDDING });
+
+    const cypher = mockNeoRun.mock.calls[0]![0] as string;
+    expect(cypher).toContain("FOREACH");
+    expect(cypher).toContain("$embedding");
+    expect(cypher).toContain("e.embeddingUpdatedAt");
+  });
+
+  it("passes the embedding vector as a param when provided", async () => {
+    await recordExecutionInGraph({ ...BASE_INPUT, embedding: FAKE_EMBEDDING });
+
+    const params = mockNeoRun.mock.calls[0]![1] as Record<string, unknown>;
+    expect(params.embedding).toEqual(FAKE_EMBEDDING);
+  });
+
+  it("passes embedding = null when embedding is not provided (no vector overwrite)", async () => {
+    await recordExecutionInGraph({ ...BASE_INPUT, embedding: undefined });
+
+    const params = mockNeoRun.mock.calls[0]![1] as Record<string, unknown>;
+    expect(params.embedding).toBeNull();
+  });
+
+  it("passes embedding = null when embedding is explicitly null", async () => {
+    await recordExecutionInGraph({ ...BASE_INPUT, embedding: null });
+
+    const params = mockNeoRun.mock.calls[0]![1] as Record<string, unknown>;
+    expect(params.embedding).toBeNull();
+  });
+
+  // ── Edge is_system = true ────────────────────────────────────────────────
+
+  it("sets is_system = true on the INVOKED edge to Agent", async () => {
+    await recordExecutionInGraph(BASE_INPUT);
+
+    const agentCall = mockNeoRun.mock.calls.find(([cypher]) =>
+      (cypher as string).includes(":Agent"),
+    );
+    expect(agentCall).toBeDefined();
+    const cypher = agentCall![0] as string;
+    expect(cypher).toContain("r.is_system = true");
+    expect(cypher).toContain("INVOKED");
+  });
+
+  it("sets is_system = true on the ORIGINATED_FROM edge", async () => {
+    await recordExecutionInGraph({ ...BASE_INPUT, originType: "chat" });
+
+    const originCall = mockNeoRun.mock.calls.find(([cypher]) =>
+      (cypher as string).includes("ORIGINATED_FROM"),
+    );
+    expect(originCall).toBeDefined();
+    const cypher = originCall![0] as string;
+    expect(cypher).toContain("r.is_system = true");
+  });
+
+  it("sets is_system = true on the CALLED_TOOL edges via UNWIND", async () => {
+    await recordExecutionInGraph(BASE_INPUT);
+
+    const toolCallCypher = mockNeoRun.mock.calls.find(([cypher]) =>
+      (cypher as string).includes("CALLED_TOOL"),
+    );
+    expect(toolCallCypher).toBeDefined();
+    const cypher = toolCallCypher![0] as string;
+    expect(cypher).toContain("r.is_system = true");
+    expect(cypher).toContain("UNWIND");
+  });
+
+  // ── Existing behaviour preserved ─────────────────────────────────────────
 
   it("runs a MERGE Cypher for the Execution node", async () => {
     await recordExecutionInGraph(BASE_INPUT);

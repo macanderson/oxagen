@@ -1852,6 +1852,25 @@
       }
     },
     {
+      "name": "graph.search",
+      "file": "graph.search.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "graph.stats",
       "file": "graph.stats.ts",
       "domain": "graph",
@@ -3574,7 +3593,7 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
+        "api": true,
         "mcp": true,
         "unit": false,
         "docs": false
@@ -3608,7 +3627,7 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
+        "api": true,
         "mcp": true,
         "unit": false,
         "docs": false

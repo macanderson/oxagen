@@ -142,7 +142,7 @@ describe("semanticEdgeListHandler", () => {
     });
 
     const [cypher] = mocks.runFn.mock.calls[0] as [string, Record<string, unknown>];
-    expect(cypher).toContain("OPTIONAL MATCH (src:KnowledgeNode {publicId: ie.sourceNodeId");
+    expect(cypher).toContain("OPTIONAL MATCH (src:GraphNode {publicId: ie.sourceNodeId");
   });
 
   it("marks edge as approved=false when approvalStatus is pending", async () => {

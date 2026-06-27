@@ -365,7 +365,7 @@ describe("parseSourceFile", () => {
   describe("Unknown extension", () => {
     it("returns { language: 'unknown', symbols: [] } without calling Parser", async () => {
       // Parser should not be instantiated for unknown extensions.
-      const result = await parseSourceFile("README.md", "# Hello");
+      const result = await parseSourceFile("data.bin", "binary-ish");
 
       expect(result.language).toBe("unknown");
       expect(result.symbols).toEqual([]);
@@ -386,6 +386,29 @@ describe("parseSourceFile", () => {
       const result = await parseSourceFile("styles/main.css", "body {}");
       expect(result.language).toBe("unknown");
       expect(result.symbols).toEqual([]);
+    });
+  });
+
+  // ── Markdown ───────────────────────────────────────────────────────────────
+
+  describe("Markdown (.md / .mdx)", () => {
+    it("parses markdown into heading-section symbols without invoking tree-sitter", async () => {
+      const md = "# Getting Started\nIntro.\n\n## Install\nRun npm i.";
+      const result = await parseSourceFile("docs/README.md", md);
+
+      expect(result.language).toBe("markdown");
+      expect(result.title).toBe("Getting Started");
+      expect(result.symbols.map((s) => s.name)).toEqual(["Getting Started", "Install"]);
+      expect(result.symbols.every((s) => s.kind === "heading")).toBe(true);
+      // No tree-sitter parser is loaded for markdown.
+      expect(mocks.parserInstances).toHaveLength(0);
+      expect(mocks.parserInit).not.toHaveBeenCalled();
+    });
+
+    it("treats .mdx the same as .md", async () => {
+      const result = await parseSourceFile("page.mdx", "## Section\nbody");
+      expect(result.language).toBe("markdown");
+      expect(result.symbols).toHaveLength(1);
     });
   });
 

@@ -178,7 +178,7 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
               // Find or create the target placeholder node, then create the relationship.
               await sess.run(
                 `MATCH (src:EntityNode {publicId: $sourceNodeId, orgId: $orgId})
-                 MERGE (tgt:KnowledgeNode {
+                 MERGE (tgt:GraphNode {
                    orgId: $orgId,
                    workspaceId: $workspaceId,
                    type: $targetType,

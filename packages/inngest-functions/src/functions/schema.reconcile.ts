@@ -35,6 +35,34 @@ export function buildPrunedProperties(
   return { pruned, removedKeys };
 }
 
+/**
+ * Parse a KnowledgeNode's `properties` column into a plain object.
+ *
+ * Canonical storage (see graph.node.upsert) serializes the property bag to a
+ * JSON STRING — Neo4j node property values must be primitives/arrays, never a
+ * map. This adapter previously read the column as if it were already an object
+ * (always yielding `{}` since a string isn't a Record) and wrote it back as a
+ * raw map (which Neo4j rejects: "Property values can only be of primitive types
+ * or arrays thereof"), so heal/prune silently did nothing. Read with this
+ * helper and write with `JSON.stringify(...)` to stay consistent with ingestion.
+ * Tolerates a legacy object value just in case.
+ */
+export function parseNodeProps(raw: unknown): Record<string, unknown> {
+  if (raw == null) return {};
+  if (typeof raw === "string") {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+    } catch {
+      return {};
+    }
+  }
+  if (typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, unknown>;
+  return {};
+}
+
 // ── Batch size ────────────────────────────────────────────────────────────────
 
 const BATCH_SIZE = 50;
@@ -267,7 +295,7 @@ export const [schemaReconcile] = createFunction(
 
         if (schemaDefinition.labelNames.length > 0) {
           const nodeResult = await session.run(
-            `MATCH (n:KnowledgeNode)
+            `MATCH (n:GraphNode)
              WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId AND n.label IN $labels
              RETURN count(n) AS total`,
             { orgId, workspaceId, labels: schemaDefinition.labelNames },
@@ -281,7 +309,7 @@ export const [schemaReconcile] = createFunction(
 
         if (schemaDefinition.relTypeNames.length > 0) {
           const relResult = await session.run(
-            `MATCH (n:KnowledgeNode)-[r]->(m:KnowledgeNode)
+            `MATCH (n:GraphNode)-[r]->(m:GraphNode)
              WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId AND type(r) IN $relTypes
              RETURN count(r) AS total`,
             { orgId, workspaceId, relTypes: schemaDefinition.relTypeNames },
@@ -336,7 +364,7 @@ export const [schemaReconcile] = createFunction(
 
         for (;;) {
           const batchResult = await session.run(
-            `MATCH (n:KnowledgeNode)
+            `MATCH (n:GraphNode)
              WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId AND n.label IN $labels
              RETURN n.publicId AS nodeId, n.label AS label, n.properties AS properties, n.displayName AS displayName
              SKIP $skip LIMIT $batchSize`,
@@ -354,7 +382,8 @@ export const [schemaReconcile] = createFunction(
           for (const record of batchResult.records) {
             const nodeId = record.get("nodeId") as string;
             const label = record.get("label") as string;
-            const existingProps = (record.get("properties") ?? {}) as Record<string, unknown>;
+            // `n.properties` is a JSON string (canonical storage), not a map.
+            const existingProps = parseNodeProps(record.get("properties"));
 
             const labelSchema = schemaDefinition.labelSchemaMap[label];
             if (!labelSchema) {
@@ -414,9 +443,11 @@ Return only the derived property key-value pairs in the derivedProps field.`,
             // Write back to Neo4j only if something changed.
             if (nodeUpdated) {
               await session.run(
-                `MATCH (n:KnowledgeNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
+                `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
                  SET n.properties = $properties`,
-                { nodeId, orgId, workspaceId, properties: newProps },
+                // Serialize back to a JSON string — Neo4j rejects raw maps as
+                // property values, and ingestion stores this column the same way.
+                { nodeId, orgId, workspaceId, properties: JSON.stringify(newProps) },
               );
               updatedNodes++;
             }
@@ -447,7 +478,7 @@ Return only the derived property key-value pairs in the derivedProps field.`,
 
         for (;;) {
           const batchResult = await session.run(
-            `MATCH (a:KnowledgeNode)-[r]->(b:KnowledgeNode)
+            `MATCH (a:GraphNode)-[r]->(b:GraphNode)
              WHERE a.orgId = $orgId AND a.workspaceId = $workspaceId AND type(r) IN $relTypes
              RETURN elementId(r) AS relElemId, type(r) AS relType, properties(r) AS props
              SKIP $skip LIMIT $batchSize`,
