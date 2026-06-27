@@ -25,6 +25,8 @@ import type { AgentDefinition } from "../agents/types.js";
 import type { OxagenSettings } from "../settings/schema.js";
 import type { ProjectContext } from "./project-context.js";
 import type { SessionMemory } from "./memory.js";
+import type { ToolEvent } from "./trace.js";
+import type { PermissionBroker } from "./permissions.js";
 
 export interface RunAgentOptions {
   /** The user's prompt for this turn. */
@@ -41,6 +43,8 @@ export interface RunAgentOptions {
   projectContext?: ProjectContext;
   /** Read-only mode: no file mutation or command execution. */
   readOnly?: boolean;
+  /** Permission broker gating mutating tools (absent ⇒ ungated). */
+  broker?: PermissionBroker;
   /** Session memory (Oxagen context engine). Recalled before, written after. */
   memory?: SessionMemory | null;
   /** Abort the turn (e.g. user hit Ctrl-C). */
@@ -214,6 +218,9 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   // gateway failures surface as one clean, actionable line instead of a wall of
   // internal fields.
   let streamError: unknown = null;
+  // Per-step timing: the tools in a step ran between the previous step's finish
+  // and this one's. Gives each tool event a real (if step-granular) duration.
+  let prevStepAt = Date.now();
   const result = streamText({
     model: resolveModelId(opts.model ?? opts.agent?.model),
     system,
@@ -224,16 +231,35 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     onError: ({ error }) => {
       streamError = error;
     },
-    onStepFinish: ({ toolCalls }) => {
+    onStepFinish: ({ toolCalls, toolResults }) => {
+      const now = Date.now();
+      // Index results by call id so each call is paired with what it returned.
+      const resultsById = new Map<string, unknown>();
+      for (const tr of toolResults ?? []) {
+        const r = tr as { toolCallId?: string; output?: unknown; result?: unknown; error?: unknown };
+        if (r.toolCallId) resultsById.set(r.toolCallId, r.error ?? r.output ?? r.result);
+      }
       for (const tc of toolCalls ?? []) {
-        const call = tc as { toolName: string; input?: unknown; args?: unknown };
+        const call = tc as { toolCallId?: string; toolName: string; input?: unknown; args?: unknown };
         const input = call.input ?? call.args;
         opts.onToolCall?.(call.toolName, input);
-        void opts.memory?.remember("tool_call", {
-          tool: call.toolName,
-          input,
-        });
+        void opts.memory?.remember("tool_call", { tool: call.toolName, input });
+
+        if (opts.onToolEvent) {
+          const out = call.toolCallId ? resultsById.get(call.toolCallId) : undefined;
+          const ok = !isErrorResult(out);
+          opts.onToolEvent({
+            name: call.toolName,
+            input: stringifyCapped(input, 1000),
+            result: out === undefined ? undefined : stringifyCapped(out, 2000),
+            startedAt: prevStepAt,
+            finishedAt: now,
+            durationMs: now - prevStepAt,
+            ok,
+          });
+        }
       }
+      prevStepAt = now;
     },
   });
 

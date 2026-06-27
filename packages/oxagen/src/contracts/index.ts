@@ -147,6 +147,7 @@ import { graphNodeGet } from "./graph.node.get";
 import { graphNodeDelete } from "./graph.node.delete";
 import { graphNodeSearch } from "./graph.node.search";
 import { graphSearch } from "./graph.search";
+import { graphExport } from "./graph.export";
 import { graphEdgeUpsert } from "./graph.edge.upsert";
 import { graphEdgeDelete } from "./graph.edge.delete";
 import { graphCypher } from "./graph.cypher";
@@ -215,6 +216,7 @@ import { schemaValidateRelationship } from "./schema.validate.relationship";
 import { schemaReconcileDispatch } from "./schema.reconcile.dispatch";
 import { schemaReconcileStatus } from "./schema.reconcile.status";
 import { graphRelationshipUpsert } from "./graph.relationship.upsert";
+import { graphExport } from "./graph.export";
 import { semanticRelationshipApprove } from "./semantic.relationship.approve";
 import { semanticRelationshipInfer } from "./semantic.relationship.infer";
 import { semanticRelationshipList } from "./semantic.relationship.list";
@@ -391,6 +393,7 @@ export {
   graphNodeDelete,
   graphNodeSearch,
   graphSearch,
+  graphExport,
   graphEdgeUpsert,
   graphEdgeDelete,
   graphCypher,
@@ -459,6 +462,7 @@ export {
   schemaReconcileDispatch,
   schemaReconcileStatus,
   graphRelationshipUpsert,
+  graphExport,
   semanticRelationshipApprove,
   semanticRelationshipInfer,
   semanticRelationshipList,
@@ -629,6 +633,7 @@ export const contracts = [
   graphNodeDelete,
   graphNodeSearch,
   graphSearch,
+  graphExport,
   graphEdgeUpsert,
   graphEdgeDelete,
   graphCypher,
@@ -697,6 +702,7 @@ export const contracts = [
   schemaReconcileDispatch,
   schemaReconcileStatus,
   graphRelationshipUpsert,
+  graphExport,
   semanticRelationshipApprove,
   semanticRelationshipInfer,
   semanticRelationshipList,

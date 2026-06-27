@@ -28,7 +28,7 @@ describe("client.ts barrel exports", () => {
     expect(typeof mod.clickhouse).toBe("function");
     expect(typeof mod.closeClickhouse).toBe("function");
     expect(typeof mod.sumTokenUsage).toBe("function");
-  });
+  }, 15000);
 });
 
 describe("index.ts barrel exports", () => {

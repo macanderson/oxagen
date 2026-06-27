@@ -65,7 +65,9 @@ vi.mock("./message-composer", () => ({
 // ── UI/component stubs ───────────────────────────────────────────────────────
 vi.mock("./message-tree", () => ({ MessageTree: () => null }));
 vi.mock("./suggested-prompt-chips", () => ({ SuggestedPromptChips: () => null }));
-vi.mock("./conversation-files", () => ({ ConversationFiles: () => null }));
+vi.mock("./conversation-files", () => ({
+  ConversationFiles: () => <div data-testid="conversation-files" />,
+}));
 vi.mock("./activity-timeline", () => ({
   ActivityTimeline: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   TimelineItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -374,6 +376,112 @@ describe("ChatShellClient — stream error banner on non-2xx SSE response", () =
     });
     // AbortErrors are expected (user interrupt / unmount) — no banner
     expect(screen.queryByTestId("stream-error-banner")).not.toBeInTheDocument();
+  });
+});
+
+// ── Embedded mode (floating in-app agent panel) ──────────────────────────────
+// The drawer owns its own conversation state instead of an RSC. These tests pin
+// the contract that makes the user's prompt persist there:
+//   - onConversationCreated is called (and router URL pin is skipped) when a
+//     turn creates the conversation;
+//   - reloadMessages is called after the turn (replacing router.refresh());
+//   - showFiles={false} hides the conversation-files trigger.
+
+describe("ChatShellClient — embedded mode (in-app panel)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubCleanStream() {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          new ReadableStream({
+            start(c) {
+              c.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+              c.close();
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+  }
+
+  async function renderEmbeddedAndSubmit(extra: Record<string, unknown>) {
+    stubCleanStream();
+    cleanup();
+    capturedComposerProps = {};
+    const { ChatShellClient } = await import("./chat-shell-client");
+    render(
+      <ChatShellClient
+        conversationId={null}
+        conversationPublicId={null}
+        activeLeafMessageId={null}
+        messages={[]}
+        sendAction={async () => ({
+          ok: true,
+          conversationId: "conv-embed",
+          conversationPublicId: "conv_pub_embed",
+          userMessageId: "msg-embed",
+        })}
+        resolveApprovalAction={async () => ({ ok: true })}
+        resolveConsentAction={async () => ({ ok: true })}
+        resolvePlanAction={async () => ({ ok: true })}
+        orgSlug="test-org"
+        workspaceSlug="test-ws"
+        modelConfig={modelConfig}
+        {...extra}
+      />,
+    );
+    const action = capturedComposerProps.action as (fd: FormData) => Promise<unknown>;
+    const fd = new FormData();
+    fd.set("content", "Recent activity?");
+    await action(fd);
+    await new Promise((r) => setTimeout(r, 20));
+  }
+
+  it("calls onConversationCreated with the new ids and does NOT pin the URL", async () => {
+    const onConversationCreated = vi.fn();
+    await renderEmbeddedAndSubmit({ onConversationCreated, reloadMessages: vi.fn() });
+    expect(onConversationCreated).toHaveBeenCalledWith("conv-embed", "conv_pub_embed");
+    // The floating panel has no route to pin — router.replace must not fire.
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("calls reloadMessages after the turn instead of router.refresh()", async () => {
+    const reloadMessages = vi.fn();
+    await renderEmbeddedAndSubmit({ reloadMessages, onConversationCreated: vi.fn() });
+    expect(reloadMessages).toHaveBeenCalled();
+    expect(mockRefresh).not.toHaveBeenCalled();
+  });
+
+  it("hides the conversation-files trigger when showFiles={false}", async () => {
+    cleanup();
+    await renderClient();
+    // Default (showFiles undefined → true) renders the files trigger.
+    expect(screen.getByTestId("conversation-files")).toBeInTheDocument();
+
+    cleanup();
+    const { ChatShellClient } = await import("./chat-shell-client");
+    render(
+      <ChatShellClient
+        conversationId={null}
+        conversationPublicId={null}
+        activeLeafMessageId={null}
+        messages={[]}
+        sendAction={noop}
+        resolveApprovalAction={async () => ({ ok: true })}
+        resolveConsentAction={async () => ({ ok: true })}
+        resolvePlanAction={async () => ({ ok: true })}
+        orgSlug="test-org"
+        workspaceSlug="test-ws"
+        modelConfig={modelConfig}
+        showFiles={false}
+      />,
+    );
+    expect(screen.queryByTestId("conversation-files")).not.toBeInTheDocument();
   });
 });
 

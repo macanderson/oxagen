@@ -36,6 +36,18 @@ export interface AgentPanelState {
   status: AgentStatus;
   /** The current conversation title shown in the header and collapsed bar. */
   conversationTitle: string | null;
+  /**
+   * Public id of the conversation the panel is currently driving (null before
+   * the first message is sent). Used to build the "Open in conversations" link
+   * that continues the chat on the full /ask page.
+   */
+  conversationPublicId: string | null;
+  /**
+   * Monotonic counter bumped on `startNewChat`. The panel keys its chat shell
+   * off this value so starting a new chat remounts the shell into a clean,
+   * empty state instead of leaving stale conversation state behind.
+   */
+  newChatNonce: number;
 }
 
 export interface AgentPanelActions {
@@ -53,7 +65,9 @@ export interface AgentPanelActions {
   setStatus: (status: AgentStatus) => void;
   /** Update the conversation title (shown in header + collapsed bar). */
   setConversationTitle: (title: string | null) => void;
-  /** Start a new chat — resets conversation title and messages. */
+  /** Record the public id of the conversation the panel is now driving. */
+  setConversationPublicId: (publicId: string | null) => void;
+  /** Start a new chat — resets conversation title, public id, and messages. */
   startNewChat: () => void;
 }
 
@@ -75,6 +89,8 @@ export function AgentPanelStoreProvider({ children }: { children: React.ReactNod
   const [sizeMode, setSizeModeState] = React.useState<PanelSizeMode>("standard");
   const [status, setStatusState] = React.useState<AgentStatus>("idle");
   const [conversationTitle, setConversationTitleState] = React.useState<string | null>(null);
+  const [conversationPublicId, setConversationPublicIdState] = React.useState<string | null>(null);
+  const [newChatNonce, setNewChatNonce] = React.useState(0);
 
   const open = React.useCallback(() => setVisibility("open"), []);
   const close = React.useCallback(() => {
@@ -99,9 +115,16 @@ export function AgentPanelStoreProvider({ children }: { children: React.ReactNod
     setConversationTitleState(title);
   }, []);
 
+  const setConversationPublicId = React.useCallback((publicId: string | null) => {
+    setConversationPublicIdState(publicId);
+  }, []);
+
   const startNewChat = React.useCallback(() => {
     setConversationTitleState(null);
+    setConversationPublicIdState(null);
     setStatusState("idle");
+    // Bump the nonce so the panel remounts its chat shell into a clean state.
+    setNewChatNonce((n) => n + 1);
     // Visibility stays open — user sees the empty new-chat state.
   }, []);
 
@@ -111,6 +134,8 @@ export function AgentPanelStoreProvider({ children }: { children: React.ReactNod
       sizeMode,
       status,
       conversationTitle,
+      conversationPublicId,
+      newChatNonce,
       open,
       close,
       collapse,
@@ -118,6 +143,7 @@ export function AgentPanelStoreProvider({ children }: { children: React.ReactNod
       setSizeMode,
       setStatus,
       setConversationTitle,
+      setConversationPublicId,
       startNewChat,
     }),
     [
@@ -125,6 +151,8 @@ export function AgentPanelStoreProvider({ children }: { children: React.ReactNod
       sizeMode,
       status,
       conversationTitle,
+      conversationPublicId,
+      newChatNonce,
       open,
       close,
       collapse,
@@ -132,6 +160,7 @@ export function AgentPanelStoreProvider({ children }: { children: React.ReactNod
       setSizeMode,
       setStatus,
       setConversationTitle,
+      setConversationPublicId,
       startNewChat,
     ],
   );

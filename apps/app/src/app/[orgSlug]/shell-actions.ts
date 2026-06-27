@@ -23,13 +23,15 @@ import "@oxagen/handlers/register";
 // to bind them into the kernel before the wand*Action invoke() calls below.
 import "@oxagen/agent/register";
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { DbMessageRow, ConversationRow } from "@oxagen/database";
 import { getSessionOrRedirect } from "@/lib/session";
 import type { PlanStep } from "@/components/chat/stream-event-types";
+import type { ChatMessage } from "@/components/chat/chat-shell";
+import { walkActiveBranch } from "./[workspaceSlug]/_shared/walk-active-branch";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
 import { agentMcpConsentResolve } from "@oxagen/oxagen/contracts/agent.mcp.consent.resolve";
@@ -277,6 +279,89 @@ export async function wandSendAction(
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to send message";
       return { ok: false, error: message };
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// loadAgentConversationAction — reload the active-branch messages for a
+// conversation the floating agent panel is driving.
+//
+// The in-app agent drawer is mounted at the org layout and has no RSC of its
+// own, so it cannot rely on the router.refresh()/`?c=` reconciliation the full
+// /ask page uses. Instead it owns its conversation state in React and calls
+// this action after each turn to pull the just-persisted user + assistant
+// messages back into the panel — so the user's prompt and the assistant reply
+// stay on screen and survive the next send (instead of vanishing).
+//
+// Workspace-scoped read: org + workspace are resolved from slugs server-side
+// and membership is asserted before any row is read.
+// ---------------------------------------------------------------------------
+
+export async function loadAgentConversationAction(
+  orgSlug: string,
+  workspaceSlug: string,
+  conversationPublicId: string,
+): Promise<
+  | {
+      ok: true;
+      conversationId: string;
+      messages: ChatMessage[];
+      activeLeafMessageId: string | null;
+      title: string | null;
+    }
+  | { ok: false; error: string }
+> {
+  const session = await getSessionOrRedirect();
+
+  const resolved = await resolveWorkspaceFromSlugs(orgSlug, workspaceSlug);
+  if (!resolved) return { ok: false, error: "No active workspace." };
+  const { orgId, workspaceId } = resolved;
+
+  const isMember = await assertWorkspaceMember(orgId, workspaceId, session.user.id);
+  if (!isMember) return { ok: false, error: "You don't have access to this workspace." };
+
+  return runInTenantScope({ orgId, workspaceId }, async () => {
+    try {
+      const [conv] = await withTenantDb((tx) =>
+        tx
+          .select({
+            id: schema.conversations.id,
+            title: schema.conversations.title,
+            leaf: schema.conversations.activeLeafMessageId,
+          })
+          .from(schema.conversations)
+          .where(
+            and(
+              eq(schema.conversations.publicId, conversationPublicId),
+              eq(schema.conversations.orgId, orgId),
+              eq(schema.conversations.workspaceId, workspaceId),
+            ),
+          )
+          .limit(1),
+      );
+      if (!conv) return { ok: false as const, error: "Conversation not found" };
+
+      const leaf = conv.leaf ?? null;
+      const rows = (await withTenantDb((tx) =>
+        tx
+          .select()
+          .from(schema.messages)
+          .where(eq(schema.messages.conversationId, conv.id))
+          .orderBy(desc(schema.messages.createdAt))
+          .limit(200),
+      )) as DbMessageRow[];
+
+      return {
+        ok: true as const,
+        conversationId: conv.id,
+        messages: walkActiveBranch(rows, leaf),
+        activeLeafMessageId: leaf,
+        title: conv.title ?? null,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load conversation";
+      return { ok: false as const, error: message };
     }
   });
 }

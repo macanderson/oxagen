@@ -16,7 +16,7 @@
 
 import * as React from "react";
 import { Suspense } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   X,
   Minus,
@@ -25,6 +25,7 @@ import {
   MoreHorizontal,
   Copy,
   Trash2,
+  SquareArrowOutUpRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePageContext } from "@/lib/page-context";
@@ -53,6 +54,7 @@ import {
   wandResolveApprovalAction,
   wandResolveConsentAction,
   wandResolvePlanAction,
+  loadAgentConversationAction,
 } from "@/app/[orgSlug]/shell-actions";
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
@@ -83,15 +85,19 @@ export function InAppAgentPanel({
     visibility,
     sizeMode,
     conversationTitle,
+    conversationPublicId,
+    newChatNonce,
     close,
     collapse,
     toggleSize,
     setStatus,
     setConversationTitle,
+    setConversationPublicId,
     startNewChat,
   } = useAgentPanelStore();
 
   const pathname = usePathname();
+  const router = useRouter();
   const messagesRef = React.useRef<ChatMessage[]>(EMPTY_MESSAGES);
 
   // Don't render when fully closed.
@@ -105,6 +111,17 @@ export function InAppAgentPanel({
     ctx.workspaceSlug ?? availableWorkspaces[0]?.slug ?? "";
 
   const isExpanded = sizeMode === "expanded";
+
+  // Continue the current drawer conversation on the full /ask page (where all
+  // chat tools — including conversation files — are available). Closes the
+  // floating panel so the user isn't looking at the same chat twice.
+  const handleContinueInPage = () => {
+    if (!conversationPublicId || !activeWorkspaceSlug) return;
+    close();
+    router.push(
+      `/${orgSlug}/${activeWorkspaceSlug}/ask?c=${conversationPublicId}`,
+    );
+  };
 
   return (
     <div
@@ -128,6 +145,8 @@ export function InAppAgentPanel({
       <PanelHeader
         title={conversationTitle ?? "New chat"}
         isExpanded={isExpanded}
+        canContinueInPage={conversationPublicId !== null}
+        onContinueInPage={handleContinueInPage}
         onCollapse={collapse}
         onToggleSize={toggleSize}
         onClose={close}
@@ -135,15 +154,19 @@ export function InAppAgentPanel({
         messagesRef={messagesRef}
       />
 
-      {/* Chat area */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* Chat area — `key` on the nonce remounts into a clean state on New chat.
+          Horizontal + bottom padding keeps the composer and messages off the
+          panel's edges so the chat doesn't feel scrunched. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-3">
         <AgentChatShell
+          key={newChatNonce}
           orgSlug={orgSlug}
           workspaceSlug={activeWorkspaceSlug}
           modelConfig={modelConfig}
           messagesRef={messagesRef}
           onStatusChange={setStatus}
           onTitleChange={setConversationTitle}
+          onConversationPublicIdChange={setConversationPublicId}
         />
       </div>
     </div>
@@ -157,6 +180,8 @@ export function InAppAgentPanel({
 function PanelHeader({
   title,
   isExpanded,
+  canContinueInPage,
+  onContinueInPage,
   onCollapse,
   onToggleSize,
   onClose,
@@ -165,6 +190,10 @@ function PanelHeader({
 }: {
   title: string;
   isExpanded: boolean;
+  /** Whether a conversation exists to continue on the full /ask page. */
+  canContinueInPage: boolean;
+  /** Navigate to the full /ask page with this conversation loaded. */
+  onContinueInPage: () => void;
   onCollapse: () => void;
   onToggleSize: () => void;
   onClose: () => void;
@@ -213,7 +242,14 @@ function PanelHeader({
           <MoreHorizontal className="h-4 w-4" />
         </MenuTrigger>
         <MenuPortal>
-          <MenuPopup className="min-w-[180px]">
+          <MenuPopup className="min-w-[200px]">
+            <MenuItem
+              onClick={onContinueInPage}
+              disabled={!canContinueInPage}
+            >
+              <SquareArrowOutUpRight className="mr-2 h-4 w-4" />
+              Open in conversations
+            </MenuItem>
             <MenuItem onClick={handleCopyAsMarkdown}>
               <Copy className="mr-2 h-4 w-4" />
               Copy as markdown
@@ -302,20 +338,80 @@ function AgentChatShell({
   orgSlug,
   workspaceSlug,
   modelConfig,
-  messagesRef: _messagesRef,
+  messagesRef,
   onStatusChange,
-  onTitleChange: _onTitleChange,
+  onTitleChange,
+  onConversationPublicIdChange,
 }: {
   orgSlug: string;
   workspaceSlug: string;
   modelConfig: ResolvedTierCatalog;
-  messagesRef: React.MutableRefObject<ChatMessage[]>;
+  messagesRef: React.RefObject<ChatMessage[]>;
   onStatusChange: (status: "idle" | "active" | "completed") => void;
   onTitleChange: (title: string | null) => void;
+  /** Publish the active conversation's publicId up to the panel store. */
+  onConversationPublicIdChange: (publicId: string | null) => void;
 }) {
   const { fillableForm, entity, _setIsFilling, _setFillResult } =
     usePageContext();
   const pathname = usePathname();
+
+  // The floating panel owns its conversation state — it has no RSC of its own to
+  // drive the conversationId/messages props the way the /ask page does. On the
+  // first send `wandSendAction` creates the conversation and returns its ids; we
+  // adopt them here and reload the persisted messages after every turn, so the
+  // user's prompt and the assistant reply stay on screen and survive the next
+  // send (previously this shell was stateless, so the prompt never rendered and
+  // each turn wiped the last one).
+  const [conversationId, setConversationId] = React.useState<string | null>(null);
+  const [conversationPublicId, setConversationPublicId] = React.useState<string | null>(
+    null,
+  );
+  const [activeLeafMessageId, setActiveLeafMessageId] = React.useState<string | null>(
+    null,
+  );
+  const [messages, setMessages] = React.useState<ChatMessage[]>(EMPTY_MESSAGES);
+
+  // Mirror messages into the shared ref so the header's "Copy as markdown" sees
+  // the current transcript.
+  React.useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages, messagesRef]);
+
+  // Stable ref to the active conversation publicId, read inside reloadMessages
+  // (whose identity must stay stable) immediately after a turn — including the
+  // very first turn, before the state update has re-rendered.
+  const conversationPublicIdRef = React.useRef<string | null>(null);
+
+  // Reconcile the local transcript with the persisted active branch. Called both
+  // right after the conversation is created (so the user's prompt shows during
+  // the first stream) and after each turn completes (so the assistant reply
+  // becomes durable). Replaces the /ask page's router.refresh().
+  const reloadMessages = React.useCallback(async () => {
+    const publicId = conversationPublicIdRef.current;
+    if (!publicId) return;
+    const result = await loadAgentConversationAction(orgSlug, workspaceSlug, publicId);
+    if (result.ok) {
+      setMessages(result.messages);
+      setActiveLeafMessageId(result.activeLeafMessageId);
+      onTitleChange(result.title);
+    }
+  }, [orgSlug, workspaceSlug, onTitleChange]);
+
+  // Called by ChatShellClient on the turn that creates the conversation. Adopt
+  // the new ids, publish the publicId to the panel store (for the header's
+  // "Open in conversations" link), and immediately reload so the user's prompt
+  // bubble appears while the assistant is still streaming.
+  const handleConversationCreated = React.useCallback(
+    (newId: string, newPublicId: string) => {
+      conversationPublicIdRef.current = newPublicId;
+      setConversationId(newId);
+      setConversationPublicId(newPublicId);
+      onConversationPublicIdChange(newPublicId);
+      void reloadMessages();
+    },
+    [onConversationPublicIdChange, reloadMessages],
+  );
 
   const buildPageContext = React.useCallback((): ChatPageContext | null => {
     const route = pathname;
@@ -352,9 +448,15 @@ function AgentChatShell({
       onStatusChange("active");
       const result = await wandSendAction(formData);
       onStatusChange("completed");
+      // For an already-established conversation, reload right away so the just-
+      // sent user prompt appears while the assistant streams (the first turn is
+      // covered by handleConversationCreated instead).
+      if (result.ok && conversationPublicIdRef.current) {
+        void reloadMessages();
+      }
       return result;
     },
-    [orgSlug, workspaceSlug, onStatusChange],
+    [orgSlug, workspaceSlug, onStatusChange, reloadMessages],
   );
 
   const scopedResolveApprovalAction = React.useCallback<
@@ -415,10 +517,10 @@ function AgentChatShell({
       }
     >
       <LazyChatShellClient
-        conversationId={null}
-        conversationPublicId={null}
-        activeLeafMessageId={null}
-        messages={EMPTY_MESSAGES}
+        conversationId={conversationId}
+        conversationPublicId={conversationPublicId}
+        activeLeafMessageId={activeLeafMessageId}
+        messages={messages}
         sendAction={scopedSendAction}
         resolveApprovalAction={scopedResolveApprovalAction}
         resolveConsentAction={scopedResolveConsentAction}
@@ -429,6 +531,9 @@ function AgentChatShell({
         pageContext={pageCtx}
         onFormFillStart={handleFormFillStart}
         onFormFillEnd={handleFormFillEnd}
+        onConversationCreated={handleConversationCreated}
+        reloadMessages={reloadMessages}
+        showFiles={false}
       />
     </Suspense>
   );
