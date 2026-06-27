@@ -9,8 +9,10 @@ import { logger } from "../logger";
 
 // Paths to exclude from the file tree (not worth parsing).
 const EXCLUDED_PREFIXES = ["node_modules/", "dist/", ".git/", "__pycache__/"];
-// Extensions we process.
-const ALLOWED_EXTENSIONS = [".ts", ".tsx", ".py"];
+// Extensions we process. Code (tree-sitter parsed into symbols) + markdown
+// documentation (parsed into heading sections). Every matched file has its full
+// content embedded for natural-language search regardless of symbol extraction.
+const ALLOWED_EXTENSIONS = [".ts", ".tsx", ".py", ".md", ".mdx", ".markdown"];
 // Maximum files dispatched per sync to keep fan-out bounded.
 const MAX_FILES = 500;
 // Maximum events sent per step.sendEvent batch call.

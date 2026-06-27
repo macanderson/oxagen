@@ -46,7 +46,7 @@ export class GraphRetrievalEngine implements RetrievalEngine {
           AND m.workspaceId = $workspaceId
         RETURN m.recordId AS recordId, m.salience AS salience
         UNION
-        MATCH (m:EngramMemory)-[:ABOUT]->(kn:KnowledgeNode)
+        MATCH (m:EngramMemory)-[:ABOUT]->(kn:GraphNode)
         WHERE kn.publicId IN $workingSet
           AND m.orgId = $orgId
           AND m.workspaceId = $workspaceId

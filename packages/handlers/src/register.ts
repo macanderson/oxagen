@@ -660,6 +660,11 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .graphNodeSearchHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "graph.search",
+    async () =>
+      (await import("./graph.search")).graphSearchHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "graph.edge.upsert",
     async () =>
       (await import("./graph.edge.upsert"))

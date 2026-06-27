@@ -111,6 +111,11 @@ export async function writeMemory(
         })
         ON CREATE SET
           m.id = randomUUID(),
+          m.publicId = randomUUID(),
+          m:GraphNode,
+          m.is_system = true,
+          m.label = 'AgentMemory',
+          m.displayName = left($lesson, 200),
           m.weight = $weight,
           m.kind = $kind,
           m.source = $source,
@@ -119,6 +124,11 @@ export async function writeMemory(
           m.lastReinforcedAt = datetime(),
           m.createdAt = datetime()
         ON MATCH SET
+          m:GraphNode,
+          m.is_system = true,
+          m.label = 'AgentMemory',
+          m.displayName = left($lesson, 200),
+          m.publicId = coalesce(m.publicId, randomUUID()),
           m.weight = $weight,
           m.kind = $kind,
           m.source = $source,
@@ -127,15 +137,17 @@ export async function writeMemory(
         WITH m
         OPTIONAL MATCH (target { id: $nodeRef, orgId: $orgId })
         FOREACH (_ IN CASE WHEN target IS NULL THEN [] ELSE [1] END |
-          MERGE (target)-[:REMEMBERS]->(m)
+          MERGE (target)-[rr:REMEMBERS]->(m)
+          SET rr.is_system = true
         )
         WITH m
         CALL {
           WITH m
           UNWIND $relatedNodeIds AS nid
-          OPTIONAL MATCH (kn:KnowledgeNode {publicId: nid, orgId: $orgId})
+          OPTIONAL MATCH (kn:GraphNode {publicId: nid, orgId: $orgId})
           FOREACH (_ IN CASE WHEN kn IS NULL THEN [] ELSE [1] END |
-            MERGE (m)-[:ABOUT]->(kn)
+            MERGE (m)-[ra:ABOUT]->(kn)
+            SET ra.is_system = true
           )
           RETURN count(kn) AS edgesCreated
         }

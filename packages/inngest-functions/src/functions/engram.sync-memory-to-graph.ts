@@ -77,7 +77,7 @@ export const [engramSyncMemoryToGraph] = createFunction(
               CALL {
                 WITH m
                 UNWIND $entityRefs AS nid
-                OPTIONAL MATCH (kn:KnowledgeNode {publicId: nid, orgId: $orgId})
+                OPTIONAL MATCH (kn:GraphNode {publicId: nid, orgId: $orgId})
                 FOREACH (_ IN CASE WHEN kn IS NOT NULL THEN [1] ELSE [] END |
                   MERGE (m)-[:ABOUT]->(kn)
                 )

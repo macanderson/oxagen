@@ -31,7 +31,7 @@ export const semanticEdgeSuggestHandler: CapabilityHandler<typeof semanticEdgeSu
         `MATCH (ie:InferredEdge {orgId: $orgId, workspaceId: $workspaceId, approvalStatus: 'pending'})
          WHERE ($confidenceMin IS NULL OR ie.confidence >= $confidenceMin)
            AND ($confidenceMax IS NULL OR ie.confidence <= $confidenceMax)
-         OPTIONAL MATCH (src:KnowledgeNode {publicId: ie.sourceNodeId, orgId: $orgId, workspaceId: $workspaceId})
+         OPTIONAL MATCH (src:GraphNode {publicId: ie.sourceNodeId, orgId: $orgId, workspaceId: $workspaceId})
          RETURN
            ie.id               AS id,
            ie.sourceNodeId     AS sourceNodeId,

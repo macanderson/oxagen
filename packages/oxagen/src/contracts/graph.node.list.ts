@@ -19,6 +19,13 @@ export const graphNodeList = registerCapability({
   input: z.object({
     labels: z.array(z.string()).optional().describe("Filter by node labels (e.g., Feature, Issue)"),
     sourceId: z.string().optional().describe("Filter by source connector ID"),
+    isSystem: z
+      .boolean()
+      .optional()
+      .describe(
+        "Filter by ownership: false = customer ontology only, true = product-owned artifacts only " +
+          "(executions, code, memories, chunks). Omit to return both. Lets the explorer hide system nodes.",
+      ),
     limit: z.number().int().min(1).max(250).default(50).describe("Max results (default 50)"),
     offset: z.number().int().min(0).default(0).describe("Pagination offset"),
     query: z.string().optional().describe("Text search in displayName and description"),

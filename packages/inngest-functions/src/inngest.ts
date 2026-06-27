@@ -318,10 +318,12 @@ type Events = {
     };
   };
 
+  // ── Generated-file graph sync ───────────────────────────────────────────────
   // Fired by persistGeneratedAsset() after a generated_assets row is committed.
-  // The Inngest worker mirrors the asset into Neo4j as a Document node with
-  // PRODUCED edges from the originating Conversation/Message.
-  "agent/generated-asset.sync": {
+  // content.sync-generated-file-to-graph mirrors the file into Neo4j as a
+  // searchable :GeneratedFile node (embedding + lineage to the producing
+  // execution) so NL queries like "find the files I made about X" return it.
+  "content/generated-asset.sync": {
     data: {
       assetId: string;
       publicId: string;
@@ -329,12 +331,13 @@ type Events = {
       workspaceId: string;
       kind: string;
       mimeType: string;
-      prompt: string;
       model: string;
-      displayName?: string | null;
+      displayName: string;
+      prompt?: string | null;
       conversationId?: string | null;
       messageId?: string | null;
-      userId: string;
+      summary?: string | null;
+      embedding?: number[] | null;
     };
   };
 

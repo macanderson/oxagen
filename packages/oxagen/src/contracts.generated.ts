@@ -106,6 +106,7 @@ import "./contracts/graph.node.list";
 import "./contracts/graph.node.search";
 import "./contracts/graph.node.upsert";
 import "./contracts/graph.relationship.upsert";
+import "./contracts/graph.search";
 import "./contracts/graph.stats";
 import "./contracts/image.analyze";
 import "./contracts/image.create";

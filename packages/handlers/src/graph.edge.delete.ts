@@ -21,7 +21,7 @@ function buildDeleteQuery(relationshipType: string): string {
       `graph.edge.delete: relationship type "${relationshipType}" fails the lexical guard`,
     );
   }
-  return `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})-[r:${relationshipType}]->(to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
+  return `MATCH (from:GraphNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})-[r:${relationshipType}]->(to:GraphNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
           WITH r, count(r) AS found
           DELETE r
           RETURN found > 0 AS wasDeleted`;

@@ -52,6 +52,8 @@ vi.mock("../logger", () => ({
 // Import module to trigger createFunction call.
 await import("./agent.sync-execution-to-graph");
 
+const FAKE_EMBEDDING = new Array(1536).fill(0.5);
+
 const EXEC_PAYLOAD = {
   executionId: "aex-test-123",
   orgId: "org-abc",
@@ -70,6 +72,9 @@ const EXEC_PAYLOAD = {
     { toolName: "web.search", toolType: "builtin" },
     { toolName: "document.read", toolType: "capability" },
   ],
+  summary: "chat execution by agent agt-789: completed, 2 tool calls, 340 output tokens",
+  displayName: "chat execution by agt-789",
+  embedding: FAKE_EMBEDDING,
 };
 
 describe("agent.sync-execution-to-graph Inngest function", () => {
@@ -110,6 +115,24 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
       expect(call.toolCalls![0]).toEqual({ toolName: "web.search", toolType: "builtin" });
     });
 
+    it("passes summary, displayName, and embedding fields to recordExecutionInGraph", async () => {
+      const mockStep = {
+        run: vi.fn((_name: string, fn: () => unknown) => fn()),
+      };
+
+      await capturedHandler!(
+        {
+          event: { data: EXEC_PAYLOAD },
+          step: mockStep,
+        } as InngestContext,
+      );
+
+      const call = mocks.recordExecutionInGraph.mock.calls[0]![0] as Record<string, unknown>;
+      expect(call.summary).toBe(EXEC_PAYLOAD.summary);
+      expect(call.displayName).toBe(EXEC_PAYLOAD.displayName);
+      expect(call.embedding).toEqual(FAKE_EMBEDDING);
+    });
+
     it("works when optional fields are omitted", async () => {
       const minimalPayload = {
         executionId: "aex-minimal",
@@ -131,7 +154,15 @@ describe("agent.sync-execution-to-graph Inngest function", () => {
         } as InngestContext,
       );
 
-      expect(mocks.recordExecutionInGraph).toHaveBeenCalledWith(minimalPayload);
+      // Verify required fields are forwarded; optional fields absent in the event
+      // land as undefined in the destructure and are passed through as-is.
+      const call = mocks.recordExecutionInGraph.mock.calls[0]![0] as Record<string, unknown>;
+      expect(call.executionId).toBe("aex-minimal");
+      expect(call.orgId).toBe("org-abc");
+      expect(call.workspaceId).toBe("ws-xyz");
+      expect(call.status).toBe("running");
+      expect(call.originType).toBe("mcp_request");
+      expect(call.originId).toBe("req-111");
     });
   });
 

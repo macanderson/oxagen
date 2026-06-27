@@ -4,7 +4,7 @@ import { registerCapability } from "../registry";
 export const graphNodeUpsert = registerCapability({
   name: "graph.node.upsert",
   domain: "graph",
-  description: "MERGE a KnowledgeNode in the graph. Creates or updates by externalId, or by a natural key derived from label+displayName+workspaceId.",
+  description: "MERGE a node in the knowledge graph. The node carries its real domain label (from `label`) plus the universal :GraphNode anchor. Creates or updates by externalId, or by a natural key derived from label+displayName+workspaceId.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -22,6 +22,7 @@ export const graphNodeUpsert = registerCapability({
     description: z.string().max(2000).optional().describe("Optional description or summary"),
     properties: z.record(z.string(), z.unknown()).optional().describe("Arbitrary key-value metadata"),
     externalId: z.string().max(500).optional().describe("Stable user-supplied identifier for MERGE; if absent, natural key is label+displayName+workspaceId"),
+    isSystem: z.boolean().optional().describe("True for product-owned nodes (executions, code, memories); false/omitted for customer ontology/knowledge nodes. Drives the is_system filter on reads."),
   }),
   output: z.object({
     nodeId: z.string().describe("publicId of the upserted node"),
