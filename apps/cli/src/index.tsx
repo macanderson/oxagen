@@ -292,6 +292,44 @@ agent
     agentNew(name);
   });
 
+// ── command: user-defined slash commands ──────────────────────────────────────
+
+const command = program
+  .command("command")
+  .description("Manage user-defined slash commands (invoke as `/name` in the REPL)");
+command
+  .command("list")
+  .description("List available slash commands")
+  .action(async () => {
+    const { commandList } = await import("./commands/command.js");
+    commandList();
+  });
+command
+  .command("show")
+  .description("Show a slash command's template")
+  .argument("<name>", "Command name")
+  .action(async (name: string) => {
+    const { commandShow } = await import("./commands/command.js");
+    commandShow(name);
+  });
+command
+  .command("new")
+  .description("Scaffold a new slash command at .oxagen/commands/<name>.md")
+  .argument("<name>", "Command name")
+  .action(async (name: string) => {
+    const { commandNew } = await import("./commands/command.js");
+    commandNew(name);
+  });
+command
+  .command("run")
+  .description("Expand a slash command's template with args and run it as a turn")
+  .argument("<name>", "Command name")
+  .argument("[args...]", "Arguments substituted into the template")
+  .action(async (name: string, args: string[]) => {
+    const { commandRun } = await import("./commands/command.js");
+    await commandRun(name, args ?? []);
+  });
+
 // ── mcp: external MCP servers ─────────────────────────────────────────────────
 
 const collect = (val: string, prev: string[]): string[] => prev.concat([val]);
