@@ -6,8 +6,10 @@ import { revalidatePath } from "next/cache";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
-// Side-effect import: bind every foundation handler so invoke() can resolve.
+// Side-effect imports: bind every foundation + agent handler so invoke() can
+// resolve. agent.memory.policy.* handlers live in @oxagen/agent/register.
 import "@oxagen/handlers/register";
+import "@oxagen/agent/register";
 import type { AgentMemoryPolicyWriteOutput } from "@oxagen/oxagen/contracts/agent.memory.policy.write";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
