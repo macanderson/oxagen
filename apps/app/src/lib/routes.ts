@@ -185,6 +185,8 @@ export const workspace = {
       `${wsBase(ctx)}/settings/skills`,
     knowledge: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/knowledge`,
+    memory: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/memory`,
   },
 } as const;
 

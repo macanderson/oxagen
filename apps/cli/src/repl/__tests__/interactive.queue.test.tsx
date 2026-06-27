@@ -1,7 +1,7 @@
 /**
  * Proof of the Claude Code-style prompt queue in the interactive REPL.
  *
- * The agent loop (`runAgent`) is replaced with a controllable mock so each turn
+ * The turn pipeline (`runTurn`) is replaced with a controllable mock so each turn
  * stays "in flight" until the test resolves it. We drive the real <ReplApp/>
  * through ink-testing-library's stdin and assert that prompts submitted while a
  * turn is running are (a) visibly queued, (b) not started early, and (c) run in
@@ -104,7 +104,7 @@ describe("REPL prompt queue (Claude Code-style)", () => {
     const { stdin, lastFrame } = render(<ReplApp options={{}} />);
     await tick();
 
-    // 1) First prompt starts a turn; runAgent is invoked and parks (in flight).
+    // 1) First prompt starts a turn; runTurn is invoked and parks (in flight).
     await submit(stdin, "first task");
     await waitFor(() => runTurnSpy.mock.calls.length === 1);
     expect(runTurnSpy.mock.calls[0]?.[0].prompt).toBe("first task");

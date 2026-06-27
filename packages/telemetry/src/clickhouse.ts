@@ -1,5 +1,6 @@
 import { createClient, type ClickHouseClient } from "@clickhouse/client";
 import { requireEnv } from "@oxagen/config/env";
+import { currentTraceIds } from "./tracer";
 
 // Singleton client per process. ClickHouse Cloud handles concurrency
 // upstream; we just reuse a single keepalive connection pool.
@@ -147,6 +148,13 @@ export interface EventRow {
   stream_offset: string | null;
   payload: string;
   emitted_at: string;
+  /**
+   * OTEL trace id (32-char lowercase hex). Stamped automatically by
+   * insertEvents() via currentTraceIds(). Empty string when no trace active.
+   */
+  trace_id?: string;
+  /** OTEL span id (16-char lowercase hex). */
+  span_id?: string;
 }
 
 export type Surface =
@@ -197,6 +205,14 @@ export interface TokenUsageRow {
   /** SHA-256 of the rendered prompt, first 16 bytes hex. PII-free cohort key. */
   prompt_hash: string;
   created_at: string;
+  /**
+   * OTEL trace id (32-char lowercase hex) of the enclosing distributed trace.
+   * Stamped automatically by insertTokenUsage() via currentTraceIds().
+   * Empty string when no trace is active (OTEL not initialised or no active span).
+   */
+  trace_id?: string;
+  /** OTEL span id (16-char lowercase hex) of the enclosing span. */
+  span_id?: string;
 }
 
 async function insertRows<T>(table: string, rows: readonly T[]): Promise<void> {
@@ -230,17 +246,32 @@ export const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
 export const insertExecutionLogs = (rows: readonly ExecutionLogRow[]) =>
   insertRows("execution_logs", rows);
-export const insertEvents = (rows: readonly EventRow[]) =>
-  insertRows("events", rows);
-export const insertTokenUsage = (rows: readonly TokenUsageRow[]) =>
-  insertRows(
+
+export const insertEvents = (rows: readonly EventRow[]) => {
+  const { trace_id, span_id } = currentTraceIds();
+  return insertRows(
+    "events",
+    rows.map((r) => ({
+      ...r,
+      trace_id: r.trace_id ?? trace_id,
+      span_id: r.span_id ?? span_id,
+    })),
+  );
+};
+export const insertTokenUsage = (rows: readonly TokenUsageRow[]) => {
+  const { trace_id, span_id } = currentTraceIds();
+  return insertRows(
     "token_usage",
     // Coalesce the "no execution step" sentinel (null/undefined) to the nil UUID
     // so the non-nullable UUID key column always receives a parseable value.
-    rows.map((r) =>
-      r.execution_step_id == null ? { ...r, execution_step_id: NIL_UUID } : r,
-    ),
+    // Also stamp trace_id/span_id from the active OTEL context for log↔trace join.
+    rows.map((r) => ({
+      ...(r.execution_step_id == null ? { ...r, execution_step_id: NIL_UUID } : r),
+      trace_id: r.trace_id ?? trace_id,
+      span_id: r.span_id ?? span_id,
+    })),
   );
+};
 
 // Agent runtime epic (spec §9). One row per tool invocation. Analytics
 // mirror of execution.tool_calls; durable record stays in Postgres.
@@ -266,10 +297,25 @@ export interface ToolInvocationRow {
   /** Empty string when the underlying capability isn't model-backed. */
   provider: Provider;
   created_at: string;
+  /**
+   * OTEL trace id (32-char lowercase hex). Stamped automatically by
+   * insertToolInvocation() via currentTraceIds(). Empty string when no trace active.
+   */
+  trace_id?: string;
+  /** OTEL span id (16-char lowercase hex). */
+  span_id?: string;
 }
 
-export const insertToolInvocation = (row: ToolInvocationRow) =>
-  insertRows("tool_invocations", [row]);
+export const insertToolInvocation = (row: ToolInvocationRow) => {
+  const { trace_id, span_id } = currentTraceIds();
+  return insertRows("tool_invocations", [
+    {
+      ...row,
+      trace_id: row.trace_id ?? trace_id,
+      span_id: row.span_id ?? span_id,
+    },
+  ]);
+};
 
 /**
  * Deterministic, PII-free cohort key for prompts. SHA-256, first 16 bytes
@@ -369,6 +415,30 @@ export interface AuditEventRow {
  */
 export const insertAuditEvent = (row: AuditEventRow): Promise<void> =>
   insertRows("audit_events", [row]);
+
+// ── Memory decay / reinforcement events (OXA-1374) ────────────────────────────
+//
+// One row per confidence change to an AgentMemory node. Callers write
+// fire-and-forget; the table is append-only with a 365-day TTL.
+
+export interface MemoryChangeRow {
+  change_id: string;
+  org_id: string;
+  workspace_id: string;
+  memory_id: string;
+  node_ref: string;
+  cause: "reinforced" | "decayed" | "manually_promoted" | "manually_forgotten";
+  confidence_before: number;
+  confidence_after: number;
+  occurred_at: string;
+}
+
+/**
+ * Insert a single memory-change event. Caller is responsible for fire-and-forget
+ * semantics (not awaiting unless auditing is in the critical path).
+ */
+export const insertMemoryChange = (row: MemoryChangeRow): Promise<void> =>
+  insertRows("memory_changes", [row]);
 
 /**
  * Read the most recent chain_hash for a given (org_id, capability) pair so the

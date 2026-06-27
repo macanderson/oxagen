@@ -19,6 +19,8 @@ import "./contracts/agent.mcp.delete";
 import "./contracts/agent.mcp.list";
 import "./contracts/agent.mcp.register";
 import "./contracts/agent.mcp.set_enabled";
+import "./contracts/agent.memory.policy.read";
+import "./contracts/agent.memory.policy.write";
 import "./contracts/agent.memory.recall";
 import "./contracts/agent.memory.write";
 import "./contracts/agent.plan.approve";

@@ -87,6 +87,30 @@ vi.mock("@oxagen/database", () => ({
       publicId: "public_id",
       deletedAt: "deleted_at",
     },
+    // Required by vault-secret-service module-level KEY_COLUMNS initializer
+    secretKeys: {
+      id: "id",
+      publicId: "public_id",
+      key: "key",
+      sensitive: "sensitive",
+      memo: "memo",
+      defaultValueEnc: "default_value_enc",
+      defaultValueText: "default_value_text",
+      defaultValueKmsKeyId: "default_value_kms_key_id",
+      workspaceId: "workspace_id",
+      deletedAt: "deleted_at",
+      environmentId: "environment_id",
+    },
+    secretValues: {
+      secretKeyId: "secret_key_id",
+      environmentId: "environment_id",
+    },
+    environments: {
+      id: "id",
+      publicId: "public_id",
+      workspaceId: "workspace_id",
+      deletedAt: "deleted_at",
+    },
   },
 }));
 

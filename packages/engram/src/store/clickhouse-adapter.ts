@@ -115,6 +115,15 @@ export class ClickHouseEpisodicStore implements EpisodicStore {
       },
     });
     this.ready = this.initialize();
+
+    // The store is opened eagerly (e.g. at CLI/runtime startup) but awaited only
+    // lazily on first use. If ClickHouse is unreachable, `initialize()` rejects
+    // with a connection error (ECONNREFUSED) while nothing is awaiting `ready`,
+    // which would otherwise surface as an *unhandled* rejection and crash the
+    // host process. Attach a no-op catch so the rejection never escapes; real
+    // consumers still observe it via their own `await this.ready` and degrade to
+    // best-effort. Mirrors the DuckDB adapter's guard.
+    void this.ready.catch(() => {});
   }
 
   private async initialize(): Promise<void> {

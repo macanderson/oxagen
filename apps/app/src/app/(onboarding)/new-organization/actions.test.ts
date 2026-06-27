@@ -17,6 +17,7 @@
  *            @oxagen/handlers/workspace-registry-seed,
  *            @oxagen/handlers/workspace-capability-seed,
  *            @oxagen/handlers/skill-workspace-seed,
+ *            @oxagen/handlers/workspace-environment-seed,
  *            @oxagen/oxagen/contracts/*.
  */
 
@@ -38,6 +39,7 @@ const {
   mockSeedRegistry,
   mockSeedCapabilities,
   mockSeedSkills,
+  mockSeedEnvironment,
   mockOrgCreateParse,
   mockWsCreateParse,
 } = vi.hoisted(() => ({
@@ -51,6 +53,7 @@ const {
   mockSeedRegistry: vi.fn(),
   mockSeedCapabilities: vi.fn(),
   mockSeedSkills: vi.fn(),
+  mockSeedEnvironment: vi.fn(),
   mockOrgCreateParse: vi.fn(),
   mockWsCreateParse: vi.fn(),
 }));
@@ -101,6 +104,9 @@ vi.mock("@oxagen/handlers/workspace-capability-seed", () => ({
 }));
 vi.mock("@oxagen/handlers/skill-workspace-seed", () => ({
   seedWorkspaceDefaultSkillsSystem: mockSeedSkills,
+}));
+vi.mock("@oxagen/handlers/workspace-environment-seed", () => ({
+  seedWorkspaceDefaultEnvironmentSystem: mockSeedEnvironment,
 }));
 
 // We need to mock the contracts so we can control safeParse.
@@ -227,6 +233,7 @@ describe("createOrgAction", () => {
     mockSeedRegistry.mockResolvedValue("mreg_onboarding_123");
     mockSeedCapabilities.mockResolvedValue(undefined);
     mockSeedSkills.mockResolvedValue({ scanned: 3, inserted: 3 });
+    mockSeedEnvironment.mockResolvedValue("env-seed-789");
     // By default, let mocks return null so real schema runs
     mockOrgCreateParse.mockReturnValue(null);
     mockWsCreateParse.mockReturnValue(null);
@@ -458,7 +465,7 @@ describe("createOrgAction", () => {
   // (h) Seed wiring
   // ---------------------------------------------------------------------------
 
-  it("calls all three *System seeders with correct orgId and workspaceId on success", async () => {
+  it("calls all four *System seeders with correct orgId and workspaceId on success", async () => {
     const result = await createOrgAction(makeFormData());
     expect(result.ok).toBe(true);
 
@@ -470,6 +477,9 @@ describe("createOrgAction", () => {
 
     expect(mockSeedSkills).toHaveBeenCalledOnce();
     expect(mockSeedSkills).toHaveBeenCalledWith({ orgId: "org-123", workspaceId: "ws-456" });
+
+    expect(mockSeedEnvironment).toHaveBeenCalledOnce();
+    expect(mockSeedEnvironment).toHaveBeenCalledWith({ orgId: "org-123", workspaceId: "ws-456" });
   });
 
   it("calls bootstrapWorkspaceAgents inside the tx with correct args on success", async () => {
@@ -504,12 +514,19 @@ describe("createOrgAction", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("seed failure in seedWorkspaceDefaultEnvironmentSystem does NOT reject the action", async () => {
+    mockSeedEnvironment.mockRejectedValue(new Error("environment seed failed"));
+    const result = await createOrgAction(makeFormData());
+    expect(result.ok).toBe(true);
+  });
+
   it("seeders are NOT called when the action returns ok:false (validation failure)", async () => {
     const result = await createOrgAction(makeFormData({ name: "" }));
     expect(result.ok).toBe(false);
     expect(mockSeedRegistry).not.toHaveBeenCalled();
     expect(mockSeedCapabilities).not.toHaveBeenCalled();
     expect(mockSeedSkills).not.toHaveBeenCalled();
+    expect(mockSeedEnvironment).not.toHaveBeenCalled();
   });
 
   it("seeders are NOT called when the tx fails (DB error)", async () => {
@@ -519,5 +536,6 @@ describe("createOrgAction", () => {
     expect(mockSeedRegistry).not.toHaveBeenCalled();
     expect(mockSeedCapabilities).not.toHaveBeenCalled();
     expect(mockSeedSkills).not.toHaveBeenCalled();
+    expect(mockSeedEnvironment).not.toHaveBeenCalled();
   });
 });

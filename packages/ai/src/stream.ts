@@ -9,6 +9,7 @@ import {
 } from "@oxagen/telemetry";
 import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
 import { getScope, runInTenantScope, type TenantScope } from "@oxagen/tenancy";
+import { trace, context, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 import { defaultModel, modelIdOf } from "./models";
 import type { EffortLevel } from "./catalog";
 
@@ -173,6 +174,24 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
   const modelId = modelIdOf(model);
   const provider = providerFromModelId(modelId);
   const startedAt = Date.now();
+
+  // ── OTEL span: tracks the LLM stream from call to onFinish ───────────────
+  // Started synchronously here (inside any parent kernel.invoke span) so it
+  // inherits the parent context.  Ended asynchronously in onFinish once we
+  // know token counts.  No-op when OTEL SDK is not initialised (NoopTracer).
+  // Attributes are PII-safe: model/provider/surface only — never prompt text.
+  const _otelSpan = trace.getTracer("oxagen.ai.stream").startSpan("ai.stream", {
+    kind: SpanKind.CLIENT,
+    attributes: {
+      "ai.model": modelId,
+      "ai.provider": provider,
+      "ai.surface": args.telemetry.surface as string,
+    },
+  });
+  // Capture the OTEL context (including parent span) so onFinish can restore
+  // it for proper parent↔child span linkage in the trace backend.
+  const _capturedOtelCtx = trace.setSpan(context.active(), _otelSpan);
+
   // Capture the tenant scope NOW, before the stream starts. The AI SDK's
   // onFinish callback fires asynchronously after the stream completes — by then
   // the AsyncLocalStorage context has ended, so withTenantDb / requireScope
@@ -248,6 +267,21 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
       // cost column and the credit charge below.
       const usage = { model: modelId, inputTokens, outputTokens, cachedTokens };
       const costUsdMicros = providerCostUsdMicros(usage);
+
+      // ── OTEL: stamp token metrics on span and close it ─────────────────────
+      // Run inside the captured OTEL context so the span is correctly linked
+      // to its parent (the kernel.invoke span, if present).
+      context.with(_capturedOtelCtx, () => {
+        _otelSpan.setAttributes({
+          "ai.input_tokens": inputTokens,
+          "ai.output_tokens": outputTokens,
+          "ai.cached_tokens": cachedTokens,
+          "ai.cost_usd_micros": costUsdMicros,
+          "ai.duration_ms": durationMs,
+        });
+        _otelSpan.setStatus({ code: SpanStatusCode.OK });
+        _otelSpan.end();
+      });
 
       // Telemetry write is best-effort; if ClickHouse is unreachable, the
       // chat still completes and the message persists in Postgres.
