@@ -16,10 +16,18 @@ import { loadProjectContext } from "../agent/project-context.js";
 import { openSessionMemory } from "../agent/memory.js";
 import { openFleetMemory } from "../agent/fleet/memory.js";
 import { openTraceStore } from "../agent/trace-store.js";
+import { PermissionBroker, type PermissionMode } from "../agent/permissions.js";
 
 export interface OneShotOptions {
   readOnly?: boolean;
   model?: string;
+  /**
+   * Permission posture. One-shot is non-interactive, so there is no approver:
+   * `ask` fails closed (mutations are denied), `acceptEdits` auto-allows file
+   * edits, `bypass` allows everything. When unset, the run is ungated (the
+   * historical scripted behavior).
+   */
+  mode?: PermissionMode;
   /** Skip the eval/enhance/judge pipeline and run the bare agent. */
   bare?: boolean;
 }
@@ -34,13 +42,23 @@ export async function runOneShot(
   const fleetMemory = openFleetMemory(cwd);
   const traceStore = openTraceStore(cwd);
 
+  // Non-interactive: build a broker only when a mode is requested. With no
+  // approver, `ask` denies mutations (fail closed); acceptEdits/bypass enable
+  // scripted edits. The model-router never under-spends on safety regardless.
+  const broker =
+    options.mode && options.mode !== "readonly"
+      ? new PermissionBroker({ mode: options.mode, cwd })
+      : undefined;
+  const readOnly = options.readOnly || options.mode === "readonly";
+
   try {
     let streamed = false;
     const result = await runTurn({
       prompt,
       cwd,
       projectContext,
-      readOnly: options.readOnly,
+      readOnly,
+      broker,
       model: options.model,
       bare: options.bare,
       memory,
