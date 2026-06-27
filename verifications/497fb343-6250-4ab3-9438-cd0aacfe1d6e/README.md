@@ -266,6 +266,19 @@ CI-verified until the Actions billing cap / OXA-1877 is lifted).
 | check:contracts / env:check / db:lint-migrations | ✅ | hook output / `logs/07` |
 | check:manifest | ✅ exit 0 (warn-only) | `logs/08-check-manifest.log` |
 
+### Runtime proof (these fixes are CLI/contract-layer — no app UI surface)
+
+Evidence the changed code works at **runtime**, not merely typechecks (`logs/09-runtime-proof.log`,
+`logs/09b-runtime-proof-cli.log`):
+
+- **Fix #1** — `oxagen --help` runs and lists the wired `--mode <mode>` flag (Permission mode).
+- **Fix #3** — `graph.export` resolves from the live registry (`graph.export.test.ts` 11/11, exercising
+  `getCapability` at runtime) — the capability was dead before.
+- **Fix #4 + #6** — `loop-gating.test.ts` (gate applied to streamed tools) + `hooks.test.ts`
+  (EPIPE-safe hook runner) pass at runtime.
+- **Fix #5** — MCP tool-registry parity (219 mcp-surfaced contracts == 219 registered tools) at runtime.
+- App-level runtime proof: 4 captured screenshots of the running app + 12/12 core e2e flows.
+
 **The only thing keeping `main`'s GitHub status red is the external org Actions spending cap
 (OXA-1877) — an admin billing action, the one deferral the prime directive allows.** Once it
 is lifted, push any commit (or reopen CI on #224) and the pipeline will run against a tree
