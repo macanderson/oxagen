@@ -147,6 +147,7 @@ import { graphNodeGet } from "./graph.node.get";
 import { graphNodeDelete } from "./graph.node.delete";
 import { graphNodeSearch } from "./graph.node.search";
 import { graphSearch } from "./graph.search";
+import { graphExport } from "./graph.export";
 import { graphEdgeUpsert } from "./graph.edge.upsert";
 import { graphEdgeDelete } from "./graph.edge.delete";
 import { graphCypher } from "./graph.cypher";
@@ -391,6 +392,7 @@ export {
   graphNodeDelete,
   graphNodeSearch,
   graphSearch,
+  graphExport,
   graphEdgeUpsert,
   graphEdgeDelete,
   graphCypher,
@@ -629,6 +631,7 @@ export const contracts = [
   graphNodeDelete,
   graphNodeSearch,
   graphSearch,
+  graphExport,
   graphEdgeUpsert,
   graphEdgeDelete,
   graphCypher,
