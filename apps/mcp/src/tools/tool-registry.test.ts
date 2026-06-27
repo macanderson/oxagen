@@ -220,6 +220,22 @@ import { metadata as semanticRelationshipApproveMetadata } from "./semantic.rela
 import { metadata as semanticRelationshipInferMetadata } from "./semantic.relationship.infer";
 import { metadata as semanticRelationshipListMetadata } from "./semantic.relationship.list";
 import { metadata as semanticRelationshipSuggestMetadata } from "./semantic.relationship.suggest";
+// Environment management
+import { metadata as environmentCreateMetadata } from "./environment.create";
+import { metadata as environmentListMetadata } from "./environment.list";
+import { metadata as environmentGetMetadata } from "./environment.get";
+import { metadata as environmentUpdateMetadata } from "./environment.update";
+import { metadata as environmentDeleteMetadata } from "./environment.delete";
+import { metadata as environmentSetDefaultMetadata } from "./environment.set_default";
+// Secret / env-vault
+import { metadata as secretKeyUpsertMetadata } from "./secret.key.upsert";
+import { metadata as secretKeyListMetadata } from "./secret.key.list";
+import { metadata as secretKeyDeleteMetadata } from "./secret.key.delete";
+import { metadata as secretValueSetMetadata } from "./secret.value.set";
+import { metadata as secretValueUnsetMetadata } from "./secret.value.unset";
+import { metadata as secretImportEnvMetadata } from "./secret.import_env";
+import { metadata as secretRevealMetadata } from "./secret.reveal";
+import { metadata as secretExportMetadata } from "./secret.export";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -423,6 +439,20 @@ const allToolMetadata = [
   semanticRelationshipInferMetadata,
   semanticRelationshipListMetadata,
   semanticRelationshipSuggestMetadata,
+  environmentCreateMetadata,
+  environmentListMetadata,
+  environmentGetMetadata,
+  environmentUpdateMetadata,
+  environmentDeleteMetadata,
+  environmentSetDefaultMetadata,
+  secretKeyUpsertMetadata,
+  secretKeyListMetadata,
+  secretKeyDeleteMetadata,
+  secretValueSetMetadata,
+  secretValueUnsetMetadata,
+  secretImportEnvMetadata,
+  secretRevealMetadata,
+  secretExportMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────
