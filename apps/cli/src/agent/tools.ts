@@ -18,6 +18,7 @@ import { promises as fs } from "node:fs";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { resolve, relative, join, isAbsolute } from "node:path";
+import { queryCodeGraph } from "./code-graph.js";
 
 const execAsync = promisify(exec);
 
@@ -249,6 +250,39 @@ export function buildTools(
           if (hits.length >= 200) break;
         }
         return clip(hits.join("\n") || "(no matches)");
+      },
+    }),
+
+    code_graph: tool({
+      description:
+        "Query the repository's code graph — a precomputed index of symbols and " +
+        "import relationships — for STRUCTURAL answers, instead of guessing paths " +
+        "or grepping. Prefer this over `grep` for \"where is X defined\" and for " +
+        "impact analysis before a change. Operations: 'search' finds where a " +
+        "symbol (function/class/type/interface) is defined by name; 'file_symbols' " +
+        "lists the top-level symbols a file defines; 'dependents' lists the files " +
+        "that import a given file (what a change could break); 'imports' lists the " +
+        "local files a given file imports.",
+      inputSchema: z.object({
+        operation: z.enum(["search", "file_symbols", "dependents", "imports"]),
+        query: z
+          .string()
+          .describe(
+            "A symbol name for 'search'; a file path (relative to cwd, or a suffix " +
+              "like 'agent/loop.ts') for 'file_symbols' / 'dependents' / 'imports'.",
+          ),
+        limit: z
+          .number()
+          .int()
+          .optional()
+          .describe("Max results to return (default 25)."),
+      }),
+      execute: async ({ operation, query, limit }) => {
+        try {
+          return clip(await queryCodeGraph(cwd, operation, query, limit));
+        } catch (err) {
+          return `code_graph error: ${err instanceof Error ? err.message : String(err)}`;
+        }
       },
     }),
 
