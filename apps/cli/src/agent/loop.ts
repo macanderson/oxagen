@@ -197,7 +197,13 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     model: resolveModelId(opts.model),
     system,
     messages,
-    tools,
+    tools: wrapToolsWithGate(buildTools(cwd, { readOnly: opts.readOnly, broker: opts.broker }), {
+      cwd,
+      permissions: settings.permissions,
+      hooks: settings.hooks,
+      signal: opts.signal,
+      onBlocked: opts.onToolBlocked,
+    }),
     stopWhen: stepCountIs(opts.maxSteps ?? 32),
     abortSignal: opts.signal,
     onError: ({ error }) => {

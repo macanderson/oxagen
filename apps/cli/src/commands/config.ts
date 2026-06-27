@@ -58,7 +58,7 @@ export async function handleConfig(key?: string, value?: string): Promise<void> 
     if (!current) {
       console.log(`${key}: (not set)`);
     } else if (key === "token") {
-      console.log(`${key}: ${maskToken(String(current))}`);
+      console.log(`${key}: ${maskToken(current as string)}`);
     } else {
       console.log(`${key}: ${current}`);
     }
