@@ -15,8 +15,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { enhancePrompt } from "./prompt-enhancer.js";
 import { classifyTier, modelForTier } from "./model-router.js";
-import { ensureGatewayKey } from "./env.js";
-import { MissingGatewayKeyError } from "./loop.js";
+import { ensureGatewayKey, MissingGatewayKeyError } from "./env.js";
 import { emptyUsage, type ModelTier, type Plan, type Task } from "./fleet/types.js";
 import type { FleetMemory } from "./fleet/memory.js";
 

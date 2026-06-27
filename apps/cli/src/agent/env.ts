@@ -18,6 +18,17 @@ import { readConfig } from "../lib/config.js";
 
 const ENV_VAR = "AI_GATEWAY_API_KEY";
 
+/** Thrown when no gateway credential can be resolved anywhere. */
+export class MissingGatewayKeyError extends Error {
+  constructor() {
+    super(
+      "No AI_GATEWAY_API_KEY found. Set it in your shell, in ~/.config/oxagen/config.json " +
+        '("gatewayKey"), or in a .env.local above the working directory.',
+    );
+    this.name = "MissingGatewayKeyError";
+  }
+}
+
 function findInEnvLocal(startDir: string): string | undefined {
   let dir = startDir;
   const { root } = parsePath(startDir);

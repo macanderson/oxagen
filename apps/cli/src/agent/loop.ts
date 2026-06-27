@@ -13,7 +13,7 @@ import { streamText, stepCountIs, type ModelMessage } from "ai";
 import { buildTools } from "./tools.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 import { resolveModelId } from "./model.js";
-import { ensureGatewayKey } from "./env.js";
+import { ensureGatewayKey, MissingGatewayKeyError } from "./env.js";
 import type { ProjectContext } from "./project-context.js";
 import type { SessionMemory } from "./memory.js";
 
@@ -50,15 +50,9 @@ export interface RunAgentResult {
   usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
 }
 
-export class MissingGatewayKeyError extends Error {
-  constructor() {
-    super(
-      "No AI_GATEWAY_API_KEY found. Set it in your shell, in ~/.config/oxagen/config.json " +
-        '("gatewayKey"), or in a .env.local above the working directory.',
-    );
-    this.name = "MissingGatewayKeyError";
-  }
-}
+// Re-exported from ./env so consumers (e.g. the planner) can catch it without
+// importing this whole loop (and its heavy transitive deps).
+export { MissingGatewayKeyError };
 
 /** Best-effort extraction of the human-readable cause from an AI Gateway error. */
 function gatewayMessage(error: unknown): string {

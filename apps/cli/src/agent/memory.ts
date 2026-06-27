@@ -61,6 +61,21 @@ export async function openSessionMemory(
   const workspace = projectKey(cwd);
   const namespace = { org: "local", workspace, session: sessionId };
 
+  // Probe the connection once so a locked/unavailable DuckDB file (e.g. another
+  // oxagen process or the context daemon already holds the single-writer lock)
+  // disables memory cleanly instead of crashing on a floating rejection or
+  // silently failing every later write. Best-effort: no memory is fine.
+  try {
+    await store.recent({ org: "local", workspace }, 1);
+  } catch (err) {
+    if (process.env["OXAGEN_DEBUG"])
+      process.stderr.write(
+        `[mem] connection probe failed, disabling memory: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+    await store.close().catch(() => {});
+    return null;
+  }
+
   // Callers fire writes without awaiting (`void memory.remember(...)`), so we
   // track them here and flush on close — otherwise the process can exit before
   // DuckDB persists the append and the memory is silently lost.
