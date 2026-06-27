@@ -7,12 +7,26 @@ import { scopedSession } from "@oxagen/ontology/tenant";
 import { embedText } from "@oxagen/ai";
 import { parseSourceFile } from "@oxagen/ingestion/parsers";
 import type { ParsedSymbol } from "@oxagen/ingestion/parsers";
+import { chunkText } from "@oxagen/ingestion/embed";
 import { logger } from "../logger";
 
 // Skip files larger than 1000 KB — too expensive to parse + embed.
 const MAX_CONTENT_BYTES = 1000 * 1024;
 // Batch size for symbol upsert to keep Neo4j sessions bounded.
 const SYMBOL_BATCH_SIZE = 20;
+// Per-chunk upsert batch size (one embed call per chunk).
+const CHUNK_BATCH_SIZE = 10;
+
+// Shared embed telemetry. executionStepId MUST be a UUID or null — a synthesized
+// string breaks the ClickHouse UUID insert + Postgres uuid credit charge.
+const EMBED_TELEMETRY = (orgId: string, workspaceId: string) => ({
+  telemetry: {
+    orgId,
+    workspaceId,
+    surface: "ingestion" as const,
+    executionStepId: null,
+  },
+});
 
 /**
  * GitHub parse-file Inngest function.
@@ -145,11 +159,11 @@ export const [ingestionGithubParseFile] = createFunction(
         const session = scopedSession();
         try {
           const result = await session.run(
-            // Carries the universal :KnowledgeNode label + display fields
+            // Carries the universal :GraphNode anchor + is_system + display fields
             // (label/displayName/sourceId/properties) so the file shows up in the
-            // graph explorer, which filters every read on :KnowledgeNode scoped by
-            // orgId + workspaceId. The MERGE key stays on :SourceFile so the
-            // CONTAINS/SOURCED_FROM traversals below keep matching that label.
+            // graph explorer and graph.search, which match the :GraphNode anchor
+            // scoped by orgId + workspaceId. The MERGE key stays on :SourceFile so
+            // the CONTAINS/SOURCED_FROM/HAS_CHUNK traversals below keep matching it.
             `MERGE (f:SourceFile {naturalKey: $naturalKey, orgId: $orgId})
              ON CREATE SET
                f.publicId    = randomUUID(),
@@ -157,7 +171,8 @@ export const [ingestionGithubParseFile] = createFunction(
              ON MATCH SET
                f.syncedAt   = datetime()
              SET
-               f:KnowledgeNode,
+               f:GraphNode,
+               f.is_system   = true,
                f.path        = $path,
                f.language    = $language,
                f.repo        = $repo,
@@ -219,11 +234,11 @@ export const [ingestionGithubParseFile] = createFunction(
               for (const symbol of batch) {
                 const symbolNaturalKey = `github:${connectionId}:${owner}/${repo}:${path}:${symbol.kind}:${symbol.name}`;
                 await session.run(
-                  // Same dual-label pattern as SourceFile: MERGE on :SourceSymbol
+                  // Same anchor pattern as SourceFile: MERGE on :SourceSymbol
                   // (keeps the CONTAINS edge match below), then SET adds the
-                  // universal :KnowledgeNode label + display fields so symbols are
-                  // visible/traversable in the graph explorer (label = symbol kind,
-                  // displayName = symbol name).
+                  // universal :GraphNode anchor + is_system + display fields so
+                  // symbols are visible/traversable in the graph explorer
+                  // (label = symbol kind, displayName = symbol name).
                   `MERGE (s:SourceSymbol {naturalKey: $naturalKey, orgId: $orgId})
                     ON CREATE SET
                       s.publicId    = randomUUID(),
@@ -231,7 +246,8 @@ export const [ingestionGithubParseFile] = createFunction(
                     ON MATCH SET
                       s.syncedAt   = datetime()
                     SET
-                      s:KnowledgeNode,
+                      s:GraphNode,
+                      s.is_system   = true,
                       s.name        = $name,
                       s.kind        = $kind,
                       s.label       = $kind,
@@ -246,7 +262,8 @@ export const [ingestionGithubParseFile] = createFunction(
                       s.updatedAt   = datetime()
                     WITH s
                     MATCH (f:SourceFile {naturalKey: $fileNaturalKey, orgId: $orgId})
-                    MERGE (f)-[:CONTAINS]->(s)`,
+                    MERGE (f)-[cont:CONTAINS]->(s)
+                    SET cont.is_system = true`,
                   {
                     naturalKey: symbolNaturalKey,
                     orgId,
@@ -272,7 +289,8 @@ export const [ingestionGithubParseFile] = createFunction(
               await session.run(
                 `MATCH (f:SourceFile {naturalKey: $fileNaturalKey, orgId: $orgId})
                   MERGE (sc:SourceConnection {id: $connectionId, orgId: $orgId})
-                  MERGE (f)-[:SOURCED_FROM]->(sc)`,
+                  MERGE (f)-[srcd:SOURCED_FROM]->(sc)
+                  SET srcd.is_system = true`,
                 { fileNaturalKey: naturalKey, orgId, connectionId },
               );
             } finally {
@@ -283,7 +301,100 @@ export const [ingestionGithubParseFile] = createFunction(
       }
     }
 
-    // ── Step 6: Embed file ─────────────────────────────────────────────────────
+    // ── Step 6: Chunk the full body and upsert embedded :SourceChunk nodes ────
+    // This is what makes the ENTIRE file content searchable by similarity, not
+    // just the named symbols. Each chunk is its own :GraphNode with an embedding.
+    const { chunks, truncated: chunksTruncated } = chunkText(content);
+    if (chunksTruncated) {
+      logger.info(
+        { path, orgId, chunkCount: chunks.length },
+        "ingestion-github-parse-file: file exceeded chunk cap — tail not chunked",
+      );
+    }
+    if (chunks.length > 0) {
+      const chunkBatches: (typeof chunks)[] = [];
+      for (let i = 0; i < chunks.length; i += CHUNK_BATCH_SIZE) {
+        chunkBatches.push(chunks.slice(i, i + CHUNK_BATCH_SIZE));
+      }
+      for (let batchIdx = 0; batchIdx < chunkBatches.length; batchIdx++) {
+        const batch = chunkBatches[batchIdx]!;
+        await step.run(`upsert-chunks-batch-${batchIdx}`, async () => {
+          const embeddings = await Promise.all(
+            batch.map(async (chunk) => {
+              try {
+                return await embedText(chunk.text, EMBED_TELEMETRY(orgId, workspaceId));
+              } catch (err) {
+                logger.warn({ err, path, chunk: chunk.index }, "parse-file: chunk embed failed");
+                return null;
+              }
+            }),
+          );
+          return runInTenantScope({ orgId, workspaceId }, async () => {
+            const session = scopedSession();
+            try {
+              for (let i = 0; i < batch.length; i++) {
+                const chunk = batch[i]!;
+                const embedding = embeddings[i];
+                const chunkNaturalKey = `${naturalKey}:chunk:${chunk.index}`;
+                await session.run(
+                  `MERGE (c:SourceChunk {naturalKey: $naturalKey, orgId: $orgId})
+                   ON CREATE SET
+                     c.publicId  = randomUUID(),
+                     c.createdAt = datetime()
+                   ON MATCH SET
+                     c.syncedAt = datetime()
+                   SET
+                     c:GraphNode,
+                     c.is_system   = true,
+                     c.label       = 'SourceChunk',
+                     c.displayName = $displayName,
+                     c.chunkIndex  = $chunkIndex,
+                     c.startLine   = $startLine,
+                     c.endLine     = $endLine,
+                     c.fileNaturalKey = $fileNaturalKey,
+                     c.connectionId = $connectionId,
+                     c.sourceId    = $connectionId,
+                     c.workspaceId = $workspaceId,
+                     c.content     = $content,
+                     c.properties  = $properties,
+                     c.embedding   = coalesce($embedding, c.embedding),
+                     c.embeddingUpdatedAt = CASE WHEN $embedding IS NULL THEN c.embeddingUpdatedAt ELSE datetime() END,
+                     c.updatedAt   = datetime()
+                   WITH c
+                   MATCH (f:SourceFile {naturalKey: $fileNaturalKey, orgId: $orgId})
+                   MERGE (f)-[hc:HAS_CHUNK]->(c)
+                   SET hc.is_system = true`,
+                  {
+                    naturalKey: chunkNaturalKey,
+                    orgId,
+                    displayName: `${path} [${chunk.index}]`,
+                    chunkIndex: chunk.index,
+                    startLine: chunk.startLine,
+                    endLine: chunk.endLine,
+                    fileNaturalKey: naturalKey,
+                    connectionId,
+                    workspaceId,
+                    content: chunk.text,
+                    embedding: embedding ?? null,
+                    properties: JSON.stringify({
+                      path,
+                      chunkIndex: chunk.index,
+                      startLine: chunk.startLine,
+                      endLine: chunk.endLine,
+                      content: chunk.text,
+                    }),
+                  },
+                );
+              }
+            } finally {
+              await session.close();
+            }
+          });
+        });
+      }
+    }
+
+    // ── Step 7: Embed file ─────────────────────────────────────────────────────
     const embedInput =
       `${path} ${parseResult.language} ${parseResult.symbols.map((s) => s.name).join(" ")}`.trim();
 

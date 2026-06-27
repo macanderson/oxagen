@@ -95,16 +95,19 @@ export const semanticEdgeApproveHandler: CapabilityHandler<typeof semanticEdgeAp
       //    MERGE on the target KnowledgeNode first, then MERGE the relationship.
       const relResult = await sess.run(
         `MATCH (src:EntityNode {publicId: $sourceNodeId, orgId: $orgId})
-         MERGE (tgt:KnowledgeNode {
+         MERGE (tgt:GraphNode {
            orgId: $orgId,
            workspaceId: $workspaceId,
            type: $targetType,
            name: $targetName
          })
          ON CREATE SET
-           tgt.id        = randomUUID(),
-           tgt.publicId  = randomUUID(),
-           tgt.createdAt = datetime()
+           tgt.id          = randomUUID(),
+           tgt.publicId    = randomUUID(),
+           tgt.label       = $targetType,
+           tgt.displayName = $targetName,
+           tgt.is_system   = false,
+           tgt.createdAt   = datetime()
          WITH src, tgt
          MERGE (src)-[r:SEMANTIC_EDGE {inferredEdgeId: $edgeId}]->(tgt)
          ON CREATE SET
@@ -112,6 +115,7 @@ export const semanticEdgeApproveHandler: CapabilityHandler<typeof semanticEdgeAp
            r.confidence  = $confidence,
            r.approvedBy  = $approvedBy,
            r.approvedAt  = datetime($approvedAt),
+           r.is_system   = false,
            r.createdAt   = datetime()
          RETURN elementId(r) AS relId`,
         {

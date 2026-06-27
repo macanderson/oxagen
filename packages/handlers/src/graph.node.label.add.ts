@@ -6,7 +6,7 @@ import { logger } from "./logger";
 
 // Internal storage label every node carries; not a semantic label, so it is
 // hidden from the returned label set.
-const BASE_LABEL = "KnowledgeNode";
+const BASE_LABEL = "GraphNode";
 
 export const graphNodeLabelAddHandler: CapabilityHandler<typeof graphNodeLabelAdd> = async (
   input,
@@ -27,7 +27,7 @@ export const graphNodeLabelAddHandler: CapabilityHandler<typeof graphNodeLabelAd
       const result = await session.run(
         // $orgId / $workspaceId injected by scopedSession(). Labels are NOT
         // parameterizable in Cypher; they are LABEL_PATTERN-guarded above.
-        `MATCH (n:KnowledgeNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
+        `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
          WITH n, labels(n) AS before
          SET n:${setClause}, n.updatedAt = datetime()
          RETURN labels(n) AS after, before`,

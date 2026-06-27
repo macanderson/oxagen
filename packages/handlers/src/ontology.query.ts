@@ -87,11 +87,11 @@ function buildMatchPattern(
   const variable = `[r${typeSelector}*1..${maxDepth}]`;
   switch (direction) {
     case "out":
-      return `(start)-${variable}->(reached:KnowledgeNode)`;
+      return `(start)-${variable}->(reached:GraphNode)`;
     case "in":
-      return `(start)<-${variable}-(reached:KnowledgeNode)`;
+      return `(start)<-${variable}-(reached:GraphNode)`;
     case "both":
-      return `(start)-${variable}-(reached:KnowledgeNode)`;
+      return `(start)-${variable}-(reached:GraphNode)`;
   }
 }
 
@@ -118,7 +118,7 @@ export const ontologyQueryHandler: CapabilityHandler<typeof ontologyQuery> = asy
       //    same-publicId node in another workspace can never seed a traversal
       //    (tenant isolation, §0).
       const startResult = await session.run(
-        `MATCH (start:KnowledgeNode {publicId: $startNodeId, orgId: $orgId, workspaceId: $workspaceId})
+        `MATCH (start:GraphNode {publicId: $startNodeId, orgId: $orgId, workspaceId: $workspaceId})
          RETURN start.publicId AS nodeId, start.label AS label,
                 start.displayName AS displayName, start.description AS description`,
         { startNodeId: input.startNodeId, orgId, workspaceId },
@@ -144,7 +144,7 @@ export const ontologyQueryHandler: CapabilityHandler<typeof ontologyQuery> = asy
       // Float and Neo4j rejects them for LIMIT.
       const fetchLimit = BigInt(input.limit + 1);
       const traverseResult = await session.run(
-        `MATCH (start:KnowledgeNode {publicId: $startNodeId, orgId: $orgId, workspaceId: $workspaceId})
+        `MATCH (start:GraphNode {publicId: $startNodeId, orgId: $orgId, workspaceId: $workspaceId})
          MATCH path = ${matchPattern}
          WHERE reached.orgId = $orgId AND reached.workspaceId = $workspaceId
            AND ALL(n IN nodes(path) WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId)

@@ -41,6 +41,9 @@ export const [agentSyncExecutionToGraph] = createFunction(
       outputTokens,
       estimatedCostUsd,
       toolCalls,
+      summary,
+      displayName,
+      embedding,
     } = event.data as {
       executionId: string;
       orgId: string;
@@ -56,6 +59,9 @@ export const [agentSyncExecutionToGraph] = createFunction(
       outputTokens?: number;
       estimatedCostUsd?: string;
       toolCalls?: Array<{ toolName: string; toolType: string }>;
+      summary?: string;
+      displayName?: string;
+      embedding?: number[] | null;
     };
 
     await step.run("write-neo4j", () =>
@@ -75,6 +81,9 @@ export const [agentSyncExecutionToGraph] = createFunction(
           outputTokens,
           estimatedCostUsd,
           toolCalls,
+          summary,
+          displayName,
+          embedding,
         }),
       ),
     );

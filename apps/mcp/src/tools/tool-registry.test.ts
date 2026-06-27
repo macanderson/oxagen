@@ -130,6 +130,7 @@ import { metadata as graphNodeUpsertMetadata } from "./graph.node.upsert";
 import { metadata as graphNodeGetMetadata } from "./graph.node.get";
 import { metadata as graphNodeDeleteMetadata } from "./graph.node.delete";
 import { metadata as graphNodeSearchMetadata } from "./graph.node.search";
+import { metadata as graphSearchMetadata } from "./graph.search";
 import { metadata as graphEdgeUpsertMetadata } from "./graph.edge.upsert";
 import { metadata as graphEdgeDeleteMetadata } from "./graph.edge.delete";
 import { metadata as graphCypherMetadata } from "./graph.cypher";
@@ -361,6 +362,7 @@ const allToolMetadata = [
   graphNodeGetMetadata,
   graphNodeDeleteMetadata,
   graphNodeSearchMetadata,
+  graphSearchMetadata,
   graphEdgeUpsertMetadata,
   graphEdgeDeleteMetadata,
   graphCypherMetadata,

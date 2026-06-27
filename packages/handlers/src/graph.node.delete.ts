@@ -22,7 +22,7 @@ export const graphNodeDeleteHandler: CapabilityHandler<typeof graphNodeDelete> =
       // collide — a tenant-isolation breach (policy §0).
       // DETACH DELETE removes the node and all its relationships atomically.
       const result = await session.run(
-        `MATCH (n:KnowledgeNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
+        `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
          WITH n, count(n) AS found
          DETACH DELETE n
          RETURN found > 0 AS wasDeleted`,

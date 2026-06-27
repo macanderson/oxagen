@@ -29,7 +29,7 @@ export const graphNodeGetHandler: CapabilityHandler<
       // collide — a tenant-isolation breach (policy §0). workspaceId is
       // matched in the node pattern so the index can prune up front.
       const result = await session.run(
-        `MATCH (n:KnowledgeNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
+        `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
          RETURN
            n.publicId    AS nodeId,
            n.label       AS label,

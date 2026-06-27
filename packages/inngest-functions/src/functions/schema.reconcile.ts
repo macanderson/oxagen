@@ -267,7 +267,7 @@ export const [schemaReconcile] = createFunction(
 
         if (schemaDefinition.labelNames.length > 0) {
           const nodeResult = await session.run(
-            `MATCH (n:KnowledgeNode)
+            `MATCH (n:GraphNode)
              WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId AND n.label IN $labels
              RETURN count(n) AS total`,
             { orgId, workspaceId, labels: schemaDefinition.labelNames },
@@ -281,7 +281,7 @@ export const [schemaReconcile] = createFunction(
 
         if (schemaDefinition.relTypeNames.length > 0) {
           const relResult = await session.run(
-            `MATCH (n:KnowledgeNode)-[r]->(m:KnowledgeNode)
+            `MATCH (n:GraphNode)-[r]->(m:GraphNode)
              WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId AND type(r) IN $relTypes
              RETURN count(r) AS total`,
             { orgId, workspaceId, relTypes: schemaDefinition.relTypeNames },
@@ -336,7 +336,7 @@ export const [schemaReconcile] = createFunction(
 
         for (;;) {
           const batchResult = await session.run(
-            `MATCH (n:KnowledgeNode)
+            `MATCH (n:GraphNode)
              WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId AND n.label IN $labels
              RETURN n.publicId AS nodeId, n.label AS label, n.properties AS properties, n.displayName AS displayName
              SKIP $skip LIMIT $batchSize`,
@@ -414,7 +414,7 @@ Return only the derived property key-value pairs in the derivedProps field.`,
             // Write back to Neo4j only if something changed.
             if (nodeUpdated) {
               await session.run(
-                `MATCH (n:KnowledgeNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
+                `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
                  SET n.properties = $properties`,
                 { nodeId, orgId, workspaceId, properties: newProps },
               );
@@ -447,7 +447,7 @@ Return only the derived property key-value pairs in the derivedProps field.`,
 
         for (;;) {
           const batchResult = await session.run(
-            `MATCH (a:KnowledgeNode)-[r]->(b:KnowledgeNode)
+            `MATCH (a:GraphNode)-[r]->(b:GraphNode)
              WHERE a.orgId = $orgId AND a.workspaceId = $workspaceId AND type(r) IN $relTypes
              RETURN elementId(r) AS relElemId, type(r) AS relType, properties(r) AS props
              SKIP $skip LIMIT $batchSize`,
