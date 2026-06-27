@@ -17,6 +17,7 @@ import { ensureGatewayKey, MissingGatewayKeyError } from "./env.js";
 import { loadSettings } from "../settings/resolve.js";
 import { wrapToolsWithGate } from "../settings/gate.js";
 import { runHooks } from "../settings/hooks.js";
+import { loadMcpTools, type McpServerStatus } from "../mcp/client.js";
 import type { OxagenSettings } from "../settings/schema.js";
 import type { ProjectContext } from "./project-context.js";
 import type { SessionMemory } from "./memory.js";
@@ -46,6 +47,8 @@ export interface RunAgentOptions {
   onToolCall?: (name: string, input: unknown) => void;
   /** Fired when a tool is blocked by a permission rule or PreToolUse hook. */
   onToolBlocked?: (name: string, reason: string) => void;
+  /** Fired once per external MCP server after its connect attempt. */
+  onMcpServer?: (status: McpServerStatus) => void;
   /**
    * Resolved `settings.json` for this turn (permissions, hooks). Defaults to the
    * settings resolved from `cwd`. Injectable so callers (and tests) can override.
@@ -145,16 +148,30 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     { role: "user", content: opts.prompt },
   ];
 
+  // Connect external MCP servers declared in settings.json and materialize their
+  // tools alongside the local ones. Skipped in read-only mode (MCP tools may
+  // mutate) and when none are configured. Per-server failures are isolated; the
+  // clients are closed in the finally below.
+  const hasServers =
+    !opts.readOnly && Object.keys(settings.mcpServers ?? {}).length > 0;
+  const mcp = hasServers
+    ? await loadMcpTools(settings, { onStatus: opts.onMcpServer })
+    : null;
+
   // Gate every tool with the settings-driven permission rules and Pre/PostToolUse
   // hooks. A denied call or a blocking hook returns a string the model reads.
-  const tools = wrapToolsWithGate(buildTools(cwd, { readOnly: opts.readOnly }), {
-    cwd,
-    permissions: settings.permissions,
-    hooks: settings.hooks,
-    signal: opts.signal,
-    onBlocked: opts.onToolBlocked,
-  });
+  const tools = wrapToolsWithGate(
+    { ...buildTools(cwd, { readOnly: opts.readOnly }), ...(mcp?.tools ?? {}) },
+    {
+      cwd,
+      permissions: settings.permissions,
+      hooks: settings.hooks,
+      signal: opts.signal,
+      onBlocked: opts.onToolBlocked,
+    },
+  );
 
+  try {
   // Capture the underlying stream error ourselves. Supplying onError replaces
   // the AI SDK default (which dumps the whole error object to the console), so
   // gateway failures surface as one clean, actionable line instead of a wall of
@@ -211,4 +228,8 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
       totalTokens: usage.totalTokens,
     },
   };
+  } finally {
+    // Always disconnect MCP servers, even if the turn threw.
+    await mcp?.close();
+  }
 }

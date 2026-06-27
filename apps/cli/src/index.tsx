@@ -250,6 +250,81 @@ settings
     settingsInit(opts.scope);
   });
 
+// ── mcp: external MCP servers ─────────────────────────────────────────────────
+
+const collect = (val: string, prev: string[]): string[] => prev.concat([val]);
+
+const mcp = program
+  .command("mcp")
+  .description("Manage external MCP servers the agent loop connects to");
+mcp
+  .command("add")
+  .description("Add an MCP server (stdio via --command, or http/sse/websocket via --url)")
+  .argument("<name>", "Server name (used in tool names: mcp__<name>__<tool>)")
+  .option("--command <command>", "stdio: the command to spawn (e.g. npx)")
+  .option("--arg <arg>", "stdio: a command argument (repeatable)", collect, [])
+  .option("--url <url>", "http/sse/websocket: the server URL")
+  .option("--transport <transport>", "streamable-http | sse | websocket (default streamable-http)")
+  .option("--auth <auth>", "none | bearer | header (default none)")
+  .option("--env-token <VAR>", "Env var holding the bearer token")
+  .option("--header <KEY=VALUE>", "Static header for header auth (repeatable)", collect, [])
+  .option("--scope <scope>", "user | project | local (default project)")
+  .action(async (name: string, opts: Record<string, unknown>) => {
+    const { mcpAdd } = await import("./commands/mcp.js");
+    mcpAdd(name, {
+      command: opts["command"] as string | undefined,
+      arg: opts["arg"] as string[] | undefined,
+      url: opts["url"] as string | undefined,
+      transport: opts["transport"] as string | undefined,
+      auth: opts["auth"] as string | undefined,
+      envToken: opts["envToken"] as string | undefined,
+      header: opts["header"] as string[] | undefined,
+      scope: opts["scope"] as string | undefined,
+    });
+  });
+mcp
+  .command("list")
+  .description("List configured MCP servers")
+  .action(async () => {
+    const { mcpList } = await import("./commands/mcp.js");
+    mcpList();
+  });
+mcp
+  .command("remove")
+  .description("Remove an MCP server")
+  .argument("<name>", "Server name")
+  .option("--scope <scope>", "Limit to a scope (default: auto-detect)")
+  .action(async (name: string, opts: { scope?: string }) => {
+    const { mcpRemove } = await import("./commands/mcp.js");
+    mcpRemove(name, opts.scope);
+  });
+mcp
+  .command("enable")
+  .description("Enable a disabled MCP server")
+  .argument("<name>", "Server name")
+  .option("--scope <scope>", "Limit to a scope (default: auto-detect)")
+  .action(async (name: string, opts: { scope?: string }) => {
+    const { mcpSetEnabled } = await import("./commands/mcp.js");
+    mcpSetEnabled(name, true, opts.scope);
+  });
+mcp
+  .command("disable")
+  .description("Disable an MCP server without removing it")
+  .argument("<name>", "Server name")
+  .option("--scope <scope>", "Limit to a scope (default: auto-detect)")
+  .action(async (name: string, opts: { scope?: string }) => {
+    const { mcpSetEnabled } = await import("./commands/mcp.js");
+    mcpSetEnabled(name, false, opts.scope);
+  });
+mcp
+  .command("check")
+  .description("Connect to a server (or all enabled) and preview the tools it exposes")
+  .argument("[name]", "Server name (omit to check all enabled)")
+  .action(async (name: string | undefined) => {
+    const { mcpCheck } = await import("./commands/mcp.js");
+    await mcpCheck(name);
+  });
+
 // ── env: workspace environments ───────────────────────────────────────────────
 
 const env = program.command("env").description("Manage workspace environments");

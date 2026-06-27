@@ -78,7 +78,10 @@ export function parseRule(rule: string): ParsedRule {
 
 function ruleMatches(rule: string, canonical: string, subject: string): boolean {
   const parsed = parseRule(rule);
-  if (parsed.tool !== canonical) return false;
+  // The tool token is glob-matched against the canonical name. For local tools
+  // this is an exact compare ("Bash" === "Bash"); for MCP tools it lets a rule
+  // like `mcp__github__*` match `mcp__github__create_issue`.
+  if (!matchGlob(parsed.tool, canonical)) return false;
   if (parsed.pattern === undefined || parsed.pattern === "") return true;
   return matchGlob(parsed.pattern, subject);
 }

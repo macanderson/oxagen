@@ -24,7 +24,8 @@ export interface WriteValueOptions {
   projectDirName?: string;
 }
 
-function readRawScope(path: string): Record<string, unknown> {
+/** Read a single scope file as a raw JSON object (empty if absent). */
+export function readScopeDoc(path: string): Record<string, unknown> {
   if (!existsSync(path)) return {};
   const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -33,7 +34,8 @@ function readRawScope(path: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
-function writeRawScope(path: string, doc: OxagenSettings): void {
+/** Validate and write a settings document to a scope file, busting the cache. */
+export function writeScopeDoc(path: string, doc: OxagenSettings): void {
   const validated = oxagenSettingsSchema.parse(doc);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(validated, null, 2) + "\n", "utf8");
@@ -47,7 +49,7 @@ function writeRawScope(path: string, doc: OxagenSettings): void {
 export function writeSettingsValue(opts: WriteValueOptions): string {
   const paths = getScopePaths(opts);
   const path = paths[opts.scope];
-  const doc = readRawScope(path);
+  const doc = readScopeDoc(path);
 
   if (opts.key.startsWith("env.")) {
     const name = opts.key.slice("env.".length);
@@ -64,7 +66,7 @@ export function writeSettingsValue(opts: WriteValueOptions): string {
     );
   }
 
-  writeRawScope(path, doc as OxagenSettings);
+  writeScopeDoc(path, doc as OxagenSettings);
   return path;
 }
 
@@ -99,6 +101,6 @@ export function writeStarterSettings(opts: InitOptions): { path: string; created
   const paths = getScopePaths(opts);
   const path = paths[opts.scope];
   if (existsSync(path)) return { path, created: false };
-  writeRawScope(path, STARTER);
+  writeScopeDoc(path, STARTER);
   return { path, created: true };
 }

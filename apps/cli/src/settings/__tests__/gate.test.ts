@@ -62,6 +62,27 @@ describe("wrapToolsWithGate", () => {
     expect(blocked).toEqual(["bash"]);
   });
 
+  it("gates MCP tools by their mcp__server__tool name", async () => {
+    const calls: string[] = [];
+    const mcpTools: ToolSet = {
+      mcp__github__delete_repo: tool({
+        description: "delete",
+        inputSchema: z.object({ repo: z.string() }),
+        execute: async () => {
+          calls.push("deleted");
+          return "deleted";
+        },
+      }),
+    };
+    const gated = wrapToolsWithGate(mcpTools, {
+      cwd: CWD,
+      permissions: { deny: ["mcp__github__delete_*"] },
+    });
+    const result = await call(gated, "mcp__github__delete_repo", { repo: "x" });
+    expect(String(result)).toContain("⛔");
+    expect(calls).toEqual([]);
+  });
+
   it("passes an allowed tool through to the original execute", async () => {
     const calls: string[] = [];
     const permissions: Permissions = { deny: ["Bash(rm -rf*)"] };

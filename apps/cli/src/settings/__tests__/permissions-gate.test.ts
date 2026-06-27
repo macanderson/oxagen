@@ -65,4 +65,24 @@ describe("evaluateLocalPermission", () => {
     expect(evaluateLocalPermission("mystery", null, { deny: ["mystery"] }).decision).toBe("deny");
     expect(evaluateLocalPermission("bash", undefined, { deny: ["Bash(x*)"] }).decision).toBe("allow");
   });
+
+  describe("MCP tool name globbing", () => {
+    it("denies an mcp__server__tool via a glob rule", () => {
+      const perms: Permissions = { deny: ["mcp__github__delete_*"] };
+      expect(evaluateLocalPermission("mcp__github__delete_repo", {}, perms).decision).toBe("deny");
+      expect(evaluateLocalPermission("mcp__github__create_issue", {}, perms).decision).toBe("allow");
+    });
+
+    it("lets allow rules whitelist MCP tools under defaultMode deny", () => {
+      const perms: Permissions = { defaultMode: "deny", allow: ["mcp__github__*", "Read"] };
+      expect(evaluateLocalPermission("mcp__github__create_issue", {}, perms).decision).toBe("allow");
+      expect(evaluateLocalPermission("mcp__other__tool", {}, perms).decision).toBe("deny");
+    });
+
+    it("does not let an MCP glob bleed into local tools", () => {
+      const perms: Permissions = { deny: ["mcp__*"] };
+      expect(evaluateLocalPermission("bash", { command: "ls" }, perms).decision).toBe("allow");
+      expect(evaluateLocalPermission("mcp__x__y", {}, perms).decision).toBe("deny");
+    });
+  });
 });
