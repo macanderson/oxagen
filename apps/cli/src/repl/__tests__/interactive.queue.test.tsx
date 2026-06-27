@@ -15,13 +15,12 @@ interface RunTurnResultLike {
   steps: number;
   messages: unknown[];
   usage: Record<string, number>;
-  trace: { id: string };
+  trace: Record<string, unknown>;
 }
 
 // Each runTurn call parks here until the test resolves it, simulating a turn
 // that takes real wall-clock time (so later submissions have to queue). The REPL
-// drives each turn through the eval→enhance→judge pipeline (`runTurn`), not
-// `runAgent` directly, so the interception point is pipeline.js.
+// drives every prompt through the pipeline's `runTurn`, so that is what we mock.
 const pending: Array<{ prompt: string; finish: () => void }> = [];
 const runTurnSpy = vi.fn<(opts: { prompt: string }) => void>();
 
@@ -36,26 +35,17 @@ vi.mock("../../agent/pipeline.js", () => ({
             text: `done:${opts.prompt}`,
             steps: 1,
             messages: [],
-            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-            trace: { id: `trace:${opts.prompt}` },
+            usage: {},
+            trace: { id: `trace:${opts.prompt}`, prompt: opts.prompt },
           }),
       });
     }),
   MissingGatewayKeyError: class extends Error {},
 }));
 
-// The REPL opens a trace store + fleet memory at mount (both do real file I/O);
-// stub them so the queue test stays hermetic.
+// Keep the turn-trace store hermetic — no disk writes to ~/.config during tests.
 vi.mock("../../agent/trace-store.js", () => ({
-  openTraceStore: () => ({ record: () => {}, get: () => undefined, list: () => [] }),
-}));
-vi.mock("../../agent/fleet/memory.js", () => ({
-  openFleetMemory: () => ({
-    remember: () => {},
-    recall: () => [],
-    all: () => [],
-    close: () => {},
-  }),
+  openTraceStore: () => ({ record: () => {}, list: () => [] }),
 }));
 
 vi.mock("../../agent/memory.js", () => ({
@@ -108,7 +98,7 @@ describe("REPL prompt queue (Claude Code-style)", () => {
     const { stdin, lastFrame } = render(<ReplApp options={{}} />);
     await tick();
 
-    // 1) First prompt starts a turn; runAgent is invoked and parks (in flight).
+    // 1) First prompt starts a turn; runTurn is invoked and parks (in flight).
     await submit(stdin, "first task");
     await waitFor(() => runTurnSpy.mock.calls.length === 1);
     expect(runTurnSpy.mock.calls[0]?.[0].prompt).toBe("first task");

@@ -1,17 +1,17 @@
 /**
- * Regression test: a ClickHouse store whose initialization fails (the target
- * database does not exist, or ClickHouse is unreachable) must NOT escape as an
- * unhandled promise rejection that fails the whole test run / crashes the host
- * process. The constructor kicks off `CREATE TABLE` via `this.ready` and callers
- * only await it lazily on the first read/write — so `ready` can reject while
- * nothing is awaiting it. Pre-fix, that surfaced in CI as
- * "Database <db> does not exist" reaching `unhandledRejection` and failing the
- * run even though every test passed (mirrors the DuckDB guard).
+ * Regression test: a ClickHouse store whose connection fails to initialize (e.g.
+ * ClickHouse is unreachable in a local/CI environment without the datastore) must
+ * NOT escape as an unhandled promise rejection that crashes the host process. The
+ * store is opened eagerly at startup and only awaited lazily on first use, so the
+ * constructor's `ready` promise can reject while nothing is awaiting it — pre-fix
+ * that surfaced as an unhandled ECONNREFUSED and failed the whole vitest run.
+ *
+ * Mirrors duckdb-adapter.unhandled.test.ts for the ClickHouse adapter.
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { ClickHouseEpisodicStore } from "./clickhouse-adapter";
 
-describe("ClickHouseEpisodicStore — failed init is non-fatal", () => {
+describe("ClickHouseEpisodicStore — failed connection is non-fatal", () => {
   const captured: unknown[] = [];
   const onUnhandled = (e: unknown) => captured.push(e);
 
@@ -20,24 +20,26 @@ describe("ClickHouseEpisodicStore — failed init is non-fatal", () => {
     captured.length = 0;
   });
 
-  it("never emits an unhandled rejection when init fails and is never awaited", async () => {
+  it("never emits an unhandled rejection when initialization fails and is never awaited", async () => {
     process.on("unhandledRejection", onUnhandled);
 
-    // Unreachable endpoint → the constructor's CREATE TABLE command rejects
-    // (connection refused). Construct but DO NOT await — mirrors the factory
-    // path that instantiates the store and hands it back without touching it.
+    // Point at an unreachable endpoint so the constructor's `initialize()` (a
+    // CREATE TABLE command) rejects with a connection error. Construct but DO NOT
+    // await — mirrors the runtime opening memory at startup and awaiting only on
+    // first use. The floating `ready` rejection must be caught by the in-adapter
+    // guard, never reaching `unhandledRejection`.
     const store = new ClickHouseEpisodicStore({
-      url: "http://127.0.0.1:9",
+      url: "http://127.0.0.1:1",
       username: "default",
       password: "",
-      database: "no_such_db_engram_regression",
+      database: "test",
     });
 
     // Flush microtasks + a macrotask so any floating rejection would fire.
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 100));
 
-    // Non-vacuous: confirm init genuinely failed — a consumer awaiting `ready`
-    // (getById awaits ready, then queries) observes the rejection.
+    // Non-vacuous: confirm the connection genuinely failed — a consumer awaiting
+    // `ready` (getById awaits ready then queries) observes the rejection.
     let failed = false;
     await store.getById("x").then(
       () => {},
