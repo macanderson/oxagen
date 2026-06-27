@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { schemaSourceEnum, enforcementModeEnum } from "./schema.types";
+import { schemaSourceEnum, enforcementModeEnum, propertyInputSchema, cardinalityEnum } from "./schema.types";
 
 export const schemaRegistryGet = registerCapability({
   name: "schema.registry.get",
@@ -36,12 +36,16 @@ export const schemaRegistryGet = registerCapability({
         name: z.string(),
         displayName: z.string(),
         description: z.string().nullable(),
+        naturalKeyProps: z.array(z.string()),
+        properties: z.array(propertyInputSchema),
       })),
       relationshipTypes: z.array(z.object({
         name: z.string(),
         displayName: z.string(),
         startLabel: z.string().nullable(),
         endLabel: z.string().nullable(),
+        cardinality: cardinalityEnum.nullable(),
+        properties: z.array(propertyInputSchema),
       })),
     })),
   }),
