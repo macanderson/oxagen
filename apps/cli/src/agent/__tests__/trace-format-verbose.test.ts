@@ -73,6 +73,17 @@ describe("formatVerboseSection", () => {
     expect(text).toContain("/file");
   });
 
+  it("marks a failed tool call with the error glyph", () => {
+    const text = formatVerboseSection(
+      trace({
+        toolEvents: [
+          { name: "bash", input: '{"command":"pnpm test"}', result: "1 failed", startedAt: 0, finishedAt: 50, durationMs: 50, ok: false },
+        ],
+      }),
+    ).join("\n");
+    expect(text).toContain("✗ bash");
+  });
+
   it("returns nothing when there is no telemetry", () => {
     expect(formatVerboseSection(trace({ phases: [], toolEvents: [] }))).toEqual([]);
   });

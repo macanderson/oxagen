@@ -45,8 +45,8 @@ export interface RunAgentOptions {
   onToolEvent?: (e: ToolEvent) => void;
 }
 
-/** Heuristic: did a tool result represent an error? */
-function isErrorResult(out: unknown): boolean {
+/** Heuristic: did a tool result represent an error? Exported for tests. */
+export function isErrorResult(out: unknown): boolean {
   if (out instanceof Error) return true;
   if (out && typeof out === "object") {
     const o = out as { isError?: unknown; error?: unknown };
@@ -55,8 +55,8 @@ function isErrorResult(out: unknown): boolean {
   return false;
 }
 
-/** JSON-stringify a value, falling back to String(), capped to `max` chars. */
-function stringifyCapped(v: unknown, max: number): string {
+/** JSON-stringify a value, falling back to String(), capped to `max` chars. Exported for tests. */
+export function stringifyCapped(v: unknown, max: number): string {
   let s: string;
   try {
     s = typeof v === "string" ? v : JSON.stringify(v) ?? String(v);

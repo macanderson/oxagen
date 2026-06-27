@@ -119,4 +119,42 @@ describe("cost --session", () => {
     await handleCost({ session: true });
     expect(out).toContain("No turns recorded");
   });
+
+  it("attributes a non-phased (pre-verbose / bare) trace to its executor model", async () => {
+    // No `phases` → attribute() falls back to selectedModel + trace.usage.
+    mockStore.mockReturnValue({ list: () => [turn({ id: "t1" })] });
+    await handleCost({ session: true, json: true });
+    const r = JSON.parse(out) as {
+      turns: number;
+      totalCostUsd: number;
+      byModel: Array<{ model: string; costUsd: number; inputTokens: number; turns: number }>;
+    };
+    expect(r.turns).toBe(1);
+    expect(r.totalCostUsd).toBeCloseTo(0.05);
+    expect(r.byModel).toHaveLength(1);
+    expect(r.byModel[0]?.model).toBe("anthropic/claude-sonnet-4.6");
+    expect(r.byModel[0]?.costUsd).toBeCloseTo(0.05);
+    expect(r.byModel[0]?.inputTokens).toBe(100);
+    expect(r.byModel[0]?.turns).toBe(1);
+  });
+
+  it("attributes per-phase spend to each model numerically (--json)", async () => {
+    const phased = turn({
+      id: "t1",
+      phases: [
+        { phase: "evaluate", round: 0, startedAt: 0, finishedAt: 10, durationMs: 10, model: "anthropic/claude-haiku-4.5", usage: { inputTokens: 20, outputTokens: 5, costUsd: 0.001 } },
+        { phase: "execute", round: 0, startedAt: 10, finishedAt: 1000, durationMs: 990, model: "anthropic/claude-sonnet-4.6", usage: { inputTokens: 80, outputTokens: 45, costUsd: 0.049 } },
+      ],
+    });
+    mockStore.mockReturnValue({ list: () => [phased] });
+    await handleCost({ session: true, json: true });
+    const r = JSON.parse(out) as { byModel: Array<{ model: string; costUsd: number; turns: number }> };
+    const haiku = r.byModel.find((m) => m.model.includes("haiku"));
+    const sonnet = r.byModel.find((m) => m.model.includes("sonnet"));
+    expect(haiku?.costUsd).toBeCloseTo(0.001);
+    expect(sonnet?.costUsd).toBeCloseTo(0.049);
+    // Turns are counted by executor (selectedModel = sonnet), not per phase.
+    expect(sonnet?.turns).toBe(1);
+    expect(haiku?.turns).toBe(0);
+  });
 });

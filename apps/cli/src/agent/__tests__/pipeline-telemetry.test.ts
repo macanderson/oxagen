@@ -136,4 +136,39 @@ describe("verbose telemetry", () => {
     expect(t.phases).toBeUndefined();
     expect(t.toolEvents).toBeUndefined();
   });
+
+  it("captures telemetry in bare mode too (no eval/enhance/judge, one execute phase)", async () => {
+    const t = (await runTurn({ prompt: "do it", cwd: "/x", bare: true, verbose: true, model: "anthropic/claude-sonnet-4.6" })).trace;
+    expect(t.verbose).toBe(true);
+    // Bare mode skips eval/enhance/judge — exactly one execute phase.
+    expect((t.phases ?? []).map((p) => p.phase)).toEqual(["execute"]);
+    expect(t.phases?.[0]?.model).toContain("sonnet");
+    expect(t.phases?.[0]?.usage.costUsd).toBeGreaterThan(0);
+    expect(t.toolEvents).toHaveLength(1);
+    // The eval/judge stages didn't run.
+    expect(mockEval).not.toHaveBeenCalled();
+    expect(mockJudge).not.toHaveBeenCalled();
+  });
+});
+
+describe("enhancement source classification", () => {
+  it("labels memory-only context as 'memory'", async () => {
+    mockEnhance.mockResolvedValueOnce({
+      prompt: "p", context: "## lessons", resolved: [], lessons: [{ id: "l1" }],
+      startedAt: 0, finishedAt: 5, durationMs: 5,
+      retrieval: { symbolsQueried: [], pathsQueried: [], resolved: [], unresolved: [] },
+    });
+    const t = (await runTurn({ prompt: "x", cwd: "/x" })).trace;
+    expect(t.enhancement.source).toBe("memory");
+  });
+
+  it("labels combined context as 'code-graph+memory'", async () => {
+    mockEnhance.mockResolvedValueOnce({
+      prompt: "p", context: "## both", resolved: ["Foo"], lessons: [{ id: "l1" }],
+      startedAt: 0, finishedAt: 5, durationMs: 5,
+      retrieval: { symbolsQueried: ["Foo"], pathsQueried: [], resolved: ["Foo"], unresolved: [] },
+    });
+    const t = (await runTurn({ prompt: "x", cwd: "/x" })).trace;
+    expect(t.enhancement.source).toBe("code-graph+memory");
+  });
 });
