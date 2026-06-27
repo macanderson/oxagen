@@ -5,7 +5,11 @@
       "file": "agent.approval.resolve.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -20,7 +24,11 @@
       "file": "agent.code.execute.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -34,7 +42,11 @@
       "file": "agent.compose.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -48,7 +60,11 @@
       "file": "agent.definition.create.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -63,7 +79,11 @@
       "file": "agent.definition.get.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -78,7 +98,11 @@
       "file": "agent.definition.list.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -93,7 +117,11 @@
       "file": "agent.definition.publish.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -108,7 +136,11 @@
       "file": "agent.definition.update.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -123,7 +155,11 @@
       "file": "agent.deploy.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -138,7 +174,10 @@
       "file": "agent.execution.record.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -153,7 +192,11 @@
       "file": "agent.mcp.consent.list.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -167,7 +210,11 @@
       "file": "agent.mcp.consent.resolve.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -181,7 +228,10 @@
       "file": "agent.mcp.delete.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -195,7 +245,11 @@
       "file": "agent.mcp.list.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -210,7 +264,10 @@
       "file": "agent.mcp.register.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -225,7 +282,10 @@
       "file": "agent.mcp.set_enabled.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -239,7 +299,11 @@
       "file": "agent.memory.recall.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -254,7 +318,11 @@
       "file": "agent.memory.write.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -269,7 +337,11 @@
       "file": "agent.plan.approve.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -284,7 +356,11 @@
       "file": "agent.plan.create.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -298,7 +374,11 @@
       "file": "agent.skill.list.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -313,7 +393,11 @@
       "file": "agent.skill.load.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -328,7 +412,11 @@
       "file": "agent.subagent.aggregate.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -343,7 +431,11 @@
       "file": "agent.subagent.cancel.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -357,7 +449,11 @@
       "file": "agent.subagent.dispatch.ts",
       "domain": "agent",
       "mode": "async",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -372,7 +468,11 @@
       "file": "agent.subagent.fanout.get.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -387,7 +487,11 @@
       "file": "agent.subagent.fanout.list.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -402,7 +506,11 @@
       "file": "agent.subagent.logs.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -416,7 +524,11 @@
       "file": "agent.task.background.cancel.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -431,7 +543,11 @@
       "file": "agent.task.background.read.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -446,7 +562,11 @@
       "file": "agent.task.background.start.ts",
       "domain": "agent",
       "mode": "async",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -461,7 +581,11 @@
       "file": "agent.tool.list.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -476,7 +600,11 @@
       "file": "agent.trigger.create.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -491,7 +619,11 @@
       "file": "agent.trigger.delete.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -506,7 +638,11 @@
       "file": "agent.trigger.list.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -521,7 +657,11 @@
       "file": "agent.trigger.update.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -536,7 +676,9 @@
       "file": "agent.ui.render.ts",
       "domain": "agent",
       "mode": "sync",
-      "surfaces": ["agent"],
+      "surfaces": [
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "docs": true,
@@ -548,7 +690,11 @@
       "file": "api.key.create.ts",
       "domain": "api_key",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -561,7 +707,10 @@
       "file": "api.key.revoke.ts",
       "domain": "api_key",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -574,7 +723,10 @@
       "file": "api.key.rotate.ts",
       "domain": "api_key",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -587,7 +739,11 @@
       "file": "archive.create.ts",
       "domain": "documents",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -601,7 +757,11 @@
       "file": "asset.upload.ts",
       "domain": "asset",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -616,7 +776,12 @@
       "file": "audit.log.query.ts",
       "domain": "audit",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -630,7 +795,12 @@
       "file": "automation.create.ts",
       "domain": "automation",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -644,7 +814,12 @@
       "file": "automation.disable.ts",
       "domain": "automation",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -658,7 +833,12 @@
       "file": "automation.enable.ts",
       "domain": "automation",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -672,7 +852,12 @@
       "file": "automation.list.ts",
       "domain": "automation",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -685,7 +870,12 @@
       "file": "automation.trigger.ts",
       "domain": "automation",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -698,7 +888,12 @@
       "file": "automation.update.ts",
       "domain": "automation",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -712,7 +907,11 @@
       "file": "billing.credits.purchase.ts",
       "domain": "billing",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -727,7 +926,11 @@
       "file": "billing.subscription.read.ts",
       "domain": "billing",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -742,7 +945,11 @@
       "file": "billing.subscription.upgrade.start.ts",
       "domain": "billing",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -757,7 +964,10 @@
       "file": "chat.message.execution.ts",
       "domain": "chat",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -772,7 +982,10 @@
       "file": "chat.message.send.ts",
       "domain": "chat",
       "mode": "async",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -787,7 +1000,10 @@
       "file": "command.menu.search.ts",
       "domain": "command",
       "mode": "sync",
-      "surfaces": ["api", "agent"],
+      "surfaces": [
+        "api",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -799,7 +1015,10 @@
       "file": "command.menu.suggest.ts",
       "domain": "command",
       "mode": "sync",
-      "surfaces": ["api", "agent"],
+      "surfaces": [
+        "api",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -811,7 +1030,11 @@
       "file": "connection.create.ts",
       "domain": "connection",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -825,7 +1048,11 @@
       "file": "connection.delete.ts",
       "domain": "connection",
       "mode": "async",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -839,7 +1066,11 @@
       "file": "connection.get.ts",
       "domain": "connection",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -853,7 +1084,11 @@
       "file": "connection.list.ts",
       "domain": "connection",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -867,7 +1102,11 @@
       "file": "connection.mappings.get.ts",
       "domain": "connection",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -881,7 +1120,11 @@
       "file": "connection.mappings.set.ts",
       "domain": "connection",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -895,7 +1138,11 @@
       "file": "connection.mappings.suggest.ts",
       "domain": "connection",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -909,7 +1156,11 @@
       "file": "connection.pause.ts",
       "domain": "connection",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -923,7 +1174,11 @@
       "file": "connection.preview.ts",
       "domain": "connection",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -937,7 +1192,11 @@
       "file": "connection.update.ts",
       "domain": "connection",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -951,7 +1210,11 @@
       "file": "conversation.archive.ts",
       "domain": "conversation",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -965,7 +1228,10 @@
       "file": "conversation.chat.ts",
       "domain": "conversation",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -978,7 +1244,11 @@
       "file": "conversation.delete.ts",
       "domain": "conversation",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -992,7 +1262,11 @@
       "file": "conversation.files.list.ts",
       "domain": "conversation",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1006,7 +1280,11 @@
       "file": "conversation.list.ts",
       "domain": "conversation",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1021,7 +1299,11 @@
       "file": "conversation.purge.ts",
       "domain": "conversation",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1035,7 +1317,11 @@
       "file": "conversation.rename.ts",
       "domain": "conversation",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1049,7 +1335,10 @@
       "file": "document.create.ts",
       "domain": "document",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1062,7 +1351,10 @@
       "file": "document.list.ts",
       "domain": "document",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1075,7 +1367,10 @@
       "file": "document.read.ts",
       "domain": "document",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1088,7 +1383,11 @@
       "file": "documents.generate.ts",
       "domain": "documents",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1102,9 +1401,115 @@
       "file": "documents.pdf.create.ts",
       "domain": "documents",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "environment.create",
+      "file": "environment.create.ts",
+      "domain": "environment",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "environment.delete",
+      "file": "environment.delete.ts",
+      "domain": "environment",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "environment.get",
+      "file": "environment.get.ts",
+      "domain": "environment",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "environment.list",
+      "file": "environment.list.ts",
+      "domain": "environment",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "environment.set_default",
+      "file": "environment.set_default.ts",
+      "domain": "environment",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "environment.update",
+      "file": "environment.update.ts",
+      "domain": "environment",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
         "api": true,
         "mcp": true,
         "unit": true,
@@ -1116,7 +1521,11 @@
       "file": "form.fill.ts",
       "domain": "form",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1130,7 +1539,12 @@
       "file": "graph.cypher.ts",
       "domain": "graph",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1144,7 +1558,12 @@
       "file": "graph.edge.delete.ts",
       "domain": "graph",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1158,7 +1577,12 @@
       "file": "graph.edge.upsert.ts",
       "domain": "graph",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1172,7 +1596,11 @@
       "file": "graph.ingest.ts",
       "domain": "graph",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1186,7 +1614,12 @@
       "file": "graph.node.delete.ts",
       "domain": "graph",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1200,7 +1633,12 @@
       "file": "graph.node.get.ts",
       "domain": "graph",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1214,7 +1652,9 @@
       "file": "graph.node.label.add.ts",
       "domain": "graph",
       "mode": "sync",
-      "surfaces": ["agent"],
+      "surfaces": [
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "unit": false
@@ -1225,7 +1665,9 @@
       "file": "graph.node.label.remove.ts",
       "domain": "graph",
       "mode": "sync",
-      "surfaces": ["agent"],
+      "surfaces": [
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "unit": false
@@ -1236,7 +1678,9 @@
       "file": "graph.node.labels.get.ts",
       "domain": "graph",
       "mode": "sync",
-      "surfaces": ["agent"],
+      "surfaces": [
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "unit": false
@@ -1247,7 +1691,11 @@
       "file": "graph.node.list.ts",
       "domain": "graph",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1261,7 +1709,12 @@
       "file": "graph.node.search.ts",
       "domain": "graph",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1275,7 +1728,12 @@
       "file": "graph.node.upsert.ts",
       "domain": "graph",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1289,7 +1747,12 @@
       "file": "graph.relationship.upsert.ts",
       "domain": "graph",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1303,7 +1766,11 @@
       "file": "graph.stats.ts",
       "domain": "graph",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1317,7 +1784,10 @@
       "file": "image.analyze.ts",
       "domain": "image",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1330,7 +1800,10 @@
       "file": "image.create.ts",
       "domain": "image",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1343,7 +1816,11 @@
       "file": "image.generate.ts",
       "domain": "image",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1357,7 +1834,10 @@
       "file": "image.list.ts",
       "domain": "image",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1370,7 +1850,12 @@
       "file": "integration.configure.ts",
       "domain": "integration",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -1384,7 +1869,12 @@
       "file": "integration.delete.ts",
       "domain": "integration",
       "mode": "async",
-      "surfaces": ["api", "mcp", "cli", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -1398,7 +1888,12 @@
       "file": "integration.get.ts",
       "domain": "integration",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -1412,7 +1907,12 @@
       "file": "integration.install.ts",
       "domain": "integration",
       "mode": "async",
-      "surfaces": ["api", "mcp", "cli", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -1426,7 +1926,12 @@
       "file": "integration.list.ts",
       "domain": "integration",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -1440,7 +1945,11 @@
       "file": "integration.metrics.ts",
       "domain": "integration",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -1454,7 +1963,12 @@
       "file": "integration.sync.ts",
       "domain": "integration",
       "mode": "async",
-      "surfaces": ["api", "mcp", "cli", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -1468,7 +1982,11 @@
       "file": "markdown.generate.ts",
       "domain": "documents",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1482,7 +2000,11 @@
       "file": "mermaid.generate.ts",
       "domain": "mermaid",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1496,7 +2018,11 @@
       "file": "notifications.list.ts",
       "domain": "notifications",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1509,7 +2035,11 @@
       "file": "notifications.mark.ts",
       "domain": "notifications",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1522,7 +2052,12 @@
       "file": "ontology.neighbors.ts",
       "domain": "ontology",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1536,7 +2071,12 @@
       "file": "ontology.query.ts",
       "domain": "ontology",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1550,7 +2090,11 @@
       "file": "org.member.add.ts",
       "domain": "organization",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1565,7 +2109,11 @@
       "file": "org.member.invite.accept.ts",
       "domain": "organization",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1580,7 +2128,11 @@
       "file": "org.member.invite.decline.ts",
       "domain": "organization",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1595,7 +2147,11 @@
       "file": "org.member.remove.ts",
       "domain": "organization",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1608,7 +2164,11 @@
       "file": "org.member.role.change.ts",
       "domain": "organization",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1621,7 +2181,11 @@
       "file": "org.settings.read.ts",
       "domain": "organization",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1635,7 +2199,11 @@
       "file": "org.settings.write.ts",
       "domain": "organization",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1649,7 +2217,11 @@
       "file": "organization.create.ts",
       "domain": "organization",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1664,7 +2236,11 @@
       "file": "plugin.catalog.browse.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1677,7 +2253,11 @@
       "file": "plugin.catalog.get.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1686,11 +2266,30 @@
       }
     },
     {
+      "name": "plugin.catalog.sync",
+      "file": "plugin.catalog.sync.ts",
+      "domain": "plugin",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": true,
+        "unit": false
+      }
+    },
+    {
       "name": "plugin.credential.reauth",
       "file": "plugin.credential.reauth.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1703,7 +2302,11 @@
       "file": "plugin.credential.set_secret.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1716,7 +2319,11 @@
       "file": "plugin.org.install.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1729,7 +2336,11 @@
       "file": "plugin.org.install_bulk.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1742,7 +2353,11 @@
       "file": "plugin.org.list.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1755,7 +2370,11 @@
       "file": "plugin.org.set_enabled.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1768,7 +2387,11 @@
       "file": "plugin.org.uninstall.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1781,7 +2404,11 @@
       "file": "plugin.registry.add.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1794,7 +2421,11 @@
       "file": "plugin.registry.list.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1807,7 +2438,11 @@
       "file": "plugin.registry.remove.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1820,7 +2455,11 @@
       "file": "plugin.schema.get.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -1834,7 +2473,11 @@
       "file": "plugin.schema.validate.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -1848,7 +2491,11 @@
       "file": "plugin.settings.set_auth_alerts.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1861,7 +2508,11 @@
       "file": "plugin.version.list.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -1875,7 +2526,11 @@
       "file": "plugin.workspace.set_enabled.ts",
       "domain": "plugin",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "api": true,
         "docs": true,
@@ -1888,7 +2543,11 @@
       "file": "privacy.data.erase.ts",
       "domain": "privacy",
       "mode": "async",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1902,7 +2561,11 @@
       "file": "privacy.data.export.ts",
       "domain": "privacy",
       "mode": "async",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1916,7 +2579,11 @@
       "file": "prompt.settings.read.ts",
       "domain": "workspace",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1930,7 +2597,11 @@
       "file": "prompt.settings.write.ts",
       "domain": "workspace",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -1944,7 +2615,12 @@
       "file": "repo.configure.ts",
       "domain": "repo",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -1958,7 +2634,11 @@
       "file": "repo.metrics.ts",
       "domain": "repo",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -1972,7 +2652,12 @@
       "file": "repo.pause.ts",
       "domain": "repo",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -1986,7 +2671,12 @@
       "file": "repo.resume.ts",
       "domain": "repo",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2000,7 +2690,12 @@
       "file": "repo.sync.ts",
       "domain": "repo",
       "mode": "async",
-      "surfaces": ["api", "mcp", "cli", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2014,7 +2709,11 @@
       "file": "research.swarm.start.ts",
       "domain": "research",
       "mode": "async",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2028,7 +2727,11 @@
       "file": "research.swarm.status.ts",
       "domain": "research",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2042,7 +2745,10 @@
       "file": "schema.chat.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "agent"],
+      "surfaces": [
+        "api",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2055,7 +2761,9 @@
       "file": "schema.delete.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["agent"],
+      "surfaces": [
+        "agent"
+      ],
       "layers": {
         "schema": true
       }
@@ -2065,7 +2773,11 @@
       "file": "schema.export.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2079,7 +2791,11 @@
       "file": "schema.label.delete.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2093,7 +2809,12 @@
       "file": "schema.label.upsert.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2107,7 +2828,12 @@
       "file": "schema.list.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2121,7 +2847,11 @@
       "file": "schema.property.delete.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2135,7 +2865,12 @@
       "file": "schema.property.upsert.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2149,7 +2884,12 @@
       "file": "schema.recommend.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2163,7 +2903,11 @@
       "file": "schema.reconcile.dispatch.ts",
       "domain": "schema",
       "mode": "async",
-      "surfaces": ["api", "mcp", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2177,7 +2921,11 @@
       "file": "schema.reconcile.status.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2191,7 +2939,11 @@
       "file": "schema.registry.config.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2205,7 +2957,11 @@
       "file": "schema.registry.get.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2219,7 +2975,11 @@
       "file": "schema.relationship.delete.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2233,7 +2993,12 @@
       "file": "schema.relationship.upsert.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2247,7 +3012,12 @@
       "file": "schema.setup.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2261,7 +3031,10 @@
       "file": "schema.shared.ts",
       "domain": "unknown",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {}
     },
     {
@@ -2269,7 +3042,11 @@
       "file": "schema.toggle.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2283,7 +3060,10 @@
       "file": "schema.types.ts",
       "domain": "unknown",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {}
     },
     {
@@ -2291,7 +3071,12 @@
       "file": "schema.validate.node.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2305,7 +3090,12 @@
       "file": "schema.validate.relationship.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2319,7 +3109,11 @@
       "file": "schema.version.create.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2333,7 +3127,11 @@
       "file": "schema.version.diff.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2347,7 +3145,11 @@
       "file": "schema.version.list.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2361,7 +3163,11 @@
       "file": "schema.version.pin.ts",
       "domain": "schema",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "cli"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2371,11 +3177,149 @@
       }
     },
     {
+      "name": "secret.export",
+      "file": "secret.export.ts",
+      "domain": "secret",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "secret.import_env",
+      "file": "secret.import_env.ts",
+      "domain": "secret",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "secret.key.delete",
+      "file": "secret.key.delete.ts",
+      "domain": "secret",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "secret.key.list",
+      "file": "secret.key.list.ts",
+      "domain": "secret",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "secret.key.upsert",
+      "file": "secret.key.upsert.ts",
+      "domain": "secret",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "secret.reveal",
+      "file": "secret.reveal.ts",
+      "domain": "secret",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "secret.value.set",
+      "file": "secret.value.set.ts",
+      "domain": "secret",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "secret.value.unset",
+      "file": "secret.value.unset.ts",
+      "domain": "secret",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "semantic.edge.approve",
       "file": "semantic.edge.approve.ts",
       "domain": "semantic",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2389,7 +3333,11 @@
       "file": "semantic.edge.infer.ts",
       "domain": "semantic",
       "mode": "async",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2403,7 +3351,11 @@
       "file": "semantic.edge.list.ts",
       "domain": "semantic",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2417,7 +3369,11 @@
       "file": "semantic.edge.suggest.ts",
       "domain": "semantic",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2431,7 +3387,11 @@
       "file": "semantic.relationship.approve.ts",
       "domain": "semantic",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2445,7 +3405,11 @@
       "file": "semantic.relationship.infer.ts",
       "domain": "semantic",
       "mode": "async",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2459,7 +3423,11 @@
       "file": "semantic.relationship.list.ts",
       "domain": "semantic",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2473,7 +3441,11 @@
       "file": "semantic.relationship.suggest.ts",
       "domain": "semantic",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2487,7 +3459,11 @@
       "file": "skill.author.ts",
       "domain": "skill",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2497,11 +3473,32 @@
       }
     },
     {
+      "name": "skill.create",
+      "file": "skill.create.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "skill.edit",
       "file": "skill.edit.ts",
       "domain": "skill",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2510,11 +3507,32 @@
       }
     },
     {
+      "name": "skill.enable",
+      "file": "skill.enable.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "skill.export",
       "file": "skill.export.ts",
       "domain": "skill",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2527,7 +3545,10 @@
       "file": "skill.metrics.read.ts",
       "domain": "skill",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2540,7 +3561,10 @@
       "file": "skill.version.activate.ts",
       "domain": "skill",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2553,7 +3577,10 @@
       "file": "skill.version.get.ts",
       "domain": "skill",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2566,7 +3593,10 @@
       "file": "skill.version.list.ts",
       "domain": "skill",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2579,7 +3609,10 @@
       "file": "skill.version.upload.ts",
       "domain": "skill",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2592,7 +3625,10 @@
       "file": "skill.workspace.install.ts",
       "domain": "skill",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2605,7 +3641,10 @@
       "file": "skill.workspace.list.ts",
       "domain": "skill",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2618,7 +3657,11 @@
       "file": "svg.generate.ts",
       "domain": "svg",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2632,7 +3675,11 @@
       "file": "system.install.instructions.ts",
       "domain": "system",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2646,7 +3693,11 @@
       "file": "user.preferences.read.ts",
       "domain": "user",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2660,7 +3711,11 @@
       "file": "user.preferences.write.ts",
       "domain": "user",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2674,7 +3729,11 @@
       "file": "video.generate.ts",
       "domain": "video",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2688,7 +3747,11 @@
       "file": "web.fetch.ts",
       "domain": "web",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2703,7 +3766,11 @@
       "file": "web.search.ts",
       "domain": "web",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2718,7 +3785,11 @@
       "file": "workflow.cancel.ts",
       "domain": "workflow",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2732,7 +3803,11 @@
       "file": "workflow.run.ts",
       "domain": "workflow",
       "mode": "async",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2746,7 +3821,11 @@
       "file": "workflow.status.ts",
       "domain": "workflow",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": false,
@@ -2760,7 +3839,11 @@
       "file": "workspace.create.ts",
       "domain": "workspace",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2775,7 +3858,10 @@
       "file": "workspace.invite.send.ts",
       "domain": "workspace",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2788,7 +3874,10 @@
       "file": "workspace.member.list.ts",
       "domain": "workspace",
       "mode": "sync",
-      "surfaces": ["api", "mcp"],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2801,7 +3890,11 @@
       "file": "workspace.model.settings.read.ts",
       "domain": "workspace",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2815,7 +3908,11 @@
       "file": "workspace.model.settings.write.ts",
       "domain": "workspace",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2829,7 +3926,11 @@
       "file": "workspace.settings.read.ts",
       "domain": "workspace",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
@@ -2843,7 +3944,11 @@
       "file": "workspace.settings.write.ts",
       "domain": "workspace",
       "mode": "sync",
-      "surfaces": ["api", "mcp", "agent"],
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
       "layers": {
         "schema": true,
         "api": true,
