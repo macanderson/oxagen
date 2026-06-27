@@ -76,8 +76,23 @@ function mockRegistryQuery(registries: typeof fakeRegistry[]) {
   );
 }
 
-/** Mock the withTenantDb upsert for non-capability installs. */
+/**
+ * Mock the catalog icon lookup withTenantDb call that now precedes the upsert
+ * for all non-agent_capability plugin types. Returns null (no catalog entry) —
+ * the handler treats this as non-fatal and continues.
+ */
+function mockIconLookup() {
+  mocks.withTenantDb.mockImplementationOnce(async () => null);
+}
+
+/**
+ * Mock the withTenantDb upsert for non-capability installs. Also mocks the
+ * icon lookup call that precedes it in the handler.
+ */
 function mockUpsert(returnId = "porg-registry-listing") {
+  // First: icon lookup (non-fatal, returns null → no catalog entry).
+  mockIconLookup();
+  // Second: the actual upsert.
   mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       insert: () => ({
@@ -104,6 +119,9 @@ describe("installOne — registry install (empty endpointUrl)", () => {
   it("resolves endpoint from registry and stores source='registry' with the resolved URL", async () => {
     mockRegistryQuery([fakeRegistry]);
     mocks.listServers.mockResolvedValueOnce({ servers: [fakeServerResponse] });
+
+    // Mock the icon lookup that precedes the upsert in the handler.
+    mockIconLookup();
 
     let capturedValues: Record<string, unknown> | null = null;
     mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
@@ -210,6 +228,9 @@ describe("installOne — truly-custom install (endpointUrl provided)", () => {
   });
 
   it("stores the provided endpointUrl as-is with source='custom', no registry lookup", async () => {
+    // Mock the icon lookup that precedes the upsert in the handler.
+    mockIconLookup();
+
     let capturedValues: Record<string, unknown> | null = null;
     mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
