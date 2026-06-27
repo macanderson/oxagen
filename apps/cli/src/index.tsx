@@ -13,6 +13,7 @@
 import { createRequire } from "node:module";
 import { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
+import { parseModeArg, type PermissionMode } from "./agent/permissions.js";
 
 // The Oxagen context engine pulls in DuckDB, a native CommonJS dependency that
 // references a bare `require`. Under pure-ESM execution that global is absent, so
@@ -39,19 +40,41 @@ program
     false,
   )
   .option(
+    "--mode <mode>",
+    "Permission mode: ask | accept-edits | bypass | readonly (REPL default: ask; one-shot ungated unless set)",
+  )
+  .option(
     "--no-pipeline",
     "Skip prompt evaluation, context injection, and completeness judging",
+  )
+  .option(
+    "--verbose",
+    "Capture + emit full per-turn telemetry (per-phase timing, model+token+cost, tool results)",
+    false,
   )
   .action(
     async (
       promptWords: string[],
-      opts: { model?: string; readonly?: boolean; pipeline?: boolean },
+      opts: { model?: string; readonly?: boolean; pipeline?: boolean; verbose?: boolean },
     ) => {
       const prompt = promptWords.join(" ").trim();
+      let mode: PermissionMode | undefined;
+      if (opts.mode) {
+        mode = parseModeArg(opts.mode);
+        if (!mode) {
+          process.stderr.write(
+            `Error: invalid --mode "${opts.mode}". Use ask, accept-edits, bypass, or readonly.\n`,
+          );
+          process.exitCode = 1;
+          return;
+        }
+      }
       const runOpts = {
         model: opts.model,
         readOnly: opts.readonly,
+        mode,
         bare: opts.pipeline === false,
+        verbose: opts.verbose,
       };
 
       if (prompt) {
@@ -153,6 +176,30 @@ program
     await handleReplay(turn, opts);
   });
 
+// ── cost: project + report model cost from the baked-in rate card ─────────────
+
+program
+  .command("cost")
+  // The root's global `-m, --model` is reused (commander binds it to the parent),
+  // so the action reads merged opts via optsWithGlobals() to see --model here.
+  .description("Project model cost from the baked-in rate card, or roll up this project's spend")
+  .option("--in <tokens>", "Input token count to price", (v) => parseInt(v, 10))
+  .option("--out <tokens>", "Output token count to price", (v) => parseInt(v, 10))
+  .option("--rates", "Print the baked-in rate card", false)
+  .option("--session", "Roll up what this project's recorded turns actually cost, by model", false)
+  .option("--json", "Output JSON", false)
+  .action(async (_opts, command: Command) => {
+    const merged = command.optsWithGlobals() as {
+      in?: number;
+      out?: number;
+      model?: string;
+      rates?: boolean;
+      session?: boolean;
+      json?: boolean;
+    };
+    const { handleCost } = await import("./commands/cost.js");
+    await handleCost(merged);
+  });
 // ── graph: knowledge-graph search ─────────────────────────────────────────────
 
 const graph = program.command("graph").description("Query the knowledge graph");
