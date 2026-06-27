@@ -24,6 +24,11 @@ export async function register(): Promise<void> {
   // during client-side builds). bootstrapIAMRuntime depends on @oxagen/database
   // which uses `pg` — a Node.js-only module.
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    // Bootstrap the OpenTelemetry SDK first so spans are captured from the
+    // first request. No-op when OTEL_EXPORTER_OTLP_ENDPOINT is unset, so
+    // this is safe in all envs. Rollback = leave the env var unset.
+    const { initTracer } = await import("@oxagen/telemetry");
+    initTracer();
     // Turbopack HMR re-evaluates module factories via (0, eval)(code) in global
     // scope where `require` is not defined (it's only a CJS module-wrapper param).
     // next/dist/esm/build/templates/app-page.js contains `require('path')` inside

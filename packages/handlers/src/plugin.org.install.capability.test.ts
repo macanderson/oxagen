@@ -72,9 +72,24 @@ function mockCapabilityUpsert(returnId?: string) {
   );
 }
 
-/** Mock a custom server (mcp_server) withTenantDb upsert. */
+/**
+ * Mock the catalog icon lookup withTenantDb call that now precedes the upsert
+ * for non-agent_capability plugin types (mcp_server, etc.). Returns null (no
+ * catalog entry) — the handler treats this as non-fatal and continues.
+ */
+function mockIconLookup() {
+  mocks.withTenantDb.mockImplementationOnce(async () => null);
+}
+
+/**
+ * Mock a custom server (mcp_server) withTenantDb upsert. Also mocks the icon
+ * lookup call that precedes it in the handler.
+ */
 function mockCustomUpsert(returnId?: string) {
   const id = returnId ?? "porg-custom-listing";
+  // First: icon lookup (non-fatal, returns null → no catalog entry).
+  mockIconLookup();
+  // Second: the actual upsert.
   mocks.withTenantDb.mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
     fn({
       insert: () => ({
@@ -207,7 +222,8 @@ describe("installOne — custom mcp_server path", () => {
       },
     });
     expect(id).toBe("porg-mcp-new");
-    expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
+    // Two withTenantDb calls: (1) icon lookup, (2) the upsert insert.
+    expect(mocks.withTenantDb).toHaveBeenCalledTimes(2);
   });
 });
 
