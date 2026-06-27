@@ -4,7 +4,7 @@
  * are legible instead of dumping the SDK's internal error object.
  */
 import { describe, it, expect } from "vitest";
-import { normalizeAgentError } from "../loop.js";
+import { normalizeAgentError, isErrorResult, stringifyCapped } from "../loop.js";
 
 /** Shape of an AI SDK gateway error: provider JSON lives on `responseBody`. */
 function gatewayError(message: string, type = "error"): Error {
@@ -50,5 +50,38 @@ describe("normalizeAgentError", () => {
     const out = normalizeAgentError("plain string failure");
     expect(out).toBeInstanceOf(Error);
     expect(out.message).toContain("plain string failure");
+  });
+});
+
+describe("isErrorResult — sets the ok flag on tool events", () => {
+  it("flags an Error instance", () => {
+    expect(isErrorResult(new Error("boom"))).toBe(true);
+  });
+  it("flags an object with isError:true or a truthy error", () => {
+    expect(isErrorResult({ isError: true })).toBe(true);
+    expect(isErrorResult({ error: "ENOENT" })).toBe(true);
+  });
+  it("treats a normal result (incl. error:false / error:null) as ok", () => {
+    expect(isErrorResult({ ok: true, output: "done" })).toBe(false);
+    expect(isErrorResult({ error: false })).toBe(false);
+    expect(isErrorResult({ error: null })).toBe(false);
+    expect(isErrorResult("plain string output")).toBe(false);
+    expect(isErrorResult(undefined)).toBe(false);
+  });
+});
+
+describe("stringifyCapped — bounds captured tool input/results", () => {
+  it("passes a short string through and JSON-stringifies objects", () => {
+    expect(stringifyCapped("hi", 100)).toBe("hi");
+    expect(stringifyCapped({ path: "src/x.ts" }, 100)).toBe('{"path":"src/x.ts"}');
+  });
+  it("truncates with an ellipsis past the cap", () => {
+    const out = stringifyCapped("x".repeat(50), 10);
+    expect(out).toBe("x".repeat(10) + "…");
+  });
+  it("falls back to String() for unserializable values", () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    expect(typeof stringifyCapped(circular, 100)).toBe("string");
   });
 });

@@ -16,6 +16,9 @@ import { loadProjectContext } from "../agent/project-context.js";
 import { openSessionMemory } from "../agent/memory.js";
 import { openFleetMemory } from "../agent/fleet/memory.js";
 import { openTraceStore } from "../agent/trace-store.js";
+import { appendVerboseLog } from "../agent/verbose-log.js";
+import { formatVerboseSection } from "../agent/trace-format.js";
+import { readConfig } from "../lib/config.js";
 import { PermissionBroker, type PermissionMode } from "../agent/permissions.js";
 
 export interface OneShotOptions {
@@ -30,6 +33,8 @@ export interface OneShotOptions {
   mode?: PermissionMode;
   /** Skip the eval/enhance/judge pipeline and run the bare agent. */
   bare?: boolean;
+  /** Capture + emit full per-turn telemetry (overrides config default). */
+  verbose?: boolean;
 }
 
 export async function runOneShot(
@@ -41,6 +46,7 @@ export async function runOneShot(
   const memory = await openSessionMemory(cwd, `one-shot-${Date.now()}`);
   const fleetMemory = openFleetMemory(cwd);
   const traceStore = openTraceStore(cwd);
+  const verbose = options.verbose ?? readConfig().verbose ?? false;
 
   // Non-interactive: build a broker only when a mode is requested. With no
   // approver, `ask` denies mutations (fail closed); acceptEdits/bypass enable
@@ -61,6 +67,7 @@ export async function runOneShot(
       broker,
       model: options.model,
       bare: options.bare,
+      verbose,
       memory,
       fleetMemory,
       // Pipeline stage progress goes to stderr so stdout stays the clean answer.
@@ -85,6 +92,12 @@ export async function runOneShot(
     });
     traceStore.record(result.trace);
     if (streamed) process.stdout.write("\n");
+    // Verbose: append the structured record to the JSONL stream and print the
+    // per-phase / per-model / cost breakdown to stderr (stdout stays the answer).
+    if (verbose) {
+      appendVerboseLog(cwd, result.trace);
+      process.stderr.write(formatVerboseSection(result.trace).join("\n") + "\n");
+    }
   } catch (err) {
     if (err instanceof MissingGatewayKeyError) {
       process.stderr.write(`Error: ${err.message}\n`);

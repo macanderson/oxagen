@@ -47,10 +47,15 @@ program
     "--no-pipeline",
     "Skip prompt evaluation, context injection, and completeness judging",
   )
+  .option(
+    "--verbose",
+    "Capture + emit full per-turn telemetry (per-phase timing, model+token+cost, tool results)",
+    false,
+  )
   .action(
     async (
       promptWords: string[],
-      opts: { model?: string; readonly?: boolean; mode?: string; pipeline?: boolean },
+      opts: { model?: string; readonly?: boolean; pipeline?: boolean; verbose?: boolean },
     ) => {
       const prompt = promptWords.join(" ").trim();
       let mode: PermissionMode | undefined;
@@ -69,6 +74,7 @@ program
         readOnly: opts.readonly,
         mode,
         bare: opts.pipeline === false,
+        verbose: opts.verbose,
       };
 
       if (prompt) {
@@ -170,6 +176,30 @@ program
     await handleReplay(turn, opts);
   });
 
+// ── cost: project + report model cost from the baked-in rate card ─────────────
+
+program
+  .command("cost")
+  // The root's global `-m, --model` is reused (commander binds it to the parent),
+  // so the action reads merged opts via optsWithGlobals() to see --model here.
+  .description("Project model cost from the baked-in rate card, or roll up this project's spend")
+  .option("--in <tokens>", "Input token count to price", (v) => parseInt(v, 10))
+  .option("--out <tokens>", "Output token count to price", (v) => parseInt(v, 10))
+  .option("--rates", "Print the baked-in rate card", false)
+  .option("--session", "Roll up what this project's recorded turns actually cost, by model", false)
+  .option("--json", "Output JSON", false)
+  .action(async (_opts, command: Command) => {
+    const merged = command.optsWithGlobals() as {
+      in?: number;
+      out?: number;
+      model?: string;
+      rates?: boolean;
+      session?: boolean;
+      json?: boolean;
+    };
+    const { handleCost } = await import("./commands/cost.js");
+    await handleCost(merged);
+  });
 // ── graph: knowledge-graph search ─────────────────────────────────────────────
 
 const graph = program.command("graph").description("Query the knowledge graph");

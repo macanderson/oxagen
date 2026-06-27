@@ -7,15 +7,18 @@
  * a {@link ModelTier} and a concrete gateway slug, deterministically and without
  * an extra LLM round-trip — encoding the CLAUDE.md operating-model table in code.
  *
- * It also vendors a small provider rate card so the agent can *estimate and
- * report* the dollar cost of a run. The numbers mirror
- * `packages/billing/src/pricing.ts` (the platform's single source of truth);
- * they are duplicated here only so the standalone `oxagen` bin stays lean and
- * does not pull in @oxagen/billing (Stripe et al.). Keep them in sync.
+ * Dollar costs come from the baked-in rate card in {@link ./rate-card.ts} — the
+ * single place model prices live in the CLI. This module re-exports the pricing
+ * helpers so existing imports keep working, but does not own a second copy.
  */
 import type { ModelTier } from "./fleet/types.js";
 import type { UsageTotals } from "./fleet/types.js";
 import { readConfig } from "../lib/config.js";
+import { estimateCostUsd, rateFor, formatUsd } from "./rate-card.js";
+
+// Re-exported so call sites that import pricing from the router keep working.
+// The authoritative definitions live in ./rate-card.ts.
+export { estimateCostUsd, rateFor, formatUsd };
 
 /** A tier's concrete gateway slug, overridable per-env to track gateway drift. */
 function tierSlug(tier: ModelTier): string {
@@ -36,55 +39,9 @@ export function tierLabel(tier: ModelTier): string {
   return tier === "fast" ? "Haiku" : tier === "balanced" ? "Sonnet" : "Opus";
 }
 
-// ── Rate card (USD per 1,000,000 tokens) ─────────────────────────────────────
-// Longest-prefix match on the bare model family. Mirrors PROVIDER_RATE_CARD.
-
-interface Rate {
-  inputPer1M: number;
-  outputPer1M: number;
-}
-
-const RATES: Array<{ prefix: string; rate: Rate }> = [
-  { prefix: "claude-opus", rate: { inputPer1M: 15.0, outputPer1M: 75.0 } },
-  { prefix: "claude-sonnet", rate: { inputPer1M: 3.0, outputPer1M: 15.0 } },
-  { prefix: "claude-haiku", rate: { inputPer1M: 1.0, outputPer1M: 5.0 } },
-  { prefix: "gpt-5", rate: { inputPer1M: 1.25, outputPer1M: 10.0 } },
-  { prefix: "gpt-4o-mini", rate: { inputPer1M: 0.15, outputPer1M: 0.6 } },
-  { prefix: "gpt-4o", rate: { inputPer1M: 2.5, outputPer1M: 10.0 } },
-  { prefix: "gemini", rate: { inputPer1M: 1.25, outputPer1M: 5.0 } },
-];
-
-const FALLBACK_RATE: Rate = { inputPer1M: 3.0, outputPer1M: 15.0 }; // Sonnet — never zero-charge.
-
-/** Resolve a gateway slug (e.g. "anthropic/claude-opus-4.8") to its token rate. */
-export function rateFor(model: string): Rate {
-  // Drop the "vendor/" prefix and dotted version so "anthropic/claude-opus-4.8"
-  // matches the "claude-opus" family. Normalize dots→dashes for prefix tests.
-  const family = model.split("/").pop() ?? model;
-  for (const { prefix, rate } of RATES) {
-    if (family.startsWith(prefix)) return rate;
-  }
-  return FALLBACK_RATE;
-}
-
-/** Estimated provider cost in USD for a token usage on a given model. */
-export function estimateCostUsd(
-  model: string,
-  usage: { inputTokens?: number; outputTokens?: number },
-): number {
-  const rate = rateFor(model);
-  const inCost = ((usage.inputTokens ?? 0) / 1_000_000) * rate.inputPer1M;
-  const outCost = ((usage.outputTokens ?? 0) / 1_000_000) * rate.outputPer1M;
-  return inCost + outCost;
-}
-
-/** Format a USD amount compactly for the TUI ("$0.0042", "$1.20", "<$0.0001"). */
-export function formatUsd(usd: number): string {
-  if (usd === 0) return "$0";
-  if (usd < 0.0001) return "<$0.0001";
-  if (usd < 1) return `$${usd.toFixed(4)}`;
-  return `$${usd.toFixed(2)}`;
-}
+// ── Usage accumulation ───────────────────────────────────────────────────────
+// Pricing helpers (rateFor / estimateCostUsd / formatUsd) come from the rate
+// card; this only composes them into a running per-turn total.
 
 /** Add a per-call usage into a running total, pricing it on the call's model. */
 export function accumulateUsage(

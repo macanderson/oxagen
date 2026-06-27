@@ -32,6 +32,7 @@ export const HELP = [
   "  /replay [n|id] show how a turn was handled (default: last turn)",
   "  /traces        list recent turns you can /replay",
   "  /pipeline [on|off]  toggle prompt evaluation + completeness judging",
+  "  /verbose [on|off]   per-phase timing, model+token+cost breakdown, tool results",
   "  /clear         reset the conversation",
   "  /exit, /quit   quit",
   "Permission prompt: y allow once · a allow + remember · n/Esc deny",
@@ -271,6 +272,7 @@ export function StatusLine({
   inputTokens,
   outputTokens,
   pipelineOn,
+  verboseOn,
   mode,
 }: {
   model: string;
@@ -280,6 +282,8 @@ export function StatusLine({
   outputTokens: number;
   /** Whether the eval→enhance→judge pipeline is active (undefined = don't show). */
   pipelineOn?: boolean;
+  /** Whether verbose telemetry capture is active (undefined = don't show). */
+  verboseOn?: boolean;
   /** Current permission posture (undefined = fall back to the read-only chip). */
   mode?: PermissionMode;
 }): React.ReactElement {
@@ -306,6 +310,8 @@ export function StatusLine({
             </Text>
           </Text>
         )}
+        {verboseOn && <Text color={theme.cyan}>verbose</Text>}
+        {readOnly && <Text color="#FBBF24">read-only</Text>}
         {mode ? (
           <Text dimColor>
             mode:
