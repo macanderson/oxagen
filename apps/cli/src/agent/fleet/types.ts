@@ -54,6 +54,8 @@ export interface Task {
   tier: ModelTier;
   /** Concrete gateway model slug resolved from the tier. */
   model: string;
+  /** Named agent definition the planner assigned this task to (if any). */
+  agent?: string;
   createdAt: number;
   startedAt?: number;
   finishedAt?: number;

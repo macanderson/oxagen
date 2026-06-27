@@ -14,15 +14,27 @@ export interface SystemPromptOptions {
   projectContext?: ProjectContext;
   /** When true, the agent must not mutate the filesystem or run commands. */
   readOnly?: boolean;
+  /** A named agent persona whose prompt replaces the default identity. */
+  agent?: { name: string; systemPrompt: string };
 }
 
 export function buildSystemPrompt(opts: SystemPromptOptions): string {
-  const { cwd, projectContext, readOnly } = opts;
+  const { cwd, projectContext, readOnly, agent } = opts;
+
+  const preamble = agent
+    ? [
+        agent.systemPrompt.trim(),
+        "",
+        "You operate locally in the user's terminal, on the working directory, using the provided tools.",
+      ]
+    : [
+        "You are oxagen, an agentic coding assistant running locally in the user's terminal,",
+        "backed by Oxagen's knowledge-graph context engine.",
+        "You operate directly on the user's working directory using the provided tools.",
+      ];
 
   const lines = [
-    "You are oxagen, an agentic coding assistant running locally in the user's terminal,",
-    "backed by Oxagen's knowledge-graph context engine.",
-    "You operate directly on the user's working directory using the provided tools.",
+    ...preamble,
     "",
     "Operating rules:",
     "- Act, don't narrate intentions at length. Read before you edit, and edit precisely.",

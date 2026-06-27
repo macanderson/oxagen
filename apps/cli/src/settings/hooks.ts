@@ -93,6 +93,10 @@ function execHook(
     child.on("error", (err) => finish({ code: 1, stdout, stderr: stderr + String(err) }));
     child.on("close", (code) => finish({ code: code ?? 0, stdout, stderr }));
 
+    // A hook that exits before reading stdin makes the write below emit EPIPE
+    // asynchronously on the stdin stream. Swallow it — the exit code is what
+    // matters, and an unhandled stream error would otherwise crash the process.
+    child.stdin.on("error", () => {});
     try {
       child.stdin.write(payloadJson);
       child.stdin.end();

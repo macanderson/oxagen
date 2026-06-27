@@ -21,6 +21,7 @@ import { runAgent } from "../loop.js";
 import { enhancePrompt } from "../prompt-enhancer.js";
 import { accumulateUsage, routeModel } from "../model-router.js";
 import type { ProjectContext } from "../project-context.js";
+import type { AgentDefinition } from "../../agents/types.js";
 import type { FleetMemory } from "./memory.js";
 import type { PlanStore } from "./store.js";
 import type { Isolation, IntegrationResult } from "./git-isolation.js";
@@ -38,6 +39,7 @@ export type AgentRunner = (opts: {
   cwd: string;
   model?: string;
   projectContext?: ProjectContext;
+  agent?: AgentDefinition;
   readOnly?: boolean;
   signal?: AbortSignal;
   onText?: (delta: string) => void;
@@ -55,6 +57,8 @@ export interface FleetOptions {
   memory?: FleetMemory | null;
   store?: PlanStore | null;
   projectContext?: ProjectContext;
+  /** Named agent registry; a task's `agent` is looked up here at dispatch. */
+  agents?: Map<string, AgentDefinition>;
   /** Inject a fake runner in tests; defaults to the real {@link runAgent}. */
   runner?: AgentRunner;
   /** Read-only subagents (explain, don't edit). */
@@ -76,6 +80,7 @@ export class Fleet extends EventEmitter {
   private readonly memory: FleetMemory | null;
   private readonly store: PlanStore | null;
   private readonly projectContext: ProjectContext | undefined;
+  private readonly agents: Map<string, AgentDefinition>;
   private readonly runner: AgentRunner;
   private readonly readOnly: boolean;
   private readonly isolation: Isolation | null;
@@ -97,6 +102,7 @@ export class Fleet extends EventEmitter {
     this.memory = opts.memory ?? null;
     this.store = opts.store ?? null;
     this.projectContext = opts.projectContext;
+    this.agents = opts.agents ?? new Map<string, AgentDefinition>();
     this.runner = opts.runner ?? runAgent;
     this.readOnly = opts.readOnly ?? false;
     this.isolation = opts.isolation ?? null;
@@ -261,6 +267,7 @@ export class Fleet extends EventEmitter {
         cwd: workdir,
         model: task.model,
         projectContext: this.projectContext,
+        agent: task.agent ? this.agents.get(task.agent) : undefined,
         readOnly: this.readOnly,
         signal: controller.signal,
         onText: (delta) => {

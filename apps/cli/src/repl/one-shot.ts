@@ -12,10 +12,12 @@
  * context engine. Model calls go through the Vercel AI Gateway.
  */
 import { runTurn, MissingGatewayKeyError } from "../agent/pipeline.js";
+import { runAgent } from "../agent/loop.js";
 import { loadProjectContext } from "../agent/project-context.js";
 import { openSessionMemory } from "../agent/memory.js";
 import { openFleetMemory } from "../agent/fleet/memory.js";
 import { openTraceStore } from "../agent/trace-store.js";
+import { getAgent } from "../agents/loader.js";
 
 export interface OneShotOptions {
   readOnly?: boolean;
@@ -75,6 +77,57 @@ export async function runOneShot(
         `Error: ${err instanceof Error ? err.message : String(err)}\n`,
       );
     }
+    process.exitCode = 1;
+  } finally {
+    await memory?.close();
+  }
+}
+
+/**
+ * Run a single prompt as a named agent (its system prompt, tool allowlist, and
+ * model). Bypasses the eval/enhance/judge pipeline — the agent's own prompt is
+ * authoritative. Streams the answer to stdout; tool activity to stderr.
+ */
+export async function runAgentOneShot(
+  prompt: string,
+  agentName: string,
+  options: OneShotOptions = {},
+): Promise<void> {
+  const cwd = process.cwd();
+  const agent = getAgent(agentName, { cwd });
+  if (!agent) {
+    process.stderr.write(`Error: unknown agent "${agentName}". Run \`oxagen agent list\`.\n`);
+    process.exitCode = 1;
+    return;
+  }
+  const projectContext = loadProjectContext(cwd);
+  const memory = await openSessionMemory(cwd, `agent-${agentName}-${Date.now()}`);
+  try {
+    let streamed = false;
+    await runAgent({
+      prompt,
+      cwd,
+      agent,
+      readOnly: options.readOnly,
+      model: options.model,
+      projectContext,
+      memory,
+      onText: (delta) => {
+        streamed = true;
+        process.stdout.write(delta);
+      },
+      onToolCall: (name, input) => {
+        const summary =
+          typeof input === "object" && input !== null
+            ? JSON.stringify(input).slice(0, 120)
+            : String(input);
+        process.stderr.write(`  · ${name} ${summary}\n`);
+      },
+      onToolBlocked: (name, reason) => process.stderr.write(`  ⛔ ${name}: ${reason}\n`),
+    });
+    if (streamed) process.stdout.write("\n");
+  } catch (err) {
+    process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`);
     process.exitCode = 1;
   } finally {
     await memory?.close();

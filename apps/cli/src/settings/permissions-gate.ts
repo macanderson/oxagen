@@ -56,6 +56,11 @@ const SUBJECT_FIELD: Record<string, string> = {
   bash: "command",
 };
 
+/** The canonical permission name for a tool (e.g. read_file → Read; mcp tools unchanged). */
+export function canonicalToolName(toolName: string): string {
+  return CANONICAL[toolName] ?? toolName;
+}
+
 function subjectOf(toolName: string, input: unknown): string {
   const field = SUBJECT_FIELD[toolName];
   if (!field || input === null || typeof input !== "object") return "";

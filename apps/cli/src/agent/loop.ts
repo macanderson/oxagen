@@ -18,6 +18,8 @@ import { loadSettings } from "../settings/resolve.js";
 import { wrapToolsWithGate } from "../settings/gate.js";
 import { runHooks } from "../settings/hooks.js";
 import { loadMcpTools, type McpServerStatus } from "../mcp/client.js";
+import { filterToolsForAgent } from "../agents/tools.js";
+import type { AgentDefinition } from "../agents/types.js";
 import type { OxagenSettings } from "../settings/schema.js";
 import type { ProjectContext } from "./project-context.js";
 import type { SessionMemory } from "./memory.js";
@@ -54,6 +56,12 @@ export interface RunAgentOptions {
    * settings resolved from `cwd`. Injectable so callers (and tests) can override.
    */
   settings?: OxagenSettings;
+  /**
+   * Run this turn as a named agent: its system prompt replaces the default
+   * identity, its tool allowlist restricts the available tools, and its model
+   * is used unless `model` overrides it.
+   */
+  agent?: AgentDefinition;
 }
 
 export interface RunAgentResult {
@@ -125,6 +133,9 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     cwd,
     projectContext: opts.projectContext,
     readOnly: opts.readOnly,
+    agent: opts.agent
+      ? { name: opts.agent.name, systemPrompt: opts.agent.systemPrompt }
+      : undefined,
   });
   if (recalled) {
     system +=
@@ -158,11 +169,13 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     ? await loadMcpTools(settings, { onStatus: opts.onMcpServer })
     : null;
 
-  // Gate every tool with the settings-driven permission rules and Pre/PostToolUse
-  // hooks. A denied call or a blocking hook returns a string the model reads.
-  const tools = wrapToolsWithGate(
+  // Merge local + MCP tools, restrict to the agent's allowlist (if any), then
+  // gate with the settings-driven permission rules and Pre/PostToolUse hooks.
+  const availableTools = filterToolsForAgent(
     { ...buildTools(cwd, { readOnly: opts.readOnly }), ...(mcp?.tools ?? {}) },
-    {
+    opts.agent?.tools,
+  );
+  const tools = wrapToolsWithGate(availableTools, {
       cwd,
       permissions: settings.permissions,
       hooks: settings.hooks,
@@ -178,7 +191,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   // internal fields.
   let streamError: unknown = null;
   const result = streamText({
-    model: resolveModelId(opts.model),
+    model: resolveModelId(opts.model ?? opts.agent?.model),
     system,
     messages,
     tools,

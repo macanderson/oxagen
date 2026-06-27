@@ -33,6 +33,7 @@ program
   .version(version)
   .argument("[prompt...]", "One-shot prompt (runs and exits)")
   .option("-m, --model <slug>", "Gateway model slug (overrides config/default)")
+  .option("--agent <name>", "Run the one-shot prompt as a named agent definition")
   .option(
     "--readonly",
     "Read-only mode: read/search/explain only — no file edits or commands",
@@ -45,7 +46,7 @@ program
   .action(
     async (
       promptWords: string[],
-      opts: { model?: string; readonly?: boolean; pipeline?: boolean },
+      opts: { model?: string; readonly?: boolean; pipeline?: boolean; agent?: string },
     ) => {
       const prompt = promptWords.join(" ").trim();
       const runOpts = {
@@ -53,6 +54,18 @@ program
         readOnly: opts.readonly,
         bare: opts.pipeline === false,
       };
+
+      // --agent: run the prompt as a named agent (its prompt, tools, model).
+      if (opts.agent) {
+        if (!prompt) {
+          process.stderr.write("Error: --agent requires a prompt, e.g. `oxagen --agent reviewer \"…\"`.\n");
+          process.exitCode = 1;
+          return;
+        }
+        const { runAgentOneShot } = await import("./repl/one-shot.js");
+        await runAgentOneShot(prompt, opts.agent, runOpts);
+        return;
+      }
 
       if (prompt) {
         // One-shot mode: run prompt, stream response, exit
@@ -248,6 +261,35 @@ settings
   .action(async (opts: { scope?: string }) => {
     const { settingsInit } = await import("./commands/settings.js");
     settingsInit(opts.scope);
+  });
+
+// ── agent: named agent definitions ────────────────────────────────────────────
+
+const agent = program
+  .command("agent")
+  .description("Manage named agent definitions (run one with `oxagen --agent <name> \"…\"`)");
+agent
+  .command("list")
+  .description("List available agents")
+  .action(async () => {
+    const { agentList } = await import("./commands/agent.js");
+    agentList();
+  });
+agent
+  .command("show")
+  .description("Show an agent's definition and system prompt")
+  .argument("<name>", "Agent name")
+  .action(async (name: string) => {
+    const { agentShow } = await import("./commands/agent.js");
+    agentShow(name);
+  });
+agent
+  .command("new")
+  .description("Scaffold a new agent at .oxagen/agents/<name>.md")
+  .argument("<name>", "Agent name")
+  .action(async (name: string) => {
+    const { agentNew } = await import("./commands/agent.js");
+    agentNew(name);
   });
 
 // ── mcp: external MCP servers ─────────────────────────────────────────────────
