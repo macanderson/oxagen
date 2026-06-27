@@ -278,7 +278,9 @@ describe("insert helpers — insertRows delegation", () => {
     await mod.insertEvents([row]);
     expect(insertMock).toHaveBeenCalledWith({
       table: "events",
-      values: [row],
+      // insertEvents stamps trace_id/span_id from the active OTEL context for
+      // log↔trace joins — empty strings here since no trace is active.
+      values: [{ ...row, trace_id: "", span_id: "" }],
       format: "JSONEachRow",
     });
   });
@@ -300,10 +302,11 @@ describe("insert helpers — insertRows delegation", () => {
       created_at: new Date().toISOString(),
     };
     await mod.insertTokenUsage([row]);
-    // A real UUID is passed straight through unchanged (no coalescing).
+    // A real UUID is passed straight through unchanged (no coalescing); the row
+    // is also stamped with trace_id/span_id (empty when no trace is active).
     expect(insertMock).toHaveBeenCalledWith({
       table: "token_usage",
-      values: [row],
+      values: [{ ...row, trace_id: "", span_id: "" }],
       format: "JSONEachRow",
     });
   });
@@ -398,7 +401,8 @@ describe("insert helpers — insertRows delegation", () => {
     await mod.insertToolInvocation(row);
     expect(insertMock).toHaveBeenCalledWith({
       table: "tool_invocations",
-      values: [row],
+      // Stamped with trace_id/span_id (empty when no trace is active).
+      values: [{ ...row, trace_id: "", span_id: "" }],
       format: "JSONEachRow",
     });
   });

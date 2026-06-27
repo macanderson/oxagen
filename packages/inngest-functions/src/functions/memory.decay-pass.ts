@@ -125,22 +125,15 @@ export const [memoryDecayPass] = createFunction(
               );
 
               for (const r of records) {
-                // neo4j-driver records are typed as `any` at the driver level;
-                // we extract typed values via the get() accessor below.
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const rec = r as any;
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+                // neo4j-driver records expose a typed get() accessor; treat each
+                // return as `unknown` and narrow it at the call site (no `any`).
+                const rec = r as { get(key: string): unknown };
                 const id: string = rec.get("id") as string;
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
                 const weight: string = rec.get("weight") as string;
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
                 const confidence: number = Number(rec.get("confidence") ?? 1.0);
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
                 const lastReinforcedAt: string | null =
                   (rec.get("lastReinforcedAt") as string | null) ?? null;
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
                 const createdAt: string = rec.get("createdAt") as string;
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
                 const nodeRef: string = (rec.get("nodeRef") as string) ?? "";
 
                 const halfLifeDays = halfLifeForWeight(
