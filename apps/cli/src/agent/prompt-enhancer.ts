@@ -93,13 +93,23 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
   const resolved: string[] = [];
 
   try {
-    // Mine candidates from the prompt plus any evaluator-supplied hints. The hints
-    // sharpen retrieval without polluting the visible prompt text.
-    const minedFrom = [prompt, ...(opts.extraQueries ?? [])].join(" \n ");
-    const { symbols, paths } = extractCandidates(minedFrom);
+    // Mine candidates from the prompt prose; then add any evaluator-supplied
+    // hints (extraQueries) directly as trusted candidates — a hint may be a real
+    // symbol/path that the prose heuristics would skip (e.g. a lowercase
+    // function name). Hints sharpen retrieval but never pollute the visible
+    // prompt text.
+    const mined = extractCandidates(prompt);
+    const symSet = new Set(mined.symbols);
+    const pathSet = new Set(mined.paths);
+    for (const hint of opts.extraQueries ?? []) {
+      const h = hint.trim();
+      if (!h) continue;
+      if (h.includes("/") || CODEY_EXT.test(h)) pathSet.add(h.replace(/^\.\//, ""));
+      else symSet.add(h);
+    }
 
     // Symbol definitions — "where is X defined".
-    for (const sym of symbols.slice(0, max)) {
+    for (const sym of [...symSet].slice(0, max)) {
       const res = await queryCodeGraph(cwd, "search", sym, 4);
       if (isHit(res)) {
         sections.push(`Definitions of \`${sym}\`:\n${res}`);
@@ -110,7 +120,7 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
     // File context — symbols a referenced file defines, plus its dependents
     // (what a change to it could break). This is the impact-analysis the agent
     // would otherwise have to discover by hand.
-    for (const p of paths.slice(0, max)) {
+    for (const p of [...pathSet].slice(0, max)) {
       const syms = await queryCodeGraph(cwd, "file_symbols", p, 12);
       if (isHit(syms)) {
         sections.push(`Symbols in ${p}:\n${syms}`);
