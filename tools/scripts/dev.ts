@@ -7,9 +7,42 @@ import { computeEnvPins } from "./lib/pin-env";
 import { startStripeTunnel } from "./stripe-tunnel";
 import { startInngestDevServer } from "./inngest-dev";
 import { formatError } from "./lib/format-error";
+import { inspectAppPorts, type AppPort } from "./lib/preflight-ports";
 
 const ROOT = resolve(process.cwd());
 const COMPOSE_FILE = "docker-compose.dev.yml";
+
+// Before touching anything, check whether the app servers are already bound.
+// `pnpm dev` is run repeatedly and in parallel against this one repo; without
+// this guard a second launch pushes through docker-up + migrate, spawns a
+// duplicate Stripe tunnel and Inngest dev server, and finally crashes turbo with
+// a raw `EADDRINUSE` stack trace from the app. Detect that up front and exit with
+// an actionable message instead — and never disturb the running stack.
+async function preflightAppPorts(): Promise<void> {
+  const result = await inspectAppPorts();
+  if (result.status === "clean") return;
+
+  const list = (ports: AppPort[]): string => ports.map((p) => `${p.name} :${p.port}`).join(", ");
+  const killHint =
+    "[dev] to restart cleanly run `pnpm kill` then `pnpm dev` — note `pnpm kill` also stops the " +
+    "shared Docker datastores other sessions of this repo may be using.";
+
+  if (result.status === "running") {
+    console.log(kleur.green(`[dev] the local dev stack is already running (${list(result.bound)}).`));
+    console.log(kleur.cyan("[dev] reuse it at http://localhost:3000 — nothing to start."));
+    console.log(kleur.dim(killHint));
+    process.exit(0);
+  }
+
+  // Partial / wedged: some app ports bound, some free — a second launch can't
+  // cleanly take over. Surface it as an error so the developer resolves it.
+  console.error(
+    kleur.yellow(`[dev] a partial dev stack is already up — bound: ${list(result.bound)}; free: ${list(result.free)}.`),
+  );
+  console.error(kleur.cyan("[dev] this is a wedged state; a fresh launch would crash on the bound ports."));
+  console.error(kleur.dim(killHint));
+  process.exit(1);
+}
 
 async function checkDocker(): Promise<void> {
   try {
@@ -152,6 +185,10 @@ async function turbo(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  // Fail fast (and side-effect-free) if a stack is already running, before any
+  // docker/migrate/tunnel/turbo work that would conflict or double-spawn.
+  await preflightAppPorts();
+
   // The shell (or a Vercel-pulled .env) may export over-quoted values — e.g.
   // NODE_ENV='"development"' — which every spawned dev server (Next, api, mcp)
   // inherits, producing Next's "non-standard NODE_ENV" warning and @oxagen/config

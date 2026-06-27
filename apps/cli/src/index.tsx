@@ -13,6 +13,7 @@
 import { createRequire } from "node:module";
 import { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
+import { parseModeArg, type PermissionMode } from "./agent/permissions.js";
 
 // The Oxagen context engine pulls in DuckDB, a native CommonJS dependency that
 // references a bare `require`. Under pure-ESM execution that global is absent, so
@@ -39,19 +40,41 @@ program
     false,
   )
   .option(
+    "--mode <mode>",
+    "Permission mode: ask | accept-edits | bypass | readonly (REPL default: ask; one-shot ungated unless set)",
+  )
+  .option(
     "--no-pipeline",
     "Skip prompt evaluation, context injection, and completeness judging",
+  )
+  .option(
+    "--verbose",
+    "Capture + emit full per-turn telemetry (per-phase timing, model+token+cost, tool results)",
+    false,
   )
   .action(
     async (
       promptWords: string[],
-      opts: { model?: string; readonly?: boolean; pipeline?: boolean },
+      opts: { model?: string; readonly?: boolean; pipeline?: boolean; verbose?: boolean },
     ) => {
       const prompt = promptWords.join(" ").trim();
+      let mode: PermissionMode | undefined;
+      if (opts.mode) {
+        mode = parseModeArg(opts.mode);
+        if (!mode) {
+          process.stderr.write(
+            `Error: invalid --mode "${opts.mode}". Use ask, accept-edits, bypass, or readonly.\n`,
+          );
+          process.exitCode = 1;
+          return;
+        }
+      }
       const runOpts = {
         model: opts.model,
         readOnly: opts.readonly,
+        mode,
         bare: opts.pipeline === false,
+        verbose: opts.verbose,
       };
 
       if (prompt) {
@@ -153,6 +176,31 @@ program
     await handleReplay(turn, opts);
   });
 
+// ── cost: project + report model cost from the baked-in rate card ─────────────
+
+program
+  .command("cost")
+  // The root's global `-m, --model` is reused (commander binds it to the parent),
+  // so the action reads merged opts via optsWithGlobals() to see --model here.
+  .description("Project model cost from the baked-in rate card, or roll up this project's spend")
+  .option("--in <tokens>", "Input token count to price", (v) => parseInt(v, 10))
+  .option("--out <tokens>", "Output token count to price", (v) => parseInt(v, 10))
+  .option("--rates", "Print the baked-in rate card", false)
+  .option("--session", "Roll up what this project's recorded turns actually cost, by model", false)
+  .option("--json", "Output JSON", false)
+  .action(async (_opts, command: Command) => {
+    const merged = command.optsWithGlobals() as {
+      in?: number;
+      out?: number;
+      model?: string;
+      rates?: boolean;
+      session?: boolean;
+      json?: boolean;
+    };
+    const { handleCost } = await import("./commands/cost.js");
+    await handleCost(merged);
+  });
+
 // ── graph: knowledge-graph search + pull + status ─────────────────────────────
 
 const graph = program.command("graph").description("Query the knowledge graph");
@@ -229,6 +277,63 @@ program
   .action(async (key?: string, value?: string) => {
     const { handleConfig } = await import("./commands/config.js");
     await handleConfig(key, value);
+  });
+
+// ── settings: the unified settings.json driver ────────────────────────────────
+
+const settings = program
+  .command("settings")
+  .description("Inspect and edit the unified settings.json (model, env, permissions, hooks, MCP)")
+  .action(async () => {
+    const { settingsShow } = await import("./commands/settings.js");
+    settingsShow();
+  });
+settings
+  .command("show")
+  .description("Show the merged settings and which scope each file lives in")
+  .action(async () => {
+    const { settingsShow } = await import("./commands/settings.js");
+    settingsShow();
+  });
+settings
+  .command("path")
+  .description("List the three scope files (user / project / local) and their status")
+  .action(async () => {
+    const { settingsPath } = await import("./commands/settings.js");
+    settingsPath();
+  });
+settings
+  .command("get")
+  .description("Print a value by dotted key (e.g. permissions.defaultMode)")
+  .argument("<key>", "Dotted settings key")
+  .action(async (key: string) => {
+    const { settingsGet } = await import("./commands/settings.js");
+    settingsGet(key);
+  });
+settings
+  .command("set")
+  .description("Set a value (model | apiUrl | env.NAME) in a scope")
+  .argument("<key>", "model, apiUrl, or env.NAME")
+  .argument("<value>", "Value to write")
+  .option("--scope <scope>", "user | project | local (default: project)")
+  .action(async (key: string, value: string, opts: { scope?: string }) => {
+    const { settingsSet } = await import("./commands/settings.js");
+    settingsSet(key, value, opts.scope);
+  });
+settings
+  .command("validate")
+  .description("Validate every scope file against the settings schema")
+  .action(async () => {
+    const { settingsValidate } = await import("./commands/settings.js");
+    settingsValidate();
+  });
+settings
+  .command("init")
+  .description("Write a documented starter settings.json (default: project scope)")
+  .option("--scope <scope>", "user | project | local (default: project)")
+  .action(async (opts: { scope?: string }) => {
+    const { settingsInit } = await import("./commands/settings.js");
+    settingsInit(opts.scope);
   });
 
 // ── env: workspace environments ───────────────────────────────────────────────
@@ -362,6 +467,10 @@ secret
   });
 
 async function main(): Promise<void> {
+  // Project settings.json (env, apiUrl, model) into the environment before any
+  // command runs — filling only unset vars, so the shell always wins.
+  const { applySettingsToEnv } = await import("./settings/runtime.js");
+  applySettingsToEnv();
   await program.parseAsync(process.argv);
 }
 

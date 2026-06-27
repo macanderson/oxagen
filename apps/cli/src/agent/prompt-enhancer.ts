@@ -16,6 +16,7 @@
 import { queryCodeGraph } from "./code-graph.js";
 import { formatLessons, type FleetMemory } from "./fleet/memory.js";
 import type { MemoryRecord } from "./fleet/types.js";
+import type { ContextRetrieval } from "./trace.js";
 
 export interface EnhanceOptions {
   prompt: string;
@@ -42,6 +43,14 @@ export interface EnhanceResult {
   resolved: string[];
   /** Lessons recalled from fleet memory. */
   lessons: MemoryRecord[];
+  /** Epoch ms context-gathering started. */
+  startedAt: number;
+  /** Epoch ms context-gathering finished. */
+  finishedAt: number;
+  /** Wall-clock ms spent gathering + injecting context. */
+  durationMs: number;
+  /** Which candidates were mined and which resolved (for verbose telemetry). */
+  retrieval: ContextRetrieval;
 }
 
 const CODEY_EXT =
@@ -85,12 +94,15 @@ function isHit(result: string): boolean {
 export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult> {
   const { prompt, cwd } = opts;
   const max = opts.maxSymbols ?? 6;
+  const startedAt = Date.now();
 
   // Lessons first — they need no code graph and must surface even if it fails.
   const lessons = opts.memory?.recall(prompt, { limit: 4 }) ?? [];
 
   const sections: string[] = [];
   const resolved: string[] = [];
+  const symbolsQueried: string[] = [];
+  const pathsQueried: string[] = [];
 
   try {
     const { symbols, paths } = extractCandidates(prompt);
@@ -109,6 +121,7 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
 
     // Symbol definitions — "where is X defined".
     for (const sym of [...symSet].slice(0, max)) {
+      symbolsQueried.push(sym);
       const res = await queryCodeGraph(cwd, "search", sym, 4);
       if (isHit(res)) {
         sections.push(`Definitions of \`${sym}\`:\n${res}`);
@@ -120,6 +133,7 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
     // (what a change to it could break). This is the impact-analysis the agent
     // would otherwise have to discover by hand.
     for (const p of [...pathSet].slice(0, max)) {
+      pathsQueried.push(p);
       const syms = await queryCodeGraph(cwd, "file_symbols", p, 12);
       if (isHit(syms)) {
         sections.push(`Symbols in ${p}:\n${syms}`);
@@ -149,5 +163,23 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
   const context = parts.join("\n\n");
   const enhanced = context ? `${prompt}\n\n${context}` : prompt;
 
-  return { prompt: enhanced, context, resolved, lessons };
+  const finishedAt = Date.now();
+  const resolvedSet = new Set(resolved);
+  const retrieval: ContextRetrieval = {
+    symbolsQueried,
+    pathsQueried,
+    resolved,
+    unresolved: [...symbolsQueried, ...pathsQueried].filter((c) => !resolvedSet.has(c)),
+  };
+
+  return {
+    prompt: enhanced,
+    context,
+    resolved,
+    lessons,
+    startedAt,
+    finishedAt,
+    durationMs: finishedAt - startedAt,
+    retrieval,
+  };
 }

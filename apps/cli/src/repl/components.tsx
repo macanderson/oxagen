@@ -10,6 +10,7 @@ import React, { useState, useEffect } from "react";
 import { theme } from "../tui/theme.js";
 import { formatUsd } from "../agent/model-router.js";
 import type { StageEvent, StageKind, TurnTrace, JudgeVerdict } from "../agent/trace.js";
+import type { ApprovalRequest, ApprovalResponse, PermissionMode } from "../agent/permissions.js";
 
 export interface Message {
   role: "user" | "assistant" | "tool" | "stage";
@@ -27,13 +28,21 @@ export const HELP = [
   "Slash commands:",
   "  /help          show this help",
   "  /model [slug]  show or set the gateway model",
+  "  /mode [ask|auto-edit|bypass|readonly]  show or set the permission mode",
   "  /replay [n|id] show how a turn was handled (default: last turn)",
   "  /traces        list recent turns you can /replay",
   "  /pipeline [on|off]  toggle prompt evaluation + completeness judging",
+  "  /verbose [on|off]   per-phase timing, model+token+cost breakdown, tool results",
   "  /clear         reset the conversation",
   "  /exit, /quit   quit",
+  "Permission prompt: y allow once · a allow + remember · n/Esc deny",
   "Esc / Ctrl-C     cancel the current turn (Ctrl-C quits when idle)",
 ].join("\n");
+
+/** Friendly label for a permission mode (matches the `/mode` argument spelling). */
+export function modeLabel(mode: PermissionMode): string {
+  return mode === "acceptEdits" ? "auto-edit" : mode === "readonly" ? "read-only" : mode;
+}
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -86,6 +95,63 @@ export function PromptInput({
         {value}
         <Text color={theme.cyan}>█</Text>
       </Text>
+    </Box>
+  );
+}
+
+// ── Permission approval prompt ─────────────────────────────────────────────────
+
+/**
+ * Shown in place of the input row while the agent is blocked waiting for the
+ * human to approve a mutating tool call. Captures a single keystroke:
+ * `y` allow once · `a` allow and remember (auto-allow identical calls this
+ * session) · `n` / Esc deny. The pending promise is resolved by the container.
+ */
+export function ApprovalPrompt({
+  req,
+  onResolve,
+}: {
+  req: ApprovalRequest;
+  onResolve: (response: ApprovalResponse) => void;
+}): React.ReactElement {
+  useInput((input, key) => {
+    const ch = (input || "").toLowerCase();
+    if (ch === "y") onResolve({ decision: "allow" });
+    else if (ch === "a") onResolve({ decision: "allow", remember: true });
+    else if (ch === "n" || key.escape) onResolve({ decision: "deny" });
+  });
+
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor="#FBBF24" paddingX={1}>
+      <Box>
+        <Text color="#FBBF24" bold>
+          {"⚠ permission · "}
+        </Text>
+        <Text dimColor>{req.reason}</Text>
+      </Box>
+      <Box>
+        <Text wrap="truncate-end">{req.summary}</Text>
+      </Box>
+      <Box marginTop={1} gap={2}>
+        <Text>
+          <Text color="#34D399" bold>
+            y
+          </Text>
+          <Text dimColor> allow once</Text>
+        </Text>
+        <Text>
+          <Text color={theme.cyan} bold>
+            a
+          </Text>
+          <Text dimColor> allow + remember</Text>
+        </Text>
+        <Text>
+          <Text color="#FB7185" bold>
+            n
+          </Text>
+          <Text dimColor> deny (Esc)</Text>
+        </Text>
+      </Box>
     </Box>
   );
 }
@@ -206,6 +272,8 @@ export function StatusLine({
   inputTokens,
   outputTokens,
   pipelineOn,
+  verboseOn,
+  mode,
 }: {
   model: string;
   readOnly: boolean;
@@ -214,6 +282,10 @@ export function StatusLine({
   outputTokens: number;
   /** Whether the eval→enhance→judge pipeline is active (undefined = don't show). */
   pipelineOn?: boolean;
+  /** Whether verbose telemetry capture is active (undefined = don't show). */
+  verboseOn?: boolean;
+  /** Current permission posture (undefined = fall back to the read-only chip). */
+  mode?: PermissionMode;
 }): React.ReactElement {
   const total = inputTokens + outputTokens;
   return (
@@ -238,7 +310,26 @@ export function StatusLine({
             </Text>
           </Text>
         )}
+        {verboseOn && <Text color={theme.cyan}>verbose</Text>}
         {readOnly && <Text color="#FBBF24">read-only</Text>}
+        {mode ? (
+          <Text dimColor>
+            mode:
+            <Text
+              color={
+                mode === "bypass"
+                  ? "#FB7185"
+                  : mode === "ask"
+                    ? theme.cyan
+                    : "#FBBF24"
+              }
+            >
+              {modeLabel(mode)}
+            </Text>
+          </Text>
+        ) : (
+          readOnly && <Text color="#FBBF24">read-only</Text>
+        )}
       </Box>
       <Box gap={2}>
         <Text dimColor>/help</Text>

@@ -2,10 +2,24 @@ import { describe, it, expect } from "vitest";
 import { render } from "ink-testing-library";
 import React from "react";
 import {
+  ApprovalPrompt,
   humanizeTokens,
+  modeLabel,
   StatusLine,
   ThinkingIndicator,
 } from "../components.js";
+import type { ApprovalRequest, ApprovalResponse } from "../../agent/permissions.js";
+
+const sampleReq: ApprovalRequest = {
+  tool: "bash",
+  command: "rm -rf build",
+  cwd: "/x",
+  summary: "Run: rm -rf build",
+  reason: "command matches a dangerous pattern",
+};
+
+/** Ink delivers stdin to useInput on a microtask; let it settle before asserting. */
+const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 10));
 
 describe("humanizeTokens", () => {
   it("formats token counts compactly", () => {
@@ -45,6 +59,63 @@ describe("StatusLine (token counter)", () => {
       />,
     );
     expect(lastFrame() ?? "").toContain("read-only");
+  });
+});
+
+describe("StatusLine (permission mode)", () => {
+  it("shows the mode chip when a mode is provided", () => {
+    const { lastFrame } = render(
+      <StatusLine
+        model="x/y"
+        readOnly={false}
+        turns={0}
+        inputTokens={0}
+        outputTokens={0}
+        mode="acceptEdits"
+      />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("mode:");
+    expect(frame).toContain("auto-edit");
+  });
+});
+
+describe("modeLabel", () => {
+  it("maps modes to friendly labels", () => {
+    expect(modeLabel("acceptEdits")).toBe("auto-edit");
+    expect(modeLabel("readonly")).toBe("read-only");
+    expect(modeLabel("ask")).toBe("ask");
+    expect(modeLabel("bypass")).toBe("bypass");
+  });
+});
+
+describe("ApprovalPrompt", () => {
+  it("renders the call summary and the reason it is asking", () => {
+    const { lastFrame, unmount } = render(
+      <ApprovalPrompt req={sampleReq} onResolve={() => {}} />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("Run: rm -rf build");
+    expect(frame).toContain("dangerous");
+    expect(frame).toContain("allow once");
+    unmount();
+  });
+
+  it("resolves allow on 'y', allow+remember on 'a', deny on 'n'", async () => {
+    for (const [key, expected] of [
+      ["y", { decision: "allow" }],
+      ["a", { decision: "allow", remember: true }],
+      ["n", { decision: "deny" }],
+    ] as Array<[string, ApprovalResponse]>) {
+      const calls: ApprovalResponse[] = [];
+      const { stdin, unmount } = render(
+        <ApprovalPrompt req={sampleReq} onResolve={(r) => calls.push(r)} />,
+      );
+      stdin.write(key);
+      await tick();
+      expect(calls).toEqual([expected]);
+      unmount();
+    }
   });
 });
 

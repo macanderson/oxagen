@@ -20,7 +20,11 @@ import { loadProjectContext } from "../agent/project-context.js";
 import { openSessionMemory, type SessionMemory } from "../agent/memory.js";
 import { openFleetMemory } from "../agent/fleet/memory.js";
 import { openTraceStore } from "../agent/trace-store.js";
+import { appendVerboseLog } from "../agent/verbose-log.js";
+import { formatVerboseSection } from "../agent/trace-format.js";
+import { readConfig } from "../lib/config.js";
 import {
+  ApprovalPrompt,
   HELP,
   MessageView,
   PromptInput,
@@ -29,13 +33,25 @@ import {
   summarizeTrace,
   type Message,
 } from "./components.js";
+import {
+  PermissionBroker,
+  parseModeArg,
+  resolveMode,
+  type ApprovalRequest,
+  type ApprovalResponse,
+  type PermissionMode,
+} from "../agent/permissions.js";
 import pkg from "../../package.json" with { type: "json" };
 
 export interface ReplOptions {
   model?: string;
   readOnly?: boolean;
+  /** Initial permission posture; defaults to `ask` (or `readonly` when readOnly). */
+  mode?: PermissionMode;
   /** Start with the eval→enhance→judge pipeline disabled (bare agent). */
   bare?: boolean;
+  /** Start in verbose mode: capture + emit full per-turn telemetry. */
+  verbose?: boolean;
 }
 
 // ── Main App ──────────────────────────────────────────────────────────────────
@@ -77,6 +93,21 @@ export function ReplApp({
   const [pipelineOn, setPipelineOn] = useState(!options.bare);
   const bareRef = useRef(options.bare ?? false);
 
+  // Verbose telemetry: capture per-phase timing/model/cost + tool results, write
+  // the JSONL stream, and show the breakdown inline. Defaults from config.
+  const initialVerbose = options.verbose ?? readConfig().verbose ?? false;
+  const [verboseOn, setVerboseOn] = useState(initialVerbose);
+  const verboseRef = useRef(initialVerbose);
+  // Permission posture (drives the broker + status chip) and the in-flight
+  // approval request (drives the inline ApprovalPrompt; null when none).
+  const [mode, setMode] = useState<PermissionMode>(
+    options.mode ?? resolveMode({ readOnly: options.readOnly }),
+  );
+  const [approval, setApproval] = useState<{
+    req: ApprovalRequest;
+    resolve: (r: ApprovalResponse) => void;
+  } | null>(null);
+
   const cwd = process.cwd();
   // Project rules (CLAUDE.md/AGENTS.md) loaded once for the session.
   const projectContextRef = useRef(loadProjectContext(cwd));
@@ -94,6 +125,22 @@ export function ReplApp({
   const streamingRef = useRef(false);
   const modelRef = useRef(model);
   modelRef.current = model;
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const approvalRef = useRef(approval);
+  approvalRef.current = approval;
+
+  // The permission broker, created once. Its approver surfaces an inline prompt
+  // and resolves when the user answers (see ApprovalPrompt / resolveApproval).
+  const brokerRef = useRef<PermissionBroker | null>(null);
+  if (!brokerRef.current) {
+    brokerRef.current = new PermissionBroker({
+      mode: modeRef.current,
+      cwd,
+      approver: (req) =>
+        new Promise<ApprovalResponse>((resolve) => setApproval({ req, resolve })),
+    });
+  }
 
   useEffect(() => {
     let mem: SessionMemory | null = null;
@@ -125,14 +172,23 @@ export function ReplApp({
     // Cancel the in-flight turn and drop anything queued behind it.
     queueRef.current = [];
     setQueued([]);
+    // Release any pending permission prompt as a denial so the tool unblocks.
+    approvalRef.current?.resolve({ decision: "deny" });
+    setApproval(null);
     abortRef.current?.abort();
   }, []);
 
+  // Resolve the in-flight approval prompt with the user's answer and clear it.
+  const resolveApproval = useCallback((response: ApprovalResponse) => {
+    setApproval((cur) => {
+      cur?.resolve(response);
+      return null;
+    });
+  }, []);
+
   useInput((input, key) => {
-    if (key.escape) {
-      if (streamingRef.current) cancelTurn();
-      return;
-    }
+    // Ctrl-C is handled first so it works even while a permission prompt is up
+    // (cancelTurn releases the prompt as a denial before aborting).
     if (key.ctrl && input === "c") {
       if (streamingRef.current && abortRef.current) {
         cancelTurn();
@@ -140,6 +196,12 @@ export function ReplApp({
         void memoryRef.current?.close();
         exit();
       }
+      return;
+    }
+    // While a permission prompt is up, ApprovalPrompt owns Esc and the answer keys.
+    if (approvalRef.current) return;
+    if (key.escape) {
+      if (streamingRef.current) cancelTurn();
     }
   });
 
@@ -163,6 +225,29 @@ export function ReplApp({
           pushAssistant(`Model set to ${slug}.`);
         } else {
           pushAssistant(`Current model: ${modelRef.current}`);
+        }
+        return;
+      }
+      if (text.startsWith("/mode")) {
+        const arg = text.slice("/mode".length).trim();
+        const next = arg ? parseModeArg(arg) : undefined;
+        if (!arg) {
+          pushAssistant(
+            `Permission mode: ${modeRef.current}. Use /mode ask|auto-edit|bypass|readonly.`,
+          );
+        } else if (next) {
+          setMode(next);
+          brokerRef.current?.setMode(next);
+          pushAssistant(
+            `Permission mode set to ${next}.` +
+              (next === "bypass"
+                ? " ⚠ tool calls now run without confirmation."
+                : next === "readonly"
+                  ? " File edits and commands are disabled."
+                  : ""),
+          );
+        } else {
+          pushAssistant(`Unknown mode "${arg}". Use ask, auto-edit, bypass, or readonly.`);
         }
         return;
       }
@@ -208,6 +293,25 @@ export function ReplApp({
         }
         return;
       }
+      if (text.startsWith("/verbose")) {
+        const arg = text.slice("/verbose".length).trim().toLowerCase();
+        if (arg === "off") {
+          verboseRef.current = false;
+          setVerboseOn(false);
+          pushAssistant("Verbose OFF.");
+        } else if (arg === "on" || arg === "") {
+          verboseRef.current = true;
+          setVerboseOn(true);
+          pushAssistant(
+            "Verbose ON — each turn now reports per-phase timing, the model + tokens + " +
+              "cost for enhance / work / review, tool calls + results, and the injected " +
+              "context. Structured records also stream to the verbose JSONL log.",
+          );
+        } else {
+          pushAssistant(`Verbose is ${verboseRef.current ? "ON" : "OFF"}. Use /verbose on|off.`);
+        }
+        return;
+      }
       if (text === "/exit" || text === "/quit") {
         void memoryRef.current?.close();
         exit();
@@ -239,8 +343,10 @@ export function ReplApp({
           history: historyRef.current,
           cwd,
           model: modelRef.current,
-          readOnly: options.readOnly,
+          readOnly: modeRef.current === "readonly",
+          broker: brokerRef.current ?? undefined,
           bare: bareRef.current,
+          verbose: verboseRef.current,
           projectContext: projectContextRef.current,
           memory: memoryRef.current,
           fleetMemory: fleetMemoryRef.current,
@@ -296,6 +402,17 @@ export function ReplApp({
         historyRef.current = result.messages;
         // Persist the turn trace so /replay can show how it was handled.
         traceStoreRef.current.record(result.trace);
+        // Verbose: stream the structured record to the JSONL log and show the
+        // per-phase / per-model / cost breakdown inline.
+        if (verboseRef.current) {
+          appendVerboseLog(cwd, result.trace);
+          turn.push({
+            role: "assistant",
+            content: formatVerboseSection(result.trace).join("\n"),
+            timestamp: Date.now(),
+          });
+          render();
+        }
         setTurns((n) => n + 1);
         setUsage((u) => ({
           input: u.input + (result.usage.inputTokens ?? 0),
@@ -317,7 +434,9 @@ export function ReplApp({
         setIsStreaming(false);
         setTurnStartedAt(null);
       }
-  }, []);
+    },
+    [exit, commit, pushAssistant, cwd, options.readOnly],
+  );
 
   // The pump reads the latest handleSubmit via a ref so it never closes over a
   // stale version, while staying a stable callback itself.
@@ -412,15 +531,22 @@ export function ReplApp({
       {/* Status line */}
       <StatusLine
         model={model}
-        readOnly={options.readOnly ?? false}
+        readOnly={mode === "readonly"}
         turns={turns}
         inputTokens={usage.input}
         outputTokens={usage.output}
         pipelineOn={pipelineOn}
+        verboseOn={verboseOn}
+        mode={mode}
       />
 
-      {/* Input — stays live during a turn; submissions queue instead of blocking */}
-      <PromptInput onSubmit={enqueue} busy={isStreaming} />
+      {/* A pending permission prompt takes over the input row; otherwise the
+          input stays live during a turn and submissions queue (FIFO). */}
+      {approval ? (
+        <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
+      ) : (
+        <PromptInput onSubmit={enqueue} busy={isStreaming} />
+      )}
     </Box>
   );
 }

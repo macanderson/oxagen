@@ -1,0 +1,323 @@
+/**
+ * The permission broker — the safety layer between the model and the host.
+ *
+ * Oxagen's coding tools (`write_file`, `edit_file`, `bash`) mutate the user's
+ * filesystem and run arbitrary shell commands. Until now they executed with no
+ * gate other than `--readonly` (which simply withholds them). That is fine for a
+ * developer dogfooding their own repo, but it blocks every unattended / shared /
+ * CI use case and offers no protection against a destructive command.
+ *
+ * This module adds a deterministic decision layer that every mutating tool call
+ * is routed through before it runs. It is intentionally framework-agnostic: the
+ * broker decides `allow` / `deny`, and the *interactive* part (asking the human)
+ * is a pluggable async {@link Approver} the REPL supplies. Non-interactive
+ * callers (one-shot, CI) simply omit the approver and get the mode's safe
+ * default.
+ *
+ * Decision order for a mutating call (most → least decisive):
+ *   1. `bypass` mode → allow (the user explicitly opted out of the safety layer).
+ *   2. First matching explicit rule (project/user/session) → allow | ask | deny.
+ *   3. A catastrophic command pattern → forced to `ask` (never silently allowed).
+ *   4. A write/edit outside the workspace root → forced to `ask`.
+ *   5. Mode default: `acceptEdits` auto-allows file edits (bash still asks);
+ *      `ask` asks for everything.
+ *   6. Resolve an `ask`: call the approver if present; otherwise `deny`.
+ */
+import { isAbsolute, relative, resolve } from "node:path";
+
+/** The tools that can change the host. Read/search tools are never gated. */
+export const MUTATING_TOOLS = ["write_file", "edit_file", "bash"] as const;
+export type MutatingTool = (typeof MUTATING_TOOLS)[number];
+
+export function isMutatingTool(name: string): name is MutatingTool {
+  return (MUTATING_TOOLS as readonly string[]).includes(name);
+}
+
+/**
+ * Session permission posture.
+ * - `readonly`   — mutating tools are withheld entirely (enforced in buildTools).
+ * - `ask`        — every mutating call is approved/denied (default).
+ * - `acceptEdits`— file writes/edits auto-allowed; shell commands still ask.
+ * - `bypass`     — everything allowed, no prompts (explicit, dangerous opt-out).
+ */
+export type PermissionMode = "readonly" | "ask" | "acceptEdits" | "bypass";
+
+export type RuleDecision = "allow" | "ask" | "deny";
+
+/**
+ * A user/project rule. `tool` matches a tool name (or "*"); `pattern` is a glob
+ * matched against the call's path (file tools) or the command string (bash).
+ * Rules are evaluated in order — the first match wins.
+ */
+export interface PermissionRule {
+  tool?: string;
+  pattern?: string;
+  decision: RuleDecision;
+}
+
+/** A normalized, tool-agnostic description of a single mutating call. */
+export interface PermissionRequest {
+  tool: MutatingTool;
+  /** Resolved absolute path for file tools (undefined for bash). */
+  path?: string;
+  /** The shell command for bash (undefined for file tools). */
+  command?: string;
+  cwd: string;
+}
+
+/** What the broker hands the human when it must ask. */
+export interface ApprovalRequest extends PermissionRequest {
+  /** One-line, human-readable summary of what will happen. */
+  summary: string;
+  /** Why approval is required (denylist hit, outside workspace, mode policy). */
+  reason: string;
+}
+
+export interface ApprovalResponse {
+  decision: "allow" | "deny";
+  /**
+   * When true, the broker records a session rule so identical future calls are
+   * auto-resolved the same way without re-prompting.
+   */
+  remember?: boolean;
+}
+
+export type Approver = (req: ApprovalRequest) => Promise<ApprovalResponse>;
+
+export type PermissionDecision =
+  | { decision: "allow"; reason: string }
+  | { decision: "deny"; reason: string };
+
+export interface BrokerOptions {
+  mode: PermissionMode;
+  cwd: string;
+  /** Project/user rules, evaluated before mode defaults. */
+  rules?: PermissionRule[];
+  /** Interactive prompt. Absent ⇒ non-interactive (every `ask` becomes `deny`). */
+  approver?: Approver;
+}
+
+/**
+ * Commands that can irreversibly destroy data or compromise the machine. A match
+ * never silently passes — it is forced to `ask` even under `acceptEdits`, so the
+ * human always sees it. (In `bypass` mode the user has opted out entirely.)
+ */
+const DANGEROUS_COMMAND = [
+  /\brm\s+(-[a-z]*\s+)*-[a-z]*r[a-z]*f|\brm\s+(-[a-z]*\s+)*-[a-z]*f[a-z]*r/i, // rm -rf / -fr
+  /\brm\s+-[a-z]*\s+\/(\s|$)/i, // rm -… /
+  /\b(mkfs|fdisk|parted)\b/i,
+  /\bdd\b[^|]*\bof=\/dev\//i,
+  /[>|]\s*\/dev\/(sd|nvme|disk|hd)/i,
+  /:\(\)\s*\{.*\};\s*:/, // fork bomb
+  /\bchmod\s+-R\s+777\s+\//i,
+  /\b(curl|wget)\b[^|&;]*\|\s*(sudo\s+)?(sh|bash|zsh)\b/i, // curl … | sh
+  /\bgit\s+push\b[^&;]*--force\b[^&;]*\b(origin\s+)?(main|master)\b/i,
+  /\bsudo\s+rm\b/i,
+  /\b(shutdown|reboot|halt)\b/i,
+] as const;
+
+function matchesDangerous(command: string): boolean {
+  return DANGEROUS_COMMAND.some((re) => re.test(command));
+}
+
+/** Minimal glob → RegExp (mirrors the tools' matcher): `**` any, `*` segment, `?` one. */
+function globToRegExp(pattern: string): RegExp {
+  let re = "";
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i] as string;
+    if (c === "*") {
+      if (pattern[i + 1] === "*") {
+        re += ".*";
+        i++;
+      } else {
+        re += "[^/]*";
+      }
+    } else if (c === "?") {
+      re += "[^/]";
+    } else if (".+^${}()|[]\\".includes(c)) {
+      re += "\\" + c;
+    } else {
+      re += c;
+    }
+  }
+  return new RegExp("^" + re + "$");
+}
+
+/**
+ * The string a rule's `pattern` is tested against. File rules match the path
+ * *relative to the workspace root* (so `src/**` works regardless of where the
+ * repo lives); bash rules match the raw command string.
+ */
+function subjectOf(req: PermissionRequest, cwd: string): string {
+  if (req.tool === "bash") return req.command ?? "";
+  return req.path ? relative(cwd, req.path) : "";
+}
+
+function ruleMatches(rule: PermissionRule, req: PermissionRequest, cwd: string): boolean {
+  if (rule.tool && rule.tool !== "*" && rule.tool !== req.tool) return false;
+  if (rule.pattern) {
+    const subject = subjectOf(req, cwd);
+    // A command rule matches as a prefix or a glob; a path rule as a glob.
+    if (req.tool === "bash") {
+      if (!subject.startsWith(rule.pattern) && !globToRegExp(rule.pattern).test(subject))
+        return false;
+    } else if (!globToRegExp(rule.pattern).test(subject)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** True when an absolute path is not inside (or equal to) the workspace root. */
+export function isOutsideWorkspace(cwd: string, absPath: string): boolean {
+  const rel = relative(resolve(cwd), resolve(absPath));
+  return rel === ".." || rel.startsWith(".." + "/") || isAbsolute(rel);
+}
+
+function summarize(req: PermissionRequest): string {
+  if (req.tool === "bash") return `Run: ${req.command ?? ""}`;
+  const verb = req.tool === "write_file" ? "Write" : "Edit";
+  const shown = req.path ? relative(req.cwd, req.path) || req.path : "(unknown path)";
+  return `${verb} ${shown}`;
+}
+
+/**
+ * The broker. Stateful only in that it accumulates session rules the human
+ * chooses to "remember"; everything else is a pure function of the request and
+ * the configured rules/mode.
+ */
+export class PermissionBroker {
+  private mode: PermissionMode;
+  private readonly cwd: string;
+  private readonly approver?: Approver;
+  private readonly baseRules: PermissionRule[];
+  private readonly sessionRules: PermissionRule[] = [];
+
+  constructor(opts: BrokerOptions) {
+    this.mode = opts.mode;
+    this.cwd = resolve(opts.cwd);
+    this.approver = opts.approver;
+    this.baseRules = opts.rules ?? [];
+  }
+
+  get currentMode(): PermissionMode {
+    return this.mode;
+  }
+
+  /** Switch posture mid-session (drives the REPL `/mode` command). */
+  setMode(mode: PermissionMode): void {
+    this.mode = mode;
+  }
+
+  /** Rules in precedence order: remembered session rules first, then configured. */
+  private rules(): PermissionRule[] {
+    return [...this.sessionRules, ...this.baseRules];
+  }
+
+  /** Record a rule so an identical future call resolves the same way silently. */
+  private remember(req: PermissionRequest, decision: "allow" | "deny"): void {
+    const pattern =
+      req.tool === "bash" ? (req.command ?? "") : (req.path ? relative(this.cwd, req.path) : undefined);
+    this.sessionRules.unshift({ tool: req.tool, pattern, decision });
+  }
+
+  /**
+   * Decide whether a mutating call may proceed. Never throws; an absent approver
+   * on an `ask` resolves to `deny` (fail closed). Returns the decision plus a
+   * human-readable reason (surfaced in the trace / tool result).
+   */
+  async check(req: PermissionRequest): Promise<PermissionDecision> {
+    // 1. Explicit opt-out — the user has accepted full responsibility.
+    if (this.mode === "bypass") return { decision: "allow", reason: "bypass mode" };
+
+    // 2. Base decision: first matching rule, else the mode default.
+    let decision: RuleDecision;
+    let reason: string;
+    const rule = this.rules().find((r) => ruleMatches(r, req, this.cwd));
+    if (rule) {
+      decision = rule.decision;
+      reason = `matched ${rule.decision} rule`;
+    } else if (this.mode === "acceptEdits" && req.tool !== "bash") {
+      decision = "allow";
+      reason = "acceptEdits: file change auto-approved";
+    } else {
+      decision = "ask";
+      reason = this.mode === "acceptEdits" ? "shell command needs approval" : "approval required";
+    }
+
+    // 3. Safety escalations downgrade an `allow` to `ask` so a catastrophic
+    //    command or a write outside the workspace is never run silently — even
+    //    when a broad allow rule would otherwise pass it. An explicit `deny`
+    //    still denies; bypass already returned above.
+    if (decision === "allow") {
+      if (req.tool === "bash" && req.command && matchesDangerous(req.command)) {
+        decision = "ask";
+        reason = "command matches a dangerous pattern";
+      } else if (req.tool !== "bash" && req.path && isOutsideWorkspace(this.cwd, req.path)) {
+        decision = "ask";
+        reason = "writes outside the workspace root";
+      }
+    }
+
+    if (decision === "allow") return { decision: "allow", reason };
+    if (decision === "deny") return { decision: "deny", reason };
+    return this.ask(req, reason);
+  }
+
+  private async ask(req: PermissionRequest, reason: string): Promise<PermissionDecision> {
+    if (!this.approver) {
+      // Fail closed: no human available to approve.
+      return { decision: "deny", reason: `${reason} (no approver — denied)` };
+    }
+    const response = await this.approver({ ...req, summary: summarize(req), reason });
+    if (response.remember) this.remember(req, response.decision);
+    return {
+      decision: response.decision,
+      reason: response.decision === "allow" ? `approved (${reason})` : `denied by user (${reason})`,
+    };
+  }
+}
+
+/** Map a CLI flag set to a {@link PermissionMode}. `readonly` wins; then bypass. */
+export function resolveMode(opts: {
+  readOnly?: boolean;
+  acceptEdits?: boolean;
+  bypass?: boolean;
+}): PermissionMode {
+  if (opts.readOnly) return "readonly";
+  if (opts.bypass) return "bypass";
+  if (opts.acceptEdits) return "acceptEdits";
+  return "ask";
+}
+
+/** Accepted spellings for the `--mode` flag and the `/mode` command. */
+const MODE_ALIASES: Record<string, PermissionMode> = {
+  ask: "ask",
+  "auto-edit": "acceptEdits",
+  "accept-edits": "acceptEdits",
+  acceptedits: "acceptEdits",
+  bypass: "bypass",
+  readonly: "readonly",
+  "read-only": "readonly",
+};
+
+/** Parse a user-supplied mode string to a {@link PermissionMode} (or undefined). */
+export function parseModeArg(s: string): PermissionMode | undefined {
+  return MODE_ALIASES[s.trim().toLowerCase()];
+}
+
+/** Build a normalized {@link PermissionRequest} from a raw tool call. */
+export function toRequest(
+  tool: string,
+  input: unknown,
+  cwd: string,
+): PermissionRequest | null {
+  if (!isMutatingTool(tool)) return null;
+  const obj = (input ?? {}) as { path?: unknown; command?: unknown };
+  if (tool === "bash") {
+    return { tool, command: typeof obj.command === "string" ? obj.command : "", cwd };
+  }
+  const p = typeof obj.path === "string" ? obj.path : "";
+  const abs = p ? (isAbsolute(p) ? p : resolve(cwd, p)) : "";
+  return { tool, path: abs, cwd };
+}

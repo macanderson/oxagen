@@ -14,8 +14,14 @@ import { buildTools } from "./tools.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 import { resolveModelId } from "./model.js";
 import { ensureGatewayKey, MissingGatewayKeyError } from "./env.js";
+import { loadSettings } from "../settings/resolve.js";
+import { wrapToolsWithGate } from "../settings/gate.js";
+import { runHooks } from "../settings/hooks.js";
+import type { OxagenSettings } from "../settings/schema.js";
 import type { ProjectContext } from "./project-context.js";
 import type { SessionMemory } from "./memory.js";
+import type { ToolEvent } from "./trace.js";
+import type { PermissionBroker } from "./permissions.js";
 
 export interface RunAgentOptions {
   /** The user's prompt for this turn. */
@@ -32,6 +38,8 @@ export interface RunAgentOptions {
   projectContext?: ProjectContext;
   /** Read-only mode: no file mutation or command execution. */
   readOnly?: boolean;
+  /** Permission broker gating mutating tools (absent ⇒ ungated). */
+  broker?: PermissionBroker;
   /** Session memory (Oxagen context engine). Recalled before, written after. */
   memory?: SessionMemory | null;
   /** Abort the turn (e.g. user hit Ctrl-C). */
@@ -40,6 +48,36 @@ export interface RunAgentOptions {
   onText?: (delta: string) => void;
   /** Fired when the model invokes a tool. */
   onToolCall?: (name: string, input: unknown) => void;
+  /** Fired when a tool is blocked by a permission rule or PreToolUse hook. */
+  onToolBlocked?: (name: string, reason: string) => void;
+  /**
+   * Resolved `settings.json` for this turn (permissions, hooks). Defaults to the
+   * settings resolved from `cwd`. Injectable so callers (and tests) can override.
+   */
+  settings?: OxagenSettings;
+  /** Fired once per tool with its input, result, and timing (for verbose telemetry). */
+  onToolEvent?: (e: ToolEvent) => void;
+}
+
+/** Heuristic: did a tool result represent an error? Exported for tests. */
+export function isErrorResult(out: unknown): boolean {
+  if (out instanceof Error) return true;
+  if (out && typeof out === "object") {
+    const o = out as { isError?: unknown; error?: unknown };
+    if (o.isError === true || (o.error != null && o.error !== false)) return true;
+  }
+  return false;
+}
+
+/** JSON-stringify a value, falling back to String(), capped to `max` chars. Exported for tests. */
+export function stringifyCapped(v: unknown, max: number): string {
+  let s: string;
+  try {
+    s = typeof v === "string" ? v : JSON.stringify(v) ?? String(v);
+  } catch {
+    s = String(v);
+  }
+  return s.length > max ? s.slice(0, max) + "…" : s;
 }
 
 export interface RunAgentResult {
@@ -100,6 +138,9 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   const cwd = opts.cwd ?? process.cwd();
   if (!ensureGatewayKey(cwd)) throw new MissingGatewayKeyError();
 
+  // settings.json drives this turn's tool permissions and lifecycle hooks.
+  const settings = opts.settings ?? loadSettings({ cwd }).settings;
+
   // Recall relevant project memory and write the incoming prompt (best-effort).
   const recalled = opts.memory ? await opts.memory.recallContext() : "";
   void opts.memory?.remember("user_prompt", opts.prompt);
@@ -115,36 +156,79 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
       recalled;
   }
 
+  // SessionStart hooks may print context (sprint, on-call notes, changelog) to
+  // stdout; append it to the system prompt so the model sees it this turn.
+  const sessionStart = await runHooks(
+    settings.hooks,
+    { event: "SessionStart", cwd },
+    opts.signal,
+  );
+  if (sessionStart.output) {
+    system += "\n\n## Session context (from SessionStart hooks)\n" + sessionStart.output;
+  }
+
   const messages: ModelMessage[] = [
     ...(opts.history ?? []),
     { role: "user", content: opts.prompt },
   ];
+
+  // Gate every tool with the settings-driven permission rules and Pre/PostToolUse
+  // hooks. A denied call or a blocking hook returns a string the model reads.
+  const tools = wrapToolsWithGate(buildTools(cwd, { readOnly: opts.readOnly }), {
+    cwd,
+    permissions: settings.permissions,
+    hooks: settings.hooks,
+    signal: opts.signal,
+    onBlocked: opts.onToolBlocked,
+  });
 
   // Capture the underlying stream error ourselves. Supplying onError replaces
   // the AI SDK default (which dumps the whole error object to the console), so
   // gateway failures surface as one clean, actionable line instead of a wall of
   // internal fields.
   let streamError: unknown = null;
+  // Per-step timing: the tools in a step ran between the previous step's finish
+  // and this one's. Gives each tool event a real (if step-granular) duration.
+  let prevStepAt = Date.now();
   const result = streamText({
     model: resolveModelId(opts.model),
     system,
     messages,
-    tools: buildTools(cwd, { readOnly: opts.readOnly }),
+    tools: buildTools(cwd, { readOnly: opts.readOnly, broker: opts.broker }),
     stopWhen: stepCountIs(opts.maxSteps ?? 32),
     abortSignal: opts.signal,
     onError: ({ error }) => {
       streamError = error;
     },
-    onStepFinish: ({ toolCalls }) => {
+    onStepFinish: ({ toolCalls, toolResults }) => {
+      const now = Date.now();
+      // Index results by call id so each call is paired with what it returned.
+      const resultsById = new Map<string, unknown>();
+      for (const tr of toolResults ?? []) {
+        const r = tr as { toolCallId?: string; output?: unknown; result?: unknown; error?: unknown };
+        if (r.toolCallId) resultsById.set(r.toolCallId, r.error ?? r.output ?? r.result);
+      }
       for (const tc of toolCalls ?? []) {
-        const call = tc as { toolName: string; input?: unknown; args?: unknown };
+        const call = tc as { toolCallId?: string; toolName: string; input?: unknown; args?: unknown };
         const input = call.input ?? call.args;
         opts.onToolCall?.(call.toolName, input);
-        void opts.memory?.remember("tool_call", {
-          tool: call.toolName,
-          input,
-        });
+        void opts.memory?.remember("tool_call", { tool: call.toolName, input });
+
+        if (opts.onToolEvent) {
+          const out = call.toolCallId ? resultsById.get(call.toolCallId) : undefined;
+          const ok = !isErrorResult(out);
+          opts.onToolEvent({
+            name: call.toolName,
+            input: stringifyCapped(input, 1000),
+            result: out === undefined ? undefined : stringifyCapped(out, 2000),
+            startedAt: prevStepAt,
+            finishedAt: now,
+            durationMs: now - prevStepAt,
+            ok,
+          });
+        }
       }
+      prevStepAt = now;
     },
   });
 

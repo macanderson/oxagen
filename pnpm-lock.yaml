@@ -397,6 +397,9 @@ importers:
       '@oxagen/engram':
         specifier: workspace:*
         version: link:../../packages/engram
+      '@oxagen/mcp-config':
+        specifier: workspace:*
+        version: link:../../packages/mcp-config
       ai:
         specifier: 6.0.197
         version: 6.0.197(zod@3.25.76)

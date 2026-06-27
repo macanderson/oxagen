@@ -37,6 +37,7 @@
   "dependencies": {
     "@inkjs/ui": "2.0.0",
     "@oxagen/engram": "workspace:*",
+    "@oxagen/mcp-config": "workspace:*",
     "ai": "6.0.197",
     "commander": "12.1.0",
     "ink": "7.1.0",
