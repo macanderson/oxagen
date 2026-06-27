@@ -1,0 +1,312 @@
+"use server";
+
+import { and, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { withTenantDb, schema } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
+import { invoke } from "@oxagen/oxagen";
+// Side-effect import: bind every foundation handler (incl. environment.* and
+// secret.*) so invoke() can resolve them.
+import "@oxagen/handlers/register";
+import { getSessionOrRedirect } from "@/lib/session";
+import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import { workspace as routes } from "@/lib/routes";
+
+// ── Shared types (mirror the contract outputs; never carries plaintext) ───────
+
+export interface EnvironmentSummary {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  isDefault: boolean;
+  isActive: boolean;
+}
+
+export interface SecretKeySummary {
+  id: string;
+  key: string;
+  sensitive: boolean;
+  memo: string | null;
+  hasDefault: boolean;
+  overrideEnvironmentIds: string[];
+}
+
+export interface ImportPreviewRow {
+  key: string;
+  isNewKey: boolean;
+  sensitive: boolean;
+  target: "default" | "override";
+  willOverride: boolean;
+}
+
+export type ActionResult<T = unknown> =
+  | ({ ok: true } & T)
+  | { ok: false; error: string };
+
+// ── Scope + role resolution ───────────────────────────────────────────────────
+
+interface Scope {
+  orgId: string;
+  workspaceId: string;
+  userId: string;
+}
+
+/** Resolve org+workspace, assert org membership (IDOR guard), return scope. */
+async function resolveScope(orgSlug: string, workspaceSlug: string): Promise<Scope> {
+  const session = await getSessionOrRedirect();
+  const org = await resolveOrg(orgSlug);
+  const ws = await resolveWorkspace(org.id, workspaceSlug);
+  await assertOrgMember(org.id, session.user.id);
+  return { orgId: org.id, workspaceId: ws.id, userId: session.user.id };
+}
+
+/**
+ * Re-read the caller's workspace role server-side — apps/app does NOT enforce
+ * IAM via invoke(), so this is the gate. Owner/Admin may manage the vault.
+ */
+async function isManager(scope: Scope): Promise<boolean> {
+  const rows = await withTenantDb((tx) =>
+    tx
+      .select({ role: schema.workspaceUsers.role })
+      .from(schema.workspaceUsers)
+      .where(
+        and(
+          eq(schema.workspaceUsers.workspaceId, scope.workspaceId),
+          eq(schema.workspaceUsers.userId, scope.userId),
+        ),
+      )
+      .limit(1),
+  );
+  const role = (rows[0]?.role ?? "").toLowerCase();
+  return role === "owner" || role === "admin";
+}
+
+function vaultCtx(scope: Scope) {
+  // The environment.*/secret.* contracts list surfaces ["api","mcp","agent"] —
+  // not "app" — so we invoke with surface "agent" (the workspace.settings.write
+  // / memory precedent). The kernel still scopes to org+workspace from ctx.
+  return {
+    orgId: scope.orgId,
+    workspaceId: scope.workspaceId,
+    userId: scope.userId,
+    apiKeyId: null as string | null,
+    requestId: crypto.randomUUID(),
+    surface: "app" as const,
+    messageId: null as string | null,
+  };
+}
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
+// ── Reads (any workspace member) ──────────────────────────────────────────────
+
+export async function readEnvironmentsAction(args: {
+  orgSlug: string;
+  workspaceSlug: string;
+}): Promise<EnvironmentSummary[]> {
+  const scope = await resolveScope(args.orgSlug, args.workspaceSlug);
+  return runInTenantScope({ orgId: scope.orgId, workspaceId: scope.workspaceId }, async () => {
+    const out = (await invoke("environment.list", {}, vaultCtx(scope), {
+      surface: "agent",
+    })) as { environments: EnvironmentSummary[] };
+    return out.environments;
+  });
+}
+
+export async function readSecretKeysAction(args: {
+  orgSlug: string;
+  workspaceSlug: string;
+}): Promise<SecretKeySummary[]> {
+  const scope = await resolveScope(args.orgSlug, args.workspaceSlug);
+  return runInTenantScope({ orgId: scope.orgId, workspaceId: scope.workspaceId }, async () => {
+    const out = (await invoke("secret.key.list", {}, vaultCtx(scope), {
+      surface: "agent",
+    })) as { keys: SecretKeySummary[] };
+    return out.keys;
+  });
+}
+
+// ── Mutations (owner/admin) ───────────────────────────────────────────────────
+
+async function asManager<T>(
+  args: { orgSlug: string; workspaceSlug: string },
+  fn: (scope: Scope) => Promise<ActionResult<T>>,
+): Promise<ActionResult<T>> {
+  const scope = await resolveScope(args.orgSlug, args.workspaceSlug);
+  return runInTenantScope({ orgId: scope.orgId, workspaceId: scope.workspaceId }, async () => {
+    if (!(await isManager(scope))) {
+      return { ok: false, error: "Only workspace owners or admins can manage the vault." };
+    }
+    return fn(scope);
+  });
+}
+
+function revalidate(args: { orgSlug: string; workspaceSlug: string }): void {
+  revalidatePath(routes.settings.environments(args));
+}
+
+/**
+ * HEADLINE: paste `.env` text → preview (new vs override) or commit. Parses,
+ * strips quotes/comments/`export `, targets workspace defaults or an
+ * environment's overrides. New keys default to sensitive (encrypted).
+ */
+export async function importEnvAction(args: {
+  orgSlug: string;
+  workspaceSlug: string;
+  text: string;
+  environmentId?: string | null;
+  commit: boolean;
+}): Promise<ActionResult<{ rows: ImportPreviewRow[]; committed: boolean }>> {
+  return asManager(args, async (scope) => {
+    try {
+      const out = (await invoke(
+        "secret.import_env",
+        { text: args.text, environmentId: args.environmentId ?? null, commit: args.commit },
+        vaultCtx(scope),
+        { surface: "agent" },
+      )) as { rows: ImportPreviewRow[]; committed: boolean };
+      if (out.committed) revalidate(args);
+      return { ok: true, rows: out.rows, committed: out.committed };
+    } catch (err) {
+      return { ok: false, error: errorMessage(err, "Failed to import .env") };
+    }
+  });
+}
+
+export async function upsertKeyAction(args: {
+  orgSlug: string;
+  workspaceSlug: string;
+  key: string;
+  sensitive: boolean;
+  memo?: string | null;
+  defaultValue?: string | null;
+}): Promise<ActionResult<{ id: string }>> {
+  return asManager(args, async (scope) => {
+    try {
+      const out = (await invoke(
+        "secret.key.upsert",
+        {
+          key: args.key,
+          sensitive: args.sensitive,
+          memo: args.memo ?? null,
+          defaultValue: args.defaultValue,
+        },
+        vaultCtx(scope),
+        { surface: "agent" },
+      )) as { id: string };
+      revalidate(args);
+      return { ok: true, id: out.id };
+    } catch (err) {
+      return { ok: false, error: errorMessage(err, "Failed to save key") };
+    }
+  });
+}
+
+export async function setValueAction(args: {
+  orgSlug: string;
+  workspaceSlug: string;
+  keyId: string;
+  environmentId: string;
+  value: string;
+}): Promise<ActionResult> {
+  return asManager(args, async (scope) => {
+    try {
+      await invoke(
+        "secret.value.set",
+        { keyId: args.keyId, environmentId: args.environmentId, value: args.value },
+        vaultCtx(scope),
+        { surface: "agent" },
+      );
+      revalidate(args);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: errorMessage(err, "Failed to set value") };
+    }
+  });
+}
+
+export async function unsetValueAction(args: {
+  orgSlug: string;
+  workspaceSlug: string;
+  keyId: string;
+  environmentId: string;
+}): Promise<ActionResult> {
+  return asManager(args, async (scope) => {
+    try {
+      await invoke(
+        "secret.value.unset",
+        { keyId: args.keyId, environmentId: args.environmentId },
+        vaultCtx(scope),
+        { surface: "agent" },
+      );
+      revalidate(args);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: errorMessage(err, "Failed to remove override") };
+    }
+  });
+}
+
+export async function deleteKeyAction(args: {
+  orgSlug: string;
+  workspaceSlug: string;
+  keyId: string;
+}): Promise<ActionResult> {
+  return asManager(args, async (scope) => {
+    try {
+      await invoke("secret.key.delete", { keyId: args.keyId }, vaultCtx(scope), {
+        surface: "agent",
+      });
+      revalidate(args);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: errorMessage(err, "Failed to delete key") };
+    }
+  });
+}
+
+export async function createEnvironmentAction(args: {
+  orgSlug: string;
+  workspaceSlug: string;
+  name: string;
+  slug: string;
+}): Promise<ActionResult<{ environment: EnvironmentSummary }>> {
+  return asManager(args, async (scope) => {
+    try {
+      const out = (await invoke(
+        "environment.create",
+        { name: args.name, slug: args.slug },
+        vaultCtx(scope),
+        { surface: "agent" },
+      )) as { environment: EnvironmentSummary };
+      revalidate(args);
+      return { ok: true, environment: out.environment };
+    } catch (err) {
+      return { ok: false, error: errorMessage(err, "Failed to create environment") };
+    }
+  });
+}
+
+export async function setDefaultEnvironmentAction(args: {
+  orgSlug: string;
+  workspaceSlug: string;
+  environmentId: string;
+}): Promise<ActionResult<{ environment: EnvironmentSummary }>> {
+  return asManager(args, async (scope) => {
+    try {
+      const out = (await invoke(
+        "environment.set_default",
+        { environmentId: args.environmentId },
+        vaultCtx(scope),
+        { surface: "agent" },
+      )) as { environment: EnvironmentSummary };
+      revalidate(args);
+      return { ok: true, environment: out.environment };
+    } catch (err) {
+      return { ok: false, error: errorMessage(err, "Failed to set default environment") };
+    }
+  });
+}
