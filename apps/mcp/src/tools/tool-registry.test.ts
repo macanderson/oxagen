@@ -236,6 +236,12 @@ import { metadata as secretValueUnsetMetadata } from "./secret.value.unset";
 import { metadata as secretImportEnvMetadata } from "./secret.import_env";
 import { metadata as secretRevealMetadata } from "./secret.reveal";
 import { metadata as secretExportMetadata } from "./secret.export";
+// Agent memory policy + code tools
+import { metadata as agentMemoryPolicyReadMetadata } from "./agent.memory.policy.read";
+import { metadata as agentMemoryPolicyWriteMetadata } from "./agent.memory.policy.write";
+import { metadata as codeDiffMetadata } from "./code.diff";
+import { metadata as codeFormatMetadata } from "./code.format";
+import { metadata as codePatchMetadata } from "./code.patch";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -453,6 +459,11 @@ const allToolMetadata = [
   secretImportEnvMetadata,
   secretRevealMetadata,
   secretExportMetadata,
+  agentMemoryPolicyReadMetadata,
+  agentMemoryPolicyWriteMetadata,
+  codeDiffMetadata,
+  codeFormatMetadata,
+  codePatchMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────

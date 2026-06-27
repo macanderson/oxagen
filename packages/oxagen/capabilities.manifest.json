@@ -3574,7 +3574,7 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
+        "api": true,
         "mcp": true,
         "unit": false,
         "docs": false
@@ -3608,7 +3608,7 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
+        "api": true,
         "mcp": true,
         "unit": false,
         "docs": false
