@@ -240,6 +240,63 @@ program
     await handleConfig(key, value);
   });
 
+// ── settings: the unified settings.json driver ────────────────────────────────
+
+const settings = program
+  .command("settings")
+  .description("Inspect and edit the unified settings.json (model, env, permissions, hooks, MCP)")
+  .action(async () => {
+    const { settingsShow } = await import("./commands/settings.js");
+    settingsShow();
+  });
+settings
+  .command("show")
+  .description("Show the merged settings and which scope each file lives in")
+  .action(async () => {
+    const { settingsShow } = await import("./commands/settings.js");
+    settingsShow();
+  });
+settings
+  .command("path")
+  .description("List the three scope files (user / project / local) and their status")
+  .action(async () => {
+    const { settingsPath } = await import("./commands/settings.js");
+    settingsPath();
+  });
+settings
+  .command("get")
+  .description("Print a value by dotted key (e.g. permissions.defaultMode)")
+  .argument("<key>", "Dotted settings key")
+  .action(async (key: string) => {
+    const { settingsGet } = await import("./commands/settings.js");
+    settingsGet(key);
+  });
+settings
+  .command("set")
+  .description("Set a value (model | apiUrl | env.NAME) in a scope")
+  .argument("<key>", "model, apiUrl, or env.NAME")
+  .argument("<value>", "Value to write")
+  .option("--scope <scope>", "user | project | local (default: project)")
+  .action(async (key: string, value: string, opts: { scope?: string }) => {
+    const { settingsSet } = await import("./commands/settings.js");
+    settingsSet(key, value, opts.scope);
+  });
+settings
+  .command("validate")
+  .description("Validate every scope file against the settings schema")
+  .action(async () => {
+    const { settingsValidate } = await import("./commands/settings.js");
+    settingsValidate();
+  });
+settings
+  .command("init")
+  .description("Write a documented starter settings.json (default: project scope)")
+  .option("--scope <scope>", "user | project | local (default: project)")
+  .action(async (opts: { scope?: string }) => {
+    const { settingsInit } = await import("./commands/settings.js");
+    settingsInit(opts.scope);
+  });
+
 // ── env: workspace environments ───────────────────────────────────────────────
 
 const env = program.command("env").description("Manage workspace environments");
@@ -371,6 +428,10 @@ secret
   });
 
 async function main(): Promise<void> {
+  // Project settings.json (env, apiUrl, model) into the environment before any
+  // command runs — filling only unset vars, so the shell always wins.
+  const { applySettingsToEnv } = await import("./settings/runtime.js");
+  applySettingsToEnv();
   await program.parseAsync(process.argv);
 }
 
