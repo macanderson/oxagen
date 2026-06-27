@@ -74,6 +74,8 @@ export interface RunAgentOptions {
    * is used unless `model` overrides it.
    */
   agent?: AgentDefinition;
+  /** Fired once per tool with its input, result, and timing (for verbose telemetry). */
+  onToolEvent?: (e: ToolEvent) => void;
 }
 
 export interface RunAgentResult {
@@ -82,6 +84,27 @@ export interface RunAgentResult {
   /** Full message history including this turn's assistant/tool messages. */
   messages: ModelMessage[];
   usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+}
+
+/** Heuristic: did a tool result represent an error? Exported for tests. */
+export function isErrorResult(out: unknown): boolean {
+  if (out instanceof Error) return true;
+  if (out && typeof out === "object") {
+    const o = out as { isError?: unknown; error?: unknown };
+    if (o.isError === true || (o.error != null && o.error !== false)) return true;
+  }
+  return false;
+}
+
+/** JSON-stringify a value, falling back to String(), capped to `max` chars. Exported for tests. */
+export function stringifyCapped(v: unknown, max: number): string {
+  let s: string;
+  try {
+    s = typeof v === "string" ? v : JSON.stringify(v) ?? String(v);
+  } catch {
+    s = String(v);
+  }
+  return s.length > max ? s.slice(0, max) + "…" : s;
 }
 
 // Re-exported from ./env so consumers (e.g. the planner) can catch it without
@@ -190,7 +213,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   // Merge local + MCP tools, restrict to the agent's allowlist (if any), then
   // gate with the settings-driven permission rules and Pre/PostToolUse hooks.
   const availableTools = filterToolsForAgent(
-    { ...buildTools(cwd, { readOnly: opts.readOnly }), ...(mcp?.tools ?? {}) },
+    { ...buildTools(cwd, { readOnly: opts.readOnly, broker: opts.broker }), ...(mcp?.tools ?? {}) },
     opts.agent?.tools,
   );
   // Tier 2 adherence: guarded rules become permission deny entries the gate
