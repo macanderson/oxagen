@@ -93,13 +93,26 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
   const resolved: string[] = [];
 
   try {
-    // Mine candidates from the prompt plus any evaluator-supplied hints. The hints
-    // sharpen retrieval without polluting the visible prompt text.
-    const minedFrom = [prompt, ...(opts.extraQueries ?? [])].join(" \n ");
-    const { symbols, paths } = extractCandidates(minedFrom);
+    // Mine candidates from the prompt's prose conservatively (so ordinary words
+    // aren't treated as symbols), then add the evaluator's explicit extraQueries
+    // directly. The hints are signal, not prose, so they bypass the identifier
+    // filter that would otherwise drop a lowercase camelCase name like
+    // `computeAlpha`. They sharpen retrieval without polluting the visible prompt.
+    const mined = extractCandidates(prompt);
+    const symbols = [...mined.symbols];
+    const paths = [...mined.paths];
+    for (const q of opts.extraQueries ?? []) {
+      const t = q.trim();
+      if (!t) continue;
+      if (t.includes("/") || CODEY_EXT.test(t)) {
+        if (!paths.includes(t)) paths.push(t);
+      } else if (!symbols.includes(t)) {
+        symbols.push(t);
+      }
+    }
 
     // Symbol definitions — "where is X defined".
-    for (const sym of [...symSet].slice(0, max)) {
+    for (const sym of [...symbols].slice(0, max)) {
       const res = await queryCodeGraph(cwd, "search", sym, 4);
       if (isHit(res)) {
         sections.push(`Definitions of \`${sym}\`:\n${res}`);
@@ -110,7 +123,7 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
     // File context — symbols a referenced file defines, plus its dependents
     // (what a change to it could break). This is the impact-analysis the agent
     // would otherwise have to discover by hand.
-    for (const p of [...pathSet].slice(0, max)) {
+    for (const p of [...paths].slice(0, max)) {
       const syms = await queryCodeGraph(cwd, "file_symbols", p, 12);
       if (isHit(syms)) {
         sections.push(`Symbols in ${p}:\n${syms}`);
