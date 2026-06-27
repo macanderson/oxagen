@@ -32,4 +32,14 @@ describe("MemoryWorkspace", () => {
     const d = await ws.diff();
     expect(d).toContain("a.txt");
   });
+
+  it("editFile rejects when old_string is absent", async () => {
+    const ws = new MemoryWorkspace({ "a.txt": "hello" });
+    await expect(ws.editFile("a.txt", "zzz", "x")).rejects.toThrow(/not found/i);
+  });
+
+  it("list returns immediate children only (non-recursive)", async () => {
+    const ws = new MemoryWorkspace({ "src/x.ts": "", "src/deep/y.ts": "" });
+    expect((await ws.list("src")).sort()).toEqual(["deep", "x.ts"]);
+  });
 });
