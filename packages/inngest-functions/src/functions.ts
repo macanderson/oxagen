@@ -42,6 +42,7 @@ import { schemaReconcile } from "./functions/schema.reconcile";
 import { engramSyncMemoryToGraph } from "./functions/engram.sync-memory-to-graph";
 import { engramEmbedMemory } from "./functions/engram.embed-memory";
 import { engramConsolidationRun } from "./functions/engram.consolidation.run";
+import { memoryDecayPass } from "./functions/memory.decay-pass";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -87,4 +88,5 @@ export const functions: any[] = [
   engramSyncMemoryToGraph,
   engramEmbedMemory,
   engramConsolidationRun,
+  memoryDecayPass,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);
