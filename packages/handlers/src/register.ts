@@ -976,4 +976,62 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./schema.reconcile.status"))
         .schemaReconcileStatusHandler as CapabilityHandlerFn,
   );
+  // Environments + credential vault (Spec: 2026-06-24-credential-vault-…).
+  registerHandler(
+    "environment.create",
+    async () => (await import("./environment.create")).environmentCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "environment.list",
+    async () => (await import("./environment.list")).environmentListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "environment.get",
+    async () => (await import("./environment.get")).environmentGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "environment.update",
+    async () => (await import("./environment.update")).environmentUpdateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "environment.delete",
+    async () => (await import("./environment.delete")).environmentDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "environment.set_default",
+    async () =>
+      (await import("./environment.set_default")).environmentSetDefaultHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "secret.key.upsert",
+    async () => (await import("./secret.key.upsert")).secretKeyUpsertHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "secret.key.list",
+    async () => (await import("./secret.key.list")).secretKeyListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "secret.key.delete",
+    async () => (await import("./secret.key.delete")).secretKeyDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "secret.value.set",
+    async () => (await import("./secret.value.set")).secretValueSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "secret.value.unset",
+    async () => (await import("./secret.value.unset")).secretValueUnsetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "secret.import_env",
+    async () => (await import("./secret.import_env")).secretImportEnvHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "secret.reveal",
+    async () => (await import("./secret.reveal")).secretRevealHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "secret.export",
+    async () => (await import("./secret.export")).secretExportHandler as CapabilityHandlerFn,
+  );
 });
