@@ -15,11 +15,13 @@ interface RunTurnResultLike {
   steps: number;
   messages: unknown[];
   usage: Record<string, number>;
-  trace: Record<string, unknown>;
+  trace: { id: string };
 }
 
 // Each runTurn call parks here until the test resolves it, simulating a turn
-// that takes real wall-clock time (so later submissions have to queue).
+// that takes real wall-clock time (so later submissions have to queue). The REPL
+// drives each turn through the eval→enhance→judge pipeline (`runTurn`), not
+// `runAgent` directly, so the interception point is pipeline.js.
 const pending: Array<{ prompt: string; finish: () => void }> = [];
 const runTurnSpy = vi.fn<(opts: { prompt: string }) => void>();
 
@@ -34,26 +36,26 @@ vi.mock("../../agent/pipeline.js", () => ({
             text: `done:${opts.prompt}`,
             steps: 1,
             messages: [],
-            usage: {},
-            trace: { id: `trace_${opts.prompt}` },
+            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+            trace: { id: `trace:${opts.prompt}` },
           }),
       });
     }),
   MissingGatewayKeyError: class extends Error {},
 }));
 
+// The REPL opens a trace store + fleet memory at mount (both do real file I/O);
+// stub them so the queue test stays hermetic.
 vi.mock("../../agent/trace-store.js", () => ({
-  openTraceStore: () => ({
-    record: () => {},
-    get: () => undefined,
-    list: () => [],
-    last: () => undefined,
-    resolve: () => undefined,
-  }),
+  openTraceStore: () => ({ record: () => {}, get: () => undefined, list: () => [] }),
 }));
-
 vi.mock("../../agent/fleet/memory.js", () => ({
-  openFleetMemory: () => ({ record: () => {}, recall: () => [], all: () => [] }),
+  openFleetMemory: () => ({
+    remember: () => {},
+    recall: () => [],
+    all: () => [],
+    close: () => {},
+  }),
 }));
 
 vi.mock("../../agent/memory.js", () => ({

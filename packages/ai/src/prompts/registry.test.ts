@@ -133,9 +133,11 @@ describe("chatSystemPrompt — tools/skills/MCP/plugins discoverability", () => 
     expect(chatSystemPrompt(CTX)).toContain("## Capabilities, Skills, MCP servers & Plugins");
   });
 
-  it("tells the agent to discover and load skills via the skill contracts", () => {
+  it("tells the agent to load skills via the skill contracts", () => {
     const prompt = chatSystemPrompt(CTX);
-    expect(prompt).toContain("agent.skill.list");
+    // #176 replaced list-then-load discovery with an injected skill index plus
+    // agent.skill.load (progressive disclosure); the prompt no longer instructs
+    // an explicit agent.skill.list call, so only the load contract is asserted.
     expect(prompt).toContain("agent.skill.load");
   });
 
