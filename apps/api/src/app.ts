@@ -187,6 +187,7 @@ import {
   pluginVersionRoute,
 } from "./routes/v1/plugin-schema";
 import { graphNodeListRoute } from "./routes/v1/graph.node.list";
+import { graphExportRoute } from "./routes/v1/graph.export";
 import { graphStatsRoute } from "./routes/v1/graph.stats";
 import { ontologyQueryRoute } from "./routes/v1/ontology.query";
 import { ontologyNeighborsRoute } from "./routes/v1/ontology.neighbors";
@@ -432,6 +433,7 @@ orgScoped.route("/graph/relationship/upsert", graphRelationshipUpsertRoute);
 orgScoped.route("/plugin-schema", pluginSchemaRoute);
 orgScoped.route("/plugin-versions", pluginVersionRoute);
 orgScoped.route("/graph/nodes", graphNodeListRoute);
+orgScoped.route("/graph/export", graphExportRoute);
 orgScoped.route("/graph/stats", graphStatsRoute);
 orgScoped.route("/ontology/query", ontologyQueryRoute);
 orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);

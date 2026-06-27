@@ -1692,10 +1692,10 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
-        "mcp": false,
+        "api": true,
+        "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
