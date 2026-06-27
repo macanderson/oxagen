@@ -1,0 +1,225 @@
+/**
+ * Workspace-bound coding tools for the agent loop.
+ *
+ * Identical tool names, descriptions, and inputSchemas as apps/cli/src/agent/tools.ts,
+ * but execute bodies delegate to a `Workspace` abstraction instead of node:fs /
+ * child_process — making them testable in-process (MemoryWorkspace) and portable
+ * to sandboxed execution environments.
+ */
+import { tool, type ToolSet } from "ai";
+import { z } from "zod";
+import type { Workspace, CodeGraphProvider, CodingEvent } from "./types";
+
+const MAX_OUTPUT = 30_000; // chars; keep tool output from blowing the context window
+
+function clip(text: string): string {
+  if (text.length <= MAX_OUTPUT) return text;
+  return (
+    text.slice(0, MAX_OUTPUT) +
+    `\n… [truncated ${text.length - MAX_OUTPUT} chars]`
+  );
+}
+
+export function buildWorkspaceTools(
+  workspace: Workspace,
+  opts: {
+    readOnly?: boolean;
+    codeGraph?: CodeGraphProvider;
+    onEvent?: (e: CodingEvent) => void;
+  } = {},
+): ToolSet {
+  const onEvent = opts.onEvent ?? (() => undefined);
+
+  const tools: ToolSet = {
+    read_file: tool({
+      description:
+        "Read a file from the working directory. Returns the file contents (optionally a line range).",
+      inputSchema: z.object({
+        path: z.string().describe("File path, relative to cwd or absolute."),
+        offset: z
+          .number()
+          .int()
+          .optional()
+          .describe("1-based start line (optional)."),
+        limit: z
+          .number()
+          .int()
+          .optional()
+          .describe("Max number of lines to return (optional)."),
+      }),
+      execute: async ({ path, offset, limit }) => {
+        try {
+          return clip(await workspace.readFile(path, { offset, limit }));
+        } catch (err) {
+          return `Error reading ${path}: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    }),
+
+    write_file: tool({
+      description:
+        "Write (create or overwrite) a file with the given content. Creates parent directories as needed.",
+      inputSchema: z.object({
+        path: z.string(),
+        content: z.string(),
+      }),
+      execute: async ({ path, content }) => {
+        try {
+          await workspace.writeFile(path, content);
+          onEvent({ type: "file-edit", path, bytes: content.length });
+          return `Wrote ${content.length} bytes to ${path}`;
+        } catch (err) {
+          return `Error writing ${path}: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    }),
+
+    edit_file: tool({
+      description:
+        "Replace an exact substring in a file. old_string must appear exactly once. Use for surgical edits.",
+      inputSchema: z.object({
+        path: z.string(),
+        old_string: z.string().describe("Exact text to replace (must be unique)."),
+        new_string: z.string().describe("Replacement text."),
+      }),
+      execute: async ({ path, old_string, new_string }) => {
+        try {
+          await workspace.editFile(path, old_string, new_string);
+          const bytes = new_string.length;
+          onEvent({ type: "file-edit", path, bytes });
+          return `Edited ${path}`;
+        } catch (err) {
+          return `Error editing ${path}: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    }),
+
+    list_dir: tool({
+      description: "List the entries of a directory (non-recursive).",
+      inputSchema: z.object({
+        path: z.string().optional().describe("Directory (default: cwd)."),
+      }),
+      execute: async ({ path }) => {
+        try {
+          const entries = await workspace.list(path);
+          return clip(entries.join("\n") || "(empty)");
+        } catch (err) {
+          return `Error listing ${path ?? "."}: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    }),
+
+    glob: tool({
+      description:
+        "Find files matching a glob pattern (e.g. 'src/**/*.ts'). Skips node_modules/.git/dist.",
+      inputSchema: z.object({
+        pattern: z.string(),
+      }),
+      execute: async ({ pattern }) => {
+        try {
+          const matches = await workspace.glob(pattern);
+          return clip(matches.sort().join("\n") || "(no matches)");
+        } catch (err) {
+          return `Error globbing ${pattern}: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    }),
+
+    grep: tool({
+      description:
+        "Search file contents with a regular expression. Returns matching file:line:text. Skips node_modules/.git/dist.",
+      inputSchema: z.object({
+        pattern: z.string().describe("JavaScript regular expression."),
+        path: z
+          .string()
+          .optional()
+          .describe("Subdirectory to search (default: cwd)."),
+        glob: z
+          .string()
+          .optional()
+          .describe("Restrict to files matching this glob (e.g. '*.ts')."),
+      }),
+      execute: async ({ pattern, path, glob }) => {
+        try {
+          const hits = await workspace.grep(pattern, { path, glob });
+          return clip(hits.join("\n") || "(no matches)");
+        } catch (err) {
+          return `Error grepping for ${pattern}: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    }),
+  };
+
+  // code_graph is optional — only added when a provider is supplied.
+  if (opts.codeGraph) {
+    const codeGraph = opts.codeGraph;
+    tools.code_graph = tool({
+      description:
+        "Query the repository's code graph — a precomputed index of symbols and " +
+        "import relationships — for STRUCTURAL answers, instead of guessing paths " +
+        "or grepping. Prefer this over `grep` for \"where is X defined\" and for " +
+        "impact analysis before a change. Operations: 'search' finds where a " +
+        "symbol (function/class/type/interface) is defined by name; 'file_symbols' " +
+        "lists the top-level symbols a file defines; 'dependents' lists the files " +
+        "that import a given file (what a change could break); 'imports' lists the " +
+        "local files a given file imports.",
+      inputSchema: z.object({
+        operation: z.enum(["search", "file_symbols", "dependents", "imports"]),
+        query: z
+          .string()
+          .describe(
+            "A symbol name for 'search'; a file path (relative to cwd, or a suffix " +
+              "like 'agent/loop.ts') for 'file_symbols' / 'dependents' / 'imports'.",
+          ),
+        limit: z
+          .number()
+          .int()
+          .optional()
+          .describe("Max results to return (default 25)."),
+      }),
+      execute: async ({ operation, query, limit }) => {
+        try {
+          return clip(await codeGraph.query(operation, query, limit));
+        } catch (err) {
+          return `code_graph error: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    });
+  }
+
+  tools.bash = tool({
+    description:
+      "Run a shell command in the working directory. Use for builds, tests, git, package managers. Has a timeout.",
+    inputSchema: z.object({
+      command: z.string(),
+      timeout_ms: z
+        .number()
+        .int()
+        .optional()
+        .describe("Timeout in milliseconds (default 120000, max 600000)."),
+    }),
+    execute: async ({ command, timeout_ms }) => {
+      const timeoutMs = Math.min(timeout_ms ?? 120_000, 600_000);
+      try {
+        const result = await workspace.exec(command, { timeoutMs });
+        onEvent({ type: "command", command, exitCode: result.exitCode });
+        if (result.timedOut) return `Command timed out after ${timeoutMs}ms.`;
+        const out = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+        if (result.exitCode !== 0) return clip(`Command failed:\n${out || "(no output)"}`);
+        return clip(out || "(no output)");
+      } catch (err) {
+        return `Error running command: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+  });
+
+  // Read-only mode: withhold every mutating tool so the model literally cannot
+  // change the filesystem or run commands.
+  if (opts.readOnly) {
+    delete tools["write_file"];
+    delete tools["edit_file"];
+    delete tools["bash"];
+  }
+
+  return tools;
+}
