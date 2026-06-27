@@ -112,3 +112,38 @@ describe("useAgentPanelStore — status and title", () => {
     expect(result.current.visibility).toBe("open");
   });
 });
+
+describe("useAgentPanelStore — conversation public id (continue-in-page link)", () => {
+  it("defaults to null", () => {
+    const { result } = renderStore();
+    expect(result.current.conversationPublicId).toBeNull();
+  });
+
+  it("setConversationPublicId() records the active conversation publicId", () => {
+    const { result } = renderStore();
+    act(() => result.current.setConversationPublicId("conv_abc123"));
+    expect(result.current.conversationPublicId).toBe("conv_abc123");
+  });
+
+  it("startNewChat() clears the conversation publicId", () => {
+    const { result } = renderStore();
+    act(() => result.current.setConversationPublicId("conv_abc123"));
+    act(() => result.current.startNewChat());
+    expect(result.current.conversationPublicId).toBeNull();
+  });
+});
+
+describe("useAgentPanelStore — newChatNonce (remount signal)", () => {
+  it("defaults to 0", () => {
+    const { result } = renderStore();
+    expect(result.current.newChatNonce).toBe(0);
+  });
+
+  it("increments on every startNewChat() so the panel can key a fresh chat shell", () => {
+    const { result } = renderStore();
+    act(() => result.current.startNewChat());
+    expect(result.current.newChatNonce).toBe(1);
+    act(() => result.current.startNewChat());
+    expect(result.current.newChatNonce).toBe(2);
+  });
+});
