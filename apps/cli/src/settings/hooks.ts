@@ -92,6 +92,9 @@ function execHook(
     child.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
     child.on("error", (err) => finish({ code: 1, stdout, stderr: stderr + String(err) }));
     child.on("close", (code) => finish({ code: code ?? 0, stdout, stderr }));
+    child.stdin.on("error", () => {
+      /* stdin may already be closed if the command exits immediately */
+    });
 
     try {
       child.stdin.write(payloadJson);
