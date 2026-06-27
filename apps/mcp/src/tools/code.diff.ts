@@ -1,0 +1,25 @@
+import { type InferSchema, type ToolMetadata } from "xmcp";
+import { headers } from "xmcp/headers";
+import { codeDiff } from "@oxagen/oxagen/contracts/code.diff";
+import { invoke } from "@oxagen/oxagen/kernel";
+import { buildContext } from "../context";
+
+export const schema = {
+  ...codeDiff.input.shape,
+};
+
+export const metadata: ToolMetadata = {
+  name: codeDiff.name,
+  description: codeDiff.description,
+  annotations: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+  },
+};
+
+export default async function codeDiffTool(args: InferSchema<typeof schema>) {
+  const ctx = await buildContext(headers());
+  const output = await invoke(codeDiff.name, args, ctx, { surface: "mcp" });
+  return codeDiff.output.parse(output);
+}

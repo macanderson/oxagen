@@ -18,6 +18,9 @@ import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
 import { chatMessageExecutionRoute } from "./routes/v1/chat.message.execution";
 import { chatStreamRoute } from "./routes/v1/chat.stream";
 import { agentCodeExecuteRoute } from "./routes/v1/agent.code.execute";
+import { codeDiffRoute } from "./routes/v1/code.diff";
+import { codePatchRoute } from "./routes/v1/code.patch";
+import { codeFormatRoute } from "./routes/v1/code.format";
 import { agentToolListRoute } from "./routes/v1/agent.tool.list";
 import { agentMcpRegisterRoute } from "./routes/v1/agent.mcp.register";
 import { agentMcpListRoute } from "./routes/v1/agent.mcp.list";
@@ -252,6 +255,10 @@ orgScoped.route("/conversations/purge", conversationPurgeRoute);
 // Agent-runtime routes live under the org + workspace scope so the runner
 // inherits the same auth, isolation, and audit envelope as every other v1 call.
 orgScoped.route("/agent/code/execute", agentCodeExecuteRoute);
+// Code-execution surface peers (OXA-1352) under the same org+workspace scope.
+orgScoped.route("/code/diff", codeDiffRoute);
+orgScoped.route("/code/patch", codePatchRoute);
+orgScoped.route("/code/format", codeFormatRoute);
 orgScoped.route("/agent/tools", agentToolListRoute);
 orgScoped.route("/agent/mcp-servers", agentMcpRegisterRoute);
 orgScoped.route("/agent/mcp-servers", agentMcpListRoute);
