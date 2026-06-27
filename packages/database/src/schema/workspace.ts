@@ -1,4 +1,4 @@
-import { boolean, check, index, jsonb, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { workspaceSchema } from "./_schemas";
 import { auditMixin, citext, idMixin } from "./_mixins";
@@ -80,5 +80,39 @@ export const workspaceUsers = workspaceSchema.table(
       "workspace_users_role_check",
       sql`lower(${t.role}) IN ('owner', 'admin', 'member', 'billing', 'compliance', 'viewer')`,
     ),
+  }),
+);
+
+// ── workspace.workspace_memory_policy (OXA-1374) ─────────────────────────────
+// One row per workspace. Stores the per-workspace memory decay policy:
+//   halfLifeLowDays   — decay half-life in days for 'low' weight memories
+//   halfLifeHighDays  — decay half-life in days for 'high' weight memories
+//   recallThreshold   — memories below this confidence are excluded from recall
+//
+// Rows are created on first write; callers fall back to defaults when absent.
+export const workspaceMemoryPolicy = workspaceSchema.table(
+  "workspace_memory_policy",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`COALESCE(
+        CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
+          THEN uuid_generate_v7() ELSE uuid_generate_v4() END,
+        uuid_generate_v4())`),
+    orgId: uuid("org_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull().unique(),
+    halfLifeLowDays: integer("half_life_low_days").notNull().default(30),
+    halfLifeHighDays: integer("half_life_high_days").notNull().default(90),
+    recallThreshold: real("recall_threshold").notNull().default(0.1),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    workspaceIdx: uniqueIndex("workspace_memory_policy_workspace_idx").on(t.workspaceId),
+    orgWorkspaceIdx: index("workspace_memory_policy_org_workspace_idx").on(t.orgId, t.workspaceId),
   }),
 );

@@ -1034,4 +1034,17 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "secret.export",
     async () => (await import("./secret.export")).secretExportHandler as CapabilityHandlerFn,
   );
+  // Memory decay policies (OXA-1374).
+  registerHandler(
+    "agent.memory.policy.read",
+    async () =>
+      (await import("./agent.memory.policy.read"))
+        .agentMemoryPolicyReadHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "agent.memory.policy.write",
+    async () =>
+      (await import("./agent.memory.policy.write"))
+        .agentMemoryPolicyWriteHandler as CapabilityHandlerFn,
+  );
 });
