@@ -1,4 +1,4 @@
-h1:v34iKZ/N2qof6YodHyu5hihk+FLxas8lSl/0dNLOrWw=
+h1:5uU4EWv3jrj6ke0jn6LOhRMWClUZ6dZUHOkYxCuUbLI=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:rkdyIpu+hw+f+fGZHzpXyfm5feAL2GK9qitZROPXTpo=
@@ -24,3 +24,4 @@ h1:v34iKZ/N2qof6YodHyu5hihk+FLxas8lSl/0dNLOrWw=
 20260624160000_add_generated_assets_synced_to_graph_at.sql h1:gjA0Q3RxjG2QGJCSuhozleuO+UxAaD9yPuX7zVj7g0Q=
 20260625120000_drop_forms_tables.sql h1:HN/3XfZOi1m0S26MwDzha0SNnPwDY5i/W5TCSiyV8Pg=
 20260625130000_catalog_servers.sql h1:myG1uSIVy/Yb2ZMoUFPwBGS03U09oHXC56Aq0crMQIs=
+20260626120000_environments_vault.sql h1:Y7IXBB0NZac9F7YdwPiICce0m52191/y2q50j4wyxNs=
