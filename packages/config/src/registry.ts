@@ -1232,8 +1232,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_LLM_EVALUATOR: {
     group: "CLI",
     description:
-      "Vercel AI Gateway model slug for the CLI turn pipeline's evaluator stage " +
-      "(scores prompts/responses). Optional; falls back to the CLI default model.",
+      "Optional Vercel AI Gateway model slug for the CLI turn-pipeline's prompt " +
+      "evaluator. Falls back to the fast tier when unset.",
     secret: false,
     clientExposed: false,
     services: [],
@@ -1243,8 +1243,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_LLM_ADVISOR: {
     group: "CLI",
     description:
-      "Vercel AI Gateway model slug for the CLI turn pipeline's advisor/judge stage " +
-      "(completeness critique). Optional; falls back to the CLI default model.",
+      "Optional Vercel AI Gateway model slug for the CLI completeness advisor/" +
+      "judge. Falls back to the precise tier (then balanced) when unset.",
     secret: false,
     clientExposed: false,
     services: [],

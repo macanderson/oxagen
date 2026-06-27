@@ -35,6 +35,7 @@
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "ai": "6.0.197",
+    "diff": "9.0.0",
     "drizzle-orm": "0.45.2",
     "inngest": "3.54.2",
     "neo4j-driver": "5.28.3",

@@ -200,4 +200,41 @@ describe("agent.code.execute handler", () => {
       expect.objectContaining({ env: { SAFE_VALUE: "keep" } }),
     );
   });
+
+  it("lands a multi-file workspace into the sandbox before running", async () => {
+    await agentCodeExecuteHandler(
+      {
+        language: "node",
+        code: "require('./util')",
+        files: { "util.js": "module.exports = 1", "lib/a.js": "1" },
+        timeoutMs: 5_000,
+        memoryMb: 128,
+        network: "deny",
+      },
+      CTX,
+    );
+
+    expect(mockRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        files: { "util.js": "module.exports = 1", "lib/a.js": "1" },
+      }),
+    );
+  });
+
+  it("rejects a path-traversal file at the sandbox boundary (defense in depth)", async () => {
+    await expect(
+      agentCodeExecuteHandler(
+        {
+          language: "node",
+          code: "x",
+          files: { "../escape.js": "evil" },
+          timeoutMs: 5_000,
+          memoryMb: 64,
+          network: "deny",
+        },
+        CTX,
+      ),
+    ).rejects.toThrow(/unsafe workspace path/);
+    expect(mockRun).not.toHaveBeenCalled();
+  });
 });

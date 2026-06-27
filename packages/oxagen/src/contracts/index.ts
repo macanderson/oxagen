@@ -14,6 +14,9 @@ import { archiveCreate } from "./archive.create";
 import { assetUpload } from "./asset.upload";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { agentCodeExecute } from "./agent.code.execute";
+import { codeDiff } from "./code.diff";
+import { codePatch } from "./code.patch";
+import { codeFormat } from "./code.format";
 import { agentDefinitionCreate } from "./agent.definition.create";
 import { agentDefinitionUpdate } from "./agent.definition.update";
 import { agentDefinitionPublish } from "./agent.definition.publish";
@@ -254,6 +257,9 @@ export {
   assetUpload,
   agentApprovalResolve,
   agentCodeExecute,
+  codeDiff,
+  codePatch,
+  codeFormat,
   agentDefinitionCreate,
   agentDefinitionUpdate,
   agentDefinitionPublish,
@@ -488,6 +494,9 @@ export const contracts = [
   assetUpload,
   agentApprovalResolve,
   agentCodeExecute,
+  codeDiff,
+  codePatch,
+  codeFormat,
   agentDefinitionCreate,
   agentDefinitionUpdate,
   agentDefinitionPublish,

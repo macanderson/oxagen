@@ -12,7 +12,6 @@ import { render } from "ink-testing-library";
 
 interface RunTurnResultLike {
   text: string;
-  steps: number;
   messages: unknown[];
   usage: Record<string, number>;
   trace: Record<string, unknown>;
@@ -20,7 +19,8 @@ interface RunTurnResultLike {
 
 // Each runTurn call parks here until the test resolves it, simulating a turn
 // that takes real wall-clock time (so later submissions have to queue). The REPL
-// drives every prompt through the pipeline's `runTurn`, so that is what we mock.
+// runs every prompt through the pipeline's `runTurn` (eval → enhance → agent →
+// judge), so that is the seam we control — not the lower-level agent loop.
 const pending: Array<{ prompt: string; finish: () => void }> = [];
 const runTurnSpy = vi.fn<(opts: { prompt: string }) => void>();
 
@@ -33,19 +33,25 @@ vi.mock("../../agent/pipeline.js", () => ({
         finish: () =>
           resolve({
             text: `done:${opts.prompt}`,
-            steps: 1,
             messages: [],
             usage: {},
-            trace: { id: `trace:${opts.prompt}`, prompt: opts.prompt },
+            trace: {},
           }),
       });
     }),
   MissingGatewayKeyError: class extends Error {},
 }));
 
-// Keep the turn-trace store hermetic — no disk writes to ~/.config during tests.
+// The REPL records each completed turn's trace; stub the durable store so the
+// test neither writes to ~/.config nor couples to the TurnTrace shape.
 vi.mock("../../agent/trace-store.js", () => ({
-  openTraceStore: () => ({ record: () => {}, list: () => [] }),
+  openTraceStore: () => ({
+    record: () => {},
+    get: () => undefined,
+    list: () => [],
+    last: () => undefined,
+    resolve: () => undefined,
+  }),
 }));
 
 vi.mock("../../agent/memory.js", () => ({
