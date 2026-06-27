@@ -10,6 +10,7 @@ import { bootstrapWorkspaceAgents } from "@oxagen/handlers/workspace-agents";
 import { seedWorkspaceDefaultRegistrySystem } from "@oxagen/handlers/workspace-registry-seed";
 import { seedWorkspaceDefaultCapabilitiesSystem } from "@oxagen/handlers/workspace-capability-seed";
 import { seedWorkspaceDefaultSkillsSystem } from "@oxagen/handlers/skill-workspace-seed";
+import { seedWorkspaceDefaultEnvironmentSystem } from "@oxagen/handlers/workspace-environment-seed";
 
 // Mirrors the workspace.create capability's defaultRoles (org Owner/Admin allow).
 // Re-checked server-side here so the gate can't be bypassed from the client.
@@ -146,6 +147,14 @@ export async function createWorkspaceAction(
         logger.error(
           { err: seedErr, orgId: org.id, workspaceId },
           "[new-workspace] seedWorkspaceDefaultSkillsSystem failed — workspace was created; seed is recoverable via db:backfill-workspace-seeds",
+        );
+      }
+      try {
+        await seedWorkspaceDefaultEnvironmentSystem({ orgId: org.id, workspaceId });
+      } catch (seedErr) {
+        logger.error(
+          { err: seedErr, orgId: org.id, workspaceId },
+          "[new-workspace] seedWorkspaceDefaultEnvironmentSystem failed — workspace was created; seed is recoverable via db:backfill-workspace-seeds",
         );
       }
 

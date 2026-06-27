@@ -215,6 +215,21 @@ import { semanticRelationshipApprove } from "./semantic.relationship.approve";
 import { semanticRelationshipInfer } from "./semantic.relationship.infer";
 import { semanticRelationshipList } from "./semantic.relationship.list";
 import { semanticRelationshipSuggest } from "./semantic.relationship.suggest";
+// Environments + credential vault (Spec: 2026-06-24-credential-vault-…).
+import { environmentCreate } from "./environment.create";
+import { environmentList } from "./environment.list";
+import { environmentGet } from "./environment.get";
+import { environmentUpdate } from "./environment.update";
+import { environmentDelete } from "./environment.delete";
+import { environmentSetDefault } from "./environment.set_default";
+import { secretKeyUpsert } from "./secret.key.upsert";
+import { secretKeyList } from "./secret.key.list";
+import { secretKeyDelete } from "./secret.key.delete";
+import { secretValueSet } from "./secret.value.set";
+import { secretValueUnset } from "./secret.value.unset";
+import { secretImportEnv } from "./secret.import_env";
+import { secretReveal } from "./secret.reveal";
+import { secretExport } from "./secret.export";
 // Re-export shared Zod helpers used across schema.* contracts.
 // These are not capability contracts themselves but must appear here to satisfy
 // the check-contracts file-coverage guard (tools/scripts/check-contracts.mjs).
@@ -432,6 +447,20 @@ export {
   semanticRelationshipInfer,
   semanticRelationshipList,
   semanticRelationshipSuggest,
+  environmentCreate,
+  environmentList,
+  environmentGet,
+  environmentUpdate,
+  environmentDelete,
+  environmentSetDefault,
+  secretKeyUpsert,
+  secretKeyList,
+  secretKeyDelete,
+  secretValueSet,
+  secretValueUnset,
+  secretImportEnv,
+  secretReveal,
+  secretExport,
 };
 
 /**
@@ -650,4 +679,18 @@ export const contracts = [
   semanticRelationshipInfer,
   semanticRelationshipList,
   semanticRelationshipSuggest,
+  environmentCreate,
+  environmentList,
+  environmentGet,
+  environmentUpdate,
+  environmentDelete,
+  environmentSetDefault,
+  secretKeyUpsert,
+  secretKeyList,
+  secretKeyDelete,
+  secretValueSet,
+  secretValueUnset,
+  secretImportEnv,
+  secretReveal,
+  secretExport,
 ] as const;

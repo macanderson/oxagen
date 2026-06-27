@@ -50,8 +50,12 @@ describe("PLUGIN_TYPES constant", () => {
     expect(PLUGIN_TYPES).toContain("integration");
   });
 
-  it("has exactly five members", () => {
-    expect(PLUGIN_TYPES).toHaveLength(5);
+  it("contains 'mcp_server_local'", () => {
+    expect(PLUGIN_TYPES).toContain("mcp_server_local");
+  });
+
+  it("has exactly six members", () => {
+    expect(PLUGIN_TYPES).toHaveLength(6);
   });
 
   it("does NOT contain the old 'content_tool' type", () => {
