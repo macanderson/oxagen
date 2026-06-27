@@ -33,3 +33,39 @@ export {
   FIRST_PARTY_MCP_SERVERS,
 } from "./first-party-mcp";
 export type { FirstPartyMcpServer } from "./first-party-mcp";
+
+// Credential vault + environments (Spec: 2026-06-24-credential-vault-…).
+export {
+  upsertSecretKey,
+  listSecretKeys,
+  deleteSecretKey,
+  setSecretValue,
+  unsetSecretValue,
+  importEnv,
+  revealSecret,
+  exportSecrets,
+  resolveEnvironmentSecrets,
+} from "./vault/vault-secret-service";
+export type {
+  VaultActor,
+  SecretKeySummary,
+  RevealResult,
+  ExportResult,
+  ImportEnvResult,
+  ImportPreviewRow,
+  ResolvedSource,
+} from "./vault/vault-secret-service";
+export { resolveVaultKms, WORKSPACE_VAULT_KEY_ID, VaultLockedError } from "./vault/vault-kms";
+export { parseEnvText, isValidSecretKeyName, SECRET_KEY_PATTERN } from "./vault/env-parse";
+export type { ParsedEnvEntry } from "./vault/env-parse";
+export {
+  createEnvironment,
+  listEnvironments,
+  getEnvironment,
+  updateEnvironment,
+  deleteEnvironment,
+  setDefaultEnvironment,
+  isValidEnvironmentSlug,
+  ENVIRONMENT_SLUG_PATTERN,
+} from "./environments/environment-service";
+export type { EnvironmentActor, EnvironmentSummary } from "./environments/environment-service";
