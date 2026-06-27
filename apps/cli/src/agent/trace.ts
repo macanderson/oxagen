@@ -64,6 +64,18 @@ export interface PromptEvaluation {
   usage: UsageTotals;
 }
 
+/** Which candidates the enhancer mined and which actually resolved. */
+export interface ContextRetrieval {
+  /** Symbol-like candidates queried against the code graph. */
+  symbolsQueried: string[];
+  /** File-path candidates queried against the code graph. */
+  pathsQueried: string[];
+  /** Candidates that resolved to something real. */
+  resolved: string[];
+  /** Candidates that resolved to nothing (no code-graph hit). */
+  unresolved: string[];
+}
+
 /** What the enhancer added to the prompt before handing it to the executor. */
 export interface EnhancementTrace {
   /** The final prompt handed to the executor (refined + injected context). */
@@ -76,6 +88,46 @@ export interface EnhancementTrace {
   lessonCount: number;
   /** Where the injected context came from. */
   source: "none" | "code-graph" | "memory" | "code-graph+memory";
+  /** Epoch ms the context-gathering started (verbose turns). */
+  startedAt?: number;
+  /** Epoch ms the context-gathering finished (verbose turns). */
+  finishedAt?: number;
+  /** Wall-clock ms spent gathering + injecting context. */
+  durationMs?: number;
+  /** Per-candidate retrieval breakdown (verbose turns). */
+  retrieval?: ContextRetrieval;
+}
+
+/**
+ * Timing + model + cost for one pipeline phase — the headline of verbose mode.
+ * One per phase occurrence (so each execute/judge revision round gets its own).
+ */
+export interface PhaseStat {
+  /** Which phase: evaluate | enhance | route | execute | judge. */
+  phase: StageKind;
+  /** Round index for repeated phases (execute/judge); 0 for single-shot phases. */
+  round: number;
+  startedAt: number;
+  finishedAt: number;
+  durationMs: number;
+  /** The model that did this phase's work (absent for non-LLM phases). */
+  model?: string;
+  /** Tokens + dollar cost attributable to this phase (zero for non-LLM phases). */
+  usage: UsageTotals;
+}
+
+/** One tool invocation: what was called, with what, what came back, how long. */
+export interface ToolEvent {
+  name: string;
+  /** Tool input, JSON-stringified and truncated. */
+  input: string;
+  /** Tool result, JSON-stringified and truncated (verbose turns). */
+  result?: string;
+  startedAt: number;
+  finishedAt: number;
+  durationMs: number;
+  /** False when the tool reported an error. */
+  ok: boolean;
 }
 
 /** The advisor judge's verdict on whether the agent's work is actually done. */
@@ -130,4 +182,14 @@ export interface TurnTrace {
   /** Token + cost totals across evaluator + executor + judge calls. */
   usage: UsageTotals;
   durationMs: number;
+  /**
+   * Per-phase timing + model + token/cost breakdown. Present on verbose turns;
+   * lets you see exactly which model spent which dollars on which phase (enhance
+   * vs work vs review) and how long each took. Optional for backward-compat.
+   */
+  phases?: PhaseStat[];
+  /** Every tool call + result with timing (verbose turns). */
+  toolEvents?: ToolEvent[];
+  /** True when this turn was captured in verbose mode. */
+  verbose?: boolean;
 }

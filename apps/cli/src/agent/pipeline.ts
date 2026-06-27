@@ -40,8 +40,10 @@ import type { FleetMemory } from "./fleet/memory.js";
 import type {
   EnhancementTrace,
   JudgeVerdict,
+  PhaseStat,
   PromptEvaluation,
   StageEvent,
+  ToolEvent,
   TurnTrace,
 } from "./trace.js";
 
@@ -86,6 +88,11 @@ export interface RunTurnOptions {
   maxReviseRounds?: number;
   /** Skip the eval/enhance/judge pipeline and run the bare agent. */
   bare?: boolean;
+  /**
+   * Capture full per-phase telemetry (timing, per-model token/cost breakdown,
+   * tool calls + results, the injected context) onto the trace, for `/verbose`.
+   */
+  verbose?: boolean;
   /** Abort the turn (e.g. user hit Ctrl-C / Esc). */
   signal?: AbortSignal;
   /** Live stage events for the UI. */
@@ -140,16 +147,22 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     collectActivity(name, input, filesTouched, commandsRun);
     opts.onToolCall?.(name, input);
   };
+  // Verbose telemetry accumulators (left empty/undefined when verbose is off).
+  const phases: PhaseStat[] = [];
+  const toolEvents: ToolEvent[] = [];
+  const onToolEvent = opts.verbose ? (e: ToolEvent): void => void toolEvents.push(e) : undefined;
 
   // ── Bare mode: skip the pipeline, run the agent directly. ──
   if (opts.bare) {
-    return runBare(opts, cwd, startedAt, filesTouched, commandsRun, onToolCall);
+    return runBare(opts, cwd, startedAt, filesTouched, commandsRun, onToolCall, onToolEvent, toolEvents);
   }
 
   let usage = emptyUsage();
 
   // ── 1. EVALUATE ──
+  const evalStart = Date.now();
   const evaluation = await evaluatePrompt({ prompt: opts.prompt, signal: opts.signal });
+  phases.push(phaseStat("evaluate", 0, evalStart, evaluation.model, evaluation.usage));
   usage = mergeUsage(usage, evaluation.usage);
   opts.onStage?.({
     kind: "evaluate",
@@ -158,18 +171,24 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   });
 
   // ── 2. ENHANCE ──
+  const enhanceStart = Date.now();
   const enhanced = await enhancePrompt({
     prompt: evaluation.refinedPrompt,
     cwd,
     memory: opts.fleetMemory ?? null,
     extraQueries: evaluation.contextQueries,
   });
+  phases.push(phaseStat("enhance", 0, enhanceStart, undefined, emptyUsage()));
   const enhancement: EnhancementTrace = {
     prompt: enhanced.prompt,
     context: enhanced.context,
     resolved: enhanced.resolved,
     lessonCount: enhanced.lessons.length,
     source: enhancementSource(enhanced.resolved.length, enhanced.lessons.length),
+    startedAt: enhanced.startedAt,
+    finishedAt: enhanced.finishedAt,
+    durationMs: enhanced.durationMs,
+    retrieval: enhanced.retrieval,
   };
   opts.onStage?.({
     kind: "enhance",
@@ -180,7 +199,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   });
 
   // ── 3. ROUTE ──
+  const routeStart = Date.now();
   const routed = selectModel(opts.model, evaluation);
+  phases.push(phaseStat("route", 0, routeStart, undefined, emptyUsage()));
   opts.onStage?.({
     kind: "route",
     label: `model · ${tierLabel(routed.tier)} (${routed.model.split("/").pop()})`,
@@ -204,6 +225,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       label: round === 0 ? "executing" : `executing · revision ${round}`,
     });
 
+    const execStart = Date.now();
     const result = await runAgent({
       prompt,
       history,
@@ -216,13 +238,17 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       signal: opts.signal,
       onText: opts.onText,
       onToolCall,
+      onToolEvent,
     });
-    usage = accumulateUsage(usage, routed.model, result.usage);
+    const execUsage = accumulateUsage(emptyUsage(), routed.model, result.usage);
+    phases.push(phaseStat("execute", round, execStart, routed.model, execUsage));
+    usage = mergeUsage(usage, execUsage);
     history = result.messages;
     lastText = result.text;
     totalSteps += result.steps;
 
     // ── 5. JUDGE ──
+    const judgeStart = Date.now();
     const verdict = await judgeCompleteness({
       request: opts.prompt,
       response: result.text,
@@ -232,6 +258,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       executorModel: routed.model,
       signal: opts.signal,
     });
+    phases.push(phaseStat("judge", round, judgeStart, verdict.model, verdict.usage));
     usage = mergeUsage(usage, verdict.usage);
     judgeRounds.push(verdict);
     opts.onStage?.({
@@ -271,6 +298,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     steps: totalSteps,
     usage,
     startedAt,
+    verbose: opts.verbose,
+    phases,
+    toolEvents,
   });
   recordLesson(opts.fleetMemory, trace);
 
@@ -291,6 +321,18 @@ function mergeUsage(a: UsageTotals, b: UsageTotals): UsageTotals {
     outputTokens: a.outputTokens + b.outputTokens,
     costUsd: a.costUsd + b.costUsd,
   };
+}
+
+/** Build a {@link PhaseStat} from a start time (end is `now`) + its model/usage. */
+function phaseStat(
+  phase: PhaseStat["phase"],
+  round: number,
+  startedAt: number,
+  model: string | undefined,
+  usage: UsageTotals,
+): PhaseStat {
+  const finishedAt = Date.now();
+  return { phase, round, startedAt, finishedAt, durationMs: finishedAt - startedAt, model, usage };
 }
 
 function enhancementSource(
@@ -339,6 +381,9 @@ interface AssembleArgs {
   steps: number;
   usage: UsageTotals;
   startedAt: number;
+  verbose?: boolean;
+  phases?: PhaseStat[];
+  toolEvents?: ToolEvent[];
 }
 
 function assembleTrace(a: AssembleArgs): TurnTrace {
@@ -364,6 +409,15 @@ function assembleTrace(a: AssembleArgs): TurnTrace {
     steps: a.steps,
     usage: a.usage,
     durationMs: Date.now() - a.startedAt,
+    // Verbose telemetry — only attached when the turn ran in verbose mode, so
+    // non-verbose traces stay small. Tool events are capped to bound the file.
+    ...(a.verbose
+      ? {
+          verbose: true,
+          phases: a.phases,
+          toolEvents: (a.toolEvents ?? []).slice(-200),
+        }
+      : {}),
   };
 }
 
@@ -406,9 +460,12 @@ async function runBare(
   filesTouched: Set<string>,
   commandsRun: string[],
   onToolCall: (name: string, input: unknown) => void,
+  onToolEvent: ((e: ToolEvent) => void) | undefined,
+  toolEvents: ToolEvent[],
 ): Promise<RunTurnResult> {
   const model = opts.model ?? modelForTier("balanced");
   opts.onStage?.({ kind: "execute", label: "executing (pipeline off)" });
+  const execStart = Date.now();
   const result = await runAgent({
     prompt: opts.prompt,
     history: opts.history,
@@ -421,8 +478,10 @@ async function runBare(
     signal: opts.signal,
     onText: opts.onText,
     onToolCall,
+    onToolEvent,
   });
   const usage = accumulateUsage(emptyUsage(), model, result.usage);
+  const phases: PhaseStat[] = [phaseStat("execute", 0, execStart, model, usage)];
   const evaluation: PromptEvaluation = {
     completeness: 0,
     complexity: 0,
@@ -450,6 +509,9 @@ async function runBare(
     steps: result.steps,
     usage,
     startedAt,
+    verbose: opts.verbose,
+    phases,
+    toolEvents,
   });
   return {
     text: result.text,
