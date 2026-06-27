@@ -115,6 +115,14 @@ export class ClickHouseEpisodicStore implements EpisodicStore {
       },
     });
     this.ready = this.initialize();
+    // The constructor kicks off `CREATE TABLE` but callers only await `ready`
+    // lazily on the first read/write. If init fails (the target database does
+    // not exist, or ClickHouse is unreachable) while nothing is awaiting it, the
+    // rejection would escape as an *unhandled* promise rejection and fail the
+    // process/test run. Attach a no-op catch so that never happens — consumers
+    // still observe the failure via their own `await this.ready`. Mirrors the
+    // DuckDB adapter's guard.
+    void this.ready.catch(() => {});
   }
 
   private async initialize(): Promise<void> {
