@@ -23,6 +23,7 @@ import { accumulateUsage, routeModel } from "../model-router.js";
 import type { ProjectContext } from "../project-context.js";
 import type { FleetMemory } from "./memory.js";
 import type { PlanStore } from "./store.js";
+import type { Isolation, IntegrationResult } from "./git-isolation.js";
 import {
   emptyUsage,
   type AgentSnapshot,
@@ -58,6 +59,13 @@ export interface FleetOptions {
   runner?: AgentRunner;
   /** Read-only subagents (explain, don't edit). */
   readOnly?: boolean;
+  /**
+   * Per-task git isolation. When set, each agent runs in its own worktree and
+   * its work is checkpointed + integrated via explicit merges, so parallel
+   * agents physically cannot clobber the tree. When omitted (default), all
+   * agents share `cwd` and overlapping-file tasks are serialized instead.
+   */
+  isolation?: Isolation | null;
 }
 
 const TERMINAL = new Set(["done", "failed", "cancelled", "blocked"]);
@@ -70,6 +78,7 @@ export class Fleet extends EventEmitter {
   private readonly projectContext: ProjectContext | undefined;
   private readonly runner: AgentRunner;
   private readonly readOnly: boolean;
+  private readonly isolation: Isolation | null;
 
   private readonly tasks = new Map<string, Task>();
   private readonly snapshots = new Map<string, AgentSnapshot>();
@@ -90,6 +99,7 @@ export class Fleet extends EventEmitter {
     this.projectContext = opts.projectContext;
     this.runner = opts.runner ?? runAgent;
     this.readOnly = opts.readOnly ?? false;
+    this.isolation = opts.isolation ?? null;
   }
 
   /** Register every task in a plan (does not start it). */
@@ -209,7 +219,10 @@ export class Fleet extends EventEmitter {
       if (task.status !== "queued") continue;
       const depsDone = task.dependsOn.every((d) => this.tasks.get(d)?.status === "done");
       if (!depsDone) continue;
-      if (task.files.some((f) => lockedFiles.has(f))) continue; // would collide with a running agent
+      // With isolation, overlapping files are safe (each agent has its own
+      // worktree; collisions become merge conflicts, surfaced at integration).
+      // Without it, serialize tasks that would fight over the same file.
+      if (!this.isolation && task.files.some((f) => lockedFiles.has(f))) continue;
       return task;
     }
     return undefined;
@@ -227,7 +240,15 @@ export class Fleet extends EventEmitter {
       log = (log + s).slice(-2000);
     };
 
+    // With isolation on, the agent works in its own worktree, not the shared
+    // tree. Conflicts (if any) are surfaced after it finishes, not silently.
+    let workdir = this.cwd;
+    let conflict: IntegrationResult | null = null;
     try {
+      if (this.isolation && !this.readOnly) {
+        workdir = await this.isolation.spawn(task.id);
+      }
+
       // Enhance the task with code-graph context + lessons right before it runs.
       const enhanced = await enhancePrompt({
         prompt: task.description,
@@ -237,7 +258,7 @@ export class Fleet extends EventEmitter {
 
       const result = await this.runner({
         prompt: enhanced.prompt,
-        cwd: this.cwd,
+        cwd: workdir,
         model: task.model,
         projectContext: this.projectContext,
         readOnly: this.readOnly,
@@ -253,14 +274,29 @@ export class Fleet extends EventEmitter {
       });
 
       const usage = accumulateUsage(emptyUsage(), task.model, result.usage);
-      const summary = result.text.trim().slice(0, 280);
+      let summary = result.text.trim().slice(0, 280);
+
+      // Commit the agent's work atomically (pinned, so it can never be lost),
+      // then merge it back. A conflict is surfaced — never a corrupt tree.
+      if (this.isolation && !this.readOnly && !controller.signal.aborted) {
+        await this.isolation.checkpoint(task.id, `fleet(${task.id}): ${task.title}`);
+        conflict = await this.isolation.integrate(task.id, `fleet(${task.id}): ${task.title}`);
+        if (!conflict.ok) {
+          const files = (conflict.conflicts ?? []).join(", ");
+          summary = `⚠ integration conflict in ${conflict.conflicts?.length ?? 0} file(s): ${files}`.slice(0, 280);
+          this.emit("conflict", { taskId: task.id, ...conflict });
+        }
+      }
+
+      const aborted = "cancelled" === this.tasks.get(task.id)?.status;
       this.update(task.id, {
-        status: "cancelled" === this.tasks.get(task.id)?.status ? "cancelled" : "done",
+        status: aborted ? "cancelled" : "done",
         finishedAt: Date.now(),
         summary,
         usage,
         steps: result.steps,
         logTail: log,
+        ...(conflict && !conflict.ok ? { error: summary } : {}),
       });
       this.recordSuccess(task, summary);
     } catch (err) {
@@ -273,6 +309,12 @@ export class Fleet extends EventEmitter {
         this.recordFailure(task, message);
       }
     } finally {
+      // Tear down the worktree — but keep it on a conflict so a resolver agent
+      // or human can finish the merge in place. The pinned commits survive
+      // either way, so the agent's work is never lost.
+      if (this.isolation && !this.readOnly) {
+        await this.isolation.dispose(task.id, { keep: conflict ? !conflict.ok : false });
+      }
       this.running.delete(task.id);
       this.controllers.delete(task.id);
       this.pump();
