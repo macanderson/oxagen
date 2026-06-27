@@ -99,7 +99,7 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
     const { symbols, paths } = extractCandidates(minedFrom);
 
     // Symbol definitions — "where is X defined".
-    for (const sym of [...symSet].slice(0, max)) {
+    for (const sym of [...symbols].slice(0, max)) {
       const res = await queryCodeGraph(cwd, "search", sym, 4);
       if (isHit(res)) {
         sections.push(`Definitions of \`${sym}\`:\n${res}`);
@@ -110,7 +110,7 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
     // File context — symbols a referenced file defines, plus its dependents
     // (what a change to it could break). This is the impact-analysis the agent
     // would otherwise have to discover by hand.
-    for (const p of [...pathSet].slice(0, max)) {
+    for (const p of [...paths].slice(0, max)) {
       const syms = await queryCodeGraph(cwd, "file_symbols", p, 12);
       if (isHit(syms)) {
         sections.push(`Symbols in ${p}:\n${syms}`);
