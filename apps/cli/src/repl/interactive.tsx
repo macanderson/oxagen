@@ -3,11 +3,12 @@
  *
  * Full-screen Ink TUI with:
  *   - Scrollable conversation history (user prompts + assistant responses)
- *   - Streaming response display with tool call annotations
+ *   - A thinking indicator (spinner + elapsed time + live token estimate) and a
+ *     session token counter in the status bar
  *   - Multi-turn history, project rules, and Oxagen context-engine memory
- *   - Slash commands (/help, /model, /clear, /exit) and Ctrl-C to cancel a turn
+ *   - Slash commands (/help, /model, /clear, /exit), prompt queue, Esc/Ctrl-C cancel
  *
- * Like Claude Code, but backed by the Oxagen context engine.
+ * Presentational pieces live in ./components; this file is the container.
  */
 import { Box, Text, useApp, useInput } from "ink";
 import React, { useState, useCallback, useRef, useEffect } from "react";
@@ -17,144 +18,19 @@ import { runAgent } from "../agent/loop.js";
 import { resolveModelId } from "../agent/model.js";
 import { loadProjectContext } from "../agent/project-context.js";
 import { openSessionMemory, type SessionMemory } from "../agent/memory.js";
+import {
+  HELP,
+  MessageView,
+  PromptInput,
+  StatusLine,
+  ThinkingIndicator,
+  type Message,
+} from "./components.js";
 import pkg from "../../package.json" with { type: "json" };
 
 export interface ReplOptions {
   model?: string;
   readOnly?: boolean;
-}
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface Message {
-  role: "user" | "assistant" | "tool";
-  content: string;
-  timestamp: number;
-  toolName?: string;
-  streaming?: boolean;
-}
-
-const HELP = [
-  "Slash commands:",
-  "  /help          show this help",
-  "  /model [slug]  show or set the gateway model",
-  "  /clear         reset the conversation",
-  "  /exit, /quit   quit",
-  "Ctrl-C           cancel the current turn (or quit when idle)",
-].join("\n");
-
-// ── Prompt Input ──────────────────────────────────────────────────────────────
-
-function PromptInput({
-  onSubmit,
-  busy,
-}: {
-  onSubmit: (text: string) => void;
-  /** A turn is in flight. The input stays live — submissions queue (Claude
-   *  Code-style) instead of being blocked — but the glyph shows the busy state. */
-  busy: boolean;
-}): React.ReactElement {
-  const [value, setValue] = useState("");
-
-  useInput((input, key) => {
-    if (key.return && !key.shift) {
-      if (value.trim()) {
-        onSubmit(value.trim());
-        setValue("");
-      }
-      return;
-    }
-    if (key.backspace || key.delete) {
-      setValue((v) => v.slice(0, -1));
-      return;
-    }
-    if (input && !key.ctrl && !key.meta) {
-      setValue((v) => v + input);
-    }
-  });
-
-  return (
-    <Box
-      borderStyle="round"
-      borderColor={busy ? "#FBBF24" : theme.cyan}
-      paddingX={1}
-    >
-      <Text color={busy ? "#FBBF24" : theme.cyan} bold>
-        {busy ? "⧗ " : "❯ "}
-      </Text>
-      <Text>
-        {value}
-        <Text color={theme.cyan}>█</Text>
-      </Text>
-    </Box>
-  );
-}
-
-// ── Message Display ───────────────────────────────────────────────────────────
-
-function MessageView({ msg }: { msg: Message }): React.ReactElement {
-  if (msg.role === "user") {
-    return (
-      <Box paddingX={1} marginY={0}>
-        <Text color={theme.cyan} bold>
-          {"❯ "}
-        </Text>
-        <Text bold>{msg.content}</Text>
-      </Box>
-    );
-  }
-
-  if (msg.role === "tool") {
-    return (
-      <Box paddingX={1} marginY={0}>
-        <Text color="#FBBF24">{"  ⚡ "}</Text>
-        <Text dimColor>{msg.toolName ?? "tool"}</Text>
-        <Text dimColor>{" → "}</Text>
-        <Text wrap="truncate">{msg.content}</Text>
-      </Box>
-    );
-  }
-
-  // assistant
-  return (
-    <Box paddingX={1} marginY={0} flexDirection="column">
-      <Text>
-        {msg.content}
-        {msg.streaming && <Text color={theme.cyan}>▊</Text>}
-      </Text>
-    </Box>
-  );
-}
-
-// ── Status Bar ────────────────────────────────────────────────────────────────
-
-function StatusLine({
-  model,
-  readOnly,
-  turns,
-}: {
-  model: string;
-  readOnly: boolean;
-  turns: number;
-}): React.ReactElement {
-  return (
-    <Box paddingX={1} justifyContent="space-between">
-      <Box gap={2}>
-        <Text dimColor>
-          model:<Text color={theme.cyan}>{model.split("/").pop()}</Text>
-        </Text>
-        <Text dimColor>
-          turns:<Text color="#34D399">{turns}</Text>
-        </Text>
-        {readOnly && <Text color="#FBBF24">read-only</Text>}
-      </Box>
-      <Box gap={2}>
-        <Text dimColor>/help</Text>
-        <Text dimColor>/clear</Text>
-        <Text dimColor>ctrl+c</Text>
-      </Box>
-    </Box>
-  );
 }
 
 // ── Main App ──────────────────────────────────────────────────────────────────
@@ -176,6 +52,15 @@ export function ReplApp({
   const [isStreaming, setIsStreaming] = useState(false);
   const [model, setModel] = useState<string>(resolveModelId(options.model));
   const [turns, setTurns] = useState(0);
+  // Cumulative session token usage (exact, from the model's reported usage).
+  const [usage, setUsage] = useState<{ input: number; output: number }>({
+    input: 0,
+    output: 0,
+  });
+  // When the active turn began (drives the thinking indicator); null when idle.
+  const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
+  // Output chars streamed this turn, for the live token estimate in the indicator.
+  const streamCharsRef = useRef(0);
   // Prompts submitted while a turn is in flight wait here and run FIFO when the
   // current turn finishes (Claude Code-style prompt queue). `queued` drives the
   // visible list; `queueRef` is the synchronous source of truth the pump reads.
@@ -224,13 +109,21 @@ export function ReplApp({
     [commit],
   );
 
+  const cancelTurn = useCallback(() => {
+    // Cancel the in-flight turn and drop anything queued behind it.
+    queueRef.current = [];
+    setQueued([]);
+    abortRef.current?.abort();
+  }, []);
+
   useInput((input, key) => {
+    if (key.escape) {
+      if (streamingRef.current) cancelTurn();
+      return;
+    }
     if (key.ctrl && input === "c") {
       if (streamingRef.current && abortRef.current) {
-        // Cancel the in-flight turn and drop anything queued behind it.
-        queueRef.current = [];
-        setQueued([]);
-        abortRef.current.abort();
+        cancelTurn();
       } else {
         void memoryRef.current?.close();
         exit();
@@ -276,6 +169,8 @@ export function ReplApp({
       commit(base);
       setIsStreaming(true);
       streamingRef.current = true;
+      setTurnStartedAt(Date.now());
+      streamCharsRef.current = 0;
       const controller = new AbortController();
       abortRef.current = controller;
 
@@ -305,6 +200,7 @@ export function ReplApp({
             render();
           },
           onText: (delta) => {
+            streamCharsRef.current += delta.length;
             if (!assistantOpen) {
               turn.push({
                 role: "assistant",
@@ -333,6 +229,10 @@ export function ReplApp({
         render();
         historyRef.current = result.messages;
         setTurns((n) => n + 1);
+        setUsage((u) => ({
+          input: u.input + (result.usage.inputTokens ?? 0),
+          output: u.output + (result.usage.outputTokens ?? 0),
+        }));
       } catch (err) {
         const cancelled = controller.signal.aborted;
         turn.push({
@@ -347,6 +247,7 @@ export function ReplApp({
         abortRef.current = null;
         streamingRef.current = false;
         setIsStreaming(false);
+        setTurnStartedAt(null);
       }
     },
     [exit, commit, pushAssistant, cwd, options.readOnly],
@@ -434,11 +335,21 @@ export function ReplApp({
         </Box>
       )}
 
+      {/* Thinking indicator — visible only while a turn is in flight */}
+      {isStreaming && turnStartedAt !== null && (
+        <ThinkingIndicator
+          startedAt={turnStartedAt}
+          getTokens={() => Math.round(streamCharsRef.current / 4)}
+        />
+      )}
+
       {/* Status line */}
       <StatusLine
         model={model}
         readOnly={options.readOnly ?? false}
         turns={turns}
+        inputTokens={usage.input}
+        outputTokens={usage.output}
       />
 
       {/* Input — stays live during a turn; submissions queue instead of blocking */}
