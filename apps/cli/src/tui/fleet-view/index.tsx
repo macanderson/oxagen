@@ -14,6 +14,7 @@ import { Fleet } from "../../agent/fleet/orchestrator.js";
 import { planTasks } from "../../agent/planner.js";
 import { openFleetMemory } from "../../agent/fleet/memory.js";
 import { openPlanStore } from "../../agent/fleet/store.js";
+import { WorktreeManager } from "../../agent/fleet/git-isolation.js";
 import { loadProjectContext } from "../../agent/project-context.js";
 import { FleetApp } from "./fleet-app.js";
 import type { Plan } from "../../agent/fleet/types.js";
@@ -26,6 +27,11 @@ export interface FleetViewOptions {
   concurrency?: number;
   /** Read-only subagents: explain, don't edit. */
   readOnly?: boolean;
+  /**
+   * Run each agent in its own git worktree (commits pinned, work merged back),
+   * so parallel agents can't clobber the tree. Requires `cwd` to be a git repo.
+   */
+  isolate?: boolean;
 }
 
 export async function launchFleetView(opts: FleetViewOptions): Promise<void> {
@@ -35,6 +41,14 @@ export async function launchFleetView(opts: FleetViewOptions): Promise<void> {
   const memory = openFleetMemory(cwd);
   const store = openPlanStore(cwd);
 
+  // Per-agent git isolation is opt-in. Each run gets its own ref/branch
+  // namespace so concurrent runs never collide. Read-only fleets never write,
+  // so isolation is moot there.
+  const isolation =
+    opts.isolate && !opts.readOnly
+      ? new WorktreeManager({ repoRoot: cwd, namespace: `session-${Date.now()}` })
+      : null;
+
   const fleet = new Fleet({
     cwd,
     concurrency: opts.concurrency,
@@ -42,6 +56,7 @@ export async function launchFleetView(opts: FleetViewOptions): Promise<void> {
     store,
     projectContext,
     readOnly: opts.readOnly,
+    isolation,
   });
 
   // Stable, closed-over planner so the goal is decomposed — and persisted to the
@@ -61,4 +76,8 @@ export async function launchFleetView(opts: FleetViewOptions): Promise<void> {
     { exitOnCtrlC: false },
   );
   await waitUntilExit();
+
+  // Tear down worktrees on exit. The refs/oxagen/agents pins are kept, so every
+  // committed change remains recoverable by hash even after cleanup.
+  if (isolation) await isolation.cleanupAll();
 }

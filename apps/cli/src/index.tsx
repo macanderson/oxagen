@@ -92,15 +92,23 @@ program
     "Read-only agents: read/search/explain only — no file edits or commands",
     false,
   )
-  .action(async (goal: string[], opts: { concurrency: number; readonly: boolean }) => {
-    const { launchFleetView } = await import("./tui/fleet-view/index.js");
-    await launchFleetView({
-      cwd: process.cwd(),
-      goal: goal.join(" ").trim() || undefined,
-      concurrency: opts.concurrency,
-      readOnly: opts.readonly,
-    });
-  });
+  .option(
+    "--isolate",
+    "Run each agent in its own git worktree; commit + merge work back (no clobbering)",
+    false,
+  )
+  .action(
+    async (goal: string[], opts: { concurrency: number; readonly: boolean; isolate: boolean }) => {
+      const { launchFleetView } = await import("./tui/fleet-view/index.js");
+      await launchFleetView({
+        cwd: process.cwd(),
+        goal: goal.join(" ").trim() || undefined,
+        concurrency: opts.concurrency,
+        readOnly: opts.readonly,
+        isolate: opts.isolate,
+      });
+    },
+  );
 
 // ── daemon: context daemon lifecycle ──────────────────────────────────────────
 
