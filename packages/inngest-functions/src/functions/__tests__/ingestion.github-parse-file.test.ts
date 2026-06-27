@@ -277,7 +277,15 @@ describe("ingestion.github-parse-file Inngest function", () => {
       }),
     );
 
-    const [text] = mocks.embedText.mock.calls[0] as [string, unknown];
+    // The file-level embed input carries the language + symbol names; the
+    // per-chunk embeds (added with :SourceChunk full-body search) carry raw file
+    // content and run first, so locate the file embed explicitly by its language
+    // token rather than assuming it is the first embedText call.
+    const fileEmbedCall = mocks.embedText.mock.calls.find(
+      (c: unknown[]) => typeof c[0] === "string" && (c[0] as string).includes("typescript"),
+    );
+    expect(fileEmbedCall).toBeDefined();
+    const [text] = fileEmbedCall as [string, unknown];
     expect(text).toContain("typescript");
     expect(text).toContain("login");
     expect(text).toContain("AuthService");
