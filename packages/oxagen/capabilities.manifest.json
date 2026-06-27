@@ -295,6 +295,42 @@
       }
     },
     {
+      "name": "agent.memory.policy.read",
+      "file": "agent.memory.policy.read.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.memory.policy.write",
+      "file": "agent.memory.policy.write.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "agent.memory.recall",
       "file": "agent.memory.recall.ts",
       "domain": "agent",
