@@ -1,7 +1,7 @@
-# Cortex + Engram — Spec for a faster agentic CLI and its context/memory engine
+# Oxagen CLI + Context Engine — design for the agentic coding CLI and its knowledge-graph context engine
 
 > A clean-sheet design for (1) a command-line agent in the spirit of Claude Code but
-> faster and more reproducible, and (2) **Engram** — the context/state/memory engine that
+> faster and more reproducible, and (2) **Oxagen Context Engine** — the context/state/memory engine that
 > powers it, designed to run *identically* on a resource-constrained robot and in a
 > multi-tenant cloud, and to be the shared brain for complex multi-agent workflows.
 
@@ -18,14 +18,14 @@ of the engine is, every single turn, to *compile* the best possible window from 
 is orders of magnitude larger than the window — with microsecond-to-low-millisecond latency on
 the read path, and to do the *writing/learning* asynchronously off the critical path.
 
-So Engram is two cooperating machines:
+So Oxagen Context Engine is two cooperating machines:
 
 1. **A memory substrate** — append-only, content-addressed, tiered, locally-embeddable,
    conflict-free under concurrent multi-agent and offline writes.
 2. **A context compiler** — a cost-based query planner that assembles a prompt-cache-aligned,
    token-budgeted window each turn, and ships only the *delta* from the previous turn.
 
-The CLI (**Cortex**) is a thin, deterministic harness around that engine.
+The CLI (**Oxagen CLI**) is a thin, deterministic harness around that engine.
 
 ---
 
@@ -37,7 +37,7 @@ Keep (these are genuinely good):
 - Subagents for context isolation.
 - A tight tool loop with bash/edit/grep/glob and a permission model.
 
-Where it leaves speed and quality on the table — and what Engram/Cortex fix:
+Where it leaves speed and quality on the table — and what Oxagen Context Engine/Oxagen CLI fix:
 
 | Limitation today | Cost | Fix |
 |---|---|---|
@@ -57,8 +57,8 @@ Where it leaves speed and quality on the table — and what Engram/Cortex fix:
 
 ```
                          ┌─────────────────────────────────────────────┐
-   cortex CLI / TUI ─────┤                                             │
-   editor plugin    ─────┤            ENGRAM ENGINE (daemon/lib)       │
+   oxagen CLI / TUI ─────┤                                             │
+   editor plugin    ─────┤            OXAGEN CONTEXT ENGINE (daemon/lib)       │
    MCP server       ─────┤                                             │
    subagents        ─────┤   ┌──────────────┐    ┌──────────────────┐  │
    robot runtime    ─────┤   │   Context    │    │   Memory         │  │
@@ -78,13 +78,13 @@ Where it leaves speed and quality on the table — and what Engram/Cortex fix:
                           (hot + warm tiers)         (cold + sync hub)
 ```
 
-**Engram** is one library with two deployment profiles (§7): an embeddable in-process build
+**Oxagen Context Engine** is one library with two deployment profiles (§7): an embeddable in-process build
 for robots/edge, and a sharded service build for the cloud. Same data model, same query
-language, same record format. **Cortex** is the agent harness that uses it.
+language, same record format. **Oxagen CLI** is the agent harness that uses it.
 
 ---
 
-## 3. Engram: the memory substrate
+## 3. Oxagen Context Engine: the memory substrate
 
 ### 3.1 Memory taxonomy (cognitive architecture, engineered)
 
@@ -188,7 +188,7 @@ Many agents (and offline robots) write concurrently. You cannot take locks on th
 
 ---
 
-## 4. Engram: the context compiler (the read path — this is the speed)
+## 4. Oxagen Context Engine: the context compiler (the read path — this is the speed)
 
 Every turn, `compile(task_frame, budget) → ContextWindow`. Target: **p50 < 5 ms, p99 < 25 ms**
 on the warm tier for a project-scale corpus (excluding the model call itself).
@@ -222,7 +222,7 @@ Hot, directly-relevant items go **verbatim**; cold/supporting items go **compres
 Lay the window out so the **prefix is byte-stable across turns**: `[system] [procedural rules]
 [stable project facts] [code-graph skeleton] … [volatile: retrieved task context] [working
 memory]`. Stable prefix → provider **prompt-cache hits** → big latency + cost reduction. Most
-tools destroy cache by reordering context every turn; Engram treats cache alignment as a
+tools destroy cache by reordering context every turn; Oxagen Context Engine treats cache alignment as a
 first-class layout constraint and only mutates the tail.
 
 ### 4.5 Differential context (send patches, not the window)
@@ -240,7 +240,7 @@ By the time the next tool call lands, the context is already resident.
 
 ---
 
-## 5. Engram: the write path, salience, decay, consolidation
+## 5. Oxagen Context Engine: the write path, salience, decay, consolidation
 
 The write path must be **cheap and non-blocking**. Agents emit episodic events; everything else
 is derived asynchronously.
@@ -333,11 +333,11 @@ The differentiator: **one engine, two builds, identical data model and query lan
 
 ---
 
-## 8. Cortex: the CLI harness (improving on Claude Code)
+## 8. Oxagen CLI: the CLI harness (improving on Claude Code)
 
-Thin, deterministic, fast. The intelligence lives in Engram.
+Thin, deterministic, fast. The intelligence lives in Oxagen Context Engine.
 
-1. **Context daemon** — Engram runs as a persistent local service (or in-proc lib). CLI, editor,
+1. **Context daemon** — Oxagen Context Engine runs as a persistent local service (or in-proc lib). CLI, editor,
    MCP, and subagents share one warm index and code graph. No per-session cold rebuild.
 2. **Incremental code graph** — tree-sitter + LSP + symbol graph + embeddings, maintained on
    **file-watch**, not per-session. "Where is X used" is a graph query, not a grep sweep.
@@ -365,20 +365,20 @@ A small, stable API; the cleverness is server-side.
 
 ```
 # Write (cheap, non-blocking)
-engram.remember(event)                       -> id          # append episodic
-engram.assert(fact, confidence, provenance)  -> id          # semantic
-engram.relate(src, edge, dst)                -> id          # graph edge
-engram.pin(rule) / engram.unpin(id)                         # procedural
+context.remember(event)                       -> id          # append episodic
+context.assert(fact, confidence, provenance)  -> id          # semantic
+context.relate(src, edge, dst)                -> id          # graph edge
+context.pin(rule) / context.unpin(id)                         # procedural
 
 # Read (the compiler)
-engram.compile(task_frame, budget)           -> ContextWindow   # the per-turn money call
-engram.query(cxl)                            -> records          # ad-hoc retrieval
-engram.recall(handle)                        -> original         # page a summary back in
+context.compile(task_frame, budget)           -> ContextWindow   # the per-turn money call
+context.query(cxl)                            -> records          # ad-hoc retrieval
+context.recall(handle)                        -> original         # page a summary back in
 
 # Session / multi-agent
-engram.fork(session) / engram.replay(session, at)
-engram.namespace(scope) ; engram.subscribe(pattern) ; engram.lease(resource)
-engram.sync(peer)                                            # Merkle anti-entropy
+context.fork(session) / context.replay(session, at)
+context.namespace(scope) ; context.subscribe(pattern) ; context.lease(resource)
+context.sync(peer)                                            # Merkle anti-entropy
 ```
 
 **CXL** (a SQL/GraphQL-ish query for *context assembly*, not just rows) so retrieval policy is
@@ -454,7 +454,7 @@ Python/TS/C++ for robot runtimes).
 - Blob: local FS / object store (S3-compatible)
 - Embeddings: small on-device model at edge; batched in cloud
 
-**Cortex CLI**: TypeScript (Ink TUI) or Rust; talks to Engram over a local socket or in-proc.
+**Oxagen CLI CLI**: TypeScript (Ink TUI) or Rust; talks to Oxagen Context Engine over a local socket or in-proc.
 Provider-agnostic model gateway with cache-aware prompt assembly.
 
 ---
@@ -464,7 +464,7 @@ Provider-agnostic model gateway with cache-aware prompt assembly.
 1. **Episodic core + content addressing** — append-only DAG, dedup, replay. (The substrate.)
 2. **Indexes + `compile()` v1** — hybrid retrieval, knapsack pack, cache-aware layout. (The win.)
 3. **Differential context + prompt-cache alignment.** (The latency/cost cliff.)
-4. **Code graph + structured tools** in Cortex. (Coding-agent quality.)
+4. **Code graph + structured tools** in Oxagen CLI. (Coding-agent quality.)
 5. **Consolidation job** — salience, decay, reinforcement, episodic→semantic. (Gets smarter.)
 6. **Multi-agent blackboard** — namespaces, lineage, conflict resolution, intent ledger.
 7. **Edge profile** — quantization, ring buffer, offline CRDT sync. (Robots.)
@@ -478,7 +478,7 @@ Ship 1–4 and you already beat the status quo on speed and recall; 5–9 are th
 ## 15. Why this is faster — the one-paragraph argument
 
 Speed comes from doing less work on the hot path and never paying for the same context twice.
-Engram keeps a **warm, persistent index** (no cold rebuild), answers retrieval **locally**
+Oxagen Context Engine keeps a **warm, persistent index** (no cold rebuild), answers retrieval **locally**
 (no network hop), packs by **value-per-token** instead of top-k (smaller windows), lays out
 prompts **cache-stable** (provider cache hits), and sends **only the delta** each turn (flat
 cost over long sessions) — while all the expensive learning (consolidation, re-embedding,

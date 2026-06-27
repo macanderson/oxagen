@@ -397,6 +397,9 @@ importers:
       '@oxagen/engram':
         specifier: workspace:*
         version: link:../../packages/engram
+      ai:
+        specifier: 6.0.197
+        version: 6.0.197(zod@3.25.76)
       commander:
         specifier: 12.1.0
         version: 12.1.0
@@ -406,6 +409,9 @@ importers:
       react:
         specifier: 19.2.6
         version: 19.2.6
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: 25.9.1

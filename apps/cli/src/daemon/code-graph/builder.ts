@@ -72,7 +72,7 @@ async function processFile(filePath: string, root: string, graph: CodeGraph): Pr
     }
 
     // Extract imports
-    const imports = extractImports(content, relativePath, language);
+    const imports = extractImports(content, relativePath, root);
     graph.edges.push(...imports);
   } catch {
     // Skip files that can't be read
@@ -135,23 +135,68 @@ function extractSymbols(content: string, filePath: string, language: string): Co
   return symbols;
 }
 
+/** Extensions tried (in order) when resolving an import specifier to a file. */
+const RESOLVE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
+
 /**
- * Extract import edges from file content.
+ * Resolve a *relative* import specifier to the workspace-relative path of the
+ * file it actually points to, so the resulting edge targets the same node id
+ * the file node was created with (`computeNodeId(relPath, basename, "file")`).
+ *
+ * Handles the TS-ESM convention where the specifier carries a `.js` extension
+ * that maps to a `.ts`/`.tsx` source, extensionless specifiers, and directory
+ * imports resolving to `index.*`. Returns null when nothing resolves on disk
+ * (e.g. a type-only path, or a target outside the walked tree). Bare and
+ * workspace-aliased specifiers (`react`, `@oxagen/*`) are not resolved here —
+ * they need a package/path map and would otherwise produce phantom edges.
  */
-function extractImports(content: string, filePath: string, _language: string): CodeEdge[] {
+function resolveRelativeImport(
+  spec: string,
+  importerRelPath: string,
+  root: string,
+): string | null {
+  const baseAbs = path.resolve(root, path.dirname(importerRelPath), spec);
+  const ext = path.extname(baseAbs);
+  const stem = ext ? baseAbs.slice(0, -ext.length) : baseAbs;
+
+  const candidates: string[] = [];
+  if (ext && SUPPORTED_EXTENSIONS.has(ext)) candidates.push(baseAbs); // already a source file
+  for (const e of RESOLVE_EXTENSIONS) candidates.push(stem + e); // ".js" spec → ".ts" source, or extensionless
+  for (const e of RESOLVE_EXTENSIONS) candidates.push(path.join(baseAbs, "index" + e)); // directory import
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.statSync(candidate).isFile()) return path.relative(root, candidate);
+    } catch {
+      // not this candidate
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract import edges from file content, resolving each relative specifier to
+ * the real target file node so the dependency graph is queryable
+ * (imports / dependents / impact analysis).
+ */
+function extractImports(content: string, filePath: string, root: string): CodeEdge[] {
   const edges: CodeEdge[] = [];
   const fileId = computeNodeId(filePath, path.basename(filePath), "file");
+  const seen = new Set<string>();
 
-  // Match import statements
-  const importRegex = /import\s+.*?from\s+["']([^"']+)["']/g;
+  // `import … from "x"`, `export … from "x"`, and side-effect `import "x"`.
+  const importRegex =
+    /(?:import|export)\s+(?:[^"';]*?\s+from\s+)?["']([^"']+)["']/g;
   let match;
   while ((match = importRegex.exec(content)) !== null) {
-    const importPath = match[1]!;
-    // Only track relative imports (skip node_modules)
-    if (importPath.startsWith(".") || importPath.startsWith("@")) {
-      const targetId = computeNodeId(importPath, path.basename(importPath), "file");
-      edges.push({ source: fileId, target: targetId, type: "imports" });
-    }
+    const spec = match[1]!;
+    if (!spec.startsWith(".")) continue; // only relative imports are resolvable here
+    const targetRel = resolveRelativeImport(spec, filePath, root);
+    if (!targetRel) continue;
+    const targetId = computeNodeId(targetRel, path.basename(targetRel), "file");
+    if (targetId === fileId || seen.has(targetId)) continue;
+    seen.add(targetId);
+    edges.push({ source: fileId, target: targetId, type: "imports" });
   }
 
   return edges;

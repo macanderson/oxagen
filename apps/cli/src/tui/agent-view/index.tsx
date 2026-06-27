@@ -1,10 +1,10 @@
 /**
- * Agent View — full-screen TUI dashboard showing the Engram engine in
+ * Agent View — full-screen TUI dashboard showing the Oxagen context engine in
  * real-time. Shows memory writes, context compilation, session state,
  * token budgets, and code graph activity.
  *
  * Inspired by mission-control-style developer dashboards.
- * Launch with: `oxagen agent view` or `cortex view`
+ * Launch with: `oxagen view`
  */
 import { Box, Text, render } from "ink";
 import React, { useState, useEffect } from "react";
@@ -30,7 +30,7 @@ export function AgentView(): React.ReactElement {
       {/* Header */}
       <Box marginBottom={1}>
         <Text color={theme.cyan} bold>{theme.ring} </Text>
-        <Text color={theme.violet} bold>CORTEX</Text>
+        <Text color={theme.violet} bold>OXAGEN</Text>
         <Text dimColor>  ·  agent memory engine  ·  </Text>
         <Text color={theme.cyan}>live</Text>
       </Box>
