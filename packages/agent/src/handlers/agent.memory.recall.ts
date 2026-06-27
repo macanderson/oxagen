@@ -36,7 +36,7 @@ export async function agentMemoryRecallHandler(
     const confidenceBefore = m.confidence;
     const confidenceAfter = Math.min(confidenceBefore + 0.05, 1.0);
 
-    void reinforceMemory({ memoryId: m.id, reinforcementAmount: 0.05 }).catch((err) => {
+    void reinforceMemory({ memoryId: m.id, reinforcementAmount: 0.05 }).catch((err: unknown) => {
       console.warn("reinforceMemory fire-and-forget failed", err);
     });
 
@@ -50,7 +50,7 @@ export async function agentMemoryRecallHandler(
       confidence_before: confidenceBefore,
       confidence_after: confidenceAfter,
       occurred_at: occurredAt,
-    }).catch((err) => {
+    }).catch((err: unknown) => {
       console.warn("insertMemoryChange fire-and-forget failed", err);
     });
   }

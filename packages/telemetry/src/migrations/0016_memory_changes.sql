@@ -1,4 +1,4 @@
--- 0015_memory_changes.sql
+-- 0016_memory_changes.sql
 --
 -- Creates the memory_changes table for auditable memory weight/decay events.
 -- One row per memory confidence change (reinforced, decayed, manually_promoted,
