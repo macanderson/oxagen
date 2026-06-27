@@ -157,46 +157,6 @@ program
     await handleConfig(key, value);
   });
 
-// ── code: sandboxed code utilities (diff, patch, format) ──────────────────────
-
-const code = program
-  .command("code")
-  .description("Sandboxed code utilities — diff, patch, and format");
-code
-  .command("diff")
-  .description("Produce a unified diff between two files")
-  .argument("<before>", "Original file")
-  .argument("<after>", "New file")
-  .option("--path <p>", "Path label used in the diff headers")
-  .option("--context <n>", "Context lines around each hunk (default 3)")
-  .action(async (before: string, after: string, opts: { path?: string; context?: string }) => {
-    const { handleCodeDiff } = await import("./commands/code.js");
-    await handleCodeDiff(before, after, opts);
-  });
-code
-  .command("patch")
-  .description("Apply a unified diff to files in a directory")
-  .argument("<diffFile>", "Path to a unified diff file")
-  .option("--dir <dir>", "Workspace directory the diff applies to (default '.')")
-  .option("--write", "Write changes to disk (default: dry run)", false)
-  .action(async (diffFile: string, opts: { dir?: string; write?: boolean }) => {
-    const { handleCodePatch } = await import("./commands/code.js");
-    await handleCodePatch(diffFile, opts);
-  });
-code
-  .command("format")
-  .description("Format a source file (json or python) inside the sandbox")
-  .argument("<file>", "File to format")
-  .option("--language <l>", "Language (json|python); inferred from the extension if omitted")
-  .option("--indent <n>", "Indent width in spaces (json only)")
-  .option("--write", "Write the formatted result back to the file", false)
-  .action(
-    async (file: string, opts: { language?: string; indent?: string; write?: boolean }) => {
-      const { handleCodeFormat } = await import("./commands/code.js");
-      await handleCodeFormat(file, opts);
-    },
-  );
-
 // ── env: workspace environments ───────────────────────────────────────────────
 
 const env = program.command("env").description("Manage workspace environments");
