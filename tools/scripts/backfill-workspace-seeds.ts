@@ -46,6 +46,7 @@ import { db, closeDatabase, schema } from "@oxagen/database";
 import { seedWorkspaceDefaultRegistrySystem } from "@oxagen/handlers/workspace-registry-seed";
 import { seedWorkspaceDefaultCapabilitiesSystem } from "@oxagen/handlers/workspace-capability-seed";
 import { seedWorkspaceDefaultSkillsSystem } from "@oxagen/handlers/skill-workspace-seed";
+import { seedWorkspaceDefaultEnvironmentSystem } from "@oxagen/handlers/workspace-environment-seed";
 
 // ── CLI flags ─────────────────────────────────────────────────────────────────
 
@@ -175,6 +176,12 @@ async function main(): Promise<void> {
 
       // 2c. Default builtin skills
       const skillResult = await seedWorkspaceDefaultSkillsSystem({
+        orgId: ws.orgId,
+        workspaceId: ws.id,
+      });
+
+      // 2d. Default environment (Spec §15)
+      await seedWorkspaceDefaultEnvironmentSystem({
         orgId: ws.orgId,
         workspaceId: ws.id,
       });
