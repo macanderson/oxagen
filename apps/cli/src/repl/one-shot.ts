@@ -11,13 +11,17 @@
  * loads project rules (CLAUDE.md/AGENTS.md), and records the turn into Oxagen's
  * context engine. Model calls go through the Vercel AI Gateway.
  */
-import { runAgent, MissingGatewayKeyError } from "../agent/loop.js";
+import { runTurn, MissingGatewayKeyError } from "../agent/pipeline.js";
 import { loadProjectContext } from "../agent/project-context.js";
 import { openSessionMemory } from "../agent/memory.js";
+import { openFleetMemory } from "../agent/fleet/memory.js";
+import { openTraceStore } from "../agent/trace-store.js";
 
 export interface OneShotOptions {
   readOnly?: boolean;
   model?: string;
+  /** Skip the eval/enhance/judge pipeline and run the bare agent. */
+  bare?: boolean;
 }
 
 export async function runOneShot(
@@ -27,16 +31,26 @@ export async function runOneShot(
   const cwd = process.cwd();
   const projectContext = loadProjectContext(cwd);
   const memory = await openSessionMemory(cwd, `one-shot-${Date.now()}`);
+  const fleetMemory = openFleetMemory(cwd);
+  const traceStore = openTraceStore(cwd);
 
   try {
     let streamed = false;
-    await runAgent({
+    const result = await runTurn({
       prompt,
       cwd,
       projectContext,
       readOnly: options.readOnly,
       model: options.model,
+      bare: options.bare,
       memory,
+      fleetMemory,
+      // Pipeline stage progress goes to stderr so stdout stays the clean answer.
+      onStage: (stage) => {
+        process.stderr.write(
+          `  ${stage.label}${stage.detail ? ` · ${stage.detail}` : ""}\n`,
+        );
+      },
       onText: (delta) => {
         streamed = true;
         process.stdout.write(delta);
@@ -51,6 +65,7 @@ export async function runOneShot(
         process.stderr.write(`  · ${name} ${summary}\n`);
       },
     });
+    traceStore.record(result.trace);
     if (streamed) process.stdout.write("\n");
   } catch (err) {
     if (err instanceof MissingGatewayKeyError) {

@@ -14,16 +14,19 @@ import { Box, Text, useApp, useInput } from "ink";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import type { ModelMessage } from "ai";
 import { theme } from "../tui/theme.js";
-import { runAgent } from "../agent/loop.js";
+import { runTurn } from "../agent/pipeline.js";
 import { resolveModelId } from "../agent/model.js";
 import { loadProjectContext } from "../agent/project-context.js";
 import { openSessionMemory, type SessionMemory } from "../agent/memory.js";
+import { openFleetMemory } from "../agent/fleet/memory.js";
+import { openTraceStore } from "../agent/trace-store.js";
 import {
   HELP,
   MessageView,
   PromptInput,
   StatusLine,
   ThinkingIndicator,
+  summarizeTrace,
   type Message,
 } from "./components.js";
 import pkg from "../../package.json" with { type: "json" };
@@ -68,11 +71,18 @@ export function ReplApp({
   const queueRef = useRef<string[]>([]);
   const pumpingRef = useRef(false);
 
+  // Whether the eval→enhance→judge pipeline is active (vs. the bare agent).
+  const [pipelineOn, setPipelineOn] = useState(true);
+  const bareRef = useRef(false);
+
   const cwd = process.cwd();
   // Project rules (CLAUDE.md/AGENTS.md) loaded once for the session.
   const projectContextRef = useRef(loadProjectContext(cwd));
   // Oxagen context-engine memory, opened asynchronously on mount.
   const memoryRef = useRef<SessionMemory | null>(null);
+  // Fleet memory (weighted lessons) and the per-turn trace store, both synchronous.
+  const fleetMemoryRef = useRef(openFleetMemory(cwd));
+  const traceStoreRef = useRef(openTraceStore(cwd));
   // Source-of-truth message list (the state mirror), so streaming updates can be
   // computed synchronously without racing React's batched setState.
   const allRef = useRef<Message[]>([]);
@@ -154,6 +164,48 @@ export function ReplApp({
         }
         return;
       }
+      if (text.startsWith("/replay")) {
+        const arg = text.slice("/replay".length).trim();
+        const trace = traceStoreRef.current.resolve(arg);
+        if (!trace) {
+          pushAssistant(
+            arg
+              ? `No turn matches "${arg}". Try /traces to list recent turns.`
+              : "No turns recorded yet. Run a prompt first.",
+          );
+        } else {
+          commit([
+            ...allRef.current,
+            { role: "assistant", content: "", trace, timestamp: Date.now() },
+          ]);
+        }
+        return;
+      }
+      if (text === "/traces") {
+        const traces = traceStoreRef.current.list();
+        pushAssistant(
+          traces.length === 0
+            ? "No turns recorded yet."
+            : "Recent turns (use /replay <n>):\n" +
+                traces.slice(0, 10).map((t, i) => summarizeTrace(t, i)).join("\n"),
+        );
+        return;
+      }
+      if (text.startsWith("/pipeline")) {
+        const arg = text.slice("/pipeline".length).trim().toLowerCase();
+        if (arg === "off") {
+          bareRef.current = true;
+          setPipelineOn(false);
+          pushAssistant("Pipeline OFF — running the bare agent (no eval/enhance/judge).");
+        } else if (arg === "on") {
+          bareRef.current = false;
+          setPipelineOn(true);
+          pushAssistant("Pipeline ON — prompts are evaluated, enhanced, and judged for completeness.");
+        } else {
+          pushAssistant(`Pipeline is ${bareRef.current ? "OFF" : "ON"}. Use /pipeline on|off.`);
+        }
+        return;
+      }
       if (text === "/exit" || text === "/quit") {
         void memoryRef.current?.close();
         exit();
@@ -180,15 +232,27 @@ export function ReplApp({
       const render = (): void => commit([...base, ...turn]);
 
       try {
-        const result = await runAgent({
+        const result = await runTurn({
           prompt: text,
           history: historyRef.current,
           cwd,
           model: modelRef.current,
           readOnly: options.readOnly,
+          bare: bareRef.current,
           projectContext: projectContextRef.current,
           memory: memoryRef.current,
+          fleetMemory: fleetMemoryRef.current,
           signal: controller.signal,
+          onStage: (stage) => {
+            turn.push({
+              role: "stage",
+              stage,
+              content: stage.label,
+              timestamp: Date.now(),
+            });
+            assistantOpen = false;
+            render();
+          },
           onToolCall: (name, input) => {
             turn.push({
               role: "tool",
@@ -228,6 +292,8 @@ export function ReplApp({
         }
         render();
         historyRef.current = result.messages;
+        // Persist the turn trace so /replay can show how it was handled.
+        traceStoreRef.current.record(result.trace);
         setTurns((n) => n + 1);
         setUsage((u) => ({
           input: u.input + (result.usage.inputTokens ?? 0),
@@ -350,6 +416,7 @@ export function ReplApp({
         turns={turns}
         inputTokens={usage.input}
         outputTokens={usage.output}
+        pipelineOn={pipelineOn}
       />
 
       {/* Input — stays live during a turn; submissions queue instead of blocking */}
