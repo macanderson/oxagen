@@ -56,6 +56,17 @@ export { createStore } from "./store/index";
 export type { EpisodicStore, EpisodicQuery } from "./store/episodic";
 export type { StoreConfig } from "./store/index";
 
+// Graph store (local DuckDB projection of the workspace knowledge graph)
+export { GraphStore, createGraphStore } from "./store/graph-store";
+export type {
+  GraphNode,
+  GraphEdge,
+  SyncCursor,
+  GraphStoreStats,
+  GraphStoreOpts,
+  CreateGraphStoreOpts,
+} from "./store/graph-store";
+
 // Write API
 export { remember } from "./api/remember";
 export { assert } from "./api/assert";

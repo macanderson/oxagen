@@ -200,7 +200,8 @@ program
     const { handleCost } = await import("./commands/cost.js");
     await handleCost(merged);
   });
-// ── graph: knowledge-graph search ─────────────────────────────────────────────
+
+// ── graph: knowledge-graph search + pull + status ─────────────────────────────
 
 const graph = program.command("graph").description("Query the knowledge graph");
 graph
@@ -227,6 +228,44 @@ graph
       await handleGraphSearch(opts);
     },
   );
+
+graph
+  .command("pull")
+  .description(
+    "Download an incremental snapshot of the workspace graph into a local DuckDB replica",
+  )
+  .option("--full", "Ignore the saved cursor and re-pull the entire graph", false)
+  .option(
+    "-l, --labels <csv>",
+    "Comma-separated domain labels to filter (e.g. Person,SourceFile)",
+  )
+  .option("--no-system", "Exclude product-owned (system) nodes")
+  .option("--json", "Output summary as JSON")
+  .action(
+    async (opts: {
+      full?: boolean;
+      labels?: string;
+      system?: boolean;
+      json?: boolean;
+    }) => {
+      const { handleGraphPull } = await import("./commands/graph.pull.js");
+      await handleGraphPull({
+        full: opts.full,
+        labels: opts.labels,
+        noSystem: opts.system === false,
+        json: opts.json,
+      });
+    },
+  );
+
+graph
+  .command("status")
+  .description("Show the state of the local workspace-graph replica")
+  .option("--json", "Output as JSON")
+  .action(async (opts: { json?: boolean }) => {
+    const { handleGraphStatus } = await import("./commands/graph.status.js");
+    await handleGraphStatus(opts);
+  });
 
 // ── config: local configuration ───────────────────────────────────────────────
 

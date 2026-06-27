@@ -96,6 +96,7 @@ import "./contracts/form.fill";
 import "./contracts/graph.cypher";
 import "./contracts/graph.edge.delete";
 import "./contracts/graph.edge.upsert";
+import "./contracts/graph.export";
 import "./contracts/graph.ingest";
 import "./contracts/graph.node.delete";
 import "./contracts/graph.node.get";
