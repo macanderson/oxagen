@@ -93,10 +93,18 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
   const resolved: string[] = [];
 
   try {
-    // Mine candidates from the prompt plus any evaluator-supplied hints. The hints
-    // sharpen retrieval without polluting the visible prompt text.
-    const minedFrom = [prompt, ...(opts.extraQueries ?? [])].join(" \n ");
-    const { symbols, paths } = extractCandidates(minedFrom);
+    // Mine candidates from the prompt prose, then fold in any evaluator-supplied
+    // hints as direct candidates (a bare symbol name or file path to look up).
+    // Hints sharpen retrieval without polluting the visible prompt text.
+    const { symbols, paths } = extractCandidates(prompt);
+    const symSet = new Set(symbols);
+    const pathSet = new Set(paths);
+    for (const hint of opts.extraQueries ?? []) {
+      const t = hint.trim();
+      if (!t) continue;
+      if (t.includes("/") || CODEY_EXT.test(t)) pathSet.add(t.replace(/^\.\//, ""));
+      else symSet.add(t);
+    }
 
     // Symbol definitions — "where is X defined".
     for (const sym of [...symSet].slice(0, max)) {
