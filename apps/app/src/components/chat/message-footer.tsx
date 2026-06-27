@@ -15,6 +15,7 @@ import * as React from "react";
 import { useState, useCallback } from "react";
 import { Copy, Check, BookOpen, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import type { TurnUsage } from "./stream-event-types";
 import { saveAsKnowledgeAction, saveAsMemoryAction } from "./message-footer-actions";
@@ -52,21 +53,28 @@ function ActionButton({
   onClick: (id: ButtonId) => void;
 }) {
   return (
-    <button
-      type="button"
-      disabled={loading}
-      onClick={() => onClick(id)}
-      aria-label={done ? `${label} — done` : label}
-      className={cn(
-        "flex items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors",
-        "text-muted-foreground hover:bg-muted hover:text-foreground",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        "disabled:pointer-events-none disabled:opacity-50",
-      )}
-    >
-      {done ? (successIcon ?? <Check className="size-3.5 text-foreground" aria-hidden="true" />) : icon}
-      <span className="sr-only">{label}</span>
-    </button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => onClick(id)}
+            aria-label={done ? `${label} — done` : label}
+            className={cn(
+              "flex items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors",
+              "text-muted-foreground hover:bg-muted hover:text-foreground",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "disabled:pointer-events-none disabled:opacity-50",
+            )}
+          />
+        }
+      >
+        {done ? (successIcon ?? <Check className="size-3.5 text-foreground" aria-hidden="true" />) : icon}
+        <span className="sr-only">{label}</span>
+      </TooltipTrigger>
+      <TooltipPopup>{done ? `${label} — done` : label}</TooltipPopup>
+    </Tooltip>
   );
 }
 

@@ -95,17 +95,25 @@ vi.mock("@oxagen/database", () => {
 
   const makeTenantTx = () => ({
     select: (_cols: unknown) => ({
-      from: (_table: unknown) => ({
-        where: (_w: unknown) => ({
-          limit: (_n: number) => {
-            // First tenant SELECT in wandSendAction is the workspace-membership
-            // check; subsequent ones are the conversation lookup.
-            dbState.tenantSelectIdx++;
-            if (dbState.tenantSelectIdx === 1) return Promise.resolve(dbState.wsUserRows);
-            return Promise.resolve(dbState.convRows);
-          },
-        }),
-      }),
+      from: (_table: unknown) => {
+        // Tenant SELECT order:
+        //   1 — workspace-membership check (wsUserRows)
+        //   2 — conversation lookup (convRows)
+        //   3 — message history walk (msgRows; loadAgentConversationAction only)
+        const limit = (_n: number) => {
+          dbState.tenantSelectIdx++;
+          if (dbState.tenantSelectIdx === 1) return Promise.resolve(dbState.wsUserRows);
+          if (dbState.tenantSelectIdx === 3) return Promise.resolve(dbState.msgRows);
+          return Promise.resolve(dbState.convRows);
+        };
+        return {
+          where: (_w: unknown) => ({
+            limit,
+            // loadAgentConversationAction's message query orders before limiting.
+            orderBy: (_o: unknown) => ({ limit }),
+          }),
+        };
+      },
     }),
     insert: (_table: unknown) => ({
       values: (_vals: unknown) => ({
@@ -208,6 +216,7 @@ import {
   wandSendAction,
   wandResolveApprovalAction,
   wandResolvePlanAction,
+  loadAgentConversationAction,
 } from "./shell-actions";
 
 const SESSION = { user: { id: "user-1" } };
@@ -327,6 +336,74 @@ describe("wandResolveApprovalAction", () => {
 // ---------------------------------------------------------------------------
 // Tests — wandResolvePlanAction
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Tests — loadAgentConversationAction
+//
+// The floating in-app agent panel calls this after each turn to reload the
+// persisted active branch (it has no RSC to refresh). These tests prove it
+// gates on membership, walks the active branch into ChatMessages, and degrades
+// gracefully when the conversation isn't found.
+// ---------------------------------------------------------------------------
+
+describe("loadAgentConversationAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    dbState.orgRows = [{ id: "org-1" }];
+    dbState.wsRows = [{ id: "ws-1" }];
+    dbState.wsUserRows = [{ id: "wu-1" }];
+    // Conversation lookup (2nd tenant select) returns one row with a leaf.
+    dbState.convRows = [
+      { id: "conv-1", publicId: "pub-1", leaf: "m2" } as unknown as {
+        id: string;
+        publicId: string;
+        leaf: string | null;
+      },
+    ];
+    // Message history (3rd tenant select) — a user→assistant branch.
+    dbState.msgRows = [
+      { id: "m1", parentMessageId: null, publicId: "msg_1", role: "user", content: "hi", branchReason: null, contentBlocks: [] },
+      { id: "m2", parentMessageId: "m1", publicId: "msg_2", role: "assistant", content: "hello", branchReason: null, contentBlocks: [] },
+    ] as unknown as Array<{ id: string }>;
+    dbState.systemCallIdx = 0;
+    dbState.tenantSelectIdx = 0;
+    dbState.tenantInsertIdx = 0;
+    mockGetSession.mockResolvedValue(SESSION);
+  });
+
+  it("denies a non-member (no cross-workspace read)", async () => {
+    dbState.wsUserRows = [];
+    const res = await loadAgentConversationAction("acme", "main", "pub-1");
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("access");
+  });
+
+  it("returns ok:false when the workspace cannot be resolved", async () => {
+    dbState.wsRows = [];
+    const res = await loadAgentConversationAction("acme", "main", "pub-1");
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("workspace");
+  });
+
+  it("returns ok:false when the conversation is not found", async () => {
+    dbState.convRows = [];
+    const res = await loadAgentConversationAction("acme", "main", "pub-missing");
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("not found");
+  });
+
+  it("walks the active branch into ordered ChatMessages", async () => {
+    const res = await loadAgentConversationAction("acme", "main", "pub-1");
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.conversationId).toBe("conv-1");
+      expect(res.activeLeafMessageId).toBe("m2");
+      expect(res.messages).toHaveLength(2);
+      expect(res.messages[0]).toMatchObject({ role: "user", content: "hi" });
+      expect(res.messages[1]).toMatchObject({ role: "assistant", content: "hello" });
+    }
+  });
+});
 
 describe("wandResolvePlanAction", () => {
   beforeEach(() => {
