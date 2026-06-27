@@ -4,18 +4,39 @@
  *
  * Usage:
  *   oxagen "fix the login bug"
+ *   oxagen --readonly "explain how auth works"
  *   echo "explain this code" | oxagen
  *
- * The agent operates on the current working directory using local coding tools
- * (read/write/edit/grep/glob/bash). Model calls go through the Vercel AI Gateway.
+ * The agent operates on the current working directory using local coding tools,
+ * loads project rules (CLAUDE.md/AGENTS.md), and records the turn into Oxagen's
+ * context engine. Model calls go through the Vercel AI Gateway.
  */
 import { runAgent, MissingGatewayKeyError } from "../agent/loop.js";
+import { loadProjectContext } from "../agent/project-context.js";
+import { openSessionMemory } from "../agent/memory.js";
 
-export async function runOneShot(prompt: string): Promise<void> {
+export interface OneShotOptions {
+  readOnly?: boolean;
+  model?: string;
+}
+
+export async function runOneShot(
+  prompt: string,
+  options: OneShotOptions = {},
+): Promise<void> {
+  const cwd = process.cwd();
+  const projectContext = loadProjectContext(cwd);
+  const memory = await openSessionMemory(cwd, `one-shot-${Date.now()}`);
+
   try {
     let streamed = false;
     await runAgent({
       prompt,
+      cwd,
+      projectContext,
+      readOnly: options.readOnly,
+      model: options.model,
+      memory,
       onText: (delta) => {
         streamed = true;
         process.stdout.write(delta);
@@ -40,10 +61,12 @@ export async function runOneShot(prompt: string): Promise<void> {
       );
     }
     process.exitCode = 1;
+  } finally {
+    await memory?.close();
   }
 }
 
-export async function runFromStdin(): Promise<void> {
+export async function runFromStdin(options: OneShotOptions = {}): Promise<void> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
     chunks.push(chunk as Buffer);
@@ -54,5 +77,5 @@ export async function runFromStdin(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  await runOneShot(prompt);
+  await runOneShot(prompt, options);
 }

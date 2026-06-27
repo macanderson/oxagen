@@ -2,20 +2,20 @@
  * The local agentic coding loop.
  *
  * Runs entirely in the CLI process: the model (via the Vercel AI Gateway) calls
- * the local coding tools in a multi-step loop until the task is done. This is
- * the piece that turns `oxagen` from a thin remote chat client into a
- * Claude Code-style coding agent operating on the local repository.
+ * local coding tools in a multi-step loop until the task is done. This is what
+ * makes `oxagen` a real coding agent operating on the local repository.
  *
- * Engram context retrieval layers on top of this (Phase 2): a `compile()` call
- * will assemble retrieved memory into a context section, and `remember()` will
- * record episodic events after each turn. The loop is structured so that
- * `history` and the system prompt are the seams where that context plugs in.
+ * It is wired to Oxagen's knowledge-graph context engine in two places: recalled
+ * project memory is injected before the turn, and the turn's activity is written
+ * back as episodic memory after it.
  */
 import { streamText, stepCountIs, type ModelMessage } from "ai";
 import { buildTools } from "./tools.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 import { resolveModelId } from "./model.js";
 import { ensureGatewayKey } from "./env.js";
+import type { ProjectContext } from "./project-context.js";
+import type { SessionMemory } from "./memory.js";
 
 export interface RunAgentOptions {
   /** The user's prompt for this turn. */
@@ -28,6 +28,12 @@ export interface RunAgentOptions {
   model?: string;
   /** Max tool-loop steps before stopping (default 32). */
   maxSteps?: number;
+  /** Loaded project rules (CLAUDE.md/AGENTS.md), injected into the system prompt. */
+  projectContext?: ProjectContext;
+  /** Read-only mode: no file mutation or command execution. */
+  readOnly?: boolean;
+  /** Session memory (Oxagen context engine). Recalled before, written after. */
+  memory?: SessionMemory | null;
   /** Abort the turn (e.g. user hit Ctrl-C). */
   signal?: AbortSignal;
   /** Streamed assistant text deltas. */
@@ -58,6 +64,21 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   const cwd = opts.cwd ?? process.cwd();
   if (!ensureGatewayKey(cwd)) throw new MissingGatewayKeyError();
 
+  // Recall relevant project memory and write the incoming prompt (best-effort).
+  const recalled = opts.memory ? await opts.memory.recallContext() : "";
+  void opts.memory?.remember("user_prompt", opts.prompt);
+
+  let system = buildSystemPrompt({
+    cwd,
+    projectContext: opts.projectContext,
+    readOnly: opts.readOnly,
+  });
+  if (recalled) {
+    system +=
+      "\n\n## Recent project activity (recalled from the Oxagen context engine)\n" +
+      recalled;
+  }
+
   const messages: ModelMessage[] = [
     ...(opts.history ?? []),
     { role: "user", content: opts.prompt },
@@ -65,16 +86,20 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
 
   const result = streamText({
     model: resolveModelId(opts.model),
-    system: buildSystemPrompt(cwd),
+    system,
     messages,
-    tools: buildTools(cwd),
+    tools: buildTools(cwd, { readOnly: opts.readOnly }),
     stopWhen: stepCountIs(opts.maxSteps ?? 32),
     abortSignal: opts.signal,
     onStepFinish: ({ toolCalls }) => {
-      if (!opts.onToolCall) return;
       for (const tc of toolCalls ?? []) {
         const call = tc as { toolName: string; input?: unknown; args?: unknown };
-        opts.onToolCall(call.toolName, call.input ?? call.args);
+        const input = call.input ?? call.args;
+        opts.onToolCall?.(call.toolName, input);
+        void opts.memory?.remember("tool_call", {
+          tool: call.toolName,
+          input,
+        });
       }
     },
   });
@@ -88,6 +113,8 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   const steps = (await result.steps).length;
   const usage = await result.usage;
   const response = await result.response;
+
+  void opts.memory?.remember("assistant_reply", text.slice(0, 500), "success");
 
   return {
     text,

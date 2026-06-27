@@ -4,17 +4,25 @@
  * Full-screen Ink TUI with:
  *   - Scrollable conversation history (user prompts + assistant responses)
  *   - Streaming response display with tool call annotations
- *   - Compact status bar showing engram memory stats + daemon health
- *   - Multi-line prompt input at the bottom
+ *   - Multi-turn history, project rules, and Oxagen context-engine memory
+ *   - Slash commands (/help, /model, /clear, /exit) and Ctrl-C to cancel a turn
  *
- * Like Claude Code, but with Engram memory visible.
+ * Like Claude Code, but backed by the Oxagen context engine.
  */
 import { Box, Text, useApp, useInput } from "ink";
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import type { ModelMessage } from "ai";
 import { theme } from "../tui/theme.js";
 import { runAgent } from "../agent/loop.js";
+import { resolveModelId } from "../agent/model.js";
+import { loadProjectContext } from "../agent/project-context.js";
+import { openSessionMemory, type SessionMemory } from "../agent/memory.js";
 import pkg from "../../package.json" with { type: "json" };
+
+export interface ReplOptions {
+  model?: string;
+  readOnly?: boolean;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,12 +34,14 @@ interface Message {
   streaming?: boolean;
 }
 
-interface MemoryStats {
-  recordsThisTurn: number;
-  totalRecords: number;
-  compileMs: number;
-  cacheHitRate: number;
-}
+const HELP = [
+  "Slash commands:",
+  "  /help          show this help",
+  "  /model [slug]  show or set the gateway model",
+  "  /clear         reset the conversation",
+  "  /exit, /quit   quit",
+  "Ctrl-C           cancel the current turn (or quit when idle)",
+].join("\n");
 
 // ── Prompt Input ──────────────────────────────────────────────────────────────
 
@@ -118,33 +128,30 @@ function MessageView({ msg }: { msg: Message }): React.ReactElement {
 
 // ── Status Bar ────────────────────────────────────────────────────────────────
 
-function StatusLine({ stats }: { stats: MemoryStats }): React.ReactElement {
+function StatusLine({
+  model,
+  readOnly,
+  turns,
+}: {
+  model: string;
+  readOnly: boolean;
+  turns: number;
+}): React.ReactElement {
   return (
     <Box paddingX={1} justifyContent="space-between">
       <Box gap={2}>
         <Text dimColor>
-          mem:<Text color="#34D399">{stats.totalRecords}</Text>
+          model:<Text color={theme.cyan}>{model.split("/").pop()}</Text>
         </Text>
         <Text dimColor>
-          turn:<Text color={theme.cyan}>{stats.recordsThisTurn}</Text>
+          turns:<Text color="#34D399">{turns}</Text>
         </Text>
-        <Text dimColor>
-          compile:
-          <Text color={stats.compileMs < 20 ? "#34D399" : "#FBBF24"}>
-            {stats.compileMs}ms
-          </Text>
-        </Text>
-        <Text dimColor>
-          cache:
-          <Text color={stats.cacheHitRate > 0.6 ? "#34D399" : "#FBBF24"}>
-            {Math.round(stats.cacheHitRate * 100)}%
-          </Text>
-        </Text>
+        {readOnly && <Text color="#FBBF24">read-only</Text>}
       </Box>
       <Box gap={2}>
-        <Text dimColor>/view dashboard</Text>
-        <Text dimColor>/clear reset</Text>
-        <Text dimColor>ctrl+c exit</Text>
+        <Text dimColor>/help</Text>
+        <Text dimColor>/clear</Text>
+        <Text dimColor>ctrl+c</Text>
       </Box>
     </Box>
   );
@@ -159,48 +166,90 @@ function summarizeInput(input: unknown): string {
   return text.length > 100 ? text.slice(0, 100) + "…" : text;
 }
 
-function ReplApp(): React.ReactElement {
+function ReplApp({ options }: { options: ReplOptions }): React.ReactElement {
   const { exit } = useApp();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [stats, setStats] = useState<MemoryStats>({
-    recordsThisTurn: 0,
-    totalRecords: 0,
-    compileMs: 0,
-    cacheHitRate: 0,
-  });
+  const [model, setModel] = useState<string>(resolveModelId(options.model));
+  const [turns, setTurns] = useState(0);
 
+  const cwd = process.cwd();
+  // Project rules (CLAUDE.md/AGENTS.md) loaded once for the session.
+  const projectContextRef = useRef(loadProjectContext(cwd));
+  // Oxagen context-engine memory, opened asynchronously on mount.
+  const memoryRef = useRef<SessionMemory | null>(null);
   // Source-of-truth message list (the state mirror), so streaming updates can be
   // computed synchronously without racing React's batched setState.
   const allRef = useRef<Message[]>([]);
   // Multi-turn conversation history fed back to the model each turn.
   const historyRef = useRef<ModelMessage[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
+  const streamingRef = useRef(false);
+  const modelRef = useRef(model);
+  modelRef.current = model;
+
+  useEffect(() => {
+    let mem: SessionMemory | null = null;
+    void openSessionMemory(cwd, `repl-${Date.now()}`).then((m) => {
+      mem = m;
+      memoryRef.current = m;
+    });
+    return () => {
+      void mem?.close();
+    };
+  }, [cwd]);
 
   const commit = useCallback((next: Message[]) => {
     allRef.current = next;
     setMessages(next);
   }, []);
 
-  useInput((_input, key) => {
-    if (key.ctrl && _input === "c") {
-      exit();
+  const pushAssistant = useCallback(
+    (content: string) => {
+      commit([
+        ...allRef.current,
+        { role: "assistant", content, timestamp: Date.now() },
+      ]);
+    },
+    [commit],
+  );
+
+  useInput((input, key) => {
+    if (key.ctrl && input === "c") {
+      if (streamingRef.current && abortRef.current) {
+        abortRef.current.abort();
+      } else {
+        void memoryRef.current?.close();
+        exit();
+      }
     }
   });
 
   const handleSubmit = useCallback(
     async (text: string) => {
-      // Handle slash commands
+      // ── Slash commands ──
+      if (text === "/help") {
+        pushAssistant(HELP);
+        return;
+      }
       if (text === "/clear") {
         allRef.current = [];
         historyRef.current = [];
         setMessages([]);
         return;
       }
-      if (text === "/view") {
-        // TODO: switch to agent-view
+      if (text.startsWith("/model")) {
+        const slug = text.slice("/model".length).trim();
+        if (slug) {
+          setModel(slug);
+          pushAssistant(`Model set to ${slug}.`);
+        } else {
+          pushAssistant(`Current model: ${modelRef.current}`);
+        }
         return;
       }
       if (text === "/exit" || text === "/quit") {
+        void memoryRef.current?.close();
         exit();
         return;
       }
@@ -213,6 +262,9 @@ function ReplApp(): React.ReactElement {
       const base = [...allRef.current, userMsg];
       commit(base);
       setIsStreaming(true);
+      streamingRef.current = true;
+      const controller = new AbortController();
+      abortRef.current = controller;
 
       // This turn's streamed messages (tool annotations + assistant text).
       const turn: Message[] = [];
@@ -223,6 +275,12 @@ function ReplApp(): React.ReactElement {
         const result = await runAgent({
           prompt: text,
           history: historyRef.current,
+          cwd,
+          model: modelRef.current,
+          readOnly: options.readOnly,
+          projectContext: projectContextRef.current,
+          memory: memoryRef.current,
+          signal: controller.signal,
           onToolCall: (name, input) => {
             turn.push({
               role: "tool",
@@ -261,23 +319,24 @@ function ReplApp(): React.ReactElement {
         }
         render();
         historyRef.current = result.messages;
-        setStats((prev) => ({
-          ...prev,
-          recordsThisTurn: result.steps,
-          totalRecords: prev.totalRecords + result.steps,
-        }));
+        setTurns((n) => n + 1);
       } catch (err) {
+        const cancelled = controller.signal.aborted;
         turn.push({
           role: "assistant",
-          content: `Error: ${err instanceof Error ? err.message : String(err)}`,
+          content: cancelled
+            ? "(cancelled)"
+            : `Error: ${err instanceof Error ? err.message : String(err)}`,
           timestamp: Date.now(),
         });
         render();
       } finally {
+        abortRef.current = null;
+        streamingRef.current = false;
         setIsStreaming(false);
       }
     },
-    [exit, commit],
+    [exit, commit, pushAssistant, cwd, options.readOnly],
   );
 
   return (
@@ -300,8 +359,14 @@ function ReplApp(): React.ReactElement {
           <Box paddingX={1} flexDirection="column">
             <Text dimColor>Ready. Type a prompt to start coding.</Text>
             <Text dimColor>
-              The Engram context engine compiles relevant memory each turn.
+              Backed by Oxagen's knowledge-graph context engine. Type /help for
+              commands.
             </Text>
+            {projectContextRef.current.sources.length > 0 && (
+              <Text dimColor>
+                Loaded rules: {projectContextRef.current.sources.join(", ")}
+              </Text>
+            )}
           </Box>
         ) : (
           messages.map((msg, i) => <MessageView key={i} msg={msg} />)
@@ -309,7 +374,11 @@ function ReplApp(): React.ReactElement {
       </Box>
 
       {/* Status line */}
-      <StatusLine stats={stats} />
+      <StatusLine
+        model={model}
+        readOnly={options.readOnly ?? false}
+        turns={turns}
+      />
 
       {/* Input */}
       <PromptInput onSubmit={handleSubmit} disabled={isStreaming} />
@@ -319,8 +388,8 @@ function ReplApp(): React.ReactElement {
 
 // ── Launch ────────────────────────────────────────────────────────────────────
 
-export async function launchRepl(): Promise<void> {
+export async function launchRepl(options: ReplOptions = {}): Promise<void> {
   const { render: renderInk } = await import("ink");
-  const { waitUntilExit } = renderInk(<ReplApp />);
+  const { waitUntilExit } = renderInk(<ReplApp options={options} />);
   await waitUntilExit();
 }

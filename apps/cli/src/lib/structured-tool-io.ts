@@ -4,7 +4,7 @@
  *
  * Every tool result is:
  * 1. Summarized to a one-line reference
- * 2. Written to Engram as an episodic record
+ * 2. Written to the context store as an episodic record
  * 3. Available for recall via its record handle
  */
 
@@ -21,7 +21,7 @@ export interface StructuredToolResult {
     executionMs: number;
     /** Estimated tokens if the full result were included verbatim. */
     tokenEstimate: number;
-    /** Engram record ID for page-back-in. */
+    /** Context store record ID for page-back-in. */
     recordHandle?: string;
   };
 }

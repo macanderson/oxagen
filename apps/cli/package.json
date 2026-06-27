@@ -1,7 +1,7 @@
 {
   "name": "@oxagen/cli",
   "version": "0.5.0",
-  "description": "Oxagen — agentic coding assistant powered by the Engram context engine",
+  "description": "Oxagen CLI — agentic coding powered by Oxagen's knowledge-graph context engine",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -18,7 +18,6 @@
     "coding",
     "ai",
     "agent",
-    "engram",
     "context-engine"
   ],
   "homepage": "https://github.com/oxagen/oxagen-monorepo#readme",

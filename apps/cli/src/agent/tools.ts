@@ -93,8 +93,11 @@ async function* walk(
   }
 }
 
-export function buildTools(cwd: string): ToolSet {
-  return {
+export function buildTools(
+  cwd: string,
+  opts: { readOnly?: boolean } = {},
+): ToolSet {
+  const tools: ToolSet = {
     read_file: tool({
       description:
         "Read a file from the working directory. Returns the file contents (optionally a line range).",
@@ -280,4 +283,13 @@ export function buildTools(cwd: string): ToolSet {
       },
     }),
   };
+
+  // Read-only mode: withhold every mutating tool so the model literally cannot
+  // change the filesystem or run commands.
+  if (opts.readOnly) {
+    delete tools["write_file"];
+    delete tools["edit_file"];
+    delete tools["bash"];
+  }
+  return tools;
 }
