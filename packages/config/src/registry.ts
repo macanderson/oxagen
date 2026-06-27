@@ -727,30 +727,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: { "*": "anthropic/claude-opus-4.8" },
   },
-  OXAGEN_LLM_EVALUATOR: {
-    group: "AI providers",
-    description:
-      "Optional override for the oxagen CLI pipeline's evaluator model (the quick " +
-      "eval pass that scores a draft). Unset by default — falls back in-code to the " +
-      "fast tier. CLI-local; not injected into any deployed service.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  OXAGEN_LLM_ADVISOR: {
-    group: "AI providers",
-    description:
-      "Optional override for the oxagen CLI pipeline's advisor/judge model. Unset by " +
-      "default — falls back in-code to the precise tier (or balanced when the executor " +
-      "is already the precise model). CLI-local; not injected into any deployed service.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
   OXAGEN_LLM_IMAGE_BASIC: {
     group: "AI providers",
     description:
@@ -1255,28 +1231,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "CLI",
     description:
       "When set, the CLI prints extra diagnostics (e.g. context-engine memory open failures) to stderr.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  OXAGEN_LLM_EVALUATOR: {
-    group: "CLI",
-    description:
-      "Gateway model slug the CLI turn pipeline uses to evaluate each prompt (completeness " +
-      "+ complexity scoring, context hints, refined rewrite). Defaults to the fast tier (Haiku).",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  OXAGEN_LLM_ADVISOR: {
-    group: "CLI",
-    description:
-      "Gateway model slug the CLI uses as the completeness-judge advisor — always distinct from " +
-      "the executor so work is never graded by the model that produced it. Defaults to the precise tier (Opus).",
     secret: false,
     clientExposed: false,
     services: [],
