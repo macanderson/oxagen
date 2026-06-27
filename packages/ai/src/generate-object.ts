@@ -40,6 +40,19 @@ export interface GenerateObjectArgs<T> {
   /** Sampling temperature (0–2). Defaults to 0 for structured output. */
   temperature?: number;
   /**
+   * Optional abort signal forwarded to the AI SDK so a caller can bound the
+   * wall-clock of a single generation. A hung gateway call otherwise never
+   * resolves nor rejects, and a plain try/catch cannot rescue a hang — pass
+   * `AbortSignal.timeout(ms)` to turn a stall into a clean abort error the
+   * caller can catch. (See schema.reconcile, which must not hang the worker.)
+   */
+  abortSignal?: AbortSignal;
+  /**
+   * Optional max-retries forwarded to the AI SDK. Leave undefined to use the
+   * SDK default; set to 0 when an outer system (e.g. Inngest) owns retries.
+   */
+  maxRetries?: number;
+  /**
    * Required telemetry context forwarded from the caller's CapabilityContext.
    * Carries `orgId`, `workspaceId`, and `surface` so every generateObject call
    * lands in `token_usage` with provider, duration_ms, surface, and prompt_hash.
@@ -117,6 +130,8 @@ export async function generateObjectFor<T>(
     schema: args.schema,
     system: args.system,
     temperature: args.temperature ?? 0,
+    ...(args.abortSignal ? { abortSignal: args.abortSignal } : {}),
+    ...(args.maxRetries !== undefined ? { maxRetries: args.maxRetries } : {}),
     ...(args.messages ? { messages: args.messages } : { prompt: args.prompt ?? "" }),
   });
 

@@ -987,6 +987,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./schema.reconcile.status"))
         .schemaReconcileStatusHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "schema.validate.node",
+    async () =>
+      (await import("./schema.validate.node"))
+        .schemaValidateNodeHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "schema.validate.relationship",
+    async () =>
+      (await import("./schema.validate.relationship"))
+        .schemaValidateRelationshipHandler as CapabilityHandlerFn,
+  );
   // Environments + credential vault (Spec: 2026-06-24-credential-vault-…).
   registerHandler(
     "environment.create",
