@@ -10,7 +10,7 @@ import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";
 import { bootstrapEntitlementRuntime } from "@oxagen/plugins";
 import { setSecurityEventEmitter } from "@oxagen/oxagen/kernel";
-import { recordSecurityEvent } from "@oxagen/telemetry";
+import { initTracer, recordSecurityEvent } from "@oxagen/telemetry";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { assertRlsConnectionSafe } from "@oxagen/database";
 import { isEmailVerificationRequired } from "@oxagen/auth";
@@ -57,6 +57,10 @@ export function bootstrap(): Promise<void> {
  */
 async function runBootstrap(): Promise<void> {
   loadEnv();
+
+  // Bootstrap OpenTelemetry SDK first so spans are captured from the first
+  // request. No-op when OTEL_EXPORTER_OTLP_ENDPOINT is unset (dev / rollback).
+  initTracer();
 
   // OXA-1753: surface unconfigured SMTP loudly on deployed envs. Deployed envs
   // set Better Auth's requireEmailVerification=true, so every credential sign-up

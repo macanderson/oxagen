@@ -117,6 +117,19 @@ describe("createModalSandbox — run() HTTP 200 success", () => {
     expect(body.org_id).toBe("org_abc");
     expect(body.workspace_id).toBe("wrk_xyz");
   });
+
+  it("forwards the workspace files map to the runner", async () => {
+    const fetchSpy = makeFetch(200, {
+      exit_code: 0, stdout: "", stderr: "", duration_ms: 1, timed_out: false, oom_killed: false,
+    });
+    const driver = createModalSandbox({ ...BASE_CONFIG, fetchImpl: fetchSpy });
+
+    await driver.run(makeReq({ files: { "util.js": "1", "src/a.js": "2" } }));
+
+    const [, init] = (fetchSpy as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as { files?: Record<string, string> };
+    expect(body.files).toEqual({ "util.js": "1", "src/a.js": "2" });
+  });
 });
 
 // ---------------------------------------------------------------------------

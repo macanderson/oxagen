@@ -20,6 +20,7 @@ configured driver (`SANDBOX_DRIVER`: `vercel` | `modal` | `docker`).
 | ----------- | ------------------------------- | ---------- | ----------------------------------------------------------- |
 | `language`  | `"node" \| "python" \| "shell"` | required   | Runtime language for the sandbox                           |
 | `code`      | `string`                        | required   | Source code to execute (min 1 char)                        |
+| `files`     | `Record<string, string>?`       | undefined  | Extra files (workspace-relative path → contents) landed into the sandbox before the entrypoint runs, so the agent can stage a multi-file edit and execute against it. Paths are confined to the workspace root (no absolute paths or `..`); capped at 64 files / 5 MiB. |
 | `stdin`     | `string?`                       | undefined  | Optional stdin; not supported on the Vercel driver         |
 | `env`       | `Record<string, string>?`       | undefined  | Environment variables injected into the sandbox            |
 | `timeoutMs` | `integer`                       | `30000`    | Execution timeout in ms (1 000–300 000)                    |

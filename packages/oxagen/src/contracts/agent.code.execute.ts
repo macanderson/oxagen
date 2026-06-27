@@ -1,5 +1,25 @@
 import { z } from "zod";
+import { validateWorkspaceFiles } from "@oxagen/sandbox/workspace";
 import { registerCapability } from "../registry";
+
+// ── Workspace files trust boundary ───────────────────────────────────────────
+// `files` lets a caller stage a multi-file workspace (path → contents) into the
+// sandbox before the entrypoint runs. The path-confinement, count, and byte
+// caps live ONCE in `@oxagen/sandbox/workspace` (the lowest layer); this Zod
+// wrapper just surfaces a violation as a field-level parse error. Exported so
+// code.patch reuses the exact same boundary — there is no second definition.
+export const workspaceFilesSchema = z
+  .record(z.string(), z.string())
+  .superRefine((files, ctx) => {
+    try {
+      validateWorkspaceFiles(files);
+    } catch (e) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: e instanceof Error ? e.message : "invalid workspace files",
+      });
+    }
+  });
 
 // ── Sandbox env trust boundary ───────────────────────────────────────────────
 // The caller-supplied `env` record is forwarded into the sandbox process. Left
@@ -72,6 +92,14 @@ export const agentCodeExecute = registerCapability({
   input: z.object({
     language: z.enum(["node", "python", "shell"]).describe("Runtime language"),
     code: z.string().min(1).describe("Source code to execute"),
+    files: workspaceFilesSchema
+      .optional()
+      .describe(
+        "Extra files (workspace-relative path → contents) landed into the sandbox " +
+          "workspace before the entrypoint runs, so an agent can stage a multi-file " +
+          "edit and execute against it. Paths are confined to the workspace root " +
+          "(no absolute paths or `..`); capped at 64 files / 5 MiB total.",
+      ),
     stdin: z.string().optional().describe("Optional stdin input"),
     env: z
       .record(z.string(), z.string())

@@ -1,54 +1,87 @@
 /**
- * One-shot mode — run a single prompt, stream the response, exit.
+ * One-shot mode — run a single prompt through the local agent loop, stream the
+ * response to stdout, exit.
  *
  * Usage:
  *   oxagen "fix the login bug"
+ *   oxagen --readonly "explain how auth works"
  *   echo "explain this code" | oxagen
+ *
+ * The agent operates on the current working directory using local coding tools,
+ * loads project rules (CLAUDE.md/AGENTS.md), and records the turn into Oxagen's
+ * context engine. Model calls go through the Vercel AI Gateway.
  */
-import { getApiUrl, getToken } from "../lib/config.js";
+import { runTurn, MissingGatewayKeyError } from "../agent/pipeline.js";
+import { loadProjectContext } from "../agent/project-context.js";
+import { openSessionMemory } from "../agent/memory.js";
+import { openFleetMemory } from "../agent/fleet/memory.js";
+import { openTraceStore } from "../agent/trace-store.js";
 
-export async function runOneShot(prompt: string): Promise<void> {
-  const token = getToken();
-  const apiUrl = getApiUrl();
+export interface OneShotOptions {
+  readOnly?: boolean;
+  model?: string;
+  /** Skip the eval/enhance/judge pipeline and run the bare agent. */
+  bare?: boolean;
+}
 
-  if (!token) {
-    process.stderr.write(
-      "Error: No API token configured.\n" +
-        "Run `oxagen config token <your-token>` or set OXAGEN_API_TOKEN.\n",
-    );
-    process.exitCode = 1;
-    return;
-  }
+export async function runOneShot(
+  prompt: string,
+  options: OneShotOptions = {},
+): Promise<void> {
+  const cwd = process.cwd();
+  const projectContext = loadProjectContext(cwd);
+  const memory = await openSessionMemory(cwd, `one-shot-${Date.now()}`);
+  const fleetMemory = openFleetMemory(cwd);
+  const traceStore = openTraceStore(cwd);
 
   try {
-    const response = await fetch(`${apiUrl}/chat/send`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+    let streamed = false;
+    const result = await runTurn({
+      prompt,
+      cwd,
+      projectContext,
+      readOnly: options.readOnly,
+      model: options.model,
+      bare: options.bare,
+      memory,
+      fleetMemory,
+      // Pipeline stage progress goes to stderr so stdout stays the clean answer.
+      onStage: (stage) => {
+        process.stderr.write(
+          `  ${stage.label}${stage.detail ? ` · ${stage.detail}` : ""}\n`,
+        );
       },
-      body: JSON.stringify({ message: prompt }),
+      onText: (delta) => {
+        streamed = true;
+        process.stdout.write(delta);
+      },
+      // Tool activity goes to stderr so stdout stays the clean final answer
+      // (pipeable). e.g. `oxagen "..." > out.md` captures only the answer.
+      onToolCall: (name, input) => {
+        const summary =
+          typeof input === "object" && input !== null
+            ? JSON.stringify(input).slice(0, 120)
+            : String(input);
+        process.stderr.write(`  · ${name} ${summary}\n`);
+      },
     });
-
-    if (!response.ok) {
-      process.stderr.write(
-        `Error: API returned ${response.status} ${response.statusText}\n`,
-      );
-      process.exitCode = 1;
-      return;
-    }
-
-    const data = (await response.json()) as { content: string };
-    process.stdout.write(data.content + "\n");
+    traceStore.record(result.trace);
+    if (streamed) process.stdout.write("\n");
   } catch (err) {
-    process.stderr.write(
-      `Error: ${err instanceof Error ? err.message : String(err)}\n`,
-    );
+    if (err instanceof MissingGatewayKeyError) {
+      process.stderr.write(`Error: ${err.message}\n`);
+    } else {
+      process.stderr.write(
+        `Error: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+    }
     process.exitCode = 1;
+  } finally {
+    await memory?.close();
   }
 }
 
-export async function runFromStdin(): Promise<void> {
+export async function runFromStdin(options: OneShotOptions = {}): Promise<void> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
     chunks.push(chunk as Buffer);
@@ -59,5 +92,5 @@ export async function runFromStdin(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  await runOneShot(prompt);
+  await runOneShot(prompt, options);
 }

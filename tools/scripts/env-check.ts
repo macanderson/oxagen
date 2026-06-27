@@ -62,6 +62,10 @@ export const SCHEMA_EXEMPT = new Set<string>([
   "OXAGEN_ORG_ID",
   "OXAGEN_WORKSPACE_ID",
   "OXAGEN_API_URL",
+  "OXAGEN_MODEL",
+  "OXAGEN_LLM_EVALUATOR",
+  "OXAGEN_LLM_ADVISOR",
+  "OXAGEN_DEBUG",
   // Dev-tooling signal — set by tools/scripts/dev.ts; services: []
   "OXAGEN_LOCAL_DEV",
 ]);

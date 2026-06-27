@@ -11,7 +11,7 @@ const DAEMON_DIR = join(homedir(), ".config", "oxagen");
 const SOCKET_PATH = join(DAEMON_DIR, "daemon.sock");
 const PID_FILE = join(DAEMON_DIR, "daemon.pid");
 const LOG_FILE = join(DAEMON_DIR, "daemon.log");
-const DB_PATH = join(DAEMON_DIR, "engram.duckdb");
+const DB_PATH = join(DAEMON_DIR, "context.duckdb");
 
 function getClient(): DaemonClient {
   return new DaemonClient(SOCKET_PATH);

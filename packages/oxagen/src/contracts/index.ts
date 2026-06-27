@@ -14,6 +14,9 @@ import { archiveCreate } from "./archive.create";
 import { assetUpload } from "./asset.upload";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { agentCodeExecute } from "./agent.code.execute";
+import { codeDiff } from "./code.diff";
+import { codePatch } from "./code.patch";
+import { codeFormat } from "./code.format";
 import { agentDefinitionCreate } from "./agent.definition.create";
 import { agentDefinitionUpdate } from "./agent.definition.update";
 import { agentDefinitionPublish } from "./agent.definition.publish";
@@ -230,6 +233,9 @@ import { secretValueUnset } from "./secret.value.unset";
 import { secretImportEnv } from "./secret.import_env";
 import { secretReveal } from "./secret.reveal";
 import { secretExport } from "./secret.export";
+// Memory decay policies (OXA-1374).
+import { agentMemoryPolicyRead } from "./agent.memory.policy.read";
+import { agentMemoryPolicyWrite } from "./agent.memory.policy.write";
 // Re-export shared Zod helpers used across schema.* contracts.
 // These are not capability contracts themselves but must appear here to satisfy
 // the check-contracts file-coverage guard (tools/scripts/check-contracts.mjs).
@@ -238,6 +244,11 @@ export type {
   PropertyInput as SharedPropertyInput,
 } from "./schema.shared";
 export type { FieldError, DataType, PropertyInput } from "./schema.types";
+// Memory policy schema + types (OXA-1374). Capability objects are exported in
+// the named block below; here we expose the shared schema and TS types.
+export { memoryPolicySchema } from "./agent.memory.policy.read";
+export type { AgentMemoryPolicyReadOutput } from "./agent.memory.policy.read";
+export type { AgentMemoryPolicyWriteInput, AgentMemoryPolicyWriteOutput } from "./agent.memory.policy.write";
 
 export {
   apiKeyCreate,
@@ -246,6 +257,9 @@ export {
   assetUpload,
   agentApprovalResolve,
   agentCodeExecute,
+  codeDiff,
+  codePatch,
+  codeFormat,
   agentDefinitionCreate,
   agentDefinitionUpdate,
   agentDefinitionPublish,
@@ -461,6 +475,8 @@ export {
   secretImportEnv,
   secretReveal,
   secretExport,
+  agentMemoryPolicyRead,
+  agentMemoryPolicyWrite,
 };
 
 /**
@@ -478,6 +494,9 @@ export const contracts = [
   assetUpload,
   agentApprovalResolve,
   agentCodeExecute,
+  codeDiff,
+  codePatch,
+  codeFormat,
   agentDefinitionCreate,
   agentDefinitionUpdate,
   agentDefinitionPublish,
@@ -693,4 +712,6 @@ export const contracts = [
   secretImportEnv,
   secretReveal,
   secretExport,
+  agentMemoryPolicyRead,
+  agentMemoryPolicyWrite,
 ] as const;

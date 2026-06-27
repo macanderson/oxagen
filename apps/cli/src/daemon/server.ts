@@ -1,6 +1,6 @@
 /**
  * Context daemon server — persistent local service that maintains
- * warm Engram indexes, code graph state, and session state across
+ * warm context-engine indexes, code graph state, and session state across
  * CLI invocations.
  *
  * Communicates via Unix socket using the JSON-RPC protocol defined
@@ -119,7 +119,7 @@ export class ContextDaemon {
         setImmediate(() => this.shutdown());
         return { status: "shutting_down" };
       case "compile":
-        // Delegate to engram compile()
+        // Delegate to the Oxagen context engine compile()
         return this.handleCompile(request.params);
       case "query":
         return this.handleQuery(request.params);

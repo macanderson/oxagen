@@ -81,16 +81,73 @@ export function hostConfigFor(req: SandboxRequest, spec: ImageSpec): Dockerode.H
   };
 }
 
-// Packs the user's code as a single-file tar so we can `putArchive` it
-// into the read-only container's tmpfs `/work` mount before start.
-function packCodeTar(spec: ImageSpec, code: string): Promise<Buffer> {
+// Collect the unique parent directories implied by a set of relative file
+// paths (e.g. "src/lib/util.js" → ["src", "src/lib"]), nearest-root first, so
+// we can emit explicit tar directory entries. Docker's untar does create
+// missing parents, but emitting them keeps the archive self-describing and
+// portable across daemon versions.
+function parentDirsFor(paths: readonly string[]): string[] {
+  const dirs = new Set<string>();
+  for (const p of paths) {
+    const parts = p.split("/");
+    parts.pop(); // drop the file name
+    let prefix = "";
+    for (const part of parts) {
+      prefix = prefix ? `${prefix}/${part}` : part;
+      dirs.add(prefix);
+    }
+  }
+  return [...dirs].sort();
+}
+
+// Packs the user's entrypoint code plus any extra workspace `files` as a single
+// tar so we can `putArchive` it into the read-only container's tmpfs `/work`
+// mount before start. The extra files land workspace-relative to the entrypoint
+// so language-relative imports resolve. Caller-supplied paths are already
+// confined to the workspace root upstream (contract + handler validation via
+// `@oxagen/sandbox/workspace`); the entry name strips any leading `/work/` and
+// `tar-stream` itself never interprets `..` — the bytes are written verbatim.
+function packWorkspaceTar(
+  spec: ImageSpec,
+  code: string,
+  files: Record<string, string> | undefined,
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const pack = tar.pack();
-    const fileName = spec.codePath.replace(/^\/work\//, "");
-    pack.entry({ name: fileName, mode: 0o755 }, code, (err) => {
-      if (err) reject(err);
-      else pack.finalize();
-    });
+    const codeName = spec.codePath.replace(/^\/work\//, "");
+    const extra = Object.entries(files ?? {}).filter(([name]) => name !== codeName);
+
+    // Sequence the async pack.entry() calls (the callback API does not queue).
+    const dirEntries = parentDirsFor(extra.map(([name]) => name)).map(
+      (name) => ({ kind: "dir" as const, name }),
+    );
+    const fileEntries = [
+      { kind: "file" as const, name: codeName, content: code },
+      ...extra.map(([name, content]) => ({ kind: "file" as const, name, content })),
+    ];
+    const queue: Array<
+      { kind: "dir"; name: string } | { kind: "file"; name: string; content: string }
+    > = [...dirEntries, ...fileEntries];
+
+    let i = 0;
+    const next = (): void => {
+      if (i >= queue.length) {
+        pack.finalize();
+        return;
+      }
+      const item = queue[i++]!;
+      if (item.kind === "dir") {
+        pack.entry({ name: item.name, type: "directory", mode: 0o755 }, "", (err) =>
+          err ? reject(err) : next(),
+        );
+      } else {
+        pack.entry({ name: item.name, mode: 0o755 }, item.content, (err) =>
+          err ? reject(err) : next(),
+        );
+      }
+    };
+    next();
+
     const chunks: Buffer[] = [];
     pack.on("data", (c: Buffer) => chunks.push(c));
     pack.on("end", () => resolve(Buffer.concat(chunks)));
@@ -158,7 +215,7 @@ async function createAndLoad(
       "oxagen.workspace": req.workspaceId,
     },
   });
-  const archive = await packCodeTar(spec, req.code);
+  const archive = await packWorkspaceTar(spec, req.code, req.files);
   await container.putArchive(archive, { path: "/work" });
   return { container, spec };
 }

@@ -1,16 +1,27 @@
 #!/usr/bin/env tsx
 /**
- * oxagen — agentic coding CLI powered by the Engram context engine.
+ * oxagen — agentic coding CLI powered by the Oxagen context engine.
  *
  * Usage:
  *   oxagen                     Interactive REPL (default)
  *   oxagen "fix the login bug" One-shot prompt
+ *   oxagen agents [goal...]    Agents screen — plan, dispatch & watch a fleet
  *   oxagen view                Agent dashboard (memory, compile, sessions)
  *   oxagen daemon start|stop|status
  *   oxagen config [key] [value]
  */
+import { createRequire } from "node:module";
 import { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
+
+// The Oxagen context engine pulls in DuckDB, a native CommonJS dependency that
+// references a bare `require`. Under pure-ESM execution that global is absent, so
+// loading the store throws "require is not defined". Provide the shim before any
+// code path dynamically imports the context engine.
+{
+  const g = globalThis as { require?: unknown };
+  if (typeof g.require === "undefined") g.require = createRequire(import.meta.url);
+}
 
 const { version } = pkg;
 
@@ -18,26 +29,46 @@ const program = new Command();
 
 program
   .name("oxagen")
-  .description("Agentic coding assistant — powered by Engram")
+  .description("Agentic coding assistant — powered by the Oxagen context engine")
   .version(version)
   .argument("[prompt...]", "One-shot prompt (runs and exits)")
-  .action(async (promptWords: string[]) => {
-    const prompt = promptWords.join(" ").trim();
+  .option("-m, --model <slug>", "Gateway model slug (overrides config/default)")
+  .option(
+    "--readonly",
+    "Read-only mode: read/search/explain only — no file edits or commands",
+    false,
+  )
+  .option(
+    "--no-pipeline",
+    "Skip prompt evaluation, context injection, and completeness judging",
+  )
+  .action(
+    async (
+      promptWords: string[],
+      opts: { model?: string; readonly?: boolean; pipeline?: boolean },
+    ) => {
+      const prompt = promptWords.join(" ").trim();
+      const runOpts = {
+        model: opts.model,
+        readOnly: opts.readonly,
+        bare: opts.pipeline === false,
+      };
 
-    if (prompt) {
-      // One-shot mode: run prompt, stream response, exit
-      const { runOneShot } = await import("./repl/one-shot.js");
-      await runOneShot(prompt);
-    } else if (process.stdout.isTTY) {
-      // Interactive REPL mode
-      const { launchRepl } = await import("./repl/interactive.js");
-      await launchRepl();
-    } else {
-      // Piped input — read from stdin
-      const { runFromStdin } = await import("./repl/one-shot.js");
-      await runFromStdin();
-    }
-  });
+      if (prompt) {
+        // One-shot mode: run prompt, stream response, exit
+        const { runOneShot } = await import("./repl/one-shot.js");
+        await runOneShot(prompt, runOpts);
+      } else if (process.stdout.isTTY) {
+        // Interactive REPL mode
+        const { launchRepl } = await import("./repl/interactive.js");
+        await launchRepl(runOpts);
+      } else {
+        // Piped input — read from stdin
+        const { runFromStdin } = await import("./repl/one-shot.js");
+        await runFromStdin(runOpts);
+      }
+    },
+  );
 
 // ── view: agent dashboard ─────────────────────────────────────────────────────
 
@@ -47,6 +78,28 @@ program
   .action(async () => {
     const { launchAgentView } = await import("./tui/agent-view/index.js");
     launchAgentView();
+  });
+
+// ── agents: the agents screen (fleet) ─────────────────────────────────────────
+
+program
+  .command("agents")
+  .description("Launch the agents screen — plan a goal, dispatch a fleet, watch it work")
+  .argument("[goal...]", "Goal to plan into tasks and run immediately")
+  .option("--concurrency <n>", "Max agents running at once", (v) => parseInt(v, 10), 4)
+  .option(
+    "--readonly",
+    "Read-only agents: read/search/explain only — no file edits or commands",
+    false,
+  )
+  .action(async (goal: string[], opts: { concurrency: number; readonly: boolean }) => {
+    const { launchFleetView } = await import("./tui/fleet-view/index.js");
+    await launchFleetView({
+      cwd: process.cwd(),
+      goal: goal.join(" ").trim() || undefined,
+      concurrency: opts.concurrency,
+      readOnly: opts.readonly,
+    });
   });
 
 // ── daemon: context daemon lifecycle ──────────────────────────────────────────
@@ -78,6 +131,18 @@ daemon
   .action(async () => {
     const { daemonStatus } = await import("./daemon/lifecycle.js");
     await daemonStatus();
+  });
+
+// ── replay: inspect how a past turn was handled ───────────────────────────────
+
+program
+  .command("replay")
+  .description("Show how a past turn was handled (prompt, scores, context, model, judge)")
+  .argument("[turn]", "Turn index (1 = most recent) or id; omit for the latest")
+  .option("--list", "List recent turns instead of replaying one", false)
+  .action(async (turn: string | undefined, opts: { list?: boolean }) => {
+    const { handleReplay } = await import("./commands/replay.js");
+    await handleReplay(turn, opts);
   });
 
 // ── config: local configuration ───────────────────────────────────────────────

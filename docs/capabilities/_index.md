@@ -72,6 +72,12 @@ contract-first design, IAM enforcement, and instrumentation.
 - [chat.message.execution](chat.message.execution.md) — Record an agent execution that originated from a chat message; atomically links execution to message for observability
 - [chat.message.send](chat.message.send.md) — Append a user message to a conversation and stream the assistant's response
 
+## Code (3)
+
+- [code.diff](code.diff.md) — Produce a unified diff between two file blobs with added/removed line counts (computed in-process)
+- [code.format](code.format.md) — Run a language-aware formatter (json, python) on source inside the sandbox and return the formatted text
+- [code.patch](code.patch.md) — Apply a unified diff to a path-confined workspace and return only the changed files
+
 ## Connection (10)
 
 - [connection.create](connection.create.md) — Create a new data source connection for a workspace; credentials are encrypted before storage
