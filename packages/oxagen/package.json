@@ -25,6 +25,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@opentelemetry/api": "1.9.1",
     "@oxagen/config": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "zod": "3.25.76"
