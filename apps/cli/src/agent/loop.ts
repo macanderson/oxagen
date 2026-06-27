@@ -19,6 +19,8 @@ import { wrapToolsWithGate } from "../settings/gate.js";
 import { runHooks } from "../settings/hooks.js";
 import { loadMcpTools, type McpServerStatus } from "../mcp/client.js";
 import { filterToolsForAgent } from "../agents/tools.js";
+import { loadRules, renderRulesSection, guardsToDeny } from "../rules/index.js";
+import type { Rule } from "../rules/types.js";
 import type { AgentDefinition } from "../agents/types.js";
 import type { OxagenSettings } from "../settings/schema.js";
 import type { ProjectContext } from "./project-context.js";
@@ -56,6 +58,12 @@ export interface RunAgentOptions {
    * settings resolved from `cwd`. Injectable so callers (and tests) can override.
    */
   settings?: OxagenSettings;
+  /**
+   * Workspace rules for this turn. Injected into the system prompt (Tier 1) and
+   * their guards hard-enforced at the tool gate (Tier 2). Defaults to the rules
+   * loaded from `cwd`; injectable for tests.
+   */
+  rules?: Rule[];
   /**
    * Run this turn as a named agent: its system prompt replaces the default
    * identity, its tool allowlist restricts the available tools, and its model
@@ -125,6 +133,9 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   // settings.json drives this turn's tool permissions and lifecycle hooks.
   const settings = opts.settings ?? loadSettings({ cwd }).settings;
 
+  // Workspace rules: injected into the prompt (Tier 1) + hard-gated (Tier 2).
+  const rules = opts.rules ?? loadRules({ cwd });
+
   // Recall relevant project memory and write the incoming prompt (best-effort).
   const recalled = opts.memory ? await opts.memory.recallContext() : "";
   void opts.memory?.remember("user_prompt", opts.prompt);
@@ -154,6 +165,9 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     system += "\n\n## Session context (from SessionStart hooks)\n" + sessionStart.output;
   }
 
+  // Tier 1 adherence: tell the model about the workspace rules it must follow.
+  system += renderRulesSection(rules);
+
   const messages: ModelMessage[] = [
     ...(opts.history ?? []),
     { role: "user", content: opts.prompt },
@@ -175,12 +189,22 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     { ...buildTools(cwd, { readOnly: opts.readOnly }), ...(mcp?.tools ?? {}) },
     opts.agent?.tools,
   );
+  // Tier 2 adherence: guarded rules become permission deny entries the gate
+  // enforces before a tool runs; the deny→reason map returns the rule text.
+  const ruleDenies = guardsToDeny(rules);
+  const gatePermissions = ruleDenies.deny.length
+    ? {
+        ...settings.permissions,
+        deny: [...(settings.permissions?.deny ?? []), ...ruleDenies.deny],
+      }
+    : settings.permissions;
   const tools = wrapToolsWithGate(availableTools, {
       cwd,
-      permissions: settings.permissions,
+      permissions: gatePermissions,
       hooks: settings.hooks,
       signal: opts.signal,
       onBlocked: opts.onToolBlocked,
+      denyReasons: ruleDenies.reasons,
     },
   );
 

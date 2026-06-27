@@ -21,6 +21,13 @@ export interface ToolGateContext {
   signal?: AbortSignal;
   /** Notified whenever a tool call is blocked (for surfacing in the UI/logs). */
   onBlocked?: (toolName: string, reason: string) => void;
+  /**
+   * Map from a permission deny entry (e.g. `Edit(migrations/**)`) to a human
+   * message. When a workspace rule's guard produces the deny, the agent sees the
+   * rule text instead of the raw glob, so it self-corrects. (See the rules
+   * module / adherence loop.)
+   */
+  denyReasons?: Record<string, string>;
 }
 
 type ToolExecute = NonNullable<ToolSet[string]["execute"]>;
@@ -44,8 +51,11 @@ export function wrapToolsWithGate(tools: ToolSet, ctx: ToolGateContext): ToolSet
     const gated: ToolExecute = async (input, options) => {
       const perm = evaluateLocalPermission(name, input, ctx.permissions);
       if (perm.decision === "deny") {
-        const reason = `Permission denied: \`${name}\` ${perm.reason}.`;
-        ctx.onBlocked?.(name, perm.reason);
+        const ruleMessage = perm.rule ? ctx.denyReasons?.[perm.rule] : undefined;
+        const reason = ruleMessage
+          ? `Blocked by ${ruleMessage}`
+          : `Permission denied: \`${name}\` ${perm.reason}.`;
+        ctx.onBlocked?.(name, ruleMessage ?? perm.reason);
         return `⛔ ${reason}`;
       }
 

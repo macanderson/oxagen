@@ -330,6 +330,44 @@ command
     await commandRun(name, args ?? []);
   });
 
+// ── rules: workspace rules the agent must follow ──────────────────────────────
+
+const rules = program
+  .command("rules")
+  .description("Manage workspace rules the agent is told about and hard-blocked from violating");
+rules
+  .command("list")
+  .description("List rules (and which are hard-enforced)")
+  .action(async () => {
+    const { rulesList } = await import("./commands/rules.js");
+    rulesList();
+  });
+rules
+  .command("show")
+  .description("Show a rule's text and guard")
+  .argument("<name>", "Rule name")
+  .action(async (name: string) => {
+    const { rulesShow } = await import("./commands/rules.js");
+    rulesShow(name);
+  });
+rules
+  .command("new")
+  .description("Scaffold a new rule at .oxagen/rules/<name>.md")
+  .argument("<name>", "Rule name")
+  .action(async (name: string) => {
+    const { rulesNew } = await import("./commands/rules.js");
+    rulesNew(name);
+  });
+rules
+  .command("check")
+  .description("Dry-run a proposed tool call against the guards (bash|edit|write|read)")
+  .argument("<tool>", "bash | edit | write | read")
+  .argument("<subject>", "The command (bash) or path (edit/write/read) to test")
+  .action(async (tool: string, subject: string) => {
+    const { rulesCheck } = await import("./commands/rules.js");
+    rulesCheck(tool, subject);
+  });
+
 // ── mcp: external MCP servers ─────────────────────────────────────────────────
 
 const collect = (val: string, prev: string[]): string[] => prev.concat([val]);

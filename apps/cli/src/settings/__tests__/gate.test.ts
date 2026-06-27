@@ -92,6 +92,22 @@ describe("wrapToolsWithGate", () => {
     expect(calls).toEqual(["bash:git status"]);
   });
 
+  it("surfaces the rule text (denyReasons) instead of the raw glob when a guard blocks", async () => {
+    const calls: string[] = [];
+    const blocked: string[] = [];
+    const gated = wrapToolsWithGate(makeTools(calls), {
+      cwd: CWD,
+      permissions: { deny: ["Bash(rm -rf*)"] },
+      denyReasons: { "Bash(rm -rf*)": 'rule "no-rm-rf" — Never run destructive recursive deletes.' },
+      onBlocked: (_n, reason) => blocked.push(reason),
+    });
+    const result = await call(gated, "bash", { command: "rm -rf /tmp/x" });
+    expect(String(result)).toContain("Never run destructive recursive deletes.");
+    expect(String(result)).toContain('rule "no-rm-rf"');
+    expect(calls).toEqual([]);
+    expect(blocked[0]).toContain("no-rm-rf");
+  });
+
   it("blocks a tool when a PreToolUse hook vetoes it", async () => {
     const calls: string[] = [];
     const blocked: string[] = [];
