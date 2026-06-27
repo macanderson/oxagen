@@ -63,6 +63,12 @@ vi.mock("./skill-workspace-seed", () => ({
   seedWorkspaceDefaultSkills: vi.fn(async () => ({ scanned: 0, inserted: 0 })),
 }));
 
+// Stub seedWorkspaceDefaultEnvironment to isolate workspace.create tests from
+// environment-seeding behaviour — covered by workspace-environment-seed tests.
+vi.mock("./workspace-environment-seed", () => ({
+  seedWorkspaceDefaultEnvironment: vi.fn(async () => "env_stub_id"),
+}));
+
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return {
@@ -188,6 +194,15 @@ describe("workspaceCreateHandler (@oxagen/handlers)", () => {
     const { seedWorkspaceDefaultSkills } = await import("./skill-workspace-seed");
     await workspaceCreateHandler({ name: "Skill Ws", slug: "skill-ws" }, CTX);
     expect(seedWorkspaceDefaultSkills).toHaveBeenCalledWith({
+      orgId: CTX.orgId,
+      workspaceId: "internal_ws_id",
+    });
+  });
+
+  it("seeds the default environment after workspace creation", async () => {
+    const { seedWorkspaceDefaultEnvironment } = await import("./workspace-environment-seed");
+    await workspaceCreateHandler({ name: "Env Ws", slug: "env-ws" }, CTX);
+    expect(seedWorkspaceDefaultEnvironment).toHaveBeenCalledWith({
       orgId: CTX.orgId,
       workspaceId: "internal_ws_id",
     });
