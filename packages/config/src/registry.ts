@@ -727,30 +727,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: { "*": "anthropic/claude-opus-4.8" },
   },
-  OXAGEN_LLM_EVALUATOR: {
-    group: "AI providers",
-    description:
-      "Optional override for the oxagen CLI pipeline's evaluator model (the quick " +
-      "eval pass that scores a draft). Unset by default — falls back in-code to the " +
-      "fast tier. CLI-local; not injected into any deployed service.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  OXAGEN_LLM_ADVISOR: {
-    group: "AI providers",
-    description:
-      "Optional override for the oxagen CLI pipeline's advisor/judge model. Unset by " +
-      "default — falls back in-code to the precise tier (or balanced when the executor " +
-      "is already the precise model). CLI-local; not injected into any deployed service.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
   OXAGEN_LLM_IMAGE_BASIC: {
     group: "AI providers",
     description:
@@ -1223,28 +1199,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     description:
       "Vercel AI Gateway model slug used by the CLI's local agent loop (e.g. " +
       "anthropic/claude-sonnet-4.5). Falls back to the value in ~/.config/oxagen/config.json, then a default.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  OXAGEN_LLM_EVALUATOR: {
-    group: "CLI",
-    description:
-      "Optional Vercel AI Gateway model slug for the CLI turn-pipeline's prompt " +
-      "evaluator. Falls back to the fast tier when unset.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  OXAGEN_LLM_ADVISOR: {
-    group: "CLI",
-    description:
-      "Optional Vercel AI Gateway model slug for the CLI completeness advisor/" +
-      "judge. Falls back to the precise tier (then balanced) when unset.",
     secret: false,
     clientExposed: false,
     services: [],

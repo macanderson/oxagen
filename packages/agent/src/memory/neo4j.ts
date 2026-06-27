@@ -199,6 +199,57 @@ export async function reinforceMemory(args: {
   }
 }
 
+/** A decayable AgentMemory projection, scoped to the active tenant. */
+export interface DecayableMemory {
+  id: string;
+  weight: "low" | "high" | "critical";
+  confidence: number;
+  lastReinforcedAt: string | null;
+  createdAt: string;
+  nodeRef: string;
+}
+
+/**
+ * List all decayable (non-critical, confidence > 0) AgentMemory nodes for the
+ * active tenant scope. Returns plain typed objects — the raw neo4j-driver
+ * records never leave this package, so callers (e.g. the decay-pass Inngest
+ * function) get a fully typed projection with no `any` boundary.
+ *
+ * orgId/workspaceId are injected automatically by scopedSession() from the
+ * active tenant scope.
+ */
+export async function listDecayableMemories(): Promise<DecayableMemory[]> {
+  const s = scopedSession();
+  try {
+    const result = await s.run(
+      /* cypher */ `
+        MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})
+        WHERE m.weight <> 'critical'
+          AND coalesce(m.confidence, 1.0) > 0
+        RETURN
+          m.id            AS id,
+          m.weight        AS weight,
+          coalesce(m.confidence, 1.0)  AS confidence,
+          toString(m.lastReinforcedAt) AS lastReinforcedAt,
+          toString(m.createdAt)        AS createdAt,
+          coalesce(m.nodeRef, '')      AS nodeRef
+      `,
+    );
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment -- neo4j-driver Record.get() is typed as `any`; shape is guaranteed by the Cypher projection above. */
+    return result.records.map((r) => ({
+      id: r.get("id"),
+      weight: r.get("weight"),
+      confidence: Number(r.get("confidence") ?? 1.0),
+      lastReinforcedAt: r.get("lastReinforcedAt") ?? null,
+      createdAt: r.get("createdAt"),
+      nodeRef: r.get("nodeRef") ?? "",
+    }));
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
+  } finally {
+    await s.close();
+  }
+}
+
 /**
  * Apply exponential decay to a memory by setting its confidence to `newConfidence`.
  * Callers are responsible for computing the decay formula:

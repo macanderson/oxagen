@@ -8,6 +8,8 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
 // Side-effect import: bind every foundation handler so invoke() can resolve.
 import "@oxagen/handlers/register";
+// agent.* capabilities (e.g. agent.memory.policy.write) bind via the agent register.
+import "@oxagen/agent/register";
 import type { AgentMemoryPolicyWriteOutput } from "@oxagen/oxagen/contracts/agent.memory.policy.write";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";

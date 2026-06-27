@@ -236,6 +236,13 @@ import { metadata as secretValueUnsetMetadata } from "./secret.value.unset";
 import { metadata as secretImportEnvMetadata } from "./secret.import_env";
 import { metadata as secretRevealMetadata } from "./secret.reveal";
 import { metadata as secretExportMetadata } from "./secret.export";
+// Code capability tools (code.diff / code.patch / code.format are mcp-surfaced)
+import { metadata as codeDiffMetadata } from "./code.diff";
+import { metadata as codePatchMetadata } from "./code.patch";
+import { metadata as codeFormatMetadata } from "./code.format";
+// Memory decay policy tools (OXA-1374)
+import { metadata as agentMemoryPolicyReadMetadata } from "./agent.memory.policy.read";
+import { metadata as agentMemoryPolicyWriteMetadata } from "./agent.memory.policy.write";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -453,6 +460,13 @@ const allToolMetadata = [
   secretImportEnvMetadata,
   secretRevealMetadata,
   secretExportMetadata,
+  // Code capability tools (mcp-surfaced; tool files existed but weren't listed here)
+  codeDiffMetadata,
+  codePatchMetadata,
+  codeFormatMetadata,
+  // Memory decay policy tools (OXA-1374)
+  agentMemoryPolicyReadMetadata,
+  agentMemoryPolicyWriteMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────

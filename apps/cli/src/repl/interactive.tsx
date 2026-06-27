@@ -317,21 +317,7 @@ export function ReplApp({
         setIsStreaming(false);
         setTurnStartedAt(null);
       }
-    } finally {
-      pumpingRef.current = false;
-    }
   }, []);
-
-  // Every submission goes through the queue. When idle, the pump picks it up
-  // immediately; when a turn is in flight, it waits its turn (FIFO).
-  const enqueue = useCallback(
-    (text: string) => {
-      queueRef.current = [...queueRef.current, text];
-      setQueued(queueRef.current);
-      void pump();
-    },
-    [exit, commit, pushAssistant, cwd, options.readOnly],
-  );
 
   // The pump reads the latest handleSubmit via a ref so it never closes over a
   // stale version, while staying a stable callback itself.
