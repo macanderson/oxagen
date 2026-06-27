@@ -34,7 +34,7 @@ export const graphNodeSearchHandler: CapabilityHandler<typeof graphNodeSearch> =
       // Score: 1.0 if displayName matches, 0.5 if only description matches,
       // 0.75 if both match. This keeps ranking deterministic without full-text indexing.
       const result = await session.run(
-        `MATCH (n:KnowledgeNode)
+        `MATCH (n:GraphNode)
          WHERE n.orgId = $orgId
            AND n.workspaceId = $workspaceId
            AND (

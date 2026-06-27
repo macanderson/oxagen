@@ -17,6 +17,7 @@ import { ensureGatewayKey, MissingGatewayKeyError } from "./env.js";
 import type { ProjectContext } from "./project-context.js";
 import type { SessionMemory } from "./memory.js";
 import type { ToolEvent } from "./trace.js";
+import type { PermissionBroker } from "./permissions.js";
 
 export interface RunAgentOptions {
   /** The user's prompt for this turn. */
@@ -33,6 +34,8 @@ export interface RunAgentOptions {
   projectContext?: ProjectContext;
   /** Read-only mode: no file mutation or command execution. */
   readOnly?: boolean;
+  /** Permission broker gating mutating tools (absent ⇒ ungated). */
+  broker?: PermissionBroker;
   /** Session memory (Oxagen context engine). Recalled before, written after. */
   memory?: SessionMemory | null;
   /** Abort the turn (e.g. user hit Ctrl-C). */
@@ -156,7 +159,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     model: resolveModelId(opts.model),
     system,
     messages,
-    tools: buildTools(cwd, { readOnly: opts.readOnly }),
+    tools: buildTools(cwd, { readOnly: opts.readOnly, broker: opts.broker }),
     stopWhen: stepCountIs(opts.maxSteps ?? 32),
     abortSignal: opts.signal,
     onError: ({ error }) => {

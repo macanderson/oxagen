@@ -37,6 +37,7 @@ import { emptyUsage, type ModelTier, type UsageTotals } from "./fleet/types.js";
 import type { ProjectContext } from "./project-context.js";
 import type { SessionMemory } from "./memory.js";
 import type { FleetMemory } from "./fleet/memory.js";
+import type { PermissionBroker } from "./permissions.js";
 import type {
   EnhancementTrace,
   JudgeVerdict,
@@ -80,6 +81,8 @@ export interface RunTurnOptions {
   projectContext?: ProjectContext;
   /** Read-only mode: no file mutation, and the auto-revise loop is disabled. */
   readOnly?: boolean;
+  /** Permission broker gating mutating tools (absent ⇒ ungated). */
+  broker?: PermissionBroker;
   /** Episodic session memory (recalled before, written after). */
   memory?: SessionMemory | null;
   /** Fleet memory for recalling/recording weighted lessons. */
@@ -234,6 +237,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       maxSteps: opts.maxSteps,
       projectContext: opts.projectContext,
       readOnly: opts.readOnly,
+      broker: opts.broker,
       memory: opts.memory,
       signal: opts.signal,
       onText: opts.onText,
@@ -474,6 +478,7 @@ async function runBare(
     maxSteps: opts.maxSteps,
     projectContext: opts.projectContext,
     readOnly: opts.readOnly,
+    broker: opts.broker,
     memory: opts.memory,
     signal: opts.signal,
     onText: opts.onText,

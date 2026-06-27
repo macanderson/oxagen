@@ -49,10 +49,10 @@ export const graphCypherHandler: CapabilityHandler<typeof graphCypher> = async (
     const { object } = await generateObjectFor<NlToCypherResult>({
       schema: nlToCypherSchema,
       system: `You are a Neo4j Cypher expert. Translate the user's natural-language question into a
-read-only Cypher query against a knowledge graph. The graph has :KnowledgeNode nodes with
+read-only Cypher query against a knowledge graph. The graph has :GraphNode nodes with
 properties: publicId (UUID), orgId, workspaceId, label (string), displayName (string),
 description (string?), properties (JSON string), createdAt, updatedAt.
-Relationships between :KnowledgeNode nodes include:
+Relationships between :GraphNode nodes include:
 RELATED_TO, PART_OF, CAUSED_BY, REFERENCES, SIMILAR_TO, DEPENDS_ON, CREATED_BY, MENTIONS.
 
 RULES:

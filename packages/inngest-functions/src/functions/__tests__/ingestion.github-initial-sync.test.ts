@@ -263,13 +263,16 @@ describe("ingestion.github-initial-sync Inngest function", () => {
     expect((commits[0]!.data["payload"] as Record<string, unknown>)["git_branch"]).toBe("trunk");
   });
 
-  it("dispatches one ingestion/github.parse-file per accepted source file (3)", async () => {
+  it("dispatches one ingestion/github.parse-file per accepted source file (.ts/.py/.md, 4)", async () => {
     const step = makeStep();
     const sendEvent = step.sendEvent as ReturnType<typeof vi.fn>;
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
     const parseFiles = allEventsFrom(sendEvent).filter((e) => e.name === "ingestion/github.parse-file");
-    expect(parseFiles).toHaveLength(3);
+    // src/auth.ts, src/billing.ts, src/utils.py, README.md (markdown docs are now
+    // ingested too); node_modules/dist/empty/tree entries remain excluded.
+    expect(parseFiles).toHaveLength(4);
+    expect(parseFiles.map((e) => e.data["path"])).toContain("README.md");
     for (const ev of parseFiles) {
       expect(ev.data).toMatchObject({
         connectionId: "conn-gh-1",
@@ -308,7 +311,7 @@ describe("ingestion.github-initial-sync Inngest function", () => {
       connectionId: "conn-gh-1",
       owner: "acme",
       repo: "api",
-      fileCount: 3,
+      fileCount: 4,
       // 1 repo + 2 PRs + 1 issue + 1 release + 1 commit
       entityCount: 6,
     });

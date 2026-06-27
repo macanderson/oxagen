@@ -1,3 +1,4 @@
+import { embedText } from "@oxagen/ai";
 import { eventClient } from "./event-client";
 import { logger } from "./logger";
 
@@ -17,6 +18,10 @@ import { logger } from "./logger";
  * - Best-effort: the Postgres row is the source of truth. A failure to enqueue
  *   is logged, never thrown — synced_to_graph_at simply stays NULL for a sweep
  *   to retry, exactly as the worker documents.
+ * - Embedding: computed here so the Inngest worker does not need to depend on
+ *   @oxagen/ai. A failed embed is treated as best-effort — the event is still
+ *   emitted with embedding: null and the node remains searchable by structural
+ *   traversal; a nightly sweep can backfill missing vectors.
  */
 
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
@@ -42,12 +47,59 @@ export interface ExecutionSyncInput {
   steps?: ExecutionStepLike[] | null;
 }
 
+/** Build a concise human-readable summary of what happened in an execution. */
+function buildSummary(input: ExecutionSyncInput, toolCalls: Array<{ toolName: string }>): string {
+  const toolPart =
+    toolCalls.length > 0
+      ? `${toolCalls.length} tool call${toolCalls.length === 1 ? "" : "s"} (${toolCalls.map((tc) => tc.toolName).join(", ")})`
+      : "no tool calls";
+  const tokenPart =
+    input.outputTokens != null ? `${input.outputTokens} output tokens` : "no token data";
+  const agentPart = input.agentId ? ` by agent ${input.agentId}` : "";
+  return `${input.originType} execution${agentPart}: ${input.status}, ${toolPart}, ${tokenPart}`;
+}
+
+/** Build a short display name for the graph node — never a raw UUID. */
+function buildDisplayName(input: ExecutionSyncInput): string {
+  const agentPart = input.agentId ? ` by ${input.agentId}` : "";
+  return `${input.originType} execution${agentPart}`;
+}
+
 export async function emitExecutionSyncEvent(input: ExecutionSyncInput): Promise<void> {
   if (!TERMINAL_STATUSES.has(input.status)) return;
 
   const toolCalls = (input.steps ?? []).flatMap((step) =>
     (step.toolCalls ?? []).map((tc) => ({ toolName: tc.toolName, toolType: tc.toolType })),
   );
+
+  const summary = buildSummary(input, toolCalls);
+  const displayName = buildDisplayName(input);
+
+  // Compute an embedding of the summary for vector search. Best-effort — a
+  // failed embed never prevents the event from being emitted or the lineage
+  // node from being written; the node just won't be hit by semantic search
+  // until a backfill pass sets its vector.
+  //
+  // executionStepId MUST be null (not a synthesized string) because it flows
+  // into ClickHouse `token_usage.execution_step_id` (UUID column) and
+  // `credit_ledger.reference_id` (Postgres uuid column) — see EmbedTextOpts
+  // docs in @oxagen/ai.
+  let embedding: number[] | null = null;
+  try {
+    embedding = await embedText(summary, {
+      telemetry: {
+        orgId: input.orgId,
+        workspaceId: input.workspaceId,
+        surface: "runner",
+        executionStepId: null,
+      },
+    });
+  } catch (err) {
+    logger.warn(
+      { err, executionId: input.executionId, orgId: input.orgId },
+      "agent.execution: embedding failed — lineage node will be written without a vector",
+    );
+  }
 
   try {
     await eventClient.send({
@@ -67,6 +119,9 @@ export async function emitExecutionSyncEvent(input: ExecutionSyncInput): Promise
         outputTokens: input.outputTokens ?? null,
         estimatedCostUsd: input.estimatedCostUsd != null ? String(input.estimatedCostUsd) : null,
         toolCalls,
+        summary,
+        displayName,
+        embedding,
       },
     });
   } catch (err) {

@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/cli",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Oxagen CLI — agentic coding powered by Oxagen's knowledge-graph context engine",
   "type": "module",
   "main": "./dist/index.js",

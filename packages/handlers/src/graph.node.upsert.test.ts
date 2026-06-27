@@ -8,6 +8,9 @@
  *   - Returns nodeId and created=true on create, created=false on match
  *   - Throws when MERGE returns no record
  *   - JSON-encodes properties before passing to Cypher
+ *   - Calls embedText with executionStepId: null (billing correctness)
+ *   - Stores embedding on node after upsert
+ *   - Upsert still succeeds when embedText throws
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -15,6 +18,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   run: vi.fn(),
   close: vi.fn(async () => undefined),
+  embedText: vi.fn(),
 }));
 
 vi.mock("@oxagen/ontology/tenant", () => ({
@@ -26,6 +30,10 @@ vi.mock("@oxagen/tenancy", () => ({
     _scope: unknown,
     fn: () => Promise<void>,
   ) => fn(),
+}));
+
+vi.mock("@oxagen/ai", () => ({
+  embedText: mocks.embedText,
 }));
 
 import { graphNodeUpsertHandler } from "./graph.node.upsert";
@@ -47,11 +55,14 @@ function makeRecord(nodeId: string, wasCreated: boolean) {
   };
 }
 
+const VECTOR = new Array(1536).fill(0.5);
+
 // ── setup ─────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.run.mockResolvedValue(makeRecord("node-uuid-1", true));
+  mocks.embedText.mockResolvedValue(VECTOR);
 });
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -90,7 +101,7 @@ describe("graphNodeUpsertHandler", () => {
     await graphNodeUpsertHandler({ label: "Person", displayName: "Grace" }, CTX);
     const cypher = mocks.run.mock.calls[0]?.[0] as string;
     expect(cypher).toContain(
-      "MERGE (n:KnowledgeNode {naturalKey: $naturalKey, orgId: $orgId, workspaceId: $workspaceId})",
+      "MERGE (n:GraphNode {naturalKey: $naturalKey, orgId: $orgId, workspaceId: $workspaceId})",
     );
   });
 
@@ -132,6 +143,35 @@ describe("graphNodeUpsertHandler", () => {
     expect(params.description).toBe("Graph database");
   });
 
+  it("promotes the label to a real Neo4j domain label and defaults is_system to false", async () => {
+    await graphNodeUpsertHandler({ label: "Person", displayName: "Heidi" }, CTX);
+    const cypher = mocks.run.mock.calls[0]?.[0] as string;
+    const params = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(cypher).toContain("SET n:Person");
+    expect(cypher).toContain("n.is_system    = $isSystem");
+    expect(params.isSystem).toBe(false);
+  });
+
+  it("sanitizes an unsafe label before interpolating it as a Neo4j label", async () => {
+    await graphNodeUpsertHandler(
+      { label: "Nuclear-powered submarine", displayName: "Nautilus" },
+      CTX,
+    );
+    const cypher = mocks.run.mock.calls[0]?.[0] as string;
+    // Hyphens/spaces collapse to underscores; no raw metacharacters reach Cypher.
+    expect(cypher).toContain("SET n:Nuclear_powered_submarine");
+    expect(cypher).not.toContain("Nuclear-powered submarine");
+  });
+
+  it("honors an explicit isSystem=true for product-owned nodes", async () => {
+    await graphNodeUpsertHandler(
+      { label: "Execution", displayName: "run-1", isSystem: true },
+      CTX,
+    );
+    const params = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.isSystem).toBe(true);
+  });
+
   it("throws when MERGE returns no record", async () => {
     mocks.run.mockResolvedValueOnce({ records: [] });
     await expect(
@@ -145,5 +185,52 @@ describe("graphNodeUpsertHandler", () => {
       graphNodeUpsertHandler({ label: "Person", displayName: "Frank" }, CTX),
     ).rejects.toThrow("Neo4j down");
     expect(mocks.close).toHaveBeenCalled();
+  });
+
+  // ── embedding tests ────────────────────────────────────────────────────────
+
+  it("calls embedText after upsert with executionStepId: null", async () => {
+    await graphNodeUpsertHandler({ label: "Person", displayName: "Alice" }, CTX);
+    expect(mocks.embedText).toHaveBeenCalledTimes(1);
+    const opts = mocks.embedText.mock.calls[0]![1] as {
+      telemetry: { executionStepId: unknown; orgId: string; workspaceId: string; surface: string };
+    };
+    expect(opts.telemetry.executionStepId).toBeNull();
+    expect(opts.telemetry.orgId).toBe(CTX.orgId);
+    expect(opts.telemetry.workspaceId).toBe(CTX.workspaceId);
+    expect(opts.telemetry.surface).toBe("app");
+  });
+
+  it("stores the embedding on the node via a second session.run call", async () => {
+    await graphNodeUpsertHandler({ label: "Person", displayName: "Bob" }, CTX);
+    // First call = MERGE, second call = SET n.embedding
+    expect(mocks.run).toHaveBeenCalledTimes(2);
+    const embedCypher = mocks.run.mock.calls[1]![0] as string;
+    const embedParams = mocks.run.mock.calls[1]![1] as Record<string, unknown>;
+    expect(embedCypher).toContain("SET n.embedding = $embedding");
+    expect(embedCypher).toContain("n.embeddingUpdatedAt = datetime()");
+    expect(embedParams.embedding).toEqual(VECTOR);
+  });
+
+  it("upsert still succeeds when embedText throws (embedding is best-effort)", async () => {
+    mocks.embedText.mockRejectedValueOnce(new Error("AI gateway down"));
+    const result = await graphNodeUpsertHandler(
+      { label: "Person", displayName: "Carol" },
+      CTX,
+    );
+    // The upsert itself must still return normally.
+    expect(result.nodeId).toBe("node-uuid-1");
+    expect(result.created).toBe(true);
+  });
+
+  it("includes label, displayName, and description in the embedding text", async () => {
+    await graphNodeUpsertHandler(
+      { label: "Topic", displayName: "TypeScript", description: "Typed superset of JS" },
+      CTX,
+    );
+    const embeddingText = mocks.embedText.mock.calls[0]![0] as string;
+    expect(embeddingText).toContain("Topic");
+    expect(embeddingText).toContain("TypeScript");
+    expect(embeddingText).toContain("Typed superset of JS");
   });
 });

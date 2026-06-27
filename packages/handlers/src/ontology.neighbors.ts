@@ -86,7 +86,7 @@ export const ontologyNeighborsHandler: CapabilityHandler<typeof ontologyNeighbor
       //    neighbors — a same-publicId node in another workspace must never be
       //    treated as found (tenant isolation, §0).
       const existsResult = await session.run(
-        `MATCH (n:KnowledgeNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
+        `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
          RETURN n.publicId AS nodeId`,
         { nodeId: input.nodeId, orgId, workspaceId },
       );
@@ -115,8 +115,8 @@ export const ontologyNeighborsHandler: CapabilityHandler<typeof ontologyNeighbor
       // number would be serialised as Float and Neo4j rejects it for LIMIT.
       const fetchLimit = BigInt(input.limit + 1);
       const result = await session.run(
-        `MATCH (n:KnowledgeNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
-         MATCH (n)-[r]-(m:KnowledgeNode)
+        `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
+         MATCH (n)-[r]-(m:GraphNode)
          WHERE m.orgId = $orgId AND m.workspaceId = $workspaceId
            ${relTypeClause}
            ${directionClause}

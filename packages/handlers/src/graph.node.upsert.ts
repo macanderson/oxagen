@@ -1,7 +1,9 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { graphNodeUpsert } from "@oxagen/oxagen/contracts/graph.node.upsert";
 import { scopedSession } from "@oxagen/ontology/tenant";
+import { sanitizeLabel } from "@oxagen/ontology/labels";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { embedText } from "@oxagen/ai";
 import { logger } from "./logger";
 
 export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> = async (
@@ -19,6 +21,15 @@ export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> =
 
   const propertiesJson = input.properties ? JSON.stringify(input.properties) : null;
 
+  // Promote the customer's type to a REAL Neo4j label (in addition to the
+  // :GraphNode anchor) so it is queryable/traversable as `(:Submarine)`. Labels
+  // cannot be parameterized in Cypher, so the value is sanitized to an
+  // injection-safe identifier before interpolation; an unusable type (e.g. "!!!")
+  // falls back to the anchor-only node with the type preserved in the `label`
+  // property. See packages/ontology/src/labels.ts.
+  const domainLabel = sanitizeLabel(input.label);
+  const domainLabelClause = domainLabel ? `\n           SET n:${domainLabel}` : "";
+
   let nodeId = "";
   let created = false;
 
@@ -30,13 +41,14 @@ export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> =
         // to its workspace; this prevents a same-org sibling workspace from
         // matching (and overwriting) another workspace's node. $orgId and
         // $workspaceId are injected automatically by scopedSession().
-        `MERGE (n:KnowledgeNode {naturalKey: $naturalKey, orgId: $orgId, workspaceId: $workspaceId})
+        `MERGE (n:GraphNode {naturalKey: $naturalKey, orgId: $orgId, workspaceId: $workspaceId})
          ON CREATE SET
            n.publicId     = randomUUID(),
            n.label        = $label,
            n.displayName  = $displayName,
            n.description  = $description,
            n.properties   = $properties,
+           n.is_system    = $isSystem,
            n.createdAt    = datetime(),
            n.updatedAt    = datetime(),
            n._created     = true
@@ -45,8 +57,10 @@ export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> =
            n.displayName  = $displayName,
            n.description  = $description,
            n.properties   = $properties,
+           n.is_system    = $isSystem,
            n.updatedAt    = datetime(),
            n._created     = false
+         WITH n${domainLabelClause}
          RETURN n.publicId AS nodeId, n._created AS wasCreated`,
         {
           naturalKey,
@@ -54,6 +68,7 @@ export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> =
           displayName: input.displayName,
           description: input.description ?? null,
           properties: propertiesJson,
+          isSystem: input.isSystem ?? false,
         },
       );
 
@@ -73,6 +88,44 @@ export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> =
     { nodeId, created, label: input.label, orgId, workspaceId },
     "graph.node.upsert: node upserted",
   );
+
+  // Best-effort: embed the node text so it's searchable via graph.search.
+  // A failed embed must NOT fail the upsert — log and continue.
+  try {
+    const textParts: string[] = [input.label, input.displayName];
+    if (input.description) textParts.push(input.description);
+    if (input.properties) {
+      for (const v of Object.values(input.properties)) {
+        if (v != null && (typeof v === "string" || typeof v === "number" || typeof v === "boolean")) {
+          textParts.push(String(v));
+        }
+      }
+    }
+    const embeddingText = textParts.join("  ");
+    const embedding = await embedText(embeddingText, {
+      telemetry: {
+        orgId,
+        workspaceId,
+        surface: "app",
+        executionStepId: null,
+      },
+    });
+
+    await runInTenantScope({ orgId, workspaceId }, async () => {
+      const session = scopedSession();
+      try {
+        await session.run(
+          `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId})
+           SET n.embedding = $embedding, n.embeddingUpdatedAt = datetime()`,
+          { nodeId, embedding },
+        );
+      } finally {
+        await session.close();
+      }
+    });
+  } catch (err) {
+    logger.warn({ err, nodeId }, "graph.node.upsert: embedding failed (non-fatal)");
+  }
 
   return { nodeId, created };
 };

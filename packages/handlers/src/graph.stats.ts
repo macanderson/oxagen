@@ -24,7 +24,7 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (in
       // independently tenant-tagged, but both endpoints carry the workspace.
       // Pure Cypher only (no APOC) so this runs on any Neo4j deployment.
       const counts = await session.run(
-        `MATCH (n:KnowledgeNode)
+        `MATCH (n:GraphNode)
          WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
          RETURN count(n) AS nodeCount,
                 count(DISTINCT n.sourceId) AS sourceCount`,
@@ -37,7 +37,7 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (in
       // Edge counts: total, and inferred subset (r.inferred = true is set by
       // semantic.edge.infer). lastModifiedAt is the most recent node/edge touch.
       const edgeResult = await session.run(
-        `MATCH (n:KnowledgeNode)-[r]->(m:KnowledgeNode)
+        `MATCH (n:GraphNode)-[r]->(m:GraphNode)
          WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
            AND m.orgId = $orgId AND m.workspaceId = $workspaceId
          RETURN count(r) AS edgeCount,
@@ -49,7 +49,7 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (in
       inferredEdgeCount = toNumber(edgeRec?.get("inferredEdgeCount"));
 
       const modifiedResult = await session.run(
-        `MATCH (n:KnowledgeNode)
+        `MATCH (n:GraphNode)
          WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
          RETURN max(coalesce(n.updatedAt, n.createdAt)) AS lastModifiedAt`,
         { orgId, workspaceId },
@@ -61,7 +61,7 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (in
 
       if (input.includeByType) {
         const byLabelResult = await session.run(
-          `MATCH (n:KnowledgeNode)
+          `MATCH (n:GraphNode)
            WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
            RETURN n.label AS label, count(n) AS count`,
           { orgId, workspaceId },
@@ -73,7 +73,7 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (in
         }
 
         const byTypeResult = await session.run(
-          `MATCH (n:KnowledgeNode)-[r]->(m:KnowledgeNode)
+          `MATCH (n:GraphNode)-[r]->(m:GraphNode)
            WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
              AND m.orgId = $orgId AND m.workspaceId = $workspaceId
            RETURN type(r) AS edgeType, count(r) AS count`,

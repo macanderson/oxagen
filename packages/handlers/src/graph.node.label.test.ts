@@ -32,7 +32,7 @@ beforeEach(() => vi.clearAllMocks());
 describe("graphNodeLabelAddHandler", () => {
   it("adds multiple labels and returns the resulting set + added delta", async () => {
     mocks.run.mockResolvedValueOnce(
-      rec({ after: ["KnowledgeNode", "Payment", "Billing", "Pii"], before: ["KnowledgeNode", "Payment"] }),
+      rec({ after: ["GraphNode", "Payment", "Billing", "Pii"], before: ["GraphNode", "Payment"] }),
     );
     const out = await graphNodeLabelAddHandler({ nodeId: "n1", labels: ["Billing", "Pii"] }, CTX);
     expect(out.labels).toEqual(["Payment", "Billing", "Pii"]); // KnowledgeNode filtered
@@ -40,16 +40,16 @@ describe("graphNodeLabelAddHandler", () => {
   });
 
   it("builds a multi-label SET clause and never parameterizes the label", async () => {
-    mocks.run.mockResolvedValueOnce(rec({ after: ["KnowledgeNode", "Billing"], before: ["KnowledgeNode"] }));
+    mocks.run.mockResolvedValueOnce(rec({ after: ["GraphNode", "Billing"], before: ["GraphNode"] }));
     await graphNodeLabelAddHandler({ nodeId: "n1", labels: ["Billing"] }, CTX);
     const cypher = mocks.run.mock.calls[0]?.[0] as string;
     expect(cypher).toContain("SET n:`Billing`");
-    expect(cypher).toContain("MATCH (n:KnowledgeNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})");
+    expect(cypher).toContain("MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})");
   });
 
   it("idempotent: a label already present is not reported as added", async () => {
     mocks.run.mockResolvedValueOnce(
-      rec({ after: ["KnowledgeNode", "Billing"], before: ["KnowledgeNode", "Billing"] }),
+      rec({ after: ["GraphNode", "Billing"], before: ["GraphNode", "Billing"] }),
     );
     const out = await graphNodeLabelAddHandler({ nodeId: "n1", labels: ["Billing"] }, CTX);
     expect(out.added).toEqual([]);
@@ -73,7 +73,7 @@ describe("graphNodeLabelAddHandler", () => {
 describe("graphNodeLabelRemoveHandler", () => {
   it("removes labels and reports the removed delta", async () => {
     mocks.run.mockResolvedValueOnce(
-      rec({ after: ["KnowledgeNode", "Payment"], before: ["KnowledgeNode", "Payment", "Billing"] }),
+      rec({ after: ["GraphNode", "Payment"], before: ["GraphNode", "Payment", "Billing"] }),
     );
     const out = await graphNodeLabelRemoveHandler({ nodeId: "n1", labels: ["Billing"] }, CTX);
     expect(out.labels).toEqual(["Payment"]);
@@ -82,7 +82,7 @@ describe("graphNodeLabelRemoveHandler", () => {
   });
 
   it("refuses to remove the internal base label (no-op)", async () => {
-    const out = await graphNodeLabelRemoveHandler({ nodeId: "n1", labels: ["KnowledgeNode"] }, CTX);
+    const out = await graphNodeLabelRemoveHandler({ nodeId: "n1", labels: ["GraphNode"] }, CTX);
     expect(out.removed).toEqual([]);
     expect(mocks.run).not.toHaveBeenCalled();
   });
@@ -90,7 +90,7 @@ describe("graphNodeLabelRemoveHandler", () => {
 
 describe("graphNodeLabelsGetHandler", () => {
   it("returns the label set minus the internal base label", async () => {
-    mocks.run.mockResolvedValueOnce(rec({ labels: ["KnowledgeNode", "Billing", "Payment"] }));
+    mocks.run.mockResolvedValueOnce(rec({ labels: ["GraphNode", "Billing", "Payment"] }));
     const out = await graphNodeLabelsGetHandler({ nodeId: "n1" }, CTX);
     expect(out.labels).toEqual(["Billing", "Payment"]);
   });
@@ -101,13 +101,13 @@ describe("graphNodeLabelsGetHandler", () => {
   });
 
   it("returns an empty array when the node has only the base label", async () => {
-    mocks.run.mockResolvedValueOnce(rec({ labels: ["KnowledgeNode"] }));
+    mocks.run.mockResolvedValueOnce(rec({ labels: ["GraphNode"] }));
     const out = await graphNodeLabelsGetHandler({ nodeId: "n1" }, CTX);
     expect(out.labels).toEqual([]);
   });
 
   it("includes the nodeId in the response", async () => {
-    mocks.run.mockResolvedValueOnce(rec({ labels: ["KnowledgeNode", "Billing"] }));
+    mocks.run.mockResolvedValueOnce(rec({ labels: ["GraphNode", "Billing"] }));
     const out = await graphNodeLabelsGetHandler({ nodeId: "my-node" }, CTX);
     expect(out.nodeId).toBe("my-node");
   });
@@ -130,7 +130,7 @@ describe("graphNodeLabelRemoveHandler — additional branches", () => {
 
   it("removed delta is empty when the label was not on the node before", async () => {
     mocks.run.mockResolvedValueOnce(
-      rec({ after: ["KnowledgeNode", "Payment"], before: ["KnowledgeNode", "Payment"] }),
+      rec({ after: ["GraphNode", "Payment"], before: ["GraphNode", "Payment"] }),
     );
     const out = await graphNodeLabelRemoveHandler({ nodeId: "n1", labels: ["Billing"] }, CTX);
     // Billing wasn't in before → removed should be empty
@@ -141,7 +141,7 @@ describe("graphNodeLabelRemoveHandler — additional branches", () => {
 
   it("removes multiple labels at once", async () => {
     mocks.run.mockResolvedValueOnce(
-      rec({ after: ["KnowledgeNode"], before: ["KnowledgeNode", "Billing", "Payment"] }),
+      rec({ after: ["GraphNode"], before: ["GraphNode", "Billing", "Payment"] }),
     );
     const out = await graphNodeLabelRemoveHandler({ nodeId: "n1", labels: ["Billing", "Payment"] }, CTX);
     expect(out.removed).toEqual(["Billing", "Payment"]);
@@ -152,7 +152,7 @@ describe("graphNodeLabelRemoveHandler — additional branches", () => {
 describe("graphNodeLabelAddHandler — additional branches", () => {
   it("includes nodeId in the response", async () => {
     mocks.run.mockResolvedValueOnce(
-      rec({ after: ["KnowledgeNode", "Billing"], before: ["KnowledgeNode"] }),
+      rec({ after: ["GraphNode", "Billing"], before: ["GraphNode"] }),
     );
     const out = await graphNodeLabelAddHandler({ nodeId: "my-node", labels: ["Billing"] }, CTX);
     expect(out.nodeId).toBe("my-node");
@@ -161,7 +161,7 @@ describe("graphNodeLabelAddHandler — additional branches", () => {
   it("partial add: only newly added labels appear in the added delta", async () => {
     // before has Payment; Billing is new
     mocks.run.mockResolvedValueOnce(
-      rec({ after: ["KnowledgeNode", "Payment", "Billing"], before: ["KnowledgeNode", "Payment"] }),
+      rec({ after: ["GraphNode", "Payment", "Billing"], before: ["GraphNode", "Payment"] }),
     );
     const out = await graphNodeLabelAddHandler({ nodeId: "n1", labels: ["Payment", "Billing"] }, CTX);
     expect(out.added).toEqual(["Billing"]);

@@ -5,7 +5,7 @@ import { scopedSession } from "@oxagen/ontology/tenant";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "./logger";
 
-const BASE_LABEL = "KnowledgeNode";
+const BASE_LABEL = "GraphNode";
 
 export const graphNodeLabelRemoveHandler: CapabilityHandler<typeof graphNodeLabelRemove> = async (
   input,
@@ -27,7 +27,7 @@ export const graphNodeLabelRemoveHandler: CapabilityHandler<typeof graphNodeLabe
     const session = scopedSession();
     try {
       const result = await session.run(
-        `MATCH (n:KnowledgeNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
+        `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
          WITH n, labels(n) AS before
          REMOVE n:${removeClause}
          SET n.updatedAt = datetime()
