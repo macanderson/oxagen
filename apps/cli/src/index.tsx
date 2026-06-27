@@ -114,6 +114,136 @@ program
     await handleConfig(key, value);
   });
 
+// ── env: workspace environments ───────────────────────────────────────────────
+
+const env = program.command("env").description("Manage workspace environments");
+env
+  .command("list")
+  .description("List environments in the active workspace")
+  .option("--json", "Output JSON")
+  .action(async (opts: { json?: boolean }) => {
+    const { handleEnvList } = await import("./commands/env.js");
+    await handleEnvList(opts);
+  });
+env
+  .command("get")
+  .description("Show one environment")
+  .argument("<idOrSlug>", "Environment public id or slug")
+  .action(async (idOrSlug: string) => {
+    const { handleEnvGet } = await import("./commands/env.js");
+    await handleEnvGet(idOrSlug, {});
+  });
+env
+  .command("create")
+  .description("Create an environment")
+  .argument("<name>", "Display name")
+  .option("--slug <slug>", "Slug (defaults to a slugified name)")
+  .option("--description <text>", "Description")
+  .action(async (name: string, opts: { slug?: string; description?: string }) => {
+    const { handleEnvCreate } = await import("./commands/env.js");
+    await handleEnvCreate(name, opts);
+  });
+env
+  .command("update")
+  .description("Update an environment")
+  .argument("<idOrSlug>", "Environment public id or slug")
+  .option("--name <name>", "New display name")
+  .option("--slug <slug>", "New slug")
+  .option("--description <text>", "New description")
+  .option("--active", "Activate")
+  .option("--inactive", "Deactivate (not allowed on the default)")
+  .action(
+    async (
+      idOrSlug: string,
+      opts: { name?: string; slug?: string; description?: string; active?: boolean; inactive?: boolean },
+    ) => {
+      const { handleEnvUpdate } = await import("./commands/env.js");
+      const active = opts.active ? true : opts.inactive ? false : undefined;
+      await handleEnvUpdate(idOrSlug, {
+        name: opts.name,
+        slug: opts.slug,
+        description: opts.description,
+        active,
+      });
+    },
+  );
+env
+  .command("rm")
+  .description("Delete an environment (not the default)")
+  .argument("<idOrSlug>", "Environment public id or slug")
+  .action(async (idOrSlug: string) => {
+    const { handleEnvRemove } = await import("./commands/env.js");
+    await handleEnvRemove(idOrSlug);
+  });
+env
+  .command("set-default")
+  .description("Promote an environment to the workspace default")
+  .argument("<idOrSlug>", "Environment public id or slug")
+  .action(async (idOrSlug: string) => {
+    const { handleEnvSetDefault } = await import("./commands/env.js");
+    await handleEnvSetDefault(idOrSlug);
+  });
+
+// ── secret: credential vault ──────────────────────────────────────────────────
+
+const secret = program.command("secret").description("Manage the workspace credential vault");
+secret
+  .command("list")
+  .description("List vault keys (masked metadata)")
+  .option("--json", "Output JSON")
+  .action(async (opts: { json?: boolean }) => {
+    const { handleSecretList } = await import("./commands/secret.js");
+    await handleSecretList(opts);
+  });
+secret
+  .command("set")
+  .description("Set a secret's default value, or an override with --env")
+  .argument("<key>", "Secret key name")
+  .argument("<value>", "Value")
+  .option("--env <slug>", "Target environment (override); omit for the default value")
+  .option("--no-sensitive", "Store as plaintext config (default: sensitive/encrypted)")
+  .action(async (key: string, value: string, opts: { env?: string; sensitive?: boolean }) => {
+    const { handleSecretSet } = await import("./commands/secret.js");
+    await handleSecretSet(key, value, opts);
+  });
+secret
+  .command("rm")
+  .description("Delete a key, or just an environment override with --env")
+  .argument("<key>", "Secret key name")
+  .option("--env <slug>", "Remove only this environment's override")
+  .action(async (key: string, opts: { env?: string }) => {
+    const { handleSecretRemove } = await import("./commands/secret.js");
+    await handleSecretRemove(key, opts);
+  });
+secret
+  .command("reveal")
+  .description("Reveal a secret's plaintext value (recorded to the access log)")
+  .argument("<key>", "Secret key name")
+  .option("--env <slug>", "Resolve for this environment")
+  .action(async (key: string, opts: { env?: string }) => {
+    const { handleSecretReveal } = await import("./commands/secret.js");
+    await handleSecretReveal(key, opts);
+  });
+secret
+  .command("import")
+  .description("Import .env text (preview unless --yes)")
+  .option("--env <slug>", "Target environment overrides; omit for default values")
+  .option("-f, --file <path>", "Read from a file (else stdin)")
+  .option("--yes", "Commit (otherwise preview only)")
+  .action(async (opts: { env?: string; file?: string; yes?: boolean }) => {
+    const { handleSecretImport } = await import("./commands/secret.js");
+    await handleSecretImport(opts);
+  });
+secret
+  .command("export")
+  .description("Export resolved secrets as .env (recorded to the access log)")
+  .option("--env <slug>", "Resolve for this environment")
+  .option("-o, --out <path>", "Write to a file (else stdout)")
+  .action(async (opts: { env?: string; out?: string }) => {
+    const { handleSecretExport } = await import("./commands/secret.js");
+    await handleSecretExport(opts);
+  });
+
 async function main(): Promise<void> {
   await program.parseAsync(process.argv);
 }

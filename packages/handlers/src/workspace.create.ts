@@ -8,6 +8,7 @@ import { bootstrapWorkspaceAgents } from "./workspace-agents";
 import { seedWorkspaceDefaultRegistry } from "./workspace-registry-seed";
 import { seedWorkspaceDefaultCapabilities } from "./workspace-capability-seed";
 import { seedWorkspaceDefaultSkills } from "./skill-workspace-seed";
+import { seedWorkspaceDefaultEnvironment } from "./workspace-environment-seed";
 
 export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> = async (
   input,
@@ -108,6 +109,9 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
     // Seed workspace-owned editable copies of all builtin skill templates so
     // agents can invoke them immediately without a separate install (idempotent).
     await seedWorkspaceDefaultSkills({ orgId: ctx.orgId, workspaceId });
+
+    // Seed the default environment so runs always resolve to a default (idempotent).
+    await seedWorkspaceDefaultEnvironment({ orgId: ctx.orgId, workspaceId });
 
     // Record security event for workspace creation (privileged mutation).
     emitSecurityEventAsync({

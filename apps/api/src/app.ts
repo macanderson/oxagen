@@ -88,6 +88,21 @@ import { pluginOrgSetEnabledRoute } from "./routes/v1/plugin.org.set_enabled";
 import { pluginWorkspaceSetEnabledRoute } from "./routes/v1/plugin.workspace.set_enabled";
 import { pluginCredentialSetSecretRoute } from "./routes/v1/plugin.credential.set_secret";
 import { pluginCredentialReauthRoute } from "./routes/v1/plugin.credential.reauth";
+// Environments + credential vault (Spec: 2026-06-24-credential-vault-…).
+import { environmentCreateRoute } from "./routes/v1/environment.create";
+import { environmentListRoute } from "./routes/v1/environment.list";
+import { environmentGetRoute } from "./routes/v1/environment.get";
+import { environmentUpdateRoute } from "./routes/v1/environment.update";
+import { environmentDeleteRoute } from "./routes/v1/environment.delete";
+import { environmentSetDefaultRoute } from "./routes/v1/environment.set_default";
+import { secretKeyUpsertRoute } from "./routes/v1/secret.key.upsert";
+import { secretKeyListRoute } from "./routes/v1/secret.key.list";
+import { secretKeyDeleteRoute } from "./routes/v1/secret.key.delete";
+import { secretValueSetRoute } from "./routes/v1/secret.value.set";
+import { secretValueUnsetRoute } from "./routes/v1/secret.value.unset";
+import { secretImportEnvRoute } from "./routes/v1/secret.import_env";
+import { secretRevealRoute } from "./routes/v1/secret.reveal";
+import { secretExportRoute } from "./routes/v1/secret.export";
 import { notificationsListRoute } from "./routes/v1/notifications.list";
 import { notificationsMarkRoute } from "./routes/v1/notifications.mark";
 import { pluginSettingsSetAuthAlertsRoute } from "./routes/v1/plugin.settings.set_auth_alerts";
@@ -321,6 +336,21 @@ orgScoped.route(
   pluginCredentialSetSecretRoute,
 );
 orgScoped.route("/plugin/credential/reauth", pluginCredentialReauthRoute);
+// Environments + credential vault.
+orgScoped.route("/environment/create", environmentCreateRoute);
+orgScoped.route("/environment/list", environmentListRoute);
+orgScoped.route("/environment/get", environmentGetRoute);
+orgScoped.route("/environment/update", environmentUpdateRoute);
+orgScoped.route("/environment/delete", environmentDeleteRoute);
+orgScoped.route("/environment/set-default", environmentSetDefaultRoute);
+orgScoped.route("/secret/key/upsert", secretKeyUpsertRoute);
+orgScoped.route("/secret/key/list", secretKeyListRoute);
+orgScoped.route("/secret/key/delete", secretKeyDeleteRoute);
+orgScoped.route("/secret/value/set", secretValueSetRoute);
+orgScoped.route("/secret/value/unset", secretValueUnsetRoute);
+orgScoped.route("/secret/import-env", secretImportEnvRoute);
+orgScoped.route("/secret/reveal", secretRevealRoute);
+orgScoped.route("/secret/export", secretExportRoute);
 orgScoped.route("/notifications", notificationsListRoute);
 orgScoped.route("/notifications/mark", notificationsMarkRoute);
 orgScoped.route(

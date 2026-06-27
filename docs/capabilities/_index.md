@@ -107,6 +107,15 @@ contract-first design, IAM enforcement, and instrumentation.
 - [documents.pdf.create](documents.pdf.create.md) — Render a PDF from either raw HTML or an existing cloud file (stub)
 - [markdown.generate](markdown.generate.md) — Persist a Markdown document as a first-class generated asset (blob storage, file-attachment render directive)
 
+## Environment (6)
+
+- [environment.create](environment.create.md) — Create a workspace environment (e.g. production, development, preview) for scoping secrets and sandbox config
+- [environment.list](environment.list.md) — List the environments configured in the active workspace
+- [environment.get](environment.get.md) — Fetch a single workspace environment by its public id
+- [environment.update](environment.update.md) — Update a workspace environment's name, slug, description, or active state; the default cannot be deactivated
+- [environment.delete](environment.delete.md) — Soft-delete a workspace environment; the default cannot be deleted until another is promoted
+- [environment.set_default](environment.set_default.md) — Promote an environment to the workspace default via an atomic swap
+
 ## Form (1)
 
 - [form.fill](form.fill.md) — Generatively fill or suggest values for page-level form fields based on context
@@ -239,6 +248,17 @@ contract-first design, IAM enforcement, and instrumentation.
 - [schema.validate.relationship](schema.validate.relationship.md) — Validate a relationship's type and properties against the workspace schema
 - [schema.reconcile.dispatch](schema.reconcile.dispatch.md) — Dispatch an async job to re-label existing graph nodes and relationships against the pinned schema version
 - [schema.reconcile.status](schema.reconcile.status.md) — Poll the progress and outcome of a schema reconciliation job
+
+## Secret (8)
+
+- [secret.key.upsert](secret.key.upsert.md) — Create or update a vault secret key at the workspace root; sensitive keys are envelope-encrypted, with an optional default value
+- [secret.key.list](secret.key.list.md) — List vault secret keys with masked metadata; never returns plaintext values
+- [secret.key.delete](secret.key.delete.md) — Soft-delete a vault secret key and hard-remove all of its per-environment overrides
+- [secret.value.set](secret.value.set.md) — Set a secret's value override for a specific environment, encrypted or plaintext per the key's sensitive flag
+- [secret.value.unset](secret.value.unset.md) — Remove a secret's per-environment override so it falls back to the key's default value
+- [secret.import_env](secret.import_env.md) — Parse pasted .env text and preview/commit key upserts + value sets for the defaults or a chosen environment
+- [secret.reveal](secret.reveal.md) — Reveal a single secret's plaintext value for an environment; Owner/Admin only, every reveal is audited (api, mcp)
+- [secret.export](secret.export.md) — Export an environment's resolved secret set as decrypted key/value pairs and .env text; Owner/Admin only, every export is audited (api, mcp)
 
 ## Semantic (8)
 
