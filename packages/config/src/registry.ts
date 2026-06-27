@@ -1212,6 +1212,28 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_LLM_EVALUATOR: {
+    group: "CLI",
+    description:
+      "Gateway model slug the CLI turn pipeline uses to evaluate each prompt (completeness " +
+      "+ complexity scoring, context hints, refined rewrite). Defaults to the fast tier (Haiku).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_LLM_ADVISOR: {
+    group: "CLI",
+    description:
+      "Gateway model slug the CLI uses as the completeness-judge advisor — always distinct from " +
+      "the executor so work is never graded by the model that produced it. Defaults to the precise tier (Opus).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_NO_TUI: {
     group: "CLI",
     description:
