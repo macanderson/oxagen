@@ -96,6 +96,16 @@ function execHook(
       /* stdin may already be closed if the command exits immediately */
     });
 
+    // A hook that exits before reading stdin (e.g. `echo … >&2; exit 1`) closes
+    // its stdin pipe; the pending write then surfaces EPIPE asynchronously on the
+    // stream's `error` event — NOT as a synchronous throw, so the try/catch below
+    // cannot catch it. Without this listener it becomes an unhandled error that
+    // crashes the process (and fails the test run under load). Swallow it: a hook
+    // that ignored its payload is a valid, intentional pattern.
+    child.stdin.on("error", () => {
+      /* hook exited before consuming stdin — nothing to deliver */
+    });
+
     try {
       child.stdin.write(payloadJson);
       child.stdin.end();

@@ -55,7 +55,13 @@ program
   .action(
     async (
       promptWords: string[],
-      opts: { model?: string; readonly?: boolean; mode?: string; pipeline?: boolean; verbose?: boolean },
+      opts: {
+        model?: string;
+        readonly?: boolean;
+        mode?: string;
+        pipeline?: boolean;
+        verbose?: boolean;
+      },
     ) => {
       const prompt = promptWords.join(" ").trim();
       let mode: PermissionMode | undefined;

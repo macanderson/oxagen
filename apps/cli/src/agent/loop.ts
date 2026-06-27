@@ -172,6 +172,19 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     { role: "user", content: opts.prompt },
   ];
 
+  // Gate every tool with the settings-driven permission rules and Pre/PostToolUse
+  // hooks. A denied call or a blocking hook returns a string the model reads.
+  const tools = wrapToolsWithGate(
+    buildTools(cwd, { readOnly: opts.readOnly, broker: opts.broker }),
+    {
+      cwd,
+      permissions: settings.permissions,
+      hooks: settings.hooks,
+      signal: opts.signal,
+      onBlocked: opts.onToolBlocked,
+    },
+  );
+
   // Capture the underlying stream error ourselves. Supplying onError replaces
   // the AI SDK default (which dumps the whole error object to the console), so
   // gateway failures surface as one clean, actionable line instead of a wall of
