@@ -71,11 +71,14 @@ export function AnimatedCreature({
     }
   });
 
-  // Get current frame (fire frames override breathing when firing)
-  const currentFrame = isFiring ? DRAGON_FRAMES[frameIndex] : DRAGON_FRAMES[frameIndex];
+  // Get current frame. Fire frames (4-5) override breathing because frameIndex
+  // is driven to those indices while firing; fall back to frame 0 defensively
+  // (frameIndex is always a valid 0-5 index, but the tuple index is typed
+  // `string | undefined` under noUncheckedIndexedAccess).
+  const currentFrame = DRAGON_FRAMES[frameIndex] ?? DRAGON_FRAMES[0];
 
   // Split frame into lines for rendering
-  const lines = currentFrame?.split("\n").filter((line) => line.length > 0) ?? [];
+  const lines = currentFrame.split("\n").filter((line) => line.length > 0);
 
   // Color scheme: violet for body, cyan for fire effects
   const getLineColor = (line: string): string => {
