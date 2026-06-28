@@ -705,6 +705,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .researchSwarmStatusHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "agent.repo.edit",
+    async () =>
+      (await import("./agent.repo.edit"))
+        .agentRepoEditHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "repo.create",
     async () =>
       (await import("./repo.create")).repoCreateHandler as CapabilityHandlerFn,

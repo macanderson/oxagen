@@ -150,6 +150,14 @@ export interface StreamAgentReplyArgs {
    */
   effort?: EffortLevel;
   /**
+   * Forwarded verbatim to `streamText`. The chat surface omits these (SDK
+   * defaults apply, unchanged); the agent-engine surface passes a `stopWhen`
+   * step cap so the multi-step coding loop is bounded — without it an agentic
+   * tool loop can run unbounded (runaway cost) — plus an `onError` capture.
+   */
+  stopWhen?: Parameters<typeof streamText>[0]["stopWhen"];
+  onError?: Parameters<typeof streamText>[0]["onError"];
+  /**
    * Required for OXA-1351 instrumentation. The caller's CapabilityContext
    * carries `orgId`, `workspaceId`, and `surface`; pass them through so
    * every LLM call lands in `token_usage` with provider, duration_ms,
@@ -249,6 +257,8 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
     // Vendor-specific reasoning/thinking options, or nothing when effort is
     // undefined or the vendor has no knob (deepseek).
     ...(rc.providerOptions ? { providerOptions: rc.providerOptions } : {}),
+    ...(args.stopWhen !== undefined ? { stopWhen: args.stopWhen } : {}),
+    ...(args.onError !== undefined ? { onError: args.onError } : {}),
     onFinish: async (event) => {
       const durationMs = Date.now() - startedAt;
       // AI SDK v6: usage fields are inputTokens/outputTokens (was

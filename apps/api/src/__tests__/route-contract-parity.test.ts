@@ -138,6 +138,10 @@ function contractNameToPathSegment(name: string): string {
     "plugin.schema": "plugin-schema",
     "plugin.version": "plugin-versions",
     repo: "repos",
+    // The coding-agent edit endpoint lives alongside the other repo
+    // operations: repoRoute.post("/agent/edit") mounted under /repos, so the
+    // full path is /repos/agent/edit (not /agent/repo/edit).
+    "agent.repo": "repos/agent",
     integration: "integrations",
     // graph.node.list maps to /graph/nodes (browse endpoint)
     "graph.node.list": "graph/nodes",

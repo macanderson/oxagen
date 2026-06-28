@@ -26,6 +26,7 @@ import "./contracts/agent.memory.recall";
 import "./contracts/agent.memory.write";
 import "./contracts/agent.plan.approve";
 import "./contracts/agent.plan.create";
+import "./contracts/agent.repo.edit";
 import "./contracts/agent.skill.list";
 import "./contracts/agent.skill.load";
 import "./contracts/agent.subagent.aggregate";

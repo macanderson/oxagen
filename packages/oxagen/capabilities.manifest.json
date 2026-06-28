@@ -425,6 +425,21 @@
       }
     },
     {
+      "name": "agent.repo.edit",
+      "file": "agent.repo.edit.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "agent.skill.list",
       "file": "agent.skill.list.ts",
       "domain": "agent",
@@ -2420,9 +2435,9 @@
         "mcp"
       ],
       "layers": {
-        "api": false,
+        "api": true,
         "mcp": true,
-        "unit": false
+        "unit": true
       }
     },
     {
