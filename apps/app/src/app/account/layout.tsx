@@ -70,10 +70,14 @@ export default async function AccountLayout({
 
   return (
     <PageContextProvider>
+      {/* The account section is user-scoped and workspace-less, so it does not
+          mount the agent panel / AgentPanelStoreProvider. Suppress the agent
+          bottom bar here — it consumes that context and would otherwise throw. */}
       <AppShell
         org={primaryOrg}
         navDataPromise={navDataPromise}
         user={user}
+        agentBar={false}
       >
         {children}
       </AppShell>

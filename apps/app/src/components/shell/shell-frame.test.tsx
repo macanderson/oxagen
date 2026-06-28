@@ -190,3 +190,27 @@ describe("ShellFrame — sidebar", () => {
     expect(screen.getByTestId("sidebar")).toBeInTheDocument();
   });
 });
+
+describe("ShellFrame — agent bottom bar", () => {
+  it("renders the agent bottom bar by default", () => {
+    renderShellFrame();
+    expect(screen.getByTestId("agent-bottom-bar")).toBeInTheDocument();
+  });
+
+  it("suppresses the agent bottom bar when agentBar={false}", () => {
+    // The workspace-less account section opts out — the bar consumes
+    // useAgentPanelStore and would throw without an AgentPanelStoreProvider.
+    render(
+      <ShellFrame
+        org={org}
+        workspace={workspace}
+        navDataPromise={navDataPromise}
+        user={user}
+        agentBar={false}
+      >
+        <p>page content</p>
+      </ShellFrame>,
+    );
+    expect(screen.queryByTestId("agent-bottom-bar")).not.toBeInTheDocument();
+  });
+});

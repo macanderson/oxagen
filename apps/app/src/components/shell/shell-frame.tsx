@@ -55,6 +55,14 @@ export interface ShellFrameProps {
   planTier?: PlanTier;
   /** Bound server action for inline workspace creation dialog. */
   createWorkspaceAction?: NewWorkspaceAction;
+  /**
+   * Whether to render the persistent agent bottom bar. Defaults to true.
+   * The bar consumes `useAgentPanelStore`, so it must only render where an
+   * `AgentPanelStoreProvider` (and the agent panel itself) is mounted. The
+   * user-scoped account section is deliberately workspace-less and does not
+   * mount the agent panel, so it opts out via `agentBar={false}`.
+   */
+  agentBar?: boolean;
   children: ReactNode;
 }
 
@@ -65,6 +73,7 @@ export function ShellFrame({
   user,
   planTier,
   createWorkspaceAction,
+  agentBar = true,
   children,
 }: ShellFrameProps) {
   const { toggle } = useSidebar();
@@ -158,10 +167,14 @@ export function ShellFrame({
           {children}
         </main>
 
-        {/* Agent bottom bar — persistent across all pages (desktop only). */}
-        <div className="hidden md:block">
-          <AgentBottomBar />
-        </div>
+        {/* Agent bottom bar — persistent across all pages (desktop only).
+            Suppressed in workspace-less sections (e.g. /account) that don't
+            mount the agent panel / AgentPanelStoreProvider. */}
+        {agentBar && (
+          <div className="hidden md:block">
+            <AgentBottomBar />
+          </div>
+        )}
       </div>
     </div>
   );
