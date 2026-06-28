@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { resolve } from "node:path";
 import {
   PermissionBroker,
@@ -14,6 +14,24 @@ import {
 } from "../permissions.js";
 
 const CWD = "/work/repo";
+
+// Mock fs operations to avoid writing to the test cwd
+const fsMocks = {
+  readFile: new Map<string, string>(),
+};
+
+vi.mock("node:fs", () => ({
+  mkdirSync: vi.fn(),
+  writeFileSync: vi.fn((path: string, content: string) => {
+    fsMocks.readFile.set(path, content);
+  }),
+  existsSync: vi.fn((path: string) => {
+    return fsMocks.readFile.has(path);
+  }),
+  readFileSync: vi.fn((path: string) => {
+    return fsMocks.readFile.get(path) ?? "{}";
+  }),
+}));
 
 /** An approver that always answers the same way and records its calls. */
 function fixedApprover(response: ApprovalResponse): Approver & { calls: ApprovalRequest[] } {
@@ -203,6 +221,10 @@ describe("PermissionBroker — rules", () => {
 });
 
 describe("PermissionBroker — remember", () => {
+  beforeEach(() => {
+    fsMocks.readFile.clear();
+  });
+
   it("records a session rule so identical calls stop prompting", async () => {
     const approver = fixedApprover({ decision: "allow", remember: true });
     const broker = new PermissionBroker({ mode: "ask", cwd: CWD, approver });
