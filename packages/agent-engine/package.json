@@ -1,5 +1,5 @@
 {
-  "name": "@oxagen/coding-agent",
+  "name": "@oxagen/agent-engine",
   "version": "0.5.0",
   "private": true,
   "type": "module",
