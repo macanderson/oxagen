@@ -2,6 +2,11 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { agentRepoEdit } from "@oxagen/oxagen/contracts/agent.repo.edit";
 import { createGitHubClient, GitHubWorkspace } from "@oxagen/github";
 import { runCodingAgent } from "@oxagen/agent-engine";
+import {
+  createNeo4jCodeGraphProvider,
+  createPlatformMemoryProvider,
+  createClickHouseTraceStore,
+} from "@oxagen/agent/adapters";
 import { resolveGitHubToken } from "./lib/github-token";
 import { createPlatformAgentAi } from "./lib/platform-agent-ai";
 
@@ -31,6 +36,8 @@ export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = asy
   const ai = createPlatformAgentAi(ctx, ctx.messageId ?? ctx.requestId);
 
   // 5. Run the coding agent loop.
+  // The kernel wraps this handler in runInTenantScope so Neo4j / embed calls
+  // inside the adapters inherit the active tenant scope via AsyncLocalStorage.
   const result = await runCodingAgent({
     workspace: ws,
     ai,
@@ -38,6 +45,21 @@ export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = asy
     model: input.model,
     maxSteps: input.maxSteps,
     readOnly: false,
+    codeGraph: createNeo4jCodeGraphProvider(),
+    memory: createPlatformMemoryProvider({
+      recallQuery: input.instruction,
+      telemetry: {
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        surface: "agent",
+        messageId: ctx.messageId ?? ctx.requestId,
+      },
+    }),
+    trace: createClickHouseTraceStore({
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      surface: "agent",
+    }),
   });
 
   // 6. Reject runs where the agent produced no file changes.
