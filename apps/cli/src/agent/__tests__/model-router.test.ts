@@ -147,6 +147,22 @@ describe("routeModel + tier helpers", () => {
     expect(tierForSlug("anthropic/claude-haiku-4.5")).toBe("fast");
     expect(tierForSlug("openai/gpt-4o-mini")).toBe("fast");
     expect(tierForSlug("anthropic/claude-sonnet-4.6")).toBe("balanced");
+    // Cross-vendor frontier coding models → precise.
+    expect(tierForSlug("openai/gpt-5.3-codex")).toBe("precise");
+    expect(tierForSlug("openai/gpt-5.5-pro")).toBe("precise");
+    expect(tierForSlug("google/gemini-3.1-pro-preview")).toBe("precise");
+    expect(tierForSlug("deepseek/deepseek-v4-pro")).toBe("precise");
+    expect(tierForSlug("mistral/mistral-large-3")).toBe("precise");
+    // Cheap variants of frontier families must NOT mislabel as precise.
+    expect(tierForSlug("openai/gpt-5-mini")).toBe("fast");
+    expect(tierForSlug("openai/gpt-5.4-nano")).toBe("fast");
+    expect(tierForSlug("openai/o3-mini")).toBe("fast");
+    expect(tierForSlug("google/gemini-3.5-flash")).toBe("fast");
+    expect(tierForSlug("deepseek/deepseek-v4-flash")).toBe("fast");
+    expect(tierForSlug("mistral/devstral-small-2")).toBe("fast");
+    // Mid-tier coders default to balanced.
+    expect(tierForSlug("mistral/devstral-2")).toBe("balanced");
+    expect(tierForSlug("deepseek/deepseek-v3.2-thinking")).toBe("balanced");
     expect(tierLabel("fast")).toBe("Haiku");
     expect(tierLabel("balanced")).toBe("Sonnet");
     expect(tierLabel("precise")).toBe("Opus");

@@ -1230,7 +1230,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "CLI",
     description:
       "Gateway model slug the CLI uses as the completeness-judge advisor — always distinct from " +
-      "the executor so work is never graded by the model that produced it. Defaults to the precise tier (Opus).",
+      "the executor so work is never graded by the model that produced it. Defaults to the most " +
+      "powerful OpenAI model (cross-vendor independence from a typically-Claude executor).",
     secret: false,
     clientExposed: false,
     services: [],

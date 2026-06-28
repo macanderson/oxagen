@@ -8,10 +8,12 @@
  *      context to pull and a noise-removed rewrite.
  *   2. ENHANCE  — the code graph + recalled lessons are injected, grounding the
  *      agent in the real files/symbols involved.
- *   3. ROUTE    — the cheapest sufficient model is selected (evaluator's
- *      recommendation reconciled UP with the deterministic cost router).
+ *   3. ROUTE    — the Haiku evaluator's chosen tier selects the worker model
+ *      (cheapest tier for the job); a one-way deterministic safety floor only
+ *      prevents under-spending on high-stakes domains.
  *   4. EXECUTE  — the coding agent runs the local tool loop.
- *   5. JUDGE    — a DIFFERENT model checks whether the work is actually complete.
+ *   5. JUDGE    — a DIFFERENT model (default: the most powerful OpenAI model)
+ *      checks whether the work is actually complete.
  *   6. REVISE   — if it isn't, the agent is sent back with the judge's findings,
  *      then re-judged, up to a bounded number of rounds.
  *
@@ -51,9 +53,6 @@ import type {
 export { MissingGatewayKeyError };
 
 const TIER_RANK: Record<ModelTier, number> = { fast: 0, balanced: 1, precise: 2 };
-function maxTier(a: ModelTier, b: ModelTier): ModelTier {
-  return TIER_RANK[a] >= TIER_RANK[b] ? a : b;
-}
 
 /** Cap stored free-text so a single trace file can't grow without bound. */
 function truncate(s: string, max: number): string {
@@ -355,19 +354,28 @@ interface RouteResult {
   rationale: string;
 }
 
-/** Pick the executor model: a manual pin wins; else evaluator ⟂ router (never under-spend). */
+/**
+ * Pick the executor (worker) model. A manual pin always wins. Otherwise the Haiku
+ * evaluator is the authority — it already chose the cheapest tier that does the job
+ * well. The deterministic router is consulted only as a one-way SAFETY FLOOR: a
+ * high-stakes domain (auth/billing/security/migration/architecture) is never run
+ * below the precise tier even if the cheap evaluator under-rated it. We never
+ * downgrade the evaluator — leaning cheapest-for-quality is precisely its job.
+ */
 function selectModel(override: string | undefined, evaluation: PromptEvaluation): RouteResult {
   if (override) {
     return { model: override, tier: tierForSlug(override), rationale: "pinned model" };
   }
-  const routed = classifyTier({ text: evaluation.refinedPrompt });
-  const tier = maxTier(evaluation.recommendedTier, routed.tier);
-  // The deterministic router only ever escalates above the evaluator on high-stakes
-  // signals; when it does, its rationale is the honest reason we spent more.
-  const routerEscalated = TIER_RANK[routed.tier] > TIER_RANK[evaluation.recommendedTier];
-  const rationale = routerEscalated
-    ? `router escalated — ${routed.rationale}`
-    : `evaluator recommended (complexity ${evaluation.complexity}/100)`;
+  let tier = evaluation.recommendedTier;
+  let rationale = `evaluator chose ${tierLabel(tier)} — cheapest tier for the job (complexity ${evaluation.complexity}/100)`;
+  // One-way safety floor: never under-spend on a high-stakes domain. classifyTier
+  // on text alone only returns "precise" for the auth/billing/security/migration
+  // domains, so this raises — never lowers — the evaluator's choice.
+  const floor = classifyTier({ text: evaluation.refinedPrompt });
+  if (floor.tier === "precise" && TIER_RANK[tier] < TIER_RANK.precise) {
+    tier = "precise";
+    rationale = `safety floor raised to ${tierLabel(tier)} — ${floor.rationale}`;
+  }
   return { model: modelForTier(tier), tier, rationale };
 }
 

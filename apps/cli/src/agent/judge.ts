@@ -22,16 +22,28 @@ import { emptyUsage } from "./fleet/types.js";
 import type { JudgeVerdict } from "./trace.js";
 
 /**
+ * The default completeness advisor: the most powerful OpenAI model. The advisor's
+ * job is to catch an executor's blind spots, and a different *vendor* shares none
+ * of them — an OpenAI model auditing a (typically Claude) executor is maximally
+ * independent. Overridable with `OXAGEN_LLM_ADVISOR` to track gateway slug drift
+ * or pick a different judge.
+ */
+export const DEFAULT_ADVISOR_MODEL = "openai/gpt-5.5-pro";
+
+/**
  * Choose the advisor model — guaranteed distinct from the executor so the work is
  * never graded by the same model that produced it.
  *
- * Order: explicit `OXAGEN_LLM_ADVISOR` (if it differs) → the precise tier (the
- * strongest judge) → the balanced tier as the last-resort distinct option when the
- * executor is already the precise model.
+ * Order: explicit `OXAGEN_LLM_ADVISOR` (if it differs) → the most powerful OpenAI
+ * model (the default cross-vendor judge) → the precise tier → the balanced tier as
+ * the last-resort distinct option when the executor is already those models.
  */
 export function pickAdvisorModel(executorModel: string): string {
   const override = process.env["OXAGEN_LLM_ADVISOR"];
   if (override && override !== executorModel) return override;
+  if (DEFAULT_ADVISOR_MODEL !== executorModel) return DEFAULT_ADVISOR_MODEL;
+  // The executor already IS the default advisor — fall back to distinct strong
+  // models so work is never graded by the model that produced it.
   const precise = modelForTier("precise");
   if (precise !== executorModel) return precise;
   return modelForTier("balanced");
