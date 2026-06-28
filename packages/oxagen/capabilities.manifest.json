@@ -295,6 +295,25 @@
       }
     },
     {
+      "name": "agent.memory.list",
+      "file": "agent.memory.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "e2e": false,
+        "docs": false
+      }
+    },
+    {
       "name": "agent.memory.policy.read",
       "file": "agent.memory.policy.read.ts",
       "domain": "agent",

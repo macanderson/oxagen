@@ -81,6 +81,104 @@ export async function recallMemories(args: {
   }
 }
 
+/** A fully-projected AgentMemory record for browse/list surfaces. */
+export interface MemoryListRow {
+  id: string;
+  publicId: string;
+  nodeRef: string;
+  weight: "low" | "high" | "critical";
+  kind: string;
+  lesson: string;
+  source: string;
+  confidence: number;
+  createdAt: string;
+  lastReinforcedAt: string | null;
+}
+
+/**
+ * Browse AgentMemory nodes for the active tenant, newest first, with optional
+ * weight/kind/node filters. Unlike `recallMemories`, this does no vector search
+ * — it is the non-semantic enumeration backing `agent.memory.list` and the
+ * Knowledge → Memories surface. Returns the page plus the unpaged `total` so
+ * callers can render accurate counts.
+ *
+ * orgId/workspaceId are injected automatically by scopedSession() from the
+ * active tenant scope.
+ */
+export async function listMemories(args: {
+  limit: number;
+  offset: number;
+  nodeRef?: string;
+  minWeight?: "low" | "high" | "critical";
+  kind?: string;
+}): Promise<{ memories: MemoryListRow[]; total: number }> {
+  const s = scopedSession();
+  const minRank =
+    args.minWeight !== undefined ? WEIGHT_RANK[args.minWeight] : null;
+  // Shared predicate so the count and the page filter identically.
+  const where = /* cypher */ `
+    WHERE ($nodeRef IS NULL OR m.nodeRef = $nodeRef)
+      AND ($minRank IS NULL OR (CASE m.weight WHEN 'critical' THEN 2 WHEN 'high' THEN 1 ELSE 0 END) >= $minRank)
+      AND ($kind IS NULL OR m.kind = $kind)
+  `;
+  // orgId/workspaceId are auto-injected by scopedSession() — do not pass them.
+  const params = {
+    nodeRef: args.nodeRef ?? null,
+    minRank,
+    kind: args.kind ?? null,
+  };
+  try {
+    const countResult = await s.run(
+      /* cypher */ `
+        MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})
+        ${where}
+        RETURN count(m) AS total
+      `,
+      params,
+    );
+    const total = Number(countResult.records[0]?.get("total") ?? 0);
+
+    const pageResult = await s.run(
+      /* cypher */ `
+        MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})
+        ${where}
+        RETURN
+          m.id AS id,
+          coalesce(m.publicId, m.id) AS publicId,
+          coalesce(m.nodeRef, '') AS nodeRef,
+          m.weight AS weight,
+          m.kind AS kind,
+          m.lesson AS lesson,
+          m.source AS source,
+          coalesce(m.confidence, 1.0) AS confidence,
+          toString(m.createdAt) AS createdAt,
+          toString(m.lastReinforcedAt) AS lastReinforcedAt
+        ORDER BY m.createdAt DESC
+        SKIP $offset
+        LIMIT $limit
+      `,
+      { ...params, offset: BigInt(args.offset), limit: BigInt(args.limit) },
+    );
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment -- neo4j-driver Record.get() is typed as `any`; shape is guaranteed by the Cypher projection above. */
+    const memories: MemoryListRow[] = pageResult.records.map((r) => ({
+      id: r.get("id"),
+      publicId: r.get("publicId"),
+      nodeRef: r.get("nodeRef") ?? "",
+      weight: r.get("weight"),
+      kind: r.get("kind"),
+      lesson: r.get("lesson"),
+      source: r.get("source"),
+      confidence: Number(r.get("confidence") ?? 1.0),
+      createdAt: r.get("createdAt"),
+      lastReinforcedAt: r.get("lastReinforcedAt") ?? null,
+    }));
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
+    return { memories, total };
+  } finally {
+    await s.close();
+  }
+}
+
 export interface WriteMemoryArgs {
   nodeRef: string;
   embedding: number[];
