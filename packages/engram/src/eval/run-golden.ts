@@ -93,6 +93,22 @@ async function main(): Promise<void> {
 }
 
 // Run only when invoked directly (tsx src/eval/run-golden.ts), not on import.
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+//
+// This module is re-exported from the `@oxagen/engram` barrel (runGoldenSuite /
+// buildRagDataset / RagDatasetRecord), so it is pulled into the CJS API bundle.
+// There `import.meta.url` is undefined, and a bare `fileURLToPath(import.meta.url)`
+// throws ERR_INVALID_ARG_TYPE *at module load* — taking down EVERY API route with
+// FUNCTION_INVOCATION_FAILED (postmortem 2026-06-12). A CJS bundle is never a direct
+// CLI entry, so guard the check and treat the throw as "not main".
+function isDirectCliEntry(): boolean {
+  try {
+    const entry = process.argv[1];
+    return entry !== undefined && fileURLToPath(import.meta.url) === resolve(entry);
+  } catch {
+    return false;
+  }
+}
+
+if (isDirectCliEntry()) {
   void main();
 }
