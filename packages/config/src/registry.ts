@@ -414,6 +414,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
   },
 
+  GITHUB_PERSONAL_ACCESS_TOKEN: {
+    group: "github",
+    description:
+      "Personal access token (PAT) used by GitHub write capabilities (repo.create, repo.file.put, repo.fork, repo.branch.create, repo.pr.open) as a local/demo fallback when per-workspace credential resolution is not yet available. MUST NOT be set in production once per-workspace KMS-encrypted credential lookup is implemented (see packages/handlers/src/lib/github-token.ts).",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
   // ── Ingestion OAuth DATA client credentials ──────────────────────────────────
   // Per-provider OAuth client pairs used exclusively by the ingestion
   // oauth-refresh Inngest cron (packages/inngest-functions).  All are optional —

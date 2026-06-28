@@ -161,7 +161,12 @@ import { semanticEdgeSuggest } from "./semantic.edge.suggest";
 import { pluginSchemaGet } from "./plugin.schema.get";
 import { pluginSchemaValidate } from "./plugin.schema.validate";
 import { pluginVersionList } from "./plugin.version.list";
+import { repoBranchCreate } from "./repo.branch.create";
 import { repoConfigure } from "./repo.configure";
+import { repoCreate } from "./repo.create";
+import { repoFilePut } from "./repo.file.put";
+import { repoFork } from "./repo.fork";
+import { repoPrOpen } from "./repo.pr.open";
 import { repoSync } from "./repo.sync";
 import { repoPause } from "./repo.pause";
 import { repoResume } from "./repo.resume";
@@ -407,7 +412,12 @@ export {
   pluginSchemaGet,
   pluginSchemaValidate,
   pluginVersionList,
+  repoBranchCreate,
   repoConfigure,
+  repoCreate,
+  repoFilePut,
+  repoFork,
+  repoPrOpen,
   repoSync,
   repoPause,
   repoResume,
@@ -647,7 +657,12 @@ export const contracts = [
   pluginSchemaGet,
   pluginSchemaValidate,
   pluginVersionList,
+  repoBranchCreate,
   repoConfigure,
+  repoCreate,
+  repoFilePut,
+  repoFork,
+  repoPrOpen,
   repoSync,
   repoPause,
   repoResume,

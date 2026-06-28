@@ -18,6 +18,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
     "@oxagen/ai": "workspace:*",
+    "@oxagen/github": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/crypto": "workspace:*",
     "@oxagen/ingestion": "workspace:*",

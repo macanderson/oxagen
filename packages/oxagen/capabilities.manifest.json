@@ -2756,6 +2756,21 @@
       }
     },
     {
+      "name": "repo.branch.create",
+      "file": "repo.branch.create.ts",
+      "domain": "repo",
+      "mode": "sync",
+      "surfaces": [
+        "agent",
+        "api"
+      ],
+      "layers": {
+        "api": false,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "repo.configure",
       "file": "repo.configure.ts",
       "domain": "repo",
@@ -2771,6 +2786,51 @@
         "api": false,
         "mcp": true,
         "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "repo.create",
+      "file": "repo.create.ts",
+      "domain": "repo",
+      "mode": "sync",
+      "surfaces": [
+        "agent",
+        "api"
+      ],
+      "layers": {
+        "api": false,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "repo.file.put",
+      "file": "repo.file.put.ts",
+      "domain": "repo",
+      "mode": "sync",
+      "surfaces": [
+        "agent",
+        "api"
+      ],
+      "layers": {
+        "api": false,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "repo.fork",
+      "file": "repo.fork.ts",
+      "domain": "repo",
+      "mode": "sync",
+      "surfaces": [
+        "agent",
+        "api"
+      ],
+      "layers": {
+        "api": false,
+        "unit": false,
         "docs": true
       }
     },
@@ -2808,6 +2868,21 @@
         "api": false,
         "mcp": true,
         "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "repo.pr.open",
+      "file": "repo.pr.open.ts",
+      "domain": "repo",
+      "mode": "sync",
+      "surfaces": [
+        "agent",
+        "api"
+      ],
+      "layers": {
+        "api": false,
+        "unit": false,
         "docs": true
       }
     },

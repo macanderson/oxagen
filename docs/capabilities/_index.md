@@ -218,11 +218,16 @@ contract-first design, IAM enforcement, and instrumentation.
 - [prompt.settings.read](prompt.settings.read.md) — Read the workspace prompt configuration including appended instructions and auto-improve toggle
 - [prompt.settings.write](prompt.settings.write.md) — Update the workspace prompt configuration (partial update)
 
-## Repo (5)
+## Repo (10)
 
+- [repo.branch.create](repo.branch.create.md) — Create a new branch in a GitHub repository, optionally from another branch
 - [repo.configure](repo.configure.md) — Set repo-specific config: filters, inference, cadence, field mappings
+- [repo.create](repo.create.md) — Create a new GitHub repository in an organization the user owns
+- [repo.file.put](repo.file.put.md) — Commit a file (create or update) to a GitHub repository
+- [repo.fork](repo.fork.md) — Fork a GitHub repository into the authenticated user's account or a specified organization
 - [repo.metrics](repo.metrics.md) — Get sync statistics and metrics for a repository connection
 - [repo.pause](repo.pause.md) — Pause automatic syncing for a repository connection
+- [repo.pr.open](repo.pr.open.md) — Open a pull request in a GitHub repository
 - [repo.resume](repo.resume.md) — Resume automatic syncing for a paused repository connection
 - [repo.sync](repo.sync.md) — Trigger incremental or full re-index of a repository connection (async)
 

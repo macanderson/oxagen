@@ -705,6 +705,33 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .researchSwarmStatusHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "repo.create",
+    async () =>
+      (await import("./repo.create")).repoCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "repo.file.put",
+    async () =>
+      (await import("./repo.file.put"))
+        .repoFilePutHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "repo.fork",
+    async () =>
+      (await import("./repo.fork")).repoForkHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "repo.branch.create",
+    async () =>
+      (await import("./repo.branch.create"))
+        .repoBranchCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "repo.pr.open",
+    async () =>
+      (await import("./repo.pr.open")).repoPrOpenHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "repo.sync",
     async () =>
       (await import("./repo.sync")).repoSyncHandler as CapabilityHandlerFn,

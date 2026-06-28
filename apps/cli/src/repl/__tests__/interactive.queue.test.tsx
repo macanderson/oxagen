@@ -35,7 +35,7 @@ vi.mock("../../agent/pipeline.js", () => ({
             text: `done:${opts.prompt}`,
             messages: [],
             usage: {},
-            trace: {},
+            trace: { id: `trace_${opts.prompt}` },
           }),
       });
     }),
@@ -52,6 +52,10 @@ vi.mock("../../agent/trace-store.js", () => ({
     last: () => undefined,
     resolve: () => undefined,
   }),
+}));
+
+vi.mock("../../agent/fleet/memory.js", () => ({
+  openFleetMemory: () => ({ record: () => {}, recall: () => [], all: () => [] }),
 }));
 
 vi.mock("../../agent/memory.js", () => ({
