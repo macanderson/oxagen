@@ -5,11 +5,13 @@
  *  - Mock @oxagen/github so createGitHubClient returns spy methods and
  *    GitHubWorkspace is a controllable fake whose changedFiles() returns
  *    predetermined data.
- *  - Mock @oxagen/agent-engine so runCodingAgent returns a fixed result
- *    without touching any LLM endpoint.
+ *  - Mock @oxagen/agent-engine so runTurn (the full 6-stage pipeline) returns
+ *    a fixed RunTurnResult without touching any LLM endpoint.
  *  - Mock ../lib/platform-agent-ai to avoid selectModel/AI Gateway env deps.
  *  - Mock ../lib/github-token to inject a test token.
- *  - Assert the handler orchestrates these collaborators correctly.
+ *  - Assert the handler orchestrates these collaborators correctly and that it
+ *    invokes the full pipeline (runTurn) rather than the bare loop
+ *    (runCodingAgent).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -41,13 +43,52 @@ const mocks = vi.hoisted(() => {
     changedFiles: changedFilesFn,
   }));
 
-  const runCodingAgentFn = vi.fn().mockResolvedValue({
-    changedFiles: ["src/a.ts"],
+  // Minimal RunTurnResult-shaped mock — matches the RunTurnResult interface
+  // from @oxagen/agent-engine including the `trace` field.
+  const fakeTrace = {
+    id: "turn_fake",
+    createdAt: 0,
+    cwd: "/repo",
+    originalPrompt: "",
+    evaluation: {
+      completeness: 80,
+      complexity: 50,
+      recommendedTier: "balanced" as const,
+      missing: [],
+      contextQueries: [],
+      refinedPrompt: "",
+      removed: [],
+      reasoning: "",
+      fallback: false,
+      model: "test-model",
+      usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    },
+    enhancement: {
+      prompt: "",
+      context: "",
+      resolved: [],
+      lessonCount: 0,
+      source: "none" as const,
+    },
+    selectedModel: "test-model",
+    selectedTier: "balanced" as const,
+    selectionRationale: "test",
+    response: "",
+    filesTouched: ["src/a.ts"],
+    commandsRun: [],
+    judgeRounds: [],
+    finalComplete: true,
+    steps: 3,
+    usage: { inputTokens: 100, outputTokens: 50, costUsd: 0 },
+    durationMs: 100,
+  };
+
+  const runTurnFn = vi.fn().mockResolvedValue({
     text: "Refactored src/a.ts as requested.",
     steps: 3,
-    diff: "--- a/src/a.ts\n+++ b/src/a.ts",
-    usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
     messages: [],
+    usage: { inputTokens: 100, outputTokens: 50 },
+    trace: fakeTrace,
   });
 
   const fakeAgentAi = {
@@ -64,9 +105,10 @@ const mocks = vi.hoisted(() => {
     ghClient,
     changedFilesFn,
     GitHubWorkspaceMock,
-    runCodingAgentFn,
+    runTurnFn,
     fakeAgentAi,
     createPlatformAgentAiFn,
+    fakeTrace,
   };
 });
 
@@ -78,7 +120,7 @@ vi.mock("@oxagen/github", () => ({
 }));
 
 vi.mock("@oxagen/agent-engine", () => ({
-  runCodingAgent: mocks.runCodingAgentFn,
+  runTurn: mocks.runTurnFn,
 }));
 
 vi.mock("../lib/platform-agent-ai", () => ({
@@ -158,6 +200,73 @@ describe("agent.repo.edit contract validation", () => {
   });
 });
 
+// ── Handler — pipeline invocation ────────────────────────────────────────────
+
+describe("agentRepoEditHandler — pipeline (runTurn)", () => {
+  beforeEach(() => {
+    mocks.createBranch.mockResolvedValue({ ref: "refs/heads/oxagen-agent-12345678", sha: "abc" });
+    mocks.putFile.mockResolvedValue({ commitSha: "sha1", htmlUrl: "https://github.com/file" });
+    mocks.openPullRequest.mockResolvedValue({
+      number: 42,
+      htmlUrl: "https://github.com/myorg/myrepo/pull/42",
+    });
+    mocks.changedFilesFn.mockReturnValue([
+      { path: "src/a.ts", content: "export const a = 1;" },
+    ]);
+  });
+
+  it("calls the full pipeline (runTurn) — not the bare loop (runCodingAgent)", async () => {
+    await agentRepoEditHandler(BASE_INPUT, ctx);
+
+    // runTurn must be called; runCodingAgent must NOT appear in the mock set.
+    expect(mocks.runTurnFn).toHaveBeenCalledOnce();
+  });
+
+  it("passes the instruction as `prompt` to runTurn", async () => {
+    await agentRepoEditHandler(BASE_INPUT, ctx);
+
+    expect(mocks.runTurnFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: BASE_INPUT.instruction,
+      }),
+    );
+  });
+
+  it("passes maxSteps and readOnly:false to runTurn", async () => {
+    await agentRepoEditHandler(BASE_INPUT, ctx);
+
+    expect(mocks.runTurnFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maxSteps: 12,
+        readOnly: false,
+      }),
+    );
+  });
+
+  it("passes the platform AgentAi port to runTurn", async () => {
+    await agentRepoEditHandler(BASE_INPUT, ctx);
+
+    expect(mocks.runTurnFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ai: mocks.fakeAgentAi,
+      }),
+    );
+  });
+
+  it("passes a workspace, codeGraph, memory, and trace to runTurn", async () => {
+    await agentRepoEditHandler(BASE_INPUT, ctx);
+
+    expect(mocks.runTurnFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspace: expect.any(Object),
+        codeGraph: expect.any(Object),
+        memory: expect.any(Object),
+        trace: expect.any(Object),
+      }),
+    );
+  });
+});
+
 // ── Handler — happy path ──────────────────────────────────────────────────────
 
 describe("agentRepoEditHandler — happy path", () => {
@@ -171,18 +280,6 @@ describe("agentRepoEditHandler — happy path", () => {
     mocks.changedFilesFn.mockReturnValue([
       { path: "src/a.ts", content: "export const a = 1;" },
     ]);
-  });
-
-  it("calls runCodingAgent with the workspace, ai port, instruction, and maxSteps", async () => {
-    await agentRepoEditHandler(BASE_INPUT, ctx);
-
-    expect(mocks.runCodingAgentFn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        instruction: BASE_INPUT.instruction,
-        maxSteps: 12,
-        readOnly: false,
-      }),
-    );
   });
 
   it("creates the branch on GitHub with an auto-generated name", async () => {
