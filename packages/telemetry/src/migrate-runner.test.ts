@@ -19,12 +19,14 @@ import { fileURLToPath } from "node:url";
 // vi.hoisted() runs before vi.mock(), making refs available to the factories.
 
 /** bootstrap client's command (used by ensureDatabase for CREATE DATABASE) */
-const commandMock = vi.hoisted(() => vi.fn<() => Promise<void>>());
+const commandMock = vi.hoisted(() =>
+  vi.fn<(opts: { query: string }) => Promise<void>>(),
+);
 /** bootstrap client's close (called in the ensureDatabase finally block) */
 const bootstrapCloseMock = vi.hoisted(() => vi.fn<() => Promise<void>>());
 /** createClient factory — returns the bootstrap client object */
 const createClientMock = vi.hoisted(() =>
-  vi.fn(() => ({
+  vi.fn((_config?: Record<string, unknown>) => ({
     command: commandMock,
     close: bootstrapCloseMock,
   })),
@@ -41,7 +43,9 @@ const requireEnvMock = vi.hoisted(() =>
 );
 
 /** clickhouse() singleton client's command (used for schema + migrations) */
-const chCommandMock = vi.hoisted(() => vi.fn<() => Promise<void>>());
+const chCommandMock = vi.hoisted(() =>
+  vi.fn<(opts: { query: string }) => Promise<void>>(),
+);
 /** clickhouse() singleton factory */
 const clickhouseSingletonMock = vi.hoisted(() =>
   vi.fn(() => ({ command: chCommandMock })),
@@ -444,8 +448,8 @@ describe("isDirectRun block", () => {
       .mockImplementation(() => true);
     const exitSpy = vi
       .spyOn(process, "exit")
-      .mockImplementation((_code?: number) => undefined as never);
-    const savedArgv1 = process.argv[1];
+      .mockImplementation((_code?: string | number | null) => undefined as never);
+    const savedArgv1 = process.argv[1] as string;
 
     try {
       vi.resetModules();
@@ -493,8 +497,8 @@ describe("isDirectRun block", () => {
       .mockImplementation(() => true);
     const exitSpy = vi
       .spyOn(process, "exit")
-      .mockImplementation((_code?: number) => undefined as never);
-    const savedArgv1 = process.argv[1];
+      .mockImplementation((_code?: string | number | null) => undefined as never);
+    const savedArgv1 = process.argv[1] as string;
 
     try {
       vi.resetModules();
@@ -537,8 +541,8 @@ describe("isDirectRun block", () => {
   it("does NOT execute the block when process.argv[1] differs from the module path", async () => {
     const exitSpy = vi
       .spyOn(process, "exit")
-      .mockImplementation((_code?: number) => undefined as never);
-    const savedArgv1 = process.argv[1];
+      .mockImplementation((_code?: string | number | null) => undefined as never);
+    const savedArgv1 = process.argv[1] as string;
 
     try {
       vi.resetModules();

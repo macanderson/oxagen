@@ -15,6 +15,12 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// The first dynamic import of ./client cold-compiles the full ./schema barrel
+// (4k+ lines), which can exceed the 5s default timeout on a cold CI cache and
+// flake the first lazy-import test. Raise the per-file timeout to match the
+// repo's established lazy-import pattern.
+vi.setConfig({ testTimeout: 30_000 });
+
 // ---------------------------------------------------------------------------
 // Hoisted mock factories — created ONCE, referenced by vi.mock() closures.
 // vi.hoisted() runs before module evaluation so the variables are available

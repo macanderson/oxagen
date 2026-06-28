@@ -173,7 +173,7 @@ describe("recordSecurityEvent", () => {
       orgId: "org-xyz",
       workspaceId: null,
       capability: null,
-      outcome: "failure",
+      outcome: "deny",
       ip: null,
       userAgent: null,
       requestId: null,
