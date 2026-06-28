@@ -23,15 +23,17 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { logger } from "./logger";
 
-// Resolve the built-in skills directory relative to this file.  The path is
-// identical to the one used by skill.workspace.install so that both handlers
-// always see the same template set.
-const __filename = fileURLToPath(import.meta.url);
-// Three `..` traversals: <file> → src → handlers → packages, then + skills/skills
-// lands at packages/skills/skills (the built-in skill registry root). Must match
-// skill.workspace.install.ts exactly — a 4th `..` overshoots to <repo>/skills/skills
-// (nonexistent), silently seeding zero skills.
-const SKILLS_DIR = join(__filename, "../../../skills/skills");
+// Resolve the built-in skills directory LAZILY + guarded — a module-scope
+// `fileURLToPath(import.meta.url)` is undefined in the CJS API bundle and crashes
+// the whole function at load (FUNCTION_INVOCATION_FAILED — postmortem 2026-06-12).
+// Path must match skill.workspace.install.ts exactly (3 `..` → packages/skills/skills).
+function skillsDir(): string {
+  try {
+    return join(fileURLToPath(import.meta.url), "../../../skills/skills");
+  } catch {
+    return join(process.cwd(), "packages/skills/skills");
+  }
+}
 
 interface SeedArgs {
   orgId: string;
@@ -52,7 +54,7 @@ async function runSeed(
   orgId: string,
   workspaceId: string,
 ): Promise<SeedWorkspaceSkillsResult> {
-  const registry = createSkillRegistry({ fsRoot: SKILLS_DIR });
+  const registry = createSkillRegistry({ fsRoot: skillsDir() });
   const templates = await registry.list();
 
   let inserted = 0;
