@@ -59,7 +59,12 @@ jobs:
   checks:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 35m (was 20m): a PR that invalidates many turbo caches must run lint +
+    # typecheck cold across the whole affected set, including apps/app's slow
+    # `tsc --noEmit` + `eslint .`. 20m wasn't enough for the cold case, so the
+    # slow tasks were killed before they could populate the remote cache —
+    # every run then re-ran them and timed out. The `test` job already uses 30m.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v5
         with:
