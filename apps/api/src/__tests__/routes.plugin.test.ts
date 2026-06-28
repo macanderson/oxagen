@@ -1,6 +1,6 @@
 /**
  * Unit tests for plugin route handlers:
- *   plugin.catalog.browse, plugin.catalog.get,
+ *   plugin.catalog.browse, plugin.catalog.get, plugin.catalog.sync,
  *   plugin.credential.reauth, plugin.credential.set_secret,
  *   plugin.org.install, plugin.org.install_bulk, plugin.org.list,
  *   plugin.org.set_enabled, plugin.org.uninstall,
@@ -140,6 +140,39 @@ describe("plugin.catalog.get route", () => {
     const res = await app.fetch(post(PATH, {}));
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── plugin.catalog.sync ───────────────────────────────────────────────────
+
+describe("plugin.catalog.sync route", () => {
+  const PATH = "/plugin/catalog/sync";
+
+  it("happy path: 200 with sync summary", async () => {
+    const invokeResult = {
+      total: 3,
+      succeeded: 3,
+      failed: 0,
+      totalEntries: 42,
+      durationMs: 120,
+    };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await app.fetch(post(PATH, {}));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke with 'plugin.catalog.sync' and defaults fullSync to false", async () => {
+    await app.fetch(post(PATH, {}));
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("plugin.catalog.sync");
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.fullSync).toBe(false);
+  });
+
+  it("forwards fullSync=true", async () => {
+    await app.fetch(post(PATH, { fullSync: true }));
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.fullSync).toBe(true);
   });
 });
 
