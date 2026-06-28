@@ -72,6 +72,16 @@ contract-first design, IAM enforcement, and instrumentation.
 - [billing.subscription.read](billing.subscription.read.md) — Return the active subscription, plan slug, current period bounds, and available credits
 - [billing.subscription.upgrade.start](billing.subscription.upgrade.start.md) — Begin a plan change via Stripe Checkout; returns a URL for the user to complete
 
+## Browser (7)
+
+- [browser.click](browser.click.md) — Click an element (by CSS selector) on the durable sandbox browser's current page; Playwright auto-waits for the element to be actionable
+- [browser.fill](browser.fill.md) — Fill a form field (by CSS selector) on the durable sandbox browser's current page; state persists so a later submit acts on the filled value
+- [browser.navigate](browser.navigate.md) — Navigate the durable sandbox's browser to a URL and wait for load; use to prove a feature renders at a given URL inside the sandbox
+- [browser.read](browser.read.md) — Read visible text from the durable sandbox browser's current page (whole page or a CSS-selected element) for programmatic assertions
+- [browser.refresh](browser.refresh.md) — Reload the durable sandbox browser's current page and wait for load; useful after a rebuild or HMR update to re-check a feature
+- [browser.screenshot](browser.screenshot.md) — Screenshot the durable sandbox browser's current page or element and store it as a private workspace asset for the cross-LLM judge
+- [browser.submit](browser.submit.md) — Submit a form on the durable sandbox browser's current page (click the given selector, or press Enter) and wait for the result to settle
+
 ## Chat (2)
 
 - [chat.message.execution](chat.message.execution.md) — Record an agent execution that originated from a chat message; atomically links execution to message for observability
