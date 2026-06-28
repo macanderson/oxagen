@@ -22,6 +22,7 @@ import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
 import { readConfig } from "../lib/config.js";
 import { PermissionBroker, type PermissionMode } from "../agent/permissions.js";
+import { formatToolCallWithSpacing } from "../agent/tool-formatter.js";
 
 export interface OneShotOptions {
   readOnly?: boolean;
@@ -85,11 +86,7 @@ export async function runOneShot(
       // Tool activity goes to stderr so stdout stays the clean final answer
       // (pipeable). e.g. `oxagen "..." > out.md` captures only the answer.
       onToolCall: (name, input) => {
-        const summary =
-          typeof input === "object" && input !== null
-            ? JSON.stringify(input).slice(0, 120)
-            : String(input);
-        process.stderr.write(`  · ${name} ${summary}\n`);
+        process.stderr.write(formatToolCallWithSpacing(name, input));
       },
     });
     traceStore.record(result.trace);
