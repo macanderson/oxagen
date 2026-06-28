@@ -18,6 +18,7 @@ import { classifyTier, modelForTier } from "./model-router.js";
 import { ensureGatewayKey, MissingGatewayKeyError } from "./env.js";
 import { emptyUsage, type ModelTier, type Plan, type Task } from "./fleet/types.js";
 import type { FleetMemory } from "./fleet/memory.js";
+import type { AgentDefinition } from "../agents/types.js";
 
 const TIER_RANK: Record<ModelTier, number> = { fast: 0, balanced: 1, precise: 2 };
 
@@ -52,6 +53,13 @@ const planSchema = z.object({
             "Model tier: 'fast' for mechanical/single-file, 'balanced' for normal feature work, " +
               "'precise' for auth/billing/security/migrations/architecture.",
           ),
+        agent: z
+          .string()
+          .optional()
+          .describe(
+            "Name of a specialized agent from the roster to handle this task, when one clearly " +
+              "fits. Omit to use the general-purpose agent.",
+          ),
       }),
     )
     .min(1)
@@ -64,6 +72,8 @@ export interface PlanOptions {
   /** Override the planning model slug (otherwise a balanced-tier model). */
   model?: string;
   memory?: FleetMemory | null;
+  /** Roster of named agents the planner may assign tasks to. */
+  agents?: AgentDefinition[];
   signal?: AbortSignal;
 }
 
@@ -99,12 +109,19 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
   // Enhance the goal so the planner sees the real code involved.
   const enhanced = await enhancePrompt({ prompt: opts.goal, cwd, memory: opts.memory });
 
+  const roster = new Set((opts.agents ?? []).map((a) => a.name));
+  const rosterBlock =
+    opts.agents && opts.agents.length > 0
+      ? `\n\nAvailable specialized agents (assign a task's "agent" to one when it clearly fits):\n` +
+        opts.agents.map((a) => `- ${a.name}: ${a.description}`).join("\n")
+      : "";
+
   const model = opts.model ?? modelForTier("balanced");
   const { object } = await generateObject({
     model,
     schema: planSchema,
     system: PLANNER_SYSTEM,
-    prompt: `Goal:\n${enhanced.prompt}`,
+    prompt: `Goal:\n${enhanced.prompt}${rosterBlock}`,
     abortSignal: opts.signal,
   });
 
@@ -121,6 +138,8 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
       fileCount: t.files.length,
     }).tier;
     const tier = maxTier(t.tier as ModelTier, routed);
+    // Keep an agent assignment only if it names a real agent in the roster.
+    const agent = t.agent && roster.has(t.agent) ? t.agent : undefined;
     return {
       id,
       title: t.title,
@@ -130,6 +149,7 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
       files: t.files ?? [],
       tier,
       model: modelForTier(tier),
+      agent,
       createdAt: now,
       usage: emptyUsage(),
     };

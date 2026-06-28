@@ -369,6 +369,26 @@ describe("createVercelSandbox — run()", () => {
     expect(result.oomKilled).toBe(false);
   });
 
+  it("writes extra workspace files next to the entrypoint", async () => {
+    const finished = makeFinished("ok\n", "");
+    const instance: MockSandboxInstance = {
+      fs: { writeFile: vi.fn().mockResolvedValue(undefined) },
+      runCommand: vi.fn().mockResolvedValue(finished),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const driver = createVercelSandbox({}, makeMockSandboxImpl(instance));
+
+    await driver.run({
+      ...makeVercelReq(),
+      files: { "util.js": "module.exports = 1", "lib/a.js": "1" },
+    });
+
+    // Entrypoint at /work/main.js, so extra files land under /work/.
+    expect(instance.fs.writeFile).toHaveBeenCalledWith("/work/main.js", expect.any(String), "utf8");
+    expect(instance.fs.writeFile).toHaveBeenCalledWith("/work/util.js", "module.exports = 1", "utf8");
+    expect(instance.fs.writeFile).toHaveBeenCalledWith("/work/lib/a.js", "1", "utf8");
+  });
+
   it("returns stderr from a failed command", async () => {
     const finished = makeFinished("", "error output\n", 1);
     const instance: MockSandboxInstance = {

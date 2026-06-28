@@ -24,6 +24,8 @@ export default async function SettingsLayout({
     { label: "Plugins", href: workspace.settings.plugins(ctx) },
     { label: "Skills", href: workspace.settings.skills(ctx) },
     { label: "Knowledge", href: workspace.settings.knowledge(ctx) },
+    { label: "Memory", href: workspace.settings.memory(ctx) },
+    { label: "Environments", href: workspace.settings.environments(ctx) },
   ];
 
   return (

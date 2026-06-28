@@ -181,6 +181,50 @@ describe("agent.code.execute capability", () => {
     expect(Object.keys(parsed.env ?? {})).toHaveLength(32);
   });
 
+  // ── input: workspace files map ────────────────────────────────────────────
+
+  it("accepts a valid files map", () => {
+    const parsed = agentCodeExecute.input.parse({
+      language: "node",
+      code: "require('./util')",
+      files: { "util.js": "module.exports = 1", "lib/a.js": "1" },
+    });
+    expect(parsed.files).toEqual({ "util.js": "module.exports = 1", "lib/a.js": "1" });
+  });
+
+  it("treats files as optional", () => {
+    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x" });
+    expect(parsed.files).toBeUndefined();
+  });
+
+  it("rejects a files map with a path-traversal key", () => {
+    expect(() =>
+      agentCodeExecute.input.parse({
+        language: "node",
+        code: "x",
+        files: { "../escape.js": "evil" },
+      }),
+    ).toThrow();
+  });
+
+  it("rejects a files map with an absolute path key", () => {
+    expect(() =>
+      agentCodeExecute.input.parse({
+        language: "node",
+        code: "x",
+        files: { "/etc/passwd": "evil" },
+      }),
+    ).toThrow();
+  });
+
+  it("rejects a files map that exceeds the file-count cap", () => {
+    const files: Record<string, string> = {};
+    for (let i = 0; i <= 64; i++) files[`f${i}.js`] = "x";
+    expect(() =>
+      agentCodeExecute.input.parse({ language: "node", code: "x", files }),
+    ).toThrow();
+  });
+
   // ── input: required fields ────────────────────────────────────────────────
 
   it("rejects input missing language", () => {

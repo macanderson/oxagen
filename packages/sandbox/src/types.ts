@@ -5,6 +5,15 @@ export interface SandboxRequest {
   code: string;
   stdin?: string;
   env?: Record<string, string>;
+  /**
+   * Extra files to land into the workspace (relative path → contents) BEFORE
+   * the entrypoint runs, so an agent can stage a multi-file edit and execute
+   * against it. Paths are workspace-relative and must already be confined to
+   * the root (validated upstream via `@oxagen/sandbox/workspace`). Each driver
+   * writes them alongside the entrypoint code file so language-relative imports
+   * (`require('./util')`, `import util`) resolve.
+   */
+  files?: Record<string, string>;
   timeoutMs: number;
   memoryMb: number;
   network: "allow" | "deny";

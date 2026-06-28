@@ -15,6 +15,11 @@ type LoaderEntry = () => Promise<{ default?: CapabilityHandlerFn } & Record<stri
 // Single source of truth mapping capability name → handler module.
 const LOADERS: Record<string, LoaderEntry> = {
   "agent.code.execute": () => import("./agent.code.execute"),
+  // Code-execution surface peers of agent.code.execute (OXA-1352). Co-located
+  // here so the whole sandboxed code surface registers through one path.
+  "code.diff": () => import("./code.diff"),
+  "code.patch": () => import("./code.patch"),
+  "code.format": () => import("./code.format"),
   "agent.tool.list": () => import("./agent.tool.list"),
   "agent.mcp.register": () => import("./agent.mcp.register"),
   "agent.mcp.list": () => import("./agent.mcp.list"),

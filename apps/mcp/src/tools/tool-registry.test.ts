@@ -130,6 +130,8 @@ import { metadata as graphNodeUpsertMetadata } from "./graph.node.upsert";
 import { metadata as graphNodeGetMetadata } from "./graph.node.get";
 import { metadata as graphNodeDeleteMetadata } from "./graph.node.delete";
 import { metadata as graphNodeSearchMetadata } from "./graph.node.search";
+import { metadata as graphSearchMetadata } from "./graph.search";
+import { metadata as graphExportMetadata } from "./graph.export";
 import { metadata as graphEdgeUpsertMetadata } from "./graph.edge.upsert";
 import { metadata as graphEdgeDeleteMetadata } from "./graph.edge.delete";
 import { metadata as graphCypherMetadata } from "./graph.cypher";
@@ -220,6 +222,29 @@ import { metadata as semanticRelationshipApproveMetadata } from "./semantic.rela
 import { metadata as semanticRelationshipInferMetadata } from "./semantic.relationship.infer";
 import { metadata as semanticRelationshipListMetadata } from "./semantic.relationship.list";
 import { metadata as semanticRelationshipSuggestMetadata } from "./semantic.relationship.suggest";
+// Environment management
+import { metadata as environmentCreateMetadata } from "./environment.create";
+import { metadata as environmentListMetadata } from "./environment.list";
+import { metadata as environmentGetMetadata } from "./environment.get";
+import { metadata as environmentUpdateMetadata } from "./environment.update";
+import { metadata as environmentDeleteMetadata } from "./environment.delete";
+import { metadata as environmentSetDefaultMetadata } from "./environment.set_default";
+// Secret / env-vault
+import { metadata as secretKeyUpsertMetadata } from "./secret.key.upsert";
+import { metadata as secretKeyListMetadata } from "./secret.key.list";
+import { metadata as secretKeyDeleteMetadata } from "./secret.key.delete";
+import { metadata as secretValueSetMetadata } from "./secret.value.set";
+import { metadata as secretValueUnsetMetadata } from "./secret.value.unset";
+import { metadata as secretImportEnvMetadata } from "./secret.import_env";
+import { metadata as secretRevealMetadata } from "./secret.reveal";
+import { metadata as secretExportMetadata } from "./secret.export";
+// Code capability tools (code.diff / code.patch / code.format are mcp-surfaced)
+import { metadata as codeDiffMetadata } from "./code.diff";
+import { metadata as codePatchMetadata } from "./code.patch";
+import { metadata as codeFormatMetadata } from "./code.format";
+// Memory decay policy tools (OXA-1374)
+import { metadata as agentMemoryPolicyReadMetadata } from "./agent.memory.policy.read";
+import { metadata as agentMemoryPolicyWriteMetadata } from "./agent.memory.policy.write";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -338,6 +363,8 @@ const allToolMetadata = [
   graphNodeGetMetadata,
   graphNodeDeleteMetadata,
   graphNodeSearchMetadata,
+  graphSearchMetadata,
+  graphExportMetadata,
   graphEdgeUpsertMetadata,
   graphEdgeDeleteMetadata,
   graphCypherMetadata,
@@ -423,6 +450,27 @@ const allToolMetadata = [
   semanticRelationshipInferMetadata,
   semanticRelationshipListMetadata,
   semanticRelationshipSuggestMetadata,
+  environmentCreateMetadata,
+  environmentListMetadata,
+  environmentGetMetadata,
+  environmentUpdateMetadata,
+  environmentDeleteMetadata,
+  environmentSetDefaultMetadata,
+  secretKeyUpsertMetadata,
+  secretKeyListMetadata,
+  secretKeyDeleteMetadata,
+  secretValueSetMetadata,
+  secretValueUnsetMetadata,
+  secretImportEnvMetadata,
+  secretRevealMetadata,
+  secretExportMetadata,
+  // Code capability tools (mcp-surfaced; tool files existed but weren't listed here)
+  codeDiffMetadata,
+  codePatchMetadata,
+  codeFormatMetadata,
+  // Memory decay policy tools (OXA-1374)
+  agentMemoryPolicyReadMetadata,
+  agentMemoryPolicyWriteMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────

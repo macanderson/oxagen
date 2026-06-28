@@ -1,0 +1,140 @@
+import type { CapabilityHandler } from "@oxagen/oxagen";
+import { graphSearch } from "@oxagen/oxagen/contracts/graph.search";
+import { scopedSession } from "@oxagen/ontology/tenant";
+import { runInTenantScope } from "@oxagen/tenancy";
+import { embedText } from "@oxagen/ai";
+import { logger } from "./logger";
+
+// Map Neo4j labels to canonical kind strings for the output.
+function kindFromLabels(labels: string[]): string {
+  if (labels.includes("SourceFile")) return "file";
+  if (labels.includes("SourceSymbol")) return "symbol";
+  if (labels.includes("SourceChunk")) return "chunk";
+  if (labels.includes("Execution")) return "execution";
+  if (labels.includes("GeneratedFile")) return "asset";
+  if (labels.includes("AgentMemory")) return "memory";
+  if (labels.includes("Document")) return "document";
+  if (labels.includes("Message")) return "message";
+  return "entity";
+}
+
+// Build a short snippet from a JSON properties string (parse then take `content`)
+// or fall back to displayName.
+function buildSnippet(propertiesJson: string | null, displayName: string): string {
+  if (propertiesJson) {
+    try {
+      const props = JSON.parse(propertiesJson) as Record<string, unknown>;
+      if (typeof props.content === "string" && props.content.length > 0) {
+        return props.content.slice(0, 240);
+      }
+    } catch {
+      // fall through
+    }
+  }
+  return displayName.slice(0, 240);
+}
+
+export const graphSearchHandler: CapabilityHandler<typeof graphSearch> = async (input, ctx) => {
+  const { orgId, workspaceId } = ctx;
+
+  // Embed the query. Telemetry mirrors the ingestion embed pattern:
+  // executionStepId must be null (not a synthesized string) to satisfy the
+  // ClickHouse UUID column and Postgres credit_ledger.reference_id constraints.
+  const queryVector = await embedText(input.query, {
+    telemetry: {
+      orgId,
+      workspaceId,
+      surface: "app",
+      executionStepId: null,
+    },
+  });
+
+  type ResultRow = {
+    nodeId: string;
+    label: string;
+    displayName: string;
+    properties: string | null;
+    isSystem: boolean;
+    nodeLabels: string[];
+    score: number;
+  };
+
+  const rows: ResultRow[] = [];
+
+  // k: how many to pull from the index before kind-filtering.
+  // When `kinds` filter is provided we over-fetch to compensate for post-filter
+  // attrition; otherwise request exactly limit.
+  const k = input.kinds && input.kinds.length > 0 ? input.limit * 3 : input.limit;
+
+  // Build optional WHERE clause additions.
+  const isSystemClause =
+    input.isSystem !== undefined ? "AND coalesce(n.is_system, false) = $isSystem" : "";
+  const labelsClause =
+    input.labels && input.labels.length > 0 ? "AND n.label IN $labels" : "";
+
+  await runInTenantScope({ orgId, workspaceId }, async () => {
+    const session = scopedSession();
+    try {
+      const result = await session.run(
+        `CALL db.index.vector.queryNodes('graph_node_embedding_index', $k, $queryVector)
+         YIELD node AS n, score
+         WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
+           ${isSystemClause}
+           ${labelsClause}
+         RETURN n.publicId    AS nodeId,
+                n.label       AS label,
+                coalesce(n.displayName, n.publicId) AS displayName,
+                n.properties  AS properties,
+                coalesce(n.is_system, false) AS isSystem,
+                labels(n)     AS nodeLabels,
+                score
+         ORDER BY score DESC LIMIT $limit`,
+        {
+          k: BigInt(k),
+          queryVector,
+          isSystem: input.isSystem ?? null,
+          labels: input.labels ?? [],
+          // BigInt forces the Bolt driver to send INTEGER — plain numbers become
+          // Float and Neo4j rejects them for LIMIT.
+          limit: BigInt(k),
+        },
+      );
+
+      for (const record of result.records) {
+        rows.push({
+          nodeId: record.get("nodeId") as string,
+          label: record.get("label") as string,
+          displayName: record.get("displayName") as string,
+          properties: record.get("properties") as string | null,
+          isSystem: record.get("isSystem") as boolean,
+          nodeLabels: record.get("nodeLabels") as string[],
+          score: record.get("score") as number,
+        });
+      }
+    } finally {
+      await session.close();
+    }
+  });
+
+  // Post-filter by kind if requested, then truncate to limit.
+  const filtered = input.kinds && input.kinds.length > 0
+    ? rows.filter((r) => (input.kinds as string[]).includes(kindFromLabels(r.nodeLabels)))
+    : rows;
+
+  const results = filtered.slice(0, input.limit).map((r) => ({
+    nodeId: r.nodeId,
+    label: r.label,
+    displayName: r.displayName,
+    kind: kindFromLabels(r.nodeLabels),
+    snippet: buildSnippet(r.properties, r.displayName),
+    score: r.score,
+    isSystem: r.isSystem,
+  }));
+
+  logger.info(
+    { query: input.query, resultCount: results.length, orgId, workspaceId },
+    "graph.search: search completed",
+  );
+
+  return { results };
+};

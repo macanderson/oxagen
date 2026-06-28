@@ -113,7 +113,7 @@ export function SuggestedPromptChips({
         </p>
       ) : null}
     <div
-      className="flex flex-wrap items-center gap-2"
+      className="flex flex-wrap items-center justify-center gap-2"
       role="group"
       aria-label="Suggested prompts"
     >

@@ -16,12 +16,24 @@ export interface RecordExecutionInput {
   outputTokens?: number | null;
   estimatedCostUsd?: string | null;
   toolCalls?: Array<{ toolName: string; toolType: string }>;
+  /** Pre-computed embedding vector (1536 dims, cosine). Caller MUST compute this
+   *  because @oxagen/ontology must NOT depend on @oxagen/ai. */
+  embedding?: number[] | null;
+  /** Human-readable summary of what the execution did. Stored on the node for
+   *  full-text context and used as the source text for the embedding. */
+  summary?: string | null;
+  /** Short human label (e.g. "chat execution by <agentId>"). Shown in the graph
+   *  explorer as the node's primary identifier instead of a raw UUID. */
+  displayName?: string | null;
 }
 
 /**
  * Merge an AgentExecution node and its relationships into the Neo4j knowledge
  * graph. Uses MERGE to stay idempotent — re-driving the same executionId is
  * safe and updates properties in place. Tenant-scoped via scopedSession().
+ *
+ * The node now carries the universal `:GraphNode` anchor label so it appears in
+ * the graph explorer and is hit by the `graph_node_embedding_index` vector search.
  */
 export async function recordExecutionInGraph(input: RecordExecutionInput): Promise<void> {
   const {
@@ -37,27 +49,68 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
     outputTokens,
     estimatedCostUsd,
     toolCalls,
+    embedding,
+    summary,
+    displayName,
   } = input;
+
+  // Build a compact JSON properties bag for the node — this is what the graph
+  // explorer surfaces in the PropertyList popover. Null/undefined values are
+  // omitted so the bag stays lean.
+  const toolNames = toolCalls?.map((tc) => tc.toolName) ?? [];
+  const propertiesBag: Record<string, unknown> = {
+    status,
+    originType,
+    ...(agentId != null && { agentId }),
+    ...(latencyMs != null && { latencyMs }),
+    ...(inputTokens != null && { inputTokens }),
+    ...(outputTokens != null && { outputTokens }),
+    ...(estimatedCostUsd != null && { estimatedCostUsd }),
+    ...(toolNames.length > 0 && { toolNames }),
+  };
+  const properties = JSON.stringify(propertiesBag);
 
   const neo4j = scopedSession();
   try {
-    // Upsert the primary Execution node. orgId is injected by scopedSession().
+    // Upsert the primary Execution node.
+    // ON CREATE sets immutable identity fields (publicId, label, workspaceId, startedAt).
+    // ON MATCH updates mutable state (status, tokens, latency, displayName, properties).
+    // The embedding FOREACH guard conditionally sets the vector and its timestamp only
+    // when a non-null embedding is supplied — a null embedding must never overwrite an
+    // existing vector from a prior call.
     await neo4j.run(
       `MERGE (e:${NodeLabels.Execution} {id: $executionId, orgId: $orgId})
        ON CREATE SET
-         e.workspaceId   = $workspaceId,
-         e.status        = $status,
-         e.originType    = $originType,
-         e.startedAt     = $startedAt,
-         e.createdAt     = datetime()
+         e:GraphNode,
+         e.is_system      = true,
+         e.publicId       = $executionId,
+         e.label          = 'Execution',
+         e.workspaceId    = $workspaceId,
+         e.status         = $status,
+         e.originType     = $originType,
+         e.displayName    = $displayName,
+         e.properties     = $properties,
+         e.summary        = $summary,
+         e.startedAt      = $startedAt,
+         e.createdAt      = datetime()
        ON MATCH SET
-         e.status        = $status,
-         e.completedAt   = $completedAt,
-         e.latencyMs     = $latencyMs,
-         e.inputTokens   = $inputTokens,
-         e.outputTokens  = $outputTokens,
+         e:GraphNode,
+         e.is_system      = true,
+         e.label          = 'Execution',
+         e.status         = $status,
+         e.completedAt    = $completedAt,
+         e.latencyMs      = $latencyMs,
+         e.inputTokens    = $inputTokens,
+         e.outputTokens   = $outputTokens,
          e.estimatedCostUsd = $estimatedCostUsd,
-         e.updatedAt     = datetime()`,
+         e.displayName    = $displayName,
+         e.properties     = $properties,
+         e.summary        = $summary,
+         e.updatedAt      = datetime()
+       FOREACH (_ IN CASE WHEN $embedding IS NULL THEN [] ELSE [1] END |
+         SET e.embedding          = $embedding,
+             e.embeddingUpdatedAt = datetime()
+       )`,
       {
         executionId,
         workspaceId: input.workspaceId,
@@ -69,26 +122,33 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
         inputTokens: inputTokens ?? null,
         outputTokens: outputTokens ?? null,
         estimatedCostUsd: estimatedCostUsd ?? null,
+        displayName: displayName ?? `${originType} execution`,
+        properties,
+        summary: summary ?? null,
+        embedding: embedding ?? null,
       },
     );
 
-    // Link execution → agent when agentId is provided.
+    // Link execution → agent when agentId is provided. The INVOKED relationship
+    // is product-owned so it carries is_system = true.
     if (agentId) {
       await neo4j.run(
         `MATCH (e:${NodeLabels.Execution} {id: $executionId, orgId: $orgId})
          MERGE (a:${NodeLabels.Agent} {id: $agentId, orgId: $orgId})
-         MERGE (e)-[:${EdgeTypes.INVOKED}]->(a)`,
+         MERGE (e)-[r:${EdgeTypes.INVOKED}]->(a)
+         SET r.is_system = true`,
         { executionId, agentId },
       );
     }
 
-    // Record origin relationship — polymorphic on originType.
+    // Record origin relationship — polymorphic on originType. Product-owned.
     const originLabel = originLabelFor(originType);
     if (originLabel) {
       await neo4j.run(
         `MATCH (e:${NodeLabels.Execution} {id: $executionId, orgId: $orgId})
          MERGE (o:${originLabel} {id: $originId, orgId: $orgId})
-         MERGE (e)-[:${EdgeTypes.ORIGINATED_FROM}]->(o)`,
+         MERGE (e)-[r:${EdgeTypes.ORIGINATED_FROM}]->(o)
+         SET r.is_system = true`,
         { executionId, originId },
       );
     }
@@ -101,7 +161,8 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
         `MATCH (e:${NodeLabels.Execution} {id: $executionId, orgId: $orgId})
          UNWIND $toolCalls AS tc
          MERGE (t:${NodeLabels.Tool} {name: tc.toolName, type: tc.toolType, orgId: $orgId})
-         MERGE (e)-[:${EdgeTypes.CALLED_TOOL}]->(t)`,
+         MERGE (e)-[r:${EdgeTypes.CALLED_TOOL}]->(t)
+         SET r.is_system = true`,
         { executionId, toolCalls },
       );
     }

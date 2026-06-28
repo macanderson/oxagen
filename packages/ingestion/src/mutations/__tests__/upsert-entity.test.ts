@@ -83,10 +83,10 @@ describe("upsertEntityNode", () => {
     expect(JSON.parse(params["properties"] as string)).toMatchObject({ title: "Fix the bug" });
   });
 
-  it("also sets the :KnowledgeNode label + graph display fields so the node is visible in the explorer", async () => {
+  it("also sets the :GraphNode anchor label + graph display fields so the node is visible in the explorer", async () => {
     // Regression: ingestion wrote only :EntityNode while every graph read
-    // (graph.node.list/search/stats, ontology.neighbors) filters on
-    // :KnowledgeNode — so ingested entities were invisible in the graph UI.
+    // (graph.node.list/search/stats, ontology.neighbors) matches the
+    // :GraphNode anchor — so ingested entities were invisible in the graph UI.
     mocks.sessionRun.mockResolvedValueOnce({
       records: [{ get: vi.fn().mockReturnValue("uuid-node-1") }],
     });
@@ -96,8 +96,8 @@ describe("upsertEntityNode", () => {
       return mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
     })();
 
-    // The universal display label is added on every write.
-    expect(cypher).toContain("n:KnowledgeNode");
+    // The universal anchor label is added on every write.
+    expect(cypher).toContain("n:GraphNode");
     // The read layer reads n.label / n.displayName / n.sourceId.
     expect(cypher).toContain("n.label");
     expect(cypher).toContain("n.sourceId");

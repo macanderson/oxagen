@@ -171,7 +171,7 @@ export const [ingestionDeleteConnection] = createFunction(
           );
 
           // ── Pass 5: Sweep concept placeholders this source's deletion orphaned
-          // Semantic-edge inference MERGEs lightweight :KnowledgeNode concept
+          // Semantic-edge inference MERGEs lightweight :GraphNode concept
           // targets (carrying type/name, NOT connectionId or naturalKey) and links
           // source entities to them. They are intentionally connection-agnostic so
           // a concept seen by several sources survives — so they're matched here
@@ -180,7 +180,7 @@ export const [ingestionDeleteConnection] = createFunction(
           // graph.node.upsert, web-search) are excluded so only inferred orphans go.
           const orphanResult = await session.run(
             `
-            MATCH (n:KnowledgeNode {orgId: $orgId, workspaceId: $workspaceId})
+            MATCH (n:GraphNode {orgId: $orgId, workspaceId: $workspaceId})
             WHERE n.connectionId IS NULL
               AND n.naturalKey IS NULL
               AND NOT (n)--()

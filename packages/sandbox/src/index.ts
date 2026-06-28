@@ -1,6 +1,7 @@
 export * from "./types";
 export * from "./images";
 export * from "./policy";
+export * from "./workspace";
 export { createDockerSandbox } from "./docker";
 export { createModalSandbox } from "./modal";
 export { createVercelSandbox } from "./vercel";

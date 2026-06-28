@@ -9,6 +9,8 @@ export interface MemoryRow {
   source: string;
   score: number;
   createdAt: string;
+  confidence: number;
+  lastReinforcedAt: string | null;
 }
 
 const WEIGHT_RANK: Record<string, number> = { low: 0, high: 1, critical: 2 };
@@ -23,10 +25,12 @@ export async function recallMemories(args: {
   minWeight: "low" | "high" | "critical";
   limit: number;
   nodeRef?: string;
+  recallThreshold?: number;
 }): Promise<MemoryRow[]> {
   const s = scopedSession();
   try {
     const minRank = WEIGHT_RANK[args.minWeight];
+    const recallThreshold = args.recallThreshold ?? 0;
     const result = await s.run(
       /* cypher */ `
         CALL db.index.vector.queryNodes('memory_embedding_index', $limit, $embedding)
@@ -35,6 +39,7 @@ export async function recallMemories(args: {
           AND node.workspaceId = $workspaceId
           AND (CASE node.weight WHEN 'critical' THEN 2 WHEN 'high' THEN 1 ELSE 0 END) >= $minRank
           AND ($nodeRef IS NULL OR node.nodeRef = $nodeRef)
+          AND coalesce(node.confidence, 1.0) >= $recallThreshold
         RETURN
           node.id AS id,
           node.nodeRef AS nodeRef,
@@ -43,7 +48,9 @@ export async function recallMemories(args: {
           node.lesson AS lesson,
           node.source AS source,
           score,
-          toString(node.createdAt) AS createdAt
+          toString(node.createdAt) AS createdAt,
+          node.confidence AS confidence,
+          toString(node.lastReinforcedAt) AS lastReinforcedAt
         ORDER BY score DESC
         LIMIT $limit
       `,
@@ -52,6 +59,7 @@ export async function recallMemories(args: {
         minRank,
         nodeRef: args.nodeRef ?? null,
         limit: BigInt(args.limit),
+        recallThreshold,
       },
     );
     /* eslint-disable @typescript-eslint/no-unsafe-assignment -- neo4j-driver Record.get() is typed as `any`; shape is guaranteed by the Cypher projection above. */
@@ -64,6 +72,8 @@ export async function recallMemories(args: {
       source: r.get("source"),
       score: Number(r.get("score")),
       createdAt: r.get("createdAt"),
+      confidence: Number(r.get("confidence") ?? 1.0),
+      lastReinforcedAt: r.get("lastReinforcedAt") ?? null,
     }));
     /* eslint-enable @typescript-eslint/no-unsafe-assignment */
   } finally {
@@ -101,12 +111,24 @@ export async function writeMemory(
         })
         ON CREATE SET
           m.id = randomUUID(),
+          m.publicId = randomUUID(),
+          m:GraphNode,
+          m.is_system = true,
+          m.label = 'AgentMemory',
+          m.displayName = left($lesson, 200),
           m.weight = $weight,
           m.kind = $kind,
           m.source = $source,
           m.embedding = $embedding,
+          m.confidence = 1.0,
+          m.lastReinforcedAt = datetime(),
           m.createdAt = datetime()
         ON MATCH SET
+          m:GraphNode,
+          m.is_system = true,
+          m.label = 'AgentMemory',
+          m.displayName = left($lesson, 200),
+          m.publicId = coalesce(m.publicId, randomUUID()),
           m.weight = $weight,
           m.kind = $kind,
           m.source = $source,
@@ -115,15 +137,17 @@ export async function writeMemory(
         WITH m
         OPTIONAL MATCH (target { id: $nodeRef, orgId: $orgId })
         FOREACH (_ IN CASE WHEN target IS NULL THEN [] ELSE [1] END |
-          MERGE (target)-[:REMEMBERS]->(m)
+          MERGE (target)-[rr:REMEMBERS]->(m)
+          SET rr.is_system = true
         )
         WITH m
         CALL {
           WITH m
           UNWIND $relatedNodeIds AS nid
-          OPTIONAL MATCH (kn:KnowledgeNode {publicId: nid, orgId: $orgId})
+          OPTIONAL MATCH (kn:GraphNode {publicId: nid, orgId: $orgId})
           FOREACH (_ IN CASE WHEN kn IS NULL THEN [] ELSE [1] END |
-            MERGE (m)-[:ABOUT]->(kn)
+            MERGE (m)-[ra:ABOUT]->(kn)
+            SET ra.is_system = true
           )
           RETURN count(kn) AS edgesCreated
         }
@@ -148,6 +172,117 @@ export async function writeMemory(
     }
     const edgesCreated = Number(result.records[0]?.get("edgesCreated") ?? 0);
     return { memoryId: id, edgesCreated };
+  } finally {
+    await s.close();
+  }
+}
+
+/**
+ * Reinforce a memory by adding `reinforcementAmount` to its confidence,
+ * capped at 1.0. Sets `lastReinforcedAt` to now.
+ *
+ * orgId/workspaceId are injected automatically by scopedSession() from the
+ * active tenant scope.
+ */
+export async function reinforceMemory(args: {
+  memoryId: string;
+  reinforcementAmount: number;
+}): Promise<{ confidence: number }> {
+  const s = scopedSession();
+  try {
+    const result = await s.run(
+      /* cypher */ `
+        MATCH (m:AgentMemory {id: $memoryId, orgId: $orgId, workspaceId: $workspaceId})
+        SET m.confidence = CASE WHEN coalesce(m.confidence, 1.0) + $amount > 1.0
+                            THEN 1.0
+                            ELSE coalesce(m.confidence, 1.0) + $amount
+                           END,
+            m.lastReinforcedAt = datetime()
+        RETURN m.confidence AS confidence
+      `,
+      { memoryId: args.memoryId, amount: args.reinforcementAmount },
+    );
+     
+    const confidence = Number(result.records[0]?.get("confidence") ?? 1.0);
+     
+    return { confidence };
+  } finally {
+    await s.close();
+  }
+}
+
+/** A decayable AgentMemory projection, scoped to the active tenant. */
+export interface DecayableMemory {
+  id: string;
+  weight: "low" | "high" | "critical";
+  confidence: number;
+  lastReinforcedAt: string | null;
+  createdAt: string;
+  nodeRef: string;
+}
+
+/**
+ * List all decayable (non-critical, confidence > 0) AgentMemory nodes for the
+ * active tenant scope. Returns plain typed objects — the raw neo4j-driver
+ * records never leave this package, so callers (e.g. the decay-pass Inngest
+ * function) get a fully typed projection with no `any` boundary.
+ *
+ * orgId/workspaceId are injected automatically by scopedSession() from the
+ * active tenant scope.
+ */
+export async function listDecayableMemories(): Promise<DecayableMemory[]> {
+  const s = scopedSession();
+  try {
+    const result = await s.run(
+      /* cypher */ `
+        MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})
+        WHERE m.weight <> 'critical'
+          AND coalesce(m.confidence, 1.0) > 0
+        RETURN
+          m.id            AS id,
+          m.weight        AS weight,
+          coalesce(m.confidence, 1.0)  AS confidence,
+          toString(m.lastReinforcedAt) AS lastReinforcedAt,
+          toString(m.createdAt)        AS createdAt,
+          coalesce(m.nodeRef, '')      AS nodeRef
+      `,
+    );
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment -- neo4j-driver Record.get() is typed as `any`; shape is guaranteed by the Cypher projection above. */
+    return result.records.map((r) => ({
+      id: r.get("id"),
+      weight: r.get("weight"),
+      confidence: Number(r.get("confidence") ?? 1.0),
+      lastReinforcedAt: r.get("lastReinforcedAt") ?? null,
+      createdAt: r.get("createdAt"),
+      nodeRef: r.get("nodeRef") ?? "",
+    }));
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
+  } finally {
+    await s.close();
+  }
+}
+
+/**
+ * Apply exponential decay to a memory by setting its confidence to `newConfidence`.
+ * Callers are responsible for computing the decay formula:
+ *   confidence * exp(-ln(2) / halfLifeDays * daysSinceReinforced)
+ *
+ * orgId/workspaceId are injected automatically by scopedSession() from the
+ * active tenant scope.
+ */
+export async function applyDecayToMemory(args: {
+  memoryId: string;
+  newConfidence: number;
+}): Promise<void> {
+  const s = scopedSession();
+  try {
+    await s.run(
+      /* cypher */ `
+        MATCH (m:AgentMemory {id: $memoryId, orgId: $orgId, workspaceId: $workspaceId})
+        SET m.confidence = $newConfidence
+      `,
+      { memoryId: args.memoryId, newConfidence: args.newConfidence },
+    );
   } finally {
     await s.close();
   }

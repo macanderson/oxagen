@@ -394,9 +394,15 @@ importers:
       '@inkjs/ui':
         specifier: 2.0.0
         version: 2.0.0(ink@7.1.0(@types/react@19.2.15)(react@19.2.6))
+      '@modelcontextprotocol/sdk':
+        specifier: 1.29.0
+        version: 1.29.0(zod@3.25.76)
       '@oxagen/engram':
         specifier: workspace:*
         version: link:../../packages/engram
+      '@oxagen/mcp-config':
+        specifier: workspace:*
+        version: link:../../packages/mcp-config
       ai:
         specifier: 6.0.197
         version: 6.0.197(zod@3.25.76)
@@ -562,6 +568,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.29.0
         version: 1.29.0(zod@3.25.76)
+      '@opentelemetry/api':
+        specifier: 1.9.1
+        version: 1.9.1
       '@oxagen/ai':
         specifier: workspace:*
         version: link:../ai
@@ -598,6 +607,9 @@ importers:
       ai:
         specifier: 6.0.197
         version: 6.0.197(zod@3.25.76)
+      diff:
+        specifier: 9.0.0
+        version: 9.0.0
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9)
@@ -635,6 +647,9 @@ importers:
       '@ai-sdk/provider':
         specifier: 3.0.10
         version: 3.0.10
+      '@opentelemetry/api':
+        specifier: 1.9.1
+        version: 1.9.1
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../billing
@@ -1263,9 +1278,15 @@ importers:
 
   packages/oxagen:
     dependencies:
+      '@opentelemetry/api':
+        specifier: 1.9.1
+        version: 1.9.1
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
+      '@oxagen/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
       '@oxagen/tenancy':
         specifier: workspace:*
         version: link:../tenancy
@@ -1452,6 +1473,24 @@ importers:
       '@clickhouse/client':
         specifier: 1.19.0
         version: 1.19.0
+      '@opentelemetry/api':
+        specifier: 1.9.1
+        version: 1.9.1
+      '@opentelemetry/exporter-trace-otlp-http':
+        specifier: 0.218.0
+        version: 0.218.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/resources':
+        specifier: 2.7.1
+        version: 2.7.1(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-node':
+        specifier: 0.218.0
+        version: 0.218.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace-base':
+        specifier: 2.7.1
+        version: 2.7.1(@opentelemetry/api@1.9.1)
+      '@opentelemetry/semantic-conventions':
+        specifier: 1.41.1
+        version: 1.41.1
       '@oxagen/compliance':
         specifier: workspace:*
         version: link:../compliance
@@ -1462,6 +1501,12 @@ importers:
         specifier: workspace:*
         version: link:../tenancy
     devDependencies:
+      '@opentelemetry/context-async-hooks':
+        specifier: 2.7.1
+        version: 2.7.1(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace-node':
+        specifier: 2.7.1
+        version: 2.7.1(@opentelemetry/api@1.9.1)
       '@vitest/coverage-v8':
         specifier: 2.1.9
         version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0))
@@ -6782,6 +6827,10 @@ packages:
 
   devlop@1.1.0:
     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
+
+  diff@9.0.0:
+    resolution: {integrity: sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw==}
+    engines: {node: '>=0.3.1'}
 
   dir-glob@3.0.1:
     resolution: {integrity: sha512-WkrWp9GR4KXfKGYzOLmTuGVi1UWFfws377n9cc55/tb6DuqyF6pcQ5AbiHEshaDpY9v6oaSr2XCDidGmMwdzIA==}
@@ -16600,6 +16649,8 @@ snapshots:
   devlop@1.1.0:
     dependencies:
       dequal: 2.0.3
+
+  diff@9.0.0: {}
 
   dir-glob@3.0.1:
     dependencies:

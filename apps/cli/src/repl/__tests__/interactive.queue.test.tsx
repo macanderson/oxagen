@@ -12,14 +12,15 @@ import { render } from "ink-testing-library";
 
 interface RunTurnResultLike {
   text: string;
-  steps: number;
   messages: unknown[];
   usage: Record<string, number>;
   trace: Record<string, unknown>;
 }
 
 // Each runTurn call parks here until the test resolves it, simulating a turn
-// that takes real wall-clock time (so later submissions have to queue).
+// that takes real wall-clock time (so later submissions have to queue). The REPL
+// runs every prompt through the pipeline's `runTurn` (eval → enhance → agent →
+// judge), so that is the seam we control — not the lower-level agent loop.
 const pending: Array<{ prompt: string; finish: () => void }> = [];
 const runTurnSpy = vi.fn<(opts: { prompt: string }) => void>();
 
@@ -32,7 +33,6 @@ vi.mock("../../agent/pipeline.js", () => ({
         finish: () =>
           resolve({
             text: `done:${opts.prompt}`,
-            steps: 1,
             messages: [],
             usage: {},
             trace: { id: `trace_${opts.prompt}` },
@@ -42,6 +42,8 @@ vi.mock("../../agent/pipeline.js", () => ({
   MissingGatewayKeyError: class extends Error {},
 }));
 
+// The REPL records each completed turn's trace; stub the durable store so the
+// test neither writes to ~/.config nor couples to the TurnTrace shape.
 vi.mock("../../agent/trace-store.js", () => ({
   openTraceStore: () => ({
     record: () => {},
@@ -106,7 +108,7 @@ describe("REPL prompt queue (Claude Code-style)", () => {
     const { stdin, lastFrame } = render(<ReplApp options={{}} />);
     await tick();
 
-    // 1) First prompt starts a turn; runAgent is invoked and parks (in flight).
+    // 1) First prompt starts a turn; runTurn is invoked and parks (in flight).
     await submit(stdin, "first task");
     await waitFor(() => runTurnSpy.mock.calls.length === 1);
     expect(runTurnSpy.mock.calls[0]?.[0].prompt).toBe("first task");

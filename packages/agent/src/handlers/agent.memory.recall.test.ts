@@ -3,6 +3,8 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   embedTextMock: vi.fn(),
   recallMemoriesMock: vi.fn(),
+  // reinforceMemory is called fire-and-forget after each recall; must be in the mock.
+  reinforceMemoryMock: vi.fn(),
   isKnowledgeGraphEnabledMock: vi.fn(),
 }));
 
@@ -17,13 +19,19 @@ mocks.recallMemoriesMock.mockImplementation(async () => [
     source: "feature",
     score: 0.9,
     createdAt: "2026-05-28T00:00:00Z",
+    confidence: 0.9,
+    lastReinforcedAt: null,
   },
 ]);
+mocks.reinforceMemoryMock.mockResolvedValue({ confidence: 0.95 });
 // Default: KG enabled so existing tests are unaffected.
 mocks.isKnowledgeGraphEnabledMock.mockReturnValue(true);
 
 vi.mock("../memory/embed", () => ({ embedText: mocks.embedTextMock }));
-vi.mock("../memory/neo4j", () => ({ recallMemories: mocks.recallMemoriesMock }));
+vi.mock("../memory/neo4j", () => ({
+  recallMemories: mocks.recallMemoriesMock,
+  reinforceMemory: mocks.reinforceMemoryMock,
+}));
 vi.mock("../runtime/knowledge-graph", () => ({
   isKnowledgeGraphEnabled: mocks.isKnowledgeGraphEnabledMock,
 }));
@@ -36,6 +44,7 @@ describe("agent.memory.recall handler", () => {
   beforeEach(() => {
     mocks.embedTextMock.mockClear();
     mocks.recallMemoriesMock.mockClear();
+    mocks.reinforceMemoryMock.mockClear();
     mocks.isKnowledgeGraphEnabledMock.mockClear();
     // Default back to enabled for each test.
     mocks.isKnowledgeGraphEnabledMock.mockReturnValue(true);

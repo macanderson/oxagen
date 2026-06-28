@@ -89,7 +89,7 @@ async function readGraphLabels(ctx: CapabilityContext): Promise<VocabularyLabel[
         // scopedSession injects $orgId/$workspaceId. Sample a few nodes per label
         // to mine the JSON-encoded `properties` for the keys customers actually use.
         const res = await session.run(
-          `MATCH (n:KnowledgeNode)
+          `MATCH (n:GraphNode)
            WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId AND n.label IS NOT NULL
            WITH n.label AS label, count(n) AS c, collect(n.properties)[0..8] AS samples
            RETURN label, c, samples ORDER BY c DESC LIMIT 100`,

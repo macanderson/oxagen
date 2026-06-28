@@ -7,7 +7,7 @@
  * (no Ink, no AI SDK) so it is trivially testable.
  */
 import { formatUsd } from "./model-router.js";
-import type { TurnTrace } from "./trace.js";
+import type { PhaseStat, ToolEvent, TurnTrace } from "./trace.js";
 
 function bar(score: number): string {
   const filled = Math.round((Math.max(0, Math.min(100, score)) / 100) * 10);
@@ -16,6 +16,140 @@ function bar(score: number): string {
 
 function bullets(items: string[], glyph = "-"): string {
   return items.map((i) => `    ${glyph} ${i}`).join("\n");
+}
+
+/** Compact ms → "340ms" / "1.2s". */
+function fmtMs(ms: number): string {
+  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(2)}s`;
+}
+
+function shortModel(model: string | undefined): string {
+  return model ? model.split("/").pop() ?? model : "—";
+}
+
+/** Human label for a phase in the verbose breakdown. */
+const PHASE_LABEL: Record<PhaseStat["phase"], string> = {
+  evaluate: "prompt eval",
+  enhance: "context gather",
+  route: "route",
+  execute: "WORK (code)",
+  judge: "REVIEW (judge)",
+  revise: "revise",
+  complete: "complete",
+};
+
+interface ModelRollup {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  durationMs: number;
+  phases: string[];
+}
+
+/** Group phases by the model that ran them — the "who spent what" headline. */
+function rollupByModel(phases: PhaseStat[]): ModelRollup[] {
+  const byModel = new Map<string, ModelRollup>();
+  for (const p of phases) {
+    if (!p.model) continue; // non-LLM phases (enhance/route) have no model
+    const r =
+      byModel.get(p.model) ??
+      { model: p.model, inputTokens: 0, outputTokens: 0, costUsd: 0, durationMs: 0, phases: [] };
+    r.inputTokens += p.usage.inputTokens;
+    r.outputTokens += p.usage.outputTokens;
+    r.costUsd += p.usage.costUsd;
+    r.durationMs += p.durationMs;
+    if (!r.phases.includes(PHASE_LABEL[p.phase])) r.phases.push(PHASE_LABEL[p.phase]);
+    byModel.set(p.model, r);
+  }
+  return [...byModel.values()].sort((a, b) => b.costUsd - a.costUsd);
+}
+
+/** One line per tool call: name · duration · ok · input → result (truncated). */
+function formatToolEvent(e: ToolEvent): string {
+  const head = `    ${e.ok ? "·" : "✗"} ${e.name} (${fmtMs(e.durationMs)})  ${e.input}`;
+  return e.result ? `${head}\n        → ${e.result}` : head;
+}
+
+/**
+ * The verbose telemetry section: per-phase timing + model + cost, the per-model
+ * rollup (who did the work vs the review vs the enhance and what each cost),
+ * context-gather detail, the injected context, tool calls + results, and the
+ * efficiency metrics that let you prove one run is faster/cheaper than another.
+ */
+export function formatVerboseSection(trace: TurnTrace): string[] {
+  const lines: string[] = [];
+  const phases = trace.phases ?? [];
+  if (phases.length === 0 && !trace.toolEvents?.length) return lines;
+
+  lines.push("", "── verbose telemetry ───────────────────────────────────");
+
+  // Per-phase timeline.
+  if (phases.length) {
+    lines.push("", "phases (time · model · tokens in→out · cost)");
+    for (const p of phases) {
+      const round = p.phase === "execute" || p.phase === "judge" ? ` #${p.round + 1}` : "";
+      const tok =
+        p.usage.inputTokens || p.usage.outputTokens
+          ? ` · ${p.usage.inputTokens}→${p.usage.outputTokens} tok · ${formatUsd(p.usage.costUsd)}`
+          : "";
+      lines.push(
+        `    ${PHASE_LABEL[p.phase]}${round}  ${fmtMs(p.durationMs)} · ${shortModel(p.model)}${tok}`,
+      );
+    }
+  }
+
+  // The headline: which model spent which dollars on which role.
+  const rollup = rollupByModel(phases);
+  if (rollup.length) {
+    lines.push("", "models used (role · time · tokens · cost)");
+    for (const r of rollup) {
+      lines.push(
+        `    ${shortModel(r.model)} [${r.phases.join(", ")}]  ` +
+          `${fmtMs(r.durationMs)} · ${r.inputTokens}→${r.outputTokens} tok · ${formatUsd(r.costUsd)}`,
+      );
+    }
+  }
+
+  // Context-gather detail.
+  const en = trace.enhancement;
+  if (en.retrieval || en.durationMs != null) {
+    lines.push("", `context gathering${en.durationMs != null ? ` · ${fmtMs(en.durationMs)}` : ""}`);
+    if (en.retrieval) {
+      const r = en.retrieval;
+      if (r.symbolsQueried.length) lines.push(`    symbols queried: ${r.symbolsQueried.join(", ")}`);
+      if (r.pathsQueried.length) lines.push(`    paths queried:   ${r.pathsQueried.join(", ")}`);
+      if (r.resolved.length) lines.push(`    resolved:        ${r.resolved.join(", ")}`);
+      if (r.unresolved.length) lines.push(`    unresolved:      ${r.unresolved.join(", ")}`);
+    }
+    if (en.context) {
+      lines.push("    injected context:");
+      for (const l of en.context.split("\n")) lines.push(`      ${l}`);
+    }
+  }
+
+  // Tool calls + results.
+  const tools = trace.toolEvents ?? [];
+  if (tools.length) {
+    lines.push("", `tool calls (${tools.length})`);
+    for (const e of tools) lines.push(formatToolEvent(e));
+  }
+
+  // Efficiency — the "prove it" numbers.
+  const totalTok = trace.usage.inputTokens + trace.usage.outputTokens;
+  const secs = trace.durationMs / 1000;
+  lines.push(
+    "",
+    "efficiency",
+    `    ${fmtMs(trace.durationMs)} total · ${totalTok} tok · ${formatUsd(trace.usage.costUsd)}`,
+    `    ${secs > 0 ? Math.round(totalTok / secs) : 0} tok/s · ` +
+      `${trace.steps} steps · ${trace.filesTouched.length} file(s) changed` +
+      (trace.filesTouched.length
+        ? ` · ${formatUsd(trace.usage.costUsd / trace.filesTouched.length)}/file`
+        : ""),
+  );
+
+  return lines;
 }
 
 /** Render one trace as a human-readable, plain-text report. */
@@ -80,6 +214,11 @@ export function formatTraceText(trace: TurnTrace): string {
     `${trace.steps} steps · ${trace.filesTouched.length} file(s) touched` +
       (trace.filesTouched.length ? `: ${trace.filesTouched.slice(0, 5).join(", ")}` : ""),
   );
+
+  // Verbose turns carry the full per-phase / per-model / tool telemetry.
+  if (trace.verbose || trace.phases?.length || trace.toolEvents?.length) {
+    lines.push(...formatVerboseSection(trace));
+  }
 
   return lines.join("\n");
 }

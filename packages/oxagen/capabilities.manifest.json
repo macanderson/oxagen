@@ -295,6 +295,42 @@
       }
     },
     {
+      "name": "agent.memory.policy.read",
+      "file": "agent.memory.policy.read.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.memory.policy.write",
+      "file": "agent.memory.policy.write.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "agent.memory.recall",
       "file": "agent.memory.recall.ts",
       "domain": "agent",
@@ -996,6 +1032,60 @@
       }
     },
     {
+      "name": "code.diff",
+      "file": "code.diff.ts",
+      "domain": "code",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "code.format",
+      "file": "code.format.ts",
+      "domain": "code",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "code.patch",
+      "file": "code.patch.ts",
+      "domain": "code",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "command.menu.search",
       "file": "command.menu.search.ts",
       "domain": "command",
@@ -1592,6 +1682,23 @@
       }
     },
     {
+      "name": "graph.export",
+      "file": "graph.export.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "graph.ingest",
       "file": "graph.ingest.ts",
       "domain": "graph",
@@ -1758,6 +1865,25 @@
         "api": true,
         "mcp": true,
         "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "graph.search",
+      "file": "graph.search.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
         "docs": true
       }
     },
@@ -3484,7 +3610,7 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
+        "api": true,
         "mcp": true,
         "unit": false,
         "docs": false
@@ -3518,7 +3644,7 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
+        "api": true,
         "mcp": true,
         "unit": false,
         "docs": false

@@ -121,3 +121,4 @@ storybook-static/
 tsconfig.staged-*.json
 nautilus-demo/
 .playwright-mcp/
+verifications/

@@ -211,10 +211,10 @@ describe("ingestion.github-parse-file Inngest function", () => {
     );
   });
 
-  it("labels the SourceFile node :KnowledgeNode with display fields so it shows in the graph explorer", async () => {
+  it("labels the SourceFile node :GraphNode with display fields so it shows in the graph explorer", async () => {
     // Regression: SourceFile/SourceSymbol were written only under their domain
-    // labels, but the graph explorer reads :KnowledgeNode — so an ingested repo's
-    // files/symbols never appeared in the graph.
+    // labels, but the graph explorer matches the :GraphNode anchor — so an
+    // ingested repo's files/symbols never appeared in the graph.
     const step = makeStep();
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
@@ -223,7 +223,7 @@ describe("ingestion.github-parse-file Inngest function", () => {
     );
     expect(fileCall).toBeDefined();
     const [cypher, params] = fileCall as [string, Record<string, unknown>];
-    expect(cypher).toContain("f:KnowledgeNode");
+    expect(cypher).toContain("f:GraphNode");
     expect(cypher).toContain("f.label");
     expect(cypher).toContain("f.displayName");
     expect(cypher).toContain("f.sourceId");
@@ -239,9 +239,9 @@ describe("ingestion.github-parse-file Inngest function", () => {
       typeof c[0] === "string" && (c[0] as string).includes("MERGE (s:SourceSymbol"),
     );
     expect(mergeSymbolCalls.length).toBeGreaterThanOrEqual(2);
-    // Each symbol carries :KnowledgeNode + label/displayName so it's graph-visible.
+    // Each symbol carries :GraphNode + label/displayName so it's graph-visible.
     const [cypher, params] = mergeSymbolCalls[0] as [string, Record<string, unknown>];
-    expect(cypher).toContain("s:KnowledgeNode");
+    expect(cypher).toContain("s:GraphNode");
     expect(cypher).toContain("s.label");
     expect(cypher).toContain("s.displayName");
     expect(cypher).toContain("s.sourceId");
@@ -277,7 +277,15 @@ describe("ingestion.github-parse-file Inngest function", () => {
       }),
     );
 
-    const [text] = mocks.embedText.mock.calls[0] as [string, unknown];
+    // The file-level embed input carries the language + symbol names; the
+    // per-chunk embeds (added with :SourceChunk full-body search) carry raw file
+    // content and run first, so locate the file embed explicitly by its language
+    // token rather than assuming it is the first embedText call.
+    const fileEmbedCall = mocks.embedText.mock.calls.find(
+      (c: unknown[]) => typeof c[0] === "string" && (c[0] as string).includes("typescript"),
+    );
+    expect(fileEmbedCall).toBeDefined();
+    const [text] = fileEmbedCall as [string, unknown];
     expect(text).toContain("typescript");
     expect(text).toContain("login");
     expect(text).toContain("AuthService");
@@ -326,11 +334,11 @@ describe("ingestion.github-parse-file Inngest function", () => {
     expect(sendEvent).not.toHaveBeenCalled();
   });
 
-  it("returns { skipped: true } when file content exceeds 500KB", async () => {
+  it("returns { skipped: true } when file content exceeds 1000KB", async () => {
     mocks.fetchMock.mockResolvedValueOnce({
       ok: true,
-      headers: { get: (_k: string) => "600000" },
-      text: () => Promise.resolve("x".repeat(600001)),
+      headers: { get: (_k: string) => "1100000" },
+      text: () => Promise.resolve("x".repeat(1100001)),
     });
 
     const step = makeStep();

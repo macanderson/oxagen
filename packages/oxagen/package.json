@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/oxagen",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -25,7 +25,9 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@opentelemetry/api": "1.9.1",
     "@oxagen/config": "workspace:*",
+    "@oxagen/sandbox": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "zod": "3.25.76"
   },

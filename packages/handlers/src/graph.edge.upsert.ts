@@ -22,10 +22,10 @@ function buildUpsertQuery(relationshipType: string): string {
       `graph.edge.upsert: relationship type "${relationshipType}" fails the lexical guard`,
     );
   }
-  return `MATCH (from:KnowledgeNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
-          MATCH (to:KnowledgeNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
+  return `MATCH (from:GraphNode {publicId: $fromNodeId, orgId: $orgId, workspaceId: $workspaceId})
+          MATCH (to:GraphNode {publicId: $toNodeId, orgId: $orgId, workspaceId: $workspaceId})
           MERGE (from)-[r:${relationshipType}]->(to)
-          ON CREATE SET r.properties = $properties, r.createdAt = datetime(), r._created = true
+          ON CREATE SET r.properties = $properties, r.is_system = false, r.createdAt = datetime(), r._created = true
           ON MATCH SET  r.properties = $properties, r.updatedAt = datetime(), r._created = false
           RETURN r._created AS wasCreated`;
 }

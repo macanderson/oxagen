@@ -19,6 +19,10 @@ export const NodeLabels = {
   PlaybookVersion: "PlaybookVersion",
   Execution: "Execution",
   Document: "Document",
+  // AI-generated files (markdown/docx/pdf/images/video/…) produced by the agent
+  // and stored in content.generated_assets. Carried as a searchable :GraphNode so
+  // "find me the files created about X" hits them via the universal vector index.
+  GeneratedFile: "GeneratedFile",
   AgentMemory: "AgentMemory",
   Conversation: "Conversation",
   Message: "Message",

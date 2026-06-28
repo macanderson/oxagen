@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/cli",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Oxagen CLI — agentic coding powered by Oxagen's knowledge-graph context engine",
   "type": "module",
   "main": "./dist/index.js",
@@ -36,7 +36,9 @@
   },
   "dependencies": {
     "@inkjs/ui": "2.0.0",
+    "@modelcontextprotocol/sdk": "1.29.0",
     "@oxagen/engram": "workspace:*",
+    "@oxagen/mcp-config": "workspace:*",
     "ai": "6.0.197",
     "commander": "12.1.0",
     "ink": "7.1.0",

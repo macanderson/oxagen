@@ -100,6 +100,27 @@ function codePathFor(lang: SandboxLanguage): string {
   return IMAGES[lang].codePath;
 }
 
+// Directory the entrypoint code file lives in; extra workspace files are landed
+// here so language-relative imports resolve next to the entrypoint.
+function baseDirOf(filePath: string): string {
+  const idx = filePath.lastIndexOf("/");
+  return idx <= 0 ? "/" : filePath.slice(0, idx);
+}
+
+// Write each caller-supplied workspace file next to the entrypoint. Paths are
+// already confined to the workspace root upstream (contract + handler). The
+// Vercel fs writes create intermediate directories as needed.
+async function writeWorkspaceFiles(
+  sandbox: Awaited<ReturnType<typeof Sandbox.create>>,
+  baseDir: string,
+  files: Record<string, string> | undefined,
+): Promise<void> {
+  if (!files) return;
+  for (const [rel, content] of Object.entries(files)) {
+    await sandbox.fs.writeFile(`${baseDir}/${rel}`, content, "utf8");
+  }
+}
+
 /** Subset of the Sandbox static API needed for mocking in tests. */
 export interface SandboxFactory {
   create: (params: Parameters<typeof Sandbox.create>[0]) => ReturnType<typeof Sandbox.create>;
@@ -137,6 +158,7 @@ export function createVercelSandbox(config: VercelSandboxConfig, sandboxImpl?: S
     let execStart: number;
     try {
       await sandbox.fs.writeFile(filePath, req.code, "utf8");
+      await writeWorkspaceFiles(sandbox, baseDirOf(filePath), req.files);
       // Measure execution time starting after file upload so that
       // Sandbox.create() + fs.writeFile() warmup (typically 1–3 s) is
       // excluded from the timedOut heuristic (ADR-011, 2026-06-07).
@@ -202,6 +224,7 @@ export function createVercelSandbox(config: VercelSandboxConfig, sandboxImpl?: S
     const sandbox = await SandboxImpl.create(createParams);
     try {
       await sandbox.fs.writeFile(filePath, req.code, "utf8");
+      await writeWorkspaceFiles(sandbox, baseDirOf(filePath), req.files);
       const command = await sandbox.runCommand({ cmd, args, env: req.env, detached: true });
       let streamedBytes = 0;
       for await (const log of command.logs()) {
