@@ -37,19 +37,24 @@ if (!existsSync(bundle)) {
 const src = JSON.parse(readFileSync(resolve(cliRoot, "package.json"), "utf8"));
 
 /**
- * Native optionals left external by scripts/bundle.mjs (`external: [...]`). Their
- * names are the contract between the two scripts; versions are resolved from
- * @oxagen/engram (which owns them) so a standalone install matches the monorepo
- * runtime and never drifts.
+ * Native deps left external by scripts/bundle.mjs (`external: [...]`): duckdb +
+ * blake3 power the context engine (local graph replica, episodic/session+fleet
+ * memory, trace store, daemon state) — which is the entire point of the CLI, so
+ * they are HARD dependencies, not optional. (The benchmark path runs the raw
+ * `oxagen.mjs` bundle directly without `npm install`, where they're absent and
+ * the engine degrades gracefully; that path is unaffected by this manifest.)
+ * Their names are the contract with scripts/bundle.mjs; versions are resolved
+ * from @oxagen/engram (which owns them) so a standalone install matches the
+ * monorepo runtime and never drifts.
  */
-const NATIVE_OPTIONALS = ["duckdb", "blake3"];
+const NATIVE_DEPS = ["duckdb", "blake3"];
 const engram = JSON.parse(readFileSync(resolve(repoRoot, "packages/engram/package.json"), "utf8"));
 const engramDeps = { ...engram.dependencies, ...engram.optionalDependencies };
-const optionalDependencies = {};
-for (const name of NATIVE_OPTIONALS) {
+const dependencies = {};
+for (const name of NATIVE_DEPS) {
   const v = engramDeps[name];
-  if (!v) throw new Error(`native optional "${name}" not found in packages/engram/package.json`);
-  optionalDependencies[name] = v;
+  if (!v) throw new Error(`native dep "${name}" not found in packages/engram/package.json`);
+  dependencies[name] = v;
 }
 
 const manifest = {
@@ -60,7 +65,7 @@ const manifest = {
   bin: { oxagen: "./oxagen.mjs" },
   files: ["oxagen.mjs", "README.md"],
   engines: { node: ">=20" },
-  optionalDependencies,
+  dependencies,
   keywords: src.keywords,
   homepage: src.homepage,
   repository: src.repository,
@@ -72,5 +77,5 @@ writeFileSync(resolve(distDir, "package.json"), `${JSON.stringify(manifest, null
 copyFileSync(resolve(cliRoot, "README.md"), resolve(distDir, "README.md"));
 
 console.log(`✔ standalone publish manifest written to ${resolve(distDir, "package.json")}`);
-console.log(`  ${manifest.name}@${manifest.version}  (bin → ./oxagen.mjs, optional: ${NATIVE_OPTIONALS.join(", ")})`);
+console.log(`  ${manifest.name}@${manifest.version}  (bin → ./oxagen.mjs, native deps: ${NATIVE_DEPS.join(", ")})`);
 console.log(`  publish with:  npm publish ${distDir}`);
