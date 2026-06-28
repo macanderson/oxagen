@@ -59,12 +59,15 @@ jobs:
   checks:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # 35m (was 20m): a PR that invalidates many turbo caches must run lint +
+    # 60m (was 20m): a PR that invalidates many turbo caches must run lint +
     # typecheck cold across the whole affected set, including apps/app's slow
-    # `tsc --noEmit` + `eslint .`. 20m wasn't enough for the cold case, so the
-    # slow tasks were killed before they could populate the remote cache —
-    # every run then re-ran them and timed out. The `test` job already uses 30m.
-    timeout-minutes: 35
+    # `tsc --noEmit` + `eslint .`. Once a cold run completes and writes to the
+    # turbo remote cache, warm runs are ~minutes — but the cold run must finish
+    # at least once. The build-input fix in turbo.json (excluding test files +
+    # vitest.config) stops test-only changes from invalidating downstream
+    # builds/typechecks going forward, so this ceiling is rarely hit after the
+    # first warm. The `test` job uses 30m.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
         with:
