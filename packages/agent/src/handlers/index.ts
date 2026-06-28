@@ -31,6 +31,8 @@ const LOADERS: Record<string, LoaderEntry> = {
   "browser.click": () => import("./browser"),
   "browser.refresh": () => import("./browser"),
   "browser.read": () => import("./browser"),
+  // Cross-LLM proof-of-done: an independent vision model judges the screenshots.
+  "agent.feature.verify": () => import("./agent.feature.verify"),
   // Code-execution surface peers of agent.code.execute (OXA-1352). Co-located
   // here so the whole sandboxed code surface registers through one path.
   "code.diff": () => import("./code.diff"),

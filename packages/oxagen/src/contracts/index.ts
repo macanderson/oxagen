@@ -25,6 +25,7 @@ import { browserSubmit } from "./browser.submit";
 import { browserClick } from "./browser.click";
 import { browserRefresh } from "./browser.refresh";
 import { browserRead } from "./browser.read";
+import { agentFeatureVerify } from "./agent.feature.verify";
 import { codeDiff } from "./code.diff";
 import { codePatch } from "./code.patch";
 import { codeFormat } from "./code.format";
@@ -289,6 +290,7 @@ export {
   browserClick,
   browserRefresh,
   browserRead,
+  agentFeatureVerify,
   codeDiff,
   codePatch,
   codeFormat,
@@ -547,6 +549,7 @@ export const contracts = [
   browserClick,
   browserRefresh,
   browserRead,
+  agentFeatureVerify,
   codeDiff,
   codePatch,
   codeFormat,
