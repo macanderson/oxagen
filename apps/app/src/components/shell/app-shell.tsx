@@ -38,6 +38,12 @@ export interface AppShellProps {
   user: SessionUser | undefined;
   /** Org subscription tier — gates enterprise-only nav items (e.g. Access). */
   planTier?: PlanTier;
+  /**
+   * Whether to render the persistent agent bottom bar. Defaults to true.
+   * Only sections that mount the agent panel (under `AgentPanelStoreProvider`)
+   * may show the bar; the workspace-less account section opts out.
+   */
+  agentBar?: boolean;
   children: ReactNode;
 }
 
@@ -47,6 +53,7 @@ export function AppShell({
   navDataPromise,
   user,
   planTier,
+  agentBar = true,
   children,
 }: AppShellProps) {
   const ctx = { orgSlug: org.slug, workspaceSlug: workspace?.slug };
@@ -68,6 +75,7 @@ export function AppShell({
         user={user}
         planTier={planTier}
         createWorkspaceAction={boundCreateWorkspace}
+        agentBar={agentBar}
       >
         {children}
       </ShellFrame>
