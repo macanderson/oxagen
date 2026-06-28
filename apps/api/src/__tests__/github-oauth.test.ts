@@ -208,11 +208,13 @@ function makeTxChain(rows: unknown[]) {
     from: vi.fn(),
     innerJoin: vi.fn(),
     where: vi.fn(),
+    orderBy: vi.fn(),
     limit: vi.fn().mockResolvedValue(rows),
   };
   selectChain.from.mockReturnValue(selectChain);
   selectChain.innerJoin.mockReturnValue(selectChain);
   selectChain.where.mockReturnValue(selectChain);
+  selectChain.orderBy.mockReturnValue(selectChain);
 
   return {
     select: vi.fn().mockReturnValue(selectChain),
@@ -880,5 +882,133 @@ describe("GET /connections/github/installations/:id/repositories", () => {
     expect(fetchCall[1]?.headers).toMatchObject({
       Authorization: "Bearer decrypted-access-token",
     });
+  });
+});
+
+// ── OAuth token resolution (Setup-URL "update" leg) ───────────────────────────
+//
+// When the GitHub App is ALREADY installed, GitHub completes the connect through
+// the stateless Setup URL leg, which never hits our OAuth callback — so the
+// freshly-created connection has a null oauthAccountId. The endpoints must fall
+// back to the org's existing GitHub OAuth account (and link it) rather than 404,
+// which is what dead-ended the wizard at "list installations".
+
+describe("OAuth token resolution for /installations", () => {
+  const ENC = { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" };
+
+  /**
+   * A tx whose successive .select()…​.limit() calls resolve successive queued
+   * result sets, and whose .update().set() payload is captured. Supports the
+   * .orderBy() used by the fallback query (the shared makeTxChain does not).
+   */
+  function makeSequencedTx(
+    selectResults: unknown[][],
+    onUpdateSet?: (arg: Record<string, unknown>) => void,
+  ) {
+    let call = 0;
+    const makeSelectChain = () => {
+      const chain: Record<string, unknown> = {};
+      chain.from = vi.fn(() => chain);
+      chain.innerJoin = vi.fn(() => chain);
+      chain.where = vi.fn(() => chain);
+      chain.orderBy = vi.fn(() => chain);
+      chain.limit = vi.fn(async () => selectResults[call++] ?? []);
+      return chain;
+    };
+    const updateChain: Record<string, unknown> = {};
+    updateChain.set = vi.fn((arg: Record<string, unknown>) => {
+      onUpdateSet?.(arg);
+      return updateChain;
+    });
+    updateChain.where = vi.fn().mockResolvedValue(undefined);
+    return {
+      select: vi.fn(() => makeSelectChain()),
+      update: vi.fn(() => updateChain),
+      insert: vi.fn(),
+      execute: vi.fn().mockResolvedValue([]),
+    };
+  }
+
+  const GH_OK = {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      total_count: 1,
+      installations: [
+        {
+          id: 111,
+          account: { login: "acme", type: "Organization", avatar_url: "https://gh.com" },
+          repository_selection: "all",
+        },
+      ],
+    }),
+  };
+
+  it("falls back to and links the org's GitHub OAuth account when the connection is unlinked", async () => {
+    let updateArg: Record<string, unknown> | undefined;
+    // Query order inside resolveConnectionAccessToken:
+    //   1. source_connections → { id, oauthAccountId: null }  (unlinked)
+    //   2. oauth_accounts fallback → { id, accessTokenEnc }    (the org's account)
+    const seqTx = makeSequencedTx(
+      [
+        [{ id: "conn-uuid-1", oauthAccountId: null }],
+        [{ id: "oa-org-1", accessTokenEnc: ENC }],
+      ],
+      (arg) => {
+        updateArg = arg;
+      },
+    );
+    mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+      fn(seqTx as unknown as TxLike),
+    );
+    mocks.fetch.mockResolvedValueOnce(GH_OK);
+
+    const res = await authGet(`${BASE}/installations?connectionId=con_UPDATE_LEG`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { installations: unknown[] };
+    expect(body.installations).toHaveLength(1);
+
+    // The unlinked connection is now linked to the fallback account so the
+    // activation path and later calls resolve it directly.
+    expect(updateArg?.oauthAccountId).toBe("oa-org-1");
+    // The fetch used the decrypted fallback token.
+    const fetchCall = mocks.fetch.mock.calls[0] as [string, RequestInit];
+    expect(fetchCall[1]?.headers).toMatchObject({ Authorization: "Bearer decrypted-access-token" });
+  });
+
+  it("uses the directly-linked OAuth account without a fallback when one is set", async () => {
+    let updateCalled = false;
+    // Query order: source_connections → { oauthAccountId set }, then
+    // oauth_accounts BY ID → { accessTokenEnc }. No fallback select, no update.
+    const seqTx = makeSequencedTx(
+      [
+        [{ id: "conn-uuid-2", oauthAccountId: "oa-linked-1" }],
+        [{ accessTokenEnc: ENC }],
+      ],
+      () => {
+        updateCalled = true;
+      },
+    );
+    mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+      fn(seqTx as unknown as TxLike),
+    );
+    mocks.fetch.mockResolvedValueOnce(GH_OK);
+
+    const res = await authGet(`${BASE}/installations?connectionId=con_LINKED`);
+    expect(res.status).toBe(200);
+    // A connection already linked must not be re-linked.
+    expect(updateCalled).toBe(false);
+  });
+
+  it("returns 404 when neither the connection nor the org has any GitHub OAuth account", async () => {
+    // source_connections → unlinked; fallback oauth_accounts → empty.
+    const seqTx = makeSequencedTx([[{ id: "conn-uuid-3", oauthAccountId: null }], []]);
+    mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+      fn(seqTx as unknown as TxLike),
+    );
+
+    const res = await authGet(`${BASE}/installations?connectionId=con_NOAUTH`);
+    expect(res.status).toBe(404);
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 });

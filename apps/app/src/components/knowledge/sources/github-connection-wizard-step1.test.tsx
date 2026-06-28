@@ -17,6 +17,7 @@ import * as React from "react";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Step1Connect } from "./github-connection-wizard-step1";
+import { readPendingGithubConnection } from "./github-connection-wizard-types";
 
 const ORG = "acme";
 const WS = "main";
@@ -42,6 +43,7 @@ function renderStep1(onConnectionCreated = vi.fn()) {
 
 beforeEach(() => {
   assignedHref = "";
+  window.sessionStorage.clear();
   // Capture (rather than perform) the redirect so jsdom doesn't try to navigate.
   Object.defineProperty(window, "location", {
     configurable: true,
@@ -96,6 +98,22 @@ describe("Step1Connect", () => {
     await waitFor(() => expect(onConnectionCreated).toHaveBeenCalledWith("con_ABC"));
     await waitFor(() =>
       expect(assignedHref).toBe("https://github.com/login/oauth/authorize?client_id=x"),
+    );
+  });
+
+  it("stashes the pending connection for resume before redirecting to GitHub", async () => {
+    renderStep1();
+
+    fireEvent.click(screen.getByTestId("github-connect-btn"));
+
+    // The handoff lets the wizard resume Step 2 even when GitHub's stateless
+    // Setup-URL "update" leg redirects back without the connectionId in the URL.
+    await waitFor(() =>
+      expect(readPendingGithubConnection()).toEqual({
+        connectionId: "con_ABC",
+        orgSlug: ORG,
+        workspaceSlug: WS,
+      }),
     );
   });
 

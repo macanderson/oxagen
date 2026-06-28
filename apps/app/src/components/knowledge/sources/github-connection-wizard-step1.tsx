@@ -7,7 +7,7 @@
 
 import * as React from "react";
 import { GithubIcon } from "lucide-react";
-import { API_BASE } from "./github-connection-wizard-types";
+import { API_BASE, storePendingGithubConnection } from "./github-connection-wizard-types";
 import { Spinner } from "./github-connection-wizard-spinner";
 
 export interface Step1Props {
@@ -52,6 +52,12 @@ export function Step1Connect({ orgSlug, workspaceSlug, onConnectionCreated, erro
       if (!connectionId) throw new Error("No connectionId returned from create");
 
       onConnectionCreated(connectionId);
+
+      // Stash the connection so we can resume Step 2 on return EVEN IF GitHub
+      // uses the stateless Setup-URL leg (App already installed → `update`),
+      // which redirects back without the connectionId in the URL. The browser
+      // is the only party that knows which connection this flow created.
+      storePendingGithubConnection({ connectionId, orgSlug, workspaceSlug });
 
       // Step 1b: Get the OAuth URL and redirect.
       const authUrlRes = await fetch(
