@@ -9,6 +9,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { createHash } from "node:crypto";
 import type { CodeGraph, CodeNode, CodeEdge, CodeNodeKind } from "./types";
+import { hashContent } from "./store";
+import type { FileGraph, CodeGraphStore } from "./store";
 
 const SUPPORTED_EXTENSIONS = new Set([
   ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
@@ -21,62 +23,127 @@ const IGNORE_DIRS = new Set([
 ]);
 
 /**
- * Build a code graph from a workspace root directory.
+ * Build an in-memory code graph from a workspace root directory.
  */
 export async function buildCodeGraph(workspaceRoot: string): Promise<CodeGraph> {
   const graph: CodeGraph = { nodes: new Map(), edges: [] };
-  await walkDirectory(workspaceRoot, workspaceRoot, graph);
+  for (const rel of await listSourceFiles(workspaceRoot)) {
+    const fg = await extractFileGraph(path.join(workspaceRoot, rel), workspaceRoot);
+    if (!fg) continue;
+    for (const node of fg.nodes) graph.nodes.set(node.id, node);
+    graph.edges.push(...fg.edges);
+  }
   return graph;
 }
 
-async function walkDirectory(dir: string, root: string, graph: CodeGraph): Promise<void> {
-  const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+/** Walk the workspace and return every supported source file as a root-relative path. */
+export async function listSourceFiles(workspaceRoot: string): Promise<string[]> {
+  const out: string[] = [];
+  await walkDirectory(workspaceRoot, workspaceRoot, out);
+  return out;
+}
+
+async function walkDirectory(dir: string, root: string, out: string[]): Promise<void> {
+  let entries: fs.Dirent[];
+  try {
+    entries = await fs.promises.readdir(dir, { withFileTypes: true });
+  } catch {
+    return; // unreadable directory — skip
+  }
 
   for (const entry of entries) {
     if (IGNORE_DIRS.has(entry.name)) continue;
     const fullPath = path.join(dir, entry.name);
 
     if (entry.isDirectory()) {
-      await walkDirectory(fullPath, root, graph);
+      await walkDirectory(fullPath, root, out);
     } else if (entry.isFile() && SUPPORTED_EXTENSIONS.has(path.extname(entry.name))) {
-      await processFile(fullPath, root, graph);
+      out.push(path.relative(root, fullPath));
     }
   }
 }
 
-async function processFile(filePath: string, root: string, graph: CodeGraph): Promise<void> {
-  const relativePath = path.relative(root, filePath);
-  const ext = path.extname(filePath);
-  const language = extensionToLanguage(ext);
+/**
+ * Extract one file's subgraph from already-read content: its file node, the
+ * symbols it declares (with `contains` edges), and its resolved relative-import
+ * edges, plus a content hash for incremental persistence. Pure (no I/O) so the
+ * full build and the incremental path can share it without re-reading.
+ */
+export function fileGraphFromContent(relativePath: string, content: string, root: string): FileGraph {
+  const language = extensionToLanguage(path.extname(relativePath));
+  const nodes: CodeNode[] = [];
+  const edges: CodeEdge[] = [];
 
-  // Create file node
   const fileNode: CodeNode = {
-    id: computeNodeId(relativePath, path.basename(filePath), "file"),
+    id: computeNodeId(relativePath, path.basename(relativePath), "file"),
     kind: "file",
-    name: path.basename(filePath),
+    name: path.basename(relativePath),
     path: relativePath,
     range: { start: 0, end: 0 },
     language,
   };
-  graph.nodes.set(fileNode.id, fileNode);
+  nodes.push(fileNode);
 
-  // Extract symbols from the file
-  try {
-    const content = await fs.promises.readFile(filePath, "utf-8");
-    const symbols = extractSymbols(content, relativePath, language);
-
-    for (const symbol of symbols) {
-      graph.nodes.set(symbol.id, symbol);
-      // File contains the symbol
-      graph.edges.push({ source: fileNode.id, target: symbol.id, type: "contains" });
-    }
-
-    // Extract imports
-    const imports = extractImports(content, relativePath, root);
-    graph.edges.push(...imports);
-  } catch {
-    // Skip files that can't be read
+  for (const symbol of extractSymbols(content, relativePath, language)) {
+    nodes.push(symbol);
+    edges.push({ source: fileNode.id, target: symbol.id, type: "contains" });
   }
+  edges.push(...extractImports(content, relativePath, root));
+
+  return { contentHash: hashContent(content), nodes, edges };
+}
+
+/** Read + extract one file's subgraph. Returns null if the file can't be read. */
+export async function extractFileGraph(filePath: string, root: string): Promise<FileGraph | null> {
+  let content: string;
+  try {
+    content = await fs.promises.readFile(filePath, "utf-8");
+  } catch {
+    return null;
+  }
+  return fileGraphFromContent(path.relative(root, filePath), content, root);
+}
+
+/**
+ * Incrementally build the code graph for `root` into a CodeGraphStore: only
+ * files whose content hash changed are re-parsed and persisted; files that
+ * vanished from disk are dropped. This is the persistent counterpart to
+ * buildCodeGraph and the basis for warm cold-starts (ADR-016 P0).
+ */
+export async function buildAndPersistCodeGraph(
+  root: string,
+  store: CodeGraphStore,
+): Promise<{ indexed: number; skipped: number; removed: number }> {
+  const onDisk = await listSourceFiles(root);
+  const onDiskSet = new Set(onDisk);
+  let indexed = 0;
+  let skipped = 0;
+
+  for (const rel of onDisk) {
+    let content: string;
+    try {
+      content = await fs.promises.readFile(path.join(root, rel), "utf-8");
+    } catch {
+      continue; // disappeared mid-walk
+    }
+    if ((await store.fileHash(root, rel)) === hashContent(content)) {
+      skipped++;
+      continue;
+    }
+    await store.replaceFile(root, rel, fileGraphFromContent(rel, content, root));
+    indexed++;
+  }
+
+  // Drop files indexed previously that no longer exist on disk.
+  let removed = 0;
+  for (const rel of await store.indexedFiles(root)) {
+    if (!onDiskSet.has(rel)) {
+      await store.removeFile(root, rel);
+      removed++;
+    }
+  }
+
+  return { indexed, skipped, removed };
 }
 
 /**

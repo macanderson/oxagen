@@ -5,17 +5,22 @@
  * cache so a coding turn can ask *structural* questions about the repository —
  * "where is X defined?", "what imports this file?" — instead of blind grep.
  *
- * The graph is built lazily on first use (~2s for a large monorepo) and reused
- * for the rest of the process. The daemon, when running, keeps a warmer copy;
- * this path makes the capability work with or without it, which is what lets
- * `oxagen` dogfood itself on this repo from a cold start.
+ * The graph is loaded from the persistent DuckDB store on first use, re-parsing
+ * only files whose content changed (incremental), and reused for the rest of the
+ * process. If the store can't be opened — e.g. the daemon holds the write lock —
+ * it falls back to a pure in-memory build, so the capability works with or
+ * without the daemon and `oxagen` can dogfood itself from a cold start.
  */
-import { buildCodeGraph } from "../daemon/code-graph/builder.js";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+import { buildCodeGraph, buildAndPersistCodeGraph } from "../daemon/code-graph/builder.js";
 import {
   searchSymbols,
   dependents,
   imports as importsOf,
 } from "../daemon/code-graph/query.js";
+import { createCodeGraphStore, defaultCodeGraphDbPath } from "../daemon/code-graph/store.js";
+import type { CodeGraphStore } from "../daemon/code-graph/store.js";
 import type { CodeGraph, CodeNode } from "../daemon/code-graph/types.js";
 
 export type CodeGraphOperation =
@@ -26,14 +31,40 @@ export type CodeGraphOperation =
 
 const cache = new Map<string, Promise<CodeGraph>>();
 
-/** Build (or reuse) the code graph rooted at `cwd`. One build per cwd per process. */
+/** Build (or reuse) the code graph rooted at `cwd`. One load per cwd per process. */
 export function getCodeGraph(cwd: string): Promise<CodeGraph> {
   let graph = cache.get(cwd);
   if (!graph) {
-    graph = buildCodeGraph(cwd);
+    graph = loadOrBuildCodeGraph(cwd);
     cache.set(cwd, graph);
   }
   return graph;
+}
+
+/**
+ * Load the code graph from the persistent store (incrementally refreshing it
+ * first), falling back to an in-memory build when the store is unavailable.
+ */
+async function loadOrBuildCodeGraph(cwd: string): Promise<CodeGraph> {
+  let store: CodeGraphStore | null = null;
+  try {
+    const dbPath = defaultCodeGraphDbPath();
+    mkdirSync(dirname(dbPath), { recursive: true });
+    store = createCodeGraphStore({ duckdbPath: dbPath });
+    await store.whenReady();
+    await buildAndPersistCodeGraph(cwd, store);
+    return await store.loadGraph(cwd);
+  } catch {
+    return buildCodeGraph(cwd); // store locked/unavailable — in-memory fallback
+  } finally {
+    if (store) {
+      try {
+        await store.close();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 }
 
 /** Drop cached graphs (used by tests; also lets a long-lived REPL force a rebuild). */

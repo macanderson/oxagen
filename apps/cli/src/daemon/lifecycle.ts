@@ -12,6 +12,7 @@ const SOCKET_PATH = join(DAEMON_DIR, "daemon.sock");
 const PID_FILE = join(DAEMON_DIR, "daemon.pid");
 const LOG_FILE = join(DAEMON_DIR, "daemon.log");
 const DB_PATH = join(DAEMON_DIR, "context.duckdb");
+const CODE_GRAPH_DB_PATH = join(DAEMON_DIR, "code-graph.duckdb");
 
 function getClient(): DaemonClient {
   return new DaemonClient(SOCKET_PATH);
@@ -36,6 +37,7 @@ export async function startDaemon(opts: { foreground: boolean }): Promise<void> 
       idleTimeoutMs: 30 * 60 * 1000,
       workspaceRoot: process.cwd(),
       dbPath: DB_PATH,
+      codeGraphDbPath: CODE_GRAPH_DB_PATH,
     });
     console.log("Starting context daemon (foreground)…");
     console.log(`  Socket: ${SOCKET_PATH}`);
@@ -70,6 +72,7 @@ export async function startDaemon(opts: { foreground: boolean }): Promise<void> 
           OXAGEN_DAEMON_PID: PID_FILE,
           OXAGEN_DAEMON_LOG: LOG_FILE,
           OXAGEN_DAEMON_DB: DB_PATH,
+          OXAGEN_DAEMON_CODE_GRAPH_DB: CODE_GRAPH_DB_PATH,
           OXAGEN_DAEMON_CWD: process.cwd(),
         },
       },
