@@ -29,7 +29,7 @@ export function readConfig(): CliConfig {
     const detail = err instanceof Error ? err.message : String(err);
     process.stderr.write(
       `Warning: failed to read config file ${CONFIG_FILE}: ${detail}\n` +
-        `Run \`oxagen auth login\` to re-authenticate.\n`,
+        `Run \`oxagen login\` to re-authenticate.\n`,
     );
     return {};
   }
