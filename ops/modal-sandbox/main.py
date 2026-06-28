@@ -303,6 +303,11 @@ async def sandbox_exec(
     The persistent cwd is what provides cross-call state (clone in call 1,
     build in call 2, etc.).  Returns gone:true if the session is not found
     so the caller can trigger a snapshot-restore cycle, matching prod behaviour.
+
+    NOTE (browser caps): browser commands routed through `browserctl` require
+    Chromium and playwright, which are only installed inside the `agent` Modal
+    image.  For local dev, symlink ops/modal-sandbox/browser/browserctl.py to
+    a directory on PATH and ensure playwright + Chromium are installed locally.
     """
     _check_auth(authorization)
 

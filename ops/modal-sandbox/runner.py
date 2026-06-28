@@ -67,15 +67,46 @@ LANG_ENTRY: dict[str, tuple[str, list[str]]] = {
 # Durable sandbox images — used for long-lived reconnectable sandboxes.
 # These include git (and curl for "agent") so repo-clone workflows work.
 # NOTE: node uses debian-based node:20 (not alpine) so apt_install works.
-# "agent" is Debian slim + Python 3.12 + git + curl; browser tooling is a
-# later PR — do NOT add Chromium/playwright here.
+#
+# Browser automation lives exclusively in the "agent" image.
+# The agent image pre-installs playwright + Chromium and bakes browserd /
+# browserctl into /usr/local/bin.  A code agent drives the browser across
+# exec() calls by piping JSON commands to browserctl via the exec stdin field:
+#
+#   POST /sandbox/exec  { "command": "python3 /usr/local/bin/browserctl",
+#                         "stdin": "{\"op\":\"navigate\",\"url\":\"...\"}",
+#                         ... }
+#
+# browserd stays alive between exec() calls (durable sandbox keeps processes
+# running) so page state (cookies, form values, SPA routing) is preserved.
 # ---------------------------------------------------------------------------
 
 DURABLE_IMAGES: dict[str, modal.Image] = {
     "node":   modal.Image.from_registry("node:20").apt_install("git"),
     "python": modal.Image.debian_slim(python_version="3.12").apt_install("git"),
     "shell":  modal.Image.debian_slim(python_version="3.12").apt_install("git"),
-    "agent":  modal.Image.debian_slim(python_version="3.12").apt_install("git", "curl"),
+    # "agent" = Debian slim + Python 3.12 + git + curl + Playwright/Chromium.
+    # add_local_file(local_path, remote_path, copy=True) bakes the file into the
+    # image layer at build time (copy=True is required so the subsequent chmod
+    # run_commands step can see the files).  Local paths are resolved relative to
+    # the cwd where `modal deploy runner.py` is invoked (ops/modal-sandbox/).
+    "agent": (
+        modal.Image.debian_slim(python_version="3.12")
+        .apt_install("git", "curl")
+        .pip_install("playwright==1.49.0")
+        .run_commands(
+            "playwright install-deps chromium",
+            "playwright install chromium",
+            "apt-get update && apt-get install -y fonts-liberation fonts-noto-color-emoji"
+            " && rm -rf /var/lib/apt/lists/*",
+        )
+        # add_local_file signature (modal >= 0.66.40):
+        #   add_local_file(local_path, remote_path, *, copy=False)
+        # copy=True bakes the file into the image layer so the chmod step below works.
+        .add_local_file("browser/browserd.py", "/usr/local/bin/browserd", copy=True)
+        .add_local_file("browser/browserctl.py", "/usr/local/bin/browserctl", copy=True)
+        .run_commands("chmod +x /usr/local/bin/browserd /usr/local/bin/browserctl")
+    ),
 }
 
 RUNNER_SECRET = modal.Secret.from_name("oxagen-runner")
