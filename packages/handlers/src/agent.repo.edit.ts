@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { agentRepoEdit } from "@oxagen/oxagen/contracts/agent.repo.edit";
 import { createGitHubClient, GitHubWorkspace } from "@oxagen/github";
-import { runCodingAgent } from "@oxagen/agent-engine";
+import { runTurn } from "@oxagen/agent-engine";
 import {
   createNeo4jCodeGraphProvider,
   createPlatformMemoryProvider,
@@ -35,13 +35,20 @@ export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = asy
   //    messageId is the ClickHouse execution_step_id correlation key.
   const ai = createPlatformAgentAi(ctx, ctx.messageId ?? ctx.requestId);
 
-  // 5. Run the coding agent loop.
+  // 5. Run the full 6-stage pipeline (evaluate → enhance → route → execute →
+  //    judge → revise) via runTurn from @oxagen/agent-engine.
+  //    The pipeline matches the quality level of the CLI: prompt evaluation,
+  //    code-graph + memory enhancement, model routing, completeness judging,
+  //    and auto-revision.  The same AgentAi / CodeGraphProvider /
+  //    MemoryProvider / TraceStore ports are used as in the CLI — the only
+  //    difference is that the AgentAi port is backed by @oxagen/ai (metered)
+  //    instead of a BYOK gateway key.
   // The kernel wraps this handler in runInTenantScope so Neo4j / embed calls
   // inside the adapters inherit the active tenant scope via AsyncLocalStorage.
-  const result = await runCodingAgent({
+  const result = await runTurn({
+    prompt: input.instruction,
     workspace: ws,
     ai,
-    instruction: input.instruction,
     model: input.model,
     maxSteps: input.maxSteps,
     readOnly: false,
