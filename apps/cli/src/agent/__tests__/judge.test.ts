@@ -31,14 +31,20 @@ const baseJudge = {
 };
 
 describe("pickAdvisorModel", () => {
-  it("defaults to the precise tier when the executor is not precise", () => {
-    expect(pickAdvisorModel("anthropic/claude-sonnet-4.6")).toContain("opus");
+  it("defaults to the most powerful OpenAI model (cross-vendor independence)", () => {
+    expect(pickAdvisorModel("anthropic/claude-sonnet-4.6")).toBe("openai/gpt-5.5-pro");
   });
 
-  it("falls back to a distinct tier when the executor is already precise", () => {
-    const advisor = pickAdvisorModel("anthropic/claude-opus-4.8");
-    expect(advisor).not.toBe("anthropic/claude-opus-4.8");
-    expect(advisor).toContain("sonnet");
+  it("stays the OpenAI advisor even when the executor is the precise (Opus) tier", () => {
+    // A different vendor shares none of the executor's blind spots, so an Opus
+    // executor still gets the OpenAI judge — no need to fall back.
+    expect(pickAdvisorModel("anthropic/claude-opus-4.8")).toBe("openai/gpt-5.5-pro");
+  });
+
+  it("falls back to a distinct strong model when the executor IS the default advisor", () => {
+    const advisor = pickAdvisorModel("openai/gpt-5.5-pro");
+    expect(advisor).not.toBe("openai/gpt-5.5-pro");
+    expect(advisor).toContain("opus");
   });
 
   it("honours an explicit override that differs from the executor", () => {

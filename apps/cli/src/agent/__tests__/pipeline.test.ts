@@ -115,7 +115,7 @@ describe("runTurn — happy path", () => {
     const t = res.trace;
     expect(t.originalPrompt).toBe("fix Foo");
     expect(t.selectedTier).toBe("balanced");
-    expect(t.selectionRationale).toContain("evaluator recommended");
+    expect(t.selectionRationale).toContain("evaluator chose");
     expect(t.judgeRounds).toHaveLength(1);
     expect(t.finalComplete).toBe(true);
     expect(t.filesTouched).toEqual(["src/x.ts"]);
@@ -183,14 +183,26 @@ describe("runTurn — model selection", () => {
     expect(mockRun.mock.calls[0]?.[0].model).toBe("openai/gpt-5");
   });
 
-  it("escalates above the evaluator on high-stakes signals", async () => {
+  it("raises the safety floor above the evaluator on high-stakes signals", async () => {
     mockEval.mockResolvedValue(
       evaluation({ recommendedTier: "fast", refinedPrompt: "implement the stripe billing refund" }),
     );
     const res = await runTurn({ prompt: "billing", cwd: "/x" });
     expect(res.trace.selectedTier).toBe("precise");
     expect(res.trace.selectedModel).toContain("opus");
-    expect(res.trace.selectionRationale).toContain("router escalated");
+    expect(res.trace.selectionRationale).toContain("safety floor");
+  });
+
+  it("trusts the evaluator's cheap choice on non-high-stakes work (no upward escalation)", async () => {
+    // "refactor" is a design signal the old maxTier router escalated to balanced;
+    // now the Haiku evaluator is the authority and its 'fast' pick stands.
+    mockEval.mockResolvedValue(
+      evaluation({ recommendedTier: "fast", refinedPrompt: "refactor the date helper" }),
+    );
+    const res = await runTurn({ prompt: "tidy helper", cwd: "/x" });
+    expect(res.trace.selectedTier).toBe("fast");
+    expect(res.trace.selectedModel).toContain("haiku");
+    expect(res.trace.selectionRationale).toContain("evaluator chose");
   });
 });
 

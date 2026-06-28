@@ -162,12 +162,22 @@ export function routeModel(
   return classifyTier(signals);
 }
 
+// Slug fragments that classify an arbitrary gateway model into a tier, across
+// vendors (Anthropic, OpenAI, Google, DeepSeek, Mistral). SMALL is checked first
+// so a cheap variant of a frontier family (e.g. `gpt-5-mini`, `o3-mini`,
+// `gemini-3.5-flash`) is never mislabelled as precise.
+const SMALL_MARKER = /\b(mini|nano|flash|lite|small|nemo)\b|\b\d{1,3}b\b/;
+const PRECISE_MARKER =
+  /\b(opus|codex|pro|large|o1|o3|deepseek-v4|deepseek-r1|magistral-medium)\b/;
+
 /** Best-effort tier label for an arbitrary slug (for display of pinned models). */
 export function tierForSlug(model: string): ModelTier {
-  const family = model.split("/").pop() ?? model;
-  if (family.startsWith("claude-opus") || family.startsWith("gpt-5")) return "precise";
-  if (family.startsWith("claude-haiku") || family.includes("mini") || family.includes("flash"))
-    return "fast";
+  const family = (model.split("/").pop() ?? model).toLowerCase();
+  // Cheap/small variants win first — every vendor marks them the same way.
+  if (family.startsWith("claude-haiku") || SMALL_MARKER.test(family)) return "fast";
+  // Frontier / high-capability families across vendors → precise.
+  if (family.startsWith("claude-opus") || family.startsWith("gpt-5") || PRECISE_MARKER.test(family))
+    return "precise";
   return "balanced";
 }
 

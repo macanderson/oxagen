@@ -50,8 +50,10 @@ const evalSchema = z.object({
   recommendedTier: z
     .enum(["fast", "balanced", "precise"])
     .describe(
-      "Cheapest tier that can do the job: 'fast' mechanical/single-file, 'balanced' " +
-        "normal feature work, 'precise' auth/billing/security/migration/architecture.",
+      "YOU are choosing the actual worker model that will build this, and it costs real " +
+        "money. Pick the CHEAPEST tier that still delivers a correct, high-quality result " +
+        "— lean cheap, never overspend: 'fast' mechanical/single-file, 'balanced' normal " +
+        "feature work, 'precise' auth/billing/security/migration/architecture or wide blast-radius.",
     ),
   missing: z
     .array(z.string())
@@ -94,8 +96,10 @@ const EVALUATOR_SYSTEM = [
   "- complexity: estimate the work, risk, and blast radius — not the prompt's length.",
   "",
   "Then help the agent succeed:",
-  "- recommendedTier: pick the CHEAPEST tier that can do the job well. Reserve 'precise'",
-  "  for auth, billing, security, migrations, schema, or architecture.",
+  "- recommendedTier: YOU choose the worker model that builds this, and it spends real",
+  "  money. Pick the CHEAPEST tier that still produces a correct, high-quality result —",
+  "  lean cheap and escalate only when the task truly needs it. Reserve 'precise' for",
+  "  auth, billing, security, migrations, schema, or architecture.",
   "- contextQueries: name the exact symbols/files/topics the agent should pull from the",
   "  code graph so it skips blind exploration. Prefer real identifiers and paths.",
   "- refinedPrompt: rewrite for the agent. Strip filler and contradiction; keep 100% of the",
