@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/cli",
-  "version": "0.6.0",
+  "version": "0.6.2",
   "description": "Oxagen CLI — agentic coding powered by Oxagen's knowledge-graph context engine",
   "type": "module",
   "main": "./dist/index.js",
@@ -31,6 +31,8 @@
     "start": "tsx src/index.tsx",
     "build": "tsc",
     "bundle": "node scripts/bundle.mjs",
+    "prepublish:standalone": "node scripts/prepare-standalone-publish.mjs",
+    "publish:standalone": "pnpm run bundle && pnpm run prepublish:standalone",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
     "test:unit": "vitest run"
