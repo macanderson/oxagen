@@ -414,6 +414,32 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
   },
 
+  // ADR-020: per-workspace write credential resolution.
+  // GITHUB_APP_ID + GITHUB_APP_PRIVATE_KEY enable the installation-token path
+  // in resolveGitHubToken(). Both must be set together; omitting either falls
+  // through to the OAuth-connection or env-PAT fallback.
+  GITHUB_APP_ID: {
+    group: "github",
+    description:
+      "GitHub App numeric ID. Required (with GITHUB_APP_PRIVATE_KEY) for the installation-token path in resolveGitHubToken() (ADR-020). Find it on the GitHub App settings page.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
+  GITHUB_APP_PRIVATE_KEY: {
+    group: "github",
+    description:
+      "PEM-encoded RSA private key for the GitHub App. Required (with GITHUB_APP_ID) for the installation-token path in resolveGitHubToken() (ADR-020). Generate in the GitHub App settings → Private keys.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
   GITHUB_PERSONAL_ACCESS_TOKEN: {
     group: "github",
     description:
