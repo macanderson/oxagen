@@ -28,7 +28,7 @@ describe("WelcomeScreen", () => {
     const output = lastFrame() ?? "";
 
     // Should show version
-    expect(output).toContain("v0.6.2");
+    expect(output).toContain("v0.6.3");
 
     // Should show dragon
     expect(output!.length).toBeGreaterThan(200);
@@ -116,12 +116,13 @@ describe("WelcomeScreen", () => {
     expect(initial).toContain("Auto-exit in");
     expect(initial).toContain("5s");
 
-    // Advance timers
-    vi.advanceTimersByTime(2000);
+    // Wait for countdown to update
+    await tick(500);
 
     const output = lastFrame();
     // Verify countdown is still rendering (updates may vary in test environment)
     expect(output).toContain("Auto-exit in");
+    unmount();
   });
 
   test("shows Ready status in interactive mode", () => {
@@ -134,13 +135,13 @@ describe("WelcomeScreen", () => {
     expect(lastFrame() ?? "").toContain("Demo");
   });
 
-  test("shows interaction counter easter egg after 5+ interactions", () => {
+  test("shows interaction counter easter egg after 5+ interactions", async () => {
     const { lastFrame, stdin } = render(<WelcomeScreen mode="interactive" />);
 
     // Fire breath 6 times
     for (let i = 0; i < 6; i++) {
       stdin.write(" ");
-      vi.advanceTimersByTime(1150);
+      await tick(100);
     }
 
     const output = lastFrame();

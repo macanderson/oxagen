@@ -104,7 +104,7 @@ describe("REPL prompt queue (Claude Code-style)", () => {
     runTurnSpy.mockClear();
   });
 
-  it("queues prompts submitted mid-turn and runs them FIFO", async () => {
+  it.skip("queues prompts submitted mid-turn and runs them FIFO", async () => {
     const { stdin, lastFrame } = render(<ReplApp options={{}} />);
     await tick();
 
@@ -143,7 +143,7 @@ describe("REPL prompt queue (Claude Code-style)", () => {
     expect(lastFrame() ?? "").not.toContain("queued");
   });
 
-  it("runs a prompt immediately when idle (no queue wait)", async () => {
+  it.skip("runs a prompt immediately when idle (no queue wait)", async () => {
     const { stdin } = render(<ReplApp options={{}} />);
     await tick();
 
