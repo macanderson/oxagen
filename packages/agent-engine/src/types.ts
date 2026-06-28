@@ -1,4 +1,5 @@
 import type { ModelMessage } from "ai";
+import type { AgentAi } from "./ports";
 
 export interface CommandResult {
   exitCode: number;
@@ -37,6 +38,8 @@ export interface CodeGraphProvider {
 
 export interface RunCodingAgentOptions {
   workspace: Workspace;
+  /** Injected AI port — BYOK/unmetered in the CLI, streamAgentReply (metered) on the platform. */
+  ai: AgentAi;
   instruction: string;
   model?: string;
   system?: string;
