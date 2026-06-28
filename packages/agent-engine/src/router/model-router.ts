@@ -13,8 +13,8 @@
  * the caller's responsibility. Pass an `override` string explicitly, or read
  * `OXAGEN_MODEL` from env.
  */
-import type { ModelTier, UsageTotals } from "../types.js";
-import { estimateCostUsd, rateFor, formatUsd } from "./rate-card.js";
+import type { ModelTier, UsageTotals } from "../types";
+import { estimateCostUsd, rateFor, formatUsd } from "./rate-card";
 
 // Re-exported so call sites that import pricing from the router keep working.
 // The authoritative definitions live in ./rate-card.ts.

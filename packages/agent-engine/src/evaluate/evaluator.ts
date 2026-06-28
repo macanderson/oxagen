@@ -20,10 +20,10 @@
  * implementation and the CLI wires in a BYOK implementation.
  */
 import { z } from "zod";
-import { classifyTier, modelForTier, accumulateUsage } from "../router/model-router.js";
-import { emptyUsage } from "../types.js";
-import type { AgentAi } from "../ports.js";
-import type { PromptEvaluation } from "../trace/types.js";
+import { classifyTier, modelForTier, accumulateUsage } from "../router/model-router";
+import { emptyUsage } from "../types";
+import type { AgentAi } from "../ports";
+import type { PromptEvaluation } from "../trace/types";
 
 /** A tier's evaluator-model slug, overridable to track gateway drift. */
 function evaluatorModel(override?: string): string {

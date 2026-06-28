@@ -27,20 +27,20 @@
  * It also does NOT check for a gateway key — that is the caller's responsibility.
  */
 import type { ModelMessage } from "ai";
-import { runCodingAgent } from "../engine.js";
-import { evaluatePrompt } from "../evaluate/evaluator.js";
-import { judgeCompleteness, buildRevisionPrompt } from "../evaluate/judge.js";
-import { enhancePrompt } from "../evaluate/prompt-enhancer.js";
+import { runCodingAgent } from "../engine";
+import { evaluatePrompt } from "../evaluate/evaluator";
+import { judgeCompleteness, buildRevisionPrompt } from "../evaluate/judge";
+import { enhancePrompt } from "../evaluate/prompt-enhancer";
 import {
   classifyTier,
   modelForTier,
   tierForSlug,
   tierLabel,
   accumulateUsage,
-} from "../router/model-router.js";
-import { emptyUsage, mergeUsage } from "../types.js";
-import type { ModelTier, UsageTotals, Workspace, CodeGraphProvider, ProjectContext } from "../types.js";
-import type { AgentAi, MemoryProvider, TraceStore } from "../ports.js";
+} from "../router/model-router";
+import { emptyUsage, mergeUsage } from "../types";
+import type { ModelTier, UsageTotals, Workspace, CodeGraphProvider, ProjectContext } from "../types";
+import type { AgentAi, MemoryProvider, TraceStore } from "../ports";
 import type {
   EnhancementTrace,
   JudgeVerdict,
@@ -49,7 +49,7 @@ import type {
   StageEvent,
   ToolEvent,
   TurnTrace,
-} from "../trace/types.js";
+} from "../trace/types";
 
 const TIER_RANK: Record<ModelTier, number> = { fast: 0, balanced: 1, precise: 2 };
 

@@ -15,12 +15,12 @@
  * or read a config file — it takes an {@link AgentAi} port.
  */
 import { z } from "zod";
-import { enhancePrompt } from "../evaluate/prompt-enhancer.js";
-import { classifyTier, modelForTier } from "../router/model-router.js";
-import { emptyUsage } from "../types.js";
-import type { ModelTier, UsageTotals, CodeGraphProvider } from "../types.js";
-import type { AgentAi, MemoryProvider } from "../ports.js";
-import type { AgentDefinition, Plan, Task } from "../fleet/types.js";
+import { enhancePrompt } from "../evaluate/prompt-enhancer";
+import { classifyTier, modelForTier } from "../router/model-router";
+import { emptyUsage } from "../types";
+import type { ModelTier, UsageTotals, CodeGraphProvider } from "../types";
+import type { AgentAi, MemoryProvider } from "../ports";
+import type { AgentDefinition, Plan, Task } from "../fleet/types";
 
 export type { Plan, Task };
 
