@@ -160,7 +160,12 @@ import { semanticEdgeSuggest } from "./semantic.edge.suggest";
 import { pluginSchemaGet } from "./plugin.schema.get";
 import { pluginSchemaValidate } from "./plugin.schema.validate";
 import { pluginVersionList } from "./plugin.version.list";
+import { repoBranchCreate } from "./repo.branch.create";
 import { repoConfigure } from "./repo.configure";
+import { repoCreate } from "./repo.create";
+import { repoFilePut } from "./repo.file.put";
+import { repoFork } from "./repo.fork";
+import { repoPrOpen } from "./repo.pr.open";
 import { repoSync } from "./repo.sync";
 import { repoPause } from "./repo.pause";
 import { repoResume } from "./repo.resume";
@@ -216,7 +221,6 @@ import { schemaValidateRelationship } from "./schema.validate.relationship";
 import { schemaReconcileDispatch } from "./schema.reconcile.dispatch";
 import { schemaReconcileStatus } from "./schema.reconcile.status";
 import { graphRelationshipUpsert } from "./graph.relationship.upsert";
-import { graphExport } from "./graph.export";
 import { semanticRelationshipApprove } from "./semantic.relationship.approve";
 import { semanticRelationshipInfer } from "./semantic.relationship.infer";
 import { semanticRelationshipList } from "./semantic.relationship.list";
@@ -406,7 +410,12 @@ export {
   pluginSchemaGet,
   pluginSchemaValidate,
   pluginVersionList,
+  repoBranchCreate,
   repoConfigure,
+  repoCreate,
+  repoFilePut,
+  repoFork,
+  repoPrOpen,
   repoSync,
   repoPause,
   repoResume,
@@ -462,7 +471,6 @@ export {
   schemaReconcileDispatch,
   schemaReconcileStatus,
   graphRelationshipUpsert,
-  graphExport,
   semanticRelationshipApprove,
   semanticRelationshipInfer,
   semanticRelationshipList,
@@ -646,7 +654,12 @@ export const contracts = [
   pluginSchemaGet,
   pluginSchemaValidate,
   pluginVersionList,
+  repoBranchCreate,
   repoConfigure,
+  repoCreate,
+  repoFilePut,
+  repoFork,
+  repoPrOpen,
   repoSync,
   repoPause,
   repoResume,
@@ -702,7 +715,6 @@ export const contracts = [
   schemaReconcileDispatch,
   schemaReconcileStatus,
   graphRelationshipUpsert,
-  graphExport,
   semanticRelationshipApprove,
   semanticRelationshipInfer,
   semanticRelationshipList,

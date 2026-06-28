@@ -978,6 +978,9 @@ importers:
       '@oxagen/functions':
         specifier: workspace:*
         version: link:../functions
+      '@oxagen/github':
+        specifier: workspace:*
+        version: link:../github
       '@oxagen/ingestion':
         specifier: workspace:*
         version: link:../ingestion
