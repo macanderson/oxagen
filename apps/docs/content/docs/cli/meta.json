@@ -1,0 +1,13 @@
+{
+  "title": "CLI",
+  "pages": [
+    "index",
+    "installation",
+    "account-setup",
+    "quickstart",
+    "---",
+    "commands",
+    "configuration",
+    "knowledge-graph"
+  ]
+}

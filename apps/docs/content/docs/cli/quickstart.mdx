@@ -1,0 +1,134 @@
+---
+title: Quickstart
+description: Your first agentic coding session — the REPL, one-shot runs, permission modes, fleets, and grounding the agent in your knowledge graph.
+---
+
+This walkthrough assumes you've [installed the CLI](/docs/cli/installation) and [provided a gateway key](/docs/cli/account-setup#1-provide-a-gateway-key-for-the-agent-loop). Run the commands from the root of a project you want the agent to work on.
+
+## Interactive REPL
+
+Run `oxagen` with no arguments in a terminal to open the interactive session:
+
+```bash
+oxagen
+```
+
+Type a request and press Enter. The agent reads relevant files, proposes edits, runs commands, and reports back. By default the REPL runs in **ask** mode: it pauses for your approval before editing a file or running a shell command.
+
+Useful in-session slash commands work like `/name` (see [custom slash commands](/docs/cli/configuration#slash-commands)). Press `Ctrl-C` to interrupt a turn, and again to exit.
+
+## One-shot runs
+
+Pass a prompt as an argument to run a single task and exit — ideal for scripts, git hooks, and CI:
+
+```bash
+oxagen "add a unit test for parseConfig covering the empty-input case"
+```
+
+You can also pipe input in:
+
+```bash
+git diff | oxagen "write a concise commit message for this diff"
+```
+
+One-shot runs are **ungated** by default (the agent edits and runs commands without prompting), so it can complete unattended. Constrain it with a [permission mode](#permission-modes) when you want a safety rail.
+
+## Permission modes
+
+The `--mode` flag controls what the agent may do without asking:
+
+| Mode | Behavior |
+|---|---|
+| `ask` | Prompt before each file edit or command. (Default in the REPL.) |
+| `accept-edits` | Apply file edits automatically; still prompt for shell commands. |
+| `bypass` | Run everything without prompting. |
+| `readonly` | Read, search, and explain only — no edits, no commands. |
+
+```bash
+# Let it edit freely but confirm any shell command:
+oxagen --mode accept-edits "refactor the date helpers into a single module"
+
+# Investigate without touching anything:
+oxagen --mode readonly "where is rate limiting implemented and is it per-org?"
+```
+
+`--readonly` is shorthand for `--mode readonly`.
+
+## Choose a model
+
+The agent uses a current Claude Sonnet model by default. Override it per run, per shell, or persistently — models are plain Vercel AI Gateway slugs (`vendor/model`):
+
+```bash
+oxagen -m anthropic/claude-opus-4.1 "design a migration plan for the events table"
+
+export OXAGEN_MODEL="anthropic/claude-sonnet-4.5"   # this shell
+oxagen config model anthropic/claude-sonnet-4.5      # persisted
+```
+
+If the gateway reports a slug as unknown, it has likely drifted — set a current one with `oxagen config model <slug>`.
+
+## Dispatch a fleet
+
+For a larger goal, `oxagen agents` plans it into tasks and runs several agents in parallel:
+
+```bash
+oxagen agents "add input validation to every public API route"
+```
+
+- `--concurrency <n>` — how many agents run at once (default 4).
+- `--isolate` — run each agent in its own git worktree and merge the work back, so parallel agents never clobber each other's files.
+- `--readonly` — analysis-only fleet (no edits or commands).
+
+```bash
+oxagen agents --isolate --concurrency 6 "migrate components off the deprecated Button API"
+```
+
+Launch `oxagen view` for a dashboard of agent memory, the compiled context, and past sessions.
+
+## Ground the agent in your knowledge graph
+
+This is what sets `oxagen` apart from a generic coding agent. If you've [authenticated against the platform](/docs/cli/account-setup#4-authenticate-the-cli), pull your workspace knowledge graph into a fast local replica:
+
+```bash
+oxagen graph pull
+```
+
+The agent now reasons with your graph — entities, relationships, prior decisions — alongside the files in your repo. Query the graph directly any time:
+
+```bash
+oxagen graph search -q "where do we enforce tenant isolation?" -n 5
+```
+
+See [Knowledge graph](/docs/cli/knowledge-graph) for the full workflow.
+
+## Speed up repeated runs
+
+The context daemon keeps indexes and the code graph warm between invocations, so subsequent turns start faster:
+
+```bash
+oxagen daemon start
+oxagen daemon status
+oxagen daemon stop
+```
+
+## Review what happened
+
+Inspect exactly how a past turn was handled — prompt, context, model, scores, and the completeness judge's verdict:
+
+```bash
+oxagen replay --list      # list recent turns
+oxagen replay             # replay the latest
+oxagen replay 3           # replay the 3rd-most-recent turn
+```
+
+And see what your runs cost, rolled up by model:
+
+```bash
+oxagen cost --session
+```
+
+## Next steps
+
+- [Command reference](/docs/cli/commands) — every command and flag.
+- [Configuration](/docs/cli/configuration) — settings scopes, custom agents, slash commands, rules, and MCP servers.
+- [Knowledge graph](/docs/cli/knowledge-graph) — pull, search, and inspect your workspace graph.

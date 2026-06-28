@@ -1,0 +1,83 @@
+---
+title: Knowledge graph
+description: Pull your workspace knowledge graph into a local replica, search it semantically, and ground the coding agent in it.
+---
+
+The knowledge graph is what distinguishes `oxagen` from a generic coding agent. Your Oxagen workspace maintains a graph of entities, code symbols, documents, executions, and the relationships between them. The CLI can replicate that graph locally and feed it to the agent as context, so it reasons about your system — not just the files open in your repo.
+
+These commands call the platform, so you need an [authenticated CLI](/docs/cli/account-setup) (platform token + org + workspace).
+
+## Pull a local replica
+
+`oxagen graph pull` downloads an **incremental** snapshot of your workspace graph into a fast local replica (DuckDB). It remembers a cursor, so subsequent pulls only fetch what changed:
+
+```bash
+oxagen graph pull              # incremental — only what changed since last pull
+oxagen graph pull --full       # ignore the cursor and re-pull everything
+oxagen graph pull --json       # machine-readable summary
+```
+
+Scope what you replicate:
+
+| Flag | Description |
+|---|---|
+| `-l, --labels <csv>` | Only pull these domain labels, e.g. `Person,SourceFile`. |
+| `--no-system` | Exclude product-owned (system) nodes; pull only your workspace's nodes. |
+| `--full` | Re-pull the entire graph, ignoring the saved cursor. |
+
+Once pulled, the coding agent automatically draws on the replica for context during its runs.
+
+## Check the replica's state
+
+```bash
+oxagen graph status            # node counts, last cursor, freshness
+oxagen graph status --json
+```
+
+## Search the graph
+
+`oxagen graph search` runs a unified **semantic (vector) similarity** search across the entire graph from a natural-language query:
+
+```bash
+oxagen graph search -q "where do we enforce tenant isolation?"
+```
+
+| Flag | Description |
+|---|---|
+| `-q, --query <text>` | Natural-language query (required). |
+| `-k, --kinds <csv>` | Restrict to node kinds: `entity, file, symbol, chunk, memory, execution, document, message`. |
+| `-l, --labels <csv>` | Restrict to domain labels, e.g. `Person,SourceFile`. |
+| `-n, --limit <n>` | Max results, 1–50 (default 10). |
+| `--system` | Only product-owned (system) nodes. |
+| `--no-system` | Only your workspace's nodes (exclude system nodes). |
+
+```bash
+# Top 5 source-file matches for an authentication question
+oxagen graph search -q "rate limiting per org" -k file,symbol -n 5
+
+# Search only your workspace's people and documents
+oxagen graph search -q "who owns the billing service?" -l Person --no-system
+```
+
+## A typical workflow
+
+```bash
+# 1. Authenticate once (see Account setup)
+oxagen config token oxk_live_… && oxagen config org acme && oxagen config workspace eng
+
+# 2. Replicate the graph
+oxagen graph pull
+
+# 3. Explore it
+oxagen graph search -q "how does ingestion dual-write to Postgres and Neo4j?"
+
+# 4. Let the agent use it
+oxagen "refactor the ingestion cursor handling; keep the dual-write invariant"
+```
+
+Re-run `oxagen graph pull` whenever you want the freshest context; it's incremental, so it's cheap to run often.
+
+## Related
+
+- [Quickstart](/docs/cli/quickstart#ground-the-agent-in-your-knowledge-graph) — grounding the agent in the graph.
+- [Command reference](/docs/cli/commands#oxagen-graph-knowledge-graph) — the `graph` command group.

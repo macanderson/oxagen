@@ -1,0 +1,196 @@
+---
+title: Command reference
+description: Every oxagen command and flag — the agentic loop, fleets, the knowledge graph, settings, agents, rules, MCP servers, environments, and secrets.
+---
+
+Run `oxagen --help` for the live list, and append `--help` to any command for its flags. Commands that call the platform (`graph`, `env`, `secret`) require an [authenticated CLI](/docs/cli/account-setup); the rest run locally.
+
+## oxagen — run the agent
+
+```bash
+oxagen [prompt...]
+```
+
+With no prompt in a terminal, opens the interactive REPL. With a prompt, runs one-shot and exits. With piped stdin and no prompt, reads the task from stdin.
+
+| Flag | Description |
+|---|---|
+| `-m, --model <slug>` | Gateway model slug (overrides config/default). |
+| `--agent <name>` | Run the one-shot prompt as a named [agent definition](/docs/cli/configuration#custom-agents). Requires a prompt. |
+| `--readonly` | Read/search/explain only — no edits or commands. |
+| `--mode <mode>` | Permission mode: `ask`, `accept-edits`, `bypass`, `readonly`. REPL default is `ask`; one-shot is ungated unless set. |
+| `--no-pipeline` | Skip prompt evaluation, context injection, and completeness judging (raw model loop). |
+| `--verbose` | Emit full per-turn telemetry: per-phase timing, model, tokens, cost, and tool results. |
+
+## oxagen agents — dispatch a fleet
+
+```bash
+oxagen agents [goal...]
+```
+
+Opens the agents screen. With a goal, plans it into tasks and runs them immediately.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--concurrency <n>` | `4` | Max agents running at once. |
+| `--readonly` | | Read/search/explain only — no edits or commands. |
+| `--isolate` | | Run each agent in its own git worktree; commit and merge work back. |
+
+## oxagen view — agent dashboard
+
+```bash
+oxagen view
+```
+
+Launches the dashboard for agent memory, the compiled context, and past sessions.
+
+## oxagen daemon — context daemon
+
+Keeps indexes and the code graph warm between runs.
+
+```bash
+oxagen daemon start [--foreground]
+oxagen daemon stop
+oxagen daemon status
+```
+
+## oxagen replay — inspect a past turn
+
+```bash
+oxagen replay [turn] [--list]
+```
+
+Shows how a turn was handled: prompt, scores, injected context, model, and judge verdict. `turn` is an index (`1` = most recent) or id; omit for the latest. `--list` lists recent turns instead.
+
+## oxagen cost — model cost
+
+```bash
+oxagen cost [options]
+```
+
+| Flag | Description |
+|---|---|
+| `--in <tokens>` | Input token count to price. |
+| `--out <tokens>` | Output token count to price. |
+| `-m, --model <slug>` | Model to price against (reuses the global flag). |
+| `--rates` | Print the baked-in rate card. |
+| `--session` | Roll up what this project's recorded turns actually cost, by model. |
+| `--json` | Output JSON. |
+
+## oxagen graph — knowledge graph
+
+Query and replicate your workspace knowledge graph. See [Knowledge graph](/docs/cli/knowledge-graph) for the full workflow. **Requires platform auth.**
+
+```bash
+oxagen graph search -q <text> [--kinds <csv>] [--labels <csv>] [--limit <n>] [--system|--no-system]
+oxagen graph pull [--full] [--labels <csv>] [--no-system] [--json]
+oxagen graph status [--json]
+```
+
+`graph search` node kinds: `entity, file, symbol, chunk, memory, execution, document, message`. Limit is 1–50 (default 10).
+
+## oxagen config — local configuration
+
+```bash
+oxagen config [key] [value]
+```
+
+With no args, prints all values (token masked). Keys: `token`, `model`, `api-url`, `org`, `workspace`. Stored in `~/.config/oxagen/config.json`.
+
+```bash
+oxagen config                       # show all
+oxagen config token oxk_live_…      # set the platform token
+oxagen config model anthropic/claude-sonnet-4.5
+```
+
+## oxagen settings — unified settings.json
+
+Inspect and edit the layered `settings.json` (model, env, permissions, hooks, MCP). See [Configuration](/docs/cli/configuration).
+
+```bash
+oxagen settings show                 # merged settings + which scope each came from
+oxagen settings path                 # the three scope files and their status
+oxagen settings get <dotted.key>     # e.g. permissions.defaultMode
+oxagen settings set <key> <value> [--scope user|project|local]
+oxagen settings validate             # validate every scope against the schema
+oxagen settings init [--scope …]     # write a documented starter file
+```
+
+`settings set` accepts `model`, `apiUrl`, or `env.<NAME>`. Default scope is `project`.
+
+## oxagen agent — named agent definitions
+
+```bash
+oxagen agent list
+oxagen agent show <name>
+oxagen agent new  <name>     # scaffold .oxagen/agents/<name>.md
+```
+
+Run one with `oxagen --agent <name> "…"`.
+
+## oxagen command — custom slash commands
+
+```bash
+oxagen command list
+oxagen command show <name>
+oxagen command new  <name>          # scaffold .oxagen/commands/<name>.md
+oxagen command run  <name> [args…]  # expand the template and run it as a turn
+```
+
+Invoke them as `/name` inside the REPL.
+
+## oxagen rules — workspace rules
+
+Rules the agent is told about and hard-blocked from violating.
+
+```bash
+oxagen rules list
+oxagen rules show  <name>
+oxagen rules new   <name>                 # scaffold .oxagen/rules/<name>.md
+oxagen rules check <tool> <subject>       # dry-run a tool call against the guards
+```
+
+`check` tools: `bash | edit | write | read`. The subject is the command (for `bash`) or a path (for `edit`/`write`/`read`).
+
+## oxagen mcp — external MCP servers
+
+Connect external [MCP](/docs/mcp/overview) servers to the agent loop. Tools appear as `mcp__<name>__<tool>`.
+
+```bash
+oxagen mcp add <name> [--command <cmd> --arg <a>…] | [--url <url> --transport <t> --auth <a> …]
+oxagen mcp list
+oxagen mcp remove  <name> [--scope …]
+oxagen mcp enable  <name> [--scope …]
+oxagen mcp disable <name> [--scope …]
+oxagen mcp check   [name]                 # connect and preview exposed tools
+```
+
+`add` options include `--transport` (`streamable-http` | `sse` | `websocket`), `--auth` (`none` | `bearer` | `header`), `--env-token <VAR>`, `--header <KEY=VALUE>` (repeatable), and `--scope` (`user` | `project` | `local`, default `project`).
+
+## oxagen env — workspace environments
+
+Manage the environments in your active workspace. **Requires platform auth.**
+
+```bash
+oxagen env list [--json]
+oxagen env get <idOrSlug>
+oxagen env create <name> [--slug <slug>] [--description <text>]
+oxagen env update <idOrSlug> [--name …] [--slug …] [--description …] [--active|--inactive]
+oxagen env rm <idOrSlug>
+oxagen env set-default <idOrSlug>
+```
+
+## oxagen secret — credential vault
+
+Manage the workspace's encrypted credential vault. Reveals and exports are recorded to the access log. **Requires platform auth.**
+
+```bash
+oxagen secret list [--json]
+oxagen secret set <key> <value> [--env <slug>] [--no-sensitive]
+oxagen secret rm <key> [--env <slug>]
+oxagen secret reveal <key> [--env <slug>]
+oxagen secret import [--env <slug>] [-f <file>] [--yes]
+oxagen secret export [--env <slug>] [-o <path>]
+```
+
+`--env <slug>` targets a specific environment override; omit it for the default value. `secret import` previews unless you pass `--yes`.
