@@ -26,6 +26,7 @@ import { metadata as agentMcpListMetadata } from "./agent.mcp.list";
 import { metadata as agentMcpRegisterMetadata } from "./agent.mcp.register";
 import { metadata as agentMemoryRecallMetadata } from "./agent.memory.recall";
 import { metadata as agentMemoryWriteMetadata } from "./agent.memory.write";
+import { metadata as agentMemoryListMetadata } from "./agent.memory.list";
 import { metadata as agentPlanApproveMetadata } from "./agent.plan.approve";
 import { metadata as agentPlanCreateMetadata } from "./agent.plan.create";
 import { metadata as agentSkillListMetadata } from "./agent.skill.list";
@@ -258,6 +259,7 @@ const allToolMetadata = [
   agentMcpRegisterMetadata,
   agentMemoryRecallMetadata,
   agentMemoryWriteMetadata,
+  agentMemoryListMetadata,
   agentPlanApproveMetadata,
   agentPlanCreateMetadata,
   agentSkillListMetadata,

@@ -310,6 +310,101 @@ describe("applyDecayToMemory", () => {
   });
 });
 
+import { listMemories } from "./neo4j";
+
+describe("listMemories", () => {
+  beforeEach(() => {
+    sessionRun.mockReset();
+    sessionClose.mockClear();
+  });
+
+  function mockCountThenPage(total: number, pageRecords: ReturnType<typeof fakeRecord>[]) {
+    sessionRun
+      .mockResolvedValueOnce({ records: [fakeRecord({ total })] })
+      .mockResolvedValueOnce({ records: pageRecords });
+  }
+
+  it("returns the unpaged total and the projected page, newest first", async () => {
+    mockCountThenPage(2, [
+      fakeRecord({
+        id: "m_1",
+        publicId: "pub_1",
+        nodeRef: "user:mac-anderson",
+        weight: "high",
+        kind: "constraint",
+        lesson: "the user's name is Mac Anderson",
+        source: "feature",
+        confidence: 1.0,
+        createdAt: "2026-06-27T00:00:00Z",
+        lastReinforcedAt: null,
+      }),
+    ]);
+
+    const out = await withTestScope(() => listMemories({ limit: 100, offset: 0 }));
+
+    expect(out.total).toBe(2);
+    expect(out.memories).toHaveLength(1);
+    expect(out.memories[0]!.id).toBe("m_1");
+    expect(out.memories[0]!.publicId).toBe("pub_1");
+    expect(out.memories[0]!.nodeRef).toBe("user:mac-anderson");
+    expect(out.memories[0]!.lesson).toBe("the user's name is Mac Anderson");
+    expect(out.memories[0]!.confidence).toBe(1.0);
+
+    // Both queries must be tenant-scoped against AgentMemory; page must order
+    // newest-first and paginate with SKIP/LIMIT.
+    const countCypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
+    const pageCypher = String(sessionRun.mock.calls[1]?.[0] ?? "");
+    expect(countCypher).toContain("MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})");
+    expect(countCypher).toContain("count(m) AS total");
+    expect(pageCypher).toContain("MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})");
+    expect(pageCypher).toContain("ORDER BY m.createdAt DESC");
+    expect(pageCypher).toContain("SKIP $offset");
+    expect(pageCypher).toContain("LIMIT $limit");
+    expect(sessionClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("forwards offset/limit as BigInt and leaves optional filters null when unset", async () => {
+    mockCountThenPage(0, []);
+    await withTestScope(() => listMemories({ limit: 50, offset: 25 }));
+    const pageParams = sessionRun.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(pageParams.offset).toBe(BigInt(25));
+    expect(pageParams.limit).toBe(BigInt(50));
+    // No filters supplied → predicate params are null so the WHERE short-circuits.
+    expect(pageParams.nodeRef).toBeNull();
+    expect(pageParams.minRank).toBeNull();
+    expect(pageParams.kind).toBeNull();
+  });
+
+  it("translates minWeight to its numeric rank and forwards kind + nodeRef filters", async () => {
+    mockCountThenPage(0, []);
+    await withTestScope(() =>
+      listMemories({
+        limit: 100,
+        offset: 0,
+        minWeight: "critical",
+        kind: "gotcha",
+        nodeRef: "user:mac-anderson",
+      }),
+    );
+    const countParams = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(countParams.minRank).toBe(2);
+    expect(countParams.kind).toBe("gotcha");
+    expect(countParams.nodeRef).toBe("user:mac-anderson");
+    // The weight predicate must be a rank comparison, not a raw string equality.
+    const countCypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
+    expect(countCypher).toContain("$minRank IS NULL OR");
+    expect(countCypher).toContain("WHEN 'critical' THEN 2");
+  });
+
+  it("returns an empty page and total 0 when the tenant has no memories", async () => {
+    mockCountThenPage(0, []);
+    const out = await withTestScope(() => listMemories({ limit: 100, offset: 0 }));
+    expect(out.total).toBe(0);
+    expect(out.memories).toEqual([]);
+    expect(sessionClose).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("writeMemory — ON CREATE SET confidence=1.0", () => {
   beforeEach(() => {
     sessionRun.mockReset();
