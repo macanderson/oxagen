@@ -22,8 +22,11 @@
  *   5. Mode default: `acceptEdits` auto-allows file edits (bash still asks);
  *      `ask` asks for everything.
  *   6. Resolve an `ask`: call the approver if present; otherwise `deny`.
+ *   7. On `remember`, persist the rule to settings.json for future sessions.
  */
 import { isAbsolute, relative, resolve } from "node:path";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 
 /** The tools that can change the host. Read/search tools are never gated. */
 export const MUTATING_TOOLS = ["write_file", "edit_file", "bash"] as const;
@@ -218,7 +221,48 @@ export class PermissionBroker {
   private remember(req: PermissionRequest, decision: "allow" | "deny"): void {
     const pattern =
       req.tool === "bash" ? (req.command ?? "") : (req.path ? relative(this.cwd, req.path) : undefined);
-    this.sessionRules.unshift({ tool: req.tool, pattern, decision });
+    const rule: PermissionRule = { tool: req.tool, pattern, decision };
+    this.sessionRules.unshift(rule);
+    // Persist to settings.json for future sessions
+    this.persistRule(rule);
+  }
+
+  /** Persist a permission rule to settings.json. */
+  private persistRule(rule: PermissionRule): void {
+    const settingsPath = resolve(this.cwd, ".oxagen", "settings.json");
+    let settings: Record<string, unknown> = {};
+
+    try {
+      if (existsSync(settingsPath)) {
+        const content = readFileSync(settingsPath, "utf8");
+        settings = JSON.parse(content) as Record<string, unknown>;
+      }
+    } catch {
+      // If settings file is corrupted, start fresh
+      settings = {};
+    }
+
+    const permissions = (settings.permissions as Record<string, unknown>) ?? {};
+    const ruleStr = ruleToString(rule);
+
+    // Add to allow or deny list
+    if (rule.decision === "allow") {
+      const allow = Array.isArray(permissions.allow) ? permissions.allow : [];
+      if (!allow.includes(ruleStr)) {
+        allow.push(ruleStr);
+        permissions.allow = allow;
+      }
+    } else if (rule.decision === "deny") {
+      const deny = Array.isArray(permissions.deny) ? permissions.deny : [];
+      if (!deny.includes(ruleStr)) {
+        deny.push(ruleStr);
+        permissions.deny = deny;
+      }
+    }
+
+    settings.permissions = permissions;
+    mkdirSync(dirname(settingsPath), { recursive: true });
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf8");
   }
 
   /**
@@ -304,6 +348,15 @@ const MODE_ALIASES: Record<string, PermissionMode> = {
 /** Parse a user-supplied mode string to a {@link PermissionMode} (or undefined). */
 export function parseModeArg(s: string): PermissionMode | undefined {
   return MODE_ALIASES[s.trim().toLowerCase()];
+}
+
+/** Convert a PermissionRule to the settings.json string format (e.g. "Edit(src/**)" or "Bash(rm*)"). */
+export function ruleToString(rule: PermissionRule): string {
+  if (!rule.tool) return rule.pattern ?? "*";
+  if (!rule.pattern) return rule.tool;
+  // Capitalize tool name for settings format
+  const toolDisplay = rule.tool.charAt(0).toUpperCase() + rule.tool.slice(1);
+  return `${toolDisplay}(${rule.pattern})`;
 }
 
 /** Build a normalized {@link PermissionRequest} from a raw tool call. */

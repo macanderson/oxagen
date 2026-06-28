@@ -18,6 +18,7 @@ import { runTurn } from "../agent/pipeline.js";
 import { resolveModelId } from "../agent/model.js";
 import { loadProjectContext } from "../agent/project-context.js";
 import { loadAndExpand } from "../slash/expand.js";
+import { isProjectInitialized, initializeProject } from "../project/init.js";
 import { openSessionMemory, type SessionMemory } from "../agent/memory.js";
 import { openFleetMemory } from "../agent/fleet/memory.js";
 import { openTraceStore } from "../agent/trace-store.js";
@@ -202,7 +203,10 @@ export function ReplApp({
     // While a permission prompt is up, ApprovalPrompt owns Esc and the answer keys.
     if (approvalRef.current) return;
     if (key.escape) {
-      if (streamingRef.current) cancelTurn();
+      if (streamingRef.current) {
+        pushAssistant("⏹ Agent interrupted (Esc)");
+        cancelTurn();
+      }
     }
   });
 
@@ -349,6 +353,35 @@ export function ReplApp({
       streamCharsRef.current = 0;
       const controller = new AbortController();
       abortRef.current = controller;
+
+      // Check if project needs initialization (first turn only)
+      if (!isProjectInitialized(cwd) && turns === 0) {
+        const initialized = await initializeProject({
+          cwd,
+          approver: (prompt) =>
+            new Promise<boolean>((resolve) => {
+              setApproval({
+                req: {
+                  tool: "write_file",
+                  summary: prompt,
+                  reason: "Project initialization",
+                  cwd,
+                },
+                resolve: (res) => {
+                  resolve(res.decision === "allow");
+                },
+              });
+            }),
+        });
+        if (!initialized) {
+          setApproval(null);
+          pushAssistant("Project initialization skipped. Use .oxagen/settings.json to configure.");
+          setIsStreaming(false);
+          streamingRef.current = false;
+          return;
+        }
+        setApproval(null);
+      }
 
       // This turn's streamed messages (tool annotations + assistant text).
       const turn: Message[] = [];

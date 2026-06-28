@@ -9,6 +9,7 @@ import { Box, Text, useInput } from "ink";
 import React, { useState, useEffect } from "react";
 import { theme } from "../tui/theme.js";
 import { formatUsd } from "../agent/model-router.js";
+import { getToolEmoji } from "../agent/tool-formatter.js";
 import type { StageEvent, StageKind, TurnTrace, JudgeVerdict } from "../agent/trace.js";
 import type { ApprovalRequest, ApprovalResponse, PermissionMode } from "../agent/permissions.js";
 
@@ -206,12 +207,16 @@ export function MessageView({ msg }: { msg: Message }): React.ReactElement {
   }
 
   if (msg.role === "tool") {
+    const emoji = getToolEmoji(msg.toolName ?? "");
     return (
-      <Box paddingX={1} marginY={0}>
-        <Text color="#FBBF24">{"  ⚡ "}</Text>
-        <Text dimColor>{msg.toolName ?? "tool"}</Text>
-        <Text dimColor>{" → "}</Text>
-        <Text wrap="truncate">{msg.content}</Text>
+      <Box paddingX={1} marginY={1} flexDirection="column">
+        <Box>
+          <Text>{emoji + " "}</Text>
+          <Text dimColor>{msg.toolName?.toLowerCase() ?? "tool"}</Text>
+          <Text dimColor>{"("}</Text>
+          <Text wrap="truncate">{msg.content}</Text>
+          <Text dimColor>{")"}</Text>
+        </Box>
       </Box>
     );
   }
