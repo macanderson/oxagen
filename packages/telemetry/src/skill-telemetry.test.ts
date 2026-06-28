@@ -185,4 +185,32 @@ describe("readSkillMetrics", () => {
     const result = await readSkillMetrics({ orgId: "org-1", workspaceId: "ws-1" });
     expect(result.lastUsed).toBe("2026-06-18T08:00:00.000Z");
   });
+
+  it("keeps the already-newer lastUsed when a subsequent skill has an older timestamp", async () => {
+    // Covers the `return latest` branch inside the lastUsed reduce (line 164):
+    // hit when a skill's last_used is non-null but OLDER than the current max.
+    mockQueries(
+      [
+        // skill_a has the NEWER time (loaded more, appears first by DESC loads)
+        {
+          skill_id: "a",
+          skill_slug: "alpha",
+          loads: "10",
+          last_used: "2026-06-18T15:00:00.000Z",
+        },
+        // skill_b has an OLDER time → the reduce's `return latest` arm fires here
+        {
+          skill_id: "b",
+          skill_slug: "beta",
+          loads: "2",
+          last_used: "2026-06-18T08:00:00.000Z",
+        },
+      ],
+      [],
+    );
+    const result = await readSkillMetrics({ orgId: "org-1", workspaceId: "ws-1" });
+    // latest is correctly the newer of the two
+    expect(result.lastUsed).toBe("2026-06-18T15:00:00.000Z");
+    expect(result.totalLoads).toBe(12);
+  });
 });

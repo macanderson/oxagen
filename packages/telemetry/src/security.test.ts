@@ -159,6 +159,36 @@ describe("recordSecurityEvent", () => {
     expect(written).toContain("org-abc");
     stderrSpy.mockRestore();
   });
+
+  it("uses String(err) when the insert rejection is a non-Error value", async () => {
+    // Covers the `err instanceof Error ? err.message : String(err)` false branch
+    // on the default stderr path — previously only the `err.message` arm was hit.
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    // Reject with a plain number (not an Error instance)
+    const insert = vi.fn(() => Promise.reject(42));
+
+    const event: SecurityEventInput = {
+      eventType: "auth.sign_in_failed",
+      actorUserId: null,
+      orgId: "org-xyz",
+      workspaceId: null,
+      capability: null,
+      outcome: "failure",
+      ip: null,
+      userAgent: null,
+      requestId: null,
+    };
+
+    expect(() => recordSecurityEvent(insert as AuditInsertFn, event)).not.toThrow();
+    await Promise.resolve();
+
+    expect(stderrSpy).toHaveBeenCalledOnce();
+    const written = stderrSpy.mock.calls[0]?.[0] as string;
+    const parsed = JSON.parse(written.trim()) as { err: string };
+    // String(42) === "42"
+    expect(parsed.err).toBe("42");
+    stderrSpy.mockRestore();
+  });
 });
 
 // ---------------------------------------------------------------------------

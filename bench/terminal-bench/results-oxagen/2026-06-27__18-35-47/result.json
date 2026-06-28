@@ -1,0 +1,47 @@
+{
+    "id": "38fb2d2f-e00c-4c78-bdbb-e93951935a73",
+    "started_at": "2026-06-27T18:35:52.783788",
+    "updated_at": "2026-06-27T18:46:37.678597",
+    "finished_at": "2026-06-27T18:46:37.678597",
+    "n_total_trials": 3,
+    "stats": {
+        "n_completed_trials": 3,
+        "n_errored_trials": 3,
+        "n_running_trials": 0,
+        "n_pending_trials": 0,
+        "n_cancelled_trials": 0,
+        "n_retries": 0,
+        "evals": {
+            "oxagen__claude-sonnet-4.5__terminal-bench": {
+                "n_trials": 3,
+                "n_errors": 3,
+                "metrics": [
+                    {
+                        "mean": 0.0
+                    }
+                ],
+                "pass_at_k": {},
+                "reward_stats": {
+                    "reward": {
+                        "0.0": [
+                            "gpt2-codegolf__XAqYdXE",
+                            "llm-inference-batching-scheduler__7HYvAF3",
+                            "break-filter-js-from-html__V7rUKyx"
+                        ]
+                    }
+                },
+                "exception_stats": {
+                    "NonZeroAgentExitCodeError": [
+                        "gpt2-codegolf__XAqYdXE",
+                        "llm-inference-batching-scheduler__7HYvAF3",
+                        "break-filter-js-from-html__V7rUKyx"
+                    ]
+                }
+            }
+        },
+        "n_input_tokens": null,
+        "n_cache_tokens": null,
+        "n_output_tokens": null,
+        "cost_usd": null
+    }
+}

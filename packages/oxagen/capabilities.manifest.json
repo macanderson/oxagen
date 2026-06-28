@@ -327,7 +327,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
@@ -345,7 +345,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
@@ -1783,7 +1783,7 @@
       ],
       "layers": {
         "schema": true,
-        "unit": false
+        "unit": true
       }
     },
     {
@@ -1796,7 +1796,7 @@
       ],
       "layers": {
         "schema": true,
-        "unit": false
+        "unit": true
       }
     },
     {
@@ -1809,7 +1809,7 @@
       ],
       "layers": {
         "schema": true,
-        "unit": false
+        "unit": true
       }
     },
     {
@@ -1883,7 +1883,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -2207,7 +2207,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -2226,7 +2226,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
