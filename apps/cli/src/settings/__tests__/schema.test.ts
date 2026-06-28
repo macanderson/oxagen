@@ -38,14 +38,22 @@ describe("oxagenSettingsSchema", () => {
     expect(() => hooksSchema.parse({ PreToolUse: [{ matcher: "*", hooks: [] }] })).toThrow();
   });
 
-  it("passes through forward-compat sections (agents/commands/skills)", () => {
+  it("passes through forward-compat sections (commands/skills)", () => {
     const parsed = oxagenSettingsSchema.parse({
       model: "x/y",
-      agents: { reviewer: { model: "z" } },
       commands: ["./.oxagen/commands"],
+      skills: ["./.oxagen/skills"],
     }) as Record<string, unknown>;
-    expect(parsed["agents"]).toEqual({ reviewer: { model: "z" } });
     expect(parsed["commands"]).toEqual(["./.oxagen/commands"]);
+    expect(parsed["skills"]).toEqual(["./.oxagen/skills"]);
+  });
+
+  it("validates inline agent definitions (prompt required)", () => {
+    const parsed = oxagenSettingsSchema.parse({
+      agents: { reviewer: { description: "d", prompt: "You review.", tools: ["Read"], model: "z" } },
+    });
+    expect(parsed.agents?.reviewer?.prompt).toBe("You review.");
+    expect(() => oxagenSettingsSchema.parse({ agents: { bad: { model: "z" } } })).toThrow();
   });
 
   it("accepts an empty document", () => {

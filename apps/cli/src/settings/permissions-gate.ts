@@ -56,6 +56,11 @@ const SUBJECT_FIELD: Record<string, string> = {
   bash: "command",
 };
 
+/** The canonical permission name for a tool (e.g. read_file → Read; mcp tools unchanged). */
+export function canonicalToolName(toolName: string): string {
+  return CANONICAL[toolName] ?? toolName;
+}
+
 function subjectOf(toolName: string, input: unknown): string {
   const field = SUBJECT_FIELD[toolName];
   if (!field || input === null || typeof input !== "object") return "";
@@ -78,7 +83,10 @@ export function parseRule(rule: string): ParsedRule {
 
 function ruleMatches(rule: string, canonical: string, subject: string): boolean {
   const parsed = parseRule(rule);
-  if (parsed.tool !== canonical) return false;
+  // The tool token is glob-matched against the canonical name. For local tools
+  // this is an exact compare ("Bash" === "Bash"); for MCP tools it lets a rule
+  // like `mcp__github__*` match `mcp__github__create_issue`.
+  if (!matchGlob(parsed.tool, canonical)) return false;
   if (parsed.pattern === undefined || parsed.pattern === "") return true;
   return matchGlob(parsed.pattern, subject);
 }

@@ -16,6 +16,7 @@ import { openFleetMemory } from "../../agent/fleet/memory.js";
 import { openPlanStore } from "../../agent/fleet/store.js";
 import { WorktreeManager } from "../../agent/fleet/git-isolation.js";
 import { loadProjectContext } from "../../agent/project-context.js";
+import { loadAgents } from "../../agents/loader.js";
 import { FleetApp } from "./fleet-app.js";
 import type { Plan } from "../../agent/fleet/types.js";
 
@@ -40,6 +41,8 @@ export async function launchFleetView(opts: FleetViewOptions): Promise<void> {
   const projectContext = loadProjectContext(cwd);
   const memory = openFleetMemory(cwd);
   const store = openPlanStore(cwd);
+  // Named agents the planner may assign tasks to, and the fleet dispatches by.
+  const agents = loadAgents({ cwd });
 
   // Per-agent git isolation is opt-in. Each run gets its own ref/branch
   // namespace so concurrent runs never collide. Read-only fleets never write,
@@ -55,6 +58,7 @@ export async function launchFleetView(opts: FleetViewOptions): Promise<void> {
     memory,
     store,
     projectContext,
+    agents,
     readOnly: opts.readOnly,
     isolation,
   });
@@ -64,7 +68,7 @@ export async function launchFleetView(opts: FleetViewOptions): Promise<void> {
   const goal = opts.goal;
   const plan = goal
     ? async (signal: AbortSignal): Promise<Plan> => {
-        const planned = await planTasks({ goal, cwd, memory, signal });
+        const planned = await planTasks({ goal, cwd, memory, agents: [...agents.values()], signal });
         store.save(planned);
         return planned;
       }

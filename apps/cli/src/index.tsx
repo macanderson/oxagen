@@ -34,6 +34,7 @@ program
   .version(version)
   .argument("[prompt...]", "One-shot prompt (runs and exits)")
   .option("-m, --model <slug>", "Gateway model slug (overrides config/default)")
+  .option("--agent <name>", "Run the one-shot prompt as a named agent definition")
   .option(
     "--readonly",
     "Read-only mode: read/search/explain only — no file edits or commands",
@@ -61,6 +62,7 @@ program
         mode?: string;
         pipeline?: boolean;
         verbose?: boolean;
+        agent?: string;
       },
     ) => {
       const prompt = promptWords.join(" ").trim();
@@ -82,6 +84,18 @@ program
         bare: opts.pipeline === false,
         verbose: opts.verbose,
       };
+
+      // --agent: run the prompt as a named agent (its prompt, tools, model).
+      if (opts.agent) {
+        if (!prompt) {
+          process.stderr.write("Error: --agent requires a prompt, e.g. `oxagen --agent reviewer \"…\"`.\n");
+          process.exitCode = 1;
+          return;
+        }
+        const { runAgentOneShot } = await import("./repl/one-shot.js");
+        await runAgentOneShot(prompt, opts.agent, runOpts);
+        return;
+      }
 
       if (prompt) {
         // One-shot mode: run prompt, stream response, exit
@@ -340,6 +354,186 @@ settings
   .action(async (opts: { scope?: string }) => {
     const { settingsInit } = await import("./commands/settings.js");
     settingsInit(opts.scope);
+  });
+
+// ── agent: named agent definitions ────────────────────────────────────────────
+
+const agent = program
+  .command("agent")
+  .description("Manage named agent definitions (run one with `oxagen --agent <name> \"…\"`)");
+agent
+  .command("list")
+  .description("List available agents")
+  .action(async () => {
+    const { agentList } = await import("./commands/agent.js");
+    agentList();
+  });
+agent
+  .command("show")
+  .description("Show an agent's definition and system prompt")
+  .argument("<name>", "Agent name")
+  .action(async (name: string) => {
+    const { agentShow } = await import("./commands/agent.js");
+    agentShow(name);
+  });
+agent
+  .command("new")
+  .description("Scaffold a new agent at .oxagen/agents/<name>.md")
+  .argument("<name>", "Agent name")
+  .action(async (name: string) => {
+    const { agentNew } = await import("./commands/agent.js");
+    agentNew(name);
+  });
+
+// ── command: user-defined slash commands ──────────────────────────────────────
+
+const command = program
+  .command("command")
+  .description("Manage user-defined slash commands (invoke as `/name` in the REPL)");
+command
+  .command("list")
+  .description("List available slash commands")
+  .action(async () => {
+    const { commandList } = await import("./commands/command.js");
+    commandList();
+  });
+command
+  .command("show")
+  .description("Show a slash command's template")
+  .argument("<name>", "Command name")
+  .action(async (name: string) => {
+    const { commandShow } = await import("./commands/command.js");
+    commandShow(name);
+  });
+command
+  .command("new")
+  .description("Scaffold a new slash command at .oxagen/commands/<name>.md")
+  .argument("<name>", "Command name")
+  .action(async (name: string) => {
+    const { commandNew } = await import("./commands/command.js");
+    commandNew(name);
+  });
+command
+  .command("run")
+  .description("Expand a slash command's template with args and run it as a turn")
+  .argument("<name>", "Command name")
+  .argument("[args...]", "Arguments substituted into the template")
+  .action(async (name: string, args: string[]) => {
+    const { commandRun } = await import("./commands/command.js");
+    await commandRun(name, args ?? []);
+  });
+
+// ── rules: workspace rules the agent must follow ──────────────────────────────
+
+const rules = program
+  .command("rules")
+  .description("Manage workspace rules the agent is told about and hard-blocked from violating");
+rules
+  .command("list")
+  .description("List rules (and which are hard-enforced)")
+  .action(async () => {
+    const { rulesList } = await import("./commands/rules.js");
+    rulesList();
+  });
+rules
+  .command("show")
+  .description("Show a rule's text and guard")
+  .argument("<name>", "Rule name")
+  .action(async (name: string) => {
+    const { rulesShow } = await import("./commands/rules.js");
+    rulesShow(name);
+  });
+rules
+  .command("new")
+  .description("Scaffold a new rule at .oxagen/rules/<name>.md")
+  .argument("<name>", "Rule name")
+  .action(async (name: string) => {
+    const { rulesNew } = await import("./commands/rules.js");
+    rulesNew(name);
+  });
+rules
+  .command("check")
+  .description("Dry-run a proposed tool call against the guards (bash|edit|write|read)")
+  .argument("<tool>", "bash | edit | write | read")
+  .argument("<subject>", "The command (bash) or path (edit/write/read) to test")
+  .action(async (tool: string, subject: string) => {
+    const { rulesCheck } = await import("./commands/rules.js");
+    rulesCheck(tool, subject);
+  });
+
+// ── mcp: external MCP servers ─────────────────────────────────────────────────
+
+const collect = (val: string, prev: string[]): string[] => prev.concat([val]);
+
+const mcp = program
+  .command("mcp")
+  .description("Manage external MCP servers the agent loop connects to");
+mcp
+  .command("add")
+  .description("Add an MCP server (stdio via --command, or http/sse/websocket via --url)")
+  .argument("<name>", "Server name (used in tool names: mcp__<name>__<tool>)")
+  .option("--command <command>", "stdio: the command to spawn (e.g. npx)")
+  .option("--arg <arg>", "stdio: a command argument (repeatable)", collect, [])
+  .option("--url <url>", "http/sse/websocket: the server URL")
+  .option("--transport <transport>", "streamable-http | sse | websocket (default streamable-http)")
+  .option("--auth <auth>", "none | bearer | header (default none)")
+  .option("--env-token <VAR>", "Env var holding the bearer token")
+  .option("--header <KEY=VALUE>", "Static header for header auth (repeatable)", collect, [])
+  .option("--scope <scope>", "user | project | local (default project)")
+  .action(async (name: string, opts: Record<string, unknown>) => {
+    const { mcpAdd } = await import("./commands/mcp.js");
+    mcpAdd(name, {
+      command: opts["command"] as string | undefined,
+      arg: opts["arg"] as string[] | undefined,
+      url: opts["url"] as string | undefined,
+      transport: opts["transport"] as string | undefined,
+      auth: opts["auth"] as string | undefined,
+      envToken: opts["envToken"] as string | undefined,
+      header: opts["header"] as string[] | undefined,
+      scope: opts["scope"] as string | undefined,
+    });
+  });
+mcp
+  .command("list")
+  .description("List configured MCP servers")
+  .action(async () => {
+    const { mcpList } = await import("./commands/mcp.js");
+    mcpList();
+  });
+mcp
+  .command("remove")
+  .description("Remove an MCP server")
+  .argument("<name>", "Server name")
+  .option("--scope <scope>", "Limit to a scope (default: auto-detect)")
+  .action(async (name: string, opts: { scope?: string }) => {
+    const { mcpRemove } = await import("./commands/mcp.js");
+    mcpRemove(name, opts.scope);
+  });
+mcp
+  .command("enable")
+  .description("Enable a disabled MCP server")
+  .argument("<name>", "Server name")
+  .option("--scope <scope>", "Limit to a scope (default: auto-detect)")
+  .action(async (name: string, opts: { scope?: string }) => {
+    const { mcpSetEnabled } = await import("./commands/mcp.js");
+    mcpSetEnabled(name, true, opts.scope);
+  });
+mcp
+  .command("disable")
+  .description("Disable an MCP server without removing it")
+  .argument("<name>", "Server name")
+  .option("--scope <scope>", "Limit to a scope (default: auto-detect)")
+  .action(async (name: string, opts: { scope?: string }) => {
+    const { mcpSetEnabled } = await import("./commands/mcp.js");
+    mcpSetEnabled(name, false, opts.scope);
+  });
+mcp
+  .command("check")
+  .description("Connect to a server (or all enabled) and preview the tools it exposes")
+  .argument("[name]", "Server name (omit to check all enabled)")
+  .action(async (name: string | undefined) => {
+    const { mcpCheck } = await import("./commands/mcp.js");
+    await mcpCheck(name);
   });
 
 // ── env: workspace environments ───────────────────────────────────────────────

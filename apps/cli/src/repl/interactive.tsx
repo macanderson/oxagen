@@ -17,6 +17,7 @@ import { theme } from "../tui/theme.js";
 import { runTurn } from "../agent/pipeline.js";
 import { resolveModelId } from "../agent/model.js";
 import { loadProjectContext } from "../agent/project-context.js";
+import { loadAndExpand } from "../slash/expand.js";
 import { openSessionMemory, type SessionMemory } from "../agent/memory.js";
 import { openFleetMemory } from "../agent/fleet/memory.js";
 import { openTraceStore } from "../agent/trace-store.js";
@@ -318,9 +319,26 @@ export function ReplApp({
         return;
       }
 
+      // User-defined slash commands (.oxagen/commands/*.md): a `/name args` that
+      // isn't a built-in expands into the prompt below.
+      let submission = text;
+      if (text.startsWith("/")) {
+        const expanded = loadAndExpand(text, { cwd });
+        if (expanded && "error" in expanded) {
+          pushAssistant(expanded.error);
+          return;
+        }
+        if (expanded) {
+          submission = expanded.prompt;
+        } else {
+          pushAssistant(`Unknown command: ${text.split(/\s+/)[0]}. Type /help for built-ins.`);
+          return;
+        }
+      }
+
       const userMsg: Message = {
         role: "user",
-        content: text,
+        content: submission,
         timestamp: Date.now(),
       };
       const base = [...allRef.current, userMsg];
@@ -339,7 +357,7 @@ export function ReplApp({
 
       try {
         const result = await runTurn({
-          prompt: text,
+          prompt: submission,
           history: historyRef.current,
           cwd,
           model: modelRef.current,

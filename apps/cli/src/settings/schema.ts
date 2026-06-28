@@ -124,6 +124,21 @@ export const hooksSchema = z.object({
 });
 export type Hooks = z.infer<typeof hooksSchema>;
 
+// ── Inline agent definitions ──────────────────────────────────────────────────
+
+/**
+ * A named agent declared inline in settings.json (an alternative to a markdown
+ * file under `.oxagen/agents/`). `prompt` is the system prompt; `tools` is the
+ * permission-syntax allowlist (omit to inherit every tool).
+ */
+export const inlineAgentSchema = z.object({
+  description: z.string().optional(),
+  prompt: z.string().min(1),
+  tools: z.array(z.string()).optional(),
+  model: z.string().optional(),
+});
+export type InlineAgent = z.infer<typeof inlineAgentSchema>;
+
 // ── Top-level settings ────────────────────────────────────────────────────────
 
 export const oxagenSettingsSchema = z
@@ -144,6 +159,8 @@ export const oxagenSettingsSchema = z
     mcpServers: z.record(mcpServerSchema).optional(),
     /** Per-MCP-server tool visibility, keyed by server name. */
     toolVisibility: z.record(toolVisibilitySchema).optional(),
+    /** Inline named agent definitions, keyed by agent name. */
+    agents: z.record(inlineAgentSchema).optional(),
   })
   // Forward-compatible: sections that land in later PRs (agents, commands,
   // skills) may already be present in a user's file; pass them through rather

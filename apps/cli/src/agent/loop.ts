@@ -17,6 +17,11 @@ import { ensureGatewayKey, MissingGatewayKeyError } from "./env.js";
 import { loadSettings } from "../settings/resolve.js";
 import { wrapToolsWithGate } from "../settings/gate.js";
 import { runHooks } from "../settings/hooks.js";
+import { loadMcpTools, type McpServerStatus } from "../mcp/client.js";
+import { filterToolsForAgent } from "../agents/tools.js";
+import { loadRules, renderRulesSection, guardsToDeny } from "../rules/index.js";
+import type { Rule } from "../rules/types.js";
+import type { AgentDefinition } from "../agents/types.js";
 import type { OxagenSettings } from "../settings/schema.js";
 import type { ProjectContext } from "./project-context.js";
 import type { SessionMemory } from "./memory.js";
@@ -50,13 +55,35 @@ export interface RunAgentOptions {
   onToolCall?: (name: string, input: unknown) => void;
   /** Fired when a tool is blocked by a permission rule or PreToolUse hook. */
   onToolBlocked?: (name: string, reason: string) => void;
+  /** Fired once per external MCP server after its connect attempt. */
+  onMcpServer?: (status: McpServerStatus) => void;
   /**
    * Resolved `settings.json` for this turn (permissions, hooks). Defaults to the
    * settings resolved from `cwd`. Injectable so callers (and tests) can override.
    */
   settings?: OxagenSettings;
+  /**
+   * Workspace rules for this turn. Injected into the system prompt (Tier 1) and
+   * their guards hard-enforced at the tool gate (Tier 2). Defaults to the rules
+   * loaded from `cwd`; injectable for tests.
+   */
+  rules?: Rule[];
+  /**
+   * Run this turn as a named agent: its system prompt replaces the default
+   * identity, its tool allowlist restricts the available tools, and its model
+   * is used unless `model` overrides it.
+   */
+  agent?: AgentDefinition;
   /** Fired once per tool with its input, result, and timing (for verbose telemetry). */
   onToolEvent?: (e: ToolEvent) => void;
+}
+
+export interface RunAgentResult {
+  text: string;
+  steps: number;
+  /** Full message history including this turn's assistant/tool messages. */
+  messages: ModelMessage[];
+  usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
 }
 
 /** Heuristic: did a tool result represent an error? Exported for tests. */
@@ -78,14 +105,6 @@ export function stringifyCapped(v: unknown, max: number): string {
     s = String(v);
   }
   return s.length > max ? s.slice(0, max) + "…" : s;
-}
-
-export interface RunAgentResult {
-  text: string;
-  steps: number;
-  /** Full message history including this turn's assistant/tool messages. */
-  messages: ModelMessage[];
-  usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
 }
 
 // Re-exported from ./env so consumers (e.g. the planner) can catch it without
@@ -141,6 +160,9 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   // settings.json drives this turn's tool permissions and lifecycle hooks.
   const settings = opts.settings ?? loadSettings({ cwd }).settings;
 
+  // Workspace rules: injected into the prompt (Tier 1) + hard-gated (Tier 2).
+  const rules = opts.rules ?? loadRules({ cwd });
+
   // Recall relevant project memory and write the incoming prompt (best-effort).
   const recalled = opts.memory ? await opts.memory.recallContext() : "";
   void opts.memory?.remember("user_prompt", opts.prompt);
@@ -149,6 +171,9 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     cwd,
     projectContext: opts.projectContext,
     readOnly: opts.readOnly,
+    agent: opts.agent
+      ? { name: opts.agent.name, systemPrompt: opts.agent.systemPrompt }
+      : undefined,
   });
   if (recalled) {
     system +=
@@ -167,24 +192,50 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     system += "\n\n## Session context (from SessionStart hooks)\n" + sessionStart.output;
   }
 
+  // Tier 1 adherence: tell the model about the workspace rules it must follow.
+  system += renderRulesSection(rules);
+
   const messages: ModelMessage[] = [
     ...(opts.history ?? []),
     { role: "user", content: opts.prompt },
   ];
 
-  // Gate every tool with the settings-driven permission rules and Pre/PostToolUse
-  // hooks. A denied call or a blocking hook returns a string the model reads.
-  const tools = wrapToolsWithGate(
-    buildTools(cwd, { readOnly: opts.readOnly, broker: opts.broker }),
-    {
+  // Connect external MCP servers declared in settings.json and materialize their
+  // tools alongside the local ones. Skipped in read-only mode (MCP tools may
+  // mutate) and when none are configured. Per-server failures are isolated; the
+  // clients are closed in the finally below.
+  const hasServers =
+    !opts.readOnly && Object.keys(settings.mcpServers ?? {}).length > 0;
+  const mcp = hasServers
+    ? await loadMcpTools(settings, { onStatus: opts.onMcpServer })
+    : null;
+
+  // Merge local + MCP tools, restrict to the agent's allowlist (if any), then
+  // gate with the settings-driven permission rules and Pre/PostToolUse hooks.
+  const availableTools = filterToolsForAgent(
+    { ...buildTools(cwd, { readOnly: opts.readOnly, broker: opts.broker }), ...(mcp?.tools ?? {}) },
+    opts.agent?.tools,
+  );
+  // Tier 2 adherence: guarded rules become permission deny entries the gate
+  // enforces before a tool runs; the deny→reason map returns the rule text.
+  const ruleDenies = guardsToDeny(rules);
+  const gatePermissions = ruleDenies.deny.length
+    ? {
+        ...settings.permissions,
+        deny: [...(settings.permissions?.deny ?? []), ...ruleDenies.deny],
+      }
+    : settings.permissions;
+  const tools = wrapToolsWithGate(availableTools, {
       cwd,
-      permissions: settings.permissions,
+      permissions: gatePermissions,
       hooks: settings.hooks,
       signal: opts.signal,
       onBlocked: opts.onToolBlocked,
+      denyReasons: ruleDenies.reasons,
     },
   );
 
+  try {
   // Capture the underlying stream error ourselves. Supplying onError replaces
   // the AI SDK default (which dumps the whole error object to the console), so
   // gateway failures surface as one clean, actionable line instead of a wall of
@@ -194,16 +245,10 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   // and this one's. Gives each tool event a real (if step-granular) duration.
   let prevStepAt = Date.now();
   const result = streamText({
-    model: resolveModelId(opts.model),
+    model: resolveModelId(opts.model ?? opts.agent?.model),
     system,
     messages,
-    tools: wrapToolsWithGate(buildTools(cwd, { readOnly: opts.readOnly, broker: opts.broker }), {
-      cwd,
-      permissions: settings.permissions,
-      hooks: settings.hooks,
-      signal: opts.signal,
-      onBlocked: opts.onToolBlocked,
-    }),
+    tools,
     stopWhen: stepCountIs(opts.maxSteps ?? 32),
     abortSignal: opts.signal,
     onError: ({ error }) => {
@@ -269,4 +314,8 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
       totalTokens: usage.totalTokens,
     },
   };
+  } finally {
+    // Always disconnect MCP servers, even if the turn threw.
+    await mcp?.close();
+  }
 }

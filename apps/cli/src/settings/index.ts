@@ -51,7 +51,18 @@ export {
 export {
   writeSettingsValue,
   writeStarterSettings,
+  readScopeDoc,
+  writeScopeDoc,
   SETTABLE_KEYS,
   type WriteValueOptions,
   type InitOptions,
 } from "./write.js";
+
+export {
+  writeMcpServer,
+  removeMcpServer,
+  setMcpServerDisabled,
+  findServerScope,
+  type WriteMcpServerOptions,
+  type McpMutateOptions,
+} from "./mcp-write.js";
