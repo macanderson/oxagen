@@ -7,13 +7,19 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { logger } from "./logger";
 
-// Resolve the built-in skills directory relative to this file so the path
-// stays correct regardless of working directory.
-const __filename = fileURLToPath(import.meta.url);
-// __filename = packages/handlers/src/skill.workspace.install.ts
-// Three `..` traversals: <file> → src → handlers → packages, then + skills/skills
-// lands at packages/skills/skills (the built-in skill registry root).
-const SKILLS_DIR = join(__filename, "../../../skills/skills");
+// Resolve the built-in skills directory LAZILY + guarded. In the CJS API bundle
+// `import.meta.url` is undefined, so a module-scope `fileURLToPath(import.meta.url)`
+// throws ERR_INVALID_ARG_TYPE and crashes the whole function at load
+// (FUNCTION_INVOCATION_FAILED — postmortem 2026-06-12). Compute it on demand with
+// a cwd-relative fallback when import.meta.url is absent.
+function skillsDir(): string {
+  try {
+    // <file> → src → handlers → packages, then skills/skills (built-in registry root)
+    return join(fileURLToPath(import.meta.url), "../../../skills/skills");
+  } catch {
+    return join(process.cwd(), "packages/skills/skills");
+  }
+}
 
 /**
  * Derive a workspace-safe slug from a custom skill name. The name must already
@@ -53,7 +59,7 @@ export const skillWorkspaceInstallHandler: CapabilityHandler<typeof skillWorkspa
 
   if (templateSlug) {
     // Builtin path: load from the filesystem registry.
-    const registry = createSkillRegistry({ fsRoot: SKILLS_DIR });
+    const registry = createSkillRegistry({ fsRoot: skillsDir() });
     const builtin = await registry.get(templateSlug);
     if (!builtin) {
       throw new Error(
