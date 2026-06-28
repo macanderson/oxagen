@@ -1,9 +1,6 @@
 export * from "./types";
-// TODO(task 2): uncomment when created
-// export { LocalWorkspace } from "./workspaces/local";
-// TODO(task 2): uncomment when created
-// export { MemoryWorkspace } from "./workspaces/memory";
-// TODO(task 3): uncomment when created
-// export { buildWorkspaceTools } from "./tools";
-// TODO(task 4): uncomment when created
-// export { runCodingAgent } from "./engine";
+export * from "./ports";
+export { MemoryWorkspace } from "./workspaces/memory";
+export { buildWorkspaceTools } from "./tools";
+// LocalWorkspace is a CLI adapter (Stage B), not engine code — see ADR-017.
+// export { runCodingAgent } from "./engine"; // uncomment in Task A3
