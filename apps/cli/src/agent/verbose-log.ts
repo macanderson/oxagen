@@ -30,8 +30,14 @@ export function appendVerboseLog(cwd: string, trace: TurnTrace): void {
   try {
     mkdirSync(dirname(path), { recursive: true });
     appendFileSync(path, JSON.stringify(trace) + "\n", "utf8");
-  } catch {
-    /* logging is best-effort — never break a turn over it */
+  } catch (err) {
+    // Logging is best-effort — never break a turn over it — but surface the
+    // cause under OXAGEN_DEBUG so a silently-missing verbose record can be
+    // diagnosed rather than leaving an unexplained gap in the JSONL stream.
+    if (process.env["OXAGEN_DEBUG"])
+      process.stderr.write(
+        `[verbose-log] append failed (${path}): ${err instanceof Error ? err.message : String(err)}\n`,
+      );
   }
 }
 

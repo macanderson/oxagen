@@ -237,9 +237,15 @@ export class PermissionBroker {
         const content = readFileSync(settingsPath, "utf8");
         settings = JSON.parse(content) as Record<string, unknown>;
       }
-    } catch {
-      // If settings file is corrupted, start fresh
+    } catch (err) {
+      // A corrupted settings file shouldn't block remembering a rule — start
+      // fresh — but warn under OXAGEN_DEBUG, since silently discarding the
+      // existing settings (and overwriting them below) is otherwise invisible.
       settings = {};
+      if (process.env["OXAGEN_DEBUG"])
+        process.stderr.write(
+          `[permissions] could not read ${settingsPath}, starting fresh: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
     }
 
     const permissions = (settings.permissions as Record<string, unknown>) ?? {};
