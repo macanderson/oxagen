@@ -306,11 +306,11 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
-        "mcp": false,
-        "unit": false,
+        "api": true,
+        "mcp": true,
+        "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {

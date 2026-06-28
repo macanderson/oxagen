@@ -314,6 +314,7 @@ function FilterBar({
               key={kind}
               type="button"
               aria-pressed={active}
+              aria-label={`Filter by ${cfg.label}`}
               onClick={() => toggleKind(kind)}
               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all border ${
                 active

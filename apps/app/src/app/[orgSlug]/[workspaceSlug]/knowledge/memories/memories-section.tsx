@@ -5,6 +5,10 @@
  * Sits inside a <Suspense> boundary so the page skeleton shows immediately.
  */
 import "@oxagen/handlers/register";
+// agent.memory.list is an agent.* capability — its handler is bound by
+// @oxagen/agent/register, NOT the foundation register. Without this the kernel
+// throws "No handler registered for capability agent.memory.list" at runtime.
+import "@oxagen/agent/register";
 import { invoke } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { AgentMemoryRecord } from "@oxagen/oxagen/contracts/agent.memory.list";

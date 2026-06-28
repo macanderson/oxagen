@@ -159,7 +159,7 @@ describe("MemoriesClient — empty state", () => {
     expect(screen.getByText("No memories yet")).toBeInTheDocument();
     expect(
       screen.getByText(
-        /Memories appear here as agents learn during this workspace's sessions/,
+        /Memories appear here as agents learn during this workspace/,
       ),
     ).toBeInTheDocument();
   });
@@ -203,7 +203,7 @@ describe("MemoriesClient — kind filter", () => {
     );
     // Click the "Constraint" kind chip to filter to constraints only
     const constraintChip = screen.getByRole("button", {
-      name: /constraint/i,
+      name: /filter by constraint/i,
     });
     fireEvent.click(constraintChip);
 
@@ -227,7 +227,7 @@ describe("MemoriesClient — kind filter", () => {
     );
     // Activate constraint filter
     const constraintChip = screen.getByRole("button", {
-      name: /constraint/i,
+      name: /filter by constraint/i,
     });
     fireEvent.click(constraintChip);
 

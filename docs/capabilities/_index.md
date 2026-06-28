@@ -16,6 +16,7 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.mcp.list](agent.mcp.list.md) — List registered external MCP servers in the active workspace with status, transport, auth kind, and tool inventory
 - [agent.mcp.register](agent.mcp.register.md) — Register an external MCP server with the workspace; the runner runs a separate process and injects its tools into the agent
 - [agent.mcp.set_enabled](agent.mcp.set_enabled.md) — Enable or disable a registered external MCP server; disabling stops its tools from registering but keeps tool-descriptor snapshots for replay
+- [agent.memory.list](agent.memory.list.md) — List a workspace's Neo4j AgentMemory nodes (newest first) with optional weight/kind/node filters; non-semantic browse counterpart to agent.memory.recall
 - [agent.memory.recall](agent.memory.recall.md) — Query Neo4j AgentMemory nodes by semantic similarity plus a weight-sorted rank
 - [agent.memory.write](agent.memory.write.md) — Persist a weighted memory tied to a graph node per the schema.memory contract
 - [agent.plan.approve](agent.plan.approve.md) — Approve, deny, or amend a previously-proposed plan; approval releases the agent stream to execute the plan's side-effectful steps
