@@ -37,6 +37,7 @@ Every code change must leave the package's test suite at or above its `vitest.co
 Never claim a task is complete without concrete verification. Always provide evidence: test output, CI status, or rendered result.
 
 - **No task is done until verified.** State what verification you ran and its output.
+- **Verification is required for everything — save the proof.** Every task you do, not just UI work, must produce concrete verification artifacts (test/command output, CI status/logs, screenshots, DB query results, API responses). Write those artifacts into a `verifications/` directory at the repo root, inside a subdirectory named after your Claude Code session id — i.e. `verifications/<claude-session-id>/` (e.g. `verifications/session_01Y8Eqm6L7KJhRmBsBx39vH6/`). Name each file by what it proves (e.g. `cli-docs-account-setup.png`, `migration-select-after.txt`). The `verifications/` directory is gitignored, so these artifacts stay local and never bloat shared history.
 - **UI changes require screenshots.** E2E tests must capture screenshots of key success states. Delete and recreate the screenshot directory on every run; add it to `.gitignore` (e.g. `apps/app/e2e/screenshots/`).
 - **Forms must be tested end-to-end.** Submit data, verify success via DB query or API response.
 - **Deployments must be verified.** Health check, DB query, or API call after deploying — not just deploy logs.
