@@ -40,6 +40,7 @@
   "dependencies": {
     "@inkjs/ui": "2.0.0",
     "@modelcontextprotocol/sdk": "1.29.0",
+    "@oxagen/code-graph": "workspace:*",
     "@oxagen/engram": "workspace:*",
     "@oxagen/mcp-config": "workspace:*",
     "ai": "6.0.197",

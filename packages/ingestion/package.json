@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@oxagen/ai": "workspace:*",
+    "@oxagen/code-graph": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/crypto": "workspace:*",
     "@oxagen/ontology": "workspace:*",
@@ -36,9 +37,6 @@
   "devDependencies": {
     "typescript": "6.0.3",
     "vitest": "2.1.9",
-    "@vitest/coverage-v8": "2.1.9",
-    "web-tree-sitter": "^0.22.6",
-    "tree-sitter-typescript": "^0.23.2",
-    "tree-sitter-python": "^0.23.6"
+    "@vitest/coverage-v8": "2.1.9"
   }
 }
