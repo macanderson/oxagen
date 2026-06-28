@@ -1,7 +1,7 @@
 # GitHub App setup — source-code ingestion connector
 
 **Audience:** operators / platform engineers configuring the GitHub connector.
-**Last verified against code:** 2026-06-14.
+**Last verified against code:** 2026-06-28.
 
 This document is the authoritative setup reference for the GitHub App(s) that power the
 **source-code ingestion connector**. It lists every configuration value, the exact callback
@@ -144,21 +144,25 @@ from the OAuth Callback URL**.
 
 | Field | Dev | Prod |
 | --- | --- | --- |
-| **Setup URL** | `http://localhost:3000/connections/github/setup` | `https://app.oxagen.sh/connections/github/setup` |
+| **Setup URL** | `http://localhost:3000/github/setup` | `https://app.oxagen.sh/github/setup` |
 | **Redirect on update** | ✅ on | ✅ on |
 
-**Recommendation: set a Setup URL and enable "Redirect on update".**
+**Recommendation: set a Setup URL and enable "Redirect on update".** The exact path matters — set it
+to **`/github/setup`** (the implemented landing route, `apps/app/src/app/github/setup/page.tsx`), not
+`/connections/github/setup` (which does not exist and would 404).
 
 - It guarantees that a user who installs the App directly from GitHub (rather than starting inside
   Oxagen) lands back in the product to finish wiring the connection.
 - **Redirect on update = ON** brings the user back whenever they add/remove repositories from the
-  installation, so Oxagen can reconcile the repo selection.
-- **Today the primary flow starts inside Oxagen** (the app generates the authorize URL and the
-  `/oauth/github/callback` route already redirects to the sources page), so the Setup URL is a
-  secondary entry point. The `/connections/github/setup` landing route is **not implemented yet** —
-  until it exists, point the Setup URL at the sources page
-  (`/{org}/{ws}/knowledge/sources`) or leave it blank and rely on the in-app flow. Tracked in
-  [Known gaps](#known-gaps--follow-ups).
+  installation, so Oxagen can reconcile the repo selection. **This leg is the common case for the
+  in-app connect flow too**: when the App is ALREADY installed, GitHub treats a subsequent connect as
+  an installation *update* and uses this stateless Setup URL (carrying `installation_id` +
+  `setup_action`, NO OAuth `state`) — NOT the OAuth callback. The `/github/setup` route resolves the
+  user's workspace and the wizard recovers the in-progress connection from a sessionStorage handoff,
+  so the wizard resumes Step 2 instead of restarting. If this URL is wrong/blank, that resume breaks.
+- **The first-ever install** (App not yet installed) goes through the OAuth callback
+  (`/oauth/github/callback`) instead, which round-trips our signed `state` and redirects straight to
+  `…/knowledge/sources?setup=github&connectionId=…`.
 
 ### Permissions
 
@@ -326,15 +330,18 @@ Resolved in code (kept here for history):
   installation's connections.
 - ✅ **Status-constraint bug** — activation now writes `connected` (was the invalid `active`, which
   violated `source_connections_status_check`).
+- ✅ **Setup URL landing route** — implemented at **`/github/setup`**
+  (`apps/app/src/app/github/setup/page.tsx`); resolves the membership-gated workspace and the wizard
+  recovers the in-progress connection via a sessionStorage handoff so it resumes Step 2 (not Step 1).
+  `/installations` + `/repositories` fall back to (and link) the org's GitHub OAuth account when the
+  Setup-URL "update" leg left the connection unlinked.
 
 Still open — worth tracking in Linear (`oxagen-v2`, labels `connectors`, `ingestion`):
 
-1. **`/connections/github/setup` landing route** — implement the Setup URL target so GitHub-initiated
-   installs resolve the current session's org/workspace.
-2. **Installation-token auth** — move unattended sync off the user token onto GitHub App installation
+1. **Installation-token auth** — move unattended sync off the user token onto GitHub App installation
    access tokens (JWT signed with the App private key), so sync survives the authorizing user leaving.
-3. **Webhook receipt bookkeeping** — optionally stamp `last_sync_at` / a `webhook_subscriptions`
+2. **Webhook receipt bookkeeping** — optionally stamp `last_sync_at` / a `webhook_subscriptions`
    row on delivery for observability (functional sync does not require it).
-4. **`push` → `source` file ingestion** — webhook `push` currently ingests commits; ingesting the
+3. **`push` → `source` file ingestion** — webhook `push` currently ingests commits; ingesting the
    changed *files* (added/modified/removed) as `source` records on push is a follow-up. Initial
    sync still covers the full file tree.

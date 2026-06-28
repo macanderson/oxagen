@@ -8,11 +8,23 @@
  */
 
 import * as React from "react";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 
 vi.mock("./github-connection-wizard", () => ({
-  GitHubConnectionWizard: () => <div data-testid="wizard" />,
+  GitHubConnectionWizard: ({
+    open,
+    initialConnectionId,
+  }: {
+    open: boolean;
+    initialConnectionId?: string;
+  }) => (
+    <div
+      data-testid="wizard"
+      data-open={open ? "true" : "false"}
+      data-initial-connection-id={initialConnectionId ?? ""}
+    />
+  ),
 }));
 
 vi.mock("./edit-source-config-sheet", () => ({
@@ -45,6 +57,10 @@ vi.mock("@/components/ui/menu", () => ({
 }));
 
 import { KnowledgeSourcesClient } from "./knowledge-sources-client";
+import {
+  storePendingGithubConnection,
+  readPendingGithubConnection,
+} from "./github-connection-wizard-types";
 
 const CONNECTION = {
   id: "con_1",
@@ -98,5 +114,81 @@ describe("KnowledgeSourcesClient — row actions", () => {
     );
     expect(screen.queryByTestId("connection-row-con_pub1")).toBeNull();
     expect(screen.getByTestId("connections-empty-state")).toBeTruthy();
+  });
+});
+
+describe("KnowledgeSourcesClient — GitHub wizard resume after redirect", () => {
+  let replaceSpy: ReturnType<typeof vi.fn>;
+  const realLocation = window.location;
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    replaceSpy = vi.fn();
+    // jsdom's location.replace isn't directly redefinable; swap the whole
+    // location object (same pattern as the Step 1 redirect test).
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { replace: replaceSpy, assign: vi.fn(), href: "http://localhost/", pathname: "/", search: "" },
+    });
+  });
+
+  afterEach(() => {
+    window.sessionStorage.clear();
+    Object.defineProperty(window, "location", { configurable: true, value: realLocation });
+  });
+
+  it("resumes Step 2 with the stored connection id when the redirect dropped it (Setup-URL leg)", async () => {
+    // GitHub's stateless update leg lands on `…/sources?setup=github` with no
+    // connectionId; the handoff stored before leaving for GitHub recovers it.
+    storePendingGithubConnection({ connectionId: "con_PENDING", orgSlug: "acme", workspaceSlug: "main" });
+
+    render(
+      <KnowledgeSourcesClient connections={[]} {...BASE} setupConnector="github" />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("wizard").getAttribute("data-initial-connection-id")).toBe(
+        "con_PENDING",
+      ),
+    );
+    expect(screen.getByTestId("wizard").getAttribute("data-open")).toBe("true");
+    expect(replaceSpy).not.toHaveBeenCalled();
+  });
+
+  it("prefers the URL connection id and clears the stale handoff (OAuth-callback leg)", async () => {
+    storePendingGithubConnection({ connectionId: "con_STALE", orgSlug: "acme", workspaceSlug: "main" });
+
+    render(
+      <KnowledgeSourcesClient
+        connections={[]}
+        {...BASE}
+        setupConnector="github"
+        setupConnectionId="con_URL"
+      />,
+    );
+
+    expect(screen.getByTestId("wizard").getAttribute("data-initial-connection-id")).toBe("con_URL");
+    await waitFor(() => expect(readPendingGithubConnection()).toBeNull());
+  });
+
+  it("self-corrects to the originating workspace when the redirect landed elsewhere", async () => {
+    // Connect started in workspace "research" but the stateless leg resolved to "main".
+    storePendingGithubConnection({ connectionId: "con_X", orgSlug: "acme", workspaceSlug: "research" });
+
+    render(
+      <KnowledgeSourcesClient connections={[]} {...BASE} setupConnector="github" />,
+    );
+
+    await waitFor(() =>
+      expect(replaceSpy).toHaveBeenCalledWith("/acme/research/knowledge/sources?setup=github"),
+    );
+  });
+
+  it("leaves the wizard at Step 1 when there is no handoff and no URL id", () => {
+    render(
+      <KnowledgeSourcesClient connections={[]} {...BASE} setupConnector="github" />,
+    );
+    expect(screen.getByTestId("wizard").getAttribute("data-initial-connection-id")).toBe("");
+    expect(replaceSpy).not.toHaveBeenCalled();
   });
 });

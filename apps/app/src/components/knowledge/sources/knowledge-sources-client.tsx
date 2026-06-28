@@ -17,6 +17,10 @@ import {
 } from "lucide-react";
 import { GitHubConnectionWizard } from "./github-connection-wizard";
 import {
+  clearPendingGithubConnection,
+  readPendingGithubConnection,
+} from "./github-connection-wizard-types";
+import {
   EditSourceConfigSheet,
   type EditSourceTarget,
 } from "./edit-source-config-sheet";
@@ -303,6 +307,41 @@ export function KnowledgeSourcesClient({
   const [wizardOpen, setWizardOpen] = React.useState(
     setupConnector === "github",
   );
+  // On the GitHub redirect-return, the connection id may not be in the URL: the
+  // App-already-installed "update" leg goes through GitHub's stateless Setup URL
+  // and lands on `…/sources?setup=github` with no `connectionId`. Recover it from
+  // the sessionStorage handoff the wizard stored before leaving for GitHub so the
+  // wizard resumes at Step 2 instead of restarting at Step 1 (which orphaned the
+  // pending_setup row). Resolved post-mount to avoid a hydration mismatch.
+  const [resumeConnectionId, setResumeConnectionId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (setupConnector !== "github") return;
+    if (setupConnectionId) {
+      // OAuth-callback leg already carried the id in the URL — the handoff is
+      // redundant; drop it so a later visit can't wrongly resume.
+      clearPendingGithubConnection();
+      return;
+    }
+    const pending = readPendingGithubConnection();
+    if (!pending) return; // No handoff → genuine fresh start; leave wizard at Step 1.
+    if (pending.orgSlug !== orgSlug || pending.workspaceSlug !== workspaceSlug) {
+      // GitHub's stateless leg can resolve to a different workspace than the one
+      // the connect flow started in. Self-correct to the originating workspace so
+      // the resume targets the connection that actually lives there.
+      window.location.replace(
+        `/${pending.orgSlug}/${pending.workspaceSlug}/knowledge/sources?setup=github`,
+      );
+      return;
+    }
+    setResumeConnectionId(pending.connectionId);
+  }, [setupConnector, setupConnectionId, orgSlug, workspaceSlug]);
+
+  // Connection id that seeds the wizard's initial step: the URL value (OAuth leg)
+  // takes precedence, else the recovered handoff (Setup-URL leg).
+  const initialGithubConnectionId =
+    setupConnector === "github" ? (setupConnectionId ?? resumeConnectionId ?? undefined) : undefined;
+
   const [resyncing, setResyncing] = React.useState<Set<string>>(new Set());
   const [editTarget, setEditTarget] = React.useState<Connection | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<Connection | null>(null);
@@ -430,11 +469,17 @@ export function KnowledgeSourcesClient({
       </p>
 
       <GitHubConnectionWizard
+        // Remount when the resolved connection id changes so the wizard's initial
+        // step picks up a handoff recovered after the first render (Setup-URL leg).
+        key={initialGithubConnectionId ?? "new"}
         open={wizardOpen}
-        onClose={() => setWizardOpen(false)}
+        onClose={() => {
+          clearPendingGithubConnection();
+          setWizardOpen(false);
+        }}
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
-        initialConnectionId={setupConnector === "github" ? setupConnectionId : undefined}
+        initialConnectionId={initialGithubConnectionId}
       />
 
       <EditSourceConfigSheet

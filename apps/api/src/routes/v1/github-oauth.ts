@@ -23,7 +23,7 @@ import { Hono } from "hono";
 import { createHmac } from "node:crypto";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { encrypt, decrypt, createIngestionCryptoAdapter } from "@oxagen/crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { AppEnv } from "../../app";
 import { requireEnv } from "@oxagen/config/env";
@@ -56,6 +56,120 @@ async function decryptToken(enc: { keyId: string; ciphertext: string }): Promise
   const { adapter } = createIngestionCryptoAdapter();
   const plain = await decrypt(Buffer.from(enc.ciphertext, "base64"), enc.keyId, { adapter });
   return plain.toString("utf8");
+}
+
+type ConnectionTokenResult =
+  | { ok: true; accessToken: string }
+  | { ok: false; status: 404 | 500; error: string };
+
+/**
+ * Resolve and decrypt the GitHub user OAuth token used to call the GitHub REST
+ * API for a connection (listing installations / repositories).
+ *
+ * A connection is normally linked to its `oauth_accounts` row by the OAuth
+ * callback. But when the App is ALREADY installed, GitHub completes the connect
+ * through the stateless **Setup URL** "update" leg, which never hits our OAuth
+ * callback — so the freshly-created connection has a null `oauthAccountId` and
+ * the old INNER JOIN returned 404, dead-ending the wizard at "list installations".
+ *
+ * The org already authorized GitHub on a prior connect, so its stored token is
+ * reusable. When the connection isn't linked yet we fall back to the org's
+ * most-recently-refreshed GitHub `oauth_accounts` row (same org → same trust
+ * boundary the callback uses, which also keys oauth accounts by org) and **link
+ * it onto the connection** so the activation path and subsequent calls resolve it
+ * directly. Everything runs inside the tenant scope, so RLS still bounds the
+ * lookup to this org.
+ */
+async function resolveConnectionAccessToken(
+  orgId: string,
+  workspaceId: string,
+  connectionPublicId: string,
+): Promise<ConnectionTokenResult> {
+  const lookup = await runInTenantScope({ orgId, workspaceId }, () =>
+    withTenantDb(async (tx) => {
+      const connRows = await tx
+        .select({
+          id: schema.sourceConnections.id,
+          oauthAccountId: schema.sourceConnections.oauthAccountId,
+        })
+        .from(schema.sourceConnections)
+        .where(
+          and(
+            eq(schema.sourceConnections.publicId, connectionPublicId),
+            eq(schema.sourceConnections.orgId, orgId),
+            eq(schema.sourceConnections.workspaceId, workspaceId),
+            isNull(schema.sourceConnections.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      const conn = connRows[0];
+      if (!conn) return { kind: "no-connection" as const };
+
+      // Already linked → use that account's token directly.
+      if (conn.oauthAccountId) {
+        const oaRows = await tx
+          .select({ accessTokenEnc: schema.oauthAccounts.accessTokenEnc })
+          .from(schema.oauthAccounts)
+          .where(eq(schema.oauthAccounts.id, conn.oauthAccountId))
+          .limit(1);
+        const oa = oaRows[0];
+        if (!oa?.accessTokenEnc) return { kind: "no-token" as const };
+        return { kind: "ok" as const, accessTokenEnc: oa.accessTokenEnc };
+      }
+
+      // Not linked (Setup-URL "update" leg) → fall back to the org's GitHub
+      // OAuth account and link it onto the connection for future calls.
+      const fbRows = await tx
+        .select({
+          id: schema.oauthAccounts.id,
+          accessTokenEnc: schema.oauthAccounts.accessTokenEnc,
+        })
+        .from(schema.oauthAccounts)
+        .where(
+          and(
+            eq(schema.oauthAccounts.orgId, orgId),
+            eq(schema.oauthAccounts.provider, "github"),
+          ),
+        )
+        .orderBy(desc(schema.oauthAccounts.updatedAt))
+        .limit(1);
+
+      const fb = fbRows[0];
+      if (!fb?.accessTokenEnc) return { kind: "no-token" as const };
+
+      await tx
+        .update(schema.sourceConnections)
+        .set({ oauthAccountId: fb.id, updatedAt: new Date() })
+        .where(eq(schema.sourceConnections.id, conn.id));
+
+      return { kind: "ok" as const, accessTokenEnc: fb.accessTokenEnc };
+    }),
+  );
+
+  if (lookup.kind === "no-connection") {
+    return { ok: false, status: 404, error: "Connection not found or OAuth token missing" };
+  }
+  if (lookup.kind === "no-token") {
+    return { ok: false, status: 404, error: "OAuth token not found for connection" };
+  }
+
+  const enc = lookup.accessTokenEnc as { keyId: string; ciphertext: string } | null;
+  if (!enc) {
+    return { ok: false, status: 404, error: "OAuth token not found for connection" };
+  }
+
+  try {
+    const accessToken = await decryptToken(enc);
+    return { ok: true, accessToken };
+  } catch {
+    return {
+      ok: false,
+      status: 500,
+      error:
+        "Failed to decrypt OAuth token — token may be corrupted or the encryption key is unavailable",
+    };
+  }
 }
 
 /**
@@ -191,49 +305,13 @@ githubOauthRoute.get("/installations", async (c) => {
     return c.json({ error: "Org/workspace scope required" }, 400);
   }
 
-  // Look up the OAuth account linked to this connection.
-  const rows = await runInTenantScope({ orgId, workspaceId }, () =>
-    withTenantDb((tx) =>
-      tx
-        .select({
-          accessTokenEnc: schema.oauthAccounts.accessTokenEnc,
-        })
-        .from(schema.sourceConnections)
-        .innerJoin(
-          schema.oauthAccounts,
-          eq(schema.oauthAccounts.id, schema.sourceConnections.oauthAccountId),
-        )
-        .where(
-          and(
-            eq(schema.sourceConnections.publicId, connectionPublicId),
-            eq(schema.sourceConnections.orgId, orgId),
-            eq(schema.sourceConnections.workspaceId, workspaceId),
-            isNull(schema.sourceConnections.deletedAt),
-          ),
-        )
-        .limit(1),
-    ),
-  );
-
-  const row = rows[0];
-  if (!row) {
-    return c.json({ error: "Connection not found or OAuth token missing" }, 404);
+  // Resolve the OAuth token for this connection, falling back to (and linking)
+  // the org's GitHub account when the Setup-URL "update" leg left it unlinked.
+  const tokenResult = await resolveConnectionAccessToken(orgId, workspaceId, connectionPublicId);
+  if (!tokenResult.ok) {
+    return c.json({ error: tokenResult.error }, tokenResult.status);
   }
-
-  const tokenEnc = row.accessTokenEnc as { keyId: string; ciphertext: string } | null;
-  if (!tokenEnc) {
-    return c.json({ error: "OAuth token not found for connection" }, 404);
-  }
-
-  let accessToken: string;
-  try {
-    accessToken = await decryptToken(tokenEnc);
-  } catch (_e) {
-    return c.json(
-      { error: "Failed to decrypt OAuth token — token may be corrupted or the encryption key is unavailable" },
-      500,
-    );
-  }
+  const accessToken = tokenResult.accessToken;
 
   // Page through all installations (GitHub paginates at 100/page).
   const allInstallations: GitHubInstallation[] = [];
@@ -325,49 +403,12 @@ githubOauthRoute.get("/installations/:installationId/repositories", async (c) =>
     return c.json({ error: "Org/workspace scope required" }, 400);
   }
 
-  // Same token lookup as /installations.
-  const rows = await runInTenantScope({ orgId, workspaceId }, () =>
-    withTenantDb((tx) =>
-      tx
-        .select({
-          accessTokenEnc: schema.oauthAccounts.accessTokenEnc,
-        })
-        .from(schema.sourceConnections)
-        .innerJoin(
-          schema.oauthAccounts,
-          eq(schema.oauthAccounts.id, schema.sourceConnections.oauthAccountId),
-        )
-        .where(
-          and(
-            eq(schema.sourceConnections.publicId, connectionPublicId),
-            eq(schema.sourceConnections.orgId, orgId),
-            eq(schema.sourceConnections.workspaceId, workspaceId),
-            isNull(schema.sourceConnections.deletedAt),
-          ),
-        )
-        .limit(1),
-    ),
-  );
-
-  const row = rows[0];
-  if (!row) {
-    return c.json({ error: "Connection not found or OAuth token missing" }, 404);
+  // Same resilient token resolution as /installations.
+  const tokenResult = await resolveConnectionAccessToken(orgId, workspaceId, connectionPublicId);
+  if (!tokenResult.ok) {
+    return c.json({ error: tokenResult.error }, tokenResult.status);
   }
-
-  const tokenEnc = row.accessTokenEnc as { keyId: string; ciphertext: string } | null;
-  if (!tokenEnc) {
-    return c.json({ error: "OAuth token not found for connection" }, 404);
-  }
-
-  let accessToken: string;
-  try {
-    accessToken = await decryptToken(tokenEnc);
-  } catch (_e) {
-    return c.json(
-      { error: "Failed to decrypt OAuth token — token may be corrupted or the encryption key is unavailable" },
-      500,
-    );
-  }
+  const accessToken = tokenResult.accessToken;
 
   const resp = await fetch(
     `https://api.github.com/user/installations/${installationId}/repositories?per_page=100`,
