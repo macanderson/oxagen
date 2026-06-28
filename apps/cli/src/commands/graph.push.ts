@@ -210,7 +210,11 @@ async function buildEnvelopeForFiles(
       if (n.docstring) props["docstring"] = n.docstring;
       const pushNode: PushNode = {
         key: symbolKey,
-        labels: ["Symbol"],
+        // Must be "SourceSymbol" (not "Symbol") to match the GitHub-ingestion
+        // tree-sitter writer and the reader createNeo4jCodeGraphProvider, which
+        // both query :SourceSymbol. A bare :Symbol label made every CLI-pushed
+        // symbol invisible to the in-app agent (cross-surface drift).
+        labels: ["SourceSymbol"],
         displayName: n.name,
         properties: props,
         isSystem: true,

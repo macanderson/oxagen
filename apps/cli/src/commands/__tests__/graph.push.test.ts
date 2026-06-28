@@ -289,4 +289,40 @@ describe("handleGraphPush — envelope structure", () => {
       expect(n.isSystem).toBe(true);
     }
   });
+
+  it("symbol nodes carry the :SourceSymbol label (not :Symbol) so the reader resolves them", async () => {
+    // Regression: a bare :Symbol label made every CLI-pushed symbol invisible to
+    // createNeo4jCodeGraphProvider + the GitHub-ingestion tree-sitter writer, which
+    // both query :SourceSymbol. CLI and platform must agree on the label.
+    setupGit({ lsFiles: "src/payments.ts" });
+    const nodes = new Map();
+    nodes.set("f-1", {
+      id: "f-1",
+      kind: "file",
+      name: "payments.ts",
+      path: "src/payments.ts",
+      range: { start: 0, end: 0 },
+      language: "typescript",
+    });
+    nodes.set("s-1", {
+      id: "s-1",
+      kind: "function",
+      name: "handlePayment",
+      path: "src/payments.ts",
+      range: { start: 1, end: 10 },
+      language: "typescript",
+    });
+    mockBuildCodeGraph.mockResolvedValue({ nodes, edges: [] });
+    mockApiPost.mockResolvedValueOnce(PUSH_RESULT);
+
+    await handleGraphPush({ _duckdbPath: ":memory:", _gitRoot: GIT_ROOT, full: true });
+
+    const body = mockApiPost.mock.calls[0]![1] as {
+      nodes: Array<{ key: string; labels: string[] }>;
+    };
+    const symbolNode = body.nodes.find((n) => n.key.includes("#handlePayment"));
+    expect(symbolNode).toBeDefined();
+    expect(symbolNode!.labels).toContain("SourceSymbol");
+    expect(symbolNode!.labels).not.toContain("Symbol");
+  });
 });
