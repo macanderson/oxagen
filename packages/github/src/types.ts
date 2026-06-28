@@ -65,6 +65,28 @@ export interface GitHubClient {
    * Return the login of the authenticated user.
    */
   getAuthenticatedUser(): Promise<{ login: string }>;
+
+  /**
+   * Return the raw UTF-8 content of a file at the given path and optional ref.
+   * Returns `null` when the file does not exist (HTTP 404).
+   */
+  getFileContent(args: {
+    owner: string;
+    repo: string;
+    path: string;
+    ref?: string;
+  }): Promise<string | null>;
+
+  /**
+   * Return all blob paths in the repository tree at the given ref (defaults to
+   * the repository default branch). The returned paths are relative to the
+   * repository root (e.g. `"src/index.ts"`).
+   */
+  getTree(args: {
+    owner: string;
+    repo: string;
+    ref?: string;
+  }): Promise<string[]>;
 }
 
 /** Options accepted by createGitHubClient. */
