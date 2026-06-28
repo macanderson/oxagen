@@ -73,9 +73,9 @@ export function AnimatedCreature({
 
   // Get current frame (fire frames override breathing when firing)
   const currentFrame = isFiring ? DRAGON_FRAMES[frameIndex] : DRAGON_FRAMES[frameIndex];
-  
+
   // Split frame into lines for rendering
-  const lines = currentFrame.split("\n").filter((line) => line.length > 0);
+  const lines = currentFrame?.split("\n").filter((line) => line.length > 0) ?? [];
 
   // Color scheme: violet for body, cyan for fire effects
   const getLineColor = (line: string): string => {

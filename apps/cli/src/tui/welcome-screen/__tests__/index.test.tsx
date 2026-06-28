@@ -18,20 +18,20 @@ describe("WelcomeScreen", () => {
     
     // Should show version
     expect(output).toContain("v0.6.2");
-    
+
     // Should show dragon
-    expect(output.length).toBeGreaterThan(200);
-    
+    expect(output!.length).toBeGreaterThan(200);
+
     // Should show action menu
     expect(output).toContain("QUICK START");
   });
 
   test("renders in passive mode", () => {
     const { lastFrame } = render(<WelcomeScreen mode="passive" />);
-    const output = lastFrame();
-    
+    const output = lastFrame() as string | undefined;
+
     // Should show dragon
-    expect(output.length).toBeGreaterThan(200);
+    expect(output!.length).toBeGreaterThan(200);
     
     // Should show mode indicator
     expect(output).toContain("passive");
