@@ -56,6 +56,13 @@ export const baseEnvSchema = z.object({
   GITHUB_APP_WEBHOOK_SECRET: z.string().optional(),
   GITHUB_APP_INSTALL_STATE_SECRET: z.string().optional(),
   GITHUB_APP_SLUG: z.string().optional(),
+  // ADR-020: per-workspace write credential resolution. When set, the
+  // resolveGitHubToken() chain mints short-lived installation access tokens
+  // via the App private key instead of falling back to per-user OAuth tokens.
+  // Both vars are required together; omitting either disables path (1) and
+  // falls through to the OAuth-connection fallback.
+  GITHUB_APP_ID: z.string().optional(),
+  GITHUB_APP_PRIVATE_KEY: z.string().optional(),
 
   // Per-provider OAuth DATA client credentials for token refresh (ingestion cron).
   // All are optional in the base schema — the ingestion.oauth-refresh function

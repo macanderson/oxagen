@@ -3,14 +3,15 @@
  *
  * Strategy:
  *  - Mock @oxagen/github so createGitHubClient returns spy methods.
- *  - Do NOT mock the token helper — instead manipulate
- *    process.env.GITHUB_PERSONAL_ACCESS_TOKEN so the real resolveGitHubToken
- *    can be exercised in isolation (tests 1-2) and used by handlers (tests 3-7).
+ *  - Mock @oxagen/database withTenantDb to return no workspace connection rows
+ *    so resolveGitHubToken falls through to the GITHUB_PERSONAL_ACCESS_TOKEN
+ *    env-var fallback (the path exercised by tests 1-2 and used by handlers 3-7).
+ *  - Tests for the full ADR-020 resolution chain live in github-token.test.ts.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// ── Hoisted GitHub client mock ────────────────────────────────────────────────
+// ── Hoisted mocks ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => {
   const createRepoInOrg = vi.fn();
   const putFile = vi.fn();
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => {
   const createBranch = vi.fn();
   const openPullRequest = vi.fn();
   const getAuthenticatedUser = vi.fn();
+  const withTenantDb = vi.fn();
 
   const mockClient = {
     createRepoInOrg,
@@ -35,11 +37,44 @@ const mocks = vi.hoisted(() => {
     createBranch,
     openPullRequest,
     mockClient,
+    withTenantDb,
+  };
+});
+
+// withTenantDb always returns no workspace connection so resolveGitHubToken
+// falls through to the env-var path (ADR-020 path 3).
+vi.mock("@oxagen/database", () => ({
+  schema: {
+    sourceConnections: {
+      orgId: "sc.orgId",
+      workspaceId: "sc.workspaceId",
+      connectorId: "sc.connectorId",
+      status: "sc.status",
+      deletedAt: "sc.deletedAt",
+      oauthAccountId: "sc.oauthAccountId",
+      deliveryConfig: "sc.deliveryConfig",
+    },
+    oauthAccounts: {
+      id: "oa.id",
+      accessTokenEnc: "oa.accessTokenEnc",
+    },
+  },
+  withTenantDb: mocks.withTenantDb,
+}));
+
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const real = await importOriginal<typeof import("drizzle-orm")>();
+  return {
+    ...real,
+    and: (...args: unknown[]) => ({ __and: args }),
+    eq: (col: unknown, val: unknown) => ({ __eq: [col, val] }),
+    isNull: (col: unknown) => ({ __isNull: col }),
   };
 });
 
 vi.mock("@oxagen/github", () => ({
   createGitHubClient: () => mocks.mockClient,
+  getInstallationToken: vi.fn(),
 }));
 
 // ── Imports ───────────────────────────────────────────────────────────────────
@@ -71,6 +106,8 @@ const TOKEN = "ghp_test_token_abcdef";
 describe("resolveGitHubToken", () => {
   beforeEach(() => {
     delete process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
+    // No workspace connection — fall through to env-var path.
+    mocks.withTenantDb.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -79,7 +116,7 @@ describe("resolveGitHubToken", () => {
 
   it("throws when GITHUB_PERSONAL_ACCESS_TOKEN is not set", async () => {
     await expect(resolveGitHubToken(ctx)).rejects.toThrow(
-      "No GitHub token available",
+      "No GitHub connection for this workspace",
     );
   });
 
@@ -94,6 +131,8 @@ describe("resolveGitHubToken", () => {
 
 function withToken(fn: () => Promise<void>): () => Promise<void> {
   return async () => {
+    // No workspace connection — resolveGitHubToken falls through to env-var.
+    mocks.withTenantDb.mockResolvedValue([]);
     process.env.GITHUB_PERSONAL_ACCESS_TOKEN = TOKEN;
     try {
       await fn();
