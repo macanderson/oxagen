@@ -1,5 +1,51 @@
 # Changelog
 
+## v0.6.1
+
+This release delivers a large set of new capabilities across the CLI, web app, and backend services. The headline items are full bidirectional CLI ↔ workspace graph sync, a cross-vendor model-routing layer for the CLI agent pipeline, the new `agent.memory.list` contract backed by Neo4j (replacing the legacy Engram store in the Memories UI), an Environments & Secrets vault in the app settings, and a Terminal-Bench (Harbor) adapter for benchmarking. Dozens of fixes close CI-blocking contract issues, a Neo4j migration edge case, agent-bar visibility noise, and in-app drawer persistence.
+
+---
+
+### Features
+
+**CLI**
+- **Cross-vendor model routing** (`708f9730`): The CLI advisor now defaults to the most powerful available OpenAI model, keeping evaluation independent from the typically-Claude executor. The evaluator and worker can each be overridden via `OXAGEN_LLM_EVALUATOR` / `OXAGEN_LLM_ADVISOR`.
+- **Unified `settings.json` driver** (`4281e9c7`): A single `~/.oxagen/settings.json` (or workspace-local override) governs env vars, model selection, tool permissions, and lifecycle hooks for every CLI session.
+- **`/verbose` telemetry + `oxagen cost`** (`9c9943f0`): The interactive REPL now supports `/verbose` to emit structured per-turn traces. A new top-level `oxagen cost` command reads those traces and renders a cost breakdown using a baked-in rate card.
+- **Slash-command system** (`400e6efe`): Reusable `/command` shortcuts can be defined in `.oxagen/slash/` and expanded inside REPL sessions.
+- **Terminal-Bench (Harbor) adapter** (`a100783c`): A new `bench/terminal-bench/` package provides a Python-based Oxagen agent adapter that plugs into the Harbor benchmark harness, enabling automated CLI evaluation runs.
+- **Bidirectional CLI ↔ workspace graph sync – ADR-018** (`5d623155`): `graph.pull` down-syncs the workspace Neo4j graph to a local DuckDB replica, and `graph.export` exposes the inverse path. The MCP tool registry, API route (`POST /graph/export`), and `packages/handlers` handler are all wired up.
+
+**App**
+- **Environments & Secrets vault UI** (`0639b28f`): A new workspace settings page (`/settings/environments`) lets users manage environment variables and secrets, including bulk import via `.env` paste.
+
+**Agent / Backend**
+- **`agent.memory.list` contract + Neo4j backend** (`267d0d6c`): Introduces a typed `agent.memory.list` capability contract, a Neo4j `listMemories` query, and a handler registered in `packages/agent`. The Knowledge → Memories tab in the app now calls this handler instead of the legacy Engram store (`aadd8057`).
+- **KFC spec-workflow agents** (`a100783c` area): A suite of Claude sub-agents (`spec-requirements`, `spec-design`, `spec-tasks`, `spec-impl`, `spec-judge`, `spec-test`) and a coordinating system prompt are added under `.claude/agents/kfc/` and `.claude/system-prompts/` to support an in-repo spec-driven development workflow.
+
+---
+
+### Fixes
+
+- **`graph.export` contract deduplication** (`cd7bc1a8`, `80bd05f9`): Removed a duplicate `graphExport` export and fixed a TypeScript error in the `graph.export` test — both were blocking CI (`#229`, `#230`).
+- **Agent bar hidden in workspace-less sections** (`1ae961b4`, `#227`): The floating agent bar no longer renders on pages that have no workspace context (e.g., account settings, org-level views).
+- **In-app agent drawer persistence** (`0a260319`, `#223`): Conversation history in the in-app agent panel now persists across drawer open/close cycles; several UI polish issues were resolved.
+- **Schema reconcile `pin→reconcile` surface bug + worker AI-hang guard** (`95b8e9fd`, `#221`): Fixed a surface mismatch in the reconcile action and added a guard to prevent the worker model from hanging indefinitely during graph reconcile operations. Also closed a `graph.export` gap in the handler registry.
+- **Six green-main defects** (`63c3d92b`, `#224`): Batch fix for six regressions that were merged without CI due to an org Actions billing cap.
+- **Idempotent Neo4j migration over duplicate `publicId` legacy nodes** (`4afa3d36`, `#214`): The Neo4j migrate script now handles pre-existing KnowledgeNodes with duplicate `publicId` values without failing.
+- **`pnpm dev` pre-flight port check** (`04d944b7`, `#217`): `pnpm dev` now probes required ports before starting and exits with a clear error if any are already bound, preventing silent crashes when the stack is already running.
+- **CLI compile breaks** (`181e6717`, `#210`): Resolved TypeScript compile errors that were breaking the CLI build.
+
+---
+
+### Internal
+
+- **CLI docs reorganized** (`4e3ddd96`): CLI documentation moved from the root `docs/` directory into `docs/cli/`.
+- **ADR-018** added documenting the CLI ↔ workspace graph bidirectional sync architecture (`docs/adr/`).
+- **Stella ⇄ graph spec** (`2595702e`, `#220`): Design spec added for memory, execution lineage, and business-process binding between the Stella agent and the workspace graph (`docs/specs/stella-graph-memory-sync/`).
+- **`graph.export` capability docs** (`docs/capabilities/graph.export.md`): New reference page describing the export contract, filters, and DuckDB replica format.
+- **`verifications/` added to `.gitignore`** to prevent accidental commits of local verification artifacts.
+
 ## What's New in v0.6.0
 
 This release delivers a major expansion of the Oxagen CLI into a full agentic coding environment, introduces an Environments & Credential Vault system, adds OpenTelemetry distributed tracing, extends the knowledge graph with natural-language semantic search, and ships per-agent git isolation for multi-agent fleet workloads. Dozens of new capability contracts are now surfaced consistently across the API, MCP, agent runtime, and CLI, and CI was stabilized across all of these merges.
