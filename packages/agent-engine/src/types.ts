@@ -1,5 +1,5 @@
 import type { ModelMessage } from "ai";
-import type { AgentAi } from "./ports";
+import type { AgentAi, MemoryProvider, TraceStore } from "./ports";
 
 export interface CommandResult {
   exitCode: number;
@@ -47,6 +47,8 @@ export interface RunCodingAgentOptions {
   maxSteps?: number;
   readOnly?: boolean;
   codeGraph?: CodeGraphProvider;
+  memory?: MemoryProvider;
+  trace?: TraceStore;
   signal?: AbortSignal;
   onEvent?: (e: CodingEvent) => void;
 }
