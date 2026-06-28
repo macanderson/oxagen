@@ -219,7 +219,35 @@ class OxagenAgent(BaseInstalledAgent):
         )
 
     def populate_context_post_run(self, context: AgentContext) -> None:
-        # Token/cost roll-up lives in Oxagen's DuckDB session store, which is not
-        # present in the cold task container. Harbor's own metering plus the
-        # captured --verbose log (/logs/agent/oxagen.txt) carry the telemetry.
-        return None
+        # Oxagen's persistent cost store (DuckDB) is absent in the cold task
+        # container, but `--verbose` prints a final efficiency roll-up, e.g.:
+        #     efficiency
+        #         815.53s total · 83086 tok · $0.2714
+        #         102 tok/s · 37 steps · 5 file(s) changed · $0.0543/file
+        # Parse it so Oxagen's cost shows up in Harbor results (Oxagen reports a
+        # single undifferentiated token total, so set cost_usd + metadata rather
+        # than faking an input/output split).
+        log = self._find_agent_log()
+        if log is None:
+            return
+        text = log.read_text(errors="replace")
+        m = re.search(r"([\d.]+)s total\D+([\d,]+)\s*tok\D+\$([\d.]+)", text)
+        if not m:
+            return
+        wall_sec = float(m.group(1))
+        total_tokens = int(m.group(2).replace(",", ""))
+        context.cost_usd = float(m.group(3))
+        steps_m = re.search(r"(\d+)\s*steps", text)
+        context.metadata = {
+            **(context.metadata or {}),
+            "oxagen_total_tokens": total_tokens,
+            "oxagen_wall_sec": wall_sec,
+            "oxagen_steps": int(steps_m.group(1)) if steps_m else None,
+        }
+
+    def _find_agent_log(self) -> Path | None:
+        candidate = Path(self.logs_dir) / "agent" / "oxagen.txt"
+        if candidate.is_file():
+            return candidate
+        matches = sorted(Path(self.logs_dir).rglob("oxagen.txt"))
+        return matches[-1] if matches else None

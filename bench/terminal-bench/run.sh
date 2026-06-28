@@ -41,10 +41,9 @@ export OXAGEN_CLI_BUNDLE="$REPO_ROOT/apps/cli/dist-standalone/oxagen.mjs"
 # 3) Python env + adapter (editable so Harbor imports it by path).
 if [ ! -d .venv ]; then
   echo "==> Creating venv + installing harbor and adapter…"
-  uv venv
+  uv venv --python 3.13          # harbor requires Python >=3.13
   # shellcheck disable=SC1091
   source .venv/bin/activate
-  uv tool install harbor >/dev/null 2>&1 || true
   uv pip install -e ".[dev]"
 else
   # shellcheck disable=SC1091

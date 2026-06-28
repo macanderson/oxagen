@@ -3,7 +3,7 @@ name = "oxagen-terminal-bench"
 version = "0.1.0"
 description = "Harbor / Terminal-Bench agent adapter for the Oxagen coding CLI"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "harbor>=0.1.0",
 ]
