@@ -37,8 +37,15 @@ describe("handler registry", () => {
     "agent.trigger.update",
     "agent.trigger.delete",
     "agent.trigger.list",
-  ])("resolves a handler function for %s", async (cap) => {
-    const fn = await resolveHandler(cap);
-    expect(typeof fn).toBe("function");
-  });
+  ])(
+    "resolves a handler function for %s",
+    async (cap) => {
+      const fn = await resolveHandler(cap);
+      expect(typeof fn).toBe("function");
+    },
+    // The first lazy import() cold-starts the module-graph transform; on a
+    // loaded CI runner that can exceed vitest's 5s default. Give the dynamic
+    // resolution a generous ceiling so it never flakes on a cold transform.
+    30_000,
+  );
 });
