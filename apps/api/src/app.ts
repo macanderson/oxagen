@@ -18,6 +18,10 @@ import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
 import { chatMessageExecutionRoute } from "./routes/v1/chat.message.execution";
 import { chatStreamRoute } from "./routes/v1/chat.stream";
 import { agentCodeExecuteRoute } from "./routes/v1/agent.code.execute";
+import { agentSandboxStartRoute } from "./routes/v1/agent.sandbox.start";
+import { agentSandboxExecRoute } from "./routes/v1/agent.sandbox.exec";
+import { agentSandboxSnapshotRoute } from "./routes/v1/agent.sandbox.snapshot";
+import { agentSandboxStopRoute } from "./routes/v1/agent.sandbox.stop";
 import { codeDiffRoute } from "./routes/v1/code.diff";
 import { codePatchRoute } from "./routes/v1/code.patch";
 import { codeFormatRoute } from "./routes/v1/code.format";
@@ -190,6 +194,7 @@ import {
 } from "./routes/v1/plugin-schema";
 import { graphNodeListRoute } from "./routes/v1/graph.node.list";
 import { graphExportRoute } from "./routes/v1/graph.export";
+import { graphSyncPushRoute } from "./routes/v1/graph.sync.push";
 import { graphStatsRoute } from "./routes/v1/graph.stats";
 import { ontologyQueryRoute } from "./routes/v1/ontology.query";
 import { ontologyNeighborsRoute } from "./routes/v1/ontology.neighbors";
@@ -263,6 +268,11 @@ orgScoped.route("/conversations/purge", conversationPurgeRoute);
 // Agent-runtime routes live under the org + workspace scope so the runner
 // inherits the same auth, isolation, and audit envelope as every other v1 call.
 orgScoped.route("/agent/code/execute", agentCodeExecuteRoute);
+// Durable sandbox sessions (clone → build → snapshot → PR), org+workspace scoped.
+orgScoped.route("/agent/sandbox/start", agentSandboxStartRoute);
+orgScoped.route("/agent/sandbox/exec", agentSandboxExecRoute);
+orgScoped.route("/agent/sandbox/snapshot", agentSandboxSnapshotRoute);
+orgScoped.route("/agent/sandbox/stop", agentSandboxStopRoute);
 // Code-execution surface peers (OXA-1352) under the same org+workspace scope.
 orgScoped.route("/code/diff", codeDiffRoute);
 orgScoped.route("/code/patch", codePatchRoute);
@@ -438,6 +448,7 @@ orgScoped.route("/plugin-schema", pluginSchemaRoute);
 orgScoped.route("/plugin-versions", pluginVersionRoute);
 orgScoped.route("/graph/nodes", graphNodeListRoute);
 orgScoped.route("/graph/export", graphExportRoute);
+orgScoped.route("/graph/sync/push", graphSyncPushRoute);
 orgScoped.route("/graph/stats", graphStatsRoute);
 orgScoped.route("/ontology/query", ontologyQueryRoute);
 orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);

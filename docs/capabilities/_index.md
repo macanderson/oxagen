@@ -4,7 +4,7 @@ Reference for all declared capabilities across the Oxagen platform.
 Each capability is implemented across API, MCP, and agent surfaces with
 contract-first design, IAM enforcement, and instrumentation.
 
-## Agent (19)
+## Agent (23)
 
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
 - [agent.code.execute](agent.code.execute.md) — Execute a code snippet in an isolated sandbox and return the exit code, stdout, stderr, and execution time
@@ -21,6 +21,10 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.memory.write](agent.memory.write.md) — Persist a weighted memory tied to a graph node per the schema.memory contract
 - [agent.plan.approve](agent.plan.approve.md) — Approve, deny, or amend a previously-proposed plan; approval releases the agent stream to execute the plan's side-effectful steps
 - [agent.plan.create](agent.plan.create.md) — Create a structured hierarchical execution plan with tasks, dependencies, and approval gates; approval via agent.plan.approve is required before execution
+- [agent.sandbox.exec](agent.sandbox.exec.md) — Run a shell command inside a durable sandbox session; filesystem/process state persists across calls; returns stdout, stderr, exit code
+- [agent.sandbox.snapshot](agent.sandbox.snapshot.md) — Capture a filesystem snapshot of a durable sandbox session so it can be restored after an idle reap or the 24h lifetime ceiling
+- [agent.sandbox.start](agent.sandbox.start.md) — Provision or reconnect to a durable code-agent sandbox that persists across turns; pass a stable sessionKey to reuse one warm sandbox
+- [agent.sandbox.stop](agent.sandbox.stop.md) — Terminate a durable sandbox session and release its resources; call when the work is finished
 - [agent.skill.list](agent.skill.list.md) — List skills available in the active workspace including built-in filesystem and dynamic marketplace-installed skills
 - [agent.skill.load](agent.skill.load.md) — Load and register a workspace skill at runtime, resolving the requested version and parsing its configuration
 - [agent.subagent.aggregate](agent.subagent.aggregate.md) — Wait for all child runs in a subagent fanout to complete and return merged results, conflict list, and execution timeline
@@ -127,22 +131,24 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [form.fill](form.fill.md) — Generatively fill or suggest values for page-level form fields based on context
 
-## Graph (11)
+## Graph (13)
 
-| Capability                  | Notes                                                                                                                         |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `graph.node.list`           | Paginated browse of all nodes in the workspace graph.                                                                         |
-| `graph.node.upsert`         | Create or update a graph node by externalId.                                                                                  |
-| `graph.node.get`            | Retrieve a graph node by externalId.                                                                                          |
-| `graph.node.delete`         | Delete a graph node and its relationships.                                                                                    |
-| `graph.node.search`         | Vector + full-text search over graph nodes.                                                                                   |
-| `graph.search`              | Unified natural-language semantic (vector) search across the entire knowledge graph by embedding similarity.                  |
-| `graph.relationship.upsert` | Create or update a directed typed relationship between two KnowledgeNodes (open-vocabulary type, replaces graph.edge.upsert). |
-| `graph.edge.upsert`         | **Deprecated** — one-release alias for `graph.relationship.upsert`; removed in v2.                                            |
-| `graph.edge.delete`         | Delete a directed relationship between two nodes.                                                                             |
-| `graph.cypher`              | Execute a read-only Cypher query against the tenant graph.                                                                    |
-| `graph.ingest`              | Extract entities + relationships from text and commit them to the graph with confidence.                                      |
-| `graph.stats`               | Workspace graph statistics: node/edge counts by type.                                                                         |
+| Capability                  | Notes                                                                                                                                                     |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `graph.node.list`           | Paginated browse of all nodes in the workspace graph.                                                                                                     |
+| `graph.node.upsert`         | Create or update a graph node by externalId.                                                                                                              |
+| `graph.node.get`            | Retrieve a graph node by externalId.                                                                                                                      |
+| `graph.node.delete`         | Delete a graph node and its relationships.                                                                                                                |
+| `graph.node.search`         | Vector + full-text search over graph nodes.                                                                                                               |
+| `graph.search`              | Unified natural-language semantic (vector) search across the entire knowledge graph by embedding similarity.                                               |
+| `graph.relationship.upsert` | Create or update a directed typed relationship between two KnowledgeNodes (open-vocabulary type, replaces graph.edge.upsert).                             |
+| `graph.edge.upsert`         | **Deprecated** — one-release alias for `graph.relationship.upsert`; removed in v2.                                                                        |
+| `graph.edge.delete`         | Delete a directed relationship between two nodes.                                                                                                         |
+| `graph.cypher`              | Execute a read-only Cypher query against the tenant graph.                                                                                                |
+| `graph.ingest`              | Extract entities + relationships from text and commit them to the graph with confidence.                                                                  |
+| `graph.stats`               | Workspace graph statistics: node/edge counts by type.                                                                                                     |
+| `graph.export`              | Paginated, cursor-aware read of a workspace subgraph for local projection. Powers `oxagen graph pull`. See ADR-018.                                       |
+| `graph.sync.push`           | Batch-upsert a content-addressed code or lineage subgraph (is_system=true). Idempotent — re-sending is a no-op. Powers `oxagen graph push`. See ADR-018. |
 | `ontology.query`            | Typed multi-hop traversal from a start node over named relationship types.                                                    |
 | `ontology.neighbors`        | One-hop neighborhood of a node, filtered by type and direction.                                                               |
 
