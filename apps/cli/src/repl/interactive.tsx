@@ -371,41 +371,43 @@ export function ReplApp({
       const controller = new AbortController();
       abortRef.current = controller;
 
-      // Check if project needs initialization (first turn only)
-      if (!isProjectInitialized(cwd) && turns === 0) {
-        const initialized = await initializeProject({
-          cwd,
-          approver: (prompt) =>
-            new Promise<boolean>((resolve) => {
-              setApproval({
-                req: {
-                  tool: "write_file",
-                  summary: prompt,
-                  reason: "Project initialization",
-                  cwd,
-                },
-                resolve: (res) => {
-                  resolve(res.decision === "allow");
-                },
-              });
-            }),
-        });
-        if (!initialized) {
-          setApproval(null);
-          pushAssistant("Project initialization skipped. Use .oxagen/settings.json to configure.");
-          setIsStreaming(false);
-          streamingRef.current = false;
-          return;
-        }
-        setApproval(null);
-      }
-
       // This turn's streamed messages (tool annotations + assistant text).
       const turn: Message[] = [];
       let assistantOpen = false;
       const render = (): void => commit([...base, ...turn]);
 
+      // Project initialization and runTurn both live inside this try so the
+      // finally below always restores the streaming UI state — otherwise a throw
+      // from initializeProject (which runs before the model call) would leave the
+      // thinking indicator stuck on forever.
       try {
+        // Check if project needs initialization (first turn only)
+        if (!isProjectInitialized(cwd) && turns === 0) {
+          const initialized = await initializeProject({
+            cwd,
+            approver: (prompt) =>
+              new Promise<boolean>((resolve) => {
+                setApproval({
+                  req: {
+                    tool: "write_file",
+                    summary: prompt,
+                    reason: "Project initialization",
+                    cwd,
+                  },
+                  resolve: (res) => {
+                    resolve(res.decision === "allow");
+                  },
+                });
+              }),
+          });
+          if (!initialized) {
+            setApproval(null);
+            pushAssistant("Project initialization skipped. Use .oxagen/settings.json to configure.");
+            return;
+          }
+          setApproval(null);
+        }
+
         const result = await runTurn({
           prompt: submission,
           history: historyRef.current,
@@ -522,12 +524,23 @@ export function ReplApp({
         const next = queueRef.current[0] as string;
         queueRef.current = queueRef.current.slice(1);
         setQueued(queueRef.current);
-        await handleSubmitRef.current(next);
+        try {
+          await handleSubmitRef.current(next);
+        } catch (err) {
+          // A single failing turn must neither wedge the queue (leaving later
+          // prompts undrained forever) nor escape as an unhandled rejection from
+          // the `void pump()` call site. handleSubmit guards the model call
+          // internally, but surface anything that still slips through and keep
+          // draining the remaining prompts.
+          pushAssistant(
+            `Error: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
       }
     } finally {
       pumpingRef.current = false;
     }
-  }, []);
+  }, [pushAssistant]);
 
   // Every submission goes through the queue. When idle, the pump picks it up
   // immediately; when a turn is in flight, it waits its turn (FIFO).
