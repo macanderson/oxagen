@@ -4,6 +4,36 @@
 
 Where every Oxagen agent-eval run is saved so you can **measure the code agent improving over time** and **catch behavioral regression per task**. Eval results are append-only time-series measurements about the product itself, so they live in **ClickHouse** (the append-only telemetry store in the four-store model), not Postgres.
 
+## Running evals & getting the data in (TL;DR)
+
+```bash
+pnpm eval                       # run the cheap engram context-quality suite + ingest to ClickHouse
+pnpm eval:ingest <file.eval.json...>   # land any harness's results into ClickHouse
+```
+
+- **One command:** `pnpm eval` runs the deterministic engram golden suite in-process (no LLM, no Docker), writes `tools/eval-out/engram-golden.eval.json`, and inserts it into `eval_runs`/`eval_results`. Each invocation is a new time-series point (fresh `run_id`).
+- **The heavier suites emit a file, you ingest it.** They cost money / need Docker, so run them with their own scripts — each writes a normalized `*.eval.json` — then ingest:
+  ```bash
+  python bench/rag-eval/run_rag_eval.py          # → bench/rag-eval/rag-eval.eval.json
+  python bench/context-eval/run_eval.py --rounds 3   # → bench/context-eval/context-eval.eval.json (array)
+  ./bench/terminal-bench/run.sh && python bench/terminal-bench/emit_eval_json.py  # → <run-dir>/terminal-bench.eval.json
+  pnpm eval:ingest bench/**/*.eval.json
+  ```
+- **Ingestion is the single boundary** (`tools/scripts/eval-ingest.ts` → `@oxagen/telemetry`). It's **idempotent per `run_id`** (re-ingesting the same file is skipped; `--force` overrides) and **degrades gracefully** — with no `CLICKHOUSE_*` env it writes the files and prints a notice instead of failing (sync with `pnpm env:pull`).
+- **The tables auto-create** on `pnpm db:migrate` (the telemetry CH migrate runs `schema.sql`), so CI/prod get them with no extra step.
+
+### The `oxagen.eval.v1` file shape (what each harness emits)
+```jsonc
+{ "schema": "oxagen.eval.v1",
+  "run":   { "run_id": "...", "agent_name": "oxagen", "agent_version": "0.6.2",
+             "model": "...", "harness": "rag-eval", "suite": "...",
+             "graph_code": 1, "graph_exec": 1, "graph_mem": 1, "warm": 0, "history_depth": 0,
+             "n_tasks": 6, "n_passed": 5, "resolved_rate": 0.83,
+             "metrics": { "context_precision": 0.9 }, "labels": {} },
+  "results": [ { "task_id": "...", "passed": 1, "reward": 1.0, "metrics": { "cost_usd": 0.1 }, "labels": {} } ] }
+```
+The ingester denormalizes `harness/suite/agent_version/model/cell` from `run` onto each result row and fills `git_sha`/`git_branch`/`environment` if empty — so a harness only emits `task_id/passed/reward/metrics/labels` per result. A file may be a single object or an array (e.g. context-eval emits one per arm / warm round).
+
 ## Why this shape
 
 A good eval store has to absorb metrics that don't exist yet without a migration, while still being fast to slice by the dimensions you always group on. So the protocol is: **a few typed core dimensions every harness shares + two open maps.**

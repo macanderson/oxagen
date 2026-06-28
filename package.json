@@ -44,6 +44,8 @@
     "check:connector-schemas": "tsx tools/scripts/check-connector-schemas.ts",
     "docs:schemas": "tsx tools/scripts/gen-capability-schemas.ts",
     "env:check": "tsx tools/scripts/env-check.ts",
+    "eval": "tsx --env-file-if-exists=.env.local tools/scripts/run-evals.ts",
+    "eval:ingest": "tsx --env-file-if-exists=.env.local tools/scripts/eval-ingest.ts",
     "gate": "turbo run lint typecheck test:unit test:coverage build --filter=...[origin/main] && pnpm check:manifest && pnpm check:contracts && pnpm check:connector-schemas && pnpm env:check && pnpm db:lint-migrations && pnpm db:atlas-validate",
     "release": "tsx --env-file-if-exists=.env.local tools/scripts/release.ts",
     "release:patch": "tsx --env-file-if-exists=.env.local tools/scripts/release.ts patch",

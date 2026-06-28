@@ -6,3 +6,6 @@ __pycache__/
 *.egg-info/
 dist/
 .ruff_cache/
+
+# generated normalized eval output (ingest via pnpm eval:ingest)
+*.eval.json

@@ -368,3 +368,16 @@ export type {
   TurnValidation,
 } from "./eval/golden-traces";
 export { generateTextReport, generateJsonReport } from "./eval/report";
+export {
+  runGoldenSuite,
+  buildRagDataset,
+  writeRagDataset,
+} from "./eval/run-golden";
+export type { RagDatasetRecord } from "./eval/run-golden";
+export {
+  GOLDEN_CORPUS,
+  GOLDEN_TRACES,
+  GOLDEN_GROUND_TRUTH,
+} from "./eval/golden-fixtures";
+export { makeGoldenCompileFn, rankCorpus } from "./eval/golden-compile";
+export type { CompiledRecord } from "./eval/golden-compile";

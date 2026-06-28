@@ -43,6 +43,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import uuid
 from pathlib import Path
 
 REPO = Path(os.environ.get("OXAGEN_REPO", Path(__file__).resolve().parents[2]))
@@ -223,6 +224,217 @@ def _is_truthy(v: str | None) -> bool:
     return (v or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+CONTEXT_EVAL_SUITE = "repo-structural-qa"
+
+# Graph-capability flags and agent identity for each cold arm.
+_ARM_META: dict[str, dict] = {
+    "oxagen-full": {
+        "agent_name": "oxagen",
+        "model": OX_MODEL,
+        "graph_code": 1,
+        "graph_exec": 1,
+        "graph_mem": 1,
+    },
+    "oxagen-lean": {
+        "agent_name": "oxagen",
+        "model": OX_MODEL,
+        "graph_code": 1,
+        "graph_exec": 0,
+        "graph_mem": 0,
+    },
+    "claude": {
+        "agent_name": "claude-code",
+        "model": CLAUDE_MODEL,
+        "graph_code": 0,
+        "graph_exec": 0,
+        "graph_mem": 0,
+    },
+}
+
+
+def _build_task_results(
+    task_map: dict,
+) -> tuple[list[dict], int, float, float, float]:
+    """Convert {task_id: result_dict} → (results_list, n_passed, cost, tokens, wall)."""
+    out: list[dict] = []
+    n_passed = 0
+    agg_cost = 0.0
+    agg_tokens = 0.0
+    agg_wall = 0.0
+    for task_id, r in task_map.items():
+        passed = 1 if r.get("correct") else 0
+        n_passed += passed
+        cost = r.get("cost")
+        tokens = r.get("tokens")
+        wall = r.get("wall")
+        if cost is not None:
+            agg_cost += cost
+        if tokens is not None:
+            agg_tokens += tokens
+        if wall is not None:
+            agg_wall += wall
+        rec_metrics: dict = {}
+        if cost is not None:
+            rec_metrics["cost_usd"] = cost
+        if tokens is not None:
+            rec_metrics["tokens"] = tokens
+        if wall is not None:
+            rec_metrics["wall_s"] = wall
+        out.append({
+            "task_id": task_id,
+            "passed": passed,
+            "reward": 1.0 if passed else 0.0,
+            "metrics": rec_metrics,
+            "labels": {},
+        })
+    return out, n_passed, agg_cost, agg_tokens, agg_wall
+
+
+def _make_run_obj(
+    *,
+    agent_name: str,
+    model: str,
+    graph_code: int,
+    graph_exec: int,
+    graph_mem: int,
+    warm: int,
+    history_depth: int,
+    run_group: str,
+    n_tasks: int,
+    n_passed: int,
+    agg_cost: float,
+    agg_tokens: float,
+    agg_wall: float,
+    results: list[dict],
+    labels: dict,
+) -> dict:
+    run_metrics: dict = {}
+    if agg_cost:
+        run_metrics["cost_usd"] = round(agg_cost, 6)
+    if agg_tokens:
+        run_metrics["tokens"] = agg_tokens
+    if agg_wall:
+        run_metrics["wall_s"] = round(agg_wall, 1)
+    resolved_rate = n_passed / n_tasks if n_tasks > 0 else 0.0
+    return {
+        "schema": "oxagen.eval.v1",
+        "run": {
+            "run_id": uuid.uuid4().hex,
+            "run_group": run_group,
+            "agent_name": agent_name,
+            "agent_version": "",
+            "model": model,
+            "harness": "context-eval",
+            "suite": CONTEXT_EVAL_SUITE,
+            "suite_version": "",
+            "git_sha": "",
+            "git_branch": "",
+            "environment": "local",
+            "graph_code": graph_code,
+            "graph_exec": graph_exec,
+            "graph_mem": graph_mem,
+            "warm": warm,
+            "history_depth": history_depth,
+            "seed": 0,
+            "n_tasks": n_tasks,
+            "n_passed": n_passed,
+            "resolved_rate": round(resolved_rate, 4),
+            "metrics": run_metrics,
+            "labels": labels,
+            "notes": "",
+        },
+        "results": results,
+    }
+
+
+def write_eval_json(all_results: dict, n_rounds: int) -> None:
+    """Emit a normalized ``oxagen.eval.v1`` JSON array for the TS ingester.
+
+    One run object per cold arm, one per warm round, and one extra for the
+    wipe-reversion phase if it ran.  Writes to CONTEXT_EVAL_JSON (env) or
+    ``bench/context-eval/context-eval.eval.json`` next to this script.
+
+    Pure addition — does not modify any eval data already in *all_results*.
+    """
+    out_path = Path(
+        os.environ.get(
+            "CONTEXT_EVAL_JSON",
+            str(Path(__file__).resolve().parent / "context-eval.eval.json"),
+        )
+    )
+
+    runs: list[dict] = []
+
+    # --- Cold arms -----------------------------------------------------------
+    for arm, task_map in all_results.items():
+        if arm == "oxagen-warm":
+            continue
+        meta = _ARM_META.get(
+            arm,
+            {
+                "agent_name": arm,
+                "model": OX_MODEL,
+                "graph_code": 0,
+                "graph_exec": 0,
+                "graph_mem": 0,
+            },
+        )
+        results, n_passed, agg_cost, agg_tokens, agg_wall = _build_task_results(task_map)
+        runs.append(_make_run_obj(
+            agent_name=meta["agent_name"],
+            model=meta["model"],
+            graph_code=meta["graph_code"],
+            graph_exec=meta["graph_exec"],
+            graph_mem=meta["graph_mem"],
+            warm=0,
+            history_depth=0,
+            run_group="",
+            n_tasks=len(results),
+            n_passed=n_passed,
+            agg_cost=agg_cost,
+            agg_tokens=agg_tokens,
+            agg_wall=agg_wall,
+            results=results,
+            labels={},
+        ))
+
+    # --- Warm arm rounds (only if the arm ran) --------------------------------
+    warm_data = all_results.get("oxagen-warm")
+    if warm_data:
+        for key, task_map in warm_data.items():
+            is_wipe = key == "wipe_reversion"
+            if is_wipe:
+                history_depth = 0
+                run_labels: dict = {"phase": "wiped"}
+            else:
+                try:
+                    history_depth = int(key.split("_")[1])
+                except (IndexError, ValueError):
+                    history_depth = 0
+                run_labels = {}
+            results, n_passed, agg_cost, agg_tokens, agg_wall = _build_task_results(task_map)
+            runs.append(_make_run_obj(
+                agent_name="oxagen",
+                model=OX_MODEL,
+                graph_code=1,
+                graph_exec=1,
+                graph_mem=1,
+                warm=1,
+                history_depth=history_depth,
+                run_group="context-warm",
+                n_tasks=len(results),
+                n_passed=n_passed,
+                agg_cost=agg_cost,
+                agg_tokens=agg_tokens,
+                agg_wall=agg_wall,
+                results=results,
+                labels=run_labels,
+            ))
+
+    out_path.write_text(json.dumps(runs, indent=2))
+    print(f"\nEval JSON written to {out_path}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Context-on eval: oxagen warm/cold vs Claude Code.",
@@ -328,6 +540,8 @@ def main() -> None:
                 "the self-improvement signal (H4).  See eval-runbook §7 for statistical "
                 "interpretation."
             )
+
+        write_eval_json(all_results, n_rounds)
 
     finally:
         # Remove the warm home dir unless the caller wants to keep it.
