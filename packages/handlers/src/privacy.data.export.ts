@@ -43,8 +43,13 @@ export const privacyDataExportHandler: CapabilityHandler<
         )
         .limit(1),
     );
+    // org_users.role stores the lowercase membership role ("owner" | "admin" |
+    // "member" — see organization.create.ts / the invite contract enum). Compare
+    // against the lowercase value, NOT the capitalized SystemOrgRole ("Owner")
+    // used by the IAM defaultRoles layer — those are different concepts. Mirrors
+    // privacy.data.erase, which compares the lowercase "owner".
     const role = membership[0]?.role;
-    if (role !== "Owner" && role !== "Admin") {
+    if (role !== "owner" && role !== "admin") {
       throw new Error("Forbidden: org export requires Owner or Admin role");
     }
   }

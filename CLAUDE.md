@@ -186,7 +186,7 @@ Project: `oxagen-v2`. API key in repo root env.
 
 **Context budget:** Delegate to shed context. Pass only file paths, error excerpts, relevant lines. Summarize results; don't quote raw output. Use `/compact` before starting a new logical unit if context is heavy.
 
-**Cost discipline:** Match model to task. Use `pnpm check:manifest --json` for contract introspection. The `ontology.*` graph query layer is **not yet shipped** — do not attempt those calls. `agent.code.execute` IS wired; use the contract, not raw `code.*` calls.
+**Cost discipline:** Match model to task. Use `pnpm check:manifest --json` for contract introspection. The `ontology.*` graph query layer **is wired** — `ontology.neighbors` and `ontology.query` have contracts, API routes, and MCP tools; call them via `invoke()`/the contract, never Neo4j directly. `agent.code.execute` IS wired; use the contract, not raw `code.*` calls.
 
 ## Local frontend verification
 
@@ -218,10 +218,10 @@ Authorized and encouraged every session without asking permission. Use `creds.js
 - `apps/mcp` — xmcp. Tools at `apps/mcp/src/tools/<capability>.ts`. Connect at `/mcp`.
 - **Capability parity rule:** new user-facing action → contract in `packages/oxagen/src/contracts/` → API route → MCP tool → CLI command. Run `pnpm check:manifest` to verify.
 - **Static mock sections** (`knowledge.*`, `access.*`, `security.*`, `activity.*`, `developer.*`, `tools/studio.*`, several billing/settings/profile actions) must NOT be wired to live data until a contract exists. Correct order: contract → API route → MCP tool → UI wire-up.
-- **`check:manifest` false positives:** combined route files report false-positive gaps. `workflow.ts` covers `workflow.run/cancel/status`; `connection.ts` covers all 10 `connection.*` capabilities (create/delete/get/list/mappings.get/mappings.set/mappings.suggest/pause/preview/update); `integration.ts` covers all 7 `integration.*` capabilities; `repo.ts` covers all 5 `repo.*` capabilities; `semantic-edge.ts` covers all 4 `semantic.edge.*` capabilities; `plugin-schema.ts` covers `plugin.schema.get/validate` + `plugin.version.list`. All are mounted in `apps/api/src/app.ts`. Verify by reading the file before filing a parity ticket.
+- **`check:manifest` false positives:** combined route files report false-positive gaps. `workflow.ts` covers `workflow.run/cancel/status`; `connection.ts` covers all 10 `connection.*` capabilities (create/delete/get/list/mappings.get/mappings.set/mappings.suggest/pause/preview/update); `integration.ts` covers all 7 `integration.*` capabilities; `repo.ts` covers all 5 `repo.*` capabilities; `semantic-edge.ts` covers all 4 `semantic.edge.*` capabilities; `semantic-relationship.ts` covers all 4 `semantic.relationship.*` capabilities (approve/infer/list/suggest); `schema.ts` covers all 23 `schema.*` capabilities (chat/export/list/setup/toggle/recommend/reconcile.dispatch/reconcile.status/registry.config/registry.get/label.upsert/label.delete/property.upsert/property.delete/relationship.upsert/relationship.delete/validate.node/validate.relationship/version.create/version.diff/version.list/version.pin); `plugin-schema.ts` covers `plugin.schema.get/validate` + `plugin.version.list`. All are mounted in `apps/api/src/app.ts`. Verify by reading the file before filing a parity ticket. To see only genuine surface gaps (ignore docs/unit/e2e-only entries): `pnpm check:manifest --json` and filter for gaps whose `missing` includes `api` or `mcp`.
 
 ### `apps/cli`
-Commander + Ink. Entry: `apps/cli/src/index.tsx`. 124 command files. `oxagen dev` is the dev-stack launcher.
+Commander + Ink. Entry: `apps/cli/src/index.tsx`. Command modules live in `apps/cli/src/commands/` (count drifts — do not hard-code it). `oxagen dev` is the dev-stack launcher.
 
 ### `apps/docs`
 Fumadocs/MDX. Statically generated. No interactive runtime.
