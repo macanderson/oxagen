@@ -7,6 +7,7 @@
  * 2. Written to the context store as an episodic record
  * 3. Available for recall via its record handle
  */
+import { z } from "zod";
 
 export interface StructuredToolResult {
   /** Tool that was executed. */
@@ -69,11 +70,47 @@ function generateSummary(toolName: string, result: unknown, success: boolean): s
   return `${toolName} [${status}]`;
 }
 
+/**
+ * Did a tool result represent an error? Mirrors the canonical heuristic in
+ * `agent/loop.ts` (kept in sync deliberately): an Error instance, an explicit
+ * `isError === true`, or a *present and truthy* `error` field. The earlier
+ * version here used `"error" in result`, which mis-classified a successful
+ * `{ error: null }` (or `{ error: false }`) as a failure and missed the
+ * `{ isError: true }` convention entirely.
+ */
 function isErrorResult(result: unknown): boolean {
-  if (result === null || result === undefined) return false;
-  if (typeof result === "object" && "error" in result) return true;
   if (result instanceof Error) return true;
+  if (result && typeof result === "object") {
+    const o = result as { isError?: unknown; error?: unknown };
+    if (o.isError === true) return true;
+    if (o.error != null && o.error !== false) return true;
+  }
   return false;
+}
+
+/**
+ * Zod schema for a {@link StructuredToolResult}. Use {@link parseStructuredToolResult}
+ * to validate a record that crossed a trust boundary (IPC / daemon / disk)
+ * before treating it as structured output, rather than casting blindly.
+ */
+export const structuredToolResultSchema = z.object({
+  toolName: z.string(),
+  success: z.boolean(),
+  summary: z.string(),
+  data: z.unknown(),
+  metadata: z.object({
+    executionMs: z.number(),
+    tokenEstimate: z.number(),
+    recordHandle: z.string().optional(),
+  }),
+});
+
+/** Validate an untrusted value as a StructuredToolResult; null if it doesn't conform. */
+export function parseStructuredToolResult(
+  value: unknown,
+): StructuredToolResult | null {
+  const parsed = structuredToolResultSchema.safeParse(value);
+  return parsed.success ? (parsed.data as StructuredToolResult) : null;
 }
 
 function estimateTokens(result: unknown): number {
