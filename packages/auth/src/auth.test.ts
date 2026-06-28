@@ -179,17 +179,17 @@ function getSessionHook(event: "create" | "delete", phase: "after"): AnyFn {
     string,
     Record<string, Record<string, AnyFn>>
   >;
-  return hooks["session"][event][phase];
+  return hooks["session"]![event]![phase]!;
 }
 
 function getSendResetPasswordFn(): AnyFn {
   const epw = getConfig()["emailAndPassword"] as Record<string, AnyFn>;
-  return epw["sendResetPassword"];
+  return epw["sendResetPassword"]!;
 }
 
 function getSendVerificationEmailFn(): AnyFn {
   const ev = getConfig()["emailVerification"] as Record<string, AnyFn>;
-  return ev["sendVerificationEmail"];
+  return ev["sendVerificationEmail"]!;
 }
 
 // ---------------------------------------------------------------------------
@@ -264,8 +264,8 @@ describe("auth module — import and betterAuth config", () => {
     expect(rl["window"]).toBe(60);
     expect(rl["max"]).toBe(100);
     const rules = rl["customRules"] as Record<string, Record<string, number>>;
-    expect(rules["/sign-in/email"]["max"]).toBe(5);
-    expect(rules["/sign-up/email"]["max"]).toBe(10);
+    expect(rules["/sign-in/email"]!["max"]).toBe(5);
+    expect(rules["/sign-up/email"]!["max"]).toBe(10);
   });
 
   it("session expiresIn=30d, updateAge=1d", () => {
@@ -287,7 +287,7 @@ describe("auth module — import and betterAuth config", () => {
   it("advanced.database.generateId produces a valid UUID", () => {
     const adv = getConfig()["advanced"] as Record<string, unknown>;
     const dbOpts = adv["database"] as Record<string, () => string>;
-    const uuid = dbOpts["generateId"]();
+    const uuid = dbOpts["generateId"]!();
     expect(uuid).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
@@ -295,7 +295,7 @@ describe("auth module — import and betterAuth config", () => {
 
   it("account.accountLinking: enabled, trusts google+github, no local verified required", () => {
     const acct = getConfig()["account"] as Record<string, Record<string, unknown>>;
-    const linking = acct["accountLinking"];
+    const linking = acct["accountLinking"]!;
     expect(linking["enabled"]).toBe(true);
     expect(linking["trustedProviders"]).toEqual(["google", "github"]);
     expect(linking["requireLocalEmailVerified"]).toBe(false);
@@ -303,8 +303,8 @@ describe("auth module — import and betterAuth config", () => {
 
   it("user field mapping: name→displayName, image→avatarUrl", () => {
     const user = getConfig()["user"] as Record<string, Record<string, string>>;
-    expect(user["fields"]["name"]).toBe("displayName");
-    expect(user["fields"]["image"]).toBe("avatarUrl");
+    expect(user["fields"]!["name"]).toBe("displayName");
+    expect(user["fields"]!["image"]).toBe("avatarUrl");
   });
 
   it("socialProviders are configured when credentials are present (mock returns fallback values)", () => {
@@ -318,8 +318,8 @@ describe("auth module — import and betterAuth config", () => {
     const hooks = getConfig()["databaseHooks"] as Record<string, unknown>;
     expect(hooks).toHaveProperty("account");
     const session = hooks["session"] as Record<string, Record<string, unknown>>;
-    expect(typeof session["create"]["after"]).toBe("function");
-    expect(typeof session["delete"]["after"]).toBe("function");
+    expect(typeof session["create"]!["after"]).toBe("function");
+    expect(typeof session["delete"]!["after"]).toBe("function");
   });
 });
 
@@ -340,7 +340,7 @@ describe("emailAndPassword.sendResetPassword callback", () => {
     });
 
     expect(sendEmailFireAndForget).toHaveBeenCalledOnce();
-    const [emailArg, tagArg] = vi.mocked(sendEmailFireAndForget).mock.calls[0] as [
+    const [emailArg, tagArg] = vi.mocked(sendEmailFireAndForget).mock.calls[0]! as [
       Record<string, unknown>,
       string,
     ];
@@ -373,7 +373,7 @@ describe("emailVerification.sendVerificationEmail callback", () => {
     });
 
     expect(sendEmailFireAndForget).toHaveBeenCalledOnce();
-    const [emailArg, tagArg] = vi.mocked(sendEmailFireAndForget).mock.calls[0] as [
+    const [emailArg, tagArg] = vi.mocked(sendEmailFireAndForget).mock.calls[0]! as [
       Record<string, unknown>,
       string,
     ];
@@ -410,7 +410,7 @@ describe("databaseHooks.session.create.after (sign_in audit)", () => {
     await hook({ userId: "user_1", ipAddress: "1.2.3.4", userAgent: "TestBrowser/1" });
 
     expect(emitSecurityEvent).toHaveBeenCalledOnce();
-    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0] as [Record<string, unknown>];
+    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [Record<string, unknown>];
     expect(event["eventType"]).toBe("auth.sign_in");
     expect(event["actorUserId"]).toBe("user_1");
     expect(event["orgId"]).toBe("org_happy");
@@ -427,7 +427,7 @@ describe("databaseHooks.session.create.after (sign_in audit)", () => {
     await hook({ userId: "user_new" });
 
     expect(emitSecurityEvent).toHaveBeenCalledOnce();
-    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0] as [Record<string, unknown>];
+    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [Record<string, unknown>];
     expect(event["orgId"]).toBe("00000000-0000-0000-0000-000000000000");
   });
 
@@ -451,7 +451,7 @@ describe("databaseHooks.session.create.after (sign_in audit)", () => {
     const hook = getSessionHook("create", "after");
     await hook({ userId: "user_3", ipAddress: "203.0.113.5", userAgent: "curl/7.88" });
 
-    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0] as [Record<string, unknown>];
+    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [Record<string, unknown>];
     expect(event["ip"]).toBe("203.0.113.5");
     expect(event["userAgent"]).toBe("curl/7.88");
   });
@@ -465,7 +465,7 @@ describe("databaseHooks.session.create.after (sign_in audit)", () => {
     const hook = getSessionHook("create", "after");
     await hook({ userId: "user_4" }); // no ip/userAgent fields
 
-    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0] as [Record<string, unknown>];
+    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [Record<string, unknown>];
     expect(event["ip"]).toBeNull();
     expect(event["userAgent"]).toBeNull();
   });
@@ -505,7 +505,7 @@ describe("databaseHooks.session.delete.after (sign_out audit)", () => {
     await hook({ userId: "user_del_1", ipAddress: "10.0.0.9", userAgent: "Agent/2" });
 
     expect(emitSecurityEvent).toHaveBeenCalledOnce();
-    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0] as [Record<string, unknown>];
+    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [Record<string, unknown>];
     expect(event["eventType"]).toBe("auth.sign_out");
     expect(event["actorUserId"]).toBe("user_del_1");
     expect(event["orgId"]).toBe("org_signout");
@@ -521,7 +521,7 @@ describe("databaseHooks.session.delete.after (sign_out audit)", () => {
     const hook = getSessionHook("delete", "after");
     await hook({ userId: "user_del_2" });
 
-    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0] as [Record<string, unknown>];
+    const [event] = vi.mocked(emitSecurityEvent).mock.calls[0]! as unknown as [Record<string, unknown>];
     expect(event["orgId"]).toBe("00000000-0000-0000-0000-000000000000");
   });
 
