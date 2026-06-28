@@ -11,7 +11,8 @@ export type CodeNodeKind =
   | "import"
   | "export"
   | "type"
-  | "interface";
+  | "interface"
+  | "arrow_function";
 
 export interface CodeNode {
   /** Content-addressed: hash of path + name + kind. */

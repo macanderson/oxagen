@@ -59,14 +59,14 @@ await build({
   logOverride: { "empty-import-meta": "silent" },
 });
 
-// tree-sitter WASM blobs: packages/ingestion/src/parsers/loader.ts loads these
-// lazily at runtime (repo ingestion via the bundled Inngest functions). They
-// are binary assets esbuild can't inline — copy them next to the bundle, where
+// tree-sitter WASM blobs: @oxagen/code-graph/src/loader.ts loads these lazily
+// at runtime (repo ingestion via the bundled Inngest functions). They are binary
+// assets esbuild can't inline — copy them next to the bundle, where
 // loader.ts's resolveWasm() looks first (module __dirname inside the function).
-// Resolve from packages/ingestion (which declares these deps); the wasm files
-// are not in the packages' exports maps, so resolve each package.json and join.
+// Resolve from packages/code-graph (which owns the tree-sitter deps); the wasm
+// files are not in the packages' exports maps, so resolve each package.json and join.
 const require = createRequire(
-  new URL("../../packages/ingestion/package.json", import.meta.url),
+  new URL("../../packages/code-graph/package.json", import.meta.url),
 );
 const WASM_ASSETS = [
   ["web-tree-sitter", "tree-sitter.wasm"],

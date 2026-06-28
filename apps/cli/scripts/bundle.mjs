@@ -16,10 +16,18 @@
  * bundle is the portable artifact we upload into that container: one `.mjs` file
  * + Node 22, nothing else.
  *
+ * WASM grammars:
+ * The CLI now uses @oxagen/code-graph (tree-sitter) for code-graph construction.
+ * tree-sitter WASM files are binary assets esbuild cannot inline; they are copied
+ * next to the bundle so the loader's resolveWasm() finds them via import.meta.url
+ * (ESM bundle: import.meta.url is the bundle's own URL, so moduleDir() = the
+ * dist-standalone/ directory where the wasm files live).
+ *
  * Output: apps/cli/dist-standalone/oxagen.mjs  (runnable: `node oxagen.mjs "…"`)
  */
 import { build } from "esbuild";
-import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -113,6 +121,29 @@ const lines = readFileSync(outfile, "utf8").split("\n");
 while (lines.length && lines[0].startsWith("#!")) lines.shift();
 writeFileSync(outfile, ["#!/usr/bin/env node", ...lines].join("\n"));
 chmodSync(outfile, 0o755);
+
+// Copy tree-sitter WASM grammars next to the bundle.
+// @oxagen/code-graph/src/loader.ts's resolveWasm() checks moduleDir() first
+// (which is the bundle's directory in ESM bundles — import.meta.url points at
+// the oxagen.mjs file, so dirname(fileURLToPath(import.meta.url)) = dist-standalone/).
+// Resolve from @oxagen/code-graph since it owns the tree-sitter deps.
+const outDir = dirname(outfile);
+mkdirSync(outDir, { recursive: true });
+const codeGraphRequire = createRequire(
+  new URL("../../../packages/code-graph/package.json", import.meta.url),
+);
+const WASM_ASSETS = [
+  ["web-tree-sitter", "tree-sitter.wasm"],
+  ["tree-sitter-typescript", "tree-sitter-typescript.wasm"],
+  ["tree-sitter-python", "tree-sitter-python.wasm"],
+];
+for (const [pkg, file] of WASM_ASSETS) {
+  const pkgDir = dirname(codeGraphRequire.resolve(`${pkg}/package.json`));
+  const src = resolve(pkgDir, file);
+  const dest = resolve(outDir, file);
+  copyFileSync(src, dest);
+  console.log(`  copied ${file} → dist-standalone/`);
+}
 
 console.log(`\n✔ oxagen standalone bundle written to ${outfile}`);
 console.log("  Run it with:  node " + outfile + " --version");
