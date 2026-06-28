@@ -4,3 +4,20 @@ export { MemoryWorkspace } from "./workspaces/memory";
 export { buildWorkspaceTools } from "./tools";
 // LocalWorkspace is a CLI adapter (Stage B), not engine code — see ADR-019.
 export { runCodingAgent, changedFilesFromDiff } from "./engine";
+
+// Stage A4 — model router + rate card.
+export * from "./router/index";
+
+// Stage A6 — trace types + system prompt.
+export * from "./trace/types";
+export * from "./prompt/system-prompt";
+
+// Stage A5 — evaluator + judge + prompt enhancer.
+export * from "./evaluate/index";
+
+// Stage A7 — fleet types + orchestrator.
+export * from "./fleet/index";
+
+// Stage A7 — pipeline + planner.
+export * from "./pipeline/index";
+export * from "./planner/index";

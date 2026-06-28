@@ -1,6 +1,43 @@
 import type { ModelMessage } from "ai";
 import type { AgentAi, MemoryProvider, TraceStore } from "./ports";
 
+// ── Model tiers + usage accounting ──────────────────────────────────────────
+// Shared by router, trace types, evaluator, planner, and fleet.
+
+/** Cost/capability tier. Maps to a concrete gateway model via the model router. */
+export type ModelTier = "fast" | "balanced" | "precise";
+
+/** Token + cost accounting for one call or the whole fleet. */
+export interface UsageTotals {
+  inputTokens: number;
+  outputTokens: number;
+  /** Estimated provider cost in USD, from the vendored rate card. */
+  costUsd: number;
+}
+
+export function emptyUsage(): UsageTotals {
+  return { inputTokens: 0, outputTokens: 0, costUsd: 0 };
+}
+
+/** Merge two UsageTotals additively. */
+export function mergeUsage(a: UsageTotals, b: UsageTotals): UsageTotals {
+  return {
+    inputTokens: a.inputTokens + b.inputTokens,
+    outputTokens: a.outputTokens + b.outputTokens,
+    costUsd: a.costUsd + b.costUsd,
+  };
+}
+
+// ── Project context (injected by CLI; type lives here for engine portability) ─
+
+/** Loaded project rules (CLAUDE.md / AGENTS.md / etc.), ready to inject. */
+export interface ProjectContext {
+  /** Concatenated rule text, ready to drop into the system prompt. */
+  text: string;
+  /** Source files that contributed, relative to cwd. */
+  sources: string[];
+}
+
 export interface CommandResult {
   exitCode: number;
   stdout: string;

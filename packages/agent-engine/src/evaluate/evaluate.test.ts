@@ -1,0 +1,435 @@
+/**
+ * Tests for the engine's evaluate sub-package.
+ *
+ * Tests evaluatePrompt, judgeCompleteness, buildRevisionPrompt, and
+ * extractCandidates via mocked AgentAi ports — never hits the gateway.
+ */
+import { describe, it, expect, vi } from "vitest";
+import { evaluatePrompt } from "./evaluator";
+import {
+  judgeCompleteness,
+  buildRevisionPrompt,
+  pickAdvisorModel,
+  DEFAULT_ADVISOR_MODEL,
+} from "./judge";
+import { extractCandidates, enhancePrompt } from "./prompt-enhancer";
+import type { AgentAi } from "../ports";
+import { emptyUsage } from "../types";
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+function makeAi(overrides: Partial<AgentAi> = {}): AgentAi {
+  return {
+    stream: vi.fn() as AgentAi["stream"],
+    generateObject: vi.fn() as AgentAi["generateObject"],
+    ...overrides,
+  };
+}
+
+// ── evaluatePrompt ────────────────────────────────────────────────────────────
+
+describe("evaluatePrompt", () => {
+  it("returns model output when ai.generateObject succeeds", async () => {
+    const ai = makeAi({
+      generateObject: vi.fn().mockResolvedValue({
+        object: {
+          completeness: 80,
+          complexity: 40,
+          recommendedTier: "balanced",
+          missing: [],
+          contextQueries: ["loginUser"],
+          refinedPrompt: "Fix the login timeout bug in src/auth/session.ts",
+          removed: ["please"],
+          reasoning: "Well-scoped task.",
+        },
+        usage: { inputTokens: 100, outputTokens: 50 },
+      }),
+    });
+
+    const result = await evaluatePrompt(
+      { prompt: "please fix the login timeout bug in src/auth/session.ts" },
+      ai,
+    );
+
+    expect(result.completeness).toBe(80);
+    expect(result.complexity).toBe(40);
+    expect(result.recommendedTier).toBe("balanced");
+    expect(result.contextQueries).toContain("loginUser");
+    expect(result.refinedPrompt).toContain("Fix the login timeout");
+    expect(result.fallback).toBe(false);
+    expect(result.usage.inputTokens).toBe(100);
+  });
+
+  it("falls back to heuristic when ai.generateObject throws", async () => {
+    const ai = makeAi({
+      generateObject: vi.fn().mockRejectedValue(new Error("gateway unavailable")),
+    });
+
+    const result = await evaluatePrompt({ prompt: "fix the auth bug" }, ai);
+
+    expect(result.fallback).toBe(true);
+    // Auth-related prompt → precise tier heuristically
+    expect(result.recommendedTier).toBe("precise");
+    // Prompt is returned unchanged by the heuristic
+    expect(result.refinedPrompt).toBe("fix the auth bug");
+  });
+
+  it("falls back to original prompt when refined prompt is empty", async () => {
+    const ai = makeAi({
+      generateObject: vi.fn().mockResolvedValue({
+        object: {
+          completeness: 50,
+          complexity: 30,
+          recommendedTier: "fast",
+          missing: [],
+          contextQueries: [],
+          refinedPrompt: "  ", // empty after trim
+          removed: [],
+          reasoning: "short prompt",
+        },
+        usage: emptyUsage(),
+      }),
+    });
+
+    const result = await evaluatePrompt({ prompt: "rename the thing" }, ai);
+    expect(result.refinedPrompt).toBe("rename the thing");
+  });
+
+  it("clamps scores outside 0–100", async () => {
+    const ai = makeAi({
+      generateObject: vi.fn().mockResolvedValue({
+        object: {
+          completeness: 150, // over 100
+          complexity: -10, // under 0
+          recommendedTier: "fast",
+          missing: [],
+          contextQueries: [],
+          refinedPrompt: "do it",
+          removed: [],
+          reasoning: "test",
+        },
+        usage: emptyUsage(),
+      }),
+    });
+
+    const result = await evaluatePrompt({ prompt: "do it" }, ai);
+    expect(result.completeness).toBe(100);
+    expect(result.complexity).toBe(0);
+  });
+});
+
+// ── judgeCompleteness ─────────────────────────────────────────────────────────
+
+describe("judgeCompleteness", () => {
+  it("returns complete verdict when ai says so", async () => {
+    const ai = makeAi({
+      generateObject: vi.fn().mockResolvedValue({
+        object: {
+          complete: true,
+          confidence: 95,
+          findings: [],
+          remainingWork: [],
+          reasoning: "All changes were made correctly.",
+        },
+        usage: { inputTokens: 200, outputTokens: 80 },
+      }),
+    });
+
+    const result = await judgeCompleteness(
+      {
+        request: "Add a button to the header",
+        response: "I've added the Button component to Header.tsx",
+        filesTouched: ["src/components/Header.tsx"],
+        commandsRun: [],
+        steps: 3,
+        executorModel: "anthropic/claude-sonnet-4.6",
+      },
+      ai,
+    );
+
+    expect(result.complete).toBe(true);
+    expect(result.confidence).toBe(95);
+    expect(result.fallback).toBe(false);
+  });
+
+  it("returns incomplete verdict with findings", async () => {
+    const ai = makeAi({
+      generateObject: vi.fn().mockResolvedValue({
+        object: {
+          complete: false,
+          confidence: 80,
+          findings: ["Tests were not added"],
+          remainingWork: ["Add unit tests for the new button"],
+          reasoning: "The button was added but tests are missing.",
+        },
+        usage: emptyUsage(),
+      }),
+    });
+
+    const result = await judgeCompleteness(
+      {
+        request: "Add a button with tests",
+        response: "I added the button",
+        filesTouched: ["src/Button.tsx"],
+        commandsRun: [],
+        steps: 2,
+        executorModel: "anthropic/claude-haiku-4.5",
+      },
+      ai,
+    );
+
+    expect(result.complete).toBe(false);
+    expect(result.findings).toContain("Tests were not added");
+  });
+
+  it("falls back to heuristic when ai throws", async () => {
+    const ai = makeAi({
+      generateObject: vi.fn().mockRejectedValue(new Error("timeout")),
+    });
+
+    const result = await judgeCompleteness(
+      {
+        request: "Create a new file",
+        response: "I created the file",
+        filesTouched: [],
+        commandsRun: [],
+        steps: 0,
+        executorModel: "anthropic/claude-opus-4.8",
+      },
+      ai,
+    );
+
+    expect(result.fallback).toBe(true);
+    // Claims change but touched nothing → heuristic marks incomplete
+    expect(result.complete).toBe(false);
+  });
+
+  it("heuristic marks complete when no obvious incompleteness", async () => {
+    const ai = makeAi({
+      generateObject: vi.fn().mockRejectedValue(new Error("timeout")),
+    });
+
+    const result = await judgeCompleteness(
+      {
+        request: "What does this code do?",
+        response: "This code implements an auth module.",
+        filesTouched: [],
+        commandsRun: [],
+        steps: 1,
+        executorModel: "anthropic/claude-haiku-4.5",
+      },
+      ai,
+    );
+
+    expect(result.fallback).toBe(true);
+    expect(result.complete).toBe(true); // read-only ask, no change expected
+  });
+
+  it("clamps confidence to 0–100", async () => {
+    const ai = makeAi({
+      generateObject: vi.fn().mockResolvedValue({
+        object: {
+          complete: true,
+          confidence: 110, // over 100
+          findings: [],
+          remainingWork: [],
+          reasoning: "test",
+        },
+        usage: emptyUsage(),
+      }),
+    });
+
+    const result = await judgeCompleteness(
+      {
+        request: "test",
+        response: "done",
+        filesTouched: [],
+        commandsRun: [],
+        steps: 0,
+        executorModel: "some/model",
+      },
+      ai,
+    );
+
+    expect(result.confidence).toBe(100);
+  });
+});
+
+describe("pickAdvisorModel", () => {
+  it("returns default advisor when it differs from executor", () => {
+    const m = pickAdvisorModel("anthropic/claude-haiku-4.5");
+    expect(m).toBe(DEFAULT_ADVISOR_MODEL);
+  });
+
+  it("returns a different model when executor IS the default advisor", () => {
+    const m = pickAdvisorModel(DEFAULT_ADVISOR_MODEL);
+    expect(m).not.toBe(DEFAULT_ADVISOR_MODEL);
+  });
+});
+
+// ── buildRevisionPrompt ───────────────────────────────────────────────────────
+
+describe("buildRevisionPrompt", () => {
+  it("includes findings and remaining work", () => {
+    const prompt = buildRevisionPrompt({
+      complete: false,
+      confidence: 60,
+      findings: ["Missing tests", "No type annotations"],
+      remainingWork: ["Add vitest tests", "Add types"],
+      reasoning: "Both are missing",
+      model: "some/model",
+      fallback: false,
+      usage: emptyUsage(),
+    });
+
+    expect(prompt).toContain("Missing tests");
+    expect(prompt).toContain("Add vitest tests");
+    expect(prompt).toContain("NOT done");
+  });
+});
+
+// ── extractCandidates ─────────────────────────────────────────────────────────
+
+describe("extractCandidates", () => {
+  it("extracts backtick symbols", () => {
+    const { symbols } = extractCandidates("Fix the `loginUser` function");
+    expect(symbols).toContain("loginUser");
+  });
+
+  it("extracts backtick paths", () => {
+    const { paths } = extractCandidates("The bug is in `src/auth/session.ts`");
+    expect(paths).toContain("src/auth/session.ts");
+  });
+
+  it("extracts CamelCase identifiers from prose", () => {
+    const { symbols } = extractCandidates("The GraphNode component is broken");
+    expect(symbols).toContain("GraphNode");
+  });
+
+  it("extracts snake_case identifiers from prose", () => {
+    const { symbols } = extractCandidates("fix the build_tools script");
+    expect(symbols).toContain("build_tools");
+  });
+
+  it("deduplicates candidates", () => {
+    const { symbols } = extractCandidates("`loginUser` and `loginUser` again");
+    expect(symbols.filter((s) => s === "loginUser").length).toBe(1);
+  });
+
+  it("returns empty arrays for plain text", () => {
+    const { symbols, paths } = extractCandidates("fix the bug please");
+    expect(symbols).toHaveLength(0);
+    expect(paths).toHaveLength(0);
+  });
+});
+
+// ── enhancePrompt ─────────────────────────────────────────────────────────────
+
+describe("enhancePrompt", () => {
+  it("returns original prompt when no codeGraph or memory", async () => {
+    const result = await enhancePrompt({ prompt: "fix the bug" });
+    expect(result.prompt).toBe("fix the bug");
+    expect(result.context).toBe("");
+    expect(result.resolved).toHaveLength(0);
+    expect(result.hasMemory).toBe(false);
+  });
+
+  it("injects code graph results for matching symbols", async () => {
+    const codeGraph = {
+      query: vi.fn().mockResolvedValue("src/auth/session.ts:5: loginUser function"),
+    };
+
+    const result = await enhancePrompt({
+      prompt: "fix the `loginUser` function",
+      codeGraph,
+    });
+
+    expect(result.context).toContain("loginUser");
+    expect(result.resolved).toContain("loginUser");
+    expect(result.prompt).toContain("code graph");
+  });
+
+  it("skips code graph results that are misses", async () => {
+    const codeGraph = {
+      query: vi.fn().mockResolvedValue("No symbols matching foo"),
+    };
+
+    const result = await enhancePrompt({
+      prompt: "fix the `foo` function",
+      codeGraph,
+    });
+
+    expect(result.resolved).toHaveLength(0);
+    expect(result.context).toBe("");
+  });
+
+  it("injects memory context when provider returns non-empty string", async () => {
+    const memory = {
+      recallContext: vi.fn().mockResolvedValue("Remember: always run tests after changes"),
+      remember: vi.fn(),
+    };
+
+    const result = await enhancePrompt({
+      prompt: "make a change",
+      memory,
+    });
+
+    expect(result.hasMemory).toBe(true);
+    expect(result.context).toContain("Recalled context");
+    expect(result.context).toContain("always run tests");
+  });
+
+  it("handles memory provider throwing gracefully", async () => {
+    const memory = {
+      recallContext: vi.fn().mockRejectedValue(new Error("memory error")),
+      remember: vi.fn(),
+    };
+
+    const result = await enhancePrompt({ prompt: "test", memory });
+    expect(result.hasMemory).toBe(false);
+    expect(result.prompt).toBe("test");
+  });
+
+  it("handles code graph throwing gracefully", async () => {
+    const codeGraph = {
+      query: vi.fn().mockRejectedValue(new Error("graph error")),
+    };
+
+    const result = await enhancePrompt({
+      prompt: "fix `loginUser`",
+      codeGraph,
+    });
+
+    expect(result.resolved).toHaveLength(0);
+    expect(result.prompt).toBe("fix `loginUser`");
+  });
+
+  it("uses extraQueries for additional symbol lookups", async () => {
+    const codeGraph = {
+      query: vi.fn().mockResolvedValue("found: sessionStore definition"),
+    };
+
+    const result = await enhancePrompt({
+      prompt: "fix the session timeout",
+      codeGraph,
+      extraQueries: ["sessionStore"],
+    });
+
+    expect(result.resolved).toContain("sessionStore");
+  });
+
+  it("records retrieval stats", async () => {
+    const codeGraph = {
+      query: vi.fn().mockResolvedValue("No symbols matching xyz"),
+    };
+
+    const result = await enhancePrompt({
+      prompt: "fix `xyz`",
+      codeGraph,
+    });
+
+    expect(result.retrieval.symbolsQueried).toContain("xyz");
+    expect(result.retrieval.unresolved).toContain("xyz");
+    expect(result.retrieval.resolved).toHaveLength(0);
+  });
+});

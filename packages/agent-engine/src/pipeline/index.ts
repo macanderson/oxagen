@@ -1,0 +1,537 @@
+/**
+ * The turn pipeline — what every user prompt flows through.
+ *
+ * This is the orchestrator that makes the engine excellent at context and honest
+ * about completion. For each prompt it:
+ *
+ *   1. EVALUATE — a cheap model scores completeness + complexity and proposes
+ *      context to pull and a noise-removed rewrite.
+ *   2. ENHANCE  — the code graph + recalled memory are injected, grounding the
+ *      agent in the real files/symbols involved.
+ *   3. ROUTE    — the Haiku evaluator's chosen tier selects the worker model
+ *      (cheapest tier for the job); a one-way deterministic safety floor only
+ *      prevents under-spending on high-stakes domains.
+ *   4. EXECUTE  — the coding agent runs the local tool loop.
+ *   5. JUDGE    — a DIFFERENT model (default: the most powerful OpenAI model)
+ *      checks whether the work is actually complete.
+ *   6. REVISE   — if it isn't, the agent is sent back with the judge's findings,
+ *      then re-judged, up to a bounded number of rounds.
+ *
+ * Every stage emits a {@link StageEvent} so the REPL can show the process live,
+ * and the whole thing is recorded as a {@link TurnTrace} for `/replay`. The
+ * pipeline degrades gracefully: any evaluator/judge model failure falls back to a
+ * heuristic, so a turn always runs.
+ *
+ * Unlike the CLI `runTurn`, this version takes a {@link Workspace} and an
+ * {@link AgentAi} port rather than a `cwd` string and CLI-specific modules.
+ * It also does NOT check for a gateway key — that is the caller's responsibility.
+ */
+import type { ModelMessage } from "ai";
+import { runCodingAgent } from "../engine.js";
+import { evaluatePrompt } from "../evaluate/evaluator.js";
+import { judgeCompleteness, buildRevisionPrompt } from "../evaluate/judge.js";
+import { enhancePrompt } from "../evaluate/prompt-enhancer.js";
+import {
+  classifyTier,
+  modelForTier,
+  tierForSlug,
+  tierLabel,
+  accumulateUsage,
+} from "../router/model-router.js";
+import { emptyUsage, mergeUsage } from "../types.js";
+import type { ModelTier, UsageTotals, Workspace, CodeGraphProvider, ProjectContext } from "../types.js";
+import type { AgentAi, MemoryProvider, TraceStore } from "../ports.js";
+import type {
+  EnhancementTrace,
+  JudgeVerdict,
+  PhaseStat,
+  PromptEvaluation,
+  StageEvent,
+  ToolEvent,
+  TurnTrace,
+} from "../trace/types.js";
+
+const TIER_RANK: Record<ModelTier, number> = { fast: 0, balanced: 1, precise: 2 };
+
+/** Cap stored free-text so a single trace file can't grow without bound. */
+function truncate(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max) + "…" : s;
+}
+
+let traceCounter = 0;
+function newTraceId(): string {
+  traceCounter = (traceCounter + 1) % 1_000_000;
+  return `turn_${Date.now().toString(36)}_${traceCounter.toString(36)}`;
+}
+
+export interface RunTurnOptions {
+  /** The user's prompt for this turn, exactly as typed. */
+  prompt: string;
+  /** Workspace the agent operates on. */
+  workspace: Workspace;
+  /** Injected AI port — BYOK/unmetered in the CLI, metered on the platform. */
+  ai: AgentAi;
+  /** Prior conversation messages (for multi-turn sessions). */
+  history?: ModelMessage[];
+  /** Manual model override — pins the executor and skips auto-routing. */
+  model?: string;
+  /** Max tool-loop steps per execution round (default 32). */
+  maxSteps?: number;
+  /** Loaded project rules (CLAUDE.md/AGENTS.md). */
+  projectContext?: ProjectContext;
+  /** Read-only mode: no file mutation, and the auto-revise loop is disabled. */
+  readOnly?: boolean;
+  /** Episodic session memory (recalled before, written after). */
+  memory?: MemoryProvider | null;
+  /** Code graph provider for prompt enhancement. */
+  codeGraph?: CodeGraphProvider | null;
+  /** Trace sink for recording the turn record. */
+  trace?: TraceStore | null;
+  /** Max judge→revise rounds (default 1; 0 disables auto-revision). */
+  maxReviseRounds?: number;
+  /** Skip the eval/enhance/judge pipeline and run the bare agent. */
+  bare?: boolean;
+  /**
+   * Capture full per-phase telemetry (timing, per-model token/cost breakdown,
+   * tool calls + results, the injected context) onto the trace, for `/verbose`.
+   */
+  verbose?: boolean;
+  /** Abort the turn (e.g. user hit Ctrl-C / Esc). */
+  signal?: AbortSignal;
+  /** Live stage events for the UI. */
+  onStage?: (e: StageEvent) => void;
+  /** Streamed assistant text deltas. */
+  onText?: (delta: string) => void;
+  /** Fired when the model invokes a tool. */
+  onToolCall?: (name: string, input: unknown) => void;
+}
+
+export interface RunTurnResult {
+  /** The agent's final assistant text (last execution round). */
+  text: string;
+  /** Tool-loop steps across all execution rounds. */
+  steps: number;
+  /** Full message history including this turn's assistant/tool messages. */
+  messages: ModelMessage[];
+  usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+  /** The full, persisted record of how this turn was handled. */
+  trace: TurnTrace;
+}
+
+/** Pull the file path from a write/edit tool call, or a command from bash. */
+function collectActivity(
+  name: string,
+  input: unknown,
+  files: Set<string>,
+  commands: string[],
+): void {
+  const obj = (input ?? {}) as { path?: unknown; command?: unknown; cmd?: unknown };
+  if ((name === "write_file" || name === "edit_file") && typeof obj.path === "string") {
+    files.add(obj.path);
+  }
+  if (name === "bash") {
+    const cmd = obj.command ?? obj.cmd;
+    if (typeof cmd === "string") commands.push(truncate(cmd, 120));
+  }
+}
+
+/**
+ * Run one prompt through the full pipeline. Throws if the workspace or AI port
+ * is invalid; otherwise always produces a trace.
+ */
+export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
+  const cwd = opts.workspace.root;
+  const startedAt = Date.now();
+  const filesTouched = new Set<string>();
+  const commandsRun: string[] = [];
+  const onToolCall = (name: string, input: unknown): void => {
+    collectActivity(name, input, filesTouched, commandsRun);
+    opts.onToolCall?.(name, input);
+  };
+  // Verbose telemetry accumulators (left empty/undefined when verbose is off).
+  const phases: PhaseStat[] = [];
+  const toolEvents: ToolEvent[] = [];
+
+  // ── Bare mode: skip the pipeline, run the agent directly. ──
+  if (opts.bare) {
+    return runBare(opts, cwd, startedAt, filesTouched, commandsRun, onToolCall, phases, toolEvents);
+  }
+
+  let usage = emptyUsage();
+
+  // ── 1. EVALUATE ──
+  const evalStart = Date.now();
+  const evaluation = await evaluatePrompt({ prompt: opts.prompt, signal: opts.signal }, opts.ai);
+  phases.push(phaseStat("evaluate", 0, evalStart, evaluation.model, evaluation.usage));
+  usage = mergeUsage(usage, evaluation.usage);
+  opts.onStage?.({
+    kind: "evaluate",
+    label: `evaluated · completeness ${evaluation.completeness}/100 · complexity ${evaluation.complexity}/100`,
+    detail: evaluation.fallback ? "heuristic" : evaluation.model.split("/").pop(),
+  });
+
+  // ── 2. ENHANCE ──
+  const enhanceStart = Date.now();
+  const enhanced = await enhancePrompt({
+    prompt: evaluation.refinedPrompt,
+    codeGraph: opts.codeGraph,
+    memory: opts.memory,
+    extraQueries: evaluation.contextQueries,
+  });
+  phases.push(phaseStat("enhance", 0, enhanceStart, undefined, emptyUsage()));
+  const enhancement: EnhancementTrace = {
+    prompt: enhanced.prompt,
+    context: enhanced.context,
+    resolved: enhanced.resolved,
+    lessonCount: enhanced.hasMemory ? 1 : 0,
+    source: enhancementSource(enhanced.resolved.length, enhanced.hasMemory),
+    startedAt: enhanced.startedAt,
+    finishedAt: enhanced.finishedAt,
+    durationMs: enhanced.durationMs,
+    retrieval: enhanced.retrieval,
+  };
+  opts.onStage?.({
+    kind: "enhance",
+    label:
+      enhanced.resolved.length || enhanced.hasMemory
+        ? `enhanced · ${enhanced.resolved.length} code refs · ${enhanced.hasMemory ? "memory" : "no memory"}`
+        : "enhanced · no extra context found",
+  });
+
+  // ── 3. ROUTE ──
+  const routeStart = Date.now();
+  const routed = selectModel(opts.model, evaluation);
+  phases.push(phaseStat("route", 0, routeStart, undefined, emptyUsage()));
+  opts.onStage?.({
+    kind: "route",
+    label: `model · ${tierLabel(routed.tier)} (${routed.model.split("/").pop()})`,
+    detail: routed.rationale,
+  });
+
+  // ── 4. EXECUTE (+ 5. JUDGE / 6. REVISE loop) ──
+  const maxRounds = Math.max(0, opts.maxReviseRounds ?? 1);
+  const judgeRounds: JudgeVerdict[] = [];
+  let history = opts.history ?? [];
+  let prompt = enhanced.prompt;
+  let lastText = "";
+  let totalSteps = 0;
+
+  for (let round = 0; ; round++) {
+    if (round > 0) {
+      opts.onStage?.({ kind: "revise", label: `revising · round ${round} (incomplete work)` });
+    }
+    opts.onStage?.({
+      kind: "execute",
+      label: round === 0 ? "executing" : `executing · revision ${round}`,
+    });
+
+    const execStart = Date.now();
+    const result = await runCodingAgent({
+      workspace: opts.workspace,
+      ai: opts.ai,
+      instruction: prompt,
+      model: routed.model,
+      system: opts.projectContext?.text,
+      history,
+      maxSteps: opts.maxSteps,
+      readOnly: opts.readOnly,
+      codeGraph: opts.codeGraph ?? undefined,
+      memory: opts.memory ?? undefined,
+      signal: opts.signal,
+      onEvent: (e) => {
+        if (e.type === "text") opts.onText?.(e.delta);
+        if (e.type === "tool-call") onToolCall(e.name, e.input);
+        if (e.type === "tool-result") {
+          if (opts.verbose) {
+            // Record tool event for verbose trace — pair with most recent call.
+            const prev = toolEvents[toolEvents.length - 1];
+            if (prev) {
+              prev.result = truncate(String(e.output), 1000);
+              prev.finishedAt = Date.now();
+              prev.durationMs = prev.finishedAt - prev.startedAt;
+              prev.ok = true;
+            }
+          }
+        }
+      },
+    });
+    if (opts.verbose) {
+      // Tool-call events were emitted above; record timing stubs here.
+      // (In a future pass, wire onStepFinish timing — for now just capture the text.)
+    }
+    const execUsage = accumulateUsage(emptyUsage(), routed.model, result.usage);
+    phases.push(phaseStat("execute", round, execStart, routed.model, execUsage));
+    usage = mergeUsage(usage, execUsage);
+    history = result.messages;
+    lastText = result.text;
+    totalSteps += result.steps;
+
+    // ── 5. JUDGE ──
+    const judgeStart = Date.now();
+    const verdict = await judgeCompleteness(
+      {
+        request: opts.prompt,
+        response: result.text,
+        filesTouched: [...filesTouched],
+        commandsRun,
+        steps: result.steps,
+        executorModel: routed.model,
+        signal: opts.signal,
+      },
+      opts.ai,
+    );
+    phases.push(phaseStat("judge", round, judgeStart, verdict.model, verdict.usage));
+    usage = mergeUsage(usage, verdict.usage);
+    judgeRounds.push(verdict);
+    opts.onStage?.({
+      kind: "judge",
+      label: verdict.complete
+        ? `judged complete · ${verdict.confidence}% confident`
+        : `judged INCOMPLETE · ${verdict.findings.length} gap(s)`,
+      detail: `advisor: ${verdict.model.split("/").pop()}${verdict.fallback ? " (heuristic)" : ""}`,
+    });
+
+    const canRevise =
+      !verdict.complete &&
+      round < maxRounds &&
+      !opts.readOnly &&
+      !opts.signal?.aborted;
+    if (!canRevise) break;
+    prompt = buildRevisionPrompt(verdict);
+  }
+
+  const finalComplete = judgeRounds[judgeRounds.length - 1]?.complete ?? true;
+  opts.onStage?.({
+    kind: "complete",
+    label: finalComplete ? "turn complete" : "turn finished (gaps remain)",
+  });
+
+  const trace = assembleTrace({
+    cwd,
+    originalPrompt: opts.prompt,
+    evaluation,
+    enhancement,
+    routed,
+    response: lastText,
+    filesTouched: [...filesTouched],
+    commandsRun,
+    judgeRounds,
+    finalComplete,
+    steps: totalSteps,
+    usage,
+    startedAt,
+    verbose: opts.verbose,
+    phases,
+    toolEvents,
+  });
+
+  // Record a lesson when the judge had to send the agent back (a gotcha).
+  if (opts.memory && judgeRounds.length > 1) {
+    const firstVerdict = judgeRounds[0];
+    if (firstVerdict && firstVerdict.findings.length > 0) {
+      void Promise.resolve(
+        opts.memory.remember(
+          "gotcha",
+          {
+            lesson:
+              `Work for "${truncate(opts.prompt, 80)}" was first judged incomplete: ` +
+              truncate(firstVerdict.findings.join("; "), 200),
+            files: [...filesTouched].slice(0, 5),
+            outcome: finalComplete ? "success" : "failure",
+          },
+        ),
+      ).catch(() => {});
+    }
+  }
+
+  // Record trace.
+  if (opts.trace) {
+    void Promise.resolve(opts.trace.record(trace)).catch(() => {});
+  }
+
+  return {
+    text: lastText,
+    steps: totalSteps,
+    messages: history,
+    usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
+    trace,
+  };
+}
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+/** Build a {@link PhaseStat} from a start time (end is `now`) + its model/usage. */
+function phaseStat(
+  phase: PhaseStat["phase"],
+  round: number,
+  startedAt: number,
+  model: string | undefined,
+  usage: UsageTotals,
+): PhaseStat {
+  const finishedAt = Date.now();
+  return { phase, round, startedAt, finishedAt, durationMs: finishedAt - startedAt, model, usage };
+}
+
+function enhancementSource(
+  resolved: number,
+  hasMemory: boolean,
+): EnhancementTrace["source"] {
+  if (resolved && hasMemory) return "code-graph+memory";
+  if (resolved) return "code-graph";
+  if (hasMemory) return "memory";
+  return "none";
+}
+
+interface RouteResult {
+  model: string;
+  tier: ModelTier;
+  rationale: string;
+}
+
+/**
+ * Pick the executor (worker) model. A manual pin always wins. Otherwise the Haiku
+ * evaluator is the authority — it already chose the cheapest tier that does the job
+ * well. The deterministic router is consulted only as a one-way SAFETY FLOOR.
+ */
+function selectModel(override: string | undefined, evaluation: PromptEvaluation): RouteResult {
+  if (override) {
+    return { model: override, tier: tierForSlug(override), rationale: "pinned model" };
+  }
+  let tier = evaluation.recommendedTier;
+  let rationale = `evaluator chose ${tierLabel(tier)} — cheapest tier for the job (complexity ${evaluation.complexity}/100)`;
+  const floor = classifyTier({ text: evaluation.refinedPrompt });
+  if (floor.tier === "precise" && TIER_RANK[tier] < TIER_RANK.precise) {
+    tier = "precise";
+    rationale = `safety floor raised to ${tierLabel(tier)} — ${floor.rationale}`;
+  }
+  return { model: modelForTier(tier), tier, rationale };
+}
+
+interface AssembleArgs {
+  cwd: string;
+  originalPrompt: string;
+  evaluation: PromptEvaluation;
+  enhancement: EnhancementTrace;
+  routed: RouteResult;
+  response: string;
+  filesTouched: string[];
+  commandsRun: string[];
+  judgeRounds: JudgeVerdict[];
+  finalComplete: boolean;
+  steps: number;
+  usage: UsageTotals;
+  startedAt: number;
+  verbose?: boolean;
+  phases?: PhaseStat[];
+  toolEvents?: ToolEvent[];
+}
+
+function assembleTrace(a: AssembleArgs): TurnTrace {
+  return {
+    id: newTraceId(),
+    createdAt: a.startedAt,
+    cwd: a.cwd,
+    originalPrompt: a.originalPrompt,
+    evaluation: { ...a.evaluation, refinedPrompt: truncate(a.evaluation.refinedPrompt, 4000) },
+    enhancement: {
+      ...a.enhancement,
+      prompt: truncate(a.enhancement.prompt, 8000),
+      context: truncate(a.enhancement.context, 8000),
+    },
+    selectedModel: a.routed.model,
+    selectedTier: a.routed.tier,
+    selectionRationale: a.routed.rationale,
+    response: truncate(a.response, 4000),
+    filesTouched: a.filesTouched,
+    commandsRun: a.commandsRun,
+    judgeRounds: a.judgeRounds.map((v) => ({ ...v, reasoning: truncate(v.reasoning, 2000) })),
+    finalComplete: a.finalComplete,
+    steps: a.steps,
+    usage: a.usage,
+    durationMs: Date.now() - a.startedAt,
+    ...(a.verbose
+      ? {
+          verbose: true,
+          phases: a.phases,
+          toolEvents: (a.toolEvents ?? []).slice(-200),
+        }
+      : {}),
+  };
+}
+
+/** Bare execution path: no eval/enhance/judge, but still traced for `/replay`. */
+async function runBare(
+  opts: RunTurnOptions,
+  cwd: string,
+  startedAt: number,
+  filesTouched: Set<string>,
+  commandsRun: string[],
+  onToolCall: (name: string, input: unknown) => void,
+  phases: PhaseStat[],
+  toolEvents: ToolEvent[],
+): Promise<RunTurnResult> {
+  const model = opts.model ?? modelForTier("balanced");
+  opts.onStage?.({ kind: "execute", label: "executing (pipeline off)" });
+  const execStart = Date.now();
+  const result = await runCodingAgent({
+    workspace: opts.workspace,
+    ai: opts.ai,
+    instruction: opts.prompt,
+    model: opts.model,
+    history: opts.history,
+    maxSteps: opts.maxSteps,
+    readOnly: opts.readOnly,
+    codeGraph: opts.codeGraph ?? undefined,
+    memory: opts.memory ?? undefined,
+    signal: opts.signal,
+    onEvent: (e) => {
+      if (e.type === "text") opts.onText?.(e.delta);
+      if (e.type === "tool-call") onToolCall(e.name, e.input);
+    },
+  });
+  const usage = accumulateUsage(emptyUsage(), model, result.usage);
+  phases.push(phaseStat("execute", 0, execStart, model, usage));
+  const evaluation: PromptEvaluation = {
+    completeness: 0,
+    complexity: 0,
+    recommendedTier: tierForSlug(model),
+    missing: [],
+    contextQueries: [],
+    refinedPrompt: opts.prompt,
+    removed: [],
+    reasoning: "Pipeline disabled (bare mode).",
+    fallback: true,
+    model,
+    usage: emptyUsage(),
+  };
+  const trace = assembleTrace({
+    cwd,
+    originalPrompt: opts.prompt,
+    evaluation,
+    enhancement: { prompt: opts.prompt, context: "", resolved: [], lessonCount: 0, source: "none" },
+    routed: { model, tier: tierForSlug(model), rationale: "bare mode (no routing)" },
+    response: result.text,
+    filesTouched: [...filesTouched],
+    commandsRun,
+    judgeRounds: [],
+    finalComplete: true,
+    steps: result.steps,
+    usage,
+    startedAt,
+    verbose: opts.verbose,
+    phases,
+    toolEvents,
+  });
+
+  if (opts.trace) {
+    void Promise.resolve(opts.trace.record(trace)).catch(() => {});
+  }
+
+  return {
+    text: result.text,
+    steps: result.steps,
+    messages: result.messages,
+    usage: { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens },
+    trace,
+  };
+}

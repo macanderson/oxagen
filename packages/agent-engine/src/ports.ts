@@ -73,7 +73,7 @@ export interface MemoryProvider {
 
 /** Per-turn trace sink. CLI: local JSON files. Platform: ClickHouse. */
 export interface TraceStore {
-  // The concrete `TurnTrace` type is migrated into the engine in Task A6;
-  // tighten this param from `unknown` to `TurnTrace` then.
+  // TurnTrace is defined in src/trace/types.ts; using `unknown` here keeps
+  // this file dep-light and avoids a circular import through the ports layer.
   record(trace: unknown): void | Promise<void>;
 }
