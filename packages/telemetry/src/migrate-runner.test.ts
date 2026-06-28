@@ -265,7 +265,7 @@ describe("migrate() — happy path", () => {
     // async coverage properly attributes the for-loop back-edge (line 58) and the
     // String(err) ternary arm (line 53) — both of which fake-timer mode misses.
     const origSetTimeout = globalThis.setTimeout;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).setTimeout = (fn: () => void) => {
       void Promise.resolve().then(fn);
       return 0;
