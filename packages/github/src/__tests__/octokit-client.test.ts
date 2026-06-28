@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   createGitHubClient,
   type OctokitLike,
-} from "../octokit-client.js";
+} from "../octokit-client";
 
 // ---------------------------------------------------------------------------
 // Fake Octokit builder

@@ -1,5 +1,5 @@
 import { Octokit } from "@octokit/rest";
-import type { GitHubClient, GitHubClientOptions } from "./types.js";
+import type { GitHubClient, GitHubClientOptions } from "./types";
 
 // ---------------------------------------------------------------------------
 // Internal interface — only the Octokit surface we actually use.
