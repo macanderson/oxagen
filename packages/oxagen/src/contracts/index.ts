@@ -216,7 +216,6 @@ import { schemaValidateRelationship } from "./schema.validate.relationship";
 import { schemaReconcileDispatch } from "./schema.reconcile.dispatch";
 import { schemaReconcileStatus } from "./schema.reconcile.status";
 import { graphRelationshipUpsert } from "./graph.relationship.upsert";
-import { graphExport } from "./graph.export";
 import { semanticRelationshipApprove } from "./semantic.relationship.approve";
 import { semanticRelationshipInfer } from "./semantic.relationship.infer";
 import { semanticRelationshipList } from "./semantic.relationship.list";
@@ -462,7 +461,6 @@ export {
   schemaReconcileDispatch,
   schemaReconcileStatus,
   graphRelationshipUpsert,
-  graphExport,
   semanticRelationshipApprove,
   semanticRelationshipInfer,
   semanticRelationshipList,
@@ -702,7 +700,6 @@ export const contracts = [
   schemaReconcileDispatch,
   schemaReconcileStatus,
   graphRelationshipUpsert,
-  graphExport,
   semanticRelationshipApprove,
   semanticRelationshipInfer,
   semanticRelationshipList,
