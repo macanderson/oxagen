@@ -146,11 +146,28 @@ export function ReplApp({
 
   useEffect(() => {
     let mem: SessionMemory | null = null;
-    void openSessionMemory(cwd, `repl-${Date.now()}`).then((m) => {
-      mem = m;
-      memoryRef.current = m;
-    });
+    // Guards the async-open race: if the component unmounts before
+    // `openSessionMemory` resolves, the cleanup below runs while `mem` is still
+    // null and cannot close the handle. Without this flag the resolved
+    // SessionMemory (and its DuckDB connection) would leak for the life of the
+    // process. When the open lands after unmount we close it immediately.
+    let cancelled = false;
+    void openSessionMemory(cwd, `repl-${Date.now()}`)
+      .then((m) => {
+        if (cancelled) {
+          void m?.close();
+          return;
+        }
+        mem = m;
+        memoryRef.current = m;
+      })
+      .catch(() => {
+        // openSessionMemory is best-effort and already fails closed (returns
+        // null) internally; swallow any unexpected rejection so it can never
+        // surface as an unhandled rejection from this effect.
+      });
     return () => {
+      cancelled = true;
       void mem?.close();
     };
   }, [cwd]);
