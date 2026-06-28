@@ -89,13 +89,12 @@ function bumpVersion(current: string, bump: Bump): string {
   const core = current.split(/[-+]/)[0] ?? current;
   const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(core);
   if (!m) throw new Error(`root version "${current}" is not semver X.Y.Z`);
-  let major = Number(m[1]);
-  let minor = Number(m[2]);
-  let patch = Number(m[3]);
-  if (bump === "major") (major += 1), (minor = 0), (patch = 0);
-  else if (bump === "minor") (minor += 1), (patch = 0);
-  else patch += 1;
-  return `${major}.${minor}.${patch}`;
+  const major = Number(m[1]);
+  const minor = Number(m[2]);
+  const patch = Number(m[3]);
+  if (bump === "major") return `${major + 1}.0.0`;
+  if (bump === "minor") return `${major}.${minor + 1}.0`;
+  return `${major}.${minor}.${patch + 1}`;
 }
 
 // ── workspace discovery ──────────────────────────────────────────────────────
@@ -355,16 +354,27 @@ function npmCfg(): { token: string } | null {
   return { token };
 }
 
-function buildCli(): void {
-  console.log(kleur.dim("    building CLI..."));
+/**
+ * Build the standalone, publishable CLI artifact under apps/cli/dist-standalone/:
+ * a single self-contained `oxagen.mjs` (every @oxagen/* and npm dep inlined, runs
+ * under plain `node`) plus a clean manifest with NO `workspace:*` deps. Publishing
+ * apps/cli/package.json directly is BROKEN — its deps carry `@oxagen/*:
+ * workspace:*` (unpublished, protocol leaks) and its bin shebang is `tsx`, so
+ * `npm i -g @oxagen/cli` fails in a clean env. See apps/cli/scripts/bundle.mjs +
+ * prepare-standalone-publish.mjs for the full why. Must run AFTER the version
+ * bump: the CLI inlines apps/cli/package.json at bundle time, so the bumped
+ * version is what gets baked into oxagen.mjs.
+ */
+function buildCliBundle(): void {
+  console.log(kleur.dim("    bundling standalone CLI..."));
   try {
-    execFileSync("pnpm", ["-C", "apps/cli", "build"], {
+    execFileSync("pnpm", ["-C", "apps/cli", "publish:standalone"], {
       cwd: ROOT,
       stdio: "pipe",
       maxBuffer: 64 * 1024 * 1024,
     });
   } catch (err) {
-    throw new Error(`CLI build failed: ${formatError(err)}`);
+    throw new Error(`CLI bundle failed: ${formatError(err)}`);
   }
 }
 
@@ -374,31 +384,36 @@ async function publishCliToNpm(version: string): Promise<void> {
 
   try {
     console.log(kleur.bold("\n  npm CLI publish:"));
-    // Build the CLI distribution
-    buildCli();
-    console.log(kleur.green("    ✓ CLI built successfully"));
+    // Build the standalone single-file bundle + clean publish manifest.
+    buildCliBundle();
+    console.log(kleur.green("    ✓ standalone CLI bundle built"));
 
-    // Verify the CLI package.json exists and is properly configured
-    const cliPkgPath = join(ROOT, "apps/cli/package.json");
-    const cliPkg = JSON.parse(readFileSync(cliPkgPath, "utf8")) as {
+    // Validate the generated publish manifest (NOT apps/cli/package.json, which
+    // is unpublishable). Guard against the historical failure modes: private,
+    // missing bin, version drift, and leaked workspace:* deps.
+    const distDir = join(ROOT, "apps/cli/dist-standalone");
+    const manifest = JSON.parse(readFileSync(join(distDir, "package.json"), "utf8")) as {
       name?: string;
       version?: string;
       private?: boolean;
       bin?: Record<string, string>;
+      dependencies?: Record<string, string>;
     };
+    if (manifest.private) throw new Error('CLI manifest has "private": true — cannot publish');
+    if (!manifest.bin || Object.keys(manifest.bin).length === 0) throw new Error("CLI manifest missing bin field");
+    if (manifest.version !== version) throw new Error(`CLI manifest version ${manifest.version} != release version ${version}`);
+    const leaked = Object.entries(manifest.dependencies ?? {}).filter(([, v]) => v.startsWith("workspace:"));
+    if (leaked.length) throw new Error(`workspace:* deps leaked into publish manifest: ${leaked.map(([k]) => k).join(", ")}`);
 
-    if (cliPkg.private) {
-      throw new Error('CLI package.json has "private": true — remove this field to publish');
-    }
+    // npm reads the auth token from .npmrc; write one that pulls NPM_TOKEN from
+    // the environment. Never published — not in the manifest `files`, and npm
+    // always excludes .npmrc from the tarball.
+    writeFileSync(join(distDir, ".npmrc"), "//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n");
 
-    if (!cliPkg.bin || Object.keys(cliPkg.bin).length === 0) {
-      throw new Error("CLI package.json missing bin field");
-    }
-
-    // Publish using npm with NPM_TOKEN from environment
+    // Publish the bundle. access:public lives in the manifest publishConfig.
     console.log(kleur.dim("    publishing to npm registry..."));
     execFileSync("npm", ["publish"], {
-      cwd: join(ROOT, "apps/cli"),
+      cwd: distDir,
       stdio: "pipe",
       env: { ...env, NPM_TOKEN: cfg.token },
       maxBuffer: 64 * 1024 * 1024,
