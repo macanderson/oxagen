@@ -5,11 +5,16 @@ import { theme } from "./theme.js";
 // Block-letter OXAGEN wordmark. Kept as a literal so it renders identically
 // across terminals (no figlet dependency).
 const WORDMARK: string[] = [
+  "---------------------------------------------------",
+  "                                                   ",
   " ██████  ██   ██  █████   ██████  ███████ ███    ██",
   "██    ██  ██ ██  ██   ██ ██       ██      ████   ██",
   "██    ██   ███   ███████ ██   ███ █████   ██ ██  ██",
   "██    ██  ██ ██  ██   ██ ██    ██ ██      ██  ██ ██",
   " ██████  ██   ██ ██   ██  ██████  ███████ ██   ████",
+  "                                                   ",
+  "---------------------------------------------------",
+  "                                                   ",
 ];
 
 export function Banner({ version }: { version: string }): React.ReactElement {
