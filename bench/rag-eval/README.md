@@ -158,3 +158,22 @@ Change the judge with `RAG_JUDGE_MODEL=openai/gpt-4o`.
 - `packages/engram/src/eval/metrics.ts` — engram `EvalMetrics` interface
 - `packages/engram/src/eval/` — TS-side eval harness
 - `docs/cli/eval-runbook.md` — full evaluation runbook
+
+---
+
+## Emit + ingest to ClickHouse
+
+Running the harness automatically writes a normalized `rag-eval.eval.json`
+(a single `oxagen.eval.v1` object with aggregate RAGAS/DeepEval scores) in the
+same directory as `run_rag_eval.py`.  Override the path with the `RAG_EVAL_JSON`
+env var.  Pass `--no-emit-json` to suppress the file entirely.
+
+To load the file into ClickHouse:
+
+```bash
+pnpm eval:ingest bench/rag-eval/rag-eval.eval.json
+# short alias:
+pnpm eval bench/rag-eval/rag-eval.eval.json
+```
+
+See `docs/cli/eval-results-schema.md` for the full `oxagen.eval.v1` schema.

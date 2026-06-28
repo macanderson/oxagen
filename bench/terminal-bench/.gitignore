@@ -2,3 +2,6 @@
 oxagen-tbench-results/
 *.egg-info/
 __pycache__/
+
+# generated normalized eval output (ingest via pnpm eval:ingest)
+*.eval.json

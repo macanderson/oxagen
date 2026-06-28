@@ -523,6 +523,104 @@ def print_summary(ragas_scores: dict[str, float], de_scores: dict[str, float]) -
 
 
 # ---------------------------------------------------------------------------
+# Eval JSON emitter
+# ---------------------------------------------------------------------------
+
+def write_eval_json(
+    records: list[dict],
+    ragas_scores: dict[str, float],
+    de_scores: dict[str, float],
+    dataset_path: str,
+) -> None:
+    """Emit a normalized ``oxagen.eval.v1`` JSON object for the TS ingester.
+
+    Wrapped in a broad try/except so a serialization or import failure never
+    crashes the eval run.  Writes to RAG_EVAL_JSON (env) or
+    ``bench/rag-eval/rag-eval.eval.json`` next to this script.
+
+    Per-record RAGAS/DeepEval breakdowns are not available from the current
+    aggregate-only return values, so per-record ``metrics`` is ``{}`` and
+    ``reward`` mirrors ``passed``.  Run-level ``metrics`` carries the
+    aggregate scores that were computed.
+    """
+    try:
+        import uuid as _uuid
+
+        out_path = Path(
+            os.environ.get(
+                "RAG_EVAL_JSON",
+                str(Path(__file__).resolve().parent / "rag-eval.eval.json"),
+            )
+        )
+
+        suite = Path(dataset_path).stem
+
+        # Run-level aggregate metrics: merge RAGAS + DeepEval; drop NaN values.
+        run_metrics: dict[str, float] = {}
+        for name, val in {**ragas_scores, **de_scores}.items():
+            if val == val:  # NaN != NaN is True, so this skips NaN
+                run_metrics[name] = round(float(val), 4)
+
+        # Per-record results.
+        results: list[dict] = []
+        n_passed = 0
+        for rec in records:
+            answer_lower = (rec.get("answer") or "").lower()
+            gt_lower = (rec.get("ground_truth") or "").lower()
+            # passed: the answer contains the ground-truth string as a substring.
+            passed = 1 if (gt_lower and gt_lower in answer_lower) else 0
+            n_passed += passed
+            results.append({
+                "task_id": rec.get("id", ""),
+                "passed": passed,
+                "reward": 1.0 if passed else 0.0,
+                "metrics": {},   # aggregate-only; no per-record breakdown available
+                "labels": {},
+            })
+
+        n_tasks = len(results)
+        resolved_rate = n_passed / n_tasks if n_tasks > 0 else 0.0
+
+        payload = {
+            "schema": "oxagen.eval.v1",
+            "run": {
+                "run_id": _uuid.uuid4().hex,
+                "run_group": "",
+                "agent_name": "oxagen",
+                "agent_version": "",
+                "model": JUDGE_MODEL,
+                "harness": "rag-eval",
+                "suite": suite,
+                "suite_version": "",
+                "git_sha": "",
+                "git_branch": "",
+                "environment": "local",
+                "graph_code": 1,
+                "graph_exec": 1,
+                "graph_mem": 1,
+                "warm": 0,
+                "history_depth": 0,
+                "seed": 0,
+                "n_tasks": n_tasks,
+                "n_passed": n_passed,
+                "resolved_rate": round(resolved_rate, 4),
+                "metrics": run_metrics,
+                "labels": {},
+                "notes": "",
+            },
+            "results": results,
+        }
+
+        out_path.write_text(json.dumps(payload, indent=2))
+        print(f"\nEval JSON written to {out_path}")
+    except Exception as exc:  # noqa: BLE001
+        print(
+            f"[eval-json] WARNING: could not write eval JSON: {exc}",
+            file=sys.stderr,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -552,6 +650,11 @@ def main() -> None:
         "--deepeval-only",
         action="store_true",
         help="Run DeepEval only, skip RAGAS.",
+    )
+    parser.add_argument(
+        "--no-emit-json",
+        action="store_true",
+        help="Skip writing the normalized eval JSON (rag-eval.eval.json).",
     )
     args = parser.parse_args()
 
@@ -588,6 +691,9 @@ def main() -> None:
             indent=2,
         )
     )
+
+    if not args.no_emit_json:
+        write_eval_json(records, ragas_scores, de_scores, args.dataset)
 
 
 if __name__ == "__main__":

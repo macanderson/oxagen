@@ -128,3 +128,89 @@ ORDER BY (org_id, workspace_id, skill_id, created_at)
 -- and aggregate load counts have long-tail value (migration 0009). created_at
 -- is plain DateTime, so no toDateTime() cast is needed.
 TTL created_at + INTERVAL 365 DAY;
+
+-- ---------------------------------------------------------------------------
+-- Eval results (agent-eval protocol). Two append-only tables that record every
+-- run of an agent-eval harness (engram-golden, terminal-bench, rag-eval,
+-- context-eval, swe-bench, …) so we can (a) measure the code agent improving
+-- over TIME — versions, warm rounds, accumulated graph/memory depth — and
+-- (b) detect behavioral REGRESSION per task. Design notes:
+--   * Flexible "protocol" shape: a small set of typed core dimensions every
+--     harness shares, plus open Map(String,Float64) `metrics` and
+--     Map(String,String) `labels` so a NEW metric needs no migration.
+--   * Denormalized slice dims (harness/suite/agent_version/model/cell flags) on
+--     BOTH tables so each queries standalone (ClickHouse-idiomatic, no joins).
+--   * NOT tenant-scoped: these measure the product itself (CI/local/research),
+--     so there is no org_id key — unlike the request-telemetry tables above.
+--   * run_id / task_id are String, never UUID: benchmark task ids are
+--     non-UUID (e.g. 'gpt2-codegolf__saXZwmX'); writing a non-UUID string into a
+--     UUID column aborts the whole row — see clickhouse-execution-step-id memo.
+-- Canonical improvement/regression queries live in docs/cli/eval-results-schema.md.
+
+-- One row per RUN (suite-level header + rollup). ReplacingMergeTree(updated_at)
+-- so the run can be written once at start and re-inserted finalized at end
+-- (later updated_at wins) — query with FINAL. Kept forever (no TTL): this IS the
+-- time series we measure improvement against, and runs are low-volume.
+CREATE TABLE IF NOT EXISTS eval_runs (
+  run_id String,
+  run_group LowCardinality(String) DEFAULT '',
+  schema_version UInt16 DEFAULT 1,
+  agent_name LowCardinality(String),
+  agent_version LowCardinality(String),
+  model LowCardinality(String),
+  harness LowCardinality(String),
+  suite LowCardinality(String),
+  suite_version LowCardinality(String) DEFAULT '',
+  git_sha String DEFAULT '',
+  git_branch LowCardinality(String) DEFAULT '',
+  environment LowCardinality(String) DEFAULT '',
+  config_hash String DEFAULT '',
+  -- ablation cell (runbook §5 2^3 factorial) + self-improvement axes (§7)
+  graph_code UInt8 DEFAULT 0,
+  graph_exec UInt8 DEFAULT 0,
+  graph_mem UInt8 DEFAULT 0,
+  warm UInt8 DEFAULT 0,
+  history_depth UInt32 DEFAULT 0,
+  seed Int64 DEFAULT 0,
+  -- suite-level outcomes
+  n_tasks UInt32 DEFAULT 0,
+  n_passed UInt32 DEFAULT 0,
+  resolved_rate Float64 DEFAULT 0,
+  metrics Map(LowCardinality(String), Float64),
+  labels Map(LowCardinality(String), String),
+  notes String DEFAULT '',
+  started_at DateTime64(3) DEFAULT now64(3),
+  finished_at DateTime64(3) DEFAULT now64(3),
+  updated_at DateTime64(3) DEFAULT now64(3)
+) ENGINE = ReplacingMergeTree(updated_at)
+PARTITION BY toYYYYMM(started_at)
+ORDER BY (harness, suite, agent_name, agent_version, run_id);
+
+-- One row per (run, task[, repeat]) — the per-task detail for regression hunting.
+-- Append-only; 365-day TTL (detail is higher-volume and regenerable; the run
+-- rollup in eval_runs preserves the long-term improvement signal).
+CREATE TABLE IF NOT EXISTS eval_results (
+  run_id String,
+  task_id String,
+  task_group LowCardinality(String) DEFAULT '',
+  repeat_idx UInt16 DEFAULT 0,
+  harness LowCardinality(String),
+  suite LowCardinality(String),
+  agent_name LowCardinality(String),
+  agent_version LowCardinality(String),
+  model LowCardinality(String),
+  graph_code UInt8 DEFAULT 0,
+  graph_exec UInt8 DEFAULT 0,
+  graph_mem UInt8 DEFAULT 0,
+  warm UInt8 DEFAULT 0,
+  history_depth UInt32 DEFAULT 0,
+  passed UInt8 DEFAULT 0,
+  reward Float64 DEFAULT 0,
+  metrics Map(LowCardinality(String), Float64),
+  labels Map(LowCardinality(String), String),
+  started_at DateTime64(3) DEFAULT now64(3),
+  created_at DateTime DEFAULT now() CODEC(DoubleDelta, ZSTD(1))
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(created_at)
+ORDER BY (harness, suite, task_id, agent_version, created_at)
+TTL toDateTime(created_at) + INTERVAL 365 DAY;

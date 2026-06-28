@@ -147,3 +147,20 @@ Notes:
 Contrast with the cold Terminal-Bench run (`../terminal-bench/`), where both
 agents tied at 0/2 and the benchmark saw nothing — that's the floor; this is the
 edge it misses.
+
+## Emit + ingest to ClickHouse
+
+Running the harness automatically writes a normalized `context-eval.eval.json`
+(one `oxagen.eval.v1` run object per cold arm, plus one per warm round) in the
+same directory as `run_eval.py`.  Override the path with the `CONTEXT_EVAL_JSON`
+env var.
+
+To load the file into ClickHouse:
+
+```bash
+pnpm eval:ingest bench/context-eval/context-eval.eval.json
+# short alias:
+pnpm eval bench/context-eval/context-eval.eval.json
+```
+
+See `docs/cli/eval-results-schema.md` for the full `oxagen.eval.v1` schema.
