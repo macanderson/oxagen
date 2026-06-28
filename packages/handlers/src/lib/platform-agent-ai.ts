@@ -12,12 +12,11 @@ import type { CapabilityContext } from "@oxagen/oxagen";
  * `generateObjectFor`), preserving the exact arg names defined in
  * `packages/ai/src/stream.ts`.
  *
- * Note: `streamAgentReply` does not forward `stopWhen`, `onError`, or
- * `onStepFinish` to `streamText`. These are accepted in `ModelRunArgs` for
- * interface compatibility but are silently dropped by this adapter; the
- * engine's own try/catch on `textStream` handles errors, and the model stops
- * naturally when it emits no further tool calls. A future update to
- * `streamAgentReply` can lift this limitation.
+ * `stopWhen` (the engine's step cap) and `onError` are forwarded to `streamText`
+ * via `streamAgentReply`, so the multi-step coding loop is bounded (no runaway
+ * cost) and stream errors are captured. `onStepFinish` (tool-call trace events)
+ * is not forwarded — it is unused by this sync capability; the engine's
+ * file-edit / command / final-diff events still fire from the workspace tools.
  *
  * @param ctx       CapabilityContext for the current request.
  * @param messageId UUID of the user message that initiated the turn — used as
@@ -43,6 +42,8 @@ export function createPlatformAgentAi(
         tools: args.tools,
         system: args.system,
         effort: args.effort,
+        stopWhen: args.stopWhen,
+        onError: args.onError,
         telemetry,
       });
     },
