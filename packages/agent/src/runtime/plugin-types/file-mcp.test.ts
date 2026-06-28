@@ -525,8 +525,7 @@ describe("contributeFileBasedMcpTools — per-server error isolation", () => {
     // The mock returns different values for subsequent calls.
     // badSrv: connectMcp throws; goodSrv: succeeds.
     // Since iteration order matches Object.entries, badSrv will be first or second
-    // depending on insertion order. We configure the mock to alternate.
-    let callCount = 0;
+    // depending on insertion order; the mock decides by endpoint URL.
     mcpClientMocks.connectMcp.mockImplementation(async (args: { endpointUrl: string }) => {
       if (args.endpointUrl === "https://bad.example.com") {
         throw new Error("connection refused");
@@ -539,7 +538,6 @@ describe("contributeFileBasedMcpTools — per-server error isolation", () => {
         execute: vi.fn(async () => "pong"),
       },
     });
-    void callCount;
 
     const tools = await contributeFileBasedMcpTools(CTX);
     // goodSrv contributes its tool; badSrv was skipped gracefully
