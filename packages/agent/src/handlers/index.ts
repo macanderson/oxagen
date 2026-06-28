@@ -34,6 +34,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   "agent.task.background.cancel": () => import("./agent.task.background.cancel"),
   "agent.memory.recall": () => import("./agent.memory.recall"),
   "agent.memory.write": () => import("./agent.memory.write"),
+  "agent.memory.list": () => import("./agent.memory.list"),
   "agent.approval.resolve": () => import("./agent.approval.resolve"),
   "agent.skill.list": () => import("./agent.skill.list"),
   "agent.skill.load": () => import("./agent.skill.load"),
