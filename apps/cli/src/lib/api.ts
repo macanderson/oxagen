@@ -19,8 +19,8 @@ function requireApiContext(): ApiContext {
   const ws = getWorkspaceId();
   if (!token || !org || !ws) {
     process.stderr.write(
-      "Missing auth or scope. Set a token + org + workspace via `oxagen config` " +
-        "or OXAGEN_API_TOKEN / OXAGEN_ORG_ID / OXAGEN_WORKSPACE_ID.\n",
+      "Missing auth or scope. Run `oxagen login` to authenticate, or set " +
+        "OXAGEN_API_TOKEN / OXAGEN_ORG_ID / OXAGEN_WORKSPACE_ID.\n",
     );
     process.exit(1);
   }

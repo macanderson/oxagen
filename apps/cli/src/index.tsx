@@ -85,6 +85,12 @@ program
         verbose: opts.verbose,
       };
 
+      // ADR-019 §4: require an Oxagen account before any agent-path command.
+      // Non-agent utility commands (config, settings, login, logout, etc.) are
+      // separate sub-commands and bypass this gate automatically.
+      const { requireSession } = await import("./lib/session.js");
+      requireSession();
+
       // --agent: run the prompt as a named agent (its prompt, tools, model).
       if (opts.agent) {
         if (!prompt) {
@@ -325,6 +331,29 @@ program
   .action(async (key?: string, value?: string) => {
     const { handleConfig } = await import("./commands/config.js");
     await handleConfig(key, value);
+  });
+
+// ── login / logout: platform authentication ───────────────────────────────────
+
+program
+  .command("login")
+  .description(
+    "Authenticate the CLI with your Oxagen account. Stores the session in ~/.config/oxagen/config.json.",
+  )
+  .option("--token <token>", "Platform API token (create at https://app.oxagen.sh)")
+  .option("--org <slug>", "Organization slug")
+  .option("--workspace <slug>", "Workspace slug")
+  .action(async (opts: { token?: string; org?: string; workspace?: string }) => {
+    const { handleLogin } = await import("./commands/auth.js");
+    await handleLogin(opts);
+  });
+
+program
+  .command("logout")
+  .description("Clear the stored Oxagen session from ~/.config/oxagen/config.json.")
+  .action(async () => {
+    const { handleLogout } = await import("./commands/auth.js");
+    handleLogout();
   });
 
 // ── settings: the unified settings.json driver ────────────────────────────────
