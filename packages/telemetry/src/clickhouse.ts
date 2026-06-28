@@ -440,6 +440,117 @@ export interface MemoryChangeRow {
 export const insertMemoryChange = (row: MemoryChangeRow): Promise<void> =>
   insertRows("memory_changes", [row]);
 
+// ── Eval results (agent-eval protocol) ────────────────────────────────────────
+//
+// Append-only record of every agent-eval run, for measuring the code agent
+// improving over time and catching behavioral regression per task. See the
+// `eval_runs` / `eval_results` tables in schema.sql and the canonical
+// improvement/regression queries in docs/cli/eval-results-schema.md.
+//
+// Protocol shape: a few typed core dimensions every harness shares, plus open
+// `metrics` (numeric) and `labels` (string) maps so a NEW metric never needs a
+// migration. Timestamps are optional — ClickHouse defaults them to now64()/now()
+// when omitted; to FINALIZE a run, re-insert the same run_id (ReplacingMergeTree
+// keeps the row with the latest updated_at).
+
+/** Open numeric metric bag (e.g. cost_usd, tokens, latency_p50_ms, context_precision). */
+export type EvalMetricsMap = Record<string, number>;
+/** Open string label bag (e.g. failure_signature, error_class, judge_model, diff_sha). */
+export type EvalLabelsMap = Record<string, string>;
+
+/** Which agent-eval harness produced the row. Extend freely — it is a LowCardinality(String). */
+export type EvalHarness =
+  | "engram-golden"
+  | "rag-eval"
+  | "context-eval"
+  | "terminal-bench"
+  | "swe-bench"
+  | (string & {});
+
+/** Suite-level run header + rollup (one logical row per run; re-insert to finalize). */
+export interface EvalRunRow {
+  run_id: string;
+  /** Logical experiment / sweep this run belongs to (groups a factorial or learning curve). */
+  run_group?: string;
+  /** Protocol version, so the row shape can evolve. Defaults to 1 in ClickHouse. */
+  schema_version?: number;
+  agent_name: string;
+  /** The time axis for "improvement over time" — bump this per release. */
+  agent_version: string;
+  model: string;
+  harness: EvalHarness;
+  suite: string;
+  suite_version?: string;
+  git_sha?: string;
+  git_branch?: string;
+  environment?: string;
+  config_hash?: string;
+  // Ablation cell (runbook §5) + self-improvement axes (§7).
+  graph_code?: 0 | 1;
+  graph_exec?: 0 | 1;
+  graph_mem?: 0 | 1;
+  warm?: 0 | 1;
+  /** Count of prior tasks of accumulated graph/memory state (the learning-curve x-axis). */
+  history_depth?: number;
+  seed?: number;
+  n_tasks?: number;
+  n_passed?: number;
+  /** n_passed / n_tasks — the headline improvement/regression number. */
+  resolved_rate?: number;
+  metrics?: EvalMetricsMap;
+  labels?: EvalLabelsMap;
+  notes?: string;
+  /** ISO-8601; defaults to now in ClickHouse. */
+  started_at?: string;
+  finished_at?: string;
+  /** ReplacingMergeTree version — omit to default to now (so a later finalize wins). */
+  updated_at?: string;
+}
+
+/** Per-(run, task) result detail for regression hunting. Append-only. */
+export interface EvalResultRow {
+  run_id: string;
+  task_id: string;
+  /** e.g. 'near-transfer' | 'far-transfer' | a domain — for stratified analysis. */
+  task_group?: string;
+  /** Seed/repeat index for this (run, task) so repeats don't collide. */
+  repeat_idx?: number;
+  // Denormalized slice dims so eval_results queries standalone (no join to eval_runs).
+  harness: EvalHarness;
+  suite: string;
+  agent_name: string;
+  agent_version: string;
+  model: string;
+  graph_code?: 0 | 1;
+  graph_exec?: 0 | 1;
+  graph_mem?: 0 | 1;
+  warm?: 0 | 1;
+  history_depth?: number;
+  /** 1 = verifier/test passed (resolved@1). */
+  passed?: 0 | 1;
+  /** Continuous score where a benchmark provides one (else 0/1 mirrors `passed`). */
+  reward?: number;
+  metrics?: EvalMetricsMap;
+  labels?: EvalLabelsMap;
+  started_at?: string;
+}
+
+/**
+ * Insert (or finalize) a run header. Re-inserting the same run_id with a later
+ * updated_at replaces the prior row under ReplacingMergeTree — query with FINAL.
+ * `metrics`/`labels` are coalesced to empty maps so the columns always receive a
+ * value.
+ */
+export const insertEvalRun = (row: EvalRunRow): Promise<void> =>
+  insertRows("eval_runs", [{ metrics: {}, labels: {}, ...row }]);
+
+/** Batch-insert per-task results. No-ops on an empty array. */
+export const insertEvalResults = (rows: readonly EvalResultRow[]): Promise<void> =>
+  insertRows(
+    "eval_results",
+    rows.map((r) => ({ metrics: {}, labels: {}, ...r })),
+  );
+
 /**
  * Read the most recent chain_hash for a given (org_id, capability) pair so the
  * next event can chain off it. Returns an empty string when no prior events

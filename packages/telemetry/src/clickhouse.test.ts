@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { hashPrompt, providerFromModelId } from "./clickhouse";
 import type {
   AuditEventRow,
+  EvalResultRow,
+  EvalRunRow,
   EventRow,
   ExecutionLogRow,
   TokenUsageRow,
@@ -439,6 +441,89 @@ describe("insert helpers — insertRows delegation", () => {
       values: [row],
       format: "JSONEachRow",
     });
+  });
+
+  it("insertEvalRun delegates to eval_runs and coalesces empty metrics/labels", async () => {
+    const row: EvalRunRow = {
+      run_id: "run-1",
+      agent_name: "oxagen",
+      agent_version: "0.6.2",
+      model: "claude-sonnet-4.5",
+      harness: "terminal-bench",
+      suite: "terminal-bench-2.0",
+      graph_code: 1,
+      graph_exec: 1,
+      graph_mem: 1,
+      n_tasks: 2,
+      n_passed: 1,
+      resolved_rate: 0.5,
+    };
+    await mod.insertEvalRun(row);
+    // metrics/labels are coalesced to {} so the Map columns always get a value.
+    expect(insertMock).toHaveBeenCalledWith({
+      table: "eval_runs",
+      values: [{ metrics: {}, labels: {}, ...row }],
+      format: "JSONEachRow",
+    });
+  });
+
+  it("insertEvalRun preserves caller-supplied metrics/labels", async () => {
+    const row: EvalRunRow = {
+      run_id: "run-2",
+      agent_name: "oxagen",
+      agent_version: "0.7.0",
+      model: "m",
+      harness: "engram-golden",
+      suite: "repo-structural-qa",
+      resolved_rate: 1,
+      metrics: { context_precision: 1, cost_usd: 0.27 },
+      labels: { branch: "main" },
+    };
+    await mod.insertEvalRun(row);
+    const call = insertMock.mock.calls[0]![0] as { values: EvalRunRow[] };
+    expect(call.values[0]!.metrics).toEqual({ context_precision: 1, cost_usd: 0.27 });
+    expect(call.values[0]!.labels).toEqual({ branch: "main" });
+  });
+
+  it("insertEvalResults delegates to eval_results and coalesces maps per row", async () => {
+    const rows: EvalResultRow[] = [
+      {
+        run_id: "run-1",
+        task_id: "gpt2-codegolf",
+        harness: "terminal-bench",
+        suite: "terminal-bench-2.0",
+        agent_name: "oxagen",
+        agent_version: "0.6.2",
+        model: "m",
+        passed: 1,
+        reward: 1,
+        metrics: { cost_usd: 0.7 },
+      },
+      {
+        run_id: "run-1",
+        task_id: "llm-batch",
+        harness: "terminal-bench",
+        suite: "terminal-bench-2.0",
+        agent_name: "oxagen",
+        agent_version: "0.6.2",
+        model: "m",
+        passed: 0,
+      },
+    ];
+    await mod.insertEvalResults(rows);
+    expect(insertMock).toHaveBeenCalledWith({
+      table: "eval_results",
+      values: [
+        { metrics: {}, labels: {}, ...rows[0] },
+        { metrics: {}, labels: {}, ...rows[1] },
+      ],
+      format: "JSONEachRow",
+    });
+  });
+
+  it("insertEvalResults no-ops on an empty array", async () => {
+    await mod.insertEvalResults([]);
+    expect(insertMock).not.toHaveBeenCalled();
   });
 
   it("no-ops when rows array is empty (any insert helper)", async () => {
