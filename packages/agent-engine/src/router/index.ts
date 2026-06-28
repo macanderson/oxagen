@@ -5,5 +5,5 @@
  * token usage. All router exports live here so consumers can import from
  * `@oxagen/agent-engine/router` (or from the main barrel which re-exports).
  */
-export * from "./rate-card.js";
-export * from "./model-router.js";
+export * from "./rate-card";
+export * from "./model-router";

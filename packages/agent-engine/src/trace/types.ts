@@ -12,7 +12,7 @@
  * These types are framework-free (no Ink, no AI SDK) so the engine, the store,
  * and their tests never import a renderer or hit the gateway.
  */
-import type { ModelTier, UsageTotals } from "../types.js";
+import type { ModelTier, UsageTotals } from "../types";
 
 // Re-export for consumers that only import from this module.
 export type { ModelTier, UsageTotals };

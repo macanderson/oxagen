@@ -7,7 +7,7 @@
  * recalled memory is injected by the loop as a separate section, not here.
  */
 import { platform, release } from "node:os";
-import type { ProjectContext } from "../types.js";
+import type { ProjectContext } from "../types";
 
 export interface SystemPromptOptions {
   cwd: string;

@@ -19,10 +19,10 @@
  * it takes an {@link AgentAi} port.
  */
 import { z } from "zod";
-import { modelForTier, accumulateUsage } from "../router/model-router.js";
-import { emptyUsage } from "../types.js";
-import type { AgentAi } from "../ports.js";
-import type { JudgeVerdict } from "../trace/types.js";
+import { modelForTier, accumulateUsage } from "../router/model-router";
+import { emptyUsage } from "../types";
+import type { AgentAi } from "../ports";
+import type { JudgeVerdict } from "../trace/types";
 
 /**
  * The default completeness advisor: the most powerful OpenAI model. The advisor's

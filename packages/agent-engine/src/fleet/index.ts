@@ -20,21 +20,21 @@
  * connect to the gateway directly. The caller (CLI or platform) wires these in.
  */
 import { EventEmitter } from "node:events";
-import { enhancePrompt } from "../evaluate/prompt-enhancer.js";
-import { accumulateUsage, routeModel } from "../router/model-router.js";
-import { emptyUsage } from "../types.js";
-import type { CodeGraphProvider } from "../types.js";
-import type { MemoryProvider } from "../ports.js";
+import { enhancePrompt } from "../evaluate/prompt-enhancer";
+import { accumulateUsage, routeModel } from "../router/model-router";
+import { emptyUsage } from "../types";
+import type { CodeGraphProvider } from "../types";
+import type { MemoryProvider } from "../ports";
 import type {
   AgentDefinition,
   AgentSnapshot,
   FleetSnapshot,
   Plan,
   Task,
-} from "./types.js";
-import type { ProjectContext } from "../types.js";
+} from "./types";
+import type { ProjectContext } from "../types";
 
-export * from "./types.js";
+export * from "./types";
 
 /** The subset of the coding loop the fleet depends on (injectable for tests). */
 export type AgentRunner = (opts: {

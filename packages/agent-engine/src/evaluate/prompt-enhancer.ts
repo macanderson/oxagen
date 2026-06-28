@@ -15,9 +15,9 @@
  * both the CLI (local symbol index) and the platform (remote Neo4j graph,
  * `agent.memory.*` context).
  */
-import type { CodeGraphProvider } from "../types.js";
-import type { MemoryProvider } from "../ports.js";
-import type { ContextRetrieval } from "../trace/types.js";
+import type { CodeGraphProvider } from "../types";
+import type { MemoryProvider } from "../ports";
+import type { ContextRetrieval } from "../trace/types";
 
 export interface EnhanceOptions {
   prompt: string;
