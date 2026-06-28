@@ -379,6 +379,58 @@ export const agentToolCalls = agentSchema.table(
   }),
 );
 
+// Durable code-agent sandbox sessions (spec §5.2 sandbox runtime).
+// One row per long-lived Modal (or future driver) sandbox; sessions are
+// reused across agent turns via session_key. snapshotId enables fast
+// restore after idle eviction. Status lifecycle: running → idle → stopped → gone.
+export const sandboxSessions = agentSchema.table(
+  "sandbox_sessions",
+  {
+    ...idMixin("sbx"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    ...softDeleteMixin(),
+    // Caller-supplied stable key (e.g. conversation id or agent-run id) used to
+    // reuse one durable sandbox across multiple agent turns. Nullable: ephemeral
+    // sandboxes (no reuse intent) carry no key.
+    sessionKey: text("session_key"),
+    // Sandbox driver identifier, e.g. "modal".
+    driver: text("driver").notNull(),
+    // Runtime image/language: node | python | shell | agent.
+    image: text("image").notNull(),
+    // Driver-issued live sandbox id (Modal `sb-...`). Mutable on restore.
+    sandboxId: text("sandbox_id").notNull(),
+    // Last filesystem snapshot id for warm restore; null before first snapshot.
+    snapshotId: text("snapshot_id"),
+    // Lifecycle status. DEFAULT 'running' — a row is created when the sandbox
+    // starts. Transitions: running → idle (TTL timer) → stopped (explicit) → gone
+    // (evicted/GC'd). CHECK constraint mirrors the IN list.
+    status: text("status").notNull().default("running"),
+    // Wall-clock of the most recent agent interaction (used by TTL logic).
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }),
+    // Soft expiry: created_at + configured TTL. Null = no expiry.
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
+    // Arbitrary driver/caller metadata (image labels, resource class, etc.).
+    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+  },
+  (t) => ({
+    orgIdx: index("sandbox_sessions_org_idx").on(t.orgId, t.workspaceId),
+    statusIdx: index("sandbox_sessions_status_idx").on(t.orgId, t.workspaceId, t.status),
+    // At most one live durable sandbox per (workspace, sessionKey).
+    sessionKeyUniq: uniqueIndex("sandbox_sessions_session_key_uniq")
+      .on(t.workspaceId, t.sessionKey)
+      .where(sql`session_key IS NOT NULL AND status IN ('running','idle') AND deleted_at IS NULL`),
+    statusCheck: check(
+      "sandbox_sessions_status_check",
+      sql`${t.status} IN ('running','idle','stopped','gone')`,
+    ),
+    imageCheck: check(
+      "sandbox_sessions_image_check",
+      sql`${t.image} IN ('node','python','shell','agent')`,
+    ),
+  }),
+);
+
 // Agent plans: structured execution plans with approval gates.
 // Status flow: draft → awaiting_approval → approved | denied | amended → executing → completed.
 // Plans are immutable after approval.
