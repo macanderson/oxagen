@@ -116,6 +116,21 @@ const CREATE_CODE_CURSOR_SQL = `
   )
 `;
 
+/**
+ * Tracks the `createdAt` epoch-ms of the most recently synced TurnTrace for a
+ * given (org, workspace) pair.  Used by `oxagen graph lineage` to emit only
+ * turns that have not been pushed yet (ADR-018 slice 3 cursor model).
+ */
+const CREATE_LINEAGE_CURSOR_SQL = `
+  CREATE TABLE IF NOT EXISTS lineage_sync_cursor (
+    org              VARCHAR NOT NULL,
+    workspace        VARCHAR NOT NULL,
+    last_synced_at   BIGINT  NOT NULL,
+    synced_at        BIGINT  NOT NULL,
+    PRIMARY KEY (org, workspace)
+  )
+`;
+
 // ---------------------------------------------------------------------------
 // GraphStore
 // ---------------------------------------------------------------------------
@@ -149,7 +164,10 @@ export class GraphStore {
             if (err3) return reject(err3);
             this.conn.run(CREATE_CODE_CURSOR_SQL, (err4) => {
               if (err4) return reject(err4);
-              resolve();
+              this.conn.run(CREATE_LINEAGE_CURSOR_SQL, (err5) => {
+                if (err5) return reject(err5);
+                resolve();
+              });
             });
           });
         });
@@ -330,6 +348,50 @@ export class GraphStore {
       `INSERT INTO code_push_cursor (org, workspace, repo, sha, pushed_at)
        VALUES (?, ?, ?, ?, ?)`,
       [org, workspace, repo, sha, Date.now()],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lineage push cursor (TurnTrace sync tracking for `oxagen graph lineage`)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Return the `createdAt` epoch-ms of the most recently synced TurnTrace, or
+   * `null` if no lineage sync has been run yet.
+   *
+   * Traces with `createdAt > lastSyncedAt` are candidates for the next push.
+   */
+  async getLineageCursor(
+    org: string,
+    workspace: string,
+  ): Promise<number | null> {
+    await this.ready;
+    const rows = await this.querySql(
+      "SELECT last_synced_at FROM lineage_sync_cursor WHERE org = ? AND workspace = ?",
+      [org, workspace],
+    );
+    if (rows.length === 0) return null;
+    return Number(rows[0]!["last_synced_at"]);
+  }
+
+  /**
+   * Persist the `createdAt` epoch-ms of the latest TurnTrace that was
+   * successfully pushed to the workspace graph.
+   */
+  async setLineageCursor(
+    org: string,
+    workspace: string,
+    lastSyncedAt: number,
+  ): Promise<void> {
+    await this.ready;
+    await this.runSql(
+      "DELETE FROM lineage_sync_cursor WHERE org = ? AND workspace = ?",
+      [org, workspace],
+    );
+    await this.runSql(
+      `INSERT INTO lineage_sync_cursor (org, workspace, last_synced_at, synced_at)
+       VALUES (?, ?, ?, ?)`,
+      [org, workspace, lastSyncedAt, Date.now()],
     );
   }
 

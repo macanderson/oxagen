@@ -69,7 +69,39 @@ oxagen graph push --json
 
 # Override repo identifier
 oxagen graph push --repo https://github.com/org/repo.git
+
+# Push CLI execution lineage (ADR-018 slice 3)
+oxagen graph lineage
+
+# Lineage push with JSON output
+oxagen graph lineage --json
+
+# Lineage push with explicit repo for cross-graph file linkage
+oxagen graph lineage --repo https://github.com/org/repo.git
 ```
+
+## Lineage node/edge model (source: "lineage")
+
+When `source: "lineage"`, the envelope projects CLI `TurnTrace` records into the following subgraph:
+
+| Node key pattern | Labels | Description |
+|---|---|---|
+| `lineage:session:{projectKey}` | `AgentSession` | One node per project (cwd basename); groups all turns. |
+| `lineage:turn:{turnId}` | `AgentTurn` | One per CLI turn (prompt → response). Carries token counts, cost, duration, model. |
+| `lineage:tool:{turnId}:{idx}` | `AgentToolCall` | One per tool call (verbose turns only). |
+| `lineage:model:{slug}` | `AIModel` | Shared model node; reused across turns. |
+| `code:{repo}:{path}` | `SourceFile` | Links to the code subgraph (same key scheme as `source: "code"`). |
+
+| Edge type | From | To |
+|---|---|---|
+| `HAS_TURN` | `AgentSession` | `AgentTurn` |
+| `USED_MODEL` | `AgentTurn` | `AIModel` |
+| `TOUCHED_FILE` | `AgentTurn` | `SourceFile` |
+| `USED_TOOL` | `AgentTurn` | `AgentToolCall` |
+
+The lineage sync cursor (most recently synced `createdAt` epoch-ms) is stored in the DuckDB `lineage_sync_cursor` table alongside the code-push cursor. Only turns newer than the cursor are projected on each run.
+
+**ClickHouse (raw events):** Per-turn token/cost/timing events belong in ClickHouse per ADR-018. No CLI-accessible contract exists today for this path; raw-event emission is a documented follow-up. The `AgentTurn` node carries summary token/cost metrics as a stopgap.
 
 ## Related
 

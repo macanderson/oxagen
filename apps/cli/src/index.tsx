@@ -300,6 +300,21 @@ graph
     await handleGraphPush({ full: opts.full, repo: opts.repo, json: opts.json });
   });
 
+graph
+  .command("lineage")
+  .description(
+    "Push CLI session execution lineage into the workspace knowledge graph (ADR-018 slice 3)",
+  )
+  .option(
+    "--repo <id>",
+    "Override the repo identifier used to link touched files to the code subgraph",
+  )
+  .option("--json", "Output summary as JSON")
+  .action(async (opts: { repo?: string; json?: boolean }) => {
+    const { handleGraphLineage } = await import("./commands/graph.lineage.js");
+    await handleGraphLineage({ repo: opts.repo, json: opts.json });
+  });
+
 // ── config: local configuration ───────────────────────────────────────────────
 
 program
