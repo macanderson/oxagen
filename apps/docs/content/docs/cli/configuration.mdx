@@ -1,0 +1,125 @@
+---
+title: Configuration
+description: Layered settings.json, model selection, permissions and hooks, and project-level agents, slash commands, and rules.
+---
+
+The CLI is configured through two files and a per-project `.oxagen/` directory:
+
+- **`config.json`** (`~/.config/oxagen/config.json`) — your credentials and defaults: platform `token`, `org`, `workspace`, `api-url`, default `model`, and optionally `gatewayKey`. Managed with [`oxagen config`](/docs/cli/commands#oxagen-config-local-configuration).
+- **`settings.json`** — layered behavior: model, environment values, tool permissions, hooks, and MCP servers. Managed with [`oxagen settings`](/docs/cli/commands#oxagen-settings-unified-settingsjson).
+- **`.oxagen/`** — Markdown definitions committed alongside your code: custom agents, slash commands, and rules.
+
+## settings.json scopes
+
+`settings.json` is merged from three scopes, most specific winning:
+
+| Scope | File | Use for |
+|---|---|---|
+| `user` | `~/.config/oxagen/settings.json` | Personal defaults across all projects. |
+| `project` | `.oxagen/settings.json` | Team-shared, committed to version control. |
+| `local` | `.oxagen/settings.local.json` | Personal/secret overrides — **gitignored**. |
+
+Start with a documented template, then inspect the merged result:
+
+```bash
+oxagen settings init --scope project   # write a starter .oxagen/settings.json
+oxagen settings show                   # merged view + which scope each value came from
+oxagen settings path                   # the three files and their status
+oxagen settings validate               # check every scope against the schema
+```
+
+### What goes in settings.json
+
+```jsonc
+{
+  // Default model (Vercel AI Gateway slug). --model and OXAGEN_MODEL override it.
+  "model": "anthropic/claude-sonnet-4.5",
+
+  // Oxagen platform API base URL (defaults to https://api.oxagen.sh).
+  "apiUrl": "https://api.oxagen.sh",
+
+  // Environment values projected into process.env on every run, if not already set.
+  // Your shell always wins — these only fill unset vars.
+  "env": {
+    "AI_GATEWAY_API_KEY": "vck_…"
+  },
+
+  // Allow/deny rules and the default mode for the agent's local tools.
+  "permissions": {
+    "defaultMode": "default",
+    "allow": ["Bash(git status)", "Read(*)"],
+    "deny":  ["Bash(rm -rf *)"]
+  },
+
+  // Shell commands fired on lifecycle events (SessionStart, before/after a tool, …).
+  "hooks": {},
+
+  // External MCP servers connected to the agent loop (see `oxagen mcp`).
+  "mcpServers": {}
+}
+```
+
+`permissions.defaultMode` accepts `default` / `acceptEdits` (allow unless a `deny` rule matches), `deny` (deny-by-default — block unless an `allow` rule matches), and `bypassPermissions` (allow everything; `deny` rules still take priority). A `deny` rule always beats an `allow` rule at the same scope.
+
+Set scalar and env values without hand-editing:
+
+```bash
+oxagen settings set model anthropic/claude-opus-4.1 --scope project
+oxagen settings set env.AI_GATEWAY_API_KEY "vck_…"  --scope user
+```
+
+## Custom agents
+
+Define reusable agents — each with its own system prompt, model, and tool allowlist — as Markdown files with YAML frontmatter:
+
+```bash
+oxagen agent new reviewer        # scaffolds .oxagen/agents/reviewer.md
+oxagen agent list
+oxagen agent show reviewer
+oxagen --agent reviewer "review the changes on this branch for security issues"
+```
+
+## Slash commands
+
+Parameterized prompt templates you invoke as `/name` in the REPL (or run headless):
+
+```bash
+oxagen command new triage        # scaffolds .oxagen/commands/triage.md
+oxagen command run triage OXA-1234
+```
+
+## Rules
+
+Guardrails the agent is told about **and hard-blocked from violating** — useful for "never touch production config" or "no force-push":
+
+```bash
+oxagen rules new no-force-push          # scaffolds .oxagen/rules/no-force-push.md
+oxagen rules list
+oxagen rules check bash "git push --force origin main"   # dry-run against the guards
+```
+
+## Where definitions are discovered
+
+Agents, slash commands, and rules are each loaded from three locations and merged — project definitions override user ones, and the `.claude/` paths are read for drop-in compatibility with Claude Code:
+
+| Order | Location | Scope |
+|---|---|---|
+| 1 | `~/.config/oxagen/<kind>/*.md` | User (all projects) |
+| 2 | `<project>/.claude/<kind>/*.md` | Project (Claude Code interop) |
+| 3 | `<project>/.oxagen/<kind>/*.md` | Project (Oxagen) |
+
+…where `<kind>` is `agents`, `commands`, or `rules`. Commit `.oxagen/` so your team shares the same agents, commands, and rules.
+
+## Environment variables
+
+Every persisted value has an environment-variable equivalent, which takes precedence — convenient in CI:
+
+| Variable | Overrides |
+|---|---|
+| `AI_GATEWAY_API_KEY` | Gateway key for the agent loop. |
+| `OXAGEN_API_TOKEN` | Platform `token`. |
+| `OXAGEN_ORG_ID` | `org`. |
+| `OXAGEN_WORKSPACE_ID` | `workspace`. |
+| `OXAGEN_API_URL` | `api-url`. |
+| `OXAGEN_MODEL` | Default `model`. |
+| `OXAGEN_NO_TUI=1` | Disable the interactive TUI menu (print help instead). |
