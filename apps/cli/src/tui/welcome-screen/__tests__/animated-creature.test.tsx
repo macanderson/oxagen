@@ -23,9 +23,9 @@ describe("AnimatedCreature", () => {
   test("renders in interactive mode", () => {
     const { lastFrame } = render(<AnimatedCreature mode="interactive" />);
     const output = lastFrame();
-    
+
     // Should show the dragon
-    expect(output.length).toBeGreaterThan(100);
+    expect(output?.length ?? 0).toBeGreaterThan(100);
     
     // Should show the interaction hint
     expect(output).toContain("SPACE");
