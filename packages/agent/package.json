@@ -35,6 +35,7 @@
     "@oxagen/ontology": "workspace:*",
     "@oxagen/plugins": "workspace:*",
     "@oxagen/sandbox": "workspace:*",
+    "@oxagen/storage": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "ai": "6.0.197",

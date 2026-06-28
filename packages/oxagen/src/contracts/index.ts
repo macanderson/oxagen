@@ -14,6 +14,18 @@ import { archiveCreate } from "./archive.create";
 import { assetUpload } from "./asset.upload";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { agentCodeExecute } from "./agent.code.execute";
+import { agentSandboxStart } from "./agent.sandbox.start";
+import { agentSandboxExec } from "./agent.sandbox.exec";
+import { agentSandboxSnapshot } from "./agent.sandbox.snapshot";
+import { agentSandboxStop } from "./agent.sandbox.stop";
+import { browserNavigate } from "./browser.navigate";
+import { browserScreenshot } from "./browser.screenshot";
+import { browserFill } from "./browser.fill";
+import { browserSubmit } from "./browser.submit";
+import { browserClick } from "./browser.click";
+import { browserRefresh } from "./browser.refresh";
+import { browserRead } from "./browser.read";
+import { agentFeatureVerify } from "./agent.feature.verify";
 import { codeDiff } from "./code.diff";
 import { codePatch } from "./code.patch";
 import { codeFormat } from "./code.format";
@@ -267,6 +279,18 @@ export {
   assetUpload,
   agentApprovalResolve,
   agentCodeExecute,
+  agentSandboxStart,
+  agentSandboxExec,
+  agentSandboxSnapshot,
+  agentSandboxStop,
+  browserNavigate,
+  browserScreenshot,
+  browserFill,
+  browserSubmit,
+  browserClick,
+  browserRefresh,
+  browserRead,
+  agentFeatureVerify,
   codeDiff,
   codePatch,
   codeFormat,
@@ -514,6 +538,18 @@ export const contracts = [
   assetUpload,
   agentApprovalResolve,
   agentCodeExecute,
+  agentSandboxStart,
+  agentSandboxExec,
+  agentSandboxSnapshot,
+  agentSandboxStop,
+  browserNavigate,
+  browserScreenshot,
+  browserFill,
+  browserSubmit,
+  browserClick,
+  browserRefresh,
+  browserRead,
+  agentFeatureVerify,
   codeDiff,
   codePatch,
   codeFormat,

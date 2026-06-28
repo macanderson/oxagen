@@ -2,8 +2,12 @@ import { z } from "zod";
 import { IMAGES } from "./images";
 import type {
   SandboxDriver,
+  SandboxExecRequest,
+  SandboxExecResult,
   SandboxRequest,
   SandboxResult,
+  SandboxSessionHandle,
+  SandboxSessionSpec,
   SandboxStreamChunk,
 } from "./types";
 
@@ -61,6 +65,42 @@ const ModalRunResponseSchema = z.object({
 
 type ModalRunResponse = z.infer<typeof ModalRunResponseSchema>;
 
+// ── Durable-session runner contracts ─────────────────────────────────────────
+// Mirror the runner's POST /sandbox/{create,exec,snapshot,restore,terminate,
+// status} JSON shapes (ops/modal-sandbox/runner.py). Snake_case on the wire,
+// camelCase at the SandboxDriver boundary.
+const ModalSessionHandleSchema = z.object({
+  sandbox_id: z.string(),
+  status: z.literal("running"),
+  created_at: z.string(),
+});
+const ModalExecResponseSchema = z.object({
+  exit_code: z.number().int(),
+  stdout: z.string(),
+  stderr: z.string(),
+  duration_ms: z.number(),
+  timed_out: z.boolean(),
+  gone: z.boolean(),
+});
+const ModalSnapshotResponseSchema = z.object({ snapshot_id: z.string() });
+const ModalStatusResponseSchema = z.object({
+  sandbox_id: z.string(),
+  status: z.enum(["running", "gone"]),
+});
+
+function sessionBody(spec: SandboxSessionSpec) {
+  return {
+    image: spec.image,
+    memory_mb: spec.memoryMb,
+    ttl_seconds: spec.ttlSeconds,
+    idle_timeout_seconds: spec.idleTimeoutSeconds,
+    network: spec.network,
+    org_id: spec.orgId,
+    workspace_id: spec.workspaceId,
+    setup_cmd: spec.setupCmd ?? null,
+  };
+}
+
 function toRunnerBody(req: SandboxRequest): ModalRunRequest {
   const spec = IMAGES[req.language];
   return {
@@ -88,8 +128,37 @@ export function createModalSandbox(config: ModalSandboxConfig): SandboxDriver {
     authorization: `Bearer ${config.runnerToken}`,
   };
 
+  // Shared POST helper for the durable-session endpoints. The HTTP timeout is
+  // the caller's logical timeout plus headroom so the runner can report its own
+  // timeout cleanly instead of us aborting the connection first.
+  async function postJson<T>(
+    path: string,
+    body: unknown,
+    schema: z.ZodType<T>,
+    timeoutMs: number,
+  ): Promise<T> {
+    const controller = new AbortController();
+    const httpTimeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetchImpl(`${config.runnerUrl}${path}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`modal runner ${res.status} ${path}: ${text.slice(0, 500)}`);
+      }
+      return schema.parse(await res.json());
+    } finally {
+      clearTimeout(httpTimeout);
+    }
+  }
+
   return {
     name: "modal",
+    supportsSessions: true,
     async run(req: SandboxRequest): Promise<SandboxResult> {
       const body = JSON.stringify(toRunnerBody(req));
       // Add a small overhead to the HTTP timeout so the runner can
@@ -133,6 +202,85 @@ export function createModalSandbox(config: ModalSandboxConfig): SandboxDriver {
       if (result.stderr) {
         yield { channel: "stderr", data: result.stderr, at: now };
       }
+    },
+
+    // ── Durable sessions ──────────────────────────────────────────────────────
+    async createSession(spec: SandboxSessionSpec): Promise<SandboxSessionHandle> {
+      // Bound provisioning (image pull + optional clone/install via setup_cmd)
+      // on a fixed 5-minute budget — NOT the session TTL, which is the whole-day
+      // lifetime ceiling and would let a wedged create hang the request.
+      const data = await postJson(
+        "/sandbox/create",
+        sessionBody(spec),
+        ModalSessionHandleSchema,
+        300_000,
+      );
+      return { sandboxId: data.sandbox_id, status: data.status, createdAt: data.created_at };
+    },
+
+    async execInSession(req: SandboxExecRequest): Promise<SandboxExecResult> {
+      const data = await postJson(
+        "/sandbox/exec",
+        {
+          sandbox_id: req.sandboxId,
+          command: req.command,
+          timeout_ms: req.timeoutMs,
+          env: req.env ?? null,
+          stdin: req.stdin ?? null,
+        },
+        ModalExecResponseSchema,
+        req.timeoutMs + 15_000,
+      );
+      return {
+        exitCode: data.exit_code,
+        stdout: data.stdout,
+        stderr: data.stderr,
+        durationMs: data.duration_ms,
+        timedOut: data.timed_out,
+        gone: data.gone,
+      };
+    },
+
+    async snapshotSession(sandboxId: string): Promise<{ snapshotId: string }> {
+      const data = await postJson(
+        "/sandbox/snapshot",
+        { sandbox_id: sandboxId },
+        ModalSnapshotResponseSchema,
+        300_000,
+      );
+      return { snapshotId: data.snapshot_id };
+    },
+
+    async restoreSession(
+      snapshotId: string,
+      spec: SandboxSessionSpec,
+    ): Promise<SandboxSessionHandle> {
+      const data = await postJson(
+        "/sandbox/restore",
+        { snapshot_id: snapshotId, ...sessionBody(spec) },
+        ModalSessionHandleSchema,
+        300_000,
+      );
+      return { sandboxId: data.sandbox_id, status: data.status, createdAt: data.created_at };
+    },
+
+    async stopSession(sandboxId: string): Promise<void> {
+      await postJson(
+        "/sandbox/terminate",
+        { sandbox_id: sandboxId },
+        z.object({ ok: z.boolean() }),
+        30_000,
+      );
+    },
+
+    async sessionStatus(sandboxId: string): Promise<"running" | "gone"> {
+      const data = await postJson(
+        "/sandbox/status",
+        { sandbox_id: sandboxId },
+        ModalStatusResponseSchema,
+        30_000,
+      );
+      return data.status;
     },
   };
 }

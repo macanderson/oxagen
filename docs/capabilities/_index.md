@@ -4,12 +4,13 @@ Reference for all declared capabilities across the Oxagen platform.
 Each capability is implemented across API, MCP, and agent surfaces with
 contract-first design, IAM enforcement, and instrumentation.
 
-## Agent (19)
+## Agent (24)
 
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
 - [agent.code.execute](agent.code.execute.md) — Execute a code snippet in an isolated sandbox and return the exit code, stdout, stderr, and execution time
 - [agent.compose](agent.compose.md) — Plan and execute a chain of capabilities to accomplish a goal, threading each step's output into dependent inputs, then synthesize a summary
 - [agent.execution.record](agent.execution.record.md) — Persist a complete agent execution record including steps, tool calls, and result summary for observability and audit
+- [agent.feature.verify](agent.feature.verify.md) — Independent cross-LLM judge: a DIFFERENT vision model than the builder reads screenshots of a feature and returns a pass/fail verdict against the stated requirement. The proof-of-done gate.
 - [agent.mcp.consent.list](agent.mcp.consent.list.md) — List external MCP tool consent grants in the active workspace (which tools the agent may invoke without re-prompting)
 - [agent.mcp.consent.resolve](agent.mcp.consent.resolve.md) — Grant or deny first-use consent for an external MCP tool; the decision resumes the paused agent stream and is remembered for subsequent calls
 - [agent.mcp.delete](agent.mcp.delete.md) — Soft-delete a registered external MCP server; its tools stop registering immediately while tool-descriptor snapshots are retained for replay
@@ -21,6 +22,10 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.memory.write](agent.memory.write.md) — Persist a weighted memory tied to a graph node per the schema.memory contract
 - [agent.plan.approve](agent.plan.approve.md) — Approve, deny, or amend a previously-proposed plan; approval releases the agent stream to execute the plan's side-effectful steps
 - [agent.plan.create](agent.plan.create.md) — Create a structured hierarchical execution plan with tasks, dependencies, and approval gates; approval via agent.plan.approve is required before execution
+- [agent.sandbox.exec](agent.sandbox.exec.md) — Run a shell command inside a durable sandbox session; filesystem/process state persists across calls; returns stdout, stderr, exit code
+- [agent.sandbox.snapshot](agent.sandbox.snapshot.md) — Capture a filesystem snapshot of a durable sandbox session so it can be restored after an idle reap or the 24h lifetime ceiling
+- [agent.sandbox.start](agent.sandbox.start.md) — Provision or reconnect to a durable code-agent sandbox that persists across turns; pass a stable sessionKey to reuse one warm sandbox
+- [agent.sandbox.stop](agent.sandbox.stop.md) — Terminate a durable sandbox session and release its resources; call when the work is finished
 - [agent.skill.list](agent.skill.list.md) — List skills available in the active workspace including built-in filesystem and dynamic marketplace-installed skills
 - [agent.skill.load](agent.skill.load.md) — Load and register a workspace skill at runtime, resolving the requested version and parsing its configuration
 - [agent.subagent.aggregate](agent.subagent.aggregate.md) — Wait for all child runs in a subagent fanout to complete and return merged results, conflict list, and execution timeline
@@ -67,6 +72,16 @@ contract-first design, IAM enforcement, and instrumentation.
 - [billing.credits.purchase](billing.credits.purchase.md) — Initiate a dynamic usage-credit purchase via Stripe Checkout with automatic volume discount
 - [billing.subscription.read](billing.subscription.read.md) — Return the active subscription, plan slug, current period bounds, and available credits
 - [billing.subscription.upgrade.start](billing.subscription.upgrade.start.md) — Begin a plan change via Stripe Checkout; returns a URL for the user to complete
+
+## Browser (7)
+
+- [browser.click](browser.click.md) — Click an element (by CSS selector) on the durable sandbox browser's current page; Playwright auto-waits for the element to be actionable
+- [browser.fill](browser.fill.md) — Fill a form field (by CSS selector) on the durable sandbox browser's current page; state persists so a later submit acts on the filled value
+- [browser.navigate](browser.navigate.md) — Navigate the durable sandbox's browser to a URL and wait for load; use to prove a feature renders at a given URL inside the sandbox
+- [browser.read](browser.read.md) — Read visible text from the durable sandbox browser's current page (whole page or a CSS-selected element) for programmatic assertions
+- [browser.refresh](browser.refresh.md) — Reload the durable sandbox browser's current page and wait for load; useful after a rebuild or HMR update to re-check a feature
+- [browser.screenshot](browser.screenshot.md) — Screenshot the durable sandbox browser's current page or element and store it as a private workspace asset for the cross-LLM judge
+- [browser.submit](browser.submit.md) — Submit a form on the durable sandbox browser's current page (click the given selector, or press Enter) and wait for the result to settle
 
 ## Chat (2)
 
@@ -145,8 +160,8 @@ contract-first design, IAM enforcement, and instrumentation.
 | `graph.stats`               | Workspace graph statistics: node/edge counts by type.                                                                                                     |
 | `graph.export`              | Paginated, cursor-aware read of a workspace subgraph for local projection. Powers `oxagen graph pull`. See ADR-018.                                       |
 | `graph.sync.push`           | Batch-upsert a content-addressed code or lineage subgraph (is_system=true). Idempotent — re-sending is a no-op. Powers `oxagen graph push`. See ADR-018. |
-| `ontology.query`            | Typed multi-hop traversal from a start node over named relationship types.                                                                                |
-| `ontology.neighbors`        | One-hop neighborhood of a node, filtered by type and direction.                                                                                           |
+| `ontology.query`            | Typed multi-hop traversal from a start node over named relationship types.                                                    |
+| `ontology.neighbors`        | One-hop neighborhood of a node, filtered by type and direction.                                                               |
 
 ## Image (4)
 

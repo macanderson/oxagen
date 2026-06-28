@@ -15,6 +15,24 @@ type LoaderEntry = () => Promise<{ default?: CapabilityHandlerFn } & Record<stri
 // Single source of truth mapping capability name → handler module.
 const LOADERS: Record<string, LoaderEntry> = {
   "agent.code.execute": () => import("./agent.code.execute"),
+  // Durable sandbox sessions — long-lived, reconnectable sandboxes that persist
+  // across agent turns (clone → build → snapshot → PR). The one-shot
+  // agent.code.execute and these durable peers share the @oxagen/sandbox driver.
+  "agent.sandbox.start": () => import("./agent.sandbox.start"),
+  "agent.sandbox.exec": () => import("./agent.sandbox.exec"),
+  "agent.sandbox.snapshot": () => import("./agent.sandbox.snapshot"),
+  "agent.sandbox.stop": () => import("./agent.sandbox.stop"),
+  // Browser automation inside a durable session — all seven thin wrappers live
+  // in one module (browser.ts) that drives `browserctl` via execInSession.
+  "browser.navigate": () => import("./browser"),
+  "browser.screenshot": () => import("./browser"),
+  "browser.fill": () => import("./browser"),
+  "browser.submit": () => import("./browser"),
+  "browser.click": () => import("./browser"),
+  "browser.refresh": () => import("./browser"),
+  "browser.read": () => import("./browser"),
+  // Cross-LLM proof-of-done: an independent vision model judges the screenshots.
+  "agent.feature.verify": () => import("./agent.feature.verify"),
   // Code-execution surface peers of agent.code.execute (OXA-1352). Co-located
   // here so the whole sandboxed code surface registers through one path.
   "code.diff": () => import("./code.diff"),

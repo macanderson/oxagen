@@ -18,6 +18,18 @@ import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
 import { chatMessageExecutionRoute } from "./routes/v1/chat.message.execution";
 import { chatStreamRoute } from "./routes/v1/chat.stream";
 import { agentCodeExecuteRoute } from "./routes/v1/agent.code.execute";
+import { agentSandboxStartRoute } from "./routes/v1/agent.sandbox.start";
+import { agentSandboxExecRoute } from "./routes/v1/agent.sandbox.exec";
+import { agentSandboxSnapshotRoute } from "./routes/v1/agent.sandbox.snapshot";
+import { agentSandboxStopRoute } from "./routes/v1/agent.sandbox.stop";
+import { agentFeatureVerifyRoute } from "./routes/v1/agent.feature.verify";
+import { browserNavigateRoute } from "./routes/v1/browser.navigate";
+import { browserScreenshotRoute } from "./routes/v1/browser.screenshot";
+import { browserFillRoute } from "./routes/v1/browser.fill";
+import { browserSubmitRoute } from "./routes/v1/browser.submit";
+import { browserClickRoute } from "./routes/v1/browser.click";
+import { browserRefreshRoute } from "./routes/v1/browser.refresh";
+import { browserReadRoute } from "./routes/v1/browser.read";
 import { codeDiffRoute } from "./routes/v1/code.diff";
 import { codePatchRoute } from "./routes/v1/code.patch";
 import { codeFormatRoute } from "./routes/v1/code.format";
@@ -264,6 +276,21 @@ orgScoped.route("/conversations/purge", conversationPurgeRoute);
 // Agent-runtime routes live under the org + workspace scope so the runner
 // inherits the same auth, isolation, and audit envelope as every other v1 call.
 orgScoped.route("/agent/code/execute", agentCodeExecuteRoute);
+// Durable sandbox sessions (clone → build → snapshot → PR), org+workspace scoped.
+orgScoped.route("/agent/sandbox/start", agentSandboxStartRoute);
+orgScoped.route("/agent/sandbox/exec", agentSandboxExecRoute);
+orgScoped.route("/agent/sandbox/snapshot", agentSandboxSnapshotRoute);
+orgScoped.route("/agent/sandbox/stop", agentSandboxStopRoute);
+// Browser automation inside a durable sandbox (proof-of-done), org+workspace scoped.
+orgScoped.route("/browser/navigate", browserNavigateRoute);
+orgScoped.route("/browser/screenshot", browserScreenshotRoute);
+orgScoped.route("/browser/fill", browserFillRoute);
+orgScoped.route("/browser/submit", browserSubmitRoute);
+orgScoped.route("/browser/click", browserClickRoute);
+orgScoped.route("/browser/refresh", browserRefreshRoute);
+orgScoped.route("/browser/read", browserReadRoute);
+// Cross-LLM proof-of-done judge.
+orgScoped.route("/agent/feature/verify", agentFeatureVerifyRoute);
 // Code-execution surface peers (OXA-1352) under the same org+workspace scope.
 orgScoped.route("/code/diff", codeDiffRoute);
 orgScoped.route("/code/patch", codePatchRoute);

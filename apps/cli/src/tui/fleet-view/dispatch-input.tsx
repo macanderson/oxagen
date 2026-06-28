@@ -47,7 +47,7 @@ export function DispatchInput({
         <Text color={theme.cyan}>█</Text>
       </Text>
       {value ? null : (
-        <Text dimColor> describe a task and press enter to dispatch an agent</Text>
+        <Text dimColor> submit a prompt using enter to dispatch an agent</Text>
       )}
     </Box>
   );
