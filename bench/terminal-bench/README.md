@@ -139,6 +139,100 @@ it live in-container if you want to measure the full context engine.
 3. Harbor runs the task's verifier against the resulting container state and
    records the reward.
 
+## Warm / self-improvement mode
+
+The cold benchmark measures a single stateless trial — the agent starts with no
+prior memory.  The warm mode persists Oxagen's memory/trace stores across trials
+so each task benefits from lessons accumulated during earlier tasks.  This is the
+experimental substrate for proving **H4** (self-improvement thesis) from
+`docs/cli/eval-runbook.md §7`.
+
+### How to run
+
+```bash
+# Warm: memory persists across all trials in the sequence
+OXAGEN_WARM=1 ./run.sh
+
+# Explicit warm-memory dir (default: ./warm-memory)
+OXAGEN_WARM=1 OXAGEN_WARM_MEMORY_DIR=./warm-mem N_CONCURRENT=1 ./run.sh
+
+# Cold baseline for comparison (default — every trial gets a fresh in-container HOME)
+./run.sh
+```
+
+**Important:** use `N_CONCURRENT=1` for warm runs.  Parallel trials all write to
+the same host-side warm dir simultaneously, causing races.  Serialized trials
+(`N_CONCURRENT=1`) give clean, ordered memory accumulation.
+
+### What it does
+
+`run.sh` with `OXAGEN_WARM=1`:
+1. Sets `OXAGEN_INSTALL_DUCKDB=1` so the DuckDB-backed context engine (episodic
+   memory, fleet memory, trace store) is live in every container.
+2. Sets `OXAGEN_WARM_MEMORY_DIR` (default `./warm-memory`) and creates it.
+3. Passes both vars to Harbor, which forwards them as env vars to the adapter.
+
+The adapter (`oxagen_agent.py`) then does the real cross-trial work:
+- **`install()` (start of each trial):** if `OXAGEN_WARM_MEMORY_DIR` has content
+  from prior trials, it uploads `<warm-dir>/.config/oxagen/` into the container
+  at `_WARM_CONFIG_IN_CONTAINER` (`/tmp/oxa-warm-home/.config/oxagen/`).
+- **`_forwarded_env()`:** sets `HOME=/tmp/oxa-warm-home` in the container env so
+  all of Oxagen's `node:os.homedir()` calls resolve to that path (fleet memory,
+  trace store, engram DuckDB, settings — all land under it).
+- **`run()` (after the agent finishes):** downloads `/tmp/oxa-warm-home/.config/oxagen/`
+  back to `<warm-dir>/.config/oxagen/` on the host, so the next trial inherits it.
+
+### Why HOME is the relocation env var
+
+The CLI has no `OXAGEN_HOME` or `XDG_CONFIG_HOME` variable.  Every path helper
+calls `node:os.homedir()` directly, which on Linux/macOS reads `HOME`.  Setting
+`HOME` in the forwarded env is therefore the complete relocation mechanism.
+Confirmed in `apps/cli/src/agent/trace-store.ts`, `fleet/memory.ts`,
+`memory.ts`, `settings/resolve.ts`, and the unit tests
+(`apps/cli/src/agent/__tests__/fleet-memory.test.ts`).
+
+### Cold vs warm comparison
+
+Run a cold baseline then a warm sequence on the **same task set** with the
+**same model**:
+
+```bash
+# Cold: N trials, each starting with empty HOME
+./run.sh                            # default cold
+# Warm: N trials, each starting with memory from all prior trials
+OXAGEN_WARM=1 N_CONCURRENT=1 ./run.sh --jobs-dir ./warm-results
+```
+
+Compare `resolved@1` (pass rate) across the two jobs dirs.  A higher warm pass
+rate is the learning signal.  For the causal test, wipe the warm dir and re-run:
+
+```bash
+rm -rf ./warm-memory && mkdir ./warm-memory
+OXAGEN_WARM=1 N_CONCURRENT=1 ./run.sh --jobs-dir ./wiped-results
+```
+
+If the wiped warm pass rate drops back toward the cold baseline, the accumulated
+memory caused the improvement (H4 causal clause).  If it does not drop, something
+else drove the gain — report that honestly.
+
+### Honest limitation
+
+Harbor's default config deletes the container after each trial
+(`environment.delete: true`).  The upload/download mechanism is real and
+implemented — memory genuinely persists across trials on the same machine.
+
+The remaining limitation: if Harbor workers run on **remote or ephemeral cloud
+machines** (Novita, E2B, Daytona), `OXAGEN_WARM_MEMORY_DIR` on the host is not
+the same machine as the container, so the download goes to the Harbor coordinator
+host rather than the same path the next trial's `install()` will read from.  In
+that configuration the warm loop silently breaks (each trial starts cold despite
+the download succeeding to a coordinator-local path).
+
+**Workaround for cloud Harbor:** mount a shared network volume (NFS, EFS, Blob) at
+`OXAGEN_WARM_MEMORY_DIR` that is accessible from all Harbor workers.  Until then,
+warm mode is fully functional only when running Harbor locally (the default
+`docker` environment).
+
 ## Results
 
 Written under `--jobs-dir` (default `./oxagen-tbench-results/`), git-ignored.
