@@ -87,7 +87,7 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
   });
 
   it("rejects org-scope export when caller is a non-privileged member", async () => {
-    queueSelects([{ role: "Member" }]);
+    queueSelects([{ role: "member" }]);
     await expect(
       privacyDataExportHandler({ scope: "org", orgId: "org_B" }, CTX),
     ).rejects.toThrow("Forbidden: org export requires Owner or Admin role");
@@ -95,14 +95,14 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
   });
 
   it("allows org-scope export for an Owner of the target org", async () => {
-    queueSelects([{ role: "Owner" }]);
+    queueSelects([{ role: "owner" }]);
     const result = await privacyDataExportHandler({ scope: "org", orgId: "org_B" }, CTX);
     expect(result).toEqual({ exportId: "exp_1", status: "queued" });
     expect(mocks.eventSend).toHaveBeenCalledTimes(1);
   });
 
   it("allows org-scope export for an Admin of the target org", async () => {
-    queueSelects([{ role: "Admin" }]);
+    queueSelects([{ role: "admin" }]);
     const result = await privacyDataExportHandler({ scope: "org", orgId: "org_B" }, CTX);
     expect(result).toEqual({ exportId: "exp_1", status: "queued" });
   });
