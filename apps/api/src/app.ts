@@ -39,6 +39,7 @@ import { agentTaskBackgroundReadRoute } from "./routes/v1/agent.task.background.
 import { agentTaskBackgroundCancelRoute } from "./routes/v1/agent.task.background.cancel";
 import { agentMemoryRecallRoute } from "./routes/v1/agent.memory.recall";
 import { agentMemoryWriteRoute } from "./routes/v1/agent.memory.write";
+import { agentMemoryListRoute } from "./routes/v1/agent.memory.list";
 import { agentMemoryPolicyReadRoute } from "./routes/v1/agent.memory.policy.read";
 import { agentMemoryPolicyWriteRoute } from "./routes/v1/agent.memory.policy.write";
 import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve";
@@ -282,6 +283,7 @@ orgScoped.route("/agent/tasks", agentTaskBackgroundStartRoute);
 orgScoped.route("/agent/tasks", agentTaskBackgroundReadRoute);
 orgScoped.route("/agent/tasks/cancel", agentTaskBackgroundCancelRoute);
 orgScoped.route("/agent/memory/recall", agentMemoryRecallRoute);
+orgScoped.route("/agent/memory/list", agentMemoryListRoute);
 orgScoped.route("/agent/memory/policy", agentMemoryPolicyReadRoute);
 orgScoped.route("/agent/memory/policy", agentMemoryPolicyWriteRoute);
 orgScoped.route("/agent/memory", agentMemoryWriteRoute);

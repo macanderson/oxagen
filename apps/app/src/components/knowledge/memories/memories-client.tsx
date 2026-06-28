@@ -1,31 +1,31 @@
 "use client";
 
 /**
- * MemoriesClient — full-featured Engram memory explorer.
+ * MemoriesClient — AgentMemory browser for the Knowledge → Memories tab.
  *
+ * Renders the list of :AgentMemory nodes written to Neo4j by agent.memory.write.
  * Features:
- * - Filter by record kind (episodic, semantic, procedural, entity, edge)
- * - Filter by minimum salience threshold
- * - Live record list with kind badges, salience bars, timestamps
- * - Click-to-inspect detail panel (sheet) showing full body, provenance, causality
- * - Content-addressed ID display for debugging
- * - Graph sync status indicators
+ * - Filter by memory kind (5 kinds), min-confidence slider, text search
+ * - Row: lesson (primary), kind badge, weight badge, confidence bar, createdAt, source, nodeRef
+ * - Click a row to open a detail sheet with all metadata
+ * - Stats row with per-kind counts
+ * - Empty state with helpful guidance
  */
 import * as React from "react";
 import {
   BrainCircuit,
   Filter,
-  Activity,
-  BookOpen,
-  Cog,
-  Box,
-  Link2,
+  RefreshCw,
+  Lock,
+  Bug,
+  AlertTriangle,
+  Zap,
   Clock,
   Fingerprint,
-  User,
   ChevronRight,
   Search,
   X,
+  Copy,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -37,39 +37,33 @@ import {
 } from "@/components/ui/sheet";
 
 // ---------------------------------------------------------------------------
-// Types
+// Types — mirrors AgentMemoryRecord from @oxagen/oxagen/contracts/agent.memory.list
 // ---------------------------------------------------------------------------
 
-type RecordKind = "episodic" | "semantic" | "procedural" | "entity" | "edge";
+type MemoryWeight = "low" | "high" | "critical";
+type MemoryKind =
+  | "routine-change"
+  | "constraint"
+  | "bug-root-cause"
+  | "convention-deviation"
+  | "gotcha";
 
-interface Provenance {
-  author: string;
-  derivedFrom: string[];
-  tool?: string;
-  model?: string;
-  timestamp: number;
-}
-
-interface SerializedRecord {
+interface AgentMemoryRecord {
   id: string;
-  kind: RecordKind;
-  namespace: {
-    org: string;
-    workspace: string;
-    session?: string;
-    agent?: string;
-  };
-  body: Record<string, unknown>;
-  salience: number;
+  publicId: string;
+  nodeRef: string;
+  weight: MemoryWeight;
+  kind: string;
+  lesson: string;
+  source: string;
   confidence: number;
-  provenance: Provenance;
-  causality: string[];
-  ttl?: number;
-  createdAt: number;
+  createdAt: string;
+  lastReinforcedAt: string | null;
 }
 
 interface MemoriesClientProps {
-  initialRecords: SerializedRecord[];
+  initialRecords: AgentMemoryRecord[];
+  total: number;
   orgId: string;
   workspaceId: string;
   orgSlug: string;
@@ -81,59 +75,91 @@ interface MemoriesClientProps {
 // ---------------------------------------------------------------------------
 
 const KIND_CONFIG: Record<
-  RecordKind,
+  MemoryKind,
   {
     label: string;
     icon: React.ComponentType<{ className?: string }>;
     color: string;
   }
 > = {
-  episodic: {
-    label: "Episodic",
-    icon: Activity,
+  "routine-change": {
+    label: "Routine Change",
+    icon: RefreshCw,
     color: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
   },
-  semantic: {
-    label: "Semantic",
-    icon: BookOpen,
-    color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  },
-  procedural: {
-    label: "Procedural",
-    icon: Cog,
-    color: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
-  },
-  entity: {
-    label: "Entity",
-    icon: Box,
+  constraint: {
+    label: "Constraint",
+    icon: Lock,
     color: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
   },
-  edge: {
-    label: "Edge",
-    icon: Link2,
-    color: "bg-pink-500/15 text-pink-700 dark:text-pink-400",
+  "bug-root-cause": {
+    label: "Bug Root Cause",
+    icon: Bug,
+    color: "bg-red-500/15 text-red-700 dark:text-red-400",
+  },
+  "convention-deviation": {
+    label: "Convention Deviation",
+    icon: AlertTriangle,
+    color: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  },
+  gotcha: {
+    label: "Gotcha",
+    icon: Zap,
+    color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
   },
 };
 
-const ALL_KINDS: RecordKind[] = [
-  "episodic",
-  "semantic",
-  "procedural",
-  "entity",
-  "edge",
+const ALL_KINDS: MemoryKind[] = [
+  "routine-change",
+  "constraint",
+  "bug-root-cause",
+  "convention-deviation",
+  "gotcha",
 ];
+
+function getKindConfig(kind: string): (typeof KIND_CONFIG)[MemoryKind] {
+  return (
+    KIND_CONFIG[kind as MemoryKind] ?? {
+      label: kind,
+      icon: BrainCircuit,
+      color: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400",
+    }
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Weight configuration
+// ---------------------------------------------------------------------------
+
+const WEIGHT_CONFIG: Record<
+  MemoryWeight,
+  { label: string; color: string }
+> = {
+  low: {
+    label: "Low",
+    color: "bg-zinc-400/20 text-zinc-600 dark:text-zinc-400",
+  },
+  high: {
+    label: "High",
+    color: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  },
+  critical: {
+    label: "Critical",
+    color: "bg-red-500/15 text-red-700 dark:text-red-400",
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatTimestamp(ms: number): string {
-  const date = new Date(ms);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  const diffHr = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
+function formatRelativeTime(iso: string): string {
+  const date = new Date(iso);
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const diffMin = Math.floor(diffMs / 60_000);
+  const diffHr = Math.floor(diffMs / 3_600_000);
+  const diffDays = Math.floor(diffMs / 86_400_000);
 
   if (diffMin < 1) return "just now";
   if (diffMin < 60) return `${diffMin}m ago`;
@@ -147,45 +173,35 @@ function formatTimestamp(ms: number): string {
 }
 
 function truncateId(id: string): string {
-  return `${id.slice(0, 8)}...${id.slice(-6)}`;
+  if (id.length <= 14) return id;
+  return `${id.slice(0, 8)}…${id.slice(-6)}`;
 }
 
-function extractBodySummary(
-  kind: RecordKind,
-  body: Record<string, unknown>,
-): string {
-  switch (kind) {
-    case "episodic": {
-      const event = body.event as string | undefined;
-      const outcome = body.outcome as string | undefined;
-      return outcome ? `${event} (${outcome})` : (event ?? "event");
-    }
-    case "semantic":
-      return (body.fact as string) ?? "fact";
-    case "procedural":
-      return (body.rule as string) ?? "rule";
-    case "entity":
-      return `${body.entityType ?? "entity"}: ${body.name ?? "unnamed"}`;
-    case "edge":
-      return `${body.edgeType ?? "edge"}: ${truncateId(String(body.sourceId ?? ""))} → ${truncateId(String(body.targetId ?? ""))}`;
-    default:
-      return JSON.stringify(body).slice(0, 80);
-  }
-}
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
 
-function SalienceBar({ value }: { value: number }) {
-  const pct = Math.round(value * 100);
-  const color =
-    value >= 0.7
+function ConfidenceBar({ value }: { value: number }) {
+  const clamped = Math.max(0, Math.min(1, value));
+  const pct = Math.round(clamped * 100);
+  const barColor =
+    clamped >= 0.7
       ? "bg-emerald-500"
-      : value >= 0.4
+      : clamped >= 0.4
         ? "bg-amber-500"
         : "bg-zinc-400";
   return (
     <div className="flex items-center gap-1.5">
-      <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
+      <div
+        role="meter"
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`Confidence ${pct}%`}
+        className="h-1.5 w-16 rounded-full bg-muted overflow-hidden"
+      >
         <div
-          className={`h-full rounded-full ${color} transition-all`}
+          className={`h-full rounded-full ${barColor} transition-all`}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -193,6 +209,30 @@ function SalienceBar({ value }: { value: number }) {
         {pct}%
       </span>
     </div>
+  );
+}
+
+function CopyableId({ id }: { id: string }) {
+  const [copied, setCopied] = React.useState(false);
+
+  function handleCopy() {
+    void navigator.clipboard.writeText(id).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title={id}
+      className="inline-flex items-center gap-1 font-mono text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+    >
+      <Fingerprint className="h-2.5 w-2.5" />
+      {copied ? "copied!" : truncateId(id)}
+      <Copy className="h-2.5 w-2.5 opacity-50" />
+    </button>
   );
 }
 
@@ -205,32 +245,34 @@ function FilterBar({
   toggleKind,
   searchQuery,
   setSearchQuery,
-  minSalience,
-  setMinSalience,
+  minConfidence,
+  setMinConfidence,
 }: {
-  activeKinds: Set<RecordKind>;
-  toggleKind: (k: RecordKind) => void;
+  activeKinds: Set<string>;
+  toggleKind: (k: MemoryKind) => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
-  minSalience: number;
-  setMinSalience: (v: number) => void;
+  minConfidence: number;
+  setMinConfidence: (v: number) => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
-      {/* Search + salience */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      {/* Search + confidence slider */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[180px] max-w-sm">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search memories..."
+            placeholder="Search lesson, source, or node ref..."
+            aria-label="Search memories"
             className="w-full rounded-md border border-border/60 bg-background py-1.5 pl-8 pr-8 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
           {searchQuery && (
             <button
               type="button"
+              aria-label="Clear search"
               onClick={() => setSearchQuery("")}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
@@ -240,24 +282,28 @@ function FilterBar({
         </div>
         <div className="flex items-center gap-2">
           <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-          <label className="text-[11px] text-muted-foreground whitespace-nowrap">
-            Min salience
+          <label
+            htmlFor="min-confidence"
+            className="text-[11px] text-muted-foreground whitespace-nowrap"
+          >
+            Min confidence
           </label>
           <input
+            id="min-confidence"
             type="range"
             min="0"
             max="100"
-            value={Math.round(minSalience * 100)}
-            onChange={(e) => setMinSalience(Number(e.target.value) / 100)}
+            value={Math.round(minConfidence * 100)}
+            onChange={(e) => setMinConfidence(Number(e.target.value) / 100)}
             className="h-1 w-20 cursor-pointer accent-primary"
           />
           <span className="text-[10px] tabular-nums text-muted-foreground w-7">
-            {Math.round(minSalience * 100)}%
+            {Math.round(minConfidence * 100)}%
           </span>
         </div>
       </div>
 
-      {/* Kind chips */}
+      {/* Kind filter chips */}
       <div className="flex items-center gap-1.5 flex-wrap">
         {ALL_KINDS.map((kind) => {
           const cfg = KIND_CONFIG[kind];
@@ -267,6 +313,8 @@ function FilterBar({
             <button
               key={kind}
               type="button"
+              aria-pressed={active}
+              aria-label={`Filter by ${cfg.label}`}
               onClick={() => toggleKind(kind)}
               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all border ${
                 active
@@ -282,7 +330,11 @@ function FilterBar({
         {activeKinds.size > 0 && activeKinds.size < ALL_KINDS.length && (
           <button
             type="button"
-            onClick={() => ALL_KINDS.forEach(toggleKind)}
+            onClick={() => {
+              for (const k of ALL_KINDS) {
+                if (activeKinds.has(k)) toggleKind(k);
+              }
+            }}
             className="text-[10px] text-muted-foreground hover:text-foreground ml-1"
           >
             Clear filters
@@ -294,56 +346,76 @@ function FilterBar({
 }
 
 // ---------------------------------------------------------------------------
-// Record row
+// Memory row
 // ---------------------------------------------------------------------------
 
-function MemoryRecordRow({
+function MemoryRow({
   record,
   onSelect,
 }: {
-  record: SerializedRecord;
+  record: AgentMemoryRecord;
   onSelect: () => void;
 }) {
-  const cfg = KIND_CONFIG[record.kind];
-  const Icon = cfg.icon;
-  const summary = extractBodySummary(record.kind, record.body);
+  const kindCfg = getKindConfig(record.kind);
+  const weightCfg =
+    WEIGHT_CONFIG[record.weight] ?? WEIGHT_CONFIG["low"];
+  const KindIcon = kindCfg.icon;
 
   return (
     <button
       type="button"
       onClick={onSelect}
-      className="flex w-full items-center gap-3 border-b border-border/30 px-4 py-3 text-left transition-colors hover:bg-muted/40 last:border-b-0 group"
+      className="flex w-full items-start gap-3 border-b border-border/30 px-4 py-3 text-left transition-colors hover:bg-muted/40 last:border-b-0 group"
     >
       {/* Kind icon */}
-      <div className={`flex-shrink-0 rounded-md p-1.5 ${cfg.color}`}>
-        <Icon className="h-3.5 w-3.5" />
+      <div className={`mt-0.5 flex-shrink-0 rounded-md p-1.5 ${kindCfg.color}`}>
+        <KindIcon className="h-3.5 w-3.5" />
       </div>
 
       {/* Content */}
-      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-        <p className="text-sm text-foreground truncate">{summary}</p>
-        <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+      <div className="flex flex-col gap-1 min-w-0 flex-1">
+        {/* Lesson (primary text) */}
+        <p className="text-sm text-foreground line-clamp-2 leading-snug">
+          {record.lesson}
+        </p>
+
+        {/* Badges row */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Badge
+            className={`${kindCfg.color} text-[10px] px-1.5 py-0 border-0 font-medium`}
+          >
+            {kindCfg.label}
+          </Badge>
+          <Badge
+            className={`${weightCfg.color} text-[10px] px-1.5 py-0 border-0 font-medium`}
+          >
+            {weightCfg.label}
+          </Badge>
+        </div>
+
+        {/* Meta row */}
+        <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
           <span className="flex items-center gap-1">
             <Clock className="h-2.5 w-2.5" />
-            {formatTimestamp(record.createdAt)}
+            {formatRelativeTime(record.createdAt)}
           </span>
-          <span className="flex items-center gap-1">
-            <Fingerprint className="h-2.5 w-2.5" />
-            {truncateId(record.id)}
+          <span className="truncate max-w-[160px]" title={record.source}>
+            {record.source}
           </span>
-          <span className="flex items-center gap-1">
-            <User className="h-2.5 w-2.5" />
-            {record.provenance.author}
-          </span>
-          {record.confidence < 1 && (
-            <span>conf {Math.round(record.confidence * 100)}%</span>
+          {record.nodeRef && (
+            <span
+              className="font-mono truncate max-w-[120px]"
+              title={record.nodeRef}
+            >
+              {record.nodeRef}
+            </span>
           )}
         </div>
       </div>
 
-      {/* Salience + arrow */}
+      {/* Confidence + arrow */}
       <div className="flex items-center gap-3 flex-shrink-0">
-        <SalienceBar value={record.salience} />
+        <ConfidenceBar value={record.confidence} />
         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
     </button>
@@ -351,17 +423,18 @@ function MemoryRecordRow({
 }
 
 // ---------------------------------------------------------------------------
-// Detail panel
+// Detail sheet
 // ---------------------------------------------------------------------------
 
-function RecordDetail({
+function MemoryDetail({
   record,
   onClose,
 }: {
-  record: SerializedRecord;
+  record: AgentMemoryRecord;
   onClose: () => void;
 }) {
-  const cfg = KIND_CONFIG[record.kind];
+  const kindCfg = getKindConfig(record.kind);
+  const weightCfg = WEIGHT_CONFIG[record.weight] ?? WEIGHT_CONFIG["low"];
 
   return (
     <Sheet
@@ -373,134 +446,72 @@ function RecordDetail({
       <SheetContent className="w-full max-w-lg overflow-y-auto">
         <SheetHeader className="pb-4">
           <SheetTitle className="flex items-center gap-2">
-            <Badge className={cfg.color}>{cfg.label}</Badge>
-            <span className="text-sm font-normal text-muted-foreground">
-              Memory Record
-            </span>
+            <Badge className={kindCfg.color}>{kindCfg.label}</Badge>
+            <Badge className={weightCfg.color}>{weightCfg.label}</Badge>
           </SheetTitle>
-          <SheetDescription className="text-xs font-mono break-all">
-            {record.id}
+          <SheetDescription className="text-xs font-mono break-all text-muted-foreground">
+            {record.publicId}
           </SheetDescription>
         </SheetHeader>
 
         <div className="flex flex-col gap-5">
+          {/* Lesson */}
+          <div className="flex flex-col gap-1.5">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Lesson
+            </h3>
+            <p className="text-sm text-foreground leading-relaxed">
+              {record.lesson}
+            </p>
+          </div>
+
           {/* Metadata grid */}
           <div className="grid grid-cols-2 gap-3">
-            <MetaField label="Kind" value={record.kind} />
-            <MetaField
-              label="Salience"
-              value={`${Math.round(record.salience * 100)}%`}
-            />
+            <MetaField label="Kind" value={kindCfg.label} />
+            <MetaField label="Weight" value={weightCfg.label} />
             <MetaField
               label="Confidence"
-              value={`${Math.round(record.confidence * 100)}%`}
+              value={`${Math.round(Math.max(0, Math.min(1, record.confidence)) * 100)}%`}
             />
             <MetaField
               label="Created"
               value={new Date(record.createdAt).toLocaleString()}
             />
-            <MetaField label="Author" value={record.provenance.author} />
-            {record.provenance.tool && (
-              <MetaField label="Tool" value={record.provenance.tool} />
-            )}
-            {record.provenance.model && (
-              <MetaField label="Model" value={record.provenance.model} />
-            )}
-            {record.ttl && (
+            {record.lastReinforcedAt && (
               <MetaField
-                label="TTL"
-                value={new Date(record.ttl).toLocaleString()}
+                label="Last Reinforced"
+                value={new Date(record.lastReinforcedAt).toLocaleString()}
               />
+            )}
+            <MetaField label="Source" value={record.source} />
+            {record.nodeRef && (
+              <MetaField label="Node Ref" value={record.nodeRef} />
             )}
           </div>
 
-          {/* Namespace */}
-          <DetailSection title="Namespace">
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <MetaField label="Org" value={record.namespace.org} />
-              <MetaField label="Workspace" value={record.namespace.workspace} />
-              {record.namespace.session && (
-                <MetaField label="Session" value={record.namespace.session} />
-              )}
-              {record.namespace.agent && (
-                <MetaField label="Agent" value={record.namespace.agent} />
-              )}
+          {/* IDs */}
+          <div className="flex flex-col gap-2">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Identifiers
+            </h3>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted-foreground w-16 flex-shrink-0">
+                  Public ID
+                </span>
+                <CopyableId id={record.publicId} />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted-foreground w-16 flex-shrink-0">
+                  Internal
+                </span>
+                <CopyableId id={record.id} />
+              </div>
             </div>
-          </DetailSection>
-
-          {/* Body */}
-          <DetailSection title="Body">
-            <pre className="rounded-md bg-muted/60 p-3 text-[11px] leading-relaxed overflow-x-auto font-mono text-foreground whitespace-pre-wrap break-words">
-              {JSON.stringify(record.body, null, 2)}
-            </pre>
-          </DetailSection>
-
-          {/* Provenance */}
-          <DetailSection title="Provenance">
-            <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
-              <p>
-                <span className="font-medium text-foreground">Author:</span>{" "}
-                {record.provenance.author}
-              </p>
-              <p>
-                <span className="font-medium text-foreground">Timestamp:</span>{" "}
-                {new Date(record.provenance.timestamp).toLocaleString()}
-              </p>
-              {record.provenance.derivedFrom.length > 0 && (
-                <div>
-                  <span className="font-medium text-foreground">
-                    Derived from:
-                  </span>
-                  <ul className="mt-1 space-y-0.5">
-                    {record.provenance.derivedFrom.map((id) => (
-                      <li
-                        key={id}
-                        className="font-mono text-[10px] text-muted-foreground"
-                      >
-                        {id}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </DetailSection>
-
-          {/* Causality DAG */}
-          {record.causality.length > 0 && (
-            <DetailSection title="Causality Chain">
-              <ul className="space-y-0.5">
-                {record.causality.map((id) => (
-                  <li
-                    key={id}
-                    className="font-mono text-[10px] text-muted-foreground"
-                  >
-                    {id}
-                  </li>
-                ))}
-              </ul>
-            </DetailSection>
-          )}
+          </div>
         </div>
       </SheetContent>
     </Sheet>
-  );
-}
-
-function DetailSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
-      </h3>
-      {children}
-    </div>
   );
 }
 
@@ -510,7 +521,7 @@ function MetaField({ label, value }: { label: string; value: string }) {
       <span className="text-[10px] font-medium text-muted-foreground">
         {label}
       </span>
-      <span className="text-xs text-foreground truncate">{value}</span>
+      <span className="text-xs text-foreground break-all">{value}</span>
     </div>
   );
 }
@@ -521,21 +532,20 @@ function MetaField({ label, value }: { label: string; value: string }) {
 
 export function MemoriesClient({
   initialRecords,
+  total,
   orgId: _orgId,
   workspaceId: _workspaceId,
   orgSlug: _orgSlug,
   workspaceSlug: _workspaceSlug,
 }: MemoriesClientProps) {
-  const [records] = React.useState<SerializedRecord[]>(initialRecords);
+  const [records] = React.useState<AgentMemoryRecord[]>(initialRecords);
   const [selectedRecord, setSelectedRecord] =
-    React.useState<SerializedRecord | null>(null);
-  const [activeKinds, setActiveKinds] = React.useState<Set<RecordKind>>(
-    new Set(),
-  );
+    React.useState<AgentMemoryRecord | null>(null);
+  const [activeKinds, setActiveKinds] = React.useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [minSalience, setMinSalience] = React.useState(0);
+  const [minConfidence, setMinConfidence] = React.useState(0);
 
-  const toggleKind = React.useCallback((kind: RecordKind) => {
+  const toggleKind = React.useCallback((kind: MemoryKind) => {
     setActiveKinds((prev) => {
       const next = new Set(prev);
       if (next.has(kind)) {
@@ -552,52 +562,49 @@ export function MemoriesClient({
     return records.filter((r) => {
       // Kind filter
       if (activeKinds.size > 0 && !activeKinds.has(r.kind)) return false;
-      // Salience filter
-      if (r.salience < minSalience) return false;
-      // Search filter
+      // Confidence filter
+      if (r.confidence < minConfidence) return false;
+      // Text search over lesson, source, nodeRef
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        const bodyStr = JSON.stringify(r.body).toLowerCase();
-        const author = r.provenance.author.toLowerCase();
-        const id = r.id.toLowerCase();
-        if (!bodyStr.includes(q) && !author.includes(q) && !id.includes(q))
+        if (
+          !r.lesson.toLowerCase().includes(q) &&
+          !r.source.toLowerCase().includes(q) &&
+          !r.nodeRef.toLowerCase().includes(q)
+        ) {
           return false;
+        }
       }
       return true;
     });
-  }, [records, activeKinds, minSalience, searchQuery]);
+  }, [records, activeKinds, minConfidence, searchQuery]);
 
-  // Kind distribution for stats
+  // Kind distribution for stats row
   const kindCounts = React.useMemo(() => {
-    const counts: Record<RecordKind, number> = {
-      episodic: 0,
-      semantic: 0,
-      procedural: 0,
-      entity: 0,
-      edge: 0,
-    };
-    for (const r of records) counts[r.kind]++;
+    const counts: Record<string, number> = {};
+    for (const k of ALL_KINDS) counts[k] = 0;
+    for (const r of records) {
+      if (r.kind in counts) counts[r.kind] = (counts[r.kind] ?? 0) + 1;
+    }
     return counts;
   }, [records]);
 
   return (
     <div className="flex flex-col gap-5">
       {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <BrainCircuit
-            className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <div>
-            <p className="text-sm font-semibold text-foreground">
-              Memory Records
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Content-addressed episodic events, semantic facts, and procedural
-              rules written by agents during this workspace&apos;s sessions.
-            </p>
-          </div>
+      <div className="flex items-start gap-3">
+        <BrainCircuit
+          className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <div>
+          <p className="text-sm font-semibold text-foreground">
+            Agent Memories
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Lessons, constraints, and gotchas written by agents during this
+            workspace&apos;s sessions.
+          </p>
         </div>
       </div>
 
@@ -612,13 +619,13 @@ export function MemoriesClient({
               className="flex items-center gap-2 rounded-lg border border-border/50 px-3 py-2"
             >
               <Icon
-                className={`h-3.5 w-3.5 ${cfg.color.split(" ").slice(1).join(" ")}`}
+                className={`h-3.5 w-3.5 flex-shrink-0 ${cfg.color.split(" ").slice(1).join(" ")}`}
               />
-              <div className="flex flex-col">
+              <div className="flex flex-col min-w-0">
                 <span className="text-sm font-semibold tabular-nums text-foreground">
-                  {kindCounts[kind]}
+                  {kindCounts[kind] ?? 0}
                 </span>
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-[10px] text-muted-foreground truncate">
                   {cfg.label}
                 </span>
               </div>
@@ -633,8 +640,8 @@ export function MemoriesClient({
         toggleKind={toggleKind}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        minSalience={minSalience}
-        setMinSalience={setMinSalience}
+        minConfidence={minConfidence}
+        setMinConfidence={setMinConfidence}
       />
 
       {/* Record list */}
@@ -642,18 +649,18 @@ export function MemoriesClient({
         <div className="rounded-lg border border-border/60 overflow-hidden">
           <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5 bg-muted/30">
             <span className="text-[11px] font-medium text-muted-foreground">
-              {filtered.length} record{filtered.length !== 1 ? "s" : ""}
-              {activeKinds.size > 0 || minSalience > 0 || searchQuery
+              {filtered.length} memor{filtered.length !== 1 ? "ies" : "y"}
+              {activeKinds.size > 0 || minConfidence > 0 || searchQuery
                 ? " (filtered)"
                 : ""}
             </span>
             <span className="text-[10px] text-muted-foreground">
-              Sorted by most recent
+              Newest first
             </span>
           </div>
           <div className="max-h-[600px] overflow-y-auto">
             {filtered.map((record) => (
-              <MemoryRecordRow
+              <MemoryRow
                 key={record.id}
                 record={record}
                 onSelect={() => setSelectedRecord(record)}
@@ -666,26 +673,29 @@ export function MemoriesClient({
           <BrainCircuit className="h-8 w-8 text-muted-foreground/50" />
           <div className="text-center">
             <p className="text-sm font-medium text-muted-foreground">
-              No memories found
-            </p>
-            <p className="text-xs text-muted-foreground/70 mt-1">
               {records.length === 0
-                ? "Memories will appear here as agents interact with this workspace."
-                : "Try adjusting your filters to see more records."}
+                ? "No memories yet"
+                : "No memories match your filters"}
+            </p>
+            <p className="text-xs text-muted-foreground/70 mt-1 max-w-xs">
+              {records.length === 0
+                ? "Memories appear here as agents learn during this workspace’s sessions, or when you ask the assistant to remember something."
+                : "Try adjusting your kind filters, confidence threshold, or search query."}
             </p>
           </div>
         </div>
       )}
 
-      {/* Total footer */}
+      {/* Footer */}
       <p className="text-[11px] text-muted-foreground">
-        {records.length} total record{records.length !== 1 ? "s" : ""} in this
-        workspace&apos;s episodic store.
+        Showing {records.length}
+        {total > records.length ? ` of ${total}` : ""} memor
+        {records.length !== 1 ? "ies" : "y"} in this workspace.
       </p>
 
       {/* Detail sheet */}
       {selectedRecord && (
-        <RecordDetail
+        <MemoryDetail
           record={selectedRecord}
           onClose={() => setSelectedRecord(null)}
         />
