@@ -14,6 +14,10 @@ import { archiveCreate } from "./archive.create";
 import { assetUpload } from "./asset.upload";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { agentCodeExecute } from "./agent.code.execute";
+import { agentSandboxStart } from "./agent.sandbox.start";
+import { agentSandboxExec } from "./agent.sandbox.exec";
+import { agentSandboxSnapshot } from "./agent.sandbox.snapshot";
+import { agentSandboxStop } from "./agent.sandbox.stop";
 import { codeDiff } from "./code.diff";
 import { codePatch } from "./code.patch";
 import { codeFormat } from "./code.format";
@@ -266,6 +270,10 @@ export {
   assetUpload,
   agentApprovalResolve,
   agentCodeExecute,
+  agentSandboxStart,
+  agentSandboxExec,
+  agentSandboxSnapshot,
+  agentSandboxStop,
   codeDiff,
   codePatch,
   codeFormat,
@@ -512,6 +520,10 @@ export const contracts = [
   assetUpload,
   agentApprovalResolve,
   agentCodeExecute,
+  agentSandboxStart,
+  agentSandboxExec,
+  agentSandboxSnapshot,
+  agentSandboxStop,
   codeDiff,
   codePatch,
   codeFormat,

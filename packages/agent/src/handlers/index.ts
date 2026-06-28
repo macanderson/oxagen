@@ -15,6 +15,13 @@ type LoaderEntry = () => Promise<{ default?: CapabilityHandlerFn } & Record<stri
 // Single source of truth mapping capability name → handler module.
 const LOADERS: Record<string, LoaderEntry> = {
   "agent.code.execute": () => import("./agent.code.execute"),
+  // Durable sandbox sessions — long-lived, reconnectable sandboxes that persist
+  // across agent turns (clone → build → snapshot → PR). The one-shot
+  // agent.code.execute and these durable peers share the @oxagen/sandbox driver.
+  "agent.sandbox.start": () => import("./agent.sandbox.start"),
+  "agent.sandbox.exec": () => import("./agent.sandbox.exec"),
+  "agent.sandbox.snapshot": () => import("./agent.sandbox.snapshot"),
+  "agent.sandbox.stop": () => import("./agent.sandbox.stop"),
   // Code-execution surface peers of agent.code.execute (OXA-1352). Co-located
   // here so the whole sandboxed code surface registers through one path.
   "code.diff": () => import("./code.diff"),
