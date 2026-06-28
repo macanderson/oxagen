@@ -14,7 +14,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
     "test:unit": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "eval:golden": "tsx src/eval/run-golden.ts",
+    "eval:export": "tsx src/eval/run-golden.ts --export"
   },
   "dependencies": {
     "@clickhouse/client": "1.19.0",
