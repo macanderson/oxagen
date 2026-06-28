@@ -22,6 +22,7 @@ import { agentSandboxStartRoute } from "./routes/v1/agent.sandbox.start";
 import { agentSandboxExecRoute } from "./routes/v1/agent.sandbox.exec";
 import { agentSandboxSnapshotRoute } from "./routes/v1/agent.sandbox.snapshot";
 import { agentSandboxStopRoute } from "./routes/v1/agent.sandbox.stop";
+import { agentFeatureVerifyRoute } from "./routes/v1/agent.feature.verify";
 import { browserNavigateRoute } from "./routes/v1/browser.navigate";
 import { browserScreenshotRoute } from "./routes/v1/browser.screenshot";
 import { browserFillRoute } from "./routes/v1/browser.fill";
@@ -288,6 +289,8 @@ orgScoped.route("/browser/submit", browserSubmitRoute);
 orgScoped.route("/browser/click", browserClickRoute);
 orgScoped.route("/browser/refresh", browserRefreshRoute);
 orgScoped.route("/browser/read", browserReadRoute);
+// Cross-LLM proof-of-done judge.
+orgScoped.route("/agent/feature/verify", agentFeatureVerifyRoute);
 // Code-execution surface peers (OXA-1352) under the same org+workspace scope.
 orgScoped.route("/code/diff", codeDiffRoute);
 orgScoped.route("/code/patch", codePatchRoute);
