@@ -10,11 +10,13 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov"],
       exclude: ["src/index.ts", "vitest.config.ts"],
+      // OXA-1898: lines/statements raised to the 85% gate (measured 89.3).
+      // branches/functions left at prior floors (measured 96.2 / 87.5).
       thresholds: {
-        lines: 80,
+        lines: 85,
         branches: 75,
         functions: 80,
-        statements: 80,
+        statements: 85,
       },
     },
   },

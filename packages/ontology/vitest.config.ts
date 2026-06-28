@@ -9,12 +9,13 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // branches measured 75.00 — at target
+      // OXA-1898: lines/statements raised to the 85% gate (measured 94.7).
+      // branches/functions left at prior floors (measured 80.0 / 88.2).
       thresholds: {
-        lines: 63,
+        lines: 85,
         branches: 70,
         functions: 63,
-        statements: 63,
+        statements: 85,
       },
     },
   },
