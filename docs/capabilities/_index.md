@@ -127,24 +127,26 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [form.fill](form.fill.md) — Generatively fill or suggest values for page-level form fields based on context
 
-## Graph (11)
+## Graph (13)
 
-| Capability                  | Notes                                                                                                                         |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `graph.node.list`           | Paginated browse of all nodes in the workspace graph.                                                                         |
-| `graph.node.upsert`         | Create or update a graph node by externalId.                                                                                  |
-| `graph.node.get`            | Retrieve a graph node by externalId.                                                                                          |
-| `graph.node.delete`         | Delete a graph node and its relationships.                                                                                    |
-| `graph.node.search`         | Vector + full-text search over graph nodes.                                                                                   |
-| `graph.search`              | Unified natural-language semantic (vector) search across the entire knowledge graph by embedding similarity.                  |
-| `graph.relationship.upsert` | Create or update a directed typed relationship between two KnowledgeNodes (open-vocabulary type, replaces graph.edge.upsert). |
-| `graph.edge.upsert`         | **Deprecated** — one-release alias for `graph.relationship.upsert`; removed in v2.                                            |
-| `graph.edge.delete`         | Delete a directed relationship between two nodes.                                                                             |
-| `graph.cypher`              | Execute a read-only Cypher query against the tenant graph.                                                                    |
-| `graph.ingest`              | Extract entities + relationships from text and commit them to the graph with confidence.                                      |
-| `graph.stats`               | Workspace graph statistics: node/edge counts by type.                                                                         |
-| `ontology.query`            | Typed multi-hop traversal from a start node over named relationship types.                                                    |
-| `ontology.neighbors`        | One-hop neighborhood of a node, filtered by type and direction.                                                               |
+| Capability                  | Notes                                                                                                                                                     |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `graph.node.list`           | Paginated browse of all nodes in the workspace graph.                                                                                                     |
+| `graph.node.upsert`         | Create or update a graph node by externalId.                                                                                                              |
+| `graph.node.get`            | Retrieve a graph node by externalId.                                                                                                                      |
+| `graph.node.delete`         | Delete a graph node and its relationships.                                                                                                                |
+| `graph.node.search`         | Vector + full-text search over graph nodes.                                                                                                               |
+| `graph.search`              | Unified natural-language semantic (vector) search across the entire knowledge graph by embedding similarity.                                               |
+| `graph.relationship.upsert` | Create or update a directed typed relationship between two KnowledgeNodes (open-vocabulary type, replaces graph.edge.upsert).                             |
+| `graph.edge.upsert`         | **Deprecated** — one-release alias for `graph.relationship.upsert`; removed in v2.                                                                        |
+| `graph.edge.delete`         | Delete a directed relationship between two nodes.                                                                                                         |
+| `graph.cypher`              | Execute a read-only Cypher query against the tenant graph.                                                                                                |
+| `graph.ingest`              | Extract entities + relationships from text and commit them to the graph with confidence.                                                                  |
+| `graph.stats`               | Workspace graph statistics: node/edge counts by type.                                                                                                     |
+| `graph.export`              | Paginated, cursor-aware read of a workspace subgraph for local projection. Powers `oxagen graph pull`. See ADR-018.                                       |
+| `graph.sync.push`           | Batch-upsert a content-addressed code or lineage subgraph (is_system=true). Idempotent — re-sending is a no-op. Powers `oxagen graph push`. See ADR-018. |
+| `ontology.query`            | Typed multi-hop traversal from a start node over named relationship types.                                                                                |
+| `ontology.neighbors`        | One-hop neighborhood of a node, filtered by type and direction.                                                                                           |
 
 ## Image (4)
 

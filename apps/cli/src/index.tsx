@@ -287,6 +287,19 @@ graph
     await handleGraphStatus(opts);
   });
 
+graph
+  .command("push")
+  .description(
+    "Compute a git code delta and push it to the workspace knowledge graph (ADR-018 up-sync)",
+  )
+  .option("--full", "Ignore the saved cursor and push all tracked source files", false)
+  .option("--repo <id>", "Override the repo identifier")
+  .option("--json", "Output summary as JSON")
+  .action(async (opts: { full?: boolean; repo?: string; json?: boolean }) => {
+    const { handleGraphPush } = await import("./commands/graph.push.js");
+    await handleGraphPush({ full: opts.full, repo: opts.repo, json: opts.json });
+  });
+
 // ── config: local configuration ───────────────────────────────────────────────
 
 program
