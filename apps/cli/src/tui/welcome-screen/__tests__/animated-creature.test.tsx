@@ -101,11 +101,11 @@ describe("AnimatedCreature", () => {
     expect(lastFrame() ?? "").not.toContain("Press");
   });
 
-  test("shows fire breath indicator when firing", () => {
+  test("shows fire breath indicator when firing", async () => {
     const { lastFrame, stdin } = render(<AnimatedCreature mode="interactive" />);
 
     stdin.write(" ");
-    vi.advanceTimersByTime(200);
+    await tick(200);
 
     const output = lastFrame();
     // Fire breath text appears in the output
@@ -116,16 +116,16 @@ describe("AnimatedCreature", () => {
     }
   });
 
-  test("returns to breathing after fire breath timeout", () => {
+  test("returns to breathing after fire breath timeout", async () => {
     const { lastFrame, stdin } = render(<AnimatedCreature mode="interactive" />);
 
     stdin.write(" ");
-    vi.advanceTimersByTime(200);
+    await tick(200);
 
     const afterFire = lastFrame();
     expect(afterFire?.length).toBeGreaterThan(0);
 
-    vi.advanceTimersByTime(1200);
+    await tick(1200);
 
     const afterTimeout = lastFrame();
     // Should return to normal breathing state
