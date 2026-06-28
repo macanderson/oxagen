@@ -9,13 +9,14 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // lines 71 (measured 71.96) — migrate.ts database ops not covered without live CH
-      // branches 95 (measured 95.65) — target 95; only migrate.ts cold-start path uncovered
+      // OXA-1898: lines/statements raised to the 85% gate (measured 98.1; the
+      // migrate.ts live-CH path is not imported by the unit suite so it stays
+      // out of the denominator). branches/functions left at prior floors.
       thresholds: {
-        lines: 71,
+        lines: 85,
         branches: 95,
         functions: 86,
-        statements: 71,
+        statements: 85,
       },
     },
   },

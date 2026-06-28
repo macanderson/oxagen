@@ -9,13 +9,13 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // lines floor 84 (measured 89.81); target 80 — already above target
-      // branches floor 77 (measured 82.49); target 75 — already above target
+      // OXA-1898: lines/statements raised to the 85% gate (measured 93.0).
+      // branches/functions left at prior floors (measured 84.4 / 94.3).
       thresholds: {
-        lines: 84,
+        lines: 85,
         branches: 77,
         functions: 74,
-        statements: 84,
+        statements: 85,
       },
       exclude: [
         // Preserve vitest default exclusions (test files, type declarations, etc.)

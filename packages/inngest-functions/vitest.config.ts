@@ -29,11 +29,14 @@ export default defineConfig({
       // generous headroom — v8 arrow-attribution on rollup-usage + barrels can
       // make the functions metric jittery across Node versions. Raise further
       // once the plugins epic stabilises.
+      // OXA-1898: lines/statements raised to the 85% gate (measured 95.1).
+      // branches/functions left at prior floors (measured 85.4 / 89.3 — the
+      // functions metric is kept conservative per the note above).
       thresholds: {
-        lines: 80,
+        lines: 85,
         branches: 80,
         functions: 50,
-        statements: 80,
+        statements: 85,
       },
     },
   },

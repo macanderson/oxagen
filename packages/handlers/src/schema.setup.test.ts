@@ -1,5 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+// The first dynamic import of @oxagen/database cold-compiles a heavy module graph
+// (schema barrel + drizzle) which can exceed the 5s default timeout on a cold CI
+// cache and flake the first lazy-import test. Raise the per-file timeout to match
+// the repo's established lazy-import pattern (packages/database/src/client.test.ts).
+vi.setConfig({ testTimeout: 30_000 });
+
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
   getOrCreateRegistry: vi.fn(),
