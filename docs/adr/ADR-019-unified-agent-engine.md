@@ -20,31 +20,30 @@ The only genuinely environment-specific seams are: the **filesystem** (local vs 
 
 **One shared "brain" (pure logic + interface ports), with environment-specific adapters injected by each consumer, running in two execution contexts.**
 
-1. **Whole engine, shared package.** Promote the CLI's full agent engine into a single dependency-light package, `@oxagen/agent-engine` (absorbing the `@oxagen/coding-agent` work-in-progress: `Workspace`, `buildWorkspaceTools`, `MemoryWorkspace`). It contains the loop, the pipeline (evaluate/enhance/route/execute/judge/revise), the model-router, evaluator, judge, planner, fleet scheduler, trace types + formatter, and the system-prompt builder. **It has no platform dependencies** (no `@oxagen/database`, `@oxagen/billing`, Neo4j) so the CLI stays lean, installable, and offline-capable. The rate card currently duplicated in `model-router.ts` moves to a shared pure cost module imported by both the engine and `@oxagen/billing`.
+1. **Whole engine, shared package.** Promote the CLI's full agent engine into a single dependency-light package, `@oxagen/agent-engine` (absorbing the `@oxagen/coding-agent` work-in-progress: `Workspace`, `buildWorkspaceTools`, `MemoryWorkspace`). It contains the loop, the pipeline (evaluate/enhance/route/execute/judge/revise), the model-router, evaluator, judge, planner, fleet scheduler, trace types + formatter, and the system-prompt builder. **It has no platform dependencies** (no `@oxagen/database`, `@oxagen/billing`, Neo4j) so it stays lean and installable; the engine is pure logic, and all environment specifics (AI, recall, sandbox) enter only through injected ports. The rate card currently duplicated in `model-router.ts` moves to a shared pure cost module imported by both the engine and `@oxagen/billing`.
 
 2. **Injected ports (adapters).** The engine depends only on interfaces; each consumer supplies implementations:
    - **`Workspace`** (filesystem): CLI = local `fs`/shell; platform = persistent Vercel Sandbox (ADR-011).
-   - **`ModelRunner`** (the AI call): a `streamAgentReply`-shaped function returning a stream + usage. CLI injects an **unmetered BYOK runner** (the user's own gateway key); platform injects **`streamAgentReply`** (metering, credits, tenant scope). This is the single seam that both honors the "all LLM calls through `@oxagen/ai`" chokepoint on the platform and preserves BYOK in the CLI. The engine **never** hardcodes `streamText`/`streamAgentReply`.
-   - **`CodeGraphProvider`**: CLI = local FS index (ADR-016); platform = Neo4j via `graph.node.search`.
-   - **`MemoryProvider`**: CLI = local DuckDB/engram; platform = `agent.memory.recall`/write contracts.
+   - **`ModelRunner`** (the AI call): a `streamAgentReply`-shaped function returning a stream + usage. **All AI requests flow through the platform chokepoint — there is no BYOK path** (decided 2026-06-27). The platform injects `streamAgentReply` directly; the CLI injects a thin *authenticated* client that calls a platform streaming-AI endpoint which runs `streamAgentReply` server-side. Every completion — in-app chat, the online coder, and the CLI alike — is metered, permission-gated, and model-routed in one place, for maximum pricing/permission flexibility. The engine **never** hardcodes `streamText`/`streamAgentReply`. Tradeoff: the CLI gains a CLI→platform hop per model call; accepted because model latency dominates and one control surface is the goal.
+   - **`CodeGraphProvider`** + **`MemoryProvider`**: **the coding agents ALWAYS read recall/code-graph from a fast LOCAL DuckDB replica — never a synchronous platform call on the turn's critical path** (decided 2026-06-27). The canonical graph syncs to the platform Neo4j **asynchronously** (the ADR-018 graph-sync pattern: local DuckDB replica ⇄ workspace graph). CLI = the user's local DuckDB replica + local FS index (ADR-016); the cloud runner = a colocated replica seeded from the workspace graph. Writes/sync are off the critical path, so recall adds **zero per-turn latency** even though AI completions are centralized.
    - **`TraceStore`**: CLI = local JSON files; platform = ClickHouse (the trace types are already ClickHouse-shaped).
 
 3. **Local + cloud, same engine.** The CLI runs the engine **locally** for the user's working directory (local adapters). For **connected repos** it triggers the **cloud runner**, which runs the *same engine* server-side with sandbox/platform adapters behind `agent.coding.session.*`. The in-app agent invokes that same cloud runner. Two execution contexts, one codebase.
 
-4. **Always-linked CLI.** The CLI authenticates to the platform (`oxagen login`). Identity is always present, so platform memory, code-graph, sessions, and connected-repo editing all work, and a run started in the CLI is visible in the app. Identity is **decoupled from metering**: local runs still use the user's own model key (BYOK, unmetered); only cloud runs (sandboxed, connected repos) are metered/credited.
+4. **Account-required CLI (no anonymous mode).** The CLI does not function without an Oxagen account — `oxagen login` is mandatory (decided 2026-06-27). Identity is always present, so platform memory, sessions, and connected-repo editing all work, and a run started in the CLI is visible in the app. Because all AI flows through the platform (decision #2), **every run is metered, permission-gated, and priced centrally — local working-dir runs included.** There is no unmetered/BYOK path.
 
 ## Consequences
 
 **Positive**
 - Exactly one agent behavior. The online agent inherits the CLI's routing, planning, self-judging, and revise loop for free; the CLI inherits the platform's sandbox, connected-repo reach, and shared memory/sessions.
-- The `ModelRunner` port both satisfies the platform chokepoint rule and keeps BYOK/offline working in the CLI.
+- Every AI call — chat, online coder, CLI — goes through one metered, permission-gated chokepoint, giving maximum flexibility on pricing and access control. Recall stays on a local DuckDB replica (async sync to the platform graph), so this centralization adds no per-turn context latency; only the completion call itself crosses the network.
 - The engine stays dependency-light, so the CLI remains installable and fast; platform weight lives only in the platform's adapters (`packages/agent`).
 
 **Negative / risks**
 - Migrating the CLI engine into a shared package is more work than the original narrow plan and touches working CLI code (mitigated: the engine is already callback-decoupled; the move is mechanical behind the ports).
 - Pipeline parity means the platform coding agent makes the same extra model calls (evaluate/judge/plan) — each metered. This is a deliberate cost-for-quality trade; surface it in pricing.
 - Two fan-out mechanisms must reconcile: the engine's fleet scheduler vs the platform's `agent.subagent.dispatch` (ADR-010). The scheduler emits dispatch *intents*; each consumer fulfills them (CLI = local concurrency, platform = Inngest). The engine does not hardcode either.
-- The Task-4 `runCodingAgent` prototype hardcodes `streamText` — it must be reworked to take an injected `ModelRunner` before it ships.
+- Resolved: `runCodingAgent` now takes an injected `AgentAi` port (Task A3, commit `f7d68ed5`) — it no longer hardcodes `streamText`.
 
 ## Implementation outline (supersedes the narrow Phase-1 plan)
 
