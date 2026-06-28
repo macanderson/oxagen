@@ -1,4 +1,4 @@
-# ADR-017: Unified agent engine — one brain across CLI and platform
+# ADR-019: Unified agent engine — one brain across CLI and platform
 
 **Status:** Accepted (2026-06-27)
 **Supersedes (in part):** the narrow "share only the inner loop + tools" scope of `docs/superpowers/plans/2026-06-27-in-app-coding-agent-phase1.md`

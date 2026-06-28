@@ -1,6 +1,6 @@
 # In-App Coding Agent — Phase 1 (Coding Runner) Implementation Plan
 
-> **⚠️ SUPERSEDED (2026-06-27) by `2026-06-27-unified-agent-engine-plan.md` and `docs/adr/ADR-017-unified-agent-engine.md`.** This plan shared only the inner loop+tools, which would have shipped two diverging agents. Its Stage-C task content (sandbox workspace, coding_sessions schema, contracts/handlers/Inngest, surfaces, diff tray) is still valid and is referenced by the new plan; its narrow engine scope is replaced by the shared `@oxagen/agent-engine`. Kept for that task detail.
+> **⚠️ SUPERSEDED (2026-06-27) by `2026-06-27-unified-agent-engine-plan.md` and `docs/adr/ADR-019-unified-agent-engine.md`.** This plan shared only the inner loop+tools, which would have shipped two diverging agents. Its Stage-C task content (sandbox workspace, coding_sessions schema, contracts/handlers/Inngest, surfaces, diff tray) is still valid and is referenced by the new plan; its narrow engine scope is replaced by the shared `@oxagen/agent-engine`. Kept for that task detail.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

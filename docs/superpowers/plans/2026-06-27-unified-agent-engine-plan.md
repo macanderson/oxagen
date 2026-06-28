@@ -1,7 +1,7 @@
 # Unified Agent Engine — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`) tracking.
-> **Supersedes** `docs/superpowers/plans/2026-06-27-in-app-coding-agent-phase1.md` (which shared only the inner loop+tools — would have shipped two agents). See `docs/adr/ADR-017-unified-agent-engine.md`.
+> **Supersedes** `docs/superpowers/plans/2026-06-27-in-app-coding-agent-phase1.md` (which shared only the inner loop+tools — would have shipped two agents). See `docs/adr/ADR-019-unified-agent-engine.md`.
 
 **Goal:** One coding agent across the CLI and the platform: a single dependency-light `@oxagen/agent-engine` (the full pipeline/router/judge/planner/fleet/trace brain) that both consumers drive through injected ports, running locally (CLI working dir, BYOK/unmetered) and in the cloud (connected repos, sandboxed/metered).
 
@@ -165,6 +165,6 @@
 
 ## Self-Review notes
 - **Two-agents risk closed:** the full pipeline/router/judge/planner/fleet live in `@oxagen/agent-engine` (Stage A) and are consumed identically by CLI (Stage B) and platform (Stage C). No intelligence lives on only one side.
-- **Chokepoint honored:** the engine calls only the `AgentAi` port; platform backs it with `@oxagen/ai`/`streamAgentReply` (metered), CLI with a BYOK runner (unmetered) — ADR-017.
+- **Chokepoint honored:** the engine calls only the `AgentAi` port; platform backs it with `@oxagen/ai`/`streamAgentReply` (metered), CLI with a BYOK runner (unmetered) — ADR-019.
 - **Dep boundary:** engine imports only `ai`+`zod`; all platform/local specifics live in adapters in the consumers.
 - **Type consistency:** ports defined in A2 (`AgentAi`, `MemoryProvider`, `TraceStore`, `CodeGraphProvider`, `Workspace`) are the only cross-stage contract; every migrated subsystem (A4–A7) and every adapter (B1–B2, C1) depends on exactly these.
