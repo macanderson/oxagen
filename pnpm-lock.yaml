@@ -604,6 +604,9 @@ importers:
       '@oxagen/sandbox':
         specifier: workspace:*
         version: link:../sandbox
+      '@oxagen/storage':
+        specifier: workspace:*
+        version: link:../storage
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry

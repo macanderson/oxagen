@@ -22,6 +22,15 @@ const LOADERS: Record<string, LoaderEntry> = {
   "agent.sandbox.exec": () => import("./agent.sandbox.exec"),
   "agent.sandbox.snapshot": () => import("./agent.sandbox.snapshot"),
   "agent.sandbox.stop": () => import("./agent.sandbox.stop"),
+  // Browser automation inside a durable session — all seven thin wrappers live
+  // in one module (browser.ts) that drives `browserctl` via execInSession.
+  "browser.navigate": () => import("./browser"),
+  "browser.screenshot": () => import("./browser"),
+  "browser.fill": () => import("./browser"),
+  "browser.submit": () => import("./browser"),
+  "browser.click": () => import("./browser"),
+  "browser.refresh": () => import("./browser"),
+  "browser.read": () => import("./browser"),
   // Code-execution surface peers of agent.code.execute (OXA-1352). Co-located
   // here so the whole sandboxed code surface registers through one path.
   "code.diff": () => import("./code.diff"),
