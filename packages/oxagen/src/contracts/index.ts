@@ -182,6 +182,7 @@ import { graphNodeList } from "./graph.node.list";
 import { graphStats } from "./graph.stats";
 import { ontologyQuery } from "./ontology.query";
 import { ontologyNeighbors } from "./ontology.neighbors";
+import { agentRepoEdit } from "./agent.repo.edit";
 import { agentCompose } from "./agent.compose";
 import { agentSubagentCancel } from "./agent.subagent.cancel";
 import { agentSubagentLogs } from "./agent.subagent.logs";
@@ -433,6 +434,7 @@ export {
   graphStats,
   ontologyQuery,
   ontologyNeighbors,
+  agentRepoEdit,
   agentCompose,
   agentSubagentCancel,
   agentSubagentLogs,
@@ -678,6 +680,7 @@ export const contracts = [
   graphStats,
   ontologyQuery,
   ontologyNeighbors,
+  agentRepoEdit,
   agentCompose,
   agentSubagentCancel,
   agentSubagentLogs,

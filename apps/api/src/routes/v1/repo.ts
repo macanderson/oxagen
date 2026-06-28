@@ -9,6 +9,7 @@ import { repoFilePut } from "@oxagen/oxagen/contracts/repo.file.put";
 import { repoFork } from "@oxagen/oxagen/contracts/repo.fork";
 import { repoBranchCreate } from "@oxagen/oxagen/contracts/repo.branch.create";
 import { repoPrOpen } from "@oxagen/oxagen/contracts/repo.pr.open";
+import { agentRepoEdit } from "@oxagen/oxagen/contracts/agent.repo.edit";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
@@ -98,5 +99,13 @@ repoRoute.post("/pulls", async (c) => {
   const body = repoPrOpen.input.parse(await c.req.json() as Record<string, unknown>);
   const ctx = capabilityContext(c);
   const out = await invoke(repoPrOpen.name, body, ctx, { surface: "api" });
+  return c.json(out, 201);
+});
+
+// POST /repos/agent/edit — run the coding agent against a repo and open a PR
+repoRoute.post("/agent/edit", async (c) => {
+  const body = agentRepoEdit.input.parse(await c.req.json() as Record<string, unknown>);
+  const ctx = capabilityContext(c);
+  const out = await invoke(agentRepoEdit.name, body, ctx, { surface: "api" });
   return c.json(out, 201);
 });

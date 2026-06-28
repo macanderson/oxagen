@@ -327,7 +327,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
@@ -345,7 +345,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": false
       }
     },
@@ -422,6 +422,21 @@
         "mcp": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "agent.repo.edit",
+      "file": "agent.repo.edit.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "agent"
+      ],
+      "layers": {
+        "api": false,
+        "unit": false,
+        "docs": false
       }
     },
     {
@@ -1783,7 +1798,7 @@
       ],
       "layers": {
         "schema": true,
-        "unit": false
+        "unit": true
       }
     },
     {
@@ -1796,7 +1811,7 @@
       ],
       "layers": {
         "schema": true,
-        "unit": false
+        "unit": true
       }
     },
     {
@@ -1809,7 +1824,7 @@
       ],
       "layers": {
         "schema": true,
-        "unit": false
+        "unit": true
       }
     },
     {
@@ -1883,7 +1898,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -2207,7 +2222,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -2226,7 +2241,7 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
+        "unit": true,
         "docs": true
       }
     },
@@ -2420,9 +2435,9 @@
         "mcp"
       ],
       "layers": {
-        "api": false,
+        "api": true,
         "mcp": true,
-        "unit": false
+        "unit": true
       }
     },
     {
