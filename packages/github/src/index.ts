@@ -1,3 +1,3 @@
 export type { GitHubClient, GitHubClientOptions } from "./types";
-export { createGitHubClient } from "./octokit-client";
-export type { OctokitLike } from "./octokit-client";
+export { createGitHubClient } from "./fetch-client";
+export { GitHubWorkspace } from "./github-workspace";
