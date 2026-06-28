@@ -4,6 +4,11 @@ import { repoSync } from "@oxagen/oxagen/contracts/repo.sync";
 import { repoPause } from "@oxagen/oxagen/contracts/repo.pause";
 import { repoResume } from "@oxagen/oxagen/contracts/repo.resume";
 import { repoMetrics } from "@oxagen/oxagen/contracts/repo.metrics";
+import { repoCreate } from "@oxagen/oxagen/contracts/repo.create";
+import { repoFilePut } from "@oxagen/oxagen/contracts/repo.file.put";
+import { repoFork } from "@oxagen/oxagen/contracts/repo.fork";
+import { repoBranchCreate } from "@oxagen/oxagen/contracts/repo.branch.create";
+import { repoPrOpen } from "@oxagen/oxagen/contracts/repo.pr.open";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
@@ -54,4 +59,44 @@ repoRoute.get("/:id/metrics", async (c) => {
   const ctx = capabilityContext(c);
   const out = await invoke(repoMetrics.name, body, ctx, { surface: "api" });
   return c.json(out);
+});
+
+// POST /repos — create a new GitHub repository
+repoRoute.post("/", async (c) => {
+  const body = repoCreate.input.parse(await c.req.json() as Record<string, unknown>);
+  const ctx = capabilityContext(c);
+  const out = await invoke(repoCreate.name, body, ctx, { surface: "api" });
+  return c.json(out, 201);
+});
+
+// POST /repos/fork — fork a GitHub repository into user account or organisation
+repoRoute.post("/fork", async (c) => {
+  const body = repoFork.input.parse(await c.req.json() as Record<string, unknown>);
+  const ctx = capabilityContext(c);
+  const out = await invoke(repoFork.name, body, ctx, { surface: "api" });
+  return c.json(out, 201);
+});
+
+// PUT /repos/file — commit a file (create or update) in a GitHub repository
+repoRoute.put("/file", async (c) => {
+  const body = repoFilePut.input.parse(await c.req.json() as Record<string, unknown>);
+  const ctx = capabilityContext(c);
+  const out = await invoke(repoFilePut.name, body, ctx, { surface: "api" });
+  return c.json(out);
+});
+
+// POST /repos/branch — create a new branch in a GitHub repository
+repoRoute.post("/branch", async (c) => {
+  const body = repoBranchCreate.input.parse(await c.req.json() as Record<string, unknown>);
+  const ctx = capabilityContext(c);
+  const out = await invoke(repoBranchCreate.name, body, ctx, { surface: "api" });
+  return c.json(out, 201);
+});
+
+// POST /repos/pulls — open a pull request in a GitHub repository
+repoRoute.post("/pulls", async (c) => {
+  const body = repoPrOpen.input.parse(await c.req.json() as Record<string, unknown>);
+  const ctx = capabilityContext(c);
+  const out = await invoke(repoPrOpen.name, body, ctx, { surface: "api" });
+  return c.json(out, 201);
 });

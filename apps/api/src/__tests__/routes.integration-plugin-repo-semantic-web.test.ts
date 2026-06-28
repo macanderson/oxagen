@@ -97,6 +97,14 @@ async function authDelete(path: string): Promise<Response> {
   }));
 }
 
+async function authPut(path: string, body: unknown): Promise<Response> {
+  return app.fetch(makeRequest(`${BASE}${path}`, {
+    method: "PUT",
+    headers: { authorization: bearerHeader("oxk_key"), "content-type": "application/json" },
+    body: JSON.stringify(body),
+  }));
+}
+
 // ── integration.install ───────────────────────────────────────────────────────
 
 describe("integration.install route", () => {
@@ -405,6 +413,165 @@ describe("repo.metrics route", () => {
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(input.repoId).toBe("repo-met");
+  });
+});
+
+// ── repo.create ───────────────────────────────────────────────────────────────
+
+describe("repo.create route", () => {
+  const validBody = { org: "acme", name: "backend-service" };
+
+  it("happy path: 201 with new repo details", async () => {
+    mocks.invoke.mockResolvedValue({ fullName: "acme/backend-service", htmlUrl: "https://github.com/acme/backend-service", defaultBranch: "main" });
+    const res = await authPost("/repos", validBody);
+    expect(res.status).toBe(201);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.fullName).toBe("acme/backend-service");
+    expect(body.htmlUrl).toBe("https://github.com/acme/backend-service");
+    expect(body.defaultBranch).toBe("main");
+  });
+
+  it("calls invoke with 'repo.create' and { surface: 'api' }", async () => {
+    await authPost("/repos", { org: "acme", name: "new-repo", private: true, autoInit: true });
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("repo.create");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+    const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(input.org).toBe("acme");
+    expect(input.name).toBe("new-repo");
+    expect(input.private).toBe(true);
+  });
+
+  it("missing required org → 400, invoke not called", async () => {
+    const res = await authPost("/repos", { name: "no-org" });
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("missing required name → 400, invoke not called", async () => {
+    const res = await authPost("/repos", { org: "acme" });
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── repo.fork ─────────────────────────────────────────────────────────────────
+
+describe("repo.fork route", () => {
+  const validBody = { owner: "openai", repo: "openai-node" };
+
+  it("happy path: 201 with fork details", async () => {
+    mocks.invoke.mockResolvedValue({ fullName: "acme/openai-node", htmlUrl: "https://github.com/acme/openai-node", defaultBranch: "main" });
+    const res = await authPost("/repos/fork", validBody);
+    expect(res.status).toBe(201);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.fullName).toBe("acme/openai-node");
+  });
+
+  it("calls invoke with 'repo.fork' and { surface: 'api' }", async () => {
+    await authPost("/repos/fork", { owner: "openai", repo: "openai-node", intoOrg: "acme" });
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("repo.fork");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+    const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(input.owner).toBe("openai");
+    expect(input.repo).toBe("openai-node");
+    expect(input.intoOrg).toBe("acme");
+  });
+
+  it("missing required owner → 400, invoke not called", async () => {
+    const res = await authPost("/repos/fork", { repo: "openai-node" });
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── repo.file.put ─────────────────────────────────────────────────────────────
+
+describe("repo.file.put route", () => {
+  const validBody = { owner: "acme", repo: "backend-service", path: "src/hello.ts", content: "export const hello = 'world';", message: "feat: add hello" };
+
+  it("happy path: 200 with commit details", async () => {
+    mocks.invoke.mockResolvedValue({ commitSha: "abc123", htmlUrl: "https://github.com/acme/backend-service/blob/main/src/hello.ts" });
+    const res = await authPut("/repos/file", validBody);
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.commitSha).toBe("abc123");
+    expect(body.htmlUrl).toContain("github.com");
+  });
+
+  it("calls invoke with 'repo.file.put' and { surface: 'api' }", async () => {
+    await authPut("/repos/file", { ...validBody, branch: "feature/hello" });
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("repo.file.put");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+    const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(input.path).toBe("src/hello.ts");
+    expect(input.branch).toBe("feature/hello");
+  });
+
+  it("missing required content → 400, invoke not called", async () => {
+    const res = await authPut("/repos/file", { owner: "acme", repo: "backend-service", path: "src/hello.ts", message: "feat: add hello" });
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── repo.branch.create ────────────────────────────────────────────────────────
+
+describe("repo.branch.create route", () => {
+  const validBody = { owner: "acme", repo: "backend-service", branch: "feature/add-hello" };
+
+  it("happy path: 201 with branch ref and sha", async () => {
+    mocks.invoke.mockResolvedValue({ ref: "refs/heads/feature/add-hello", sha: "abc123def456" });
+    const res = await authPost("/repos/branch", validBody);
+    expect(res.status).toBe(201);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ref).toBe("refs/heads/feature/add-hello");
+    expect(body.sha).toBe("abc123def456");
+  });
+
+  it("calls invoke with 'repo.branch.create' and { surface: 'api' }", async () => {
+    await authPost("/repos/branch", { owner: "acme", repo: "backend-service", branch: "feature/x", fromBranch: "main" });
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("repo.branch.create");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+    const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(input.branch).toBe("feature/x");
+    expect(input.fromBranch).toBe("main");
+  });
+
+  it("missing required branch → 400, invoke not called", async () => {
+    const res = await authPost("/repos/branch", { owner: "acme", repo: "backend-service" });
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ── repo.pr.open ──────────────────────────────────────────────────────────────
+
+describe("repo.pr.open route", () => {
+  const validBody = { owner: "acme", repo: "backend-service", title: "feat: add hello", head: "feature/add-hello", base: "main" };
+
+  it("happy path: 201 with PR number and URL", async () => {
+    mocks.invoke.mockResolvedValue({ number: 42, htmlUrl: "https://github.com/acme/backend-service/pull/42" });
+    const res = await authPost("/repos/pulls", validBody);
+    expect(res.status).toBe(201);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.number).toBe(42);
+    expect(body.htmlUrl).toContain("/pull/42");
+  });
+
+  it("calls invoke with 'repo.pr.open' and { surface: 'api' }", async () => {
+    await authPost("/repos/pulls", { ...validBody, body: "PR description", draft: true });
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("repo.pr.open");
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+    const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(input.head).toBe("feature/add-hello");
+    expect(input.base).toBe("main");
+    expect(input.draft).toBe(true);
+  });
+
+  it("missing required title → 400, invoke not called", async () => {
+    const res = await authPost("/repos/pulls", { owner: "acme", repo: "backend-service", head: "feature/add-hello", base: "main" });
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 });
 

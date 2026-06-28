@@ -2748,7 +2748,7 @@
       "layers": {
         "api": false,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -2782,7 +2782,7 @@
       "layers": {
         "api": false,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -2797,7 +2797,7 @@
       "layers": {
         "api": false,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -2812,7 +2812,7 @@
       "layers": {
         "api": false,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -2864,7 +2864,7 @@
       "layers": {
         "api": false,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
