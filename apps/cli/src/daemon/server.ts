@@ -10,6 +10,7 @@ import * as net from "node:net";
 import * as fs from "node:fs";
 import type { DaemonRequest, DaemonResponse, DaemonConfig } from "./protocol";
 import { DAEMON_ERRORS } from "./protocol";
+import type { CodeGraph, CodeEdgeType } from "./code-graph/types";
 
 export class ContextDaemon {
   private server: net.Server | null = null;
@@ -125,6 +126,8 @@ export class ContextDaemon {
         return this.handleQuery(request.params);
       case "recall":
         return this.handleRecall(request.params);
+      case "graph.build":
+        return this.handleGraphBuild(request.params);
       case "graph.query":
         return this.handleGraphQuery(request.params);
       case "graph.search":
@@ -162,13 +165,56 @@ export class ContextDaemon {
     return { record };
   }
 
-  private async handleGraphQuery(_params: { nodeId: string; hops?: number; edgeTypes?: string[] }): Promise<unknown> {
-    // Code graph queries will be wired in when the graph builder is complete
-    return { nodes: [], edges: [] };
+  /**
+   * Open the persistent code-graph store, ensure `root` is indexed (building it
+   * on first use so even the very first query after a cold daemon start
+   * answers), load the graph, run `fn`, and always close the store. Opening
+   * per-request — like the engram handlers above — keeps the DuckDB write lock
+   * short so a co-located `oxagen` agent process can use the same store between
+   * requests instead of being starved.
+   */
+  private async withCodeGraph<T>(root: string, fn: (graph: CodeGraph) => T): Promise<T> {
+    const { createCodeGraphStore } = await import("./code-graph/store.js");
+    const { buildAndPersistCodeGraph } = await import("./code-graph/builder.js");
+    const store = createCodeGraphStore({ duckdbPath: this.config.codeGraphDbPath });
+    try {
+      if ((await store.stats(root)).files === 0) {
+        await buildAndPersistCodeGraph(root, store);
+      }
+      return fn(await store.loadGraph(root));
+    } finally {
+      await store.close();
+    }
   }
 
-  private async handleGraphSearch(_params: { pattern: string; limit?: number }): Promise<unknown> {
-    return { results: [] };
+  /** Incrementally (re)build + persist the code graph; report the delta + totals. */
+  private async handleGraphBuild(params: { root?: string }): Promise<unknown> {
+    const root = params.root ?? this.config.workspaceRoot;
+    const { createCodeGraphStore } = await import("./code-graph/store.js");
+    const { buildAndPersistCodeGraph } = await import("./code-graph/builder.js");
+    const store = createCodeGraphStore({ duckdbPath: this.config.codeGraphDbPath });
+    try {
+      const delta = await buildAndPersistCodeGraph(root, store);
+      return { root, ...delta, ...(await store.stats(root)) };
+    } finally {
+      await store.close();
+    }
+  }
+
+  private async handleGraphQuery(params: { nodeId: string; hops?: number; edgeTypes?: string[]; root?: string }): Promise<unknown> {
+    const root = params.root ?? this.config.workspaceRoot;
+    const { neighbors } = await import("./code-graph/query.js");
+    return this.withCodeGraph(root, (graph) =>
+      neighbors(graph, params.nodeId, params.hops ?? 1, params.edgeTypes as CodeEdgeType[] | undefined),
+    );
+  }
+
+  private async handleGraphSearch(params: { pattern: string; limit?: number; root?: string }): Promise<unknown> {
+    const root = params.root ?? this.config.workspaceRoot;
+    const { searchSymbols } = await import("./code-graph/query.js");
+    return this.withCodeGraph(root, (graph) => ({
+      results: searchSymbols(graph, params.pattern, params.limit ?? 20),
+    }));
   }
 
   private sendResponse(socket: net.Socket, response: DaemonResponse): void {

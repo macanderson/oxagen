@@ -574,6 +574,9 @@ importers:
       '@opentelemetry/api':
         specifier: 1.9.1
         version: 1.9.1
+      '@oxagen/agent-engine':
+        specifier: workspace:*
+        version: link:../agent-engine
       '@oxagen/ai':
         specifier: workspace:*
         version: link:../ai
@@ -963,6 +966,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.29.0
         version: 1.29.0(zod@3.25.76)
+      '@oxagen/agent':
+        specifier: workspace:*
+        version: link:../agent
       '@oxagen/agent-engine':
         specifier: workspace:*
         version: link:../agent-engine

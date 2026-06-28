@@ -196,6 +196,7 @@ import { automationUpdate } from "./automation.update";
 import { connectionPause } from "./connection.pause";
 import { connectionUpdate } from "./connection.update";
 import { graphIngest } from "./graph.ingest";
+import { graphSyncPush } from "./graph.sync.push";
 import { orgSettingsRead } from "./org.settings.read";
 import { orgSettingsWrite } from "./org.settings.write";
 import { workspaceSettingsRead } from "./workspace.settings.read";
@@ -452,6 +453,7 @@ export {
   connectionPause,
   connectionUpdate,
   graphIngest,
+  graphSyncPush,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,
@@ -702,6 +704,7 @@ export const contracts = [
   connectionPause,
   connectionUpdate,
   graphIngest,
+  graphSyncPush,
   orgSettingsRead,
   orgSettingsWrite,
   workspaceSettingsRead,

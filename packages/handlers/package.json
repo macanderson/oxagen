@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
+    "@oxagen/agent": "workspace:*",
     "@oxagen/agent-engine": "workspace:*",
     "@oxagen/ai": "workspace:*",
     "@oxagen/github": "workspace:*",

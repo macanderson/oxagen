@@ -105,6 +105,17 @@ const CREATE_CURSOR_SQL = `
   )
 `;
 
+const CREATE_CODE_CURSOR_SQL = `
+  CREATE TABLE IF NOT EXISTS code_push_cursor (
+    org        VARCHAR NOT NULL,
+    workspace  VARCHAR NOT NULL,
+    repo       VARCHAR NOT NULL,
+    sha        VARCHAR NOT NULL,
+    pushed_at  BIGINT  NOT NULL,
+    PRIMARY KEY (org, workspace, repo)
+  )
+`;
+
 // ---------------------------------------------------------------------------
 // GraphStore
 // ---------------------------------------------------------------------------
@@ -136,7 +147,10 @@ export class GraphStore {
           if (err2) return reject(err2);
           this.conn.run(CREATE_CURSOR_SQL, (err3) => {
             if (err3) return reject(err3);
-            resolve();
+            this.conn.run(CREATE_CODE_CURSOR_SQL, (err4) => {
+              if (err4) return reject(err4);
+              resolve();
+            });
           });
         });
       });
@@ -280,6 +294,42 @@ export class GraphStore {
       `INSERT INTO sync_cursor (org, workspace, cursor, node_count, edge_count, synced_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [org, workspace, cursor, nodeCount, edgeCount, Date.now()],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Code push cursor — git SHA tracking for 'oxagen graph push'
+  // ---------------------------------------------------------------------------
+
+  async getCodeCursor(
+    org: string,
+    workspace: string,
+    repo: string,
+  ): Promise<string | null> {
+    await this.ready;
+    const rows = await this.querySql(
+      "SELECT sha FROM code_push_cursor WHERE org = ? AND workspace = ? AND repo = ?",
+      [org, workspace, repo],
+    );
+    if (rows.length === 0) return null;
+    return (rows[0] as Record<string, unknown>)["sha"] as string;
+  }
+
+  async setCodeCursor(
+    org: string,
+    workspace: string,
+    repo: string,
+    sha: string,
+  ): Promise<void> {
+    await this.ready;
+    await this.runSql(
+      "DELETE FROM code_push_cursor WHERE org = ? AND workspace = ? AND repo = ?",
+      [org, workspace, repo],
+    );
+    await this.runSql(
+      `INSERT INTO code_push_cursor (org, workspace, repo, sha, pushed_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [org, workspace, repo, sha, Date.now()],
     );
   }
 

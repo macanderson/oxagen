@@ -57,6 +57,43 @@ if [ "${OXAGEN_ROUTE:-}" = "1" ]; then
   MODEL_ARGS=()
 fi
 
+# 4b) Warm / self-improvement mode.
+#
+# OXAGEN_WARM=1 enables cross-trial memory persistence so that task N's lessons
+# are available to task N+1 — the self-improvement loop from eval-runbook §7.
+#
+# What it does:
+#   - Sets OXAGEN_INSTALL_DUCKDB=1 so the DuckDB-backed context engine (episodic
+#     memory, fleet memory, trace store) is live in every container.
+#   - Sets OXAGEN_WARM_MEMORY_DIR (default: ./warm-memory) as the host-side dir
+#     where the adapter persists ~/.config/oxagen between trials via
+#     environment.upload_dir / environment.download_dir.
+#   - The adapter (oxagen_agent.py) forwards HOME=<in-container path> so that
+#     Oxagen writes all memory under that path, then downloads it to
+#     OXAGEN_WARM_MEMORY_DIR after each trial and uploads it at the start of the
+#     next trial's install().
+#
+# Usage:
+#   OXAGEN_WARM=1 ./run.sh
+#   OXAGEN_WARM=1 OXAGEN_WARM_MEMORY_DIR=./my-warm-dir ./run.sh
+#
+# To run a cold comparison side-by-side, run once without OXAGEN_WARM (the
+# default: every trial starts from a fresh in-container HOME) and once with it.
+# A rising pass rate across the warm sequence vs. the cold baseline is the
+# learning signal (H4 monotonic clause); wipe OXAGEN_WARM_MEMORY_DIR and re-run
+# to confirm the causal clause (H4 causal — performance should revert).
+if [ "${OXAGEN_WARM:-}" = "1" ]; then
+  export OXAGEN_INSTALL_DUCKDB=1
+  if [ -z "${OXAGEN_WARM_MEMORY_DIR:-}" ]; then
+    OXAGEN_WARM_MEMORY_DIR="$(pwd)/warm-memory"
+    export OXAGEN_WARM_MEMORY_DIR
+  fi
+  mkdir -p "$OXAGEN_WARM_MEMORY_DIR"
+  echo "==> OXAGEN_WARM=1 — DuckDB enabled; memory persisted across trials."
+  echo "==>   Warm memory dir: $OXAGEN_WARM_MEMORY_DIR"
+  echo "==>   (Upload into each trial container on install; download back after run.)"
+fi
+
 # 5) Go.
 echo "==> harbor run  dataset=$DATASET  agent=oxagen  model=${MODEL_SLUG}  n=$N_CONCURRENT  attempts=$N_ATTEMPTS"
 exec uv run harbor run \

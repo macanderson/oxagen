@@ -39,10 +39,15 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
     { role: "user", content: opts.instruction },
   ];
 
+  const recalled = opts.memory ? await opts.memory.recallContext().catch(() => "") : "";
+  const system =
+    (opts.system ?? DEFAULT_SYSTEM) +
+    (recalled ? "\n\n## Recalled context (from prior sessions)\n" + recalled : "");
+
   let streamError: unknown = null;
   const result = opts.ai.stream({
     model: opts.model ?? "anthropic/claude-opus-4-8",
-    system: opts.system ?? DEFAULT_SYSTEM,
+    system,
     messages,
     tools,
     stopWhen: stepCountIs(opts.maxSteps ?? 32),
@@ -76,6 +81,15 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
   const diff = await opts.workspace.diff();
   const changedFiles = changedFilesFromDiff(diff);
   onEvent({ type: "final-diff", diff, changedFiles });
+
+  if (opts.memory)
+    void Promise.resolve(
+      opts.memory.remember("coding_turn", { instruction: opts.instruction, changedFiles }),
+    ).catch(() => {});
+  if (opts.trace)
+    void Promise.resolve(
+      opts.trace.record({ instruction: opts.instruction, changedFiles, steps, text, usage }),
+    ).catch(() => {});
 
   return {
     text,

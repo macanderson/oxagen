@@ -32,15 +32,49 @@ Environment
 - ``OXAGEN_INSTALL_DUCKDB=1`` — also ``npm i`` DuckDB in the container so the
   context engine's persistent memory/trace stores are live. Off by default:
   DuckDB is not load-bearing for a cold single-trial run (no pre-pulled graph,
-  no prior sessions) and the CLI degrades gracefully without it.
+  no prior sessions) and the CLI degrades gracefully without it.  Set
+  automatically by ``run.sh`` when ``OXAGEN_WARM=1``.
+- ``OXAGEN_WARM_MEMORY_DIR`` — host-side directory for cross-trial memory
+  persistence (warm / self-improvement mode).  When set the adapter:
+    1. uploads the directory's contents into the container during ``install()``
+       so the agent starts each trial with the accumulated memory from all
+       prior trials;
+    2. downloads the updated ``~/.config/oxagen`` back to this directory at the
+       end of ``run()`` so the next trial inherits it.
+  Set ``OXAGEN_WARM=1`` in ``run.sh`` to activate warm mode; that sets both
+  ``OXAGEN_INSTALL_DUCKDB=1`` and a default ``OXAGEN_WARM_MEMORY_DIR``.
+  See "Warm / self-improvement mode" in the README for full documentation.
 - Any other ``OXAGEN_*`` var on the host is forwarded (e.g. ``OXAGEN_MODEL``,
   tier overrides ``OXAGEN_LLM_FAST`` / ``_BALANCED`` / ``_PRECISE``).
+
+Warm mode — honest limitation
+------------------------------
+Harbor deletes the trial container after each run (``environment.delete: true``
+in Terminal-Bench's default config).  Cross-trial persistence is achieved by
+downloading ``~/.config/oxagen`` from the container to the host after every run
+and uploading it into the next container's ``install()`` — so memory truly
+persists between trials, not just within a trial.
+
+This works correctly as long as:
+  - ``OXAGEN_WARM_MEMORY_DIR`` is on the same machine running Harbor (localhost
+    or the Harbor worker host).  Remote/cloud Harbor workers need the warm dir
+    to be on shared storage accessible from the worker.
+  - Trials are serialized (``--n-concurrent 1``).  Parallel trials write to the
+    same warm dir simultaneously, causing races; use ``N_CONCURRENT=1`` for warm
+    runs.
+
+With ``N_CONCURRENT=1`` on a single machine the upload/download loop is fully
+real and deterministic.  No fake persistence — if the download or upload fails,
+the adapter logs it to stderr and the next trial starts cold (rather than
+silently with stale state).
 """
 
 from __future__ import annotations
 
 import os
+import re
 import shlex
+import sys
 from pathlib import Path
 
 from harbor.agents.installed.base import BaseInstalledAgent, with_prompt_template
@@ -53,6 +87,13 @@ _BUNDLE_REMOTE_TMP = "/tmp/oxagen.mjs"
 _BUNDLE_INSTALL_DIR = "/usr/local/lib/oxagen"
 _BUNDLE_INSTALL_PATH = f"{_BUNDLE_INSTALL_DIR}/oxagen.mjs"
 _WRAPPER_PATH = "/usr/local/bin/oxagen"
+
+# In-container HOME used in warm mode.  All of Oxagen's path helpers call
+# node:os.homedir() which reads HOME, so pinning HOME to this path makes
+# ~/.config/oxagen/ resolve to _WARM_HOME_IN_CONTAINER/.config/oxagen/ —
+# the same path we upload into and download from across trials.
+_WARM_HOME_IN_CONTAINER = "/tmp/oxa-warm-home"
+_WARM_CONFIG_IN_CONTAINER = f"{_WARM_HOME_IN_CONTAINER}/.config/oxagen"
 
 # Minimum Node major the bundle needs; skip reinstall if the image already has it.
 _MIN_NODE_MAJOR = 20
@@ -173,6 +214,36 @@ class OxagenAgent(BaseInstalledAgent):
                 timeout_sec=600,
             )
 
+        # 4) Warm mode: upload prior-trial memory into the container so this
+        #    trial starts with accumulated state from all preceding trials.
+        #
+        #    The in-container HOME is pinned to _WARM_HOME_IN_CONTAINER in
+        #    _forwarded_env() so that Oxagen writes all its stores under
+        #    _WARM_CONFIG_IN_CONTAINER during this trial.  Here we seed that
+        #    directory with whatever the host-side warm dir contains.
+        warm_dir = os.environ.get("OXAGEN_WARM_MEMORY_DIR")
+        if warm_dir:
+            host_config = Path(warm_dir) / ".config" / "oxagen"
+            # Create the in-container home path so Oxagen can always write there.
+            await self.exec_as_root(
+                environment,
+                command=f"mkdir -p {_WARM_CONFIG_IN_CONTAINER}",
+            )
+            if host_config.is_dir() and any(host_config.iterdir()):
+                try:
+                    await environment.upload_dir(host_config, _WARM_CONFIG_IN_CONTAINER)
+                    self.logger.info(
+                        "oxagen-adapter: uploaded warm memory from %s into %s",
+                        host_config,
+                        _WARM_CONFIG_IN_CONTAINER,
+                    )
+                except Exception as exc:
+                    print(
+                        f"oxagen-adapter: warm memory upload failed ({exc}); "
+                        "this trial starts cold",
+                        file=sys.stderr,
+                    )
+
     def _forwarded_env(self) -> dict[str, str]:
         """Host env to forward into the container for the agent run."""
         env: dict[str, str] = {}
@@ -187,6 +258,13 @@ class OxagenAgent(BaseInstalledAgent):
         for k, v in os.environ.items():
             if k.startswith("OXAGEN_") and k != "OXAGEN_CLI_BUNDLE":
                 env[k] = v
+        # Warm mode: pin HOME to a stable in-container path so all of Oxagen's
+        # node:os.homedir() calls resolve to _WARM_HOME_IN_CONTAINER rather than
+        # whatever the trial container's default user home happens to be.  This
+        # makes _WARM_CONFIG_IN_CONTAINER the canonical config dir for the trial
+        # and ensures the post-run download (in run()) targets the right path.
+        if os.environ.get("OXAGEN_WARM_MEMORY_DIR"):
+            env["HOME"] = _WARM_HOME_IN_CONTAINER
         return env
 
     def _build_flags(self) -> str:
@@ -217,6 +295,31 @@ class OxagenAgent(BaseInstalledAgent):
             command=command,
             env=self._forwarded_env(),
         )
+
+        # Warm mode: download updated memory back to the host after the run so
+        # the next trial inherits it.  This is the cross-trial persistence
+        # mechanism — Harbor deletes the container after each trial
+        # (environment.delete: true), so we must snapshot state here.
+        #
+        # Failure is non-fatal: if the download fails, a warning is printed and
+        # the next trial starts cold rather than with stale/partial state.
+        warm_dir = os.environ.get("OXAGEN_WARM_MEMORY_DIR")
+        if warm_dir:
+            host_config = Path(warm_dir) / ".config" / "oxagen"
+            host_config.mkdir(parents=True, exist_ok=True)
+            try:
+                await environment.download_dir(_WARM_CONFIG_IN_CONTAINER, host_config)
+                self.logger.info(
+                    "oxagen-adapter: downloaded warm memory from %s to %s",
+                    _WARM_CONFIG_IN_CONTAINER,
+                    host_config,
+                )
+            except Exception as exc:
+                print(
+                    f"oxagen-adapter: warm memory download failed ({exc}); "
+                    "next trial will start without this trial's memory",
+                    file=sys.stderr,
+                )
 
     def populate_context_post_run(self, context: AgentContext) -> None:
         # Oxagen's persistent cost store (DuckDB) is absent in the cold task

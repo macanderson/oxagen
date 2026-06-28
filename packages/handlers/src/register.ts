@@ -861,6 +861,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .graphExportHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "graph.sync.push",
+    async () =>
+      (await import("./graph.sync.push"))
+        .graphSyncPushHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "graph.stats",
     async () =>
       (await import("./graph.stats")).graphStatsHandler as CapabilityHandlerFn,

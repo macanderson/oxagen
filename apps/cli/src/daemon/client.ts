@@ -94,6 +94,45 @@ export class DaemonClient {
   }
 
   /**
+   * Incrementally (re)build + persist the code graph for `root` (defaults to the
+   * daemon's workspace root). Returns the index delta + totals.
+   */
+  async buildCodeGraph(root?: string): Promise<unknown> {
+    const response = await this.send({
+      id: crypto.randomUUID(),
+      method: "graph.build",
+      params: root ? { root } : {},
+    });
+    if (response.error) throw new Error(response.error.message);
+    return response.result;
+  }
+
+  /** Fuzzy symbol search across the persisted code graph. */
+  async searchCodeGraph(pattern: string, limit = 20, root?: string): Promise<unknown> {
+    const response = await this.send({
+      id: crypto.randomUUID(),
+      method: "graph.search",
+      params: { pattern, limit, ...(root ? { root } : {}) },
+    });
+    if (response.error) throw new Error(response.error.message);
+    return response.result;
+  }
+
+  /** k-hop neighborhood of a code node from the persisted code graph. */
+  async queryCodeGraph(
+    nodeId: string,
+    opts: { hops?: number; edgeTypes?: string[]; root?: string } = {},
+  ): Promise<unknown> {
+    const response = await this.send({
+      id: crypto.randomUUID(),
+      method: "graph.query",
+      params: { nodeId, ...opts },
+    });
+    if (response.error) throw new Error(response.error.message);
+    return response.result;
+  }
+
+  /**
    * Ask the daemon to shut down gracefully.
    */
   async shutdown(): Promise<void> {

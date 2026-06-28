@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { MemoryWorkspace } from "./workspaces/memory";
 import { runCodingAgent, changedFilesFromDiff } from "./engine";
-import type { AgentAi, ModelRunArgs } from "./ports";
+import type { AgentAi, ModelRunArgs, MemoryProvider, TraceStore } from "./ports";
 import type { CodingEvent } from "./types";
 
 describe("changedFilesFromDiff", () => {
@@ -51,5 +51,65 @@ describe("runCodingAgent", () => {
     expect(result.text).toBe("done");
     expect(events.some((e) => e.type === "final-diff")).toBe(true);
     expect(events.some((e) => e.type === "file-edit")).toBe(true);
+  });
+
+  it("injects recalled context into the system prompt and fires memory/trace hooks", async () => {
+    const ws = new MemoryWorkspace({ "x.ts": "old" });
+
+    const recallContext = vi.fn().mockResolvedValue("- [constraint] use strict types");
+    const remember = vi.fn().mockResolvedValue(undefined);
+    const record = vi.fn();
+
+    const memory: MemoryProvider = { recallContext, remember };
+    const trace: TraceStore = { record };
+
+    let capturedSystem = "";
+
+    const ai: AgentAi = {
+      stream(args: ModelRunArgs) {
+        capturedSystem = args.system;
+        return {
+          textStream: (async function* () {
+            const edit = args.tools.edit_file as {
+              execute: (i: unknown, o: unknown) => Promise<unknown>;
+            };
+            await edit.execute({ path: "x.ts", old_string: "old", new_string: "new" }, {});
+            yield "ok";
+          })(),
+          steps: Promise.resolve([{}]),
+          usage: Promise.resolve({ inputTokens: 10, outputTokens: 5, totalTokens: 15 }),
+          response: Promise.resolve({ messages: [] }),
+        } as unknown as ReturnType<AgentAi["stream"]>;
+      },
+      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+    };
+
+    await runCodingAgent({
+      workspace: ws,
+      ai,
+      instruction: "update x",
+      model: "anthropic/claude-opus-4-8",
+      memory,
+      trace,
+    });
+
+    // Recalled context must be in the system prompt passed to the model
+    expect(capturedSystem).toContain("- [constraint] use strict types");
+    expect(capturedSystem).toContain("Recalled context (from prior sessions)");
+
+    // Wait a tick for fire-and-forget Promises to settle
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(remember).toHaveBeenCalledOnce();
+    expect(remember).toHaveBeenCalledWith(
+      "coding_turn",
+      expect.objectContaining({ instruction: "update x" }),
+    );
+
+    expect(record).toHaveBeenCalledOnce();
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ instruction: "update x", changedFiles: ["x.ts"] }),
+    );
   });
 });
