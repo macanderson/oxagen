@@ -209,4 +209,42 @@ describe("GraphStore", () => {
     const results = await store.searchNodes(ORG, WS, "match", 2);
     expect(results).toHaveLength(2);
   });
+
+  // ── lineage push cursor ────────────────────────────────────────────────────
+
+  it("getLineageCursor returns null when no lineage sync has been run", async () => {
+    const cursor = await store.getLineageCursor(ORG, WS);
+    expect(cursor).toBeNull();
+  });
+
+  it("round-trips a lineage cursor through setLineageCursor/getLineageCursor", async () => {
+    const epochMs = 1_700_000_000_000;
+    await store.setLineageCursor(ORG, WS, epochMs);
+    const got = await store.getLineageCursor(ORG, WS);
+    expect(got).toBe(epochMs);
+  });
+
+  it("overwrites an existing lineage cursor on repeat setLineageCursor", async () => {
+    await store.setLineageCursor(ORG, WS, 1_000_000);
+    await store.setLineageCursor(ORG, WS, 2_000_000);
+    const got = await store.getLineageCursor(ORG, WS);
+    expect(got).toBe(2_000_000);
+  });
+
+  it("lineage cursor is scoped to org+workspace — different workspace returns null", async () => {
+    await store.setLineageCursor(ORG, WS, 1_700_000_000_000);
+    const got = await store.getLineageCursor(ORG, "other-workspace");
+    expect(got).toBeNull();
+  });
+
+  it("lineage cursor does not conflict with the sync cursor table", async () => {
+    await store.setLineageCursor(ORG, WS, 9_999_999);
+    await store.setCursor(ORG, WS, "2026-01-01T00:00:00Z", 5, 3);
+
+    const lineage = await store.getLineageCursor(ORG, WS);
+    const sync = await store.getCursor(ORG, WS);
+
+    expect(lineage).toBe(9_999_999);
+    expect(sync!.cursor).toBe("2026-01-01T00:00:00Z");
+  });
 });
