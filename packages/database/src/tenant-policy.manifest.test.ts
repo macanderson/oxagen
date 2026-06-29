@@ -146,7 +146,9 @@ describe("tenant policy manifest", () => {
     //      secret_values, secret_access_log — all `standard` (org_id + workspace_id NN).
     // 76 = 75 + agent.sandbox_sessions (durable code-agent sandbox registry,
     //      orgScopeMixin + tenant_isolation RLS, 20260628120000).
-    expect(POLICY_MANIFEST.length).toBe(76);
+    // 77 = 76 + workspace.workspace_memory_policy (agent-memory decay policy,
+    //      org_id + workspace_id both NOT NULL → standard, OXA-1374).
+    expect(POLICY_MANIFEST.length).toBe(77);
   });
 
   it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {
@@ -155,5 +157,13 @@ describe("tenant policy manifest", () => {
     expect(find("org.org_slug_history")?.policyClass).toBe("org_only");
     // workspace_slug_history has both org_id + workspace_id NN → standard.
     expect(find("workspace.workspace_slug_history")?.policyClass).toBe("standard");
+  });
+
+  it("covers workspace.workspace_memory_policy for agent-memory decay (OXA-1374)", () => {
+    const entry = POLICY_MANIFEST.find(
+      (e) => e.table === "workspace.workspace_memory_policy",
+    );
+    // Has org_id + workspace_id both NOT NULL → standard.
+    expect(entry?.policyClass).toBe("standard");
   });
 });
