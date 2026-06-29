@@ -59,6 +59,10 @@ function makeRole(overrides: Partial<Role> = {}): Role {
     scopeKind: "org",
     orgId: ORG_ID,
     principalIds: [PRINCIPAL_ID],
+    // Default to a NON-system role so the org-owner super-user rule (7.5) only
+    // fires for fixtures that opt in via `isSystemDefault: true`. This keeps the
+    // Rule 6/7/8 tests exercising the grant-based paths they were written for.
+    isSystemDefault: false,
     ...overrides,
   };
 }
@@ -119,6 +123,103 @@ describe("resolve — Rule 8: default effect", () => {
     const result = resolve(baseInput({ defaultEffect: "require_approval" }));
     expect(result.outcome).toBe("pending_approval");
     expect(result.trace.decidedBy.rule).toBe("8:default");
+  });
+});
+
+describe("resolve — Rule 7.5: org owner super-user", () => {
+  // The system-default org "Owner" role is the organization's root principal.
+  // It must resolve "allow" for ANY capability that has no explicit grant —
+  // owner access is independent of per-capability default-role seeding, so a
+  // capability added after the org was provisioned never locks the owner out
+  // (the bug: enterprise orgs run the full resolver, and an un-seeded capability
+  // fell through to a `deny` defaultEffect). Explicit denial via config still
+  // wins, because all deny rules (1, 2, 6, 7) run first.
+  const ownerRole = (): Role =>
+    makeRole({ name: "Owner", scopeKind: "org", isSystemDefault: true, principalIds: [PRINCIPAL_ID] });
+
+  it("ALLOWS an org owner for a capability with no grant, despite defaultEffect deny", () => {
+    const result = resolve(
+      baseInput({ roles: [ownerRole()], roleGrants: [], defaultEffect: "deny" }),
+    );
+    expect(result.outcome).toBe("allow");
+    expect(result.trace.decidedBy.rule).toBe("7.5:org_owner_superuser");
+  });
+
+  it("ALLOWS an org owner on a workspace-scoped invocation with no grant", () => {
+    const result = resolve(
+      baseInput({ scope: wsScope, roles: [ownerRole()], roleGrants: [], defaultEffect: "deny" }),
+    );
+    expect(result.outcome).toBe("allow");
+    expect(result.trace.decidedBy.rule).toBe("7.5:org_owner_superuser");
+  });
+
+  it("does NOT apply to a non-system role merely named 'Owner' (falls to defaultEffect)", () => {
+    const fakeOwner = makeRole({ name: "Owner", scopeKind: "org", isSystemDefault: false });
+    const result = resolve(baseInput({ roles: [fakeOwner], defaultEffect: "deny" }));
+    expect(result.outcome).toBe("deny");
+    expect(result.trace.decidedBy.rule).toBe("8:default");
+  });
+
+  it("does NOT apply to a system-default role that is not the org Owner (e.g. Admin)", () => {
+    const admin = makeRole({ name: "Admin", scopeKind: "org", isSystemDefault: true });
+    const result = resolve(baseInput({ roles: [admin], defaultEffect: "deny" }));
+    expect(result.outcome).toBe("deny");
+    expect(result.trace.decidedBy.rule).toBe("8:default");
+  });
+
+  it("does NOT apply to a workspace-scoped role named 'Owner' (only org-scoped owners are super-users)", () => {
+    const wsOwner = makeRole({ name: "Owner", scopeKind: "workspace", isSystemDefault: true });
+    const result = resolve(baseInput({ roles: [wsOwner], defaultEffect: "deny" }));
+    expect(result.outcome).toBe("deny");
+    expect(result.trace.decidedBy.rule).toBe("8:default");
+  });
+
+  it("does NOT apply when the owner role exists but the principal is not a member", () => {
+    const ownerOtherPrincipal = makeRole({
+      name: "Owner",
+      scopeKind: "org",
+      isSystemDefault: true,
+      principalIds: ["prn_someone_else"],
+    });
+    const result = resolve(baseInput({ roles: [ownerOtherPrincipal], defaultEffect: "deny" }));
+    expect(result.outcome).toBe("deny");
+    expect(result.trace.decidedBy.rule).toBe("8:default");
+  });
+
+  it("an explicit org enforced DENY policy overrides owner super-user (config wins)", () => {
+    const denyPolicy = makePolicy({ effect: "deny", enforced: true, scopeId: ORG_ID });
+    const result = resolve(
+      baseInput({ roles: [ownerRole()], policies: [denyPolicy], defaultEffect: "deny" }),
+    );
+    expect(result.outcome).toBe("deny");
+    expect(result.trace.decidedBy.rule).toBe("2:org_enforced_deny");
+  });
+
+  it("an explicit Owner-role DENY grant overrides owner super-user (config wins)", () => {
+    const denyRoleGrant = makeRoleGrant({ roleId: ROLE_ID, effect: "deny" });
+    const result = resolve(
+      baseInput({ roles: [ownerRole()], roleGrants: [denyRoleGrant], defaultEffect: "deny" }),
+    );
+    expect(result.outcome).toBe("deny");
+    expect(result.trace.decidedBy.rule).toBe("7:role_grant");
+  });
+
+  it("a workspace explicit DENY grant overrides owner super-user (config wins)", () => {
+    const wsDeny = makeGrant({ scopeKind: "workspace", scopeId: WORKSPACE_ID, effect: "deny" });
+    const result = resolve(
+      baseInput({ scope: wsScope, roles: [ownerRole()], grants: [wsDeny], defaultEffect: "deny" }),
+    );
+    expect(result.outcome).toBe("deny");
+    expect(result.trace.decidedBy.rule).toBe("1:workspace_deny");
+  });
+
+  it("an explicit Owner-role ALLOW grant still decides at rule 7 (before 7.5)", () => {
+    const allowRoleGrant = makeRoleGrant({ roleId: ROLE_ID, effect: "allow" });
+    const result = resolve(
+      baseInput({ roles: [ownerRole()], roleGrants: [allowRoleGrant], defaultEffect: "deny" }),
+    );
+    expect(result.outcome).toBe("allow");
+    expect(result.trace.decidedBy.rule).toBe("7:role_grant");
   });
 });
 
