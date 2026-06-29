@@ -20,6 +20,13 @@ import { runHooks } from "../settings/hooks.js";
 import { loadMcpTools, type McpServerStatus } from "../mcp/client.js";
 import { filterToolsForAgent } from "../agents/tools.js";
 import { loadRules, renderRulesSection, guardsToDeny } from "../rules/index.js";
+import {
+  AgentTimeoutError,
+  TIMEOUTS,
+  makeTurnController,
+  makeStallDetector,
+  wrapToolsWithTimeout,
+} from "./timeouts.js";
 import type { Rule } from "../rules/types.js";
 import type { AgentDefinition } from "../agents/types.js";
 import type { OxagenSettings } from "../settings/schema.js";
@@ -135,6 +142,24 @@ function gatewayMessage(error: unknown): string {
  * Exported for tests.
  */
 export function normalizeAgentError(error: unknown): Error {
+  // Our own timeout errors: pass through as-is — the message is already
+  // user-facing ("⏱ Agent step timed out after…").
+  if (error instanceof AgentTimeoutError) return error;
+
+  // AbortError from the AI SDK when a signal fires without a typed reason
+  // (e.g. user pressed Esc without going through the timeout path).
+  if (error instanceof Error && error.name === "AbortError") {
+    // The signal's reason may already be a typed AgentTimeoutError.
+    const cause = (error as { cause?: unknown }).cause;
+    if (cause instanceof AgentTimeoutError) return cause;
+    return new Error("Agent turn was cancelled.");
+  }
+
+  // Undefined reason from signal.abort() with no argument.
+  if (error == null) {
+    return new Error("Agent turn was cancelled.");
+  }
+
   const msg = gatewayMessage(error);
   if (/insufficient_funds|positive credit balance/i.test(msg)) {
     return new Error(
@@ -156,6 +181,14 @@ export function normalizeAgentError(error: unknown): Error {
 export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   const cwd = opts.cwd ?? process.cwd();
   if (!ensureGatewayKey(cwd)) throw new MissingGatewayKeyError();
+
+  // Create a single AbortController for the entire turn. It fires as soon as
+  // EITHER the caller's signal fires (Esc / Ctrl-C) OR the per-turn deadline
+  // (TIMEOUTS.turnMs) elapses — whichever comes first. Every sub-operation
+  // (LLM call, tool executes, hook runners) receives this signal so they all
+  // cancel together with no dangling work.
+  const turnController = makeTurnController(opts.signal);
+  const turnSignal = turnController.signal;
 
   // settings.json drives this turn's tool permissions and lifecycle hooks.
   const settings = opts.settings ?? loadSettings({ cwd }).settings;
@@ -186,7 +219,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   const sessionStart = await runHooks(
     settings.hooks,
     { event: "SessionStart", cwd },
-    opts.signal,
+    turnSignal,
   );
   if (sessionStart.output) {
     system += "\n\n## Session context (from SessionStart hooks)\n" + sessionStart.output;
@@ -225,15 +258,19 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
         deny: [...(settings.permissions?.deny ?? []), ...ruleDenies.deny],
       }
     : settings.permissions;
-  const tools = wrapToolsWithGate(availableTools, {
-      cwd,
-      permissions: gatePermissions,
-      hooks: settings.hooks,
-      signal: opts.signal,
-      onBlocked: opts.onToolBlocked,
-      denyReasons: ruleDenies.reasons,
-    },
-  );
+  // Layer 1: permission gate + Pre/PostToolUse hooks.
+  // Layer 2: per-tool timeouts (standard: 60s, bash: 240s) so no single tool
+  // call can block the turn indefinitely. Tool timeouts return a string result
+  // the model reads — the turn stays alive for the model to explain or adapt.
+  const gatedTools = wrapToolsWithGate(availableTools, {
+    cwd,
+    permissions: gatePermissions,
+    hooks: settings.hooks,
+    signal: turnSignal,
+    onBlocked: opts.onToolBlocked,
+    denyReasons: ruleDenies.reasons,
+  });
+  const tools = wrapToolsWithTimeout(gatedTools, turnSignal);
 
   try {
   // Capture the underlying stream error ourselves. Supplying onError replaces
@@ -250,7 +287,9 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     messages,
     tools,
     stopWhen: stepCountIs(opts.maxSteps ?? 32),
-    abortSignal: opts.signal,
+    // Pass the turn signal so the AI SDK aborts the in-flight HTTP request when
+    // the turn deadline fires or the user presses Esc.
+    abortSignal: turnSignal,
     onError: ({ error }) => {
       streamError = error;
     },
@@ -287,13 +326,28 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   });
 
   let text = "";
+  // Stall detector: if no text delta or streaming progress arrives within
+  // TIMEOUTS.llmStallMs, abort the turn. This catches a stalled TCP connection
+  // that keeps the socket open but stops delivering bytes — without this, such
+  // a connection could hang the turn for minutes. The detector is reset on each
+  // delta and stopped when the stream ends (success or error).
+  const stall = makeStallDetector(TIMEOUTS.llmStallMs, () => {
+    if (!turnController.signal.aborted) {
+      turnController.abort(
+        new AgentTimeoutError("LLM stream stall", TIMEOUTS.llmStallMs),
+      );
+    }
+  });
   try {
     for await (const delta of result.textStream) {
+      stall.reset(); // each delta resets the stall window
       text += delta;
       opts.onText?.(delta);
     }
   } catch (err) {
     streamError ??= err;
+  } finally {
+    stall.stop(); // always clear the stall timer
   }
 
   if (streamError) throw normalizeAgentError(streamError);

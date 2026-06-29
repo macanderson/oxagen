@@ -31,7 +31,16 @@ export const orgList = registerCapability({
   scoped: false,
   agent: { requiresApproval: false, riskLevel: "low", category: "organization" },
   sensitivity: "low",
-  defaultEffect: "deny",
+  // allow by default: "list my own orgs" is a user-intrinsic right. Any
+  // authenticated principal who passes the enterprise resolver without an
+  // explicit deny policy must be allowed — the handler enforces that the
+  // caller can only see memberships for their own user identity. Keeping
+  // this as "deny" caused no_grant 403s for Enterprise-plan callers whose
+  // org was created before org.list was added to the contract registry
+  // (role_grants seeded by bootstrapOrgIAM are missing), because the
+  // resolver correctly falls through to the contract defaultEffect when no
+  // matching role-grant row exists. (OXA fix — CLI workspace picker 403.)
+  defaultEffect: "allow",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow", Member: "allow", Billing: "allow", Compliance: "allow", Viewer: "allow" },
     workspace: {},
