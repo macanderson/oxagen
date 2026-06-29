@@ -385,3 +385,147 @@ export async function applyDecayToMemory(args: {
     await s.close();
   }
 }
+
+// Shared RETURN projection so getMemoryById/updateMemory hand back exactly the
+// MemoryListRow shape (and therefore the agentMemoryRecordSchema) that the
+// list/recall surfaces use — one definition, no drift.
+const MEMORY_RETURN = /* cypher */ `
+  RETURN
+    m.id AS id,
+    coalesce(m.publicId, m.id) AS publicId,
+    coalesce(m.nodeRef, '') AS nodeRef,
+    m.weight AS weight,
+    m.kind AS kind,
+    m.lesson AS lesson,
+    m.source AS source,
+    coalesce(m.confidence, 1.0) AS confidence,
+    toString(m.createdAt) AS createdAt,
+    toString(m.lastReinforcedAt) AS lastReinforcedAt
+`;
+
+/* eslint-disable @typescript-eslint/no-unsafe-assignment -- neo4j-driver Record.get() is typed as `any`; shape is guaranteed by MEMORY_RETURN above. */
+function rowFromRecord(r: { get: (k: string) => unknown }): MemoryListRow {
+  return {
+    id: r.get("id") as string,
+    publicId: r.get("publicId") as string,
+    nodeRef: (r.get("nodeRef") as string) ?? "",
+    weight: r.get("weight") as MemoryListRow["weight"],
+    kind: r.get("kind") as string,
+    lesson: r.get("lesson") as string,
+    source: r.get("source") as string,
+    confidence: Number(r.get("confidence") ?? 1.0),
+    createdAt: r.get("createdAt") as string,
+    lastReinforcedAt: (r.get("lastReinforcedAt") as string | null) ?? null,
+  };
+}
+/* eslint-enable @typescript-eslint/no-unsafe-assignment */
+
+/**
+ * Fetch a single AgentMemory by id, scoped to the active tenant. Returns null
+ * when no node matches in this workspace. Backs `agent.memory.remember` (to
+ * return the freshly-written record) and the CLI `memory show` view.
+ *
+ * orgId/workspaceId are injected automatically by scopedSession().
+ */
+export async function getMemoryById(memoryId: string): Promise<MemoryListRow | null> {
+  const s = scopedSession();
+  try {
+    const result = await s.run(
+      /* cypher */ `
+        MATCH (m:AgentMemory {id: $memoryId, orgId: $orgId, workspaceId: $workspaceId})
+        ${MEMORY_RETURN}
+      `,
+      { memoryId },
+    );
+    const rec = result.records[0];
+    return rec ? rowFromRecord(rec) : null;
+  } finally {
+    await s.close();
+  }
+}
+
+export interface UpdateMemoryArgs {
+  memoryId: string;
+  lesson?: string;
+  weight?: "low" | "high" | "critical";
+  kind?: string;
+  source?: string;
+  confidence?: number;
+  /** New embedding — pass only when the lesson changed and was re-embedded. */
+  embedding?: number[];
+}
+
+/**
+ * Edit an AgentMemory in place. Every field is optional: a null param leaves the
+ * stored value untouched via `coalesce`, so callers patch only what changed.
+ * `displayName` tracks the lesson, and `embedding` is replaced only when a new
+ * one is supplied (the lesson changed). Returns the updated row, or null when no
+ * node matched in this workspace.
+ *
+ * orgId/workspaceId are injected automatically by scopedSession().
+ */
+export async function updateMemory(
+  args: UpdateMemoryArgs,
+): Promise<MemoryListRow | null> {
+  const s = scopedSession();
+  try {
+    const result = await s.run(
+      /* cypher */ `
+        MATCH (m:AgentMemory {id: $memoryId, orgId: $orgId, workspaceId: $workspaceId})
+        SET
+          m.lesson = coalesce($lesson, m.lesson),
+          m.displayName = CASE WHEN $lesson IS NULL
+                            THEN coalesce(m.displayName, left(m.lesson, 200))
+                            ELSE left($lesson, 200) END,
+          m.weight = coalesce($weight, m.weight),
+          m.kind = coalesce($kind, m.kind),
+          m.source = coalesce($source, m.source),
+          m.confidence = coalesce($confidence, m.confidence),
+          m.embedding = CASE WHEN $embedding IS NULL THEN m.embedding ELSE $embedding END,
+          m.updatedAt = datetime()
+        ${MEMORY_RETURN}
+      `,
+      {
+        memoryId: args.memoryId,
+        lesson: args.lesson ?? null,
+        weight: args.weight ?? null,
+        kind: args.kind ?? null,
+        source: args.source ?? null,
+        // 0 is a meaningful confidence; only undefined means "leave unchanged".
+        confidence: args.confidence ?? null,
+        embedding: args.embedding ?? null,
+      },
+    );
+    const rec = result.records[0];
+    return rec ? rowFromRecord(rec) : null;
+  } finally {
+    await s.close();
+  }
+}
+
+/**
+ * Hard-delete an AgentMemory and all its edges (`DETACH DELETE`), scoped to the
+ * active tenant. Returns true when a node matched and was removed, false when
+ * none matched. Binding the id before the delete lets us report whether anything
+ * was actually deleted (a plain `count(m)` after DETACH DELETE is unreliable
+ * across driver versions).
+ *
+ * orgId/workspaceId are injected automatically by scopedSession().
+ */
+export async function deleteMemory(args: { memoryId: string }): Promise<boolean> {
+  const s = scopedSession();
+  try {
+    const result = await s.run(
+      /* cypher */ `
+        MATCH (m:AgentMemory {id: $memoryId, orgId: $orgId, workspaceId: $workspaceId})
+        WITH m, m.id AS deletedId
+        DETACH DELETE m
+        RETURN deletedId
+      `,
+      { memoryId: args.memoryId },
+    );
+    return result.records.length > 0;
+  } finally {
+    await s.close();
+  }
+}

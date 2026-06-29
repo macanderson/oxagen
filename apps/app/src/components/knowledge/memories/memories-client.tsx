@@ -8,10 +8,13 @@
  * - Filter by memory kind (5 kinds), min-confidence slider, text search
  * - Row: lesson (primary), kind badge, weight badge, confidence bar, createdAt, source, nodeRef
  * - Click a row to open a detail sheet with all metadata
+ * - Detail sheet: edit lesson/kind/salience (weight+confidence)/source via updateMemory action
+ * - Detail sheet: delete with a two-step confirm via deleteMemory action
  * - Stats row with per-kind counts
  * - Empty state with helpful guidance
  */
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   BrainCircuit,
   Filter,
@@ -26,8 +29,11 @@ import {
   Search,
   X,
   Copy,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -61,6 +67,16 @@ interface AgentMemoryRecord {
   lastReinforcedAt: string | null;
 }
 
+// Action result shapes (structural mirror of the server action exports — avoids
+// importing "use server" functions into client code; TS checks structurally).
+type UpdateMemoryResult =
+  | { ok: true; memory: AgentMemoryRecord }
+  | { ok: false; error: string };
+
+type DeleteMemoryResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
 interface MemoriesClientProps {
   initialRecords: AgentMemoryRecord[];
   total: number;
@@ -68,6 +84,30 @@ interface MemoriesClientProps {
   workspaceId: string;
   orgSlug: string;
   workspaceSlug: string;
+  /**
+   * Server action for editing a memory. Passed from MemoriesSection (server
+   * component) so it crosses the RSC → client boundary as a server action ref.
+   * When absent the edit affordance is not rendered.
+   */
+  updateMemory?: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    memoryId: string;
+    lesson?: string;
+    weight?: MemoryWeight;
+    kind?: MemoryKind;
+    source?: string;
+    confidence?: number;
+  }) => Promise<UpdateMemoryResult>;
+  /**
+   * Server action for deleting a memory. When absent the delete affordance is
+   * not rendered.
+   */
+  deleteMemory?: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    memoryId: string;
+  }) => Promise<DeleteMemoryResult>;
 }
 
 // ---------------------------------------------------------------------------
@@ -423,18 +463,169 @@ function MemoryRow({
 }
 
 // ---------------------------------------------------------------------------
-// Detail sheet
+// Memory detail sheet (view + edit + delete-confirm modes)
 // ---------------------------------------------------------------------------
 
+function MetaField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] font-medium text-muted-foreground">
+        {label}
+      </span>
+      <span className="text-xs text-foreground break-all">{value}</span>
+    </div>
+  );
+}
+
+const SECTION_LABEL_CLS =
+  "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
+
+const FIELD_INPUT_CLS =
+  "w-full rounded-md border border-border/60 bg-background px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50";
+
 function MemoryDetail({
-  record,
+  record: initialRecord,
+  orgSlug,
+  workspaceSlug,
   onClose,
+  onUpdated,
+  onDeleted,
+  updateMemory,
+  deleteMemory,
 }: {
   record: AgentMemoryRecord;
+  orgSlug: string;
+  workspaceSlug: string;
   onClose: () => void;
+  /** Called after a successful update with the new record shape. */
+  onUpdated: (updated: AgentMemoryRecord) => void;
+  /** Called after a successful delete with the deleted memory's id. */
+  onDeleted: (memoryId: string) => void;
+  updateMemory?: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    memoryId: string;
+    lesson?: string;
+    weight?: MemoryWeight;
+    kind?: MemoryKind;
+    source?: string;
+    confidence?: number;
+  }) => Promise<UpdateMemoryResult>;
+  deleteMemory?: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    memoryId: string;
+  }) => Promise<DeleteMemoryResult>;
 }) {
+  // Local record state — updated optimistically on a successful save.
+  const [record, setRecord] = React.useState(initialRecord);
+  const [mode, setMode] = React.useState<"view" | "edit">("view");
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [isPending, startTransition] = React.useTransition();
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Edit form state — reset to current record when entering edit mode.
+  const [editLesson, setEditLesson] = React.useState(record.lesson);
+  const [editKind, setEditKind] = React.useState(record.kind);
+  const [editWeight, setEditWeight] = React.useState<MemoryWeight>(record.weight);
+  const [editConfidence, setEditConfidence] = React.useState(record.confidence);
+  const [editSource, setEditSource] = React.useState(record.source);
+
   const kindCfg = getKindConfig(record.kind);
   const weightCfg = WEIGHT_CONFIG[record.weight] ?? WEIGHT_CONFIG["low"];
+
+  function enterEdit() {
+    // Sync form fields to the current (potentially already-updated) record.
+    setEditLesson(record.lesson);
+    setEditKind(record.kind);
+    setEditWeight(record.weight);
+    setEditConfidence(record.confidence);
+    setEditSource(record.source);
+    setError(null);
+    setConfirmDelete(false);
+    setMode("edit");
+  }
+
+  function cancelEdit() {
+    setMode("view");
+    setError(null);
+  }
+
+  function handleSave() {
+    if (!updateMemory) return;
+
+    // Collect only changed fields so we don't send no-op patches.
+    const updates: {
+      lesson?: string;
+      kind?: MemoryKind;
+      weight?: MemoryWeight;
+      confidence?: number;
+      source?: string;
+    } = {};
+
+    const trimmedLesson = editLesson.trim();
+    if (trimmedLesson !== record.lesson && trimmedLesson.length > 0) {
+      updates.lesson = trimmedLesson;
+    }
+    if (editKind !== record.kind) {
+      updates.kind = editKind as MemoryKind;
+    }
+    if (editWeight !== record.weight) {
+      updates.weight = editWeight;
+    }
+    if (Math.abs(editConfidence - record.confidence) > 0.001) {
+      updates.confidence = editConfidence;
+    }
+    const trimmedSource = editSource.trim();
+    if (trimmedSource !== record.source && trimmedSource.length > 0) {
+      updates.source = trimmedSource;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      // Nothing changed — exit edit mode silently.
+      setMode("view");
+      return;
+    }
+
+    setError(null);
+    startTransition(async () => {
+      const result = await updateMemory({
+        orgSlug,
+        workspaceSlug,
+        memoryId: record.id,
+        ...updates,
+      });
+
+      if (result.ok) {
+        // Optimistic update: show new values immediately.
+        setRecord(result.memory);
+        setMode("view");
+        onUpdated(result.memory);
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  function handleDelete() {
+    if (!deleteMemory) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await deleteMemory({
+        orgSlug,
+        workspaceSlug,
+        memoryId: record.id,
+      });
+
+      if (result.ok) {
+        onDeleted(record.id);
+        onClose();
+      } else {
+        setConfirmDelete(false);
+        setError(result.error);
+      }
+    });
+  }
 
   return (
     <Sheet
@@ -454,75 +645,279 @@ function MemoryDetail({
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex flex-col gap-5">
-          {/* Lesson */}
-          <div className="flex flex-col gap-1.5">
-            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Lesson
-            </h3>
-            <p className="text-sm text-foreground leading-relaxed">
-              {record.lesson}
-            </p>
-          </div>
-
-          {/* Metadata grid */}
-          <div className="grid grid-cols-2 gap-3">
-            <MetaField label="Kind" value={kindCfg.label} />
-            <MetaField label="Weight" value={weightCfg.label} />
-            <MetaField
-              label="Confidence"
-              value={`${Math.round(Math.max(0, Math.min(1, record.confidence)) * 100)}%`}
-            />
-            <MetaField
-              label="Created"
-              value={new Date(record.createdAt).toLocaleString()}
-            />
-            {record.lastReinforcedAt && (
-              <MetaField
-                label="Last Reinforced"
-                value={new Date(record.lastReinforcedAt).toLocaleString()}
-              />
-            )}
-            <MetaField label="Source" value={record.source} />
-            {record.nodeRef && (
-              <MetaField label="Node Ref" value={record.nodeRef} />
-            )}
-          </div>
-
-          {/* IDs */}
-          <div className="flex flex-col gap-2">
-            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Identifiers
-            </h3>
+        {mode === "view" ? (
+          /* ── View mode ─────────────────────────────────────────────────── */
+          <div className="flex flex-col gap-5">
+            {/* Lesson */}
             <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-muted-foreground w-16 flex-shrink-0">
-                  Public ID
-                </span>
-                <CopyableId id={record.publicId} />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-muted-foreground w-16 flex-shrink-0">
-                  Internal
-                </span>
-                <CopyableId id={record.id} />
+              <h3 className={SECTION_LABEL_CLS}>Lesson</h3>
+              <p className="text-sm text-foreground leading-relaxed">
+                {record.lesson}
+              </p>
+            </div>
+
+            {/* Metadata grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <MetaField label="Kind" value={kindCfg.label} />
+              <MetaField label="Weight" value={weightCfg.label} />
+              <MetaField
+                label="Confidence"
+                value={`${Math.round(Math.max(0, Math.min(1, record.confidence)) * 100)}%`}
+              />
+              <MetaField
+                label="Created"
+                value={new Date(record.createdAt).toLocaleString()}
+              />
+              {record.lastReinforcedAt && (
+                <MetaField
+                  label="Last Reinforced"
+                  value={new Date(record.lastReinforcedAt).toLocaleString()}
+                />
+              )}
+              <MetaField label="Source" value={record.source} />
+              {record.nodeRef && (
+                <MetaField label="Node Ref" value={record.nodeRef} />
+              )}
+            </div>
+
+            {/* IDs */}
+            <div className="flex flex-col gap-2">
+              <h3 className={SECTION_LABEL_CLS}>Identifiers</h3>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground w-16 flex-shrink-0">
+                    Public ID
+                  </span>
+                  <CopyableId id={record.publicId} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground w-16 flex-shrink-0">
+                    Internal
+                  </span>
+                  <CopyableId id={record.id} />
+                </div>
               </div>
             </div>
+
+            {/* Error feedback from a failed mutation */}
+            {error && (
+              <p role="alert" className="text-xs text-destructive">
+                {error}
+              </p>
+            )}
+
+            {/* Action footer — only rendered when at least one action is available */}
+            {(updateMemory ?? deleteMemory) && (
+              <div className="flex items-center justify-between gap-2 pt-3 border-t border-border/40">
+                {/* Edit */}
+                <div>
+                  {updateMemory && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={enterEdit}
+                      disabled={isPending}
+                      aria-label="Edit memory"
+                    >
+                      <Pencil className="h-3 w-3 mr-1.5" aria-hidden="true" />
+                      Edit
+                    </Button>
+                  )}
+                </div>
+
+                {/* Delete (two-step confirm) */}
+                {deleteMemory && (
+                  <div className="flex items-center gap-2">
+                    {confirmDelete ? (
+                      <>
+                        <span className="text-xs text-muted-foreground">
+                          Delete permanently?
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={handleDelete}
+                          disabled={isPending}
+                          aria-label="Confirm delete memory"
+                        >
+                          {isPending ? "Deleting…" : "Confirm"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setConfirmDelete(false);
+                            setError(null);
+                          }}
+                          disabled={isPending}
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => setConfirmDelete(true)}
+                        aria-label="Delete memory"
+                      >
+                        <Trash2 className="h-3 w-3 mr-1.5" aria-hidden="true" />
+                        Delete
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        </div>
+        ) : (
+          /* ── Edit mode ─────────────────────────────────────────────────── */
+          <div className="flex flex-col gap-4">
+            {/* Lesson */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="edit-memory-lesson" className={SECTION_LABEL_CLS}>
+                Lesson
+              </label>
+              <textarea
+                id="edit-memory-lesson"
+                rows={4}
+                value={editLesson}
+                onChange={(e) => setEditLesson(e.target.value)}
+                maxLength={2000}
+                placeholder="What should the agent remember?"
+                aria-label="Lesson text"
+                disabled={isPending}
+                className={`${FIELD_INPUT_CLS} resize-y`}
+              />
+            </div>
+
+            {/* Kind */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="edit-memory-kind" className={SECTION_LABEL_CLS}>
+                Kind
+              </label>
+              <select
+                id="edit-memory-kind"
+                value={editKind}
+                onChange={(e) => setEditKind(e.target.value)}
+                disabled={isPending}
+                aria-label="Memory kind"
+                className={FIELD_INPUT_CLS}
+              >
+                {ALL_KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {KIND_CONFIG[k].label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Salience: weight + confidence */}
+            <div className="flex flex-col gap-3">
+              <h3 className={SECTION_LABEL_CLS}>Salience</h3>
+
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="edit-memory-weight"
+                  className="text-[11px] text-muted-foreground"
+                >
+                  Weight
+                </label>
+                <select
+                  id="edit-memory-weight"
+                  value={editWeight}
+                  onChange={(e) => setEditWeight(e.target.value as MemoryWeight)}
+                  disabled={isPending}
+                  aria-label="Memory weight"
+                  className={FIELD_INPUT_CLS}
+                >
+                  {(["low", "high", "critical"] as const).map((w) => (
+                    <option key={w} value={w}>
+                      {WEIGHT_CONFIG[w].label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-muted-foreground">
+                  Low sinks below recall; Critical never decays.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="edit-memory-confidence"
+                  className="text-[11px] text-muted-foreground"
+                >
+                  Confidence:{" "}
+                  <span className="tabular-nums">
+                    {Math.round(editConfidence * 100)}%
+                  </span>
+                </label>
+                <input
+                  id="edit-memory-confidence"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={Math.round(editConfidence * 100)}
+                  onChange={(e) =>
+                    setEditConfidence(Number(e.target.value) / 100)
+                  }
+                  disabled={isPending}
+                  aria-label="Confidence level"
+                  className="h-1 w-full cursor-pointer accent-primary disabled:cursor-not-allowed"
+                />
+              </div>
+            </div>
+
+            {/* Source */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="edit-memory-source" className={SECTION_LABEL_CLS}>
+                Source
+              </label>
+              <input
+                id="edit-memory-source"
+                type="text"
+                value={editSource}
+                onChange={(e) => setEditSource(e.target.value)}
+                maxLength={64}
+                placeholder="Provenance label (e.g. user, feature, fix)"
+                aria-label="Source"
+                disabled={isPending}
+                className={FIELD_INPUT_CLS}
+              />
+            </div>
+
+            {/* Error */}
+            {error && (
+              <p role="alert" className="text-xs text-destructive">
+                {error}
+              </p>
+            )}
+
+            {/* Edit actions */}
+            <div className="flex items-center gap-2 pt-3 border-t border-border/40">
+              <Button
+                size="sm"
+                variant="gradient"
+                onClick={handleSave}
+                disabled={isPending || editLesson.trim().length === 0}
+                startIcon={undefined}
+              >
+                {isPending ? "Saving…" : "Save changes"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={cancelEdit}
+                disabled={isPending}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
       </SheetContent>
     </Sheet>
-  );
-}
-
-function MetaField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] font-medium text-muted-foreground">
-        {label}
-      </span>
-      <span className="text-xs text-foreground break-all">{value}</span>
-    </div>
   );
 }
 
@@ -535,15 +930,23 @@ export function MemoriesClient({
   total,
   orgId: _orgId,
   workspaceId: _workspaceId,
-  orgSlug: _orgSlug,
-  workspaceSlug: _workspaceSlug,
+  orgSlug,
+  workspaceSlug,
+  updateMemory,
+  deleteMemory,
 }: MemoriesClientProps) {
-  const [records] = React.useState<AgentMemoryRecord[]>(initialRecords);
+  const router = useRouter();
+  const [records, setRecords] = React.useState<AgentMemoryRecord[]>(initialRecords);
   const [selectedRecord, setSelectedRecord] =
     React.useState<AgentMemoryRecord | null>(null);
   const [activeKinds, setActiveKinds] = React.useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = React.useState("");
   const [minConfidence, setMinConfidence] = React.useState(0);
+
+  // Sync records when the server re-renders with fresh data after router.refresh().
+  React.useEffect(() => {
+    setRecords(initialRecords);
+  }, [initialRecords]);
 
   const toggleKind = React.useCallback((kind: MemoryKind) => {
     setActiveKinds((prev) => {
@@ -556,6 +959,20 @@ export function MemoriesClient({
       return next;
     });
   }, []);
+
+  /** Optimistically apply an updated record to the list, then re-sync from server. */
+  function handleMemoryUpdated(updated: AgentMemoryRecord) {
+    setRecords((prev) =>
+      prev.map((r) => (r.id === updated.id ? updated : r)),
+    );
+    router.refresh();
+  }
+
+  /** Optimistically remove a deleted record from the list, then re-sync from server. */
+  function handleMemoryDeleted(memoryId: string) {
+    setRecords((prev) => prev.filter((r) => r.id !== memoryId));
+    router.refresh();
+  }
 
   // Client-side filtering
   const filtered = React.useMemo(() => {
@@ -679,7 +1096,7 @@ export function MemoriesClient({
             </p>
             <p className="text-xs text-muted-foreground/70 mt-1 max-w-xs">
               {records.length === 0
-                ? "Memories appear here as agents learn during this workspace’s sessions, or when you ask the assistant to remember something."
+                ? "Memories appear here as agents learn during this workspace's sessions, or when you ask the assistant to remember something."
                 : "Try adjusting your kind filters, confidence threshold, or search query."}
             </p>
           </div>
@@ -697,7 +1114,13 @@ export function MemoriesClient({
       {selectedRecord && (
         <MemoryDetail
           record={selectedRecord}
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
           onClose={() => setSelectedRecord(null)}
+          onUpdated={handleMemoryUpdated}
+          onDeleted={handleMemoryDeleted}
+          updateMemory={updateMemory}
+          deleteMemory={deleteMemory}
         />
       )}
     </div>

@@ -3,6 +3,10 @@
  * records from Neo4j via agent.memory.list and passes them to MemoriesClient.
  *
  * Sits inside a <Suspense> boundary so the page skeleton shows immediately.
+ *
+ * Server actions for edit/delete are imported here and passed as props to
+ * MemoriesClient — the standard Next.js pattern for threading server actions
+ * into client components via a server intermediary.
  */
 import "@oxagen/handlers/register";
 // agent.memory.list is an agent.* capability — its handler is bound by
@@ -13,6 +17,10 @@ import { invoke } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { AgentMemoryRecord } from "@oxagen/oxagen/contracts/agent.memory.list";
 import { MemoriesClient } from "@/components/knowledge/memories/memories-client";
+import {
+  updateMemoryAction,
+  deleteMemoryAction,
+} from "./actions";
 
 interface MemoriesSectionProps {
   orgId: string;
@@ -66,6 +74,8 @@ export async function MemoriesSection({
       workspaceId={workspaceId}
       orgSlug={orgSlug}
       workspaceSlug={workspaceSlug}
+      updateMemory={updateMemoryAction}
+      deleteMemory={deleteMemoryAction}
     />
   );
 }
