@@ -458,6 +458,52 @@ export function ReplApp({
         }
         return;
       }
+      if (text === "/login" || text.startsWith("/login ")) {
+        // The interactive picker needs readline which Ink owns — so we can't
+        // run the full flow from inside the REPL. Show the current session
+        // when already logged in; otherwise instruct the user to use the shell.
+        try {
+          const { getToken, readConfig } = await import("../lib/config.js");
+          const token = getToken();
+          const config = readConfig();
+          if (token && config.orgSlug && config.workspaceSlug) {
+            const masked = token.length <= 8 ? "****" : token.slice(0, 4) + "…" + token.slice(-4);
+            pushAssistant(
+              `Logged in to Oxagen:\n` +
+                `  token:     ${masked}\n` +
+                `  org:       ${config.orgSlug}\n` +
+                `  workspace: ${config.workspaceSlug}\n` +
+                `\nRun \`oxagen logout\` in your shell to clear the session.`,
+            );
+          } else {
+            pushAssistant(
+              `Not logged in. The interactive login picker requires a shell TTY.\n` +
+                `Run \`oxagen login\` in your terminal to authenticate.`,
+            );
+          }
+        } catch (err) {
+          pushAssistant(err instanceof Error ? err.message : String(err));
+        }
+        return;
+      }
+      if (text === "/logout") {
+        try {
+          const { clearConfig, readConfig } = await import("../lib/config.js");
+          const config = readConfig();
+          if (!config.token && !config.orgSlug && !config.workspaceSlug) {
+            pushAssistant("Not logged in.");
+          } else {
+            clearConfig();
+            pushAssistant(
+              "Logged out. Session cleared from ~/.config/oxagen/config.json.\n" +
+                "Note: per-project links (.oxagen/workspace.json) are left intact.",
+            );
+          }
+        } catch (err) {
+          pushAssistant(err instanceof Error ? err.message : String(err));
+        }
+        return;
+      }
       if (text === "/remember" || text.startsWith("/remember ")) {
         const body = text.slice("/remember".length).trim();
         if (!body) {
