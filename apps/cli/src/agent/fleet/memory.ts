@@ -17,7 +17,36 @@
 import { mkdirSync, appendFileSync, readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import type { MemoryRecord } from "./types.js";
+
+/**
+ * A weighted lesson recorded as the CLI builds/fixes code, persisted as one JSON
+ * line in this store. Mirrors the platform's `agent.memory.write` shape (kind +
+ * weight + lesson) so the same lessons can be promoted to the knowledge graph.
+ *
+ * This type lives here (with its only store) rather than in the deleted
+ * `fleet/types.ts` — task/plan/snapshot types now come from `@oxagen/agent-engine`,
+ * but `MemoryRecord` is specific to this local lesson store and stays CLI-side.
+ */
+export interface MemoryRecord {
+  id: string;
+  createdAt: number;
+  /** What kind of lesson this is — mirrors the platform `agent.memory.write` kinds. */
+  kind:
+    | "routine-change"
+    | "constraint"
+    | "bug-root-cause"
+    | "convention-deviation"
+    | "gotcha";
+  /** How much it should influence future work. */
+  weight: "low" | "high" | "critical";
+  /** The lesson itself, in one or two sentences. */
+  lesson: string;
+  /** Files the lesson is about (used for lexical recall scoring). */
+  files: string[];
+  /** Task that produced it, if any. */
+  taskId?: string;
+  outcome: "success" | "failure";
+}
 
 /** Stable per-project key from the working directory name. */
 function projectKey(cwd: string): string {

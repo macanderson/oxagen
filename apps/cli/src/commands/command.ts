@@ -73,6 +73,9 @@ export async function commandRun(
     process.exitCode = 1;
     return;
   }
+  // ADR-019 §4: running a command expands to an agent turn — require an account.
+  const { requireSession } = await import("../lib/session.js");
+  const session = requireSession();
   const { runOneShot } = await import("../repl/one-shot.js");
-  await runOneShot(expanded.prompt, { model: expanded.model });
+  await runOneShot(expanded.prompt, { session, model: expanded.model });
 }

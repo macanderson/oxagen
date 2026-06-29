@@ -32,9 +32,13 @@ vi.mock("../../agent/memory.js", () => ({
 }));
 
 // Keep the rest of the REPL inert so the test exercises only the memory lifecycle.
-vi.mock("../../agent/pipeline.js", () => ({
+vi.mock("@oxagen/agent-engine", () => ({
   runTurn: () => new Promise<never>(() => {}),
-  MissingGatewayKeyError: class extends Error {},
+}));
+// Stub the engine code-graph port source so the test doesn't load the
+// tree-sitter builder or touch the DuckDB store.
+vi.mock("../../agent/code-graph.js", () => ({
+  queryCodeGraph: async () => "",
 }));
 vi.mock("../../agent/trace-store.js", () => ({
   openTraceStore: () => ({
@@ -57,6 +61,14 @@ vi.mock("../../agent/model.js", () => ({
 
 const { ReplApp } = await import("../interactive.js");
 
+// The REPL requires an authenticated session (ADR-019 §4) to build its ports.
+const TEST_SESSION = {
+  token: "test-token",
+  orgSlug: "test-org",
+  workspaceSlug: "test-ws",
+  apiUrl: "http://localhost:4000",
+};
+
 const tick = (ms = 15): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -64,7 +76,7 @@ describe("REPL session-memory lifecycle", () => {
   it("closes a session-memory handle that resolves after unmount", async () => {
     closeSpy.mockClear();
 
-    const { unmount } = render(<ReplApp options={{}} />);
+    const { unmount } = render(<ReplApp options={{ session: TEST_SESSION }} />);
     await tick();
     // The async open is still parked — unmount before it resolves. Read through
     // a typed alias so control-flow analysis doesn't narrow the mock-assigned

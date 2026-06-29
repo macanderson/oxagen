@@ -14,7 +14,17 @@ import { Box, Text, useApp, useInput, useStdout } from "ink";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import type { ModelMessage } from "ai";
 import { theme } from "../tui/theme.js";
-import { runTurn } from "../agent/pipeline.js";
+import { runTurn } from "@oxagen/agent-engine";
+import {
+  createCwdWorkspace,
+  createGatedWorkspace,
+  createCombinedMemory,
+  createCodeGraphProvider,
+  createGraphSyncProvider,
+  createPlatformAgentAi,
+} from "../agent/adapters/index.js";
+import { queryCodeGraph } from "../agent/code-graph.js";
+import type { Session } from "../lib/session.js";
 import { resolveModelId } from "../agent/model.js";
 import { loadProjectContext } from "../agent/project-context.js";
 import { loadAndExpand, parseInvocation } from "../slash/expand.js";
@@ -49,6 +59,8 @@ import {
 import pkg from "../../package.json" with { type: "json" };
 
 export interface ReplOptions {
+  /** Authenticated platform session (token, org, workspace). */
+  session: Session;
   model?: string;
   readOnly?: boolean;
   /** Initial permission posture; defaults to `ask` (or `readonly` when readOnly). */
@@ -157,6 +169,22 @@ export function ReplApp({
   } | null>(null);
 
   const cwd = process.cwd();
+  // Engine ports — created once for the session. The workspace stays bare here;
+  // it's wrapped with the permission broker (createGatedWorkspace) at call time
+  // so /mode changes take effect without re-creating the workspace.
+  const workspaceRef = useRef(createCwdWorkspace(cwd));
+  const aiRef = useRef(
+    createPlatformAgentAi({
+      apiUrl: options.session.apiUrl,
+      token: options.session.token,
+      orgSlug: options.session.orgSlug,
+      workspaceSlug: options.session.workspaceSlug,
+    }),
+  );
+  const codeGraphRef = useRef(
+    createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
+  );
+  const graphSyncRef = useRef(createGraphSyncProvider({ ...options.session, cwd }));
   // Project rules (CLAUDE.md/AGENTS.md) loaded once for the session.
   const projectContextRef = useRef(loadProjectContext(cwd));
   // Unified slash-command catalog — built-in REPL commands + every `oxagen --help`
@@ -522,15 +550,23 @@ export function ReplApp({
         const result = await runTurn({
           prompt: submission,
           history: historyRef.current,
-          cwd,
+          workspace: createGatedWorkspace(
+            workspaceRef.current,
+            brokerRef.current ?? undefined,
+          ),
+          ai: aiRef.current,
           model: modelRef.current,
           readOnly: modeRef.current === "readonly",
-          broker: brokerRef.current ?? undefined,
           bare: bareRef.current,
           verbose: verboseRef.current,
           projectContext: projectContextRef.current,
-          memory: memoryRef.current,
-          fleetMemory: fleetMemoryRef.current,
+          memory: createCombinedMemory(
+            memoryRef.current,
+            fleetMemoryRef.current,
+          ),
+          codeGraph: codeGraphRef.current,
+          trace: traceStoreRef.current,
+          graphSync: graphSyncRef.current,
           signal: controller.signal,
           onStage: (stage) => {
             turn.push({
@@ -581,8 +617,9 @@ export function ReplApp({
         }
         render();
         historyRef.current = result.messages;
-        // Persist the turn trace so /replay can show how it was handled.
-        traceStoreRef.current.record(result.trace);
+        // The engine persists the turn trace via the injected `trace` port
+        // (traceStoreRef), so /replay can show how it was handled — no explicit
+        // record() needed here.
         // Verbose: stream the structured record to the JSONL log and show the
         // per-phase / per-model / cost breakdown inline.
         if (verboseRef.current) {
@@ -756,7 +793,7 @@ export function ReplApp({
 
 // ── Launch ────────────────────────────────────────────────────────────────────
 
-export async function launchRepl(options: ReplOptions = {}): Promise<void> {
+export async function launchRepl(options: ReplOptions): Promise<void> {
   const { render: renderInk } = await import("ink");
   const { waitUntilExit } = renderInk(<ReplApp options={options} />);
   await waitUntilExit();

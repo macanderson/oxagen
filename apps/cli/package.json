@@ -38,8 +38,10 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "2.0.54",
     "@inkjs/ui": "2.0.0",
     "@modelcontextprotocol/sdk": "1.29.0",
+    "@oxagen/agent-engine": "workspace:*",
     "@oxagen/code-graph": "workspace:*",
     "@oxagen/engram": "workspace:*",
     "@oxagen/mcp-config": "workspace:*",

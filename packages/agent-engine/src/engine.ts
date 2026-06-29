@@ -18,6 +18,27 @@ export function changedFilesFromDiff(diff: string): string[] {
   return [...files].sort();
 }
 
+/** Heuristic: did a tool result represent an error? Sets `ToolEvent.ok`. Exported for tests. */
+export function isErrorResult(out: unknown): boolean {
+  if (out instanceof Error) return true;
+  if (out && typeof out === "object") {
+    const o = out as { isError?: unknown; error?: unknown };
+    if (o.isError === true || (o.error != null && o.error !== false)) return true;
+  }
+  return false;
+}
+
+/** JSON-stringify a value, falling back to String(), capped to `max` chars. Exported for tests. */
+export function stringifyCapped(v: unknown, max: number): string {
+  let s: string;
+  try {
+    s = typeof v === "string" ? v : JSON.stringify(v) ?? String(v);
+  } catch {
+    s = String(v);
+  }
+  return s.length > max ? s.slice(0, max) + "…" : s;
+}
+
 /**
  * The coding loop. Runs a tool-using model turn against a `Workspace` until the
  * model stops or the step cap is hit, then returns the resulting diff + summary.
@@ -46,6 +67,9 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
     (recalled ? "\n\n## Recalled context (from prior sessions)\n" + recalled : "");
 
   let streamError: unknown = null;
+  // Per-step timing: the tools in a step ran between the previous step's finish
+  // and this one's. Gives each tool event a real (if step-granular) duration.
+  let prevStepAt = Date.now();
   const result = opts.ai.stream({
     model: opts.model ?? "anthropic/claude-opus-4-8",
     system,
@@ -56,11 +80,34 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
     onError: ({ error }) => {
       streamError = error;
     },
-    onStepFinish: ({ toolCalls }) => {
-      for (const tc of toolCalls ?? []) {
-        const call = tc as { toolName: string; input?: unknown; args?: unknown };
-        onEvent({ type: "tool-call", name: call.toolName, input: call.input ?? call.args });
+    onStepFinish: ({ toolCalls, toolResults }) => {
+      const now = Date.now();
+      // Index results by call id so each call is paired with what it returned.
+      const resultsById = new Map<string, unknown>();
+      for (const tr of toolResults ?? []) {
+        const r = tr as { toolCallId?: string; output?: unknown; result?: unknown; error?: unknown };
+        if (r.toolCallId) resultsById.set(r.toolCallId, r.error ?? r.output ?? r.result);
       }
+      for (const tc of toolCalls ?? []) {
+        const call = tc as {
+          toolCallId?: string;
+          toolName: string;
+          input?: unknown;
+          args?: unknown;
+        };
+        const input = call.input ?? call.args;
+        onEvent({ type: "tool-call", name: call.toolName, input });
+        const out = call.toolCallId ? resultsById.get(call.toolCallId) : undefined;
+        onEvent({
+          type: "tool-result",
+          name: call.toolName,
+          input: stringifyCapped(input, 1000),
+          result: stringifyCapped(out, 2000),
+          durationMs: now - prevStepAt,
+          ok: !isErrorResult(out),
+        });
+      }
+      prevStepAt = now;
     },
   });
 

@@ -211,6 +211,7 @@ import { graphStatsRoute } from "./routes/v1/graph.stats";
 import { ontologyQueryRoute } from "./routes/v1/ontology.query";
 import { ontologyNeighborsRoute } from "./routes/v1/ontology.neighbors";
 import { auditLogQueryRoute } from "./routes/v1/audit.log.query";
+import { agentLlmRoute } from "./routes/v1/agent.llm";
 
 export type AppEnv = {
   Variables: {
@@ -480,6 +481,17 @@ orgScoped.route("/ontology/query", ontologyQueryRoute);
 orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);
 orgScoped.route("/audit/log/query", auditLogQueryRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);
+
+// OpenAI-compatible agent LLM proxy (ADR-019 B4): the CLI routes ALL model
+// inference through the platform via `@ai-sdk/openai-compatible` (no BYOK).
+// Auth is the platform API key (Bearer); the key carries org+workspace scope,
+// so this surface sits OUTSIDE the /:org/:workspace path group. The static
+// `/v1/agent/llm` prefix takes priority over the `:org_slug/:workspace_slug`
+// param route in Hono's router. Full path: POST /v1/agent/llm/chat/completions.
+const agentLlmScoped = new Hono<AppEnv>();
+agentLlmScoped.use("*", authMiddleware);
+agentLlmScoped.route("/", agentLlmRoute);
+app.route("/v1/agent/llm", agentLlmScoped);
 
 // Public OAuth callback — HMAC-verified state param is the security boundary.
 // Must NOT be inside the workspace-scoped group (user has no session when GitHub redirects).
