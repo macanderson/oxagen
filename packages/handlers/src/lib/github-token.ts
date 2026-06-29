@@ -64,12 +64,21 @@ export async function resolveGitHubToken(ctx: CapabilityContext): Promise<string
 
     // ── Path 1: GitHub App installation token ────────────────────────────
     if (installationId !== undefined && appId && privateKey) {
-      const { token } = await getInstallationToken({
-        appId,
-        privateKey,
-        installationId,
-      });
-      return token;
+      try {
+        const { token } = await getInstallationToken({
+          appId,
+          privateKey,
+          installationId,
+        });
+        return token;
+      } catch (err) {
+        // Installation token minting failed (e.g. 404 invalid installation ID,
+        // or App misconfiguration). Fall back to OAuth token path.
+        console.warn(
+          `GitHub App token mint failed for installation ${installationId}:`,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
     }
 
     // ── Path 2: stored per-workspace OAuth token (KMS-decrypted) ─────────
