@@ -115,7 +115,6 @@ export function buildProgram(): Command {
           mode,
           bare: opts.pipeline === false,
           verbose: opts.verbose,
-          session,
         };
 
         // --agent: run the prompt as a named agent (its prompt, tools, model).
