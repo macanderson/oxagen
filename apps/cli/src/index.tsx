@@ -9,11 +9,12 @@
  *   oxagen view                Agent dashboard (memory, compile, sessions)
  *   oxagen daemon start|stop|status
  *   oxagen config [key] [value]
+ *
+ * The Commander command tree lives in ./program.ts so the REPL's slash-command
+ * menu can introspect the exact same command set without re-running anything.
  */
 import { createRequire } from "node:module";
-import { Command } from "commander";
-import pkg from "../package.json" with { type: "json" };
-import { parseModeArg, type PermissionMode } from "./agent/permissions.js";
+import { buildProgram } from "./program.js";
 
 // The Oxagen context engine pulls in DuckDB, a native CommonJS dependency that
 // references a bare `require`. Under pure-ESM execution that global is absent, so
@@ -795,7 +796,7 @@ async function main(): Promise<void> {
   // command runs — filling only unset vars, so the shell always wins.
   const { applySettingsToEnv } = await import("./settings/runtime.js");
   applySettingsToEnv();
-  await program.parseAsync(process.argv);
+  await buildProgram().parseAsync(process.argv);
 }
 
 void main();

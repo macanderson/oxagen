@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadSettings, getScopePaths, clearSettingsCache } from "../resolve.js";
+import { loadSettings, getScopePaths, clearSettingsCache, migrateUserSettings } from "../resolve.js";
 import type { OxagenSettings } from "../schema.js";
 
 let dir: string;
@@ -119,5 +119,68 @@ describe("cache", () => {
     expect(loadSettings({ cwd: dir, userSettingsPath: userPath }).settings.model).toBe("v1/model");
     clearSettingsCache();
     expect(loadSettings({ cwd: dir, userSettingsPath: userPath }).settings.model).toBe("v2/model");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Migration / legacy-path fallback (Claude-Code parity path change)
+// ---------------------------------------------------------------------------
+
+describe("migrateUserSettings", () => {
+  let migrationDir: string;
+
+  beforeEach(() => {
+    migrationDir = mkdtempSync(join(tmpdir(), "oxagen-migrate-"));
+  });
+
+  afterEach(() => {
+    rmSync(migrationDir, { recursive: true, force: true });
+  });
+
+  it("copies the legacy file to the canonical path when canonical is absent", () => {
+    const legacy = join(migrationDir, "legacy", "settings.json");
+    const canonical = join(migrationDir, "canonical", "settings.json");
+
+    mkdirSync(join(migrationDir, "legacy"), { recursive: true });
+    writeFileSync(legacy, JSON.stringify({ model: "migrated/model" }), "utf8");
+
+    const migrated = migrateUserSettings(canonical, legacy);
+    expect(migrated).toBe(true);
+    expect(existsSync(canonical)).toBe(true);
+    expect(JSON.parse(readFileSync(canonical, "utf8"))).toMatchObject({ model: "migrated/model" });
+  });
+
+  it("does not overwrite a canonical file that already exists", () => {
+    const legacy = join(migrationDir, "legacy", "settings.json");
+    const canonical = join(migrationDir, "canonical", "settings.json");
+
+    mkdirSync(join(migrationDir, "legacy"), { recursive: true });
+    mkdirSync(join(migrationDir, "canonical"), { recursive: true });
+    writeFileSync(legacy, JSON.stringify({ model: "legacy/model" }), "utf8");
+    writeFileSync(canonical, JSON.stringify({ model: "canonical/model" }), "utf8");
+
+    const migrated = migrateUserSettings(canonical, legacy);
+    expect(migrated).toBe(false);
+    // Canonical content must be untouched
+    expect(JSON.parse(readFileSync(canonical, "utf8"))).toMatchObject({ model: "canonical/model" });
+  });
+
+  it("returns false and does nothing when neither file exists", () => {
+    const legacy = join(migrationDir, "no-such-dir", "settings.json");
+    const canonical = join(migrationDir, "no-such-dir2", "settings.json");
+    const result = migrateUserSettings(canonical, legacy);
+    expect(result).toBe(false);
+    expect(existsSync(canonical)).toBe(false);
+  });
+
+  it("creates parent directories for the canonical path when they are absent", () => {
+    const legacy = join(migrationDir, "legacy.json");
+    const canonical = join(migrationDir, "deep", "nested", "dir", "settings.json");
+
+    writeFileSync(legacy, JSON.stringify({ model: "deep/model" }), "utf8");
+
+    const migrated = migrateUserSettings(canonical, legacy);
+    expect(migrated).toBe(true);
+    expect(existsSync(canonical)).toBe(true);
   });
 });
