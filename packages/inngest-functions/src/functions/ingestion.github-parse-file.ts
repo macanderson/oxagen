@@ -10,6 +10,39 @@ import type { ParsedSymbol } from "@oxagen/ingestion/parsers";
 import { chunkText } from "@oxagen/ingestion/embed";
 import { logger } from "../logger";
 
+// ---------------------------------------------------------------------------
+// Import-path resolution helpers (no Node.js filesystem access in Inngest)
+// ---------------------------------------------------------------------------
+
+/** Common TypeScript/JavaScript source extensions to try when resolving an
+ *  extensionless specifier from a relative import. */
+const IMPORT_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"];
+
+/**
+ * Given a normalised (no `..` segments) relative path without extension,
+ * return the list of candidate concrete paths to MATCH against in Neo4j.
+ * We don't have fs access here, so we emit all plausible resolutions and
+ * let the Cypher MATCH filter to whichever SourceFile node actually exists.
+ */
+function resolveImportCandidates(rawPath: string): string[] {
+  // Normalise out ".." segments and leading slashes.
+  const parts: string[] = [];
+  for (const seg of rawPath.split("/")) {
+    if (seg === "..") { parts.pop(); }
+    else if (seg !== "." && seg !== "") { parts.push(seg); }
+  }
+  const base = parts.join("/");
+  if (!base) return [];
+
+  const hasExt = IMPORT_EXTENSIONS.some((e) => base.endsWith(e));
+  if (hasExt) return [base];
+
+  const candidates: string[] = [];
+  for (const ext of IMPORT_EXTENSIONS) candidates.push(`${base}${ext}`);
+  for (const ext of IMPORT_EXTENSIONS) candidates.push(`${base}/index${ext}`);
+  return candidates;
+}
+
 // Skip files larger than 1000 KB — too expensive to parse + embed.
 const MAX_CONTENT_BYTES = 1000 * 1024;
 // Batch size for symbol upsert to keep Neo4j sessions bounded.
@@ -293,6 +326,110 @@ export const [ingestionGithubParseFile] = createFunction(
                   SET srcd.is_system = true`,
                 { fileNaturalKey: naturalKey, orgId, connectionId },
               );
+            } finally {
+              await session.close();
+            }
+          }),
+        );
+      }
+    }
+
+    // ── Step 5b: Upsert CALLS edges (same-file resolution) ───────────────────
+    // For each call site in the parse result, find the enclosing symbol (caller)
+    // and the callee by name within the same file, then MERGE a :CALLS edge.
+    // Cross-file resolution is a documented follow-up; unresolvable calls are
+    // logged at info level so coverage is visible without crashing the step.
+    if (parseResult.calls && parseResult.calls.length > 0) {
+      await step.run("upsert-call-edges", () =>
+        runInTenantScope({ orgId, workspaceId }, async () => {
+          const session = scopedSession();
+          try {
+            for (const call of parseResult.calls!) {
+              if (!call.enclosingSymbol) continue; // module-level call — no caller node
+              // Match caller + optional callee by name within same file; merge CALLS edge.
+              const result = await session.run(
+                `MATCH (caller:SourceSymbol {fileNaturalKey: $fileNaturalKey, name: $callerName, orgId: $orgId})
+                 OPTIONAL MATCH (callee:SourceSymbol {fileNaturalKey: $fileNaturalKey, name: $calleeName, orgId: $orgId})
+                   WHERE callee <> caller
+                 WITH caller, callee
+                 WHERE callee IS NOT NULL
+                 MERGE (caller)-[c:CALLS]->(callee)
+                 SET c.is_system = true
+                 RETURN count(c) AS merged`,
+                {
+                  fileNaturalKey: naturalKey,
+                  callerName: call.enclosingSymbol,
+                  calleeName: call.callee,
+                  orgId,
+                },
+              );
+              const mergedRaw: unknown = result.records[0]?.get("merged");
+              const merged = typeof mergedRaw === "number" ? mergedRaw : 0;
+              if (merged === 0) {
+                logger.info(
+                  { path, callerName: call.enclosingSymbol, calleeName: call.callee, line: call.line },
+                  "ingestion-github-parse-file: unresolved call (callee not in same file — cross-file follow-up)",
+                );
+              }
+            }
+          } finally {
+            await session.close();
+          }
+        }),
+      );
+    }
+
+    // ── Step 5c: Upsert IMPORTS edges (file → file) ───────────────────────
+    // For each import in the parse result, compute the target SourceFile's
+    // naturalKey (same-repo relative specifiers only) and MERGE an IMPORTS edge.
+    // Bare specifiers (@oxagen/*, react, etc.) are logged but not yet resolved
+    // to cross-repo SourceFile nodes (documented follow-up).
+    if (parseResult.imports && parseResult.imports.length > 0) {
+      // Collect only relative imports (start with ".") for same-repo resolution.
+      const relativeImports = parseResult.imports.filter(({ specifier }) =>
+        specifier.startsWith("."),
+      );
+      const bareImports = parseResult.imports.filter(
+        ({ specifier }) => !specifier.startsWith("."),
+      );
+
+      if (bareImports.length > 0) {
+        logger.info(
+          {
+            path,
+            count: bareImports.length,
+            specifiers: bareImports.slice(0, 5).map(({ specifier }) => specifier),
+          },
+          "ingestion-github-parse-file: bare import specifiers not yet resolved (cross-package follow-up)",
+        );
+      }
+
+      if (relativeImports.length > 0) {
+        await step.run("upsert-import-edges", () =>
+          runInTenantScope({ orgId, workspaceId }, async () => {
+            const session = scopedSession();
+            try {
+              for (const { specifier } of relativeImports) {
+                // Resolve the specifier relative to the current file's directory.
+                // We don't have filesystem access here, so we try the most common
+                // extensions and create edges that MATCH only when both nodes exist.
+                const dirParts = path.split("/").slice(0, -1);
+                const specParts = specifier.split("/");
+                // Strip leading ./ or ../
+                const rawPath = [...dirParts, ...specParts].join("/");
+                const candidates = resolveImportCandidates(rawPath);
+
+                for (const candidate of candidates) {
+                  const targetNaturalKey = `github:${connectionId}:${owner}/${repo}:${candidate}`;
+                  await session.run(
+                    `MATCH (src:SourceFile {naturalKey: $srcKey, orgId: $orgId})
+                     MATCH (tgt:SourceFile {naturalKey: $tgtKey, orgId: $orgId})
+                     MERGE (src)-[imp:IMPORTS]->(tgt)
+                     SET imp.is_system = true`,
+                    { srcKey: naturalKey, tgtKey: targetNaturalKey, orgId },
+                  );
+                }
+              }
             } finally {
               await session.close();
             }
