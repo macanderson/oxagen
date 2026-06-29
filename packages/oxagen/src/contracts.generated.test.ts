@@ -41,7 +41,8 @@ function barrelImportBases(): string[] {
   const src = readFileSync(BARREL, "utf8");
   const bases: string[] = [];
   for (const m of src.matchAll(/^import\s+"\.\/contracts\/([^"]+)";$/gm)) {
-    bases.push(m[1]);
+    const base = m[1];
+    if (base) bases.push(base);
   }
   return bases.sort();
 }
