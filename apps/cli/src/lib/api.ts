@@ -11,7 +11,7 @@
  *     REPL, where a thrown error is caught and rendered into the TUI rather than
  *     tearing the whole session down with process.exit.
  */
-import { getApiUrl, getOrgId, getToken, getWorkspaceId } from "./config.js";
+import { getApiUrl, getToken, getOrgId, getWorkspaceId } from "./config.js";
 
 interface ApiContext {
   apiUrl: string;
@@ -51,6 +51,78 @@ function requireApiContext(): ApiContext {
     process.exit(1);
   }
   return ctx;
+}
+
+/**
+ * GET an org-scoped capability and return the parsed JSON. Throws `ApiError`
+ * on missing scope, network failure, or a non-2xx response — never exits.
+ */
+export async function apiGetOrThrow<T>(
+  path: string,
+  query?: Record<string, unknown>,
+): Promise<T> {
+  const ctx = resolveApiContext();
+  if (!ctx) throw new ApiError(NOT_LOGGED_IN);
+  const url = new URL(`${ctx.apiUrl}/v1/${ctx.org}/${ctx.ws}/${path}`);
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== null && value !== undefined) {
+        url.searchParams.append(key, String(value));
+      }
+    }
+  }
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${ctx.token}`,
+      },
+    });
+  } catch (err) {
+    throw new ApiError(
+      `Network error calling ${path}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new ApiError(`Error ${res.status} from ${path}: ${text}`, res.status);
+  }
+  return (await res.json()) as T;
+}
+
+/**
+ * POST a user-scoped capability (token-only, no org/workspace) and return the
+ * parsed JSON. Throws `ApiError` on missing token, network failure, or a
+ * non-2xx response — never exits.
+ */
+export async function userApiPostOrThrow<T>(
+  path: string,
+  body: unknown,
+): Promise<T> {
+  const token = getToken();
+  if (!token) throw new ApiError(NOT_LOGGED_IN);
+  const apiUrl = getApiUrl();
+  let res: Response;
+  try {
+    res = await fetch(`${apiUrl}/v1/user/${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body ?? {}),
+    });
+  } catch (err) {
+    throw new ApiError(
+      `Network error calling ${path}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new ApiError(`Error ${res.status} from ${path}: ${text}`, res.status);
+  }
+  return (await res.json()) as T;
 }
 
 /**

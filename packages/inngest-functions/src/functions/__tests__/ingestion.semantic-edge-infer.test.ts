@@ -194,15 +194,25 @@ describe("ingestion.semantic-edge-infer Inngest function", () => {
     expect(statuses).toContain("pending");    // 0.6 edge
   });
 
-  it("creates permanent :SEMANTIC_EDGE relationships for auto-accepted edges", async () => {
+  it("materialises permanent relationships typed by the inferred kind (never :SEMANTIC_EDGE)", async () => {
     const step = makeStep();
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
+    // The relationship-materialisation MERGE is the one carrying `inferredEdgeId`
+    // (the InferredEdge-node MERGE does not). Both HIGH_CONFIDENCE_EDGES auto-accept.
     const relMergeCalls = mocks.scopedSessionRun.mock.calls.filter((c: unknown[]) =>
-      typeof c[0] === "string" && (c[0] as string).includes("SEMANTIC_EDGE"),
+      typeof c[0] === "string" && (c[0] as string).includes("inferredEdgeId"),
     );
-    // Both HIGH_CONFIDENCE_EDGES are auto-accepted.
     expect(relMergeCalls.length).toBe(2);
+
+    const cyphers = relMergeCalls.map((c: unknown[]) => c[0] as string);
+    // Typed by the inferred relationship kind itself, with inferred-origin props —
+    // never the generic :SEMANTIC_EDGE label.
+    expect(cyphers.some((q) => q.includes("[r:IMPLEMENTS"))).toBe(true);
+    expect(cyphers.some((q) => q.includes("[r:BELONGS_TO"))).toBe(true);
+    expect(cyphers.every((q) => !q.includes("SEMANTIC_EDGE"))).toBe(true);
+    expect(cyphers.every((q) => q.includes("r.inferred    = true"))).toBe(true);
+    expect(cyphers.every((q) => q.includes("r.origin      = 'semantic'"))).toBe(true);
   });
 
   it("does NOT create permanent relationship for pending edges", async () => {
@@ -215,7 +225,7 @@ describe("ingestion.semantic-edge-infer Inngest function", () => {
     await capturedHandler!({ event: { data: BASE_EVENT }, step });
 
     const relMergeCalls = mocks.scopedSessionRun.mock.calls.filter((c: unknown[]) =>
-      typeof c[0] === "string" && (c[0] as string).includes("SEMANTIC_EDGE"),
+      typeof c[0] === "string" && (c[0] as string).includes("inferredEdgeId"),
     );
     expect(relMergeCalls.length).toBe(0);
   });

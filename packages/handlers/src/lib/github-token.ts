@@ -1,7 +1,7 @@
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
-import { decrypt, createIngestionCryptoAdapter } from "@oxagen/crypto";
+import { decrypt, resolveIngestionCryptoAdapterForKeyId } from "@oxagen/crypto";
 import { getInstallationToken } from "@oxagen/github";
 
 // ---------------------------------------------------------------------------
@@ -95,7 +95,10 @@ export async function resolveGitHubToken(ctx: CapabilityContext): Promise<string
 
       if (account?.accessTokenEnc) {
         const enc = account.accessTokenEnc as EncryptedToken;
-        const { adapter } = createIngestionCryptoAdapter();
+        // Route by the envelope's stored keyId, NOT the current provider env
+        // var — the token may have been wrapped under a different provider
+        // (e.g. AWS KMS) than this runtime is currently configured for.
+        const { adapter } = resolveIngestionCryptoAdapterForKeyId(enc.keyId);
         const plain = await decrypt(
           Buffer.from(enc.ciphertext, "base64"),
           enc.keyId,

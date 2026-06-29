@@ -53,6 +53,7 @@ const mocks = vi.hoisted(() => ({
   encrypt: vi.fn(),
   decrypt: vi.fn(),
   createIngestionCryptoAdapter: vi.fn(),
+  resolveIngestionCryptoAdapterForKeyId: vi.fn(),
   // Env
   requireEnv: vi.fn(),
   // Fetch
@@ -125,6 +126,7 @@ vi.mock("@oxagen/crypto", () => ({
   encrypt: mocks.encrypt,
   decrypt: mocks.decrypt,
   createIngestionCryptoAdapter: mocks.createIngestionCryptoAdapter,
+  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
 }));
 
 vi.mock("@oxagen/config/env", async (importOriginal) => {
@@ -232,7 +234,8 @@ function buildValidState(
   overrides: Partial<{
     orgId: string;
     workspaceId: string;
-    connectionId: string;
+    connectionId: string | null;
+    returnTo: "settings" | "sources";
     expiresAt: number;
     nonce: string;
   }> = {},
@@ -266,6 +269,10 @@ beforeEach(() => {
     adapter: {},
     keyId: "ingestion:env:v1",
   });
+  mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValue({
+    adapter: {},
+    keyId: "ingestion:env:v1",
+  });
   mocks.encrypt.mockResolvedValue(Buffer.from("encrypted-token"));
   mocks.decrypt.mockResolvedValue(Buffer.from("decrypted-access-token"));
 
@@ -288,11 +295,21 @@ beforeEach(() => {
 // ── GET /connections/github/auth-url ──────────────────────────────────────────
 
 describe("GET /connections/github/auth-url", () => {
-  it("returns 400 when connectionId is missing", async () => {
-    const res = await authGet(`${BASE}/auth-url`);
-    expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
-    expect(body.error).toContain("connectionId");
+  it("works WITHOUT a connectionId (settings-level connect) and encodes a null connectionId", async () => {
+    // The install now lives in workspace settings (1 workspace = 1 app install),
+    // so auth-url no longer requires a pre-created source_connection.
+    const res = await authGet(`${BASE}/auth-url?returnTo=settings`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { authUrl: string };
+    expect(body.authUrl).toContain(`github.com/apps/${APP_SLUG}/installations/new`);
+
+    const stateParam = new URL(body.authUrl).searchParams.get("state")!;
+    const encoded = stateParam.slice(0, stateParam.lastIndexOf("."));
+    const payload = JSON.parse(
+      Buffer.from(encoded, "base64url").toString("utf8"),
+    ) as { connectionId: string | null; returnTo: string };
+    expect(payload.connectionId).toBeNull();
+    expect(payload.returnTo).toBe("settings");
   });
 
   it("returns 503 when GITHUB_APP_SLUG is missing", async () => {
@@ -379,6 +396,77 @@ describe("GET /connections/github/auth-url", () => {
 
     expect(expiresAt).toBeGreaterThanOrEqual(before + 10 * 60 * 1000 - 100);
     expect(expiresAt).toBeLessThanOrEqual(after + 10 * 60 * 1000 + 100);
+  });
+});
+
+// ── GET /connections/github/status ────────────────────────────────────────────
+
+describe("GET /connections/github/status", () => {
+  it("returns 503 when the GitHub App is not configured", async () => {
+    mocks.requireEnv.mockReturnValue({ ...DEFAULT_ENV, GITHUB_APP_SLUG: undefined });
+    const res = await authGet(`${BASE}/status`);
+    expect(res.status).toBe(503);
+  });
+
+  it("reports not-connected (with an install URL) when the org has no GitHub OAuth account", async () => {
+    // Default DB returns no oauth_accounts row → not connected, but the settings
+    // UI still needs a connect URL.
+    const res = await authGet(`${BASE}/status`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      connected: boolean;
+      installations: unknown[];
+      installUrl: string;
+    };
+    expect(body.connected).toBe(false);
+    expect(body.installations).toHaveLength(0);
+    expect(body.installUrl).toContain(`github.com/apps/${APP_SLUG}/installations/new`);
+  });
+
+  it("reports connected with the installations the token can reach", async () => {
+    mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+      fn(makeTxChain([{ id: "oa1", accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+    );
+    mocks.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        total_count: 1,
+        installations: [
+          {
+            id: 444,
+            account: { login: "connected-org", type: "Organization", avatar_url: "https://gh.com/444" },
+            repository_selection: "selected",
+            html_url: "https://github.com/organizations/connected-org/settings/installations/444",
+          },
+        ],
+      }),
+    });
+
+    const res = await authGet(`${BASE}/status`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      connected: boolean;
+      installations: Array<{ accountLogin: string; htmlUrl: string | null }>;
+      manageUrl: string;
+      installUrl: string;
+    };
+    expect(body.connected).toBe(true);
+    expect(body.installations).toHaveLength(1);
+    expect(body.installations[0]!.accountLogin).toBe("connected-org");
+    expect(body.installUrl).toContain("installations/new");
+  });
+
+  it("reports not-connected when the user token has been revoked (GitHub 401)", async () => {
+    mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+      fn(makeTxChain([{ id: "oa1", accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+    );
+    mocks.fetch.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
+
+    const res = await authGet(`${BASE}/status`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { connected: boolean };
+    expect(body.connected).toBe(false);
   });
 });
 
@@ -559,6 +647,38 @@ describe("GET /oauth/github/callback", () => {
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
+  it("settings connect (null connectionId): stores the org token and redirects to settings/github", async () => {
+    mocks.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: "ghs_settings", token_type: "Bearer", scope: "repo" }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ id: 7, login: "owner" }) });
+
+    // No connection lookup (connectionId is null). withSystemDb order:
+    // oauth upsert, org slug, ws slug. There is NO connection UPDATE.
+    mocks.withSystemDb
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ id: "oauth-settings" }]) as TxLike))
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ slug: "my-org" }]) as TxLike))
+      .mockImplementationOnce((fn: Parameters<DbFn>[0]) => fn(makeTxChain([{ slug: "my-ws" }]) as TxLike));
+
+    const res = await makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState({ connectionId: null, returnTo: "settings" }),
+      installation_id: "555",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    const location = res.headers.get("location") ?? "";
+    expect(location).toContain("/my-org/my-ws/settings/github");
+    expect(location).toContain("github_connected=1");
+    expect(location).not.toContain("connectionId");
+    // Token was stored even though no connection was attached.
+    expect(mocks.encrypt).toHaveBeenCalled();
+  });
+
   it("merges the installation_id into deliveryConfig without clobbering existing keys", async () => {
     mocks.fetch
       .mockResolvedValueOnce({
@@ -604,11 +724,39 @@ describe("GET /oauth/github/callback", () => {
 // ── GET /connections/github/installations ─────────────────────────────────────
 
 describe("GET /connections/github/installations", () => {
-  it("returns 400 when connectionId is missing", async () => {
+  it("WITHOUT a connectionId, resolves the workspace token (404 when the org has no GitHub OAuth account)", async () => {
+    // Settings + post-install sources picker omit connectionId; the resolver
+    // falls back to the org's GitHub OAuth account, which is absent here.
     const res = await authGet(`${BASE}/installations`);
-    expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
-    expect(body.error).toContain("connectionId");
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("not connected");
+  });
+
+  it("WITHOUT a connectionId, lists installations using the workspace's org GitHub token", async () => {
+    mocks.withTenantDb.mockImplementationOnce((fn: Parameters<DbFn>[0]) =>
+      fn(makeTxChain([{ id: "oa1", accessTokenEnc: { keyId: "k1", ciphertext: "Y2lwaGVydGV4dA==" } }]) as TxLike),
+    );
+    mocks.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        total_count: 1,
+        installations: [
+          {
+            id: 333,
+            account: { login: "ws-org", type: "Organization", avatar_url: "https://gh.com/333" },
+            repository_selection: "all",
+          },
+        ],
+      }),
+    });
+
+    const res = await authGet(`${BASE}/installations`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { installations: Array<{ accountLogin: string }> };
+    expect(body.installations).toHaveLength(1);
+    expect(body.installations[0]!.accountLogin).toBe("ws-org");
   });
 
   it("returns 404 when connection is not found in DB", async () => {
@@ -788,11 +936,13 @@ describe("GET /connections/github/installations/:id/repositories", () => {
   const INSTALL_ID = "12345";
   const PATH = `${BASE}/installations/${INSTALL_ID}/repositories`;
 
-  it("returns 400 when connectionId is missing", async () => {
+  it("WITHOUT a connectionId, resolves the workspace token (404 when the org has no GitHub OAuth account)", async () => {
+    // connectionId is now optional here too — the post-install sources picker
+    // lists repos using the workspace's org-level token.
     const res = await authGet(PATH);
-    expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
-    expect(body.error).toContain("connectionId");
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("not connected");
   });
 
   it("returns 404 when connection is not found", async () => {

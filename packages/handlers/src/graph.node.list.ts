@@ -67,35 +67,36 @@ export const graphNodeListHandler: CapabilityHandler<typeof graphNodeList> = asy
         offset: BigInt(input.offset),
       };
 
-      // Total count for the same filter — drives hasMore and the explorer UI.
-      const countResult = await session.run(
-        `MATCH (n:GraphNode)
-         ${whereClause}
-         RETURN count(n) AS total`,
-        params,
-      );
+      // Parallelize count and page queries (independent, same filter parameters)
+      const [countResult, pageResult] = await Promise.all([
+        session.run(
+          `MATCH (n:GraphNode)
+           ${whereClause}
+           RETURN count(n) AS total`,
+          params,
+        ),
+        session.run(
+          // coalesce guards against nodes written without explicit display fields
+          // (e.g. LLM-inferred placeholder concepts carry `type`/`name` instead of
+          // `label`/`displayName`). The output contract requires non-null strings,
+          // so a single such node would otherwise fail validation and blank the
+          // entire explorer. Fall back type→label and name→displayName→publicId.
+          `MATCH (n:GraphNode)
+           ${whereClause}
+           RETURN
+             n.publicId                                      AS id,
+             coalesce(n.label, n.type, 'Node')               AS label,
+             coalesce(n.displayName, n.name, n.publicId)     AS displayName,
+             n.properties                                    AS properties,
+             n.sourceId                                      AS sourceId,
+             n.createdAt                                     AS createdAt
+           ORDER BY n.createdAt DESC, coalesce(n.displayName, n.name, n.publicId) ASC
+           SKIP $offset
+           LIMIT $limit`,
+          params,
+        ),
+      ]);
       total = toNumber(countResult.records[0]?.get("total"));
-
-      const pageResult = await session.run(
-        // coalesce guards against nodes written without explicit display fields
-        // (e.g. LLM-inferred placeholder concepts carry `type`/`name` instead of
-        // `label`/`displayName`). The output contract requires non-null strings,
-        // so a single such node would otherwise fail validation and blank the
-        // entire explorer. Fall back type→label and name→displayName→publicId.
-        `MATCH (n:GraphNode)
-         ${whereClause}
-         RETURN
-           n.publicId                                      AS id,
-           coalesce(n.label, n.type, 'Node')               AS label,
-           coalesce(n.displayName, n.name, n.publicId)     AS displayName,
-           n.properties                                    AS properties,
-           n.sourceId                                      AS sourceId,
-           n.createdAt                                     AS createdAt
-         ORDER BY n.createdAt DESC, coalesce(n.displayName, n.name, n.publicId) ASC
-         SKIP $offset
-         LIMIT $limit`,
-        params,
-      );
 
       for (const record of pageResult.records) {
         const rawProperties = record.get("properties") as string | null;

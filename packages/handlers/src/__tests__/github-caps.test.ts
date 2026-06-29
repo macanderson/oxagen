@@ -200,6 +200,35 @@ describe("repo.create handler", () => {
       });
     }),
   );
+
+  it(
+    "creates in the personal account (org undefined) when org is omitted",
+    withToken(async () => {
+      mocks.createRepoInOrg.mockResolvedValueOnce({
+        fullName: "macanderson/hello-world",
+        htmlUrl: "https://github.com/macanderson/hello-world",
+        defaultBranch: "main",
+      });
+
+      const result = await repoCreateHandler(
+        { name: "hello-world", autoInit: true },
+        ctx,
+      );
+
+      expect(mocks.createRepoInOrg).toHaveBeenCalledWith({
+        org: undefined,
+        name: "hello-world",
+        description: undefined,
+        private: undefined,
+        autoInit: true,
+      });
+      expect(result).toEqual({
+        fullName: "macanderson/hello-world",
+        htmlUrl: "https://github.com/macanderson/hello-world",
+        defaultBranch: "main",
+      });
+    }),
+  );
 });
 
 // ── 4: repo.file.put handler ──────────────────────────────────────────────────

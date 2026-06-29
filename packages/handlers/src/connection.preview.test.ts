@@ -2,7 +2,7 @@
  * connection.preview handler tests.
  *
  * Strategy: mock @oxagen/database (withTenantDb), @oxagen/crypto (decrypt,
- * createIngestionCryptoAdapter), and @oxagen/ingestion/connectors (getConnector).
+ * resolveIngestionCryptoAdapterForKeyId), and @oxagen/ingestion/connectors (getConnector).
  * Assert:
  *   - connection not found → throws HTTPException 404
  *   - decrypts auth credentials and calls connector.previewRecordTypes
@@ -38,9 +38,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 vi.mock("@oxagen/crypto", () => ({
-  createIngestionCryptoAdapter: () => ({
+  resolveIngestionCryptoAdapterForKeyId: (keyId: string) => ({
     adapter: {},
-    keyId: "test-key-id",
+    keyId,
   }),
   decrypt: mocks.decrypt,
   encrypt: vi.fn(),

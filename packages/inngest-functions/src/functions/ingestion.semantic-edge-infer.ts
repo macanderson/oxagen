@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createFunction } from "../create-function";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology/tenant";
+import { sanitizeRelationshipType } from "@oxagen/ontology/labels";
 import { generateObjectFor } from "@oxagen/ai";
 import { logger } from "../logger";
 
@@ -51,7 +52,9 @@ const edgeInferenceSchema = z.object({
  *   2. Call the LLM via @oxagen/ai with the entity's property snapshot.
  *   3. Write InferredEdge nodes to Neo4j with approvalStatus = "pending".
  *      Edges at or above a 0.85 auto-accept threshold are written as
- *      "approved" and immediately materialised as :SEMANTIC_EDGE relationships.
+ *      "approved" and immediately materialised as permanent relationships typed
+ *      by the inferred relationship kind itself (e.g. :IMPLEMENTS, :BELONGS_TO),
+ *      with `inferred: true` / `origin: "semantic"` properties marking provenance.
  *
  * Concurrency is limited to 8 parallel inferences per org to avoid thundering
  * herd against the AI Gateway after a large batch sync.
@@ -174,8 +177,15 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
             );
 
             if (isAutoAccepted) {
-              // Materialise as a permanent :SEMANTIC_EDGE relationship immediately.
-              // Find or create the target placeholder node, then create the relationship.
+              // Materialise a permanent relationship typed by the inferred kind
+              // itself (e.g. :IMPLEMENTS, :BELONGS_TO) so the graph reads
+              // descriptively — never a generic :SEMANTIC_EDGE. The inferred
+              // origin is carried on `r.inferred` / `r.origin`, and `r.confidence`
+              // (< 1.0 here) further distinguishes auto-accepted edges from
+              // human-authored ones. Relationship types cannot be parameterized in
+              // Cypher, so sanitize + interpolate. Find or create the target
+              // placeholder node, then create the relationship.
+              const relType = sanitizeRelationshipType(edge.relationshipType);
               await sess.run(
                 `MATCH (src:EntityNode {publicId: $sourceNodeId, orgId: $orgId})
                  MERGE (tgt:GraphNode {
@@ -194,8 +204,10 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
                    tgt.label       = coalesce(tgt.label, $targetType),
                    tgt.displayName = coalesce(tgt.displayName, $targetName)
                  WITH src, tgt
-                 MERGE (src)-[r:SEMANTIC_EDGE {inferredEdgeId: $edgeId}]->(tgt)
+                 MERGE (src)-[r:${relType} {inferredEdgeId: $edgeId}]->(tgt)
                  ON CREATE SET
+                   r.inferred    = true,
+                   r.origin      = 'semantic',
                    r.type        = $relationshipType,
                    r.confidence  = $confidence,
                    r.approvedBy  = $approvedBy,

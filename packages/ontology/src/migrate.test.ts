@@ -28,25 +28,38 @@ vi.mock("node:url", () => ({
 // in one place so the smart mock and assertions agree on what to match.
 const DUP_CHECK = "RETURN count(pid) AS groups, sum(c - 1) AS removable";
 const MERGE_CALL = "apoc.refactor.mergeNodes";
+// The legacy :SEMANTIC_EDGE relabel pre-check + the APOC call that performs it.
+const LEGACY_COUNT = "AS legacyEdges";
+const SETTYPE_CALL = "apoc.refactor.setType";
 
 // How many duplicate KnowledgeNode groups the mocked DB reports. Tests tweak it
 // to exercise the no-op path (0) vs. the dedup path (>0).
 let dupGroups = 0;
 // When set, the merge call rejects with this error (simulates a missing APOC plugin).
 let mergeError: Error | null = null;
+// How many legacy :SEMANTIC_EDGE relationships the mocked DB reports.
+let legacyEdges = 0;
+// When set, the setType relabel rejects with this error (missing APOC plugin).
+let relabelError: Error | null = null;
 
 function makeRecord(values: Record<string, number>) {
   return { get: (key: string) => values[key] };
 }
 
 // Stub the client so migrate() never opens a real Neo4j connection. The mock is
-// query-aware: the dup-check returns a count record; everything else is a no-op.
+// query-aware: the count pre-checks return count records; everything else is a no-op.
 const runFn = vi.fn(async (query: string) => {
   if (query.includes(DUP_CHECK)) {
     return { records: dupGroups > 0 ? [makeRecord({ groups: dupGroups, removable: dupGroups })] : [] };
   }
   if (query.includes(MERGE_CALL) && mergeError) {
     throw mergeError;
+  }
+  if (query.includes(LEGACY_COUNT)) {
+    return { records: legacyEdges > 0 ? [makeRecord({ legacyEdges })] : [] };
+  }
+  if (query.includes(SETTYPE_CALL) && relabelError) {
+    throw relabelError;
   }
   return { records: [] };
 });
@@ -72,12 +85,15 @@ describe("migrate() (@oxagen/ontology)", () => {
     closeFn.mockClear();
     dupGroups = 0;
     mergeError = null;
+    legacyEdges = 0;
+    relabelError = null;
   });
 
   it("runs the dup-check then one session.run() per non-empty, non-comment statement", async () => {
     await migrate();
-    // 1 dedupe pre-check (no duplicates) + 2 real schema statements.
-    expect(runFn).toHaveBeenCalledTimes(3);
+    // 1 dedupe pre-check (no duplicates) + 2 real schema statements +
+    // 1 legacy :SEMANTIC_EDGE relabel pre-check (no legacy edges → short-circuits).
+    expect(runFn).toHaveBeenCalledTimes(4);
   });
 
   it("passes each Cypher statement as an argument to session.run()", async () => {
@@ -110,6 +126,8 @@ describe("dedupeLegacyKnowledgeNodes (via migrate behaviour)", () => {
     closeFn.mockClear();
     dupGroups = 0;
     mergeError = null;
+    legacyEdges = 0;
+    relabelError = null;
   });
 
   it("does NOT issue the apoc merge call when there are no duplicate publicIds", async () => {
@@ -139,11 +157,58 @@ describe("dedupeLegacyKnowledgeNodes (via migrate behaviour)", () => {
   });
 });
 
+describe("relabelLegacySemanticEdges (via migrate behaviour)", () => {
+  beforeEach(() => {
+    runFn.mockClear();
+    closeFn.mockClear();
+    dupGroups = 0;
+    mergeError = null;
+    legacyEdges = 0;
+    relabelError = null;
+  });
+
+  it("does NOT issue the apoc setType call when there are no legacy :SEMANTIC_EDGE edges", async () => {
+    legacyEdges = 0;
+    await migrate();
+    expect(schemaCalls().some((c) => c.includes(SETTYPE_CALL))).toBe(false);
+  });
+
+  it("issues the apoc setType relabel when legacy :SEMANTIC_EDGE edges exist", async () => {
+    legacyEdges = 5;
+    await migrate();
+    const calls = schemaCalls();
+    expect(calls.some((c) => c.includes(SETTYPE_CALL))).toBe(true);
+    // The relabel runs AFTER the schema statements (back-fill, not a prerequisite).
+    const relabelIdx = calls.findIndex((c) => c.includes(SETTYPE_CALL));
+    const constraintIdx = calls.findIndex((c) => c.includes("CREATE CONSTRAINT a"));
+    expect(relabelIdx).toBeGreaterThan(constraintIdx);
+  });
+
+  it("relabels to the descriptive type and stamps inferred/origin provenance", async () => {
+    legacyEdges = 3;
+    await migrate();
+    const relabel = schemaCalls().find((c) => c.includes(SETTYPE_CALL))!;
+    expect(relabel).toContain("rel.inferred = true");
+    expect(relabel).toContain("rel.origin");
+    expect(relabel).toContain("RELATED_TO"); // fallback path present in the Cypher
+  });
+
+  it("throws an actionable error (mentioning APOC) if the relabel fails", async () => {
+    legacyEdges = 2;
+    relabelError = new Error("There is no procedure with the name `apoc.refactor.setType`");
+    await expect(migrate()).rejects.toThrow(/APOC/);
+    // Session is still closed on this failure path.
+    expect(closeFn).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("splitStatements (via migrate behaviour)", () => {
   beforeEach(() => {
     runFn.mockClear();
     dupGroups = 0;
     mergeError = null;
+    legacyEdges = 0;
+    relabelError = null;
   });
 
   it("strips comment-only lines before splitting", async () => {

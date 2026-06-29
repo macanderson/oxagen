@@ -2,7 +2,7 @@ import { NonRetriableError } from "@oxagen/functions";
 import { createFunction } from "../create-function";
 import { withSystemDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
-import { createIngestionCryptoAdapter, decrypt } from "@oxagen/crypto";
+import { resolveIngestionCryptoAdapterForKeyId, decrypt } from "@oxagen/crypto";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { upsertSourceConnectionMeta } from "@oxagen/ingestion/mutations";
 import { logger } from "../logger";
@@ -138,7 +138,11 @@ export const [ingestionGithubInitialSync] = createFunction(
         throw new Error(`ingestion-github-initial-sync: no oauth token for connectionId=${connectionId}`);
       }
 
-      const cryptoAdapter = createIngestionCryptoAdapter();
+      // Route by the envelope's stored keyId, not the current provider env var,
+      // so tokens wrapped under a previous INGESTION_CRYPTO_PROVIDER still decrypt.
+      const cryptoAdapter = resolveIngestionCryptoAdapterForKeyId(
+        row.access_token_enc.keyId,
+      );
       const cipherBuf = Buffer.from(row.access_token_enc.ciphertext, "base64");
       const decrypted: unknown = await decrypt(cipherBuf, cryptoAdapter.keyId, {
         adapter: cryptoAdapter.adapter,

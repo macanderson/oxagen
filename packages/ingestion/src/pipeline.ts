@@ -72,16 +72,11 @@ export async function runPipeline(
   event: RawIngestEvent,
   ctx: PipelineContext,
 ): Promise<PipelineResult | FilteredResult | null> {
-  // Load delivery config once if the context supports it
-  const deliveryConfig: DeliveryConfig | null =
-    ctx.getDeliveryConfig ? await ctx.getDeliveryConfig(event.connectionId) : null;
-
-  // §8 step 1: load the pinned schema active vocabulary ONCE (null when no
-  // version is pinned → registry inert). Threaded to the validation seam in
-  // upsertEntityNode (via resolveEntity) and to grounding (scheduleInference).
-  const pinnedSchema: PinnedSchema | null = ctx.getPinnedSchema
-    ? await ctx.getPinnedSchema(event.orgId, event.workspaceId)
-    : null;
+  // Parallelize independent I/O operations: delivery config and pinned schema
+  const [deliveryConfig, pinnedSchema] = await Promise.all([
+    ctx.getDeliveryConfig ? ctx.getDeliveryConfig(event.connectionId) : Promise.resolve(null),
+    ctx.getPinnedSchema ? ctx.getPinnedSchema(event.orgId, event.workspaceId) : Promise.resolve(null),
+  ]);
 
   // ── Stage 1: Record type filter ───────────────────────────────────────────
   const recordTypeFilters = deliveryConfig?.recordTypeFilters ?? [];

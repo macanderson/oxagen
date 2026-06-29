@@ -1,6 +1,8 @@
 # repo.create
 
-Create a new GitHub repository in an organization the user owns.
+Create a new GitHub repository. Omit `org` to create it in the connected user's
+personal account; pass `org` only to create it inside a GitHub organisation the
+user belongs to.
 
 ## Mode
 **sync**
@@ -12,7 +14,7 @@ Create a new GitHub repository in an organization the user owns.
 ## Input
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `org` | string | yes | GitHub organisation slug to create the repository in |
+| `org` | string | no | GitHub organisation slug to create the repository in. Omit to create the repository in the connected user's personal account. |
 | `name` | string | yes | Repository name |
 | `description` | string | no | Short repository description |
 | `private` | boolean | no | Whether the repository is private (default: `false`) |
@@ -50,11 +52,26 @@ Content-Type: application/json
 }
 ```
 
+**Personal-account request (omit `org`):**
+```http
+POST /v1/acme/default/repos
+Content-Type: application/json
+
+{
+  "name": "hello-world",
+  "autoInit": true
+}
+```
+
+Creates `hello-world` in the connected user's personal account
+(`POST /user/repos`), e.g. `macanderson/hello-world`.
+
 ## Notes
 - **Access:** Owner or Admin at org level; Owner or Member at workspace level.
 - **Risk level:** high — creates a persistent resource in a third-party system.
 - The caller must have a valid GitHub credential stored via `plugin.credential.set_secret` for the GitHub integration.
-- Repository names must be unique within the organisation.
+- **`org` is optional.** With `org`, the repo is created in that organisation (`POST /orgs/{org}/repos`); without it, in the connected user's personal account (`POST /user/repos`). Passing a personal username as `org` 404s — a user is not an organisation — so leave `org` empty for personal repos.
+- Repository names must be unique within the target account (org or personal).
 
 ## Related
 - `repo.fork` — fork an existing repository instead of creating a fresh one

@@ -1,7 +1,12 @@
 import { createFunction } from "../create-function";
 import { withSystemDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
-import { createIngestionCryptoAdapter, decrypt, encrypt } from "@oxagen/crypto";
+import {
+  createIngestionCryptoAdapter,
+  resolveIngestionCryptoAdapterForKeyId,
+  decrypt,
+  encrypt,
+} from "@oxagen/crypto";
 import { requireEnv } from "@oxagen/config";
 import { logger } from "../logger";
 
@@ -417,7 +422,11 @@ export const [ingestionOauthRefresh] = createFunction(
     );
 
     // ── Step 2: Refresh each expiring token ──────────────────────────────────
-    const cryptoAdapter = createIngestionCryptoAdapter();
+    // Re-encryption uses the CURRENT provider so refreshed tokens lazily migrate
+    // to the active INGESTION_CRYPTO_PROVIDER. Decryption, by contrast, must use
+    // the adapter that matches each row's STORED keyId (resolved per-row below) —
+    // a row may have been wrapped under a different provider than is active now.
+    const writeAdapter = createIngestionCryptoAdapter();
 
     for (const account of expiringAccounts) {
       await step.run(`refresh-token-${account.id}`, async () => {
@@ -449,8 +458,10 @@ export const [ingestionOauthRefresh] = createFunction(
 
         let decryptedRefreshToken: string;
         try {
-          const decryptedRaw: unknown = await decrypt(cipherBuf, cryptoAdapter.keyId, {
-            adapter: cryptoAdapter.adapter,
+          // Select the adapter by the stored keyId, not the active provider.
+          const readAdapter = resolveIngestionCryptoAdapterForKeyId(envelope.keyId);
+          const decryptedRaw: unknown = await decrypt(cipherBuf, envelope.keyId, {
+            adapter: readAdapter.adapter,
           });
           decryptedRefreshToken = Buffer.isBuffer(decryptedRaw)
             ? decryptedRaw.toString("utf8")
@@ -540,22 +551,22 @@ export const [ingestionOauthRefresh] = createFunction(
         }
 
         // ── Re-encrypt the new access token ──────────────────────────────────
-        const newAccessCipher = await encrypt(parsed.accessToken, cryptoAdapter.keyId, {
-          adapter: cryptoAdapter.adapter,
+        const newAccessCipher = await encrypt(parsed.accessToken, writeAdapter.keyId, {
+          adapter: writeAdapter.adapter,
         });
         const newAccessEnc = {
-          keyId: cryptoAdapter.keyId,
+          keyId: writeAdapter.keyId,
           ciphertext: newAccessCipher.toString("base64"),
         };
 
         // ── Re-encrypt the new refresh token (when rotated) ──────────────────
         let newRefreshEnc: { keyId: string; ciphertext: string } | null = null;
         if (parsed.refreshToken) {
-          const newRefreshCipher = await encrypt(parsed.refreshToken, cryptoAdapter.keyId, {
-            adapter: cryptoAdapter.adapter,
+          const newRefreshCipher = await encrypt(parsed.refreshToken, writeAdapter.keyId, {
+            adapter: writeAdapter.adapter,
           });
           newRefreshEnc = {
-            keyId: cryptoAdapter.keyId,
+            keyId: writeAdapter.keyId,
             ciphertext: newRefreshCipher.toString("base64"),
           };
         }

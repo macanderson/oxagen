@@ -2,7 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { connectionPreview } from "@oxagen/oxagen/contracts/connection.preview";
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
-import { createIngestionCryptoAdapter, decrypt } from "@oxagen/crypto";
+import { resolveIngestionCryptoAdapterForKeyId, decrypt } from "@oxagen/crypto";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import type { AuthCredential } from "@oxagen/ingestion/connectors";
 import { HTTPException } from "hono/http-exception";
@@ -47,11 +47,13 @@ export const connectionPreviewHandler: CapabilityHandler<typeof connectionPrevie
     throw new HTTPException(404, { message: "Connection not found" });
   }
 
-  // Decrypt auth credentials
-  const { adapter, keyId } = createIngestionCryptoAdapter();
+  // Decrypt auth credentials. Route the adapter by the envelope's stored keyId
+  // (not the current provider env var) so credentials written under a previous
+  // provider still decrypt after the deployment flips INGESTION_CRYPTO_PROVIDER.
   const envelope = row.encryptedPayload as { keyId: string; ciphertext: string };
+  const { adapter } = resolveIngestionCryptoAdapterForKeyId(envelope.keyId);
   const cipherBuf = Buffer.from(envelope.ciphertext, "base64");
-  const plaintextBuf = await decrypt(cipherBuf, keyId, { adapter });
+  const plaintextBuf = await decrypt(cipherBuf, envelope.keyId, { adapter });
   const authCredential = JSON.parse(plaintextBuf.toString("utf8")) as AuthCredential;
 
   // Load connector and fetch preview data

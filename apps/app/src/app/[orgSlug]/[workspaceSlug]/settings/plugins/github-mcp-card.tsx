@@ -7,7 +7,7 @@
  *   1. "Install & Connect" → calls installGithubMcp server action.
  *   2. On success, the browser is redirected to the OAuth authorize URL
  *      (/api/v1/mcp/oauth/authorize) which drives the GitHub OAuth 2.1 flow.
- *   3. After OAuth completes, the user lands back on /settings/integrations?mcp=connected.
+ *   3. After OAuth completes, the user lands back on /settings/plugins?mcp=connected.
  *
  * When already installed+connected, shows a "Reconnect" link and a health badge.
  */

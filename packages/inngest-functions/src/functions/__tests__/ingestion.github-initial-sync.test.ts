@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   runInTenantScope: vi.fn(),
   upsertSourceConnectionMeta: vi.fn().mockResolvedValue(undefined),
   decrypt: vi.fn(),
-  createIngestionCryptoAdapter: vi.fn(),
+  resolveIngestionCryptoAdapterForKeyId: vi.fn(),
   fetchMock: vi.fn(),
   loggerInfo: vi.fn(),
   loggerDebug: vi.fn(),
@@ -59,7 +59,7 @@ vi.mock("@oxagen/ingestion/mutations", () => ({
 }));
 
 vi.mock("@oxagen/crypto", () => ({
-  createIngestionCryptoAdapter: mocks.createIngestionCryptoAdapter,
+  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
   decrypt: mocks.decrypt,
 }));
 
@@ -154,7 +154,7 @@ function routedFetch(treeOverride?: unknown) {
 }
 
 function setupDefaultMocks(): void {
-  mocks.createIngestionCryptoAdapter.mockReturnValue({ keyId: "key-1", adapter: {} });
+  mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValue({ keyId: "key-1", adapter: {} });
   mocks.decrypt.mockResolvedValue(Buffer.from("ghp_test_token"));
 
   mocks.withSystemDb.mockImplementation((fn: (tx: unknown) => unknown) =>
