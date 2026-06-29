@@ -8,7 +8,7 @@
  */
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
-import type { Workspace, CodeGraphProvider, CodingEvent } from "./types";
+import type { Workspace, CodeGraphProvider, CodeMapProvider, CodingEvent } from "./types";
 
 const MAX_OUTPUT = 30_000; // chars; keep tool output from blowing the context window
 
@@ -25,6 +25,7 @@ export function buildWorkspaceTools(
   opts: {
     readOnly?: boolean;
     codeGraph?: CodeGraphProvider;
+    codeMap?: CodeMapProvider;
     onEvent?: (e: CodingEvent) => void;
   } = {},
 ): ToolSet {
@@ -182,6 +183,82 @@ export function buildWorkspaceTools(
           return clip(await codeGraph.query(operation, query, limit));
         } catch (err) {
           return `code_graph error: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    });
+  }
+
+  // code_map is optional — only added when a CodeMapProvider is injected.
+  if (opts.codeMap) {
+    const codeMapProvider = opts.codeMap;
+    tools.code_map = tool({
+      description:
+        "Return a structured code-map bundle for a conceptual or multi-word query — " +
+        "semantically matched source files, their symbols (functions/classes/types), " +
+        "inter-symbol call edges, and recent commits that touched those files. " +
+        "PREFER THIS OVER `grep` or `bash find` for questions like 'everything related " +
+        "to payments', 'auth session handling', or 'where does billing live'. " +
+        "Use `code_graph` for precise structural lookups ('where is X defined'); use " +
+        "`code_map` for conceptual exploration across a domain.",
+      inputSchema: z.object({
+        query: z
+          .string()
+          .describe(
+            "Natural-language concept query, e.g. 'payments', 'auth session handling', " +
+              "'everything related to billing'.",
+          ),
+        limit: z
+          .number()
+          .int()
+          .optional()
+          .describe("Max source files to return (default 20, max 50)."),
+        domain: z
+          .string()
+          .optional()
+          .describe(
+            "Optional domain filter — only return nodes whose domain property matches " +
+              "(e.g. 'billing', 'auth').",
+          ),
+        kinds: z
+          .array(z.enum(["file", "symbol", "chunk", "commit"]))
+          .optional()
+          .describe("Which result kinds to include. Omit for all."),
+      }),
+      execute: async ({ query, limit, domain, kinds }) => {
+        try {
+          const bundle = await codeMapProvider.query(query, { limit, domain, kinds });
+          // Format as a compact human-readable summary for the context window.
+          const lines: string[] = [];
+          lines.push(`Code map: "${query}" — ${bundle.files.length} file(s), ${bundle.symbols.length} symbol(s)`);
+          if (bundle.files.length > 0) {
+            lines.push("\nFiles:");
+            for (const f of bundle.files) {
+              const dom = f.domain ? ` [${f.domain}]` : "";
+              lines.push(`  ${f.path}${dom}  score=${(f.score * 100).toFixed(0)}%`);
+            }
+          }
+          if (bundle.symbols.length > 0) {
+            lines.push("\nSymbols:");
+            for (const s of bundle.symbols) {
+              lines.push(`  ${s.kind} ${s.name}  (${s.path}:${s.startLine}-${s.endLine})`);
+              if (s.signature) lines.push(`    ${s.signature}`);
+            }
+          }
+          if (bundle.calls.length > 0) {
+            lines.push("\nCall edges:");
+            for (const c of bundle.calls) {
+              lines.push(`  ${c.callerName} → ${c.calleeName}`);
+            }
+          }
+          if (bundle.recentChanges.length > 0) {
+            lines.push("\nRecent changes:");
+            for (const ch of bundle.recentChanges) {
+              lines.push(`  ${ch.commitSha.slice(0, 8)}  ${ch.committedAt.slice(0, 10)}  ${ch.authorName}  ${ch.message.split("\n")[0]?.slice(0, 72) ?? ""}`);
+            }
+          }
+          return clip(lines.join("\n"));
+        } catch (err) {
+          return `code_map error: ${err instanceof Error ? err.message : String(err)}`;
         }
       },
     });

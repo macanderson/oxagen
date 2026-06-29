@@ -73,6 +73,55 @@ export interface CodeGraphProvider {
   ): Promise<string>;
 }
 
+/** Output shape for a single code.map result (mirrors contract output). */
+export interface CodeMapBundle {
+  files: Array<{
+    nodeId: string;
+    path: string;
+    language: string;
+    displayName: string;
+    domain?: string;
+    score: number;
+  }>;
+  symbols: Array<{
+    nodeId: string;
+    name: string;
+    kind: string;
+    path: string;
+    startLine: number;
+    endLine: number;
+    signature: string;
+    docComment?: string;
+    domain?: string;
+    score: number;
+  }>;
+  calls: Array<{
+    callerNodeId: string;
+    calleeNodeId: string;
+    callerName: string;
+    calleeName: string;
+  }>;
+  recentChanges: Array<{
+    commitSha: string;
+    message: string;
+    authorName: string;
+    committedAt: string;
+    modifiedFiles: string[];
+  }>;
+}
+
+/**
+ * Provider that answers "give me everything related to <concept>" queries.
+ * Injected when the platform's code.map capability is available (in-app agent
+ * and CLI with a connected workspace).
+ */
+export interface CodeMapProvider {
+  query(
+    conceptQuery: string,
+    opts?: { limit?: number; domain?: string; kinds?: Array<"file" | "symbol" | "chunk" | "commit"> },
+  ): Promise<CodeMapBundle>;
+}
+
 export interface RunCodingAgentOptions {
   workspace: Workspace;
   /** Injected AI port — BYOK/unmetered in the CLI, streamAgentReply (metered) on the platform. */
@@ -84,6 +133,8 @@ export interface RunCodingAgentOptions {
   maxSteps?: number;
   readOnly?: boolean;
   codeGraph?: CodeGraphProvider;
+  /** Optional semantic code-map provider — enables the `code_map` tool. */
+  codeMap?: CodeMapProvider;
   memory?: MemoryProvider;
   trace?: TraceStore;
   signal?: AbortSignal;

@@ -321,6 +321,58 @@ graph
     await handleGraphLineage({ repo: opts.repo, json: opts.json });
   });
 
+// ── code: code-map retrieval + diff/patch/format utilities ────────────────────
+
+const code = program
+  .command("code")
+  .description("Code utilities: semantic code-map retrieval, diff, patch, format");
+
+code
+  .command("map <query>")
+  .description(
+    "Return a structured code-map for a natural-language concept: relevant files, " +
+      "symbols, call edges, and recent commits. Faster than grep for conceptual queries.",
+  )
+  .option("-l, --limit <n>", "Max files to return (default 20)")
+  .option("--kinds <list>", "Comma-separated result kinds: file,symbol,chunk,commit")
+  .option("--domain <domain>", "Filter by domain label (e.g. billing, auth)")
+  .option("--json", "Emit raw JSON output")
+  .action(async (query: string, opts: { limit?: string; kinds?: string; domain?: string; json?: boolean }) => {
+    const { handleCodeMap } = await import("./commands/code.js");
+    await handleCodeMap(query, opts);
+  });
+
+code
+  .command("diff <before> <after>")
+  .description("Produce a unified diff between two files")
+  .option("--path <path>", "Path used in diff headers")
+  .option("--context <n>", "Context lines (default 3)")
+  .action(async (before: string, after: string, opts: { path?: string; context?: string }) => {
+    const { handleCodeDiff } = await import("./commands/code.js");
+    await handleCodeDiff(before, after, opts);
+  });
+
+code
+  .command("format <file>")
+  .description("Format a source file by language")
+  .option("--language <lang>", "Language (json, python)")
+  .option("--indent <n>", "Indent size")
+  .option("-w, --write", "Write formatted output back to file")
+  .action(async (file: string, opts: { language?: string; indent?: string; write?: boolean }) => {
+    const { handleCodeFormat } = await import("./commands/code.js");
+    await handleCodeFormat(file, opts);
+  });
+
+code
+  .command("patch <diff-file>")
+  .description("Apply a unified diff to a local workspace")
+  .option("--dir <dir>", "Workspace root (default .)")
+  .option("-w, --write", "Write patched files (dry-run without this flag)")
+  .action(async (diffFile: string, opts: { dir?: string; write?: boolean }) => {
+    const { handleCodePatch } = await import("./commands/code.js");
+    await handleCodePatch(diffFile, opts);
+  });
+
 // ── config: local configuration ───────────────────────────────────────────────
 
 program

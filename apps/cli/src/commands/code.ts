@@ -111,6 +111,101 @@ export async function handleCodePatch(
   }
 }
 
+interface CodeMapResponse {
+  files: Array<{
+    nodeId: string;
+    path: string;
+    language: string;
+    displayName: string;
+    domain?: string;
+    score: number;
+  }>;
+  symbols: Array<{
+    nodeId: string;
+    name: string;
+    kind: string;
+    path: string;
+    startLine: number;
+    endLine: number;
+    signature: string;
+    docComment?: string;
+    domain?: string;
+    score: number;
+  }>;
+  calls: Array<{
+    callerNodeId: string;
+    calleeNodeId: string;
+    callerName: string;
+    calleeName: string;
+  }>;
+  recentChanges: Array<{
+    commitSha: string;
+    message: string;
+    authorName: string;
+    committedAt: string;
+    modifiedFiles: string[];
+  }>;
+}
+
+export async function handleCodeMap(
+  query: string,
+  opts: { limit?: string; kinds?: string; domain?: string; json?: boolean },
+): Promise<void> {
+  const body: Record<string, unknown> = { query };
+  if (opts.limit !== undefined) body.limit = parseInt(opts.limit, 10);
+  if (opts.domain) body.domain = opts.domain;
+  if (opts.kinds) body.kinds = opts.kinds.split(",").map((k) => k.trim());
+
+  const res = await apiPost<CodeMapResponse>("code/map", body);
+
+  if (opts.json) {
+    process.stdout.write(JSON.stringify(res, null, 2) + "\n");
+    return;
+  }
+
+  // Human-readable output
+  if (res.files.length === 0) {
+    process.stderr.write(`No files matched "${query}"\n`);
+    return;
+  }
+
+  process.stdout.write(`\nCode map for: ${query}\n`);
+  process.stdout.write("─".repeat(60) + "\n");
+
+  process.stdout.write(`\nFiles (${res.files.length}):\n`);
+  for (const f of res.files) {
+    const domain = f.domain ? ` [${f.domain}]` : "";
+    const score = `${(f.score * 100).toFixed(0)}%`;
+    process.stdout.write(`  ${f.path}${domain}  ${score}\n`);
+  }
+
+  if (res.symbols.length > 0) {
+    process.stdout.write(`\nSymbols (${res.symbols.length}):\n`);
+    for (const s of res.symbols) {
+      const line = `${s.startLine}:${s.endLine}`;
+      process.stdout.write(`  ${s.kind.padEnd(10)} ${s.name}  (${s.path}:${line})\n`);
+      if (s.docComment) {
+        process.stdout.write(`             ${s.docComment.slice(0, 80)}\n`);
+      }
+    }
+  }
+
+  if (res.calls.length > 0) {
+    process.stdout.write(`\nCall edges (${res.calls.length}):\n`);
+    for (const c of res.calls) {
+      process.stdout.write(`  ${c.callerName} → ${c.calleeName}\n`);
+    }
+  }
+
+  if (res.recentChanges.length > 0) {
+    process.stdout.write(`\nRecent changes (${res.recentChanges.length}):\n`);
+    for (const ch of res.recentChanges) {
+      const date = ch.committedAt.slice(0, 10);
+      process.stdout.write(`  ${ch.commitSha.slice(0, 8)}  ${date}  ${ch.authorName}  ${ch.message.split("\n")[0]?.slice(0, 60) ?? ""}\n`);
+    }
+  }
+}
+
 /** json from .json, python from .py; undefined when unknown. */
 function inferLanguage(file: string): "json" | "python" | undefined {
   if (file.endsWith(".json")) return "json";
