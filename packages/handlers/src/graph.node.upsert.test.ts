@@ -78,6 +78,17 @@ describe("graphNodeUpsertHandler", () => {
     expect(result.created).toBe(true);
   });
 
+  it("PascalCases the domain label and the `label` display property", async () => {
+    mocks.run.mockResolvedValueOnce(makeRecord("node-uuid-1", true));
+    await graphNodeUpsertHandler({ label: "pull_request", displayName: "PR #1" }, CTX);
+
+    const [cypher, params] = mocks.run.mock.calls[0] as [string, Record<string, unknown>];
+    // Structural Neo4j label is applied PascalCase…
+    expect(cypher).toContain("SET n:PullRequest");
+    // …and the display property mirrors it (not the raw "pull_request").
+    expect(params["label"]).toBe("PullRequest");
+  });
+
   it("returns created=false when node already exists", async () => {
     mocks.run.mockResolvedValueOnce(makeRecord("node-uuid-existing", false));
     const result = await graphNodeUpsertHandler(
@@ -158,8 +169,9 @@ describe("graphNodeUpsertHandler", () => {
       CTX,
     );
     const cypher = mocks.run.mock.calls[0]?.[0] as string;
-    // Hyphens/spaces collapse to underscores; no raw metacharacters reach Cypher.
-    expect(cypher).toContain("SET n:Nuclear_powered_submarine");
+    // Hyphens/spaces are tokenised and Title-cased into one PascalCase label;
+    // no raw metacharacters reach Cypher.
+    expect(cypher).toContain("SET n:NuclearPoweredSubmarine");
     expect(cypher).not.toContain("Nuclear-powered submarine");
   });
 

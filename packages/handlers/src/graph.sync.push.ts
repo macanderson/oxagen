@@ -43,7 +43,10 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
       if (input.nodes.length > 0) {
         const nodeParams = input.nodes.map((n) => ({
           naturalKey: `sync:${input.source}:${n.key}`,
-          label: n.labels[0] ?? "Node",
+          // PascalCase the `label` display property so it matches the structural
+          // domain label applied below (and the rest of the graph); fall back to
+          // the raw label / "Node" when the type is unusable as an identifier.
+          label: sanitizeLabel(n.labels[0] ?? "") ?? (n.labels[0] ?? "Node"),
           displayName: n.displayName,
           // Serialise properties as JSON string — same pattern as graph.node.upsert
           properties: n.properties ? JSON.stringify(n.properties) : null,

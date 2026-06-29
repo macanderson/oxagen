@@ -24,11 +24,16 @@ export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> =
   // Promote the customer's type to a REAL Neo4j label (in addition to the
   // :GraphNode anchor) so it is queryable/traversable as `(:Submarine)`. Labels
   // cannot be parameterized in Cypher, so the value is sanitized to an
-  // injection-safe identifier before interpolation; an unusable type (e.g. "!!!")
-  // falls back to the anchor-only node with the type preserved in the `label`
-  // property. See packages/ontology/src/labels.ts.
+  // injection-safe PascalCase identifier before interpolation; an unusable type
+  // (e.g. "!!!") falls back to the anchor-only node with the type preserved in
+  // the `label` property. See packages/ontology/src/labels.ts.
   const domainLabel = sanitizeLabel(input.label);
   const domainLabelClause = domainLabel ? `\n           SET n:${domainLabel}` : "";
+  // The `label` display property mirrors the structural domain label so the
+  // explorer chip reads PascalCase too (PullRequest, not pull_request). When the
+  // type is unusable as a label, keep the caller's raw string so the node never
+  // loses its human-readable type.
+  const displayLabel = domainLabel ?? input.label;
 
   let nodeId = "";
   let created = false;
@@ -64,7 +69,7 @@ export const graphNodeUpsertHandler: CapabilityHandler<typeof graphNodeUpsert> =
          RETURN n.publicId AS nodeId, n._created AS wasCreated`,
         {
           naturalKey,
-          label: input.label,
+          label: displayLabel,
           displayName: input.displayName,
           description: input.description ?? null,
           properties: propertiesJson,
