@@ -175,8 +175,6 @@ export const workspace = {
       `${wsBase(ctx)}/settings/models`,
     modelKeys: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/model-keys`,
-    integrations: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/settings/integrations`,
     prompts: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/prompts`,
     plugins: (ctx: Required<ScopeContext>): string =>

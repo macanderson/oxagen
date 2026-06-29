@@ -19,7 +19,6 @@ export default async function SettingsLayout({
     { label: "Members", href: workspace.settings.members(ctx) },
     { label: "Models", href: workspace.settings.models(ctx) },
     { label: "Model Keys", href: workspace.settings.modelKeys(ctx) },
-    { label: "Integrations", href: workspace.settings.integrations(ctx) },
     { label: "Prompts", href: workspace.settings.prompts(ctx) },
     { label: "Plugins", href: workspace.settings.plugins(ctx) },
     { label: "Skills", href: workspace.settings.skills(ctx) },
@@ -32,7 +31,7 @@ export default async function SettingsLayout({
     <div className="flex flex-col gap-0">
       <PageHeader
         title="Settings"
-        description="Workspace configuration, members, and integrations."
+        description="Workspace configuration, members, and plugins."
         breadcrumb={
           <Breadcrumb
             items={[

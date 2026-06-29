@@ -160,7 +160,7 @@ async function handleAuthorize(req: NextRequest): Promise<Response> {
 
   const state = randomUUID();
   const redirectUrl = `${url.origin}/api/v1/mcp/oauth/callback`;
-  const returnTo = `/${orgSlug}/${workspaceSlug}/settings/integrations`;
+  const returnTo = `/${orgSlug}/${workspaceSlug}/settings/plugins`;
 
   const provider = new DbOAuthClientProvider({
     orgId: tenant.id,

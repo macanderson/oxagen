@@ -532,11 +532,6 @@ export function enumerateNavTargets(
       href: workspace.settings.modelKeys(wsCtx),
       parent: "settings",
     });
-    targets.push({
-      label: "Settings · Integrations",
-      href: workspace.settings.integrations(wsCtx),
-      parent: "settings",
-    });
   }
 
   // -- Org mode --
