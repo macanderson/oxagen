@@ -330,6 +330,53 @@
       }
     },
     {
+      "name": "agent.memory.import.commit",
+      "file": "agent.memory.import.commit.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "agent.memory.import.parse",
+      "file": "agent.memory.import.parse.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "agent.memory.import.shared",
+      "file": "agent.memory.import.shared.ts",
+      "domain": "unknown",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {}
+    },
+    {
       "name": "agent.memory.list",
       "file": "agent.memory.list.ts",
       "domain": "agent",
