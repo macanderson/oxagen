@@ -26,7 +26,6 @@ import * as readline from "node:readline/promises";
 import {
   getApiUrl,
   getAppUrl,
-  getOrgId,
   getToken,
   readConfig,
   writeConfig,
@@ -239,9 +238,11 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
   } catch (err) {
     // Picker failures must not leave a partial config (token but no scope).
     writeConfig({ token: undefined, orgSlug: undefined, workspaceSlug: undefined });
+    // The token already validated — surface the real picker error rather than
+    // a misleading "token invalid" message.
     process.stderr.write(
-      `Error: Token validation failed. Verify the token is a valid Oxagen API key.\n` +
-        `  Get a token at: https://app.oxagen.sh/settings/tokens\n`,
+      `Error: ${err instanceof Error ? err.message : String(err)}\n` +
+        `  Your token is valid, but selecting an org/workspace failed.\n`,
     );
     process.exitCode = 1;
     return;
