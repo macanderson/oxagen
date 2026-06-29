@@ -78,6 +78,8 @@ export const EdgeTypes = {
   PART_OF: "PART_OF",         // issue → epic; commit → PR
   ASSIGNED_TO: "ASSIGNED_TO", // task/issue → User
   AUTHORED_BY: "AUTHORED_BY", // document/commit → User
+  // Agent coding lineage — written by the in-app coding agent on every turn.
+  TOUCHED_FILE: "TOUCHED_FILE", // Execution → SourceFile (file was read/written this turn)
 } as const;
 export type EdgeType = (typeof EdgeTypes)[keyof typeof EdgeTypes];
 

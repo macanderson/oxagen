@@ -77,3 +77,29 @@ export interface TraceStore {
   // this file dep-light and avoids a circular import through the ports layer.
   record(trace: unknown): void | Promise<void>;
 }
+
+/**
+ * Graph-sync port: materialises touched files into the knowledge graph and
+ * records execution-lineage edges from the turn's execution node to each file.
+ *
+ * Both methods are fire-and-forget — callers MUST wrap them in
+ * `void Promise.resolve(...).catch(() => {})` so a failure never blocks or
+ * fails the agent turn.
+ *
+ * CLI: a no-op stub (the CLI has no platform Neo4j session).
+ * Platform: injects the in-app adapter from `@oxagen/agent/adapters`.
+ */
+export interface GraphSyncProvider {
+  /**
+   * Upsert minimal `:SourceFile` nodes for every path in `touchedFiles`.
+   * Called near the start of turn finalization so the nodes exist before
+   * `recordLineage` attempts to create TOUCHED_FILE edges.
+   */
+  ensureGraph(touchedFiles: string[]): void | Promise<void>;
+
+  /**
+   * Create `(:Execution)-[:TOUCHED_FILE]->(:SourceFile)` edges in Neo4j for
+   * every path in `touchedFiles`. Uses the turn's trace id as the executionId.
+   */
+  recordLineage(args: { executionId: string; touchedFiles: string[] }): void | Promise<void>;
+}
