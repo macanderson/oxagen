@@ -1,0 +1,122 @@
+Codemap Analysis Report
+Generated: 2025-07-10
+Session: initial scan (no prior codemaps found)
+================================================================================
+
+SCAN SUMMARY
+------------
+Total TypeScript/TSX files scanned: 3,800
+  apps/api:        256 files
+  apps/app:        819 files
+  apps/cli:        200 files
+  apps/mcp:        257 files (240 tool files)
+  apps/docs:        11 files
+  packages/:     2,257 files across 31 packages
+
+Project type: MONOREPO (pnpm workspaces + Turborepo)
+Build system: Turborepo (build/typecheck/lint/test/test:unit/test:coverage/test:e2e/dev/generate/migrate)
+
+ARCHITECTURE SNAPSHOT
+---------------------
+Apps:     5 (api, app, cli, mcp, docs)
+Packages: 31 shared packages
+Services: Hono REST API · Next.js 15 App · xmcp MCP Server · Ink CLI · Docs
+
+API ROUTES
+----------
+Total route files: 203 (in apps/api/src/routes/v1/)
+Route groups:
+  - Agent routes:         ~55 routes (agent.*, sandbox, browser, code)
+  - Knowledge/Graph:      ~25 routes (graph.*, semantic.*, ontology.*, schema.*)
+  - Chat/Conversation:    ~10 routes
+  - Skill routes:         ~10 routes
+  - Plugin routes:        ~12 routes
+  - Billing routes:        ~5 routes
+  - Secret/Environment:   ~12 routes
+  - Ingestion/Connectors:  ~8 routes
+  - Automation/Workflow:   ~8 routes
+  - Other (web, media, etc): ~58 routes
+  - Webhooks (stripe, github, inngest): 3 routes
+
+DATABASE
+--------
+Total tables: 96 across 20 schema files
+Schema domains:
+  auth (8 tables): users, credentials, apiKeys, sessions, accounts, verifications, rateLimitTable, userPreferences
+  org (4 tables): organizations, orgUsers, orgSlugHistory, invitations
+  workspace (4 tables): workspaces, workspaceSlugHistory, workspaceUsers, workspaceMemoryPolicy
+  chat (2 tables): conversations, messages
+  agent (14 tables): agents, agentTriggers, agentVersions, skills, skillVersions, backgroundTasks, approvalRequests, subagentFanouts, subagentRuns, agentExecutions, agentExecutionSteps, agentToolCalls, sandboxSessions, agentPlans
+  billing (14 tables): plans, subscriptions, paymentMethods, invoices, invoiceLineItems, usageRecords, creditBalances, creditLedger, creditLots, stripeEvents, orgBillingProfiles, orgBillingSettings, billingDisputes, stripeEventProcessing
+  ingestion (10 tables): sourceConnections, authCredentials, oauthTokens, webhookSubscriptions, oauthAccounts, entityTypes, entityTypeMappings, setupSuggestions, deletionJobs, connectorSchemas
+  mcp (6 tables): mcpRegistries, mcpCredentials, mcpServers, mcpConsents, mcpCatalogServers, mcpToolSnapshots
+  iam (5 tables): principals, roles, roleGrants, accessRequests, principalRoleAssignments
+  workflow (9 tables): playbooks, playbookVersions, playbookSteps, playbookEdges, playbookTriggers, playbookRuns, playbookStepRuns, playbookEvents, playbookApprovals
+  schema-registry (8 tables): schemaRegistries, schemaVersions, schemas, schemaActivations, nodeLabels, relationshipTypes, schemaProperties
+  environments (4 tables): environments, secretKeys, secretValues, secretAccessLog
+  content (2 tables): generatedAssets, documents
+  notification (1 table): notifications
+  plugin (1 table): pluginInstalledPlugins
+  security (3 tables): securityEvents, orgSecurityPolicy, mcpServerChanges
+  privacy (2 tables): privacyExportRequests, privacyErasureRequests
+
+BACKGROUND JOBS (Inngest)
+--------------------------
+Total functions: 38
+  Agent:      7 (execute-subagent, aggregate-fanout, background-task, workflow-supervisor, workflow-task, sync-to-graph, video-render)
+  Billing:    2 (dunning-sweep, rollup-usage)
+  Chat:       1 (persist-stream)
+  Engram:     3 (consolidation, embed-memory, sync-to-graph)
+  Ingestion:  7 (pipeline, github-initial-sync, github-commit-files, github-parse-file, github-infer-domains, github-infer-features, oauth-refresh, delete, semantic-edge-infer, sync-requested)
+  Memory:     1 (decay-pass)
+  Playbook:   2 (run.execute, trigger.match)
+  Plugin:     2 (catalog-sync, oauth-refresh-watcher)
+  Privacy:    2 (erasure.execute, export.process)
+  Schema:     1 (reconcile)
+  Security:   1 (audit-partition-rollover)
+  Stripe:     2 (sync-invoice, sync-subscription)
+  Content:    1 (sync-generated-file-to-graph)
+  Auth:       1 (session-expiry-audit)
+  Web:        1 (search.ingest-graph)
+  MCP:        1 (tool-snapshot-retention)
+
+MCP SURFACE
+-----------
+Total MCP tools: ~240 tool files (mirroring API routes 1:1)
+Auth: API keys only (session tokens rejected at edge)
+Protocol: Streamable HTTP at mcp.oxagen.sh/mcp
+
+EXTERNAL SERVICES
+-----------------
+NEW (first scan):
+  + PostgreSQL (Neon) — primary data store
+  + Neo4j — knowledge graph + lineage + memory
+  + Inngest — background job orchestration
+  + Stripe — billing, subscriptions, credits
+  + Vercel Blob — file/asset storage
+  + Vercel Sandbox — code execution
+  + AI Gateway (Vercel) — LLM proxy (all model tiers)
+  + GitHub App — OAuth, webhooks, repo sync
+  + AWS KMS — optional credential encryption
+
+STALENESS WARNINGS
+------------------
+None (first scan — no prior codemaps to compare against)
+
+CODEMAPS WRITTEN
+----------------
+docs/CODEMAPS/architecture.md  (~750 tokens)
+docs/CODEMAPS/backend.md       (~950 tokens)
+docs/CODEMAPS/frontend.md      (~900 tokens)
+docs/CODEMAPS/data.md          (~850 tokens)
+docs/CODEMAPS/dependencies.md  (~700 tokens)
+
+DIFF STATUS
+-----------
+Prior codemaps: NONE (first generation)
+Diff percentage: N/A
+Action taken: All codemaps written without approval gate (no prior state to diff against)
+
+NEXT RECOMMENDED SCAN
+---------------------
+After: major feature addition, schema migration, new service integration, or 90+ days elapsed.
