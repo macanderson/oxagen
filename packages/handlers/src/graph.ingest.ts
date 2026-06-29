@@ -185,15 +185,12 @@ export const graphIngestHandler: CapabilityHandler<typeof graphIngest> = async (
   input,
   ctx,
 ) => {
-  const workspacePrompt = await readWorkspacePrompt(ctx);
-  // Ground extraction in the workspace's configured schema registry (when pinned)
-  // and the labels already in its graph, so the model reuses real types/keys
-  // instead of inventing inconsistent labels and empty nodes.
-  const vocab = await resolveIngestVocabulary(ctx);
-
-  // Resolve the pinned active vocabulary's relationship types (null when no
-  // version is pinned) — the §3.2 allow-list for inferred relationship types.
-  const pinned = await getPinnedSchema(ctx.orgId, ctx.workspaceId);
+  // Parallelize independent I/O operations: workspace prompt, vocabulary, and pinned schema
+  const [workspacePrompt, vocab, pinned] = await Promise.all([
+    readWorkspacePrompt(ctx),
+    resolveIngestVocabulary(ctx),
+    getPinnedSchema(ctx.orgId, ctx.workspaceId),
+  ]);
   const allowedRelationshipTypes = pinned ? pinned.relationshipTypes.map((r) => r.name) : null;
   const allowedSet = allowedRelationshipTypes ? new Set(allowedRelationshipTypes) : null;
 

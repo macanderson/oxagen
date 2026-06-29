@@ -22,47 +22,56 @@ export const semanticEdgeListHandler: CapabilityHandler<typeof semanticEdgeList>
   const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, async () => {
     const sess = scopedSession();
     try {
-      // OPTIONAL MATCH the source node by its (unique) publicId so every edge is
-      // cited by its human label + properties, not a raw UUID — parity with
-      // semantic.edge.suggest. The target stays described from the inferred edge
-      // (its real node, if any, is created only on approval).
-      const rows = await sess.run(
-        `MATCH (ie:InferredEdge {orgId: $orgId, workspaceId: $workspaceId})
-         WHERE ($type IS NULL OR ie.relationshipType = $type)
-           AND ($sourceId IS NULL OR ie.connectionId = $sourceId)
-           AND ($confidenceMin IS NULL OR ie.confidence >= $confidenceMin)
-           AND ($confidenceMax IS NULL OR ie.confidence <= $confidenceMax)
-         OPTIONAL MATCH (src:GraphNode {publicId: ie.sourceNodeId, orgId: $orgId, workspaceId: $workspaceId})
-         RETURN
-           ie.id               AS id,
-           ie.sourceNodeId     AS sourceNodeId,
-           coalesce(src.displayName, src.name, src.publicId, ie.sourceNodeId) AS sourceDisplayName,
-           coalesce(src.label, src.type, 'Node')             AS sourceLabel,
-           src.properties      AS sourceProperties,
-           ie.targetName       AS targetName,
-           ie.targetType       AS targetType,
-           ie.relationshipType AS type,
-           ie.confidence       AS confidence,
-           ie.connectionId     AS connectorId,
-           ie.connectionId     AS sourceId,
-           ie.llmModel         AS llmModel,
-           ie.approvalStatus   AS approvalStatus,
-           toString(ie.approvedAt)  AS approvedAt,
-           ie.approvedBy       AS approvedBy,
-           toString(ie.inferredAt)  AS inferredAt
-         ORDER BY ie.confidence DESC
-         SKIP $offset
-         LIMIT $limit`,
-        {
-          type: type ?? null,
-          sourceId: sourceId ?? null,
-          confidenceMin: confidenceMin ?? null,
-          confidenceMax: confidenceMax ?? null,
-          offset: BigInt(offset),
-          limit: BigInt(limit),
-        },
-      );
+      // Parallelize page and count queries (independent, same filter parameters)
+      const params = {
+        type: type ?? null,
+        sourceId: sourceId ?? null,
+        confidenceMin: confidenceMin ?? null,
+        confidenceMax: confidenceMax ?? null,
+        offset: BigInt(offset),
+        limit: BigInt(limit),
+      };
 
+      const [rows, countRow] = await Promise.all([
+        sess.run(
+          `MATCH (ie:InferredEdge {orgId: $orgId, workspaceId: $workspaceId})
+           WHERE ($type IS NULL OR ie.relationshipType = $type)
+             AND ($sourceId IS NULL OR ie.connectionId = $sourceId)
+             AND ($confidenceMin IS NULL OR ie.confidence >= $confidenceMin)
+             AND ($confidenceMax IS NULL OR ie.confidence <= $confidenceMax)
+           OPTIONAL MATCH (src:GraphNode {publicId: ie.sourceNodeId, orgId: $orgId, workspaceId: $workspaceId})
+           RETURN
+             ie.id               AS id,
+             ie.sourceNodeId     AS sourceNodeId,
+             coalesce(src.displayName, src.name, src.publicId, ie.sourceNodeId) AS sourceDisplayName,
+             coalesce(src.label, src.type, 'Node')             AS sourceLabel,
+             src.properties      AS sourceProperties,
+             ie.targetName       AS targetName,
+             ie.targetType       AS targetType,
+             ie.relationshipType AS type,
+             ie.confidence       AS confidence,
+             ie.connectionId     AS connectorId,
+             ie.connectionId     AS sourceId,
+             ie.llmModel         AS llmModel,
+             ie.approvalStatus   AS approvalStatus,
+             toString(ie.approvedAt)  AS approvedAt,
+             ie.approvedBy       AS approvedBy,
+             toString(ie.inferredAt)  AS inferredAt
+           ORDER BY ie.confidence DESC
+           SKIP $offset
+           LIMIT $limit`,
+          params,
+        ),
+        sess.run(
+          `MATCH (ie:InferredEdge {orgId: $orgId, workspaceId: $workspaceId})
+           WHERE ($type IS NULL OR ie.relationshipType = $type)
+             AND ($sourceId IS NULL OR ie.connectionId = $sourceId)
+             AND ($confidenceMin IS NULL OR ie.confidence >= $confidenceMin)
+             AND ($confidenceMax IS NULL OR ie.confidence <= $confidenceMax)
+           RETURN count(ie) AS total`,
+          params,
+        ),
+      ]);
 
       const edges: SemanticEdge[] = rows.records.map((r) => {
         const approvalStatus = r.get("approvalStatus") as string;
@@ -115,23 +124,6 @@ export const semanticEdgeListHandler: CapabilityHandler<typeof semanticEdgeList>
         };
       });
 
-
-      const countRow = await sess.run(
-        `MATCH (ie:InferredEdge {orgId: $orgId, workspaceId: $workspaceId})
-         WHERE ($type IS NULL OR ie.relationshipType = $type)
-           AND ($sourceId IS NULL OR ie.connectionId = $sourceId)
-           AND ($confidenceMin IS NULL OR ie.confidence >= $confidenceMin)
-           AND ($confidenceMax IS NULL OR ie.confidence <= $confidenceMax)
-         RETURN count(ie) AS total`,
-        {
-          type: type ?? null,
-          sourceId: sourceId ?? null,
-          confidenceMin: confidenceMin ?? null,
-          confidenceMax: confidenceMax ?? null,
-        },
-      );
-
-       
       const total = Number(countRow.records[0]?.get("total") ?? 0);
        
 
