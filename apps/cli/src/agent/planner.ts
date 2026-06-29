@@ -16,9 +16,22 @@ import { z } from "zod";
 import { enhancePrompt } from "./prompt-enhancer.js";
 import { classifyTier, modelForTier } from "./model-router.js";
 import { ensureGatewayKey, MissingGatewayKeyError } from "./env.js";
+import { AgentTimeoutError, makeTurnController, withTimeout } from "./timeouts.js";
 import { emptyUsage, type ModelTier, type Plan, type Task } from "./fleet/types.js";
 import type { FleetMemory } from "./fleet/memory.js";
 import type { AgentDefinition } from "../agents/types.js";
+
+/**
+ * Timeout budget for the planning phase (ms).
+ * Prompt enhancement + one structured-output LLM call must fit inside this.
+ */
+const PLANNER_TIMEOUT_MS = 120_000; // 2 min; ample for a generateObject call
+
+/**
+ * Timeout for prompt enhancement alone. This involves code-graph queries (fast,
+ * local) and optional fleet-memory recall — it should be very quick.
+ */
+const ENHANCE_TIMEOUT_MS = 30_000; // 30s
 
 const TIER_RANK: Record<ModelTier, number> = { fast: 0, balanced: 1, precise: 2 };
 
@@ -106,8 +119,39 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
   const cwd = opts.cwd;
   if (!ensureGatewayKey(cwd)) throw new MissingGatewayKeyError();
 
-  // Enhance the goal so the planner sees the real code involved.
-  const enhanced = await enhancePrompt({ prompt: opts.goal, cwd, memory: opts.memory });
+  // Merge the caller's abort signal with a planning-phase deadline. If either
+  // fires, every sub-operation (enhancement + LLM call) is cancelled.
+  const planController = makeTurnController(opts.signal, PLANNER_TIMEOUT_MS);
+  const planSignal = planController.signal;
+
+  // Enhance the goal so the planner sees the real code involved. Bound
+  // separately so a slow code-graph build doesn't eat the whole planning budget.
+  let enhanced: Awaited<ReturnType<typeof enhancePrompt>>;
+  try {
+    enhanced = await withTimeout(
+      enhancePrompt({ prompt: opts.goal, cwd, memory: opts.memory }),
+      ENHANCE_TIMEOUT_MS,
+      planSignal,
+      "prompt enhancement",
+    );
+  } catch (err) {
+    // Enhancement is best-effort: a timeout means we fall back to the raw goal
+    // rather than failing the whole planning phase.
+    if (err instanceof AgentTimeoutError) {
+      enhanced = {
+        prompt: opts.goal,
+        context: "",
+        resolved: [],
+        lessons: [],
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+        durationMs: 0,
+        retrieval: { symbolsQueried: [], pathsQueried: [], resolved: [], unresolved: [] },
+      };
+    } else {
+      throw err;
+    }
+  }
 
   const roster = new Set((opts.agents ?? []).map((a) => a.name));
   const rosterBlock =
@@ -122,7 +166,9 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
     schema: planSchema,
     system: PLANNER_SYSTEM,
     prompt: `Goal:\n${enhanced.prompt}${rosterBlock}`,
-    abortSignal: opts.signal,
+    // Pass the planner-scoped signal so the LLM call aborts with the planning
+    // deadline rather than hanging indefinitely.
+    abortSignal: planSignal,
   });
 
   const now = Date.now();

@@ -463,3 +463,202 @@ describe("MemoriesClient — edit/delete action prop smoke tests", () => {
     expect(mockDelete).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Create memory UI
+// ---------------------------------------------------------------------------
+
+describe("MemoriesClient — create memory UI", () => {
+  // A freshly-created record the mock action resolves with.
+  const createdRecord = {
+    id: "dddd4444-0000-0000-0000-000000000004",
+    publicId: "pub-dddd4444-0000-0000-0000-000000000004",
+    nodeRef: "user-memory",
+    weight: "high" as const,
+    kind: "constraint",
+    lesson: "Echo the target DB URL before any mutation script.",
+    source: "user",
+    confidence: 1,
+    createdAt: new Date().toISOString(),
+    lastReinforcedAt: null,
+  };
+
+  it("renders the New Memory button only when createMemory is provided", () => {
+    const { rerender } = render(
+      <MemoriesClient {...baseProps} initialRecords={[routineRecord]} />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "New Memory" }),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        createMemory={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "New Memory" }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not call createMemory on initial render", () => {
+    const mockCreate = vi.fn();
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        createMemory={mockCreate}
+      />,
+    );
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("opens the create sheet with lesson, kind, and weight fields", () => {
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        createMemory={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "New Memory" }));
+
+    expect(screen.getByLabelText("Lesson text")).toBeInTheDocument();
+    expect(screen.getByLabelText("Memory kind")).toBeInTheDocument();
+    expect(screen.getByLabelText("Memory weight")).toBeInTheDocument();
+  });
+
+  it("offers all five kinds plus Auto-detect in the kind select", () => {
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        createMemory={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "New Memory" }));
+
+    const kindSelect = screen.getByLabelText("Memory kind");
+    const optionLabels = Array.from(
+      kindSelect.querySelectorAll("option"),
+    ).map((o) => o.textContent);
+    expect(optionLabels).toEqual([
+      "Auto-detect",
+      "Routine Change",
+      "Constraint",
+      "Bug Root Cause",
+      "Convention Deviation",
+      "Gotcha",
+    ]);
+  });
+
+  it("submits the trimmed text with the pinned kind and weight", async () => {
+    const mockCreate = vi
+      .fn()
+      .mockResolvedValue({ ok: true, memory: createdRecord });
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        createMemory={mockCreate}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "New Memory" }));
+
+    fireEvent.change(screen.getByLabelText("Lesson text"), {
+      target: { value: "  Echo the target DB URL before any mutation.  " },
+    });
+    fireEvent.change(screen.getByLabelText("Memory kind"), {
+      target: { value: "constraint" },
+    });
+    fireEvent.change(screen.getByLabelText("Memory weight"), {
+      target: { value: "high" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add memory" }));
+
+    await vi.waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
+    expect(mockCreate).toHaveBeenCalledWith({
+      orgSlug: "oxagen",
+      workspaceSlug: "main",
+      text: "Echo the target DB URL before any mutation.",
+      kind: "constraint",
+      weight: "high",
+    });
+  });
+
+  it("omits kind and weight when left on Auto-detect", async () => {
+    const mockCreate = vi
+      .fn()
+      .mockResolvedValue({ ok: true, memory: createdRecord });
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        createMemory={mockCreate}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "New Memory" }));
+    fireEvent.change(screen.getByLabelText("Lesson text"), {
+      target: { value: "Remember this without a pinned type." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add memory" }));
+
+    await vi.waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
+    expect(mockCreate).toHaveBeenCalledWith({
+      orgSlug: "oxagen",
+      workspaceSlug: "main",
+      text: "Remember this without a pinned type.",
+    });
+  });
+
+  it("prepends the created memory to the list on success", async () => {
+    const mockCreate = vi
+      .fn()
+      .mockResolvedValue({ ok: true, memory: createdRecord });
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        createMemory={mockCreate}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "New Memory" }));
+    fireEvent.change(screen.getByLabelText("Lesson text"), {
+      target: { value: createdRecord.lesson },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add memory" }));
+
+    // The new lesson now appears in the list.
+    await vi.waitFor(() =>
+      expect(screen.getByText(createdRecord.lesson)).toBeInTheDocument(),
+    );
+  });
+
+  it("shows an error and keeps the sheet open when create fails", async () => {
+    const mockCreate = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "You must be a workspace member to add memories." });
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        createMemory={mockCreate}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "New Memory" }));
+    fireEvent.change(screen.getByLabelText("Lesson text"), {
+      target: { value: "Some lesson" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add memory" }));
+
+    await vi.waitFor(() =>
+      expect(
+        screen.getByText("You must be a workspace member to add memories."),
+      ).toBeInTheDocument(),
+    );
+    // Sheet stays open — the lesson field is still present.
+    expect(screen.getByLabelText("Lesson text")).toBeInTheDocument();
+  });
+});

@@ -56,6 +56,30 @@ describe("graphNodeListHandler", () => {
     expect(result).toEqual({ nodes: [], total: 0, hasMore: false, limit: 50, offset: 0 });
   });
 
+  it("runs count then page sequentially on one session — never concurrently (regression: #303 Neo4j 'open transaction')", async () => {
+    // Neo4j allows only one in-flight query per session; reject overlap with the
+    // real driver error. Sequential passes, a Promise.all() over the shared
+    // session (the #303 regression) fires the second run() while the first is
+    // still awaiting and throws.
+    let inFlight = 0;
+    mocks.run.mockImplementation(async () => {
+      if (inFlight > 0) {
+        throw new Error(
+          "Queries cannot be run directly on a session with an open transaction; either run from within the transaction or use a different session.",
+        );
+      }
+      inFlight += 1;
+      await Promise.resolve();
+      inFlight -= 1;
+      return { records: [] };
+    });
+
+    await expect(
+      graphNodeListHandler({ limit: 50, offset: 0 }, CTX),
+    ).resolves.toBeDefined();
+    expect(mocks.run).toHaveBeenCalledTimes(2);
+  });
+
   it("maps a populated page into the contract shape", async () => {
     mocks.run.mockResolvedValueOnce(countResult(1)).mockResolvedValueOnce(
       pageResult([

@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { schema, withSystemDb } from "@oxagen/database";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { logger } from "./logger";
 
 /**
@@ -14,15 +14,43 @@ import { logger } from "./logger";
  * the bypass can never leak another tenant's workspaces. The caller's own
  * workspace role is left-joined (null when they're an org admin with no direct
  * workspace membership).
+ *
+ * Auth: supports both session auth (ctx.userId set) and API-key auth
+ * (ctx.userId null, ctx.apiKeyId set). For API-key callers the effective user
+ * is resolved from the key's created_by_user_id, matching the IAM layer's
+ * "API key authorizes as its creator" invariant.
  */
 export const workspaceListHandler: CapabilityHandler<typeof workspaceList> = async (
   input,
   ctx,
 ) => {
-  if (!ctx.userId) {
+  // ── Resolve acting user (same pattern as org.list) ───────────────────────
+  let userId = ctx.userId;
+  if (!userId && ctx.apiKeyId) {
+    const keyRow = await withSystemDb((tx) =>
+      tx
+        .select({ createdByUserId: schema.apiKeys.createdByUserId })
+        .from(schema.apiKeys)
+        .where(
+          and(
+            eq(schema.apiKeys.id, ctx.apiKeyId!),
+            isNull(schema.apiKeys.deletedAt),
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows[0] ?? null),
+    );
+    userId = keyRow?.createdByUserId ?? null;
+  }
+
+  if (!userId) {
     logger.warn("workspace.list: rejected — no authenticated user");
     throw new Error("workspace.list requires an authenticated user");
   }
+
+  // Capture into a const so TS narrowing survives across the withSystemDb closure.
+  const resolvedUserId = userId;
+
   return withSystemDb(async (tx) => {
     const org = await tx.query.organizations.findFirst({
       where: and(
@@ -38,7 +66,7 @@ export const workspaceListHandler: CapabilityHandler<typeof workspaceList> = asy
     const membership = await tx.query.orgUsers.findFirst({
       where: and(
         eq(schema.orgUsers.orgId, org.id),
-        eq(schema.orgUsers.userId, ctx.userId!),
+        eq(schema.orgUsers.userId, resolvedUserId),
       ),
       columns: { role: true },
     });
@@ -58,7 +86,7 @@ export const workspaceListHandler: CapabilityHandler<typeof workspaceList> = asy
         schema.workspaceUsers,
         and(
           eq(schema.workspaceUsers.workspaceId, schema.workspaces.id),
-          eq(schema.workspaceUsers.userId, ctx.userId!),
+          eq(schema.workspaceUsers.userId, resolvedUserId),
         ),
       )
       .where(eq(schema.workspaces.orgId, org.id));

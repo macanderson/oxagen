@@ -18,6 +18,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import type { AgentMemoryRecord } from "@oxagen/oxagen/contracts/agent.memory.list";
 import { MemoriesClient } from "@/components/knowledge/memories/memories-client";
 import {
+  createMemoryAction,
   updateMemoryAction,
   deleteMemoryAction,
 } from "./actions";
@@ -74,6 +75,7 @@ export async function MemoriesSection({
       workspaceId={workspaceId}
       orgSlug={orgSlug}
       workspaceSlug={workspaceSlug}
+      createMemory={createMemoryAction}
       updateMemory={updateMemoryAction}
       deleteMemory={deleteMemoryAction}
     />

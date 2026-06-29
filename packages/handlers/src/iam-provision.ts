@@ -25,6 +25,7 @@ import { schema, withSystemDb } from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
 import { listCapabilities } from "@oxagen/oxagen";
+import { ORG_OWNER_ROLE_NAME } from "@oxagen/oxagen/iam";
 import { logger } from "./logger";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -35,8 +36,10 @@ import { logger } from "./logger";
 // Re-export the Tx alias so callers can type the optional param correctly.
 export type { Tx as DbOrTx };
 
-// System role definitions. Mirrored from seed-iam-defaults.ts.
-const ORG_ROLES = ["Owner", "Admin", "Compliance", "Billing"] as const;
+// System role definitions. Mirrored from seed-iam-defaults.ts. The Owner name is
+// sourced from the resolver's ORG_OWNER_ROLE_NAME so the seeded role name can
+// never drift from the super-user check in resolve.ts (rule 7.5).
+const ORG_ROLES = [ORG_OWNER_ROLE_NAME, "Admin", "Compliance", "Billing"] as const;
 const WORKSPACE_ROLES = ["Owner", "Member", "Viewer"] as const;
 
 type OrgRoleName = (typeof ORG_ROLES)[number];
@@ -242,7 +245,7 @@ async function bootstrapOrgIAMWithTx(
   }
 
   // ── (c) Assign owner the org "Owner" role ─────────────────────────────────
-  const ownerRoleId = roleIdMap.get("org:Owner");
+  const ownerRoleId = roleIdMap.get(`org:${ORG_OWNER_ROLE_NAME}`);
   if (!ownerRoleId) {
     throw new Error(`[iam-provision] org:Owner role not found in roleIdMap for org ${orgId}`);
   }

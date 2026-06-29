@@ -12,10 +12,21 @@
 //   Rule 5: Workspace require_approval → PENDING
 //   Rule 6: Org default grant         → inherit org grant
 //   Rule 7: Role-inherited grant      → inherit role grant
+//   Rule 7.5: Org owner super-user    → ALLOW (system org Owner role)
 //   Rule 8: Default effect (contract) → use contract.defaultEffect
 
 import type { CapabilityEffect, ResolvedPrincipal } from "../types";
 import { evaluateConditions, type ConditionEvalContext } from "./conditions";
+
+// ── Constants ───────────────────────────────────────────────────────────────
+
+/**
+ * Name of the system-default org-scoped role that owns the organization.
+ * The org owner is the organization's root principal — a super-user (rule 7.5).
+ * MUST match the role name written by the IAM seeder
+ * (`packages/handlers/src/iam-provision.ts`, which imports this constant).
+ */
+export const ORG_OWNER_ROLE_NAME = "Owner";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -49,6 +60,12 @@ export interface Role {
   scopeKind: ScopeKind;
   orgId: string;
   principalIds: string[];
+  /**
+   * True when this is a system-provisioned role (iam.roles.is_system_default).
+   * Used by rule 7.5 to identify the genuine org Owner role — a user-created
+   * role merely named "Owner" (is_system_default = false) is NOT a super-user.
+   */
+  isSystemDefault?: boolean;
 }
 
 export interface Policy {
@@ -452,6 +469,42 @@ export function resolve(input: ResolveInput): ResolveResult {
     return { outcome: "deny", reason: "no_grant", trace: { steps, decidedBy: step } };
   }
   steps.push({ rule: "7:role_grant", description: "No matching role grant", decided: false });
+
+  // ── Rule 7.5: Org owner super-user ─────────────────────────────────────────
+  // The system-default org "Owner" role is the organization's root principal.
+  // Once every explicit grant/policy above has been evaluated and none decided,
+  // an owner is ALLOWED by default — they are never locked out of a capability
+  // they have not explicitly restricted. This makes owner access independent of
+  // per-capability default-role seeding: a capability added AFTER the org was
+  // provisioned has no Owner role_grant, and would otherwise fall through to a
+  // `deny` defaultEffect on enterprise orgs (the only tier that runs this
+  // resolver — see check-iam.ts), silently locking the owner out of new
+  // features. Explicit denial is still honoured: rules 1, 2, 6 and 7 (workspace
+  // deny, org enforced deny, org/role deny grants) all run first and hard-stop,
+  // so an owner CAN restrict themselves "through config". Only system-default
+  // org Owner roles qualify (isSystemDefault) — a user-created role merely named
+  // "Owner" does not inherit super-user rights.
+  const isOrgOwner = principalRoles.some(
+    (r) =>
+      r.scopeKind === "org" &&
+      r.name === ORG_OWNER_ROLE_NAME &&
+      r.isSystemDefault === true,
+  );
+  if (isOrgOwner) {
+    const step: TraceStep = {
+      rule: "7.5:org_owner_superuser",
+      description: "Principal is the system org Owner — super-user allow",
+      decided: true,
+      outcome: "allow",
+    };
+    steps.push(step);
+    return { outcome: "allow", trace: { steps, decidedBy: step } };
+  }
+  steps.push({
+    rule: "7.5:org_owner_superuser",
+    description: "Principal is not a system org owner",
+    decided: false,
+  });
 
   // ── Rule 8: Default effect ─────────────────────────────────────────────────
   const defaultOutcome: "allow" | "deny" | "pending_approval" =

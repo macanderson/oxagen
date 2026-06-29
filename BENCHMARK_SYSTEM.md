@@ -47,28 +47,43 @@ A comprehensive web-based benchmark system for comparing AI code agents (Oxagen 
 
 ## Technical Stack
 - Next.js 16.2.7 (Turbopack)
-- React 19.2.6 (Server + Client Components)
+- React 19.2.6 (single `"use client"` boundary — `benchmark-dashboard.tsx`)
 - TypeScript 6.0.3 (strict mode, no 'any')
-- Tailwind CSS 4.3.0
-- Framer Motion (animations)
-- Recharts (charts)
-- Zustand (state management)
+- Tailwind CSS 4.3.0 (self-contained "graphite + ember" theme, no `@oxagen/ui` coupling)
+- `motion` 12.40.0 (workspace standard — animations)
+- Charts: lightweight custom SVG/div bars (no charting dependency, SSR-safe)
+- State: plain React state in the dashboard (no external store)
+
+## Architecture
+The benchmark is a **deterministic simulation**, not a live agent race. Each
+agent has a published performance profile (`bench/web/src/lib/data.ts`) and each
+eval a baseline cost; given a seed, `runBenchmark()`
+(`bench/web/src/lib/benchmark.ts`) derives every per-task result reproducibly —
+no API keys, agents, or network calls. The pure engine in `src/lib/**` holds all
+logic and is unit-tested (Vitest, ≥90% coverage); `src/components/**` is the
+client view layer.
 
 ## Build & Deploy
 ```bash
-# Development
-pnpm --filter @oxagen/bench-web dev       # Port 3200
+# Launch (primary)
+pnpm eval:app                             # Port 3200 → http://localhost:3200
+# Equivalent
+pnpm bench
+pnpm --filter @oxagen/bench-web dev
 
-# Production
-pnpm --filter @oxagen/bench-web build     # 4.6s with Turbopack
+# Verify
+pnpm --filter @oxagen/bench-web build     # Turbopack production build
 pnpm --filter @oxagen/bench-web typecheck # ✓ Strict mode
 pnpm --filter @oxagen/bench-web lint      # ✓ Zero warnings
+pnpm --filter @oxagen/bench-web test:unit # ✓ Engine unit tests
 ```
 
 ## Integration
-- Added to `pnpm-workspace.yaml` under `bench/*`
-- Runs alongside main dev stack via `pnpm dev`
-- Integrates with monorepo's existing tooling
+- Added to `pnpm-workspace.yaml` under `bench/*` (only `bench/web` has a
+  `package.json`; the Python eval suites under `bench/*` are ignored by pnpm)
+- **Excluded from `pnpm dev`** (see `tools/scripts/dev.ts`) so it never adds a
+  fifth persistent server to the main local stack — launch on demand via
+  `pnpm eval:app`
 
 ## Proof of Functionality
 - ✅ Server responds on http://localhost:3200 (HTTP 200)

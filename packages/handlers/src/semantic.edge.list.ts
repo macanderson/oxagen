@@ -32,9 +32,14 @@ export const semanticEdgeListHandler: CapabilityHandler<typeof semanticEdgeList>
         limit: BigInt(limit),
       };
 
-      const [rows, countRow] = await Promise.all([
-        sess.run(
-          `MATCH (ie:InferredEdge {orgId: $orgId, workspaceId: $workspaceId})
+      // Rows then count, run SEQUENTIALLY on the one scoped session — NOT via
+      // Promise.all(). A Neo4j session permits only a single in-flight query
+      // (auto-commit transaction) at a time, so firing both sess.run() calls
+      // concurrently throws "Queries cannot be run directly on a session with an
+      // open transaction" (regression #303). Parallelism would require a session
+      // per query; these reads are cheap.
+      const rows = await sess.run(
+        `MATCH (ie:InferredEdge {orgId: $orgId, workspaceId: $workspaceId})
            WHERE ($type IS NULL OR ie.relationshipType = $type)
              AND ($sourceId IS NULL OR ie.connectionId = $sourceId)
              AND ($confidenceMin IS NULL OR ie.confidence >= $confidenceMin)
@@ -60,18 +65,17 @@ export const semanticEdgeListHandler: CapabilityHandler<typeof semanticEdgeList>
            ORDER BY ie.confidence DESC
            SKIP $offset
            LIMIT $limit`,
-          params,
-        ),
-        sess.run(
-          `MATCH (ie:InferredEdge {orgId: $orgId, workspaceId: $workspaceId})
+        params,
+      );
+      const countRow = await sess.run(
+        `MATCH (ie:InferredEdge {orgId: $orgId, workspaceId: $workspaceId})
            WHERE ($type IS NULL OR ie.relationshipType = $type)
              AND ($sourceId IS NULL OR ie.connectionId = $sourceId)
              AND ($confidenceMin IS NULL OR ie.confidence >= $confidenceMin)
              AND ($confidenceMax IS NULL OR ie.confidence <= $confidenceMax)
            RETURN count(ie) AS total`,
-          params,
-        ),
-      ]);
+        params,
+      );
 
       const edges: SemanticEdge[] = rows.records.map((r) => {
         const approvalStatus = r.get("approvalStatus") as string;

@@ -56,6 +56,9 @@ const LOADERS: Record<string, LoaderEntry> = {
   "agent.memory.update": () => import("./agent.memory.update"),
   "agent.memory.delete": () => import("./agent.memory.delete"),
   "agent.memory.remember": () => import("./agent.memory.remember"),
+  // Bulk memory import: parse uploaded docs → drafts, then commit the edited set.
+  "agent.memory.import.parse": () => import("./agent.memory.import.parse"),
+  "agent.memory.import.commit": () => import("./agent.memory.import.commit"),
   "agent.approval.resolve": () => import("./agent.approval.resolve"),
   "agent.skill.list": () => import("./agent.skill.list"),
   "agent.skill.load": () => import("./agent.skill.load"),

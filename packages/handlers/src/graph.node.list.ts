@@ -67,21 +67,25 @@ export const graphNodeListHandler: CapabilityHandler<typeof graphNodeList> = asy
         offset: BigInt(input.offset),
       };
 
-      // Parallelize count and page queries (independent, same filter parameters)
-      const [countResult, pageResult] = await Promise.all([
-        session.run(
-          `MATCH (n:GraphNode)
+      // Count then page, run SEQUENTIALLY on the one scoped session — NOT via
+      // Promise.all(). A Neo4j session allows only a single in-flight query
+      // (auto-commit transaction) at a time, so firing both session.run() calls
+      // concurrently throws "Queries cannot be run directly on a session with an
+      // open transaction" (regression #303). The two reads are cheap; parallelism
+      // would require a session per query.
+      const countResult = await session.run(
+        `MATCH (n:GraphNode)
            ${whereClause}
            RETURN count(n) AS total`,
-          params,
-        ),
-        session.run(
-          // coalesce guards against nodes written without explicit display fields
-          // (e.g. LLM-inferred placeholder concepts carry `type`/`name` instead of
-          // `label`/`displayName`). The output contract requires non-null strings,
-          // so a single such node would otherwise fail validation and blank the
-          // entire explorer. Fall back type→label and name→displayName→publicId.
-          `MATCH (n:GraphNode)
+        params,
+      );
+      const pageResult = await session.run(
+        // coalesce guards against nodes written without explicit display fields
+        // (e.g. LLM-inferred placeholder concepts carry `type`/`name` instead of
+        // `label`/`displayName`). The output contract requires non-null strings,
+        // so a single such node would otherwise fail validation and blank the
+        // entire explorer. Fall back type→label and name→displayName→publicId.
+        `MATCH (n:GraphNode)
            ${whereClause}
            RETURN
              n.publicId                                      AS id,
@@ -93,9 +97,8 @@ export const graphNodeListHandler: CapabilityHandler<typeof graphNodeList> = asy
            ORDER BY n.createdAt DESC, coalesce(n.displayName, n.name, n.publicId) ASC
            SKIP $offset
            LIMIT $limit`,
-          params,
-        ),
-      ]);
+        params,
+      );
       total = toNumber(countResult.records[0]?.get("total"));
 
       for (const record of pageResult.records) {

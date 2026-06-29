@@ -575,6 +575,70 @@ importers:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0)
 
+  bench/web:
+    dependencies:
+      clsx:
+        specifier: 2.1.1
+        version: 2.1.1
+      motion:
+        specifier: 12.40.0
+        version: 12.40.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      next:
+        specifier: 16.2.7
+        version: 16.2.7(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      react:
+        specifier: 19.2.6
+        version: 19.2.6
+      react-dom:
+        specifier: 19.2.6
+        version: 19.2.6(react@19.2.6)
+      tailwind-merge:
+        specifier: 2.6.1
+        version: 2.6.1
+    devDependencies:
+      '@eslint/eslintrc':
+        specifier: 3.3.5
+        version: 3.3.5
+      '@eslint/js':
+        specifier: 9.39.4
+        version: 9.39.4
+      '@tailwindcss/postcss':
+        specifier: 4.3.0
+        version: 4.3.0
+      '@types/node':
+        specifier: 25.9.1
+        version: 25.9.1
+      '@types/react':
+        specifier: 19.2.15
+        version: 19.2.15
+      '@types/react-dom':
+        specifier: 19.2.3
+        version: 19.2.3(@types/react@19.2.15)
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0))
+      autoprefixer:
+        specifier: 10.5.0
+        version: 10.5.0(postcss@8.5.15)
+      globals:
+        specifier: 17.6.0
+        version: 17.6.0
+      postcss:
+        specifier: 8.5.15
+        version: 8.5.15
+      tailwindcss:
+        specifier: 4.3.0
+        version: 4.3.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      typescript-eslint:
+        specifier: 8.60.0
+        version: 8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0)
+
   packages/agent:
     dependencies:
       '@modelcontextprotocol/sdk':

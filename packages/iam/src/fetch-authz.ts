@@ -294,6 +294,10 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
       name: r.name,
       scopeKind: r.scopeKind as "org" | "workspace",
       orgId: r.orgId,
+      // Carry the system-default flag so the resolver can identify the genuine
+      // org Owner role (rule 7.5 — org owner super-user). A user-created role
+      // named "Owner" has is_system_default = false and does NOT qualify.
+      isSystemDefault: r.isSystemDefault,
       // Only include the principal if they have an explicit assignment to this
       // role in the principal_role_assignments table (OXA-1498).
       principalIds: principalRoleIdSet.has(r.id) ? [principalRow.id] : [],

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://oxagen.sh/schemas/cli-settings.json",
+  "model": "anthropic/claude-sonnet-4.6",
+  "env": {},
+  "permissions": {
+    "defaultMode": "default",
+    "allow": [],
+    "deny": [
+      "Bash(rm -rf*)",
+      "Write(.env*)",
+      "Read(.env*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [],
+    "PreToolUse": [],
+    "PostToolUse": []
+  }
+}

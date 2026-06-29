@@ -4,7 +4,6 @@ import * as React from "react";
 import { GitPullRequest, Copy, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 
 export interface PRDetails {
   number: number;

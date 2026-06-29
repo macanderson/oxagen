@@ -4,7 +4,7 @@ Reference for all declared capabilities across the Oxagen platform.
 Each capability is implemented across API, MCP, and agent surfaces with
 contract-first design, IAM enforcement, and instrumentation.
 
-## Agent (24)
+## Agent (26)
 
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
 - [agent.code.execute](agent.code.execute.md) — Execute a code snippet in an isolated sandbox and return the exit code, stdout, stderr, and execution time
@@ -17,6 +17,8 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.mcp.list](agent.mcp.list.md) — List registered external MCP servers in the active workspace with status, transport, auth kind, and tool inventory
 - [agent.mcp.register](agent.mcp.register.md) — Register an external MCP server with the workspace; the runner runs a separate process and injects its tools into the agent
 - [agent.mcp.set_enabled](agent.mcp.set_enabled.md) — Enable or disable a registered external MCP server; disabling stops its tools from registering but keeps tool-descriptor snapshots for replay
+- [agent.memory.import.commit](agent.memory.import.commit.md) — Write confirmed draft memories into the workspace AgentMemory Neo4j graph; per-item error capture enables partial success on batch writes
+- [agent.memory.import.parse](agent.memory.import.parse.md) — Extract and classify atomic memories from markdown documents using the AI gateway; returns editable drafts without persisting to the graph
 - [agent.memory.list](agent.memory.list.md) — List a workspace's Neo4j AgentMemory nodes (newest first) with optional weight/kind/node filters; non-semantic browse counterpart to agent.memory.recall
 - [agent.memory.recall](agent.memory.recall.md) — Query Neo4j AgentMemory nodes by semantic similarity plus a weight-sorted rank
 - [agent.memory.write](agent.memory.write.md) — Persist a weighted memory tied to a graph node per the schema.memory contract

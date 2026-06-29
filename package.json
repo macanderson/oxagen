@@ -1,6 +1,6 @@
 {
   "name": "oxagen-monorepo",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "engines": {
@@ -11,6 +11,7 @@
     "preinstall": "npx only-allow pnpm",
     "prepare": "lefthook install",
     "dev": "tsx tools/scripts/dev.ts",
+    "eval:app": "pnpm --filter @oxagen/bench-web dev",
     "bench": "pnpm --filter @oxagen/bench-web dev",
     "cli:dev": "tsx tools/scripts/cli-dev.ts",
     "cli:install": "tsx tools/scripts/cli-dev.ts --once",

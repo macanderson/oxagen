@@ -31,6 +31,7 @@ import {
   Copy,
   Pencil,
   Trash2,
+  Plus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,10 @@ interface AgentMemoryRecord {
 
 // Action result shapes (structural mirror of the server action exports — avoids
 // importing "use server" functions into client code; TS checks structurally).
+type CreateMemoryResult =
+  | { ok: true; memory: AgentMemoryRecord }
+  | { ok: false; error: string };
+
 type UpdateMemoryResult =
   | { ok: true; memory: AgentMemoryRecord }
   | { ok: false; error: string };
@@ -84,6 +89,19 @@ interface MemoriesClientProps {
   workspaceId: string;
   orgSlug: string;
   workspaceSlug: string;
+  /**
+   * Server action for adding a manual one-off memory of any kind. Passed from
+   * MemoriesSection as a server action ref. When absent the "New Memory"
+   * affordance is not rendered. `kind`/`weight` are optional — omitting them
+   * lets the agent.memory.remember classifier infer them from the lesson.
+   */
+  createMemory?: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    text: string;
+    kind?: MemoryKind;
+    weight?: MemoryWeight;
+  }) => Promise<CreateMemoryResult>;
   /**
    * Server action for editing a memory. Passed from MemoriesSection (server
    * component) so it crosses the RSC → client boundary as a server action ref.
@@ -922,6 +940,187 @@ function MemoryDetail({
 }
 
 // ---------------------------------------------------------------------------
+// New memory sheet — manual one-off capture, any kind
+// ---------------------------------------------------------------------------
+
+// Sentinel for the "let the classifier decide" option in the kind/weight
+// selects. The empty string is falsy, so it maps cleanly to "omit the field"
+// when building the action payload, and agent.memory.remember then infers it.
+const INFER = "" as const;
+
+function MemoryCreate({
+  orgSlug,
+  workspaceSlug,
+  onClose,
+  onCreated,
+  createMemory,
+}: {
+  orgSlug: string;
+  workspaceSlug: string;
+  onClose: () => void;
+  /** Called after a successful create with the new record shape. */
+  onCreated: (created: AgentMemoryRecord) => void;
+  createMemory: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    text: string;
+    kind?: MemoryKind;
+    weight?: MemoryWeight;
+  }) => Promise<CreateMemoryResult>;
+}) {
+  const [text, setText] = React.useState("");
+  const [kind, setKind] = React.useState<MemoryKind | typeof INFER>(INFER);
+  const [weight, setWeight] = React.useState<MemoryWeight | typeof INFER>(INFER);
+  const [isPending, startTransition] = React.useTransition();
+  const [error, setError] = React.useState<string | null>(null);
+
+  function handleCreate() {
+    const trimmed = text.trim();
+    if (trimmed.length === 0) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await createMemory({
+        orgSlug,
+        workspaceSlug,
+        text: trimmed,
+        // Only send a pinned kind/weight; the empty sentinel is omitted so the
+        // handler classifier infers it.
+        ...(kind ? { kind } : {}),
+        ...(weight ? { weight } : {}),
+      });
+
+      if (result.ok) {
+        onCreated(result.memory);
+        onClose();
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  return (
+    <Sheet
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <SheetContent className="w-full max-w-lg overflow-y-auto">
+        <SheetHeader className="pb-4">
+          <SheetTitle className="flex items-center gap-2">
+            <BrainCircuit className="h-4 w-4" aria-hidden="true" />
+            New memory
+          </SheetTitle>
+          <SheetDescription className="text-xs text-muted-foreground">
+            Capture a lesson, constraint, or gotcha for agents in this
+            workspace. Leave Kind or Weight on &ldquo;Auto-detect&rdquo; to let
+            the assistant classify it.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="flex flex-col gap-4">
+          {/* Lesson */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="create-memory-lesson" className={SECTION_LABEL_CLS}>
+              Lesson
+            </label>
+            <textarea
+              id="create-memory-lesson"
+              rows={4}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              maxLength={2000}
+              placeholder="What should the agent remember?"
+              aria-label="Lesson text"
+              disabled={isPending}
+              className={`${FIELD_INPUT_CLS} resize-y`}
+            />
+          </div>
+
+          {/* Kind — any of the five types, or Auto-detect */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="create-memory-kind" className={SECTION_LABEL_CLS}>
+              Kind
+            </label>
+            <select
+              id="create-memory-kind"
+              value={kind}
+              onChange={(e) =>
+                setKind(e.target.value as MemoryKind | typeof INFER)
+              }
+              disabled={isPending}
+              aria-label="Memory kind"
+              className={FIELD_INPUT_CLS}
+            >
+              <option value={INFER}>Auto-detect</option>
+              {ALL_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {KIND_CONFIG[k].label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Weight */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="create-memory-weight" className={SECTION_LABEL_CLS}>
+              Weight
+            </label>
+            <select
+              id="create-memory-weight"
+              value={weight}
+              onChange={(e) =>
+                setWeight(e.target.value as MemoryWeight | typeof INFER)
+              }
+              disabled={isPending}
+              aria-label="Memory weight"
+              className={FIELD_INPUT_CLS}
+            >
+              <option value={INFER}>Auto-detect</option>
+              {(["low", "high", "critical"] as const).map((w) => (
+                <option key={w} value={w}>
+                  {WEIGHT_CONFIG[w].label}
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] text-muted-foreground">
+              Low sinks below recall; Critical never decays.
+            </p>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <p role="alert" className="text-xs text-destructive">
+              {error}
+            </p>
+          )}
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 pt-3 border-t border-border/40">
+            <Button
+              size="sm"
+              variant="gradient"
+              onClick={handleCreate}
+              disabled={isPending || text.trim().length === 0}
+            >
+              {isPending ? "Adding…" : "Add memory"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onClose}
+              disabled={isPending}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -932,6 +1131,7 @@ export function MemoriesClient({
   workspaceId: _workspaceId,
   orgSlug,
   workspaceSlug,
+  createMemory,
   updateMemory,
   deleteMemory,
 }: MemoriesClientProps) {
@@ -939,6 +1139,7 @@ export function MemoriesClient({
   const [records, setRecords] = React.useState<AgentMemoryRecord[]>(initialRecords);
   const [selectedRecord, setSelectedRecord] =
     React.useState<AgentMemoryRecord | null>(null);
+  const [showCreate, setShowCreate] = React.useState(false);
   const [activeKinds, setActiveKinds] = React.useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = React.useState("");
   const [minConfidence, setMinConfidence] = React.useState(0);
@@ -959,6 +1160,15 @@ export function MemoriesClient({
       return next;
     });
   }, []);
+
+  /** Prepend a newly created record (newest first), then re-sync from server. */
+  function handleMemoryCreated(created: AgentMemoryRecord) {
+    setRecords((prev) => [
+      created,
+      ...prev.filter((r) => r.id !== created.id),
+    ]);
+    router.refresh();
+  }
 
   /** Optimistically apply an updated record to the list, then re-sync from server. */
   function handleMemoryUpdated(updated: AgentMemoryRecord) {
@@ -1009,20 +1219,33 @@ export function MemoriesClient({
   return (
     <div className="flex flex-col gap-5">
       {/* Header */}
-      <div className="flex items-start gap-3">
-        <BrainCircuit
-          className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <div>
-          <p className="text-sm font-semibold text-foreground">
-            Agent Memories
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Lessons, constraints, and gotchas written by agents during this
-            workspace&apos;s sessions.
-          </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <BrainCircuit
+            className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              Agent Memories
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Lessons, constraints, and gotchas written by agents during this
+              workspace&apos;s sessions.
+            </p>
+          </div>
         </div>
+        {createMemory && (
+          <Button
+            size="sm"
+            variant="gradient"
+            onClick={() => setShowCreate(true)}
+            className="flex-shrink-0"
+          >
+            <Plus className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+            New Memory
+          </Button>
+        )}
       </div>
 
       {/* Stats row */}
@@ -1096,7 +1319,7 @@ export function MemoriesClient({
             </p>
             <p className="text-xs text-muted-foreground/70 mt-1 max-w-xs">
               {records.length === 0
-                ? "Memories appear here as agents learn during this workspace's sessions, or when you ask the assistant to remember something."
+                ? "Memories appear here as agents learn during this workspace's sessions, when you ask the assistant to remember something, or when you add one with “New Memory”."
                 : "Try adjusting your kind filters, confidence threshold, or search query."}
             </p>
           </div>
@@ -1121,6 +1344,17 @@ export function MemoriesClient({
           onDeleted={handleMemoryDeleted}
           updateMemory={updateMemory}
           deleteMemory={deleteMemory}
+        />
+      )}
+
+      {/* Create sheet */}
+      {showCreate && createMemory && (
+        <MemoryCreate
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          onClose={() => setShowCreate(false)}
+          onCreated={handleMemoryCreated}
+          createMemory={createMemory}
         />
       )}
     </div>
