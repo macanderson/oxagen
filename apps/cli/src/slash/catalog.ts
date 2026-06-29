@@ -43,6 +43,15 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
 > = [
   { name: "help", description: "Show the slash-command help" },
   {
+    name: "login",
+    description:
+      "Show the current Oxagen session. To authenticate interactively, run `oxagen login` in your shell.",
+  },
+  {
+    name: "logout",
+    description: "Clear the stored Oxagen session (token + org + workspace) from the global config.",
+  },
+  {
     name: "tui",
     description:
       "Switch the terminal layout between compact (inline) and fullscreen (alternate screen). Omit the argument to toggle.",

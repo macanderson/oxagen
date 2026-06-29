@@ -37,7 +37,7 @@ const mocks = vi.hoisted(() => ({
   verifyWebhook: vi.fn(),
   // Crypto
   decrypt: vi.fn(),
-  createIngestionCryptoAdapter: vi.fn(),
+  resolveIngestionCryptoAdapterForKeyId: vi.fn(),
 }));
 
 vi.mock("@oxagen/auth", () => ({
@@ -106,7 +106,7 @@ vi.mock("@oxagen/ingestion/connectors", () => ({
 
 vi.mock("@oxagen/crypto", () => ({
   decrypt: mocks.decrypt,
-  createIngestionCryptoAdapter: mocks.createIngestionCryptoAdapter,
+  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
 }));
 
 import { app } from "../app";
@@ -281,7 +281,7 @@ describe("happy path — no secretEnc", () => {
   it("does not call decrypt when secretEnc is null", async () => {
     await app.fetch(makePost("{}"));
     expect(mocks.decrypt).not.toHaveBeenCalled();
-    expect(mocks.createIngestionCryptoAdapter).not.toHaveBeenCalled();
+    expect(mocks.resolveIngestionCryptoAdapterForKeyId).not.toHaveBeenCalled();
   });
 });
 
@@ -297,7 +297,7 @@ describe("happy path — with secretEnc (HMAC decryption)", () => {
     mocks.withSystemDb.mockImplementation(
       (fn: Parameters<WithDbFn>[0]) => fn(makeMockTx([ENC_ROW]) as TxLike),
     );
-    mocks.createIngestionCryptoAdapter.mockReturnValue({ adapter: {} });
+    mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValue({ adapter: {} });
     mocks.decrypt.mockResolvedValue(Buffer.from("my-webhook-secret"));
   });
 
@@ -308,7 +308,7 @@ describe("happy path — with secretEnc (HMAC decryption)", () => {
 
   it("decrypts the secretEnc and passes the secret to verifyWebhook", async () => {
     await app.fetch(makePost("{}"));
-    expect(mocks.createIngestionCryptoAdapter).toHaveBeenCalledOnce();
+    expect(mocks.resolveIngestionCryptoAdapterForKeyId).toHaveBeenCalledOnce();
     expect(mocks.decrypt).toHaveBeenCalledOnce();
     expect(mocks.verifyWebhook).toHaveBeenCalledWith(
       expect.any(Uint8Array),

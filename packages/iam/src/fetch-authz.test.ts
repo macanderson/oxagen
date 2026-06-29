@@ -54,6 +54,50 @@ const PRINCIPAL_ROW = {
   metadata: {},
 };
 
+// Mock for the API-key path, where _fetchAuthz fires an EXTRA leading query to
+// resolve the key's creator before the principal lookup. Query order:
+//   1: api_keys (created_by_user_id, with limit 1)
+//   2: principals (with limit 1)
+//   3: roles (no limit)
+//   4: roleGrants (no limit, only if roleIds.length > 0)
+//   5: pra (no limit)
+function buildApiKeyDbMock(overrides: {
+  apiKey?: unknown[];
+  principals?: unknown[];
+  roles?: unknown[];
+  roleGrants?: unknown[];
+  pra?: unknown[];
+} = {}) {
+  const apiKey = overrides.apiKey ?? [{ createdByUserId: "usr_creator" }];
+  const principals = overrides.principals ?? [{ ...PRINCIPAL_ROW, parentUserId: "usr_creator" }];
+  const roles = overrides.roles ?? [];
+  const roleGrants = overrides.roleGrants ?? [];
+  const pra = overrides.pra ?? [];
+
+  let selectCallIdx = 0;
+
+  const makeChain = (rows: unknown[]) => ({
+    from: () => ({ where: () => ({ limit: () => Promise.resolve(rows) }) }),
+  });
+  const makeChainNoLimit = (rows: unknown[]) => ({
+    from: () => ({ where: () => Promise.resolve(rows) }),
+  });
+
+  return {
+    select: () => {
+      selectCallIdx++;
+      switch (selectCallIdx) {
+        case 1: return makeChain(apiKey);
+        case 2: return makeChain(principals);
+        case 3: return makeChainNoLimit(roles);
+        case 4: return makeChainNoLimit(roleGrants);
+        case 5: return makeChainNoLimit(pra);
+        default: return makeChain([]);
+      }
+    },
+  };
+}
+
 function buildDbMock(overrides: {
   principals?: unknown[];
   grants?: unknown[];
@@ -62,10 +106,11 @@ function buildDbMock(overrides: {
   roleGrants?: unknown[];
   pra?: unknown[];
 } = {}) {
+  // grants/policies tables were dropped in migration 0027 — _fetchAuthz returns
+  // [] for both unconditionally (never a DB query), so this mock has no chain
+  // for them. The override keys remain accepted but are intentionally unused.
   const principals = overrides.principals ?? [PRINCIPAL_ROW];
-  const grants = overrides.grants ?? [];
   const roles = overrides.roles ?? [];
-  const policies = overrides.policies ?? [];
   const roleGrants = overrides.roleGrants ?? [];
   const pra = overrides.pra ?? [];
 
@@ -174,11 +219,19 @@ describe("fetchAuthz()", () => {
     expect(result.policies).toHaveLength(0);
   });
 
-  // ── API-key caller fail-closed ───────────────────────────────────────────
+  // ── API-key caller authorizes AS ITS CREATOR ─────────────────────────────
 
-  it("fails closed with an org-enforced deny policy when userId is null but apiKeyId is set", async () => {
-    // No DB queries should fire — the function returns before any select.
-    mocks.dbFn.mockReturnValue(buildDbMock());
+  it("resolves an API key to its creator's principal + role grants", async () => {
+    const roleRow = { id: "role_admin", orgId: "org_1", name: "Admin", scopeKind: "org" };
+    mocks.dbFn.mockReturnValue(
+      buildApiKeyDbMock({
+        apiKey: [{ createdByUserId: "usr_creator" }],
+        principals: [{ ...PRINCIPAL_ROW, parentUserId: "usr_creator" }],
+        roles: [roleRow],
+        pra: [{ roleId: "role_admin" }],
+        roleGrants: [{ roleId: "role_admin", capabilityId: "markdown.generate", effect: "allow" }],
+      }),
+    );
 
     const result = await fetchAuthz({
       userId: null,
@@ -188,13 +241,27 @@ describe("fetchAuthz()", () => {
       capability: "markdown.generate",
     });
 
-    // A sentinel service principal is returned (not EMPTY_AUTHZ) so the request
-    // is denied via rule 2 rather than degrading to defaultEffect.
+    // The key acts as its creator — a real principal, with the creator's grants.
+    expect(result.principal?.id).toBe("prn_internal");
+    expect(result.policies).toHaveLength(0);
+    expect(result.roleGrants).toHaveLength(1);
+    expect(result.roleGrants[0]?.effect).toBe("allow");
+    const adminRole = result.roles.find((r) => r.id === "role_admin");
+    expect(adminRole?.principalIds).toContain("prn_internal");
+  });
+
+  it("fails closed when the API key row is missing / soft-deleted / foreign-org", async () => {
+    mocks.dbFn.mockReturnValue(buildApiKeyDbMock({ apiKey: [] }));
+
+    const result = await fetchAuthz({
+      userId: null,
+      apiKeyId: "aky_gone",
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      capability: "markdown.generate",
+    });
+
     expect(result.principal?.kind).toBe("service");
-    expect(result.grants).toHaveLength(0);
-    expect(result.roles).toHaveLength(0);
-    expect(result.roleGrants).toHaveLength(0);
-    // Synthetic org-enforced deny policy scoped to the requested capability/org.
     expect(result.policies).toHaveLength(1);
     expect(result.policies[0]).toMatchObject({
       capabilityId: "markdown.generate",
@@ -203,6 +270,60 @@ describe("fetchAuthz()", () => {
       effect: "deny",
       enforced: true,
     });
+  });
+
+  it("fails closed when the API key has no recorded creator", async () => {
+    mocks.dbFn.mockReturnValue(buildApiKeyDbMock({ apiKey: [{ createdByUserId: null }] }));
+
+    const result = await fetchAuthz({
+      userId: null,
+      apiKeyId: "aky_nocreator",
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      capability: "markdown.generate",
+    });
+
+    expect(result.policies).toHaveLength(1);
+    expect(result.policies[0]).toMatchObject({ effect: "deny", enforced: true });
+  });
+
+  it("fails closed when the key's creator has no principal in this org", async () => {
+    mocks.dbFn.mockReturnValue(
+      buildApiKeyDbMock({ apiKey: [{ createdByUserId: "usr_creator" }], principals: [] }),
+    );
+
+    const result = await fetchAuthz({
+      userId: null,
+      apiKeyId: "aky_1",
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      capability: "markdown.generate",
+    });
+
+    expect(result.principal?.kind).toBe("service");
+    expect(result.policies).toHaveLength(1);
+    expect(result.policies[0]).toMatchObject({ effect: "deny", enforced: true });
+  });
+
+  it("fails closed for an API-key caller when IAM tables are missing (42P01)", async () => {
+    mocks.dbFn.mockReturnValue({
+      select: () => {
+        const err = Object.assign(new Error("relation does not exist"), { code: "42P01" });
+        throw err;
+      },
+    });
+
+    const result = await fetchAuthz({
+      userId: null,
+      apiKeyId: "aky_1",
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      capability: "markdown.generate",
+    });
+
+    // Must NOT degrade to EMPTY_AUTHZ (defaultEffect) on the m2m surface.
+    expect(result.policies).toHaveLength(1);
+    expect(result.policies[0]).toMatchObject({ effect: "deny", enforced: true });
   });
 
   // ── !principal early return ──────────────────────────────────────────────

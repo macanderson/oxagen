@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   decrypt: vi.fn(),
   encrypt: vi.fn(),
   createIngestionCryptoAdapter: vi.fn(),
+  resolveIngestionCryptoAdapterForKeyId: vi.fn(),
   requireEnv: vi.fn(),
   fetchMock: vi.fn(),
   inngestCreateFunction: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock("@oxagen/database", () => ({
 
 vi.mock("@oxagen/crypto", () => ({
   createIngestionCryptoAdapter: mocks.createIngestionCryptoAdapter,
+  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
   decrypt: mocks.decrypt,
   encrypt: mocks.encrypt,
 }));
@@ -111,8 +113,13 @@ function setupSingleAccountDb(
 beforeEach(() => {
   vi.clearAllMocks();
 
-  // Default crypto adapter
+  // Default crypto adapter (write/encrypt path)
   mocks.createIngestionCryptoAdapter.mockReturnValue({
+    adapter: {},
+    keyId: "test-key-id",
+  });
+  // Default crypto adapter (read/decrypt path)
+  mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValue({
     adapter: {},
     keyId: "test-key-id",
   });

@@ -11,7 +11,8 @@
  *     REPL, where a thrown error is caught and rendered into the TUI rather than
  *     tearing the whole session down with process.exit.
  */
-import { getApiUrl, getOrgId, getToken, getWorkspaceId } from "./config.js";
+import { readConfig, getApiUrl, getToken } from "./config.js";
+import { readWorkspaceLink } from "./workspace-link.js";
 
 interface ApiContext {
   apiUrl: string;

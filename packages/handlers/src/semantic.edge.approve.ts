@@ -2,6 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { semanticEdgeApprove } from "@oxagen/oxagen/contracts/semantic.edge.approve";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology/tenant";
+import { sanitizeRelationshipType } from "@oxagen/ontology/labels";
 import { HTTPException } from "hono/http-exception";
 import { logger } from "./logger";
 
@@ -13,8 +14,13 @@ import { logger } from "./logger";
  * On APPROVE:
  *   - Updates InferredEdge.approvalStatus = "approved", sets approvedBy + approvedAt.
  *   - Finds or creates the target KnowledgeNode (MERGE on orgId+workspaceId+type+name).
- *   - Creates a permanent :SEMANTIC_EDGE relationship from the source EntityNode
- *     to the target node.
+ *   - Creates a permanent relationship from the source EntityNode to the target,
+ *     typed by the inferred relationship kind itself (e.g. :IMPLEMENTS, :DEPENDS_ON)
+ *     so the graph reads descriptively — never a generic :SEMANTIC_EDGE label. The
+ *     inferred origin is recorded as the `inferred` / `origin` properties on the
+ *     relationship, not as its type. Relationship types cannot be parameterized in
+ *     Cypher, so the type is sanitized via `sanitizeRelationshipType` and
+ *     interpolated.
  *   - Returns the Neo4j element-id of the created relationship.
  *
  * On REJECT:
@@ -91,8 +97,15 @@ export const semanticEdgeApproveHandler: CapabilityHandler<typeof semanticEdgeAp
         return { edgeId, decision: "reject" as const, permanentEdgeId: undefined };
       }
 
-      // 3. Approval path: create a permanent :SEMANTIC_EDGE relationship.
+      // 3. Approval path: materialise a permanent relationship typed by the
+      //    inferred relationship kind itself (e.g. :IMPLEMENTS), so the graph
+      //    reads descriptively instead of every inferred edge collapsing to a
+      //    generic :SEMANTIC_EDGE. Relationship types cannot be parameterized in
+      //    Cypher, so sanitize + interpolate (`relType` is guaranteed safe to
+      //    place in a type position). The inferred origin lives on `r.inferred` /
+      //    `r.origin`; `r.type` keeps the raw, pre-sanitization model output.
       //    MERGE on the target KnowledgeNode first, then MERGE the relationship.
+      const relType = sanitizeRelationshipType(relationshipType);
       const relResult = await sess.run(
         `MATCH (src:EntityNode {publicId: $sourceNodeId, orgId: $orgId})
          MERGE (tgt:GraphNode {
@@ -109,8 +122,10 @@ export const semanticEdgeApproveHandler: CapabilityHandler<typeof semanticEdgeAp
            tgt.is_system   = false,
            tgt.createdAt   = datetime()
          WITH src, tgt
-         MERGE (src)-[r:SEMANTIC_EDGE {inferredEdgeId: $edgeId}]->(tgt)
+         MERGE (src)-[r:${relType} {inferredEdgeId: $edgeId}]->(tgt)
          ON CREATE SET
+           r.inferred    = true,
+           r.origin      = 'semantic',
            r.type        = $relationshipType,
            r.confidence  = $confidence,
            r.approvedBy  = $approvedBy,
