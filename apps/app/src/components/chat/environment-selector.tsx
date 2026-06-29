@@ -36,8 +36,6 @@ export function EnvironmentSelector({
   onSelectEnv,
   isLoading = false,
 }: EnvironmentSelectorProps) {
-  const selectedEnv = environments.find((e) => e.id === selectedEnvId);
-
   return (
     <div className="flex items-center gap-2">
       <Settings className="size-4 text-muted-foreground" />
