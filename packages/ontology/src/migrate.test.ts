@@ -31,6 +31,12 @@ const MERGE_CALL = "apoc.refactor.mergeNodes";
 // The legacy :SEMANTIC_EDGE relabel pre-check + the APOC call that performs it.
 const LEGACY_COUNT = "AS legacyEdges";
 const SETTYPE_CALL = "apoc.refactor.setType";
+// The PascalCase recase: `label` property probe, structural label probe, the
+// pure-Cypher property update, and the APOC label rename.
+const PROP_PROBE = "DISTINCT n.label";
+const LABELS_PROBE = "CALL db.labels()";
+const PROP_UPDATE = "SET n.label = $next";
+const RENAME_CALL = "apoc.refactor.rename.label";
 
 // How many duplicate KnowledgeNode groups the mocked DB reports. Tests tweak it
 // to exercise the no-op path (0) vs. the dedup path (>0).
@@ -41,8 +47,18 @@ let mergeError: Error | null = null;
 let legacyEdges = 0;
 // When set, the setType relabel rejects with this error (missing APOC plugin).
 let relabelError: Error | null = null;
+// Distinct legacy `label` property values the mocked DB reports (recase pass 1).
+let legacyLabelProps: string[] = [];
+// Structural labels the mocked DB reports from db.labels() (recase pass 2).
+let legacyLabels: string[] = [];
+// When set, the apoc label rename rejects with this error (missing APOC plugin).
+let renameError: Error | null = null;
 
 function makeRecord(values: Record<string, number>) {
+  return { get: (key: string) => values[key] };
+}
+
+function makeStrRecord(values: Record<string, string>) {
   return { get: (key: string) => values[key] };
 }
 
@@ -60,6 +76,18 @@ const runFn = vi.fn(async (query: string) => {
   }
   if (query.includes(SETTYPE_CALL) && relabelError) {
     throw relabelError;
+  }
+  // PascalCase recase pass 1: distinct `label` property probe (must be checked
+  // before the property UPDATE, which also mentions `n.label`).
+  if (query.includes(PROP_PROBE)) {
+    return { records: legacyLabelProps.map((label) => makeStrRecord({ label })) };
+  }
+  // PascalCase recase pass 2: structural label probe.
+  if (query.includes(LABELS_PROBE)) {
+    return { records: legacyLabels.map((label) => makeStrRecord({ label })) };
+  }
+  if (query.includes(RENAME_CALL) && renameError) {
+    throw renameError;
   }
   return { records: [] };
 });
@@ -87,13 +115,17 @@ describe("migrate() (@oxagen/ontology)", () => {
     mergeError = null;
     legacyEdges = 0;
     relabelError = null;
+    legacyLabelProps = [];
+    legacyLabels = [];
+    renameError = null;
   });
 
   it("runs the dup-check then one session.run() per non-empty, non-comment statement", async () => {
     await migrate();
     // 1 dedupe pre-check (no duplicates) + 2 real schema statements +
-    // 1 legacy :SEMANTIC_EDGE relabel pre-check (no legacy edges → short-circuits).
-    expect(runFn).toHaveBeenCalledTimes(4);
+    // 1 legacy :SEMANTIC_EDGE relabel pre-check (no legacy edges → short-circuits) +
+    // 2 PascalCase recase probes (label-property + db.labels(), both empty → no-op).
+    expect(runFn).toHaveBeenCalledTimes(6);
   });
 
   it("passes each Cypher statement as an argument to session.run()", async () => {
@@ -128,6 +160,9 @@ describe("dedupeLegacyKnowledgeNodes (via migrate behaviour)", () => {
     mergeError = null;
     legacyEdges = 0;
     relabelError = null;
+    legacyLabelProps = [];
+    legacyLabels = [];
+    renameError = null;
   });
 
   it("does NOT issue the apoc merge call when there are no duplicate publicIds", async () => {
@@ -165,6 +200,9 @@ describe("relabelLegacySemanticEdges (via migrate behaviour)", () => {
     mergeError = null;
     legacyEdges = 0;
     relabelError = null;
+    legacyLabelProps = [];
+    legacyLabels = [];
+    renameError = null;
   });
 
   it("does NOT issue the apoc setType call when there are no legacy :SEMANTIC_EDGE edges", async () => {
@@ -202,6 +240,70 @@ describe("relabelLegacySemanticEdges (via migrate behaviour)", () => {
   });
 });
 
+describe("pascalCaseDomainLabels (via migrate behaviour)", () => {
+  beforeEach(() => {
+    runFn.mockClear();
+    closeFn.mockClear();
+    dupGroups = 0;
+    mergeError = null;
+    legacyEdges = 0;
+    relabelError = null;
+    legacyLabelProps = [];
+    legacyLabels = [];
+    renameError = null;
+  });
+
+  it("is a no-op when every label/property is already PascalCase", async () => {
+    // Mixed system + already-canonical domain labels — none need recasing.
+    legacyLabels = ["GraphNode", "EntityNode", "PullRequest", "User"];
+    legacyLabelProps = ["PullRequest", "Issue"];
+    await migrate();
+    const calls = schemaCalls();
+    expect(calls.some((c) => c.includes(RENAME_CALL))).toBe(false);
+    expect(calls.some((c) => c.includes(PROP_UPDATE))).toBe(false);
+  });
+
+  it("recases lower-/snake-cased `label` properties to PascalCase (pure Cypher)", async () => {
+    legacyLabelProps = ["pull_request", "issue"];
+    await migrate();
+    const calls = schemaCalls();
+    const updates = calls.filter((c) => c.includes(PROP_UPDATE));
+    // One UPDATE per distinct changed value — and never an APOC call for the
+    // property pass (must work on community Neo4j).
+    expect(updates.length).toBe(2);
+  });
+
+  it("issues an APOC label rename only for labels that actually change", async () => {
+    // Two need recasing (pull_request, issue); two are already canonical.
+    legacyLabels = ["pull_request", "issue", "GraphNode", "User"];
+    await migrate();
+    const renames = schemaCalls().filter((c) => c.includes(RENAME_CALL));
+    expect(renames.length).toBe(2);
+  });
+
+  it("does NOT issue the apoc rename when all labels are already canonical", async () => {
+    legacyLabels = ["GraphNode", "EntityNode", "Execution"];
+    await migrate();
+    expect(schemaCalls().some((c) => c.includes(RENAME_CALL))).toBe(false);
+  });
+
+  it("runs the recase AFTER the schema statements (back-fill, not a prerequisite)", async () => {
+    legacyLabels = ["pull_request"];
+    await migrate();
+    const calls = schemaCalls();
+    const renameIdx = calls.findIndex((c) => c.includes(RENAME_CALL));
+    const constraintIdx = calls.findIndex((c) => c.includes("CREATE CONSTRAINT a"));
+    expect(renameIdx).toBeGreaterThan(constraintIdx);
+  });
+
+  it("throws an actionable error (mentioning APOC) if the label rename fails", async () => {
+    legacyLabels = ["pull_request"];
+    renameError = new Error("There is no procedure with the name `apoc.refactor.rename.label`");
+    await expect(migrate()).rejects.toThrow(/APOC/);
+    expect(closeFn).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("splitStatements (via migrate behaviour)", () => {
   beforeEach(() => {
     runFn.mockClear();
@@ -209,6 +311,9 @@ describe("splitStatements (via migrate behaviour)", () => {
     mergeError = null;
     legacyEdges = 0;
     relabelError = null;
+    legacyLabelProps = [];
+    legacyLabels = [];
+    renameError = null;
   });
 
   it("strips comment-only lines before splitting", async () => {

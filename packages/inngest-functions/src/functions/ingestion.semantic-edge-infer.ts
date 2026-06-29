@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createFunction } from "../create-function";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology/tenant";
-import { sanitizeRelationshipType } from "@oxagen/ontology/labels";
+import { sanitizeRelationshipType, sanitizeLabel } from "@oxagen/ontology/labels";
 import { generateObjectFor } from "@oxagen/ai";
 import { logger } from "../logger";
 
@@ -186,6 +186,15 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
               // Cypher, so sanitize + interpolate. Find or create the target
               // placeholder node, then create the relationship.
               const relType = sanitizeRelationshipType(edge.relationshipType);
+              // The materialised target carries a DESCRIPTIVE PascalCase domain
+              // label (e.g. :Feature, :Service) so an auto-accepted inferred node
+              // reads like any other graph node — never an anchor-only :GraphNode.
+              // sanitizeLabel makes it injection-safe; applied idempotently so it
+              // also lands on pre-existing placeholders. `tgt.label` mirrors it.
+              const tgtDomainLabel = sanitizeLabel(edge.targetType);
+              const tgtLabelClause = tgtDomainLabel
+                ? `SET tgt:${tgtDomainLabel}\n                 WITH src, tgt\n                 `
+                : "";
               await sess.run(
                 `MATCH (src:EntityNode {publicId: $sourceNodeId, orgId: $orgId})
                  MERGE (tgt:GraphNode {
@@ -197,14 +206,14 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
                  ON CREATE SET
                    tgt.id          = randomUUID(),
                    tgt.publicId    = randomUUID(),
-                   tgt.label       = $targetType,
+                   tgt.label       = $targetDisplayLabel,
                    tgt.displayName = $targetName,
                    tgt.createdAt   = datetime()
                  SET
-                   tgt.label       = coalesce(tgt.label, $targetType),
+                   tgt.label       = coalesce(tgt.label, $targetDisplayLabel),
                    tgt.displayName = coalesce(tgt.displayName, $targetName)
                  WITH src, tgt
-                 MERGE (src)-[r:${relType} {inferredEdgeId: $edgeId}]->(tgt)
+                 ${tgtLabelClause}MERGE (src)-[r:${relType} {inferredEdgeId: $edgeId}]->(tgt)
                  ON CREATE SET
                    r.inferred    = true,
                    r.origin      = 'semantic',
@@ -218,6 +227,7 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
                   workspaceId,
                   sourceNodeId: nodeId,
                   targetType: edge.targetType,
+                  targetDisplayLabel: tgtDomainLabel ?? edge.targetType,
                   targetName: edge.targetName,
                   edgeId,
                   relationshipType: edge.relationshipType,

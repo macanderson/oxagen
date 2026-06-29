@@ -4,6 +4,7 @@ import {
   isValidLabel,
   assertValidLabel,
   sanitizeLabel,
+  toLabelKey,
   sanitizeRelationshipType,
   FALLBACK_RELATIONSHIP_TYPE,
 } from "./labels";
@@ -50,15 +51,31 @@ describe("assertValidLabel", () => {
 });
 
 describe("sanitizeLabel", () => {
-  it("coerces free text into a valid label", () => {
-    expect(sanitizeLabel("Nuclear-powered submarine")).toBe("Nuclear_powered_submarine");
-    expect(sanitizeLabel("pull_request")).toBe("pull_request");
+  it("coerces free text into a PascalCase label", () => {
+    expect(sanitizeLabel("Nuclear-powered submarine")).toBe("NuclearPoweredSubmarine");
+    expect(sanitizeLabel("pull_request")).toBe("PullRequest");
     expect(sanitizeLabel("  Person  ")).toBe("Person");
+    expect(sanitizeLabel("issue")).toBe("Issue");
+    expect(sanitizeLabel("source repository")).toBe("SourceRepository");
+  });
+
+  it("normalises casing regardless of how the source spelled the type", () => {
+    // snake, SCREAMING_SNAKE, camelCase, and PascalCase all collapse to one form.
+    expect(sanitizeLabel("PULL_REQUEST")).toBe("PullRequest");
+    expect(sanitizeLabel("pullRequest")).toBe("PullRequest");
+    expect(sanitizeLabel("PullRequest")).toBe("PullRequest");
+    expect(sanitizeLabel("pull request")).toBe("PullRequest");
+  });
+
+  it("is idempotent on already-PascalCase system labels", () => {
+    for (const label of ["GraphNode", "EntityNode", "User", "AgentVersion", "SourceConnection"]) {
+      expect(sanitizeLabel(label)).toBe(label);
+    }
   });
 
   it("prefixes leading-digit results so they start with a letter", () => {
     const out = sanitizeLabel("3D model");
-    expect(out).toBe("N_3D_model");
+    expect(out).toBe("N3dModel");
     expect(isValidLabel(out!)).toBe(true);
   });
 
@@ -72,6 +89,21 @@ describe("sanitizeLabel", () => {
       const out = sanitizeLabel(raw);
       if (out !== null) expect(isValidLabel(out)).toBe(true);
     }
+  });
+});
+
+describe("toLabelKey", () => {
+  it("collapses every spelling of one concept to a single key", () => {
+    const key = "pullrequest";
+    expect(toLabelKey("pull_request")).toBe(key);
+    expect(toLabelKey("PullRequest")).toBe(key);
+    expect(toLabelKey("pull request")).toBe(key);
+    expect(toLabelKey("PULL_REQUEST")).toBe(key);
+  });
+
+  it("returns empty string when nothing usable remains", () => {
+    expect(toLabelKey("!!!")).toBe("");
+    expect(toLabelKey("   ")).toBe("");
   });
 });
 

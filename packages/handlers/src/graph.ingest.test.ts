@@ -25,9 +25,12 @@ const EMPTY_VOCAB: TestVocab = { source: "none", enforcement: "off", labels: [],
 vi.mock("./graph.ingest-vocabulary", () => ({
   resolveIngestVocabulary: resolveVocab,
   renderVocabularyPrompt: (v: TestVocab) => (v.labels.length ? "VOCAB-PROMPT" : ""),
+  // Mirror the real strictAllowedLabels → toLabelKey normalisation (separator-
+  // and case-insensitive) so the allow-list keys match the handler's real
+  // toLabelKey(e.type) membership check.
   strictAllowedLabels: (v: TestVocab) =>
     v.enforcement === "strict" && v.source === "registry"
-      ? new Set(v.labels.map((l) => l.name.toLowerCase()))
+      ? new Set(v.labels.map((l) => l.name.toLowerCase().replace(/[^a-z0-9]/g, "")))
       : null,
 }));
 
@@ -71,10 +74,13 @@ const ctx: CapabilityContext = {
 };
 
 describe("sanitizeLabel", () => {
-  it("falls back to Entity for blank, and caps length at 100", () => {
+  it("coerces extracted types to PascalCase, falling back to Entity for blanks", () => {
     expect(sanitizeLabel("  ")).toBe("Entity");
     expect(sanitizeLabel("Person")).toBe("Person");
-    expect(sanitizeLabel("x".repeat(200)).length).toBe(100);
+    expect(sanitizeLabel("pull_request")).toBe("PullRequest");
+    expect(sanitizeLabel("source repository")).toBe("SourceRepository");
+    // Capped to the shared coercer's 99-char identifier bound.
+    expect(sanitizeLabel("x".repeat(200)).length).toBe(99);
   });
 });
 

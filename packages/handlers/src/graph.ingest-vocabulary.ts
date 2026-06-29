@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { withTenantDb } from "@oxagen/database";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { scopedSession } from "@oxagen/ontology/tenant";
+import { toLabelKey } from "@oxagen/ontology/labels";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "./logger";
 
@@ -357,8 +358,14 @@ export function renderVocabularyPrompt(vocab: IngestVocabulary): string {
   return lines.join("\n");
 }
 
-/** The set of allowed label names (lowercased) under strict enforcement. */
+/**
+ * The set of allowed label identity keys under strict enforcement. Keyed via
+ * `toLabelKey` (separator- and case-insensitive) so an extracted type matches its
+ * vocabulary entry regardless of how either was cased/separated — "pull_request",
+ * "PullRequest", and "pull request" all resolve to one key. The membership check
+ * in graph.ingest MUST key the extracted type the same way.
+ */
 export function strictAllowedLabels(vocab: IngestVocabulary): Set<string> | null {
   if (vocab.enforcement !== "strict" || vocab.source !== "registry") return null;
-  return new Set(vocab.labels.map((l) => l.name.toLowerCase()));
+  return new Set(vocab.labels.map((l) => toLabelKey(l.name)));
 }

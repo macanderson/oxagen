@@ -5,6 +5,7 @@ import { graphIngest } from "@oxagen/oxagen/contracts/graph.ingest";
 import type { GraphIngestOutput } from "@oxagen/oxagen/contracts/graph.ingest";
 import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
 import { invoke } from "@oxagen/oxagen/kernel";
+import { sanitizeLabel as toPascalLabel, toLabelKey } from "@oxagen/ontology/labels";
 import { getPinnedSchema } from "./schema.pinned";
 import { logger } from "./logger";
 import {
@@ -62,10 +63,14 @@ const extractionSchema = z.object({
 
 export type GraphExtraction = z.output<typeof extractionSchema>;
 
-/** A graph node label must be a non-empty ≤100-char string (the contract bound). */
+/**
+ * Coerce an extracted entity type into a canonical PascalCase graph label,
+ * delegating to the shared `@oxagen/ontology/labels` coercer (the single source
+ * of truth every node-label write site uses). Falls back to the generic `Entity`
+ * when the type has no usable label characters, so a node always has a label.
+ */
 export function sanitizeLabel(type: string): string {
-  const trimmed = type.trim().slice(0, 100);
-  return trimmed.length > 0 ? trimmed : "Entity";
+  return toPascalLabel(type) ?? "Entity";
 }
 
 async function readWorkspacePrompt(ctx: CapabilityContext): Promise<string> {
@@ -214,7 +219,10 @@ export const graphIngestHandler: CapabilityHandler<typeof graphIngest> = async (
   const entities: GraphIngestOutput["entities"] = [];
   for (const e of extraction.entities.slice(0, input.maxEntities)) {
     if (e.name.trim().length === 0) continue;
-    if (allowed && !allowed.has(sanitizeLabel(e.type).toLowerCase())) {
+    // Key the extracted type the same separator-/case-insensitive way the
+    // allow-list was built (strictAllowedLabels → toLabelKey), so vocabulary
+    // membership is robust to casing/separator differences.
+    if (allowed && !allowed.has(toLabelKey(e.type))) {
       droppedOffVocabulary++;
       continue;
     }

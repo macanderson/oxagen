@@ -169,6 +169,9 @@ describe("semanticEdgeApproveHandler", () => {
     expect(relCypher).not.toContain("SEMANTIC_EDGE");
     expect(relCypher).toContain("r.inferred    = true");
     expect(relCypher).toContain("r.origin      = 'semantic'");
+    // The materialised target carries its descriptive PascalCase domain label
+    // (PENDING_EDGE_ROW.targetType === "Feature"), never an anchor-only node.
+    expect(relCypher).toContain("SET tgt:Feature");
     expect(mocks.closeFn).toHaveBeenCalledOnce();
   });
 
