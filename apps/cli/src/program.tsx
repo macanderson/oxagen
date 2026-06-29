@@ -109,6 +109,7 @@ export function buildProgram(): Command {
         const session = requireSession();
 
         const runOpts = {
+          session,
           model: opts.model,
           readOnly: opts.readonly,
           mode,

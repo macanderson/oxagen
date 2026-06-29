@@ -246,6 +246,29 @@ import { metadata as codeFormatMetadata } from "./code.format";
 // Memory decay policy tools (OXA-1374)
 import { metadata as agentMemoryPolicyReadMetadata } from "./agent.memory.policy.read";
 import { metadata as agentMemoryPolicyWriteMetadata } from "./agent.memory.policy.write";
+// Memory CRUD (delete/remember/update added in agent-memory work)
+import { metadata as agentMemoryDeleteMetadata } from "./agent.memory.delete";
+import { metadata as agentMemoryRememberMetadata } from "./agent.memory.remember";
+import { metadata as agentMemoryUpdateMetadata } from "./agent.memory.update";
+// Agent feature verification
+import { metadata as agentFeatureVerifyMetadata } from "./agent.feature.verify";
+// Sandbox lifecycle (agent.sandbox.*)
+import { metadata as agentSandboxExecMetadata } from "./agent.sandbox.exec";
+import { metadata as agentSandboxSnapshotMetadata } from "./agent.sandbox.snapshot";
+import { metadata as agentSandboxStartMetadata } from "./agent.sandbox.start";
+import { metadata as agentSandboxStopMetadata } from "./agent.sandbox.stop";
+// Browser automation (browser.*)
+import { metadata as browserClickMetadata } from "./browser.click";
+import { metadata as browserFillMetadata } from "./browser.fill";
+import { metadata as browserNavigateMetadata } from "./browser.navigate";
+import { metadata as browserReadMetadata } from "./browser.read";
+import { metadata as browserRefreshMetadata } from "./browser.refresh";
+import { metadata as browserScreenshotMetadata } from "./browser.screenshot";
+import { metadata as browserSubmitMetadata } from "./browser.submit";
+// Code-map retrieval (code.map)
+import { metadata as codeMapMetadata } from "./code.map";
+// Graph sync push (graph.sync.push)
+import { metadata as graphSyncPushMetadata } from "./graph.sync.push";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -473,6 +496,29 @@ const allToolMetadata = [
   // Memory decay policy tools (OXA-1374)
   agentMemoryPolicyReadMetadata,
   agentMemoryPolicyWriteMetadata,
+  // Memory CRUD
+  agentMemoryDeleteMetadata,
+  agentMemoryRememberMetadata,
+  agentMemoryUpdateMetadata,
+  // Agent feature verification
+  agentFeatureVerifyMetadata,
+  // Sandbox lifecycle
+  agentSandboxExecMetadata,
+  agentSandboxSnapshotMetadata,
+  agentSandboxStartMetadata,
+  agentSandboxStopMetadata,
+  // Browser automation
+  browserClickMetadata,
+  browserFillMetadata,
+  browserNavigateMetadata,
+  browserReadMetadata,
+  browserRefreshMetadata,
+  browserScreenshotMetadata,
+  browserSubmitMetadata,
+  // Code-map retrieval
+  codeMapMetadata,
+  // Graph sync push
+  graphSyncPushMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────
