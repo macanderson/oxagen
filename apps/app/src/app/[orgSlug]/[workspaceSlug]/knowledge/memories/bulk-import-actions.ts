@@ -29,24 +29,21 @@ import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 import { withTenantDb, schema } from "@oxagen/database";
-import type {
-  MemoryImportDraft,
-  MemoryImportDraftInput,
-} from "@oxagen/oxagen/contracts/agent.memory.import.shared";
+import type { MemoryImportDraftInput } from "@oxagen/oxagen/contracts/agent.memory.import.shared";
 import type { AgentMemoryImportParseOutput } from "@oxagen/oxagen/contracts/agent.memory.import.parse";
 import type { AgentMemoryImportCommitOutput } from "@oxagen/oxagen/contracts/agent.memory.import.commit";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 
 // ---------------------------------------------------------------------------
-// Result types (exported for client prop typing). The draft shape that
-// round-trips through the review grid is the contract's MemoryImportDraft —
-// re-exported so the client component never imports the zod schema.
+// Result types. A "use server" module may only EXPORT async server actions —
+// re-exporting types from here breaks the Next server-actions transform (it
+// registers every export as an action ref, but types are erased at runtime).
+// So the client component declares its own structural draft type (DraftMemory
+// in memories-bulk-import.tsx); these Result aliases are local-only helpers.
 // ---------------------------------------------------------------------------
 
-export type { MemoryImportDraft, MemoryImportDraftInput };
-
-export type ParseImportResult =
+type ParseImportResult =
   | {
       ok: true;
       drafts: AgentMemoryImportParseOutput["drafts"];

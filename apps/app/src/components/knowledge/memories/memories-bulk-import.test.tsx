@@ -167,6 +167,35 @@ describe("MemoriesBulkImport — select stage", () => {
       defaultNodeRef: "team:platform",
     });
   });
+
+  it("shows an error and stays on the select stage when parse fails", async () => {
+    const parseImport = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "You must be a workspace member to import memories." });
+    render(
+      <MemoriesBulkImport
+        {...baseProps}
+        onClose={vi.fn()}
+        onImported={vi.fn()}
+        parseImport={parseImport}
+        commitImport={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Choose markdown documents"), {
+      target: { files: [md("rules.md", "- content")] },
+    });
+    await screen.findByText("rules.md");
+    fireEvent.click(screen.getByRole("button", { name: /parse documents/i }));
+
+    expect(
+      await screen.findByText("You must be a workspace member to import memories."),
+    ).toBeInTheDocument();
+    // Still on the select stage — the drop zone is present, the review grid is not.
+    expect(
+      screen.getByText("Drop markdown files here, or click to choose"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Review draft memories")).not.toBeInTheDocument();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -290,6 +319,31 @@ describe("MemoriesBulkImport — review stage", () => {
     // Re-select all.
     fireEvent.click(screen.getByLabelText("Select all drafts"));
     expect(screen.getByText("2 of 2 selected")).toBeInTheDocument();
+  });
+
+  it("shows an error and stays on review when commit fails outright", async () => {
+    const commitImport = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: "You must be a workspace member to import memories." });
+    await toReview([draft({ lesson: "Keep." })], [], commitImport);
+
+    fireEvent.click(screen.getByRole("button", { name: /import 1 memory/i }));
+
+    expect(
+      await screen.findByText("You must be a workspace member to import memories."),
+    ).toBeInTheDocument();
+    // Still on review (the grid + Import button remain), not the result stage.
+    expect(screen.getByText("Review draft memories")).toBeInTheDocument();
+    expect(screen.queryByText("Import complete")).not.toBeInTheDocument();
+  });
+
+  it("returns to the select stage when Back is clicked", async () => {
+    await toReview([draft()]);
+    fireEvent.click(screen.getByRole("button", { name: /back/i }));
+    expect(
+      screen.getByText("Drop markdown files here, or click to choose"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Review draft memories")).not.toBeInTheDocument();
   });
 });
 

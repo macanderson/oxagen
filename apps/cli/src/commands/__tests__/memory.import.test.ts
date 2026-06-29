@@ -93,6 +93,20 @@ describe("handleMemoryImport", () => {
     expect(text()).toContain("Re-run with --yes to import");
   });
 
+  it("emits JSON of the parsed drafts (no commit) with --json and no --yes", async () => {
+    mocks.parseImportMemories.mockResolvedValue({
+      drafts: [draft({ lesson: "Preview me." })],
+      documentCount: 1,
+      skipped: [],
+    });
+    await handleMemoryImport([md("rules.md", "- content")], { json: true });
+
+    expect(mocks.commitImportMemories).not.toHaveBeenCalled();
+    const parsed = JSON.parse(text());
+    expect(parsed.drafts).toHaveLength(1);
+    expect(parsed.drafts[0].lesson).toBe("Preview me.");
+  });
+
   it("passes --node through as the default anchor", async () => {
     mocks.parseImportMemories.mockResolvedValue({
       drafts: [draft()],
