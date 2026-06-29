@@ -270,7 +270,7 @@ describe("builder — CALLS edge extraction (same-file resolution)", () => {
     expect(callEdges).toHaveLength(0);
   });
 
-  it("logs (but does not throw) when callee is unresolved (cross-file call)", async () => {
+  it("emits no same-file edge for an external callee, and stays silent by default", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const calls: CallSite[] = [
       { callee: "externalFn", line: 2, enclosingSymbol: "localFn" },
@@ -284,12 +284,33 @@ describe("builder — CALLS edge extraction (same-file resolution)", () => {
     const fg = await fileGraphFromContent("src/caller.ts", "/* content */", "/root");
 
     const callEdges = fg.edges.filter((e) => e.type === "calls");
-    expect(callEdges).toHaveLength(0); // unresolved — no edge
+    expect(callEdges).toHaveLength(0); // external callee — no same-file edge
+    // No default noise: a call into another module/stdlib is the norm, not an error.
+    expect(consoleSpy).not.toHaveBeenCalled();
+
+    consoleSpy.mockRestore();
+  });
+
+  it("surfaces an external-call diagnostic only under OXAGEN_CODE_GRAPH_DEBUG", async () => {
+    vi.stubEnv("OXAGEN_CODE_GRAPH_DEBUG", "1");
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const calls: CallSite[] = [
+      { callee: "externalFn", line: 2, enclosingSymbol: "localFn" },
+    ];
+    mockParseSourceFile.mockResolvedValueOnce({
+      language: "typescript",
+      symbols: [{ name: "localFn", kind: "function", startLine: 0, endLine: 5 }],
+      calls,
+    } as ParseResult);
+
+    await fileGraphFromContent("src/caller.ts", "/* content */", "/root");
+
     expect(consoleSpy).toHaveBeenCalledOnce();
-    expect(consoleSpy.mock.calls[0]![0]).toMatch(/unresolved call/);
+    expect(consoleSpy.mock.calls[0]![0]).toMatch(/external call/);
     expect(consoleSpy.mock.calls[0]![0]).toMatch(/externalFn/);
 
     consoleSpy.mockRestore();
+    vi.unstubAllEnvs();
   });
 
   it("deduplicates calls edges: same caller→callee pair appears only once", async () => {
@@ -363,27 +384,36 @@ describe("builder — workspace-alias IMPORTS (@oxagen/*)", () => {
     expect(importEdges[0]!.source).toBe(fg.nodes.find((n) => n.kind === "file")!.id);
   });
 
-  it("logs (but does not throw) when @oxagen/<pkg> cannot be resolved on disk", async () => {
+  it("emits no alias edge for an unresolvable @oxagen/<pkg>: silent by default, logs under debug", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
-
     const imports: ImportSite[] = [
       { specifier: "@oxagen/nonexistent-pkg-xyz", line: 0 },
     ];
+
+    // Default: no edge, no noise.
     mockParseSourceFile.mockResolvedValueOnce({
       language: "typescript",
       symbols: [],
       imports,
     } as ParseResult);
-
     const fg = await fileGraphFromContent("src/consumer.ts", "/* content */", tmpDir);
+    expect(fg.edges.filter((e) => e.type === "imports")).toHaveLength(0);
+    expect(consoleSpy).not.toHaveBeenCalled();
 
-    const importEdges = fg.edges.filter((e) => e.type === "imports");
-    expect(importEdges).toHaveLength(0);
+    // Debug: the reworded diagnostic surfaces.
+    vi.stubEnv("OXAGEN_CODE_GRAPH_DEBUG", "1");
+    mockParseSourceFile.mockResolvedValueOnce({
+      language: "typescript",
+      symbols: [],
+      imports,
+    } as ParseResult);
+    await fileGraphFromContent("src/consumer.ts", "/* content */", tmpDir);
     expect(consoleSpy).toHaveBeenCalledOnce();
     expect(consoleSpy.mock.calls[0]![0]).toMatch(/unresolved workspace alias/);
     expect(consoleSpy.mock.calls[0]![0]).toMatch(/@oxagen\/nonexistent-pkg-xyz/);
 
     consoleSpy.mockRestore();
+    vi.unstubAllEnvs();
   });
 
   it("emits no alias-imports edges when parseResult.imports is undefined", async () => {

@@ -37,7 +37,7 @@ export class CodeGraphWatcher {
     const watcher = fs.watch(
       this.config.workspaceRoot,
       { recursive: true },
-      (eventType, filename) => {
+      (_eventType, filename) => {
         if (!filename) return;
         if (this.shouldIgnore(filename)) return;
         this.scheduleUpdate(filename);
@@ -64,7 +64,10 @@ export class CodeGraphWatcher {
 
   private shouldIgnore(filename: string): boolean {
     const parts = filename.split(path.sep);
-    const ignoreDirs = ["node_modules", ".git", ".next", "dist", "coverage", ".turbo"];
+    const ignoreDirs = [
+      "node_modules", ".git", ".next", "dist", "coverage", ".turbo",
+      ".vercel", "__pycache__", ".claude", "verifications",
+    ];
     return parts.some((p) => ignoreDirs.includes(p));
   }
 

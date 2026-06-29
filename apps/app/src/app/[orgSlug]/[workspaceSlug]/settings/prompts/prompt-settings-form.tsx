@@ -64,6 +64,13 @@ export interface PromptSettingsFormProps {
   initial: PromptSettingsReadOutput;
   /** Whether the viewing user may save changes (workspace owner or admin). */
   canEdit: boolean;
+  /**
+   * Whether the org is on the Enterprise plan. Controls whether per-prompt
+   * override fields are unlocked (editable). False → fields are disabled with
+   * an upsell overlay. True → fields are fully editable (subject to canEdit).
+   * Server enforces the tier gate regardless of UI state.
+   */
+  isEnterprise: boolean;
   orgSlug: string;
   workspaceSlug: string;
 }
@@ -83,6 +90,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 export function PromptSettingsForm({
   initial,
   canEdit,
+  isEnterprise,
   orgSlug,
   workspaceSlug,
 }: PromptSettingsFormProps) {
@@ -284,10 +292,12 @@ export function PromptSettingsForm({
             Per-prompt overrides
           </SectionLabel>
           <span className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
-            <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-            <Badge variant="outline" size="sm">
-              Enterprise
-            </Badge>
+            {!isEnterprise && <Lock className="h-3.5 w-3.5" aria-hidden="true" />}
+            {!isEnterprise && (
+              <Badge variant="outline" size="sm">
+                Enterprise
+              </Badge>
+            )}
             {overridesOpen ? (
               <ChevronUp className="h-4 w-4" aria-hidden="true" />
             ) : (
@@ -315,10 +325,12 @@ export function PromptSettingsForm({
                   >
                     {label}
                   </Label>
-                  <Badge variant="outline" size="sm">
-                    <Lock className="h-2.5 w-2.5 mr-1" aria-hidden="true" />
-                    Enterprise
-                  </Badge>
+                  {!isEnterprise && (
+                    <Badge variant="outline" size="sm">
+                      <Lock className="h-2.5 w-2.5 mr-1" aria-hidden="true" />
+                      Enterprise
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">{description}</p>
                 <div className="relative">
@@ -328,21 +340,27 @@ export function PromptSettingsForm({
                     onChange={(e) =>
                       setOverrides((prev) => ({ ...prev, [key]: e.target.value }))
                     }
-                    disabled
+                    disabled={!isEnterprise || disabled}
                     placeholder={placeholder}
-                    className="min-h-[100px] resize-y font-mono text-sm cursor-not-allowed opacity-60"
+                    className={
+                      !isEnterprise
+                        ? "min-h-[100px] resize-y font-mono text-sm cursor-not-allowed opacity-60"
+                        : "min-h-[100px] resize-y font-mono text-sm"
+                    }
                     maxLength={4000}
-                    aria-describedby={`override-${key}-help`}
+                    aria-describedby={!isEnterprise ? `override-${key}-help` : undefined}
                   />
-                  <div
-                    id={`override-${key}-help`}
-                    className="absolute inset-0 flex items-center justify-center rounded-md bg-muted/40 pointer-events-none"
-                  >
-                    <span className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-sm">
-                      <Lock className="h-3 w-3" aria-hidden="true" />
-                      Requires Enterprise plan
-                    </span>
-                  </div>
+                  {!isEnterprise && (
+                    <div
+                      id={`override-${key}-help`}
+                      className="absolute inset-0 flex items-center justify-center rounded-md bg-muted/40 pointer-events-none"
+                    >
+                      <span className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-sm">
+                        <Lock className="h-3 w-3" aria-hidden="true" />
+                        Requires Enterprise plan
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

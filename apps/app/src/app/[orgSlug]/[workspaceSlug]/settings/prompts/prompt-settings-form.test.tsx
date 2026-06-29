@@ -170,6 +170,7 @@ const defaultProps = {
     overrides: {},
   },
   canEdit: true,
+  isEnterprise: false,
   orgSlug: "test-org",
   workspaceSlug: "test-ws",
 };
@@ -375,5 +376,86 @@ describe("PromptSettingsForm", () => {
     expect(mockAddToast).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Failed to save" }),
     );
+  });
+});
+
+// ── Enterprise gating ───────────────────────────────────────────────────────
+
+describe("PromptSettingsForm — per-prompt override entitlement", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseRegisterFillableForm.mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  /**
+   * Opens the collapsible "Per-prompt overrides" panel by clicking its toggle.
+   */
+  function openOverridesPanel() {
+    fireEvent.click(screen.getByRole("button", { name: /per-prompt overrides/i }));
+  }
+
+  it("shows 'Requires Enterprise plan' overlay and disabled textareas when isEnterprise is false", () => {
+    render(<PromptSettingsForm {...defaultProps} isEnterprise={false} />);
+    openOverridesPanel();
+
+    // All three override textareas should be disabled.
+    const overrideTextareas = screen
+      .getAllByRole("textbox")
+      .filter((el) => el.id?.startsWith("override-"));
+    expect(overrideTextareas.length).toBeGreaterThan(0);
+    for (const textarea of overrideTextareas) {
+      expect(textarea).toBeDisabled();
+    }
+
+    // Overlay text present.
+    expect(screen.getAllByText(/requires enterprise plan/i).length).toBeGreaterThan(0);
+  });
+
+  it("does not show 'Requires Enterprise plan' overlay and enables textareas when isEnterprise is true", () => {
+    render(<PromptSettingsForm {...defaultProps} isEnterprise canEdit />);
+    openOverridesPanel();
+
+    // None of the override textareas should be disabled.
+    const overrideTextareas = screen
+      .getAllByRole("textbox")
+      .filter((el) => el.id?.startsWith("override-"));
+    expect(overrideTextareas.length).toBeGreaterThan(0);
+    for (const textarea of overrideTextareas) {
+      expect(textarea).not.toBeDisabled();
+    }
+
+    // Overlay text should NOT be present.
+    expect(screen.queryByText(/requires enterprise plan/i)).toBeNull();
+  });
+
+  it("disables override textareas even for Enterprise when canEdit is false", () => {
+    render(<PromptSettingsForm {...defaultProps} isEnterprise canEdit={false} />);
+    openOverridesPanel();
+
+    const overrideTextareas = screen
+      .getAllByRole("textbox")
+      .filter((el) => el.id?.startsWith("override-"));
+    expect(overrideTextareas.length).toBeGreaterThan(0);
+    for (const textarea of overrideTextareas) {
+      expect(textarea).toBeDisabled();
+    }
+  });
+
+  it("hides the lock icon and Enterprise badge in the section header when isEnterprise is true", () => {
+    render(<PromptSettingsForm {...defaultProps} isEnterprise />);
+
+    // The section toggle button should not contain the word "Enterprise" as a badge.
+    const toggleButton = screen.getByRole("button", { name: /per-prompt overrides/i });
+    // The Enterprise badge (rendered as a <span data-testid="badge">) should not be present
+    // inside the toggle button when the org is on Enterprise.
+    const badgesInToggle = Array.from(toggleButton.querySelectorAll("[data-testid='badge']"));
+    const enterpriseBadgeText = badgesInToggle.find((b) =>
+      b.textContent?.toLowerCase().includes("enterprise"),
+    );
+    expect(enterpriseBadgeText).toBeUndefined();
   });
 });

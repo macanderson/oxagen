@@ -565,11 +565,15 @@ export function formatInitSummary(result: InitResult): string {
   lines.push("");
 
   // Code graph
+  const totalNodes = result.graph.files + result.graph.totalSymbols;
   lines.push(
     `Code graph  (${result.graph.files} files · ${result.graph.totalSymbols} symbols · ${result.graph.totalEdges} edges):`,
   );
   lines.push(
-    `  Indexed:   ${result.graph.indexed}  skipped (unchanged): ${result.graph.skipped}`,
+    `  Files read: ${result.graph.files}  (parsed ${result.graph.indexed} · unchanged ${result.graph.skipped})`,
+  );
+  lines.push(
+    `  Nodes:      ${totalNodes}  (${result.graph.files} files + ${result.graph.totalSymbols} symbols)`,
   );
 
   if (result.graph.languages.length > 0) {

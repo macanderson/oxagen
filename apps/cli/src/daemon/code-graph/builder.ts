@@ -13,10 +13,25 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { parseSourceFile, type SymbolKind, type CallSite, type ImportSite } from "@oxagen/code-graph";
 import type { CodeGraph, CodeNode, CodeEdge, CodeNodeKind } from "./types";
 import { hashContent } from "./store";
 import type { FileGraph, CodeGraphStore } from "./store";
+
+const pexec = promisify(execFile);
+
+/**
+ * Whether to emit verbose per-call / per-import diagnostics. Off by default —
+ * the "the callee/alias isn't a local symbol" cases are the overwhelmingly
+ * common, expected outcome, not errors, so logging each one floods the terminal
+ * and reads as failure when nothing is wrong. Read at call time (cheap) so the
+ * environment can toggle it without a reload.
+ */
+function codeGraphDebugEnabled(): boolean {
+  return process.env.OXAGEN_CODE_GRAPH_DEBUG === "1";
+}
 
 const SUPPORTED_EXTENSIONS = new Set([
   ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
@@ -64,11 +79,50 @@ export async function buildCodeGraph(workspaceRoot: string): Promise<CodeGraph> 
   return graph;
 }
 
-/** Walk the workspace and return every supported source file as a root-relative path. */
+/**
+ * Return every supported source file under `workspaceRoot` as a root-relative
+ * path, **honoring .gitignore**.
+ *
+ * In a git working tree we ask git itself for the candidate set
+ * (`git ls-files --cached --others --exclude-standard`): tracked files plus
+ * untracked-but-not-ignored files, and nothing .gitignore excludes. This keeps
+ * the indexer out of build outputs, vendored trees, and — most importantly —
+ * nested worktrees under `.claude/worktrees/`, which are full copies of the
+ * monorepo and would otherwise multiply the index several-fold and stall
+ * `init`. Outside a git repo we fall back to a manual directory walk that still
+ * skips the well-known build/output directories.
+ */
 export async function listSourceFiles(workspaceRoot: string): Promise<string[]> {
+  const gitFiles = await listGitFiles(workspaceRoot);
+  if (gitFiles) {
+    return gitFiles.filter((rel) => SUPPORTED_EXTENSIONS.has(path.extname(rel)));
+  }
   const out: string[] = [];
   await walkDirectory(workspaceRoot, workspaceRoot, out);
   return out;
+}
+
+/**
+ * Ask git for every file it does *not* ignore under `workspaceRoot`, as
+ * root-relative paths. Returns null when the directory is not a git working
+ * tree (or git is unavailable), signalling the caller to fall back to a manual
+ * walk. `-z` keeps paths intact even when they contain spaces or newlines.
+ */
+async function listGitFiles(workspaceRoot: string): Promise<string[] | null> {
+  try {
+    const { stdout } = await pexec(
+      "git",
+      ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+      { cwd: workspaceRoot, maxBuffer: 256 * 1024 * 1024 },
+    );
+    const seen = new Set<string>();
+    for (const rel of stdout.split("\0")) {
+      if (rel.length > 0) seen.add(rel);
+    }
+    return [...seen];
+  } catch {
+    return null; // not a git repo / git unavailable — caller falls back to walk
+  }
 }
 
 async function walkDirectory(dir: string, root: string, out: string[]): Promise<void> {
@@ -278,9 +332,11 @@ function extractImports(content: string, filePath: string, root: string): CodeEd
  *
  * Resolution: `enclosingSymbol` is the caller (looked up by name among the
  * file's symbol nodes); `callee` is matched by name among the same file's
- * symbol nodes. Unresolved cross-file calls are LOGGED (not silently skipped)
- * so coverage is honest. Module-level calls (enclosingSymbol = null) are
- * skipped — they have no meaningful caller node in the graph.
+ * symbol nodes. A callee that isn't a symbol declared in this file (an import,
+ * a method, a runtime/stdlib built-in) is the common, expected case and simply
+ * yields no same-file edge — surfaced only under OXAGEN_CODE_GRAPH_DEBUG, never
+ * as default noise. Module-level calls (enclosingSymbol = null) are skipped —
+ * they have no meaningful caller node in the graph.
  */
 function extractCallEdges(
   calls: CallSite[],
@@ -306,11 +362,16 @@ function extractCallEdges(
 
     const calleeNode = symbolsByName.get(call.callee);
     if (!calleeNode) {
-      // Cross-file or unresolvable call — log so coverage is visible.
-      console.log(
-        `[code-graph] unresolved call: ${call.enclosingSymbol} → ${call.callee} ` +
-          `(${filePath}:${call.line + 1})`,
-      );
+      // The callee isn't a symbol declared in this file — it's a call into
+      // another module, a method, or a runtime/stdlib built-in. That's the
+      // norm, not an error, so we emit no same-file CALLS edge and stay quiet
+      // unless explicitly asked for coverage diagnostics.
+      if (codeGraphDebugEnabled()) {
+        console.log(
+          `[code-graph] external call (not same-file): ${call.enclosingSymbol} → ${call.callee} ` +
+            `(${filePath}:${call.line + 1})`,
+        );
+      }
       continue;
     }
 
@@ -376,9 +437,11 @@ function extractWorkspaceAliasImports(
     }
 
     if (!resolvedRel) {
-      console.log(
-        `[code-graph] unresolved workspace alias: ${specifier} imported by ${filePath}`,
-      );
+      if (codeGraphDebugEnabled()) {
+        console.log(
+          `[code-graph] unresolved workspace alias: ${specifier} imported by ${filePath}`,
+        );
+      }
       continue;
     }
 

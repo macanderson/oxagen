@@ -14,6 +14,7 @@ import { resolvePrompt, chatSystemPrompt } from "@oxagen/ai";
 import "@oxagen/handlers/register";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
+import { getEnterpriseAccess } from "@/lib/enterprise";
 import { PromptSettingsForm } from "./prompt-settings-form";
 import { SystemPromptReadonly } from "./system-prompt-readonly";
 import type { PromptSettingsReadOutput } from "./prompt-settings-action";
@@ -51,37 +52,42 @@ export default async function WorkspacePromptsPage({ params }: PageProps) {
     messageId: null as string | null,
   };
 
-  const { settings, canEdit } = await runInTenantScope(
-    { orgId: org.id, workspaceId: ws.id },
-    async () => {
-      // Read current settings via capability.
-      const promptSettings = (await invoke(
-        "prompt.settings.read",
-        {},
-        ctx,
-        { surface: "agent" },
-      )) as PromptSettingsReadOutput;
+  // Resolve Enterprise entitlement alongside settings so the form correctly
+  // unlocks per-prompt overrides for Enterprise orgs.
+  const [{ settings, canEdit }, enterpriseAccess] = await Promise.all([
+    runInTenantScope(
+      { orgId: org.id, workspaceId: ws.id },
+      async () => {
+        // Read current settings via capability.
+        const promptSettings = (await invoke(
+          "prompt.settings.read",
+          {},
+          ctx,
+          { surface: "agent" },
+        )) as PromptSettingsReadOutput;
 
-      // Re-read the caller's workspace role to determine edit permission.
-      const wsRoleRows = await withTenantDb((tx) =>
-        tx
-          .select({ role: schema.workspaceUsers.role })
-          .from(schema.workspaceUsers)
-          .where(
-            and(
-              eq(schema.workspaceUsers.workspaceId, ws.id),
-              eq(schema.workspaceUsers.userId, session.user.id),
-            ),
-          )
-          .limit(1),
-      );
+        // Re-read the caller's workspace role to determine edit permission.
+        const wsRoleRows = await withTenantDb((tx) =>
+          tx
+            .select({ role: schema.workspaceUsers.role })
+            .from(schema.workspaceUsers)
+            .where(
+              and(
+                eq(schema.workspaceUsers.workspaceId, ws.id),
+                eq(schema.workspaceUsers.userId, session.user.id),
+              ),
+            )
+            .limit(1),
+        );
 
-      const wsRole = wsRoleRows[0]?.role ?? "";
-      const canEditSettings = ["owner", "admin"].includes(wsRole.toLowerCase());
+        const wsRole = wsRoleRows[0]?.role ?? "";
+        const canEditSettings = ["owner", "admin"].includes(wsRole.toLowerCase());
 
-      return { settings: promptSettings, canEdit: canEditSettings };
-    },
-  );
+        return { settings: promptSettings, canEdit: canEditSettings };
+      },
+    ),
+    getEnterpriseAccess(org.id),
+  ]);
 
   // Render the workspace's effective system prompt read-only for transparency.
   // The baseline chat.system prompt is a pure function of workspace context;
@@ -104,6 +110,7 @@ export default async function WorkspacePromptsPage({ params }: PageProps) {
       <PromptSettingsForm
         initial={settings}
         canEdit={canEdit}
+        isEnterprise={enterpriseAccess.isEnterprise}
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
       />
