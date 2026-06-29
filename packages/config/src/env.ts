@@ -248,6 +248,9 @@ export const baseEnvSchema = z.object({
     .optional()
     .transform((v) => v === "true"),
 
+  // ── CLI debugging ──
+  OXAGEN_CODE_GRAPH_DEBUG: z.string().optional(),
+
   // ── Billing / usage-meter tuning (see @oxagen/billing pricing.ts) ──
   // Target *blended* gross margin across all products, in (0,1). When set,
   // it overrides DEFAULT_TARGET_MARGIN and re-derives the meter markup.

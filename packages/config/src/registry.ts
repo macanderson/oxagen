@@ -1298,6 +1298,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_CODE_GRAPH_DEBUG: {
+    group: "CLI",
+    description:
+      "Set to '1' to emit verbose per-call / per-import diagnostics during code graph analysis. " +
+      "Off by default as most misses are expected outcomes. Diagnostic output goes to stderr.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",
     description: "Credential encryption backend for ingestion: 'env' (AES-256-GCM via INGESTION_ENCRYPTION_KEY) or 'kms' (AWS KMS).",

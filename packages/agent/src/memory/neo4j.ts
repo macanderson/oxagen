@@ -403,7 +403,6 @@ const MEMORY_RETURN = /* cypher */ `
     toString(m.lastReinforcedAt) AS lastReinforcedAt
 `;
 
-/* eslint-disable @typescript-eslint/no-unsafe-assignment -- neo4j-driver Record.get() is typed as `any`; shape is guaranteed by MEMORY_RETURN above. */
 function rowFromRecord(r: { get: (k: string) => unknown }): MemoryListRow {
   return {
     id: r.get("id") as string,
@@ -418,7 +417,6 @@ function rowFromRecord(r: { get: (k: string) => unknown }): MemoryListRow {
     lastReinforcedAt: (r.get("lastReinforcedAt") as string | null) ?? null,
   };
 }
-/* eslint-enable @typescript-eslint/no-unsafe-assignment */
 
 /**
  * Fetch a single AgentMemory by id, scoped to the active tenant. Returns null
