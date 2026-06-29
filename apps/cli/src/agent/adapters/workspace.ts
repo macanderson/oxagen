@@ -15,6 +15,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { Workspace, CommandResult } from "@oxagen/agent-engine";
+import { toRequest, type PermissionBroker } from "../permissions.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -195,6 +196,67 @@ export function createCwdWorkspace(cwd: string): Workspace {
       } catch {
         return ""; // not a git repo, or git missing — no diff available
       }
+    },
+  };
+}
+
+/**
+ * Wrap a {@link Workspace} so its mutating primitives (`writeFile`, `editFile`,
+ * `exec`) are routed through the {@link PermissionBroker} before they run.
+ *
+ * This is how the converged CLI keeps its interactive approval / dangerous-command
+ * / write-outside-workspace safety layer now that the engine's coding loop builds
+ * its own tools (and so no longer sees the CLI's tool-gate). The broker maps each
+ * call to the same `write_file` / `edit_file` / `bash` decision it always made, so
+ * `/mode`, remembered rules, and the inline approval prompt behave identically.
+ *
+ * A denied file mutation throws (the engine surfaces it as a tool error); a denied
+ * command returns a non-zero {@link CommandResult} so the model sees the refusal
+ * and can adapt rather than crash. With no broker the workspace is returned as-is.
+ */
+export function createGatedWorkspace(
+  workspace: Workspace,
+  broker?: PermissionBroker,
+): Workspace {
+  if (!broker) return workspace;
+
+  /** Resolve the broker's decision for one mutating call. */
+  const decide = async (
+    tool: "write_file" | "edit_file" | "bash",
+    input: { path?: string; command?: string },
+  ): Promise<{ allowed: boolean; reason: string }> => {
+    const req = toRequest(tool, input, workspace.root);
+    if (!req) return { allowed: true, reason: "" }; // not a gated tool
+    const decision = await broker.check(req);
+    return { allowed: decision.decision === "allow", reason: decision.reason };
+  };
+
+  return {
+    ...workspace,
+
+    async writeFile(filePath, content) {
+      const { allowed, reason } = await decide("write_file", { path: filePath });
+      if (!allowed) throw new Error(`Permission denied: ${reason || "write_file blocked"}`);
+      return workspace.writeFile(filePath, content);
+    },
+
+    async editFile(filePath, oldString, newString) {
+      const { allowed, reason } = await decide("edit_file", { path: filePath });
+      if (!allowed) throw new Error(`Permission denied: ${reason || "edit_file blocked"}`);
+      return workspace.editFile(filePath, oldString, newString);
+    },
+
+    async exec(command, opts): Promise<CommandResult> {
+      const { allowed, reason } = await decide("bash", { command });
+      if (!allowed) {
+        return {
+          exitCode: 1,
+          stdout: "",
+          stderr: `Permission denied: ${reason || "bash blocked"}`,
+          timedOut: false,
+        };
+      }
+      return workspace.exec(command, opts);
     },
   };
 }
