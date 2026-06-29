@@ -3,6 +3,10 @@ packages:
   - "packages/*"
   - "plugins/*"
   - "tools/*"
+  # Benchmark apps/tools. Only dirs with a package.json are picked up (the
+  # Python eval suites under bench/* are ignored); today this is bench/web,
+  # the @oxagen/bench-web dashboard launched via `pnpm eval:app`.
+  - "bench/*"
 
 # pnpm 10 reads these settings from pnpm-workspace.yaml only — the
 # package.json#pnpm field is ignored (pnpm warns on every install).

@@ -11,6 +11,7 @@
     "preinstall": "npx only-allow pnpm",
     "prepare": "lefthook install",
     "dev": "tsx tools/scripts/dev.ts",
+    "eval:app": "pnpm --filter @oxagen/bench-web dev",
     "bench": "pnpm --filter @oxagen/bench-web dev",
     "cli:dev": "tsx tools/scripts/cli-dev.ts",
     "cli:install": "tsx tools/scripts/cli-dev.ts --once",
