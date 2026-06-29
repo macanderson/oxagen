@@ -1,6 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { graphNodeLabelAdd, assertSafeLabel } from "@oxagen/oxagen/contracts/graph.node.label.add";
 import { scopedSession } from "@oxagen/ontology/tenant";
+import { sanitizeLabel } from "@oxagen/ontology/labels";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "./logger";
 
@@ -13,10 +14,16 @@ export const graphNodeLabelAddHandler: CapabilityHandler<typeof graphNodeLabelAd
   ctx,
 ) => {
   const { orgId, workspaceId } = ctx;
-  // Defense-in-depth: every label is re-validated before it is interpolated
-  // into Cypher, regardless of contract-layer validation.
+  // Defense-in-depth: reject any non-identifier label BEFORE processing (the
+  // contract already enforces LABEL_PATTERN; this guards direct handler callers
+  // and any injection attempt). Run first so garbage throws rather than being
+  // silently coerced.
   for (const label of input.labels) assertSafeLabel(label);
-  const setClause = input.labels.map((l) => `\`${l}\``).join(":");
+  // Canonicalise the validated labels to the graph-wide PascalCase convention
+  // (billing -> Billing) so this primitive never introduces an off-convention
+  // label. A LABEL_PATTERN-valid label always sanitizes to a non-null identifier.
+  const requested = input.labels.map((l) => sanitizeLabel(l) ?? l);
+  const setClause = requested.map((l) => `\`${l}\``).join(":");
 
   let labels: string[] = [];
   let added: string[] = [];
@@ -38,7 +45,7 @@ export const graphNodeLabelAddHandler: CapabilityHandler<typeof graphNodeLabelAd
       const after = record.get("after") as string[];
       const before = record.get("before") as string[];
       labels = after.filter((l) => l !== BASE_LABEL);
-      added = input.labels.filter((l) => !before.includes(l));
+      added = requested.filter((l) => !before.includes(l));
     } finally {
       await session.close();
     }

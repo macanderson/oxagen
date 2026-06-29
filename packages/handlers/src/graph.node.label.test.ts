@@ -47,6 +47,18 @@ describe("graphNodeLabelAddHandler", () => {
     expect(cypher).toContain("MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})");
   });
 
+  it("canonicalises a lower-/snake-cased label to PascalCase before applying it", async () => {
+    mocks.run.mockResolvedValueOnce(
+      rec({ after: ["GraphNode", "PullRequest"], before: ["GraphNode"] }),
+    );
+    const out = await graphNodeLabelAddHandler({ nodeId: "n1", labels: ["pull_request"] }, CTX);
+    const cypher = mocks.run.mock.calls[0]?.[0] as string;
+    // Applied as the PascalCase label, never the raw "pull_request".
+    expect(cypher).toContain("SET n:`PullRequest`");
+    expect(cypher).not.toContain("pull_request");
+    expect(out.added).toEqual(["PullRequest"]);
+  });
+
   it("idempotent: a label already present is not reported as added", async () => {
     mocks.run.mockResolvedValueOnce(
       rec({ after: ["GraphNode", "Billing"], before: ["GraphNode", "Billing"] }),

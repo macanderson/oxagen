@@ -2,6 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { graphNodeLabelRemove } from "@oxagen/oxagen/contracts/graph.node.label.remove";
 import { assertSafeLabel } from "@oxagen/oxagen/contracts/graph.node.label.add";
 import { scopedSession } from "@oxagen/ontology/tenant";
+import { sanitizeLabel } from "@oxagen/ontology/labels";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "./logger";
 
@@ -12,9 +13,13 @@ export const graphNodeLabelRemoveHandler: CapabilityHandler<typeof graphNodeLabe
   ctx,
 ) => {
   const { orgId, workspaceId } = ctx;
+  // Defense-in-depth first: reject non-identifier labels (guards direct callers /
+  // injection), then canonicalise to PascalCase so a removal targets the same
+  // label add would have applied (billing -> Billing), keeping add/remove symmetric.
   for (const label of input.labels) assertSafeLabel(label);
+  const requested = input.labels.map((l) => sanitizeLabel(l) ?? l);
   // Never allow removing the internal base label.
-  const toRemove = input.labels.filter((l) => l !== BASE_LABEL);
+  const toRemove = requested.filter((l) => l !== BASE_LABEL);
   if (toRemove.length === 0) {
     return { nodeId: input.nodeId, labels: [], removed: [] };
   }
