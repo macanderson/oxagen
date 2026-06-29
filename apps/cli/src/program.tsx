@@ -100,19 +100,22 @@ export function buildProgram(): Command {
             return;
           }
         }
+        // ADR-019 §4: require an Oxagen account before any agent-path command.
+        // Non-agent utility commands (config, settings, login, logout, etc.) are
+        // separate sub-commands and bypass this gate automatically. The resolved
+        // session (token + org + workspace) is threaded into every run path so
+        // the agent loop, graph sync, and metering share one authenticated scope.
+        const { requireSession } = await import("./lib/session.js");
+        const session = requireSession();
+
         const runOpts = {
           model: opts.model,
           readOnly: opts.readonly,
           mode,
           bare: opts.pipeline === false,
           verbose: opts.verbose,
+          session,
         };
-
-        // ADR-019 §4: require an Oxagen account before any agent-path command.
-        // Non-agent utility commands (config, settings, login, logout, etc.) are
-        // separate sub-commands and bypass this gate automatically.
-        const { requireSession } = await import("./lib/session.js");
-        requireSession();
 
         // --agent: run the prompt as a named agent (its prompt, tools, model).
         if (opts.agent) {
@@ -343,6 +346,100 @@ export function buildProgram(): Command {
       const { handleGraphLineage } = await import("./commands/graph.lineage.js");
       await handleGraphLineage({ repo: opts.repo, json: opts.json });
     });
+
+  // ── memory: manage the workspace's agent memories ───────────────────────────
+
+  const memory = program
+    .command("memory")
+    .description("Manage the workspace's agent memories (list, show, edit, salience, rm)");
+  memory
+    .command("list")
+    .description("List the workspace's memories, newest first")
+    .option(
+      "--kind <kind>",
+      "Filter by kind (routine-change|constraint|bug-root-cause|convention-deviation|gotcha)",
+    )
+    .option("--weight <weight>", "Only memories at or above this weight (low|high|critical)")
+    .option("--node <ref>", "Scope to memories anchored on a graph node ref")
+    .option("--limit <n>", "Max rows (default 100)")
+    .option("--offset <n>", "Skip N rows (paging)")
+    .option("--json", "Output JSON")
+    .action(
+      async (opts: {
+        kind?: string;
+        weight?: string;
+        node?: string;
+        limit?: string;
+        offset?: string;
+        json?: boolean;
+      }) => {
+        const { handleMemoryList } = await import("./commands/memory.js");
+        await handleMemoryList(opts);
+      },
+    );
+  memory
+    .command("show <id>")
+    .description("Show one memory in full detail (by id or publicId)")
+    .option("--json", "Output JSON")
+    .action(async (id: string, opts: { json?: boolean }) => {
+      const { handleMemoryShow } = await import("./commands/memory.js");
+      await handleMemoryShow(id, opts);
+    });
+  memory
+    .command("edit <id>")
+    .description("Edit a memory's lesson, kind, or source")
+    .option("--lesson <text>", "Replacement lesson text (re-embeds for recall)")
+    .option("--kind <kind>", "New kind")
+    .option("--source <source>", "New provenance label")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        id: string,
+        opts: { lesson?: string; kind?: string; source?: string; json?: boolean },
+      ) => {
+        const { handleMemoryEdit } = await import("./commands/memory.js");
+        await handleMemoryEdit(id, opts);
+      },
+    );
+  memory
+    .command("salience <id> <weight>")
+    .description("Adjust a memory's salience: weight (low|high|critical) + optional --confidence")
+    .option("--confidence <n>", "Numeric confidence 0–1")
+    .option("--json", "Output JSON")
+    .action(
+      async (id: string, weight: string, opts: { confidence?: string; json?: boolean }) => {
+        const { handleMemorySalience } = await import("./commands/memory.js");
+        await handleMemorySalience(id, weight, opts);
+      },
+    );
+  memory
+    .command("rm <id>")
+    .description("Permanently delete a memory by id")
+    .action(async (id: string) => {
+      const { handleMemoryRemove } = await import("./commands/memory.js");
+      await handleMemoryRemove(id);
+    });
+
+  // ── remember: capture a memory (infers kind + weight) ───────────────────────
+
+  program
+    .command("remember <text...>")
+    .description(
+      "Capture a memory — infers its kind + weight and saves it to the workspace graph",
+    )
+    .option("--kind <kind>", "Pin the kind instead of inferring it")
+    .option("--weight <weight>", "Pin the weight (low|high|critical) instead of inferring it")
+    .option("--node <ref>", "Anchor the memory on a graph node ref")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        text: string[],
+        opts: { kind?: string; weight?: string; node?: string; json?: boolean },
+      ) => {
+        const { handleRemember } = await import("./commands/memory.js");
+        await handleRemember(text.join(" "), opts);
+      },
+    );
 
   // ── code: code-map retrieval + diff/patch/format utilities ──────────────────
 

@@ -74,6 +74,22 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
     argumentHint: "[on|off]",
   },
   {
+    name: "remember",
+    description:
+      "Capture a memory — infers its kind + weight and saves it to the workspace graph",
+    argumentHint: "<text>",
+  },
+  {
+    name: "memories",
+    description: "Browse this workspace's saved memories (optionally filter by kind)",
+    argumentHint: "[kind]",
+  },
+  {
+    name: "forget",
+    description: "Delete a memory by id",
+    argumentHint: "<id>",
+  },
+  {
     name: "replay",
     description: "Show how a past turn was handled (prompt, scores, context, model, judge)",
     argumentHint: "[n|id]",
