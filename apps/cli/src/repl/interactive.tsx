@@ -48,6 +48,7 @@ import {
   type Message,
   type TuiMode,
 } from "./components.js";
+import { resolveEscapeAction } from "./escape-action.js";
 import {
   PermissionBroker,
   parseModeArg,
@@ -219,6 +220,15 @@ export function ReplApp({
   const approvalRef = useRef(approval);
   approvalRef.current = approval;
 
+  // Whether we are showing the "reset conversation?" confirmation prompt.
+  // The ref is the synchronous source of truth; the state drives the render.
+  const [resetPending, setResetPending] = useState(false);
+  const resetPendingRef = useRef(false);
+  // Timestamp of the most-recent Escape press (for the double-Esc detection
+  // window). Null means no previous Esc has been recorded (or the window was
+  // explicitly cleared after a 'prompt-reset' fires).
+  const lastEscapeRef = useRef<number | null>(null);
+
   // The permission broker, created once. Its approver surfaces an inline prompt
   // and resolves when the user answers (see ApprovalPrompt / resolveApproval).
   const brokerRef = useRef<PermissionBroker | null>(null);
@@ -284,6 +294,16 @@ export function ReplApp({
     abortRef.current?.abort();
   }, []);
 
+  /**
+   * Shared conversation reset — used by both the /clear slash command and the
+   * Esc-twice flow. Wipes all in-memory conversation and history state.
+   */
+  const resetConversation = useCallback(() => {
+    allRef.current = [];
+    historyRef.current = [];
+    setMessages([]);
+  }, []);
+
   // Resolve the in-flight approval prompt with the user's answer and clear it.
   const resolveApproval = useCallback((response: ApprovalResponse) => {
     setApproval((cur) => {
@@ -306,16 +326,66 @@ export function ReplApp({
     }
     // While a permission prompt is up, ApprovalPrompt owns Esc and the answer keys.
     if (approvalRef.current) return;
+
     if (key.escape) {
-      if (streamingRef.current) {
+      // If the reset-confirmation prompt is already visible, Esc cancels it
+      // immediately (without going through the submit path).
+      if (resetPendingRef.current) {
+        resetPendingRef.current = false;
+        setResetPending(false);
+        pushAssistant("Reset cancelled.");
+        // Clear the window so this cancellation Esc doesn't seed a new pair.
+        lastEscapeRef.current = null;
+        return;
+      }
+
+      const now = Date.now();
+      const action = resolveEscapeAction(
+        {
+          isStreaming: streamingRef.current,
+          resetPending: false, // handled above
+          lastEscapeMs: lastEscapeRef.current,
+        },
+        now,
+      );
+      // Always record this Esc's timestamp so the next press can measure
+      // the gap, UNLESS we are about to open the confirm prompt (in which
+      // case we clear it so a third Esc after cancel starts a fresh pair).
+      if (action === "prompt-reset") {
+        lastEscapeRef.current = null;
+      } else {
+        lastEscapeRef.current = now;
+      }
+
+      if (action === "stop") {
         pushAssistant("⏹ Agent interrupted (Esc)");
         cancelTurn();
+      } else if (action === "prompt-reset") {
+        resetPendingRef.current = true;
+        setResetPending(true);
       }
+      // 'none' → no-op; timestamp already recorded above.
     }
   });
 
   const handleSubmit = useCallback(
     async (text: string) => {
+      // ── Reset-confirmation gate ───────────────────────────────────────────
+      // When the Esc-twice prompt is visible, the next submission is treated
+      // as the user's confirmation answer, NOT as a slash command or prompt.
+      if (resetPendingRef.current) {
+        resetPendingRef.current = false;
+        setResetPending(false);
+        const answer = text.trim().toLowerCase();
+        if (answer === "y" || answer === "yes") {
+          resetConversation();
+          pushAssistant("🗑 Conversation reset.");
+        } else {
+          pushAssistant("Reset cancelled.");
+        }
+        return;
+      }
+
       // ── Slash commands ──
       if (text === "/help") {
         pushAssistant(HELP);
@@ -359,9 +429,7 @@ export function ReplApp({
         return;
       }
       if (text === "/clear") {
-        allRef.current = [];
-        historyRef.current = [];
-        setMessages([]);
+        resetConversation();
         return;
       }
       if (text.startsWith("/model")) {
@@ -755,7 +823,7 @@ export function ReplApp({
         setTurnStartedAt(null);
       }
     },
-    [exit, commit, pushAssistant, cwd, options.readOnly],
+    [exit, commit, pushAssistant, resetConversation, cwd, options.readOnly],
   );
 
   // The pump reads the latest handleSubmit via a ref so it never closes over a
@@ -877,6 +945,20 @@ export function ReplApp({
         mode={mode}
         tuiMode={tuiMode}
       />
+
+      {/* Esc-twice reset confirmation — shown above the input row until the
+          user types y/yes to confirm or anything else to cancel. */}
+      {resetPending && (
+        <Box paddingX={1} flexDirection="column">
+          <Text color={theme.cyan}>
+            Are you sure you want to reset the conversation?
+          </Text>
+          <Text dimColor>
+            Type <Text bold>y</Text> or <Text bold>yes</Text> to confirm, or
+            anything else (or Esc) to cancel.
+          </Text>
+        </Box>
+      )}
 
       {/* A pending permission prompt takes over the input row; otherwise the
           input stays live during a turn and submissions queue (FIFO). */}
