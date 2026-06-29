@@ -2,7 +2,6 @@ import type { CapabilityContext } from "../types";
 import {
   extractMemoriesFromDocument,
   mapWithConcurrency,
-  type ExtractedMemory,
 } from "../memory/import";
 import type {
   AgentMemoryImportParseInput,
@@ -32,20 +31,26 @@ export async function agentMemoryImportParseHandler(
 ): Promise<AgentMemoryImportParseOutput> {
   const defaultNodeRef = input.defaultNodeRef?.trim() || USER_MEMORY_NODE_REF;
 
+  type DocumentResult =
+    | { filename: string; extracted: Awaited<ReturnType<typeof extractMemoriesFromDocument>> }
+    | { filename: string; error: string };
+
   const perDocument = await mapWithConcurrency(
     input.documents,
     DOC_CONCURRENCY,
-    async (doc) => {
+    async (doc): Promise<DocumentResult> => {
       try {
+        const filename = doc.filename || "unnamed-document";
         const extracted = await extractMemoriesFromDocument({
           content: doc.content,
-          filename: doc.filename,
+          filename,
           ctx,
         });
-        return { filename: doc.filename, extracted };
+        return { filename, extracted };
       } catch (err) {
         const reason = err instanceof Error ? err.message : "Extraction failed";
-        return { filename: doc.filename, error: reason };
+        const filename = doc.filename || "unnamed-document";
+        return { filename, error: reason };
       }
     },
   );
