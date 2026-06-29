@@ -1,17 +1,32 @@
 /**
- * Thin client for the org-scoped /v1 API used by the env, secret, and memory
- * commands. Resolves auth + org/workspace scope from config (or OXAGEN_* env)
- * and POSTs to `${apiUrl}/v1/{org}/{workspace}/<path>`. Single place that talks
- * HTTP so commands stay declarative.
+ * Thin client for the /v1 API used by the env, secret, memory, and linker
+ * commands. Single place that talks HTTP so commands stay declarative.
  *
- * Two call styles share one core:
- *   - `apiPost`        — exits the process with a friendly message on error.
+ * Three call styles share one core:
+ *   - `apiPost`            — exits the process with a friendly message on error.
  *     Right for one-shot CLI subcommands where a non-zero exit is the contract.
- *   - `apiPostOrThrow` — throws `ApiError` instead. Right for the interactive
- *     REPL, where a thrown error is caught and rendered into the TUI rather than
- *     tearing the whole session down with process.exit.
+ *   - `apiPostOrThrow`     — POST to `${apiUrl}/v1/{org}/{ws}/{path}` (org+ws
+ *     scoped). Throws `ApiError` on missing scope / network failure / non-2xx.
+ *     Right for the REPL, where a thrown error is caught and rendered into the
+ *     TUI rather than tearing the whole session down with process.exit.
+ *   - `userApiPostOrThrow` — POST to `${apiUrl}/v1/{path}` with ONLY the Bearer
+ *     token (no org/ws scope). Used for pre-org calls such as org.list and
+ *     workspace.list — the routes the linker hits before an org is chosen.
+ *   - `apiGetOrThrow`      — GET to `${apiUrl}/v1/{org}/{ws}/{path}?{params}`.
+ *     Org+ws scoped, used for GET-based endpoints (e.g. connection.list).
+ *
+ * Scope resolution in resolveApiContext()
+ * ─────────────────────────────────────────
+ * Precedence (lowest → highest):
+ *   global config  (~/.config/oxagen/config.json orgSlug / workspaceSlug)
+ *   project link   (.oxagen/workspace.json in process.cwd())
+ *   env vars       (OXAGEN_ORG_ID / OXAGEN_WORKSPACE_ID)
+ *
+ * This means `oxagen init` and per-project commands automatically use the
+ * workspace linked by `oxagen init --link`, with no extra flags required.
  */
-import { getApiUrl, getOrgId, getToken, getWorkspaceId } from "./config.js";
+import { readConfig, getApiUrl, getToken } from "./config.js";
+import { readWorkspaceLink } from "./workspace-link.js";
 
 interface ApiContext {
   apiUrl: string;
@@ -35,11 +50,32 @@ const NOT_LOGGED_IN =
   "Not logged in. Run `oxagen login` to authenticate, or set " +
   "OXAGEN_API_TOKEN / OXAGEN_ORG_ID / OXAGEN_WORKSPACE_ID.";
 
-/** Resolve auth + scope, or null when any of token / org / workspace is absent. */
+const NOT_AUTHED =
+  "Not logged in. Run `oxagen login`.";
+
+/**
+ * Resolve auth + scope, or null when any of token / org / workspace is absent.
+ *
+ * Resolution order for org/ws:
+ *   env (OXAGEN_ORG_ID / OXAGEN_WORKSPACE_ID)
+ *   → .oxagen/workspace.json in process.cwd()  (project workspace link)
+ *   → global config (~/.config/oxagen/config.json)
+ */
 export function resolveApiContext(): ApiContext | null {
   const token = getToken();
-  const org = getOrgId();
-  const ws = getWorkspaceId();
+  const config = readConfig();
+  const link = readWorkspaceLink(process.cwd());
+
+  const org =
+    process.env["OXAGEN_ORG_ID"] ??
+    link?.orgSlug ??
+    config.orgSlug;
+
+  const ws =
+    process.env["OXAGEN_WORKSPACE_ID"] ??
+    link?.workspaceSlug ??
+    config.workspaceSlug;
+
   if (!token || !org || !ws) return null;
   return { apiUrl: getApiUrl(), token, org, ws };
 }
@@ -54,32 +90,98 @@ function requireApiContext(): ApiContext {
 }
 
 /**
+ * Core fetch helper shared by all call styles. Accepts the full URL and
+ * headers; throws ApiError on network failure or non-2xx.
+ */
+async function coreRequest<T>(
+  url: string,
+  method: "GET" | "POST" | "PUT",
+  headers: Record<string, string>,
+  body?: unknown,
+): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    throw new ApiError(
+      `Network error calling ${url}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new ApiError(`Error ${res.status} from ${url}: ${text}`, res.status);
+  }
+  return (await res.json()) as T;
+}
+
+/**
  * POST an org-scoped capability and return the parsed JSON. Throws `ApiError`
  * on missing scope, network failure, or a non-2xx response — never exits.
  */
 export async function apiPostOrThrow<T>(path: string, body: unknown): Promise<T> {
   const ctx = resolveApiContext();
   if (!ctx) throw new ApiError(NOT_LOGGED_IN);
-  let res: Response;
-  try {
-    res = await fetch(`${ctx.apiUrl}/v1/${ctx.org}/${ctx.ws}/${path}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${ctx.token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body ?? {}),
-    });
-  } catch (err) {
-    throw new ApiError(
-      `Network error calling ${path}: ${err instanceof Error ? err.message : String(err)}`,
-    );
+  return coreRequest<T>(
+    `${ctx.apiUrl}/v1/${ctx.org}/${ctx.ws}/${path}`,
+    "POST",
+    {
+      Authorization: `Bearer ${ctx.token}`,
+      "Content-Type": "application/json",
+    },
+    body ?? {},
+  );
+}
+
+/**
+ * GET an org-scoped endpoint and return the parsed JSON. Throws `ApiError`
+ * on missing scope, network failure, or a non-2xx response — never exits.
+ *
+ * `params` is appended as a query string. Pass `undefined` for no params.
+ */
+export async function apiGetOrThrow<T>(
+  path: string,
+  params?: Record<string, string | undefined>,
+): Promise<T> {
+  const ctx = resolveApiContext();
+  if (!ctx) throw new ApiError(NOT_LOGGED_IN);
+  let url = `${ctx.apiUrl}/v1/${ctx.org}/${ctx.ws}/${path}`;
+  if (params) {
+    const qs = new URLSearchParams(
+      Object.entries(params).flatMap(([k, v]) => (v !== undefined ? [[k, v]] : [])),
+    ).toString();
+    if (qs) url += `?${qs}`;
   }
-  if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText);
-    throw new ApiError(`Error ${res.status} from ${path}: ${text}`, res.status);
-  }
-  return (await res.json()) as T;
+  return coreRequest<T>(url, "GET", {
+    Authorization: `Bearer ${ctx.token}`,
+    Accept: "application/json",
+  });
+}
+
+/**
+ * POST a user-level (pre-org) capability and return the parsed JSON.
+ * Hits `${apiUrl}/v1/${path}` with ONLY the Bearer token — no org/workspace
+ * in the path. Used for org.list and workspace.list.
+ * Throws `ApiError` when the token is absent or the call fails.
+ */
+export async function userApiPostOrThrow<T>(
+  path: string,
+  body: unknown,
+): Promise<T> {
+  const token = getToken();
+  if (!token) throw new ApiError(NOT_AUTHED);
+  return coreRequest<T>(
+    `${getApiUrl()}/v1/${path}`,
+    "POST",
+    {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body ?? {},
+  );
 }
 
 /** POST an org-scoped capability and return the parsed JSON, or exit(1) on error. */

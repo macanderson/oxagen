@@ -32,13 +32,12 @@
 import * as readline from "node:readline/promises";
 import {
   getApiUrl,
-  getOrgId,
   getToken,
-  getWorkspaceId,
   readConfig,
   writeConfig,
   clearConfig,
 } from "../lib/config.js";
+import { resolveLinkedAccount } from "../lib/linker.js";
 
 export interface LoginOptions {
   token?: string;
@@ -125,8 +124,8 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
   // No flags → show current session status if logged in.
   if (!opts.token && !opts.org && !opts.workspace) {
     const token = getToken();
-    const orgSlug = getOrgId();
-    const workspaceSlug = getWorkspaceId();
+    const orgSlug = config.orgSlug;
+    const workspaceSlug = config.workspaceSlug;
     if (token && orgSlug && workspaceSlug) {
       process.stdout.write(`Logged in to Oxagen:\n`);
       process.stdout.write(`  token:     ${maskToken(token)}\n`);
@@ -150,46 +149,12 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
       return;
     }
     process.stdout.write(
-      `\nOxagen API token (create one at https://app.oxagen.sh):\n`,
+      `\nOxagen API token (create one at https://app.oxagen.sh/settings/tokens):\n`,
     );
     token = await promptLine("  Token: ");
   }
   if (!token) {
     process.stderr.write(`Error: Token cannot be empty.\n`);
-    process.exitCode = 1;
-    return;
-  }
-
-  // ── Resolve org slug ─────────────────────────────────────────────────────────
-  let orgSlug = opts.org ?? config.orgSlug;
-  if (!orgSlug) {
-    if (!isTTY) {
-      process.stderr.write(`Error: No org provided. Pass --org <slug>.\n`);
-      process.exitCode = 1;
-      return;
-    }
-    orgSlug = await promptLine("  Organization slug: ");
-  }
-  if (!orgSlug) {
-    process.stderr.write(`Error: Organization slug cannot be empty.\n`);
-    process.exitCode = 1;
-    return;
-  }
-
-  // ── Resolve workspace slug ───────────────────────────────────────────────────
-  let workspaceSlug = opts.workspace ?? config.workspaceSlug;
-  if (!workspaceSlug) {
-    if (!isTTY) {
-      process.stderr.write(
-        `Error: No workspace provided. Pass --workspace <slug>.\n`,
-      );
-      process.exitCode = 1;
-      return;
-    }
-    workspaceSlug = await promptLine("  Workspace slug: ");
-  }
-  if (!workspaceSlug) {
-    process.stderr.write(`Error: Workspace slug cannot be empty.\n`);
     process.exitCode = 1;
     return;
   }
@@ -203,7 +168,7 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
       process.stderr.write(
         `Error: Token validation failed. The API rejected this key (HTTP 401).\n` +
           `  Verify the token is a current, non-expired Oxagen API key.\n` +
-          `  Get a token at: https://app.oxagen.sh\n`,
+          `  Get a token at: https://app.oxagen.sh/settings/tokens\n`,
       );
       process.exitCode = 1;
       return;
@@ -227,7 +192,33 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
       break;
   }
 
-  // ── Persist session ──────────────────────────────────────────────────────────
+  // Persist the token before running the org/workspace picker so that
+  // userApiPostOrThrow (called by the linker) can pick it up via getToken().
+  writeConfig({ token });
+
+  // ── Org + workspace picker via the shared linker ─────────────────────────────
+  process.stdout.write(`\nFetching your organizations...\n`);
+  let orgSlug: string;
+  let workspaceSlug: string;
+  try {
+    const account = await resolveLinkedAccount({
+      orgSlug: opts.org,
+      workspaceSlug: opts.workspace,
+      isTTY,
+    });
+    orgSlug = account.orgSlug;
+    workspaceSlug = account.workspaceSlug;
+  } catch (err) {
+    // Picker failures must not leave a partial config (token but no scope).
+    writeConfig({ token: undefined, orgSlug: undefined, workspaceSlug: undefined });
+    process.stderr.write(
+      `Error: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  // ── Persist full session ─────────────────────────────────────────────────────
   writeConfig({ token, orgSlug, workspaceSlug });
 
   process.stdout.write(`\nLogged in to Oxagen:\n`);
@@ -237,8 +228,6 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
   process.stdout.write(`  api:       ${apiUrl}\n`);
 
   if (probe.kind === "forbidden") {
-    // The key authenticated but IAM denied the probe capability. Tell the user
-    // their session is saved while being honest that API calls may be blocked.
     process.stderr.write(
       `\nNote: this key authenticated, but the API currently denies it access ` +
         `(HTTP 403).\n` +
@@ -255,5 +244,8 @@ export function handleLogout(): void {
     return;
   }
   clearConfig();
-  process.stdout.write(`Logged out. Session cleared from ~/.config/oxagen/config.json.\n`);
+  process.stdout.write(
+    `Logged out. Session cleared from ~/.config/oxagen/config.json.\n` +
+      `Note: per-project links (.oxagen/workspace.json) are left intact.\n`,
+  );
 }

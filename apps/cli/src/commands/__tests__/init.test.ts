@@ -52,6 +52,7 @@ function makeResult(overrides: Partial<InitResult> = {}): InitResult {
       { name: "graph", files: 5 },
     ],
     domainsSkipped: false,
+    workspaceLink: null,
     ...overrides,
   };
 }
