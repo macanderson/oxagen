@@ -40,24 +40,26 @@ const EMPTY_AUTHZ: AuthzData = {
 const UNRESOLVED_SERVICE_PRINCIPAL_ID = "00000000-0000-0000-0000-0000000000ff";
 
 /**
- * Build a fail-closed AuthzData for an API-key-authenticated request that we
- * cannot resolve to a service principal.
+ * Build a fail-closed AuthzData for an API-key-authenticated request whose
+ * acting identity we cannot resolve.
  *
- * Service principals are not yet linked to API keys in the data model
- * (api_keys carries no principal_id, and principals has no parent_api_key_id),
- * so we cannot resolve role grants for an API-key caller. Returning EMPTY_AUTHZ
- * here would let the resolver fall through to rule 8 (contract defaultEffect):
- * any capability whose defaultEffect is "allow" would be granted to every API
- * key regardless of the enterprise org's role-grant matrix, and an explicit
- * role-grant deny would be silently ignored — an IAM bypass on the
- * machine-to-machine surface (this path only runs for enterprise orgs; the tier
- * gate in check-iam.ts bypasses the resolver for everyone else).
+ * API keys authorize AS THEIR CREATOR (api_keys.created_by_user_id) — see
+ * _fetchAuthz. This fallback fires only when that resolution fails: the key row
+ * is missing/soft-deleted/scoped to another org, carries no recorded creator,
+ * or the creator has no principal in this org. In those cases we must NOT
+ * return EMPTY_AUTHZ, because the resolver would then fall through to rule 8
+ * (contract defaultEffect): any capability whose defaultEffect is "allow" would
+ * be granted to the key regardless of the enterprise org's role-grant matrix,
+ * and an explicit role-grant deny would be silently ignored — an IAM bypass on
+ * the machine-to-machine surface (this resolver path runs only for enterprise
+ * orgs; the tier gate in check-iam.ts bypasses it for everyone else).
  *
  * Instead we fail closed by emitting a synthetic org-enforced DENY policy for
  * the requested capability. resolve()'s rule 2 (org enforced deny) is a hard
  * stop that overrides defaultEffect, so the request is denied rather than
- * degraded. Replace this with a real service-principal lookup once API keys are
- * linked to principals.
+ * degraded. A dedicated service principal per key is the durable model; the
+ * creator-inheritance path is the no-migration fix that unblocks API keys on
+ * enterprise orgs today.
  */
 function denyApiKeyAuthz(orgId: string, workspaceId: string, capability: string): AuthzData {
   return {
@@ -120,6 +122,12 @@ export async function fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
         "[iam] IAM tables not found (Postgres 42P01). Falling back to defaultEffect. " +
           "Run `pnpm db:migrate` to apply the IAM foundation migration.",
       );
+      // Preserve the machine-to-machine fail-closed invariant: an API-key
+      // caller must NEVER degrade to defaultEffect (that would bypass enterprise
+      // role grants), even when the IAM tables are absent.
+      if (!args.userId && args.apiKeyId) {
+        return denyApiKeyAuthz(args.orgId, args.workspaceId, args.capability);
+      }
       return EMPTY_AUTHZ;
     }
     throw err;
@@ -142,32 +150,60 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
   // correctly visible inside withTenantDb. No query is over-filtered.
   const { userId, apiKeyId, orgId, workspaceId, capability } = args;
 
-  // Resolve the principal from the userId (human kind).
-  if (!userId) {
-    // API-key-authenticated request (userId null, apiKeyId set): we cannot yet
-    // resolve a service principal from the API key, so FAIL CLOSED rather than
-    // fall through to defaultEffect (which would bypass enterprise role grants).
-    // See denyApiKeyAuthz for the full rationale.
-    if (apiKeyId) return denyApiKeyAuthz(orgId, workspaceId, capability);
-    // No user and no API key — nothing to resolve.
-    return EMPTY_AUTHZ;
-  }
+  // An API-key request authenticates with no session user (userId null,
+  // apiKeyId set). It authorizes AS THE KEY'S CREATOR (see below).
+  const isApiKey = !userId && !!apiKeyId;
+
+  // Neither a human session nor an API key — nothing to resolve.
+  if (!userId && !apiKeyId) return EMPTY_AUTHZ;
 
   return withTenantDb(async (tx) => {
+    // ── Resolve the EFFECTIVE acting user ─────────────────────────────────────
+    // Human session → the session user. API key → the user who CREATED the key
+    // (api_keys.created_by_user_id): the key inherits its creator's role grants.
+    // This is what lets API keys work on enterprise orgs, which run the full
+    // resolver — the prior behaviour fail-closed EVERY API-key call. The key row
+    // is org-scoped, so the active tenant scope (the key's own org/workspace,
+    // set by the auth middleware) sees it. A missing/soft-deleted/foreign-org
+    // key or a key with no recorded creator yields no effective user → fail
+    // closed below (never fall through to defaultEffect on the m2m surface).
+    let effectiveUserId: string | null = userId;
+    if (isApiKey) {
+      const keyRows = await tx
+        .select({ createdByUserId: schema.apiKeys.createdByUserId })
+        .from(schema.apiKeys)
+        .where(
+          and(
+            eq(schema.apiKeys.id, apiKeyId as string),
+            eq(schema.apiKeys.orgId, orgId),
+            isNull(schema.apiKeys.deletedAt),
+          ),
+        )
+        .limit(1);
+      effectiveUserId = keyRows[0]?.createdByUserId ?? null;
+      if (!effectiveUserId) return denyApiKeyAuthz(orgId, workspaceId, capability);
+    }
+
     const principalRows = await tx
       .select()
       .from(schema.principals)
       .where(
         and(
           eq(schema.principals.orgId, orgId),
-          // Match by the human user's ID stored in parent_user_id for humans.
-          eq(schema.principals.parentUserId, userId),
+          // Match by the effective user's ID stored in parent_user_id.
+          eq(schema.principals.parentUserId, effectiveUserId as string),
         ),
       )
       .limit(1);
 
     const principalRow = principalRows[0];
-    if (!principalRow) return EMPTY_AUTHZ;
+    if (!principalRow) {
+      // The effective user has no principal in this org. For an API key this
+      // MUST fail closed (do not degrade to defaultEffect, which would bypass
+      // enterprise role grants). For a human session, fall through to
+      // defaultEffect via EMPTY_AUTHZ as before.
+      return isApiKey ? denyApiKeyAuthz(orgId, workspaceId, capability) : EMPTY_AUTHZ;
+    }
 
     const principal: ResolvedPrincipal = {
       id: principalRow.id,
