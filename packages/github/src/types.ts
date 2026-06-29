@@ -5,10 +5,16 @@
  */
 export interface GitHubClient {
   /**
-   * Create a new repository inside a GitHub organisation.
+   * Create a new repository.
+   *
+   * When `org` is provided the repository is created inside that GitHub
+   * organisation (`POST /orgs/{org}/repos`). When `org` is omitted it is
+   * created in the authenticated user's personal account
+   * (`POST /user/repos`) — `POST /orgs/{user}/repos` 404s for a personal
+   * account, so the two endpoints are not interchangeable.
    */
   createRepoInOrg(args: {
-    org: string;
+    org?: string;
     name: string;
     description?: string;
     private?: boolean;
