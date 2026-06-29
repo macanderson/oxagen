@@ -86,7 +86,9 @@ import { orgMemberInviteAccept } from "./org.member.invite.accept";
 import { orgMemberInviteDecline } from "./org.member.invite.decline";
 import { orgMemberRemove } from "./org.member.remove";
 import { orgMemberRoleChange } from "./org.member.role.change";
+import { orgList } from "./org.list";
 import { workspaceCreate } from "./workspace.create";
+import { workspaceList } from "./workspace.list";
 import { videoGenerate } from "./video.generate";
 import { imageGenerate } from "./image.generate";
 import { svgGenerate } from "./svg.generate";
@@ -350,6 +352,7 @@ export {
   conversationFilesList,
   formFill,
   organizationCreate,
+  orgList,
   orgMemberAdd,
   orgMemberInviteAccept,
   orgMemberInviteDecline,
@@ -612,6 +615,7 @@ export const contracts = [
   conversationFilesList,
   formFill,
   organizationCreate,
+  orgList,
   orgMemberAdd,
   orgMemberInviteAccept,
   orgMemberInviteDecline,

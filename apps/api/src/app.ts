@@ -11,6 +11,8 @@ import { stripeWebhook } from "./routes/stripe";
 import { inngestRoute } from "./routes/inngest";
 import { organizationCreateRoute } from "./routes/v1/organization.create";
 import { workspaceCreateRoute } from "./routes/v1/workspace.create";
+import { orgListRoute } from "./routes/v1/org.list";
+import { workspaceListRoute } from "./routes/v1/workspace.list";
 import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.read";
 import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription.upgrade.start";
 import { billingCreditsPurchaseRoute } from "./routes/v1/billing.credits.purchase";
@@ -252,6 +254,9 @@ app.route("/api/inngest", inngestRoute);
 const userScoped = new Hono<AppEnv>();
 userScoped.use("*", authMiddleware);
 userScoped.route("/organizations", organizationCreateRoute);
+// Pre-org tenant + workspace pickers for the CLI linker (auth-only, no scope).
+userScoped.route("/user/organizations", orgListRoute);
+userScoped.route("/user/workspaces", workspaceListRoute);
 userScoped.route("/user/preferences/read", userPreferencesReadRoute);
 userScoped.route("/user/preferences/write", userPreferencesWriteRoute);
 app.route("/v1", userScoped);
