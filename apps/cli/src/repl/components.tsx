@@ -5,13 +5,22 @@
  * they render instantly and are unit-testable in isolation with
  * ink-testing-library.
  */
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput, useStdout } from "ink";
 import React, { useState, useEffect } from "react";
 import { theme } from "../tui/theme.js";
 import { formatUsd } from "../agent/model-router.js";
 import { getToolEmoji } from "../agent/tool-formatter.js";
+import { SlashMenu } from "./slash-menu.js";
+import {
+  slashQuery,
+  filterSlashCatalog,
+  type SlashCatalogEntry,
+} from "../slash/catalog.js";
 import type { StageEvent, StageKind, TurnTrace, JudgeVerdict } from "../agent/trace.js";
 import type { ApprovalRequest, ApprovalResponse, PermissionMode } from "../agent/permissions.js";
+
+/** Layout mode for the REPL: inline scrollback vs. alternate-screen fullscreen. */
+export type TuiMode = "compact" | "fullscreen";
 
 export interface Message {
   role: "user" | "assistant" | "tool" | "stage";
@@ -26,9 +35,9 @@ export interface Message {
 }
 
 export const HELP = [
-  "Slash commands:",
+  "Slash commands (type / to browse them with descriptions):",
   "  /help          show this help",
-  "  /init          scaffold .oxagen/ settings + build code graph + print stats",
+  "  /tui [compact|fullscreen]  switch the terminal layout (omit to toggle)",
   "  /model [slug]  show or set the gateway model",
   "  /mode [ask|auto-edit|bypass|readonly]  show or set the permission mode",
   "  /replay [n|id] show how a turn was handled (default: last turn)",
@@ -37,6 +46,8 @@ export const HELP = [
   "  /verbose [on|off]   per-phase timing, model+token+cost breakdown, tool results",
   "  /clear         reset the conversation",
   "  /exit, /quit   quit",
+  "Type / to open the command menu — 📦 marks built-in & CLI commands; every",
+  "`oxagen --help` command is browsable there too (custom commands show no glyph).",
   "Permission prompt: y allow once · a allow + remember · n/Esc deny",
   "Esc / Ctrl-C     cancel the current turn (Ctrl-C quits when idle)",
 ].join("\n");
@@ -59,44 +70,125 @@ export function humanizeTokens(n: number): string {
 export function PromptInput({
   onSubmit,
   busy,
+  catalog = [],
 }: {
   onSubmit: (text: string) => void;
   /** A turn is in flight. The input stays live — submissions queue (Claude
    *  Code-style) instead of being blocked — but the glyph shows the busy state. */
   busy: boolean;
+  /** Slash-command catalog powering the live typeahead menu (empty = no menu). */
+  catalog?: ReadonlyArray<SlashCatalogEntry>;
 }): React.ReactElement {
   const [value, setValue] = useState("");
+  // Highlighted suggestion + whether the user dismissed the menu (Esc). Both
+  // reset to their defaults whenever the buffer changes via typing.
+  const [selected, setSelected] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
+  const { stdout } = useStdout();
+
+  // Derive the live typeahead state from the current buffer. The menu is open
+  // only while the buffer is a single `/word` token and the user hasn't
+  // dismissed it.
+  const query = dismissed ? null : slashQuery(value);
+  const suggestions = query === null ? [] : filterSlashCatalog(catalog, query);
+  const menuOpen = suggestions.length > 0;
+  // `selected` may lag the (shrinking) suggestion list; clamp for rendering/use.
+  const sel = suggestions.length === 0 ? 0 : Math.min(selected, suggestions.length - 1);
+  const cols = stdout?.columns ?? 80;
+  const menuWidth = Math.min(Math.max(cols - 2, 40), 100);
+
+  const resetInput = (): void => {
+    setValue("");
+    setSelected(0);
+    setDismissed(false);
+  };
 
   useInput((input, key) => {
+    // ── Typeahead navigation (only while the menu is open) ──
+    if (menuOpen) {
+      if (key.downArrow) {
+        setSelected((s) => (Math.min(s, suggestions.length - 1) + 1) % suggestions.length);
+        return;
+      }
+      if (key.upArrow) {
+        setSelected(
+          (s) => (Math.min(s, suggestions.length - 1) - 1 + suggestions.length) % suggestions.length,
+        );
+        return;
+      }
+      if (key.tab) {
+        const pick = suggestions[sel];
+        if (pick) {
+          // Complete to `/name `; commands taking args keep the trailing space
+          // (and a closed menu) so the user types arguments next.
+          setValue(`/${pick.name}${pick.argumentHint ? " " : ""}`);
+          setSelected(0);
+          setDismissed(false);
+        }
+        return;
+      }
+      if (key.escape) {
+        setDismissed(true);
+        return;
+      }
+      if (key.return && !key.shift) {
+        const pick = suggestions[sel];
+        if (pick) {
+          const exact = value.trim() === `/${pick.name}`;
+          if (exact || !pick.argumentHint) {
+            // Fully-typed, or an argument-free command: run it now.
+            onSubmit(`/${pick.name}`);
+            resetInput();
+          } else {
+            // Selected a different/partial command that takes args: complete it
+            // and keep editing rather than firing the wrong command.
+            setValue(`/${pick.name} `);
+            setSelected(0);
+            setDismissed(false);
+          }
+        }
+        return;
+      }
+    }
+
+    // ── Plain line editing ──
+    if (key.tab) return; // never insert a literal tab character
     if (key.return && !key.shift) {
       if (value.trim()) {
         onSubmit(value.trim());
-        setValue("");
+        resetInput();
       }
       return;
     }
     if (key.backspace || key.delete) {
       setValue((v) => v.slice(0, -1));
+      setSelected(0);
+      setDismissed(false);
       return;
     }
     if (input && !key.ctrl && !key.meta) {
       setValue((v) => v + input);
+      setSelected(0);
+      setDismissed(false);
     }
   });
 
   return (
-    <Box
-      borderStyle="round"
-      borderColor={busy ? "#FBBF24" : theme.cyan}
-      paddingX={1}
-    >
-      <Text color={busy ? "#FBBF24" : theme.cyan} bold>
-        {busy ? "⧗ " : "❯ "}
-      </Text>
-      <Text>
-        {value}
-        <Text color={theme.cyan}>█</Text>
-      </Text>
+    <Box flexDirection="column">
+      {menuOpen && <SlashMenu entries={suggestions} selectedIndex={sel} width={menuWidth} />}
+      <Box
+        borderStyle="round"
+        borderColor={busy ? "#FBBF24" : theme.cyan}
+        paddingX={1}
+      >
+        <Text color={busy ? "#FBBF24" : theme.cyan} bold>
+          {busy ? "⧗ " : "❯ "}
+        </Text>
+        <Text>
+          {value}
+          <Text color={theme.cyan}>█</Text>
+        </Text>
+      </Box>
     </Box>
   );
 }
@@ -280,6 +372,7 @@ export function StatusLine({
   pipelineOn,
   verboseOn,
   mode,
+  tuiMode,
 }: {
   model: string;
   readOnly: boolean;
@@ -292,6 +385,8 @@ export function StatusLine({
   verboseOn?: boolean;
   /** Current permission posture (undefined = fall back to the read-only chip). */
   mode?: PermissionMode;
+  /** Current layout mode (undefined = don't show the chip). */
+  tuiMode?: TuiMode;
 }): React.ReactElement {
   const total = inputTokens + outputTokens;
   return (
@@ -314,6 +409,11 @@ export function StatusLine({
             <Text color={pipelineOn ? "#34D399" : "#FB7185"}>
               {pipelineOn ? "on" : "off"}
             </Text>
+          </Text>
+        )}
+        {tuiMode && (
+          <Text dimColor>
+            layout:<Text color={theme.violet}>{tuiMode}</Text>
           </Text>
         )}
         {verboseOn && <Text color={theme.cyan}>verbose</Text>}

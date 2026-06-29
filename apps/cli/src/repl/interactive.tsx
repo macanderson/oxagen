@@ -10,21 +10,23 @@
  *
  * Presentational pieces live in ./components; this file is the container.
  */
-import { Box, Text, useApp, useInput } from "ink";
+import { Box, Text, useApp, useInput, useStdout } from "ink";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import type { ModelMessage } from "ai";
 import { theme } from "../tui/theme.js";
 import { runTurn } from "../agent/pipeline.js";
 import { resolveModelId } from "../agent/model.js";
 import { loadProjectContext } from "../agent/project-context.js";
-import { loadAndExpand } from "../slash/expand.js";
+import { loadAndExpand, parseInvocation } from "../slash/expand.js";
+import { buildSlashCatalog, type SlashCatalogEntry } from "../slash/catalog.js";
+import { buildProgram, describeCliCommands } from "../program.js";
 import { isProjectInitialized, initializeProject } from "../project/init.js";
 import { openSessionMemory, type SessionMemory } from "../agent/memory.js";
 import { openFleetMemory } from "../agent/fleet/memory.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
-import { readConfig } from "../lib/config.js";
+import { readConfig, writeConfig } from "../lib/config.js";
 import {
   ApprovalPrompt,
   HELP,
@@ -34,6 +36,7 @@ import {
   ThinkingIndicator,
   summarizeTrace,
   type Message,
+  type TuiMode,
 } from "./components.js";
 import {
   PermissionBroker,
@@ -63,6 +66,41 @@ function summarizeInput(input: unknown): string {
   const text =
     typeof input === "object" ? JSON.stringify(input) : String(input);
   return text.length > 100 ? text.slice(0, 100) + "…" : text;
+}
+
+// Alternate-screen control sequences: 1049h swaps to the alt buffer (and 1049l
+// restores the user's scrollback on exit); [H homes the cursor so the first
+// frame draws from the top of the screen rather than wherever the prompt was.
+const ALT_SCREEN_ENTER = "\x1b[?1049h\x1b[H";
+const ALT_SCREEN_LEAVE = "\x1b[?1049l";
+
+/**
+ * Drive fullscreen (alternate-screen) layout for the REPL.
+ *
+ * When `active`, the app swaps to the terminal's alternate screen buffer and
+ * reports its current row count so the root Box can be pinned to the full
+ * terminal height (header at top, input pinned at the bottom). When inactive —
+ * or on unmount/exit — the alt buffer is left so the user's shell scrollback is
+ * restored untouched. Toggling at runtime re-runs the effect, so `/tui` flips
+ * cleanly between compact and fullscreen.
+ */
+function useFullscreen(active: boolean): number {
+  const { stdout } = useStdout();
+  const [rows, setRows] = useState<number>(stdout?.rows ?? 24);
+
+  useEffect(() => {
+    if (!active || !stdout) return;
+    stdout.write(ALT_SCREEN_ENTER);
+    const sync = (): void => setRows(stdout.rows ?? 24);
+    sync();
+    stdout.on("resize", sync);
+    return () => {
+      stdout.off("resize", sync);
+      stdout.write(ALT_SCREEN_LEAVE);
+    };
+  }, [active, stdout]);
+
+  return rows;
 }
 
 export function ReplApp({
@@ -100,6 +138,14 @@ export function ReplApp({
   const initialVerbose = options.verbose ?? readConfig().verbose ?? false;
   const [verboseOn, setVerboseOn] = useState(initialVerbose);
   const verboseRef = useRef(initialVerbose);
+  // Layout mode: "compact" (inline scrollback) vs. "fullscreen" (alternate
+  // screen, pinned to the terminal height). Defaults from config; toggled by
+  // /tui. useFullscreen swaps the alt buffer + reports the live row count.
+  const [tuiMode, setTuiMode] = useState<TuiMode>(
+    readConfig().tui === "fullscreen" ? "fullscreen" : "compact",
+  );
+  const fullscreen = tuiMode === "fullscreen";
+  const rows = useFullscreen(fullscreen);
   // Permission posture (drives the broker + status chip) and the in-flight
   // approval request (drives the inline ApprovalPrompt; null when none).
   const [mode, setMode] = useState<PermissionMode>(
@@ -113,6 +159,17 @@ export function ReplApp({
   const cwd = process.cwd();
   // Project rules (CLAUDE.md/AGENTS.md) loaded once for the session.
   const projectContextRef = useRef(loadProjectContext(cwd));
+  // Unified slash-command catalog — built-in REPL commands + every `oxagen --help`
+  // command + custom .md commands — built once. Powers the typeahead menu and the
+  // CLI-command hints in handleSubmit. buildProgram() is pure introspection: no
+  // parse, no I/O, no side effects.
+  const catalogRef = useRef<SlashCatalogEntry[] | null>(null);
+  if (!catalogRef.current) {
+    catalogRef.current = buildSlashCatalog({
+      cwd,
+      cliCommands: describeCliCommands(buildProgram()),
+    });
+  }
   // Oxagen context-engine memory, opened asynchronously on mount.
   const memoryRef = useRef<SessionMemory | null>(null);
   // Fleet memory (weighted lessons) and the per-turn trace store, both synchronous.
@@ -129,6 +186,8 @@ export function ReplApp({
   modelRef.current = model;
   const modeRef = useRef(mode);
   modeRef.current = mode;
+  const tuiModeRef = useRef(tuiMode);
+  tuiModeRef.current = tuiMode;
   const approvalRef = useRef(approval);
   approvalRef.current = approval;
 
@@ -232,6 +291,30 @@ export function ReplApp({
       // ── Slash commands ──
       if (text === "/help") {
         pushAssistant(HELP);
+        return;
+      }
+      if (text === "/tui" || text.startsWith("/tui ")) {
+        const arg = text.slice("/tui".length).trim().toLowerCase();
+        let next: TuiMode;
+        if (arg === "") {
+          // No argument toggles between the two layouts.
+          next = tuiModeRef.current === "fullscreen" ? "compact" : "fullscreen";
+        } else if (arg === "compact" || arg === "fullscreen") {
+          next = arg;
+        } else {
+          pushAssistant(
+            `Unknown layout "${arg}". Use /tui compact|fullscreen (or /tui alone to toggle).`,
+          );
+          return;
+        }
+        setTuiMode(next);
+        // Remember the choice so the next session starts in the same layout.
+        writeConfig({ tui: next });
+        pushAssistant(
+          next === "fullscreen"
+            ? "Layout: fullscreen — the REPL fills the alternate screen. /tui compact returns to inline scrollback."
+            : "Layout: compact — the REPL renders inline in your scrollback. /tui fullscreen uses the alternate screen.",
+        );
         return;
       }
       if (text === "/init") {
@@ -365,7 +448,22 @@ export function ReplApp({
         if (expanded) {
           submission = expanded.prompt;
         } else {
-          pushAssistant(`Unknown command: ${text.split(/\s+/)[0]}. Type /help for built-ins.`);
+          // Not a built-in and not a custom .md command. If it's one of the
+          // productized `oxagen --help` commands surfaced in the menu, point the
+          // user at the shell rather than failing — those run outside the REPL.
+          const name = parseInvocation(text)?.name ?? text.split(/\s+/)[0]!.slice(1);
+          const entry = catalogRef.current?.find((c) => c.name === name);
+          if (entry && entry.source === "cli") {
+            const hint = entry.argumentHint ? ` ${entry.argumentHint}` : "";
+            pushAssistant(
+              `📦 oxagen ${entry.name}${hint} — ${entry.description}\n` +
+                `This is an oxagen CLI command — run it from your shell: oxagen ${entry.name}`,
+            );
+          } else {
+            pushAssistant(
+              `Unknown command: /${name}. Type /help for built-ins, or / to browse the menu.`,
+            );
+          }
           return;
         }
       }
@@ -567,7 +665,9 @@ export function ReplApp({
   );
 
   return (
-    <Box flexDirection="column" height="100%">
+    // Fullscreen pins the column to the terminal height (alt screen); compact
+    // leaves height unset so the conversation grows inline in the scrollback.
+    <Box flexDirection="column" height={fullscreen ? rows : undefined}>
       {/* Header */}
       <Box paddingX={1} marginBottom={1}>
         <Text color={theme.cyan} bold>
@@ -580,8 +680,12 @@ export function ReplApp({
         <Text dimColor>v{pkg.version}</Text>
       </Box>
 
-      {/* Messages */}
-      <Box flexDirection="column" flexGrow={1} overflow="hidden">
+      {/* Messages — fullscreen fills + clips to the screen; compact grows inline */}
+      <Box
+        flexDirection="column"
+        flexGrow={fullscreen ? 1 : undefined}
+        overflow={fullscreen ? "hidden" : undefined}
+      >
         {messages.length === 0 ? (
           <Box paddingX={1} flexDirection="column">
             <Text dimColor>Ready. Type a prompt to start coding.</Text>
@@ -632,6 +736,7 @@ export function ReplApp({
         pipelineOn={pipelineOn}
         verboseOn={verboseOn}
         mode={mode}
+        tuiMode={tuiMode}
       />
 
       {/* A pending permission prompt takes over the input row; otherwise the
@@ -639,7 +744,11 @@ export function ReplApp({
       {approval ? (
         <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
       ) : (
-        <PromptInput onSubmit={enqueue} busy={isStreaming} />
+        <PromptInput
+          onSubmit={enqueue}
+          busy={isStreaming}
+          catalog={catalogRef.current ?? []}
+        />
       )}
     </Box>
   );
