@@ -11,7 +11,12 @@ export type {
   ApiKeyResolutionError,
   ApiKeyResolution,
 } from "./api-key";
-export { resolveApiKey } from "./api-key";
+export {
+  resolveApiKey,
+  apiKeyPrefix,
+  API_KEY_PREFIX_LENGTH,
+  API_KEY_RAW_PREFIX,
+} from "./api-key";
 
 export type {
   OrgScopeResult,

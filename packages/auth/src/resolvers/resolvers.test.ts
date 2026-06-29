@@ -67,6 +67,8 @@ import {
   stripCookieSignature,
   SESSION_COOKIE_NAME,
   resolveApiKey,
+  apiKeyPrefix,
+  API_KEY_PREFIX_LENGTH,
   resolveOrgScope,
   resolveWorkspaceScope,
 } from "./index";
@@ -272,32 +274,54 @@ describe("resolveSession", () => {
 
 // ---------------------------------------------------------------------------
 // resolveApiKey
+//
+// Real keys are `ox_<base64url(32 bytes)>` (46 chars), minted by
+// generateApiKey() in @oxagen/handlers. The indexed lookup prefix is a FIXED
+// 12-char leading window — `rawKey.slice(0, API_KEY_PREFIX_LENGTH)` — NOT a
+// split on the first "_". These tests use realistic ox_ keys and include an
+// explicit regression guard for the prod bug where resolveApiKey split on "_"
+// → extracted "ox" → never matched the stored 12-char prefix, so every
+// app-generated key was rejected on the API/MCP/CLI bearer-auth paths.
 // ---------------------------------------------------------------------------
+
+// Mirror generateApiKey()'s output shape with a deterministic secret so the
+// 12-char prefix window is stable: "ox_" + 44 chars. The base64url alphabet
+// includes "-" and "_", so the secret intentionally contains a "_" to prove the
+// resolver does NOT split on it.
+const RAW_KEY = "ox_AbCdEfGhIjKl-_MnOpQrStUvWxYz0123456789AbCd";
+const RAW_KEY_PREFIX = "ox_AbCdEfGhI"; // RAW_KEY.slice(0, 12) — 12 chars
 
 describe("resolveApiKey", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("returns malformed when there is no underscore separator", async () => {
+  it("returns malformed when the key does not start with the ox_ marker", async () => {
     const result = await resolveApiKey("noseparatorhere");
+    expect(result).toEqual({ ok: false, kind: "malformed" });
+    expect(mockQuery.apiKeys.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("returns malformed when the key is only the prefix with no secret", async () => {
+    // Length <= the 12-char prefix window — there is no secret to hash.
+    const result = await resolveApiKey("ox_abcdef");
     expect(result).toEqual({ ok: false, kind: "malformed" });
     expect(mockQuery.apiKeys.findFirst).not.toHaveBeenCalled();
   });
 
   it("returns invalid when no row matches the prefix", async () => {
     mockQuery.apiKeys.findFirst.mockResolvedValueOnce(undefined);
-    const result = await resolveApiKey("pfx_secret");
+    const result = await resolveApiKey(RAW_KEY);
     expect(result).toEqual({ ok: false, kind: "invalid" });
   });
 
   it("returns invalid when the hash does not match", async () => {
     mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
       id: "aky_1",
-      keyHash: sha256hex("pfx_WRONG_SECRET"),
+      keyHash: sha256hex("ox_AbCdEfGhIj_DIFFERENT_KEY_ENTIRELY_00000000"),
       orgId: "org_1",
       workspaceId: "wrk_1",
       expiresAt: null,
     });
-    const result = await resolveApiKey("pfx_correct_secret");
+    const result = await resolveApiKey(RAW_KEY);
     expect(result).toEqual({ ok: false, kind: "invalid" });
   });
 
@@ -312,7 +336,7 @@ describe("resolveApiKey", () => {
       workspaceId: "wrk_1",
       expiresAt: null,
     });
-    const result = await resolveApiKey("pfx_some_secret");
+    const result = await resolveApiKey(RAW_KEY);
     expect(result).toEqual({ ok: false, kind: "invalid" });
   });
 
@@ -325,33 +349,31 @@ describe("resolveApiKey", () => {
       workspaceId: "wrk_1",
       expiresAt: null,
     });
-    const result = await resolveApiKey("pfx_some_secret");
+    const result = await resolveApiKey(RAW_KEY);
     expect(result).toEqual({ ok: false, kind: "invalid" });
   });
 
   it("returns expired when the key has passed its expiry", async () => {
-    const rawKey = "pfx_mysecret";
     mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
       id: "aky_2",
-      keyHash: sha256hex(rawKey),
+      keyHash: sha256hex(RAW_KEY),
       orgId: "org_1",
       workspaceId: "wrk_1",
       expiresAt: pastDate(),
     });
-    const result = await resolveApiKey(rawKey);
+    const result = await resolveApiKey(RAW_KEY);
     expect(result).toEqual({ ok: false, kind: "expired" });
   });
 
   it("returns ok with scope for a valid non-expiring key", async () => {
-    const rawKey = "pfx_valid_secret";
     mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
       id: "aky_3",
-      keyHash: sha256hex(rawKey),
+      keyHash: sha256hex(RAW_KEY),
       orgId: "org_abc",
       workspaceId: "wrk_xyz",
       expiresAt: null,
     });
-    const result = await resolveApiKey(rawKey);
+    const result = await resolveApiKey(RAW_KEY);
     expect(result).toEqual({
       ok: true,
       apiKeyId: "aky_3",
@@ -361,21 +383,39 @@ describe("resolveApiKey", () => {
   });
 
   it("returns ok for a valid key that has not yet expired", async () => {
-    const rawKey = "pfx_fresh_secret";
     mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
       id: "aky_4",
-      keyHash: sha256hex(rawKey),
+      keyHash: sha256hex(RAW_KEY),
       orgId: "org_abc",
       workspaceId: "wrk_xyz",
       expiresAt: futureDate(3_600_000),
     });
-    const result = await resolveApiKey(rawKey);
+    const result = await resolveApiKey(RAW_KEY);
     expect(result).toEqual({
       ok: true,
       apiKeyId: "aky_4",
       orgId: "org_abc",
       workspaceId: "wrk_xyz",
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // Regression guard (the original prod bug): the lookup prefix is the fixed
+  // 12-char leading window, NOT the substring before the first "_".
+  // -------------------------------------------------------------------------
+  it("derives the lookup prefix as the fixed 12-char window, not the chars before the first '_'", () => {
+    expect(API_KEY_PREFIX_LENGTH).toBe(12);
+    expect(apiKeyPrefix(RAW_KEY)).toBe(RAW_KEY.slice(0, API_KEY_PREFIX_LENGTH));
+    expect(apiKeyPrefix(RAW_KEY)).toBe(RAW_KEY_PREFIX);
+    // The old, buggy implementation produced just "ox" — must never happen.
+    expect(apiKeyPrefix(RAW_KEY)).not.toBe(RAW_KEY.slice(0, RAW_KEY.indexOf("_")));
+    expect(apiKeyPrefix(RAW_KEY)).not.toBe("ox");
+  });
+
+  it("calls the DB exactly once for a well-formed key (the prefix window passes the malformed guard)", async () => {
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce(undefined);
+    await resolveApiKey(RAW_KEY);
+    expect(mockQuery.apiKeys.findFirst).toHaveBeenCalledTimes(1);
   });
 });
 
