@@ -234,6 +234,19 @@ export function ReplApp({
         pushAssistant(HELP);
         return;
       }
+      if (text === "/init") {
+        pushAssistant("Initializing…");
+        try {
+          const { runInit, formatInitSummary } = await import("../commands/init.js");
+          const result = await runInit({ cwd });
+          pushAssistant(formatInitSummary(result));
+        } catch (err) {
+          pushAssistant(
+            `Init failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        return;
+      }
       if (text === "/clear") {
         allRef.current = [];
         historyRef.current = [];
