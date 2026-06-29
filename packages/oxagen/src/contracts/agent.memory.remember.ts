@@ -87,5 +87,10 @@ export const agentMemoryRemember = registerCapability({
   }),
 });
 
-export type AgentMemoryRememberInput = z.output<typeof agentMemoryRemember.input>;
+// z.input (not z.output): `source` has a .default, so the value a *caller*
+// supplies leaves it optional. The handler applies the `?? "user"` fallback
+// itself, so typing the handler input as the caller-facing shape is the honest
+// contract — and a parsed (source-present) object the kernel passes still
+// satisfies it.
+export type AgentMemoryRememberInput = z.input<typeof agentMemoryRemember.input>;
 export type AgentMemoryRememberOutput = z.output<typeof agentMemoryRemember.output>;
