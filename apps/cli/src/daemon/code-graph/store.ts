@@ -81,9 +81,15 @@ const CREATE_NODES_SQL = `
     language    VARCHAR NOT NULL,
     signature   VARCHAR,
     docstring   VARCHAR,
+    domain      VARCHAR,
     PRIMARY KEY (root, id)
   )
 `;
+
+// Migration: add domain column to existing DBs that pre-date this schema change.
+// DuckDB supports ADD COLUMN IF NOT EXISTS, so this is safe on fresh DBs too.
+const MIGRATE_ADD_DOMAIN_SQL =
+  "ALTER TABLE code_nodes ADD COLUMN IF NOT EXISTS domain VARCHAR";
 
 const CREATE_EDGES_SQL = `
   CREATE TABLE IF NOT EXISTS code_edges (
@@ -144,7 +150,11 @@ export class CodeGraphStore {
           if (e2) return reject(e2);
           this.conn.run(CREATE_FILES_SQL, (e3: Error | null) => {
             if (e3) return reject(e3);
-            resolve();
+            // Migrate existing DBs: add domain column if it does not exist.
+            this.conn.run(MIGRATE_ADD_DOMAIN_SQL, (e4: Error | null) => {
+              if (e4) return reject(e4);
+              resolve();
+            });
           });
         });
       });
@@ -210,17 +220,17 @@ export class CodeGraphStore {
       for (const n of fileGraph.nodes) {
         await this.runSql(
           `INSERT INTO code_nodes
-             (root, id, kind, name, path, range_start, range_end, language, signature, docstring)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             (root, id, kind, name, path, range_start, range_end, language, signature, docstring, domain)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (root, id) DO UPDATE SET
              kind = excluded.kind, name = excluded.name, path = excluded.path,
              range_start = excluded.range_start, range_end = excluded.range_end,
              language = excluded.language, signature = excluded.signature,
-             docstring = excluded.docstring`,
+             docstring = excluded.docstring, domain = excluded.domain`,
           [
             root, n.id, n.kind, n.name, n.path,
             n.range.start, n.range.end, n.language,
-            n.signature ?? null, n.docstring ?? null,
+            n.signature ?? null, n.docstring ?? null, n.domain ?? null,
           ],
         );
       }
@@ -265,6 +275,38 @@ export class CodeGraphStore {
   }
 
   // -------------------------------------------------------------------------
+  // Domain updates
+  // -------------------------------------------------------------------------
+
+  /**
+   * Bulk-stamp the `domain` property on all code_nodes (file + symbol nodes)
+   * whose relative path matches a key in `domainMap`.
+   *
+   * Called by `graph push` after `inferDomains()` so the local DuckDB store
+   * stays in sync with the domain tags sent to Neo4j.
+   *
+   * Idempotent: re-running with the same map is a no-op.
+   */
+  async updateNodeDomains(root: string, domainMap: Map<string, string>): Promise<void> {
+    await this.ready;
+    if (domainMap.size === 0) return;
+
+    await this.runSql("BEGIN TRANSACTION");
+    try {
+      for (const [relPath, domain] of domainMap) {
+        await this.runSql(
+          "UPDATE code_nodes SET domain = ? WHERE root = ? AND path = ?",
+          [domain, root, relPath],
+        );
+      }
+      await this.runSql("COMMIT");
+    } catch (err) {
+      await this.runSql("ROLLBACK");
+      throw err;
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Read
   // -------------------------------------------------------------------------
 
@@ -272,7 +314,7 @@ export class CodeGraphStore {
   async loadGraph(root: string): Promise<CodeGraph> {
     await this.ready;
     const nodeRows = await this.querySql(
-      `SELECT id, kind, name, path, range_start, range_end, language, signature, docstring
+      `SELECT id, kind, name, path, range_start, range_end, language, signature, docstring, domain
        FROM code_nodes WHERE root = ?`,
       [root],
     );
@@ -339,6 +381,7 @@ function rowToNode(row: Record<string, unknown>): CodeNode {
     language: row["language"] as string,
     signature: (row["signature"] as string | null) ?? undefined,
     docstring: (row["docstring"] as string | null) ?? undefined,
+    domain: (row["domain"] as string | null) ?? undefined,
   };
 }
 

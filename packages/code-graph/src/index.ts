@@ -21,6 +21,8 @@ export type { ParseResult, ParsedSymbol, ParsedLanguage, SymbolKind };
 export { getParser, _resetForTest, _injectLanguagesForTest } from "./loader";
 export { parseMarkdown } from "./markdown";
 export type { MarkdownParse } from "./markdown";
+export { inferDomains } from "./domains";
+export type { DomainAI, DomainInferInput, DomainMap } from "./domains";
 
 // ---------------------------------------------------------------------------
 // Language detection

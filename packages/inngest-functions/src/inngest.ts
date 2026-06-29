@@ -283,6 +283,23 @@ type Events = {
     };
   };
 
+  // Infer application domains from the full repo file-path list and stamp
+  // `domain` on SourceFile + SourceSymbol nodes in Neo4j. Triggered once
+  // per initial sync (and per incremental re-sync) by the initial-sync function.
+  "ingestion/github.infer-domains": {
+    data: {
+      /** All relative file paths in the repo being analysed. */
+      filePaths: string[];
+      orgId: string;
+      workspaceId: string;
+      connectionId: string;
+      /** GitHub repo owner (user or org). */
+      owner: string;
+      /** GitHub repo name. */
+      repo: string;
+    };
+  };
+
   // ── Playbook execution ─────────────────────────────────────────────────────
   // Fired after a playbook_runs row is inserted (status='pending') by either
   // automation.trigger.ts (manual/api) or playbook.trigger.match.ts (event-driven).

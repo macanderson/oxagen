@@ -393,6 +393,26 @@ export const [ingestionGithubInitialSync] = createFunction(
       ),
     );
 
+    // ── Step 12: Trigger LLM domain inference over the full file tree ───────────
+    // Emitted once per initial sync. The infer-domains function classifies every
+    // file into an application domain (e.g. "payments", "auth") and stamps
+    // `domain` on SourceFile + SourceSymbol nodes in Neo4j, enabling domain-
+    // sliced knowledge-graph queries:
+    //   MATCH (n:SourceFile {orgId: $orgId, domain: 'payments'})
+    if (filteredFiles.length > 0) {
+      await step.sendEvent("infer-domains", {
+        name: "ingestion/github.infer-domains" as const,
+        data: {
+          filePaths: filteredFiles.map((f) => f.path),
+          orgId,
+          workspaceId,
+          connectionId,
+          owner,
+          repo,
+        },
+      });
+    }
+
     logger.info(
       { connectionId, orgId, owner, repo, fileCount: filteredFiles.length },
       "ingestion-github-initial-sync: completed",
