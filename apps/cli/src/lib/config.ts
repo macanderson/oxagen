@@ -7,6 +7,8 @@ export interface CliConfig {
   orgSlug?: string;
   workspaceSlug?: string;
   apiUrl?: string;
+  /** Web app base URL — where `oxagen login` opens the browser authorize page. */
+  appUrl?: string;
   model?: string;
   /** Vercel AI Gateway key for the local agent loop (falls back to env / .env.local). */
   gatewayKey?: string;
@@ -69,5 +71,13 @@ export function getApiUrl(): string {
     process.env["OXAGEN_API_URL"] ??
     readConfig().apiUrl ??
     "https://api.oxagen.sh"
+  );
+}
+
+export function getAppUrl(): string {
+  return (
+    process.env["OXAGEN_APP_URL"] ??
+    readConfig().appUrl ??
+    "https://app.oxagen.sh"
   );
 }

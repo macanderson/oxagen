@@ -1231,6 +1231,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: { development: "http://localhost:4000", production: "https://api.oxagen.sh" },
   },
+  OXAGEN_APP_URL: {
+    group: "CLI",
+    description:
+      "Base URL for the Oxagen web app, where `oxagen login` opens the browser " +
+      "authorize page. Falls back to the default production app URL when unset.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "http://localhost:3000", production: "https://app.oxagen.sh" },
+  },
   OXAGEN_MODEL: {
     group: "CLI",
     description:
