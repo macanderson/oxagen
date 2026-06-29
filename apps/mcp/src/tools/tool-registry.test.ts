@@ -271,6 +271,9 @@ import { metadata as browserSubmitMetadata } from "./browser.submit";
 import { metadata as codeMapMetadata } from "./code.map";
 // Graph sync push (graph.sync.push)
 import { metadata as graphSyncPushMetadata } from "./graph.sync.push";
+// Memory import tools (agent.memory.import.*)
+import { metadata as agentMemoryImportCommitMetadata } from "./agent.memory.import.commit";
+import { metadata as agentMemoryImportParseMetadata } from "./agent.memory.import.parse";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -504,6 +507,9 @@ const allToolMetadata = [
   agentMemoryDeleteMetadata,
   agentMemoryRememberMetadata,
   agentMemoryUpdateMetadata,
+  // Memory import
+  agentMemoryImportCommitMetadata,
+  agentMemoryImportParseMetadata,
   // Agent feature verification
   agentFeatureVerifyMetadata,
   // Sandbox lifecycle
