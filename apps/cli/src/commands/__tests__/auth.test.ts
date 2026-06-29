@@ -17,6 +17,13 @@ vi.mock("../../lib/config.js", () => ({
   clearConfig: vi.fn(),
 }));
 
+// Mock the org/workspace picker. handleLogin delegates scope resolution to the
+// linker (which has its own tests); here we only need to control what it
+// returns / whether it throws.
+vi.mock("../../lib/linker.js", () => ({
+  resolveLinkedAccount: vi.fn(),
+}));
+
 // Mock fetch to avoid real network calls
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
@@ -30,6 +37,7 @@ import {
   writeConfig,
   clearConfig,
 } from "../../lib/config.js";
+import { resolveLinkedAccount } from "../../lib/linker.js";
 import { handleLogin, handleLogout, validatePlatformToken } from "../auth.js";
 
 const mockGetApiUrl = getApiUrl as ReturnType<typeof vi.fn>;
@@ -39,6 +47,19 @@ const mockGetWorkspaceId = getWorkspaceId as ReturnType<typeof vi.fn>;
 const mockReadConfig = readConfig as ReturnType<typeof vi.fn>;
 const mockWriteConfig = writeConfig as ReturnType<typeof vi.fn>;
 const mockClearConfig = clearConfig as ReturnType<typeof vi.fn>;
+const mockResolveLinkedAccount = resolveLinkedAccount as ReturnType<typeof vi.fn>;
+
+/** A fully-resolved account, as the linker returns it on the happy path. */
+function linkedAccount(orgSlug = "acme", workspaceSlug = "main") {
+  return {
+    orgId: "org-id",
+    orgSlug,
+    orgName: orgSlug,
+    workspaceId: "ws-id",
+    workspaceSlug,
+    workspaceName: workspaceSlug,
+  };
+}
 
 let stdout = "";
 let stderr = "";
@@ -63,6 +84,10 @@ beforeEach(() => {
   mockGetOrgId.mockReturnValue(undefined);
   mockGetWorkspaceId.mockReturnValue(undefined);
   mockFetch.mockReset();
+  // Default: the picker succeeds and resolves to acme/main. Tests that exercise
+  // the failure path override this with mockRejectedValue.
+  mockResolveLinkedAccount.mockReset();
+  mockResolveLinkedAccount.mockResolvedValue(linkedAccount());
 });
 
 afterEach(() => {
@@ -119,9 +144,10 @@ describe("validatePlatformToken", () => {
 
 describe("handleLogin — already logged in", () => {
   it("shows current session when called with no flags and session exists", async () => {
+    // handleLogin reads the token via getToken() and the org/workspace slugs
+    // from the persisted config (readConfig), not getOrgId/getWorkspaceId.
     mockGetToken.mockReturnValue("tok_existing");
-    mockGetOrgId.mockReturnValue("acme");
-    mockGetWorkspaceId.mockReturnValue("main");
+    mockReadConfig.mockReturnValue({ orgSlug: "acme", workspaceSlug: "main" });
 
     await handleLogin({});
 
@@ -131,6 +157,8 @@ describe("handleLogin — already logged in", () => {
     // Token should be masked
     expect(stdout).not.toContain("tok_existing");
     expect(mockFetch).not.toHaveBeenCalled();
+    // Already-logged-in short-circuits before the picker.
+    expect(mockResolveLinkedAccount).not.toHaveBeenCalled();
   });
 });
 
@@ -231,29 +259,56 @@ describe("handleLogin — headless (--token/--org/--workspace flags)", () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it("sets exitCode 1 when org is missing and not TTY", async () => {
-    await handleLogin({ token: "tok_valid", workspace: "main" });
+  it("resolves org/workspace via the picker when --org/--workspace are omitted", async () => {
+    // Org/workspace are no longer required flags: a valid key plus the linker
+    // (auto-select or prompt) resolves the scope. Pass only the token.
+    mockFetch.mockResolvedValue({ ok: true, status: 200 });
+    mockResolveLinkedAccount.mockResolvedValue(linkedAccount("picked-org", "picked-ws"));
 
-    expect(stderr).toContain("No org provided");
-    expect(process.exitCode).toBe(1);
-    expect(mockFetch).not.toHaveBeenCalled();
+    await handleLogin({ token: "tok_valid" });
+
+    expect(mockResolveLinkedAccount).toHaveBeenCalledWith(
+      expect.objectContaining({ orgSlug: undefined, workspaceSlug: undefined }),
+    );
+    expect(mockWriteConfig).toHaveBeenCalledWith({
+      token: "tok_valid",
+      orgSlug: "picked-org",
+      workspaceSlug: "picked-ws",
+    });
+    expect(process.exitCode).toBeFalsy();
   });
 
-  it("sets exitCode 1 when workspace is missing and not TTY", async () => {
-    await handleLogin({ token: "tok_valid", org: "acme" });
+  it("clears the partial config and sets exitCode 1 when the picker fails", async () => {
+    // The token is persisted before the picker runs (so the linker's API calls
+    // can authenticate). If the picker then fails — e.g. no orgs, ambiguous in
+    // non-TTY — login must not leave a token with no scope behind.
+    mockFetch.mockResolvedValue({ ok: true, status: 200 });
+    mockResolveLinkedAccount.mockRejectedValue(
+      new Error("No organizations found for this account."),
+    );
 
-    expect(stderr).toContain("No workspace provided");
+    await handleLogin({ token: "tok_valid" });
+
+    expect(mockWriteConfig).toHaveBeenCalledWith({
+      token: undefined,
+      orgSlug: undefined,
+      workspaceSlug: undefined,
+    });
+    expect(stderr).toContain("No organizations found");
     expect(process.exitCode).toBe(1);
-    expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it("uses config values as defaults when no flags are passed", async () => {
+  it("uses the config token as the default and resolves scope via the picker", async () => {
+    // No flags and no live session (getToken undefined) → fall through to the
+    // interactive flow, defaulting the token to config.token and probing with
+    // it. Scope then comes from the picker, not from config.
     mockReadConfig.mockReturnValue({
       token: "tok_config",
       orgSlug: "config-org",
       workspaceSlug: "config-ws",
     });
-    mockFetch.mockResolvedValue({ ok: true });
+    mockFetch.mockResolvedValue({ ok: true, status: 200 });
+    mockResolveLinkedAccount.mockResolvedValue(linkedAccount("picked-org", "picked-ws"));
 
     await handleLogin({});
 
@@ -265,8 +320,8 @@ describe("handleLogin — headless (--token/--org/--workspace flags)", () => {
     );
     expect(mockWriteConfig).toHaveBeenCalledWith({
       token: "tok_config",
-      orgSlug: "config-org",
-      workspaceSlug: "config-ws",
+      orgSlug: "picked-org",
+      workspaceSlug: "picked-ws",
     });
   });
 });
