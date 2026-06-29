@@ -100,19 +100,20 @@ export function buildProgram(): Command {
             return;
           }
         }
+        // ADR-019 §4: require an Oxagen account before any agent-path command.
+        // Non-agent utility commands (config, settings, login, logout, etc.) are
+        // separate sub-commands and bypass this gate automatically.
+        const { requireSession } = await import("./lib/session.js");
+        const session = requireSession();
+
         const runOpts = {
+          session,
           model: opts.model,
           readOnly: opts.readonly,
           mode,
           bare: opts.pipeline === false,
           verbose: opts.verbose,
         };
-
-        // ADR-019 §4: require an Oxagen account before any agent-path command.
-        // Non-agent utility commands (config, settings, login, logout, etc.) are
-        // separate sub-commands and bypass this gate automatically.
-        const { requireSession } = await import("./lib/session.js");
-        requireSession();
 
         // --agent: run the prompt as a named agent (its prompt, tools, model).
         if (opts.agent) {
