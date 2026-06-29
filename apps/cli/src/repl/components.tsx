@@ -9,6 +9,7 @@ import { Box, Text, useInput, useStdout } from "ink";
 import React, { useState, useEffect } from "react";
 import { theme } from "../tui/theme.js";
 import { formatUsd } from "../agent/model-router.js";
+import { AGENT_TURN_TIMEOUT_MS } from "../agent/timeouts.js";
 import { getToolEmoji } from "../agent/tool-formatter.js";
 import { SlashMenu } from "./slash-menu.js";
 import {
@@ -327,10 +328,14 @@ export function MessageView({ msg }: { msg: Message }): React.ReactElement {
 
 // ── Thinking Indicator ────────────────────────────────────────────────────────
 
+/** Width (cells) of the turn-budget bar in the thinking indicator. */
+const BUDGET_BAR_WIDTH = 6;
+
 /**
- * Animated "the agent is working" indicator: a braille spinner, elapsed seconds,
- * and a live estimate of output tokens for the in-flight turn. It runs its own
- * ~100ms timer so it animates independently of streaming updates.
+ * Animated "the agent is working" indicator: a braille spinner, elapsed
+ * seconds, a live output-token estimate, and a best-guess "time remaining" bar
+ * toward the turn's auto-cancel deadline. It runs its own ~100ms timer so it
+ * animates independently of streaming updates.
  */
 export function ThinkingIndicator({
   startedAt,
@@ -345,8 +350,21 @@ export function ThinkingIndicator({
     return () => clearInterval(id);
   }, []);
 
-  const elapsed = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+  const elapsedMs = Math.max(0, Date.now() - startedAt);
+  const elapsed = Math.round(elapsedMs / 1000);
   const tokens = getTokens();
+
+  // Best-guess "time remaining" = the budget left before the turn hits its
+  // auto-cancel backstop (AGENT_TURN_TIMEOUT_MS). The bar fills as the turn runs
+  // and the remaining time warms dim → amber → red as the deadline nears, so a
+  // slow turn shows honest progress instead of an opaque, possibly-hung spinner.
+  const remainingSec = Math.ceil(Math.max(0, AGENT_TURN_TIMEOUT_MS - elapsedMs) / 1000);
+  const frac = Math.min(1, elapsedMs / AGENT_TURN_TIMEOUT_MS);
+  const filled = Math.round(frac * BUDGET_BAR_WIDTH);
+  const bar = "▰".repeat(filled) + "▱".repeat(BUDGET_BAR_WIDTH - filled);
+  const remainingColor =
+    remainingSec <= 30 ? "#F87171" : remainingSec <= 90 ? "#FBBF24" : undefined;
+
   return (
     <Box paddingX={1}>
       <Text color="#FBBF24" bold>
@@ -354,9 +372,14 @@ export function ThinkingIndicator({
       </Text>
       <Text color="#FBBF24">Thinking… </Text>
       <Text dimColor>
-        {elapsed}s{tokens > 0 ? ` · ~${humanizeTokens(tokens)} tok` : ""} · esc to
-        cancel
+        {elapsed}s{tokens > 0 ? ` · ~${humanizeTokens(tokens)} tok` : ""}
+        {" · "}
+        {bar}{" "}
       </Text>
+      <Text dimColor={remainingColor === undefined} color={remainingColor}>
+        ~{remainingSec}s left
+      </Text>
+      <Text dimColor> · esc to cancel</Text>
     </Box>
   );
 }
