@@ -28,7 +28,7 @@ describe("WelcomeScreen", () => {
     const output = lastFrame() ?? "";
 
     // Should show version
-    expect(output).toContain("v0.6.3");
+    expect(output).toContain("v0.6.4");
 
     // Should show dragon
     expect(output!.length).toBeGreaterThan(200);
