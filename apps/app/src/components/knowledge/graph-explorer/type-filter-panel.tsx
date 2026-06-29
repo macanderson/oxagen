@@ -22,11 +22,14 @@ export interface TypeFilterPanelProps {
   hiddenEdgeTypes: Set<string>;
   /** True when inferred edges are currently hidden. */
   inferredHidden: boolean;
+  /** True when system nodes are currently hidden. */
+  systemHidden: boolean;
   inferredCount: number;
   confirmedCount: number;
   onToggleNodeType: (type: string) => void;
   onToggleEdgeType: (type: string) => void;
   onToggleInferred: () => void;
+  onToggleSystem: () => void;
   onShowAllNodeTypes: () => void;
   onHideAllNodeTypes: () => void;
 }
@@ -66,13 +69,20 @@ export function TypeFilterPanel(props: TypeFilterPanelProps) {
         </ul>
       </section>
 
-      <section aria-labelledby="edge-source-heading">
-        <h3 id="edge-source-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Edge source
+      <section aria-labelledby="visibility-heading">
+        <h3 id="visibility-heading" className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Visibility
         </h3>
         <ul className="flex flex-col gap-0.5">
           <FilterRow
-            label="Inferred"
+            label="System nodes"
+            count={0}
+            color="#6b7280"
+            checked={!props.systemHidden}
+            onToggle={props.onToggleSystem}
+          />
+          <FilterRow
+            label="Inferred edges"
             count={props.inferredCount}
             color={INFERRED_EDGE_COLOR}
             checked={!props.inferredHidden}
@@ -80,7 +90,7 @@ export function TypeFilterPanel(props: TypeFilterPanelProps) {
             squareSwatch
           />
           <FilterRow
-            label="Confirmed"
+            label="Confirmed edges"
             count={props.confirmedCount}
             color={CONFIRMED_EDGE_COLOR}
             checked

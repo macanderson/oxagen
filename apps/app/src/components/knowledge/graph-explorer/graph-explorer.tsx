@@ -80,6 +80,7 @@ export function GraphExplorer() {
     new Set(),
   );
   const [inferredHidden, setInferredHidden] = React.useState(false);
+  const [systemHidden, setSystemHidden] = React.useState(true);
   const [searching, setSearching] = React.useState(false);
   const [showFilters, setShowFilters] = React.useState(true);
   const [isDark, setIsDark] = React.useState(false);
@@ -137,8 +138,13 @@ export function GraphExplorer() {
   );
 
   const visibleNodes = React.useMemo(
-    () => data.nodes.filter((n) => !hiddenNodeTypes.has(n.label)),
-    [data.nodes, hiddenNodeTypes],
+    () =>
+      data.nodes.filter(
+        (n) =>
+          !hiddenNodeTypes.has(n.label) &&
+          (!systemHidden || !isSystemLabel(n.label)),
+      ),
+    [data.nodes, hiddenNodeTypes, systemHidden],
   );
   const visibleNodeIds = React.useMemo(
     () => new Set(visibleNodes.map((n) => n.id)),
@@ -273,11 +279,13 @@ export function GraphExplorer() {
               hiddenNodeTypes={hiddenNodeTypes}
               hiddenEdgeTypes={hiddenEdgeTypes}
               inferredHidden={inferredHidden}
+              systemHidden={systemHidden}
               inferredCount={inferredCount}
               confirmedCount={confirmedCount}
               onToggleNodeType={toggleNodeType}
               onToggleEdgeType={toggleEdgeType}
               onToggleInferred={() => setInferredHidden((v) => !v)}
+              onToggleSystem={() => setSystemHidden((v) => !v)}
               onShowAllNodeTypes={() => setHiddenNodeTypes(new Set())}
               onHideAllNodeTypes={() =>
                 setHiddenNodeTypes(new Set(nodeCounts.map((c) => c.type)))
@@ -450,6 +458,21 @@ function toggleInSet(prev: Set<string>, value: string): Set<string> {
   if (next.has(value)) next.delete(value);
   else next.add(value);
   return next;
+}
+
+function isSystemLabel(label: string): boolean {
+  const systemLabels = new Set([
+    "System",
+    "__System",
+    "_System",
+    "Internal",
+    "__Internal",
+    "_Internal",
+    "Metadata",
+    "__Metadata",
+    "_Metadata",
+  ]);
+  return systemLabels.has(label);
 }
 
 function FilterToggle({
