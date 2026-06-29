@@ -22,6 +22,7 @@ import {
   updateMemoryAction,
   deleteMemoryAction,
 } from "./actions";
+import { parseImportAction, commitImportAction } from "./bulk-import-actions";
 
 interface MemoriesSectionProps {
   orgId: string;
@@ -78,6 +79,8 @@ export async function MemoriesSection({
       createMemory={createMemoryAction}
       updateMemory={updateMemoryAction}
       deleteMemory={deleteMemoryAction}
+      parseImport={parseImportAction}
+      commitImport={commitImportAction}
     />
   );
 }

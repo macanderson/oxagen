@@ -13,15 +13,21 @@
  * formatters the REPL slash commands also use) and exits non-zero with a
  * friendly message on an API/auth error.
  */
+import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
 import { ApiError } from "../lib/api.js";
 import {
   listMemories,
   rememberMemory,
   updateMemory,
   deleteMemory,
+  parseImportMemories,
+  commitImportMemories,
   formatMemoryLines,
   formatMemoryDetail,
   formatRememberResult,
+  formatImportDrafts,
+  formatImportResults,
   MEMORY_KINDS,
   MEMORY_WEIGHTS,
   type MemoryKind,
@@ -173,6 +179,87 @@ export async function handleMemoryRemove(id: string): Promise<void> {
     } else {
       fail(`No memory ${id} found in this workspace.`);
     }
+  } catch (err) {
+    handleApiError(err);
+  }
+}
+
+export interface MemoryImportCliOptions {
+  node?: string;
+  /** Commit the parsed drafts. Without it, the command only previews them. */
+  yes?: boolean;
+  json?: boolean;
+}
+
+/**
+ * `oxagen memory import <files...>` — bulk-import markdown skill files / rule
+ * docs into the workspace AgentMemory graph.
+ *
+ * Two phases mirror the parse → commit capability pair: every file is read and
+ * sent to agent.memory.import.parse, which classifies atomic draft memories.
+ * Importing is gated behind --yes (safe by default), so a bare invocation
+ * previews the drafts table and writes nothing — the editable review grid is the
+ * app's job; the CLI's review is the printed table plus an explicit --yes.
+ */
+export async function handleMemoryImport(
+  files: string[],
+  opts: MemoryImportCliOptions,
+): Promise<void> {
+  if (files.length === 0) {
+    fail("Nothing to import. Pass one or more markdown files, e.g. `oxagen memory import rules.md`.");
+  }
+
+  // Read every file; collect read failures rather than aborting the batch.
+  const documents: { filename: string; content: string }[] = [];
+  const unreadable: string[] = [];
+  for (const path of files) {
+    try {
+      const content = await readFile(path, "utf8");
+      if (content.trim().length === 0) {
+        unreadable.push(`${path} (empty)`);
+        continue;
+      }
+      documents.push({ filename: basename(path), content });
+    } catch {
+      unreadable.push(path);
+    }
+  }
+  if (unreadable.length > 0) {
+    process.stderr.write(`⚠ Skipped unreadable/empty files:\n  ${unreadable.join("\n  ")}\n`);
+  }
+  if (documents.length === 0) {
+    fail("No readable, non-empty documents to import.");
+  }
+
+  try {
+    const parsed = await parseImportMemories(documents, opts.node);
+
+    // Preview-only (no --yes): print drafts (or JSON) and stop without writing.
+    if (!opts.yes) {
+      if (opts.json) {
+        process.stdout.write(JSON.stringify(parsed, null, 2) + "\n");
+        return;
+      }
+      process.stdout.write(formatImportDrafts(parsed.drafts) + "\n");
+      for (const s of parsed.skipped) {
+        process.stderr.write(`  · skipped ${s.filename}: ${s.reason}\n`);
+      }
+      if (parsed.drafts.length > 0) {
+        process.stdout.write("\nRe-run with --yes to import these memories.\n");
+      }
+      return;
+    }
+
+    if (parsed.drafts.length === 0) {
+      fail("No memories could be extracted from the supplied documents.");
+    }
+
+    const result = await commitImportMemories(parsed.drafts);
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+      return;
+    }
+    process.stdout.write(formatImportResults(result) + "\n");
   } catch (err) {
     handleApiError(err);
   }

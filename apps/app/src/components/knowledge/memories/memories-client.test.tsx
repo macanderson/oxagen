@@ -503,6 +503,43 @@ describe("MemoriesClient — create memory UI", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders the Bulk Import button only when both parseImport and commitImport are provided", () => {
+    const { rerender } = render(
+      <MemoriesClient {...baseProps} initialRecords={[routineRecord]} createMemory={vi.fn()} />,
+    );
+    // No import actions → no Bulk Import button.
+    expect(
+      screen.queryByRole("button", { name: "Bulk Import" }),
+    ).not.toBeInTheDocument();
+
+    // Only one of the pair → still no button.
+    rerender(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        createMemory={vi.fn()}
+        parseImport={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Bulk Import" }),
+    ).not.toBeInTheDocument();
+
+    // Both → button appears.
+    rerender(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        createMemory={vi.fn()}
+        parseImport={vi.fn()}
+        commitImport={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Bulk Import" }),
+    ).toBeInTheDocument();
+  });
+
   it("does not call createMemory on initial render", () => {
     const mockCreate = vi.fn();
     render(

@@ -419,6 +419,23 @@ export function buildProgram(): Command {
       const { handleMemoryRemove } = await import("./commands/memory.js");
       await handleMemoryRemove(id);
     });
+  memory
+    .command("import <files...>")
+    .description(
+      "Bulk-import markdown skill files / rule docs as memories (previews unless --yes)",
+    )
+    .option("--node <ref>", "Anchor every imported memory on a graph node ref")
+    .option("-y, --yes", "Commit the parsed drafts (default previews only)")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        files: string[],
+        opts: { node?: string; yes?: boolean; json?: boolean },
+      ) => {
+        const { handleMemoryImport } = await import("./commands/memory.js");
+        await handleMemoryImport(files, opts);
+      },
+    );
 
   // ── remember: capture a memory (infers kind + weight) ───────────────────────
 

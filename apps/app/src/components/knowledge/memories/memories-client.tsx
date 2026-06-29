@@ -32,6 +32,7 @@ import {
   Pencil,
   Trash2,
   Plus,
+  Upload,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,13 +43,19 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import {
+  MemoriesBulkImport,
+  type DraftMemory,
+} from "./memories-bulk-import";
 
 // ---------------------------------------------------------------------------
 // Types — mirrors AgentMemoryRecord from @oxagen/oxagen/contracts/agent.memory.list
 // ---------------------------------------------------------------------------
 
-type MemoryWeight = "low" | "high" | "critical";
-type MemoryKind =
+// Exported so the bulk-import grid shares the exact kind/weight taxonomy,
+// labels, and colors — one source of truth for the Memories surface.
+export type MemoryWeight = "low" | "high" | "critical";
+export type MemoryKind =
   | "routine-change"
   | "constraint"
   | "bug-root-cause"
@@ -126,13 +133,54 @@ interface MemoriesClientProps {
     workspaceSlug: string;
     memoryId: string;
   }) => Promise<DeleteMemoryResult>;
+  /**
+   * Server action for stage 1 of bulk import — parse uploaded markdown into
+   * editable draft memories (read-only). Paired with `commitImport`; when both
+   * are present the "Bulk Import" affordance is rendered.
+   */
+  parseImport?: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    documents: { filename: string; content: string }[];
+    defaultNodeRef?: string;
+  }) => Promise<
+    | {
+        ok: true;
+        drafts: DraftMemory[];
+        documentCount: number;
+        skipped: { filename: string; reason: string }[];
+      }
+    | { ok: false; error: string }
+  >;
+  /**
+   * Server action for stage 2 of bulk import — write the confirmed drafts into
+   * the AgentMemory graph with per-item error capture.
+   */
+  commitImport?: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    drafts: DraftMemory[];
+  }) => Promise<
+    | {
+        ok: true;
+        results: {
+          lesson: string;
+          ok: boolean;
+          memoryId: string | null;
+          error: string | null;
+        }[];
+        imported: number;
+        failed: number;
+      }
+    | { ok: false; error: string }
+  >;
 }
 
 // ---------------------------------------------------------------------------
 // Kind configuration
 // ---------------------------------------------------------------------------
 
-const KIND_CONFIG: Record<
+export const KIND_CONFIG: Record<
   MemoryKind,
   {
     label: string;
@@ -167,7 +215,7 @@ const KIND_CONFIG: Record<
   },
 };
 
-const ALL_KINDS: MemoryKind[] = [
+export const ALL_KINDS: MemoryKind[] = [
   "routine-change",
   "constraint",
   "bug-root-cause",
@@ -189,7 +237,7 @@ function getKindConfig(kind: string): (typeof KIND_CONFIG)[MemoryKind] {
 // Weight configuration
 // ---------------------------------------------------------------------------
 
-const WEIGHT_CONFIG: Record<
+export const WEIGHT_CONFIG: Record<
   MemoryWeight,
   { label: string; color: string }
 > = {
@@ -1134,12 +1182,15 @@ export function MemoriesClient({
   createMemory,
   updateMemory,
   deleteMemory,
+  parseImport,
+  commitImport,
 }: MemoriesClientProps) {
   const router = useRouter();
   const [records, setRecords] = React.useState<AgentMemoryRecord[]>(initialRecords);
   const [selectedRecord, setSelectedRecord] =
     React.useState<AgentMemoryRecord | null>(null);
   const [showCreate, setShowCreate] = React.useState(false);
+  const [showBulkImport, setShowBulkImport] = React.useState(false);
   const [activeKinds, setActiveKinds] = React.useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = React.useState("");
   const [minConfidence, setMinConfidence] = React.useState(0);
@@ -1235,17 +1286,28 @@ export function MemoriesClient({
             </p>
           </div>
         </div>
-        {createMemory && (
-          <Button
-            size="sm"
-            variant="gradient"
-            onClick={() => setShowCreate(true)}
-            className="flex-shrink-0"
-          >
-            <Plus className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
-            New Memory
-          </Button>
-        )}
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {parseImport && commitImport && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowBulkImport(true)}
+            >
+              <Upload className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+              Bulk Import
+            </Button>
+          )}
+          {createMemory && (
+            <Button
+              size="sm"
+              variant="gradient"
+              onClick={() => setShowCreate(true)}
+            >
+              <Plus className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+              New Memory
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Stats row */}
@@ -1355,6 +1417,18 @@ export function MemoriesClient({
           onClose={() => setShowCreate(false)}
           onCreated={handleMemoryCreated}
           createMemory={createMemory}
+        />
+      )}
+
+      {/* Bulk import sheet */}
+      {showBulkImport && parseImport && commitImport && (
+        <MemoriesBulkImport
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          onClose={() => setShowBulkImport(false)}
+          onImported={() => router.refresh()}
+          parseImport={parseImport}
+          commitImport={commitImport}
         />
       )}
     </div>
