@@ -1,13 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { render } from "ink-testing-library";
-import React from "react";
 import {
   ApprovalPrompt,
   humanizeTokens,
   modeLabel,
+  PromptInput,
   StatusLine,
   ThinkingIndicator,
 } from "../components.js";
+import type { SlashCatalogEntry } from "../../slash/catalog.js";
 import type { ApprovalRequest, ApprovalResponse } from "../../agent/permissions.js";
 
 const sampleReq: ApprovalRequest = {
@@ -18,8 +19,16 @@ const sampleReq: ApprovalRequest = {
   reason: "command matches a dangerous pattern",
 };
 
-/** Ink delivers stdin to useInput on a microtask; let it settle before asserting. */
-const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 10));
+/**
+ * Ink delivers stdin to useInput asynchronously, and disambiguates a lone ESC
+ * with a short internal timeout, so give state a beat to settle before asserting.
+ */
+const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 30));
+
+// Raw terminal byte sequences for the keys the typeahead listens for. Built from
+// char codes so the source stays free of invisible control characters.
+const ESC = String.fromCharCode(27);
+const ARROW_DOWN = `${ESC}[B`;
 
 describe("humanizeTokens", () => {
   it("formats token counts compactly", () => {
@@ -77,6 +86,136 @@ describe("StatusLine (permission mode)", () => {
     const frame = lastFrame() ?? "";
     expect(frame).toContain("mode:");
     expect(frame).toContain("auto-edit");
+  });
+});
+
+describe("StatusLine (layout chip)", () => {
+  it("shows the layout chip with the active tui mode", () => {
+    const { lastFrame } = render(
+      <StatusLine
+        model="x/y"
+        readOnly={false}
+        turns={0}
+        inputTokens={0}
+        outputTokens={0}
+        tuiMode="fullscreen"
+      />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("layout:");
+    expect(frame).toContain("fullscreen");
+  });
+
+  it("omits the layout chip when no tui mode is provided", () => {
+    const { lastFrame } = render(
+      <StatusLine model="x/y" readOnly={false} turns={0} inputTokens={0} outputTokens={0} />,
+    );
+    expect(lastFrame() ?? "").not.toContain("layout:");
+  });
+});
+
+describe("PromptInput typeahead", () => {
+  const catalog: SlashCatalogEntry[] = [
+    { name: "help", description: "Show the slash-command help", source: "builtin", productized: true },
+    {
+      name: "tui",
+      description: "Switch the terminal layout",
+      argumentHint: "[compact|fullscreen]",
+      source: "builtin",
+      productized: true,
+    },
+    { name: "model", description: "Show or set the gateway model", argumentHint: "[slug]", source: "builtin", productized: true },
+    { name: "mode", description: "Show or set the permission posture", argumentHint: "[ask]", source: "builtin", productized: true },
+    { name: "cost", description: "Project model cost", source: "cli", productized: true },
+  ];
+
+  it("stays closed until a slash command is being typed", () => {
+    const { lastFrame } = render(<PromptInput onSubmit={() => {}} busy={false} catalog={catalog} />);
+    expect(lastFrame() ?? "").not.toContain("navigate");
+  });
+
+  it("opens the menu and filters as the user types", async () => {
+    const { lastFrame, stdin, unmount } = render(
+      <PromptInput onSubmit={() => {}} busy={false} catalog={catalog} />,
+    );
+    stdin.write("/tu");
+    await tick();
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("/tui");
+    expect(frame).toContain("Switch the terminal layout");
+    expect(frame).toContain("[compact|fullscreen]");
+    expect(frame).not.toContain("/cost"); // filtered out
+    unmount();
+  });
+
+  it("marks productized commands with the package glyph in the menu", async () => {
+    const { lastFrame, stdin, unmount } = render(
+      <PromptInput onSubmit={() => {}} busy={false} catalog={catalog} />,
+    );
+    stdin.write("/h");
+    await tick();
+    expect(lastFrame() ?? "").toContain("📦");
+    unmount();
+  });
+
+  it("submits a fully-typed argument-free command on Enter", async () => {
+    const calls: string[] = [];
+    const { stdin, unmount } = render(
+      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} catalog={catalog} />,
+    );
+    stdin.write("/help");
+    await tick();
+    stdin.write("\r");
+    await tick();
+    expect(calls).toEqual(["/help"]);
+    unmount();
+  });
+
+  it("Tab completes the highlighted command and closes the menu for arg commands", async () => {
+    const { lastFrame, stdin, unmount } = render(
+      <PromptInput onSubmit={() => {}} busy={false} catalog={catalog} />,
+    );
+    stdin.write("/mod");
+    await tick();
+    expect(lastFrame() ?? "").toContain("navigate"); // menu open
+    stdin.write("\t");
+    await tick();
+    // Completed to "/mode " (an arg command): the menu closed once a space was added.
+    expect(lastFrame() ?? "").not.toContain("navigate");
+    unmount();
+  });
+
+  it("navigates the menu with the down arrow", async () => {
+    const { lastFrame, stdin, unmount } = render(
+      <PromptInput onSubmit={() => {}} busy={false} catalog={catalog} />,
+    );
+    // Two matches for "m": /model (hint [slug]) then /mode (hint [ask]); the
+    // unique hints disambiguate the rows (/mode is a substring of /model).
+    stdin.write("/m");
+    await tick();
+    const before = (lastFrame() ?? "").split("\n");
+    expect(before.find((l) => l.includes("[slug]")) ?? "").toContain("❯");
+
+    stdin.write(ARROW_DOWN);
+    await tick();
+    const after = (lastFrame() ?? "").split("\n");
+    // The pointer moved to the second match.
+    expect(after.find((l) => l.includes("[ask]")) ?? "").toContain("❯");
+    expect(after.find((l) => l.includes("[slug]")) ?? "").not.toContain("❯");
+    unmount();
+  });
+
+  it("dismisses the menu on Escape", async () => {
+    const { lastFrame, stdin, unmount } = render(
+      <PromptInput onSubmit={() => {}} busy={false} catalog={catalog} />,
+    );
+    stdin.write("/");
+    await tick();
+    expect(lastFrame() ?? "").toContain("navigate");
+    stdin.write(ESC);
+    await tick();
+    expect(lastFrame() ?? "").not.toContain("navigate");
+    unmount();
   });
 });
 
