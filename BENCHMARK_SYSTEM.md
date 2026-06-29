@@ -65,8 +65,10 @@ client view layer.
 
 ## Build & Deploy
 ```bash
-# Launch (primary)
-pnpm eval:app                             # Port 3200 → http://localhost:3200
+# Launch (primary) — prefers port 3200; if it's busy, reuses an already-running
+# instance or falls back to the next free port instead of crashing on EADDRINUSE.
+pnpm eval:app                             # → http://localhost:3200 (or next free port)
+PORT=4200 pnpm eval:app                   # override the preferred port
 # Equivalent
 pnpm bench
 pnpm --filter @oxagen/bench-web dev
