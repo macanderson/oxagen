@@ -111,7 +111,7 @@ export async function resolveOrg(opts: {
 }): Promise<OrgListItem> {
   const { organizations } = await userApiPostOrThrow<{
     organizations: OrgListItem[];
-  }>("user/organizations", {});
+  }>("organizations", {});
 
   if (organizations.length === 0) {
     throw new Error(
@@ -166,7 +166,7 @@ export async function resolveWorkspace(opts: {
   const result = await userApiPostOrThrow<{
     organization: { id: string; publicId: string; slug: string; name: string };
     workspaces: WorkspaceListItem[];
-  }>("user/workspaces", { orgSlug: opts.orgSlug });
+  }>("workspaces", { orgSlug: opts.orgSlug });
 
   const { organization, workspaces } = result;
 
