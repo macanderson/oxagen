@@ -8,7 +8,7 @@ export const orgListRoute = new Hono<AppEnv>();
 
 orgListRoute.post("/", async (c) => {
   // Pre-org call: the body is empty ({}). Tolerate a missing/empty JSON body.
-  const raw = await c.req.json().catch(() => ({}));
+  const raw = (await c.req.json().catch(() => ({}))) as unknown;
   const body = orgList.input.parse(raw);
   const ctx = capabilityContext(c, { requireOrg: false });
   const out = await invoke(orgList.name, body, ctx, { surface: "api" });
