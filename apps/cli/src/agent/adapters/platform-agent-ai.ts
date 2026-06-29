@@ -1,6 +1,6 @@
 /**
  * Platform `AgentAi` adapter for the CLI — routes every coding-engine LLM call
- * through the platform's OpenAI-compatible endpoint (`/api/v1/agent/llm`) so
+ * through the platform's OpenAI-compatible endpoint (`/v1/agent/llm`) so
  * turns are metered, credit-charged, and telemetry-instrumented server-side,
  * with the session token as the API key (ADR-019: no CLI-side BYOK).
  *
@@ -26,7 +26,9 @@ export interface PlatformAgentAiOptions {
 export function createPlatformAgentAi(opts: PlatformAgentAiOptions): AgentAi {
   const provider = createOpenAICompatible({
     name: "oxagen-platform",
-    baseURL: `${opts.apiUrl}/api/v1/agent/llm`,
+    // Route: POST /v1/agent/llm/chat/completions — no /api prefix, no org/workspace
+    // slugs in the path; org+workspace scope is pre-bound to the API key.
+    baseURL: `${opts.apiUrl}/v1/agent/llm`,
     headers: {
       Authorization: `Bearer ${opts.token}`,
       "x-org-slug": opts.orgSlug,

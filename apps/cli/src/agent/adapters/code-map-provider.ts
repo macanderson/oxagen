@@ -21,21 +21,23 @@ export function createCodeMapProvider(opts: CodeMapApiOptions): CodeMapProvider 
   return {
     async query(conceptQuery, queryOpts) {
       try {
-        const res = await fetch(`${opts.apiUrl}/api/v1/code/map`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${opts.token}`,
-            "x-org-slug": opts.orgSlug,
-            "x-workspace-slug": opts.workspaceSlug,
+        // Route: POST /v1/:org_slug/:workspace_slug/code/map (org-scoped).
+        const res = await fetch(
+          `${opts.apiUrl}/v1/${opts.orgSlug}/${opts.workspaceSlug}/code/map`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${opts.token}`,
+            },
+            body: JSON.stringify({
+              query: conceptQuery,
+              limit: queryOpts?.limit,
+              domain: queryOpts?.domain,
+              kinds: queryOpts?.kinds,
+            }),
           },
-          body: JSON.stringify({
-            query: conceptQuery,
-            limit: queryOpts?.limit,
-            domain: queryOpts?.domain,
-            kinds: queryOpts?.kinds,
-          }),
-        });
+        );
         if (!res.ok) return EMPTY;
         return (await res.json()) as CodeMapBundle;
       } catch {

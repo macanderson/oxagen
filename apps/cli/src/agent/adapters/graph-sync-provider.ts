@@ -1,13 +1,17 @@
 /**
- * `GraphSyncProvider` adapter — after each turn, materialises the touched files
- * into the workspace knowledge graph and records execution lineage, by pushing a
- * git-native delta to the platform.
+ * `GraphSyncProvider` adapter — after each turn, records execution lineage into
+ * the workspace knowledge graph by pushing a `graph.sync.push` (source="lineage")
+ * envelope to the platform.
+ *
+ * `ensureGraph` is currently a no-op: building a full code-graph envelope from
+ * local file paths requires running the code-graph builder which is expensive
+ * mid-turn. The `oxagen graph push` command and the ingestion pipeline handle
+ * code-graph sync; this adapter is responsible only for execution lineage.
  *
  * Both methods are fire-and-forget (the engine wraps them in
- * `void Promise.resolve(...).catch(...)`). To avoid a request per file mid-turn,
- * touched files + lineage entries are debounced for 1s and flushed together;
- * every network call is best-effort and swallows its own errors so graph sync
- * never blocks or fails a coding turn.
+ * `void Promise.resolve(...).catch(...)`). Errors are swallowed so graph sync
+ * never blocks or fails a coding turn. Debounced 1 s so a burst of touched
+ * files generates a single push rather than one-per-file.
  */
 import type { GraphSyncProvider } from "@oxagen/agent-engine";
 
@@ -19,24 +23,22 @@ export interface GraphSyncOptions {
   cwd: string;
 }
 
-interface LineageEntry {
+interface PendingLineage {
   executionId: string;
   touchedFiles: string[];
 }
 
 export function createGraphSyncProvider(opts: GraphSyncOptions): GraphSyncProvider {
-  let pendingFiles: string[] = [];
-  let pendingLineage: LineageEntry[] = [];
+  let pendingLineage: PendingLineage[] = [];
   let timer: ReturnType<typeof setTimeout> | null = null;
 
   function flush(): void {
     timer = null;
-    const files = pendingFiles;
     const lineage = pendingLineage;
-    pendingFiles = [];
     pendingLineage = [];
-    if (files.length > 0) void pushDelta(opts, files).catch(() => {});
-    for (const entry of lineage) void pushLineage(opts, entry).catch(() => {});
+    for (const entry of lineage) {
+      void pushLineage(opts, entry).catch(() => {});
+    }
   }
 
   function schedule(): void {
@@ -47,9 +49,11 @@ export function createGraphSyncProvider(opts: GraphSyncOptions): GraphSyncProvid
   }
 
   return {
-    ensureGraph(touchedFiles) {
-      pendingFiles = [...new Set([...pendingFiles, ...touchedFiles])];
-      schedule();
+    // Code-graph delta sync (ensuring SourceFile nodes) is handled by the
+    // ingestion pipeline and `oxagen graph push` — skip here to avoid running
+    // the full tree-sitter builder mid-turn.
+    ensureGraph(_touchedFiles) {
+      // intentional no-op
     },
     recordLineage({ executionId, touchedFiles }) {
       pendingLineage.push({ executionId, touchedFiles });
@@ -58,27 +62,50 @@ export function createGraphSyncProvider(opts: GraphSyncOptions): GraphSyncProvid
   };
 }
 
-async function pushDelta(opts: GraphSyncOptions, files: string[]): Promise<void> {
-  await fetch(`${opts.apiUrl}/api/v1/graph/sync/push-delta`, {
-    method: "POST",
-    headers: headers(opts),
-    body: JSON.stringify({ files, cwd: opts.cwd }),
-  });
-}
+async function pushLineage(opts: GraphSyncOptions, entry: PendingLineage): Promise<void> {
+  const { executionId, touchedFiles } = entry;
+  const repo = opts.cwd.split("/").pop() ?? "local";
 
-async function pushLineage(opts: GraphSyncOptions, entry: LineageEntry): Promise<void> {
-  await fetch(`${opts.apiUrl}/api/v1/graph/lineage`, {
-    method: "POST",
-    headers: headers(opts),
-    body: JSON.stringify(entry),
-  });
-}
+  // Minimal lineage envelope: one AgentTurn node + TOUCHED_FILE edges to
+  // existing SourceFile nodes (created by the ingestion pipeline / graph push).
+  const turnKey = `lineage:turn:${executionId}`;
+  const nodes = [
+    {
+      key: turnKey,
+      labels: ["AgentTurn"],
+      displayName: `Turn ${executionId}`,
+      properties: {
+        executionId,
+        source: "cli",
+        cwd: opts.cwd,
+        touchedCount: touchedFiles.length,
+        recordedAt: new Date().toISOString(),
+      },
+      isSystem: true,
+    },
+  ];
 
-function headers(opts: GraphSyncOptions): Record<string, string> {
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${opts.token}`,
-    "x-org-slug": opts.orgSlug,
-    "x-workspace-slug": opts.workspaceSlug,
-  };
+  const edges = touchedFiles.map((f) => ({
+    sourceKey: turnKey,
+    targetKey: `code:${repo}:${f}`,
+    type: "TOUCHED_FILE",
+    properties: { source: "cli" },
+  }));
+
+  await fetch(
+    `${opts.apiUrl}/v1/${opts.orgSlug}/${opts.workspaceSlug}/graph/sync/push`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${opts.token}`,
+      },
+      body: JSON.stringify({
+        source: "lineage",
+        idempotencyKey: `lineage:cli:${executionId}`,
+        nodes,
+        edges,
+      }),
+    },
+  );
 }

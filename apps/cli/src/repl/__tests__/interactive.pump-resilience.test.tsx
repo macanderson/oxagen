@@ -24,7 +24,7 @@ interface RunTurnResultLike {
 const pending: Array<{ prompt: string; finish: () => void }> = [];
 const runTurnSpy = vi.fn<(opts: { prompt: string }) => void>();
 
-vi.mock("../../agent/pipeline.js", () => ({
+vi.mock("@oxagen/agent-engine", () => ({
   runTurn: (opts: { prompt: string }) =>
     new Promise<RunTurnResultLike>((resolve) => {
       runTurnSpy(opts);
@@ -34,7 +34,6 @@ vi.mock("../../agent/pipeline.js", () => ({
           resolve({ text: `done:${opts.prompt}`, messages: [], usage: {}, trace: {} }),
       });
     }),
-  MissingGatewayKeyError: class extends Error {},
 }));
 
 // The failing seam: expanding "/boom" throws, so handleSubmit rejects before it
@@ -77,8 +76,22 @@ vi.mock("../../agent/project-context.js", () => ({
 vi.mock("../../agent/model.js", () => ({
   resolveModelId: (override?: string) => override ?? "test/model",
 }));
+// The REPL now wires the engine code-graph port from this module; stub it so the
+// test neither loads the tree-sitter builder nor touches the DuckDB store.
+vi.mock("../../agent/code-graph.js", () => ({
+  queryCodeGraph: async () => "",
+}));
 
 const { ReplApp } = await import("../interactive.js");
+
+// Minimal authenticated session — the REPL requires one (ADR-019 §4) to build
+// the platform AI / graph-sync ports.
+const TEST_SESSION = {
+  token: "test-token",
+  orgSlug: "test-org",
+  workspaceSlug: "test-ws",
+  apiUrl: "http://localhost:4000",
+};
 
 const tick = (ms = 15): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -108,7 +121,7 @@ describe("REPL pump resilience", () => {
   });
 
   it("keeps draining the queue after a turn throws", async () => {
-    const { stdin, lastFrame } = render(<ReplApp options={{}} />);
+    const { stdin, lastFrame } = render(<ReplApp options={{ session: TEST_SESSION }} />);
     await tick();
 
     // 1) First prompt starts a turn and parks (in flight).

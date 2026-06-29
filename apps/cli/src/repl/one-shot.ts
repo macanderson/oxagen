@@ -11,7 +11,17 @@
  * loads project rules (CLAUDE.md/AGENTS.md), and records the turn into Oxagen's
  * context engine. Model calls go through the Vercel AI Gateway.
  */
-import { runTurn, MissingGatewayKeyError } from "../agent/pipeline.js";
+import { runTurn } from "@oxagen/agent-engine";
+import {
+  createCwdWorkspace,
+  createGatedWorkspace,
+  createCombinedMemory,
+  createCodeGraphProvider,
+  createGraphSyncProvider,
+  createPlatformAgentAi,
+} from "../agent/adapters/index.js";
+import { queryCodeGraph } from "../agent/code-graph.js";
+import type { Session } from "../lib/session.js";
 import { runAgent } from "../agent/loop.js";
 import { loadProjectContext } from "../agent/project-context.js";
 import { openSessionMemory } from "../agent/memory.js";
@@ -25,6 +35,8 @@ import { PermissionBroker, type PermissionMode } from "../agent/permissions.js";
 import { formatToolCallWithSpacing } from "../agent/tool-formatter.js";
 
 export interface OneShotOptions {
+  /** Authenticated platform session (token, org, workspace). */
+  session: Session;
   readOnly?: boolean;
   model?: string;
   /**
@@ -42,7 +54,7 @@ export interface OneShotOptions {
 
 export async function runOneShot(
   prompt: string,
-  options: OneShotOptions = {},
+  options: OneShotOptions,
 ): Promise<void> {
   const cwd = process.cwd();
   const projectContext = loadProjectContext(cwd);
@@ -50,6 +62,16 @@ export async function runOneShot(
   const fleetMemory = openFleetMemory(cwd);
   const traceStore = openTraceStore(cwd);
   const verbose = options.verbose ?? readConfig().verbose ?? false;
+
+  // Engine ports for this invocation: local workspace + platform-routed AI,
+  // combined local memory, the local code graph, and best-effort graph sync.
+  const workspace = createCwdWorkspace(cwd);
+  const ai = createPlatformAgentAi({
+    apiUrl: options.session.apiUrl,
+    token: options.session.token,
+    orgSlug: options.session.orgSlug,
+    workspaceSlug: options.session.workspaceSlug,
+  });
 
   // Non-interactive: build a broker only when a mode is requested. With no
   // approver, `ask` denies mutations (fail closed); acceptEdits/bypass enable
@@ -64,15 +86,17 @@ export async function runOneShot(
     let streamed = false;
     const result = await runTurn({
       prompt,
-      cwd,
+      workspace: createGatedWorkspace(workspace, broker),
+      ai,
       projectContext,
       readOnly,
-      broker,
       model: options.model,
       bare: options.bare,
       verbose,
-      memory,
-      fleetMemory,
+      memory: createCombinedMemory(memory, fleetMemory),
+      codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
+      trace: traceStore,
+      graphSync: createGraphSyncProvider({ ...options.session, cwd }),
       // Pipeline stage progress goes to stderr so stdout stays the clean answer.
       onStage: (stage) => {
         process.stderr.write(
@@ -89,22 +113,19 @@ export async function runOneShot(
         process.stderr.write(formatToolCallWithSpacing(name, input));
       },
     });
-    traceStore.record(result.trace);
     if (streamed) process.stdout.write("\n");
-    // Verbose: append the structured record to the JSONL stream and print the
-    // per-phase / per-model / cost breakdown to stderr (stdout stays the answer).
+    // The engine persists the trace via the injected `trace` port. Verbose mode
+    // additionally appends the structured record to the JSONL stream and prints
+    // the per-phase / per-model / cost breakdown to stderr (stdout stays the
+    // clean answer).
     if (verbose) {
       appendVerboseLog(cwd, result.trace);
       process.stderr.write(formatVerboseSection(result.trace).join("\n") + "\n");
     }
   } catch (err) {
-    if (err instanceof MissingGatewayKeyError) {
-      process.stderr.write(`Error: ${err.message}\n`);
-    } else {
-      process.stderr.write(
-        `Error: ${err instanceof Error ? err.message : String(err)}\n`,
-      );
-    }
+    process.stderr.write(
+      `Error: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
     process.exitCode = 1;
   } finally {
     await memory?.close();
@@ -119,7 +140,7 @@ export async function runOneShot(
 export async function runAgentOneShot(
   prompt: string,
   agentName: string,
-  options: OneShotOptions = {},
+  options: OneShotOptions,
 ): Promise<void> {
   const cwd = process.cwd();
   const agent = getAgent(agentName, { cwd });
@@ -162,7 +183,7 @@ export async function runAgentOneShot(
   }
 }
 
-export async function runFromStdin(options: OneShotOptions = {}): Promise<void> {
+export async function runFromStdin(options: OneShotOptions): Promise<void> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
     chunks.push(chunk as Buffer);
