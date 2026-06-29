@@ -44,7 +44,9 @@
         "!**/*.spec.tsx",
         "!**/__tests__/**",
         "!vitest.config.*",
-        "!vitest.setup.*"
+        "!vitest.setup.*",
+        "!**/.storybook/**",
+        "!**/e2e/**"
       ],
       "outputs": ["dist/**", ".xmcp/**", ".vercel/output/**"],
       "passThroughEnv": ["VERCEL", "VERCEL_URL", "NEXT_PHASE"],
@@ -114,7 +116,6 @@
     },
 
     "typecheck": {
-      "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "src/**", "tsconfig.json", "package.json"],
       "outputs": []
     },
