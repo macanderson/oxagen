@@ -37,13 +37,45 @@ usage — `oxagen <command> …`, pipes, and CI — is unaffected.
 
 ## Authentication
 
+### Interactive (default)
+
+Run `oxagen login` in a terminal. A browser window opens at
+`https://app.oxagen.sh/cli/authorize`. After you approve, the CLI receives
+the token via a local loopback callback and saves the session automatically.
+
 ```bash
-oxagen auth login --email you@example.com --password yourpassword
-oxagen auth whoami
-oxagen auth logout
+oxagen login       # opens browser, handles the full OAuth + PKCE flow
+oxagen logout      # clear the saved session
 ```
 
-Your session is written to `~/.config/oxagen/` and reused by all subsequent commands.
+### CI / headless
+
+When running in a non-interactive environment (CI, Docker, SSH pipe), pass
+`--token`, `--org`, and `--workspace` directly:
+
+```bash
+oxagen login \
+  --token  oxg_live_... \
+  --org    my-org \
+  --workspace  main
+```
+
+You can also set environment variables instead of flags (checked first, before
+config file):
+
+```bash
+export OXAGEN_API_TOKEN=oxg_live_...
+export OXAGEN_ORG_ID=my-org
+export OXAGEN_WORKSPACE_ID=main
+```
+
+### Opt out of the browser on an interactive TTY
+
+```bash
+oxagen login --no-browser   # prompts for token, org, and workspace inline
+```
+
+Your session is written to `~/.config/oxagen/config.json` and reused by all subsequent commands.
 
 ## Real-world scenarios
 
@@ -251,7 +283,7 @@ oxagen automation list
 ## All commands
 
 ```
-oxagen auth login / logout / whoami
+oxagen login / logout
 
 oxagen chat send
 oxagen conversation list / rename / archive / delete / purge / chat
@@ -331,8 +363,8 @@ oxagen automation list
 # Overrides env var with explicit flag
 oxagen automation list --workspace ws_different456
 
-# Authenticate and save defaults to config
-oxagen auth login --email you@example.com --password yourpassword
+# Authenticate and save defaults to config (opens browser)
+oxagen login
 ```
 
 ---
@@ -349,7 +381,7 @@ npm install -g @oxagen/cli
 **Auth failures** — clear and re-authenticate:
 
 ```bash
-oxagen auth logout && oxagen auth login
+oxagen logout && oxagen login
 ```
 
 ---
@@ -372,7 +404,7 @@ source edit is live on the next invocation, with no reinstall step:
 ```bash
 oxagen --version
 oxagen --help
-oxagen auth whoami
+oxagen login
 ```
 
 **How it works.** The installed binary is a symlink from a PATH directory

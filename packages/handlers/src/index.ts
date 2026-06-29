@@ -3,6 +3,7 @@ export type { BootstrapWorkspaceAgentsArgs } from "./workspace-agents";
 export { archiveCreateHandler } from "./archive.create";
 export { apiKeyCreateHandler } from "./api.key.create";
 export { apiKeyRevokeHandler } from "./api.key.revoke";
+export { generateApiKey, actorCanManageApiKeys } from "./lib/api-key-authz";
 export { organizationCreateHandler } from "./organization.create";
 export { bootstrapOrgIAM, provisionMemberPrincipal } from "./iam-provision";
 export type {

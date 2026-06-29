@@ -524,15 +524,18 @@ export function buildProgram(): Command {
   program
     .command("login")
     .description(
-      "Authenticate the CLI with your Oxagen account. Stores the session in ~/.config/oxagen/config.json.",
+      "Authenticate the CLI — opens a browser by default (interactive). Use --token for CI/headless.",
     )
-    .option("--token <token>", "Platform API token (create at https://app.oxagen.sh)")
-    .option("--org <slug>", "Organization slug")
-    .option("--workspace <slug>", "Workspace slug")
-    .action(async (opts: { token?: string; org?: string; workspace?: string }) => {
-      const { handleLogin } = await import("./commands/auth.js");
-      await handleLogin(opts);
-    });
+    .option("--token <token>", "Platform API token — skips browser login (CI/headless)")
+    .option("--org <slug>", "Organization slug (required with --token)")
+    .option("--workspace <slug>", "Workspace slug (required with --token)")
+    .option("--no-browser", "Prompt for token instead of opening the browser")
+    .action(
+      async (opts: { token?: string; org?: string; workspace?: string; browser?: boolean }) => {
+        const { handleLogin } = await import("./commands/auth.js");
+        await handleLogin(opts);
+      },
+    );
 
   program
     .command("logout")

@@ -1,10 +1,18 @@
 /**
  * Auth commands: `oxagen login` and `oxagen logout`.
  *
- * Login validates a platform API key against the Oxagen API and persists the
- * session (token + orgSlug + workspaceSlug) to ~/.config/oxagen/config.json.
+ * Login default (interactive TTY, no --token): opens a browser-based PKCE
+ * OAuth flow via `browserLogin` in lib/loopback-login.ts. The authorize page
+ * lives at ${appUrl}/cli/authorize; the token exchange hits
+ * POST ${apiUrl}/v1/auth/cli/token. On success, the returned
+ * { token, orgSlug, workspaceSlug } is persisted to ~/.config/oxagen/config.json.
  *
- * Validation endpoint: GET /v1/user/preferences/read
+ * Headless / CI fallback: pass --token (and optionally --org / --workspace) to
+ * skip the browser entirely. If the flags are omitted but we are NOT on a TTY,
+ * the command exits with an error. Pass --no-browser to force the token-prompt
+ * flow even on an interactive TTY.
+ *
+ * Validation endpoint (token flow): GET /v1/user/preferences/read
  *   - Requires a valid Bearer API key (auth middleware validates the key).
  *   - Returns 200 for a recognised key; 401 for an invalid or expired key.
  *   - Does not require an org/workspace path parameter — the API key itself
@@ -17,6 +25,7 @@
 import * as readline from "node:readline/promises";
 import {
   getApiUrl,
+  getAppUrl,
   getOrgId,
   getToken,
   getWorkspaceId,
@@ -29,6 +38,11 @@ export interface LoginOptions {
   token?: string;
   org?: string;
   workspace?: string;
+  /**
+   * `false` when --no-browser is passed; `true` (default) otherwise.
+   * Commander sets this to false when the user passes `--no-browser`.
+   */
+  browser?: boolean;
 }
 
 function maskToken(token: string): string {
@@ -76,10 +90,11 @@ export async function validatePlatformToken(
 
 export async function handleLogin(opts: LoginOptions): Promise<void> {
   const apiUrl = getApiUrl();
+  const appUrl = getAppUrl();
   const isTTY = process.stdin.isTTY ?? false;
   const config = readConfig();
 
-  // No flags → show current session status if logged in.
+  // No credentials provided → show current session status if already logged in.
   if (!opts.token && !opts.org && !opts.workspace) {
     const token = getToken();
     const orgSlug = getOrgId();
@@ -93,8 +108,36 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
       process.stdout.write(`\nRun \`oxagen logout\` to clear the session.\n`);
       return;
     }
-    // Fall through to interactive auth flow if not logged in.
+    // Fall through to auth flow if not logged in.
   }
+
+  // ── Browser-based PKCE flow (default for interactive TTY) ───────────────────
+  // Use browser flow when:
+  //   - we are on an interactive TTY, AND
+  //   - the caller has not provided a token directly (--token), AND
+  //   - --no-browser has not been passed (opts.browser === false).
+  const useBrowser = isTTY && !opts.token && opts.browser !== false;
+
+  if (useBrowser) {
+    try {
+      const { browserLogin } = await import("../lib/loopback-login.js");
+      const { token, orgSlug, workspaceSlug } = await browserLogin({ apiUrl, appUrl });
+      writeConfig({ token, orgSlug, workspaceSlug, appUrl });
+      process.stdout.write(`\nLogged in to Oxagen:\n`);
+      process.stdout.write(`  token:     ${maskToken(token)}\n`);
+      process.stdout.write(`  org:       ${orgSlug}\n`);
+      process.stdout.write(`  workspace: ${workspaceSlug}\n`);
+      process.stdout.write(`  api:       ${apiUrl}\n`);
+    } catch (err) {
+      process.stderr.write(
+        `Error: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  // ── Headless / token-paste flow (--token flag, --no-browser, or non-TTY) ────
 
   // ── Resolve token ────────────────────────────────────────────────────────────
   let token = opts.token ?? config.token;
@@ -107,7 +150,7 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
       return;
     }
     process.stdout.write(
-      `\nOxagen API token (create one at https://app.oxagen.sh):\n`,
+      `\nOxagen API token (create one at https://app.oxagen.sh/settings/tokens):\n`,
     );
     token = await promptLine("  Token: ");
   }
@@ -157,7 +200,7 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
   if (!valid) {
     process.stderr.write(
       `Error: Token validation failed. Verify the token is a valid Oxagen API key.\n` +
-        `  Get a token at: https://app.oxagen.sh\n`,
+        `  Get a token at: https://app.oxagen.sh/settings/tokens\n`,
     );
     process.exitCode = 1;
     return;
