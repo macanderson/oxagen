@@ -3,9 +3,16 @@
  *
  * Precedence (lowest → highest), identical to the MCP config layering and to
  * Claude Code:
- *   1. User (global):   ~/.config/oxagen/settings.json
+ *   1. User (global):   ~/.oxagen/settings.json
  *   2. Project (shared): <projectRoot>/.oxagen/settings.json
  *   3. Local (personal): <projectRoot>/.oxagen/settings.local.json
+ *
+ * NOTE: Auth credentials (token, org, workspace, gatewayKey) stay in
+ * ~/.config/oxagen/config.json — only the settings tier moved.
+ *
+ * MIGRATION: On first load, if ~/.oxagen/settings.json is absent but the
+ * legacy path ~/.config/oxagen/settings.json exists, the legacy file is
+ * automatically copied to the new location so existing users lose nothing.
  *
  * Merge rules:
  *   - scalars (model, apiUrl, $schema):       higher scope wins
@@ -19,8 +26,8 @@
  * `${VAR}` references in any string value are expanded from the environment at
  * resolution time (reusing @oxagen/mcp-config's expander).
  */
-import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, existsSync, copyFileSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { expandEnvVars } from "@oxagen/mcp-config/resolve";
 import {
@@ -62,8 +69,54 @@ export interface ResolvedSettings {
 
 const DEFAULT_PROJECT_DIR = ".oxagen";
 
+/** The canonical user (global) settings path — matches Claude Code's ~/.oxagen layout. */
 function userSettingsFile(): string {
+  return join(homedir(), ".oxagen", "settings.json");
+}
+
+/**
+ * Legacy path used before the Claude-Code-parity migration.
+ * Only consulted when the canonical path does not yet exist.
+ */
+function legacyUserSettingsFile(): string {
   return join(homedir(), ".config", "oxagen", "settings.json");
+}
+
+/**
+ * One-time migration: copy `legacyPath` → `canonicalPath` when the canonical
+ * file is absent but the legacy file exists. Returns `true` if the copy
+ * occurred, `false` otherwise (no-op when canonical already exists, or when
+ * legacy is missing, or when the copy fails).
+ *
+ * Exported so tests can exercise the migration with controlled temp paths
+ * rather than touching the real home directory.
+ */
+export function migrateUserSettings(canonicalPath: string, legacyPath: string): boolean {
+  if (existsSync(canonicalPath)) return false;
+  if (!existsSync(legacyPath)) return false;
+  try {
+    mkdirSync(dirname(canonicalPath), { recursive: true });
+    copyFileSync(legacyPath, canonicalPath);
+    return true;
+  } catch {
+    // Best-effort — callers fall back to reading the legacy path directly.
+    return false;
+  }
+}
+
+/**
+ * Resolve the effective user settings path for the current process.
+ * Attempts a one-time migration from the legacy location; falls back to
+ * reading from the legacy path if migration fails and the canonical is absent.
+ */
+function resolvedUserSettingsPath(): string {
+  const canonical = userSettingsFile();
+  const legacy = legacyUserSettingsFile();
+  migrateUserSettings(canonical, legacy);
+  if (existsSync(canonical)) return canonical;
+  if (existsSync(legacy)) return legacy;
+  // Neither exists — return canonical so new writes go to the right place.
+  return canonical;
 }
 
 /** The three scope file paths for a given project root, in precedence order. */
@@ -74,7 +127,7 @@ export function getScopePaths(opts: ResolveSettingsOptions = {}): Record<
   const root = opts.cwd ?? process.cwd();
   const dir = opts.projectDirName ?? DEFAULT_PROJECT_DIR;
   return {
-    user: opts.userSettingsPath ?? userSettingsFile(),
+    user: opts.userSettingsPath ?? resolvedUserSettingsPath(),
     project: join(root, dir, "settings.json"),
     local: join(root, dir, "settings.local.json"),
   };
