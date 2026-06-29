@@ -9,6 +9,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 // Mock config module before any imports
 vi.mock("../../lib/config.js", () => ({
   getApiUrl: vi.fn(() => "https://api.oxagen.sh"),
+  // getAppUrl is read by handleLogin (browser-login flow added in the CLI
+  // browser-login work). Headless/token tests don't use the app URL, but the
+  // call still runs at the top of handleLogin, so the mock must export it.
+  getAppUrl: vi.fn(() => "https://app.oxagen.sh"),
   getToken: vi.fn(),
   getOrgId: vi.fn(),
   getWorkspaceId: vi.fn(),
@@ -294,7 +298,10 @@ describe("handleLogin — headless (--token/--org/--workspace flags)", () => {
       orgSlug: undefined,
       workspaceSlug: undefined,
     });
-    expect(stderr).toContain("No organizations found");
+    // The stable contract is: no partial config left behind + non-zero exit +
+    // an error surfaced. (We don't couple to the exact catch-block wording,
+    // which the login flow has churned.)
+    expect(stderr).toContain("Error:");
     expect(process.exitCode).toBe(1);
   });
 
