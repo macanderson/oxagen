@@ -23,11 +23,13 @@ function makeProps(overrides: Partial<TypeFilterPanelProps> = {}): TypeFilterPan
     hiddenNodeTypes: new Set<string>(),
     hiddenEdgeTypes: new Set<string>(),
     inferredHidden: false,
+    systemHidden: false,
     inferredCount: 3,
     confirmedCount: 9,
     onToggleNodeType: vi.fn(),
     onToggleEdgeType: vi.fn(),
     onToggleInferred: vi.fn(),
+    onToggleSystem: vi.fn(),
     onShowAllNodeTypes: vi.fn(),
     onHideAllNodeTypes: vi.fn(),
     ...overrides,
@@ -126,12 +128,11 @@ describe("TypeFilterPanel — inferred toggle", () => {
     const { container } = render(
       <TypeFilterPanel {...makeProps({ inferredHidden: true })} />,
     );
-    // The first list in "Edge source" section has 2 rows: Inferred and Confirmed.
-    // We can check the checkboxes rendered; the first one should not have data-[checked].
+    // Checkboxes are ordered: Issue, Topic, System nodes, Inferred, Confirmed, RELATES_TO
     const checkboxes = container.querySelectorAll('[role="checkbox"]');
-    // Find the Inferred checkbox (first in edge source section)
+    // Find the Inferred checkbox (index 3: 2 node + 1 system + inferred)
     // Its data-[checked] attribute should be absent when inferredHidden=true
-    const inferredCheckbox = checkboxes[2]; // 2 node checkboxes + inferred (index 2)
+    const inferredCheckbox = checkboxes[3]; // 2 node checkboxes + system node + inferred (index 3)
     expect(inferredCheckbox).not.toHaveAttribute("data-checked");
   });
 
@@ -140,7 +141,7 @@ describe("TypeFilterPanel — inferred toggle", () => {
       <TypeFilterPanel {...makeProps({ inferredHidden: false })} />,
     );
     const checkboxes = container.querySelectorAll('[role="checkbox"]');
-    const inferredCheckbox = checkboxes[2];
+    const inferredCheckbox = checkboxes[3]; // 2 node checkboxes + system node + inferred (index 3)
     expect(inferredCheckbox).toHaveAttribute("data-checked", "");
   });
 });

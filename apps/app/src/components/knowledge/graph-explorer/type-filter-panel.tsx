@@ -82,7 +82,7 @@ export function TypeFilterPanel(props: TypeFilterPanelProps) {
             onToggle={props.onToggleSystem}
           />
           <FilterRow
-            label="Inferred edges"
+            label="Inferred"
             count={props.inferredCount}
             color={INFERRED_EDGE_COLOR}
             checked={!props.inferredHidden}
@@ -90,7 +90,7 @@ export function TypeFilterPanel(props: TypeFilterPanelProps) {
             squareSwatch
           />
           <FilterRow
-            label="Confirmed edges"
+            label="Confirmed"
             count={props.confirmedCount}
             color={CONFIRMED_EDGE_COLOR}
             checked
