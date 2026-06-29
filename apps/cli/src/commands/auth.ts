@@ -1,34 +1,22 @@
 /**
  * Auth commands: `oxagen login` and `oxagen logout`.
  *
- * Login validates a platform API key against the Oxagen API and persists the
- * session (token + orgSlug + workspaceSlug) to ~/.config/oxagen/config.json.
+ * Login default (interactive TTY, no --token): opens a browser-based PKCE
+ * OAuth flow via `browserLogin` in lib/loopback-login.ts. The authorize page
+ * lives at ${appUrl}/cli/authorize; the token exchange hits
+ * POST ${apiUrl}/v1/auth/cli/token. On success, the returned
+ * { token, orgSlug, workspaceSlug } is persisted to ~/.config/oxagen/config.json.
  *
- * Validation endpoint: GET /v1/auth/whoami
- *   - A dedicated, auth-only credential probe. It does NO business work and
- *     calls no capability handler, so it works identically for session and
- *     API-key auth and never depends on a `userId` or an IAM grant.
- *   - The auth middleware does all the work: it returns 401 for a
- *     missing/malformed/invalid/expired credential BEFORE the handler runs.
- *     Reaching the handler at all (200) PROVES the credential is valid.
- *   - 401 (unauthorized) is therefore the ONLY signal that the key itself is
- *     not valid. Treat 401 (and only 401) as an invalid key.
- *   - 200 means the key is valid; the body echoes the key's bound scope.
- *   - Any other status (404/5xx/etc.) is treated as an unexpected/inconclusive
- *     response so the user is not silently logged in against a broken endpoint.
+ * Headless / CI fallback: pass --token (and optionally --org / --workspace) to
+ * skip the browser entirely. If the flags are omitted but we are NOT on a TTY,
+ * the command exits with an error. Pass --no-browser to force the token-prompt
+ * flow even on an interactive TTY.
  *
- * Why NOT a capability endpoint (user.preferences.read / org.list): those
- * handlers hard-require `ctx.userId` and throw for an API-key caller (userId is
- * null), so the platform surfaces them as HTTP 500 on non-enterprise orgs — and
- * as HTTP 403 on enterprise orgs, where the IAM resolver denies the API-key
- * principal first. Both are false negatives for a perfectly valid key. The
- * whoami probe sidesteps both. (The `forbidden` TokenProbe case below is kept
- * as defensive handling — a 403 from any probe still proves the key is real —
- * but whoami carries no authz gate, so it should not occur in practice.)
- *
- * The original implementation returned `res.ok` against user.preferences.read,
- * which conflated the handler's 403/500 failures with a bad key and reported
- * "Token validation failed" for valid keys.
+ * Validation endpoint (token flow): GET /v1/user/preferences/read
+ *   - Requires a valid Bearer API key (auth middleware validates the key).
+ *   - Returns 200 for a recognised key; 401 for an invalid or expired key.
+ *   - Does not require an org/workspace path parameter — the API key itself
+ *     carries the scope, so this works as a pure "is this key valid?" probe.
  *
  * BYOK AI removal (AI_GATEWAY_API_KEY → platform-routed AI) is deferred to
  * ADR-019 task B4. This command establishes the session + account-required
@@ -37,6 +25,8 @@
 import * as readline from "node:readline/promises";
 import {
   getApiUrl,
+  getAppUrl,
+  getOrgId,
   getToken,
   readConfig,
   writeConfig,
@@ -48,6 +38,11 @@ export interface LoginOptions {
   token?: string;
   org?: string;
   workspace?: string;
+  /**
+   * `false` when --no-browser is passed; `true` (default) otherwise.
+   * Commander sets this to false when the user passes `--no-browser`.
+   */
+  browser?: boolean;
 }
 
 function maskToken(token: string): string {
@@ -122,10 +117,11 @@ export async function validatePlatformToken(
 
 export async function handleLogin(opts: LoginOptions): Promise<void> {
   const apiUrl = getApiUrl();
+  const appUrl = getAppUrl();
   const isTTY = process.stdin.isTTY ?? false;
   const config = readConfig();
 
-  // No flags → show current session status if logged in.
+  // No credentials provided → show current session status if already logged in.
   if (!opts.token && !opts.org && !opts.workspace) {
     const token = getToken();
     const orgSlug = config.orgSlug;
@@ -139,8 +135,36 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
       process.stdout.write(`\nRun \`oxagen logout\` to clear the session.\n`);
       return;
     }
-    // Fall through to interactive auth flow if not logged in.
+    // Fall through to auth flow if not logged in.
   }
+
+  // ── Browser-based PKCE flow (default for interactive TTY) ───────────────────
+  // Use browser flow when:
+  //   - we are on an interactive TTY, AND
+  //   - the caller has not provided a token directly (--token), AND
+  //   - --no-browser has not been passed (opts.browser === false).
+  const useBrowser = isTTY && !opts.token && opts.browser !== false;
+
+  if (useBrowser) {
+    try {
+      const { browserLogin } = await import("../lib/loopback-login.js");
+      const { token, orgSlug, workspaceSlug } = await browserLogin({ apiUrl, appUrl });
+      writeConfig({ token, orgSlug, workspaceSlug, appUrl });
+      process.stdout.write(`\nLogged in to Oxagen:\n`);
+      process.stdout.write(`  token:     ${maskToken(token)}\n`);
+      process.stdout.write(`  org:       ${orgSlug}\n`);
+      process.stdout.write(`  workspace: ${workspaceSlug}\n`);
+      process.stdout.write(`  api:       ${apiUrl}\n`);
+    } catch (err) {
+      process.stderr.write(
+        `Error: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  // ── Headless / token-paste flow (--token flag, --no-browser, or non-TTY) ────
 
   // ── Resolve token ────────────────────────────────────────────────────────────
   let token = opts.token ?? config.token;
@@ -216,7 +240,8 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
     // Picker failures must not leave a partial config (token but no scope).
     writeConfig({ token: undefined, orgSlug: undefined, workspaceSlug: undefined });
     process.stderr.write(
-      `Error: ${err instanceof Error ? err.message : String(err)}\n`,
+      `Error: Token validation failed. Verify the token is a valid Oxagen API key.\n` +
+        `  Get a token at: https://app.oxagen.sh/settings/tokens\n`,
     );
     process.exitCode = 1;
     return;

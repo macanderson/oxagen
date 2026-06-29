@@ -215,6 +215,7 @@ import { ontologyQueryRoute } from "./routes/v1/ontology.query";
 import { ontologyNeighborsRoute } from "./routes/v1/ontology.neighbors";
 import { auditLogQueryRoute } from "./routes/v1/audit.log.query";
 import { agentLlmRoute } from "./routes/v1/agent.llm";
+import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
 
 export type AppEnv = {
   Variables: {
@@ -248,6 +249,11 @@ app.route("/webhooks", webhookRoute);
 // Inngest cloud polls /api/inngest for the function manifest; signing-key
 // verification is enforced inside the inngest/hono serve handler.
 app.route("/api/inngest", inngestRoute);
+
+// Public CLI token exchange — no auth middleware (the code + PKCE verifier are
+// the security boundary; RFC 8252 + RFC 7636 S256). Must be mounted BEFORE the
+// auth-gated /v1 groups so authMiddleware never sees this path.
+app.route("/v1/auth/cli", authCliTokenRoute);
 
 // /v1 user-level routes (org + workspace CRUD) require auth but no
 // org scope: a freshly-authenticated user can create their first
