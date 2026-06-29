@@ -458,6 +458,62 @@ export function ReplApp({
         }
         return;
       }
+      if (text === "/remember" || text.startsWith("/remember ")) {
+        const body = text.slice("/remember".length).trim();
+        if (!body) {
+          pushAssistant(
+            "Usage: /remember <text> — captures a memory (infers its kind + weight) and saves it to the workspace graph.",
+          );
+          return;
+        }
+        pushAssistant("Remembering…");
+        try {
+          const { rememberMemory, formatRememberResult } = await import(
+            "../lib/memory-client.js"
+          );
+          pushAssistant(formatRememberResult(await rememberMemory({ text: body })));
+        } catch (err) {
+          pushAssistant(err instanceof Error ? err.message : String(err));
+        }
+        return;
+      }
+      if (text === "/memories" || text.startsWith("/memories ")) {
+        const arg = text.slice("/memories".length).trim();
+        try {
+          const { listMemories, formatMemoryLines, MEMORY_KINDS } = await import(
+            "../lib/memory-client.js"
+          );
+          let kind: (typeof MEMORY_KINDS)[number] | undefined;
+          if (arg) {
+            if (!MEMORY_KINDS.includes(arg as (typeof MEMORY_KINDS)[number])) {
+              pushAssistant(`Unknown kind "${arg}". Use one of: ${MEMORY_KINDS.join(", ")}.`);
+              return;
+            }
+            kind = arg as (typeof MEMORY_KINDS)[number];
+          }
+          pushAssistant(formatMemoryLines(await listMemories({ kind, limit: 30 })));
+        } catch (err) {
+          pushAssistant(err instanceof Error ? err.message : String(err));
+        }
+        return;
+      }
+      if (text === "/forget" || text.startsWith("/forget ")) {
+        const id = text.slice("/forget".length).trim();
+        if (!id) {
+          pushAssistant("Usage: /forget <id> — permanently deletes a memory by id (see /memories).");
+          return;
+        }
+        try {
+          const { deleteMemory } = await import("../lib/memory-client.js");
+          const { deleted } = await deleteMemory(id);
+          pushAssistant(
+            deleted ? `✓ Forgot memory ${id}.` : `No memory ${id} found in this workspace.`,
+          );
+        } catch (err) {
+          pushAssistant(err instanceof Error ? err.message : String(err));
+        }
+        return;
+      }
       if (text === "/exit" || text === "/quit") {
         void memoryRef.current?.close();
         exit();

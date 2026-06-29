@@ -10,8 +10,9 @@
  *   oxagen daemon start|stop|status
  *   oxagen config [key] [value]
  *
- * The Commander command tree lives in ./program.ts so the REPL's slash-command
+ * The Commander command tree lives in ./program.tsx so the REPL's slash-command
  * menu can introspect the exact same command set without re-running anything.
+ * This entry stays thin: shim, settings projection, then hand off to the tree.
  */
 import { createRequire } from "node:module";
 import { buildProgram } from "./program.js";
