@@ -31,6 +31,7 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
   const tools = buildWorkspaceTools(opts.workspace, {
     readOnly: opts.readOnly,
     codeGraph: opts.codeGraph,
+    codeMap: opts.codeMap,
     onEvent,
   });
 

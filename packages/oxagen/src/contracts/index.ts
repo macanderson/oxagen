@@ -29,6 +29,7 @@ import { agentFeatureVerify } from "./agent.feature.verify";
 import { codeDiff } from "./code.diff";
 import { codePatch } from "./code.patch";
 import { codeFormat } from "./code.format";
+import { codeMap } from "./code.map";
 import { agentDefinitionCreate } from "./agent.definition.create";
 import { agentDefinitionUpdate } from "./agent.definition.update";
 import { agentDefinitionPublish } from "./agent.definition.publish";
@@ -294,6 +295,7 @@ export {
   codeDiff,
   codePatch,
   codeFormat,
+  codeMap,
   agentDefinitionCreate,
   agentDefinitionUpdate,
   agentDefinitionPublish,
@@ -553,6 +555,7 @@ export const contracts = [
   codeDiff,
   codePatch,
   codeFormat,
+  codeMap,
   agentDefinitionCreate,
   agentDefinitionUpdate,
   agentDefinitionPublish,

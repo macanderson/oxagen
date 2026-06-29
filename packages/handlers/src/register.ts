@@ -1096,4 +1096,9 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "secret.export",
     async () => (await import("./secret.export")).secretExportHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "code.map",
+    async () =>
+      (await import("./code.map")).codeMapHandler as CapabilityHandlerFn,
+  );
 });
