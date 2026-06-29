@@ -20,6 +20,7 @@ export default async function SettingsLayout({
     { label: "Models", href: workspace.settings.models(ctx) },
     { label: "Model Keys", href: workspace.settings.modelKeys(ctx) },
     { label: "Integrations", href: workspace.settings.integrations(ctx) },
+    { label: "GitHub", href: workspace.settings.github(ctx) },
     { label: "Prompts", href: workspace.settings.prompts(ctx) },
     { label: "Plugins", href: workspace.settings.plugins(ctx) },
     { label: "Skills", href: workspace.settings.skills(ctx) },
