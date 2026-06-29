@@ -67,13 +67,19 @@ describe("repo.create", () => {
     expect(repoCreate.name).toBe("repo.create");
   });
 
-  it("parses a minimal valid input (org + name required)", () => {
+  it("parses a minimal valid input (only name required)", () => {
     const parsed = repoCreate.input.parse({ org: "myorg", name: "myrepo" });
     expect(parsed.org).toBe("myorg");
     expect(parsed.name).toBe("myrepo");
     expect(parsed.description).toBeUndefined();
     expect(parsed.private).toBeUndefined();
     expect(parsed.autoInit).toBeUndefined();
+  });
+
+  it("accepts input without org (personal account) and leaves org undefined", () => {
+    const parsed = repoCreate.input.parse({ name: "hello-world" });
+    expect(parsed.org).toBeUndefined();
+    expect(parsed.name).toBe("hello-world");
   });
 
   it("parses a fully specified input", () => {
@@ -87,10 +93,6 @@ describe("repo.create", () => {
     expect(parsed.description).toBe("A repo");
     expect(parsed.private).toBe(true);
     expect(parsed.autoInit).toBe(true);
-  });
-
-  it("rejects input missing org", () => {
-    expect(() => repoCreate.input.parse({ name: "myrepo" })).toThrow();
   });
 
   it("rejects input missing name", () => {

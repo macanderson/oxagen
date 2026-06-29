@@ -141,7 +141,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
   }
 
   async function createRepoInOrg(args: {
-    org: string;
+    org?: string;
     name: string;
     description?: string;
     private?: boolean;
@@ -152,7 +152,12 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     if (args.private !== undefined) body.private = args.private;
     if (args.autoInit !== undefined) body.auto_init = args.autoInit;
 
-    const data = await request<GHRepo>("POST", `/orgs/${args.org}/repos`, body);
+    // With an org → create inside that organisation. Without one → create in
+    // the authenticated user's personal account. `POST /orgs/{user}/repos`
+    // 404s for a personal account (a user is not an org), so personal repos
+    // MUST go through `/user/repos`.
+    const path = args.org ? `/orgs/${args.org}/repos` : "/user/repos";
+    const data = await request<GHRepo>("POST", path, body);
     return {
       fullName: data.full_name,
       htmlUrl: data.html_url,

@@ -5,9 +5,20 @@
  * Heavy children (wizard, edit sheet, delete dialog) are mocked to capture the
  * open/target props so we can assert the menu items open the right surface with
  * the right connection.
+ *
+ * Gate / wizard-internal behavior (not-connected → install gate, connected →
+ * repo selector) is covered in github-connection-wizard.test.tsx where the
+ * real wizard renders without the module-level mock below.
  */
 
 import * as React from "react";
+
+// Silence any `@/lib/github` import from the real wizard (mocked out below)
+// and from any future tests that render wizard internals.
+vi.mock("@/lib/github", () => ({
+  fetchGithubStatus: vi.fn(),
+  API_BASE: "/api",
+}));
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 
