@@ -5,11 +5,19 @@
  * Covers: lesson text display, kind badge, weight badge, confidence bar,
  * empty state, kind-chip filtering, confidence-slider filtering, and
  * text-search filtering over lesson/source/nodeRef.
+ * Also covers: smoke-tests for the optional updateMemory/deleteMemory action
+ * props that wire up the edit/delete affordances in the detail sheet.
  */
 
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { MemoriesClient } from "./memories-client";
+
+// next/navigation is not available in jsdom — stub useRouter so the component
+// mounts without throwing.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 
 afterEach(cleanup);
 
@@ -393,5 +401,65 @@ describe("MemoriesClient — stats row", () => {
     // routine-change count = 2, constraint count = 1
     const allText = screen.getAllByText("2");
     expect(allText.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Edit / delete action props
+// ---------------------------------------------------------------------------
+
+describe("MemoriesClient — edit/delete action prop smoke tests", () => {
+  it("renders the lesson list normally when both action props are provided", () => {
+    const mockUpdate = vi.fn().mockResolvedValue({
+      ok: true,
+      memory: routineRecord,
+    });
+    const mockDelete = vi.fn().mockResolvedValue({ ok: true });
+
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord, constraintRecord]}
+        updateMemory={mockUpdate}
+        deleteMemory={mockDelete}
+      />,
+    );
+
+    // The lesson list is unaffected by the presence of action props.
+    expect(
+      screen.getByText("Always run pnpm i --no-frozen-lockfile after adding a dep."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Never commit directly to main — always open a PR."),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the lesson list normally when neither action prop is provided", () => {
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+      />,
+    );
+    expect(
+      screen.getByText("Always run pnpm i --no-frozen-lockfile after adding a dep."),
+    ).toBeInTheDocument();
+  });
+
+  it("does not call updateMemory or deleteMemory on initial render", () => {
+    const mockUpdate = vi.fn();
+    const mockDelete = vi.fn();
+
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        updateMemory={mockUpdate}
+        deleteMemory={mockDelete}
+      />,
+    );
+
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockDelete).not.toHaveBeenCalled();
   });
 });
