@@ -441,10 +441,16 @@ describe("repo.create route", () => {
     expect(input.private).toBe(true);
   });
 
-  it("missing required org → 400, invoke not called", async () => {
+  it("omitting org → 201, creates in the connected user's personal account", async () => {
+    // repo.create's `org` is optional by design (omit → personal account); a
+    // missing org must NOT 400 — it succeeds and invoke is called with no org.
+    mocks.invoke.mockResolvedValue({ fullName: "octocat/no-org", htmlUrl: "https://github.com/octocat/no-org", defaultBranch: "main" });
     const res = await authPost("/repos", { name: "no-org" });
-    expect(res.status).toBe(400);
-    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(res.status).toBe(201);
+    expect(mocks.invoke).toHaveBeenCalled();
+    const input = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(input.org).toBeUndefined();
+    expect(input.name).toBe("no-org");
   });
 
   it("missing required name → 400, invoke not called", async () => {
