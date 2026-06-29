@@ -5,10 +5,25 @@
  * session (token + orgSlug + workspaceSlug) to ~/.config/oxagen/config.json.
  *
  * Validation endpoint: GET /v1/user/preferences/read
- *   - Requires a valid Bearer API key (auth middleware validates the key).
- *   - Returns 200 for a recognised key; 401 for an invalid or expired key.
- *   - Does not require an org/workspace path parameter — the API key itself
- *     carries the scope, so this works as a pure "is this key valid?" probe.
+ *   - The auth middleware resolves the Bearer API key BEFORE any IAM check.
+ *   - 401 (unauthorized) is the ONLY signal that the key itself is not valid:
+ *     "Missing credentials" / "Malformed API key" / "Invalid API key" /
+ *     "API key expired" all surface as 401. Treat 401 (and only 401) as an
+ *     invalid key.
+ *   - 200 means the key is valid AND the caller may read preferences.
+ *   - 403 (forbidden) means the key IS valid (it authenticated past the auth
+ *     middleware) but the IAM resolver denied this one capability for the key's
+ *     principal — e.g. enterprise orgs currently fail-closed on API-key callers
+ *     until keys are linked to service principals. A 403 therefore PROVES the
+ *     key is real; the login probe must NOT reject it. We persist the session
+ *     and warn that API access is currently restricted.
+ *   - Any other status (404/5xx/etc.) is treated as an unexpected/inconclusive
+ *     response so the user is not silently logged in against a broken endpoint.
+ *
+ * The earlier implementation returned `res.ok`, which conflated 403 with a bad
+ * key: a perfectly valid key whose org IAM-denies the probe capability was
+ * reported as "Token validation failed". Distinguishing the auth layer (401)
+ * from the authz layer (403) fixes that.
  *
  * BYOK AI removal (AI_GATEWAY_API_KEY → platform-routed AI) is deferred to
  * ADR-019 task B4. This command establishes the session + account-required
@@ -49,13 +64,34 @@ async function promptLine(question: string): Promise<string> {
 }
 
 /**
- * Validate a platform API token by calling GET /v1/user/preferences/read.
- * Returns true when the key is recognised by the platform (HTTP 200).
+ * Outcome of probing a platform API token against the Oxagen API.
+ *
+ * - `valid`    — the key authenticated (HTTP 200). Fully usable.
+ * - `forbidden`— the key authenticated but IAM denied the probe capability
+ *                (HTTP 403). The key is REAL; API access is currently
+ *                restricted for its principal/org.
+ * - `invalid`  — the key was rejected by the auth layer (HTTP 401).
+ * - `network`  — the request never reached the API (connection error).
+ * - `unexpected` — any other HTTP status; we cannot conclude the key is valid.
+ */
+export type TokenProbe =
+  | { kind: "valid" }
+  | { kind: "forbidden" }
+  | { kind: "invalid" }
+  | { kind: "network"; detail: string }
+  | { kind: "unexpected"; status: number };
+
+/**
+ * Probe a platform API token by calling GET /v1/user/preferences/read.
+ *
+ * Distinguishes the auth layer (401 → invalid key) from the authz layer
+ * (403 → valid key, capability denied). See the module header for the full
+ * status contract.
  */
 export async function validatePlatformToken(
   token: string,
   apiUrl: string,
-): Promise<boolean> {
+): Promise<TokenProbe> {
   let res: Response;
   try {
     res = await fetch(`${apiUrl}/v1/user/preferences/read`, {
@@ -66,12 +102,19 @@ export async function validatePlatformToken(
       },
     });
   } catch (err) {
-    process.stderr.write(
-      `Network error contacting ${apiUrl}: ${err instanceof Error ? err.message : String(err)}\n`,
-    );
-    return false;
+    return {
+      kind: "network",
+      detail: err instanceof Error ? err.message : String(err),
+    };
   }
-  return res.ok;
+  if (res.ok) return { kind: "valid" };
+  // 403 means the key got PAST the auth middleware — it is a real, recognised
+  // key — but the IAM resolver denied this capability. The key is valid.
+  if (res.status === 403) return { kind: "forbidden" };
+  // 401 is the auth layer rejecting the key itself (missing/malformed/invalid/
+  // expired). This is the only "not a valid key" signal.
+  if (res.status === 401) return { kind: "invalid" };
+  return { kind: "unexpected", status: res.status };
 }
 
 export async function handleLogin(opts: LoginOptions): Promise<void> {
@@ -153,14 +196,35 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
 
   // ── Validate token against the platform ─────────────────────────────────────
   process.stdout.write(`\nAuthenticating against ${apiUrl}...\n`);
-  const valid = await validatePlatformToken(token, apiUrl);
-  if (!valid) {
-    process.stderr.write(
-      `Error: Token validation failed. Verify the token is a valid Oxagen API key.\n` +
-        `  Get a token at: https://app.oxagen.sh\n`,
-    );
-    process.exitCode = 1;
-    return;
+  const probe = await validatePlatformToken(token, apiUrl);
+
+  switch (probe.kind) {
+    case "invalid":
+      process.stderr.write(
+        `Error: Token validation failed. The API rejected this key (HTTP 401).\n` +
+          `  Verify the token is a current, non-expired Oxagen API key.\n` +
+          `  Get a token at: https://app.oxagen.sh\n`,
+      );
+      process.exitCode = 1;
+      return;
+    case "network":
+      process.stderr.write(
+        `Error: Network error contacting ${apiUrl}: ${probe.detail}\n` +
+          `  Check your connection and the --api / OXAGEN_API_URL setting.\n`,
+      );
+      process.exitCode = 1;
+      return;
+    case "unexpected":
+      process.stderr.write(
+        `Error: Unexpected response (HTTP ${probe.status}) from ${apiUrl}.\n` +
+          `  Could not confirm the key is valid; not saving the session.\n`,
+      );
+      process.exitCode = 1;
+      return;
+    case "valid":
+    case "forbidden":
+      // Both mean the key is real (it authenticated). Persist the session.
+      break;
   }
 
   // ── Persist session ──────────────────────────────────────────────────────────
@@ -171,6 +235,17 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
   process.stdout.write(`  org:       ${orgSlug}\n`);
   process.stdout.write(`  workspace: ${workspaceSlug}\n`);
   process.stdout.write(`  api:       ${apiUrl}\n`);
+
+  if (probe.kind === "forbidden") {
+    // The key authenticated but IAM denied the probe capability. Tell the user
+    // their session is saved while being honest that API calls may be blocked.
+    process.stderr.write(
+      `\nNote: this key authenticated, but the API currently denies it access ` +
+        `(HTTP 403).\n` +
+        `  Capability calls for org "${orgSlug}" may be blocked until the org's ` +
+        `API-key access is enabled.\n`,
+    );
+  }
 }
 
 export function handleLogout(): void {
