@@ -71,29 +71,31 @@ export function GraphToolbar(props: GraphToolbarProps) {
 
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2.5">
-      <form
-        onSubmit={submit}
-        className="relative min-w-[14rem] flex-1 sm:max-w-md"
-      >
-        {props.searching ? (
-          <Loader2
-            className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
-            aria-hidden="true"
+      {!isTable && (
+        <form
+          onSubmit={submit}
+          className="relative min-w-[14rem] flex-1 sm:max-w-md"
+        >
+          {props.searching ? (
+            <Loader2
+              className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
+              aria-hidden="true"
+            />
+          ) : (
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+          )}
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search the graph in natural language…"
+            aria-label="Search the graph"
+            className="pl-8"
           />
-        ) : (
-          <Search
-            className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-        )}
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search the graph in natural language…"
-          aria-label="Search the graph"
-          className="pl-8"
-        />
-      </form>
+        </form>
+      )}
 
       {props.stats && (
         <div

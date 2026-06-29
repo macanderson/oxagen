@@ -103,7 +103,16 @@ export function GraphExplorer() {
   const [canvasReady, setCanvasReady] = React.useState(false);
 
   React.useEffect(() => {
-    setIsDark(document.documentElement.classList.contains("dark"));
+    const checkDark = () => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    };
+    checkDark();
+    const observer = new MutationObserver(checkDark);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
   }, []);
 
   // Fetch workspace vocabulary (labels + relationship types) for create/edit selects.
