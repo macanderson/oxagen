@@ -30,6 +30,7 @@ import { ingestionPipeline } from "./functions/ingestion.pipeline";
 import { ingestionDeleteConnection } from "./functions/ingestion.delete";
 import { ingestionOauthRefresh } from "./functions/ingestion.oauth-refresh";
 import { ingestionGithubInitialSync } from "./functions/ingestion.github-initial-sync";
+import { ingestionGithubCommitFiles } from "./functions/ingestion.github-commit-files";
 import { ingestionGithubParseFile } from "./functions/ingestion.github-parse-file";
 import { ingestionGithubInferFeatures } from "./functions/ingestion.github-infer-features";
 import { ingestionSemanticEdgeInfer } from "./functions/ingestion.semantic-edge-infer";
@@ -76,6 +77,7 @@ export const functions: any[] = [
   ingestionDeleteConnection,
   ingestionOauthRefresh,
   ingestionGithubInitialSync,
+  ingestionGithubCommitFiles,
   ingestionGithubParseFile,
   ingestionGithubInferFeatures,
   ingestionSemanticEdgeInfer,
