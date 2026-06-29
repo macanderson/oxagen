@@ -36,7 +36,7 @@ const mocks = vi.hoisted(() => ({
   verifyWebhook: vi.fn(),
   // Crypto
   decrypt: vi.fn(),
-  createIngestionCryptoAdapter: vi.fn(),
+  resolveIngestionCryptoAdapterForKeyId: vi.fn(),
 }));
 
 vi.mock("@oxagen/auth", () => ({
@@ -102,7 +102,7 @@ vi.mock("@oxagen/ingestion/connectors", () => ({
 
 vi.mock("@oxagen/crypto", () => ({
   decrypt: mocks.decrypt,
-  createIngestionCryptoAdapter: mocks.createIngestionCryptoAdapter,
+  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
 }));
 
 import { app } from "../app";
@@ -351,7 +351,7 @@ describe("HMAC signature enforcement", () => {
     mocks.withSystemDb.mockImplementation(
       (fn: Parameters<WithDbFn>[0]) => fn(makeMockTx([ENC_ROW]) as TxLike),
     );
-    mocks.createIngestionCryptoAdapter.mockReturnValue({ adapter: {} });
+    mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValue({ adapter: {} });
     mocks.decrypt.mockResolvedValue(Buffer.from("my-webhook-secret"));
 
     const res = await app.fetch(

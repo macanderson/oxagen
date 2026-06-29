@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
   createFunction: vi.fn(),
   withSystemDb: vi.fn(),
   decrypt: vi.fn(),
-  createIngestionCryptoAdapter: vi.fn(),
+  resolveIngestionCryptoAdapterForKeyId: vi.fn(),
   runInTenantScope: vi.fn(),
   sessionRun: vi.fn(),
   sessionClose: vi.fn(),
@@ -44,7 +44,7 @@ vi.mock("drizzle-orm", () => ({
 }));
 
 vi.mock("@oxagen/crypto", () => ({
-  createIngestionCryptoAdapter: mocks.createIngestionCryptoAdapter,
+  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
   decrypt: mocks.decrypt,
 }));
 
@@ -141,7 +141,7 @@ beforeEach(() => {
         ]),
       }),
   );
-  mocks.createIngestionCryptoAdapter.mockReturnValue({
+  mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValue({
     keyId: "k1",
     adapter: {},
   });

@@ -98,6 +98,68 @@ export async function dedupeLegacyKnowledgeNodes(s: Session): Promise<void> {
   }
 }
 
+/**
+ * One-time, idempotent relabel of legacy `:SEMANTIC_EDGE` relationships to the
+ * descriptive relationship type they actually represent (e.g. :IMPLEMENTS,
+ * :DEPENDS_ON), recording the inferred provenance on `r.inferred` / `r.origin`.
+ *
+ * Why this is needed: earlier builds materialised every LLM-inferred edge under a
+ * single generic `:SEMANTIC_EDGE` type and stashed the real kind in `r.type`.
+ * Read paths surface `type(r)` to users (graph.export, ontology.neighbors), so the
+ * graph showed an unhelpful "SEMANTIC_EDGE" on every inferred edge. New writes now
+ * type the relationship descriptively (see semantic.edge.approve and
+ * ingestion.semantic-edge-infer); this back-fills relationships written before
+ * that change. The normalization here mirrors `sanitizeRelationshipType`.
+ *
+ * Guarded so APOC is only ever invoked when such edges actually exist: clean and
+ * freshly-built graphs short-circuit on the pure-Cypher count below, so a
+ * community Neo4j without the APOC plugin is never asked to plan an apoc.* call
+ * (Neo4j validates procedure names at plan time, even for zero-row statements).
+ * Re-running is a no-op — no `:SEMANTIC_EDGE` remain after a successful pass.
+ */
+export async function relabelLegacySemanticEdges(s: Session): Promise<void> {
+  const countCheck = await s.run(
+    `MATCH ()-[r:SEMANTIC_EDGE]->() RETURN count(r) AS legacyEdges`,
+  );
+
+  const legacy = toNumber(countCheck.records[0]?.get("legacyEdges"));
+  if (legacy === 0) return;
+
+  process.stdout.write(
+    JSON.stringify({
+      level: "info",
+      msg: "Neo4j migrate: relabelling legacy :SEMANTIC_EDGE relationships to their descriptive type",
+      relationships: legacy,
+    }) + "\n",
+  );
+
+  try {
+    await s.run(
+      `MATCH ()-[r:SEMANTIC_EDGE]->()
+       WITH r, toUpper(trim(coalesce(r.type, 'RELATED_TO'))) AS up
+       WITH r, apoc.text.replace(up, '[^A-Z0-9]+', '_') AS collapsed
+       WITH r, apoc.text.replace(collapsed, '^_+|_+$', '') AS body
+       WITH r, CASE
+                 WHEN body = ''          THEN 'RELATED_TO'
+                 WHEN body =~ '^[A-Z].*' THEN body
+                 ELSE 'REL_' + body
+               END AS typed
+       WITH r, apoc.text.replace(left(typed, 99), '_+$', '') AS newType
+       CALL apoc.refactor.setType(r, newType) YIELD output AS rel
+       SET rel.inferred = true,
+           rel.origin   = coalesce(rel.origin, 'semantic')
+       RETURN count(rel) AS relabeled`,
+    );
+  } catch (err) {
+    throw new Error(
+      `Neo4j migrate: failed to relabel ${legacy} legacy :SEMANTIC_EDGE relationship(s) ` +
+        `to their descriptive type. This requires the APOC plugin (apoc.refactor.setType, ` +
+        `apoc.text.replace). Enable APOC on this Neo4j instance, then re-run db:migrate. ` +
+        `Underlying error: ${String(err)}`,
+    );
+  }
+}
+
 export async function migrate(): Promise<void> {
   const here = dirname(fileURLToPath(import.meta.url));
   const source = readFileSync(join(here, "schema.cypher"), "utf8");
@@ -112,6 +174,9 @@ export async function migrate(): Promise<void> {
     for (const stmt of statements) {
       await s.run(stmt);
     }
+    // Back-fill any legacy generic :SEMANTIC_EDGE relationships to the descriptive
+    // type they represent, now that the schema is in place. No-op on clean graphs.
+    await relabelLegacySemanticEdges(s);
   } finally {
     await s.close();
   }

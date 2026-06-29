@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   parseSourceFile: vi.fn(),
   embedText: vi.fn().mockResolvedValue(Array.from({ length: 1536 }, () => 0.1)),
   decrypt: vi.fn(),
-  createIngestionCryptoAdapter: vi.fn(),
+  resolveIngestionCryptoAdapterForKeyId: vi.fn(),
   fetchMock: vi.fn(),
   loggerInfo: vi.fn(),
   loggerDebug: vi.fn(),
@@ -71,7 +71,7 @@ vi.mock("@oxagen/ai", () => ({
 }));
 
 vi.mock("@oxagen/crypto", () => ({
-  createIngestionCryptoAdapter: mocks.createIngestionCryptoAdapter,
+  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
   decrypt: mocks.decrypt,
 }));
 
@@ -103,7 +103,7 @@ const PARSED_SYMBOLS = [
 ];
 
 function setupDefaultMocks(): void {
-  mocks.createIngestionCryptoAdapter.mockReturnValue({ keyId: "key-1", adapter: {} });
+  mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValue({ keyId: "key-1", adapter: {} });
   mocks.decrypt.mockResolvedValue(Buffer.from("ghp_test_token"));
 
   mocks.withSystemDb.mockImplementation((fn: (tx: unknown) => unknown) =>

@@ -70,3 +70,45 @@ export function sanitizeLabel(raw: string): string | null {
   const cleaned = capped.replace(/_+$/g, "");
   return isValidLabel(cleaned) ? cleaned : null;
 }
+
+/**
+ * The relationship type assigned when a model- or customer-supplied type cannot
+ * be coerced into a valid Neo4j relationship type. A materialised edge MUST carry
+ * a type (Cypher has no "untyped" relationship), so unlike `sanitizeLabel` the
+ * relationship-type coercion never returns null — it falls back to this constant.
+ */
+export const FALLBACK_RELATIONSHIP_TYPE = "RELATED_TO" as const;
+
+/**
+ * Coerce an arbitrary, descriptive relationship type ("depends on", "implements",
+ * "PART_OF") into a single valid, UPPER_SNAKE_CASE Neo4j relationship type.
+ *
+ * Relationship types, exactly like labels, CANNOT be parameterized in Cypher
+ * (`MERGE (a)-[r:$type]->(b)` is illegal), so any non-constant type written into
+ * a query string MUST pass through here first — it is an injection surface. The
+ * output always satisfies `isValidLabel`, so it is safe to interpolate directly
+ * into a relationship-type position.
+ *
+ * Rules: uppercase; collapse any run of non-alphanumeric characters to a single
+ * underscore; trim leading/trailing underscores; prefix `REL_` when the result
+ * would start with a digit; cap at 99 chars; fall back to RELATED_TO when nothing
+ * usable remains.
+ *
+ *   "depends on"  → "DEPENDS_ON"
+ *   "implements"  → "IMPLEMENTS"
+ *   "PART_OF"     → "PART_OF"
+ *   "3-way merge" → "REL_3_WAY_MERGE"
+ *   "!!!"         → "RELATED_TO"
+ */
+export function sanitizeRelationshipType(raw: string): string {
+  const collapsed = raw
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (collapsed.length === 0) return FALLBACK_RELATIONSHIP_TYPE;
+  const prefixed = /^[A-Z]/.test(collapsed) ? collapsed : `REL_${collapsed}`;
+  // Cap, then re-trim a trailing underscore the 99-char slice could re-introduce.
+  const capped = prefixed.slice(0, 99).replace(/_+$/g, "");
+  return isValidLabel(capped) ? capped : FALLBACK_RELATIONSHIP_TYPE;
+}

@@ -20,6 +20,7 @@ export { ENVELOPE_VERSION } from "./types";
 export type { KmsAdapter, EncryptOptions, DecryptOptions } from "./types";
 export {
   createIngestionCryptoAdapter,
+  resolveIngestionCryptoAdapterForKeyId,
   INGESTION_KEY_ID_ENV,
   INGESTION_KEY_ID_KMS,
 } from "./ingestion";

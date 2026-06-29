@@ -5,7 +5,7 @@ export const semanticEdgeApprove = registerCapability({
   name: "semantic.edge.approve",
   domain: "semantic",
   description:
-    "Approve or reject an inferred semantic edge candidate. Approved edges are materialised as permanent :SEMANTIC_EDGE relationships in Neo4j; rejected edges are soft-dismissed with an audit trail.",
+    "Approve or reject an inferred semantic edge candidate. Approved edges are materialised as permanent Neo4j relationships typed by the inferred relationship kind itself (e.g. :IMPLEMENTS, :DEPENDS_ON), with inferred/origin properties marking provenance; rejected edges are soft-dismissed with an audit trail.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -38,7 +38,7 @@ export const semanticEdgeApprove = registerCapability({
     permanentEdgeId: z
       .string()
       .optional()
-      .describe("Neo4j element-id of the permanent :SEMANTIC_EDGE relationship created on approval"),
+      .describe("Neo4j element-id of the permanent relationship created on approval"),
   }),
 });
 

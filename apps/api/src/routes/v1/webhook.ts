@@ -3,7 +3,7 @@ import { schema, withSystemDb } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
 import { eventClient } from "../../event-client";
 import { getConnector } from "@oxagen/ingestion/connectors";
-import { decrypt, createIngestionCryptoAdapter } from "@oxagen/crypto";
+import { decrypt, resolveIngestionCryptoAdapterForKeyId } from "@oxagen/crypto";
 import { logger } from "../../middleware/logger";
 import type { AppEnv } from "../../app";
 
@@ -86,7 +86,9 @@ webhookRoute.post("/:connectorId/:connectionId", async (c) => {
   if (conn.secretEnc) {
     try {
       const enc = conn.secretEnc as { keyId: string; ciphertext: string };
-      const { adapter } = createIngestionCryptoAdapter();
+      // Route by the envelope's stored keyId, not the current provider env var,
+      // so a secret wrapped under a previous INGESTION_CRYPTO_PROVIDER still decrypts.
+      const { adapter } = resolveIngestionCryptoAdapterForKeyId(enc.keyId);
       const plain = await decrypt(Buffer.from(enc.ciphertext, "base64"), enc.keyId, { adapter });
       webhookSecret = plain.toString("utf8");
     } catch (err) {
