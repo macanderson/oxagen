@@ -101,8 +101,11 @@ export type {
   EnhancePromptResult,
 } from "./prompts";
 
-// Tool descriptor builder and core message types — re-exported here so agent
-// domain code doesn't import directly from "ai", keeping @oxagen/ai as the
-// single AI SDK chokepoint.
-export { tool } from "ai";
+// Tool descriptor builder, JSON-Schema tool input helper, and core message
+// types — re-exported here so agent domain code doesn't import directly from
+// "ai", keeping @oxagen/ai as the single AI SDK chokepoint. `jsonSchema` builds
+// a tool input schema from a raw JSON Schema (used by the OpenAI-compatible CLI
+// proxy, where tool params arrive as JSON Schema rather than Zod).
+export { tool, jsonSchema } from "ai";
 export type { Tool, ToolSet, ModelMessage } from "ai";
+export type { JSONSchema7 } from "@ai-sdk/provider";

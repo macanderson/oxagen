@@ -212,7 +212,10 @@ export async function launchWelcomeScreen(
   // If configured to start REPL, the caller should handle it
   // This is a clean separation — welcome screen exits, then REPL launches
   if (startRepl && options.startReplOnAction) {
+    // ADR-019 §4: the REPL is an agent-path surface — require an Oxagen account.
+    const { requireSession } = await import("../../lib/session.js");
+    const session = requireSession();
     const { launchRepl } = await import("../../repl/interactive.js");
-    await launchRepl();
+    await launchRepl({ session });
   }
 }

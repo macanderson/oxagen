@@ -158,6 +158,19 @@ export interface StreamAgentReplyArgs {
   stopWhen?: Parameters<typeof streamText>[0]["stopWhen"];
   onError?: Parameters<typeof streamText>[0]["onError"];
   /**
+   * Hard cap on output tokens for this turn, forwarded verbatim to `streamText`.
+   * The OpenAI-compatible CLI proxy maps the request's `max_tokens` here so a
+   * single coding turn stays bounded. Omit to use the provider default.
+   */
+  maxOutputTokens?: number;
+  /**
+   * Tool-selection strategy forwarded verbatim to `streamText`
+   * (`"auto" | "none" | "required" | { type: "tool"; toolName }`). The
+   * OpenAI-compatible proxy maps the request's `tool_choice` here. Omit to use
+   * the SDK default ("auto" when tools are present).
+   */
+  toolChoice?: Parameters<typeof streamText>[0]["toolChoice"];
+  /**
    * Required for OXA-1351 instrumentation. The caller's CapabilityContext
    * carries `orgId`, `workspaceId`, and `surface`; pass them through so
    * every LLM call lands in `token_usage` with provider, duration_ms,
@@ -259,6 +272,10 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
     ...(rc.providerOptions ? { providerOptions: rc.providerOptions } : {}),
     ...(args.stopWhen !== undefined ? { stopWhen: args.stopWhen } : {}),
     ...(args.onError !== undefined ? { onError: args.onError } : {}),
+    ...(args.maxOutputTokens !== undefined
+      ? { maxOutputTokens: args.maxOutputTokens }
+      : {}),
+    ...(args.toolChoice !== undefined ? { toolChoice: args.toolChoice } : {}),
     onFinish: async (event) => {
       const durationMs = Date.now() - startedAt;
       // AI SDK v6: usage fields are inputTokens/outputTokens (was

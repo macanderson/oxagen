@@ -253,14 +253,18 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         if (e.type === "tool-call") onToolCall(e.name, e.input);
         if (e.type === "tool-result") {
           if (opts.verbose) {
-            // Record tool event for verbose trace — pair with most recent call.
-            const prev = toolEvents[toolEvents.length - 1];
-            if (prev) {
-              prev.result = truncate(String(e.output), 1000);
-              prev.finishedAt = Date.now();
-              prev.durationMs = prev.finishedAt - prev.startedAt;
-              prev.ok = true;
-            }
+            // The rich tool-result event carries everything (name, input,
+            // result, step-granular timing, ok) — record a complete entry.
+            const finishedAt = Date.now();
+            toolEvents.push({
+              name: e.name,
+              input: e.input,
+              result: e.result,
+              startedAt: finishedAt - e.durationMs,
+              finishedAt,
+              durationMs: e.durationMs,
+              ok: e.ok,
+            });
           }
         }
       },

@@ -24,7 +24,7 @@ interface RunTurnResultLike {
 const pending: Array<{ prompt: string; finish: () => void }> = [];
 const runTurnSpy = vi.fn<(opts: { prompt: string }) => void>();
 
-vi.mock("../../agent/pipeline.js", () => ({
+vi.mock("@oxagen/agent-engine", () => ({
   runTurn: (opts: { prompt: string }) =>
     new Promise<RunTurnResultLike>((resolve) => {
       runTurnSpy(opts);
@@ -39,7 +39,6 @@ vi.mock("../../agent/pipeline.js", () => ({
           }),
       });
     }),
-  MissingGatewayKeyError: class extends Error {},
 }));
 
 // The REPL records each completed turn's trace; stub the durable store so the
@@ -74,7 +73,21 @@ vi.mock("../../agent/model.js", () => ({
   resolveModelId: (override?: string) => override ?? "test/model",
 }));
 
+// The REPL now sources the engine code-graph port here; stub it so the test
+// avoids loading the tree-sitter builder / DuckDB store.
+vi.mock("../../agent/code-graph.js", () => ({
+  queryCodeGraph: async () => "",
+}));
+
 const { ReplApp } = await import("../interactive.js");
+
+// The REPL requires an authenticated session (ADR-019 §4) to build its ports.
+const TEST_SESSION = {
+  token: "test-token",
+  orgSlug: "test-org",
+  workspaceSlug: "test-ws",
+  apiUrl: "http://localhost:4000",
+};
 
 const tick = (ms = 15): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -105,7 +118,7 @@ describe("REPL prompt queue (Claude Code-style)", () => {
   });
 
   it.skip("queues prompts submitted mid-turn and runs them FIFO", async () => {
-    const { stdin, lastFrame } = render(<ReplApp options={{}} />);
+    const { stdin, lastFrame } = render(<ReplApp options={{ session: TEST_SESSION }} />);
     await tick();
 
     // 1) First prompt starts a turn; runTurn is invoked and parks (in flight).
@@ -144,7 +157,7 @@ describe("REPL prompt queue (Claude Code-style)", () => {
   });
 
   it.skip("runs a prompt immediately when idle (no queue wait)", async () => {
-    const { stdin } = render(<ReplApp options={{}} />);
+    const { stdin } = render(<ReplApp options={{ session: TEST_SESSION }} />);
     await tick();
 
     await submit(stdin, "solo task");
