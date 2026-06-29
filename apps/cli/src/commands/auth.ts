@@ -4,26 +4,31 @@
  * Login validates a platform API key against the Oxagen API and persists the
  * session (token + orgSlug + workspaceSlug) to ~/.config/oxagen/config.json.
  *
- * Validation endpoint: GET /v1/user/preferences/read
- *   - The auth middleware resolves the Bearer API key BEFORE any IAM check.
- *   - 401 (unauthorized) is the ONLY signal that the key itself is not valid:
- *     "Missing credentials" / "Malformed API key" / "Invalid API key" /
- *     "API key expired" all surface as 401. Treat 401 (and only 401) as an
- *     invalid key.
- *   - 200 means the key is valid AND the caller may read preferences.
- *   - 403 (forbidden) means the key IS valid (it authenticated past the auth
- *     middleware) but the IAM resolver denied this one capability for the key's
- *     principal — e.g. enterprise orgs currently fail-closed on API-key callers
- *     until keys are linked to service principals. A 403 therefore PROVES the
- *     key is real; the login probe must NOT reject it. We persist the session
- *     and warn that API access is currently restricted.
+ * Validation endpoint: GET /v1/auth/whoami
+ *   - A dedicated, auth-only credential probe. It does NO business work and
+ *     calls no capability handler, so it works identically for session and
+ *     API-key auth and never depends on a `userId` or an IAM grant.
+ *   - The auth middleware does all the work: it returns 401 for a
+ *     missing/malformed/invalid/expired credential BEFORE the handler runs.
+ *     Reaching the handler at all (200) PROVES the credential is valid.
+ *   - 401 (unauthorized) is therefore the ONLY signal that the key itself is
+ *     not valid. Treat 401 (and only 401) as an invalid key.
+ *   - 200 means the key is valid; the body echoes the key's bound scope.
  *   - Any other status (404/5xx/etc.) is treated as an unexpected/inconclusive
  *     response so the user is not silently logged in against a broken endpoint.
  *
- * The earlier implementation returned `res.ok`, which conflated 403 with a bad
- * key: a perfectly valid key whose org IAM-denies the probe capability was
- * reported as "Token validation failed". Distinguishing the auth layer (401)
- * from the authz layer (403) fixes that.
+ * Why NOT a capability endpoint (user.preferences.read / org.list): those
+ * handlers hard-require `ctx.userId` and throw for an API-key caller (userId is
+ * null), so the platform surfaces them as HTTP 500 on non-enterprise orgs — and
+ * as HTTP 403 on enterprise orgs, where the IAM resolver denies the API-key
+ * principal first. Both are false negatives for a perfectly valid key. The
+ * whoami probe sidesteps both. (The `forbidden` TokenProbe case below is kept
+ * as defensive handling — a 403 from any probe still proves the key is real —
+ * but whoami carries no authz gate, so it should not occur in practice.)
+ *
+ * The original implementation returned `res.ok` against user.preferences.read,
+ * which conflated the handler's 403/500 failures with a bad key and reported
+ * "Token validation failed" for valid keys.
  *
  * BYOK AI removal (AI_GATEWAY_API_KEY → platform-routed AI) is deferred to
  * ADR-019 task B4. This command establishes the session + account-required
@@ -81,11 +86,10 @@ export type TokenProbe =
   | { kind: "unexpected"; status: number };
 
 /**
- * Probe a platform API token by calling GET /v1/user/preferences/read.
- *
- * Distinguishes the auth layer (401 → invalid key) from the authz layer
- * (403 → valid key, capability denied). See the module header for the full
- * status contract.
+ * Probe a platform API token by calling GET /v1/auth/whoami — the auth-only
+ * credential probe. Reaching the handler (200) proves the credential is valid;
+ * the auth middleware returns 401 for an invalid one before the handler runs.
+ * See the module header for the full status contract.
  */
 export async function validatePlatformToken(
   token: string,
@@ -93,7 +97,7 @@ export async function validatePlatformToken(
 ): Promise<TokenProbe> {
   let res: Response;
   try {
-    res = await fetch(`${apiUrl}/v1/user/preferences/read`, {
+    res = await fetch(`${apiUrl}/v1/auth/whoami`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -107,12 +111,12 @@ export async function validatePlatformToken(
     };
   }
   if (res.ok) return { kind: "valid" };
-  // 403 means the key got PAST the auth middleware — it is a real, recognised
-  // key — but the IAM resolver denied this capability. The key is valid.
-  if (res.status === 403) return { kind: "forbidden" };
   // 401 is the auth layer rejecting the key itself (missing/malformed/invalid/
   // expired). This is the only "not a valid key" signal.
   if (res.status === 401) return { kind: "invalid" };
+  // 403 should not occur against whoami (no authz gate), but if any probe ever
+  // returns it, the key still authenticated — treat it as a real key.
+  if (res.status === 403) return { kind: "forbidden" };
   return { kind: "unexpected", status: res.status };
 }
 

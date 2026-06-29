@@ -80,7 +80,7 @@ describe("validatePlatformToken", () => {
     const result = await validatePlatformToken("tok_valid", "https://api.oxagen.sh");
     expect(result).toEqual({ kind: "valid" });
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://api.oxagen.sh/v1/user/preferences/read",
+      "https://api.oxagen.sh/v1/auth/whoami",
       expect.objectContaining({
         method: "GET",
         headers: expect.objectContaining({
@@ -258,7 +258,7 @@ describe("handleLogin — headless (--token/--org/--workspace flags)", () => {
     await handleLogin({});
 
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://api.oxagen.sh/v1/user/preferences/read",
+      "https://api.oxagen.sh/v1/auth/whoami",
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: "Bearer tok_config" }),
       }),
