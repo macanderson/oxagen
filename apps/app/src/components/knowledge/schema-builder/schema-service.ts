@@ -1,6 +1,3 @@
-// API route is live — fixtures are off.
-const USE_FIXTURES = false;
-
 import type {
   TenantSlugs,
   SchemaRegistryData,
@@ -9,6 +6,20 @@ import type {
   VersionItem,
   VersionDiff,
 } from "./types";
+
+/**
+ * The live app hits the real `/api/schema/*` route; Storybook has no API
+ * backend, so every service call there would `fetch` a route that 404s inside
+ * the preview iframe. When running under Storybook we serve the in-memory
+ * fixtures instead. `apps/app/.storybook/preview.ts` sets the global flag.
+ *
+ * Read at call time (not module load) so the result is correct regardless of
+ * whether Storybook evaluates `preview.ts` before or after the story modules
+ * that import this service.
+ */
+function fixturesEnabled(): boolean {
+  return (globalThis as { __OXAGEN_STORYBOOK__?: boolean }).__OXAGEN_STORYBOOK__ === true;
+}
 
 // ---- Input / Output type aliases ----
 
@@ -323,7 +334,7 @@ export async function fetchRegistry(
   slugs: TenantSlugs,
   opts: { versionId?: string } = {},
 ): Promise<SchemaRegistryGetOutput> {
-  if (USE_FIXTURES) {
+  if (fixturesEnabled()) {
     await delay(300);
     return FIXTURE_REGISTRY;
   }
@@ -331,7 +342,7 @@ export async function fetchRegistry(
 }
 
 export async function fetchSchemas(slugs: TenantSlugs): Promise<SchemaListOutput> {
-  if (USE_FIXTURES) {
+  if (fixturesEnabled()) {
     await delay(300);
     return {
       schemas: FIXTURE_REGISTRY.schemas.map(({ schemaName, displayName, source, connectorId, enabled }) => ({
@@ -351,7 +362,7 @@ export async function toggleSchema(
   schemaName: string,
   enabled: boolean,
 ): Promise<SchemaToggleOutput> {
-  if (USE_FIXTURES) {
+  if (fixturesEnabled()) {
     await delay(300);
     return {
       schemaName,
@@ -369,7 +380,7 @@ export async function upsertLabel(
   slugs: TenantSlugs,
   input: SchemaLabelUpsertInput,
 ): Promise<SchemaLabelUpsertOutput> {
-  if (USE_FIXTURES) {
+  if (fixturesEnabled()) {
     await delay(300);
     return { labelId: `lbl_${input.name}`, created: true };
   }
@@ -380,7 +391,7 @@ export async function upsertRelationship(
   slugs: TenantSlugs,
   input: SchemaRelationshipUpsertInput,
 ): Promise<SchemaRelationshipUpsertOutput> {
-  if (USE_FIXTURES) {
+  if (fixturesEnabled()) {
     await delay(300);
     return { relationshipTypeId: `rel_${input.name}`, created: true };
   }
@@ -391,7 +402,7 @@ export async function upsertProperty(
   slugs: TenantSlugs,
   input: SchemaPropertyUpsertInput,
 ): Promise<SchemaPropertyUpsertOutput> {
-  if (USE_FIXTURES) {
+  if (fixturesEnabled()) {
     await delay(300);
     return { propertyId: `prop_${input.key}`, created: true };
   }
@@ -403,7 +414,7 @@ export async function deleteLabel(
   schemaName: string,
   labelName: string,
 ): Promise<SchemaLabelDeleteOutput> {
-  if (USE_FIXTURES) {
+  if (fixturesEnabled()) {
     await delay(300);
     return { deleted: true, labelName };
   }
@@ -415,7 +426,7 @@ export async function deleteRelationship(
   schemaName: string,
   name: string,
 ): Promise<SchemaRelationshipDeleteOutput> {
-  if (USE_FIXTURES) {
+  if (fixturesEnabled()) {
     await delay(300);
     return { deleted: true, relationshipTypeName: name };
   }
@@ -427,7 +438,7 @@ export async function deleteProperty(
   ownerName: string,
   key: string,
 ): Promise<SchemaPropertyDeleteOutput> {
-  if (USE_FIXTURES) {
+  if (fixturesEnabled()) {
     await delay(300);
     return { deleted: true, propertyKey: key };
   }
@@ -438,7 +449,7 @@ export async function fetchVersions(
   slugs: TenantSlugs,
   opts: { limit?: number; offset?: number } = {},
 ): Promise<SchemaVersionListOutput> {
-  if (USE_FIXTURES) {
+  if (fixturesEnabled()) {
     await delay(300);
     return { versions: FIXTURE_VERSIONS, total: FIXTURE_VERSIONS.length };
   }
@@ -450,7 +461,7 @@ export async function diffVersions(
   fromVersionId: string,
   toVersionId: string,
 ): Promise<SchemaVersionDiffOutput> {
-  if (USE_FIXTURES) {
+  if (fixturesEnabled()) {
     await delay(300);
     return FIXTURE_DIFF;
   }
@@ -461,7 +472,7 @@ export async function exportSchema(
   slugs: TenantSlugs,
   opts: { versionId?: string } = {},
 ): Promise<SchemaExportOutput> {
-  if (USE_FIXTURES) {
+  if (fixturesEnabled()) {
     await delay(300);
     return {
       assetId: "ast_fixture_01",
@@ -477,7 +488,7 @@ export async function recommend(
   slugs: TenantSlugs,
   opts: { sampleLimit?: number } = {},
 ): Promise<SchemaRecommendOutput> {
-  if (USE_FIXTURES) {
+  if (fixturesEnabled()) {
     await delay(300);
     return FIXTURE_RECOMMEND;
   }
@@ -489,7 +500,7 @@ export async function reconcileDispatch(
   versionId: string,
   prune: boolean,
 ): Promise<SchemaReconcileDispatchOutput> {
-  if (USE_FIXTURES) {
+  if (fixturesEnabled()) {
     await delay(300);
     return { executionId: "aex_fixture_01" };
   }
@@ -500,7 +511,7 @@ export async function configRegistry(
   slugs: TenantSlugs,
   input: SchemaRegistryConfigInput,
 ): Promise<SchemaRegistryConfigOutput> {
-  if (USE_FIXTURES) {
+  if (fixturesEnabled()) {
     await delay(300);
     return {
       registryId: "reg_fixture_01",
