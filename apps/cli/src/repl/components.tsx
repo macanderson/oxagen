@@ -28,6 +28,7 @@ export interface Message {
 export const HELP = [
   "Slash commands:",
   "  /help          show this help",
+  "  /init          scaffold .oxagen/ settings + build code graph + print stats",
   "  /model [slug]  show or set the gateway model",
   "  /mode [ask|auto-edit|bypass|readonly]  show or set the permission mode",
   "  /replay [n|id] show how a turn was handled (default: last turn)",

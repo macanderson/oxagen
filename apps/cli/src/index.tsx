@@ -373,6 +373,20 @@ code
     await handleCodePatch(diffFile, opts);
   });
 
+// ── init: scaffold project + global settings, build code graph ────────────────
+
+program
+  .command("init")
+  .description(
+    "Scaffold .oxagen/ project settings + global user settings, build the local code graph, " +
+      "and print graph statistics + inferred domains",
+  )
+  .option("--json", "Output JSON instead of human-readable text")
+  .action(async (opts: { json?: boolean }) => {
+    const { handleInit } = await import("./commands/init.js");
+    await handleInit({ json: opts.json });
+  });
+
 // ── config: local configuration ───────────────────────────────────────────────
 
 program
