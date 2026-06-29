@@ -53,6 +53,7 @@ const mocks = vi.hoisted(() => ({
   encrypt: vi.fn(),
   decrypt: vi.fn(),
   createIngestionCryptoAdapter: vi.fn(),
+  resolveIngestionCryptoAdapterForKeyId: vi.fn(),
   // Env
   requireEnv: vi.fn(),
   // Fetch
@@ -125,6 +126,7 @@ vi.mock("@oxagen/crypto", () => ({
   encrypt: mocks.encrypt,
   decrypt: mocks.decrypt,
   createIngestionCryptoAdapter: mocks.createIngestionCryptoAdapter,
+  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
 }));
 
 vi.mock("@oxagen/config/env", async (importOriginal) => {
@@ -263,6 +265,10 @@ beforeEach(() => {
 
   // Crypto: simple pass-through stubs
   mocks.createIngestionCryptoAdapter.mockReturnValue({
+    adapter: {},
+    keyId: "ingestion:env:v1",
+  });
+  mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValue({
     adapter: {},
     keyId: "ingestion:env:v1",
   });

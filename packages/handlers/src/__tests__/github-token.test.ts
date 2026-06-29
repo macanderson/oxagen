@@ -2,8 +2,8 @@
  * Unit tests for resolveGitHubToken (ADR-020).
  *
  * Strategy: mock all I/O boundaries (withTenantDb, getInstallationToken,
- * createIngestionCryptoAdapter, decrypt) so no real DB or network calls
- * are made. Each test exercises exactly one branch of the resolution chain.
+ * resolveIngestionCryptoAdapterForKeyId, decrypt) so no real DB or network
+ * calls are made. Each test exercises exactly one branch of the resolution chain.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
   getInstallationToken: vi.fn(),
   decrypt: vi.fn(),
-  createIngestionCryptoAdapter: vi.fn(),
+  resolveIngestionCryptoAdapterForKeyId: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", () => ({
@@ -53,7 +53,7 @@ vi.mock("@oxagen/github", () => ({
 
 vi.mock("@oxagen/crypto", () => ({
   decrypt: mocks.decrypt,
-  createIngestionCryptoAdapter: mocks.createIngestionCryptoAdapter,
+  resolveIngestionCryptoAdapterForKeyId: mocks.resolveIngestionCryptoAdapterForKeyId,
 }));
 
 // ---------------------------------------------------------------------------
@@ -97,6 +97,15 @@ function mockDbCalls(...callResults: unknown[][]): void {
 describe("resolveGitHubToken", () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
+    // Hermetic env: resolveGitHubToken reads GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY
+    // (Path 1) and GITHUB_PERSONAL_ACCESS_TOKEN (Path 3) straight from process.env.
+    // vi.unstubAllEnvs() only clears vi stubs, NOT vars inherited from the shell, so
+    // a developer with these exported locally would otherwise see Path 1/3 fire in
+    // tests that assume them absent. Neutralize them here (empty string is falsy for
+    // every check); per-test stubs that set real values still override these.
+    vi.stubEnv("GITHUB_APP_ID", "");
+    vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "");
+    vi.stubEnv("GITHUB_PERSONAL_ACCESS_TOKEN", "");
   });
 
   afterEach(() => {
@@ -168,7 +177,7 @@ describe("resolveGitHubToken", () => {
     );
 
     const fakeAdapter = {};
-    mocks.createIngestionCryptoAdapter.mockReturnValueOnce({ adapter: fakeAdapter });
+    mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValueOnce({ adapter: fakeAdapter });
     mocks.decrypt.mockResolvedValueOnce(Buffer.from("ghp_oauth_token", "utf8"));
 
     const token = await resolveGitHubToken(makeCtx());
@@ -191,12 +200,17 @@ describe("resolveGitHubToken", () => {
     );
 
     const fakeAdapter = { decryptDataKey: vi.fn() };
-    mocks.createIngestionCryptoAdapter.mockReturnValueOnce({ adapter: fakeAdapter });
+    mocks.resolveIngestionCryptoAdapterForKeyId.mockReturnValueOnce({ adapter: fakeAdapter });
     mocks.decrypt.mockResolvedValueOnce(Buffer.from("ghp_decrypted_oauth", "utf8"));
 
     const token = await resolveGitHubToken(makeCtx());
 
     expect(token).toBe("ghp_decrypted_oauth");
+    // The adapter must be routed by the envelope's STORED keyId, not the global
+    // INGESTION_CRYPTO_PROVIDER — this is the cross-provider regression guard.
+    expect(mocks.resolveIngestionCryptoAdapterForKeyId).toHaveBeenCalledWith(
+      encryptedPayload.keyId,
+    );
     expect(mocks.decrypt).toHaveBeenCalledWith(
       expect.any(Buffer), // Buffer.from(enc.ciphertext, "base64")
       encryptedPayload.keyId,
