@@ -235,7 +235,7 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
     });
     orgSlug = account.orgSlug;
     workspaceSlug = account.workspaceSlug;
-  } catch (_err) {
+  } catch (err) {
     // Picker failures must not leave a partial config (token but no scope).
     writeConfig({ token: undefined, orgSlug: undefined, workspaceSlug: undefined });
     // The token already validated — surface the real picker error rather than
