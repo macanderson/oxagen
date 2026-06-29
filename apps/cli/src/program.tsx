@@ -109,6 +109,7 @@ export function buildProgram(): Command {
         const session = requireSession();
 
         const runOpts = {
+          session,
           model: opts.model,
           readOnly: opts.readonly,
           mode,
@@ -499,12 +500,16 @@ export function buildProgram(): Command {
     .command("init")
     .description(
       "Scaffold .oxagen/ project settings + global user settings, build the local code graph, " +
-        "and print graph statistics + inferred domains",
+        "link the project to an Oxagen workspace, and print graph statistics + inferred domains",
     )
     .option("--json", "Output JSON instead of human-readable text")
-    .action(async (opts: { json?: boolean }) => {
+    .option(
+      "--no-link",
+      "Skip the workspace linker step — only scaffold settings + build the code graph",
+    )
+    .action(async (opts: { json?: boolean; link?: boolean }) => {
       const { handleInit } = await import("./commands/init.js");
-      await handleInit({ json: opts.json });
+      await handleInit({ json: opts.json, noLink: opts.link === false });
     });
 
   // ── config: local configuration ─────────────────────────────────────────────

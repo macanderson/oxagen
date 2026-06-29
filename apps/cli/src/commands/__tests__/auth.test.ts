@@ -75,12 +75,12 @@ afterEach(() => {
 // ── validatePlatformToken ────────────────────────────────────────────────────
 
 describe("validatePlatformToken", () => {
-  it("returns true for a 200 response", async () => {
-    mockFetch.mockResolvedValue({ ok: true });
+  it("returns kind:valid for a 200 response", async () => {
+    mockFetch.mockResolvedValue({ ok: true, status: 200 });
     const result = await validatePlatformToken("tok_valid", "https://api.oxagen.sh");
-    expect(result).toBe(true);
+    expect(result).toEqual({ kind: "valid" });
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://api.oxagen.sh/v1/user/preferences/read",
+      "https://api.oxagen.sh/v1/auth/whoami",
       expect.objectContaining({
         method: "GET",
         headers: expect.objectContaining({
@@ -90,18 +90,28 @@ describe("validatePlatformToken", () => {
     );
   });
 
-  it("returns false for a 401 response", async () => {
+  it("returns kind:invalid for a 401 response (auth layer rejected the key)", async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 401 });
     const result = await validatePlatformToken("tok_bad", "https://api.oxagen.sh");
-    expect(result).toBe(false);
+    expect(result).toEqual({ kind: "invalid" });
   });
 
-  it("returns false and writes to stderr on network error", async () => {
+  it("returns kind:forbidden for a 403 response (valid key, IAM denied)", async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 403 });
+    const result = await validatePlatformToken("tok_real", "https://api.oxagen.sh");
+    expect(result).toEqual({ kind: "forbidden" });
+  });
+
+  it("returns kind:unexpected for other non-ok statuses", async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 500 });
+    const result = await validatePlatformToken("tok_x", "https://api.oxagen.sh");
+    expect(result).toEqual({ kind: "unexpected", status: 500 });
+  });
+
+  it("returns kind:network with detail on network error", async () => {
     mockFetch.mockRejectedValue(new Error("ECONNREFUSED"));
     const result = await validatePlatformToken("tok_bad", "https://api.oxagen.sh");
-    expect(result).toBe(false);
-    expect(stderr).toContain("Network error");
-    expect(stderr).toContain("ECONNREFUSED");
+    expect(result).toEqual({ kind: "network", detail: "ECONNREFUSED" });
   });
 });
 
@@ -165,13 +175,51 @@ describe("handleLogin — headless (--token/--org/--workspace flags)", () => {
     expect(process.exitCode).toBeFalsy();
   });
 
-  it("sets exitCode 1 when token validation fails", async () => {
+  it("sets exitCode 1 when token validation fails (401 invalid key)", async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 401 });
 
     await handleLogin({ token: "tok_bad", org: "acme", workspace: "main" });
 
     expect(mockWriteConfig).not.toHaveBeenCalled();
     expect(stderr).toContain("Token validation failed");
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("persists the session and warns when the key is valid but IAM-denied (403)", async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 403 });
+
+    await handleLogin({ token: "tok_real", org: "acme", workspace: "main" });
+
+    // A 403 proves the key is real — login must succeed, not reject it.
+    expect(mockWriteConfig).toHaveBeenCalledWith({
+      token: "tok_real",
+      orgSlug: "acme",
+      workspaceSlug: "main",
+    });
+    expect(stdout).toContain("Logged in to Oxagen");
+    expect(stderr).toContain("403");
+    expect(stderr).toContain("acme");
+    expect(process.exitCode).toBeFalsy();
+  });
+
+  it("does not persist and sets exitCode 1 on an unexpected status (500)", async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 500 });
+
+    await handleLogin({ token: "tok_x", org: "acme", workspace: "main" });
+
+    expect(mockWriteConfig).not.toHaveBeenCalled();
+    expect(stderr).toContain("Unexpected response (HTTP 500)");
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("does not persist and sets exitCode 1 on a network error", async () => {
+    mockFetch.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    await handleLogin({ token: "tok_x", org: "acme", workspace: "main" });
+
+    expect(mockWriteConfig).not.toHaveBeenCalled();
+    expect(stderr).toContain("Network error");
+    expect(stderr).toContain("ECONNREFUSED");
     expect(process.exitCode).toBe(1);
   });
 
@@ -210,7 +258,7 @@ describe("handleLogin — headless (--token/--org/--workspace flags)", () => {
     await handleLogin({});
 
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://api.oxagen.sh/v1/user/preferences/read",
+      "https://api.oxagen.sh/v1/auth/whoami",
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: "Bearer tok_config" }),
       }),

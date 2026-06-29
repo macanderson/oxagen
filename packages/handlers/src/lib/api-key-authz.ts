@@ -55,10 +55,18 @@ export async function actorCanManageApiKeys(orgId: string, userId: string): Prom
   return role !== null && API_KEY_AUTHORIZED_ROLES.has(role);
 }
 
-/** Generate a secure API key in the format: ox_<base64url(32 random bytes)>. */
+/**
+ * Generate a secure API key in the format `ox_<base64url(32 random bytes)>`.
+ *
+ * `keyPrefix` is the fixed 12-character leading window of the raw key. This
+ * window length MUST equal @oxagen/auth's `API_KEY_PREFIX_LENGTH`, which
+ * resolveApiKey() uses to look the key up — handlers mints, auth verifies, and
+ * the two live in separate packages. Keep the window identical or no key will
+ * resolve. Pinned by the generateApiKey prefix-contract test.
+ */
 export function generateApiKey(): { rawKey: string; keyPrefix: string; keyHash: string } {
   const rawKey = "ox_" + randomBytes(32).toString("base64url");
-  const keyPrefix = rawKey.slice(0, 12);
+  const keyPrefix = rawKey.slice(0, 12); // == @oxagen/auth API_KEY_PREFIX_LENGTH
   const keyHash = createHash("sha256").update(rawKey).digest("hex");
   return { rawKey, keyPrefix, keyHash };
 }

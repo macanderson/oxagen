@@ -67,6 +67,17 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .workspaceCreateHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "org.list",
+    async () =>
+      (await import("./org.list")).orgListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "workspace.list",
+    async () =>
+      (await import("./workspace.list"))
+        .workspaceListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "billing.subscription.read",
     async () =>
       (await import("./billing.subscription.read"))
