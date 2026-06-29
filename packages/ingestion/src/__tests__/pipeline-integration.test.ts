@@ -184,7 +184,9 @@ describe("runPipeline — full 6-stage integration", () => {
     await runPipeline(event, ctx);
 
     // upsertEntityNode runs a MERGE — find the specific call (after Pass A + Pass B session.run).
-    // §3.3 dual-write: the sanitized PascalCase label (`CodeChange`) is PRIMARY, `:EntityNode` secondary.
+    // §3.3 dual-write: the real label (`CodeChange`) is PRIMARY, `:EntityNode` secondary.
+    // Labels are PascalCase (sanitizeLabel); the entityType *property* stays the
+    // lowercase slug (`code_change`).
     const upsertCall = mocks.sessionRun.mock.calls.find(([cypher]) =>
       typeof cypher === "string" &&
       cypher.includes("MERGE (n:`CodeChange`:`EntityNode`") &&
@@ -255,7 +257,8 @@ describe("runPipeline — full 6-stage integration", () => {
 
     await runPipeline(event, ctx);
 
-    // Find the upsertEntityNode MERGE call (§3.3 dual-write: sanitized `Task` PRIMARY label)
+    // Find the upsertEntityNode MERGE call (§3.3 dual-write: `Task` PRIMARY label —
+    // PascalCase via sanitizeLabel)
     const upsertCall = mocks.sessionRun.mock.calls.find(([cypher]) =>
       typeof cypher === "string" && cypher.includes("MERGE (n:`Task`:`EntityNode`") && cypher.includes("RETURN n.publicId"),
     ) as [string, Record<string, unknown>] | undefined;
