@@ -184,10 +184,12 @@ describe("runPipeline — full 6-stage integration", () => {
     await runPipeline(event, ctx);
 
     // upsertEntityNode runs a MERGE — find the specific call (after Pass A + Pass B session.run).
-    // §3.3 dual-write: the real label (`code_change`) is PRIMARY, `:EntityNode` secondary.
+    // §3.3 dual-write: the real label (`CodeChange`) is PRIMARY, `:EntityNode` secondary.
+    // Labels are PascalCase (sanitizeLabel); the entityType *property* stays the
+    // lowercase slug (`code_change`).
     const upsertCall = mocks.sessionRun.mock.calls.find(([cypher]) =>
       typeof cypher === "string" &&
-      cypher.includes("MERGE (n:`code_change`:`EntityNode`") &&
+      cypher.includes("MERGE (n:`CodeChange`:`EntityNode`") &&
       cypher.includes("RETURN n.publicId AS nodeId"),
     ) as [string, Record<string, unknown>] | undefined;
 
@@ -195,7 +197,7 @@ describe("runPipeline — full 6-stage integration", () => {
     const [cypher, params] = upsertCall!;
 
     // naturalKey convention: {connectorType}:{connectionId}:{externalId}
-    expect(cypher).toContain("MERGE (n:`code_change`:`EntityNode` {naturalKey: $naturalKey, orgId: $orgId})");
+    expect(cypher).toContain("MERGE (n:`CodeChange`:`EntityNode` {naturalKey: $naturalKey, orgId: $orgId})");
     expect(params["naturalKey"]).toBe("github:conn-integration-1:99");
     expect(params["entityType"]).toBe("code_change");
     expect(params["orgId"]).toBeUndefined(); // orgId is in the MERGE pattern, not params
@@ -255,9 +257,10 @@ describe("runPipeline — full 6-stage integration", () => {
 
     await runPipeline(event, ctx);
 
-    // Find the upsertEntityNode MERGE call (§3.3 dual-write: `task` PRIMARY label)
+    // Find the upsertEntityNode MERGE call (§3.3 dual-write: `Task` PRIMARY label —
+    // PascalCase via sanitizeLabel)
     const upsertCall = mocks.sessionRun.mock.calls.find(([cypher]) =>
-      typeof cypher === "string" && cypher.includes("MERGE (n:`task`:`EntityNode`") && cypher.includes("RETURN n.publicId"),
+      typeof cypher === "string" && cypher.includes("MERGE (n:`Task`:`EntityNode`") && cypher.includes("RETURN n.publicId"),
     ) as [string, Record<string, unknown>] | undefined;
 
     expect(upsertCall).toBeDefined();
