@@ -36,10 +36,10 @@ function hexPoints(cx: number, cy: number, r: number): string {
 // scattered cluster rather than a dense honeycomb.
 const FIELD: Cell[] = [
   { cx: 90, cy: 110, r: 30, variant: "faint" },
-  { cx: 150, cy: 210, r: 30, variant: "lit", delay: 0 },
+  { cx: 150, cy: 210, r: 30, variant: "faint" },
   { cx: 90, cy: 310, r: 30, variant: "faint" },
   { cx: 210, cy: 110, r: 30, variant: "faint" },
-  { cx: 210, cy: 310, r: 30, variant: "cool", delay: 1.4 },
+  { cx: 210, cy: 310, r: 30, variant: "faint" },
   { cx: 270, cy: 210, r: 30, variant: "faint" },
   { cx: 270, cy: 410, r: 30, variant: "faint" },
   { cx: 330, cy: 110, r: 30, variant: "faint" },

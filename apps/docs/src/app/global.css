@@ -47,7 +47,14 @@
 }
 
 .lp-grad-surface {
-  background-image: var(--brand-gradient);
+  /* Literal ember stops (not var(--brand-gradient)) so the fill is guaranteed
+     to render regardless of which token scope is active. */
+  background-image: linear-gradient(
+    100deg,
+    var(--_ember-gold, #f9d423) 0%,
+    var(--_ember-flame, #ff7e5f) 46%,
+    var(--_ember-crimson, #c2185b) 100%
+  );
 }
 
 /* Faint ember edge used on section dividers + card borders on hover. */
@@ -82,13 +89,15 @@
   animation: lp-glow 9s ease-in-out infinite;
 }
 
-/* Terminal window chrome. */
+/* Terminal window chrome. Intentionally always-dark (like a real terminal) in
+   both light and dark mode — fixed literal colours so the panel never washes
+   out on the light page. */
 .lp-term {
-  border: 1px solid color-mix(in oklch, var(--foreground) 14%, transparent);
-  background: color-mix(in oklch, var(--_stone-950, #131211) 88%, transparent);
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(18 19 24 / 0.94);
   box-shadow:
-    0 1px 0 0 color-mix(in oklch, var(--foreground) 6%, transparent) inset,
-    0 30px 80px -28px color-mix(in oklch, var(--_ember-crimson) 40%, transparent),
+    0 1px 0 0 rgb(255 255 255 / 0.06) inset,
+    0 30px 80px -28px color-mix(in oklch, var(--_ember-crimson, #c2185b) 42%, transparent),
     0 18px 50px -30px rgb(0 0 0 / 0.7);
   backdrop-filter: blur(8px);
 }

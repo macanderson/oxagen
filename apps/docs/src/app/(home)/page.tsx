@@ -59,11 +59,11 @@ export default function HomePage(): ReactNode {
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <section className="relative isolate overflow-hidden border-b border-border">
         {/* layered background: ambient grid + ember orb + hex constellation */}
-        <div aria-hidden="true" className="lp-grid pointer-events-none absolute inset-0" />
-        <div aria-hidden="true" className="lp-orb pointer-events-none absolute left-1/2 top-[-12%] h-[520px] w-[820px] -translate-x-1/2" />
-        <HexField className="lp-float pointer-events-none absolute inset-0 h-full w-full text-foreground opacity-70" />
+        <div aria-hidden="true" className="lp-grid pointer-events-none absolute inset-0 -z-10" />
+        <div aria-hidden="true" className="lp-orb pointer-events-none absolute left-1/2 top-[-12%] -z-10 h-[520px] w-[820px] -translate-x-1/2" />
+        <HexField className="lp-float pointer-events-none absolute inset-0 -z-10 h-full w-full text-foreground opacity-70" />
 
-        <div className="relative mx-auto grid w-full max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-[1.05fr_1fr] lg:py-28">
+        <div className="relative z-10 mx-auto grid w-full max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-[1.05fr_1fr] lg:py-28">
           <div className="flex flex-col items-start text-left">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
               <OxagenLogomark className="size-3.5" />
@@ -110,8 +110,8 @@ export default function HomePage(): ReactNode {
 
       {/* ── Context window: more free than full ───────────────────────────── */}
       <section className="relative isolate overflow-hidden border-b border-border bg-muted/20">
-        <HexField className="pointer-events-none absolute inset-0 h-full w-full text-foreground opacity-40" />
-        <div className="relative mx-auto grid w-full max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-[1fr_1.1fr] lg:py-28">
+        <HexField className="pointer-events-none absolute inset-0 -z-10 h-full w-full text-foreground opacity-40" />
+        <div className="relative z-10 mx-auto grid w-full max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-[1fr_1.1fr] lg:py-28">
           <div>
             <span className="ox-eyebrow">The core idea</span>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -204,9 +204,9 @@ export default function HomePage(): ReactNode {
 
       {/* ── Final CTA ─────────────────────────────────────────────────────── */}
       <section className="relative isolate overflow-hidden border-t border-border bg-muted/20">
-        <div aria-hidden="true" className="lp-orb pointer-events-none absolute bottom-[-40%] left-1/2 h-[480px] w-[760px] -translate-x-1/2 opacity-60" />
-        <HexField className="pointer-events-none absolute inset-0 h-full w-full text-foreground opacity-40" />
-        <div className="relative mx-auto flex w-full max-w-3xl flex-col items-center px-6 py-24 text-center">
+        <div aria-hidden="true" className="lp-orb pointer-events-none absolute bottom-[-40%] left-1/2 -z-10 h-[480px] w-[760px] -translate-x-1/2 opacity-60" />
+        <HexField className="pointer-events-none absolute inset-0 -z-10 h-full w-full text-foreground opacity-40" />
+        <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center px-6 py-24 text-center">
           <OxagenLogomark className="size-12" />
           <h2 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
             Start with the context window <span className="lp-grad-text">open</span>.
