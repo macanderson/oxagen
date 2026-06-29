@@ -33,7 +33,7 @@ export default async function SettingsLayout({
     <div className="flex flex-col gap-0">
       <PageHeader
         title="Settings"
-        description="Workspace configuration, members, and integrations."
+        description="Workspace configuration, members, and plugins."
         breadcrumb={
           <Breadcrumb
             items={[
