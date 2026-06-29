@@ -143,6 +143,36 @@ describe("createRepoInOrg", () => {
     expect(body).not.toHaveProperty("private");
     expect(body).not.toHaveProperty("auto_init");
   });
+
+  it("sends POST /user/repos when org is omitted (personal account)", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse({
+        full_name: "macanderson/hello-world",
+        html_url: "https://github.com/macanderson/hello-world",
+        default_branch: "main",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    const result = await client.createRepoInOrg({
+      name: "hello-world",
+      autoInit: true,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.github.com/user/repos");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({
+      name: "hello-world",
+      auto_init: true,
+    });
+    expect(result).toEqual({
+      fullName: "macanderson/hello-world",
+      htmlUrl: "https://github.com/macanderson/hello-world",
+      defaultBranch: "main",
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
