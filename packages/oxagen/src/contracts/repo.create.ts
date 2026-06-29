@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 export const repoCreate = registerCapability({
   name: "repo.create",
   domain: "repo",
-  description: "Create a new GitHub repository in an organization the user owns.",
+  description:
+    "Create a new GitHub repository. Omit `org` to create it in the connected user's personal account; pass `org` only to create it inside a GitHub organisation the user belongs to.",
   mode: "sync",
   surfaces: ["agent", "api"],
   layers: ["api", "unit", "docs"],
@@ -17,7 +18,12 @@ export const repoCreate = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z.object({
-    org: z.string().describe("GitHub organisation slug to create the repository in"),
+    org: z
+      .string()
+      .optional()
+      .describe(
+        "GitHub organisation slug to create the repository in. Omit to create the repository in the connected user's personal account.",
+      ),
     name: z.string().describe("Repository name"),
     description: z.string().optional().describe("Short repository description"),
     private: z.boolean().optional().describe("Whether the repository is private (default: false)"),

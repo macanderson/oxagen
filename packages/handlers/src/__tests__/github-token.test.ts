@@ -94,9 +94,23 @@ function mockDbCalls(...callResults: unknown[][]): void {
 // Tests
 // ---------------------------------------------------------------------------
 
+// GitHub credentials this suite reasons about. Each test opts into the env it
+// needs via vi.stubEnv; the baseline must be "none present". A developer's
+// shell exports these from .env.local (GITHUB_APP_ID / _PRIVATE_KEY /
+// GITHUB_PERSONAL_ACCESS_TOKEN), and vi.unstubAllEnvs() restores that ambient
+// state — so without an explicit clear they leak into Path 1 (App token) and
+// Path 3 (PAT fallback) and break the "no credentials" assertions. CI doesn't
+// export them, so this only bit local runs.
+const GITHUB_CRED_ENV = [
+  "GITHUB_APP_ID",
+  "GITHUB_APP_PRIVATE_KEY",
+  "GITHUB_PERSONAL_ACCESS_TOKEN",
+] as const;
+
 describe("resolveGitHubToken", () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
+    for (const key of GITHUB_CRED_ENV) delete process.env[key];
     // Hermetic env: resolveGitHubToken reads GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY
     // (Path 1) and GITHUB_PERSONAL_ACCESS_TOKEN (Path 3) straight from process.env.
     // vi.unstubAllEnvs() only clears vi stubs, NOT vars inherited from the shell, so
@@ -110,6 +124,7 @@ describe("resolveGitHubToken", () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    for (const key of GITHUB_CRED_ENV) delete process.env[key];
   });
 
   // ── Path 1: GitHub App installation token ──────────────────────────────

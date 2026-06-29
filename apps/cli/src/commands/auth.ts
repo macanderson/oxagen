@@ -4,11 +4,31 @@
  * Login validates a platform API key against the Oxagen API and persists the
  * session (token + orgSlug + workspaceSlug) to ~/.config/oxagen/config.json.
  *
- * Validation endpoint: GET /v1/user/preferences/read
- *   - Requires a valid Bearer API key (auth middleware validates the key).
- *   - Returns 200 for a recognised key; 401 for an invalid or expired key.
- *   - Does not require an org/workspace path parameter — the API key itself
- *     carries the scope, so this works as a pure "is this key valid?" probe.
+ * Validation endpoint: GET /v1/auth/whoami
+ *   - A dedicated, auth-only credential probe. It does NO business work and
+ *     calls no capability handler, so it works identically for session and
+ *     API-key auth and never depends on a `userId` or an IAM grant.
+ *   - The auth middleware does all the work: it returns 401 for a
+ *     missing/malformed/invalid/expired credential BEFORE the handler runs.
+ *     Reaching the handler at all (200) PROVES the credential is valid.
+ *   - 401 (unauthorized) is therefore the ONLY signal that the key itself is
+ *     not valid. Treat 401 (and only 401) as an invalid key.
+ *   - 200 means the key is valid; the body echoes the key's bound scope.
+ *   - Any other status (404/5xx/etc.) is treated as an unexpected/inconclusive
+ *     response so the user is not silently logged in against a broken endpoint.
+ *
+ * Why NOT a capability endpoint (user.preferences.read / org.list): those
+ * handlers hard-require `ctx.userId` and throw for an API-key caller (userId is
+ * null), so the platform surfaces them as HTTP 500 on non-enterprise orgs — and
+ * as HTTP 403 on enterprise orgs, where the IAM resolver denies the API-key
+ * principal first. Both are false negatives for a perfectly valid key. The
+ * whoami probe sidesteps both. (The `forbidden` TokenProbe case below is kept
+ * as defensive handling — a 403 from any probe still proves the key is real —
+ * but whoami carries no authz gate, so it should not occur in practice.)
+ *
+ * The original implementation returned `res.ok` against user.preferences.read,
+ * which conflated the handler's 403/500 failures with a bad key and reported
+ * "Token validation failed" for valid keys.
  *
  * BYOK AI removal (AI_GATEWAY_API_KEY → platform-routed AI) is deferred to
  * ADR-019 task B4. This command establishes the session + account-required
@@ -17,13 +37,12 @@
 import * as readline from "node:readline/promises";
 import {
   getApiUrl,
-  getOrgId,
   getToken,
-  getWorkspaceId,
   readConfig,
   writeConfig,
   clearConfig,
 } from "../lib/config.js";
+import { resolveLinkedAccount } from "../lib/linker.js";
 
 export interface LoginOptions {
   token?: string;
@@ -49,16 +68,36 @@ async function promptLine(question: string): Promise<string> {
 }
 
 /**
- * Validate a platform API token by calling GET /v1/user/preferences/read.
- * Returns true when the key is recognised by the platform (HTTP 200).
+ * Outcome of probing a platform API token against the Oxagen API.
+ *
+ * - `valid`    — the key authenticated (HTTP 200). Fully usable.
+ * - `forbidden`— the key authenticated but IAM denied the probe capability
+ *                (HTTP 403). The key is REAL; API access is currently
+ *                restricted for its principal/org.
+ * - `invalid`  — the key was rejected by the auth layer (HTTP 401).
+ * - `network`  — the request never reached the API (connection error).
+ * - `unexpected` — any other HTTP status; we cannot conclude the key is valid.
+ */
+export type TokenProbe =
+  | { kind: "valid" }
+  | { kind: "forbidden" }
+  | { kind: "invalid" }
+  | { kind: "network"; detail: string }
+  | { kind: "unexpected"; status: number };
+
+/**
+ * Probe a platform API token by calling GET /v1/auth/whoami — the auth-only
+ * credential probe. Reaching the handler (200) proves the credential is valid;
+ * the auth middleware returns 401 for an invalid one before the handler runs.
+ * See the module header for the full status contract.
  */
 export async function validatePlatformToken(
   token: string,
   apiUrl: string,
-): Promise<boolean> {
+): Promise<TokenProbe> {
   let res: Response;
   try {
-    res = await fetch(`${apiUrl}/v1/user/preferences/read`, {
+    res = await fetch(`${apiUrl}/v1/auth/whoami`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -66,12 +105,19 @@ export async function validatePlatformToken(
       },
     });
   } catch (err) {
-    process.stderr.write(
-      `Network error contacting ${apiUrl}: ${err instanceof Error ? err.message : String(err)}\n`,
-    );
-    return false;
+    return {
+      kind: "network",
+      detail: err instanceof Error ? err.message : String(err),
+    };
   }
-  return res.ok;
+  if (res.ok) return { kind: "valid" };
+  // 401 is the auth layer rejecting the key itself (missing/malformed/invalid/
+  // expired). This is the only "not a valid key" signal.
+  if (res.status === 401) return { kind: "invalid" };
+  // 403 should not occur against whoami (no authz gate), but if any probe ever
+  // returns it, the key still authenticated — treat it as a real key.
+  if (res.status === 403) return { kind: "forbidden" };
+  return { kind: "unexpected", status: res.status };
 }
 
 export async function handleLogin(opts: LoginOptions): Promise<void> {
@@ -82,8 +128,8 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
   // No flags → show current session status if logged in.
   if (!opts.token && !opts.org && !opts.workspace) {
     const token = getToken();
-    const orgSlug = getOrgId();
-    const workspaceSlug = getWorkspaceId();
+    const orgSlug = config.orgSlug;
+    const workspaceSlug = config.workspaceSlug;
     if (token && orgSlug && workspaceSlug) {
       process.stdout.write(`Logged in to Oxagen:\n`);
       process.stdout.write(`  token:     ${maskToken(token)}\n`);
@@ -107,7 +153,7 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
       return;
     }
     process.stdout.write(
-      `\nOxagen API token (create one at https://app.oxagen.sh):\n`,
+      `\nOxagen API token (create one at https://app.oxagen.sh/settings/tokens):\n`,
     );
     token = await promptLine("  Token: ");
   }
@@ -117,53 +163,66 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
     return;
   }
 
-  // ── Resolve org slug ─────────────────────────────────────────────────────────
-  let orgSlug = opts.org ?? config.orgSlug;
-  if (!orgSlug) {
-    if (!isTTY) {
-      process.stderr.write(`Error: No org provided. Pass --org <slug>.\n`);
-      process.exitCode = 1;
-      return;
-    }
-    orgSlug = await promptLine("  Organization slug: ");
-  }
-  if (!orgSlug) {
-    process.stderr.write(`Error: Organization slug cannot be empty.\n`);
-    process.exitCode = 1;
-    return;
-  }
+  // ── Validate token against the platform ─────────────────────────────────────
+  process.stdout.write(`\nAuthenticating against ${apiUrl}...\n`);
+  const probe = await validatePlatformToken(token, apiUrl);
 
-  // ── Resolve workspace slug ───────────────────────────────────────────────────
-  let workspaceSlug = opts.workspace ?? config.workspaceSlug;
-  if (!workspaceSlug) {
-    if (!isTTY) {
+  switch (probe.kind) {
+    case "invalid":
       process.stderr.write(
-        `Error: No workspace provided. Pass --workspace <slug>.\n`,
+        `Error: Token validation failed. The API rejected this key (HTTP 401).\n` +
+          `  Verify the token is a current, non-expired Oxagen API key.\n` +
+          `  Get a token at: https://app.oxagen.sh/settings/tokens\n`,
       );
       process.exitCode = 1;
       return;
-    }
-    workspaceSlug = await promptLine("  Workspace slug: ");
-  }
-  if (!workspaceSlug) {
-    process.stderr.write(`Error: Workspace slug cannot be empty.\n`);
-    process.exitCode = 1;
-    return;
+    case "network":
+      process.stderr.write(
+        `Error: Network error contacting ${apiUrl}: ${probe.detail}\n` +
+          `  Check your connection and the --api / OXAGEN_API_URL setting.\n`,
+      );
+      process.exitCode = 1;
+      return;
+    case "unexpected":
+      process.stderr.write(
+        `Error: Unexpected response (HTTP ${probe.status}) from ${apiUrl}.\n` +
+          `  Could not confirm the key is valid; not saving the session.\n`,
+      );
+      process.exitCode = 1;
+      return;
+    case "valid":
+    case "forbidden":
+      // Both mean the key is real (it authenticated). Persist the session.
+      break;
   }
 
-  // ── Validate token against the platform ─────────────────────────────────────
-  process.stdout.write(`\nAuthenticating against ${apiUrl}...\n`);
-  const valid = await validatePlatformToken(token, apiUrl);
-  if (!valid) {
+  // Persist the token before running the org/workspace picker so that
+  // userApiPostOrThrow (called by the linker) can pick it up via getToken().
+  writeConfig({ token });
+
+  // ── Org + workspace picker via the shared linker ─────────────────────────────
+  process.stdout.write(`\nFetching your organizations...\n`);
+  let orgSlug: string;
+  let workspaceSlug: string;
+  try {
+    const account = await resolveLinkedAccount({
+      orgSlug: opts.org,
+      workspaceSlug: opts.workspace,
+      isTTY,
+    });
+    orgSlug = account.orgSlug;
+    workspaceSlug = account.workspaceSlug;
+  } catch (err) {
+    // Picker failures must not leave a partial config (token but no scope).
+    writeConfig({ token: undefined, orgSlug: undefined, workspaceSlug: undefined });
     process.stderr.write(
-      `Error: Token validation failed. Verify the token is a valid Oxagen API key.\n` +
-        `  Get a token at: https://app.oxagen.sh\n`,
+      `Error: ${err instanceof Error ? err.message : String(err)}\n`,
     );
     process.exitCode = 1;
     return;
   }
 
-  // ── Persist session ──────────────────────────────────────────────────────────
+  // ── Persist full session ─────────────────────────────────────────────────────
   writeConfig({ token, orgSlug, workspaceSlug });
 
   process.stdout.write(`\nLogged in to Oxagen:\n`);
@@ -171,6 +230,15 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
   process.stdout.write(`  org:       ${orgSlug}\n`);
   process.stdout.write(`  workspace: ${workspaceSlug}\n`);
   process.stdout.write(`  api:       ${apiUrl}\n`);
+
+  if (probe.kind === "forbidden") {
+    process.stderr.write(
+      `\nNote: this key authenticated, but the API currently denies it access ` +
+        `(HTTP 403).\n` +
+        `  Capability calls for org "${orgSlug}" may be blocked until the org's ` +
+        `API-key access is enabled.\n`,
+    );
+  }
 }
 
 export function handleLogout(): void {
@@ -180,5 +248,8 @@ export function handleLogout(): void {
     return;
   }
   clearConfig();
-  process.stdout.write(`Logged out. Session cleared from ~/.config/oxagen/config.json.\n`);
+  process.stdout.write(
+    `Logged out. Session cleared from ~/.config/oxagen/config.json.\n` +
+      `Note: per-project links (.oxagen/workspace.json) are left intact.\n`,
+  );
 }
