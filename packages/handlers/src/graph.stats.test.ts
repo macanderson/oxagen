@@ -154,6 +154,42 @@ describe("graphStatsHandler", () => {
     });
   });
 
+  it("runs its queries sequentially on one session — never concurrently (regression: #303 Neo4j 'open transaction')", async () => {
+    // A real Neo4j session permits only ONE in-flight query (auto-commit
+    // transaction) at a time. Model that exactly: if a second run() begins
+    // before the previous one resolves, throw the real driver error. A
+    // sequential handler never triggers it; a Promise.all() over the single
+    // scoped session (the #303 regression that broke the graph explorer) does —
+    // the second run() fires synchronously while the first is still awaiting.
+    let inFlight = 0;
+    mocks.run.mockImplementation(async () => {
+      if (inFlight > 0) {
+        throw new Error(
+          "Queries cannot be run directly on a session with an open transaction; either run from within the transaction or use a different session.",
+        );
+      }
+      inFlight += 1;
+      await Promise.resolve(); // yield a microtask so an overlap would be observed
+      inFlight -= 1;
+      return record({
+        nodeCount: 0,
+        sourceCount: 0,
+        edgeCount: 0,
+        inferredEdgeCount: 0,
+        lastModifiedAt: null,
+        label: null,
+        edgeType: null,
+        count: 0,
+      });
+    });
+
+    // includeByType=true exercises the maximum fan-out (five queries).
+    await expect(
+      graphStatsHandler({ includeByType: true }, CTX),
+    ).resolves.toBeDefined();
+    expect(mocks.run).toHaveBeenCalledTimes(5);
+  });
+
   it("omits the render directive on non-app surfaces (api/mcp get plain JSON)", async () => {
     mocks.run
       .mockResolvedValueOnce(record({ nodeCount: 0, sourceCount: 0 }))

@@ -18,16 +18,26 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (in
   await runInTenantScope({ orgId, workspaceId }, async () => {
     const session = scopedSession();
     try {
-      // Parallelize independent baseline queries: node count, edge count, and last modified time
-      const queries = [
-        session.run(
+      // These independent reads run SEQUENTIALLY on the one scoped session, NOT
+      // via Promise.all(). scopedSession() hands back a single Neo4j session, and
+      // a session can only have one query (auto-commit transaction) in flight at a
+      // time — firing several session.run() calls concurrently throws Neo4jError
+      // "Queries cannot be run directly on a session with an open transaction"
+      // (the regression #303 introduced when it "parallelised" these). True
+      // parallelism would need a separate session per query; these counts are
+      // cheap, so sequential reuse of one session is the correct, simpler fix.
+      const results: Array<Awaited<ReturnType<typeof session.run>>> = [];
+      results.push(
+        await session.run(
           `MATCH (n:GraphNode)
            WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
            RETURN count(n) AS nodeCount,
                   count(DISTINCT n.sourceId) AS sourceCount`,
           { orgId, workspaceId },
         ),
-        session.run(
+      );
+      results.push(
+        await session.run(
           `MATCH (n:GraphNode)-[r]->(m:GraphNode)
            WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
              AND m.orgId = $orgId AND m.workspaceId = $workspaceId
@@ -35,23 +45,27 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (in
                   count(CASE WHEN r.inferred = true THEN 1 END) AS inferredEdgeCount`,
           { orgId, workspaceId },
         ),
-        session.run(
+      );
+      results.push(
+        await session.run(
           `MATCH (n:GraphNode)
            WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
            RETURN max(coalesce(n.updatedAt, n.createdAt)) AS lastModifiedAt`,
           { orgId, workspaceId },
         ),
-      ];
+      );
 
       if (input.includeByType) {
-        queries.push(
-          session.run(
+        results.push(
+          await session.run(
             `MATCH (n:GraphNode)
              WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
              RETURN n.label AS label, count(n) AS count`,
             { orgId, workspaceId },
           ),
-          session.run(
+        );
+        results.push(
+          await session.run(
             `MATCH (n:GraphNode)-[r]->(m:GraphNode)
              WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId
                AND m.orgId = $orgId AND m.workspaceId = $workspaceId
@@ -60,8 +74,6 @@ export const graphStatsHandler: CapabilityHandler<typeof graphStats> = async (in
           ),
         );
       }
-
-      const results = await Promise.all(queries);
 
       const countRec = results[0]!.records[0];
       nodeCount = toNumber(countRec?.get("nodeCount"));
