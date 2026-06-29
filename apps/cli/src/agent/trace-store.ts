@@ -44,8 +44,14 @@ function write(cwd: string, data: StoreShape): void {
   try {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, JSON.stringify(data, null, 2), "utf8");
-  } catch {
-    /* persistence is best-effort — a failed write must never break a turn */
+  } catch (err) {
+    // Persistence is best-effort — a failed write must never break a turn — but
+    // leave a breadcrumb under OXAGEN_DEBUG so a silently-dropped trace (e.g. a
+    // full disk or a permissions problem) is diagnosable instead of invisible.
+    if (process.env["OXAGEN_DEBUG"])
+      process.stderr.write(
+        `[trace-store] write failed (${path}): ${err instanceof Error ? err.message : String(err)}\n`,
+      );
   }
 }
 

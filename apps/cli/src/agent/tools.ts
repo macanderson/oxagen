@@ -344,11 +344,15 @@ export function buildTools(
         ...original,
         execute: async (input: unknown, options: unknown) => {
           const req = toRequest(name, input, cwd);
-          if (req) {
-            const decision = await broker.check(req);
-            if (decision.decision === "deny") {
-              return `Permission denied (${decision.reason}). The user did not approve this ${name} call; do not retry it — explain or choose another approach.`;
-            }
+          // Fail closed: this branch only runs for a known mutating tool, so a
+          // request that can't be normalized means we cannot evaluate the
+          // permission boundary — never run the side effect ungated.
+          if (!req) {
+            return `Permission denied (could not evaluate the permission check for ${name}); do not retry this call.`;
+          }
+          const decision = await broker.check(req);
+          if (decision.decision === "deny") {
+            return `Permission denied (${decision.reason}). The user did not approve this ${name} call; do not retry it — explain or choose another approach.`;
           }
           return (innerExecute as (i: unknown, o: unknown) => unknown).call(original, input, options);
         },
