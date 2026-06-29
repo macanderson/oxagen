@@ -70,8 +70,9 @@ describe("upsertEntityNode", () => {
     expect(mocks.sessionRun).toHaveBeenCalledOnce();
 
     const [cypher, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
-    // §3.3 dual-write: the real label (`task`) is PRIMARY, `:EntityNode` secondary.
-    expect(cypher).toContain("MERGE (n:`task`:`EntityNode`");
+    // §3.3 dual-write: the real label is PRIMARY, `:EntityNode` secondary. The
+    // entityType "task" is canonicalised to the PascalCase label `Task`.
+    expect(cypher).toContain("MERGE (n:`Task`:`EntityNode`");
     expect(cypher).toContain("naturalKey:");
     expect(cypher).toContain("orgId:");
     expect(cypher).toContain("RETURN n.publicId AS nodeId");
@@ -81,6 +82,21 @@ describe("upsertEntityNode", () => {
     // properties must be JSON-stringified
     expect(typeof params["properties"]).toBe("string");
     expect(JSON.parse(params["properties"] as string)).toMatchObject({ title: "Fix the bug" });
+  });
+
+  it("canonicalises a multi-word snake entityType to a PascalCase label, slug kept on entityType", async () => {
+    mocks.sessionRun.mockResolvedValueOnce({
+      records: [{ get: vi.fn().mockReturnValue("uuid-node-1") }],
+    });
+
+    await upsertEntityNode(makeMutation({ entityType: "pull_request" }), "org-1");
+
+    const [cypher, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    // Neo4j :Label and the display `label` are PascalCase; the registry slug
+    // "pull_request" is preserved verbatim on `entityType`.
+    expect(cypher).toContain("MERGE (n:`PullRequest`:`EntityNode`");
+    expect(params["label"]).toBe("PullRequest");
+    expect(params["entityType"]).toBe("pull_request");
   });
 
   it("also sets the :GraphNode anchor label + graph display fields so the node is visible in the explorer", async () => {
@@ -101,7 +117,9 @@ describe("upsertEntityNode", () => {
     // The read layer reads n.label / n.displayName / n.sourceId.
     expect(cypher).toContain("n.label");
     expect(cypher).toContain("n.sourceId");
-    expect(params["label"]).toBe("task"); // label = entityType
+    // The display `label` is the PascalCase form; the lowercase registry slug
+    // lives on `entityType` (asserted above), the two intentionally distinct.
+    expect(params["label"]).toBe("Task");
     expect(params["displayName"]).toBe("Fix the bug");
     expect(params["connectionId"]).toBe("conn-1"); // becomes n.sourceId
   });

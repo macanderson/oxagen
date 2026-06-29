@@ -16,6 +16,7 @@
  */
 
 import { scopedSession } from "@oxagen/ontology/tenant";
+import { sanitizeLabel } from "@oxagen/ontology/labels";
 import { chInsert } from "@oxagen/telemetry";
 import { randomUUID } from "node:crypto";
 import type { EntityMutation } from "../types";
@@ -24,9 +25,6 @@ import {
   type PinnedSchema,
   type SchemaValidationResult,
 } from "../validate/schema";
-
-/** The relationship-type lexical guard (mirrors RELATIONSHIP_TYPE_PATTERN, §3.2). */
-const NEO4J_LABEL_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,62}$/;
 
 /**
  * Options threaded from the pipeline into the node write. All optional so
@@ -58,14 +56,15 @@ export interface UpsertEntityResult {
 }
 
 /**
- * Derive the first-class Neo4j label from the mutation's entityType (§3.3).
- * Falls back to the generic `EntityNode` when the entityType is not a valid
- * Neo4j label identifier, so a malformed customer type can never be
- * interpolated into Cypher.
+ * Derive the first-class Neo4j label from the mutation's entityType (§3.3),
+ * canonicalised to PascalCase — `pull_request`/`PULL_REQUEST` both become
+ * `PullRequest`. Falls back to the generic `EntityNode` when the entityType has
+ * no usable label characters, so a malformed customer type can never be
+ * interpolated into Cypher. `sanitizeLabel` guarantees an injection-safe
+ * identifier; this is the same coercer every other node-label write site uses.
  */
 export function resolveNodeLabel(entityType: string): string {
-  const trimmed = entityType.trim();
-  return NEO4J_LABEL_PATTERN.test(trimmed) ? trimmed : "EntityNode";
+  return sanitizeLabel(entityType) ?? "EntityNode";
 }
 
 export async function upsertEntityNode(
@@ -97,8 +96,8 @@ export async function upsertEntityNode(
 
   // ── §3.3 dual-write: real label PRIMARY + :EntityNode secondary ─────────────
   const label = resolveNodeLabel(mutation.entityType);
-  // The label passed NEO4J_LABEL_PATTERN above → safe to interpolate. When it is
-  // already "EntityNode", don't double-apply the secondary label.
+  // `sanitizeLabel` produced an injection-safe identifier → safe to interpolate.
+  // When it is already "EntityNode", don't double-apply the secondary label.
   const labelClause = label === "EntityNode" ? "`EntityNode`" : `\`${label}\`:\`EntityNode\``;
 
   // Conformance props are attached on lenient writes (§8). undefined when no
@@ -135,9 +134,11 @@ export async function upsertEntityNode(
         naturalKey: mutation.naturalKey,
         entityType: mutation.entityType,
         sourceRecordType: mutation.sourceRecordType,
-        // `label` is the type chip the explorer groups + filters on. Use the
-        // domain entityType (e.g. "issue", "pull_request", "source_repository").
-        label: mutation.entityType,
+        // `label` is the PascalCase type chip the explorer groups/filters/colours
+        // on (e.g. "Issue", "PullRequest", "SourceRepository"). The lowercase
+        // registry slug stays on `entityType` above — the two are intentionally
+        // distinct: slug for vocabulary lookup, PascalCase label for humans.
+        label,
         // displayName must be non-null — the explorer renders it directly. Fall
         // back to the naturalKey so a node never shows as empty/"null".
         displayName: mutation.displayName ?? mutation.naturalKey,
