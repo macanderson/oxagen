@@ -1,22 +1,23 @@
 /**
- * GitHub source-connect start — regression for the cross-origin wizard path.
+ * GitHub connect start — workspace-settings install + sources gate.
  *
- * The connection wizard fetches the Hono API (localhost:3000 → localhost:4000)
- * with `credentials: "include"`; before the API grew CORS middleware the
- * browser killed the very first preflight with "Failed to fetch" and the
- * wizard could never start. This spec drives the real button path:
+ * The Oxagen GitHub App install now lives in Workspace Settings → GitHub
+ * (1 workspace = 1 app install); the Sources tab no longer installs the App, it
+ * only points the user to settings and then selects repos to ingest.
  *
- *   sources page → wizard → POST /connections (cross-origin, credentialed)
- *   → GET /connections/github/auth-url → redirect to GitHub authorize URL
+ * These specs drive the real button paths and assert the cross-origin,
+ * credentialed fetch path the wizard/panel rely on (localhost:3000 →
+ * localhost:4000) — the same path that, before the API grew CORS middleware,
+ * died in preflight with "Failed to fetch".
  *
- * Hermetic: github.com is never contacted — the OAuth navigation is
- * intercepted and stubbed, asserted by URL shape only.
+ * Hermetic: github.com is never contacted — the OAuth navigation is intercepted
+ * and stubbed, asserted by URL shape only.
  */
 
 import { test, expect } from "@playwright/test";
 import { signUpFreshUser } from "./helpers/signup";
 
-test("GitHub connect wizard reaches the OAuth redirect (no failed-to-fetch)", async ({
+test("Settings → GitHub connect reaches the OAuth install redirect (no failed-to-fetch)", async ({
   page,
 }) => {
   const user = await signUpFreshUser(page);
@@ -30,37 +31,45 @@ test("GitHub connect wizard reaches the OAuth redirect (no failed-to-fetch)", as
     }),
   );
 
-  await page.goto(`/${user.orgSlug}/default/knowledge/sources`);
-  await page.getByTestId("connect-github-btn").click();
+  // The panel fetches GET /connections/github/status on mount — the credentialed
+  // cross-origin GET that used to die in CORS preflight.
+  const statusResponse = page.waitForResponse((res) =>
+    res.url().includes("/connections/github/status"),
+  );
+  await page.goto(`/${user.orgSlug}/default/settings/github`);
 
-  // Step 1 of the wizard: "Connect with GitHub" fires the credentialed
-  // cross-origin POST that used to die in CORS preflight.
-  const createResponse = page.waitForResponse(
-    (res) =>
-      res.url().includes("/connections") && res.request().method() === "POST",
-  );
-  const authUrlResponse = page.waitForResponse((res) =>
-    res.url().includes("/connections/github/auth-url"),
-  );
+  const statusRes = await statusResponse;
+  expect(
+    statusRes.ok(),
+    `GET status → ${statusRes.status()}: ${await statusRes.text().catch(() => "<no body>")}`,
+  ).toBe(true);
+
+  // A fresh workspace has never connected GitHub → the Connect button shows.
+  await page.getByTestId("github-disconnected").waitFor();
   await page.getByTestId("github-connect-btn").click();
 
-  // Surface status + body on failure — a bare ok()=false told us nothing when
-  // CI's API was missing INGESTION_ENCRYPTION_KEY and 500'd this POST.
-  const createRes = await createResponse;
-  expect(
-    createRes.ok(),
-    `POST /connections → ${createRes.status()}: ${await createRes.text().catch(() => "<no body>")}`,
-  ).toBe(true);
-  const authUrlRes = await authUrlResponse;
-  expect(
-    authUrlRes.ok(),
-    `GET auth-url → ${authUrlRes.status()}: ${await authUrlRes.text().catch(() => "<no body>")}`,
-  ).toBe(true);
-
-  // The wizard hands off to the GitHub App *installation* page (so a first-time
+  // The connect hands off to the GitHub App *installation* page so a first-time
   // user installs the App and GitHub round-trips our HMAC-signed state back to
-  // the callback). The state param carries org/workspace/connection attribution.
+  // the callback. The state param carries org/workspace attribution.
   await page.waitForURL(/github\.com\/apps\/[^/]+\/installations\/new/);
   const installUrl = new URL(page.url());
   expect(installUrl.searchParams.get("state")).toBeTruthy();
+});
+
+test("Sources tab skips the install and points to Settings when GitHub is not connected", async ({
+  page,
+}) => {
+  const user = await signUpFreshUser(page);
+
+  await page.goto(`/${user.orgSlug}/default/knowledge/sources`);
+  // Empty state → open the GitHub add-source wizard.
+  await page.getByTestId("connect-github-btn").click();
+
+  // With no install yet, the wizard does NOT offer to install — it gates to the
+  // workspace settings GitHub page.
+  await expect(page.getByTestId("github-install-gate")).toBeVisible();
+  await expect(page.getByTestId("github-gate-settings-link")).toHaveAttribute(
+    "href",
+    new RegExp(`/${user.orgSlug}/default/settings/github`),
+  );
 });

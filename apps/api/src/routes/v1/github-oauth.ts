@@ -62,6 +62,83 @@ type ConnectionTokenResult =
   | { ok: true; accessToken: string }
   | { ok: false; status: 404 | 500; error: string };
 
+type EncryptedToken = { keyId: string; ciphertext: string };
+
+/**
+ * The org's most-recently-refreshed GitHub OAuth account, selected within an
+ * existing tenant-scoped transaction. `oauth_accounts` is keyed by org (one row
+ * per GitHub user per org), so this is the org's reusable user token — the same
+ * trust boundary the OAuth callback writes to. Shared by both the connection-
+ * scoped and workspace-scoped resolvers so there is exactly one definition of
+ * "the org's GitHub token".
+ */
+async function selectOrgGithubOauthAccount(
+  tx: Parameters<Parameters<typeof withTenantDb>[0]>[0],
+  orgId: string,
+): Promise<{ id: string; accessTokenEnc: unknown } | null> {
+  const rows = await tx
+    .select({
+      id: schema.oauthAccounts.id,
+      accessTokenEnc: schema.oauthAccounts.accessTokenEnc,
+    })
+    .from(schema.oauthAccounts)
+    .where(
+      and(eq(schema.oauthAccounts.orgId, orgId), eq(schema.oauthAccounts.provider, "github")),
+    )
+    .orderBy(desc(schema.oauthAccounts.updatedAt))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Decrypt an `accessTokenEnc` envelope into a `ConnectionTokenResult`, mapping a
+ * missing envelope to 404 and a decrypt failure to 500. Centralises the
+ * decode/error mapping both resolvers share.
+ */
+async function decryptAccessTokenResult(
+  accessTokenEnc: unknown,
+): Promise<ConnectionTokenResult> {
+  const enc = accessTokenEnc as EncryptedToken | null;
+  if (!enc) {
+    return { ok: false, status: 404, error: "OAuth token not found" };
+  }
+  try {
+    const accessToken = await decryptToken(enc);
+    return { ok: true, accessToken };
+  } catch {
+    return {
+      ok: false,
+      status: 500,
+      error:
+        "Failed to decrypt OAuth token — token may be corrupted or the encryption key is unavailable",
+    };
+  }
+}
+
+/**
+ * Resolve and decrypt the GitHub user OAuth token at the WORKSPACE level — i.e.
+ * without a pre-created source_connection.
+ *
+ * This backs the settings-level "connect GitHub" surface and the sources
+ * repo-picker once the App is already installed: both list installations/repos
+ * for the workspace before any per-repo connection exists. The token is the
+ * org's GitHub OAuth account (`oauth_accounts`), so this returns 404 when the
+ * workspace's org has never connected GitHub. Runs inside the tenant scope so
+ * RLS bounds the lookup to this org.
+ */
+async function resolveWorkspaceGithubToken(
+  orgId: string,
+  workspaceId: string,
+): Promise<ConnectionTokenResult> {
+  const account = await runInTenantScope({ orgId, workspaceId }, () =>
+    withTenantDb((tx) => selectOrgGithubOauthAccount(tx, orgId)),
+  );
+  if (!account?.accessTokenEnc) {
+    return { ok: false, status: 404, error: "GitHub is not connected for this workspace" };
+  }
+  return decryptAccessTokenResult(account.accessTokenEnc);
+}
+
 /**
  * Resolve and decrypt the GitHub user OAuth token used to call the GitHub REST
  * API for a connection (listing installations / repositories).
@@ -120,22 +197,7 @@ async function resolveConnectionAccessToken(
 
       // Not linked (Setup-URL "update" leg) → fall back to the org's GitHub
       // OAuth account and link it onto the connection for future calls.
-      const fbRows = await tx
-        .select({
-          id: schema.oauthAccounts.id,
-          accessTokenEnc: schema.oauthAccounts.accessTokenEnc,
-        })
-        .from(schema.oauthAccounts)
-        .where(
-          and(
-            eq(schema.oauthAccounts.orgId, orgId),
-            eq(schema.oauthAccounts.provider, "github"),
-          ),
-        )
-        .orderBy(desc(schema.oauthAccounts.updatedAt))
-        .limit(1);
-
-      const fb = fbRows[0];
+      const fb = await selectOrgGithubOauthAccount(tx, orgId);
       if (!fb?.accessTokenEnc) return { kind: "no-token" as const };
 
       await tx
@@ -154,22 +216,24 @@ async function resolveConnectionAccessToken(
     return { ok: false, status: 404, error: "OAuth token not found for connection" };
   }
 
-  const enc = lookup.accessTokenEnc as { keyId: string; ciphertext: string } | null;
-  if (!enc) {
-    return { ok: false, status: 404, error: "OAuth token not found for connection" };
-  }
+  return decryptAccessTokenResult(lookup.accessTokenEnc);
+}
 
-  try {
-    const accessToken = await decryptToken(enc);
-    return { ok: true, accessToken };
-  } catch {
-    return {
-      ok: false,
-      status: 500,
-      error:
-        "Failed to decrypt OAuth token — token may be corrupted or the encryption key is unavailable",
-    };
-  }
+/**
+ * Resolve the GitHub user OAuth token for a list/repos request, accepting an
+ * OPTIONAL connectionId. With a connectionId we use the connection-scoped
+ * resolver (which also self-heals the connection→oauth_account link); without
+ * one — the settings connect and the post-install sources picker — we resolve
+ * the workspace's org-level GitHub token directly.
+ */
+function resolveGithubListToken(
+  orgId: string,
+  workspaceId: string,
+  connectionPublicId: string | undefined,
+): Promise<ConnectionTokenResult> {
+  return connectionPublicId
+    ? resolveConnectionAccessToken(orgId, workspaceId, connectionPublicId)
+    : resolveWorkspaceGithubToken(orgId, workspaceId);
 }
 
 /**
@@ -191,13 +255,76 @@ function buildManageInstallationsUrl(
     : "https://github.com/settings/installations";
 }
 
+/**
+ * Where the OAuth callback should land the user after a connect. The install
+ * now lives in Workspace Settings → GitHub (1 workspace = 1 app install), while
+ * the legacy in-wizard connect still returns to the sources picker. The value is
+ * carried in the signed state so the (single, global) callback can route back to
+ * the surface the connect started from.
+ */
+type GithubConnectReturnTo = "settings" | "sources";
+
+function parseReturnTo(raw: string | undefined): GithubConnectReturnTo {
+  return raw === "settings" ? "settings" : "sources";
+}
+
+/** Signed-state payload round-tripped through GitHub's `state` query param. */
+interface GithubInstallState {
+  orgId: string;
+  workspaceId: string;
+  /** publicId of a pre-created source_connection, or null for a settings-level connect. */
+  connectionId: string | null;
+  returnTo: GithubConnectReturnTo;
+  expiresAt: number;
+  nonce: string;
+}
+
+/**
+ * Build the signed GitHub App installation URL (`installations/new?state=…`).
+ *
+ * Drive the user through the App *installation* flow, NOT the bare
+ * `login/oauth/authorize` flow: the connector needs the App installed on the
+ * target org to read repos, and `installations/new` both installs the App and —
+ * with "Request user authorization (OAuth) during installation" enabled — returns
+ * an OAuth `code` to the configured callback. GitHub round-trips the `state` we
+ * pass here back to the callback, so it can verify the HMAC and attribute the
+ * install to the right org/workspace (and connection, when present). The
+ * post-install redirect target is the App's configured Callback URL, so no
+ * redirect_uri is passed.
+ */
+function buildInstallAuthUrl(
+  appSlug: string,
+  stateSecret: string,
+  payload: { orgId: string; workspaceId: string; connectionId: string | null; returnTo: GithubConnectReturnTo },
+): string {
+  const stateJson = JSON.stringify({
+    orgId: payload.orgId,
+    workspaceId: payload.workspaceId,
+    connectionId: payload.connectionId,
+    returnTo: payload.returnTo,
+    expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
+    nonce: crypto.randomUUID(),
+  } satisfies GithubInstallState);
+
+  const hmac = buildStateHmac(stateJson, stateSecret);
+  const encodedState = encodeState(stateJson);
+
+  return (
+    `https://github.com/apps/${encodeURIComponent(appSlug)}/installations/new` +
+    `?state=${encodeURIComponent(`${encodedState}.${hmac}`)}`
+  );
+}
+
 // ── GET /connections/github/auth-url ─────────────────────────────────────────
 
 /**
- * Generate a signed GitHub OAuth authorization URL.
+ * Generate a signed GitHub App installation URL.
  *
  * Query params:
- *   connectionId  — publicId of the pre-created source_connection row
+ *   connectionId  — OPTIONAL publicId of a pre-created source_connection row.
+ *                   Omitted for a settings-level connect (1 workspace = 1 install).
+ *   returnTo      — OPTIONAL "settings" | "sources" (default "sources"); where the
+ *                   callback lands the user after the install completes.
  *
  * Returns:
  *   { authUrl: string }
@@ -208,10 +335,8 @@ githubOauthRoute.get("/auth-url", async (c) => {
     "GITHUB_APP_INSTALL_STATE_SECRET",
   ] as const);
 
-  const connectionId = c.req.query("connectionId");
-  if (!connectionId) {
-    return c.json({ error: "connectionId query param is required" }, 400);
-  }
+  const connectionId = c.req.query("connectionId") ?? null;
+  const returnTo = parseReturnTo(c.req.query("returnTo"));
 
   const orgId = c.get("orgId");
   const workspaceId = c.get("workspaceId");
@@ -229,36 +354,12 @@ githubOauthRoute.get("/auth-url", async (c) => {
     );
   }
 
-  const stateJson = JSON.stringify({
+  const authUrl = buildInstallAuthUrl(appSlug, stateSecret, {
     orgId,
     workspaceId,
     connectionId,
-    expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
-    nonce: crypto.randomUUID(),
+    returnTo,
   });
-
-  const hmac = buildStateHmac(stateJson, stateSecret);
-  const encodedState = encodeState(stateJson);
-
-  // Drive the user through the GitHub App *installation* flow, NOT the bare
-  // `login/oauth/authorize` flow. The connector needs the App installed on the
-  // target org to read repos; a first-time user has not installed it yet. Hitting
-  // `login/oauth/authorize` for an un-installed App detours through GitHub's
-  // install/Setup-URL leg, which redirected back with installation_id +
-  // setup_action but DROPPED our OAuth `state` → the callback 400'd with
-  // "Missing code or state parameter".
-  //
-  // `installations/new?state=` installs the App AND — with "Request user
-  // authorization (OAuth) during installation" enabled on the App — returns an
-  // OAuth `code` to the configured callback. Critically, GitHub round-trips the
-  // `state` we pass here back to the callback (docs: "include a state query
-  // parameter in the installation URL … to correlate an installation with a
-  // specific user or account"), so the callback can verify the HMAC and attribute
-  // the install to the right org/workspace/connection. The post-install redirect
-  // target is the App's configured Callback URL, so no redirect_uri is passed.
-  const authUrl =
-    `https://github.com/apps/${encodeURIComponent(appSlug)}/installations/new` +
-    `?state=${encodeURIComponent(`${encodedState}.${hmac}`)}`;
 
   return c.json({ authUrl });
 });
@@ -284,36 +385,17 @@ interface GitHubInstallationsResponse {
   installations: GitHubInstallation[];
 }
 
+/** Outcome of paging GitHub's `/user/installations` with a user token. */
+type FetchInstallationsResult =
+  | { ok: true; installations: GitHubInstallation[] }
+  | { ok: false; status: number };
+
 /**
- * List GitHub App installations accessible to the OAuth-authed user.
- *
- * Query params:
- *   connectionId — publicId of the source_connection (used to look up the token)
- *
- * Returns:
- *   { installations: [{ id, accountLogin, accountType, repositorySelection, avatarUrl }] }
+ * Page through every GitHub App installation the user token can see (GitHub
+ * paginates at 100/page). Shared by `/installations` and `/status` so there is
+ * one definition of "list the App installations this workspace can reach".
  */
-githubOauthRoute.get("/installations", async (c) => {
-  const connectionPublicId = c.req.query("connectionId");
-  if (!connectionPublicId) {
-    return c.json({ error: "connectionId query param is required" }, 400);
-  }
-
-  const orgId = c.get("orgId");
-  const workspaceId = c.get("workspaceId");
-  if (!orgId || !workspaceId) {
-    return c.json({ error: "Org/workspace scope required" }, 400);
-  }
-
-  // Resolve the OAuth token for this connection, falling back to (and linking)
-  // the org's GitHub account when the Setup-URL "update" leg left it unlinked.
-  const tokenResult = await resolveConnectionAccessToken(orgId, workspaceId, connectionPublicId);
-  if (!tokenResult.ok) {
-    return c.json({ error: tokenResult.error }, tokenResult.status);
-  }
-  const accessToken = tokenResult.accessToken;
-
-  // Page through all installations (GitHub paginates at 100/page).
+async function fetchAllInstallations(accessToken: string): Promise<FetchInstallationsResult> {
   const allInstallations: GitHubInstallation[] = [];
   let page = 1;
   let totalCount = 0;
@@ -329,13 +411,7 @@ githubOauthRoute.get("/installations", async (c) => {
         },
       },
     );
-
-    if (!resp.ok) {
-      return c.json(
-        { error: `GitHub API returned ${resp.status} when listing installations` },
-        502,
-      );
-    }
+    if (!resp.ok) return { ok: false, status: resp.status };
 
     const data = (await resp.json()) as GitHubInstallationsResponse;
     totalCount = data.total_count;
@@ -343,21 +419,65 @@ githubOauthRoute.get("/installations", async (c) => {
     page++;
   } while (allInstallations.length < totalCount);
 
+  return { ok: true, installations: allInstallations };
+}
+
+/** Project a raw GitHub installation into the client-facing wire shape. */
+function mapInstallation(inst: GitHubInstallation) {
+  return {
+    id: inst.id,
+    accountLogin: inst.account.login,
+    accountType: inst.account.type,
+    repositorySelection: inst.repository_selection,
+    avatarUrl: inst.account.avatar_url,
+    // Per-installation page for managing which repos this org grants access to.
+    htmlUrl: inst.html_url ?? null,
+  };
+}
+
+/**
+ * List GitHub App installations accessible to the OAuth-authed user.
+ *
+ * Query params:
+ *   connectionId — OPTIONAL publicId of the source_connection used to look up the
+ *                  token. Omitted by the settings surface and the post-install
+ *                  sources picker, which resolve the workspace's org-level token.
+ *
+ * Returns:
+ *   { installations: [{ id, accountLogin, accountType, repositorySelection, avatarUrl }], manageUrl }
+ */
+githubOauthRoute.get("/installations", async (c) => {
+  const connectionPublicId = c.req.query("connectionId") || undefined;
+
+  const orgId = c.get("orgId");
+  const workspaceId = c.get("workspaceId");
+  if (!orgId || !workspaceId) {
+    return c.json({ error: "Org/workspace scope required" }, 400);
+  }
+
+  // Resolve the OAuth token: connection-scoped when a connectionId is supplied
+  // (also self-heals the connection→oauth_account link), else the workspace's
+  // org-level GitHub token.
+  const tokenResult = await resolveGithubListToken(orgId, workspaceId, connectionPublicId);
+  if (!tokenResult.ok) {
+    return c.json({ error: tokenResult.error }, tokenResult.status);
+  }
+
+  const fetched = await fetchAllInstallations(tokenResult.accessToken);
+  if (!fetched.ok) {
+    return c.json(
+      { error: `GitHub API returned ${fetched.status} when listing installations` },
+      502,
+    );
+  }
+
   const { GITHUB_APP_SLUG } = requireEnv(["GITHUB_APP_SLUG"] as const);
 
   return c.json({
     // Top-level link to GitHub's install/configure page so the user can add the
     // App to another org (or remove one) and have it appear after a refresh.
-    manageUrl: buildManageInstallationsUrl(GITHUB_APP_SLUG, allInstallations),
-    installations: allInstallations.map((inst) => ({
-      id: inst.id,
-      accountLogin: inst.account.login,
-      accountType: inst.account.type,
-      repositorySelection: inst.repository_selection,
-      avatarUrl: inst.account.avatar_url,
-      // Per-installation page for managing which repos this org grants access to.
-      htmlUrl: inst.html_url ?? null,
-    })),
+    manageUrl: buildManageInstallationsUrl(GITHUB_APP_SLUG, fetched.installations),
+    installations: fetched.installations.map(mapInstallation),
   });
 });
 
@@ -384,18 +504,16 @@ interface GitHubRepositoriesResponse {
  * Path params:
  *   installationId — GitHub App installation ID
  * Query params:
- *   connectionId — publicId of the source_connection (used to look up the token)
+ *   connectionId — OPTIONAL publicId of the source_connection used to look up the
+ *                  token. Omitted by the settings surface and the post-install
+ *                  sources picker, which resolve the workspace's org-level token.
  *
  * Returns:
  *   { repositories: [...], totalCount: number }
  */
 githubOauthRoute.get("/installations/:installationId/repositories", async (c) => {
   const installationId = c.req.param("installationId");
-  const connectionPublicId = c.req.query("connectionId");
-
-  if (!connectionPublicId) {
-    return c.json({ error: "connectionId query param is required" }, 400);
-  }
+  const connectionPublicId = c.req.query("connectionId") || undefined;
 
   const orgId = c.get("orgId");
   const workspaceId = c.get("workspaceId");
@@ -404,7 +522,7 @@ githubOauthRoute.get("/installations/:installationId/repositories", async (c) =>
   }
 
   // Same resilient token resolution as /installations.
-  const tokenResult = await resolveConnectionAccessToken(orgId, workspaceId, connectionPublicId);
+  const tokenResult = await resolveGithubListToken(orgId, workspaceId, connectionPublicId);
   if (!tokenResult.ok) {
     return c.json({ error: tokenResult.error }, tokenResult.status);
   }
@@ -441,6 +559,86 @@ githubOauthRoute.get("/installations/:installationId/repositories", async (c) =>
       description: r.description,
     })),
     totalCount: data.total_count,
+  });
+});
+
+// ── GET /connections/github/status ────────────────────────────────────────────
+
+/**
+ * Report the workspace's GitHub App connection status for the settings surface.
+ *
+ * "Connected" means the workspace's org has a usable GitHub OAuth token (the App
+ * was installed/authorized once — 1 workspace = 1 app install). The same install
+ * can back many orgs/workspaces, so this lists every installation the token can
+ * reach; the settings UI surfaces them and the sources picker selects repos from
+ * them. `installUrl` is always returned so the UI can offer "Connect" whether or
+ * not GitHub is already linked.
+ *
+ * Returns:
+ *   { connected, installations: [...], manageUrl, installUrl }
+ */
+githubOauthRoute.get("/status", async (c) => {
+  const env = requireEnv(["GITHUB_APP_SLUG", "GITHUB_APP_INSTALL_STATE_SECRET"] as const);
+
+  const orgId = c.get("orgId");
+  const workspaceId = c.get("workspaceId");
+  if (!orgId || !workspaceId) {
+    return c.json({ error: "Org/workspace scope required" }, 400);
+  }
+
+  const appSlug = env.GITHUB_APP_SLUG;
+  const stateSecret = env.GITHUB_APP_INSTALL_STATE_SECRET;
+  if (!appSlug || !stateSecret) {
+    return c.json(
+      { error: "GitHub App is not configured — GITHUB_APP_SLUG / GITHUB_APP_INSTALL_STATE_SECRET missing" },
+      503,
+    );
+  }
+
+  // The connect/install entry point — always returned so the settings UI can
+  // offer "Connect" regardless of current state. returnTo=settings routes the
+  // post-install callback back to the settings surface.
+  const installUrl = buildInstallAuthUrl(appSlug, stateSecret, {
+    orgId,
+    workspaceId,
+    connectionId: null,
+    returnTo: "settings",
+  });
+
+  // Not-connected shape, reused for "never connected" and "token revoked" so the
+  // UI shows the same "Connect" affordance in both cases.
+  const notConnected = {
+    connected: false as const,
+    installations: [] as ReturnType<typeof mapInstallation>[],
+    manageUrl: buildManageInstallationsUrl(appSlug, []),
+    installUrl,
+  };
+
+  const tokenResult = await resolveWorkspaceGithubToken(orgId, workspaceId);
+  if (!tokenResult.ok) {
+    // 404 = org never connected GitHub; 500 = token undecryptable. Either way the
+    // user must (re)connect, so report not-connected rather than erroring.
+    return c.json(notConnected);
+  }
+
+  const fetched = await fetchAllInstallations(tokenResult.accessToken);
+  if (!fetched.ok) {
+    // A revoked/expired user token surfaces as 401/403 → treat as not-connected so
+    // the UI offers a reconnect. Other statuses are genuine upstream failures.
+    if (fetched.status === 401 || fetched.status === 403) {
+      return c.json(notConnected);
+    }
+    return c.json(
+      { error: `GitHub API returned ${fetched.status} when listing installations` },
+      502,
+    );
+  }
+
+  return c.json({
+    connected: true,
+    installations: fetched.installations.map(mapInstallation),
+    manageUrl: buildManageInstallationsUrl(appSlug, fetched.installations),
+    installUrl,
   });
 });
 
@@ -533,16 +731,12 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
     return c.json({ error: "Invalid state signature" }, 400);
   }
 
-  // Parse state payload
-  let statePayload: {
-    orgId: string;
-    workspaceId: string;
-    connectionId: string;
-    expiresAt: number;
-    nonce: string;
-  };
+  // Parse state payload. `connectionId` is null for a settings-level connect
+  // (1 workspace = 1 app install, no source_connection yet); `returnTo` may be
+  // absent on states minted before this field existed → default to "sources".
+  let statePayload: GithubInstallState;
   try {
-    statePayload = JSON.parse(stateJson) as typeof statePayload;
+    statePayload = JSON.parse(stateJson) as GithubInstallState;
   } catch {
     return c.json({ error: "Invalid state JSON" }, 400);
   }
@@ -552,33 +746,38 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   }
 
   const { orgId, workspaceId, connectionId: connectionPublicId } = statePayload;
+  const returnTo = parseReturnTo(statePayload.returnTo);
   const now = new Date();
 
   // Resolve the internal connection (UUID) from the publicId up front — needed
   // whether or not the install redirect carried an OAuth `code`. Pull the current
   // deliveryConfig too so we can merge the installation id without clobbering the
   // operational keys (owner/repo/defaultBranch) the resync path relies on.
-  const connRows = await withSystemDb((tx) =>
-    tx
-      .select({
-        id: schema.sourceConnections.id,
-        deliveryConfig: schema.sourceConnections.deliveryConfig,
-      })
-      .from(schema.sourceConnections)
-      .where(
-        and(
-          eq(schema.sourceConnections.publicId, connectionPublicId),
-          eq(schema.sourceConnections.orgId, orgId),
-          eq(schema.sourceConnections.workspaceId, workspaceId),
-          isNull(schema.sourceConnections.deletedAt),
-        ),
-      )
-      .limit(1),
-  );
-
-  const conn = connRows[0];
-  if (!conn) {
-    return c.json({ error: "Connection not found" }, 404);
+  // A settings-level connect carries no connectionId: there is no source
+  // connection to attach to, only the org's OAuth token to (re)store.
+  let conn: { id: string; deliveryConfig: unknown } | null = null;
+  if (connectionPublicId) {
+    const connRows = await withSystemDb((tx) =>
+      tx
+        .select({
+          id: schema.sourceConnections.id,
+          deliveryConfig: schema.sourceConnections.deliveryConfig,
+        })
+        .from(schema.sourceConnections)
+        .where(
+          and(
+            eq(schema.sourceConnections.publicId, connectionPublicId),
+            eq(schema.sourceConnections.orgId, orgId),
+            eq(schema.sourceConnections.workspaceId, workspaceId),
+            isNull(schema.sourceConnections.deletedAt),
+          ),
+        )
+        .limit(1),
+    );
+    conn = connRows[0] ?? null;
+    if (!conn) {
+      return c.json({ error: "Connection not found" }, 404);
+    }
   }
 
   // Exchange the OAuth `code` for a user access token WHEN present. With "Request
@@ -639,8 +838,10 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
     const expiresAt = expires_in ? new Date(Date.now() + expires_in * 1000) : null;
 
     // Fetch the authenticated GitHub user to get a stable provider_user_id.
-    // Errors here are non-fatal — we fall back to a generated placeholder.
-    let providerUserId = `github:${connectionPublicId}`;
+    // Errors here are non-fatal — we fall back to a generated placeholder. The
+    // placeholder keys off the connection when present, else the workspace (the
+    // settings connect has no connection id).
+    let providerUserId = `github:${connectionPublicId ?? workspaceId}`;
     let providerUserEmail: string | null = null;
     let providerUserName: string | null = null;
 
@@ -715,29 +916,34 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
     oauthAccountId = oauthAccount.id;
   }
 
-  // Link the oauth_account (when obtained) and record the GitHub App installation
-  // id onto the connection, resetting to pending_setup (the user still picks
-  // repos). installationId is merged into deliveryConfig so the wizard can
-  // pre-select the just-installed org, without clobbering existing config keys.
-  const mergedDeliveryConfig =
-    installationId != null
-      ? {
-          ...((conn.deliveryConfig as Record<string, unknown> | null) ?? {}),
-          installationId,
-        }
-      : undefined;
+  // When the connect started from a source_connection (the legacy in-wizard
+  // flow), link the oauth_account (when obtained) and record the GitHub App
+  // installation id onto the connection, resetting to pending_setup (the user
+  // still picks repos). installationId is merged into deliveryConfig so the
+  // wizard can pre-select the just-installed org, without clobbering existing
+  // config keys. The settings connect has no connection, so this is skipped —
+  // the org's OAuth token (stored above) is all the settings surface needs.
+  if (conn) {
+    const mergedDeliveryConfig =
+      installationId != null
+        ? {
+            ...((conn.deliveryConfig as Record<string, unknown> | null) ?? {}),
+            installationId,
+          }
+        : undefined;
 
-  await withSystemDb((tx) =>
-    tx
-      .update(schema.sourceConnections)
-      .set({
-        ...(oauthAccountId ? { oauthAccountId } : {}),
-        ...(mergedDeliveryConfig ? { deliveryConfig: mergedDeliveryConfig } : {}),
-        status: "pending_setup",
-        updatedAt: now,
-      })
-      .where(eq(schema.sourceConnections.id, conn.id)),
-  );
+    await withSystemDb((tx) =>
+      tx
+        .update(schema.sourceConnections)
+        .set({
+          ...(oauthAccountId ? { oauthAccountId } : {}),
+          ...(mergedDeliveryConfig ? { deliveryConfig: mergedDeliveryConfig } : {}),
+          status: "pending_setup",
+          updatedAt: now,
+        })
+        .where(eq(schema.sourceConnections.id, conn.id)),
+    );
+  }
 
   // Determine org and workspace slugs from the state-encoded IDs.
   // We need slugs for the redirect URL; fetch them from Postgres.
@@ -758,9 +964,14 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   const orgSlug = orgSlugRows[0]?.slug ?? orgId;
   const wsSlug = wsSlugRows[0]?.slug ?? workspaceId;
 
+  // Route back to the surface the connect started from. Settings is the new home
+  // for the install (1 workspace = 1 app install); the legacy wizard resumes at
+  // the sources repo-picker, carrying the connectionId so it lands on Step 2.
   const redirectUrl =
-    `${appBaseUrl}/${orgSlug}/${wsSlug}/knowledge/sources` +
-    `?setup=github&connectionId=${encodeURIComponent(connectionPublicId)}`;
+    returnTo === "settings"
+      ? `${appBaseUrl}/${orgSlug}/${wsSlug}/settings/github?github_connected=1`
+      : `${appBaseUrl}/${orgSlug}/${wsSlug}/knowledge/sources?setup=github` +
+        (connectionPublicId ? `&connectionId=${encodeURIComponent(connectionPublicId)}` : "");
 
   return c.redirect(redirectUrl, 302);
 });
