@@ -276,6 +276,11 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     lastText = result.text;
     totalSteps += result.steps;
 
+    // Union the git-diff file list into filesTouched. This is the ground truth
+    // for what changed and supplements tool-call events (which may not fire in
+    // all execution environments — e.g. when onStepFinish is not called).
+    for (const f of result.changedFiles) filesTouched.add(f);
+
     // ── 5. JUDGE ──
     const judgeStart = Date.now();
     const verdict = await judgeCompleteness(
@@ -514,6 +519,11 @@ async function runBare(
   });
   const usage = accumulateUsage(emptyUsage(), model, result.usage);
   phases.push(phaseStat("execute", 0, execStart, model, usage));
+
+  // Union git-diff file list into filesTouched — ground truth for changed files,
+  // supplements tool-call events (bare mode also fires graphSync).
+  for (const f of result.changedFiles) filesTouched.add(f);
+
   const evaluation: PromptEvaluation = {
     completeness: 0,
     complexity: 0,

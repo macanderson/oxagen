@@ -61,6 +61,7 @@ describe("EdgeTypes (@oxagen/ontology)", () => {
       "LOADED_SKILL",
       "BRANCHED_TO_SUBAGENT",
       "APPROVED_BY",
+      "TOUCHED_FILE",
     ] as const;
 
     for (const edge of required) {
