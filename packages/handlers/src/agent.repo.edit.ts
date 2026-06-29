@@ -6,6 +6,7 @@ import {
   createNeo4jCodeGraphProvider,
   createPlatformMemoryProvider,
   createClickHouseTraceStore,
+  createGraphSyncAdapter,
 } from "@oxagen/agent/adapters";
 import { resolveGitHubToken } from "./lib/github-token";
 import { createPlatformAgentAi } from "./lib/platform-agent-ai";
@@ -67,6 +68,10 @@ export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = asy
       workspaceId: ctx.workspaceId,
       surface: "agent",
     }),
+    // Always-on graph sync: materialise touched files as :SourceFile nodes and
+    // record (:Execution)-[:TOUCHED_FILE]->(:SourceFile) lineage edges in Neo4j.
+    // Both writes are async + fire-and-forget — never block or fail the turn.
+    graphSync: createGraphSyncAdapter({ owner: input.owner, repo: input.repo }),
   });
 
   // 6. Reject runs where the agent produced no file changes.

@@ -40,7 +40,7 @@ import {
 } from "../router/model-router";
 import { emptyUsage, mergeUsage } from "../types";
 import type { ModelTier, UsageTotals, Workspace, CodeGraphProvider, ProjectContext } from "../types";
-import type { AgentAi, MemoryProvider, TraceStore } from "../ports";
+import type { AgentAi, MemoryProvider, TraceStore, GraphSyncProvider } from "../ports";
 import type {
   EnhancementTrace,
   JudgeVerdict,
@@ -87,6 +87,16 @@ export interface RunTurnOptions {
   codeGraph?: CodeGraphProvider | null;
   /** Trace sink for recording the turn record. */
   trace?: TraceStore | null;
+  /**
+   * Graph-sync port: on every turn, (1) materialise/refresh the touched files
+   * as `:SourceFile` nodes in Neo4j and (2) record an `:Execution` node with
+   * `[:TOUCHED_FILE]` edges to each file. Both writes are async and
+   * fire-and-forget — a failure here NEVER blocks or fails the turn.
+   *
+   * CLI: omit or pass null (no platform Neo4j session).
+   * Platform: inject the adapter from `@oxagen/agent/adapters`.
+   */
+  graphSync?: GraphSyncProvider | null;
   /** Max judge→revise rounds (default 1; 0 disables auto-revision). */
   maxReviseRounds?: number;
   /** Skip the eval/enhance/judge pipeline and run the bare agent. */
@@ -266,6 +276,11 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     lastText = result.text;
     totalSteps += result.steps;
 
+    // Union the git-diff file list into filesTouched. This is the ground truth
+    // for what changed and supplements tool-call events (which may not fire in
+    // all execution environments — e.g. when onStepFinish is not called).
+    for (const f of result.changedFiles) filesTouched.add(f);
+
     // ── 5. JUDGE ──
     const judgeStart = Date.now();
     const verdict = await judgeCompleteness(
@@ -324,6 +339,19 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     phases,
     toolEvents,
   });
+
+  // ── Graph sync: always-on, fire-and-forget, non-blocking. ──
+  // (1) Upsert :SourceFile nodes for every file touched this turn.
+  // (2) Record (:Execution)-[:TOUCHED_FILE]->(:SourceFile) edges in Neo4j.
+  // Both use the trace id as the executionId so lineage ties back to the turn.
+  // A throwing sync MUST NOT fail the turn — both are wrapped in void/catch.
+  if (opts.graphSync && filesTouched.size > 0) {
+    const touchedArr = [...filesTouched];
+    void Promise.resolve(opts.graphSync.ensureGraph(touchedArr)).catch(() => {});
+    void Promise.resolve(
+      opts.graphSync.recordLineage({ executionId: trace.id, touchedFiles: touchedArr }),
+    ).catch(() => {});
+  }
 
   // Record a lesson when the judge had to send the agent back (a gotcha).
   if (opts.memory && judgeRounds.length > 1) {
@@ -491,6 +519,11 @@ async function runBare(
   });
   const usage = accumulateUsage(emptyUsage(), model, result.usage);
   phases.push(phaseStat("execute", 0, execStart, model, usage));
+
+  // Union git-diff file list into filesTouched — ground truth for changed files,
+  // supplements tool-call events (bare mode also fires graphSync).
+  for (const f of result.changedFiles) filesTouched.add(f);
+
   const evaluation: PromptEvaluation = {
     completeness: 0,
     complexity: 0,
@@ -522,6 +555,14 @@ async function runBare(
     phases,
     toolEvents,
   });
+
+  if (opts.graphSync && filesTouched.size > 0) {
+    const touchedArr = [...filesTouched];
+    void Promise.resolve(opts.graphSync.ensureGraph(touchedArr)).catch(() => {});
+    void Promise.resolve(
+      opts.graphSync.recordLineage({ executionId: trace.id, touchedFiles: touchedArr }),
+    ).catch(() => {});
+  }
 
   if (opts.trace) {
     void Promise.resolve(opts.trace.record(trace)).catch(() => {});

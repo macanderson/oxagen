@@ -300,4 +300,74 @@ describe("recordExecutionInGraph", () => {
     // Each call should run at minimum the Execution MERGE per invocation.
     expect(mockNeoRun.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
+
+  // ── TOUCHED_FILE edges (coding-agent lineage) ────────────────────────────
+
+  it("emits TOUCHED_FILE Cypher with UNWIND MERGE when touchedFilePaths is provided", async () => {
+    const touchedFilePaths = ["github:owner/repo:src/a.ts", "github:owner/repo:src/b.ts"];
+    await recordExecutionInGraph({ ...BASE_INPUT, touchedFilePaths });
+
+    const touchedCall = mockNeoRun.mock.calls.find(([cypher]) =>
+      (cypher as string).includes("TOUCHED_FILE"),
+    );
+    expect(touchedCall).toBeDefined();
+    const cypher = touchedCall![0] as string;
+    expect(cypher).toContain("UNWIND");
+    expect(cypher).toContain("SourceFile");
+    expect(cypher).toContain("TOUCHED_FILE");
+    expect(cypher).toContain("MERGE");
+  });
+
+  it("passes touchedFilePaths as the $touchedFilePaths param", async () => {
+    const touchedFilePaths = ["github:owner/repo:src/util.ts"];
+    await recordExecutionInGraph({ ...BASE_INPUT, touchedFilePaths });
+
+    const touchedCall = mockNeoRun.mock.calls.find(([cypher]) =>
+      (cypher as string).includes("TOUCHED_FILE"),
+    );
+    expect(touchedCall).toBeDefined();
+    const params = touchedCall![1] as Record<string, unknown>;
+    expect(params.touchedFilePaths).toEqual(touchedFilePaths);
+  });
+
+  it("sets is_system = true on the TOUCHED_FILE relationship", async () => {
+    await recordExecutionInGraph({
+      ...BASE_INPUT,
+      touchedFilePaths: ["github:owner/repo:src/x.ts"],
+    });
+
+    const touchedCall = mockNeoRun.mock.calls.find(([cypher]) =>
+      (cypher as string).includes("TOUCHED_FILE"),
+    );
+    expect(touchedCall).toBeDefined();
+    const cypher = touchedCall![0] as string;
+    expect(cypher).toContain("r.is_system = true");
+  });
+
+  it("skips TOUCHED_FILE edges when touchedFilePaths is not provided", async () => {
+    await recordExecutionInGraph({ ...BASE_INPUT });
+
+    const touchedCall = mockNeoRun.mock.calls.find(([cypher]) =>
+      (cypher as string).includes("TOUCHED_FILE"),
+    );
+    expect(touchedCall).toBeUndefined();
+  });
+
+  it("skips TOUCHED_FILE edges when touchedFilePaths is empty", async () => {
+    await recordExecutionInGraph({ ...BASE_INPUT, touchedFilePaths: [] });
+
+    const touchedCall = mockNeoRun.mock.calls.find(([cypher]) =>
+      (cypher as string).includes("TOUCHED_FILE"),
+    );
+    expect(touchedCall).toBeUndefined();
+  });
+
+  it("skips TOUCHED_FILE edges when touchedFilePaths is null", async () => {
+    await recordExecutionInGraph({ ...BASE_INPUT, touchedFilePaths: null });
+
+    const touchedCall = mockNeoRun.mock.calls.find(([cypher]) =>
+      (cypher as string).includes("TOUCHED_FILE"),
+    );
+    expect(touchedCall).toBeUndefined();
+  });
 });

@@ -25,6 +25,16 @@ export interface RecordExecutionInput {
   /** Short human label (e.g. "chat execution by <agentId>"). Shown in the graph
    *  explorer as the node's primary identifier instead of a raw UUID. */
   displayName?: string | null;
+  /**
+   * File paths (or naturalKeys) touched during this execution. Each entry is
+   * MERGEd as a `:SourceFile` node and linked via a `[:TOUCHED_FILE]` edge so
+   * callers can query "which files did execution X touch?" in Neo4j.
+   *
+   * The MERGE uses `naturalKey` as the primary key so it is safe to call before
+   * `graph.sync.push` has enriched the node — subsequent syncs SET additional
+   * properties without overwriting the lineage edge.
+   */
+  touchedFilePaths?: string[] | null;
 }
 
 /**
@@ -52,6 +62,7 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
     embedding,
     summary,
     displayName,
+    touchedFilePaths,
   } = input;
 
   // Build a compact JSON properties bag for the node — this is what the graph
@@ -164,6 +175,26 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
          MERGE (e)-[r:${EdgeTypes.CALLED_TOOL}]->(t)
          SET r.is_system = true`,
         { executionId, toolCalls },
+      );
+    }
+
+    // Record file-level lineage: MERGE a minimal :SourceFile for each path and
+    // link it from the Execution with a [:TOUCHED_FILE] edge. Uses naturalKey
+    // as the primary key so subsequent graph.sync.push enrichment only adds
+    // properties — it will never clobber the edge. Single round-trip via UNWIND.
+    if (touchedFilePaths?.length) {
+      await neo4j.run(
+        `MATCH (e:${NodeLabels.Execution} {id: $executionId, orgId: $orgId})
+         UNWIND $touchedFilePaths AS naturalKey
+         MERGE (f:SourceFile {naturalKey: naturalKey, orgId: $orgId})
+         ON CREATE SET
+           f.path         = naturalKey,
+           f.displayName  = naturalKey,
+           f.is_system    = true,
+           f.createdAt    = datetime()
+         MERGE (e)-[r:${EdgeTypes.TOUCHED_FILE}]->(f)
+         SET r.is_system = true`,
+        { executionId, touchedFilePaths },
       );
     }
   } finally {
