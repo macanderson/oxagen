@@ -213,6 +213,10 @@ describe("ingestion.semantic-edge-infer Inngest function", () => {
     expect(cyphers.every((q) => !q.includes("SEMANTIC_EDGE"))).toBe(true);
     expect(cyphers.every((q) => q.includes("r.inferred    = true"))).toBe(true);
     expect(cyphers.every((q) => q.includes("r.origin      = 'semantic'"))).toBe(true);
+    // Each target node gets its descriptive PascalCase domain label (targetType
+    // "Feature"/"Service"), so an auto-accepted inferred node is never anchor-only.
+    expect(cyphers.some((q) => q.includes("SET tgt:Feature"))).toBe(true);
+    expect(cyphers.some((q) => q.includes("SET tgt:Service"))).toBe(true);
   });
 
   it("does NOT create permanent relationship for pending edges", async () => {

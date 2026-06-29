@@ -2,7 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { semanticEdgeApprove } from "@oxagen/oxagen/contracts/semantic.edge.approve";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology/tenant";
-import { sanitizeRelationshipType } from "@oxagen/ontology/labels";
+import { sanitizeRelationshipType, sanitizeLabel } from "@oxagen/ontology/labels";
 import { HTTPException } from "hono/http-exception";
 import { logger } from "./logger";
 
@@ -106,6 +106,16 @@ export const semanticEdgeApproveHandler: CapabilityHandler<typeof semanticEdgeAp
       //    `r.origin`; `r.type` keeps the raw, pre-sanitization model output.
       //    MERGE on the target KnowledgeNode first, then MERGE the relationship.
       const relType = sanitizeRelationshipType(relationshipType);
+      // The materialised target carries a DESCRIPTIVE PascalCase domain label
+      // (e.g. :Feature, :Service) so an inferred node reads like any other graph
+      // node — never an anchor-only :GraphNode and never a system-oriented marker.
+      // sanitizeLabel makes it injection-safe; applied idempotently (re-adding a
+      // label a node already has is a no-op) so it lands on pre-existing
+      // placeholders too. `tgt.label` mirrors it as the PascalCase display chip.
+      const tgtDomainLabel = sanitizeLabel(targetType);
+      const tgtLabelClause = tgtDomainLabel
+        ? `SET tgt:${tgtDomainLabel}\n         WITH src, tgt\n         `
+        : "";
       const relResult = await sess.run(
         `MATCH (src:EntityNode {publicId: $sourceNodeId, orgId: $orgId})
          MERGE (tgt:GraphNode {
@@ -117,12 +127,12 @@ export const semanticEdgeApproveHandler: CapabilityHandler<typeof semanticEdgeAp
          ON CREATE SET
            tgt.id          = randomUUID(),
            tgt.publicId    = randomUUID(),
-           tgt.label       = $targetType,
+           tgt.label       = $targetDisplayLabel,
            tgt.displayName = $targetName,
            tgt.is_system   = false,
            tgt.createdAt   = datetime()
          WITH src, tgt
-         MERGE (src)-[r:${relType} {inferredEdgeId: $edgeId}]->(tgt)
+         ${tgtLabelClause}MERGE (src)-[r:${relType} {inferredEdgeId: $edgeId}]->(tgt)
          ON CREATE SET
            r.inferred    = true,
            r.origin      = 'semantic',
@@ -138,6 +148,7 @@ export const semanticEdgeApproveHandler: CapabilityHandler<typeof semanticEdgeAp
           workspaceId: ctx.workspaceId,
           sourceNodeId,
           targetType,
+          targetDisplayLabel: tgtDomainLabel ?? targetType,
           targetName,
           edgeId,
           relationshipType,
