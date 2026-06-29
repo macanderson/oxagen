@@ -46,29 +46,62 @@ export function assertValidLabel(label: string): string {
 }
 
 /**
- * Coerce an arbitrary free-text type ("Nuclear-powered submarine", "pull_request")
- * into a single valid Neo4j label, or return null if nothing usable remains.
+ * Coerce an arbitrary free-text type ("Nuclear-powered submarine", "pull_request",
+ * "ISSUE") into a single **PascalCase** Neo4j label, or return null if nothing
+ * usable remains.
  *
- * Rules: collapse any run of non-alphanumeric characters to a single underscore,
- * trim leading/trailing underscores, prefix `N_` when the result would start with a
- * digit, and cap at 99 chars. The result always satisfies `isValidLabel`.
+ * PascalCase is the canonical, human-readable label convention across the graph:
+ * every node label a user ever sees (the structural `:Label` and the `label`
+ * property the explorer groups/colours on) reads as `PullRequest`, never
+ * `pull_request`, `PULL_REQUEST`, or `pullRequest`. Casing is normalised
+ * regardless of how the source (a connector, the LLM, a customer) spelled the
+ * type, so the same concept never splinters into differently-cased labels.
  *
- *   "Nuclear-powered submarine" → "Nuclear_powered_submarine"
- *   "pull_request"              → "pull_request"
- *   "3D model"                  → "N_3D_model"
+ * Rules: split into word tokens on any run of non-alphanumeric characters AND on
+ * camelCase humps (lower→upper boundaries); Title-case each token (first char
+ * upper, rest lower — this also flattens SCREAMING_SNAKE input); concatenate;
+ * prefix `N` when the result would start with a digit; cap at 99 chars. The
+ * result always satisfies `isValidLabel`, and the function is idempotent on
+ * already-PascalCase input.
+ *
+ *   "Nuclear-powered submarine" → "NuclearPoweredSubmarine"
+ *   "pull_request"              → "PullRequest"
+ *   "PULL_REQUEST"              → "PullRequest"
+ *   "issue"                     → "Issue"
+ *   "GraphNode"                 → "GraphNode"   (idempotent)
+ *   "3D model"                  → "N3DModel"
  *   "!!!"                       → null
  */
 export function sanitizeLabel(raw: string): string | null {
-  const collapsed = raw
+  const words = raw
     .trim()
-    .replace(/[^A-Za-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  if (collapsed.length === 0) return null;
-  const prefixed = /^[A-Za-z]/.test(collapsed) ? collapsed : `N_${collapsed}`;
-  const capped = prefixed.slice(0, 99);
-  // The slice could re-introduce a trailing underscore at the 99-char boundary.
-  const cleaned = capped.replace(/_+$/g, "");
-  return isValidLabel(cleaned) ? cleaned : null;
+    // Insert a separator at camelCase humps so "pullRequest" tokenises the same
+    // way "pull_request" does — both collapse to the same canonical PascalCase.
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .split(/[^A-Za-z0-9]+/)
+    .filter((w) => w.length > 0);
+  if (words.length === 0) return null;
+  let pascal = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join("");
+  // A Neo4j label must start with a letter; prefix `N` for digit-leading results.
+  if (!/^[A-Za-z]/.test(pascal)) pascal = `N${pascal}`;
+  const capped = pascal.slice(0, 99);
+  return isValidLabel(capped) ? capped : null;
+}
+
+/**
+ * Normalised, separator- and case-insensitive identity key for a label or type.
+ * Used for vocabulary-membership comparisons where "pull_request", "PullRequest",
+ * and "pull request" must all be treated as the same type. Because it routes
+ * through `sanitizeLabel` (which strips separators and canonicalises case) then
+ * lower-cases, every spelling of one concept collapses to a single key.
+ *
+ *   toLabelKey("pull_request") === toLabelKey("PullRequest") === "pullrequest"
+ *
+ * Returns "" when the input has no usable label characters, so an unusable type
+ * can never accidentally match a real vocabulary entry.
+ */
+export function toLabelKey(raw: string): string {
+  return sanitizeLabel(raw)?.toLowerCase() ?? "";
 }
 
 /**
