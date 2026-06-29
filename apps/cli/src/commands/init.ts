@@ -4,7 +4,7 @@
  *
  * Mirrors the Claude Code `~/.claude` (global) + `.claude/` (project) two-tier
  * model. Precedence (lowest → highest), matching the existing settings/resolve.ts:
- *   1. Global user:  ~/.config/oxagen/settings.json
+ *   1. Global user:  ~/.oxagen/settings.json
  *   2. Project:      <cwd>/.oxagen/settings.json
  *   3. Local:        <cwd>/.oxagen/settings.local.json  (not written by init)
  *
