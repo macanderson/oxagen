@@ -55,6 +55,9 @@ import { agentMcpConsentList } from "./agent.mcp.consent.list";
 import { agentMemoryRecall } from "./agent.memory.recall";
 import { agentMemoryWrite } from "./agent.memory.write";
 import { agentMemoryList } from "./agent.memory.list";
+import { agentMemoryUpdate } from "./agent.memory.update";
+import { agentMemoryDelete } from "./agent.memory.delete";
+import { agentMemoryRemember } from "./agent.memory.remember";
 import { agentPlanApprove } from "./agent.plan.approve";
 import { agentPlanCreate } from "./agent.plan.create";
 import { agentSkillList } from "./agent.skill.list";
@@ -321,6 +324,9 @@ export {
   agentMemoryRecall,
   agentMemoryWrite,
   agentMemoryList,
+  agentMemoryUpdate,
+  agentMemoryDelete,
+  agentMemoryRemember,
   agentPlanApprove,
   agentPlanCreate,
   agentSkillList,
@@ -580,6 +586,9 @@ export const contracts = [
   agentMemoryRecall,
   agentMemoryWrite,
   agentMemoryList,
+  agentMemoryUpdate,
+  agentMemoryDelete,
+  agentMemoryRemember,
   agentPlanApprove,
   agentPlanCreate,
   agentSkillList,
