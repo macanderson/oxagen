@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./server": "./src/auth.ts",
-    "./client": "./src/client.ts"
+    "./client": "./src/client.ts",
+    "./cli-auth": "./src/cli-auth/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
