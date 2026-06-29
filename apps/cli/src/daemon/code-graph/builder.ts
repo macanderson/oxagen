@@ -13,7 +13,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { createHash } from "node:crypto";
-import { parseSourceFile, type SymbolKind } from "@oxagen/code-graph";
+import { parseSourceFile, type SymbolKind, type CallSite, type ImportSite } from "@oxagen/code-graph";
 import type { CodeGraph, CodeNode, CodeEdge, CodeNodeKind } from "./types";
 import { hashContent } from "./store";
 import type { FileGraph, CodeGraphStore } from "./store";
@@ -138,6 +138,23 @@ export async function fileGraphFromContent(
 
   edges.push(...extractImports(content, relativePath, root));
 
+  // ── CALLS edges (same-file resolution) ──────────────────────────────────
+  if (parseResult.calls && parseResult.calls.length > 0) {
+    const callEdges = extractCallEdges(parseResult.calls, nodes, relativePath);
+    edges.push(...callEdges);
+  }
+
+  // ── Workspace-alias IMPORTS (@oxagen/*) ─────────────────────────────────
+  if (parseResult.imports && parseResult.imports.length > 0) {
+    const aliasEdges = extractWorkspaceAliasImports(
+      parseResult.imports,
+      fileNode.id,
+      relativePath,
+      root,
+    );
+    edges.push(...aliasEdges);
+  }
+
   return { contentHash: hashContent(content), nodes, edges };
 }
 
@@ -251,6 +268,125 @@ function extractImports(content: string, filePath: string, root: string): CodeEd
     if (targetId === fileId || seen.has(targetId)) continue;
     seen.add(targetId);
     edges.push({ source: fileId, target: targetId, type: "imports" });
+  }
+
+  return edges;
+}
+
+/**
+ * Emit same-file CALLS edges from the call sites returned by the parser.
+ *
+ * Resolution: `enclosingSymbol` is the caller (looked up by name among the
+ * file's symbol nodes); `callee` is matched by name among the same file's
+ * symbol nodes. Unresolved cross-file calls are LOGGED (not silently skipped)
+ * so coverage is honest. Module-level calls (enclosingSymbol = null) are
+ * skipped — they have no meaningful caller node in the graph.
+ */
+function extractCallEdges(
+  calls: CallSite[],
+  nodes: CodeNode[],
+  filePath: string,
+): CodeEdge[] {
+  // Index symbol nodes by name for O(1) lookup.
+  const symbolsByName = new Map<string, CodeNode>();
+  for (const node of nodes) {
+    if (node.kind !== "file") {
+      symbolsByName.set(node.name, node);
+    }
+  }
+
+  const edges: CodeEdge[] = [];
+  const seenEdges = new Set<string>(); // deduplicate source:target pairs
+
+  for (const call of calls) {
+    if (!call.enclosingSymbol) continue; // skip module-level calls
+
+    const callerNode = symbolsByName.get(call.enclosingSymbol);
+    if (!callerNode) continue; // enclosing symbol not in graph (shouldn't happen)
+
+    const calleeNode = symbolsByName.get(call.callee);
+    if (!calleeNode) {
+      // Cross-file or unresolvable call — log so coverage is visible.
+      console.log(
+        `[code-graph] unresolved call: ${call.enclosingSymbol} → ${call.callee} ` +
+          `(${filePath}:${call.line + 1})`,
+      );
+      continue;
+    }
+
+    if (callerNode.id === calleeNode.id) continue; // self-call (recursive)
+
+    const edgeKey = `${callerNode.id}:${calleeNode.id}`;
+    if (seenEdges.has(edgeKey)) continue;
+    seenEdges.add(edgeKey);
+
+    edges.push({ source: callerNode.id, target: calleeNode.id, type: "calls" });
+  }
+
+  return edges;
+}
+
+/** Extensions tried (in order) for workspace-alias package index resolution. */
+const WORKSPACE_ALIAS_CANDIDATES = [
+  ["src", "index.ts"],
+  ["src", "index.tsx"],
+  ["src", "index.js"],
+  ["index.ts"],
+  ["index.tsx"],
+  ["index.js"],
+];
+
+/**
+ * Resolve `@oxagen/<pkg>` workspace-alias import specifiers to their actual
+ * source files in `packages/<pkg>/` so cross-package IMPORTS edges can be
+ * built for the local code graph.
+ *
+ * Resolution: check `<root>/packages/<pkg>/src/index.ts` and variants.
+ * Unresolved aliases are logged.
+ */
+function extractWorkspaceAliasImports(
+  imports: ImportSite[],
+  fileNodeId: string,
+  filePath: string,
+  root: string,
+): CodeEdge[] {
+  const edges: CodeEdge[] = [];
+  const seenTargets = new Set<string>();
+
+  for (const { specifier } of imports) {
+    if (!specifier.startsWith("@oxagen/")) continue;
+
+    // "@oxagen/ai/something" → pkg = "ai"
+    const afterScope = specifier.slice("@oxagen/".length);
+    const pkg = afterScope.split("/")[0]!;
+
+    const pkgRoot = path.join(root, "packages", pkg);
+    let resolvedRel: string | null = null;
+
+    for (const parts of WORKSPACE_ALIAS_CANDIDATES) {
+      const candidate = path.join(pkgRoot, ...parts);
+      try {
+        if (fs.statSync(candidate).isFile()) {
+          resolvedRel = path.relative(root, candidate);
+          break;
+        }
+      } catch {
+        // candidate doesn't exist — try next
+      }
+    }
+
+    if (!resolvedRel) {
+      console.log(
+        `[code-graph] unresolved workspace alias: ${specifier} imported by ${filePath}`,
+      );
+      continue;
+    }
+
+    const targetId = computeNodeId(resolvedRel, path.basename(resolvedRel), "file");
+    if (targetId === fileNodeId || seenTargets.has(targetId)) continue;
+    seenTargets.add(targetId);
+
+    edges.push({ source: fileNodeId, target: targetId, type: "imports" });
   }
 
   return edges;

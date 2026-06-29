@@ -9,4 +9,6 @@ export type {
   ParsedSymbol,
   ParsedLanguage,
   ParseResult,
+  CallSite,
+  ImportSite,
 } from "@oxagen/code-graph";

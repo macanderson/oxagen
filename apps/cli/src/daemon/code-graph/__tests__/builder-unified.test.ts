@@ -19,7 +19,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ParseResult } from "@oxagen/code-graph";
+import type { ParseResult, CallSite, ImportSite } from "@oxagen/code-graph";
 
 // ---------------------------------------------------------------------------
 // Mock @oxagen/code-graph so the builder can be tested without real WASM
@@ -216,6 +216,206 @@ describe("builder — unified tree-sitter extraction", () => {
 
     expect(mockParseSourceFile).toHaveBeenCalledOnce();
     expect(mockParseSourceFile).toHaveBeenCalledWith("lib/utils.ts", content);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CALLS edge extraction
+// ---------------------------------------------------------------------------
+
+describe("builder — CALLS edge extraction (same-file resolution)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("emits a calls edge when enclosingSymbol and callee both exist in the same file", async () => {
+    const calls: CallSite[] = [
+      { callee: "helper", line: 1, enclosingSymbol: "doWork" },
+    ];
+    mockParseSourceFile.mockResolvedValueOnce({
+      language: "typescript",
+      symbols: [
+        { name: "doWork", kind: "function", startLine: 0, endLine: 3 },
+        { name: "helper", kind: "function", startLine: 5, endLine: 7 },
+      ],
+      calls,
+    } as ParseResult);
+
+    const fg = await fileGraphFromContent("src/work.ts", "/* content */", "/root");
+
+    const callEdges = fg.edges.filter((e) => e.type === "calls");
+    expect(callEdges).toHaveLength(1);
+
+    const doWorkNode = fg.nodes.find((n) => n.name === "doWork");
+    const helperNode = fg.nodes.find((n) => n.name === "helper");
+    expect(doWorkNode).toBeDefined();
+    expect(helperNode).toBeDefined();
+    expect(callEdges[0]!.source).toBe(doWorkNode!.id);
+    expect(callEdges[0]!.target).toBe(helperNode!.id);
+  });
+
+  it("skips calls with enclosingSymbol = null (module-level calls)", async () => {
+    const calls: CallSite[] = [
+      { callee: "init", line: 0, enclosingSymbol: null },
+    ];
+    mockParseSourceFile.mockResolvedValueOnce({
+      language: "typescript",
+      symbols: [{ name: "init", kind: "function", startLine: 2, endLine: 4 }],
+      calls,
+    } as ParseResult);
+
+    const fg = await fileGraphFromContent("src/boot.ts", "init();", "/root");
+
+    const callEdges = fg.edges.filter((e) => e.type === "calls");
+    expect(callEdges).toHaveLength(0);
+  });
+
+  it("logs (but does not throw) when callee is unresolved (cross-file call)", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const calls: CallSite[] = [
+      { callee: "externalFn", line: 2, enclosingSymbol: "localFn" },
+    ];
+    mockParseSourceFile.mockResolvedValueOnce({
+      language: "typescript",
+      symbols: [{ name: "localFn", kind: "function", startLine: 0, endLine: 5 }],
+      calls,
+    } as ParseResult);
+
+    const fg = await fileGraphFromContent("src/caller.ts", "/* content */", "/root");
+
+    const callEdges = fg.edges.filter((e) => e.type === "calls");
+    expect(callEdges).toHaveLength(0); // unresolved — no edge
+    expect(consoleSpy).toHaveBeenCalledOnce();
+    expect(consoleSpy.mock.calls[0]![0]).toMatch(/unresolved call/);
+    expect(consoleSpy.mock.calls[0]![0]).toMatch(/externalFn/);
+
+    consoleSpy.mockRestore();
+  });
+
+  it("deduplicates calls edges: same caller→callee pair appears only once", async () => {
+    const calls: CallSite[] = [
+      { callee: "helper", line: 1, enclosingSymbol: "doWork" },
+      { callee: "helper", line: 3, enclosingSymbol: "doWork" }, // same pair, different line
+    ];
+    mockParseSourceFile.mockResolvedValueOnce({
+      language: "typescript",
+      symbols: [
+        { name: "doWork", kind: "function", startLine: 0, endLine: 5 },
+        { name: "helper", kind: "function", startLine: 7, endLine: 9 },
+      ],
+      calls,
+    } as ParseResult);
+
+    const fg = await fileGraphFromContent("src/dup-call.ts", "/* content */", "/root");
+
+    const callEdges = fg.edges.filter((e) => e.type === "calls");
+    expect(callEdges).toHaveLength(1); // deduplicated
+  });
+
+  it("emits no calls edges when parseResult.calls is undefined", async () => {
+    mockParseSourceFile.mockResolvedValueOnce({
+      language: "typescript",
+      symbols: [{ name: "fn", kind: "function", startLine: 0, endLine: 2 }],
+      // no calls field
+    } as ParseResult);
+
+    const fg = await fileGraphFromContent("src/nocalls.ts", "/* content */", "/root");
+    expect(fg.edges.filter((e) => e.type === "calls")).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Workspace-alias IMPORTS edge extraction
+// ---------------------------------------------------------------------------
+
+describe("builder — workspace-alias IMPORTS (@oxagen/*)", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Create a temp dir to simulate <workspace-root>/packages/<pkg>/src/index.ts
+    tmpDir = mkdtempSync(join(tmpdir(), "oxagen-alias-test-"));
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("resolves @oxagen/<pkg> to packages/<pkg>/src/index.ts and emits an imports edge", async () => {
+    // Create the target file so statSync resolves it
+    mkdirSync(join(tmpDir, "packages", "ai", "src"), { recursive: true });
+    writeFileSync(join(tmpDir, "packages", "ai", "src", "index.ts"), "// ai index");
+
+    const imports: ImportSite[] = [
+      { specifier: "@oxagen/ai", line: 0 },
+    ];
+    mockParseSourceFile.mockResolvedValueOnce({
+      language: "typescript",
+      symbols: [],
+      imports,
+    } as ParseResult);
+
+    const fg = await fileGraphFromContent("src/consumer.ts", "/* content */", tmpDir);
+
+    const importEdges = fg.edges.filter((e) => e.type === "imports");
+    // Should have one edge from the consumer file to packages/ai/src/index.ts
+    expect(importEdges).toHaveLength(1);
+    expect(importEdges[0]!.source).toBe(fg.nodes.find((n) => n.kind === "file")!.id);
+  });
+
+  it("logs (but does not throw) when @oxagen/<pkg> cannot be resolved on disk", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const imports: ImportSite[] = [
+      { specifier: "@oxagen/nonexistent-pkg-xyz", line: 0 },
+    ];
+    mockParseSourceFile.mockResolvedValueOnce({
+      language: "typescript",
+      symbols: [],
+      imports,
+    } as ParseResult);
+
+    const fg = await fileGraphFromContent("src/consumer.ts", "/* content */", tmpDir);
+
+    const importEdges = fg.edges.filter((e) => e.type === "imports");
+    expect(importEdges).toHaveLength(0);
+    expect(consoleSpy).toHaveBeenCalledOnce();
+    expect(consoleSpy.mock.calls[0]![0]).toMatch(/unresolved workspace alias/);
+    expect(consoleSpy.mock.calls[0]![0]).toMatch(/@oxagen\/nonexistent-pkg-xyz/);
+
+    consoleSpy.mockRestore();
+  });
+
+  it("emits no alias-imports edges when parseResult.imports is undefined", async () => {
+    mockParseSourceFile.mockResolvedValueOnce({
+      language: "typescript",
+      symbols: [],
+      // no imports field
+    } as ParseResult);
+
+    const fg = await fileGraphFromContent("src/noimports.ts", "/* content */", tmpDir);
+    expect(fg.edges.filter((e) => e.type === "imports")).toHaveLength(0);
+  });
+
+  it("does not emit an alias-imports edge for non-@oxagen specifiers", async () => {
+    const imports: ImportSite[] = [
+      { specifier: "react", line: 0 },
+      { specifier: "./local", line: 1 },
+    ];
+    mockParseSourceFile.mockResolvedValueOnce({
+      language: "typescript",
+      symbols: [],
+      imports,
+    } as ParseResult);
+
+    const fg = await fileGraphFromContent("src/bare.ts", "/* content */", tmpDir);
+
+    // Relative imports go through extractImports() (existing logic), not the alias resolver.
+    // Bare specifiers like "react" are skipped by both paths.
+    const aliasEdges = fg.edges.filter(
+      (e) => e.type === "imports" && e.target.includes("packages"),
+    );
+    expect(aliasEdges).toHaveLength(0);
   });
 });
 

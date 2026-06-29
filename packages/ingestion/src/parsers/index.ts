@@ -21,4 +21,6 @@ export type {
   ParsedLanguage,
   SymbolKind,
   MarkdownParse,
+  CallSite,
+  ImportSite,
 } from "@oxagen/code-graph";

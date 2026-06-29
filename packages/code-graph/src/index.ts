@@ -15,9 +15,9 @@
 import { extname } from "path";
 import { getParser } from "./loader";
 import { parseMarkdown } from "./markdown";
-import type { ParseResult, ParsedSymbol, ParsedLanguage, SymbolKind } from "./types";
+import type { ParseResult, ParsedSymbol, ParsedLanguage, SymbolKind, CallSite, ImportSite } from "./types";
 
-export type { ParseResult, ParsedSymbol, ParsedLanguage, SymbolKind };
+export type { ParseResult, ParsedSymbol, ParsedLanguage, SymbolKind, CallSite, ImportSite };
 export { getParser, _resetForTest, _injectLanguagesForTest } from "./loader";
 export { parseMarkdown } from "./markdown";
 export type { MarkdownParse } from "./markdown";
@@ -79,6 +79,36 @@ const TS_QUERIES = [
 // or public_field_definition, not from the arrow function node itself.
 const TS_ARROW_QUERY =
   "(lexical_declaration (variable_declarator name: (identifier) @name value: (arrow_function) @fn)) @node";
+
+/**
+ * Call-site query: matches every call_expression and captures the callee
+ * identifier (or the final method property for member calls).
+ *
+ * Examples matched:
+ *   foo()              → callee "foo"
+ *   obj.bar()          → callee "bar"
+ *   this.doWork()      → callee "doWork"
+ *   a.b.transform()    → callee "transform"
+ *
+ * Note: decorator calls and type-assertion-only expressions are not matched
+ * by this pattern, which is intentional (we want runtime call edges only).
+ */
+const TS_CALL_QUERY =
+  "(call_expression function: [(identifier) @callee (member_expression property: (property_identifier) @callee)]) @node";
+
+/**
+ * Import-statement query: captures the specifier string of every static
+ * `import … from "…"` declaration (TypeScript/JavaScript).
+ */
+const TS_IMPORT_QUERY =
+  "(import_statement source: (string (string_fragment) @specifier)) @node";
+
+/**
+ * Re-export query: captures the specifier of `export { … } from "…"` and
+ * `export * from "…"` — both are import-like declarations that create edges.
+ */
+const TS_REEXPORT_QUERY =
+  "(export_statement source: (string (string_fragment) @specifier)) @node";
 
 // ---------------------------------------------------------------------------
 // Python query patterns
@@ -180,6 +210,106 @@ function runArrowQuery(
   }
 
   return symbols;
+}
+
+/**
+ * Extract call sites from a TypeScript/JavaScript parse tree.
+ *
+ * For each call_expression the query matches, we resolve the `enclosingSymbol`
+ * by finding the narrowest already-extracted symbol whose [startLine, endLine]
+ * range contains the call's line.  Module-level calls (not inside any symbol)
+ * have enclosingSymbol = null.
+ */
+function runCallQuery(
+  tree: Parser.Tree,
+  language: Parser.Language,
+  symbols: ParsedSymbol[],
+): CallSite[] {
+  const calls: CallSite[] = [];
+  let q: Parser.Query;
+  try {
+    q = language.query(TS_CALL_QUERY);
+  } catch {
+    return calls;
+  }
+
+  const matches = q.matches(tree.rootNode);
+  const seen = new Set<string>(); // deduplicate callee:line pairs
+  for (const match of matches) {
+    const calleeCapture = match.captures.find((c) => c.name === "callee");
+    const nodeCapture = match.captures.find((c) => c.name === "node");
+    if (!calleeCapture || !nodeCapture) continue;
+
+    const callee = calleeCapture.node.text;
+    if (!callee) continue;
+    const line = nodeCapture.node.startPosition.row;
+
+    // Deduplicate same callee on same line (e.g. nested capture patterns).
+    const dedupeKey = `${callee}:${line}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    // Find the narrowest enclosing symbol by line range.
+    let enclosingSymbol: string | null = null;
+    let bestSize = Infinity;
+    for (const sym of symbols) {
+      if (sym.startLine <= line && sym.endLine >= line) {
+        const size = sym.endLine - sym.startLine;
+        if (size < bestSize) {
+          bestSize = size;
+          enclosingSymbol = sym.name;
+        }
+      }
+    }
+
+    calls.push({ callee, line, enclosingSymbol });
+  }
+
+  return calls;
+}
+
+/**
+ * Extract import specifiers from a TypeScript/JavaScript parse tree.
+ *
+ * Returns both import_statement and export_statement sources (re-exports) so
+ * all inbound/outbound module dependencies are captured.  Both relative
+ * ('./utils') and bare ('@oxagen/ai', 'react') specifiers are returned —
+ * callers decide which to resolve.
+ */
+function runImportQuery(
+  tree: Parser.Tree,
+  language: Parser.Language,
+): ImportSite[] {
+  const imports: ImportSite[] = [];
+  const seen = new Set<string>(); // deduplicate specifier:line pairs
+
+  for (const queryStr of [TS_IMPORT_QUERY, TS_REEXPORT_QUERY]) {
+    let q: Parser.Query;
+    try {
+      q = language.query(queryStr);
+    } catch {
+      continue;
+    }
+
+    const matches = q.matches(tree.rootNode);
+    for (const match of matches) {
+      const specCapture = match.captures.find((c) => c.name === "specifier");
+      const nodeCapture = match.captures.find((c) => c.name === "node");
+      if (!specCapture || !nodeCapture) continue;
+
+      const specifier = specCapture.node.text;
+      if (!specifier) continue;
+      const line = nodeCapture.node.startPosition.row;
+
+      const dedupeKey = `${specifier}:${line}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+
+      imports.push({ specifier, line });
+    }
+  }
+
+  return imports;
 }
 
 // ---------------------------------------------------------------------------
@@ -293,30 +423,45 @@ export async function parseSourceFile(
     const parser = await getParser(language);
     const tree = parser.parse(content);
 
-    let symbols: ParsedSymbol[];
-
     if (language === "typescript") {
       const tsLang = parser.getLanguage();
-      symbols = [
+      const rawSymbols = [
         ...runQueries(tree, tsLang, TS_QUERIES),
         ...runArrowQuery(tree, tsLang),
       ];
-    } else {
-      const pyLang = parser.getLanguage();
-      symbols = runQueries(tree, pyLang, PY_QUERIES);
+
+      // Deduplicate by (name + kind + startLine) to avoid double-counting
+      // if multiple query patterns match the same node.
+      const seenSymbols = new Set<string>();
+      const deduped = rawSymbols.filter((s) => {
+        const key = `${s.kind}:${s.name}:${s.startLine}`;
+        if (seenSymbols.has(key)) return false;
+        seenSymbols.add(key);
+        return true;
+      });
+
+      // Extract call sites and import specifiers using the deduped symbols so
+      // enclosingSymbol resolution uses the same set that will be returned.
+      const calls = runCallQuery(tree, tsLang, deduped);
+      const imports = runImportQuery(tree, tsLang);
+
+      return { language, symbols: enrichSymbols(deduped, content), calls, imports };
     }
 
-    // Deduplicate by (name + kind + startLine) to avoid double-counting
-    // if multiple query patterns match the same node.
-    const seen = new Set<string>();
-    const deduped = symbols.filter((s) => {
+    // Python: symbol extraction only; call/import queries not yet implemented.
+    const pyLang = parser.getLanguage();
+    const pySymbols = runQueries(tree, pyLang, PY_QUERIES);
+
+    // Deduplicate by (name + kind + startLine).
+    const seenPy = new Set<string>();
+    const dedupedPy = pySymbols.filter((s) => {
       const key = `${s.kind}:${s.name}:${s.startLine}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
+      if (seenPy.has(key)) return false;
+      seenPy.add(key);
       return true;
     });
 
-    return { language, symbols: enrichSymbols(deduped, content) };
+    return { language, symbols: enrichSymbols(dedupedPy, content) };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     // Log at error level so WASM init failures and tree-sitter errors are

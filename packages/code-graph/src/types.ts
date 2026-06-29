@@ -39,10 +39,52 @@ export interface ParsedSymbol {
 
 export type ParsedLanguage = "typescript" | "python" | "markdown" | "unknown";
 
+/**
+ * A call site extracted from the source file.
+ *
+ * The `enclosingSymbol` is the name of the function/method/arrow_function whose
+ * line range contains the call expression, or null for module-level calls.  The
+ * caller name is used for same-file CALLS edge resolution; cross-file resolution
+ * is a documented follow-up.
+ */
+export interface CallSite {
+  /** The function or method name being called (identifier or member property). */
+  callee: string;
+  /** 0-indexed line of the call_expression node. */
+  line: number;
+  /** Name of the enclosing symbol, or null if the call is at module scope. */
+  enclosingSymbol: string | null;
+}
+
+/**
+ * An import specifier extracted from an import or re-export statement.
+ *
+ * Consumers use this to build IMPORTS edges.  Both relative ('./utils') and
+ * bare specifiers ('@oxagen/ai', 'react') are surfaced so consumers can decide
+ * which to resolve.
+ */
+export interface ImportSite {
+  /** The raw import specifier, e.g. "@oxagen/ai", "./utils", "react". */
+  specifier: string;
+  /** 0-indexed line of the import_statement or export_statement node. */
+  line: number;
+}
+
 export interface ParseResult {
   language: ParsedLanguage;
   symbols: ParsedSymbol[];
   /** First H1 title for markdown documents, when present. */
   title?: string;
   error?: string;
+  /**
+   * Call sites extracted from the source (TypeScript/JavaScript only).
+   * Omitted (undefined) for Python, Markdown, and unknown files.
+   */
+  calls?: CallSite[];
+  /**
+   * Import specifiers extracted from the source (TypeScript/JavaScript only).
+   * Includes both relative and bare specifiers; callers resolve them.
+   * Omitted (undefined) for Python, Markdown, and unknown files.
+   */
+  imports?: ImportSite[];
 }
