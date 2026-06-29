@@ -188,6 +188,23 @@
       }
     },
     {
+      "name": "agent.feature.verify",
+      "file": "agent.feature.verify.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "agent.mcp.consent.list",
       "file": "agent.mcp.consent.list.ts",
       "domain": "agent",
@@ -295,6 +312,24 @@
       }
     },
     {
+      "name": "agent.memory.delete",
+      "file": "agent.memory.delete.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
       "name": "agent.memory.list",
       "file": "agent.memory.list.ts",
       "domain": "agent",
@@ -369,6 +404,42 @@
       }
     },
     {
+      "name": "agent.memory.remember",
+      "file": "agent.memory.remember.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.memory.update",
+      "file": "agent.memory.update.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
       "name": "agent.memory.write",
       "file": "agent.memory.write.ts",
       "domain": "agent",
@@ -437,6 +508,78 @@
         "api": false,
         "unit": false,
         "docs": false
+      }
+    },
+    {
+      "name": "agent.sandbox.exec",
+      "file": "agent.sandbox.exec.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "agent.sandbox.snapshot",
+      "file": "agent.sandbox.snapshot.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "agent.sandbox.start",
+      "file": "agent.sandbox.start.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "agent.sandbox.stop",
+      "file": "agent.sandbox.stop.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -1030,6 +1173,125 @@
       }
     },
     {
+      "name": "browser.click",
+      "file": "browser.click.ts",
+      "domain": "browser",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "browser.fill",
+      "file": "browser.fill.ts",
+      "domain": "browser",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "browser.navigate",
+      "file": "browser.navigate.ts",
+      "domain": "browser",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "browser.read",
+      "file": "browser.read.ts",
+      "domain": "browser",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "browser.refresh",
+      "file": "browser.refresh.ts",
+      "domain": "browser",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "browser.screenshot",
+      "file": "browser.screenshot.ts",
+      "domain": "browser",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "browser.submit",
+      "file": "browser.submit.ts",
+      "domain": "browser",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "chat.message.execution",
       "file": "chat.message.execution.ts",
       "domain": "chat",
@@ -1092,6 +1354,25 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "code.map",
+      "file": "code.map.ts",
+      "domain": "code",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
       ],
       "layers": {
         "schema": true,
@@ -1940,6 +2221,24 @@
       }
     },
     {
+      "name": "graph.sync.push",
+      "file": "graph.sync.push.ts",
+      "domain": "graph",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "image.analyze",
       "file": "image.analyze.ts",
       "domain": "image",
@@ -2243,6 +2542,24 @@
         "mcp": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "org.list",
+      "file": "org.list.ts",
+      "domain": "organization",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": false
       }
     },
     {
@@ -4102,6 +4419,24 @@
         "api": true,
         "mcp": true,
         "docs": true
+      }
+    },
+    {
+      "name": "workspace.list",
+      "file": "workspace.list.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": false
       }
     },
     {
