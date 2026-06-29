@@ -12,6 +12,8 @@ export interface CliConfig {
   gatewayKey?: string;
   /** Default verbose mode: capture + emit full per-turn telemetry. */
   verbose?: boolean;
+  /** Default REPL layout: "compact" (inline scrollback) or "fullscreen" (alt screen). */
+  tui?: "compact" | "fullscreen";
 }
 
 const CONFIG_DIR = join(homedir(), ".config", "oxagen");
