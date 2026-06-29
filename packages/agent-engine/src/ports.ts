@@ -24,7 +24,7 @@ export interface ModelRunArgs {
   abortSignal?: AbortSignal;
   effort?: "low" | "medium" | "high";
   onError?: (e: { error: unknown }) => void;
-  onStepFinish?: (s: { toolCalls?: unknown[] }) => void;
+  onStepFinish?: (s: { toolCalls?: unknown[]; toolResults?: unknown[] }) => void;
 }
 
 /**

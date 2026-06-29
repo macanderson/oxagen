@@ -60,7 +60,18 @@ export interface Workspace {
 export type CodingEvent =
   | { type: "text"; delta: string }
   | { type: "tool-call"; name: string; input: unknown }
-  | { type: "tool-result"; name: string; output: string }
+  | {
+      type: "tool-result";
+      name: string;
+      /** Tool input, JSON-stringified and capped. */
+      input: string;
+      /** Tool result, JSON-stringified and capped. */
+      result: string;
+      /** Wall-clock ms the step that ran this tool took (step-granular). */
+      durationMs: number;
+      /** False when the tool reported an error. */
+      ok: boolean;
+    }
   | { type: "file-edit"; path: string; bytes: number }
   | { type: "command"; command: string; exitCode: number }
   | { type: "final-diff"; diff: string; changedFiles: string[] };
