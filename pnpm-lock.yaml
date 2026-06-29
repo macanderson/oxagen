@@ -819,6 +819,9 @@ importers:
       web-tree-sitter:
         specifier: ^0.22.6
         version: 0.22.6
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: 25.9.1
@@ -1192,6 +1195,9 @@ importers:
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../billing
+      '@oxagen/code-graph':
+        specifier: workspace:*
+        version: link:../code-graph
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config

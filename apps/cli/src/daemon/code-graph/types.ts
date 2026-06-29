@@ -28,6 +28,12 @@ export interface CodeNode {
   signature?: string;
   /** JSDoc/docstring if present. */
   docstring?: string;
+  /**
+   * LLM-inferred application domain (e.g. "payments", "auth", "billing").
+   * Set by graph push via inferDomains() and propagated to both DuckDB
+   * (local persistence) and Neo4j (workspace knowledge graph).
+   */
+  domain?: string;
 }
 
 export type CodeEdgeType =

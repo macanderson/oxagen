@@ -20,11 +20,17 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
+import { generateObject } from "ai";
 import { buildCodeGraph } from "../daemon/code-graph/builder.js";
+import { createCodeGraphStore, defaultCodeGraphDbPath } from "../daemon/code-graph/store.js";
 import { apiPost } from "../lib/api.js";
 import { getOrgId, getWorkspaceId } from "../lib/config.js";
 import { createGraphStore } from "@oxagen/engram";
 import { graphStorePath } from "./graph.pull.js";
+import { inferDomains } from "@oxagen/code-graph";
+import type { DomainAI, DomainMap } from "@oxagen/code-graph";
+import { ensureGatewayKey } from "../agent/env.js";
+import { modelForTier } from "../agent/model-router.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -164,11 +170,15 @@ function allTrackedFiles(root: string): string[] {
 /**
  * Build nodes and edges for a set of files by running them through the
  * code-graph builder and mapping to the `graph.sync.push` envelope shape.
+ *
+ * When `domainMap` is provided, the `domain` property is stamped on both
+ * SourceFile and SourceSymbol nodes so Neo4j can be sliced by domain.
  */
 async function buildEnvelopeForFiles(
   files: string[],
   root: string,
   repo: string,
+  domainMap?: DomainMap,
 ): Promise<{ nodes: PushNode[]; edges: PushEdge[] }> {
   if (files.length === 0) return { nodes: [], edges: [] };
 
@@ -185,11 +195,16 @@ async function buildEnvelopeForFiles(
     if (n.kind === "file") {
       // File node key is simpler
       const fileKey = `code:${repo}:${n.path}`;
+      const fileDomain = domainMap?.get(n.path);
       const pushNode: PushNode = {
         key: fileKey,
         labels: ["SourceFile"],
         displayName: n.name,
-        properties: { path: n.path, language: n.language },
+        properties: {
+          path: n.path,
+          language: n.language,
+          ...(fileDomain ? { domain: fileDomain } : {}),
+        },
         isSystem: true,
       };
       nodeMap.set(fileKey, pushNode);
@@ -197,14 +212,16 @@ async function buildEnvelopeForFiles(
       existing.push(fileKey);
       nodesByPath.set(n.path, existing);
     } else {
-      // Symbol node
+      // Symbol node — inherits domain from its parent file.
       const symbolKey = `code:${repo}:${n.path}#${n.name}:${n.kind}`;
+      const symbolDomain = domainMap?.get(n.path);
       const props: Record<string, unknown> = {
         path: n.path,
         language: n.language,
         kind: n.kind,
         lineStart: n.range.start,
         lineEnd: n.range.end,
+        ...(symbolDomain ? { domain: symbolDomain } : {}),
       };
       if (n.signature) props["signature"] = n.signature;
       if (n.docstring) props["docstring"] = n.docstring;
@@ -345,8 +362,48 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
       deletedFiles = changed.deleted;
     }
 
+    // ── Domain inference ───────────────────────────────────────────────────────
+    // Run once per push over ALL tracked files (not just the delta) so the
+    // model sees the full repo structure for accurate domain classification.
+    // Gracefully no-ops when the AI Gateway key is unavailable.
+    let domainMap: DomainMap = new Map();
+    const gatewayKey = ensureGatewayKey();
+    if (gatewayKey) {
+      try {
+        const allFiles = !lastSha ? addedFiles : allTrackedFiles(root);
+        const domainModel = modelForTier("fast"); // Haiku-class — cheap classification
+        const domainAI: DomainAI = {
+          generateObject: (args) =>
+            generateObject({ model: domainModel, ...args }),
+        };
+        domainMap = await inferDomains({ files: allFiles }, domainAI);
+
+        // Persist domains to local code-graph DuckDB store so offline queries work.
+        if (domainMap.size > 0) {
+          const cgPath = opts._duckdbPath
+            ? opts._duckdbPath.replace(".duckdb", "-code-graph.duckdb")
+            : defaultCodeGraphDbPath();
+          if (cgPath !== ":memory:") {
+            mkdirSync(dirname(cgPath), { recursive: true });
+          }
+          const cgStore = createCodeGraphStore({ duckdbPath: cgPath });
+          try {
+            await cgStore.whenReady();
+            await cgStore.updateNodeDomains(root, domainMap);
+          } catch {
+            // Non-fatal: DuckDB may be locked by the daemon. Neo4j gets domain
+            // properties regardless; DuckDB will be updated on the next full build.
+          } finally {
+            await cgStore.close().catch(() => {});
+          }
+        }
+      } catch {
+        // Domain inference is best-effort; a model or network error never blocks push.
+      }
+    }
+
     // Build the push envelope.
-    const { nodes, edges } = await buildEnvelopeForFiles(addedFiles, root, repo);
+    const { nodes, edges } = await buildEnvelopeForFiles(addedFiles, root, repo, domainMap);
 
     // Tombstones for deleted files: file node + all symbol nodes that share the path.
     // We use a coarse key (`code:{repo}:{path}`) and a symbol-prefix pattern. For
