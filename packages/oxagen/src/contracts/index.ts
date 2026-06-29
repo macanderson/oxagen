@@ -58,6 +58,9 @@ import { agentMemoryList } from "./agent.memory.list";
 import { agentMemoryUpdate } from "./agent.memory.update";
 import { agentMemoryDelete } from "./agent.memory.delete";
 import { agentMemoryRemember } from "./agent.memory.remember";
+// Bulk memory import (parse → editable review grid → commit).
+import { agentMemoryImportParse } from "./agent.memory.import.parse";
+import { agentMemoryImportCommit } from "./agent.memory.import.commit";
 import { agentPlanApprove } from "./agent.plan.approve";
 import { agentPlanCreate } from "./agent.plan.create";
 import { agentSkillList } from "./agent.skill.list";
@@ -277,6 +280,13 @@ export type { FieldError, DataType, PropertyInput } from "./schema.types";
 export { memoryPolicySchema } from "./agent.memory.policy.read";
 export type { AgentMemoryPolicyReadOutput } from "./agent.memory.policy.read";
 export type { AgentMemoryPolicyWriteInput, AgentMemoryPolicyWriteOutput } from "./agent.memory.policy.write";
+// Bulk memory import: shared draft schema/types + per-contract IO types. The
+// shared file is not a capability, so it is exported here to satisfy the
+// check-contracts file-coverage guard (same reason as schema.shared above).
+export { memoryImportDraftSchema, memoryKindEnum, memoryWeightEnum } from "./agent.memory.import.shared";
+export type { MemoryImportDraft, MemoryImportDraftInput } from "./agent.memory.import.shared";
+export type { AgentMemoryImportParseInput, AgentMemoryImportParseOutput } from "./agent.memory.import.parse";
+export type { AgentMemoryImportCommitInput, AgentMemoryImportCommitOutput } from "./agent.memory.import.commit";
 
 export {
   apiKeyCreate,
@@ -329,6 +339,8 @@ export {
   agentMemoryUpdate,
   agentMemoryDelete,
   agentMemoryRemember,
+  agentMemoryImportParse,
+  agentMemoryImportCommit,
   agentPlanApprove,
   agentPlanCreate,
   agentSkillList,
@@ -593,6 +605,8 @@ export const contracts = [
   agentMemoryUpdate,
   agentMemoryDelete,
   agentMemoryRemember,
+  agentMemoryImportParse,
+  agentMemoryImportCommit,
   agentPlanApprove,
   agentPlanCreate,
   agentSkillList,
