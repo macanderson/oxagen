@@ -97,6 +97,8 @@ import { metadata as userPreferencesReadMetadata } from "./user.preferences.read
 import { metadata as userPreferencesWriteMetadata } from "./user.preferences.write";
 import { metadata as videoGenerateMetadata } from "./video.generate";
 import { metadata as workspaceCreateMetadata } from "./workspace.create";
+import { metadata as orgListMetadata } from "./org.list";
+import { metadata as workspaceListMetadata } from "./workspace.list";
 import { metadata as workspaceModelSettingsReadMetadata } from "./workspace.model.settings.read";
 import { metadata as workspaceModelSettingsWriteMetadata } from "./workspace.model.settings.write";
 import { metadata as workflowRunMetadata } from "./workflow.run";
@@ -354,6 +356,8 @@ const allToolMetadata = [
   userPreferencesWriteMetadata,
   videoGenerateMetadata,
   workspaceCreateMetadata,
+  orgListMetadata,
+  workspaceListMetadata,
   workspaceModelSettingsReadMetadata,
   workspaceModelSettingsWriteMetadata,
   workflowRunMetadata,
