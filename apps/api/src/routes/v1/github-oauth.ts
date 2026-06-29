@@ -22,12 +22,7 @@
 import { Hono } from "hono";
 import { createHmac } from "node:crypto";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
-import {
-  encrypt,
-  decrypt,
-  createIngestionCryptoAdapter,
-  resolveIngestionCryptoAdapterForKeyId,
-} from "@oxagen/crypto";
+import { encrypt, decrypt, createIngestionCryptoAdapter } from "@oxagen/crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { AppEnv } from "../../app";
@@ -58,10 +53,7 @@ function decodeState(encoded: string): string {
  * Decrypt an access token stored as { keyId, ciphertext } JSON payload.
  */
 async function decryptToken(enc: { keyId: string; ciphertext: string }): Promise<string> {
-  // Route the adapter by the envelope's stored keyId, not the current provider
-  // env var, so a token wrapped under a previous INGESTION_CRYPTO_PROVIDER still
-  // decrypts after the deployment flips providers.
-  const { adapter } = resolveIngestionCryptoAdapterForKeyId(enc.keyId);
+  const { adapter } = createIngestionCryptoAdapter();
   const plain = await decrypt(Buffer.from(enc.ciphertext, "base64"), enc.keyId, { adapter });
   return plain.toString("utf8");
 }
