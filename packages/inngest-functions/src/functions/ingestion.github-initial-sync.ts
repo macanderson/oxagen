@@ -20,6 +20,10 @@ const BATCH_SIZE = 50;
 // Cap on historical domain records (PRs/issues/releases/commits) pulled per type
 // on the initial backfill, to bound GitHub API + downstream pipeline fan-out.
 const MAX_RECORDS_PER_TYPE = 100;
+// How many of the most recent commits to fan out commit-file detail fetches for.
+// Each commit requires one extra GitHub API call; 20 is conservative relative to
+// the 5000 req/hr OAuth rate limit while still covering several days of history.
+const MAX_COMMIT_FILE_SYNC = 20;
 
 interface GitTreeItem {
   path: string;
@@ -218,6 +222,56 @@ export const [ingestionGithubInitialSync] = createFunction(
     );
     const commitsWithBranch = commits.map((c) => ({ ...asRecord(c), git_branch: defaultBranch }));
     await dispatchEntities("commits", "commit", commitsWithBranch);
+
+    // ── Step 7b: Fan out commit-file detail fetches (bounded) ─────────────────
+    // For each of the most recent MAX_COMMIT_FILE_SYNC commits, emit one
+    // "ingestion/github.commit-files" event so the commit-files function can fetch
+    // per-commit file lists and write (:Commit)-[:MODIFIED]->(:SourceFile) edges.
+    // We log (don't silently drop) when the full commit list is capped so the
+    // operator knows partial coverage is intentional.
+    const commitsForFileSyncRaw = commits.slice(0, MAX_COMMIT_FILE_SYNC);
+    if (commits.length > MAX_COMMIT_FILE_SYNC) {
+      logger.info(
+        {
+          connectionId,
+          orgId,
+          owner,
+          repo,
+          total: commits.length,
+          cap: MAX_COMMIT_FILE_SYNC,
+        },
+        "ingestion-github-initial-sync: commit-file fan-out capped — older commits will not have :MODIFIED edges",
+      );
+    }
+
+    // Extract the SHA for each commit. The GitHub list endpoint puts the SHA at
+    // the top level of each commit object.
+    const commitShas = commitsForFileSyncRaw
+      .map((c) => {
+        const rec = asRecord(c);
+        return typeof rec["sha"] === "string" ? rec["sha"] : null;
+      })
+      .filter((s): s is string => s !== null);
+
+    if (commitShas.length > 0) {
+      for (let i = 0; i < commitShas.length; i += BATCH_SIZE) {
+        const batch = commitShas.slice(i, i + BATCH_SIZE);
+        await step.sendEvent(
+          `dispatch-commit-files-batch-${i}`,
+          batch.map((commitSha) => ({
+            name: "ingestion/github.commit-files" as const,
+            data: {
+              connectionId,
+              orgId,
+              workspaceId,
+              owner,
+              repo,
+              sha: commitSha,
+            },
+          })),
+        );
+      }
+    }
 
     // ── Step 8: Fetch the repo file tree from GitHub (real default branch) ────
     const filteredFiles = await step.run("fetch-repo-tree", async () => {
