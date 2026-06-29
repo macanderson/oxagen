@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgList } from "@oxagen/oxagen/contracts/org.list";
 import { schema, withSystemDb } from "@oxagen/database";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { logger } from "./logger";
 
 /**
@@ -12,15 +12,51 @@ import { logger } from "./logger";
  * userId, so it can only ever return the caller's own memberships. Deleted orgs
  * are filtered out; suspended ones remain visible so the user understands why
  * they can't act.
+ *
+ * Auth: supports both session auth (ctx.userId set) and API-key auth
+ * (ctx.userId null, ctx.apiKeyId set). For API-key callers the effective user
+ * is resolved from the key's created_by_user_id — matching the IAM layer's
+ * "API key authorizes as its creator" invariant. The result is always scoped
+ * to that one user's memberships; the caller can never cross-read another
+ * user's org list.
  */
 export const orgListHandler: CapabilityHandler<typeof orgList> = async (_input, ctx) => {
-  if (!ctx.userId) {
+  // ── Resolve acting user ───────────────────────────────────────────────────
+  // Session auth:  ctx.userId is the real user; use directly.
+  // API-key auth:  ctx.userId is null; resolve from the key's createdByUserId.
+  //                The auth middleware already validated the key before reaching
+  //                this handler (401 for invalid/expired keys), so the DB row
+  //                will almost always be present. A missing row (key deleted
+  //                between auth and here, or no creator recorded) → treat as
+  //                unauthenticated (throw rather than expose an empty list that
+  //                might look like a success to the caller).
+  let userId = ctx.userId;
+  if (!userId && ctx.apiKeyId) {
+    const keyRow = await withSystemDb((tx) =>
+      tx
+        .select({ createdByUserId: schema.apiKeys.createdByUserId })
+        .from(schema.apiKeys)
+        .where(
+          and(
+            eq(schema.apiKeys.id, ctx.apiKeyId!),
+            isNull(schema.apiKeys.deletedAt),
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows[0] ?? null),
+    );
+    userId = keyRow?.createdByUserId ?? null;
+  }
+
+  if (!userId) {
     logger.warn("org.list: rejected — no authenticated user");
     throw new Error("org.list requires an authenticated user");
   }
+
   // Capture into a const so the non-null narrowing survives into the nested
   // withSystemDb closure (TS won't carry property narrowing across the boundary).
-  const userId = ctx.userId;
+  const resolvedUserId = userId;
+
   const rows = await withSystemDb((tx) =>
     tx
       .select({
@@ -38,7 +74,7 @@ export const orgListHandler: CapabilityHandler<typeof orgList> = async (_input, 
       )
       .where(
         and(
-          eq(schema.orgUsers.userId, userId),
+          eq(schema.orgUsers.userId, resolvedUserId),
           ne(schema.organizations.status, "deleted"),
         ),
       ),
