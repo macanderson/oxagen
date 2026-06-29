@@ -160,6 +160,20 @@ describe("formatInitSummary", () => {
     expect(summary).toContain("87 edges");
   });
 
+  it("reports how many files were read (parsed vs unchanged)", () => {
+    const summary = formatInitSummary(makeResult());
+    expect(summary).toContain("Files read: 42");
+    expect(summary).toContain("parsed 40");
+    expect(summary).toContain("unchanged 2");
+  });
+
+  it("reports total node count (files + symbols)", () => {
+    const summary = formatInitSummary(makeResult());
+    // 42 files + 120 symbols = 162 nodes
+    expect(summary).toContain("Nodes:");
+    expect(summary).toContain("162");
+  });
+
   it("lists all inferred domains", () => {
     const summary = formatInitSummary(makeResult());
     expect(summary).toContain("billing");
