@@ -86,7 +86,7 @@ export function GraphExplorer() {
   const [isDark, setIsDark] = React.useState(false);
 
   // CRUD dialog state
-  const [animated, setAnimated] = React.useState(true);
+  const [animated, setAnimated] = React.useState(false);
   const [vocab, setVocab] = React.useState<ExplorerVocabPayload>({
     labels: [],
     relationshipTypes: [],

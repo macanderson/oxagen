@@ -159,18 +159,26 @@ export function GraphToolbar(props: GraphToolbarProps) {
             >
               <Camera className="size-4" />
             </IconAction>
-            <IconAction
-              label={props.animated ? "Pause animation" : "Resume animation"}
+            <Button
+              size="sm"
+              variant={props.animated ? "default" : "outline"}
               onClick={props.onToggleAnimated}
               disabled={canvasDisabled}
-              active={props.animated}
+              className="gap-1.5"
+              title={props.animated ? "Pause animation" : "Resume animation"}
             >
               {props.animated ? (
-                <Pause className="size-4" />
+                <>
+                  <Pause className="size-3.5" />
+                  <span className="hidden sm:inline text-xs">Pause</span>
+                </>
               ) : (
-                <Play className="size-4" />
+                <>
+                  <Play className="size-3.5" />
+                  <span className="hidden sm:inline text-xs">Play</span>
+                </>
               )}
-            </IconAction>
+            </Button>
           </div>
         )}
 
