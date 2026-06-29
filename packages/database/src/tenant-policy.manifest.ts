@@ -191,6 +191,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // standard. Resolver reads via withSystemDb (bypass) — workspace slugs are
   // only unique within an org, so the read filters on (org_id, old_slug).
   { table: "workspace.workspace_slug_history", policyClass: "standard" },
+  // Agent-memory decay policy (OXA-1374). org_id + workspace_id both NOT NULL
+  // → standard tenant_isolation RLS.
+  { table: "workspace.workspace_memory_policy", policyClass: "standard" },
 
   // ── environments.* — Agent Environments & Credential Vault (Phase 0, Spec §5).
   //   All four carry org_id + workspace_id NOT NULL → standard tenant_isolation.

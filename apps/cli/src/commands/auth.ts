@@ -26,7 +26,6 @@ import * as readline from "node:readline/promises";
 import {
   getApiUrl,
   getAppUrl,
-  getOrgId,
   getToken,
   readConfig,
   writeConfig,
@@ -236,7 +235,7 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
     });
     orgSlug = account.orgSlug;
     workspaceSlug = account.workspaceSlug;
-  } catch (err) {
+  } catch (_err) {
     // Picker failures must not leave a partial config (token but no scope).
     writeConfig({ token: undefined, orgSlug: undefined, workspaceSlug: undefined });
     process.stderr.write(
