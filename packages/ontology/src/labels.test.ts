@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { ANCHOR_LABEL, isValidLabel, assertValidLabel, sanitizeLabel } from "./labels";
+import {
+  ANCHOR_LABEL,
+  isValidLabel,
+  assertValidLabel,
+  sanitizeLabel,
+  sanitizeRelationshipType,
+  FALLBACK_RELATIONSHIP_TYPE,
+} from "./labels";
 
 describe("ANCHOR_LABEL", () => {
   it("is the neutral GraphNode anchor", () => {
@@ -65,5 +72,49 @@ describe("sanitizeLabel", () => {
       const out = sanitizeLabel(raw);
       if (out !== null) expect(isValidLabel(out)).toBe(true);
     }
+  });
+});
+
+describe("sanitizeRelationshipType", () => {
+  it("coerces descriptive types into UPPER_SNAKE_CASE", () => {
+    expect(sanitizeRelationshipType("depends on")).toBe("DEPENDS_ON");
+    expect(sanitizeRelationshipType("implements")).toBe("IMPLEMENTS");
+    expect(sanitizeRelationshipType("PART_OF")).toBe("PART_OF");
+    expect(sanitizeRelationshipType("  belongs to  ")).toBe("BELONGS_TO");
+    expect(sanitizeRelationshipType("depends on (heavily)")).toBe("DEPENDS_ON_HEAVILY");
+  });
+
+  it("prefixes leading-digit results so they start with a letter", () => {
+    expect(sanitizeRelationshipType("3-way merge")).toBe("REL_3_WAY_MERGE");
+  });
+
+  it("falls back to RELATED_TO when nothing usable remains", () => {
+    expect(sanitizeRelationshipType("!!!")).toBe(FALLBACK_RELATIONSHIP_TYPE);
+    expect(sanitizeRelationshipType("   ")).toBe(FALLBACK_RELATIONSHIP_TYPE);
+    expect(FALLBACK_RELATIONSHIP_TYPE).toBe("RELATED_TO");
+  });
+
+  it("never returns null and always yields a value safe to interpolate", () => {
+    for (const raw of [
+      "a b c",
+      "ALLCAPS",
+      "trailing___",
+      "___leading",
+      "x".repeat(140),
+      "Foo`)-[x]->() DETACH DELETE n //",
+      "",
+    ]) {
+      const out = sanitizeRelationshipType(raw);
+      expect(typeof out).toBe("string");
+      expect(isValidLabel(out)).toBe(true);
+    }
+  });
+
+  it("neutralizes Cypher-injection attempts", () => {
+    // Backticks, brackets, and arrows are stripped — only the safe identifier
+    // grammar survives, so the result can never break out of a type position.
+    const out = sanitizeRelationshipType("Foo`)-[x]->() DETACH DELETE n //");
+    expect(out).not.toMatch(/[`)\][(>/-]/);
+    expect(isValidLabel(out)).toBe(true);
   });
 });
