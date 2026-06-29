@@ -66,7 +66,8 @@ All capabilities declared with `'mcp'` in their `surfaces` array are available. 
 | `org__member__invite__accept`      | `org.member.invite.accept`      | Accept a pending invitation           |
 | `org__member__invite__decline`     | `org.member.invite.decline`     | Decline a pending invitation          |
 | `workspace__create`                | `workspace.create`              | Create a new workspace                |
-| `workspace__model__settings__read` | `workspace.model.settings.read` | Read workspace model configuration    |
+| `workspace__model__settings__read`  | `workspace.model.settings.read`  | Read workspace model configuration    |
+| `workspace__model__settings__write` | `workspace.model.settings.write` | Write workspace model configuration   |
 
 ### Billing
 
@@ -106,17 +107,8 @@ The MCP tool list is generated from the same contract registry as the REST API. 
 
 The following capabilities are not available via MCP due to transport or UX constraints:
 
-| Capability                           | Reason                                                                                            |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `agent.code.execute`                 | Agent-surface only; requires an active chat stream context for streaming output and approval flow |
-| `agent.subagent.dispatch`            | Agent-surface only; requires the parent agent runtime context                                     |
-| `agent.plan.create`                  | Agent-surface only; plan mode is initiated by the agent runtime, not by external callers          |
-| `agent.skill.load`                   | Agent-surface only; skills are loaded in the context of a running agent session                   |
-| `billing.credits.purchase`           | Browser redirect required for Stripe Checkout                                                     |
-| `billing.subscription.upgrade.start` | Browser redirect required for Stripe Checkout                                                     |
-| `workspace.model.settings.write`     | Available via REST API only (administrative action)                                               |
-| `plugin.credential.reauth`           | OAuth browser redirect required                                                                   |
-| `plugin.credential.set_secret`       | Available via REST API only                                                                       |
-| OAuth plugin install flows           | Browser redirect required                                                                         |
+| Capability                 | Reason                       |
+| -------------------------- | ---------------------------- |
+| OAuth plugin install flows | Browser redirect required    |
 
 The capability parity check reports the current parity gap automatically at build time.

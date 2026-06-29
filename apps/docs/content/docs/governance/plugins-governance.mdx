@@ -47,20 +47,20 @@ All plugin governance actions are recorded in `security.security_events` (Postgr
 
 | Event | When it fires |
 |---|---|
-| `plugin.org.install` | Plugin installed into a workspace. |
-| `plugin.org.uninstall` | Plugin uninstalled from a workspace. |
+| `plugin.installed` | Plugin installed into a workspace. |
+| `plugin.uninstalled` | Plugin uninstalled from a workspace. |
 | `plugin.enabled_changed` | Plugin listing enabled or disabled (`plugin.org.set_enabled`). |
 | `plugin.enabled_changed` | Workspace MCP server connection activated or deactivated (`plugin.workspace.set_enabled`). |
-| `plugin.credential.set_secret` | API key stored for a plugin. |
-| `plugin.credential.reauth` | OAuth token refreshed or re-authorized. |
+| `plugin.denylist_added` | Plugin added to the org denylist. |
+| `plugin.denylist_removed` | Plugin removed from the org denylist. |
 
 ## Role requirements
 
 | Action | Required role |
 |---|---|
 | Browse marketplace | Any workspace member |
-| Install or uninstall a plugin | Workspace Owner or Org Owner/Admin |
-| Connect OAuth or set API key | Workspace Owner or Org Owner/Admin |
+| Install or uninstall a plugin | Workspace Owner, Workspace Admin, or Org Owner/Admin |
+| Connect OAuth or set API key | Org Owner or Org Admin only |
 | Add custom MCP server or registry | Workspace Owner or Org Owner/Admin |
 | Enable or disable a plugin | Workspace Owner or Org Owner/Admin |
 

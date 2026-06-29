@@ -31,7 +31,7 @@ Add to your `~/.claude/mcp.json` (or the project-level `.claude/mcp.json`):
     "oxagen": {
       "url": "https://mcp.oxagen.sh/mcp",
       "headers": {
-        "Authorization": "Bearer oxk_live_…"
+        "Authorization": "Bearer ox_…"
       }
     }
   }
@@ -48,7 +48,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
     "oxagen": {
       "url": "https://mcp.oxagen.sh/mcp",
       "headers": {
-        "Authorization": "Bearer oxk_live_…"
+        "Authorization": "Bearer ox_…"
       }
     }
   }
@@ -66,7 +66,7 @@ Add to Cursor settings → MCP servers:
   "oxagen": {
     "url": "https://mcp.oxagen.sh/mcp",
     "headers": {
-      "Authorization": "Bearer oxk_live_…"
+      "Authorization": "Bearer ox_…"
     }
   }
 }
@@ -82,7 +82,7 @@ Add to your VS Code `settings.json`:
     "oxagen": {
       "url": "https://mcp.oxagen.sh/mcp",
       "headers": {
-        "Authorization": "Bearer oxk_live_…"
+        "Authorization": "Bearer ox_…"
       }
     }
   }
@@ -129,16 +129,16 @@ Every MCP session is scoped to the org and workspace associated with the API key
 
 ## Verifying the connection
 
-After connecting, call the `system__install__instructions` tool to verify the connection and retrieve workspace-specific context:
+After connecting, call the `system__install__instructions` tool to retrieve client-specific installation instructions for your workspace. The `client` field is required:
 
 ```json
 {
   "name": "system__install__instructions",
-  "arguments": {}
+  "arguments": { "client": "claude-code" }
 }
 ```
 
-This tool returns the workspace name, available tool count, and connection status without making any state changes.
+Supported `client` values: `claude-code`, `cursor`, `claude-desktop`, `codex`, `vscode`. The tool returns ready-to-copy configuration steps tailored to the specified client and the connected workspace.
 
 ## Troubleshooting
 

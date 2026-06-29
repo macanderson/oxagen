@@ -13,7 +13,7 @@ When an employee uses the Oxagen agent instead of an unsanctioned tool, your sec
 
 **Controls backing this:**
 - Single capability chokepoint: `invoke()` for every action, no alternate path.
-- 24 typed security event kinds in two independent audit stores.
+- 40 typed security event kinds in two independent audit stores.
 - Model access restricted to approved models and tiers.
 - Plugin governance: external MCP servers must be installed at org level before any workspace can use them.
 
@@ -26,7 +26,7 @@ When an employee uses the Oxagen agent instead of an unsanctioned tool, your sec
 **How Oxagen solves it.** Oxagen is designed SOC 2-first, not SOC 2-retrofitted. The controls your auditors need are built into the architecture:
 
 - **CC6 (access control):** Role-based IAM with default-deny, org-enforced policies, JIT access requests, and force-revoke. Every IAM decision produces a structured audit record with a resolution trace — your auditor can see exactly which rule caused a denial.
-- **CC7 (monitoring):** Two independent audit stores. Postgres `security.security_events` (7-year retention, queryable for compliance dashboards). ClickHouse `audit_events` (chain-hash tamper evidence — any deletion or mutation in the chain is detectable). 24 typed event kinds covering auth, billing, IAM, and every capability invocation.
+- **CC7 (monitoring):** Two independent audit stores. Postgres `security.security_events` (7-year retention, queryable for compliance dashboards). ClickHouse `audit_events` (chain-hash tamper evidence — any deletion or mutation in the chain is detectable). 40 typed event kinds covering auth, billing, IAM, and every capability invocation.
 - **CC9 (risk mitigation):** High-risk capabilities (code execution) require explicit user approval before running. Approval requests are recorded. Sandboxed execution in Firecracker microVMs prevents code from escaping its tenant boundary.
 
 The compliance dashboard at **Organization → Security → Compliance** exports a control coverage report. Your auditor gets artifacts, not assurances.
@@ -89,14 +89,13 @@ The org sets the outer governance rails. Each workspace tightens within them. A 
 
 **How Oxagen solves it.** The credit ledger is the single source of truth for AI spend. 1 credit = $0.01. Every model call, tool invocation, and image generation debits credits from the org's balance atomically — no double-spend, no free rides past zero balance. The credit balance enforces a hard stop: when an org's credits reach zero, subsequent agent calls return 402 before touching any model.
 
-**Per-workspace and per-agent budgets** (Scale tier) let you pre-allocate spend across teams. The Marketing workspace gets 10,000 credits for the quarter. When it's gone, Marketing's agents stop — without affecting Engineering or Finance.
-
 **Usage analytics** in **Organization → Billing → Usage** breaks down credit consumption by workspace, by agent, and by capability domain (LLM input, LLM output, image generation, tool calls) over rolling 30-day windows.
 
-The credit ledger is append-only (SOC 2 requirement) and queryable via `/v1/billing/ledger`. Finance can pull a signed, timestamped export for cost attribution without any manual aggregation.
+The credit ledger (`billing.credit_ledger`) is the immutable, append-only audit trail for all balance mutations (SOC 2 requirement). `billing.credit_balances` is a real-time cached mirror enforced with a non-negative `CHECK (balance_cents >= 0)` constraint. Finance can export usage data from **Organization → Billing → Usage** for cost attribution.
 
 **Controls backing this:**
-- `billing.credit_balances` with `CHECK (balance_cents >= 0)` at the database layer.
+- `billing.credit_ledger` — immutable append-only audit trail for all balance mutations.
+- `billing.credit_balances` with `CHECK (balance_cents >= 0)` at the database layer (cached mirror).
 - Pre-turn admission gate: 402 before any model call when balance is zero.
 - `SELECT ... FOR UPDATE` serialization prevents double-spend races.
 - ClickHouse usage analytics with org/workspace/agent attribution.
@@ -125,5 +124,5 @@ With SCIM configured, deprovisioning a user in your IdP automatically suspends t
 - `org.member_removed`, `org.role_changed` events in both audit stores.
 - JIT access with TTL and auto-expiry.
 - SCIM provisioning — deprovisioning is automatic if configured.
-- Grants matrix API: `/v1/org/access/grants` (queryable, exportable).
+- Grants matrix: queryable and exportable via **Organization → Access → Grants** in the app.
 - Compliance dashboard at **Organization → Security → Compliance**.

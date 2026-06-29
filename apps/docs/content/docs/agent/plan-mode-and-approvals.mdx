@@ -25,11 +25,11 @@ The agent responds with a structured plan card in the chat, showing:
 
 Click **Approve** in the plan card. The agent proceeds to execute the steps in order. You can deny individual high-risk tool calls during execution even after approving the overall plan.
 
-Click **Revise** to ask the agent to reconsider. The agent returns a revised plan for your review.
+Click **Amend** to submit specific changes to plan steps directly, or **Deny** to reject the plan entirely. Amending allows you to modify individual step inputs before execution begins, without requiring the agent to regenerate the full plan.
 
 ### Plan storage
 
-Plans are stored as `execution_steps` rows of `step_type: 'plan'` in Postgres, scoped to the conversation. The plan is part of the audit trail — an auditor can see what plan was proposed and whether it was approved.
+Plans are stored in `agent.agent_plans` in Postgres (created by `agent.plan.create`, identified by a `planId`). Execution progress after approval is recorded in `agent.agent_execution_steps`, scoped via `execution_id`. Both tables are part of the audit trail — an auditor can see what plan was proposed, whether it was approved, and the outcome of each execution step.
 
 ## Per-tool approval flow
 
@@ -60,7 +60,9 @@ Every approval request produces an `agent.approval_requests` row in Postgres:
 
 ```
 id, execution_step_id, tool_call_id,
-requested_at, resolved_at,
+message_id, capability_name, input_preview,
+risk_level, note, expires_at,
+created_at, resolved_at,
 resolution: 'approved' | 'denied' | 'expired',
 resolved_by_user_id
 ```
@@ -72,17 +74,17 @@ These records are part of the audit trail and visible in **Workspace → Activit
 Approval requests can be resolved programmatically via the API or MCP (useful for automated workflows with a human-in-the-loop step handled outside the chat UI):
 
 ```http
-POST /v1/agent/approval/resolve
+POST /v1/{org}/{workspace}/agent/approvals/resolve
 Authorization: Bearer oxk_live_…
 Content-Type: application/json
 
 {
-  "approvalRequestId": "uuid",
-  "resolution": "approved"
+  "approvalId": "uuid",
+  "decision": "approved"
 }
 ```
 
-The corresponding MCP tool is `agent__approval__resolve`.
+The corresponding MCP tool is `agent.approval.resolve`.
 
 ## Per-workspace tool policy
 

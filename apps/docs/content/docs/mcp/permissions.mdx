@@ -141,28 +141,6 @@ Separate from permissions, **tool visibility** controls which tools are shown to
 
 If a server exposes 40 tools but you only need 3, use `include` to keep the model's context focused.
 
-## Setting permissions via CLI
-
-```bash
-# Allow all tools from a server
-oxagen mcp permit github --allow-all
-
-# Allow all, except destructive operations
-oxagen mcp permit github --allow-all --deny "delete_*,force_push"
-
-# Only allow read operations
-oxagen mcp permit internal-api --allow "query_*,get_*,list_*"
-
-# Set default to deny (explicit allowlist required)
-oxagen mcp permit untrusted-server --deny-all --allow "safe_tool_1,safe_tool_2"
-
-# Reset to default (ask for everything)
-oxagen mcp permit github --clear
-
-# Write to a specific scope
-oxagen mcp permit github --allow-all --scope local
-```
-
 ## Interaction with platform IAM
 
 When both file-based permissions and platform IAM policies apply (e.g. when using the platform runtime), the most restrictive policy wins:

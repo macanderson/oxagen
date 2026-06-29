@@ -38,7 +38,7 @@ Every message is recorded as a conversation in the `/{orgSlug}/{workspaceSlug}/a
 
 1. Go to **Organization → Members**.
 2. Click **Invite member**.
-3. Enter their email address and assign a role (Owner, Admin, Billing, or a workspace role).
+3. Enter their email address and assign a role (Owner, Admin, Billing, Compliance, or a workspace role).
 4. They receive an invite email with a one-click acceptance link.
 
 Workspace access is granted separately under **Workspace settings → Members**.
@@ -56,7 +56,7 @@ Every capability available in the app is also reachable via the versioned REST A
 API keys carry org and workspace scope. Pass the key as a Bearer token:
 
 ```http
-Authorization: Bearer oxk_live_…
+Authorization: Bearer ox_…
 ```
 
 See [API authentication](/docs/api/authentication) for the full reference.
@@ -73,7 +73,7 @@ Oxagen exposes all capabilities as an MCP server at `https://mcp.oxagen.sh/mcp` 
     "oxagen": {
       "url": "https://mcp.oxagen.sh/mcp",
       "headers": {
-        "Authorization": "Bearer oxk_live_…"
+        "Authorization": "Bearer ox_…"
       }
     }
   }

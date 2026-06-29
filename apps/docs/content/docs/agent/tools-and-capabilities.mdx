@@ -21,7 +21,7 @@ The result is a Vercel AI SDK `tools` map passed to `streamText`. The agent sele
 | Tool | Description |
 |---|---|
 | `agent.memory.recall` | Query the workspace knowledge graph for relevant memories. Returns scored matches by semantic similarity. |
-| `agent.memory.write` | Persist a new memory (rule, fact, or note) to the workspace knowledge graph, attached to a graph node with a confidence weight. |
+| `agent.memory.write` | Persist a new memory (kind: `routine-change`, `constraint`, `bug-root-cause`, `convention-deviation`, or `gotcha`) to the workspace knowledge graph, attached to a graph node with a weight bucket (`low`, `high`, or `critical`). |
 
 Memories persist across sessions and are visible in **Workspace → Knowledge → Memories**.
 
@@ -29,7 +29,7 @@ Memories persist across sessions and are visible in **Workspace → Knowledge �
 
 | Tool | Description |
 |---|---|
-| `agent.subagent.dispatch` | Dispatch one or more subagents in parallel. Each subagent runs a scoped capability and returns its result to the parent. Long-running subagents run as durable Inngest jobs. |
+| `agent.subagent.dispatch` | Dispatch one or more subagents in parallel. Each subagent runs a scoped capability and returns its result to the parent. Long-running subagents run as durable Inngest jobs. `riskLevel: medium` — requires user approval before the fanout is created. Maximum 100 tasks per dispatch call. |
 | `agent.subagent.aggregate` | Aggregate results from previously dispatched subagents. |
 
 ### Code execution

@@ -27,15 +27,15 @@ The following capabilities are available in the current release, grouped by doma
 | ------------------------------ | --------------- | ------ |
 | `agent.tool.list`              | API, MCP, agent | Low    |
 | `agent.skill.list`             | API, MCP, agent | Low    |
-| `agent.skill.load`             | Agent           | Low    |
+| `agent.skill.load`             | API, MCP, agent | Low    |
 | `agent.mcp.list`               | API, MCP, agent | Low    |
 | `agent.mcp.register`           | API, MCP        | Medium |
-| `agent.plan.create`            | Agent           | Low    |
+| `agent.plan.create`            | API, MCP, agent | Low    |
 | `agent.plan.approve`           | API, agent      | Low    |
 | `agent.approval.resolve`       | API, agent      | Low    |
-| `agent.subagent.dispatch`      | Agent           | Medium |
-| `agent.subagent.aggregate`     | Agent           | Low    |
-| `agent.code.execute`           | Agent           | High   |
+| `agent.subagent.dispatch`      | API, MCP, agent | Medium |
+| `agent.subagent.aggregate`     | API, MCP, agent | Low    |
+| `agent.code.execute`           | API, MCP, agent | High   |
 | `agent.memory.recall`          | API, MCP, agent | Low    |
 | `agent.memory.write`           | API, MCP, agent | Low    |
 | `agent.task.background.start`  | API, MCP, agent | Medium |
@@ -125,12 +125,10 @@ The following capabilities are available in the current release, grouped by doma
 | `plugin.org.list`                 | API, MCP, agent | Low    |
 | `plugin.org.set_enabled`          | API, MCP        | Medium |
 | `plugin.workspace.set_enabled`    | API, MCP        | Medium |
-| `plugin.denylist.add`             | API, MCP        | High   |
-| `plugin.denylist.remove`          | API, MCP        | High   |
 | `plugin.registry.add`             | API, MCP        | High   |
 | `plugin.registry.remove`          | API, MCP        | High   |
 | `plugin.registry.list`            | API, MCP, agent | Low    |
-| `plugin.registry.sync`            | API, MCP        | Medium |
+| `plugin.catalog.sync`             | API, MCP        | Medium |
 | `plugin.credential.reauth`        | API, MCP        | Medium |
 | `plugin.credential.set_secret`    | API, MCP        | High   |
 | `plugin.settings.set_auth_alerts` | API, MCP        | Low    |
@@ -143,13 +141,14 @@ The following capabilities are available in the current release, grouped by doma
 
 ## REST route convention
 
-All capabilities map to REST routes under `/v1/` using the following convention:
+All capabilities map to REST routes under `/v1/{orgSlug}/{workspaceSlug}/` using the following convention:
 
-- Capability domain becomes the path prefix: `agent.code.execute` → `/v1/agent/code/execute`
+- Capability domain becomes the path prefix: `agent.code.execute` → `/v1/{orgSlug}/{workspaceSlug}/agent/code/execute`
 - The HTTP method reflects the operation: reads use `GET`, mutations use `POST`
 - List operations append `/list` or use a bare `GET` on the collection path
+- **The org and workspace slug path segments are mandatory on every capability route.** The slugs are those associated with your API key.
 
-The exact route table is generated at build time and is available at `/v1/capabilities` (returns the full contract registry as JSON for a given API key's scopes).
+The `pnpm check:manifest --json` script reports the full capability parity table at development time. There is no runtime `/v1/capabilities` endpoint.
 
 ## Parity caveat
 

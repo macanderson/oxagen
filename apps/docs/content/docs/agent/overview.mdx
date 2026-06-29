@@ -68,7 +68,7 @@ See [Tools and capabilities](/docs/agent/tools-and-capabilities) for the full li
 Every agent turn produces:
 
 - Streamed `text_delta` events (the response) and `tool_call_*` events (tool invocations) via SSE.
-- One `execution.tool_calls` row in Postgres per tool invocation (durable record).
+- One `agent.agent_tool_calls` row in Postgres per tool invocation (durable record).
 - One ClickHouse `tool_invocations` row per tool invocation (analytics).
 - A `capability.invoke_allowed` or `capability.invoke_denied` security event per IAM decision.
 - A credit delta event at turn end (credits charged for the turn).

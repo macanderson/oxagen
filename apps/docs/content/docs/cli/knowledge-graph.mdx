@@ -59,11 +59,28 @@ oxagen graph search -q "rate limiting per org" -k file,symbol -n 5
 oxagen graph search -q "who owns the billing service?" -l Person --no-system
 ```
 
+## Push code changes
+
+`oxagen graph push` computes a git code delta and up-syncs it to the workspace knowledge graph. It is the write-path counterpart to `graph pull`:
+
+```bash
+oxagen graph push              # delta push — only files changed since the last cursor
+oxagen graph push --full       # ignore the cursor and push all tracked source files
+oxagen graph push --repo <id>  # override the repo identifier
+oxagen graph push --json       # machine-readable summary
+```
+
+`oxagen graph lineage` pushes CLI session execution lineage (touched files, turn edges) into the graph:
+
+```bash
+oxagen graph lineage [--repo <id>] [--json]
+```
+
 ## A typical workflow
 
 ```bash
 # 1. Authenticate once (see Account setup)
-oxagen config token oxk_live_… && oxagen config org acme && oxagen config workspace eng
+oxagen login --org acme --workspace eng
 
 # 2. Replicate the graph
 oxagen graph pull

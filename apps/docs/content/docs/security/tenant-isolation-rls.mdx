@@ -62,12 +62,14 @@ await tx.execute(
 
 | Table class | Policy predicate | Examples |
 |---|---|---|
-| Standard owned | `org_id = GUC.org AND workspace_id = GUC.ws` | `agent.agents`, `chat.conversations`, `execution.*` |
+| Standard owned | `org_id = GUC.org AND workspace_id = GUC.ws` | `agent.agents`, `chat.conversations`, `mcp.mcp_servers` |
 | Workspace-nullable | `org_id = GUC.org AND (workspace_id IS NULL OR workspace_id = GUC.ws)` | `iam.principals`, `security.security_events` |
-| Org-only | `org_id = GUC.org` | `billing.*`, `org.roles`, `org.grants` |
+| Org-only | `org_id = GUC.org` | `billing.*`, `org.org_users`, `workspace.workspaces` |
+| Workspace-only | `workspace_id = GUC.ws` (no `org_id` column) | `workspace.workspace_users` |
+| Standard-or-builtin | `org_id = GUC.org AND workspace_id = GUC.ws`, or nil-UUID sentinel rows (platform builtins readable by all tenants) | `agent.skills`, `agent.skill_versions` |
 | Global identity | No policy (Better Auth managed) | `auth.users`, `auth.sessions` |
 
-55 tables are covered by the RLS manifest. A CI test asserts that every `orgScopeMixin` table has a manifest entry — new tables that omit the manifest entry fail CI before they can ship without a policy.
+77 tables are covered by the RLS manifest (`packages/database/src/tenant-policy.manifest.ts`). The count grows as new tables are added; the manifest file is the authoritative reference. A CI test asserts that every `orgScopeMixin` table has a manifest entry — new tables that omit it fail CI before they can ship without a policy.
 
 ### Enforcement flag
 
