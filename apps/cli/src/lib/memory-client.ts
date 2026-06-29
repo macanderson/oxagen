@@ -167,3 +167,120 @@ export function formatRememberResult(r: RememberResult): string {
     `  ${truncate(r.memory.lesson, 100)}`
   );
 }
+
+// ── Bulk import (agent.memory.import.parse + .commit) ────────────────────────
+
+/**
+ * A draft memory as returned by the parse step.  Mirrors the `z.output` of
+ * `memoryImportDraftSchema` without importing the contracts package.
+ */
+export interface MemoryImportDraft {
+  lesson: string;
+  kind: MemoryKind;
+  weight: MemoryWeight;
+  source: string;
+  nodeRef: string;
+  sourceDocument: string;
+  classified: boolean;
+}
+
+/**
+ * Input shape accepted by commit — defaults for source/nodeRef/sourceDocument/
+ * classified are filled server-side, so the caller may omit them.
+ */
+export interface MemoryImportDraftInput {
+  lesson: string;
+  kind: MemoryKind;
+  weight: MemoryWeight;
+  source?: string;
+  nodeRef?: string;
+  sourceDocument?: string;
+  classified?: boolean;
+}
+
+/** Output of `agent.memory.import.parse`. */
+export interface ParseImportOutput {
+  drafts: MemoryImportDraft[];
+  documentCount: number;
+  skipped: { filename: string; reason: string }[];
+}
+
+/** One per-draft row in `agent.memory.import.commit` output. */
+export interface CommitImportResultRow {
+  lesson: string;
+  ok: boolean;
+  memoryId: string | null;
+  error: string | null;
+}
+
+/** Output of `agent.memory.import.commit`. */
+export interface CommitImportOutput {
+  results: CommitImportResultRow[];
+  imported: number;
+  failed: number;
+}
+
+/**
+ * Call `agent.memory.import.parse` — extracts classified draft memories from
+ * the supplied documents.  Writes nothing; returns editable drafts.
+ */
+export async function parseImportMemories(
+  documents: { filename: string; content: string }[],
+  defaultNodeRef?: string,
+): Promise<ParseImportOutput> {
+  return apiPostOrThrow<ParseImportOutput>("agent/memory/import/parse", {
+    documents,
+    ...(defaultNodeRef !== undefined ? { defaultNodeRef } : {}),
+  });
+}
+
+/**
+ * Call `agent.memory.import.commit` — writes the confirmed drafts into the
+ * workspace AgentMemory graph. Per-item error capture; not all-or-nothing.
+ */
+export async function commitImportMemories(
+  drafts: MemoryImportDraftInput[],
+): Promise<CommitImportOutput> {
+  return apiPostOrThrow<CommitImportOutput>("agent/memory/import/commit", { drafts });
+}
+
+/**
+ * Render a numbered draft table consistent with `formatMemoryLines` style.
+ * Columns: index, kind, weight, sourceDocument, truncated lesson.
+ *
+ * NOTE: the interactive edit grid (where the user can tweak individual drafts)
+ * is an app-only TUI component — the CLI's review step is this read-only table
+ * plus a y/N confirmation prompt.
+ */
+export function formatImportDrafts(drafts: MemoryImportDraft[]): string {
+  if (drafts.length === 0) return "No memories could be extracted.";
+  const header =
+    `${"#".padEnd(4)}  ${"kind".padEnd(22)} ${"weight".padEnd(10)}` +
+    ` ${"source doc".padEnd(24)} lesson`;
+  const rows = drafts.map((d, i) => {
+    const num = String(i + 1).padEnd(4);
+    const kind = d.kind.padEnd(22);
+    const weight = d.weight.padEnd(10);
+    const src = (d.sourceDocument || "(none)").padEnd(24);
+    const lesson = truncate(d.lesson, 60);
+    return `${num}  ${kind} ${weight} ${src} ${lesson}`;
+  });
+  const count = drafts.length;
+  return (
+    [header, ...rows].join("\n") +
+    `\n${count} draft ${count === 1 ? "memory" : "memories"}.`
+  );
+}
+
+/**
+ * Render a commit result summary: imported/failed totals and any per-item
+ * error messages for failed rows.
+ */
+export function formatImportResults(output: CommitImportOutput): string {
+  const noun = output.imported === 1 ? "memory" : "memories";
+  const summary = `✓ Imported ${output.imported} ${noun}, ${output.failed} failed.`;
+  const errors = output.results
+    .filter((r) => !r.ok)
+    .map((r) => `  ✗ ${truncate(r.lesson, 60)}: ${r.error ?? "unknown error"}`);
+  return errors.length > 0 ? `${summary}\n${errors.join("\n")}` : summary;
+}

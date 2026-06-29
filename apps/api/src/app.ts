@@ -60,6 +60,8 @@ import { agentMemoryDeleteRoute } from "./routes/v1/agent.memory.delete";
 import { agentMemoryRememberRoute } from "./routes/v1/agent.memory.remember";
 import { agentMemoryPolicyReadRoute } from "./routes/v1/agent.memory.policy.read";
 import { agentMemoryPolicyWriteRoute } from "./routes/v1/agent.memory.policy.write";
+import { agentMemoryImportParseRoute } from "./routes/v1/agent.memory.import.parse";
+import { agentMemoryImportCommitRoute } from "./routes/v1/agent.memory.import.commit";
 import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve";
 import { agentExecutionRecordRoute } from "./routes/v1/agent.execution.record";
 import { agentSubagentAggregateRoute } from "./routes/v1/agent.subagent.aggregate";
@@ -341,6 +343,10 @@ orgScoped.route("/agent/memory/delete", agentMemoryDeleteRoute);
 orgScoped.route("/agent/memory/remember", agentMemoryRememberRoute);
 orgScoped.route("/agent/memory/policy", agentMemoryPolicyReadRoute);
 orgScoped.route("/agent/memory/policy", agentMemoryPolicyWriteRoute);
+// Bulk import: parse uploaded docs → drafts, commit the confirmed set. Mounted
+// before the "/agent/memory" catch-all so the more specific paths win.
+orgScoped.route("/agent/memory/import/parse", agentMemoryImportParseRoute);
+orgScoped.route("/agent/memory/import/commit", agentMemoryImportCommitRoute);
 orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
 orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);

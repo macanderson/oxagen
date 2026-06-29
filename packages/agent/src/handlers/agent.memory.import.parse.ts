@@ -1,5 +1,9 @@
 import type { CapabilityContext } from "../types";
-import { extractMemoriesFromDocument, mapWithConcurrency } from "../memory/import";
+import {
+  extractMemoriesFromDocument,
+  mapWithConcurrency,
+  type ExtractedMemory,
+} from "../memory/import";
 import type {
   AgentMemoryImportParseInput,
   AgentMemoryImportParseOutput,

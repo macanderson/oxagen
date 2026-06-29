@@ -4,6 +4,7 @@ import type { CapabilityContext } from "../types";
 import { writeMemory, getMemoryById } from "../memory/neo4j";
 import { embedText } from "../memory/embed";
 import { isKnowledgeGraphEnabled } from "../runtime/knowledge-graph";
+import { MEMORY_KIND_GUIDE, MEMORY_WEIGHT_GUIDE } from "../memory/taxonomy";
 import type {
   AgentMemoryRememberInput,
   AgentMemoryRememberOutput,
@@ -40,20 +41,14 @@ const classificationSchema = z.object({
   weight: z.enum(["low", "high", "critical"]),
 });
 
+// Taxonomy bullets are shared with the bulk-import extractor via memory/taxonomy
+// so a definition change updates both classifiers at once.
 const CLASSIFIER_SYSTEM = [
   "You classify a single user-captured engineering memory into a kind and a salience weight.",
   "",
-  "kind:",
-  "- routine-change: a self-evident, low-stakes change or fact.",
-  "- constraint: a rule, limit, or requirement the agent must respect going forward.",
-  "- bug-root-cause: the underlying cause of a defect.",
-  "- convention-deviation: a deliberate departure from an established pattern.",
-  "- gotcha: a surprising, non-obvious trap tied to the codebase.",
+  MEMORY_KIND_GUIDE,
   "",
-  "weight:",
-  "- low: routine and self-evident; fine if it rarely surfaces.",
-  "- high: a real lesson the agent should usually see before acting.",
-  "- critical: must never be forgotten (security, data-loss, production incident).",
+  MEMORY_WEIGHT_GUIDE,
   "",
   "Default to constraint/high when unsure. Respond with the structured object only.",
 ].join("\n");

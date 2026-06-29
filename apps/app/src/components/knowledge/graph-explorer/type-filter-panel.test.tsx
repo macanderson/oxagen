@@ -54,8 +54,13 @@ describe("TypeFilterPanel — rendering", () => {
 
   it("renders 'Inferred' and 'Confirmed' edge source rows", () => {
     render(<TypeFilterPanel {...makeProps()} />);
-    expect(screen.getByText("Inferred")).toBeInTheDocument();
-    expect(screen.getByText("Confirmed")).toBeInTheDocument();
+    expect(screen.getByText("Inferred edges")).toBeInTheDocument();
+    expect(screen.getByText("Confirmed edges")).toBeInTheDocument();
+  });
+
+  it("renders the 'System nodes' visibility row", () => {
+    render(<TypeFilterPanel {...makeProps()} />);
+    expect(screen.getByText("System nodes")).toBeInTheDocument();
   });
 
   it("renders inferred count and confirmed count", () => {
@@ -115,10 +120,15 @@ describe("TypeFilterPanel — edge type callbacks", () => {
 });
 
 describe("TypeFilterPanel — inferred toggle", () => {
+  // Checkbox order in the fixture: 2 node types (Issue, Topic), then the
+  // Visibility section — System nodes (idx 2), Inferred edges (idx 3),
+  // Confirmed edges (idx 4) — then 1 edge type (RELATES_TO, idx 5).
+  const INFERRED_CHECKBOX_INDEX = 3;
+
   it("calls onToggleInferred when the Inferred row is clicked", () => {
     const onToggleInferred = vi.fn();
     render(<TypeFilterPanel {...makeProps({ onToggleInferred })} />);
-    fireEvent.click(screen.getByText("Inferred"));
+    fireEvent.click(screen.getByText("Inferred edges"));
     expect(onToggleInferred).toHaveBeenCalledOnce();
   });
 
@@ -128,12 +138,9 @@ describe("TypeFilterPanel — inferred toggle", () => {
     const { container } = render(
       <TypeFilterPanel {...makeProps({ inferredHidden: true })} />,
     );
-    // The first list in "Edge source" section has 2 rows: Inferred and Confirmed.
-    // We can check the checkboxes rendered; the first one should not have data-[checked].
     const checkboxes = container.querySelectorAll('[role="checkbox"]');
-    // Find the Inferred checkbox (first in edge source section)
-    // Its data-[checked] attribute should be absent when inferredHidden=true
-    const inferredCheckbox = checkboxes[2]; // 2 node checkboxes + inferred (index 2)
+    // Its data-[checked] attribute should be absent when inferredHidden=true.
+    const inferredCheckbox = checkboxes[INFERRED_CHECKBOX_INDEX];
     expect(inferredCheckbox).not.toHaveAttribute("data-checked");
   });
 
@@ -142,7 +149,36 @@ describe("TypeFilterPanel — inferred toggle", () => {
       <TypeFilterPanel {...makeProps({ inferredHidden: false })} />,
     );
     const checkboxes = container.querySelectorAll('[role="checkbox"]');
-    const inferredCheckbox = checkboxes[2];
+    const inferredCheckbox = checkboxes[INFERRED_CHECKBOX_INDEX];
     expect(inferredCheckbox).toHaveAttribute("data-checked", "");
+  });
+});
+
+describe("TypeFilterPanel — system nodes toggle", () => {
+  // System nodes is the first row of the Visibility section: 2 node-type
+  // checkboxes precede it.
+  const SYSTEM_CHECKBOX_INDEX = 2;
+
+  it("calls onToggleSystem when the System nodes row is clicked", () => {
+    const onToggleSystem = vi.fn();
+    render(<TypeFilterPanel {...makeProps({ onToggleSystem })} />);
+    fireEvent.click(screen.getByText("System nodes"));
+    expect(onToggleSystem).toHaveBeenCalledOnce();
+  });
+
+  it("reflects systemHidden=true by marking the system row as hidden", () => {
+    const { container } = render(
+      <TypeFilterPanel {...makeProps({ systemHidden: true })} />,
+    );
+    const checkboxes = container.querySelectorAll('[role="checkbox"]');
+    expect(checkboxes[SYSTEM_CHECKBOX_INDEX]).not.toHaveAttribute("data-checked");
+  });
+
+  it("reflects systemHidden=false by marking the system row as visible", () => {
+    const { container } = render(
+      <TypeFilterPanel {...makeProps({ systemHidden: false })} />,
+    );
+    const checkboxes = container.querySelectorAll('[role="checkbox"]');
+    expect(checkboxes[SYSTEM_CHECKBOX_INDEX]).toHaveAttribute("data-checked", "");
   });
 });

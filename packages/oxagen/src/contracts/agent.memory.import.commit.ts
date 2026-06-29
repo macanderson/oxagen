@@ -48,7 +48,7 @@ export const agentMemoryImportCommit = registerCapability({
           memoryId: z
             .string()
             .nullable()
-            .describe("publicId of the written memory, or null on failure"),
+            .describe("Neo4j node id of the written memory, or null on failure"),
           error: z.string().nullable().describe("Failure reason, or null on success"),
         }),
       )
