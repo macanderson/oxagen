@@ -9,10 +9,10 @@ Oxagen provides self-service controls for the two most operationally significant
 
 | Right | Article | Scope | Surface |
 |---|---|---|---|
-| Data portability | Art. 20 | User-level | Account → Privacy, API, MCP, CLI |
-| Right to erasure | Art. 17 | User-level and Org-level | Account → Privacy, Org Settings → Privacy, API, MCP, CLI |
+| Data portability | Art. 20 | User-level | Account → Privacy, API, MCP |
+| Right to erasure | Art. 17 | User-level and Org-level | Account → Privacy, Org Settings → Privacy, API, MCP |
 
-Both rights can be exercised without contacting support. They are also available via API, MCP, and CLI for operators who need to fulfill requests programmatically.
+Both rights can be exercised without contacting support. They are also available via API and MCP for operators who need to fulfill requests programmatically.
 
 ## Data export (Article 20)
 
@@ -43,10 +43,7 @@ Capability: `privacy.data.export`
 
 ### CLI
 
-```bash
-oxagen privacy export --scope user
-oxagen privacy export --scope org --org-id <uuid>
-```
+CLI support for privacy commands is not yet implemented.
 
 ## Account and org erasure (Article 17)
 
@@ -54,14 +51,14 @@ Erasure is available at two scopes:
 
 ### User-scope erasure
 Any authenticated user may request deletion of their own account. The request:
-1. Revokes all active sessions immediately.
-2. Marks the user as `deleted_at` (soft-delete).
+1. Revokes the requesting user's active sessions immediately.
+2. Schedules a soft-delete of the user account (executed asynchronously by the grace-period job, not immediately at request time).
 3. Schedules a hard-delete of all personal data within 30 days (configurable via `PRIVACY_ERASURE_GRACE_DAYS`).
-4. Emits a `privacy.erasure.requested` security event and a `privacy/erasure.execute` webhook event.
+4. Emits a `privacy.erasure_requested` security event and dispatches a `privacy/erasure.execute` Inngest job.
 
 ### Org-scope erasure
 An org Owner may request deletion of the entire organization. The request:
-1. Revokes all member sessions.
+1. Revokes the requesting owner's active sessions immediately. Downstream member session revocation is scheduled asynchronously via the Inngest job.
 2. Offboards all members.
 3. Schedules deletion of all org data (workspaces, conversations, assets, billing records).
 4. Emits `privacy.org_erasure_requested` security event and webhook.
@@ -84,11 +81,10 @@ When erasure is requested, Oxagen emits a `privacy/erasure.execute` event throug
 
 ```json
 {
-  "type": "privacy.erasure.requested",
   "requestId": "<uuid>",
+  "userId": "<userId>",
+  "orgId": "<orgId>",
   "scope": "user",
-  "subjectId": "<userId or orgId>",
-  "requestedAt": "2026-06-09T...",
   "scheduledAt": "2026-07-09T..."
 }
 ```

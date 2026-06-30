@@ -15,6 +15,8 @@ Both capabilities are available on the **API, MCP, and in-app agent** surfaces.
 
 ## Start a swarm
 
+When called from the in-app agent, dispatching a swarm requires user approval (`riskLevel: medium`). The approval card shows the topic and estimated task count before the fanout is created.
+
 `POST /v1/{org}/{workspace}/research/swarm/start`
 
 | Input | Description |

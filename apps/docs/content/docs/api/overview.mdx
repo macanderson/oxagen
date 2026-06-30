@@ -26,7 +26,7 @@ All endpoints are under `/v1/`. The version prefix is required.
 See [Authentication](/docs/api/authentication) for the full reference. In short:
 
 ```http
-Authorization: Bearer oxk_live_…
+Authorization: Bearer ox_…
 ```
 
 Every request must include an `Authorization` header with a Bearer token. Requests without a valid token return `401 Unauthorized`. Requests where the token does not have the required capability for the endpoint return `403 Forbidden` with a `capability_denied` error body.
@@ -65,23 +65,7 @@ Note: some UI-only actions (plan approval flows, billing page interactions) are 
 
 ## Rate limits
 
-Rate limits are applied per API key:
-
-| Plan | Requests per minute |
-|---|---|
-| Starter | 60 |
-| Growth | 300 |
-| Scale | 1,000 |
-
-Rate limit headers are included in every response:
-
-```http
-X-RateLimit-Limit: 300
-X-RateLimit-Remaining: 247
-X-RateLimit-Reset: 1717776000
-```
-
-When a rate limit is exceeded, the response is `429 Too Many Requests` with a `Retry-After` header.
+The API enforces rate limits per key. When a limit is exceeded, the response is `429 Too Many Requests`. Specific per-plan limits are not yet published — contact support if you encounter sustained rate-limiting.
 
 ## Streaming
 

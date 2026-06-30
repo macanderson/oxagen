@@ -20,3 +20,154 @@
   --color-fd-primary: var(--primary);
   --color-fd-ring: var(--ring);
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * Marketing landing page (the (home) route only).
+ *
+ * Pure-CSS animation layer for the docs landing page. Everything is namespaced
+ * `lp-*` so it never leaks into the Fumadocs /docs theme. Colours are pulled
+ * from the @oxagen/ui brand tokens (ember gradient + graphite neutrals) so the
+ * page re-skins with the rest of the system. The concept is "context windows,
+ * more free than full": hex-cell fields (abstracted from the Oxagen logomark),
+ * an animated install terminal, and a context-window meter that drains.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* The canonical ember sweep, reused for clipped headline text + accents. */
+.lp-grad-text {
+  background-image: linear-gradient(
+    100deg,
+    var(--_ember-gold) 0%,
+    var(--_ember-flame) 46%,
+    var(--_ember-crimson) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.lp-grad-surface {
+  /* Literal ember stops (not var(--brand-gradient)) so the fill is guaranteed
+     to render regardless of which token scope is active. */
+  background-image: linear-gradient(
+    100deg,
+    var(--_ember-gold, #f9d423) 0%,
+    var(--_ember-flame, #ff7e5f) 46%,
+    var(--_ember-crimson, #c2185b) 100%
+  );
+}
+
+/* Faint ember edge used on section dividers + card borders on hover. */
+.lp-hairline {
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklch, var(--_ember-flame) 55%, transparent),
+    transparent
+  );
+}
+
+/* Ambient grid the hero sits on — a dot/line lattice that fades to the page. */
+.lp-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in oklch, var(--foreground) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklch, var(--foreground) 7%, transparent) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 38%, #000 0%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 38%, #000 0%, transparent 78%);
+}
+
+/* A soft ember light source bleeding from behind the hero. */
+.lp-orb {
+  background: radial-gradient(
+    circle at center,
+    color-mix(in oklch, var(--_ember-flame) 38%, transparent) 0%,
+    color-mix(in oklch, var(--_ember-crimson) 16%, transparent) 40%,
+    transparent 70%
+  );
+  filter: blur(36px);
+  animation: lp-glow 9s ease-in-out infinite;
+}
+
+/* Terminal window chrome. Intentionally always-dark (like a real terminal) in
+   both light and dark mode — fixed literal colours so the panel never washes
+   out on the light page. */
+.lp-term {
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(18 19 24 / 0.94);
+  box-shadow:
+    0 1px 0 0 rgb(255 255 255 / 0.06) inset,
+    0 30px 80px -28px color-mix(in oklch, var(--_ember-crimson, #c2185b) 42%, transparent),
+    0 18px 50px -30px rgb(0 0 0 / 0.7);
+  backdrop-filter: blur(8px);
+}
+
+.lp-caret {
+  display: inline-block;
+  width: 0.6ch;
+  height: 1.05em;
+  translate: 0 0.16em;
+  background: var(--_ember-flame);
+  box-shadow: 0 0 8px color-mix(in oklch, var(--_ember-flame) 80%, transparent);
+  animation: lp-blink 1.05s steps(1) infinite;
+}
+
+.lp-line {
+  opacity: 0;
+  animation: lp-rise 0.42s ease-out forwards;
+}
+
+/* Context-window cell field — a token grid that fills (full) then drains (free). */
+.lp-cell {
+  fill: color-mix(in oklch, var(--foreground) 9%, transparent);
+  transition: fill 0.5s ease, opacity 0.5s ease;
+}
+.lp-cell[data-lit="true"] {
+  fill: var(--_ember-flame);
+  filter: drop-shadow(0 0 3px color-mix(in oklch, var(--_ember-flame) 70%, transparent));
+}
+.lp-cell[data-lit="cool"] {
+  fill: var(--ox-indigo-bright, #9ca3e8);
+}
+
+/* Lit hexagons in the section backgrounds — breathe slowly, out of phase. */
+.lp-hex-lit {
+  animation: lp-hexpulse 6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.lp-float {
+  animation: lp-float 14s ease-in-out infinite;
+}
+
+@keyframes lp-blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+@keyframes lp-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes lp-glow {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.08); }
+}
+@keyframes lp-hexpulse {
+  0%, 100% { opacity: 0.22; transform: scale(0.97); }
+  50% { opacity: 0.7; transform: scale(1.03); }
+}
+@keyframes lp-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-12px) rotate(1.5deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-orb,
+  .lp-caret,
+  .lp-line,
+  .lp-hex-lit,
+  .lp-float {
+    animation: none !important;
+  }
+  .lp-line { opacity: 1; }
+}

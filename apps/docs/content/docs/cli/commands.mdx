@@ -82,12 +82,18 @@ oxagen cost [options]
 Query and replicate your workspace knowledge graph. See [Knowledge graph](/docs/cli/knowledge-graph) for the full workflow. **Requires platform auth.**
 
 ```bash
-oxagen graph search -q <text> [--kinds <csv>] [--labels <csv>] [--limit <n>] [--system|--no-system]
-oxagen graph pull [--full] [--labels <csv>] [--no-system] [--json]
-oxagen graph status [--json]
+oxagen graph search  -q <text> [--kinds <csv>] [--labels <csv>] [--limit <n>] [--system|--no-system]
+oxagen graph pull    [--full] [--labels <csv>] [--no-system] [--json]
+oxagen graph push    [--full] [--repo <id>] [--json]
+oxagen graph lineage [--repo <id>] [--json]
+oxagen graph status  [--json]
 ```
 
 `graph search` node kinds: `entity, file, symbol, chunk, memory, execution, document, message`. Limit is 1–50 (default 10).
+
+`graph push` computes a git code delta and up-syncs it to the workspace knowledge graph. Use `--full` to ignore the saved cursor and push all tracked source files. `--repo <id>` overrides the repo identifier.
+
+`graph lineage` pushes CLI session execution lineage (touched files, turn edges) into the workspace knowledge graph. `--repo <id>` overrides the repo identifier used to link files to the code subgraph.
 
 ## oxagen config — local configuration
 
@@ -95,7 +101,7 @@ oxagen graph status [--json]
 oxagen config [key] [value]
 ```
 
-With no args, prints all values (token masked). Keys: `token`, `model`, `api-url`, `org`, `workspace`. Stored in `~/.config/oxagen/config.json`.
+With no args, prints the stored values (token masked): `token`, `api-url`, `org`, `workspace`. The `model` key is readable/settable via `oxagen config model` but is not included in the aggregate display. Stored in `~/.config/oxagen/config.json`.
 
 ```bash
 oxagen config                       # show all

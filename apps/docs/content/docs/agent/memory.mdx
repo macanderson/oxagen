@@ -7,13 +7,15 @@ description: How the agent reads and writes persistent memories from the workspa
 
 Agent memory is persistent, queryable knowledge scoped to a workspace. Unlike conversation history (which is a linear sequence of messages), memories are discrete facts, rules, and observations stored as nodes in the workspace knowledge graph (Neo4j). They survive across sessions, across conversations, and across different agents working in the same workspace.
 
-Memory has three kinds:
+Memory has five kinds:
 
-| Kind | Description | Example |
-|---|---|---|
-| `rule` | A persistent behavioral instruction | "Always format currency in USD. Never abbreviate." |
-| `fact` | A piece of knowledge about the world or the org | "Q2 2026 revenue was $2.4M." |
-| `note` | An observation, preference, or reminder | "This user prefers bullet-point summaries." |
+| Kind | Description |
+|---|---|
+| `routine-change` | A process or convention change the agent should carry forward |
+| `constraint` | A hard boundary the agent must respect |
+| `bug-root-cause` | Root cause of a known bug or failure pattern |
+| `convention-deviation` | A departure from a project convention that has been intentionally accepted |
+| `gotcha` | A known trap or non-obvious behavior to watch out for |
 
 ## Recalling memories
 
@@ -40,15 +42,15 @@ The agent uses `agent.memory.write` to persist a new memory. It can propose this
 Each written memory includes:
 
 - The memory content (text)
-- The kind (`rule`, `fact`, or `note`)
-- A confidence weight (0–1, higher = more trustworthy)
+- The kind (`routine-change`, `constraint`, `bug-root-cause`, `convention-deviation`, or `gotcha`)
+- A weight bucket (`low`, `high`, or `critical`) representing the salience of the memory. The `agent.memory.remember` capability can infer this automatically from free text.
 - Graph node attachments (e.g., linked to a specific entity in the ontology)
 
 ## Viewing and managing memories
 
 All workspace memories are visible in **Workspace → Knowledge → Memories**. You can:
 
-- Browse memories by kind
+- Browse and filter memories by kind
 - Edit or delete individual memories
 - See which agent or user created each memory and when
 - Review agent-proposed memories before accepting them

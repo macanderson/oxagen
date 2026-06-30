@@ -15,7 +15,7 @@ The agentic coding loop calls models through the [Vercel AI Gateway](https://ver
 The CLI resolves the key in this order — the first one found wins:
 
 1. `AI_GATEWAY_API_KEY` in your shell environment
-2. `env.AI_GATEWAY_API_KEY` in `~/.config/oxagen/settings.json`
+2. `env.AI_GATEWAY_API_KEY` in `~/.oxagen/settings.json`
 3. `gatewayKey` in `~/.config/oxagen/config.json`
 4. The nearest `.env.local` walking up from your working directory
 
@@ -65,28 +65,44 @@ API keys carry org and workspace scope and are passed as a Bearer token by the C
 
 ## 4. Authenticate the CLI
 
-Point the CLI at your token, org, and workspace. These persist in `~/.config/oxagen/config.json`:
+Run `oxagen login` to authenticate. The default flow opens a browser-based OAuth page:
+
+```bash
+oxagen login            # opens a browser — follow the prompt, then pick your org and workspace
+```
+
+After logging in, an interactive picker lets you choose your org and workspace. To pre-select them and skip the picker:
+
+```bash
+oxagen login --org your-org-slug --workspace your-workspace-slug
+```
+
+**For CI / headless environments**, pass the token directly — no browser, no interactive prompts:
+
+```bash
+oxagen login --token oxk_live_… --org your-org-slug --workspace your-workspace-slug
+```
+
+To sign out and clear the stored session:
+
+```bash
+oxagen logout
+```
+
+Confirm the credentials work:
+
+```bash
+oxagen graph status
+```
+
+### Advanced: raw config setters (scripting)
+
+For provisioning scripts that need to write credentials without any interactive flow, the raw config setters are available. They write to `~/.config/oxagen/config.json` but do **not** validate the token or call the platform:
 
 ```bash
 oxagen config token oxk_live_…
 oxagen config org   your-org-slug
 oxagen config workspace your-workspace-slug
-```
-
-Verify the stored configuration (the token is masked):
-
-```bash
-oxagen config
-# token:     oxk_…1234
-# api-url:   https://api.oxagen.sh
-# org:       your-org-slug
-# workspace: your-workspace-slug
-```
-
-Confirm the credentials actually work by hitting the platform:
-
-```bash
-oxagen graph status
 ```
 
 ### Using environment variables instead
@@ -106,7 +122,7 @@ To target a self-hosted or staging API, set `OXAGEN_API_URL` (or `oxagen config 
 | File | Contents |
 |---|---|
 | `~/.config/oxagen/config.json` | Platform `token`, `org`, `workspace`, `api-url`, default `model`, and optionally `gatewayKey`. |
-| `~/.config/oxagen/settings.json` | User-scope settings: `model`, `apiUrl`, and `env.*` values (e.g. `env.AI_GATEWAY_API_KEY`) projected into the environment on every run. |
+| `~/.oxagen/settings.json` | User-scope settings: `model`, `apiUrl`, and `env.*` values (e.g. `env.AI_GATEWAY_API_KEY`) projected into the environment on every run. |
 
 Both files contain secrets. They live under your home directory with your user permissions — keep them off shared machines and out of version control. Project-scope settings (`.oxagen/settings.json`) are safe to commit; **local** secrets belong in `.oxagen/settings.local.json`, which is gitignored.
 

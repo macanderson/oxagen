@@ -1,6 +1,6 @@
 ---
-title: BYOK and model governance
-description: How to bring your own model API keys, which models are available on each plan, and how to restrict model access per workspace.
+title: Model governance
+description: Which models are available on each plan, how workspace model defaults work, and how to restrict model access per workspace.
 ---
 
 ## Model access by plan
@@ -9,38 +9,29 @@ Oxagen routes all AI inference through the Vercel AI Gateway. No provider API ke
 
 Available models depend on your subscription tier:
 
-| Model | Starter | Growth | Scale |
-|---|---|---|---|
-| Claude Haiku 4.5 | Yes | Yes | Yes |
-| Claude Sonnet 4.6 | Yes | Yes | Yes |
-| Claude Opus 4.7 | — | Yes | Yes |
-| Image generation (gpt-image-1, flux-2-max) | — | Yes | Yes |
-| Video generation (veo-3.0) | — | — | Yes |
+| Model | Free | Build | Scale | Enterprise |
+|---|---|---|---|---|
+| Claude Haiku 4.5 | Yes | Yes | Yes | Yes |
+| Claude Sonnet 4.6 | Yes | Yes | Yes | Yes |
+| Claude Opus 4.8 | — | Yes | Yes | Yes |
+| Image generation (gpt-image-1, flux-2-max) | — | Yes | Yes | Yes |
+| Video generation (veo-3.0) | — | — | Yes | Yes |
 
 All model calls are metered in credits at the per-token rate defined in the billing pricing table. See the [full cost table](/docs/enterprise/use-cases#metered-spend) for per-model credit rates.
 
-## Bring your own keys (BYOK)
+## Workspace model defaults
 
-Organizations on the Scale tier can provide their own model API keys at the workspace level. BYOK keys are used in preference to the Oxagen-managed gateway for any model the key supports.
+Workspace administrators can configure default model selection for their workspace via `workspace.model.settings.write`. This sets the default text model (and tier), image model, and video model applied to all agents running in that workspace, overriding individual user preferences.
 
-**Why BYOK matters for enterprise:**
+**To configure workspace model defaults:**
 
-- Use your existing commercial agreements with Anthropic or OpenAI.
-- Route inference to your own Azure OpenAI or AWS Bedrock endpoints.
-- Apply your organization's data residency requirements to model traffic.
-- Maintain your own rate limits and quotas independently of the Oxagen platform.
+1. Go to **Workspace settings → Models**.
+2. Set the default text model tier and model name, image model, and video model as appropriate.
+3. Save. Agents in this workspace will use these defaults unless a playbook explicitly overrides them.
 
-**To configure BYOK:**
+Different workspaces can use different model defaults — for example, a cost-sensitive workspace can be pinned to Haiku while a high-capability workspace uses Sonnet.
 
-1. Go to **Workspace settings → Model Keys**.
-2. Click **Add key**.
-3. Select the provider (Anthropic, OpenAI, Azure OpenAI, AWS Bedrock, or a custom endpoint).
-4. Paste your API key. The key is encrypted with AES-256-GCM before being stored.
-5. Map the key to the model handles you want it to serve.
-
-BYOK keys are stored per workspace. Different workspaces can use different keys — for example, a production workspace can use a dedicated API key with its own usage limits, while a development workspace uses the Oxagen-managed gateway.
-
-**Audit trail:** BYOK key creation, updates, and deletions are recorded as security events.
+> **BYOK (bring your own model API keys)** is a planned feature and is not yet implemented. All inference currently routes through the Vercel AI Gateway using Oxagen-managed provider credentials.
 
 ## Restricting model access per workspace
 
@@ -50,7 +41,7 @@ Workspace administrators can restrict which models are available to agents in th
 - Restricting model access in workspaces that handle sensitive data to only pre-approved models.
 - Enforcing consistent model behavior across a team.
 
-Model restrictions are configured at **Workspace settings → Model Keys → Allowed models**. Agents attempting to use a disallowed model receive a capability denied response, which is recorded in the audit log.
+Model restrictions are configured at **Workspace settings → Models → Allowed models**. Agents attempting to use a disallowed model receive a capability denied response, which is recorded in the audit log.
 
 ## Model governance and org-enforced policies
 

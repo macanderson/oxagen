@@ -29,7 +29,7 @@ Organization → governance rails, billing, global policies
 
 ### Role-based access control
 
-Five built-in roles (Owner, Admin, Billing, Member, Viewer) cover the majority of enterprise access patterns. Custom roles are available via the role builder for finer-grained divisions. See [RBAC and roles](/docs/governance/rbac).
+Seven built-in roles — four org-scoped (Owner, Admin, Compliance, Billing) and three workspace-scoped (Owner, Member, Viewer) — cover the majority of enterprise access patterns. Custom roles are available via the role builder for finer-grained divisions. See [RBAC and roles](/docs/governance/rbac).
 
 ### Org-enforced policies
 
@@ -41,7 +41,7 @@ Every third-party plugin (MCP server, integration, content tool) must be install
 
 ### Model governance
 
-Model access is tiered by subscription plan. Organizations on the Scale tier can bring their own model API keys at the workspace level (BYOK). Model access can be restricted per workspace — a workspace handling sensitive data can be configured to use only approved models. See [BYOK and model governance](/docs/governance/byok-and-models).
+Model access is tiered by subscription plan. Workspace administrators can configure default model selection (text, image, and video) for their workspace. Model access can be restricted per workspace — a workspace handling sensitive data can be configured to use only approved models. See [Model governance](/docs/governance/byok-and-models).
 
 ### Just-in-time access requests
 

@@ -34,7 +34,7 @@ The agent writes the code, proposes it in an approval card, waits for your confi
 | Resource | Limit |
 |---|---|
 | Wallclock time | 30 seconds (default); workspace policy may lower |
-| Memory | 512 MiB hard cap |
+| Memory | default 256 MiB; configurable per-invocation up to 2048 MiB |
 | CPU | 0.5 vCPU |
 | PIDs | 128 max processes |
 | Network | Denied by default |
@@ -67,7 +67,7 @@ Every invocation produces:
 
 - A `capability.invoke_allowed` or `capability.invoke_denied` event (IAM decision).
 - An `agent.approval_requests` row (who approved, when, what they approved).
-- An `execution.tool_calls` row with the invocation ID, input hash, exit code, and output preview.
+- An `agent.agent_tool_calls` row with the invocation ID, input hash, exit code, and output preview.
 - A ClickHouse `tool_invocations` row (analytics: duration, exit code, language).
 
 All of these are scoped to the calling org and workspace. A separate tenant cannot see your code execution records.

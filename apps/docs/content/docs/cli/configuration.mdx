@@ -15,9 +15,13 @@ The CLI is configured through two files and a per-project `.oxagen/` directory:
 
 | Scope | File | Use for |
 |---|---|---|
-| `user` | `~/.config/oxagen/settings.json` | Personal defaults across all projects. |
+| `user` | `~/.oxagen/settings.json` | Personal defaults across all projects. |
 | `project` | `.oxagen/settings.json` | Team-shared, committed to version control. |
 | `local` | `.oxagen/settings.local.json` | Personal/secret overrides — **gitignored**. |
+
+<Callout type="info">
+Existing users: if you have an older `~/.config/oxagen/settings.json`, it is copied to `~/.oxagen/settings.json` automatically on first run.
+</Callout>
 
 Start with a documented template, then inspect the merged result:
 

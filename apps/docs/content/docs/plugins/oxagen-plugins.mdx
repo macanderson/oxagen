@@ -29,7 +29,7 @@ Each plugin unlocks a specific set of named capabilities across the API, MCP, an
 | Image Generation | `image.generate` · `image.create` · `image.analyze` · `image.list` |
 | SVG Generation | `svg.generate` |
 | Video Generation | `video.generate` |
-| Document Generation | `documents.generate` · `documents.pdf.create` |
+| Document Generation | `documents.generate` · `documents.pdf.create` · `markdown.generate` · `mermaid.generate` |
 
 ## Installing an Oxagen Plugin
 
@@ -58,8 +58,9 @@ If an agent or direct API/MCP call targets a capability that belongs to a plugin
 
 ```json
 {
+  "capability": "video.generate",
   "code": "capability_not_installed",
-  "message": "The 'video.generate' capability requires the 'oxagen/media-video' plugin (Video Generation) to be installed. Install it from Workspace settings → Plugins → Browse marketplace → Agent Capabilities."
+  "message": "Capability \"video.generate\" requires the \"Video Generation\" plugin (oxagen/media-video). Install and enable it from the marketplace."
 }
 ```
 

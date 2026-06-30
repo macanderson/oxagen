@@ -62,20 +62,17 @@ Both contributor types produce `ContributedRawTool` entries that pass through th
 The fastest way to connect an external MCP server:
 
 ```bash
-# Add GitHub MCP (OAuth)
-oxagen mcp add github --url https://api.githubcopilot.com/mcp/ --auth oauth
+# Add GitHub MCP with a static auth header
+oxagen mcp add github --url https://api.githubcopilot.com/mcp/ --auth header --header "Authorization=Bearer ${GITHUB_TOKEN}"
 
 # Add a bearer-token server
 oxagen mcp add linear --url https://mcp.linear.app/sse --transport sse --auth bearer --env-token LINEAR_MCP_TOKEN
 
 # Add a local stdio server
-oxagen mcp add filesystem --transport stdio --command npx --args "-y,@modelcontextprotocol/server-filesystem,./src"
+oxagen mcp add filesystem --transport stdio --command npx --arg -y --arg @modelcontextprotocol/server-filesystem --arg ./src
 
 # Check connectivity
 oxagen mcp check
-
-# Set permissions
-oxagen mcp permit github --allow-all --deny delete_repository
 ```
 
 See [CLI reference](/docs/mcp/cli-reference) for the full command set.

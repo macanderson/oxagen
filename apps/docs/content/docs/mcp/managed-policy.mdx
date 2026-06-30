@@ -7,13 +7,7 @@ Managed policies let organization admins control which external MCP servers deve
 
 ## How it works
 
-The managed config is stored at `~/.config/oxagen/managed.json` and synced from the platform:
-
-```bash
-oxagen org sync-policy
-```
-
-This file acts as an **unoverridable floor** — its rules take precedence over all user/project/local settings.
+The managed config is stored at `~/.config/oxagen/managed.json` and synced automatically from the platform (on login and periodically in the background). This file acts as an **unoverridable floor** — its rules take precedence over all user/project/local settings.
 
 ## Managed config structure
 
@@ -143,17 +137,11 @@ This ensures critical integrations (internal tools, company Jira, etc.) are alwa
 
 ## Syncing the policy
 
-The managed config is pulled from the platform and written locally:
+The managed config is pulled from the platform automatically on `oxagen auth login` and periodically when the CLI is used (at most once per hour). To check when the policy was last synced:
 
 ```bash
-# Sync the latest org policy
-oxagen org sync-policy
-
-# Check when the policy was last synced
 cat ~/.config/oxagen/managed.json | jq '._syncedAt'
 ```
-
-The sync is also triggered automatically on `oxagen auth login` and periodically when the CLI is used (at most once per hour).
 
 ## For org admins
 
@@ -167,4 +155,4 @@ To set up a managed policy:
 4. Optionally provision managed servers that all members receive
 5. Publish the policy
 
-Members receive the updated policy on their next `oxagen org sync-policy` or automatic background sync.
+Members receive the updated policy on their next automatic background sync (triggered on login or CLI use, at most once per hour).

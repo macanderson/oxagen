@@ -96,7 +96,7 @@ chosen to ingest; you can also trigger a manual **Re-sync** at any time.
 
 | Problem | What to do |
 | --- | --- |
-| "GitHub is not configured" / authorization won't start | The connection isn't available in this environment yet — contact your Oxagen admin or support. |
+| "GitHub App is not configured" (HTTP 503) / authorization won't start | `GITHUB_APP_SLUG` or `GITHUB_APP_INSTALL_STATE_SECRET` is absent from the deployment environment — contact your Oxagen admin. |
 | No installations appear after authorizing | Make sure you completed the **Install & Authorize** step on GitHub for the account that owns your repos. |
 | A repository is missing from the list | The Oxagen app may not have access to it. On GitHub, open the Oxagen app's configuration and add the repository, then return to Oxagen. |
 | Sync seems stuck | Large repositories take longer. If it doesn't progress, re-run the sync from the source settings or contact support. |

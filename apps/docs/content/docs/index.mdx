@@ -31,8 +31,8 @@ The same principle extends to Neo4j (scoped session guard), ClickHouse (org-scop
 
 Oxagen is designed SOC 2-first, not SOC 2-retrofitted. The Trust Service Criteria are architectural requirements:
 
-- **CC6 (access control):** role-based IAM with owner/admin/billing/member/viewer roles, default-deny, org-enforced policies that workspaces can tighten but never expand, just-in-time access requests, and force-revoke on any session.
-- **CC7 (monitoring):** two independent audit stores — a Postgres `security.security_events` table with 7-year retention and a ClickHouse `audit_events` table with chain-hash tamper evidence — covering 24 typed event kinds from every auth, billing, and capability invocation.
+- **CC6 (access control):** role-based IAM — org roles (Owner, Admin, Compliance, Billing) and workspace roles (Owner, Member, Viewer) — with default-deny, org-enforced policies that workspaces can tighten but never expand, just-in-time access requests, and force-revoke on any session.
+- **CC7 (monitoring):** two independent audit stores — a Postgres `security.security_events` table with 7-year retention and a ClickHouse `audit_events` table with chain-hash tamper evidence — covering 40 typed event kinds from every auth, billing, and capability invocation.
 - **CC8 (change management):** versioned migrations, expand-then-contract schema changes, CI-gated deploys.
 - **CC9 (risk mitigation):** sandboxed code execution (Firecracker microVMs in production, Docker locally), network-denied by default, capabilities with high blast radius require explicit user approval before they run.
 
