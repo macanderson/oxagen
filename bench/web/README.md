@@ -16,6 +16,13 @@ pnpm --filter @oxagen/bench-web dev
 It is intentionally **excluded from `pnpm dev`** so it never adds a fifth
 persistent server to the main local stack — run it on demand with `pnpm eval:app`.
 
+The launcher (`scripts/dev.mjs`) is resilient to a busy port: it prefers 3200,
+but if 3200 is already serving this dashboard it just prints the live URL and
+exits 0, and if 3200 is held by something else it starts on the next free port
+and announces it. So `pnpm eval:app` never hard-crashes with `EADDRINUSE`.
+Override the preferred port with `PORT=<n> pnpm eval:app`; for the raw,
+fixed-3200 behaviour use `pnpm --filter @oxagen/bench-web dev:next`.
+
 ## How it works
 
 The benchmark is a **deterministic simulation**, not a live agent race. Each

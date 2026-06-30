@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Oxagen Benchmark Suite — web dashboard for comparing AI code agents. Launch with `pnpm eval:app`.",
   "scripts": {
-    "dev": "next dev --port 3200",
+    "dev": "node scripts/dev.mjs",
+    "dev:next": "next dev --port 3200",
     "build": "next build",
     "start": "next start --port 3200",
     "lint": "eslint .",
