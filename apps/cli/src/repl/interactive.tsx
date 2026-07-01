@@ -57,6 +57,8 @@ import {
   type TuiMode,
 } from "./components.js";
 import { resolveEscapeAction } from "./escape-action.js";
+import { isDebugEnabled } from "../lib/debug-log.js";
+import { Banner } from "../tui/banner.js";
 import {
   makeTurnController,
   makeStallDetector,
@@ -178,7 +180,9 @@ export function ReplApp({
   // screen, pinned to the terminal height). Defaults from config; toggled by
   // /tui. useFullscreen swaps the alt buffer + reports the live row count.
   const [tuiMode, setTuiMode] = useState<TuiMode>(
-    readConfig().tui === "fullscreen" ? "fullscreen" : "compact",
+    // Fullscreen is the default REPL experience; opt out with `/tui compact`
+    // or a persisted `tui: "compact"` in config.
+    readConfig().tui === "compact" ? "compact" : "fullscreen",
   );
   const fullscreen = tuiMode === "fullscreen";
   const rows = useFullscreen(fullscreen);
@@ -435,6 +439,48 @@ export function ReplApp({
           pushAssistant("🗑 Conversation reset.");
         } else {
           pushAssistant("Reset cancelled.");
+        }
+        return;
+      }
+
+      // ── Shell escape (`!cmd`) ──
+      // A prompt beginning with "!" runs the rest as a shell command in the
+      // workspace, like Claude Code. The user typed it explicitly, so it runs
+      // directly (not through the agent's permission broker). Output is shown in
+      // the conversation AND fed into history so the model sees it next turn.
+      if (text.startsWith("!")) {
+        const command = text.slice(1).trim();
+        if (!command) {
+          pushAssistant("Usage: !<shell command> — runs it in the workspace and shows the output.");
+          return;
+        }
+        commit([...allRef.current, { role: "user", content: text, timestamp: Date.now() }]);
+        try {
+          const res = await workspaceRef.current.exec(command, {
+            timeoutMs: TIMEOUTS.toolLongMs,
+          });
+          const merged = [res.stdout, res.stderr].filter(Boolean).join("\n").trimEnd();
+          const body = merged || "(no output)";
+          const tail = res.timedOut
+            ? "\n(timed out)"
+            : res.exitCode !== 0
+              ? `\n(exit ${res.exitCode})`
+              : "";
+          pushAssistant("```\n$ " + command + "\n" + body + "\n```" + tail);
+          // Make the model aware of what the user ran and what it produced.
+          historyRef.current = [
+            ...historyRef.current,
+            {
+              role: "user",
+              content:
+                `I ran \`${command}\` in the shell (exit ${res.exitCode}). Output:\n` +
+                body.slice(0, 4000),
+            },
+          ];
+        } catch (err) {
+          pushAssistant(
+            `Command failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
         return;
       }
@@ -937,6 +983,23 @@ export function ReplApp({
         }
         render();
         historyRef.current = result.messages;
+        // Debug mode: surface the exact prompt the model received after the
+        // enhance stage (code-graph refs + recalled memory injected). This is
+        // what the agent actually reasoned over, printed into the messages list
+        // so the user can see how their prompt was transformed. Gated on the
+        // same OXAGEN_CLI_DEBUG flag as the file log; skipped in bare mode where
+        // no enhancement runs and the enhanced prompt equals the original.
+        if (isDebugEnabled() && !bareRef.current) {
+          const enhanced = result.trace.enhancement?.prompt;
+          if (enhanced && enhanced !== submission) {
+            turn.push({
+              role: "reasoning",
+              content: "debug · enhanced prompt sent to the model:\n" + enhanced,
+              timestamp: Date.now(),
+            });
+            render();
+          }
+        }
         // The engine persists the turn trace via the injected `trace` port
         // (traceStoreRef), so /replay can show how it was handled — no explicit
         // record() needed here.
@@ -1032,17 +1095,9 @@ export function ReplApp({
     // Fullscreen pins the column to the terminal height (alt screen); compact
     // leaves height unset so the conversation grows inline in the scrollback.
     <Box flexDirection="column" height={fullscreen ? rows : undefined}>
-      {/* Header */}
-      <Box paddingX={1} marginBottom={1}>
-        <Text color={theme.cyan} bold>
-          {theme.ring}{" "}
-        </Text>
-        <Text color={theme.violet} bold>
-          oxagen
-        </Text>
-        <Text dimColor> · agentic coding · </Text>
-        <Text dimColor>v{pkg.version}</Text>
-      </Box>
+      {/* Header — the Oxagen ASCII wordmark. It animates (reveals top-to-bottom)
+          the first time the REPL mounts, then stays as the logo header. */}
+      <Banner version={pkg.version} animate />
 
       {/* Messages — fullscreen fills + clips to the screen; compact grows inline */}
       <Box
