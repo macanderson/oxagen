@@ -1311,7 +1311,7 @@ export function MemoriesClient({
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-5 gap-2">
+      <div className="grid grid-cols-5 gap-2" data-testid="memory-stats-row">
         {ALL_KINDS.map((kind) => {
           const cfg = KIND_CONFIG[kind];
           const Icon = cfg.icon;

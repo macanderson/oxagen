@@ -76,7 +76,7 @@ export interface RunTurnOptions {
   /** Manual model override — pins the executor and skips auto-routing. */
   model?: string;
   /** Reasoning effort for models that support it (forwarded to the AI port). */
-  effort?: "low" | "medium" | "high";
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
   /** Max tool-loop steps per execution round (default 32). */
   maxSteps?: number;
   /** Loaded project rules (CLAUDE.md/AGENTS.md). */
@@ -127,7 +127,13 @@ export interface RunTurnResult {
   steps: number;
   /** Full message history including this turn's assistant/tool messages. */
   messages: ModelMessage[];
-  usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+  usage: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    /** Prompt tokens served from the provider cache (a cache "hit"), summed across rounds. */
+    cachedInputTokens?: number;
+  };
   /** The full, persisted record of how this turn was handled. */
   trace: TurnTrace;
 }
@@ -259,6 +265,10 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   let prompt = enhanced.prompt;
   let lastText = "";
   let totalSteps = 0;
+  // Cache-read tokens summed across execution rounds (drives the CLI status
+  // line's cache "hit" counter). Tracked alongside — not inside — UsageTotals,
+  // which is cost accounting and has no cache field.
+  let cachedInputTokens = 0;
 
   for (let round = 0; ; round++) {
     if (round > 0) {
@@ -296,6 +306,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     history = result.messages;
     lastText = result.text;
     totalSteps += result.steps;
+    cachedInputTokens += result.usage.cachedInputTokens ?? 0;
 
     // Union the git-diff file list into filesTouched. This is the ground truth
     // for what changed and supplements tool-call events (which may not fire in
@@ -402,7 +413,11 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     text: lastText,
     steps: totalSteps,
     messages: history,
-    usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
+    usage: {
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cachedInputTokens,
+    },
     trace,
   };
 }
@@ -601,7 +616,11 @@ async function runBare(
     text: result.text,
     steps: result.steps,
     messages: result.messages,
-    usage: { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens },
+    usage: {
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      cachedInputTokens: result.usage.cachedInputTokens,
+    },
     trace,
   };
 }

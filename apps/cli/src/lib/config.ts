@@ -10,8 +10,8 @@ export interface CliConfig {
   /** Web app base URL — where `oxagen login` opens the browser authorize page. */
   appUrl?: string;
   model?: string;
-  /** Default reasoning effort for models that support it ("low" | "medium" | "high"). */
-  effort?: "low" | "medium" | "high";
+  /** Default reasoning effort for models that support it (low|medium|high|xhigh|max). */
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
   /** Vercel AI Gateway key for the local agent loop (falls back to env / .env.local). */
   gatewayKey?: string;
   /** Default verbose mode: capture + emit full per-turn telemetry. */

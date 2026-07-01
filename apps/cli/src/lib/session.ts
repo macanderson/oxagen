@@ -33,25 +33,11 @@ export function loadSession(): Session | null {
  * Wire this in front of the default one-shot action, the interactive REPL
  * launch, and the `--agent` path — all agent-execution paths. Non-agent
  * utility commands (config, settings, login, logout, etc.) bypass this gate.
- *
- * `OXAGEN_ALLOW_NO_SESSION=1` bypasses the gate entirely, returning a
- * synthetic session instead of exiting. This exists for headless benchmark
- * containers (bench/terminal-bench, bench/swe-bench) that run the agent path
- * with no logged-in account — never set this outside a benchmark/CI sandbox.
  */
 export function requireSession(): Session {
   const token = getToken();
   const orgSlug = getOrgId();
   const workspaceSlug = getWorkspaceId();
-
-  if (process.env.OXAGEN_ALLOW_NO_SESSION === "1") {
-    return {
-      token: token ?? "benchmark-token",
-      orgSlug: orgSlug ?? "benchmark",
-      workspaceSlug: workspaceSlug ?? "benchmark",
-      apiUrl: getApiUrl(),
-    };
-  }
 
   if (!token || !orgSlug || !workspaceSlug) {
     const missing: string[] = [];

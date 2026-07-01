@@ -30,8 +30,15 @@ export type Vendor =
   | "deepseek"
   | "bfl";
 
-/** Reasoning effort surfaced to reasoning-capable models. */
-export type EffortLevel = "low" | "medium" | "high";
+/**
+ * Reasoning effort surfaced to reasoning-capable models.
+ *
+ * `low | medium | high` are the cross-vendor baseline. `xhigh` and `max` are the
+ * deepest tiers Anthropic's adaptive-thinking models (Claude Opus) expose; for
+ * vendors without those tiers (e.g. OpenAI's `reasoning_effort`, which tops out
+ * at `high`) they are clamped down to `high` in {@link reasoningRequestConfig}.
+ */
+export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
 
 /** Media generation kinds the composer can request. */
 export type MediaKind = "image" | "video";
