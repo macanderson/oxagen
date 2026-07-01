@@ -58,6 +58,8 @@ export interface RunAgentOptions {
   signal?: AbortSignal;
   /** Streamed assistant text deltas. */
   onText?: (delta: string) => void;
+  /** Streamed model reasoning / chain-of-thought deltas (shown dim in the CLI). */
+  onReasoning?: (delta: string) => void;
   /** Fired when the model invokes a tool. */
   onToolCall?: (name: string, input: unknown) => void;
   /** Fired when a tool is blocked by a permission rule or PreToolUse hook. */
@@ -339,10 +341,19 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     }
   });
   try {
-    for await (const delta of result.textStream) {
-      stall.reset(); // each delta resets the stall window
-      text += delta;
-      opts.onText?.(delta);
+    // Consume the full stream so reasoning deltas surface alongside answer text.
+    // Both `text-delta` and `reasoning-delta` reset the stall window — a model
+    // that is actively "thinking" (emitting reasoning) is making progress even
+    // before any answer text arrives.
+    for await (const part of result.fullStream) {
+      if (part.type === "text-delta") {
+        stall.reset();
+        text += part.text;
+        opts.onText?.(part.text);
+      } else if (part.type === "reasoning-delta") {
+        stall.reset();
+        opts.onReasoning?.(part.text);
+      }
     }
   } catch (err) {
     streamError ??= err;

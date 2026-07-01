@@ -33,6 +33,13 @@ import { formatVerboseSection } from "../agent/trace-format.js";
 import { readConfig } from "../lib/config.js";
 import { PermissionBroker, type PermissionMode } from "../agent/permissions.js";
 import { formatToolCallWithSpacing } from "../agent/tool-formatter.js";
+import { debugLog } from "../lib/debug-log.js";
+import {
+  makeTurnController,
+  makeStallDetector,
+  AgentTimeoutError,
+  TIMEOUTS,
+} from "../agent/timeouts.js";
 
 export interface OneShotOptions {
   /** Authenticated platform session (token, org, workspace). */
@@ -82,6 +89,21 @@ export async function runOneShot(
       : undefined;
   const readOnly = options.readOnly || options.mode === "readonly";
 
+  // Bound the non-interactive turn: a per-turn deadline (TIMEOUTS.turnMs) plus a
+  // stall detector (aborts if no stream progress within TIMEOUTS.llmStallMs) so a
+  // scripted/CI `oxagen "…"` invocation can never hang a pipeline forever. Esc is
+  // not available here, so these timers are the only backstop.
+  const turnController = makeTurnController();
+  const stall = makeStallDetector(TIMEOUTS.llmStallMs, () => {
+    if (!turnController.signal.aborted) {
+      turnController.abort(
+        new AgentTimeoutError("LLM stream stall", TIMEOUTS.llmStallMs),
+      );
+    }
+  });
+
+  void debugLog("turn", "turn.start", { mode: "one-shot", readOnly, model: options.model, prompt });
+
   try {
     let streamed = false;
     const result = await runTurn({
@@ -97,23 +119,36 @@ export async function runOneShot(
       codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
       trace: traceStore,
       graphSync: createGraphSyncProvider({ ...options.session, cwd }),
+      signal: turnController.signal,
       // Pipeline stage progress goes to stderr so stdout stays the clean answer.
       onStage: (stage) => {
+        stall.reset();
+        void debugLog("turn", "turn.stage", { label: stage.label, detail: stage.detail });
         process.stderr.write(
           `  ${stage.label}${stage.detail ? ` · ${stage.detail}` : ""}\n`,
         );
       },
       onText: (delta) => {
+        stall.reset();
         streamed = true;
         process.stdout.write(delta);
+      },
+      // Reasoning / chain-of-thought goes to stderr (dim), so the piped stdout
+      // stays the clean answer while the thinking is still visible on a TTY.
+      onReasoning: (delta) => {
+        stall.reset();
+        process.stderr.write(`\x1b[2m${delta}\x1b[22m`);
       },
       // Tool activity goes to stderr so stdout stays the clean final answer
       // (pipeable). e.g. `oxagen "..." > out.md` captures only the answer.
       onToolCall: (name, input) => {
+        stall.reset();
+        void debugLog("turn", "turn.tool-call", { name, input });
         process.stderr.write(formatToolCallWithSpacing(name, input));
       },
     });
     if (streamed) process.stdout.write("\n");
+    void debugLog("turn", "turn.end", { mode: "one-shot", streamed });
     // The engine persists the trace via the injected `trace` port. Verbose mode
     // additionally appends the structured record to the JSONL stream and prints
     // the per-phase / per-model / cost breakdown to stderr (stdout stays the
@@ -123,11 +158,23 @@ export async function runOneShot(
       process.stderr.write(formatVerboseSection(result.trace).join("\n") + "\n");
     }
   } catch (err) {
-    process.stderr.write(
-      `Error: ${err instanceof Error ? err.message : String(err)}\n`,
-    );
+    // A timeout/stall aborts turnController with a typed AgentTimeoutError whose
+    // message is already user-facing; surface it verbatim rather than as a raw
+    // AbortError from the AI SDK.
+    const reason: unknown = turnController.signal.aborted
+      ? turnController.signal.reason
+      : undefined;
+    const message =
+      reason instanceof AgentTimeoutError
+        ? reason.message
+        : err instanceof Error
+          ? err.message
+          : String(err);
+    void debugLog("error", "turn.error", { mode: "one-shot", message });
+    process.stderr.write(`Error: ${message}\n`);
     process.exitCode = 1;
   } finally {
+    stall.stop();
     await memory?.close();
   }
 }
@@ -165,6 +212,8 @@ export async function runAgentOneShot(
         streamed = true;
         process.stdout.write(delta);
       },
+      // Reasoning to stderr (dim) so piped stdout stays the clean answer.
+      onReasoning: (delta) => process.stderr.write(`\x1b[2m${delta}\x1b[22m`),
       onToolCall: (name, input) => {
         const summary =
           typeof input === "object" && input !== null

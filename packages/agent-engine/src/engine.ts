@@ -113,9 +113,18 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
 
   let text = "";
   try {
-    for await (const delta of result.textStream) {
-      text += delta;
-      onEvent({ type: "text", delta });
+    // Consume the FULL stream (not just textStream) so the model's reasoning /
+    // chain-of-thought is surfaced alongside its answer — the CLI renders it dim
+    // and inline so the user sees everything the agent is thinking, not only the
+    // final prose. `text-delta` carries answer text; `reasoning-delta` carries
+    // the thinking trace. Both parts expose their content on `.text` in ai@6.
+    for await (const part of result.fullStream) {
+      if (part.type === "text-delta") {
+        text += part.text;
+        onEvent({ type: "text", delta: part.text });
+      } else if (part.type === "reasoning-delta") {
+        onEvent({ type: "reasoning", delta: part.text });
+      }
     }
   } catch (err) {
     streamError ??= err;

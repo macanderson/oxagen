@@ -540,6 +540,38 @@ export function buildProgram(): Command {
       await handleConfig(key, value);
     });
 
+  // ── logs: see + debug the OXAGEN_CLI_DEBUG .output stream ────────────────────
+
+  program
+    .command("logs")
+    .description(
+      "See and debug the CLI's log (~/.oxagen/logs/cli.output). Captures invocations, " +
+        "LLM telemetry, and the lineage + code-graph data synced to the workspace graph " +
+        "when OXAGEN_CLI_DEBUG=1.",
+    )
+    .option("--path", "Print the log file path and exit", false)
+    .option("-n, --lines <n>", "Number of recent entries to show (default 50)")
+    .option(
+      "--category <category>",
+      "Filter by category: invoke | turn | api | code-graph | graph-sync | llm | error",
+    )
+    .option("-f, --follow", "Follow the log live (like tail -f)", false)
+    .option("--clear", "Truncate the log to empty and exit", false)
+    .option("--json", "Emit raw JSONL instead of the formatted view", false)
+    .action(
+      async (opts: {
+        path?: boolean;
+        lines?: string;
+        category?: string;
+        follow?: boolean;
+        clear?: boolean;
+        json?: boolean;
+      }) => {
+        const { handleLogs } = await import("./commands/logs.js");
+        await handleLogs(opts);
+      },
+    );
+
   // ── login / logout: platform authentication ─────────────────────────────────
 
   program

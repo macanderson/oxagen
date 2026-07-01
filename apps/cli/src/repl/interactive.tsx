@@ -37,6 +37,7 @@ import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
 import { readConfig, writeConfig } from "../lib/config.js";
+import { debugLog } from "../lib/debug-log.js";
 import {
   ApprovalPrompt,
   HELP,
@@ -50,9 +51,16 @@ import {
 } from "./components.js";
 import { resolveEscapeAction } from "./escape-action.js";
 import {
+  makeTurnController,
+  makeStallDetector,
+  AgentTimeoutError,
+  TIMEOUTS,
+} from "../agent/timeouts.js";
+import {
   PermissionBroker,
   parseModeArg,
   resolveMode,
+  persistedRuleString,
   type ApprovalRequest,
   type ApprovalResponse,
   type PermissionMode,
@@ -304,13 +312,32 @@ export function ReplApp({
     setMessages([]);
   }, []);
 
-  // Resolve the in-flight approval prompt with the user's answer and clear it.
-  const resolveApproval = useCallback((response: ApprovalResponse) => {
-    setApproval((cur) => {
+  // Resolve the in-flight approval prompt with the user's answer, clear it, and
+  // echo a confirmation so the user always sees the outcome of their decision.
+  // On "allow + remember" we also name the exact rule the broker persists to
+  // .oxagen/settings.json, so the workspace file update is never silent.
+  const resolveApproval = useCallback(
+    (response: ApprovalResponse) => {
+      const cur = approvalRef.current;
       cur?.resolve(response);
-      return null;
-    });
-  }, []);
+      setApproval(null);
+      if (!cur) return;
+      const { req } = cur;
+      if (response.decision === "allow") {
+        let msg = `✓ Allowed · ${req.summary}`;
+        if (response.remember) {
+          const rule = persistedRuleString(req, "allow", cwd);
+          msg +=
+            `\n  ↳ saved allow-rule ${rule} to .oxagen/settings.json — ` +
+            `matching calls now run without asking.`;
+        }
+        pushAssistant(msg);
+      } else {
+        pushAssistant(`✗ Denied · ${req.summary}`);
+      }
+    },
+    [cwd, pushAssistant],
+  );
 
   useInput((input, key) => {
     // Ctrl-C is handled first so it works even while a permission prompt is up
@@ -680,10 +707,38 @@ export function ReplApp({
       const controller = new AbortController();
       abortRef.current = controller;
 
+      // Bound the whole turn: makeTurnController fires when EITHER the user hits
+      // Esc/Ctrl-C (controller) OR the per-turn deadline (TIMEOUTS.turnMs) elapses.
+      // A stall detector layered on top aborts the turn if no stream progress —
+      // text, reasoning, tool call, or stage — arrives within TIMEOUTS.llmStallMs,
+      // catching a socket that stays open but stops delivering bytes. Together
+      // these guarantee the turn can never hang the CLI indefinitely, even though
+      // the shared engine path forwards only a bare abort signal.
+      const turnController = makeTurnController(controller.signal);
+      const stall = makeStallDetector(TIMEOUTS.llmStallMs, () => {
+        if (!turnController.signal.aborted) {
+          turnController.abort(
+            new AgentTimeoutError("LLM stream stall", TIMEOUTS.llmStallMs),
+          );
+        }
+      });
+
       // This turn's streamed messages (tool annotations + assistant text).
       const turn: Message[] = [];
       let assistantOpen = false;
+      let reasoningOpen = false;
       const render = (): void => commit([...base, ...turn]);
+      // Close any open streaming block (assistant prose or reasoning aside) so a
+      // switch between the two — or a tool call in between — renders as a clean
+      // break rather than concatenating into one run-on line.
+      const closeStreamingBlocks = (): void => {
+        if (assistantOpen || reasoningOpen) {
+          const last = turn[turn.length - 1] as Message;
+          turn[turn.length - 1] = { ...last, streaming: false };
+        }
+        assistantOpen = false;
+        reasoningOpen = false;
+      };
 
       // Project initialization and runTurn both live inside this try so the
       // finally below always restores the streaming UI state — otherwise a throw
@@ -717,6 +772,12 @@ export function ReplApp({
           setApproval(null);
         }
 
+        void debugLog("turn", "turn.start", {
+          mode: "repl",
+          readOnly: modeRef.current === "readonly",
+          model: modelRef.current,
+          prompt: submission,
+        });
         const result = await runTurn({
           prompt: submission,
           history: historyRef.current,
@@ -737,29 +798,53 @@ export function ReplApp({
           codeGraph: codeGraphRef.current,
           trace: traceStoreRef.current,
           graphSync: graphSyncRef.current,
-          signal: controller.signal,
+          signal: turnController.signal,
           onStage: (stage) => {
+            stall.reset();
+            void debugLog("turn", "turn.stage", { label: stage.label, detail: stage.detail });
+            closeStreamingBlocks();
             turn.push({
               role: "stage",
               stage,
               content: stage.label,
               timestamp: Date.now(),
             });
-            assistantOpen = false;
             render();
           },
           onToolCall: (name, input) => {
+            stall.reset();
+            void debugLog("turn", "turn.tool-call", { name, input });
+            closeStreamingBlocks();
             turn.push({
               role: "tool",
               toolName: name,
               content: summarizeInput(input),
               timestamp: Date.now(),
             });
-            assistantOpen = false;
+            render();
+          },
+          onReasoning: (delta) => {
+            stall.reset();
+            // Reasoning and answer text interleave across steps — close the
+            // assistant block when thinking resumes so they never merge.
+            if (assistantOpen) closeStreamingBlocks();
+            if (!reasoningOpen) {
+              turn.push({
+                role: "reasoning",
+                content: "",
+                streaming: true,
+                timestamp: Date.now(),
+              });
+              reasoningOpen = true;
+            }
+            const last = turn[turn.length - 1] as Message;
+            turn[turn.length - 1] = { ...last, content: last.content + delta };
             render();
           },
           onText: (delta) => {
+            stall.reset();
             streamCharsRef.current += delta.length;
+            if (reasoningOpen) closeStreamingBlocks();
             if (!assistantOpen) {
               turn.push({
                 role: "assistant",
@@ -776,9 +861,11 @@ export function ReplApp({
         });
 
         if (assistantOpen) {
-          const last = turn[turn.length - 1] as Message;
-          turn[turn.length - 1] = { ...last, streaming: false };
+          closeStreamingBlocks();
         } else {
+          // Close any dangling reasoning block, then show the final answer text
+          // (the model may have reasoned without emitting streamed prose).
+          closeStreamingBlocks();
           turn.push({
             role: "assistant",
             content: result.text || "(done)",
@@ -807,16 +894,23 @@ export function ReplApp({
           output: u.output + (result.usage.outputTokens ?? 0),
         }));
       } catch (err) {
-        const cancelled = controller.signal.aborted;
-        turn.push({
-          role: "assistant",
-          content: cancelled
-            ? "(cancelled)"
-            : `Error: ${err instanceof Error ? err.message : String(err)}`,
-          timestamp: Date.now(),
-        });
+        closeStreamingBlocks();
+        // Distinguish the three exit paths: an explicit user cancel (Esc/Ctrl-C),
+        // a timeout/stall (the turn deadline or stall detector fired on
+        // turnController with a typed AgentTimeoutError reason), or a real error.
+        const userCancelled = controller.signal.aborted;
+        const timeoutReason: unknown = turnController.signal.aborted
+          ? turnController.signal.reason
+          : undefined;
+        const content = userCancelled
+          ? "(cancelled)"
+          : timeoutReason instanceof AgentTimeoutError
+            ? timeoutReason.message
+            : `Error: ${err instanceof Error ? err.message : String(err)}`;
+        turn.push({ role: "assistant", content, timestamp: Date.now() });
         render();
       } finally {
+        stall.stop();
         abortRef.current = null;
         streamingRef.current = false;
         setIsStreaming(false);
