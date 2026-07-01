@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    // This package imports the CLI's settings schema by relative source path
+    // (apps/cli is not published for import) rather than duplicating it, so
+    // rootDir must cover both apps/schemas and apps/cli.
+    "rootDir": "../..",
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts"]
+}
