@@ -32,6 +32,16 @@ export const agentMemoryRecall = registerCapability({
       .describe("Only recall rules at or above this enforcement score"),
     limit: z.number().int().positive().max(50).default(10),
     nodeRef: z.string().optional(),
+    executionRef: z
+      .string()
+      .optional()
+      .describe(
+        "When set, auto-record an :Execution + CONSIDERED citations for the recalled memories — builds the citation pressure that surfaces promotion candidates. Omit for a pure read.",
+      ),
+    agentId: z
+      .string()
+      .optional()
+      .describe("Agent id stamped on the auto-recorded execution (with executionRef)"),
   }),
   output: z.object({
     memories: z.array(

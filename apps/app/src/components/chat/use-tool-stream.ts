@@ -4,8 +4,8 @@ import type {
   ApprovalResolution,
   BackgroundTaskStatus,
   ConsentResolution,
+  MemoryClass,
   MemoryRecallHit,
-  MemoryWeight,
   PlanDecision,
   PlanStep,
   RiskLevel,
@@ -123,7 +123,8 @@ export interface LiveMemoryRecall {
 export interface LiveMemoryWrite {
   memoryId: string;
   nodeRef: string;
-  weight: MemoryWeight | string;
+  memoryClass: MemoryClass | string;
+  enforcementScore: number | null;
 }
 
 /**
@@ -540,7 +541,8 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
           [e.memoryId]: {
             memoryId: e.memoryId,
             nodeRef: e.nodeRef,
-            weight: e.weight,
+            memoryClass: e.memoryClass,
+            enforcementScore: e.enforcementScore,
           },
         },
         order: withOrder(state.order, `memwrite:${e.memoryId}`),
