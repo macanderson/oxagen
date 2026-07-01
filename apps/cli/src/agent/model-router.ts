@@ -15,6 +15,7 @@ import type { ModelTier } from "./fleet/types.js";
 import type { UsageTotals } from "./fleet/types.js";
 import { readConfig } from "../lib/config.js";
 import { estimateCostUsd, rateFor, formatUsd } from "./rate-card.js";
+import { LATEST_ANTHROPIC } from "./model-catalog.js";
 
 // Re-exported so call sites that import pricing from the router keep working.
 // The authoritative definitions live in ./rate-card.ts.
@@ -22,13 +23,15 @@ export { estimateCostUsd, rateFor, formatUsd };
 
 /** A tier's concrete gateway slug, overridable per-env to track gateway drift. */
 function tierSlug(tier: ModelTier): string {
+  // Latest-GA slugs come from the single catalog so a family bump lands here
+  // automatically; env vars still win for gateway drift ahead of a catalog bump.
   switch (tier) {
     case "fast":
-      return process.env["OXAGEN_LLM_FAST"] ?? "anthropic/claude-haiku-4.5";
+      return process.env["OXAGEN_LLM_FAST"] ?? LATEST_ANTHROPIC.haiku;
     case "balanced":
-      return process.env["OXAGEN_LLM_BALANCED"] ?? "anthropic/claude-sonnet-4.6";
+      return process.env["OXAGEN_LLM_BALANCED"] ?? LATEST_ANTHROPIC.sonnet;
     case "precise":
-      return process.env["OXAGEN_LLM_PRECISE"] ?? "anthropic/claude-opus-4.8";
+      return process.env["OXAGEN_LLM_PRECISE"] ?? LATEST_ANTHROPIC.opus;
   }
 }
 

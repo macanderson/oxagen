@@ -12,6 +12,7 @@
  * to a sane default rather than `undefined`.
  */
 import { readConfig } from "../lib/config.js";
+import { LATEST_OPENAI_CODING } from "../agent/model-catalog.js";
 
 export interface PromptEnhancementConfig {
   enabled: boolean;
@@ -67,7 +68,7 @@ export const DEFAULT_MIN_ACCEPTABLE_SCORE = 0.7;
  * point of the different-model rule. Kept in sync with the agent-engine advisor
  * default; override with `OXAGEN_LLM_JUDGE` to track gateway slug drift.
  */
-export const DEFAULT_JUDGE_MODEL = "openai/gpt-5.5-pro";
+export const DEFAULT_JUDGE_MODEL = LATEST_OPENAI_CODING;
 
 /** Env var that overrides the judge model slug (gateway slugs drift). */
 export const JUDGE_MODEL_ENV = "OXAGEN_LLM_JUDGE";
