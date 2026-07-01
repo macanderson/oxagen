@@ -70,6 +70,24 @@ import {
   MemoriesBulkImport,
   type DraftMemory,
 } from "./memories-bulk-import";
+// Shared kind/weight taxonomy lives in its own lightweight module (see
+// memory-kinds.ts) so the bulk-import grid can reuse it without importing this
+// CodeMirror-laden component. Re-exported here for existing consumers.
+import {
+  ALL_KINDS,
+  KIND_CONFIG,
+  WEIGHT_CONFIG,
+  type MemoryKind,
+  type MemoryWeight,
+} from "./memory-kinds";
+
+export {
+  ALL_KINDS,
+  KIND_CONFIG,
+  WEIGHT_CONFIG,
+  type MemoryKind,
+  type MemoryWeight,
+} from "./memory-kinds";
 
 // ---------------------------------------------------------------------------
 // Types — structural mirror of AgentMemoryRecord from
@@ -278,7 +296,7 @@ interface MemoriesClientProps {
 }
 
 // ---------------------------------------------------------------------------
-// Kind configuration
+// Kind configuration helper
 // ---------------------------------------------------------------------------
 
 const KIND_CONFIG: Record<
