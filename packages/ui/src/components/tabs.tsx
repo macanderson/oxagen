@@ -76,6 +76,11 @@ const TabsPanel = React.forwardRef<
     {...props}
   >
     <motion.div
+      // `h-full` lets a height-constrained panel (e.g. a `flex-1 min-h-0` panel
+      // inside a fixed-height dialog) pass its bounded height down to the content
+      // so an inner `overflow-auto` region can actually scroll. For the common
+      // auto-height panel this resolves to `auto` and is a no-op.
+      className="h-full"
       key={props.value as string | undefined}
       initial="hidden"
       animate="visible"
