@@ -44,7 +44,12 @@ export interface RunAgentOptions {
   cwd?: string;
   /** Gateway model slug override. */
   model?: string;
-  /** Max tool-loop steps before stopping (default 32). */
+  /**
+   * Runaway backstop for the tool loop (default 256). NOT a functional limit —
+   * a turn ends naturally when the model returns a step with no tool call. This
+   * only fires if the model loops on tools without settling, bounding billed
+   * LLM calls before a stuck loop burns unbounded credits.
+   */
   maxSteps?: number;
   /** Loaded project rules (CLAUDE.md/AGENTS.md), injected into the system prompt. */
   projectContext?: ProjectContext;
@@ -288,7 +293,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
     system,
     messages,
     tools,
-    stopWhen: stepCountIs(opts.maxSteps ?? 32),
+    stopWhen: stepCountIs(opts.maxSteps ?? 256),
     // Pass the turn signal so the AI SDK aborts the in-flight HTTP request when
     // the turn deadline fires or the user presses Esc.
     abortSignal: turnSignal,

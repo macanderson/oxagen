@@ -91,7 +91,7 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
     messages,
     tools,
     effort: opts.effort,
-    stopWhen: stepCountIs(opts.maxSteps ?? 32),
+    stopWhen: stepCountIs(opts.maxSteps ?? 256),
     abortSignal: opts.signal,
     onError: ({ error }) => {
       streamError = error;
