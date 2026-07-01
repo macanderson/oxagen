@@ -18,7 +18,7 @@ function makeAi(editFile?: string): AgentAi {
   return {
     stream(args: ModelRunArgs) {
       return {
-        textStream: (async function* () {
+        fullStream: (async function* () {
           if (editFile) {
             const editTool = args.tools.edit_file as {
               execute: (i: unknown, o: unknown) => Promise<unknown>;
@@ -28,7 +28,7 @@ function makeAi(editFile?: string): AgentAi {
               {},
             );
           }
-          yield "done";
+          yield { type: "text-delta", text: "done" };
         })(),
         steps: Promise.resolve([{}]),
         usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),

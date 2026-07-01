@@ -9,12 +9,12 @@ import type { AgentAi, ModelRunArgs } from "./ports";
 import type { CodingEvent } from "./types";
 
 describe("runCodingAgent – stream error handling", () => {
-  it("re-throws an Error thrown inside textStream (lines 67-70)", async () => {
+  it("re-throws an Error thrown inside fullStream (lines 67-70)", async () => {
     const ws = new MemoryWorkspace({});
     const ai: AgentAi = {
       stream() {
         return {
-          textStream: (async function* () {
+          fullStream: (async function* () {
             throw new Error("stream exploded");
           })(),
           steps: Promise.resolve([]),
@@ -35,7 +35,7 @@ describe("runCodingAgent – stream error handling", () => {
     const ai: AgentAi = {
       stream() {
         return {
-          textStream: (async function* () {
+          fullStream: (async function* () {
             throw "raw string failure";
           })(),
           steps: Promise.resolve([]),
@@ -60,7 +60,7 @@ describe("runCodingAgent – onStepFinish tool-call events (lines 51-58)", () =>
     const ai: AgentAi = {
       stream(args: ModelRunArgs) {
         return {
-          textStream: (async function* () {
+          fullStream: (async function* () {
             // Simulate the AI SDK calling onStepFinish with tool calls.
             args.onStepFinish?.({
               toolCalls: [
@@ -68,7 +68,7 @@ describe("runCodingAgent – onStepFinish tool-call events (lines 51-58)", () =>
                 { toolName: "glob", input: { pattern: "**/*.ts" } },
               ],
             });
-            yield "finished";
+            yield { type: "text-delta", text: "finished" };
           })(),
           steps: Promise.resolve([{}]),
           usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
@@ -99,9 +99,9 @@ describe("runCodingAgent – onStepFinish tool-call events (lines 51-58)", () =>
     const ai: AgentAi = {
       stream(args: ModelRunArgs) {
         return {
-          textStream: (async function* () {
+          fullStream: (async function* () {
             args.onStepFinish?.({ toolCalls: [] });
-            yield "ok";
+            yield { type: "text-delta", text: "ok" };
           })(),
           steps: Promise.resolve([]),
           usage: Promise.resolve({ inputTokens: 0, outputTokens: 0, totalTokens: 0 }),
@@ -128,10 +128,10 @@ describe("runCodingAgent – onStepFinish tool-call events (lines 51-58)", () =>
     const ai: AgentAi = {
       stream(args: ModelRunArgs) {
         return {
-          textStream: (async function* () {
+          fullStream: (async function* () {
             // toolCalls is undefined — exercises the `?? []` branch
             args.onStepFinish?.({ toolCalls: undefined });
-            yield "ok";
+            yield { type: "text-delta", text: "ok" };
           })(),
           steps: Promise.resolve([]),
           usage: Promise.resolve({ inputTokens: 0, outputTokens: 0, totalTokens: 0 }),
@@ -155,7 +155,7 @@ describe("runCodingAgent – default model and system", () => {
       stream(args: ModelRunArgs) {
         observed.push({ model: args.model, system: args.system });
         return {
-          textStream: (async function* () { yield ""; })(),
+          fullStream: (async function* () { yield { type: "text-delta", text: "" }; })(),
           steps: Promise.resolve([]),
           usage: Promise.resolve({ inputTokens: 0, outputTokens: 0, totalTokens: 0 }),
           response: Promise.resolve({ messages: [] }),

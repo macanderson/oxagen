@@ -141,7 +141,7 @@ export interface RunCodingAgentOptions {
   instruction: string;
   model?: string;
   /** Reasoning effort for models that support it (forwarded to the AI port). */
-  effort?: "low" | "medium" | "high";
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
   system?: string;
   history?: ModelMessage[];
   maxSteps?: number;

@@ -75,6 +75,9 @@ vi.mock("../../agent/project-context.js", () => ({
 }));
 vi.mock("../../agent/model.js", () => ({
   resolveModelId: (override?: string) => override ?? "test/model",
+  resolveEffort: () => undefined,
+  isReasoningEffort: (s: string) => ["low", "medium", "high", "xhigh", "max"].includes(s),
+  EFFORT_LEVELS: ["low", "medium", "high", "xhigh", "max"] as const,
 }));
 // The REPL now wires the engine code-graph port from this module; stub it so the
 // test neither loads the tree-sitter builder nor touches the DuckDB store.

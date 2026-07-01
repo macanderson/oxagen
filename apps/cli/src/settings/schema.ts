@@ -152,7 +152,7 @@ export const oxagenSettingsSchema = z
      * `reasoning_effort`; ignored by models without a reasoning mode. Higher
      * effort = deeper thinking, more tokens, higher cost.
      */
-    effort: z.enum(["low", "medium", "high"]).optional(),
+    effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
     /** Oxagen platform API base URL (overrides config.json; env still wins). */
     apiUrl: z.string().url().optional(),
     /** Environment variables exported into the session (fills only unset vars; shell wins). */

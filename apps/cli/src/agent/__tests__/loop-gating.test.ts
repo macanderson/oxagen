@@ -53,8 +53,8 @@ import { runAgent } from "../loop.js";
 
 function fakeStream() {
   return {
-    textStream: (async function* () {
-      yield "ok";
+    fullStream: (async function* () {
+      yield { type: "text-delta", text: "ok" };
     })(),
     steps: Promise.resolve([]),
     usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),

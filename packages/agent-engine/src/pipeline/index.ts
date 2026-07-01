@@ -76,7 +76,7 @@ export interface RunTurnOptions {
   /** Manual model override — pins the executor and skips auto-routing. */
   model?: string;
   /** Reasoning effort for models that support it (forwarded to the AI port). */
-  effort?: "low" | "medium" | "high";
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
   /** Max tool-loop steps per execution round (default 32). */
   maxSteps?: number;
   /** Loaded project rules (CLAUDE.md/AGENTS.md). */

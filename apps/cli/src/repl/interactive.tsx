@@ -179,11 +179,16 @@ export function ReplApp({
   // Layout mode: "compact" (inline scrollback) vs. "fullscreen" (alternate
   // screen, pinned to the terminal height). Defaults from config; toggled by
   // /tui. useFullscreen swaps the alt buffer + reports the live row count.
-  const [tuiMode, setTuiMode] = useState<TuiMode>(
-    // Fullscreen is the default REPL experience; opt out with `/tui compact`
-    // or a persisted `tui: "compact"` in config.
-    readConfig().tui === "compact" ? "compact" : "fullscreen",
-  );
+  const [tuiMode, setTuiMode] = useState<TuiMode>(() => {
+    // An explicit config value always wins. Otherwise fullscreen is the default
+    // on a real interactive TTY (the only place the alternate screen buffer makes
+    // sense); non-TTY contexts (pipes, CI, ink-testing-library) fall back to
+    // compact so inline rendering stays capturable and the alt-screen effect
+    // never runs.
+    const configured = readConfig().tui;
+    if (configured === "compact" || configured === "fullscreen") return configured;
+    return process.stdout.isTTY ? "fullscreen" : "compact";
+  });
   const fullscreen = tuiMode === "fullscreen";
   const rows = useFullscreen(fullscreen);
   // Permission posture (drives the broker + status chip) and the in-flight

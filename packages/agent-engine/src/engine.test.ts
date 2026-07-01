@@ -21,12 +21,12 @@ describe("runCodingAgent", () => {
     const ai: AgentAi = {
       stream(args: ModelRunArgs) {
         return {
-          textStream: (async function* () {
+          fullStream: (async function* () {
             const edit = args.tools.edit_file as {
               execute: (i: unknown, o: unknown) => Promise<unknown>;
             };
             await edit.execute({ path: "a.ts", old_string: "foo", new_string: "bar" }, {});
-            yield "done";
+            yield { type: "text-delta", text: "done" };
           })(),
           steps: Promise.resolve([{}]),
           usage: Promise.resolve({ inputTokens: 1, outputTokens: 2, totalTokens: 3 }),
@@ -64,17 +64,19 @@ describe("runCodingAgent", () => {
     const trace: TraceStore = { record };
 
     let capturedSystem = "";
+    let capturedMessages: Array<{ role: string; content: unknown }> = [];
 
     const ai: AgentAi = {
       stream(args: ModelRunArgs) {
         capturedSystem = args.system;
+        capturedMessages = args.messages as Array<{ role: string; content: unknown }>;
         return {
-          textStream: (async function* () {
+          fullStream: (async function* () {
             const edit = args.tools.edit_file as {
               execute: (i: unknown, o: unknown) => Promise<unknown>;
             };
             await edit.execute({ path: "x.ts", old_string: "old", new_string: "new" }, {});
-            yield "ok";
+            yield { type: "text-delta", text: "ok" };
           })(),
           steps: Promise.resolve([{}]),
           usage: Promise.resolve({ inputTokens: 10, outputTokens: 5, totalTokens: 15 }),
@@ -93,9 +95,17 @@ describe("runCodingAgent", () => {
       trace,
     });
 
-    // Recalled context must be in the system prompt passed to the model
-    expect(capturedSystem).toContain("- [constraint] use strict types");
-    expect(capturedSystem).toContain("Recalled context (from prior sessions)");
+    // Recalled context rides as a volatile user MESSAGE (not in the system
+    // prompt), so the system stays a stable, cacheable prefix across turns.
+    expect(capturedSystem).not.toContain("Recalled context");
+    const recalledMsg = capturedMessages.find(
+      (m) =>
+        m.role === "user" &&
+        typeof m.content === "string" &&
+        m.content.includes("Recalled context (from prior sessions)"),
+    );
+    expect(recalledMsg).toBeDefined();
+    expect(String(recalledMsg?.content)).toContain("- [constraint] use strict types");
 
     // Wait a tick for fire-and-forget Promises to settle
     await Promise.resolve();

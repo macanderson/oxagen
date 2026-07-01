@@ -111,7 +111,7 @@ const BodySchema = z.object({
   // Reasoning effort for models with a thinking mode (OpenAI's canonical field).
   // Forwarded by the Oxagen CLI via provider options; streamAgentReply applies it
   // per-model and it is a no-op for models without a reasoning mode.
-  reasoning_effort: z.enum(["low", "medium", "high"]).optional(),
+  reasoning_effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
 });
 
 type OpenAiMessage = z.infer<typeof MessageSchema>;

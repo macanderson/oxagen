@@ -27,6 +27,7 @@
 import { isAbsolute, relative, resolve } from "node:path";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { canonicalToolName } from "../settings/permissions-gate.js";
 
 /** The tools that can change the host. Read/search tools are never gated. */
 export const MUTATING_TOOLS = ["write_file", "edit_file", "bash"] as const;
@@ -376,12 +377,18 @@ export function persistedRuleString(
   return ruleToString({ tool: req.tool, pattern, decision });
 }
 
-/** Convert a PermissionRule to the settings.json string format (e.g. "Edit(src/**)" or "Bash(rm*)"). */
+/**
+ * Convert a PermissionRule to the settings.json string format (e.g. "Edit(src/**)"
+ * or "Bash(rm*)"). The tool is rendered as its CANONICAL permission name
+ * (`write_file`→`Write`, `edit_file`→`Edit`, `bash`→`Bash`) — the exact token the
+ * gate matches against. A naive capitalization would emit `Write_file`/`Edit_file`,
+ * which the gate can never match, so a remembered "allow" rule would silently
+ * never take effect.
+ */
 export function ruleToString(rule: PermissionRule): string {
   if (!rule.tool) return rule.pattern ?? "*";
-  if (!rule.pattern) return rule.tool;
-  // Capitalize tool name for settings format
-  const toolDisplay = rule.tool.charAt(0).toUpperCase() + rule.tool.slice(1);
+  const toolDisplay = canonicalToolName(rule.tool);
+  if (!rule.pattern) return toolDisplay;
   return `${toolDisplay}(${rule.pattern})`;
 }
 
