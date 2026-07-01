@@ -26,8 +26,9 @@ Default effect: deny.
 | Field             | Type                                                                          | Notes                                                           |
 | ----------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | `lesson`          | `string` (1 – 2000)                                                           | The memory lesson, in prose.                                   |
-| `kind`            | `"routine-change" \| "constraint" \| "bug-root-cause" \| "convention-deviation" \| "gotcha"` | Memory category.                                     |
-| `weight`          | `"low" \| "high" \| "critical"`                                               | Importance weight.                                             |
+| `memoryClass`     | `"OBSERVATION" \| "RULE" \| "FACT"`                                           | Epistemic class.                                                |
+| `memoryKind`      | `string`                                                                      | Content domain (extensible).                                    |
+| `enforcementScore`| `int 1–100`?                                                                  | Enforcement when class is RULE.                                 |
 | `source`          | `"user"`                                                                      | Provenance marker.                                              |
 | `nodeRef`         | `string`                                                                      | Graph node ref the memory anchors to.                          |
 | `sourceDocument`  | `string`                                                                      | Original source document filename.                             |
@@ -52,7 +53,7 @@ Default effect: deny.
 
 ## Side effects
 
-- Neo4j: for each successful draft, create `(:AgentMemory)-[:ABOUT]->(:GraphNode { ref: nodeRef })` with the given weight, kind, lesson, and source.
+- Neo4j: for each successful draft, MERGE an `(:AgentMemory)` with the given memoryClass, memoryKind, enforcementScore, lesson, and source, plus `:ABOUT` edges.
 - ClickHouse: emit one `agent.memory.imported` row per successfully written memory.
 - Failed writes emit no side effects; the draft is not persisted.
 
