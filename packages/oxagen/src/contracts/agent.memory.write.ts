@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { memoryClassEnum, memoryKindSchema } from "./agent.memory.model";
 
 export const agentMemoryWrite = registerCapability({
   name: "agent.memory.write",
   domain: "agent",
-  description: "Persist a weighted memory tied to a graph node per the oxagen-feature skill memory contract",
+  description:
+    "Persist a two-axis memory (class + kind) tied to a graph node per the oxagen-feature skill memory contract",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
@@ -18,14 +20,17 @@ export const agentMemoryWrite = registerCapability({
   },
   input: z.object({
     nodeRef: z.string(),
-    weight: z.enum(["low", "high", "critical"]),
-    kind: z.enum([
-      "routine-change",
-      "constraint",
-      "bug-root-cause",
-      "convention-deviation",
-      "gotcha",
-    ]),
+    memoryClass: memoryClassEnum
+      .default("OBSERVATION")
+      .describe("Epistemic class; new memories default to OBSERVATION"),
+    memoryKind: memoryKindSchema.describe("Content domain of the memory"),
+    enforcementScore: z
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .optional()
+      .describe("Required when memoryClass is RULE (1-100); ignored for OBSERVATION"),
     lesson: z.string().min(1).max(2000),
     source: z.enum(["feature", "fix", "exception-watcher", "bug-report"]),
     relatedNodeIds: z

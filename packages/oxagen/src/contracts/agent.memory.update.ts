@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { agentMemoryRecordSchema } from "./agent.memory.list";
+import { memoryKindSchema, memoryStatusEnum } from "./agent.memory.model";
 
 /**
  * agent.memory.update — edit an existing AgentMemory in place.
@@ -20,7 +21,7 @@ export const agentMemoryUpdate = registerCapability({
   name: "agent.memory.update",
   domain: "agent",
   description:
-    "Edit an AgentMemory: change its lesson, kind, source, or salience (weight + confidence). Re-embeds when the lesson changes so semantic recall stays accurate.",
+    "Edit an AgentMemory: change its lesson, kind, source, confidence/enforcement scores, or status. Re-embeds when the lesson changes so semantic recall stays accurate. Class changes go through agent.memory.promote.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -43,32 +44,29 @@ export const agentMemoryUpdate = registerCapability({
       .max(2000)
       .optional()
       .describe("Replacement lesson text; triggers a re-embed for semantic recall"),
-    weight: z
-      .enum(["low", "high", "critical"])
-      .optional()
-      .describe("New salience bucket (low sinks below default recall; critical never decays)"),
-    kind: z
-      .enum([
-        "routine-change",
-        "constraint",
-        "bug-root-cause",
-        "convention-deviation",
-        "gotcha",
-      ])
-      .optional()
-      .describe("New memory category"),
+    memoryKind: memoryKindSchema.optional().describe("New content-domain kind"),
     source: z
       .string()
       .min(1)
       .max(64)
       .optional()
       .describe("New provenance label (e.g. user, feature, fix)"),
-    confidence: z
+    confidenceScore: z
       .number()
       .min(0)
-      .max(1)
+      .max(100)
       .optional()
-      .describe("New numeric salience/confidence (0–1); the decay pass evolves it over time"),
+      .describe("New confidence (0–100); the decay pass evolves it over time"),
+    enforcementScore: z
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .optional()
+      .describe("New enforcement (1–100) for a RULE; policy, does not decay"),
+    status: memoryStatusEnum
+      .optional()
+      .describe("New lifecycle status (e.g. ARCHIVED, RETRACTED)"),
   }),
   output: agentMemoryRecordSchema,
 });
