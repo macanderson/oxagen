@@ -356,6 +356,26 @@ export function parseModeArg(s: string): PermissionMode | undefined {
   return MODE_ALIASES[s.trim().toLowerCase()];
 }
 
+/**
+ * The settings.json rule string that {@link PermissionBroker.remember} would
+ * persist for a given approval — e.g. `Edit(src/foo.ts)`, `Bash(pnpm build)`.
+ * Exported so the REPL can tell the user exactly what was written to
+ * `.oxagen/settings.json` when they choose "allow + remember".
+ */
+export function persistedRuleString(
+  req: PermissionRequest,
+  decision: "allow" | "deny",
+  cwd: string,
+): string {
+  const pattern =
+    req.tool === "bash"
+      ? (req.command ?? "")
+      : req.path
+        ? relative(resolve(cwd), req.path)
+        : undefined;
+  return ruleToString({ tool: req.tool, pattern, decision });
+}
+
 /** Convert a PermissionRule to the settings.json string format (e.g. "Edit(src/**)" or "Bash(rm*)"). */
 export function ruleToString(rule: PermissionRule): string {
   if (!rule.tool) return rule.pattern ?? "*";

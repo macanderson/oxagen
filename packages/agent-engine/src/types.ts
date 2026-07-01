@@ -59,6 +59,7 @@ export interface Workspace {
 
 export type CodingEvent =
   | { type: "text"; delta: string }
+  | { type: "reasoning"; delta: string }
   | { type: "tool-call"; name: string; input: unknown }
   | {
       type: "tool-result";

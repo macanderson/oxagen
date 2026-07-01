@@ -24,7 +24,7 @@ import type { ApprovalRequest, ApprovalResponse, PermissionMode } from "../agent
 export type TuiMode = "compact" | "fullscreen";
 
 export interface Message {
-  role: "user" | "assistant" | "tool" | "stage";
+  role: "user" | "assistant" | "reasoning" | "tool" | "stage";
   content: string;
   timestamp: number;
   toolName?: string;
@@ -297,6 +297,21 @@ export function MessageView({ msg }: { msg: Message }): React.ReactElement {
           {"❯ "}
         </Text>
         <Text bold>{msg.content}</Text>
+      </Box>
+    );
+  }
+
+  if (msg.role === "reasoning") {
+    // The model's chain-of-thought, rendered dim and prefixed so it reads as an
+    // aside distinct from the answer. Shown live so the user sees every step of
+    // the agent's thinking, not just its conclusion.
+    return (
+      <Box paddingX={1} marginY={0} flexDirection="column">
+        <Text dimColor wrap="wrap">
+          {"💭 "}
+          {msg.content}
+          {msg.streaming && <Text color={theme.violet}>▊</Text>}
+        </Text>
       </Box>
     );
   }
