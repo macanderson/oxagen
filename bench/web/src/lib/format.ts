@@ -32,3 +32,8 @@ export function formatPercent(ratio: number): string {
 export function formatPercent1(ratio: number): string {
   return `${(ratio * 100).toFixed(1)}%`;
 }
+
+/** Format a USD amount compactly (e.g. "$0.27", "$12.40"). */
+export function formatUsd(usd: number): string {
+  return `$${usd.toFixed(2)}`;
+}

@@ -65,10 +65,13 @@ test.describe("memories management — empty state and UI structure", () => {
       page.getByText("Agent Memories", { exact: true }),
     ).toBeVisible({ timeout: 15_000 });
 
-    // The 5-column stats row always renders even when the list is empty.
-    await expect(page.getByText("Routine Change")).toBeVisible();
-    await expect(page.getByText("Constraint")).toBeVisible();
-    await expect(page.getByText("Gotcha")).toBeVisible();
+    // The 5-column stats row always renders even when the list is empty. Scope
+    // to the stats row — these kind labels also appear in the filter bar, so a
+    // page-wide getByText would match two elements (strict-mode violation).
+    const statsRow = page.getByTestId("memory-stats-row");
+    await expect(statsRow.getByText("Routine Change")).toBeVisible();
+    await expect(statsRow.getByText("Constraint")).toBeVisible();
+    await expect(statsRow.getByText("Gotcha")).toBeVisible();
 
     // Filter bar elements (search input and confidence slider) are present.
     await expect(

@@ -3,7 +3,7 @@
   "version": "0.6.4",
   "private": true,
   "type": "module",
-  "description": "Oxagen Benchmark Suite — web dashboard for comparing AI code agents. Launch with `pnpm eval:app`.",
+  "description": "Oxagen SWE-bench dashboard — real, sourced agent evaluation results, no simulated scores. Launch with `pnpm eval:app`.",
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:next": "next dev --port 3200",
