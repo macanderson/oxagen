@@ -7,5 +7,5 @@ export default async function AccessRoot({
   params: Promise<{ orgSlug: string }>;
 }) {
   const { orgSlug } = await params;
-  redirect(org.access.grants({ orgSlug }));
+  redirect(org.access.sessions({ orgSlug }));
 }
