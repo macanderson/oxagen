@@ -3,6 +3,7 @@ import * as React from "react";
 import { Globe, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safe-url";
+import { TruncatedText } from "@/components/ui/truncated-text";
 
 /**
  * web-search-card — renders web.search output: a ranked list of results with
@@ -26,7 +27,6 @@ interface WebSearchCardProps {
 }
 
 const MAX_RESULTS = 12;
-const SNIPPET = 220;
 
 function readResults(output: unknown): { results: SearchResult[]; total: number } {
   if (typeof output !== "object" || output === null) return { results: [], total: 0 };
@@ -55,10 +55,6 @@ function domainOf(url: string): string {
   } catch {
     return url;
   }
-}
-
-function truncate(s: string, max = SNIPPET): string {
-  return s.length > max ? `${s.slice(0, max)}…` : s;
 }
 
 export default function WebSearchCard(props: WebSearchCardProps): React.ReactElement {
@@ -105,7 +101,9 @@ export default function WebSearchCard(props: WebSearchCardProps): React.ReactEle
                 )}
                 <p className="mt-0.5 text-xs text-muted-foreground">{domainOf(r.url)}</p>
                 {r.content ? (
-                  <p className="mt-1 text-xs text-foreground/80">{truncate(r.content)}</p>
+                  <p className="mt-1 text-xs text-foreground/80">
+                    <TruncatedText text={r.content} lines={3} />
+                  </p>
                 ) : null}
               </li>
             );

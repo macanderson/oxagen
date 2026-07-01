@@ -309,7 +309,7 @@ describe("CommandMenu — Entity Search (OXA-1771)", () => {
               label: "Run aex_abc",
               scope: "Workspace: prod",
               contextLine: "Status: failed",
-              href: "/acme/prod/activity/runs/aex_abc",
+              href: "/acme/prod/knowledge/memories/mem_abc",
             },
           ],
         }),
@@ -381,7 +381,7 @@ describe("CommandMenu — Entity Search (OXA-1771)", () => {
       label: "Run aex_abc",
       scope: "Workspace: prod",
       contextLine: "Status: failed",
-      href: "/acme/prod/activity/runs/aex_abc",
+      href: "/acme/prod/knowledge/memories/mem_abc",
     };
 
     mockFetch.mockResolvedValue({
@@ -407,7 +407,7 @@ describe("CommandMenu — Entity Search (OXA-1771)", () => {
       const option = resultText.closest('[role="option"]');
       if (option) {
         fireEvent.click(option);
-        expect(mockRouter.push).toHaveBeenCalledWith("/acme/prod/activity/runs/aex_abc");
+        expect(mockRouter.push).toHaveBeenCalledWith("/acme/prod/knowledge/memories/mem_abc");
       }
     }
   });

@@ -3,6 +3,16 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, waitFor } from "@testing-library/react";
 import ResearchSwarmCard from "./research-swarm-card";
 
+// TruncatedText (the per-hit snippet) measures scroll overflow via
+// ResizeObserver, which isn't implemented in JSDOM.
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 vi.mock("@/components/ui/badge", () => ({
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
@@ -55,6 +65,9 @@ describe("ResearchSwarmCard", () => {
     const link = screen.getByText("Crew roster").closest("a");
     expect(link?.getAttribute("href")).toBe("https://example.com/crew");
     expect(link?.getAttribute("target")).toBe("_blank");
+    // The hit snippet is now shown as visible text (via TruncatedText), not
+    // hidden away in a hover-only title attribute.
+    expect(screen.getByText("The crew…")).toBeTruthy();
   });
 
   it("renders a failed swarm", () => {

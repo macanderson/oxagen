@@ -43,6 +43,9 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import { MarkdownCodeEditor } from "@/components/ui/markdown-code-editor";
+import { MarkdownContent } from "@/components/ui/markdown-content";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import {
   MemoriesBulkImport,
   type DraftMemory,
@@ -467,11 +470,27 @@ function MemoryRow({
     WEIGHT_CONFIG[record.weight] ?? WEIGHT_CONFIG["low"];
   const KindIcon = kindCfg.icon;
 
+  function handleRowKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onSelect();
+    }
+  }
+
   return (
-    <button
-      type="button"
+    // NOTE: this row used to be a native <button>, but the lesson preview
+    // below (TruncatedText) renders its own popover-trigger <button> when the
+    // text overflows — a <button> inside a <button> is invalid HTML and
+    // breaks a11y semantics. Instead the row is a role="button" div (click +
+    // Enter/Space still open the detail sheet), and the lesson preview's
+    // wrapper stops click propagation so clicking the "…" reveal doesn't also
+    // select the row underneath it.
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
-      className="flex w-full items-start gap-3 border-b border-border/30 px-4 py-3 text-left transition-colors hover:bg-muted/40 last:border-b-0 group"
+      onKeyDown={handleRowKeyDown}
+      className="flex w-full items-start gap-3 border-b border-border/30 px-4 py-3 text-left transition-colors hover:bg-muted/40 last:border-b-0 group cursor-pointer"
     >
       {/* Kind icon */}
       <div className={`mt-0.5 flex-shrink-0 rounded-md p-1.5 ${kindCfg.color}`}>
@@ -480,10 +499,15 @@ function MemoryRow({
 
       {/* Content */}
       <div className="flex flex-col gap-1 min-w-0 flex-1">
-        {/* Lesson (primary text) */}
-        <p className="text-sm text-foreground line-clamp-2 leading-snug">
-          {record.lesson}
-        </p>
+        {/* Lesson (primary text) — stop propagation so the reveal popover's
+            trigger button doesn't also fire the row's onSelect. */}
+        <div onClick={(event) => event.stopPropagation()} className="min-w-0">
+          <TruncatedText
+            text={record.lesson}
+            lines={2}
+            className="text-sm text-foreground leading-snug"
+          />
+        </div>
 
         {/* Badges row */}
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -524,7 +548,7 @@ function MemoryRow({
         <ConfidenceBar value={record.confidence} />
         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -717,9 +741,7 @@ function MemoryDetail({
             {/* Lesson */}
             <div className="flex flex-col gap-1.5">
               <h3 className={SECTION_LABEL_CLS}>Lesson</h3>
-              <p className="text-sm text-foreground leading-relaxed">
-                {record.lesson}
-              </p>
+              <MarkdownContent>{record.lesson}</MarkdownContent>
             </div>
 
             {/* Metadata grid */}
@@ -845,16 +867,15 @@ function MemoryDetail({
               <label htmlFor="edit-memory-lesson" className={SECTION_LABEL_CLS}>
                 Lesson
               </label>
-              <textarea
+              <MarkdownCodeEditor
                 id="edit-memory-lesson"
-                rows={4}
                 value={editLesson}
-                onChange={(e) => setEditLesson(e.target.value)}
+                onChange={setEditLesson}
                 maxLength={2000}
-                placeholder="What should the agent remember?"
-                aria-label="Lesson text"
+                placeholder="What should the agent remember? Markdown supported."
+                ariaLabel="Lesson text"
                 disabled={isPending}
-                className={`${FIELD_INPUT_CLS} resize-y`}
+                minHeight="8rem"
               />
             </div>
 
@@ -1072,16 +1093,15 @@ function MemoryCreate({
             <label htmlFor="create-memory-lesson" className={SECTION_LABEL_CLS}>
               Lesson
             </label>
-            <textarea
-              id="create-memory-lesson"
-              rows={4}
+            <MarkdownCodeEditor
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={setText}
+              id="create-memory-lesson"
               maxLength={2000}
-              placeholder="What should the agent remember?"
-              aria-label="Lesson text"
+              placeholder="What should the agent remember? Markdown supported."
+              ariaLabel="Lesson text"
               disabled={isPending}
-              className={`${FIELD_INPUT_CLS} resize-y`}
+              minHeight="8rem"
             />
           </div>
 

@@ -3,6 +3,16 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import GraphNodeListCard from "./graph-node-list-card";
 
+// TruncatedText (the row description) measures scroll overflow via
+// ResizeObserver, which isn't implemented in JSDOM.
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 vi.mock("@/components/ui/badge", () => ({
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
@@ -44,5 +54,20 @@ describe("GraphNodeListCard", () => {
   it("renders an empty state", () => {
     render(<GraphNodeListCard output={{ nodes: [], total: 0 }} />);
     expect(screen.getByText("No matching nodes.")).toBeTruthy();
+  });
+
+  it("renders a row description outside the deep-link anchor (no nested interactive elements)", () => {
+    render(
+      <GraphNodeListCard
+        output={{
+          nodes: [{ id: "n_4", displayName: "Reactor Core", description: "A compact PWR design." }],
+          total: 1,
+        }}
+        orgSlug="acme"
+        workspaceSlug="ws"
+      />,
+    );
+    const description = screen.getByText("A compact PWR design.");
+    expect(description.closest("a")).toBeNull();
   });
 });

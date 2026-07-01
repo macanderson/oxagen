@@ -36,24 +36,16 @@ export const org = {
 
   members: (ctx: ScopeContext): string => `/${ctx.orgSlug}/members`,
 
-  // Access sub-routes
+  // Access sub-routes (only wired tabs remain: sessions, reviews)
   access: {
     root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access`,
-    grants: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/grants`,
-    roles: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/roles`,
-    policies: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/policies`,
-    requests: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/requests`,
     sessions: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/sessions`,
-    principals: (ctx: ScopeContext): string =>
-      `/${ctx.orgSlug}/access/principals`,
     reviews: (ctx: ScopeContext): string => `/${ctx.orgSlug}/access/reviews`,
   },
 
   // Security sub-routes
   security: {
     root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security`,
-    sso: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/sso`,
-    scim: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/scim`,
     mfa: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/mfa`,
     audit: (ctx: ScopeContext): string => `/${ctx.orgSlug}/security/audit`,
     compliance: (ctx: ScopeContext): string =>
@@ -70,13 +62,10 @@ export const org = {
     invoices: (ctx: ScopeContext): string => `/${ctx.orgSlug}/billing/invoices`,
   },
 
-  // Developer portal
+  // Developer portal (wired tabs only: mcp, tokens)
   developer: {
     root: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer`,
     mcp: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/mcp`,
-    docs: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/docs`,
-    webhooks: (ctx: ScopeContext): string =>
-      `/${ctx.orgSlug}/developer/webhooks`,
     tokens: (ctx: ScopeContext): string => `/${ctx.orgSlug}/developer/tokens`,
   },
 
@@ -124,46 +113,6 @@ export const workspace = {
       `${wsBase(ctx)}/knowledge/nodes/${encodeURIComponent(nodeId)}`,
   },
 
-  // Agents — IA spec §4/§5: agents are a tab of Automation. Canonical path is
-  // /automation/agents/*. Legacy /agents/* 301-redirects here via proxy.ts.
-  agents: {
-    root: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/automation/agents`,
-    create: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/automation/agents/new`,
-    detail: (ctx: Required<ScopeContext>, agentSlug: string): string =>
-      `${wsBase(ctx)}/automation/agents/${agentSlug}`,
-    edit: (ctx: Required<ScopeContext>, agentSlug: string): string =>
-      `${wsBase(ctx)}/automation/agents/${agentSlug}/edit`,
-  },
-
-  // Automation
-  automation: {
-    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/automation`,
-    agents: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/automation/agents`,
-    playbooks: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/automation/playbooks`,
-    eventSources: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/automation/event-sources`,
-    triggers: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/automation/triggers`,
-  },
-
-  // Activity — IA spec §5: Runs is the single home for ALL run kinds (subagent
-  // fan-outs, parallel tasks, chat/API/MCP runs). `run` is the per-fan-out drill-down.
-  activity: {
-    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/activity`,
-    runs: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/activity/runs`,
-    run: (ctx: Required<ScopeContext>, fanoutId: string): string =>
-      `${wsBase(ctx)}/activity/runs/${fanoutId}`,
-    approvals: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/activity/approvals`,
-    audit: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/activity/audit`,
-  },
-
   // Settings
   settings: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings`,
@@ -173,8 +122,6 @@ export const workspace = {
       `${wsBase(ctx)}/settings/members`,
     models: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/models`,
-    modelKeys: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/settings/model-keys`,
     github: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/github`,
     prompts: (ctx: Required<ScopeContext>): string =>
@@ -205,12 +152,10 @@ export const workspace = {
 export const defaultTab: Record<string, string> = {
   // Workspace-scope parents
   knowledge: "sources",
-  automation: "playbooks",
-  activity: "runs",
   settings: "general",
 
   // Org-scope parents
-  access: "grants",
+  access: "sessions",
   security: "audit",
   billing: "subscription",
   developer: "mcp",

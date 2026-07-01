@@ -18,7 +18,6 @@ export default async function SettingsLayout({
     { label: "General", href: workspace.settings.general(ctx) },
     { label: "Members", href: workspace.settings.members(ctx) },
     { label: "Models", href: workspace.settings.models(ctx) },
-    { label: "Model Keys", href: workspace.settings.modelKeys(ctx) },
     { label: "GitHub", href: workspace.settings.github(ctx) },
     { label: "Prompts", href: workspace.settings.prompts(ctx) },
     { label: "Plugins", href: workspace.settings.plugins(ctx) },

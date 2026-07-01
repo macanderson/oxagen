@@ -27,12 +27,7 @@ export default async function AccessLayout({
   const ctx = { orgSlug };
 
   const tabs = [
-    { label: "Grants", href: org.access.grants(ctx) },
-    { label: "Roles", href: org.access.roles(ctx) },
-    { label: "Policies", href: org.access.policies(ctx) },
-    { label: "Requests", href: org.access.requests(ctx) },
     { label: "Sessions", href: org.access.sessions(ctx) },
-    { label: "Principals", href: org.access.principals(ctx) },
     { label: "Reviews", href: org.access.reviews(ctx) },
   ];
 
@@ -40,7 +35,7 @@ export default async function AccessLayout({
     <div className="flex flex-col gap-0">
       <PageHeader
         title="Access"
-        description="Capability grants, roles, policies, and principal identities."
+        description="Active sessions and periodic access reviews."
       />
       <PageTabs tabs={tabs} className="mb-6" />
       {children}

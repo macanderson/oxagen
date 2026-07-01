@@ -76,19 +76,19 @@ describe("resolveSidebarMode", () => {
 // 2. getSidebarConfig — item counts per mode
 //
 // Spec (IA spec §4):
-//   workspace: 6 items (Ask, Knowledge, Automation, Activity, Marketplace, Settings)
-//     — Agents is a tab of Automation; all run kinds live under Activity → Runs;
-//       "Workflows" is gone (folded into Activity → Runs; banned term, §19).
-//       Studio removed. Marketplace moved to footer.
+//   workspace: 4 items (Ask, Knowledge, Marketplace, Settings)
+//     — the Automation and Activity feature areas were removed entirely;
+//       "Workflows" is gone too (banned term, §19). Studio removed.
+//       Marketplace + Settings are pinned to the footer group.
 //   org:       7 items (Workspaces, Members, Access, Security, Billing, Developer, Settings)
 //   account:   5 items (Back to app, Profile, Preferences, Security, Privacy)
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
-  it("workspace config has exactly 6 items", () => {
+  it("workspace config has exactly 4 items", () => {
     const config = getSidebarConfig("workspace");
     expect(config.mode).toBe("workspace");
-    expect(config.items).toHaveLength(6);
+    expect(config.items).toHaveLength(4);
   });
 
   it("org config has 6 items by default (access filtered for non-enterprise)", () => {
@@ -122,18 +122,18 @@ describe("getSidebarConfig item counts", () => {
     expect(toolsItems).toHaveLength(0);
   });
 
-  it("does NOT surface standalone Agents / Subagent Runs / Workflows / Studio items (IA spec §4/§19)", () => {
+  it("does NOT surface standalone Agents / Subagent Runs / Workflows / Studio / Automation / Activity items (IA spec §4/§19)", () => {
     const ids = getSidebarConfig("workspace").items.map((i) => i.id);
     expect(ids).not.toContain("agents");
     expect(ids).not.toContain("agent-runs");
     expect(ids).not.toContain("workflows");
     expect(ids).not.toContain("studio");
+    expect(ids).not.toContain("automation");
+    expect(ids).not.toContain("activity");
     // The clean spec tree, in order.
     expect(ids).toEqual([
       "ask",
       "knowledge",
-      "automation",
-      "activity",
       "marketplace",
       "settings",
     ]);
@@ -177,14 +177,6 @@ describe("href builders produce correct paths", () => {
 
     it("knowledge -> /{org}/{ws}/knowledge", () => {
       expect(findItem("knowledge").href(wsCtx)).toBe("/acme/production/knowledge");
-    });
-
-    it("automation -> /{org}/{ws}/automation", () => {
-      expect(findItem("automation").href(wsCtx)).toBe("/acme/production/automation");
-    });
-
-    it("activity -> /{org}/{ws}/activity", () => {
-      expect(findItem("activity").href(wsCtx)).toBe("/acme/production/activity");
     });
 
     it("marketplace -> /{org}/{ws}/settings/plugins (workspace-scoped, from ws ctx)", () => {
@@ -260,7 +252,6 @@ describe("enumerateNavTargets", () => {
     // Spot-check a workspace path and a tab path
     expect(hrefs).toContain("/acme/production/ask");
     expect(hrefs).toContain("/acme/production/knowledge/sources");
-    expect(hrefs).toContain("/acme/production/automation/triggers");
     expect(hrefs).toContain("/acme/production/settings");
   });
 
@@ -271,7 +262,8 @@ describe("enumerateNavTargets", () => {
     for (const targets of [targetsWithWs, targetsOrgOnly]) {
       const hrefs = targets.map((t) => t.href);
       expect(hrefs).toContain("/acme/access");
-      expect(hrefs).toContain("/acme/access/grants");
+      expect(hrefs).toContain("/acme/access/sessions");
+      expect(hrefs).toContain("/acme/access/reviews");
       expect(hrefs).toContain("/acme/security/audit");
       expect(hrefs).toContain("/acme/billing/subscription");
       expect(hrefs).toContain("/acme/developer/mcp");
@@ -412,21 +404,28 @@ describe("ORG_SCOPE_ROUTES", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. IA realignment — Agents under Automation, runs under Activity, no Workflows/Studio
+// 8. IA realignment — Automation/Activity removed entirely, no Workflows/Studio
 // ---------------------------------------------------------------------------
 
 describe("IA realignment (spec §4/§5/§19)", () => {
   const ctx: Required<ScopeContext> = { orgSlug: "acme", workspaceSlug: "prod" };
 
-  it("enumerateNavTargets routes Agents under Automation, not as a top-level page", () => {
+  it("enumerateNavTargets has no Automation or Agents destination", () => {
     const targets = enumerateNavTargets(ctx);
     const hrefs = targets.map((t) => t.href);
-    // Agents list + create live under /automation/agents.
-    expect(hrefs).toContain("/acme/prod/automation/agents");
-    expect(hrefs).toContain("/acme/prod/automation/agents/new");
-    // The old top-level /agents surface is gone from the nav.
+    // The Automation feature area (and the old top-level /agents surface) is
+    // gone entirely — no nav target should reference either.
+    expect(hrefs).not.toContain("/acme/prod/automation/agents");
+    expect(hrefs).not.toContain("/acme/prod/automation/agents/new");
     expect(hrefs).not.toContain("/acme/prod/agents");
     expect(hrefs).not.toContain("/acme/prod/agents/new");
+  });
+
+  it("enumerateNavTargets has no Activity destination", () => {
+    const targets = enumerateNavTargets(ctx);
+    const hrefs = targets.map((t) => t.href);
+    expect(hrefs).not.toContain("/acme/prod/activity/runs");
+    expect(targets.find((t) => t.label === "Activity")).toBeUndefined();
   });
 
   it("enumerateNavTargets has no Workflows or Studio destination", () => {

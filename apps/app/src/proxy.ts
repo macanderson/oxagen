@@ -33,32 +33,19 @@ export function proxy(request: NextRequest): NextResponse {
     return NextResponse.redirect(new URL(`${dest}${search}`, request.url), 308);
   }
 
-  // 2. v1 → v2 workspace route renames + IA realignment (§16 of the IA spec).
+  // 2. v1 → v2 workspace route renames (§16 of the IA spec).
   //    Pattern: /{org}/{ws}/{old}(/{rest})? → /{org}/{ws}/{new}(/{rest})?
   //    Uses 301 (permanent, GET-preserving) per spec — these routes moved for good.
-  //    Order matters: the specific `agents/runs` rule must precede the general
-  //    `agents` rule, or fan-out links would 301 into the agents CRUD tree.
+  //    The Automation/Activity feature areas (agents, playbooks, workflows,
+  //    executions, runs) were removed entirely, so their legacy redirects are
+  //    gone too — old links fall through to a 404 rather than a dead redirect.
   {
     const wsRouteMove = pathname.match(/^(\/[^/]+\/[^/]+)\/(.*)$/);
     if (wsRouteMove) {
       const wsBase = wsRouteMove[1] ?? "";
       const rest = wsRouteMove[2] ?? "";
-      const after = (seg: string): string => rest.slice(seg.length); // preserved tail incl. leading "/"
       let dest: string | null = null;
-      if (rest === "agents/runs" || rest.startsWith("agents/runs/")) {
-        // Subagent fan-out viewer moved from under Agents to Activity → Runs.
-        dest = `activity/runs${after("agents/runs")}`;
-      } else if (rest === "workflows" || rest.startsWith("workflows/")) {
-        // "Workflows" folded into Activity → Runs ("Workflow" is a banned term, spec §19).
-        dest = "activity/runs";
-      } else if (rest === "executions" || rest.startsWith("executions/")) {
-        dest = `activity/runs${after("executions")}`;
-      } else if (rest === "agents" || rest.startsWith("agents/")) {
-        // Agents are a tab of Automation (spec §4/§5).
-        dest = `automation/agents${after("agents")}`;
-      } else if (rest === "playbooks" || rest.startsWith("playbooks/")) {
-        dest = `automation/playbooks${after("playbooks")}`;
-      } else if (rest === "chat" || rest.startsWith("chat/")) {
+      if (rest === "chat" || rest.startsWith("chat/")) {
         dest = "ask";
       }
       if (dest) {
