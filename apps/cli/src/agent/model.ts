@@ -8,14 +8,18 @@
  * the default below.
  */
 import { readConfig } from "../lib/config.js";
+import { DEFAULT_CODING_MODEL } from "./model-catalog.js";
 
 /**
  * Default coding model. Override per-call (`opts.model`), per-shell
  * (`OXAGEN_MODEL`), or persistently (`oxagen config model <slug>`).
  * If the gateway reports the slug as unknown, set a current one with
  * `oxagen config model <slug>` — gateway slugs drift over time.
+ *
+ * Resolves to the latest-GA balanced/Sonnet slug from the model catalog, the
+ * single place that tracks "latest" per family.
  */
-export const DEFAULT_MODEL = "anthropic/claude-sonnet-4.5";
+export const DEFAULT_MODEL = DEFAULT_CODING_MODEL;
 
 export function resolveModelId(override?: string): string {
   return (

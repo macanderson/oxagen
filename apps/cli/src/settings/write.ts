@@ -10,6 +10,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { oxagenSettingsSchema, type OxagenSettings } from "./schema.js";
 import { getScopePaths, clearSettingsCache, type SettingsScope } from "./resolve.js";
+import { DEFAULT_CODING_MODEL } from "../agent/model-catalog.js";
 
 /** Keys `oxagen settings set` accepts. Complex sections are edited in the file. */
 export const SETTABLE_KEYS = ["model", "apiUrl"] as const;
@@ -72,7 +73,7 @@ export function writeSettingsValue(opts: WriteValueOptions): string {
 
 const STARTER: OxagenSettings = {
   $schema: "https://schemas.oxagen.sh/oxagen-cli-settings-schema.json",
-  model: "anthropic/claude-sonnet-4.6",
+  model: DEFAULT_CODING_MODEL,
   env: {},
   permissions: {
     defaultMode: "default",

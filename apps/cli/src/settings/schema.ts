@@ -145,7 +145,7 @@ export const oxagenSettingsSchema = z
   .object({
     /** Optional JSON-Schema reference for editor autocompletion. */
     $schema: z.string().optional(),
-    /** Default gateway model slug for the agent loop (e.g. "anthropic/claude-sonnet-4.6"). */
+    /** Default gateway model slug for the agent loop (e.g. "anthropic/claude-sonnet-5"). */
     model: z.string().optional(),
     /**
      * Reasoning effort for models that support it. Forwarded to the model as

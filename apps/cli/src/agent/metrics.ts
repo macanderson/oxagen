@@ -23,7 +23,7 @@ export interface MetricsEvent {
   /** Correlates this event back to the originating call (LLM step or tool invocation). */
   callId: string;
   kind: "model_call" | "tool_call";
-  /** Gateway model slug (e.g. "anthropic/claude-sonnet-4.6"). */
+  /** Gateway model slug (e.g. "anthropic/claude-sonnet-5"). */
   model: string;
   tokensIn: number;
   tokensOut: number;
