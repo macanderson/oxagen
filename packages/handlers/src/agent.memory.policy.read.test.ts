@@ -56,6 +56,8 @@ describe("agentMemoryPolicyReadHandler", () => {
     expect(result.halfLifeLowDays).toBe(30);
     expect(result.halfLifeHighDays).toBe(90);
     expect(result.recallThreshold).toBe(0.1);
+    expect(result.complianceThreshold).toBe(70);
+    expect(result.defaultDecayFloor).toBe(5);
   });
 
   it("returns stored policy values when a row exists", async () => {
@@ -66,6 +68,8 @@ describe("agentMemoryPolicyReadHandler", () => {
       halfLifeLowDays: 14,
       halfLifeHighDays: 60,
       recallThreshold: 0.2,
+      complianceThreshold: 80,
+      defaultDecayFloor: 10,
     };
 
     mocks.withTenantDb.mockImplementation(
@@ -78,6 +82,8 @@ describe("agentMemoryPolicyReadHandler", () => {
     expect(result.halfLifeLowDays).toBe(14);
     expect(result.halfLifeHighDays).toBe(60);
     expect(result.recallThreshold).toBe(0.2);
+    expect(result.complianceThreshold).toBe(80);
+    expect(result.defaultDecayFloor).toBe(10);
   });
 
   it("falls back recallThreshold to 0.1 when stored row has null recallThreshold", async () => {
@@ -88,6 +94,8 @@ describe("agentMemoryPolicyReadHandler", () => {
       halfLifeLowDays: 45,
       halfLifeHighDays: 120,
       recallThreshold: null,
+      complianceThreshold: 70,
+      defaultDecayFloor: 5,
     };
 
     mocks.withTenantDb.mockImplementation(
@@ -100,6 +108,29 @@ describe("agentMemoryPolicyReadHandler", () => {
     expect(result.halfLifeLowDays).toBe(45);
     expect(result.halfLifeHighDays).toBe(120);
     expect(result.recallThreshold).toBe(0.1);
+  });
+
+  it("falls back complianceThreshold/defaultDecayFloor to defaults when stored row has them null", async () => {
+    const storedRowNullNewFields = {
+      id: "pol_4",
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      halfLifeLowDays: 30,
+      halfLifeHighDays: 90,
+      recallThreshold: 0.1,
+      complianceThreshold: null,
+      defaultDecayFloor: null,
+    };
+
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) =>
+        fn(makeTx(storedRowNullNewFields)),
+    );
+
+    const result = await agentMemoryPolicyReadHandler({}, TEST_CTX);
+
+    expect(result.complianceThreshold).toBe(70);
+    expect(result.defaultDecayFloor).toBe(5);
   });
 
   it("throws when workspaceId is missing from ctx", async () => {

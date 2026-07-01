@@ -454,6 +454,13 @@ export interface MemoryChangeRow {
   cause: "reinforced" | "decayed" | "manually_promoted" | "manually_forgotten";
   confidence_before: number;
   confidence_after: number;
+  /**
+   * Two-axis model (OXA-1374 follow-up): enforcement_score before/after this
+   * change, for auditing the policy axis alongside confidence (the evidence
+   * axis). Default 0 — most causes (e.g. decay) never touch enforcement.
+   */
+  enforcement_before?: number;
+  enforcement_after?: number;
   occurred_at: string;
 }
 
@@ -462,7 +469,9 @@ export interface MemoryChangeRow {
  * semantics (not awaiting unless auditing is in the critical path).
  */
 export const insertMemoryChange = (row: MemoryChangeRow): Promise<void> =>
-  insertRows("memory_changes", [row]);
+  insertRows("memory_changes", [
+    { enforcement_before: 0, enforcement_after: 0, ...row },
+  ]);
 
 // ── Eval results (agent-eval protocol) ────────────────────────────────────────
 //

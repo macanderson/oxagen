@@ -59,6 +59,13 @@ const LOADERS: Record<string, LoaderEntry> = {
   // Bulk memory import: parse uploaded docs → drafts, then commit the edited set.
   "agent.memory.import.parse": () => import("./agent.memory.import.parse"),
   "agent.memory.import.commit": () => import("./agent.memory.import.commit"),
+  // Two-axis memory: confidence ladder promotion + the citation/evidence
+  // mechanism that drives it (docs/specs/two-axis-memory).
+  "agent.memory.promote": () => import("./agent.memory.promote"),
+  "agent.memory.promotion.candidates": () => import("./agent.memory.promotion.candidates"),
+  "agent.memory.cite": () => import("./agent.memory.cite"),
+  "agent.memory.evidence.attach": () => import("./agent.memory.evidence.attach"),
+  "agent.memory.citations.list": () => import("./agent.memory.citations.list"),
   "agent.approval.resolve": () => import("./agent.approval.resolve"),
   "agent.skill.list": () => import("./agent.skill.list"),
   "agent.skill.load": () => import("./agent.skill.load"),

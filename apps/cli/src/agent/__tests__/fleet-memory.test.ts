@@ -1,7 +1,8 @@
 /**
  * Fleet memory — proves lessons are durably recorded as JSON Lines and that
- * lexical recall ranks by term overlap, file overlap, and weight. Each test runs
- * against an isolated $HOME so it never touches the developer's real store.
+ * lexical recall ranks by term overlap, file overlap, and class/enforcement.
+ * Each test runs against an isolated $HOME so it never touches the developer's
+ * real store.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
@@ -28,8 +29,22 @@ afterEach(() => {
 describe("record + all", () => {
   it("persists records and reads them back newest-first", () => {
     const mem = openFleetMemory(cwd);
-    mem.record({ kind: "routine-change", weight: "low", lesson: "first lesson", files: [], outcome: "success" });
-    mem.record({ kind: "gotcha", weight: "high", lesson: "second lesson", files: ["a.ts"], outcome: "failure" });
+    mem.record({
+      memoryKind: "routine-change",
+      memoryClass: "OBSERVATION",
+      enforcementScore: null,
+      lesson: "first lesson",
+      files: [],
+      outcome: "success",
+    });
+    mem.record({
+      memoryKind: "gotcha",
+      memoryClass: "RULE",
+      enforcementScore: 70,
+      lesson: "second lesson",
+      files: ["a.ts"],
+      outcome: "failure",
+    });
     const all = mem.all();
     expect(all).toHaveLength(2);
     expect(all.map((r) => r.lesson)).toContain("first lesson");
@@ -40,8 +55,9 @@ describe("record + all", () => {
 
   it("persists across separate openFleetMemory instances (reads the file)", () => {
     openFleetMemory(cwd).record({
-      kind: "constraint",
-      weight: "critical",
+      memoryKind: "constraint",
+      memoryClass: "RULE",
+      enforcementScore: 95,
       lesson: "keep the cache warm",
       files: [],
       outcome: "success",
@@ -58,8 +74,22 @@ describe("record + all", () => {
 describe("recall", () => {
   it("ranks by term overlap and ignores irrelevant lessons", () => {
     const mem = openFleetMemory(cwd);
-    mem.record({ kind: "bug-root-cause", weight: "low", lesson: "the parser drops the final token", files: ["parser.ts"], outcome: "success" });
-    mem.record({ kind: "routine-change", weight: "low", lesson: "stylesheet needs a vendor prefix", files: ["style.css"], outcome: "success" });
+    mem.record({
+      memoryKind: "bug-root-cause",
+      memoryClass: "OBSERVATION",
+      enforcementScore: null,
+      lesson: "the parser drops the final token",
+      files: ["parser.ts"],
+      outcome: "success",
+    });
+    mem.record({
+      memoryKind: "routine-change",
+      memoryClass: "OBSERVATION",
+      enforcementScore: null,
+      lesson: "stylesheet needs a vendor prefix",
+      files: ["style.css"],
+      outcome: "success",
+    });
     const hits = mem.recall("why does the parser lose a token");
     expect(hits.length).toBeGreaterThanOrEqual(1);
     expect(hits[0]?.lesson).toContain("parser");
@@ -68,8 +98,22 @@ describe("recall", () => {
 
   it("weights file overlap above term overlap", () => {
     const mem = openFleetMemory(cwd);
-    mem.record({ kind: "gotcha", weight: "low", lesson: "unrelated words entirely", files: ["target.ts"], outcome: "success" });
-    mem.record({ kind: "gotcha", weight: "low", lesson: "the target logic is fragile", files: ["other.ts"], outcome: "success" });
+    mem.record({
+      memoryKind: "gotcha",
+      memoryClass: "OBSERVATION",
+      enforcementScore: null,
+      lesson: "unrelated words entirely",
+      files: ["target.ts"],
+      outcome: "success",
+    });
+    mem.record({
+      memoryKind: "gotcha",
+      memoryClass: "OBSERVATION",
+      enforcementScore: null,
+      lesson: "the target logic is fragile",
+      files: ["other.ts"],
+      outcome: "success",
+    });
     // Query term "target" hits the second lesson's text, but the file filter
     // matches the first lesson's file — and file overlap is weighted higher.
     const hits = mem.recall("target", { files: ["target.ts"] });
@@ -78,8 +122,37 @@ describe("recall", () => {
 
   it("returns nothing when there is no overlap", () => {
     const mem = openFleetMemory(cwd);
-    mem.record({ kind: "gotcha", weight: "low", lesson: "alpha beta gamma", files: [], outcome: "success" });
+    mem.record({
+      memoryKind: "gotcha",
+      memoryClass: "OBSERVATION",
+      enforcementScore: null,
+      lesson: "alpha beta gamma",
+      files: [],
+      outcome: "success",
+    });
     expect(mem.recall("zzz qqq xxx")).toHaveLength(0);
+  });
+
+  it("ranks a high-enforcement RULE above an OBSERVATION on equal term/file overlap", () => {
+    const mem = openFleetMemory(cwd);
+    mem.record({
+      memoryKind: "gotcha",
+      memoryClass: "OBSERVATION",
+      enforcementScore: null,
+      lesson: "widgets need careful handling",
+      files: [],
+      outcome: "success",
+    });
+    mem.record({
+      memoryKind: "constraint",
+      memoryClass: "RULE",
+      enforcementScore: 95,
+      lesson: "widgets need careful handling too",
+      files: [],
+      outcome: "success",
+    });
+    const hits = mem.recall("widgets need careful handling");
+    expect(hits[0]?.memoryClass).toBe("RULE");
   });
 
   it("tolerates a corrupt line already on disk", () => {
@@ -88,8 +161,9 @@ describe("recall", () => {
     const good: MemoryRecord = {
       id: "mem_x",
       createdAt: 1,
-      kind: "gotcha",
-      weight: "high",
+      memoryKind: "gotcha",
+      memoryClass: "RULE",
+      enforcementScore: 70,
       lesson: "real lesson about widgets",
       files: [],
       outcome: "success",
@@ -101,11 +175,38 @@ describe("recall", () => {
 });
 
 describe("formatLessons", () => {
-  it("marks weight and lists files", () => {
+  it("marks class/enforcement and lists files", () => {
     const records: MemoryRecord[] = [
-      { id: "1", createdAt: 1, kind: "constraint", weight: "critical", lesson: "A", files: ["x.ts"], outcome: "success" },
-      { id: "2", createdAt: 2, kind: "gotcha", weight: "high", lesson: "B", files: [], outcome: "success" },
-      { id: "3", createdAt: 3, kind: "routine-change", weight: "low", lesson: "C", files: [], outcome: "success" },
+      {
+        id: "1",
+        createdAt: 1,
+        memoryKind: "constraint",
+        memoryClass: "RULE",
+        enforcementScore: 95,
+        lesson: "A",
+        files: ["x.ts"],
+        outcome: "success",
+      },
+      {
+        id: "2",
+        createdAt: 2,
+        memoryKind: "gotcha",
+        memoryClass: "RULE",
+        enforcementScore: 70,
+        lesson: "B",
+        files: [],
+        outcome: "success",
+      },
+      {
+        id: "3",
+        createdAt: 3,
+        memoryKind: "routine-change",
+        memoryClass: "OBSERVATION",
+        enforcementScore: null,
+        lesson: "C",
+        files: [],
+        outcome: "success",
+      },
     ];
     const out = formatLessons(records);
     expect(out).toContain("‼");

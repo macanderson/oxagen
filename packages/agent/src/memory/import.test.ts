@@ -80,10 +80,10 @@ describe("extractMemoriesFromDocument", () => {
     mocks.generateObjectForMock.mockReset();
   });
 
-  it("returns the model's extracted memories", async () => {
+  it("returns the model's extracted, two-axis classified memories", async () => {
     const memories = [
-      { lesson: "Never push to main.", kind: "constraint", weight: "critical" },
-      { lesson: "Run pnpm i after a dep change.", kind: "routine-change", weight: "high" },
+      { lesson: "Never push to main.", memoryClass: "RULE" as const, memoryKind: "constraint", enforcementScore: 95 },
+      { lesson: "Run pnpm i after a dep change.", memoryClass: "OBSERVATION" as const, memoryKind: "routine-change" },
     ];
     mocks.generateObjectForMock.mockResolvedValue({ object: { memories } });
 

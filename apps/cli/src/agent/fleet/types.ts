@@ -75,19 +75,21 @@ export interface Plan {
   status: "draft" | "executing" | "completed" | "failed";
 }
 
-/** A weighted lesson recorded as the fleet builds/fixes code. */
+/** A two-axis lesson recorded as the fleet builds/fixes code. */
 export interface MemoryRecord {
   id: string;
   createdAt: number;
-  /** What kind of lesson this is — mirrors the platform `agent.memory.write` kinds. */
-  kind:
+  /** Content domain — mirrors the platform `agent.memory.write` memoryKind values. */
+  memoryKind:
     | "routine-change"
     | "constraint"
     | "bug-root-cause"
     | "convention-deviation"
     | "gotcha";
-  /** How much it should influence future work. */
-  weight: "low" | "high" | "critical";
+  /** Epistemic class — mirrors the platform `agent.memory.write` memoryClass ladder. */
+  memoryClass: "OBSERVATION" | "RULE" | "FACT";
+  /** How strongly it should influence future work; 1-100 for RULE, null otherwise. */
+  enforcementScore: number | null;
   /** The lesson itself, in one or two sentences. */
   lesson: string;
   /** Files the lesson is about (used for lexical recall scoring). */

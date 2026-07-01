@@ -83,11 +83,17 @@ export const workspaceUsers = workspaceSchema.table(
   }),
 );
 
-// ── workspace.workspace_memory_policy (OXA-1374) ─────────────────────────────
-// One row per workspace. Stores the per-workspace memory decay policy:
-//   halfLifeLowDays   — decay half-life in days for 'low' weight memories
-//   halfLifeHighDays  — decay half-life in days for 'high' weight memories
-//   recallThreshold   — memories below this confidence are excluded from recall
+// ── workspace.workspace_memory_policy (OXA-1374, two-axis model) ────────────
+// One row per workspace. Stores the per-workspace memory decay + enforcement
+// policy:
+//   halfLifeLowDays      — decay half-life (days) for OBSERVATION memories
+//   halfLifeHighDays     — decay half-life (days) for RULE memories
+//   recallThreshold      — memories below this confidence fraction (0-1) are
+//                          excluded from recall
+//   complianceThreshold  — enforcement (1-100) at/above which a RULE
+//                          deviation is a VIOLATION rather than DISCRETION
+//   defaultDecayFloor    — confidence (0-100) new memories never auto-decay
+//                          below
 //
 // Rows are created on first write; callers fall back to defaults when absent.
 export const workspaceMemoryPolicy = workspaceSchema.table(
@@ -104,6 +110,8 @@ export const workspaceMemoryPolicy = workspaceSchema.table(
     halfLifeLowDays: integer("half_life_low_days").notNull().default(30),
     halfLifeHighDays: integer("half_life_high_days").notNull().default(90),
     recallThreshold: real("recall_threshold").notNull().default(0.1),
+    complianceThreshold: integer("compliance_threshold").notNull().default(70),
+    defaultDecayFloor: real("default_decay_floor").notNull().default(5),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),

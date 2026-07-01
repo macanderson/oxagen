@@ -62,6 +62,11 @@ import { agentMemoryPolicyReadRoute } from "./routes/v1/agent.memory.policy.read
 import { agentMemoryPolicyWriteRoute } from "./routes/v1/agent.memory.policy.write";
 import { agentMemoryImportParseRoute } from "./routes/v1/agent.memory.import.parse";
 import { agentMemoryImportCommitRoute } from "./routes/v1/agent.memory.import.commit";
+import { agentMemoryPromoteRoute } from "./routes/v1/agent.memory.promote";
+import { agentMemoryPromotionCandidatesRoute } from "./routes/v1/agent.memory.promotion.candidates";
+import { agentMemoryCiteRoute } from "./routes/v1/agent.memory.cite";
+import { agentMemoryEvidenceAttachRoute } from "./routes/v1/agent.memory.evidence.attach";
+import { agentMemoryCitationsListRoute } from "./routes/v1/agent.memory.citations.list";
 import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve";
 import { agentExecutionRecordRoute } from "./routes/v1/agent.execution.record";
 import { agentSubagentAggregateRoute } from "./routes/v1/agent.subagent.aggregate";
@@ -347,6 +352,14 @@ orgScoped.route("/agent/memory/policy", agentMemoryPolicyWriteRoute);
 // before the "/agent/memory" catch-all so the more specific paths win.
 orgScoped.route("/agent/memory/import/parse", agentMemoryImportParseRoute);
 orgScoped.route("/agent/memory/import/commit", agentMemoryImportCommitRoute);
+orgScoped.route("/agent/memory/promote", agentMemoryPromoteRoute);
+orgScoped.route(
+  "/agent/memory/promotion/candidates",
+  agentMemoryPromotionCandidatesRoute,
+);
+orgScoped.route("/agent/memory/cite", agentMemoryCiteRoute);
+orgScoped.route("/agent/memory/evidence/attach", agentMemoryEvidenceAttachRoute);
+orgScoped.route("/agent/memory/citations/list", agentMemoryCitationsListRoute);
 orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
 orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);

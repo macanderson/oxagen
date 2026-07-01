@@ -21,8 +21,9 @@ import { TEST_CTX as CTX } from "../test-utils/fixtures";
 function draft(overrides: Record<string, unknown> = {}) {
   return {
     lesson: "Never push to main.",
-    kind: "constraint" as const,
-    weight: "critical" as const,
+    memoryClass: "RULE" as const,
+    memoryKind: "constraint",
+    enforcementScore: 95,
     source: "user",
     nodeRef: "user-memory",
     sourceDocument: "rules.md",
@@ -59,14 +60,15 @@ describe("agent.memory.import.commit handler", () => {
     expect(mocks.embedTextMock).toHaveBeenCalledTimes(2);
   });
 
-  it("passes kind, weight, lesson, nodeRef, and source through to writeMemory", async () => {
+  it("passes memoryClass, memoryKind, enforcementScore, lesson, nodeRef, and source through to writeMemory", async () => {
     await agentMemoryImportCommitHandler(
       {
         drafts: [
           draft({
             lesson: "Anchored lesson",
-            kind: "gotcha",
-            weight: "low",
+            memoryClass: "OBSERVATION",
+            memoryKind: "gotcha",
+            enforcementScore: undefined,
             nodeRef: "Function:auth#login",
             source: "imported-rules",
           }),
@@ -77,24 +79,29 @@ describe("agent.memory.import.commit handler", () => {
     const arg = mocks.writeMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(arg).toMatchObject({
       lesson: "Anchored lesson",
-      kind: "gotcha",
-      weight: "low",
+      memoryClass: "OBSERVATION",
+      memoryKind: "gotcha",
+      enforcementScore: null,
       nodeRef: "Function:auth#login",
       source: "imported-rules",
+      createdByKind: "AGENT",
+      createdById: "imported-rules",
     });
     expect(Array.isArray(arg.embedding)).toBe(true);
   });
 
-  it("defaults nodeRef and source when a draft omits them (invoke skips schema defaults)", async () => {
+  it("defaults nodeRef, source, and memoryClass when a draft omits them (invoke skips schema defaults)", async () => {
     await agentMemoryImportCommitHandler(
       // Hand-construct a draft missing the defaulted fields, as a raw invoke()
       // caller might.
-      { drafts: [{ lesson: "L", kind: "constraint", weight: "high" } as never] },
+      { drafts: [{ lesson: "L", memoryKind: "constraint" } as never] },
       CTX,
     );
     const arg = mocks.writeMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(arg.nodeRef).toBe("user-memory");
     expect(arg.source).toBe("user");
+    expect(arg.memoryClass).toBe("OBSERVATION");
+    expect(arg.enforcementScore).toBeNull();
   });
 
   it("captures per-item failures without aborting the batch", async () => {
@@ -120,6 +127,17 @@ describe("agent.memory.import.commit handler", () => {
     });
     expect(out.results[0]?.ok).toBe(true);
     expect(out.results[2]?.ok).toBe(true);
+  });
+
+  it("captures a class-invariant violation as a per-item failure (RULE draft with no enforcementScore)", async () => {
+    const out = await agentMemoryImportCommitHandler(
+      { drafts: [draft({ lesson: "A", memoryClass: "RULE", enforcementScore: undefined })] },
+      CTX,
+    );
+    expect(out.failed).toBe(1);
+    expect(out.results[0]).toMatchObject({ ok: false, memoryId: null });
+    expect(out.results[0]?.error).toMatch(/RULE requires enforcement_score/);
+    expect(mocks.writeMemoryMock).not.toHaveBeenCalled();
   });
 
   it("captures embedding failures per item", async () => {

@@ -7,8 +7,11 @@ import { buildContext } from "../context";
 export const schema = {
   ...agentMemoryRecall.input.shape,
   query: agentMemoryRecall.input.shape.query.describe("Semantic search query"),
-  minWeight: agentMemoryRecall.input.shape.minWeight.describe(
-    "Minimum memory weight threshold",
+  memoryClass: agentMemoryRecall.input.shape.memoryClass.describe(
+    "Only recall memories of this epistemic class",
+  ),
+  minEnforcement: agentMemoryRecall.input.shape.minEnforcement.describe(
+    "Only recall rules at or above this enforcement score",
   ),
   limit: agentMemoryRecall.input.shape.limit.describe(
     "Maximum number of memories to return",

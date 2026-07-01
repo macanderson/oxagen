@@ -9,8 +9,13 @@ export const schema = {
   nodeRef: agentMemoryWrite.input.shape.nodeRef.describe(
     "Graph node reference to attach the memory to",
   ),
-  weight: agentMemoryWrite.input.shape.weight.describe("Memory weight / priority"),
-  kind: agentMemoryWrite.input.shape.kind.describe("Memory category"),
+  memoryClass: agentMemoryWrite.input.shape.memoryClass.describe(
+    "Epistemic class; new memories default to OBSERVATION",
+  ),
+  memoryKind: agentMemoryWrite.input.shape.memoryKind.describe("Content domain of the memory"),
+  enforcementScore: agentMemoryWrite.input.shape.enforcementScore.describe(
+    "Required when memoryClass is RULE (1-100); ignored for OBSERVATION",
+  ),
   lesson: agentMemoryWrite.input.shape.lesson.describe("The lesson or insight to persist"),
   source: agentMemoryWrite.input.shape.source.describe("Origin of the memory"),
 };
