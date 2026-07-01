@@ -847,4 +847,98 @@ describe("MemoriesClient — row accessibility and detail sheet", () => {
       }),
     );
   });
+
+  it("edits the kind, weight, confidence and source fields and saves the changes", async () => {
+    const mockUpdate = vi.fn().mockResolvedValue({
+      ok: true,
+      memory: { ...routineRecord, kind: "gotcha", weight: "low" },
+    });
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        updateMemory={mockUpdate}
+      />,
+    );
+    fireEvent.click(
+      screen
+        .getByText(routineRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Edit memory" }));
+
+    fireEvent.change(screen.getByLabelText("Memory kind"), {
+      target: { value: "gotcha" },
+    });
+    fireEvent.change(screen.getByLabelText("Memory weight"), {
+      target: { value: "low" },
+    });
+    fireEvent.change(screen.getByLabelText("Confidence level"), {
+      target: { value: "42" },
+    });
+    fireEvent.change(screen.getByLabelText("Source"), {
+      target: { value: "manual-review" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await vi.waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        memoryId: routineRecord.id,
+        kind: "gotcha",
+        weight: "low",
+        source: "manual-review",
+      }),
+    );
+  });
+
+  it("cancels edit mode and returns to the read-only detail view", () => {
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        updateMemory={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      screen
+        .getByText(routineRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Edit memory" }));
+    expect(screen.getByLabelText("Lesson text")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    // Back in view mode: the Edit button returns and the lesson editor is gone.
+    expect(
+      screen.getByRole("button", { name: "Edit memory" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Lesson text")).toBeNull();
+  });
+
+  it("deletes a memory through the two-step confirm", async () => {
+    const mockDelete = vi.fn().mockResolvedValue({ ok: true });
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        deleteMemory={mockDelete}
+      />,
+    );
+    fireEvent.click(
+      screen
+        .getByText(routineRecord.lesson)
+        .closest('[role="button"]') as HTMLElement,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Delete memory" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Confirm delete memory" }),
+    );
+
+    await vi.waitFor(() => expect(mockDelete).toHaveBeenCalledTimes(1));
+    expect(mockDelete).toHaveBeenCalledWith(
+      expect.objectContaining({ memoryId: routineRecord.id }),
+    );
+  });
 });
