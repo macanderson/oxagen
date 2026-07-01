@@ -6,11 +6,16 @@
  *
  * Regenerate with `pnpm --filter @oxagen/schemas run settings:schema`.
  */
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
-import { generateOxagenCliSettingsSchema } from "../scripts/generate.js";
+import { afterAll, describe, expect, it } from "vitest";
+import {
+  defaultSchemaOutPath,
+  generateOxagenCliSettingsSchema,
+  writeOxagenCliSettingsSchema,
+} from "../scripts/generate.js";
 
 const committedPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -31,5 +36,35 @@ describe("oxagen-cli-settings-schema.json drift", () => {
     expect(fresh.$id).toBe("https://schemas.oxagen.sh/oxagen-cli-settings-schema.json");
     expect(typeof fresh.title).toBe("string");
     expect(typeof fresh.description).toBe("string");
+  });
+});
+
+describe("writeOxagenCliSettingsSchema", () => {
+  const scratch = mkdtempSync(join(tmpdir(), "oxagen-schemas-"));
+
+  afterAll(() => {
+    rmSync(scratch, { recursive: true, force: true });
+  });
+
+  it("writes the freshly generated schema (with trailing newline) to the given path", () => {
+    const outPath = join(scratch, "settings-schema.json");
+    const returned = writeOxagenCliSettingsSchema(outPath);
+
+    expect(returned).toBe(outPath);
+    const written = readFileSync(outPath, "utf8");
+    expect(written.endsWith("\n")).toBe(true);
+    expect(JSON.parse(written)).toStrictEqual(generateOxagenCliSettingsSchema());
+  });
+
+  it("defaults to the committed public artifact path and rewrites it idempotently", () => {
+    const returned = writeOxagenCliSettingsSchema();
+
+    expect(returned).toBe(defaultSchemaOutPath());
+    expect(returned).toBe(committedPath);
+    // The default write targets the committed file; it must stay in sync, so
+    // the on-disk artifact after the rewrite equals a fresh generation.
+    expect(JSON.parse(readFileSync(committedPath, "utf8"))).toStrictEqual(
+      generateOxagenCliSettingsSchema(),
+    );
   });
 });
