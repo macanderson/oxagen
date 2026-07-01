@@ -5,7 +5,7 @@ import { OxagenLogomark } from "@oxagen/ui";
 import { HeroTerminal } from "@/components/landing/hero-terminal";
 import { ContextWindow } from "@/components/landing/context-window";
 import { CopyCommand } from "@/components/landing/copy-command";
-import { HexField } from "@/components/landing/hex-field";
+import { HexField } from "@/components/ui/hex-field";
 
 export const metadata: Metadata = {
   title: "Oxagen — context, governed",
