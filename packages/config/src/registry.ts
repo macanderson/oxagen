@@ -1254,6 +1254,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_EFFORT: {
+    group: "CLI",
+    description:
+      "Default reasoning effort for models that support a thinking mode: low | medium | high. " +
+      "Forwarded as reasoning_effort; models without a reasoning mode ignore it. Falls back to " +
+      "`effort` in ~/.config/oxagen/config.json / .oxagen/settings.json, then the model default.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_DEBUG: {
     group: "CLI",
     description:
