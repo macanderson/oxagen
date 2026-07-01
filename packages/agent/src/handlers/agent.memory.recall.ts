@@ -1,8 +1,14 @@
 import type { CapabilityContext } from "../types";
-import { recallMemories, reinforceMemory } from "../memory/neo4j";
+import {
+  recallMemories,
+  reinforceMemory,
+  recordExecution,
+  recordCitation,
+} from "../memory/neo4j";
 import { embedText } from "../memory/embed";
 import { isKnowledgeGraphEnabled } from "../runtime/knowledge-graph";
 import type { AgentMemoryRecallInput, AgentMemoryRecallOutput } from "@oxagen/oxagen/contracts/agent.memory.recall";
+import { deriveCompliance } from "@oxagen/oxagen/contracts/agent.memory.model";
 import { insertMemoryChange } from "@oxagen/telemetry";
 
 export type { AgentMemoryRecallInput, AgentMemoryRecallOutput };
@@ -58,6 +64,43 @@ export async function agentMemoryRecallHandler(
     }).catch((err) => {
       console.warn("insertMemoryChange fire-and-forget failed", err);
     });
+  }
+
+  // Opt-in automatic citation: when the caller passes an executionRef (the agent
+  // runtime does this per turn), MERGE the :Execution and record a CONSIDERED
+  // citation of every recalled memory. We only know the memory was retrieved and
+  // considered — not whether it was decisive — so influence is CONSIDERED and
+  // deviated is false (compliance derives to NA for observations, COMPLIED for
+  // rules). This is the citation pressure that feeds agent.memory.promotion.candidates.
+  // Fully fire-and-forget: it must never block or fail the recall path.
+  if (input.executionRef) {
+    const executionRef = input.executionRef;
+    void (async () => {
+      try {
+        const { executionId } = await recordExecution({
+          executionRef,
+          agentId: input.agentId ?? null,
+          taskSummary: input.query.slice(0, 500),
+        });
+        await Promise.all(
+          rows.map((m) =>
+            recordCitation({
+              executionId,
+              memoryId: m.id,
+              influence: "CONSIDERED",
+              compliance: deriveCompliance({
+                enforcement: m.enforcementScore,
+                deviated: false,
+              }),
+              enforcementAtCite: m.enforcementScore,
+              confidenceAtCite: m.confidenceScore,
+            }),
+          ),
+        );
+      } catch (err) {
+        console.warn("recall auto-citation fire-and-forget failed", err);
+      }
+    })();
   }
 
   return {
