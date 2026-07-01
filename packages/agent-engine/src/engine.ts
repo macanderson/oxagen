@@ -185,6 +185,7 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       totalTokens: usage.totalTokens,
+      cachedInputTokens: (usage as { cachedInputTokens?: number }).cachedInputTokens,
     },
     messages: [...messages, ...response.messages],
   };

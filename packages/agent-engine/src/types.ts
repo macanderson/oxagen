@@ -164,6 +164,8 @@ export interface RunCodingAgentResult {
     inputTokens?: number;
     outputTokens?: number;
     totalTokens?: number;
+    /** Prompt tokens served from the provider cache (a cache "hit"). */
+    cachedInputTokens?: number;
   };
   messages: ModelMessage[];
 }

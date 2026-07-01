@@ -144,6 +144,33 @@ interface OpenAiUsage {
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
+  /**
+   * OpenAI cache-read breakdown. Surfaced so clients (the Oxagen CLI status line)
+   * can show cache hit/miss: `cached_tokens` are prompt tokens served from the
+   * provider's prompt cache (a "hit"); `prompt_tokens - cached_tokens` were billed
+   * fresh (a "miss"). The AI SDK's openai-compatible provider maps this back to
+   * `usage.cachedInputTokens`.
+   */
+  prompt_tokens_details?: { cached_tokens: number };
+}
+
+/** Build the OpenAI usage object, including the cache-read detail when present. */
+function toOpenAiUsage(u: {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  cachedInputTokens?: number;
+}): OpenAiUsage {
+  const prompt_tokens = u.inputTokens ?? 0;
+  const completion_tokens = u.outputTokens ?? 0;
+  return {
+    prompt_tokens,
+    completion_tokens,
+    total_tokens: u.totalTokens ?? prompt_tokens + completion_tokens,
+    ...(u.cachedInputTokens
+      ? { prompt_tokens_details: { cached_tokens: u.cachedInputTokens } }
+      : {}),
+  };
 }
 
 interface OpenAiChunk {
@@ -460,11 +487,7 @@ agentLlmRoute.post("/chat/completions", async (c) => {
             finish_reason: mapFinishReason(finishReason),
           },
         ],
-        usage: {
-          prompt_tokens: totalUsage.inputTokens ?? 0,
-          completion_tokens: totalUsage.outputTokens ?? 0,
-          total_tokens: totalUsage.totalTokens ?? 0,
-        },
+        usage: toOpenAiUsage(totalUsage),
       });
     } catch (err) {
       const reason = errorText(err);
@@ -589,14 +612,11 @@ agentLlmRoute.post("/chat/completions", async (c) => {
                   inputTokens?: number;
                   outputTokens?: number;
                   totalTokens?: number;
+                  cachedInputTokens?: number;
                 };
               };
               finishReason = fr;
-              usage = {
-                prompt_tokens: totalUsage.inputTokens ?? 0,
-                completion_tokens: totalUsage.outputTokens ?? 0,
-                total_tokens: totalUsage.totalTokens ?? 0,
-              };
+              usage = toOpenAiUsage(totalUsage);
               break;
             }
             case "error": {

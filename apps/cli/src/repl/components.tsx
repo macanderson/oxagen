@@ -61,10 +61,11 @@ export function modeLabel(mode: PermissionMode): string {
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-/** Compact token count: 1234 → "1.2k", 980 → "980", 23000 → "23k". */
+/** Compact token count: 980 → "980", 1234 → "1.2k", 23000 → "23k", 87.1e6 → "87.1M". */
 export function humanizeTokens(n: number): string {
   if (n < 1000) return String(n);
-  return (n / 1000).toFixed(n < 10_000 ? 1 : 0) + "k";
+  if (n < 1_000_000) return (n / 1000).toFixed(n < 10_000 ? 1 : 0) + "k";
+  return (n / 1_000_000).toFixed(1) + "M";
 }
 
 // ── Prompt Input ──────────────────────────────────────────────────────────────
@@ -402,84 +403,108 @@ export function ThinkingIndicator({
 
 // ── Status Bar ────────────────────────────────────────────────────────────────
 
+/** Second-line description of the active permission posture. */
+function permissionLine(mode: PermissionMode): { label: string; color: string } {
+  switch (mode) {
+    case "bypass":
+      return { label: "bypass permissions on", color: "#FB7185" };
+    case "acceptEdits":
+      return { label: "auto-accept edits on", color: "#FBBF24" };
+    case "readonly":
+      return { label: "read-only", color: "#FBBF24" };
+    default:
+      return { label: "ask before edits", color: theme.cyan };
+  }
+}
+
 export function StatusLine({
   model,
-  readOnly,
-  turns,
+  branch,
   inputTokens,
   outputTokens,
+  cacheHit,
+  cacheMiss,
+  costUsd,
   pipelineOn,
   verboseOn,
-  mode,
-  tuiMode,
+  effort,
+  mode = "ask",
 }: {
   model: string;
-  readOnly: boolean;
-  turns: number;
+  /** Current git branch (undefined = not a repo / unknown; the chip is hidden). */
+  branch?: string;
   inputTokens: number;
   outputTokens: number;
+  /** Cumulative prompt tokens served from cache (a "hit"). */
+  cacheHit: number;
+  /** Cumulative prompt tokens billed fresh (a "miss"). */
+  cacheMiss: number;
+  /** Cumulative estimated session cost, USD. */
+  costUsd: number;
   /** Whether the eval→enhance→judge pipeline is active (undefined = don't show). */
   pipelineOn?: boolean;
   /** Whether verbose telemetry capture is active (undefined = don't show). */
   verboseOn?: boolean;
-  /** Current permission posture (undefined = fall back to the read-only chip). */
+  /** Active reasoning effort (undefined = model default; chip hidden). */
+  effort?: string;
+  /** Current permission posture (drives the second line). */
   mode?: PermissionMode;
-  /** Current layout mode (undefined = don't show the chip). */
-  tuiMode?: TuiMode;
 }): React.ReactElement {
-  const total = inputTokens + outputTokens;
+  const sep = (
+    <Text dimColor>{"  │  "}</Text>
+  );
+  const perm = permissionLine(mode);
+  const cost = costUsd > 0 ? `~$${costUsd.toFixed(costUsd < 100 ? 2 : 0)}` : "~$0.00";
   return (
-    <Box paddingX={1} justifyContent="space-between">
-      <Box gap={2}>
-        <Text dimColor>
-          model:<Text color={theme.cyan}>{model.split("/").pop()}</Text>
+    <Box flexDirection="column" paddingX={1}>
+      {/* Line 1 — model · branch · tokens · cache · cost */}
+      <Box>
+        <Text color={theme.violet} bold>
+          {model.split("/").pop()}
         </Text>
-        <Text dimColor>
-          turns:<Text color="#34D399">{turns}</Text>
-        </Text>
-        <Text dimColor>
-          tokens:<Text color={theme.cyan}>↑{humanizeTokens(inputTokens)}</Text>{" "}
-          <Text color="#34D399">↓{humanizeTokens(outputTokens)}</Text>
-          {total > 0 ? <Text dimColor> (Σ{humanizeTokens(total)})</Text> : null}
-        </Text>
-        {pipelineOn !== undefined && (
-          <Text dimColor>
-            pipeline:
-            <Text color={pipelineOn ? "#34D399" : "#FB7185"}>
-              {pipelineOn ? "on" : "off"}
-            </Text>
-          </Text>
-        )}
-        {tuiMode && (
-          <Text dimColor>
-            layout:<Text color={theme.violet}>{tuiMode}</Text>
-          </Text>
-        )}
-        {verboseOn && <Text color={theme.cyan}>verbose</Text>}
-        {readOnly && <Text color="#FBBF24">read-only</Text>}
-        {mode ? (
-          <Text dimColor>
-            mode:
-            <Text
-              color={
-                mode === "bypass"
-                  ? "#FB7185"
-                  : mode === "ask"
-                    ? theme.cyan
-                    : "#FBBF24"
-              }
-            >
-              {modeLabel(mode)}
-            </Text>
-          </Text>
-        ) : (
-          readOnly && <Text color="#FBBF24">read-only</Text>
-        )}
+        {branch ? (
+          <>
+            {sep}
+            <Text color={theme.cyan}>{branch}</Text>
+          </>
+        ) : null}
+        {sep}
+        <Text color={theme.cyan}>↑{humanizeTokens(inputTokens)} </Text>
+        <Text color="#34D399">↓{humanizeTokens(outputTokens)}</Text>
+        {sep}
+        <Text dimColor>cache </Text>
+        <Text color="#34D399">{humanizeTokens(cacheHit)}hit</Text>
+        <Text dimColor> / </Text>
+        <Text color="#FB7185">{humanizeTokens(cacheMiss)}miss</Text>
+        {sep}
+        <Text color="#FBBF24">{cost}</Text>
+        {effort ? (
+          <>
+            {sep}
+            <Text dimColor>effort:</Text>
+            <Text color={theme.violet}>{effort}</Text>
+          </>
+        ) : null}
+        {verboseOn ? (
+          <>
+            {sep}
+            <Text color={theme.cyan}>verbose</Text>
+          </>
+        ) : null}
+        {pipelineOn === false ? (
+          <>
+            {sep}
+            <Text color="#FB7185">bare</Text>
+          </>
+        ) : null}
       </Box>
-      <Box gap={2}>
-        <Text dimColor>/help</Text>
-        <Text dimColor>/replay</Text>
-        <Text dimColor>esc·ctrl+c</Text>
+      {/* Line 2 — permission posture + cycle hint */}
+      <Box>
+        <Text color={perm.color} bold>
+          {"▶▶ "}
+          {perm.label}
+        </Text>
+        <Text dimColor> (shift+tab to cycle)</Text>
       </Box>
     </Box>
   );
