@@ -77,6 +77,7 @@ export const HELP = [
   "  /traces        list recent turns you can /replay",
   "  /pipeline [on|off]  toggle prompt evaluation + completeness judging",
   "  /verbose [on|off]   per-phase timing, model+token+cost breakdown, tool results",
+  "  /hud           toggle the heads-up display of all agents running this session",
   "  /clear         reset the conversation",
   "  /exit, /quit   quit",
   "Type / to open the command menu — 📦 marks built-in & CLI commands; every",

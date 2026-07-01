@@ -41,6 +41,8 @@ import { buildProgram, describeCliCommands } from "../program.js";
 import { isProjectInitialized, initializeProject } from "../project/init.js";
 import { openSessionMemory, type SessionMemory } from "../agent/memory.js";
 import { openFleetMemory } from "../agent/fleet/memory.js";
+import { agentRegistry, type AgentHandle } from "../agent/agent-registry.js";
+import { HudPanel } from "./hud.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
@@ -287,6 +289,11 @@ export function ReplApp({
   // The ref is the synchronous source of truth; the state drives the render.
   const [resetPending, setResetPending] = useState(false);
   const resetPendingRef = useRef(false);
+  // Whether the `/hud` heads-up display (all running agents) is showing. The ref
+  // mirrors the state so the synchronous Esc handler can read it without a stale
+  // closure.
+  const [hudVisible, setHudVisible] = useState(false);
+  const hudVisibleRef = useRef(false);
   // Timestamp of the most-recent Escape press (for the double-Esc detection
   // window). Null means no previous Esc has been recorded (or the window was
   // explicitly cleared after a 'prompt-reset' fires).
@@ -449,6 +456,15 @@ export function ReplApp({
     }
 
     if (key.escape) {
+      // If the HUD is open, Esc just closes it — it never interrupts a turn or
+      // seeds a reset. This is the lightest possible dismissal.
+      if (hudVisibleRef.current) {
+        hudVisibleRef.current = false;
+        setHudVisible(false);
+        lastEscapeRef.current = null;
+        return;
+      }
+
       // If the reset-confirmation prompt is already visible, Esc cancels it
       // immediately (without going through the submit path).
       if (resetPendingRef.current) {
@@ -554,6 +570,13 @@ export function ReplApp({
       }
       if (text === "/clear") {
         resetConversation();
+        return;
+      }
+      if (text === "/hud") {
+        // Toggle the heads-up display of every agent running this session.
+        const next = !hudVisibleRef.current;
+        hudVisibleRef.current = next;
+        setHudVisible(next);
         return;
       }
       if (text.startsWith("/model")) {
@@ -885,6 +908,11 @@ export function ReplApp({
         reasoningOpen = false;
       };
 
+      // Registry handle for this turn, surfaced in `/hud`. Declared out here (not
+      // in the try) so the finally can mark it done. Assigned only once we're past
+      // project-init, so a skipped init never leaves a phantom "turn" in the HUD.
+      let hudHandle: AgentHandle | null = null;
+
       // Project initialization and runTurn both live inside this try so the
       // finally below always restores the streaming UI state — otherwise a throw
       // from initializeProject (which runs before the model call) would leave the
@@ -923,6 +951,12 @@ export function ReplApp({
           model: modelRef.current,
           prompt: submission,
         });
+        // Surface this turn in the `/hud` heads-up display for its whole life.
+        hudHandle = agentRegistry.register({
+          kind: "turn",
+          title: submission,
+          model: modelRef.current,
+        });
         const result = await runTurn({
           prompt: submission,
           history: historyRef.current,
@@ -949,6 +983,8 @@ export function ReplApp({
             if (turnController.signal.aborted) return;
             noteProgress();
             void debugLog("turn", "turn.stage", { label: stage.label, detail: stage.detail });
+            // Keep the HUD's live detail on the current stage.
+            hudHandle?.update({ detail: stage.detail ?? stage.label });
             closeStreamingBlocks();
             turn.push({
               role: "stage",
@@ -1126,6 +1162,10 @@ export function ReplApp({
         render();
       } finally {
         stall.stop();
+        // This turn is over (success, error, or cancel) — retire its HUD entry.
+        // It's this turn's own handle, so retiring it is safe even when an
+        // overlapped later turn now owns the shared UI state guarded below.
+        hudHandle?.done();
         // Only tear down SHARED turn/UI state if THIS turn still owns it. When a
         // turn is interrupted (Esc), the pump moves on to the next prompt right
         // away — so a cancelled turn's stream can settle here LONG after a newer
@@ -1335,6 +1375,11 @@ export function ReplApp({
           </Text>
         </Box>
       )}
+
+      {/* Heads-up display — every agent running this session. Toggled by /hud
+          (and closed by Esc); sits just above the input so it reads as a live
+          status overlay without disturbing the scrollback history above. */}
+      {hudVisible && <HudPanel />}
 
       {/* Input row — pinned to the bottom stack, padded above, and never allowed
           to shrink (flexShrink={0}) so the prompt bar keeps a constant height as
