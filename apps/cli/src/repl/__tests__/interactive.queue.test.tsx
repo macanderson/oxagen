@@ -159,6 +159,31 @@ describe("REPL prompt queue (Claude Code-style)", () => {
     expect(lastFrame() ?? "").not.toContain("queued");
   });
 
+  it("answers the Esc-twice reset confirmation synchronously — 'y' resets, never queues", async () => {
+    const { stdin, lastFrame } = render(<ReplApp options={{ session: TEST_SESSION }} />);
+    await tick(100); // let the async session-memory mount settle before input
+
+    // Double-Esc while idle opens the reset confirmation (two presses inside the
+    // 1500ms window — back-to-back writes are well within it).
+    stdin.write("\x1b");
+    await tick(60);
+    stdin.write("\x1b");
+    await tick(60);
+    await waitFor(() => (lastFrame() ?? "").includes("reset the conversation"));
+
+    // Answering "y" must be consumed as the confirmation the instant Enter is
+    // pressed — it must NOT be enqueued as a prompt (regression: it used to land
+    // in the FIFO and run as an ordinary turn).
+    await submit(stdin, "y");
+    await tick(30);
+
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("Conversation reset");
+    expect(frame).not.toContain("queued");
+    // The answer never reached the turn pipeline.
+    expect(runTurnSpy).not.toHaveBeenCalled();
+  });
+
   it.skip("runs a prompt immediately when idle (no queue wait)", async () => {
     const { stdin } = render(<ReplApp options={{ session: TEST_SESSION }} />);
     await tick();
