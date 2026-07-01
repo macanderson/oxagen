@@ -254,7 +254,7 @@ export function ReplApp({
   }
   // Oxagen context-engine memory, opened asynchronously on mount.
   const memoryRef = useRef<SessionMemory | null>(null);
-  // Fleet memory (weighted lessons) and the per-turn trace store, both synchronous.
+  // Fleet memory (class + enforcement lessons) and the per-turn trace store, both synchronous.
   const fleetMemoryRef = useRef(openFleetMemory(cwd));
   const traceStoreRef = useRef(openTraceStore(cwd));
   // Source-of-truth message list (the state mirror), so streaming updates can be
@@ -704,7 +704,7 @@ export function ReplApp({
         const body = text.slice("/remember".length).trim();
         if (!body) {
           pushAssistant(
-            "Usage: /remember <text> — captures a memory (infers its kind + weight) and saves it to the workspace graph.",
+            "Usage: /remember <text> — captures a memory (infers its class + kind) and saves it to the workspace graph.",
           );
           return;
         }
@@ -722,18 +722,25 @@ export function ReplApp({
       if (text === "/memories" || text.startsWith("/memories ")) {
         const arg = text.slice("/memories".length).trim();
         try {
-          const { listMemories, formatMemoryLines, MEMORY_KINDS } = await import(
+          const { listMemories, formatMemoryLines, MEMORY_CLASSES } = await import(
             "../lib/memory-client.js"
           );
-          let kind: (typeof MEMORY_KINDS)[number] | undefined;
+          // The argument may be an epistemic class (OBSERVATION/RULE/FACT) or a
+          // free-text content-domain kind — memoryKind is an open string, so
+          // anything else is passed through verbatim as a kind filter.
+          let memoryClass: (typeof MEMORY_CLASSES)[number] | undefined;
+          let memoryKind: string | undefined;
           if (arg) {
-            if (!MEMORY_KINDS.includes(arg as (typeof MEMORY_KINDS)[number])) {
-              pushAssistant(`Unknown kind "${arg}". Use one of: ${MEMORY_KINDS.join(", ")}.`);
-              return;
+            const upper = arg.toUpperCase();
+            if (MEMORY_CLASSES.includes(upper as (typeof MEMORY_CLASSES)[number])) {
+              memoryClass = upper as (typeof MEMORY_CLASSES)[number];
+            } else {
+              memoryKind = arg;
             }
-            kind = arg as (typeof MEMORY_KINDS)[number];
           }
-          pushAssistant(formatMemoryLines(await listMemories({ kind, limit: 30 })));
+          pushAssistant(
+            formatMemoryLines(await listMemories({ memoryClass, memoryKind, limit: 30 })),
+          );
         } catch (err) {
           pushAssistant(err instanceof Error ? err.message : String(err));
         }

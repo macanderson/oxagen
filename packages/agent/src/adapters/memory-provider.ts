@@ -41,14 +41,16 @@ export function createPlatformMemoryProvider(args: MemoryAdapterArgs): MemoryPro
           executionStepId: args.telemetry.messageId,
         },
       });
+      // No memoryClass/minEnforcement filter — coding-turn recall wants the
+      // broadest context (OBSERVATION through FACT), the same "recall
+      // everything above threshold" intent the old minWeight:"low" filter had.
       const rows = await recallMemories({
         embedding: emb,
-        minWeight: "low",
         limit: 8,
         recallThreshold: 0.7,
       });
       if (rows.length === 0) return "";
-      return rows.map((r) => `- [${r.kind}] ${r.lesson}`).join("\n");
+      return rows.map((r) => `- [${r.memoryKind}] ${r.lesson}`).join("\n");
     },
 
     async remember(kind: string, content: unknown): Promise<void> {
@@ -69,10 +71,14 @@ export function createPlatformMemoryProvider(args: MemoryAdapterArgs): MemoryPro
           // the AgentMemory MERGE proceeds normally.
           nodeRef: "coding-agent",
           embedding,
-          weight: "low",
-          kind,
+          // A coding-turn note is an unconfirmed OBSERVATION — the lowest-
+          // salience rung of the confidence ladder (mirrors the old weight:"low").
+          memoryClass: "OBSERVATION",
+          memoryKind: kind,
           lesson,
           source: "coding-agent",
+          createdByKind: "AGENT",
+          createdById: "coding-agent",
         });
       } catch (err) {
         logger.warn({ err }, "agent.memory-adapter: remember() failed — skipping");

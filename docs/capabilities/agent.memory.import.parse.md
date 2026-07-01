@@ -35,8 +35,9 @@ Default effect: deny.
 | Field             | Type                                                                          | Notes                                                                          |
 | ----------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `lesson`          | `string` (1 – 2000)                                                           | The extracted memory lesson, in prose.                                        |
-| `kind`            | `"routine-change" \| "constraint" \| "bug-root-cause" \| "convention-deviation" \| "gotcha"` | Memory category assigned by the AI.                                |
-| `weight`          | `"low" \| "high" \| "critical"`                                               | Importance weight assigned by the AI.                                        |
+| `memoryClass`     | `"OBSERVATION" \| "RULE" \| "FACT"`                                           | Epistemic class assigned by the AI (defaults OBSERVATION).                     |
+| `memoryKind`      | `string`                                                                      | Content domain assigned by the AI (extensible).                               |
+| `enforcementScore`| `int 1–100`?                                                                  | Enforcement when class is RULE.                                                |
 | `source`          | `"user"`                                                                      | Always `"user"` for imported documents (distinguishes from agent-generated).   |
 | `nodeRef`         | `string`                                                                      | Graph node ref for the memory. Defaults to `defaultNodeRef` or `"user-memory"`. |
 | `sourceDocument`  | `string`                                                                      | Filename of the source document.                                              |
@@ -60,7 +61,7 @@ None—read-only. The AI parses the documents and returns drafts; nothing is wri
 
 - Parsing is AI-driven; results are deterministic within a single session but may vary slightly across runs depending on model updates.
 - Drafts are returned in-memory and are not persisted until explicitly committed via `agent.memory.import.commit`.
-- The `lesson` field is the extractable memory; callers may edit `kind`, `weight`, and `nodeRef` before committing.
+- The `lesson` field is the extractable memory; callers may edit `memoryClass`, `memoryKind`, `enforcementScore`, and `nodeRef` before committing.
 - Documents with parsing failures appear in the `skipped` list and do not generate drafts.
 
 ## SPEC references

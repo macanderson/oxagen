@@ -4,8 +4,9 @@ import { getCapability } from "../registry";
 
 const oneDraft = {
   lesson: "Never push to main.",
-  kind: "constraint" as const,
-  weight: "critical" as const,
+  memoryClass: "RULE" as const,
+  memoryKind: "constraint",
+  enforcementScore: 95,
 };
 
 describe("agent.memory.import.commit capability", () => {
@@ -32,6 +33,15 @@ describe("agent.memory.import.commit capability", () => {
     expect(parsed.drafts).toHaveLength(1);
     expect(parsed.drafts[0]?.source).toBe("user");
     expect(parsed.drafts[0]?.nodeRef).toBe("user-memory");
+    expect(parsed.drafts[0]?.memoryClass).toBe("RULE");
+    expect(parsed.drafts[0]?.enforcementScore).toBe(95);
+  });
+
+  it("applies the OBSERVATION default when memoryClass is omitted", () => {
+    const parsed = agentMemoryImportCommit.input.parse({
+      drafts: [{ lesson: "L", memoryKind: "constraint" }],
+    });
+    expect(parsed.drafts[0]?.memoryClass).toBe("OBSERVATION");
   });
 
   it("rejects an empty drafts array", () => {

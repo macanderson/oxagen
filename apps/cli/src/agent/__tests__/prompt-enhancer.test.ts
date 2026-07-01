@@ -82,8 +82,9 @@ describe("enhancePrompt", () => {
     const lesson: MemoryRecord = {
       id: "m1",
       createdAt: 1,
-      kind: "gotcha",
-      weight: "critical",
+      memoryKind: "gotcha",
+      memoryClass: "RULE",
+      enforcementScore: 95,
       lesson: "beta.ts must keep its default export",
       files: ["beta.ts"],
       outcome: "success",

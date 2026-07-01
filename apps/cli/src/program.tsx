@@ -357,23 +357,27 @@ export function buildProgram(): Command {
 
   const memory = program
     .command("memory")
-    .description("Manage the workspace's agent memories (list, show, edit, salience, rm)");
+    .description(
+      "Manage the workspace's agent memories (list, show, edit, salience, promote, candidates, rm)",
+    );
   memory
     .command("list")
     .description("List the workspace's memories, newest first")
+    .option("--class <memoryClass>", "Filter by epistemic class (OBSERVATION|RULE|FACT)")
     .option(
       "--kind <kind>",
-      "Filter by kind (routine-change|constraint|bug-root-cause|convention-deviation|gotcha)",
+      "Filter by content-domain kind (e.g. FEEDBACK, PERFORMANCE, constraint, gotcha)",
     )
-    .option("--weight <weight>", "Only memories at or above this weight (low|high|critical)")
+    .option("--min-enforcement <n>", "Only rules at or above this enforcement score (1-100)")
     .option("--node <ref>", "Scope to memories anchored on a graph node ref")
     .option("--limit <n>", "Max rows (default 100)")
     .option("--offset <n>", "Skip N rows (paging)")
     .option("--json", "Output JSON")
     .action(
       async (opts: {
+        class?: string;
         kind?: string;
-        weight?: string;
+        minEnforcement?: string;
         node?: string;
         limit?: string;
         offset?: string;
@@ -395,7 +399,7 @@ export function buildProgram(): Command {
     .command("edit <id>")
     .description("Edit a memory's lesson, kind, or source")
     .option("--lesson <text>", "Replacement lesson text (re-embeds for recall)")
-    .option("--kind <kind>", "New kind")
+    .option("--kind <kind>", "New content-domain kind")
     .option("--source <source>", "New provenance label")
     .option("--json", "Output JSON")
     .action(
@@ -408,16 +412,50 @@ export function buildProgram(): Command {
       },
     );
   memory
-    .command("salience <id> <weight>")
-    .description("Adjust a memory's salience: weight (low|high|critical) + optional --confidence")
-    .option("--confidence <n>", "Numeric confidence 0–1")
+    .command("salience <id>")
+    .description(
+      "Adjust a memory's confidence/enforcement scores or lifecycle status (class changes go through `memory promote`)",
+    )
+    .option("--confidence <n>", "Numeric confidence 0–100")
+    .option("--enforcement <n>", "Numeric enforcement 1–100 (for a RULE)")
+    .option("--status <status>", "Lifecycle status (ACTIVE|SUPERSEDED|RETRACTED|ARCHIVED)")
     .option("--json", "Output JSON")
     .action(
-      async (id: string, weight: string, opts: { confidence?: string; json?: boolean }) => {
+      async (
+        id: string,
+        opts: { confidence?: string; enforcement?: string; status?: string; json?: boolean },
+      ) => {
         const { handleMemorySalience } = await import("./commands/memory.js");
-        await handleMemorySalience(id, weight, opts);
+        await handleMemorySalience(id, opts);
       },
     );
+  memory
+    .command("promote <id>")
+    .description(
+      "Promote a memory to RULE or FACT, recording an auditable promotion event (FACT requires human confirmation)",
+    )
+    .requiredOption("--to <class>", "Target class: rule|fact")
+    .option("--enforcement <n>", "Enforcement 1–100 to set for a RULE (ignored for FACT, forced 100)")
+    .requiredOption("--rationale <text>", "Why this memory is being promoted")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        id: string,
+        opts: { to?: string; enforcement?: string; rationale?: string; json?: boolean },
+      ) => {
+        const { handleMemoryPromote } = await import("./commands/memory.js");
+        await handleMemoryPromote(id, opts);
+      },
+    );
+  memory
+    .command("candidates")
+    .description("List the top OBSERVATION memories by citation pressure ripe for promotion")
+    .option("--limit <n>", "Max candidates (default 3)")
+    .option("--json", "Output JSON")
+    .action(async (opts: { limit?: string; json?: boolean }) => {
+      const { handleMemoryCandidates } = await import("./commands/memory.js");
+      await handleMemoryCandidates(opts);
+    });
   memory
     .command("rm <id>")
     .description("Permanently delete a memory by id")
@@ -443,21 +481,22 @@ export function buildProgram(): Command {
       },
     );
 
-  // ── remember: capture a memory (infers kind + weight) ───────────────────────
+  // ── remember: capture a memory (infers class + kind) ────────────────────────
 
   program
     .command("remember <text...>")
     .description(
-      "Capture a memory — infers its kind + weight and saves it to the workspace graph",
+      "Capture a memory — infers its class + kind and saves it to the workspace graph",
     )
-    .option("--kind <kind>", "Pin the kind instead of inferring it")
-    .option("--weight <weight>", "Pin the weight (low|high|critical) instead of inferring it")
+    .option("--class <memoryClass>", "Pin the epistemic class (OBSERVATION|RULE|FACT) instead of inferring it")
+    .option("--kind <kind>", "Pin the content-domain kind instead of inferring it")
+    .option("--enforcement <n>", "Enforcement 1–100 when --class is RULE")
     .option("--node <ref>", "Anchor the memory on a graph node ref")
     .option("--json", "Output JSON")
     .action(
       async (
         text: string[],
-        opts: { kind?: string; weight?: string; node?: string; json?: boolean },
+        opts: { class?: string; kind?: string; enforcement?: string; node?: string; json?: boolean },
       ) => {
         const { handleRemember } = await import("./commands/memory.js");
         await handleRemember(text.join(" "), opts);

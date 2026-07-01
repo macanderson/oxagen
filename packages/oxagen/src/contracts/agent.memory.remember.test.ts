@@ -6,11 +6,24 @@ const VALID_RECORD = {
   id: "mem_1",
   publicId: "pub_1",
   nodeRef: "user-memory",
-  weight: "high" as const,
-  kind: "constraint",
+  memoryClass: "OBSERVATION" as const,
+  memoryKind: "constraint",
   lesson: "A lesson the agent must respect.",
   source: "user",
-  confidence: 1,
+  confidenceScore: 100,
+  enforcementScore: null,
+  status: "ACTIVE" as const,
+  subjectHint: "user-memory",
+  halfLifeDays: 30,
+  decayFloor: 5,
+  lastEvidenceAt: new Date().toISOString(),
+  citationCount: 0,
+  influenceCount: 0,
+  violationCount: 0,
+  createdByKind: "USER" as const,
+  createdById: "user",
+  confirmedByKind: null,
+  confirmedById: null,
   createdAt: new Date().toISOString(),
   lastReinforcedAt: null,
 };
@@ -23,8 +36,8 @@ describe("agent.memory.remember capability", () => {
     expect(parsed.text).toBe("Always check auth before mutating data");
     // source defaults to "user" when omitted
     expect(parsed.source).toBe("user");
-    expect(parsed.weight).toBeUndefined();
-    expect(parsed.kind).toBeUndefined();
+    expect(parsed.memoryClass).toBeUndefined();
+    expect(parsed.memoryKind).toBeUndefined();
     expect(parsed.nodeRef).toBeUndefined();
     expect(parsed.relatedNodeIds).toBeUndefined();
   });
@@ -38,33 +51,39 @@ describe("agent.memory.remember capability", () => {
     const parsed = agentMemoryRemember.input.parse({
       text: "A lesson about auth",
       nodeRef: "Function:auth#validate",
-      weight: "critical",
-      kind: "gotcha",
+      memoryClass: "RULE",
+      memoryKind: "gotcha",
+      enforcementScore: 75,
       source: "fix",
       relatedNodeIds: ["kn_1", "kn_2"],
     });
     expect(parsed.nodeRef).toBe("Function:auth#validate");
-    expect(parsed.weight).toBe("critical");
-    expect(parsed.kind).toBe("gotcha");
+    expect(parsed.memoryClass).toBe("RULE");
+    expect(parsed.memoryKind).toBe("gotcha");
+    expect(parsed.enforcementScore).toBe(75);
     expect(parsed.source).toBe("fix");
     expect(parsed.relatedNodeIds).toEqual(["kn_1", "kn_2"]);
   });
 
-  it("accepts all valid weight values", () => {
-    expect(agentMemoryRemember.input.parse({ text: "x", weight: "low" }).weight).toBe("low");
-    expect(agentMemoryRemember.input.parse({ text: "x", weight: "high" }).weight).toBe("high");
-    expect(agentMemoryRemember.input.parse({ text: "x", weight: "critical" }).weight).toBe("critical");
+  it("accepts all valid memoryClass values", () => {
+    expect(agentMemoryRemember.input.parse({ text: "x", memoryClass: "OBSERVATION" }).memoryClass).toBe(
+      "OBSERVATION",
+    );
+    expect(agentMemoryRemember.input.parse({ text: "x", memoryClass: "RULE" }).memoryClass).toBe("RULE");
+    expect(agentMemoryRemember.input.parse({ text: "x", memoryClass: "FACT" }).memoryClass).toBe("FACT");
   });
 
-  it("accepts all valid kind values", () => {
-    for (const kind of [
+  it("accepts an open-string memoryKind, including the canonical values", () => {
+    for (const memoryKind of [
       "routine-change",
       "constraint",
       "bug-root-cause",
       "convention-deviation",
       "gotcha",
-    ] as const) {
-      expect(agentMemoryRemember.input.parse({ text: "x", kind }).kind).toBe(kind);
+      "FEEDBACK",
+      "PREFERENCE",
+    ]) {
+      expect(agentMemoryRemember.input.parse({ text: "x", memoryKind }).memoryKind).toBe(memoryKind);
     }
   });
 
@@ -83,37 +102,40 @@ describe("agent.memory.remember capability", () => {
     expect(parsed.text).toHaveLength(2000);
   });
 
-  it("rejects an invalid weight", () => {
+  it("rejects an invalid memoryClass", () => {
     expect(() =>
-      agentMemoryRemember.input.parse({ text: "hi", weight: "medium" }),
+      agentMemoryRemember.input.parse({ text: "hi", memoryClass: "MAYBE" }),
     ).toThrow();
   });
 
-  it("rejects an invalid kind", () => {
+  it("rejects an enforcementScore out of the 1-100 range", () => {
     expect(() =>
-      agentMemoryRemember.input.parse({ text: "hi", kind: "note" }),
+      agentMemoryRemember.input.parse({ text: "hi", enforcementScore: 0 }),
+    ).toThrow();
+    expect(() =>
+      agentMemoryRemember.input.parse({ text: "hi", enforcementScore: 101 }),
     ).toThrow();
   });
 
   it("output parses a valid record with classified:true", () => {
     const parsed = agentMemoryRemember.output.parse({
       memory: VALID_RECORD,
-      inferred: { kind: "constraint", weight: "high", classified: true },
+      inferred: { memoryClass: "OBSERVATION", memoryKind: "constraint", classified: true },
     });
     expect(parsed.inferred.classified).toBe(true);
-    expect(parsed.inferred.kind).toBe("constraint");
-    expect(parsed.inferred.weight).toBe("high");
+    expect(parsed.inferred.memoryClass).toBe("OBSERVATION");
+    expect(parsed.inferred.memoryKind).toBe("constraint");
     expect(parsed.memory.id).toBe("mem_1");
   });
 
   it("output parses a valid record with classified:false (caller pinned values)", () => {
     const parsed = agentMemoryRemember.output.parse({
-      memory: { ...VALID_RECORD, kind: "gotcha", weight: "low" },
-      inferred: { kind: "gotcha", weight: "low", classified: false },
+      memory: { ...VALID_RECORD, memoryClass: "RULE", memoryKind: "gotcha", enforcementScore: 80 },
+      inferred: { memoryClass: "RULE", memoryKind: "gotcha", classified: false },
     });
     expect(parsed.inferred.classified).toBe(false);
-    expect(parsed.inferred.kind).toBe("gotcha");
-    expect(parsed.inferred.weight).toBe("low");
+    expect(parsed.inferred.memoryClass).toBe("RULE");
+    expect(parsed.inferred.memoryKind).toBe("gotcha");
   });
 
   it("is registered under name 'agent.memory.remember'", () => {

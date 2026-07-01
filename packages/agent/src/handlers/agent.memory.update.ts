@@ -15,16 +15,18 @@ export async function agentMemoryUpdateHandler(
 ): Promise<AgentMemoryUpdateOutput> {
   // The contract keeps `input` a plain object (so MCP can spread its shape), so
   // the "change at least one field" rule is enforced here rather than via a
-  // ZodEffects refinement.
+  // ZodEffects refinement. Class changes go through agent.memory.promote, not
+  // this field set.
   if (
     input.lesson === undefined &&
-    input.weight === undefined &&
-    input.kind === undefined &&
+    input.memoryKind === undefined &&
     input.source === undefined &&
-    input.confidence === undefined
+    input.confidenceScore === undefined &&
+    input.enforcementScore === undefined &&
+    input.status === undefined
   ) {
     throw new Error(
-      "agent.memory.update requires at least one field to change (lesson, weight, kind, source, or confidence).",
+      "agent.memory.update requires at least one field to change (lesson, memoryKind, source, confidenceScore, enforcementScore, or status).",
     );
   }
 
@@ -52,10 +54,11 @@ export async function agentMemoryUpdateHandler(
   const updated = await updateMemory({
     memoryId: input.memoryId,
     lesson: input.lesson,
-    weight: input.weight,
-    kind: input.kind,
+    memoryKind: input.memoryKind,
     source: input.source,
-    confidence: input.confidence,
+    confidenceScore: input.confidenceScore,
+    enforcementScore: input.enforcementScore,
+    status: input.status,
     embedding,
   });
 

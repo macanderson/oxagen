@@ -7,6 +7,10 @@ import { insertMemoryChange } from "@oxagen/telemetry";
 
 export type { AgentMemoryRecallInput, AgentMemoryRecallOutput };
 
+// Fixed recovery bump per recall citation, on the 0-100 confidence_score scale
+// (mirrors the legacy 0.05 bump on the pre-two-axis 0-1 `confidence` scale).
+const RECALL_REINFORCEMENT_AMOUNT = 5;
+
 export async function agentMemoryRecallHandler(
   input: AgentMemoryRecallInput,
   ctx: CapabilityContext,
@@ -22,21 +26,22 @@ export async function agentMemoryRecallHandler(
       executionStepId: ctx.messageId ?? ctx.requestId,
     },
   });
-  const memories = await recallMemories({
+  const rows = await recallMemories({
     embedding,
-    minWeight: input.minWeight,
     limit: input.limit,
     nodeRef: input.nodeRef,
+    memoryClass: input.memoryClass,
+    minEnforcement: input.minEnforcement,
   });
 
   // Fire-and-forget: reinforce each recalled memory and emit a telemetry event.
   // These are not awaited — they must not block the critical recall path.
   const occurredAt = new Date().toISOString();
-  for (const m of memories) {
-    const confidenceBefore = m.confidence;
-    const confidenceAfter = Math.min(confidenceBefore + 0.05, 1.0);
+  for (const m of rows) {
+    const confidenceBefore = m.confidenceScore;
+    const confidenceAfter = Math.min(confidenceBefore + RECALL_REINFORCEMENT_AMOUNT, 100);
 
-    void reinforceMemory({ memoryId: m.id, reinforcementAmount: 0.05 }).catch((err) => {
+    void reinforceMemory({ memoryId: m.id, reinforcementAmount: RECALL_REINFORCEMENT_AMOUNT }).catch((err) => {
       console.warn("reinforceMemory fire-and-forget failed", err);
     });
 
@@ -55,5 +60,18 @@ export async function agentMemoryRecallHandler(
     });
   }
 
-  return { memories };
+  return {
+    memories: rows.map((m) => ({
+      id: m.id,
+      nodeRef: m.nodeRef,
+      memoryClass: m.memoryClass,
+      memoryKind: m.memoryKind,
+      lesson: m.lesson,
+      source: m.source,
+      confidenceScore: m.confidenceScore,
+      enforcementScore: m.enforcementScore,
+      score: m.score,
+      createdAt: m.createdAt,
+    })),
+  };
 }

@@ -12,11 +12,16 @@ export const schema = {
   lesson: agentMemoryUpdate.input.shape.lesson.describe(
     "Replacement lesson text; triggers a re-embed",
   ),
-  weight: agentMemoryUpdate.input.shape.weight.describe("New salience bucket"),
-  kind: agentMemoryUpdate.input.shape.kind.describe("New memory category"),
+  memoryKind: agentMemoryUpdate.input.shape.memoryKind.describe("New content-domain kind"),
   source: agentMemoryUpdate.input.shape.source.describe("New provenance label"),
-  confidence: agentMemoryUpdate.input.shape.confidence.describe(
-    "New numeric salience/confidence (0–1)",
+  confidenceScore: agentMemoryUpdate.input.shape.confidenceScore.describe(
+    "New confidence (0-100); the decay pass evolves it over time",
+  ),
+  enforcementScore: agentMemoryUpdate.input.shape.enforcementScore.describe(
+    "New enforcement (1-100) for a RULE; policy, does not decay",
+  ),
+  status: agentMemoryUpdate.input.shape.status.describe(
+    "New lifecycle status (e.g. ARCHIVED, RETRACTED)",
   ),
 };
 

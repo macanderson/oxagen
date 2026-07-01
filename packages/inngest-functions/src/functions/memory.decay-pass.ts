@@ -1,6 +1,6 @@
 import { createFunction } from "../create-function";
 import { withSystemDb, schema } from "@oxagen/database";
-import { asc, eq, gt } from "drizzle-orm";
+import { asc, gt } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { applyDecayToMemory, listDecayableMemories } from "@oxagen/agent/memory/neo4j";
 import { insertMemoryChange } from "@oxagen/telemetry";
@@ -10,43 +10,42 @@ import { logger } from "../logger";
 // Inngest step, so each step stays well under the per-step timeout budget.
 const PAGE_SIZE = 200;
 
-// Half-life defaults mirror the column defaults in workspace_memory_policy.
-const DEFAULTS = { halfLifeLowDays: 30, halfLifeHighDays: 90 } as const;
+// Below this delta, skip the write — floating point / decay noise, not a
+// meaningful confidence change.
+const EPSILON = 0.001;
 
 /**
- * Return the decay half-life in days for a given memory weight, or null if
- * the memory should never decay (critical weight).
- */
-function halfLifeForWeight(
-  weight: string,
-  halfLifeLowDays: number,
-  halfLifeHighDays: number,
-): number | null {
-  if (weight === "critical") return null;
-  if (weight === "high") return halfLifeHighDays;
-  // 'low', 'medium', or any unknown weight uses the low half-life.
-  return halfLifeLowDays;
-}
-
-/**
- * Apply exponential decay: confidence * exp(-ln2 / halfLifeDays * daysSince).
- * Falls back to createdAt when lastReinforcedAt is absent.
+ * Two-axis decay curve (DESIGN.md §7a):
+ *   new_conf = floor + (conf - floor) * 0.5 ^ (daysSince / halfLifeDays)
+ *
+ * `daysSince` is measured from `lastEvidenceAt` (already falls back to
+ * `createdAt` inside `listDecayableMemories()`'s Cypher projection). Each
+ * memory carries its own `halfLifeDays`/`decayFloor`, set at write time from
+ * the workspace policy (`halfLifeLowDays`/`halfLifeHighDays`/
+ * `defaultDecayFloor`) — no policy lookup is needed here.
  */
 function calcNewConfidence(
-  confidence: number,
+  confidenceScore: number,
   halfLifeDays: number,
-  lastReinforcedAt: string | null,
+  decayFloor: number,
+  lastEvidenceAt: string | null,
   createdAt: string,
 ): number {
-  const anchor = lastReinforcedAt ?? createdAt;
+  const anchor = lastEvidenceAt ?? createdAt;
   const daysSince = (Date.now() - new Date(anchor).getTime()) / (1000 * 60 * 60 * 24);
-  const decayed = confidence * Math.exp((-Math.LN2 / halfLifeDays) * daysSince);
-  return Math.max(0, decayed);
+  const decayed =
+    decayFloor + (confidenceScore - decayFloor) * Math.pow(0.5, daysSince / halfLifeDays);
+  // Mathematically the curve never dips below the floor (0.5^x is in (0,1]
+  // for x >= 0), but clamp defensively against float drift / bad inputs.
+  return Math.max(decayFloor, decayed);
 }
 
 /**
- * Daily scheduled function: apply exponential confidence decay to all
- * non-critical AgentMemory nodes across every workspace.
+ * Daily scheduled function: apply the two-axis confidence-decay curve to
+ * every ACTIVE, non-FACT `:AgentMemory` node across every workspace, using
+ * each memory's own half-life and decay floor.
+ * `listDecayableMemories()` already excludes FACT-class memories and
+ * memories already at their decay floor.
  *
  * Runs at 04:00 UTC. Retries 3× on failure. Each page of workspaces is
  * processed as its own Inngest step so a partial failure can checkpoint.
@@ -83,16 +82,6 @@ export const [memoryDecayPass] = createFunction(
 
           for (const { id: workspaceId, orgId } of workspaceRows) {
             try {
-              // Read the decay policy for this workspace from Postgres.
-              // Falls back to DEFAULTS when no policy row exists yet.
-              const policyRows = await withSystemDb((tx) =>
-                tx.query.workspaceMemoryPolicy.findMany({
-                  where: eq(schema.workspaceMemoryPolicy.workspaceId, workspaceId),
-                  limit: 1,
-                }),
-              );
-              const policy = policyRows[0] ?? DEFAULTS;
-
               // Query all decayable memories from Neo4j for this workspace.
               // listDecayableMemories returns fully typed projections (the raw
               // neo4j-driver records stay inside @oxagen/agent), and runs inside
@@ -104,27 +93,22 @@ export const [memoryDecayPass] = createFunction(
               );
 
               for (const memory of memories) {
-                const halfLifeDays = halfLifeForWeight(
-                  memory.weight,
-                  policy.halfLifeLowDays ?? DEFAULTS.halfLifeLowDays,
-                  policy.halfLifeHighDays ?? DEFAULTS.halfLifeHighDays,
-                );
-                if (halfLifeDays === null) continue;
-
                 const newConfidence = calcNewConfidence(
-                  memory.confidence,
-                  halfLifeDays,
-                  memory.lastReinforcedAt,
+                  memory.confidenceScore,
+                  memory.halfLifeDays,
+                  memory.decayFloor,
+                  memory.lastEvidenceAt,
                   memory.createdAt,
                 );
                 // Skip if change is below the precision epsilon.
-                if (Math.abs(newConfidence - memory.confidence) < 0.001) continue;
+                if (Math.abs(newConfidence - memory.confidenceScore) < EPSILON) continue;
 
                 // Apply the decay update and record the change event.
                 // Both writes are scoped to the correct tenant.
                 await runInTenantScope({ orgId, workspaceId }, async () => {
                   await applyDecayToMemory({ memoryId: memory.id, newConfidence });
                   // Fire-and-forget: telemetry failure must not abort the sweep.
+                  // Decay never touches enforcement (policy axis) — 0/0.
                   void insertMemoryChange({
                     change_id: crypto.randomUUID(),
                     org_id: orgId,
@@ -132,8 +116,10 @@ export const [memoryDecayPass] = createFunction(
                     memory_id: memory.id,
                     node_ref: memory.nodeRef,
                     cause: "decayed",
-                    confidence_before: memory.confidence,
+                    confidence_before: memory.confidenceScore,
                     confidence_after: newConfidence,
+                    enforcement_before: 0,
+                    enforcement_after: 0,
                     occurred_at: now.toISOString(),
                   });
                 });

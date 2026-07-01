@@ -9,11 +9,14 @@ export const schema = {
   nodeRef: agentMemoryList.input.shape.nodeRef.describe(
     "Scope to memories anchored on a single graph node ref",
   ),
-  minWeight: agentMemoryList.input.shape.minWeight.describe(
-    "Only return memories at or above this weight",
+  memoryClass: agentMemoryList.input.shape.memoryClass.describe(
+    "Filter to a single epistemic class (OBSERVATION/RULE/FACT)",
   ),
-  kind: agentMemoryList.input.shape.kind.describe(
-    "Filter to a single memory kind",
+  memoryKind: agentMemoryList.input.shape.memoryKind.describe(
+    "Filter to a single memory kind (content domain)",
+  ),
+  minEnforcement: agentMemoryList.input.shape.minEnforcement.describe(
+    "Only return rules at or above this enforcement score",
   ),
   limit: agentMemoryList.input.shape.limit.describe(
     "Maximum number of memories to return",

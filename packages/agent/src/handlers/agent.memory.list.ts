@@ -21,8 +21,9 @@ export async function agentMemoryListHandler(
     limit: input.limit,
     offset: input.offset,
     nodeRef: input.nodeRef,
-    minWeight: input.minWeight,
-    kind: input.kind,
+    memoryClass: input.memoryClass,
+    memoryKind: input.memoryKind,
+    minEnforcement: input.minEnforcement,
   });
   return { memories, total };
 }

@@ -1,33 +1,32 @@
 import { describe, expect, it } from "vitest";
-import {
-  memoryImportDraftSchema,
-  memoryKindEnum,
-  memoryWeightEnum,
-} from "./agent.memory.import.shared";
+import { memoryImportDraftSchema, memoryClassEnum } from "./agent.memory.import.shared";
 
 describe("memoryImportDraftSchema", () => {
-  it("applies provenance/classification defaults from just {lesson, kind, weight}", () => {
+  it("applies provenance/classification defaults from just {lesson, memoryKind}", () => {
     const parsed = memoryImportDraftSchema.parse({
       lesson: "Never push to main.",
-      kind: "constraint",
-      weight: "critical",
+      memoryKind: "constraint",
     });
+    expect(parsed.memoryClass).toBe("OBSERVATION");
     expect(parsed.source).toBe("user");
     expect(parsed.nodeRef).toBe("user-memory");
     expect(parsed.sourceDocument).toBe("");
     expect(parsed.classified).toBe(false);
   });
 
-  it("preserves explicitly-supplied provenance fields", () => {
+  it("preserves explicitly-supplied provenance and classification fields", () => {
     const parsed = memoryImportDraftSchema.parse({
       lesson: "Anchored lesson.",
-      kind: "gotcha",
-      weight: "low",
+      memoryClass: "RULE",
+      memoryKind: "gotcha",
+      enforcementScore: 80,
       source: "imported-rules",
       nodeRef: "Function:auth#login",
       sourceDocument: "auth-rules.md",
       classified: true,
     });
+    expect(parsed.memoryClass).toBe("RULE");
+    expect(parsed.enforcementScore).toBe(80);
     expect(parsed.source).toBe("imported-rules");
     expect(parsed.nodeRef).toBe("Function:auth#login");
     expect(parsed.sourceDocument).toBe("auth-rules.md");
@@ -36,7 +35,7 @@ describe("memoryImportDraftSchema", () => {
 
   it("rejects an empty lesson", () => {
     expect(() =>
-      memoryImportDraftSchema.parse({ lesson: "", kind: "constraint", weight: "high" }),
+      memoryImportDraftSchema.parse({ lesson: "", memoryKind: "constraint" }),
     ).toThrow();
   });
 
@@ -44,32 +43,45 @@ describe("memoryImportDraftSchema", () => {
     expect(() =>
       memoryImportDraftSchema.parse({
         lesson: "x".repeat(2001),
-        kind: "constraint",
-        weight: "high",
+        memoryKind: "constraint",
       }),
     ).toThrow();
   });
 
-  it("rejects an unknown kind", () => {
+  it("rejects a missing memoryKind (no default — the extractor must always classify it)", () => {
+    expect(() => memoryImportDraftSchema.parse({ lesson: "L" })).toThrow();
+  });
+
+  it("rejects an unknown memoryClass", () => {
     expect(() =>
-      memoryImportDraftSchema.parse({ lesson: "L", kind: "not-a-kind", weight: "high" }),
+      memoryImportDraftSchema.parse({
+        lesson: "L",
+        memoryClass: "MAYBE",
+        memoryKind: "constraint",
+      }),
     ).toThrow();
   });
 
-  it("rejects an unknown weight", () => {
+  it("rejects an enforcementScore out of the 1-100 range", () => {
     expect(() =>
-      memoryImportDraftSchema.parse({ lesson: "L", kind: "constraint", weight: "huge" }),
+      memoryImportDraftSchema.parse({
+        lesson: "L",
+        memoryClass: "RULE",
+        memoryKind: "constraint",
+        enforcementScore: 0,
+      }),
+    ).toThrow();
+    expect(() =>
+      memoryImportDraftSchema.parse({
+        lesson: "L",
+        memoryClass: "RULE",
+        memoryKind: "constraint",
+        enforcementScore: 101,
+      }),
     ).toThrow();
   });
 
-  it("mirrors the closed AgentMemory taxonomy", () => {
-    expect(memoryKindEnum.options).toEqual([
-      "routine-change",
-      "constraint",
-      "bug-root-cause",
-      "convention-deviation",
-      "gotcha",
-    ]);
-    expect(memoryWeightEnum.options).toEqual(["low", "high", "critical"]);
+  it("mirrors the shared two-axis memory class taxonomy", () => {
+    expect(memoryClassEnum.options).toEqual(["OBSERVATION", "RULE", "FACT"]);
   });
 });
