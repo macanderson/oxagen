@@ -1,0 +1,140 @@
+/**
+ * Tests for the metered AI port wrapper — the seam that gives every engine model
+ * call a per-call timeout (Bug 1) and a live metrics event (Bug 2).
+ *
+ * The key guarantee: evaluator ("enhancer"), worker, and judge calls ALL flow
+ * through the port, so all three contribute to the metrics totals. A regression
+ * that routed one path around the port would drop its event — asserted here.
+ */
+import { describe, it, expect, vi, afterEach } from "vitest";
+import type { AgentAi, ObjectRunArgs, ObjectRunResult } from "@oxagen/agent-engine";
+import { createMeteredAi } from "../metered-ai.js";
+import type { MetricsEvent } from "../metrics.js";
+import { AgentTimeoutError } from "../timeouts.js";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+/** A fake stream result exposing only what the wrapper touches: `usage`. */
+function fakeStream(usage: { inputTokens: number; outputTokens: number }): {
+  usage: Promise<{ inputTokens: number; outputTokens: number }>;
+} {
+  return { usage: Promise.resolve(usage) };
+}
+
+/** Build a fake AgentAi whose behaviour the test controls. */
+function makeFakeAi(
+  overrides: Partial<AgentAi> = {},
+): AgentAi {
+  const base: AgentAi = {
+    // The wrapper only reads `.usage` off the stream result; the fake exposes
+    // just that, cast through `unknown` since it isn't a full StreamRunResult.
+    stream: ((_args) =>
+      fakeStream({ inputTokens: 500, outputTokens: 200 }) as unknown) as AgentAi["stream"],
+    generateObject: (async <T,>(args: ObjectRunArgs<T>): Promise<ObjectRunResult<T>> => ({
+      object: {} as T,
+      usage: { inputTokens: 100, outputTokens: 50 },
+    })) as AgentAi["generateObject"],
+  };
+  return { ...base, ...overrides };
+}
+
+describe("createMeteredAi", () => {
+  it("emits a priced metrics event when generateObject completes", async () => {
+    const events: MetricsEvent[] = [];
+    const ai = createMeteredAi(makeFakeAi(), {
+      onMetrics: (ev) => events.push(ev),
+      now: () => 1000,
+    });
+    const res = await ai.generateObject({
+      model: "anthropic/claude-sonnet-4",
+      schema: {} as never,
+      prompt: "x",
+    });
+    expect(res.usage.inputTokens).toBe(100);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      kind: "model_call",
+      model: "anthropic/claude-sonnet-4",
+      tokensIn: 100,
+      tokensOut: 50,
+      at: 1000,
+    });
+    // Priced via the rate card → a non-zero cost for a paid model.
+    expect(events[0]!.costUsd).toBeGreaterThan(0);
+  });
+
+  it("emits a metrics event when a stream's usage settles", async () => {
+    const events: MetricsEvent[] = [];
+    const ai = createMeteredAi(makeFakeAi(), { onMetrics: (ev) => events.push(ev) });
+    const result = ai.stream({
+      model: "anthropic/claude-opus-4",
+      system: "s",
+      messages: [],
+      tools: {},
+      stopWhen: (() => false) as never,
+    });
+    await result.usage; // let the settle handler run
+    await Promise.resolve();
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ tokensIn: 500, tokensOut: 200, kind: "model_call" });
+  });
+
+  it("records evaluator + worker + judge — every path contributes", async () => {
+    const events: MetricsEvent[] = [];
+    const ai = createMeteredAi(makeFakeAi(), { onMetrics: (ev) => events.push(ev) });
+
+    // Simulate a turn: evaluate (generateObject) → worker (stream) → judge (generateObject).
+    await ai.generateObject({ model: "eval/model", schema: {} as never, prompt: "e" });
+    await ai.stream({
+      model: "worker/model",
+      system: "s",
+      messages: [],
+      tools: {},
+      stopWhen: (() => false) as never,
+    }).usage;
+    await ai.generateObject({ model: "judge/model", schema: {} as never, prompt: "j" });
+    await Promise.resolve();
+
+    const models = events.map((e) => e.model).sort();
+    expect(models).toEqual(["eval/model", "judge/model", "worker/model"]);
+    // Dropping any one path would leave < 3 events → this assertion fails.
+    expect(events).toHaveLength(3);
+  });
+
+  it("bounds a generateObject call per-call and retries on timeout", async () => {
+    vi.useFakeTimers();
+    const logs: string[] = [];
+    let attempts = 0;
+    const ai = createMeteredAi(
+      makeFakeAi({
+        generateObject: (async <T,>(args: ObjectRunArgs<T>): Promise<ObjectRunResult<T>> => {
+          attempts++;
+          if (attempts === 1) {
+            // First attempt hangs until its per-call deadline aborts the signal.
+            return new Promise<ObjectRunResult<T>>((_resolve, reject) => {
+              args.abortSignal?.addEventListener(
+                "abort",
+                () => reject(new AgentTimeoutError("aborted", 1_000)),
+                { once: true },
+              );
+            });
+          }
+          return { object: {} as T, usage: { inputTokens: 10, outputTokens: 5 } };
+        }) as AgentAi["generateObject"],
+      }),
+      {
+        timeouts: { perModelCallMs: 1_000, retry: { maxRetries: 2, backoffMs: 0 } },
+        onLog: (l) => logs.push(l),
+      },
+    );
+
+    const promise = ai.generateObject({ model: "m", schema: {} as never, prompt: "p" });
+    await vi.advanceTimersByTimeAsync(1_001); // trip attempt 1's deadline
+    const res = await promise;
+    expect(attempts).toBe(2);
+    expect(res.usage.inputTokens).toBe(10);
+    expect(logs.some((l) => l.includes("scope=model_call") && l.includes("action=retry"))).toBe(true);
+  });
+});

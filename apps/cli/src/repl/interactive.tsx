@@ -64,8 +64,17 @@ import {
   makeTurnController,
   makeStallDetector,
   AgentTimeoutError,
+  DEFAULT_TIMEOUTS,
   TIMEOUTS,
 } from "../agent/timeouts.js";
+import { createMetricsBus, type SessionMetrics } from "../agent/metrics.js";
+import { createMeteredAi } from "../agent/metered-ai.js";
+import {
+  detectTerminalBackground,
+  diffThemeFor,
+  type DiffTheme,
+} from "../tui/terminal-theme.js";
+import { useScrollback } from "./scrollback.js";
 import {
   PermissionBroker,
   parseModeArg,
@@ -162,6 +171,44 @@ function useAltScreen(): number {
   return rows;
 }
 
+/**
+ * The messages region while the user has scrolled UP into history. Renders only
+ * the visible window plus dim affordance lines telling the user how much history
+ * sits above and below, and how to get back to the newest output.
+ */
+function ScrolledMessages({
+  window,
+  diffTheme,
+}: {
+  window: { items: Message[]; hiddenAbove: number; hiddenBelow: number };
+  diffTheme: DiffTheme;
+}): React.ReactElement {
+  return (
+    <>
+      {window.hiddenAbove > 0 && (
+        <Box paddingX={1}>
+          <Text dimColor>
+            {"↑ "}
+            {window.hiddenAbove} earlier{" "}
+            {window.hiddenAbove === 1 ? "message" : "messages"} · PageUp/PageDown to scroll
+          </Text>
+        </Box>
+      )}
+      {window.items.map((msg, i) => (
+        <MessageView key={i} msg={msg} diffTheme={diffTheme} />
+      ))}
+      {window.hiddenBelow > 0 && (
+        <Box paddingX={1}>
+          <Text dimColor>
+            {"↓ "}
+            {window.hiddenBelow} newer · PageDown to catch up to the latest
+          </Text>
+        </Box>
+      )}
+    </>
+  );
+}
+
 export function ReplApp({
   options,
 }: {
@@ -185,6 +232,24 @@ export function ReplApp({
     cacheHit: number;
     costUsd: number;
   }>({ input: 0, output: 0, cacheHit: 0, costUsd: 0 });
+  // Live token/cost metrics (Bug 2). Every model call the engine makes flows
+  // through the metered AI port, which records into this bus; the status line
+  // subscribes and re-renders (throttled) as each call completes, then settles
+  // on the final totals via flush() at turn end.
+  const metricsBusRef = useRef(createMetricsBus());
+  const [metrics, setMetrics] = useState<SessionMetrics>(() =>
+    metricsBusRef.current.snapshot(),
+  );
+  useEffect(() => metricsBusRef.current.subscribe(setMetrics), []);
+  // Timestamp of the last unit of turn progress (stream delta / stage / tool /
+  // completed call). Drives the thinking indicator's idle figure and is the
+  // signal the inactivity guard watches — the turn is bounded by PROGRESS, not
+  // by a wall clock (Bug 1). A ref (not state) so streaming deltas don't thrash
+  // React; the indicator polls it on its own 100ms tick.
+  const lastProgressRef = useRef<number | null>(null);
+  // Diff colour theme, matched once to the terminal background (light diff on a
+  // light terminal, dark on dark) — Feature C. Detection is cheap + synchronous.
+  const diffThemeRef = useRef(diffThemeFor(detectTerminalBackground()));
   // When the active turn began (drives the thinking indicator); null when idle.
   const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
   // Output chars streamed this turn, for the live token estimate in the indicator.
@@ -210,6 +275,24 @@ export function ReplApp({
   // bottom. `rows` tracks the live terminal height so the layout re-pins on
   // resize. (There is no compact/inline layout — one pinned layout, always.)
   const rows = useAltScreen();
+  // Scrollback (Feature A): page back through the FULL conversation — including
+  // tool calls and code-diff messages — that would otherwise scroll off the top
+  // of the alt screen. The viewport height is an estimate of the messages region
+  // (terminal rows minus the banner + input + status chrome).
+  const messagesHeight = Math.max(3, rows - 16);
+  const scroll = useScrollback({ total: messages.length, height: messagesHeight });
+  // Latest scroll handle, read by handleSubmit (which must not re-close over a
+  // stale hook value each render).
+  const scrollRef = useRef(scroll);
+  scrollRef.current = scroll;
+  // When the message list grows, tell the scrollback hook so a scrolled-up
+  // viewport stays put (rather than jumping) while new output streams in below.
+  const prevMsgLenRef = useRef(messages.length);
+  useEffect(() => {
+    const added = messages.length - prevMsgLenRef.current;
+    prevMsgLenRef.current = messages.length;
+    if (added > 0) scrollRef.current.onItemsChanged(added);
+  }, [messages.length]);
   // Permission posture (drives the broker + status chip) and the in-flight
   // approval request (drives the inline ApprovalPrompt; null when none).
   const [mode, setMode] = useState<PermissionMode>(
@@ -227,13 +310,22 @@ export function ReplApp({
   // it's wrapped with the permission broker (createGatedWorkspace) at call time
   // so /mode changes take effect without re-creating the workspace.
   const workspaceRef = useRef(createCwdWorkspace(cwd));
+  // The base BYOK AI port, wrapped by the metered port so every engine model
+  // call (evaluator, worker, judge) gets a per-call timeout + retry (Bug 1) and
+  // records a priced metrics event for the live status line (Bug 2).
   const aiRef = useRef(
-    createPlatformAgentAi({
-      apiUrl: options.session.apiUrl,
-      token: options.session.token,
-      orgSlug: options.session.orgSlug,
-      workspaceSlug: options.session.workspaceSlug,
-    }),
+    createMeteredAi(
+      createPlatformAgentAi({
+        apiUrl: options.session.apiUrl,
+        token: options.session.token,
+        orgSlug: options.session.orgSlug,
+        workspaceSlug: options.session.workspaceSlug,
+      }),
+      {
+        onMetrics: (ev) => metricsBusRef.current.record(ev),
+        onLog: (line) => void debugLog("timeout", line),
+      },
+    ),
   );
   const codeGraphRef = useRef(
     createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
@@ -407,6 +499,14 @@ export function ReplApp({
     }
     // While a permission prompt is up, ApprovalPrompt owns Esc and the answer keys.
     if (approvalRef.current) return;
+
+    // Scrollback: PageUp/PageDown page through the full history; Ctrl-U/Ctrl-D
+    // half-page. Works while streaming or idle. We deliberately don't bind g/G
+    // here — they'd collide with typing in the prompt input.
+    if (key.pageUp || key.pageDown || (key.ctrl && (input === "u" || input === "d"))) {
+      scrollRef.current.handleKey(input, key);
+      return;
+    }
 
     // Shift+Tab cycles the permission posture (ask → auto-edit → bypass →
     // read-only → …), mirroring Claude Code. The status line's second line
@@ -812,24 +912,35 @@ export function ReplApp({
       streamingRef.current = true;
       setTurnStartedAt(Date.now());
       streamCharsRef.current = 0;
+      // Reset the per-turn metrics totals and re-pin scrollback to the bottom so
+      // the new turn's output is visible; seed the progress clock.
+      metricsBusRef.current.startTurn();
+      lastProgressRef.current = Date.now();
+      scrollRef.current?.reset();
       const controller = new AbortController();
       abortRef.current = controller;
 
-      // Bound the whole turn: makeTurnController fires when EITHER the user hits
-      // Esc/Ctrl-C (controller) OR the per-turn deadline (TIMEOUTS.turnMs) elapses.
-      // A stall detector layered on top aborts the turn if no stream progress —
-      // text, reasoning, tool call, or stage — arrives within TIMEOUTS.llmStallMs,
-      // catching a socket that stays open but stops delivering bytes. Together
-      // these guarantee the turn can never hang the CLI indefinitely, even though
-      // the shared engine path forwards only a bare abort signal.
+      // Bound the turn by PROGRESS, not by a wall clock (Bug 1). The controller
+      // fires only on user Esc/Ctrl-C — there is NO per-turn time cap, so a long
+      // but healthy turn (hundreds of model calls, a worker→judge loop) runs to
+      // completion. The inactivity guard aborts ONLY when no progress — a stream
+      // delta, a stage, a tool call, a completed model call — lands within
+      // turnInactivityMs (300s, larger than the longest tool timeout). Any
+      // progress resets it. Per-model-call timeouts live in the metered AI port.
       const turnController = makeTurnController(controller.signal);
-      const stall = makeStallDetector(TIMEOUTS.llmStallMs, () => {
+      const inactivityMs = DEFAULT_TIMEOUTS.turnInactivityMs ?? 300_000;
+      const stall = makeStallDetector(inactivityMs, () => {
         if (!turnController.signal.aborted) {
-          turnController.abort(
-            new AgentTimeoutError("LLM stream stall", TIMEOUTS.llmStallMs),
-          );
+          const idleMs = Date.now() - (lastProgressRef.current ?? Date.now());
+          void debugLog("timeout", `[timeout] scope=turn reason=inactivity idle_ms=${idleMs}`);
+          turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
         }
       });
+      // Record progress: reset the inactivity guard AND advance the idle clock.
+      const noteProgress = (): void => {
+        stall.reset();
+        lastProgressRef.current = Date.now();
+      };
 
       // This turn's streamed messages (tool annotations + assistant text).
       const turn: Message[] = [];
@@ -910,7 +1021,7 @@ export function ReplApp({
           signal: turnController.signal,
           onStage: (stage) => {
             if (turnController.signal.aborted) return;
-            stall.reset();
+            noteProgress();
             void debugLog("turn", "turn.stage", { label: stage.label, detail: stage.detail });
             closeStreamingBlocks();
             turn.push({
@@ -923,7 +1034,7 @@ export function ReplApp({
           },
           onToolCall: (name, input) => {
             if (turnController.signal.aborted) return;
-            stall.reset();
+            noteProgress();
             void debugLog("turn", "turn.tool-call", { name, input });
             closeStreamingBlocks();
             turn.push({
@@ -936,7 +1047,7 @@ export function ReplApp({
           },
           onReasoning: (delta) => {
             if (turnController.signal.aborted) return;
-            stall.reset();
+            noteProgress();
             // Reasoning and answer text interleave across steps — close the
             // assistant block when thinking resumes so they never merge.
             if (assistantOpen) closeStreamingBlocks();
@@ -955,7 +1066,7 @@ export function ReplApp({
           },
           onText: (delta) => {
             if (turnController.signal.aborted) return;
-            stall.reset();
+            noteProgress();
             streamCharsRef.current += delta.length;
             if (reasoningOpen) closeStreamingBlocks();
             if (!assistantOpen) {
@@ -969,6 +1080,23 @@ export function ReplApp({
             }
             const last = turn[turn.length - 1] as Message;
             turn[turn.length - 1] = { ...last, content: last.content + delta };
+            render();
+          },
+          onFileChange: (diff, changedFiles) => {
+            if (turnController.signal.aborted) return;
+            noteProgress();
+            // Render the code changes as a syntax-highlighted diff message, so
+            // the user sees exactly what changed — themed to the terminal
+            // background. Skip empty diffs (no textual change to show).
+            if (!diff.trim()) return;
+            closeStreamingBlocks();
+            turn.push({
+              role: "diff",
+              content: "",
+              diff,
+              changedFiles,
+              timestamp: Date.now(),
+            });
             render();
           },
         });
@@ -1044,6 +1172,10 @@ export function ReplApp({
         render();
       } finally {
         stall.stop();
+        // Final flush so the status line settles on the correct final totals and
+        // stays visible (Bug 2), even if the last few events were throttled.
+        metricsBusRef.current.flush();
+        lastProgressRef.current = null;
         abortRef.current = null;
         streamingRef.current = false;
         setIsStreaming(false);
@@ -1155,8 +1287,19 @@ export function ReplApp({
               </Text>
             )}
           </Box>
+        ) : scroll.state.stickToBottom ? (
+          // Pinned to newest: render everything; the flex-end + overflow-hidden
+          // container clips older lines off the top.
+          messages.map((msg, i) => (
+            <MessageView key={i} msg={msg} diffTheme={diffThemeRef.current} />
+          ))
         ) : (
-          messages.map((msg, i) => <MessageView key={i} msg={msg} />)
+          // Scrolled up: render just the visible window, with affordance lines
+          // showing how much history sits above/below the viewport.
+          <ScrolledMessages
+            window={scroll.window(messages)}
+            diffTheme={diffThemeRef.current}
+          />
         )}
       </Box>
 
@@ -1179,6 +1322,7 @@ export function ReplApp({
         <ThinkingIndicator
           startedAt={turnStartedAt}
           getTokens={() => Math.round(streamCharsRef.current / 4)}
+          getLastProgressAt={() => lastProgressRef.current}
         />
       )}
 
@@ -1219,11 +1363,16 @@ export function ReplApp({
         <StatusLine
           model={model}
           branch={branchRef.current}
-          inputTokens={usage.input}
-          outputTokens={usage.output}
+          // Tokens + cost come from the live metrics bus (every model call —
+          // evaluator, worker, judge — contributes), so they update as calls
+          // complete during a turn and settle correctly at the end (Bug 2).
+          inputTokens={metrics.sessionTokensIn}
+          outputTokens={metrics.sessionTokensOut}
           cacheHit={usage.cacheHit}
-          cacheMiss={Math.max(0, usage.input - usage.cacheHit)}
-          costUsd={usage.costUsd}
+          cacheMiss={Math.max(0, metrics.sessionTokensIn - usage.cacheHit)}
+          costUsd={metrics.sessionCostUsd}
+          turnOutputTokens={metrics.turnTokensOut}
+          turnCostUsd={metrics.turnCostUsd}
           pipelineOn={pipelineOn}
           verboseOn={verboseOn}
           effort={effort}

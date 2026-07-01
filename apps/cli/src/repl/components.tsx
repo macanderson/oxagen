@@ -10,6 +10,8 @@ import React, { useState, useEffect } from "react";
 import { theme } from "../tui/theme.js";
 import { formatUsd } from "../agent/model-router.js";
 import { getToolEmoji } from "../agent/tool-formatter.js";
+import { DiffView } from "./diff-view.js";
+import type { DiffTheme } from "../tui/terminal-theme.js";
 import { SlashMenu } from "./slash-menu.js";
 import {
   slashQuery,
@@ -20,7 +22,7 @@ import type { StageEvent, StageKind, TurnTrace, JudgeVerdict } from "../agent/tr
 import type { ApprovalRequest, ApprovalResponse, PermissionMode } from "../agent/permissions.js";
 
 export interface Message {
-  role: "user" | "assistant" | "reasoning" | "tool" | "stage";
+  role: "user" | "assistant" | "reasoning" | "tool" | "stage" | "diff";
   content: string;
   timestamp: number;
   toolName?: string;
@@ -29,6 +31,10 @@ export interface Message {
   stage?: StageEvent;
   /** When present, the message renders the full replay view for a turn. */
   trace?: TurnTrace;
+  /** Present on `role: "diff"` — the unified git diff to render (highlighted). */
+  diff?: string;
+  /** Present on `role: "diff"` — the changed-file paths, for the header line. */
+  changedFiles?: string[];
 }
 
 export const HELP = [
@@ -288,8 +294,51 @@ export function StageBadge({ stage }: { stage: StageEvent }): React.ReactElement
   );
 }
 
-export function MessageView({ msg }: { msg: Message }): React.ReactElement {
+/**
+ * A code-change message: a header naming the changed files, then the unified
+ * git diff rendered with syntax highlighting in a theme matched to the terminal
+ * background (light diff on light terminals, dark on dark).
+ */
+export function DiffMessage({
+  msg,
+  theme: diffTheme,
+}: {
+  msg: Message;
+  theme?: DiffTheme;
+}): React.ReactElement {
+  const files = msg.changedFiles ?? [];
+  const header =
+    files.length === 0
+      ? "code changes"
+      : files.length === 1
+        ? files[0]!
+        : `${files.length} files changed`;
+  return (
+    <Box flexDirection="column" marginY={1} paddingX={1}>
+      <Box>
+        <Text color={theme.violet} bold>
+          {"◆ "}
+        </Text>
+        <Text dimColor>{header}</Text>
+        {files.length > 1 ? (
+          <Text dimColor> · {files.slice(0, 4).join(", ")}{files.length > 4 ? " …" : ""}</Text>
+        ) : null}
+      </Box>
+      <DiffView diff={msg.diff ?? ""} theme={diffTheme} />
+    </Box>
+  );
+}
+
+export function MessageView({
+  msg,
+  diffTheme,
+}: {
+  msg: Message;
+  /** Theme for `role: "diff"` rendering; derived from the terminal background. */
+  diffTheme?: DiffTheme;
+}): React.ReactElement {
   if (msg.trace) return <TraceView trace={msg.trace} />;
+  if (msg.role === "diff" && msg.diff) return <DiffMessage msg={msg} theme={diffTheme} />;
   if (msg.role === "stage" && msg.stage) return <StageBadge stage={msg.stage} />;
   if (msg.role === "user") {
     return (
@@ -365,12 +414,12 @@ const IDLE_WARN_SEC = 60;
 export function ThinkingIndicator({
   startedAt,
   getTokens,
-  lastProgressAt,
+  getLastProgressAt,
 }: {
   startedAt: number;
   getTokens: () => number;
-  /** Timestamp of the last completed call (stream delta / tool / stage). */
-  lastProgressAt?: number;
+  /** Live getter for the timestamp of the last completed call (delta/tool/stage). */
+  getLastProgressAt?: () => number | null;
 }): React.ReactElement {
   const [frame, setFrame] = useState(0);
   useEffect(() => {
@@ -384,6 +433,7 @@ export function ThinkingIndicator({
 
   // Seconds since the last unit of progress landed. Only surfaced once it grows
   // past the warn threshold, so a normal fast turn stays clean.
+  const lastProgressAt = getLastProgressAt?.() ?? null;
   const idleSec =
     lastProgressAt != null ? Math.round(Math.max(0, now - lastProgressAt) / 1000) : 0;
   const idleColor =
@@ -434,6 +484,8 @@ export function StatusLine({
   verboseOn,
   effort,
   mode = "ask",
+  turnOutputTokens = 0,
+  turnCostUsd = 0,
 }: {
   model: string;
   /** Current git branch (undefined = not a repo / unknown; the chip is hidden). */
@@ -446,6 +498,10 @@ export function StatusLine({
   cacheMiss: number;
   /** Cumulative estimated session cost, USD. */
   costUsd: number;
+  /** Output tokens accumulated in the CURRENT turn (live; 0 = idle/none). */
+  turnOutputTokens?: number;
+  /** Estimated cost of the CURRENT turn, USD (live; 0 = idle/none). */
+  turnCostUsd?: number;
   /** Whether the eval→enhance→judge pipeline is active (undefined = don't show). */
   pipelineOn?: boolean;
   /** Whether verbose telemetry capture is active (undefined = don't show). */
@@ -483,6 +539,13 @@ export function StatusLine({
         <Text color="#FB7185">{humanizeTokens(cacheMiss)}miss</Text>
         {sep}
         <Text color="#FBBF24">{cost}</Text>
+        {turnOutputTokens > 0 || turnCostUsd > 0 ? (
+          <Text color="#34D399">
+            {"  ▲ turn +"}
+            {humanizeTokens(turnOutputTokens)}
+            {turnCostUsd > 0 ? ` ${formatUsd(turnCostUsd)}` : ""}
+          </Text>
+        ) : null}
         {effort ? (
           <>
             {sep}
