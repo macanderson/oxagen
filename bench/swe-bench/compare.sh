@@ -17,14 +17,14 @@
 #   ./compare.sh                                     # oxagen + claude-code + codex + aider
 #   COMPETITORS="claude-code codex" ./compare.sh
 #   OXAGEN_MODEL_SLUG=anthropic/claude-opus-4.8 ./compare.sh
-#   DATASET=swebench-lite N_CONCURRENT=2 ./compare.sh   # cheaper smoke run
+#   TASK_IDS="django__django-11099" N_CONCURRENT=1 ./compare.sh   # cheap smoke run
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
 COMPETITORS="${COMPETITORS:-claude-code codex aider}"
 MODEL_SLUG="${OXAGEN_MODEL_SLUG:-anthropic/claude-sonnet-4.5}"
-DATASET="${DATASET:-swebench-verified}"
+DATASET="${DATASET:-swe-bench/swe-bench-verified}"
 RESULTS_DIR="./results"
 mkdir -p "$RESULTS_DIR"
 

@@ -40,7 +40,7 @@ def _make_run_dir(tmp_path: Path) -> Path:
                     "model_name": "anthropic/claude-sonnet-4.5",
                 }
             ],
-            "datasets": [{"name": "swebench-verified", "version": ""}],
+            "datasets": [{"name": "swe-bench/swe-bench-verified", "version": ""}],
             "jobs_dir": "results-oxagen",
         },
     )
@@ -98,7 +98,7 @@ def test_build_eval_json_schema_and_resolved_rate(tmp_path: Path) -> None:
 
     run = payload["run"]
     assert run["harness"] == "swe-bench"
-    assert run["suite"] == "swebench-verified"
+    assert run["suite"] == "swe-bench/swe-bench-verified"
     assert run["agent_name"] == "oxagen"
     assert run["model"] == "anthropic/claude-sonnet-4.5"
     assert run["n_tasks"] == 2

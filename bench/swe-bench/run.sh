@@ -8,7 +8,7 @@
 #   OXAGEN_MODEL_SLUG=anthropic/claude-opus-4.8 ./run.sh
 #   OXAGEN_ROUTE=1 ./run.sh                   # let Oxagen's cost-aware router pick
 #   AGENT=claude-code ./run.sh                # Harbor built-in competitor
-#   DATASET=swebench-lite ./run.sh            # smaller subset
+#   DATASET=swe-bench/swe-smith ./run.sh      # a different Harbor dataset slug
 #   TASK_IDS="django__django-11099" ./run.sh  # smoke-test one instance
 #   HARBOR_EXTRA="--task-id django__django-11099" N_CONCURRENT=1 ./run.sh
 #
@@ -21,11 +21,12 @@ REPO_ROOT="$(cd ../.. && pwd)"
 
 AGENT="${AGENT:-oxagen}"
 MODEL_SLUG="${OXAGEN_MODEL_SLUG:-anthropic/claude-sonnet-4.5}"
-# Default to SWE-bench Verified (the OpenAI-curated, human-filtered subset of
-# the original SWE-bench — see README "Fairness & methodology"). Set
-# DATASET=swebench-lite for the smaller Lite subset, or any other Harbor
-# dataset slug/version (e.g. swebench@2.0).
-DATASET="${DATASET:-swebench-verified}"
+# Default to SWE-bench Verified (the OpenAI-curated, 500-task human-filtered
+# subset of the original SWE-bench — see README "Fairness & methodology"). This
+# is the exact namespaced slug published on the Harbor Hub
+# (https://hub.harborframework.com/datasets). Override DATASET with any other
+# Harbor dataset slug listed there (e.g. swe-bench/swe-smith, scale-ai/swe-bench-pro).
+DATASET="${DATASET:-swe-bench/swe-bench-verified}"
 N_CONCURRENT="${N_CONCURRENT:-4}"
 N_ATTEMPTS="${N_ATTEMPTS:-1}"
 JOBS_DIR="${JOBS_DIR:-./results-$AGENT}"

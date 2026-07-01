@@ -41,7 +41,8 @@ Background reading:
 - [SWE-bench paper](https://arxiv.org/abs/2310.06770) — the original benchmark.
 - [SWE-bench Verified](https://openai.com/index/introducing-swe-bench-verified/) —
   OpenAI's human-filtered subset removing under-specified/unsolvable instances.
-  This is the default dataset here (`DATASET=swebench-verified`).
+  This is the default dataset here (`DATASET=swe-bench/swe-bench-verified`, the
+  namespaced slug published on the [Harbor Hub](https://hub.harborframework.com/datasets)).
 - [Official leaderboard](https://www.swebench.com) — third-party submitted
   numbers; see "Fairness & methodology" below for why we don't cite these as
   directly comparable to our own runs.
@@ -74,8 +75,11 @@ TASK_IDS="django__django-11099" N_CONCURRENT=1 ./run.sh
 # Full SWE-bench Verified, oxagen, default model:
 AGENT=oxagen ./run.sh
 
-# Smaller Lite subset:
-DATASET=swebench-lite ./run.sh
+# Cheap smoke test — a single instance (skips the full 500-task run):
+TASK_IDS="django__django-11099" N_CONCURRENT=1 ./run.sh
+
+# A different Harbor dataset (browse https://hub.harborframework.com/datasets):
+DATASET=swe-bench/swe-smith ./run.sh
 
 # Pin a different base model:
 OXAGEN_MODEL_SLUG=anthropic/claude-opus-4.8 ./run.sh
@@ -90,7 +94,7 @@ OXAGEN_MODEL_SLUG=anthropic/claude-opus-4.8 ./run.sh
 ./compare.sh                                   # default: claude-code codex aider
 COMPETITORS="claude-code codex" ./compare.sh   # narrower set
 OXAGEN_MODEL_SLUG=anthropic/claude-opus-4.8 ./compare.sh
-DATASET=swebench-lite N_CONCURRENT=2 ./compare.sh   # cheaper smoke run
+TASK_IDS="django__django-11099" N_CONCURRENT=1 ./compare.sh   # cheap smoke run
 ```
 
 `compare.sh` runs each agent **sequentially** on the same `DATASET` and the
@@ -135,7 +139,7 @@ that didn't happen.
 | `OXAGEN_INSTALL_DUCKDB` | unset | `1` → (oxagen only) also install DuckDB so the context engine's persistent stores are live. |
 | `OXAGEN_WARM` / `OXAGEN_WARM_MEMORY_DIR` | unset | Cross-trial memory persistence (oxagen only) — see the terminal-bench README's "Warm / self-improvement mode". |
 | `OXAGEN_CLI_BUNDLE` | repo build path | Override the path to `oxagen.mjs` (oxagen only). |
-| `DATASET` | `swebench-verified` | `swebench-lite` for the smaller subset, or any Harbor dataset slug/version (e.g. `swebench@2.0`). |
+| `DATASET` | `swe-bench/swe-bench-verified` | Any Harbor dataset slug from [the Hub](https://hub.harborframework.com/datasets) (e.g. `swe-bench/swe-smith`, `scale-ai/swe-bench-pro`). |
 | `TASK_IDS` | — | Space-separated task ids, expanded to repeated `--task-id` flags (smoke-testing a subset). |
 | `N_CONCURRENT` / `N_ATTEMPTS` | `4` / `1` | Parallelism and attempts per task. |
 | `JOBS_DIR` | `./results-$AGENT` | Where Harbor writes per-trial output. |
