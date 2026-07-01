@@ -108,6 +108,10 @@ const BodySchema = z.object({
   // Convenience: a top-level system prompt, merged with any system-role
   // messages. Most OpenAI clients send system as a message, but accept both.
   system: z.string().optional(),
+  // Reasoning effort for models with a thinking mode (OpenAI's canonical field).
+  // Forwarded by the Oxagen CLI via provider options; streamAgentReply applies it
+  // per-model and it is a no-op for models without a reasoning mode.
+  reasoning_effort: z.enum(["low", "medium", "high"]).optional(),
 });
 
 type OpenAiMessage = z.infer<typeof MessageSchema>;
@@ -406,6 +410,7 @@ agentLlmRoute.post("/chat/completions", async (c) => {
       model: selectModel({ model }),
       ...(tools ? { tools } : {}),
       ...(mergedSystem ? { system: mergedSystem } : {}),
+      ...(body.reasoning_effort ? { effort: body.reasoning_effort } : {}),
       ...(body.temperature !== undefined
         ? { temperature: body.temperature }
         : {}),
