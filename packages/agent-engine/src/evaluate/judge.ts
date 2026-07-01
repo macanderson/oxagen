@@ -25,13 +25,13 @@ import type { AgentAi } from "../ports";
 import type { JudgeVerdict } from "../trace/types";
 
 /**
- * The default completeness advisor: the most powerful OpenAI model. The advisor's
- * job is to catch an executor's blind spots, and a different *vendor* shares none
- * of them — an OpenAI model auditing a (typically Claude) executor is maximally
- * independent. Overridable with `OXAGEN_LLM_ADVISOR` to track gateway slug drift
- * or pick a different judge.
+ * The default completeness advisor: a capable cross-vendor OpenAI model. The
+ * advisor's job is to catch an executor's blind spots, and a different *vendor*
+ * shares none of them — an OpenAI model auditing a (typically Claude) executor
+ * is maximally independent. Overridable with `OXAGEN_LLM_ADVISOR` to track
+ * gateway slug drift or pick a different judge.
  */
-export const DEFAULT_ADVISOR_MODEL = "openai/gpt-5.5-pro";
+export const DEFAULT_ADVISOR_MODEL = "openai/gpt-4o";
 
 /**
  * Choose the advisor model — guaranteed distinct from the executor so the work is
@@ -155,12 +155,23 @@ function heuristicVerdict(opts: JudgeOptions, model: string): JudgeVerdict {
       usage: emptyUsage(),
     };
   }
+  // Score based on concrete evidence: files touched and commands run are the
+  // strongest signals we have without a model. Steps > 0 shows the agent did
+  // real tool-loop work. Cap at 70 — the heuristic can't read the diff.
+  const evidenceScore =
+    opts.filesTouched.length > 0
+      ? Math.min(70, 50 + opts.filesTouched.length * 5)
+      : opts.commandsRun.length > 0
+        ? 50
+        : opts.steps > 0
+          ? 40
+          : 30;
   return {
     complete: true,
-    confidence: 30,
+    confidence: evidenceScore,
     findings: [],
     remainingWork: [],
-    reasoning: "Heuristic check (advisor unavailable): no obvious incompleteness signal.",
+    reasoning: `Heuristic check (advisor unavailable): ${opts.filesTouched.length} file(s) touched, ${opts.commandsRun.length} command(s) run, ${opts.steps} step(s) taken — no obvious incompleteness signal.`,
     model,
     fallback: true,
     usage: emptyUsage(),
