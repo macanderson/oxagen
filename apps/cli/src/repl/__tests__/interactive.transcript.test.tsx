@@ -130,4 +130,33 @@ describe("REPL transcript rendering (Static, no alt screen)", () => {
     expect(runTurnSpy.mock.calls[0]?.[0].prompt).toBe("build the thing");
     unmount();
   });
+
+  it("renders each finalized message exactly once — no Static/live duplication", async () => {
+    // Regression: a botched merge left the live region re-rendering the FULL
+    // `messages` list while <Static> was ALSO committing every settled message,
+    // so once a turn finished (nothing streaming) each message rendered twice.
+    // The final composited frame (Static transcript + live tail) must contain the
+    // settled answer EXACTLY once — it lives only in <Static>; the live tail holds
+    // just the still-streaming message, which here is empty. Under the old bug it
+    // appeared twice.
+    const { stdin, lastFrame, frames, unmount } = render(
+      <ReplApp options={{ session: TEST_SESSION }} />,
+    );
+    await tick(100);
+
+    stdin.write("build the thing");
+    await tick();
+    stdin.write("\r");
+
+    await waitFor(() => runTurnSpy.mock.calls.length === 1);
+    // Wait until the answer has been committed to the Static transcript at least
+    // once across the render history.
+    await waitFor(() => frames.join("").includes("answer-to:build the thing"));
+    await tick(40);
+
+    const frame = lastFrame() ?? "";
+    const occurrences = frame.split("answer-to:build the thing").length - 1;
+    expect(occurrences).toBe(1);
+    unmount();
+  });
 });

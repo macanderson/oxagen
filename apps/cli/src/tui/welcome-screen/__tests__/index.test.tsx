@@ -2,6 +2,7 @@ import { describe, test, expect, vi } from "vitest";
 import { render } from "ink-testing-library";
 import React from "react";
 import { WelcomeScreen } from "../index.js";
+import pkg from "../../../../package.json" with { type: "json" };
 
 /**
  * Ink delivers stdin to useInput and flushes renders on a microtask/timer, so
@@ -27,8 +28,8 @@ describe("WelcomeScreen", () => {
     const { lastFrame } = render(<WelcomeScreen mode="interactive" />);
     const output = lastFrame() ?? "";
 
-    // Should show version
-    expect(output).toContain("v0.6.4");
+    // Should show version (track package.json so it never goes stale on bumps)
+    expect(output).toContain(`v${pkg.version}`);
 
     // Should show dragon
     expect(output!.length).toBeGreaterThan(200);
