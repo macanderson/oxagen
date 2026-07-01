@@ -10,7 +10,7 @@
  *
  * Presentational pieces live in ./components; this file is the container.
  */
-import { Box, Static, Text, useApp, useInput, useStdout } from "ink";
+import { Box, Static, Text, useApp, useInput } from "ink";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import type { ModelMessage } from "ai";
 import { existsSync, readFileSync } from "node:fs";
@@ -72,9 +72,7 @@ import { createMeteredAi } from "../agent/metered-ai.js";
 import {
   detectTerminalBackground,
   diffThemeFor,
-  type DiffTheme,
 } from "../tui/terminal-theme.js";
-import { useScrollback } from "./scrollback.js";
 import {
   PermissionBroker,
   parseModeArg,
@@ -134,79 +132,6 @@ function readGitBranch(cwd: string): string | undefined {
     /* not a repo / unreadable — no branch chip */
   }
   return undefined;
-}
-
-// Alternate-screen control sequences: 1049h swaps to the alt buffer (and 1049l
-// restores the user's scrollback on exit); [H homes the cursor so the first
-// frame draws from the top of the screen rather than wherever the prompt was.
-const ALT_SCREEN_ENTER = "\x1b[?1049h\x1b[H";
-const ALT_SCREEN_LEAVE = "\x1b[?1049l";
-
-/**
- * Drive the REPL's alternate-screen layout and report the live terminal height.
- *
- * The REPL always runs full-height: it swaps to the terminal's alternate screen
- * buffer on mount and reports the current row count so the root column can be
- * pinned to the full terminal height — the conversation fills the space and the
- * prompt input + status line stay glued to the bottom. On unmount/exit the alt
- * buffer is left so the user's shell is restored untouched. The row count tracks
- * `resize`, so the layout re-pins when the window changes size.
- */
-function useAltScreen(): number {
-  const { stdout } = useStdout();
-  const [rows, setRows] = useState<number>(stdout?.rows ?? 24);
-
-  useEffect(() => {
-    if (!stdout) return;
-    stdout.write(ALT_SCREEN_ENTER);
-    const sync = (): void => setRows(stdout.rows ?? 24);
-    sync();
-    stdout.on("resize", sync);
-    return () => {
-      stdout.off("resize", sync);
-      stdout.write(ALT_SCREEN_LEAVE);
-    };
-  }, [stdout]);
-
-  return rows;
-}
-
-/**
- * The messages region while the user has scrolled UP into history. Renders only
- * the visible window plus dim affordance lines telling the user how much history
- * sits above and below, and how to get back to the newest output.
- */
-function ScrolledMessages({
-  window,
-  diffTheme,
-}: {
-  window: { items: Message[]; hiddenAbove: number; hiddenBelow: number };
-  diffTheme: DiffTheme;
-}): React.ReactElement {
-  return (
-    <>
-      {window.hiddenAbove > 0 && (
-        <Box paddingX={1}>
-          <Text dimColor>
-            {"↑ "}
-            {window.hiddenAbove} earlier{" "}
-            {window.hiddenAbove === 1 ? "message" : "messages"} · PageUp/PageDown to scroll
-          </Text>
-        </Box>
-      )}
-      {window.items.map((msg, i) => (
-        <MessageView key={i} msg={msg} diffTheme={diffTheme} />
-      ))}
-      {window.hiddenBelow > 0 && (
-        <Box paddingX={1}>
-          <Text dimColor>
-            {"↓ "}
-            {window.hiddenBelow} newer · PageDown to catch up to the latest
-          </Text>
-        </Box>
-      )}
-    </>
-  );
 }
 
 export function ReplApp({
@@ -270,29 +195,11 @@ export function ReplApp({
   const initialVerbose = options.verbose ?? readConfig().verbose ?? false;
   const [verboseOn, setVerboseOn] = useState(initialVerbose);
   const verboseRef = useRef(initialVerbose);
-  // The REPL always runs full-height on the alternate screen: the conversation
-  // fills the terminal and the prompt input + status line stay pinned to the
-  // bottom. `rows` tracks the live terminal height so the layout re-pins on
-  // resize. (There is no compact/inline layout — one pinned layout, always.)
-  const rows = useAltScreen();
-  // Scrollback (Feature A): page back through the FULL conversation — including
-  // tool calls and code-diff messages — that would otherwise scroll off the top
-  // of the alt screen. The viewport height is an estimate of the messages region
-  // (terminal rows minus the banner + input + status chrome).
-  const messagesHeight = Math.max(3, rows - 16);
-  const scroll = useScrollback({ total: messages.length, height: messagesHeight });
-  // Latest scroll handle, read by handleSubmit (which must not re-close over a
-  // stale hook value each render).
-  const scrollRef = useRef(scroll);
-  scrollRef.current = scroll;
-  // When the message list grows, tell the scrollback hook so a scrolled-up
-  // viewport stays put (rather than jumping) while new output streams in below.
-  const prevMsgLenRef = useRef(messages.length);
-  useEffect(() => {
-    const added = messages.length - prevMsgLenRef.current;
-    prevMsgLenRef.current = messages.length;
-    if (added > 0) scrollRef.current.onItemsChanged(added);
-  }, [messages.length]);
+  // The REPL renders inline in the normal terminal buffer (no alternate screen):
+  // finalized transcript is committed to the terminal's own scrollback via
+  // <Static> and only the streaming tail + input + status re-render. Scrolling
+  // back through history is the terminal's native scrollback — there is no custom
+  // in-app viewport windowing (which cannot coexist with <Static>).
   // Permission posture (drives the broker + status chip) and the in-flight
   // approval request (drives the inline ApprovalPrompt; null when none).
   const [mode, setMode] = useState<PermissionMode>(
@@ -500,13 +407,9 @@ export function ReplApp({
     // While a permission prompt is up, ApprovalPrompt owns Esc and the answer keys.
     if (approvalRef.current) return;
 
-    // Scrollback: PageUp/PageDown page through the full history; Ctrl-U/Ctrl-D
-    // half-page. Works while streaming or idle. We deliberately don't bind g/G
-    // here — they'd collide with typing in the prompt input.
-    if (key.pageUp || key.pageDown || (key.ctrl && (input === "u" || input === "d"))) {
-      scrollRef.current.handleKey(input, key);
-      return;
-    }
+    // Scrolling back through history is handled by the terminal's own scrollback
+    // (the transcript is committed to it via <Static>), so the REPL does not bind
+    // PageUp/PageDown/Ctrl-U/Ctrl-D — they pass through to the terminal.
 
     // Shift+Tab cycles the permission posture (ask → auto-edit → bypass →
     // read-only → …), mirroring Claude Code. The status line's second line
@@ -912,11 +815,9 @@ export function ReplApp({
       streamingRef.current = true;
       setTurnStartedAt(Date.now());
       streamCharsRef.current = 0;
-      // Reset the per-turn metrics totals and re-pin scrollback to the bottom so
-      // the new turn's output is visible; seed the progress clock.
+      // Reset the per-turn metrics totals; seed the progress clock.
       metricsBusRef.current.startTurn();
       lastProgressRef.current = Date.now();
-      scrollRef.current?.reset();
       const controller = new AbortController();
       abortRef.current = controller;
 
@@ -1317,7 +1218,7 @@ export function ReplApp({
           item.kind === "banner" ? (
             <Banner key="banner" version={pkg.version} />
           ) : (
-            <MessageView key={i} msg={item.msg} />
+            <MessageView key={i} msg={item.msg} diffTheme={diffThemeRef.current} />
           )
         }
       </Static>
@@ -1339,23 +1240,18 @@ export function ReplApp({
               </Text>
             )}
           </Box>
-        ) : scroll.state.stickToBottom ? (
-          // Pinned to newest: render everything; the flex-end + overflow-hidden
-          // container clips older lines off the top.
-          messages.map((msg, i) => (
-            <MessageView key={i} msg={msg} diffTheme={diffThemeRef.current} />
-          ))
         ) : (
-          // Scrolled up: render just the visible window, with affordance lines
-          // showing how much history sits above/below the viewport.
-          <ScrolledMessages
-            window={scroll.window(messages)}
-            diffTheme={diffThemeRef.current}
-          />
+          // Only the streaming tail lives here; everything settled was already
+          // committed to <Static> above. Rendering the full `messages` list here
+          // too would double every finalized message on screen.
+          live.map((msg, i) => (
+            <MessageView
+              key={splitAt + i}
+              msg={msg}
+              diffTheme={diffThemeRef.current}
+            />
+          ))
         )}
-        {live.map((msg, i) => (
-          <MessageView key={splitAt + i} msg={msg} />
-        ))}
       </Box>
 
       {/* Queued prompts (submitted while a turn is running) */}
