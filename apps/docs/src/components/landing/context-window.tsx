@@ -82,7 +82,7 @@ export function ContextWindow() {
           <span
             className="size-2.5 rounded-full transition-colors duration-500"
             style={{
-              background: governed ? "var(--ox-indigo-bright, #9CA3E8)" : "var(--_ember-flame, #FF7E5F)",
+              background: governed ? "var(--ox-indigo-bright, #9CA3E8)" : "var(--_ember-flame, #F07650)",
               boxShadow: `0 0 10px ${governed ? "rgba(156,163,232,.8)" : "rgba(255,126,95,.8)"}`,
             }}
           />
@@ -93,7 +93,7 @@ export function ContextWindow() {
         <div className="flex items-baseline gap-1.5 font-mono">
           <span
             className="text-2xl font-semibold tabular-nums transition-colors duration-500"
-            style={{ color: governed ? "var(--ox-indigo-bright, #9CA3E8)" : "var(--_ember-flame, #FF7E5F)" }}
+            style={{ color: governed ? "var(--ox-indigo-bright, #9CA3E8)" : "var(--_ember-flame, #F07650)" }}
           >
             {used}%
           </span>
@@ -109,7 +109,7 @@ export function ContextWindow() {
             width: `${used}%`,
             background: governed
               ? "var(--ox-indigo-bright, #9CA3E8)"
-              : "linear-gradient(90deg, var(--_ember-gold,#F9D423), var(--_ember-flame,#FF7E5F), var(--_ember-crimson,#C2185B))",
+              : "linear-gradient(90deg, var(--_ember-gold,#FD9A4B), var(--_ember-flame,#F07650), var(--_ember-crimson,#EB5C5E))",
           }}
         />
       </div>
@@ -126,7 +126,7 @@ export function ContextWindow() {
             ? "color-mix(in oklch, var(--foreground) 7%, transparent)"
             : governed
               ? "var(--ox-indigo-bright, #9CA3E8)"
-              : "var(--_ember-flame, #FF7E5F)";
+              : "var(--_ember-flame, #F07650)";
           return (
             <span
               key={i}

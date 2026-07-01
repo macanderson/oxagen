@@ -276,8 +276,8 @@ const bannerStyles = {
     flexShrink: 0,
   } satisfies React.CSSProperties,
   installBtn: {
-    background: "#6e48ce",
-    color: "#fff",
+    background: "#FD9A4B",
+    color: "#101319",
     border: "none",
     borderRadius: 8,
     padding: "7px 16px",

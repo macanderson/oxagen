@@ -92,7 +92,7 @@ export const viewport: Viewport = {
   // standalone PWA toolbar — kept on the deep-space ink.)
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#0B0D16" },
-    { media: "(prefers-color-scheme: light)", color: "#FAF7F2" },
+    { media: "(prefers-color-scheme: light)", color: "#F8F6F1" },
   ],
 };
 

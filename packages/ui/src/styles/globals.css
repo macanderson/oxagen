@@ -34,12 +34,16 @@
  * lazily in the element's cascade context). .dark therefore only re-declares the
  * core tokens — never the whole component-token surface.
  *
- * CURRENT SKIN: "Oxagen Graphite" — neutral graphite surfaces with only a
- * whisper of warmth (near-zero chroma on a warm hue), tuned for DRAMATIC
- * contrast: off-white page + crisp white panels in light, near-black page +
- * stepped charcoal panels in dark. Card and table HEADERS are dark bars in both
- * modes. Warmth is concentrated in the ember accent (the mark, primary CTAs,
- * focus rings, the active-tab underline) — never smeared across every surface.
+ * CURRENT SKIN: "Oxagen Tangerine" — split-hue neutrals (warm off-white surfaces
+ * in light, cool narwhal near-black surfaces in dark), tuned for DRAMATIC
+ * contrast: warm paper + crisp white panels in light, narwhal (#0B0D16) page +
+ * stepped inky-blue panels in dark. Card and table HEADERS are dark bars in both
+ * modes. Colour is concentrated in the tangerine primary (#FD9A4B — the mark
+ * start, CTAs, focus rings, the active-tab underline, default badges), a rose
+ * secondary (#EB5C5E — secondary buttons/badges, the mark end), and a teak accent
+ * (#794036 — hover/selected) — never smeared across every surface. Errors use a
+ * true red so they never read as the tangerine primary. Brand mark gradient:
+ * tangerine → flame (#F07650) → rose.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 @import "tailwindcss";
@@ -58,72 +62,78 @@
     color-scheme: light;
 
     /* ════════════════════════════════════════════════════════════════════════
-     * PRIMITIVES — raw oklch palette. The reskin knobs. "Graphite":
-     * neutral graphite surfaces (near-zero chroma) + ember accent + dark headers.
+     * PRIMITIVES — raw oklch palette. The reskin knobs. "Tangerine":
+     * warm off-white in light / cool narwhal near-black in dark, tangerine
+     * primary + rose secondary + teak accent. Warmth lives in the accent, not
+     * smeared across surfaces (design system stays flat — see THEME.md §7).
      * ════════════════════════════════════════════════════════════════════════ */
 
-    /* Brand anchors — off-white paper, near-black ink, soft white. */
-    --_paper: oklch(0.988 0.0025 80);    /* #FAFAF8 — off-white (kept, de-creamed) */
-    --_ink: oklch(0.178 0.006 270);      /* #15161A — near-black ink */
-    --_ink-white: oklch(0.975 0.002 80); /* #F6F5F3 — soft white */
+    /* Brand anchors — warm paper, cool near-black ink, warm soft white. */
+    --_paper: oklch(0.980 0.004 84.6);   /* #F8F6F1 — warm off-white (hsl 40 30% 97%) */
+    --_ink: oklch(0.182 0.019 266.5);    /* #101319 — cool near-black ink (hsl 222 30% 8%) */
+    --_ink-white: oklch(0.948 0.006 67.8); /* #F1EEEA — warm soft white (hsl 30 20% 93%) */
 
     /* Header bar — dark in light mode (re-declared to a stepped charcoal in .dark). */
-    --_header-dark: oklch(0.225 0.006 75);  /* #232220 — card/table header bar (light) */
+    --_header-dark: oklch(0.214 0.022 267.8);  /* #16181F — narwhal charcoal header bar (light) */
 
-    /* Named brand swatches. ox-surface is now a neutral near-white; ox-rust is the
-       ember accent; ox-indigo* the cool link accent. The warm/sand swatches are
-       retained for API stability but no longer drive any surface. */
+    /* Named brand swatches. Tangerine is the primary accent; rose the secondary;
+       ox-indigo* the cool link accent. --ox-rust is retained (name stability) and
+       re-pointed at tangerine; the legacy warm/sand swatches are unused. */
     --ox-paper: var(--_paper);
-    --ox-surface: oklch(0.985 0.002 80);   /* #F6F6F4 — neutral near-white */
+    --ox-surface: oklch(0.985 0.003 84.6);   /* warm near-white */
     --ox-ink: var(--_ink);
+    --ox-tangerine: oklch(0.775 0.150 56.4);   /* #FD9A4B — tangerine (primary) */
+    --ox-rose: oklch(0.661 0.177 22.5);   /* #EB5C5E — rose (secondary) */
+    --ox-teak: oklch(0.440 0.081 31.1);   /* #794036 — teak (accent, dark) */
     --ox-bronze: oklch(0.452 0.03 78.6);   /* #5f5443 (legacy, unused) */
     --ox-sunset-red: oklch(0.627 0.186 17.6);   /* #e24b5d */
-    --ox-rust: oklch(0.705 0.17 36.0);   /* #F87854 — ember accent (links, focus, CTAs) */
+    --ox-rust: var(--ox-tangerine);   /* legacy name → tangerine (links, focus, CTAs) */
     --ox-gold: oklch(0.923 0.104 94.1);   /* #fce594 */
     --ox-wheat: oklch(0.895 0.09 78.8);   /* #fdd698 */
 
     --ox-indigo: oklch(0.449 0.09 278.2);   /* #4A4F86 — link accent (light) */
     --ox-indigo-bright: oklch(0.736 0.1 279.2);   /* #9CA3E8 — link accent (dark) */
 
-    /* Neutral graphite ramp — barely-warm hue (~75°) at near-zero chroma so it
-       reads as gray/charcoal, never brown. Light steps are cozy off-whites; dark
-       steps are stepped near-blacks for dramatic elevation contrast. */
-    --_stone-50: oklch(0.986 0.0020 80);   /* #FBFAF9 */
-    --_stone-100: oklch(0.970 0.0030 80);   /* #F4F3F1 */
-    --_stone-150: oklch(0.955 0.0040 80);   /* #EEEDEA */
-    --_stone-200: oklch(0.922 0.0050 80);   /* #E4E2DF */
-    --_stone-300: oklch(0.870 0.0060 80);   /* #D5D3CE */
-    --_stone-400: oklch(0.712 0.0070 78);   /* #A9A7A1 */
-    --_stone-500: oklch(0.558 0.0070 75);   /* #797670 */
-    --_stone-600: oklch(0.446 0.0070 75);   /* #5D5B55 */
-    --_stone-700: oklch(0.358 0.0060 75);   /* #494742 */
-    --_stone-800: oklch(0.272 0.0055 72);   /* #312F2D */
-    --_stone-850: oklch(0.222 0.0050 72);   /* #232220 */
-    --_stone-900: oklch(0.185 0.0045 72);   /* #1B1A18 */
-    --_stone-950: oklch(0.146 0.0040 72);   /* #131211 */
+    /* Neutral ramp — split-hue: light steps are WARM off-whites (~85°), dark steps
+       are COOL narwhal near-blacks (~267°) so light reads cozy and dark reads
+       inky-blue. Stepped elevation in dark for dramatic contrast. */
+    --_stone-50: oklch(0.990 0.002 84.6);   /* warm near-white */
+    --_stone-100: oklch(0.965 0.005 84.6);   /* warm muted / card-header */
+    --_stone-150: oklch(0.951 0.007 84.6);   /* warm surface-alt */
+    --_stone-200: oklch(0.929 0.009 84.6);   /* warm secondary surface */
+    --_stone-300: oklch(0.900 0.012 84.6);   /* warm input border (light) */
+    --_stone-400: oklch(0.770 0.017 67.6);   /* muted-foreground (dark) */
+    --_stone-500: oklch(0.567 0.024 264.4);   /* cool tertiary text */
+    --_stone-600: oklch(0.506 0.038 266.8);   /* cool secondary text (light) */
+    --_stone-700: oklch(0.346 0.028 264.1);   /* cool graphite */
+    --_stone-800: oklch(0.274 0.029 266.5);   /* narwhal accent surface (dark) */
+    --_stone-850: oklch(0.214 0.022 267.8);   /* narwhal popover / muted (dark) */
+    --_stone-900: oklch(0.182 0.018 269.1);   /* narwhal card / sidebar (dark) */
+    --_stone-950: oklch(0.151 0.012 266.5);   /* #0B0D16 — narwhal background (dark) */
 
-    /* Ember accent ramp (the theme accent — drives links, focus, CTAs).
-       Keeps the --_violet-* NAMES for zero-churn; the VALUES are ember flame. */
-    --_violet-50: oklch(0.97 0.018 64.9);   /* #FEF3E9 */
-    --_violet-100: oklch(0.928 0.045 65.1);   /* #FDE2C9 */
-    --_violet-200: oklch(0.895 0.09 78.8);   /* #FDD698 */
-    --_violet-300: oklch(0.727 0.164 34.0);   /* #FC7B5E */
-    --_violet-400: oklch(0.666 0.18 38.1);   /* #EC6336 */
-    --_violet-500: oklch(0.563 0.163 33.6);   /* #C2472D */
-    --_violet-600: oklch(0.497 0.155 34.7);   /* #A8361A */
-    --_violet-700: oklch(0.43 0.131 34.8);   /* #892C15 */
-    --_violet-800: oklch(0.356 0.106 34.6);   /* #682110 */
-    --_violet-900: oklch(0.275 0.077 34.3);   /* #46160B */
+    /* Tangerine accent ramp (the theme accent — drives accent-subtle backgrounds).
+       Keeps the --_violet-* NAMES for zero-churn; the VALUES are tangerine. */
+    --_violet-50: oklch(0.965 0.020 60.0);   /* tangerine 95% tint */
+    --_violet-100: oklch(0.917 0.050 59.5);
+    --_violet-200: oklch(0.852 0.093 58.5);
+    --_violet-300: oklch(0.803 0.128 57.1);
+    --_violet-400: oklch(0.775 0.150 56.4);   /* #FD9A4B — tangerine */
+    --_violet-500: oklch(0.699 0.168 49.5);
+    --_violet-600: oklch(0.618 0.175 42.3);
+    --_violet-700: oklch(0.508 0.144 38.9);
+    --_violet-800: oklch(0.398 0.098 37.5);
+    --_violet-900: oklch(0.313 0.065 35.1);
 
-    /* Ember mark primitives (brand gradient — canonical, never recolor). */
-    --_ember-gold: oklch(0.879 0.179 91.9);    /* #F9D423 */
-    --_ember-flame: oklch(0.682 0.162 30.2);   /* #FF7E5F */
-    --_ember-crimson: oklch(0.456 0.191 356);  /* #C2185B */
-    --_ember-navy: oklch(0.133 0.015 266.5);   /* #0B0D16 */
+    /* Brand mark primitives (tangerine → flame → rose gradient). */
+    --_ember-gold: oklch(0.775 0.150 56.4);    /* #FD9A4B — tangerine (gradient start) */
+    --_ember-flame: oklch(0.701 0.160 37.9);   /* #F07650 — flame (gradient midpoint) */
+    --_ember-crimson: oklch(0.661 0.177 22.5); /* #EB5C5E — rose (gradient end) */
+    --_ember-navy: oklch(0.151 0.012 266.5);   /* #0B0D16 — narwhal */
 
-    /* Status hues (desaturated to fit the cool palette). */
-    --_clay: oklch(0.52 0.159 30.7);           /* error — ember crimson-adjacent */
-    --_clay-light: oklch(0.593 0.154 32.1);
+    /* Status hues (desaturated to fit the palette). Error is a true red so it
+       never reads as the tangerine primary. */
+    --_clay: oklch(0.579 0.214 27.2);          /* error — true red (hsl 0 72% 51%) */
+    --_clay-light: oklch(0.617 0.191 24.7);    /* error (dark, hsl 0 72% 58%) */
     --_moss: oklch(0.60 0.12 160);             /* success — #1D9E75 adjacent */
     --_moss-light: oklch(0.72 0.12 160);
     --_ochre: oklch(0.667 0.124 73.1);         /* warning */
@@ -158,17 +168,17 @@
     --card-foreground: var(--_ink);
     --popover: oklch(1 0 0);
     --popover-foreground: var(--_ink);
-    --primary: var(--ox-rust);
+    --primary: var(--ox-rust);         /* tangerine */
     --primary-foreground: var(--ox-ink);
-    --secondary: var(--_stone-100);
-    --secondary-foreground: var(--_stone-700);
+    --secondary: oklch(0.602 0.208 25.4);   /* rose (deep for white text — hsl 359 75% 55%) */
+    --secondary-foreground: oklch(1 0 0);
     --muted: var(--_stone-100);
     --muted-foreground: var(--_stone-600);
-    --accent: var(--_stone-150);       /* neutral hover/selected (was pale orange) */
-    --accent-foreground: var(--_ink);
-    --destructive: var(--_ember-crimson);
+    --accent: oklch(0.902 0.019 37.7);   /* pale teak hover/selected (hsl 14 35% 88%) */
+    --accent-foreground: oklch(0.315 0.044 37.7);   /* deep teak ink (hsl 14 35% 20%) */
+    --destructive: var(--_clay);         /* true red */
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.855 0.004 80 / 0.7);
+    --border: oklch(0.900 0.012 84.6 / 0.9);   /* warm hairline (hsl 40 18% 86%) */
     --input: var(--_stone-300);
     --ring: var(--ox-rust);
     --link: var(--ox-indigo);
@@ -179,7 +189,7 @@
     --success-foreground: oklch(1 0 0);
     --warning: var(--_ochre);
     --warning-foreground: oklch(0.2 0.03 60);
-    --error: var(--_ember-crimson);
+    --error: var(--_clay);
     --error-foreground: oklch(1 0 0);
     --info: var(--_slate);
     --info-foreground: oklch(1 0 0);
@@ -358,18 +368,17 @@
     --popover-foreground: var(--_ink-white);
     --primary: var(--ox-rust);
     --primary-foreground: var(--ox-ink);
-    --secondary: var(--_stone-850);
-    --secondary-foreground: var(--_stone-200);
+    --secondary: var(--ox-rose);         /* bright rose (hsl 359 78% 63%) */
+    --secondary-foreground: var(--ox-ink);   /* dark ink on bright rose */
     --muted: var(--_stone-850);
-    /* Brighter secondary ink in dark for legibility — stone-500 (#797670) read
-     * as low-contrast mud on the near-black surfaces. */
+    /* Brighter secondary ink in dark for legibility on the narwhal surfaces. */
     --muted-foreground: var(--_stone-400);
-    --accent: var(--_stone-800);
+    --accent: oklch(0.456 0.070 37.7);   /* teak accent (hsl 14 35% 35%) */
     --accent-foreground: var(--_ink-white);
     --destructive: var(--_clay-light);
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.42 0.006 75 / 0.55);
-    --input: oklch(0.45 0.006 75 / 0.5);
+    --border: oklch(0.300 0.018 265 / 0.65);   /* cool narwhal hairline */
+    --input: oklch(0.320 0.018 265 / 0.6);
     --ring: var(--ox-rust);
     --link: var(--ox-indigo-bright);
     --link-hover: oklch(0.809 0.076 279.6);
@@ -474,17 +483,17 @@
       --popover-foreground: var(--_ink-white);
       --primary: var(--ox-rust);
       --primary-foreground: var(--ox-ink);
-      --secondary: var(--_stone-850);
-      --secondary-foreground: var(--_stone-200);
+      --secondary: var(--ox-rose);         /* bright rose (hsl 359 78% 63%) */
+      --secondary-foreground: var(--ox-ink);   /* dark ink on bright rose */
       --muted: var(--_stone-850);
       /* Brighter secondary ink in dark for legibility (matches .dark). */
       --muted-foreground: var(--_stone-400);
-      --accent: var(--_stone-800);
+      --accent: oklch(0.456 0.070 37.7);   /* teak accent (hsl 14 35% 35%) */
       --accent-foreground: var(--_ink-white);
       --destructive: var(--_clay-light);
       --destructive-foreground: oklch(1 0 0);
-      --border: oklch(0.42 0.006 75 / 0.55);
-      --input: oklch(0.45 0.006 75 / 0.5);
+      --border: oklch(0.300 0.018 265 / 0.65);   /* cool narwhal hairline */
+      --input: oklch(0.320 0.018 265 / 0.6);
       --ring: var(--ox-rust);
       --link: var(--ox-indigo-bright);
       --link-hover: oklch(0.809 0.076 279.6);
@@ -991,9 +1000,9 @@
   .ox-grad-surface {
     background-image: linear-gradient(
       100deg,
-      var(--_ember-gold, #f9d423) 0%,
-      var(--_ember-flame, #ff7e5f) 46%,
-      var(--_ember-crimson, #c2185b) 100%
+      var(--_ember-gold, #FD9A4B) 0%,
+      var(--_ember-flame, #F07650) 46%,
+      var(--_ember-crimson, #EB5C5E) 100%
     );
   }
 

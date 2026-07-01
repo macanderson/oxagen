@@ -90,7 +90,7 @@ export default function HomePage(): ReactNode {
               </Link>
               <Link
                 href="/docs"
-                className="inline-flex h-11 items-center rounded-lg border border-border bg-card/60 px-6 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:border-[var(--_ember-flame,#FF7E5F)]/60"
+                className="inline-flex h-11 items-center rounded-lg border border-border bg-card/60 px-6 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:border-[var(--_ember-flame,#F07650)]/60"
               >
                 Read the docs
               </Link>
@@ -130,7 +130,7 @@ export default function HomePage(): ReactNode {
                 ["Metered + instrumented", "Every retrieval and model call records context tokens used, latency, and surface of origin."],
               ].map(([t, d]) => (
                 <li key={t} className="flex gap-3">
-                  <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[var(--_ember-flame,#FF7E5F)]" />
+                  <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[var(--_ember-flame,#F07650)]" />
                   <span>
                     <span className="font-medium text-foreground">{t}.</span>{" "}
                     <span className="text-muted-foreground">{d}</span>
@@ -163,7 +163,7 @@ export default function HomePage(): ReactNode {
                 <p className="relative mt-3 flex-1 text-sm text-muted-foreground">{p.body}</p>
                 <Link
                   href={p.href}
-                  className="relative mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--_ember-flame,#FF7E5F)] hover:underline"
+                  className="relative mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--_ember-flame,#F07650)] hover:underline"
                 >
                   {p.cta}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -191,8 +191,8 @@ export default function HomePage(): ReactNode {
         <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {SURFACES.map((s) => (
             <Link key={s.href} href={s.href} className="group">
-              <div className="flex h-full flex-col rounded-xl border border-border p-6 transition-colors hover:border-[var(--_ember-flame,#FF7E5F)]/60 hover:bg-muted/40">
-                <h3 className="text-base font-semibold text-foreground group-hover:text-[var(--_ember-flame,#FF7E5F)]">
+              <div className="flex h-full flex-col rounded-xl border border-border p-6 transition-colors hover:border-[var(--_ember-flame,#F07650)]/60 hover:bg-muted/40">
+                <h3 className="text-base font-semibold text-foreground group-hover:text-[var(--_ember-flame,#F07650)]">
                   {s.title}
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">{s.body}</p>
@@ -227,7 +227,7 @@ export default function HomePage(): ReactNode {
             </Link>
             <a
               href={APP_URL}
-              className="inline-flex h-11 items-center rounded-lg border border-border bg-card/60 px-6 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:border-[var(--_ember-flame,#FF7E5F)]/60"
+              className="inline-flex h-11 items-center rounded-lg border border-border bg-card/60 px-6 text-sm font-semibold text-foreground backdrop-blur transition-colors hover:border-[var(--_ember-flame,#F07650)]/60"
             >
               Open Oxagen
             </a>
