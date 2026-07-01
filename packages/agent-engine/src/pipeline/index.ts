@@ -39,7 +39,7 @@ import {
   accumulateUsage,
 } from "../router/model-router";
 import { emptyUsage, mergeUsage } from "../types";
-import type { ModelTier, UsageTotals, Workspace, CodeGraphProvider, ProjectContext } from "../types";
+import type { ModelTier, UsageTotals, Workspace, CodeGraphProvider, ProjectContext, CodingEvent } from "../types";
 import type { AgentAi, MemoryProvider, TraceStore, GraphSyncProvider } from "../ports";
 import type {
   EnhancementTrace,
@@ -112,6 +112,8 @@ export interface RunTurnOptions {
   onStage?: (e: StageEvent) => void;
   /** Streamed assistant text deltas. */
   onText?: (delta: string) => void;
+  /** Streamed model reasoning / chain-of-thought deltas (shown dim in the CLI). */
+  onReasoning?: (delta: string) => void;
   /** Fired when the model invokes a tool. */
   onToolCall?: (name: string, input: unknown) => void;
 }
@@ -143,6 +145,36 @@ function collectActivity(
     const cmd = obj.command ?? obj.cmd;
     if (typeof cmd === "string") commands.push(truncate(cmd, 120));
   }
+}
+
+/**
+ * Record a completed tool call into the verbose telemetry buffer.
+ *
+ * The engine's `tool-result` event already carries everything we need with real,
+ * step-granular timing (measured in engine.ts from `onStepFinish`): the tool
+ * name, its capped input/result, the wall-clock `durationMs` of the step that
+ * ran it, and whether it errored. We reconstruct `startedAt`/`finishedAt` from
+ * that duration so each entry has an absolute window. No-op when verbose is off
+ * or the event is not a tool result. Shared by the full-pipeline and bare paths
+ * so both produce identical `/verbose` timing (previously the bare path dropped
+ * tool events entirely).
+ */
+function captureToolEvent(
+  e: CodingEvent,
+  toolEvents: ToolEvent[],
+  verbose: boolean | undefined,
+): void {
+  if (!verbose || e.type !== "tool-result") return;
+  const finishedAt = Date.now();
+  toolEvents.push({
+    name: e.name,
+    input: e.input,
+    result: e.result,
+    startedAt: finishedAt - e.durationMs,
+    finishedAt,
+    durationMs: e.durationMs,
+    ok: e.ok,
+  });
 }
 
 /**
@@ -250,29 +282,11 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       signal: opts.signal,
       onEvent: (e) => {
         if (e.type === "text") opts.onText?.(e.delta);
+        if (e.type === "reasoning") opts.onReasoning?.(e.delta);
         if (e.type === "tool-call") onToolCall(e.name, e.input);
-        if (e.type === "tool-result") {
-          if (opts.verbose) {
-            // The rich tool-result event carries everything (name, input,
-            // result, step-granular timing, ok) — record a complete entry.
-            const finishedAt = Date.now();
-            toolEvents.push({
-              name: e.name,
-              input: e.input,
-              result: e.result,
-              startedAt: finishedAt - e.durationMs,
-              finishedAt,
-              durationMs: e.durationMs,
-              ok: e.ok,
-            });
-          }
-        }
+        captureToolEvent(e, toolEvents, opts.verbose);
       },
     });
-    if (opts.verbose) {
-      // Tool-call events were emitted above; record timing stubs here.
-      // (In a future pass, wire onStepFinish timing — for now just capture the text.)
-    }
     const execUsage = accumulateUsage(emptyUsage(), routed.model, result.usage);
     phases.push(phaseStat("execute", round, execStart, routed.model, execUsage));
     usage = mergeUsage(usage, execUsage);
@@ -518,7 +532,9 @@ async function runBare(
     signal: opts.signal,
     onEvent: (e) => {
       if (e.type === "text") opts.onText?.(e.delta);
+      if (e.type === "reasoning") opts.onReasoning?.(e.delta);
       if (e.type === "tool-call") onToolCall(e.name, e.input);
+      captureToolEvent(e, toolEvents, opts.verbose);
     },
   });
   const usage = accumulateUsage(emptyUsage(), model, result.usage);
@@ -527,6 +543,11 @@ async function runBare(
   // Union git-diff file list into filesTouched — ground truth for changed files,
   // supplements tool-call events (bare mode also fires graphSync).
   for (const f of result.changedFiles) filesTouched.add(f);
+
+  // Bare mode has no judge loop, so emit the terminal `complete` stage here so
+  // the UI's turn lifecycle closes identically to the full-pipeline path (which
+  // fires `complete` after the judge). Bare work is always considered complete.
+  opts.onStage?.({ kind: "complete", label: "turn complete" });
 
   const evaluation: PromptEvaluation = {
     completeness: 0,
