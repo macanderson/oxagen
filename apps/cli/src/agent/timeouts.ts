@@ -1,14 +1,33 @@
 /**
- * Timeout configuration and utilities for the CLI agent turn.
+ * Timeout policy for the CLI agent turn.
  *
- * Every long operation — LLM requests, tool calls, the overall turn — must be
- * bounded so that a stalled stream, a hanging shell command, or an unresponsive
- * model never leaves the user staring at "Thinking… 249s" with no way out short
- * of killing the process.
+ * ## The rule (Group 8, Bug 1)
  *
- * This module is the SINGLE source of truth for all timeout values. The TUI
- * imports {@link AGENT_TURN_TIMEOUT_MS} to compute an ETA / time-remaining
- * indicator during a turn.
+ * **Timeouts live on the individual model call, not on the turn.** A single turn
+ * can legitimately make hundreds of model calls — a plan with many tasks, a
+ * worker→judge revise loop, background context queries. Capping the *turn* by
+ * total wall-clock time (the old `TIMEOUTS.turnMs = 300_000`) killed valid
+ * long-running work mid-flight, so it is gone.
+ *
+ * What replaces it:
+ *
+ *   - **Per model call** — every model call is raced against
+ *     {@link TimeoutConfig.perModelCallMs}. A call that hangs is aborted and
+ *     retried per {@link TimeoutConfig.retry}, **without ending the turn**
+ *     ({@link callModelWithTimeout}).
+ *   - **Per tool call** — every tool call is bounded ({@link wrapToolsWithTimeout});
+ *     bash/build/test calls get the longer {@link TIMEOUTS.toolLongMs}, all others
+ *     the standard {@link TIMEOUTS.toolMs}.
+ *   - **Turn guarded by PROGRESS, not by the clock** — the optional
+ *     {@link TimeoutConfig.turnInactivityMs} guard aborts the turn only when *no*
+ *     model or tool call has completed within that window. Any completed call
+ *     resets it, so a turn with hundreds of calls is fine as long as calls keep
+ *     landing ({@link createTurnRunner}).
+ *   - **Optional hard ceiling, off by default** — {@link TimeoutConfig.turnHardCeilingMs}
+ *     is a last-resort safety net, `undefined` (disabled) by default. If set it
+ *     must be large; it is never a few hundred seconds.
+ *
+ * This module is the SINGLE source of truth for CLI timeout values.
  */
 import type { ToolSet } from "ai";
 
@@ -33,47 +52,65 @@ export class AgentTimeoutError extends Error {
   }
 }
 
-// ── Constants — change here, propagate everywhere ────────────────────────────
+// ── Timeout configuration (the policy contract) ──────────────────────────────
 
 /**
- * All timeout durations in one place. These are the defaults; individual call
- * sites may shorten but should not exceed these values without a comment.
+ * The timeout policy. Timeouts belong on the model call; the turn is guarded by
+ * progress, never by total elapsed time. Mirrors the Group 7 `timeouts.ts`
+ * contract.
+ */
+export interface TimeoutConfig {
+  /** Applied to each individual model call — the real timeout. */
+  perModelCallMs: number;
+  /** Applied to each tool call (graph query, judge, monitor dispatch, bash…). */
+  perToolCallMs?: number;
+  /**
+   * Progress guard, NOT a wall-clock cap. Aborts the turn only when no model or
+   * tool call completes within this window; any completed call resets it. Leave
+   * undefined to disable.
+   */
+  turnInactivityMs?: number;
+  /**
+   * Hard ceiling — a last-resort safety net, disabled by default. If set it must
+   * be very large. Never set it to a few hundred seconds.
+   */
+  turnHardCeilingMs?: number;
+  /** Retry policy for a timed-out model call. */
+  retry: {
+    maxRetries: number;
+    backoffMs: number;
+  };
+}
+
+/** The default timeout policy. No wall-clock turn cap; the hard ceiling is off. */
+export const DEFAULT_TIMEOUTS: TimeoutConfig = {
+  perModelCallMs: 120_000,
+  perToolCallMs: 120_000,
+  turnInactivityMs: 300_000, // resets on every completed call; NOT total turn time
+  turnHardCeilingMs: undefined,
+  retry: { maxRetries: 2, backoffMs: 1_000 },
+};
+
+/**
+ * Fixed per-operation defaults that are not part of the tunable policy above.
+ *
+ * NOTE: there is deliberately **no** `turnMs` here. A turn is never capped by
+ * total elapsed time — see the module docblock and {@link createTurnRunner}.
  */
 export const TIMEOUTS = {
   /**
-   * ms — abort the LLM stream if no text delta or tool call arrives in this
-   * window. Guards against a stalled TCP connection that stays open indefinitely.
+   * ms — abort a single model stream if no delta (text/reasoning/tool) arrives in
+   * this window. Guards a stalled TCP connection that stays open but stops
+   * delivering bytes. This is a *per-call* stall bound, not a turn bound.
    */
-  llmStallMs: 60_000,
-  /**
-   * ms — abort a standard read/search/list/lookup tool call (read_file, glob,
-   * grep, list_dir, code_graph). These should always complete quickly.
-   */
+  llmStallMs: DEFAULT_TIMEOUTS.perModelCallMs,
+  /** ms — abort a standard read/search/list/lookup tool call. */
   toolMs: 60_000,
-  /**
-   * ms — abort a long-running tool call (bash builds, tests, git ops). The bash
-   * tool already accepts a model-supplied timeout_ms; this is a hard outer cap.
-   */
+  /** ms — abort a long-running tool call (bash builds, tests, git ops). */
   toolLongMs: 240_000,
-  /**
-   * ms — backstop for the entire agent turn (LLM calls + all tool rounds). If
-   * the turn is still running after this window, everything is aborted and the
-   * user sees a clear message.
-   */
-  turnMs: 300_000,
 } as const;
 
-/**
- * The per-turn backstop in milliseconds — exported so the TUI can import it to
- * show an ETA / time-remaining indicator.
- *
- * @example
- *   import { AGENT_TURN_TIMEOUT_MS } from "../agent/timeouts.js";
- *   const remaining = AGENT_TURN_TIMEOUT_MS - (Date.now() - turnStartedAt);
- */
-export const AGENT_TURN_TIMEOUT_MS = TIMEOUTS.turnMs;
-
-// ── Core helper ───────────────────────────────────────────────────────────────
+// ── Core race helper ──────────────────────────────────────────────────────────
 
 /**
  * Race `promise` against a `ms`-millisecond deadline.
@@ -81,11 +118,6 @@ export const AGENT_TURN_TIMEOUT_MS = TIMEOUTS.turnMs;
  * - If `signal` is already aborted, immediately rejects with `AgentTimeoutError`.
  * - If the promise settles before the deadline, the timer is cleared — no leak.
  * - If the deadline fires first, rejects with `AgentTimeoutError`.
- *
- * @param promise  The operation to bound.
- * @param ms       Deadline in milliseconds.
- * @param signal   Optional abort signal that also cancels the promise early.
- * @param label    Human label used in the error message (e.g. "LLM request").
  */
 export function withTimeout<T>(
   promise: Promise<T>,
@@ -93,7 +125,6 @@ export function withTimeout<T>(
   signal?: AbortSignal | null,
   label = "operation",
 ): Promise<T> {
-  // Short-circuit: signal already aborted before we even start.
   if (signal?.aborted) {
     return Promise.reject(new AgentTimeoutError(label, ms));
   }
@@ -104,13 +135,8 @@ export function withTimeout<T>(
     const timer = setTimeout(() => {
       reject(timeoutErr);
     }, ms);
-    // Unref so this timer never keeps the Node.js event loop alive on its own.
-    if (typeof timer === "object" && "unref" in timer) {
-      (timer as { unref: () => void }).unref();
-    }
+    unref(timer);
 
-    // Mirror the abort signal: if it fires before the promise settles, reject
-    // with the same timeout error so the caller sees a consistent type.
     const onAbort = (): void => {
       clearTimeout(timer);
       reject(timeoutErr);
@@ -132,30 +158,120 @@ export function withTimeout<T>(
   });
 }
 
-// ── Turn controller ───────────────────────────────────────────────────────────
+/** Unref a timer so it never keeps the Node.js event loop alive on its own. */
+function unref(timer: ReturnType<typeof setTimeout>): void {
+  if (timer && typeof timer === "object" && "unref" in timer) {
+    (timer as { unref: () => void }).unref();
+  }
+}
+
+/** Resolve after `ms`, or reject early if `signal` aborts. Used for retry backoff. */
+function delay(ms: number, signal?: AbortSignal | null): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    unref(timer);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(new AgentTimeoutError("backoff", ms));
+      },
+      { once: true },
+    );
+  });
+}
+
+// ── Per-model-call timeout + retry ────────────────────────────────────────────
+
+/** Context for one model call, used for logging and retry accounting. */
+export interface ModelCallContext {
+  /** Stable id for this logical call (for the `[timeout]` log line). */
+  callId: string;
+  /** Model slug being called. */
+  model: string;
+  /** Optional structured-log sink; receives the `[timeout] scope=model_call …` line. */
+  onLog?: (line: string) => void;
+}
 
 /**
- * Create an AbortController that fires as soon as EITHER:
- *   1. `callerSignal` fires (e.g. the user pressed Esc / Ctrl-C), or
- *   2. `deadlineMs` elapses (the per-turn backstop).
+ * Run a single model call bounded by `perModelCallMs`, retrying a timed-out call
+ * per the retry policy. **This never ends the turn** — a hung call is aborted and
+ * retried; the turn keeps running.
  *
- * Pass `controller.signal` to every sub-operation (streamText, tool executes,
- * hook runners) so they all cancel on the first trigger.
+ * `fn` receives a per-attempt `AbortSignal` that fires when THIS attempt exceeds
+ * `perModelCallMs` (or the outer signal aborts). Pass it straight through to the
+ * AI SDK so the in-flight request is cancelled on timeout.
  *
- * The deadline timer is `unref()`-ed — it will never prevent the Node.js
- * process from exiting normally — and is cleared automatically when the signal
- * aborts, so there are no leaks.
+ * A retry emits `[timeout] scope=model_call call=<id> model=<m> ms=<n> action=retry`.
+ * If the OUTER signal aborts (user cancel), the call is not retried — the abort
+ * propagates.
+ */
+export async function callModelWithTimeout<T>(
+  fn: (signal: AbortSignal) => Promise<T>,
+  cfg: Pick<TimeoutConfig, "perModelCallMs" | "retry">,
+  ctx: ModelCallContext,
+  outerSignal?: AbortSignal | null,
+): Promise<T> {
+  const label = `model_call:${ctx.model}`;
+  const maxRetries = Math.max(0, cfg.retry.maxRetries);
+  const backoffMs = Math.max(0, cfg.retry.backoffMs);
+
+  for (let attempt = 0; ; attempt++) {
+    if (outerSignal?.aborted) throw new AgentTimeoutError(label, cfg.perModelCallMs);
+
+    const callController = new AbortController();
+    const onOuterAbort = (): void => {
+      if (!callController.signal.aborted) callController.abort(outerSignal?.reason);
+    };
+    if (outerSignal) outerSignal.addEventListener("abort", onOuterAbort, { once: true });
+
+    const timer = setTimeout(() => {
+      if (!callController.signal.aborted) {
+        callController.abort(new AgentTimeoutError(label, cfg.perModelCallMs));
+      }
+    }, cfg.perModelCallMs);
+    unref(timer);
+
+    try {
+      const value = await fn(callController.signal);
+      return value;
+    } catch (err) {
+      // The outer signal aborting is a user cancel — propagate, never retry.
+      if (outerSignal?.aborted) throw err;
+      const timedOut =
+        err instanceof AgentTimeoutError ||
+        (err instanceof Error && err.name === "AbortError");
+      if (!timedOut || attempt >= maxRetries) throw err;
+      ctx.onLog?.(
+        `[timeout] scope=model_call call=${ctx.callId} model=${ctx.model} ` +
+          `ms=${cfg.perModelCallMs} action=retry`,
+      );
+      await delay(backoffMs, outerSignal);
+    } finally {
+      clearTimeout(timer);
+      outerSignal?.removeEventListener("abort", onOuterAbort);
+    }
+  }
+}
+
+// ── Turn controller (abort wiring — NO wall-clock cap) ────────────────────────
+
+/**
+ * Create an AbortController for a turn. Unlike the old implementation this does
+ * **not** impose a wall-clock deadline: a turn is bounded by per-call timeouts
+ * and (optionally) an inactivity guard, never by total elapsed time.
  *
- * @param callerSignal  The outer cancellation signal (user Esc / Ctrl-C).
- * @param deadlineMs    Per-turn wall-clock limit (default: {@link TIMEOUTS.turnMs}).
+ * It fires when EITHER the caller signal fires (user Esc / Ctrl-C) OR — only if
+ * explicitly requested — the last-resort `hardCeilingMs` elapses. The hard
+ * ceiling is off by default; if provided it should be very large.
  */
 export function makeTurnController(
   callerSignal?: AbortSignal | null,
-  deadlineMs: number = TIMEOUTS.turnMs,
+  opts?: { hardCeilingMs?: number },
 ): AbortController {
   const controller = new AbortController();
 
-  // Propagate the caller's signal immediately.
   if (callerSignal) {
     if (callerSignal.aborted) {
       controller.abort(callerSignal.reason);
@@ -170,55 +286,49 @@ export function makeTurnController(
     );
   }
 
-  // Wire the deadline timer.
-  const timer = setTimeout(() => {
-    if (!controller.signal.aborted) {
-      controller.abort(new AgentTimeoutError("turn deadline", deadlineMs));
-    }
-  }, deadlineMs);
-  if (typeof timer === "object" && "unref" in timer) {
-    (timer as { unref: () => void }).unref();
+  const ceiling = opts?.hardCeilingMs;
+  if (typeof ceiling === "number" && ceiling > 0 && Number.isFinite(ceiling)) {
+    const timer = setTimeout(() => {
+      if (!controller.signal.aborted) {
+        controller.abort(new AgentTimeoutError("turn hard ceiling", ceiling));
+      }
+    }, ceiling);
+    unref(timer);
+    controller.signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
   }
-
-  // Clear the timer when the signal fires (from any cause) so there is no leak.
-  controller.signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
 
   return controller;
 }
 
-// ── Stall detector ────────────────────────────────────────────────────────────
+// ── Inactivity / stall detector ───────────────────────────────────────────────
 
 /**
- * A stall detector wraps a streaming operation and aborts it if no progress
- * (no stream delta) arrives within `stallMs`. Call `reset()` each time a
- * delta arrives to push the deadline forward. Call `stop()` when the stream
- * finishes to cancel the timer.
+ * A progress guard. Fires `onIdle` if `reset()` is not called within `idleMs`.
+ * Call `reset()` on every unit of progress (a completed model/tool call, a
+ * stream delta) to push the deadline forward; `stop()` when the turn ends.
  *
- * `onStall` is called exactly once if the timer fires without a reset.
- *
- * @param stallMs  Window in ms; if no progress for this long, call `onStall`.
- * @param onStall  Callback invoked when a stall is detected (e.g. abort the turn).
+ * This is the primitive behind both the per-stream stall bound and the
+ * turn-level inactivity guard — the difference is only the window and what
+ * counts as "progress".
  */
 export function makeStallDetector(
-  stallMs: number,
-  onStall: () => void,
+  idleMs: number,
+  onIdle: () => void,
 ): { reset: () => void; stop: () => void } {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
 
-  function scheduleStall(): void {
+  function schedule(): void {
     if (timer !== null) clearTimeout(timer);
     timer = setTimeout(() => {
-      if (!stopped) onStall();
-    }, stallMs);
-    if (timer && typeof timer === "object" && "unref" in timer) {
-      (timer as { unref: () => void }).unref();
-    }
+      if (!stopped) onIdle();
+    }, idleMs);
+    unref(timer as ReturnType<typeof setTimeout>);
   }
 
   function reset(): void {
     if (stopped) return;
-    scheduleStall();
+    schedule();
   }
 
   function stop(): void {
@@ -229,10 +339,124 @@ export function makeStallDetector(
     }
   }
 
-  // Start the initial countdown.
-  scheduleStall();
-
+  schedule();
   return { reset, stop };
+}
+
+// ── Turn runner (progress-based; the contract implementation) ─────────────────
+
+/** How a turn ended: it finished, or a guard aborted it. */
+export type TurnEndReason = "completed" | "inactivity" | "hard_ceiling";
+
+/** A single model call carries its own deadline; the turn does not impose one. */
+export interface ModelCall {
+  id: string;
+  model: string;
+  /** Defaults to {@link TimeoutConfig.perModelCallMs}. */
+  timeoutMs: number;
+  startedAt: number;
+}
+
+/** Emitted when a model or tool call completes — resets the inactivity guard. */
+export interface ProgressEvent {
+  kind: "model_call_done" | "tool_call_done";
+  callId: string;
+  at: number;
+}
+
+/**
+ * Watches a turn by PROGRESS, not wall-clock:
+ *  - a completed model/tool call emits a {@link ProgressEvent} via `onProgress`
+ *  - the inactivity guard (if configured) resets on every ProgressEvent
+ *  - the turn aborts only on inactivity or the optional hard ceiling
+ */
+export interface TurnRunner {
+  onProgress(ev: ProgressEvent): void;
+  run(work: () => Promise<void>): Promise<TurnEndReason>;
+}
+
+/** A {@link TurnRunner} that also exposes its abort signal for the turn body. */
+export interface RunningTurnRunner extends TurnRunner {
+  /** Pass this to the turn's model/tool calls so guards can cancel them. */
+  readonly signal: AbortSignal;
+}
+
+/**
+ * Build a progress-guarded turn runner. The turn completes as long as calls keep
+ * landing; it aborts only when no call completes within `turnInactivityMs`
+ * (progress-based) or, if set, when the last-resort `turnHardCeilingMs` elapses.
+ */
+export function createTurnRunner(
+  cfg: Pick<TimeoutConfig, "turnInactivityMs" | "turnHardCeilingMs">,
+  opts?: { onLog?: (line: string) => void; callerSignal?: AbortSignal | null },
+): RunningTurnRunner {
+  const controller = makeTurnController(opts?.callerSignal, {
+    hardCeilingMs: cfg.turnHardCeilingMs,
+  });
+  let endReason: TurnEndReason | null = null;
+  let lastProgressAt = Date.now();
+  let guard: { reset: () => void; stop: () => void } | null = null;
+
+  // A hard-ceiling abort carries an AgentTimeoutError reason; surface it as the
+  // hard_ceiling end reason if it fired before any inactivity abort.
+  controller.signal.addEventListener(
+    "abort",
+    () => {
+      if (endReason === null && controller.signal.reason instanceof AgentTimeoutError) {
+        endReason = "hard_ceiling";
+      }
+    },
+    { once: true },
+  );
+
+  function onProgress(ev: ProgressEvent): void {
+    lastProgressAt = ev.at;
+    guard?.reset();
+  }
+
+  async function run(work: () => Promise<void>): Promise<TurnEndReason> {
+    endReason = null;
+
+    if (typeof cfg.turnInactivityMs === "number" && cfg.turnInactivityMs > 0) {
+      const window = cfg.turnInactivityMs;
+      guard = makeStallDetector(window, () => {
+        if (!controller.signal.aborted) {
+          const idleMs = Date.now() - lastProgressAt;
+          opts?.onLog?.(`[timeout] scope=turn reason=inactivity idle_ms=${idleMs}`);
+          endReason = "inactivity";
+          controller.abort(new AgentTimeoutError("turn inactivity", window));
+        }
+      });
+    }
+
+    const aborted = new Promise<"aborted">((resolve) => {
+      if (controller.signal.aborted) resolve("aborted");
+      else controller.signal.addEventListener("abort", () => resolve("aborted"), { once: true });
+    });
+
+    let workErr: unknown = null;
+    const done = work().then(
+      () => "done" as const,
+      (err: unknown) => {
+        workErr = err;
+        return "error" as const;
+      },
+    );
+
+    try {
+      const outcome = await Promise.race([done, aborted]);
+      if (outcome === "done") return "completed";
+      if (outcome === "aborted") return endReason ?? "completed";
+      // work threw: if a guard fired, report that; otherwise propagate.
+      if (endReason) return endReason;
+      throw workErr;
+    } finally {
+      guard?.stop();
+      guard = null;
+    }
+  }
+
+  return { onProgress, run, signal: controller.signal };
 }
 
 // ── Tool timeout wrapping ─────────────────────────────────────────────────────
@@ -241,26 +465,18 @@ export function makeStallDetector(
 export type ToolTimeoutCategory = "standard" | "long";
 
 /**
- * Choose the appropriate timeout category for a tool by name.
- * `bash` runs builds/tests/git ops that legitimately take minutes; every
- * other tool (reads, searches, lookups) should be fast.
+ * Choose the timeout category for a tool by name. `bash` runs builds/tests/git
+ * ops that legitimately take minutes; everything else should be fast.
  */
 export function toolTimeoutCategory(toolName: string): ToolTimeoutCategory {
   return toolName === "bash" ? "long" : "standard";
 }
 
 /**
- * Wrap every tool execute in a timeout appropriate for its category. Returns a
- * new ToolSet; never mutates the input.
- *
- * Tool timeouts surface to the model as a tool-result string (not a throw) so
- * that a slow tool aborts cleanly while the turn itself can still finish and
- * explain the situation to the user. If `signal` is already aborted when the
- * execute is called, the timeout fires immediately.
- *
- * @param tools   The tool set to wrap (e.g. from `wrapToolsWithGate`).
- * @param signal  The turn-level signal; a tool call that outlives the turn is
- *                cancelled as soon as the turn signal fires.
+ * Wrap every tool execute in a per-call timeout appropriate for its category.
+ * Returns a new ToolSet; never mutates the input. A timed-out tool surfaces as a
+ * tool-result string (not a throw) so the turn stays alive and the model can
+ * adapt.
  */
 export function wrapToolsWithTimeout(
   tools: ToolSet,
@@ -281,17 +497,11 @@ export function wrapToolsWithTimeout(
       ...toolDef,
       execute: (input: unknown, options: unknown): Promise<unknown> =>
         withTimeout(
-          // exec returns `Promise<unknown>` (the AI SDK types it as returning
-          // the execute result which may not be a promise in all TS builds, but
-          // tool executes are always async in practice — Promise.resolve is safe).
           Promise.resolve((exec as (i: unknown, o: unknown) => unknown)(input, options)),
           ms,
           signal,
           `tool:${name}`,
         ).catch((err: unknown) => {
-          // A timeout on a tool call surfaces as a string result the model reads.
-          // The turn stays alive so the model can explain the situation or try a
-          // different approach. All other errors are rethrown to the AI SDK.
           if (err instanceof AgentTimeoutError) return err.message;
           throw err;
         }),

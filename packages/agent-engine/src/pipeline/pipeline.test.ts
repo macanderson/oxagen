@@ -112,6 +112,24 @@ describe("runTurn — GraphSyncProvider", () => {
     expect(recordLineage).toHaveBeenCalledOnce();
   });
 
+  it("forwards the git diff + changed files to onFileChange after an edit", async () => {
+    const ws = new MemoryWorkspace({ "src/e.ts": "before" });
+    const changes: Array<{ diff: string; changedFiles: string[] }> = [];
+
+    await runTurn({
+      prompt: "rename before to after in src/e.ts",
+      workspace: ws,
+      ai: makeAi("src/e.ts"),
+      bare: true,
+      onFileChange: (diff, changedFiles) => changes.push({ diff, changedFiles }),
+    });
+
+    expect(changes.length).toBeGreaterThan(0);
+    const last = changes[changes.length - 1]!;
+    expect(last.changedFiles).toContain("src/e.ts");
+    expect(last.diff).toContain("src/e.ts");
+  });
+
   it("does NOT call graphSync when no files are touched", async () => {
     // AI emits text but edits no files.
     const ws = new MemoryWorkspace({ "src/d.ts": "untouched" });

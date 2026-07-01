@@ -20,7 +20,7 @@
 // relative compiler paths resolve exactly as they do for the real build. The
 // authoritative affected-package typecheck still runs in CI
 // (`turbo run typecheck --filter=...[origin/main]`).
-import { existsSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, realpathSync, writeFileSync, rmSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -35,7 +35,14 @@ const TS_EXT = /\.(ts|tsx|mts|cts)$/;
 // skip them here to mirror what the authoritative build typechecks.
 const CONFIG_FILE = /(^|\/)[^/]+\.config\.(c|m)?[jt]sx?$/i;
 const repoRoot = process.cwd();
-const tsc = join(repoRoot, "node_modules", ".bin", "tsc");
+// `node_modules` (and, in some worktree setups, packages beneath it) can be a
+// symlink into a shared install shared across git worktrees. `pnpm`'s `.bin`
+// shims `require()` their target module using a path relative to their own
+// (symlink-resolved) directory; if we hand `spawnSync` the un-resolved,
+// symlink-containing path, Node computes that relative `__dirname` against
+// the wrong base and fails with a doubled, bogus path. Resolving to the real
+// path here up front means tsc is always invoked from its true location.
+const tsc = realpathSync(join(repoRoot, "node_modules", ".bin", "tsc"));
 
 // Find the closest tsconfig.json walking up from a file toward the repo root.
 function nearestTsconfig(file) {

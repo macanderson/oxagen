@@ -28,6 +28,7 @@
  */
 import type { ModelMessage } from "ai";
 import { runCodingAgent } from "../engine";
+import { buildSystemPrompt } from "../prompt/system-prompt";
 import { evaluatePrompt } from "../evaluate/evaluator";
 import { judgeCompleteness, buildRevisionPrompt } from "../evaluate/judge";
 import { enhancePrompt } from "../evaluate/prompt-enhancer";
@@ -62,6 +63,22 @@ let traceCounter = 0;
 function newTraceId(): string {
   traceCounter = (traceCounter + 1) % 1_000_000;
   return `turn_${Date.now().toString(36)}_${traceCounter.toString(36)}`;
+}
+
+/**
+ * Compose the coding agent's system prompt: persona + operating rules (including
+ * "the user cannot see tool output — always interpret and report") + the repo's
+ * project rules. Both the pipeline and bare execution paths route through here so
+ * the agent gets its full behavioural contract, not just the raw project text.
+ * Stable within a session (cwd/projectContext/readOnly don't change), so it keeps
+ * the provider prompt cache warm across turns.
+ */
+function composeAgentSystem(opts: RunTurnOptions, cwd: string): string {
+  return buildSystemPrompt({
+    cwd,
+    projectContext: opts.projectContext,
+    readOnly: opts.readOnly,
+  });
 }
 
 export interface RunTurnOptions {
@@ -118,6 +135,12 @@ export interface RunTurnOptions {
   onReasoning?: (delta: string) => void;
   /** Fired when the model invokes a tool. */
   onToolCall?: (name: string, input: unknown) => void;
+  /**
+   * Fired at the end of each execution round with the cumulative `git diff` of
+   * the changed files and the changed-file list. Lets the UI render the code
+   * changes (syntax-highlighted diff) as they land.
+   */
+  onFileChange?: (diff: string, changedFiles: string[]) => void;
 }
 
 export interface RunTurnResult {
@@ -286,7 +309,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       instruction: prompt,
       model: routed.model,
       effort: opts.effort,
-      system: opts.projectContext?.text,
+      system: composeAgentSystem(opts, cwd),
       history,
       maxSteps: opts.maxSteps,
       readOnly: opts.readOnly,
@@ -297,6 +320,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         if (e.type === "text") opts.onText?.(e.delta);
         if (e.type === "reasoning") opts.onReasoning?.(e.delta);
         if (e.type === "tool-call") onToolCall(e.name, e.input);
+        if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
         captureToolEvent(e, toolEvents, opts.verbose);
       },
     });
@@ -543,6 +567,7 @@ async function runBare(
     instruction: opts.prompt,
     model: opts.model,
     effort: opts.effort,
+    system: composeAgentSystem(opts, cwd),
     history: opts.history,
     maxSteps: opts.maxSteps,
     readOnly: opts.readOnly,
@@ -553,6 +578,7 @@ async function runBare(
       if (e.type === "text") opts.onText?.(e.delta);
       if (e.type === "reasoning") opts.onReasoning?.(e.delta);
       if (e.type === "tool-call") onToolCall(e.name, e.input);
+      if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
       captureToolEvent(e, toolEvents, opts.verbose);
     },
   });

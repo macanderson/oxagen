@@ -10,7 +10,14 @@ import React, { useState, useEffect } from "react";
 import { theme } from "../tui/theme.js";
 import { formatUsd } from "../agent/model-router.js";
 import { AGENT_TURN_TIMEOUT_MS } from "../agent/timeouts.js";
-import { getToolEmoji } from "../agent/tool-formatter.js";
+import {
+  getToolEmoji,
+  getToolAccent,
+  toolDisplayLabel,
+  isSubagentDispatch,
+} from "../agent/tool-formatter.js";
+import { DiffView } from "./diff-view.js";
+import type { DiffTheme } from "../tui/terminal-theme.js";
 import { SlashMenu } from "./slash-menu.js";
 import {
   slashQuery,
@@ -21,7 +28,7 @@ import type { StageEvent, StageKind, TurnTrace, JudgeVerdict } from "../agent/tr
 import type { ApprovalRequest, ApprovalResponse, PermissionMode } from "../agent/permissions.js";
 
 export interface Message {
-  role: "user" | "assistant" | "reasoning" | "tool" | "stage";
+  role: "user" | "assistant" | "reasoning" | "tool" | "stage" | "diff";
   content: string;
   timestamp: number;
   toolName?: string;
@@ -30,6 +37,32 @@ export interface Message {
   stage?: StageEvent;
   /** When present, the message renders the full replay view for a turn. */
   trace?: TurnTrace;
+  /** When present, the message renders the end-of-turn summary card. */
+  summary?: TurnSummary;
+}
+
+/**
+ * Headline outcome of a turn, rendered as a boxed card once the work settles.
+ * Only fields the pipeline actually produces are populated — completeness +
+ * confidence from the advisor judge, the files the agent touched, and the
+ * priced cost. Test/PR/CI status is intentionally absent (the REPL turn does
+ * not run those) rather than shown as fabricated data.
+ */
+export interface TurnSummary {
+  /** Whether the advisor judged the work complete (or the turn simply finished). */
+  complete: boolean;
+  /** Advisor confidence 0–100 → shown as the "quality" score. Absent in bare mode. */
+  quality?: number;
+  /** Relative paths the agent wrote or edited. */
+  filesTouched: string[];
+  /** Priced cost of the turn, USD. */
+  costUsd: number;
+  /** True when the pipeline ran (judged); false for the bare agent. */
+  judged: boolean;
+  /** Present on `role: "diff"` — the unified git diff to render (highlighted). */
+  diff?: string;
+  /** Present on `role: "diff"` — the changed-file paths, for the header line. */
+  changedFiles?: string[];
 }
 
 export const HELP = [
@@ -278,19 +311,116 @@ const STAGE_COLOR: Record<StageKind, string> = {
   complete: "#34D399",
 };
 
-/** A compact, dim line announcing one pipeline stage as it happens. */
+/**
+ * A compact line announcing one pipeline stage as it happens. Rendered in the
+ * same bracketed-chip grammar as tool calls, but with the stage's own dim glyph
+ * (not the ⚡ action bolt) so pipeline chatter stays visually subordinate to the
+ * concrete actions the agent takes.
+ */
 export function StageBadge({ stage }: { stage: StageEvent }): React.ReactElement {
+  const color = STAGE_COLOR[stage.kind];
   return (
     <Box paddingX={1}>
-      <Text color={STAGE_COLOR[stage.kind]}>{STAGE_GLYPH[stage.kind]} </Text>
-      <Text dimColor>{stage.label}</Text>
+      <Text color={color}>{STAGE_GLYPH[stage.kind]} </Text>
+      <Text color={color} dimColor>
+        [{STAGE_LABEL[stage.kind]}]
+      </Text>
+      <Text>{"  "}</Text>
+      <Text dimColor wrap="truncate-end">
+        {stage.label}
+      </Text>
       {stage.detail ? <Text dimColor> · {stage.detail}</Text> : null}
+    </Box>
+  );
+}
+
+/** Title-cased chip label for each pipeline stage. */
+const STAGE_LABEL: Record<StageKind, string> = {
+  evaluate: "Evaluate",
+  enhance: "Enhance",
+  route: "Route",
+  execute: "Execute",
+  judge: "Review",
+  revise: "Revise",
+  complete: "Complete",
+};
+
+// ── Action chips ────────────────────────────────────────────────────────────
+
+/** The ⚡ action bolt that gutters every concrete agent action. */
+const ACTION_BOLT = "⚡";
+
+/**
+ * One tool call, rendered as `⚡ [📖 Read]  src/foo.ts`. The bracket is tinted
+ * by what the tool does (see getToolAccent) so writes/deletes/commands/reads are
+ * distinguishable at a glance; the argument trails, truncated to one line.
+ */
+function ToolChip({ msg }: { msg: Message }): React.ReactElement {
+  const name = msg.toolName ?? "tool";
+  const subagent = isSubagentDispatch(name);
+  // Subagent delegation gets its own grammar (`⚡ [🚀 Task]  slug → what`) and a
+  // violet accent; every other tool keeps the amber bolt with a use-colored chip.
+  const accent = subagent ? "#A78BFA" : getToolAccent(name);
+  return (
+    <Box paddingX={1} marginTop={1}>
+      <Text color={subagent ? accent : "#FBBF24"} bold>
+        {ACTION_BOLT}{" "}
+      </Text>
+      <Text color={accent}>
+        [{getToolEmoji(name)} {subagent ? "Task" : toolDisplayLabel(name)}]
+      </Text>
+      <Text>{"  "}</Text>
+      <Text dimColor={!subagent} wrap="truncate-end">
+        {msg.content}
+      </Text>
+/**
+ * A code-change message: a header naming the changed files, then the unified
+ * git diff rendered with syntax highlighting in a theme matched to the terminal
+ * background (light diff on light terminals, dark on dark).
+ */
+export function DiffMessage({
+  msg,
+  theme: diffTheme,
+}: {
+  msg: Message;
+  theme?: DiffTheme;
+}): React.ReactElement {
+  const files = msg.changedFiles ?? [];
+  const header =
+    files.length === 0
+      ? "code changes"
+      : files.length === 1
+        ? files[0]!
+        : `${files.length} files changed`;
+  return (
+    <Box flexDirection="column" marginY={1} paddingX={1}>
+      <Box>
+        <Text color={theme.violet} bold>
+          {"◆ "}
+        </Text>
+        <Text dimColor>{header}</Text>
+        {files.length > 1 ? (
+          <Text dimColor> · {files.slice(0, 4).join(", ")}{files.length > 4 ? " …" : ""}</Text>
+        ) : null}
+      </Box>
+      <DiffView diff={msg.diff ?? ""} theme={diffTheme} />
     </Box>
   );
 }
 
 export function MessageView({ msg }: { msg: Message }): React.ReactElement {
   if (msg.trace) return <TraceView trace={msg.trace} />;
+  if (msg.summary) return <TurnSummaryView summary={msg.summary} />;
+export function MessageView({
+  msg,
+  diffTheme,
+}: {
+  msg: Message;
+  /** Theme for `role: "diff"` rendering; derived from the terminal background. */
+  diffTheme?: DiffTheme;
+}): React.ReactElement {
+  if (msg.trace) return <TraceView trace={msg.trace} />;
+  if (msg.role === "diff" && msg.diff) return <DiffMessage msg={msg} theme={diffTheme} />;
   if (msg.role === "stage" && msg.stage) return <StageBadge stage={msg.stage} />;
   if (msg.role === "user") {
     return (
@@ -304,13 +434,13 @@ export function MessageView({ msg }: { msg: Message }): React.ReactElement {
   }
 
   if (msg.role === "reasoning") {
-    // The model's chain-of-thought, rendered dim and prefixed so it reads as an
-    // aside distinct from the answer. Shown live so the user sees every step of
-    // the agent's thinking, not just its conclusion.
+    // The model's chain-of-thought, rendered dim under a 💭 label so it reads as
+    // an aside distinct from the answer. Shown live so the user sees every step
+    // of the agent's thinking, not just its conclusion.
     return (
       <Box paddingX={1} marginY={0} flexDirection="column">
         <Text dimColor wrap="wrap">
-          {"💭 "}
+          <Text color={theme.violet}>💭 thinking </Text>
           {msg.content}
           {msg.streaming && <Text color={theme.violet}>▊</Text>}
         </Text>
@@ -318,25 +448,16 @@ export function MessageView({ msg }: { msg: Message }): React.ReactElement {
     );
   }
 
-  if (msg.role === "tool") {
-    const emoji = getToolEmoji(msg.toolName ?? "");
-    return (
-      <Box paddingX={1} marginY={1} flexDirection="column">
-        <Box>
-          <Text>{emoji + " "}</Text>
-          <Text dimColor>{msg.toolName?.toLowerCase() ?? "tool"}</Text>
-          <Text dimColor>{"("}</Text>
-          <Text wrap="truncate">{msg.content}</Text>
-          <Text dimColor>{")"}</Text>
-        </Box>
-      </Box>
-    );
-  }
+  if (msg.role === "tool") return <ToolChip msg={msg} />;
 
-  // assistant
+  // assistant — Oxagen speaking. A violet ◆ marker gutters the block so the
+  // agent's prose is instantly separable from tool output and thinking asides.
   return (
     <Box paddingX={1} marginY={0} flexDirection="column">
-      <Text>
+      <Text wrap="wrap">
+        <Text color={theme.violet} bold>
+          ◆{" "}
+        </Text>
         {msg.content}
         {msg.streaming && <Text color={theme.cyan}>▊</Text>}
       </Text>
@@ -344,23 +465,105 @@ export function MessageView({ msg }: { msg: Message }): React.ReactElement {
   );
 }
 
+// ── End-of-turn summary card ──────────────────────────────────────────────────
+
+/** One right-aligned label/value row inside the summary card. */
+function SummaryRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <Box>
+      <Text dimColor>{label.padEnd(9)}</Text>
+      <Text>{children}</Text>
+    </Box>
+  );
+}
+
+/**
+ * The headline outcome of a turn, as a rounded card: the completeness verdict
+ * and advisor "quality" score, the files touched, and the priced cost. The
+ * border warms green when complete and amber when the judge still sees gaps.
+ */
+export function TurnSummaryView({ summary }: { summary: TurnSummary }): React.ReactElement {
+  const { complete, quality, filesTouched, costUsd, judged } = summary;
+  const color = complete ? "#34D399" : "#FBBF24";
+  const files =
+    filesTouched.length === 0
+      ? "none"
+      : filesTouched.length === 1
+        ? (filesTouched[0] as string)
+        : `${filesTouched[0]} (+${filesTouched.length - 1})`;
+  return (
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={color}
+      paddingX={1}
+      marginY={1}
+      alignSelf="flex-start"
+    >
+      <Box>
+        <Text color={color} bold>
+          {complete ? "✓ complete" : "⚠ gaps remain"}
+        </Text>
+        {judged && typeof quality === "number" ? (
+          <>
+            <Text dimColor>{"     quality "}</Text>
+            <Text color={scoreColor(quality)} bold>
+              {quality}/100
+            </Text>
+          </>
+        ) : null}
+      </Box>
+      {!judged ? (
+        <SummaryRow label="review">
+          <Text dimColor>not judged (bare mode)</Text>
+        </SummaryRow>
+      ) : null}
+      <SummaryRow label="files">
+        <Text color={filesTouched.length > 0 ? theme.cyan : undefined} dimColor={filesTouched.length === 0}>
+          {files}
+        </Text>
+      </SummaryRow>
+      <SummaryRow label="cost">
+        <Text color="#FBBF24">{formatUsd(costUsd)}</Text>
+      </SummaryRow>
+    </Box>
+  );
+}
+
 // ── Thinking Indicator ────────────────────────────────────────────────────────
 
-/** Width (cells) of the turn-budget bar in the thinking indicator. */
-const BUDGET_BAR_WIDTH = 6;
+/**
+ * After this many seconds with no *completed* call (progress), the turn is close
+ * to the inactivity guard's window and we warn the user. This is NOT a turn cap —
+ * a turn runs as long as calls keep completing (see agent/timeouts.ts). It just
+ * signals "nothing has landed in a while" so a genuinely hung turn is visible.
+ */
+const IDLE_WARN_SEC = 60;
 
 /**
  * Animated "the agent is working" indicator: a braille spinner, elapsed
- * seconds, a live output-token estimate, and a best-guess "time remaining" bar
- * toward the turn's auto-cancel deadline. It runs its own ~100ms timer so it
- * animates independently of streaming updates.
+ * seconds, a live output-token estimate, and — crucially — seconds since the
+ * last completed call (progress). There is NO countdown to an auto-cancel
+ * deadline, because a turn is bounded by progress and per-call timeouts, not by
+ * total elapsed time: long, healthy work must not look like it is "running out
+ * of time". The idle figure warms dim → amber → red only when progress genuinely
+ * stalls. It runs its own ~100ms timer so it animates independently of streaming.
  */
 export function ThinkingIndicator({
   startedAt,
   getTokens,
+  getLastProgressAt,
 }: {
   startedAt: number;
   getTokens: () => number;
+  /** Live getter for the timestamp of the last completed call (delta/tool/stage). */
+  getLastProgressAt?: () => number | null;
 }): React.ReactElement {
   const [frame, setFrame] = useState(0);
   useEffect(() => {
@@ -368,20 +571,17 @@ export function ThinkingIndicator({
     return () => clearInterval(id);
   }, []);
 
-  const elapsedMs = Math.max(0, Date.now() - startedAt);
-  const elapsed = Math.round(elapsedMs / 1000);
+  const now = Date.now();
+  const elapsed = Math.round(Math.max(0, now - startedAt) / 1000);
   const tokens = getTokens();
 
-  // Best-guess "time remaining" = the budget left before the turn hits its
-  // auto-cancel backstop (AGENT_TURN_TIMEOUT_MS). The bar fills as the turn runs
-  // and the remaining time warms dim → amber → red as the deadline nears, so a
-  // slow turn shows honest progress instead of an opaque, possibly-hung spinner.
-  const remainingSec = Math.ceil(Math.max(0, AGENT_TURN_TIMEOUT_MS - elapsedMs) / 1000);
-  const frac = Math.min(1, elapsedMs / AGENT_TURN_TIMEOUT_MS);
-  const filled = Math.round(frac * BUDGET_BAR_WIDTH);
-  const bar = "▰".repeat(filled) + "▱".repeat(BUDGET_BAR_WIDTH - filled);
-  const remainingColor =
-    remainingSec <= 30 ? "#F87171" : remainingSec <= 90 ? "#FBBF24" : undefined;
+  // Seconds since the last unit of progress landed. Only surfaced once it grows
+  // past the warn threshold, so a normal fast turn stays clean.
+  const lastProgressAt = getLastProgressAt?.() ?? null;
+  const idleSec =
+    lastProgressAt != null ? Math.round(Math.max(0, now - lastProgressAt) / 1000) : 0;
+  const idleColor =
+    idleSec >= IDLE_WARN_SEC * 2 ? "#F87171" : idleSec >= IDLE_WARN_SEC ? "#FBBF24" : undefined;
 
   return (
     <Box paddingX={1}>
@@ -391,12 +591,10 @@ export function ThinkingIndicator({
       <Text color="#FBBF24">Thinking… </Text>
       <Text dimColor>
         {elapsed}s{tokens > 0 ? ` · ~${humanizeTokens(tokens)} tok` : ""}
-        {" · "}
-        {bar}{" "}
       </Text>
-      <Text dimColor={remainingColor === undefined} color={remainingColor}>
-        ~{remainingSec}s left
-      </Text>
+      {idleSec >= IDLE_WARN_SEC ? (
+        <Text color={idleColor}>{` · idle ${idleSec}s`}</Text>
+      ) : null}
       <Text dimColor> · esc to cancel</Text>
     </Box>
   );
@@ -430,6 +628,8 @@ export function StatusLine({
   verboseOn,
   effort,
   mode = "ask",
+  turnOutputTokens = 0,
+  turnCostUsd = 0,
 }: {
   model: string;
   /** Current git branch (undefined = not a repo / unknown; the chip is hidden). */
@@ -442,6 +642,10 @@ export function StatusLine({
   cacheMiss: number;
   /** Cumulative estimated session cost, USD. */
   costUsd: number;
+  /** Output tokens accumulated in the CURRENT turn (live; 0 = idle/none). */
+  turnOutputTokens?: number;
+  /** Estimated cost of the CURRENT turn, USD (live; 0 = idle/none). */
+  turnCostUsd?: number;
   /** Whether the eval→enhance→judge pipeline is active (undefined = don't show). */
   pipelineOn?: boolean;
   /** Whether verbose telemetry capture is active (undefined = don't show). */
@@ -479,6 +683,13 @@ export function StatusLine({
         <Text color="#FB7185">{humanizeTokens(cacheMiss)}miss</Text>
         {sep}
         <Text color="#FBBF24">{cost}</Text>
+        {turnOutputTokens > 0 || turnCostUsd > 0 ? (
+          <Text color="#34D399">
+            {"  ▲ turn +"}
+            {humanizeTokens(turnOutputTokens)}
+            {turnCostUsd > 0 ? ` ${formatUsd(turnCostUsd)}` : ""}
+          </Text>
+        ) : null}
         {effort ? (
           <>
             {sep}
@@ -492,7 +703,12 @@ export function StatusLine({
             <Text color={theme.cyan}>verbose</Text>
           </>
         ) : null}
-        {pipelineOn === false ? (
+        {pipelineOn === true ? (
+          <>
+            {sep}
+            <Text color="#34D399" bold>🏋️ pipeline activated</Text>
+          </>
+        ) : pipelineOn === false ? (
           <>
             {sep}
             <Text color="#FB7185">bare</Text>
