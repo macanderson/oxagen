@@ -16,7 +16,7 @@ import { Save, Lock, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { MarkdownCodeEditor } from "@/components/ui/markdown-code-editor";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import type { PromptSettingsActionResult, PromptSettingsInput } from "./prompt-settings-action";
@@ -260,15 +260,15 @@ export function PromptSettingsForm({
             These instructions are appended to every agent prompt in this workspace. Use this to set
             workspace-wide context, tone, or constraints.
           </p>
-          <Textarea
+          <MarkdownCodeEditor
             id="additional-instructions"
             value={additionalInstructions}
-            onChange={(e) => setAdditionalInstructions(e.target.value)}
+            onChange={setAdditionalInstructions}
             disabled={disabled}
             placeholder="e.g. Always respond in British English. Cite sources when making factual claims."
-            className="min-h-[120px] resize-y font-mono text-sm"
             maxLength={8000}
-            aria-describedby="additional-instructions-count"
+            minHeight="10rem"
+            ariaLabel="Workspace instructions"
           />
           <p
             id="additional-instructions-count"
@@ -334,21 +334,18 @@ export function PromptSettingsForm({
                 </div>
                 <p className="text-xs text-muted-foreground">{description}</p>
                 <div className="relative">
-                  <Textarea
+                  <MarkdownCodeEditor
                     id={`override-${key}`}
                     value={overrides[key] ?? ""}
-                    onChange={(e) =>
-                      setOverrides((prev) => ({ ...prev, [key]: e.target.value }))
+                    onChange={(value) =>
+                      setOverrides((prev) => ({ ...prev, [key]: value }))
                     }
                     disabled={!isEnterprise || disabled}
                     placeholder={placeholder}
-                    className={
-                      !isEnterprise
-                        ? "min-h-[100px] resize-y font-mono text-sm cursor-not-allowed opacity-60"
-                        : "min-h-[100px] resize-y font-mono text-sm"
-                    }
                     maxLength={4000}
-                    aria-describedby={!isEnterprise ? `override-${key}-help` : undefined}
+                    minHeight="7rem"
+                    ariaLabel={label}
+                    className={!isEnterprise ? "cursor-not-allowed" : undefined}
                   />
                   {!isEnterprise && (
                     <div
