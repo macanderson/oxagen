@@ -1266,6 +1266,51 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_ROUTING_TRIVIAL_MAX: {
+    group: "CLI",
+    description:
+      "Highest task complexity the CLI orchestrator handles on the coordinator model before " +
+      "dispatching to a worker. One of the complexity-scale labels; invalid values fall back to " +
+      "the built-in routing policy.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_ROUTING_SWITCH_BUDGET: {
+    group: "CLI",
+    description:
+      "Token budget guarding against low-value mid-turn model switches in the CLI orchestrator. " +
+      "Non-negative number; invalid values fall back to the built-in routing policy.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_ROUTING_CODE_WORKER: {
+    group: "CLI",
+    description:
+      "Overrides the default code-worker model id the CLI orchestrator dispatches coding work to. " +
+      "Falls back to the registry's `workerModels.defaultCode`.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_ROUTING_BASIC_WORKER: {
+    group: "CLI",
+    description:
+      "Overrides the cheap basic-work worker model id the CLI orchestrator dispatches lightweight " +
+      "work to. Falls back to the registry's `workerModels.cheapBasic`.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_DEBUG: {
     group: "CLI",
     description:
