@@ -106,6 +106,10 @@ export type {
 // "ai", keeping @oxagen/ai as the single AI SDK chokepoint. `jsonSchema` builds
 // a tool input schema from a raw JSON Schema (used by the OpenAI-compatible CLI
 // proxy, where tool params arrive as JSON Schema rather than Zod).
-export { tool, jsonSchema } from "ai";
+// `stepCountIs` builds the `stopWhen` predicate that bounds a multi-step
+// agentic tool loop. Callers with tools MUST pass one — the AI SDK default is
+// `stepCountIs(1)`, which halts the turn after the first step, so a tool call
+// executes but the model never gets a second step to read the result and reply.
+export { tool, jsonSchema, stepCountIs } from "ai";
 export type { Tool, ToolSet, ModelMessage } from "ai";
 export type { JSONSchema7 } from "@ai-sdk/provider";

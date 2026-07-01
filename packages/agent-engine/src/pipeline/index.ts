@@ -94,7 +94,7 @@ export interface RunTurnOptions {
   model?: string;
   /** Reasoning effort for models that support it (forwarded to the AI port). */
   effort?: "low" | "medium" | "high" | "xhigh" | "max";
-  /** Max tool-loop steps per execution round (default 32). */
+  /** Runaway backstop for the tool loop per execution round (default 256). */
   maxSteps?: number;
   /** Loaded project rules (CLAUDE.md/AGENTS.md). */
   projectContext?: ProjectContext;

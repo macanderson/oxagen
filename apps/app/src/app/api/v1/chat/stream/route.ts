@@ -17,6 +17,7 @@ import {
   resolvePrompt,
   chatSystemPrompt,
   loadWorkspacePromptConfig,
+  stepCountIs,
   tool,
   type ToolSet,
   type ModelMessage,
@@ -115,6 +116,15 @@ const BodySchema = z.object({
 // conversations. The newest HISTORY_LIMIT messages are taken (DESC + LIMIT,
 // then reversed so the model sees them chronologically oldest→newest).
 const HISTORY_LIMIT = 50;
+
+// Runaway backstop for the agentic tool loop, NOT a functional limit. A turn
+// ends naturally the moment the model returns a step with no tool call (its
+// final answer); this cap only fires if the model loops on tools without ever
+// settling — e.g. retrying a failing tool forever — so it bounds billed LLM
+// calls (each step is one) before a stuck loop burns unbounded credits. Set
+// high enough to never be hit in normal chat/coding use. Matches the CLI loop
+// (loop.ts) and agent-engine (engine.ts) defaults. `stopWhen: stepCountIs(...)`.
+const MAX_AGENT_STEPS = 256;
 
 // POST /api/v1/chat/stream
 //
@@ -572,6 +582,13 @@ export async function POST(request: NextRequest): Promise<Response> {
           messages: coreMessages,
           model: turnModel,
           tools: allTools,
+          // Bound the agentic tool loop. WITHOUT this, streamText inherits the
+          // AI SDK default `stopWhen: stepCountIs(1)` — the turn halts after the
+          // first step, so any tool the model calls executes but it never gets a
+          // second step to read the result and answer (the user sees a tool chip
+          // and no reply). The loop still ends naturally on the model's final
+          // answer; MAX_AGENT_STEPS is only the runaway backstop.
+          stopWhen: stepCountIs(MAX_AGENT_STEPS),
           system: resolvePrompt({
             key: "chat.system",
             baseline:
