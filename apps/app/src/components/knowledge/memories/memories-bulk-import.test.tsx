@@ -339,9 +339,11 @@ describe("MemoriesBulkImport — review stage", () => {
 
   it("returns to the select stage when Back is clicked", async () => {
     await toReview([draft()]);
-    fireEvent.click(screen.getByRole("button", { name: /back/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /back/i }));
+    // findBy (not getBy): the select stage repaints after the click, so wait for
+    // the drop zone rather than asserting synchronously (flaky under load).
     expect(
-      screen.getByText("Drop markdown files here, or click to choose"),
+      await screen.findByText("Drop markdown files here, or click to choose"),
     ).toBeInTheDocument();
     expect(screen.queryByText("Review draft memories")).not.toBeInTheDocument();
   });
@@ -381,7 +383,12 @@ describe("MemoriesBulkImport — result stage", () => {
     await screen.findByText("rules.md");
     fireEvent.click(screen.getByRole("button", { name: /parse documents/i }));
     await screen.findByText("Review draft memories");
-    fireEvent.click(screen.getByRole("button", { name: /import 2 memories/i }));
+    // findBy (not getBy): the review header and the draft-count-derived Import
+    // button can paint across separate commits, so under full-suite CPU load the
+    // button may not be present the instant the header appears.
+    fireEvent.click(
+      await screen.findByRole("button", { name: /import 2 memories/i }),
+    );
     await screen.findByText("Import complete");
     return { onImported };
   }
