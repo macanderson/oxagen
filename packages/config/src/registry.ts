@@ -1321,6 +1321,19 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_ALLOW_NO_SESSION: {
+    group: "CLI",
+    description:
+      "Set to '1' to bypass the account-required gate (requireSession()) and return a " +
+      "synthetic benchmark session instead of exiting. Only for headless benchmark " +
+      "containers (bench/terminal-bench, bench/swe-bench) that run the agent path with " +
+      "no logged-in account — never set this outside a benchmark/CI sandbox.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",
     description: "Credential encryption backend for ingestion: 'env' (AES-256-GCM via INGESTION_ENCRYPTION_KEY) or 'kms' (AWS KMS).",

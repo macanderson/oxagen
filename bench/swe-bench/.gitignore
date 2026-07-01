@@ -1,0 +1,9 @@
+.venv/
+results-*/
+results/
+*.egg-info/
+__pycache__/
+.pytest_cache/
+
+# generated normalized eval output (ingest via pnpm eval:ingest)
+*.eval.json
