@@ -186,6 +186,16 @@ export function ReplApp({
   const [queued, setQueued] = useState<string[]>([]);
   const queueRef = useRef<string[]>([]);
   const pumpingRef = useRef(false);
+  // Bumped every time a turn is interrupted (Esc/Ctrl-C). The pump captures the
+  // generation it started under; when a cancel bumps it, the pump that was
+  // awaiting the (now-cancelled) turn orphans itself instead of continuing to
+  // drain — so a turn whose stream is slow to unwind on abort can never hold the
+  // queue hostage. A fresh pump started by cancelTurn owns the drain from there.
+  const pumpGenRef = useRef(0);
+  // Stable handle to the pump, assigned once `pump` is defined below. Lets
+  // cancelTurn (declared earlier) kick a fresh drain without a declaration-order
+  // or stale-closure dependency.
+  const pumpRef = useRef<(() => void) | null>(null);
 
   // Whether the eval→enhance→judge pipeline is active (vs. the bare agent).
   const [pipelineOn, setPipelineOn] = useState(!options.bare);
@@ -342,15 +352,16 @@ export function ReplApp({
   );
 
   const cancelTurn = useCallback(() => {
-    // Cancel the in-flight turn and drop anything queued behind it.
-    queueRef.current = [];
-    setQueued([]);
+    // Interrupt the in-flight turn but KEEP anything queued behind it: the user
+    // wants Esc to abandon the current turn and move on to the next queued
+    // prompt (oldest first), not to wipe the whole queue. Prompts already
+    // dequeued are gone; those still waiting drain next.
     // Release any pending permission prompt as a denial so the tool unblocks.
     approvalRef.current?.resolve({ decision: "deny" });
     setApproval(null);
-    // Abort the turn signal. The engine now throws on an aborted signal the
-    // moment the current stream ends (no extra judge/summarize call), and the
-    // stream callbacks below no-op once aborted, so no late text renders.
+    // Abort the turn signal. The engine throws on an aborted signal the moment
+    // the current stream ends, and the stream callbacks below no-op once
+    // aborted, so no late text renders.
     abortRef.current?.abort();
     // Return the UI to idle IMMEDIATELY so Esc feels instant even if the
     // underlying HTTP stream takes a moment to unwind. The turn's own finally
@@ -358,6 +369,15 @@ export function ReplApp({
     streamingRef.current = false;
     setIsStreaming(false);
     setTurnStartedAt(null);
+    // Free the pump NOW. The aborted turn's runTurn may take a moment — or, if
+    // the stream ignores the abort, a long time — to settle, and until it does
+    // the pump would still be awaiting it and refuse (`pumpingRef`) to drain
+    // anything new. Bump the generation so that stuck pump orphans itself,
+    // release the guard, and kick a fresh pump to continue draining the queue
+    // oldest-first (or sit idle, waiting for a new prompt, if it is empty).
+    pumpGenRef.current += 1;
+    pumpingRef.current = false;
+    void pumpRef.current?.();
   }, []);
 
   /**
@@ -1106,14 +1126,24 @@ export function ReplApp({
         render();
       } finally {
         stall.stop();
-        // Final flush so the status line settles on the correct final totals and
-        // stays visible (Bug 2), even if the last few events were throttled.
-        metricsBusRef.current.flush();
-        lastProgressRef.current = null;
-        abortRef.current = null;
-        streamingRef.current = false;
-        setIsStreaming(false);
-        setTurnStartedAt(null);
+        // Only tear down SHARED turn/UI state if THIS turn still owns it. When a
+        // turn is interrupted (Esc), the pump moves on to the next prompt right
+        // away — so a cancelled turn's stream can settle here LONG after a newer
+        // turn has already started and claimed `abortRef`. Guarding on ownership
+        // stops that late finally from nulling the new turn's abort controller
+        // (which would break Esc for it) or flipping the streaming UI off while
+        // the new turn is still live. A turn that still owns `abortRef` is the
+        // normal, non-overlapped case and tears down as before.
+        if (abortRef.current === controller) {
+          // Final flush so the status line settles on the correct final totals
+          // and stays visible (Bug 2), even if the last few events were throttled.
+          metricsBusRef.current.flush();
+          lastProgressRef.current = null;
+          abortRef.current = null;
+          streamingRef.current = false;
+          setIsStreaming(false);
+          setTurnStartedAt(null);
+        }
       }
     },
     [exit, commit, pushAssistant, resetConversation, cwd, options.readOnly],
@@ -1130,8 +1160,14 @@ export function ReplApp({
   const pump = useCallback(async () => {
     if (pumpingRef.current) return;
     pumpingRef.current = true;
+    // The generation this pump owns. If an interrupt (cancelTurn) bumps it while
+    // we are awaiting a turn, we are no longer the active pump: stop draining and
+    // do not touch the guard, so the fresh pump cancelTurn started stays in
+    // charge. Without this, a cancelled turn whose stream is slow to unwind would
+    // keep this pump parked on its `await` and block every later prompt.
+    const gen = pumpGenRef.current;
     try {
-      while (queueRef.current.length > 0) {
+      while (pumpGenRef.current === gen && queueRef.current.length > 0) {
         const next = queueRef.current[0] as string;
         queueRef.current = queueRef.current.slice(1);
         setQueued(queueRef.current);
@@ -1149,9 +1185,13 @@ export function ReplApp({
         }
       }
     } finally {
-      pumpingRef.current = false;
+      // Only release the guard if we are still the current generation. An
+      // orphaned pump (a cancel bumped the generation mid-await) must not clear a
+      // newer pump's guard.
+      if (pumpGenRef.current === gen) pumpingRef.current = false;
     }
   }, [pushAssistant]);
+  pumpRef.current = pump;
 
   // Every submission goes through the queue. When idle, the pump picks it up
   // immediately; when a turn is in flight, it waits its turn (FIFO).
