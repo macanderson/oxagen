@@ -355,11 +355,19 @@ export async function setupAgentRuntimeFixture(
           ],
         },
       );
-      // Create AgentMemory node from the memory.write.
+      // Create AgentMemory node from the memory.write, on the two-axis model
+      // (memoryClass/confidenceScore/enforcementScore/status — see
+      // docs/specs/two-axis-memory/DESIGN.md). This fixture only needs to
+      // produce a countable node for the tenant/workspace-isolation specs, not
+      // a fully rendered Knowledge → Memories row.
       await session.run(
         `
         MERGE (m:AgentMemory {memoryId: $memoryId, orgId: $orgId})
-        SET m.weight = 'fact', m.nodeRef = $nodeRef
+        SET m.memoryClass = 'FACT',
+            m.confidenceScore = 100,
+            m.enforcementScore = 100,
+            m.status = 'ACTIVE',
+            m.nodeRef = $nodeRef
         `,
         { orgId, memoryId: "mem_new", nodeRef: "AgentMemory:mem_new" },
       );

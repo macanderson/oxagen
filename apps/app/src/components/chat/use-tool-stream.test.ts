@@ -451,7 +451,17 @@ describe("memory-recalled", () => {
     const s = reducer(INITIAL_STATE, event({
       type: "memory-recalled",
       queryId: "q-1",
-      memories: [{ id: "m-1", lesson: "Don't do that", weight: "fact", score: 0.9 }],
+      memories: [
+        {
+          id: "m-1",
+          lesson: "Don't do that",
+          memoryClass: "FACT",
+          memoryKind: "constraint",
+          confidenceScore: 95,
+          enforcementScore: 100,
+          score: 0.9,
+        },
+      ],
     }));
     const r = s.memoryRecalls["q-1"];
     expect(r?.queryId).toBe("q-1");
@@ -460,23 +470,42 @@ describe("memory-recalled", () => {
 
   it("overwrites for the same queryId", () => {
     let s = reducer(INITIAL_STATE, event({ type: "memory-recalled", queryId: "q-1", memories: [] }));
-    s = reducer(s, event({ type: "memory-recalled", queryId: "q-1", memories: [{ id: "m-2", lesson: "x", weight: "consider", score: 0.5 }] }));
+    s = reducer(
+      s,
+      event({
+        type: "memory-recalled",
+        queryId: "q-1",
+        memories: [
+          {
+            id: "m-2",
+            lesson: "x",
+            memoryClass: "OBSERVATION",
+            memoryKind: "gotcha",
+            confidenceScore: 50,
+            enforcementScore: null,
+            score: 0.5,
+          },
+        ],
+      }),
+    );
     expect(s.memoryRecalls["q-1"]?.memories).toHaveLength(1);
   });
 });
 
 describe("memory-written", () => {
-  it("keyed by memoryId with nodeRef and weight", () => {
+  it("keyed by memoryId with nodeRef and memoryClass", () => {
     const s = reducer(INITIAL_STATE, event({
       type: "memory-written",
       memoryId: "mem-1",
       nodeRef: "node://mem-1",
-      weight: "fact",
+      memoryClass: "FACT",
+      enforcementScore: 100,
     }));
     const w = s.memoryWrites["mem-1"];
     expect(w?.memoryId).toBe("mem-1");
     expect(w?.nodeRef).toBe("node://mem-1");
-    expect(w?.weight).toBe("fact");
+    expect(w?.memoryClass).toBe("FACT");
+    expect(w?.enforcementScore).toBe(100);
   });
 });
 

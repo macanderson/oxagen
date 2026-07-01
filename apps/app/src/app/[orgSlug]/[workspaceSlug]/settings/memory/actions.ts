@@ -24,6 +24,8 @@ const MemoryPolicySchema = z.object({
   halfLifeLowDays: z.number().int().min(1).max(3650),
   halfLifeHighDays: z.number().int().min(1).max(3650),
   recallThreshold: z.number().min(0).max(1),
+  complianceThreshold: z.number().int().min(1).max(100),
+  defaultDecayFloor: z.number().min(0).max(100),
 });
 
 type MemoryPolicyInput = z.infer<typeof MemoryPolicySchema>;
@@ -57,8 +59,15 @@ export async function saveMemoryPolicyAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
-  const { orgSlug, workspaceSlug, halfLifeLowDays, halfLifeHighDays, recallThreshold } =
-    parsed.data;
+  const {
+    orgSlug,
+    workspaceSlug,
+    halfLifeLowDays,
+    halfLifeHighDays,
+    recallThreshold,
+    complianceThreshold,
+    defaultDecayFloor,
+  } = parsed.data;
 
   // Resolve org + workspace — notFound() on mismatch prevents cross-tenant writes.
   const org = await resolveOrg(orgSlug);
@@ -104,7 +113,13 @@ export async function saveMemoryPolicyAction(
       // surface_denied. (Same as the workspace.settings.write precedent.)
       await invoke(
         "agent.memory.policy.write",
-        { halfLifeLowDays, halfLifeHighDays, recallThreshold },
+        {
+          halfLifeLowDays,
+          halfLifeHighDays,
+          recallThreshold,
+          complianceThreshold,
+          defaultDecayFloor,
+        },
         ctx,
         { surface: "agent" },
       ) as AgentMemoryPolicyWriteOutput;
@@ -133,6 +148,8 @@ export async function readMemoryPolicyAction(args: {
   halfLifeLowDays: number;
   halfLifeHighDays: number;
   recallThreshold: number;
+  complianceThreshold: number;
+  defaultDecayFloor: number;
 }> {
   const org = await resolveOrg(args.orgSlug);
   const ws = await resolveWorkspace(org.id, args.workspaceSlug);
@@ -153,6 +170,12 @@ export async function readMemoryPolicyAction(args: {
       ctx,
       { surface: "agent" },
     );
-    return result as { halfLifeLowDays: number; halfLifeHighDays: number; recallThreshold: number };
+    return result as {
+      halfLifeLowDays: number;
+      halfLifeHighDays: number;
+      recallThreshold: number;
+      complianceThreshold: number;
+      defaultDecayFloor: number;
+    };
   });
 }

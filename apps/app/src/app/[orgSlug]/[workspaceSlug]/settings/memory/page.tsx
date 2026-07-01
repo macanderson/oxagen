@@ -20,6 +20,8 @@ export default async function MemorySettingsPage({
       initialHalfLifeLow={policy.halfLifeLowDays}
       initialHalfLifeHigh={policy.halfLifeHighDays}
       initialRecallThreshold={policy.recallThreshold}
+      initialComplianceThreshold={policy.complianceThreshold}
+      initialDefaultDecayFloor={policy.defaultDecayFloor}
     />
   );
 }
