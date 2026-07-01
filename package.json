@@ -13,6 +13,8 @@
     "dev": "tsx tools/scripts/dev.ts",
     "eval:app": "pnpm --filter @oxagen/bench-web dev",
     "bench": "pnpm --filter @oxagen/bench-web dev",
+    "bench:swe": "bash bench/swe-bench/run.sh",
+    "bench:swe:compare": "bash bench/swe-bench/compare.sh",
     "cli:dev": "tsx tools/scripts/cli-dev.ts",
     "cli:install": "tsx tools/scripts/cli-dev.ts --once",
     "kill": "tsx tools/scripts/kill.ts",

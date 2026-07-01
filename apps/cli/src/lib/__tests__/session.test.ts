@@ -29,6 +29,7 @@ const origExit = process.exit.bind(process);
 beforeEach(() => {
   stderrOut = "";
   exitCalled = undefined;
+  delete process.env.OXAGEN_ALLOW_NO_SESSION;
   process.stderr.write = ((s: string) => {
     stderrOut += s;
     return true;
@@ -154,5 +155,21 @@ describe("requireSession", () => {
     expect(stderrOut).toContain("token");
     expect(stderrOut).toContain("org");
     expect(stderrOut).toContain("workspace");
+  });
+
+  it("allows headless benchmark runs when session bypass is enabled", () => {
+    process.env.OXAGEN_ALLOW_NO_SESSION = "1";
+    mockToken.mockReturnValue(undefined);
+    mockOrg.mockReturnValue(undefined);
+    mockWs.mockReturnValue(undefined);
+
+    const session = requireSession();
+    expect(session).toEqual({
+      token: "benchmark-token",
+      orgSlug: "benchmark",
+      workspaceSlug: "benchmark",
+      apiUrl: "https://api.oxagen.sh",
+    });
+    expect(exitCalled).toBeUndefined();
   });
 });
