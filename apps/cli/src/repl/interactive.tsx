@@ -10,7 +10,7 @@
  *
  * Presentational pieces live in ./components; this file is the container.
  */
-import { Box, Static, Text, useApp, useInput } from "ink";
+import { Box, Static, Text, useApp, useInput, useStdout } from "ink";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import type { ModelMessage } from "ai";
 import { existsSync, readFileSync } from "node:fs";
@@ -1326,7 +1326,7 @@ export function ReplApp({
           turn has run. Only these lines re-render as tokens arrive, so the frame
           Ink redraws stays small and never overflows the viewport. */}
       <Box flexDirection="column">
-        {messages.length === 0 && (
+        {messages.length === 0 ? (
           <Box paddingX={1} flexDirection="column">
             <Text dimColor>Ready. Type a prompt to start coding.</Text>
             <Text dimColor>
