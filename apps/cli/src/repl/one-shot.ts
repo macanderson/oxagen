@@ -33,7 +33,7 @@ import { formatVerboseSection } from "../agent/trace-format.js";
 import { readConfig } from "../lib/config.js";
 import { resolveEffort } from "../agent/model.js";
 import { PermissionBroker, type PermissionMode } from "../agent/permissions.js";
-import { formatToolCallWithSpacing } from "../agent/tool-formatter.js";
+import { formatToolCall, formatToolCallWithSpacing } from "../agent/tool-formatter.js";
 import { debugLog } from "../lib/debug-log.js";
 import {
   makeTurnController,
@@ -219,11 +219,7 @@ export async function runAgentOneShot(
       // Reasoning to stderr (dim) so piped stdout stays the clean answer.
       onReasoning: (delta) => process.stderr.write(`\x1b[2m${delta}\x1b[22m`),
       onToolCall: (name, input) => {
-        const summary =
-          typeof input === "object" && input !== null
-            ? JSON.stringify(input).slice(0, 120)
-            : String(input);
-        process.stderr.write(`  · ${name} ${summary}\n`);
+        process.stderr.write(`  · ${formatToolCall(name, input)}\n`);
       },
       onToolBlocked: (name, reason) => process.stderr.write(`  ⛔ ${name}: ${reason}\n`),
     });

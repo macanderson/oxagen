@@ -44,6 +44,7 @@ import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
 import { readConfig, writeConfig } from "../lib/config.js";
 import { debugLog } from "../lib/debug-log.js";
+import { formatToolArgs } from "../agent/tool-formatter.js";
 import {
   ApprovalPrompt,
   HELP,
@@ -90,11 +91,12 @@ export interface ReplOptions {
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 
-function summarizeInput(input: unknown): string {
-  if (input == null) return "";
-  const text =
-    typeof input === "object" ? JSON.stringify(input) : String(input);
-  return text.length > 100 ? text.slice(0, 100) + "…" : text;
+/**
+ * Human-readable summary of a tool call's input for the tool chip — the pretty
+ * `edit(a.ts)` / `bash(git push)` form, never the raw JSON argument object.
+ */
+function summarizeInput(toolName: string, input: unknown): string {
+  return formatToolArgs(toolName, input);
 }
 
 // Alternate-screen control sequences: 1049h swaps to the alt buffer (and 1049l
@@ -877,7 +879,7 @@ export function ReplApp({
             turn.push({
               role: "tool",
               toolName: name,
-              content: summarizeInput(input),
+              content: summarizeInput(name, input),
               timestamp: Date.now(),
             });
             render();
