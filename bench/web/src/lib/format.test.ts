@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cn, formatDuration, formatTokens, formatPercent, formatPercent1 } from "./format";
+import { cn, formatDuration, formatTokens, formatPercent, formatPercent1, formatUsd } from "./format";
 
 describe("cn", () => {
   it("joins truthy class names", () => {
@@ -52,5 +52,15 @@ describe("formatPercent", () => {
 describe("formatPercent1", () => {
   it("keeps one decimal place", () => {
     expect(formatPercent1(0.924)).toBe("92.4%");
+  });
+});
+
+describe("formatUsd", () => {
+  it("formats a dollar amount with two decimal places", () => {
+    expect(formatUsd(0.27)).toBe("$0.27");
+  });
+
+  it("pads whole dollar amounts", () => {
+    expect(formatUsd(12)).toBe("$12.00");
   });
 });
