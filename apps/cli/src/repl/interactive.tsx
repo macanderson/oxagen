@@ -1197,21 +1197,6 @@ export function ReplApp({
         />
       )}
 
-      {/* Status line */}
-      <StatusLine
-        model={model}
-        branch={branchRef.current}
-        inputTokens={usage.input}
-        outputTokens={usage.output}
-        cacheHit={usage.cacheHit}
-        cacheMiss={Math.max(0, usage.input - usage.cacheHit)}
-        costUsd={usage.costUsd}
-        pipelineOn={pipelineOn}
-        verboseOn={verboseOn}
-        effort={effort}
-        mode={mode}
-      />
-
       {/* Esc-twice reset confirmation — shown above the input row until the
           user types y/yes to confirm or anything else to cancel. */}
       {resetPending && (
@@ -1226,17 +1211,40 @@ export function ReplApp({
         </Box>
       )}
 
-      {/* A pending permission prompt takes over the input row; otherwise the
+      {/* Input row — pinned to the bottom stack, padded above, and never allowed
+          to shrink (flexShrink={0}) so the prompt bar keeps a constant height as
+          the conversation above it grows or the terminal is resized.
+          A pending permission prompt takes over the input row; otherwise the
           input stays live during a turn and submissions queue (FIFO). */}
-      {approval ? (
-        <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
-      ) : (
-        <PromptInput
-          onSubmit={enqueue}
-          busy={isStreaming}
-          catalog={catalogRef.current ?? []}
+      <Box marginTop={1} flexShrink={0} flexDirection="column">
+        {approval ? (
+          <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
+        ) : (
+          <PromptInput
+            onSubmit={enqueue}
+            busy={isStreaming}
+            catalog={catalogRef.current ?? []}
+          />
+        )}
+      </Box>
+
+      {/* Status line — below the input bar, with a blank row beneath it so it is
+          never flush against the bottom edge of the window. */}
+      <Box marginBottom={1} flexShrink={0}>
+        <StatusLine
+          model={model}
+          branch={branchRef.current}
+          inputTokens={usage.input}
+          outputTokens={usage.output}
+          cacheHit={usage.cacheHit}
+          cacheMiss={Math.max(0, usage.input - usage.cacheHit)}
+          costUsd={usage.costUsd}
+          pipelineOn={pipelineOn}
+          verboseOn={verboseOn}
+          effort={effort}
+          mode={mode}
         />
-      )}
+      </Box>
     </Box>
   );
 }

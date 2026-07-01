@@ -179,10 +179,15 @@ export function PromptInput({
   return (
     <Box flexDirection="column">
       {menuOpen && <SlashMenu entries={suggestions} selectedIndex={sel} width={menuWidth} />}
+      {/* The bordered input keeps a constant height (one text row inside a round
+          border = 3 rows). minHeight + flexShrink={0} guarantee it never
+          collapses or is squeezed as the conversation above grows. */}
       <Box
         borderStyle="round"
         borderColor={busy ? "#FBBF24" : theme.cyan}
         paddingX={1}
+        minHeight={3}
+        flexShrink={0}
       >
         <Text color={busy ? "#FBBF24" : theme.cyan} bold>
           {busy ? "⧗ " : "❯ "}
