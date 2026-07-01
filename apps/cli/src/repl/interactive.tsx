@@ -476,21 +476,6 @@ export function ReplApp({
 
   const handleSubmit = useCallback(
     async (text: string) => {
-      // ── Reset-confirmation gate ───────────────────────────────────────────
-      // When the Esc-twice prompt is visible, the next submission is treated
-      // as the user's confirmation answer, NOT as a slash command or prompt.
-      if (resetPendingRef.current) {
-        resetPendingRef.current = false;
-        setResetPending(false);
-        const answer = text.trim().toLowerCase();
-        if (answer === "y" || answer === "yes") {
-          resetConversation();
-          pushAssistant("🗑 Conversation reset.");
-        } else {
-          pushAssistant("Reset cancelled.");
-        }
-        return;
-      }
 
       // ── Shell escape (`!cmd`) ──
       // A prompt beginning with "!" runs the rest as a shell command in the
@@ -1143,6 +1128,31 @@ export function ReplApp({
     [pump],
   );
 
+  // Every PromptInput submission funnels through here. The Esc-twice reset
+  // confirmation must be answered SYNCHRONOUSLY — if we let it fall through to
+  // `enqueue`, the "y" lands in the FIFO behind any unwinding turn and is then
+  // run as an ordinary prompt (it visibly shows as "⧗ queued: y") instead of
+  // confirming the reset. Intercepting it here consumes the keystroke as the
+  // answer the instant the user hits Enter, never touching the queue.
+  const handleUserSubmit = useCallback(
+    (text: string) => {
+      if (resetPendingRef.current) {
+        resetPendingRef.current = false;
+        setResetPending(false);
+        const answer = text.trim().toLowerCase();
+        if (answer === "y" || answer === "yes") {
+          resetConversation();
+          pushAssistant("🗑 Conversation reset.");
+        } else {
+          pushAssistant("Reset cancelled.");
+        }
+        return;
+      }
+      enqueue(text);
+    },
+    [enqueue, resetConversation, pushAssistant],
+  );
+
   return (
     // Fullscreen pins the column to the terminal height (alt screen); compact
     // leaves height unset so the conversation grows inline in the scrollback.
@@ -1232,7 +1242,7 @@ export function ReplApp({
         <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
       ) : (
         <PromptInput
-          onSubmit={enqueue}
+          onSubmit={handleUserSubmit}
           busy={isStreaming}
           catalog={catalogRef.current ?? []}
         />
