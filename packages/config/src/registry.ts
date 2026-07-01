@@ -1266,6 +1266,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_GRAPH_DISABLED: {
+    group: "CLI",
+    description:
+      "When '1' or 'true', disables the CLI's code-graph context layer for the whole shell, so " +
+      "the context resolver goes straight to the grep fallback (logged). Unset/other values keep " +
+      "the graph-before-grep default on.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_ROUTING_TRIVIAL_MAX: {
     group: "CLI",
     description:
