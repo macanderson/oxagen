@@ -77,6 +77,20 @@ oxagen cost [options]
 | `--session` | Roll up what this project's recorded turns actually cost, by model. |
 | `--json` | Output JSON. |
 
+## oxagen models — model runtime
+
+Inspect and manage the coordinator model runtime — the on-device open-source code model and the cloud alternatives. See [On-device models](/docs/cli/models) for the full workflow. Runs locally; no platform auth required.
+
+```bash
+oxagen models list             # registry, capability scores, what fits this device
+oxagen models active           # current coordinator + resolved model + readiness
+oxagen models pull             # download + checksum-cache the resolved on-device weights
+oxagen models status           # cache location, size, checksum state, device fit
+oxagen models use <id>         # choose the coordinator (on-device is always allowed)
+```
+
+`models use <id>` accepts `on-device`, `haiku`, `sonnet-5`, `opus`, or `openai-most-capable-coding-model`. Add `--json` to `list`, `active`, and `status` for machine-readable output. On-device execution needs the optional `node-llama-cpp` runtime (`npm install node-llama-cpp`).
+
 ## oxagen graph — knowledge graph
 
 Query and replicate your workspace knowledge graph. See [Knowledge graph](/docs/cli/knowledge-graph) for the full workflow. **Requires platform auth.**

@@ -72,6 +72,27 @@ oxagen settings set model anthropic/claude-opus-4.1 --scope project
 oxagen settings set env.AI_GATEWAY_API_KEY "vck_…"  --scope user
 ```
 
+## Model runtime
+
+The **coordinator** model — the agent that gathers context, plans, dispatches workers, and judges results — is configured separately from `settings.json`, under the `runtime` block of `~/.config/oxagen/config.json`. It defaults to an [on-device open-source model](/docs/cli/models); managed with [`oxagen models`](/docs/cli/commands#oxagen-models-model-runtime).
+
+```jsonc
+{
+  "runtime": {
+    "coordinator": "on-device",          // or a cloud id: "haiku", "sonnet-5", "opus", …
+    "onDevice": {
+      "autoDownload": true,               // provision the model on first use
+      "modelId": "auto",                  // "auto" resolves best-fit for the device; or pin a modelId
+      "cacheDir": "~/.oxagen/models",     // where weights are cached
+      "verifyChecksum": true,             // checksum-verify downloads (trust-on-first-use)
+      "quantizationPreference": ["q8", "q6", "q5", "q4"]  // best quality first
+    }
+  }
+}
+```
+
+On-device is always an allowed coordinator — the CLI never silently swaps it for a cloud model. Running on-device weights needs the optional `node-llama-cpp` runtime (`npm install node-llama-cpp`); cloud coordinators need `AI_GATEWAY_API_KEY`.
+
 ## Custom agents
 
 Define reusable agents — each with its own system prompt, model, and tool allowlist — as Markdown files with YAML frontmatter:
@@ -126,4 +147,7 @@ Every persisted value has an environment-variable equivalent, which takes preced
 | `OXAGEN_WORKSPACE_ID` | `workspace`. |
 | `OXAGEN_API_URL` | `api-url`. |
 | `OXAGEN_MODEL` | Default `model`. |
+| `OXAGEN_COORDINATOR` | `runtime.coordinator` (on-device / cloud coordinator). |
+| `OXAGEN_ONDEVICE_MODEL` | `runtime.onDevice.modelId`. |
+| `OXAGEN_MODELS_CACHE_DIR` | `runtime.onDevice.cacheDir`. |
 | `OXAGEN_NO_TUI=1` | Disable the interactive TUI menu (print help instead). |

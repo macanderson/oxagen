@@ -1,5 +1,167 @@
 # Changelog
 
+## What's new in v0.7.0
+
+This is the largest release in Oxagen's history, touching nearly every layer of the platform. The headline additions are: a fully-featured CLI agent with an on-device model runtime, a multi-vendor pipeline with per-call timeouts and live metrics, a two-axis memory model (OBSERVATION → RULE → FACT with confidence and enforcement), durable sandbox browser automation, an independent cross-LLM feature-verification judge, and a brand-new benchmark suite with a real-data dashboard. The web app gains a complete Environments & Secrets vault, GitHub App workspace integration, a redesigned Oxagen Tangerine palette, and shared markdown editor primitives. Dozens of API/MCP capabilities were wired end-to-end, a new `@oxagen/agent-engine` shared package was extracted, and the monorepo now ships hosted JSON Schema for CLI settings.
+
+---
+
+### Features
+
+#### CLI agent & REPL
+- **Beautiful, scannable REPL output** — messages, tool calls, and statuses are now formatted for readability in the terminal (`235ed76c`, #378).
+- **Pinned bottom layout** — input and status bar are always glued to the bottom of the terminal; transcript scrolls above using `<Static>` rendering, eliminating the alternate-screen flicker (`29bb0dfe`, `3e27f4ac`, #374, #347).
+- **History scrollback** — the REPL now supports scrollback through previous turns (`58e77146`, #376).
+- **Themed diffs** — file-change diffs are rendered with syntax colouring in the terminal (`58e77146`, #376).
+- **Slash-command typeahead menu** — `/` in the REPL shows a filterable list of all available slash commands with descriptions (`d8fbd458`, #283).
+- **`/tui` fullscreen toggle** — switch between fullscreen and inline REPL modes at will (#283).
+- **`oxagen init` / `/init`** — scaffolds `.oxagen` settings, builds the local code graph, and prints stats and domain breakdown (`f100e58f`, #281).
+- **`oxagen login`** — browser-based PKCE loopback OAuth with a tenant/workspace picker; persists workspace link in `.oxagen/workspace.json` (`df4aac2d`, `66f1ffeb`, `53dc8730`, #265, #308, #295).
+- **`oxagen logs`** — streams or dumps the `OXAGEN_CLI_DEBUG` file log (`02d37313`, #338).
+- **`oxagen cost`** — shows per-session cost broken down by model, cached vs. uncached tokens (`9c9943f0`, #211).
+- **Esc-to-stop / Esc-to-reset** — pressing Esc once stops the agent; pressing Esc twice shows a reset confirmation handled synchronously (`52d4ac1d`, #352).
+- **Pipeline activated indicator** — a 🏋️ icon appears in the status line whenever the pipeline is engaged (`a5a7cfb0`, #373).
+- **Agent turn timeouts + ETA indicator** — per-call configurable timeouts surface estimated time remaining in the status line (`edb8be29`, `58e77146`, #321, #376).
+- **Live status metrics** — cache hit rate, cost, and token counts update in the status bar during a turn (`58e77146`, #376).
+- **Agent observability** — reasoning traces, effort level, cache/cost status, and permissions UX are all surfaced in the REPL (`4d7fcc83`, `05bf6ecc`, #346, #343).
+- **Pretty tool-call output** — tool invocations and results are formatted as scannable cards rather than raw JSON (`a265a9d1`, #342).
+- **Agent correctly interprets tool results** — the agent now reads tool results and derives a real exit status instead of always reporting success (`63688f52`, #379).
+
+#### CLI pipeline
+- **Multi-vendor orchestrator and model routing** — a routing-policy JSON file directs different turn types to different model providers; an OpenAI evaluator can score outputs from another vendor (`708f9730`, `2a1d629f`, #228, #368).
+- **On-device model runtime with auto-provisioning** — the CLI can run models locally; missing model weights are downloaded and quantized automatically (`dd35f097`, #366).
+- **Assist + review tools** — `prompt_enhancer`, `judge`, and `user_survey` pipeline tools are available to every agent turn (`c2f61187`, #369).
+- **Background agent-to-agent monitors** — long-running monitors can spawn sub-agents and relay their outputs back to the REPL (`266eae7e`, #372).
+- **Typed pipeline contracts** — all pipeline I/O is validated against typed schemas at runtime (`8701dfa1`, #371).
+- **Pipeline state machine + verification + observability** — a formal state machine governs turn lifecycle; each state transition is logged and observable (`043ea464`, #375).
+
+#### CLI commands & settings
+- **`oxagen models`** — lists available models and their routing configuration.
+- **`oxagen rules`** — manages workspace-scoped agent rules.
+- **`oxagen settings`** — reads and writes the unified `settings.json` driver (env, model, permissions, hooks) (`4281e9c7`, #212).
+- **`oxagen memory import`** — bulk-imports skill files as graph memories via an editable grid (#333).
+- **`oxagen graph push/pull/lineage/status`** — bidirectional CLI↔workspace graph sync (ADR-018); `graph.lineage` shows execution lineage.
+- **`oxagen mcp`** — manages MCP server configuration from the CLI.
+- **Global settings at `~/.oxagen/`** — home-directory settings file follows Claude Code parity (`290b92b2`, #282).
+- **Hosted CLI settings JSON Schema** — `oxagen-cli-settings-schema.json` is published at `schemas.oxagen.sh` for editor validation (`0a328134`, #339).
+
+#### Unified agent engine (`@oxagen/agent-engine`)
+- New shared `@oxagen/agent-engine` package consolidates the agent brain (loop, planner, model router, rate card, fleet memory, evaluator, judge, prompt enhancer) so the CLI, in-app agent, and API all run identical logic (ADR-019, `e60f573c`, #284).
+- Platform port adapters wire the engine to Neo4j memory, the code graph, trace store, and AI routing (`09f25002`, `1f85130d`, #267).
+
+#### Memory
+- **Two-axis memory model** — memories are now typed as OBSERVATION → RULE → FACT with a `confidence` score and an `enforcement` level (`2ef0e747`, `4c2f2415`, #357, #361).
+- **Full memory CRUD** — `agent.memory.remember`, `agent.memory.update`, `agent.memory.delete`, `agent.memory.list`, `agent.memory.cite`, `agent.memory.promote`, `agent.memory.promotion.candidates`, `agent.memory.import.parse`, `agent.memory.import.commit`, `agent.memory.evidence.attach`, `agent.memory.citations.list` all wired through contracts → MCP → API → Neo4j handlers.
+- **Auto-cite in chat** — the in-app agent automatically cites memories it uses when generating a response.
+- **Bulk import** — the Memories tab gains an editable grid for importing memories from skill files, with a `memories-bulk-import` E2E spec (#333).
+- **Memory list wired to Neo4j** — the Memories tab now queries Neo4j instead of the legacy store (#237).
+
+#### Code graph & ingestion
+- New `@oxagen/code-graph` package — unified tree-sitter builder shared by ingestion and the CLI (`290e9a8c`, #274).
+- **LLM domain inference** — each code-graph node gets a `domain` property inferred by an LLM (`2b1cf066`, #278).
+- **CALLS + cross-package IMPORTS edges** — execution-flow edges are now captured (`b260428b`, #280).
+- **Commit → SourceFile `:MODIFIED` edges** — recent-change graph queries now work (`9401769a`, #277).
+- **`code.map` capability** — structured code-map retrieval for use as a graph-before-grep agent tool (`832359c2`, #276).
+- **`:TOUCHED_FILE` edges** — the in-app agent records which files it reads or edits (`5e7af08f`, #279).
+- **`graph.sync.push` + CLI code-delta up-sync** — CLI pushes local graph deltas to the platform (ADR-018 slices 2–3).
+- **Execution lineage** — `graph.lineage` and `:EXECUTION_STEP` edges track agent turn history.
+
+#### Durable sandboxes & browser automation
+- **`agent.sandbox.*`** — `start`, `exec`, `snapshot`, `stop` capabilities provision durable Modal sandbox sessions with Playwright pre-installed (`5fc8cbe9`, `ad4b9d91`, `b9c1aea1`).
+- **`browser.*`** — `navigate`, `fill`, `submit`, `click`, `read`, `screenshot`, `refresh` capabilities drive a browser inside the durable sandbox (`d6b0275b`, `59b20fe4`).
+- **`agent.feature.verify`** — cross-LLM judge surface: a different-vendor vision model reads screenshots from the sandbox browser and produces a pass/fail verdict against a requirement (`ea47a23b`, `3ca39018`).
+- **`feature-browser-proof` skill** — formalises the definition-of-done loop using sandbox + browser + judge; agents must run it before declaring a visible feature complete.
+
+#### GitHub & repo capabilities
+- **GitHub App workspace integration** — per-workspace App installation tokens with OAuth fallback (ADR-020); settings page lets workspace admins connect or reconfigure (`f62c5d69`, `1365d172`, #300).
+- **`agent.repo.edit`** — the agent engine can edit a connected repo and open a PR (`7709271b`, #268).
+- **`repo.*` capabilities** — `repo.create`, `repo.fork`, `repo.branch.create`, `repo.file.put`, `repo.pr.open` all wired through contracts → API → GitHub handler.
+- **`/github/setup` landing route** — handles post-install redirect from GitHub App configuration (`aabfd26c`).
+
+#### Web app
+- **Oxagen Tangerine palette** — the entire app is re-themed to tangerine/rose/teak/narwhal (`0c963b5b`, #359).
+- **Docs-parity visual system** — ember hero section, gradient/outline CTAs, wordmark headings matching the marketing site (`f468db0d`, #355).
+- **Environments & Secrets vault** — full CRUD UI for workspace environment variables with bulk `.env` paste import (`0639b28f`, #215).
+- **GitHub settings page** — dedicated GitHub connection settings panel for workspace admins (`1365d172`, #300).
+- **Shared markdown editor, read-only renderer, and truncate-popover** — reusable `markdown-code-editor`, `markdown-content`, and `truncated-text` primitives used across the app (`08904994`, `350`).
+- **CLI OAuth consent page** — `/cli/authorize` handles the PKCE loopback OAuth flow with a consent form (`auth.cli.token.ts`, `consent-form.tsx`).
+- **In-app agentic chat** — foundational components for repo/env selection and CI monitoring added to the chat panel (`b2fe700b`, #314).
+- **PR inspection card** — the chat panel can render pull-request summaries inline.
+- **Conversations persisted** — in-app agent drawer conversations are now persisted across page navigations (#223).
+
+#### Benchmark suite
+- New `bench/` workspace with four runners: **context-eval** (repo-grounded Q&A, oxagen vs Claude Code), **RAG-eval** (RAGAS/DeepEval), **SWE-bench** (multi-vendor verified harness), **Terminal-Bench / Harbor** adapter for the Oxagen CLI (`1e65ef7a`, `84f54a01`, `2555efbb`, `f591efca`, #316, #234, #340).
+- **`bench/web` (`oxagen.eval.harness`)** — Next.js dashboard that renders real benchmark data with charts and methodology detail (`fd2494ef`, `9fb8e184`, #341, #337).
+- **ClickHouse eval-results ingestion** — `eval_runs` + `eval_results` tables; `tools/scripts/eval-ingest.ts` ships results from CI (`f7fafe85`).
+- **`pnpm eval:app`** — single command to launch the benchmark dashboard, resilient to a busy port.
+
+#### API & MCP
+- **`GET /v1/auth/whoami`** — credential probe endpoint used by CLI API-key login (`eb8a5178`, #293).
+- **`auth.cli.token`** — PKCE single-use code store backing the CLI loopback OAuth flow (`8008798e`, #290).
+- **`org.list` + `workspace.list`** — listed and registered in MCP tool registry and API (`1758a183`, `b54e6c51`).
+- **`plugin.catalog.sync`** — REST route + contract test wired (#238).
+- **`graph.export`** — exports a workspace graph snapshot for CLI down-sync.
+- **IAM: org owner is a super-user** — org owners are never locked out by an un-seeded capability (`ed6fc2c2`, #322).
+- **API keys authorize as their creator** — fixes fail-closed behaviour on enterprise orgs (`a9fc062d`, #297).
+- Parallelized independent async I/O operations in several handlers for improved latency (`d585887b`, #303).
+
+#### Docs
+- Full **CLI guide** (`docs/cli/`) — installation, account setup, commands, knowledge-graph reference, configuration, quickstart (`bfe2e51d`).
+- ADR-018 (CLI↔workspace graph sync), ADR-019 (unified agent engine), ADR-020 (per-workspace GitHub credentials) published.
+- `browser.*` capability reference pages + capability index updated.
+- Marketing landing page shipped with 109 accuracy corrections from a full docs audit (`a142ac4d`, #336).
+
+---
+
+### Fixes
+
+- **REPL transcript via `<Static>`** — drops the alternate screen, so output is preserved in the terminal scrollback after the session ends (`29bb0dfe`, #374).
+- **Esc-twice reset confirmation** handled synchronously (was previously queued as a prompt and could be missed) (`52d4ac1d`, #352).
+- **Agent tool-result interpretation** — the agent now reads tool results before reporting a status; previously it could report success regardless of the tool's output (`63688f52`, #379).
+- **`HexField` re-export** moved into the whitelisted UI layer in both docs and app to fix Storybook 404s (`b0b10e84`, `5462657f`, #377, #370).
+- **Graph explorer** — fixed create-node/edge dialog vocabulary, serialised Neo4j reads in scoped sessions, PascalCase node label enforcement everywhere (`aa8999a8`, `93abe34a`, `b08db6c4`, #327, #313).
+- **Knowledge graph explorer** — accepts all explore ops and serialises Neo4j reads so the explorer no longer deadlocks (`b08db6c4`, #326).
+- **Stale contract barrel** — regenerated; 19 capabilities (`agent.memory.delete` et al.) were dead at runtime (`ad1a38ba`, #323).
+- **`/init` hang** — fixed gitignore parsing and log spam that caused `oxagen init` to stall; also fixed the Esc stop/reset flow and Enterprise prompt-override unlock (`9249978b`, #317).
+- **CLI loopback login** — bound `err` variable in login picker-failure catch to fix a `ReferenceError` (`1226afad`, #312).
+- **CLI API endpoint paths** — removed a double `user/` prefix in the linker (`f2cfa54a`, #307).
+- **CLI session-memory handle** — closed the session-memory file handle when the REPL unmounts mid-open to prevent a resource leak (`bfd9e6a0`, #272).
+- **`repo.create` personal-account repos** — fixed a 404 when creating a repo under a personal GitHub account (`ce4904d2`, #294).
+- **Schema-builder dialogs** — widened label/relationship dialogs and rebalanced the properties grid (`683fb57a`, #356).
+- **TabsPanel scroll** — P0 fix: scrollable `TabsPanel` content (marketplace MCP server list was clipped) (`c173d048`, #348).
+- **Memory settings page** — repaired the broken import that rendered the page blank (#302).
+- **GitHub source wizard** — fixed the Setup-URL leg that dropped the connection after install (`ebc00ae9`, #269).
+- **`agent-engine` extensionless relative imports** — Turbopack could not resolve `.js` → `.ts` mappings; fixed by dropping the extension (`ff0b5299`, #273).
+- **Schema CLI settings schema** — regenerated for the `effort` field to unblock main CI (`27aaaf81`, #367).
+- **`app` broken import + duplicate `KIND_CONFIG`** — repaired to unblock CI (`00ef997b`, #365).
+- **Turbo cache** — optimised `turbo.json` for parallelisation and cache efficiency; CI checks timeout raised from 20 min to 60 min for cold-cache PRs (`eb96f3af`, #304).
+- **App build OOM** — raised Node heap to 8 GB for CI cold builds (`62431335`).
+- **`api` module-scope `fileURLToPath`** — guarded to prevent `FUNCTION_INVOCATION_FAILED` taking the whole API down (`34ff931a`, #258).
+- **API key prefix resolution** — fixed to use a fixed 12-char prefix window instead of splitting on `_` (`73f28dfc`, #289).
+- **IAM fetch-authz** — org owner is now treated as a super-user; fixes lockout on enterprise orgs (`ed6fc2c2`, #322).
+- **`pnpm dev` pre-flight** — app ports are checked before startup so the dev server no longer crashes when the stack is already running (`04d944b7`, #217).
+- **`eval:app` port conflict** — `pnpm eval:app` is now resilient to a busy port (`f0470f37`, #335).
+- **GitHub `@oxagen/github` package** — migrated from Octokit to native fetch so Turbopack can build the Next.js app (`3fadbb85`, #240).
+- **Duplicate `graphExport` export** — deduplicated to unblock main CI (`cd7bc1a8`, #229).
+
+---
+
+### Internal
+
+- **Removed Automation/Activity pages and all preview/placeholder pages** — simplifies the app surface and eliminates dead routes (`d218e0a7`, #351).
+- **Removed Integrations nav/page** — replaced by per-capability settings tabs (`8a79f497`, #305, #306).
+- **`@oxagen/github` package** — new package encapsulating GitHub App auth, fetch client, and workspace token resolution; replaces scattered Octokit usage.
+- **`@oxagen/code-graph` package** — new package for the tree-sitter-based code graph builder, shared by ingestion and the CLI.
+- **`@oxagen/agent-engine` package** — new shared package (see Features above).
+- **`apps/schemas`** — new app hosting `oxagen-cli-settings-schema.json` on Vercel with a schema drift test.
+- **Database migrations** — `agent_sandbox_sessions` table, `workspace_memory_policy` table, and two-axis memory policy migration added.
+- **ClickHouse migration runner** — `memory_changes_enforcement` migration added (`telemetry`).
+- **Test coverage** — database package at 94% lines (gate raised to 85%); agent-engine, code-graph, handlers, auth, and CLI packages all gained comprehensive unit-test suites. Several flaky tests de-flaked (bulk-import `findBy` vs `getBy`, welcome-screen timers).
+- **`skills-lock.json` removed** (`a509856e`, #344).
+- **`pnpm eval:app` script** and `tools/scripts/eval-ingest.ts` added for one-command benchmark runs.
+- **Turbo build inputs** — test files excluded from build inputs; parallelisation improved across the monorepo (`eb96f3af`, #304).
+- **ADR-018, ADR-019, ADR-020** published under `docs/adr/`.
+
 ## What's new in Oxagen v0.6.4
 
 This release is a large step forward for the platform, shipping a fully unified agent engine, a production-ready CLI, browser automation capabilities, durable sandbox sessions, a bidirectional CLI↔workspace graph sync, and a sweeping set of bug fixes that unblocked several runtime-dead capability surfaces. Alongside the new features, this release closes IAM privilege-escalation gaps, resolves a critical whole-API outage caused by a module-scope import, regenerates a stale contract barrel that silently killed 19 capabilities at runtime, and hardens CI with better parallelism, timeouts, and coverage gates.

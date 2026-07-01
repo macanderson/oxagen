@@ -15,6 +15,7 @@ These docs are written for **developers**. You should be comfortable with a term
 
 - **Code with the agent.** Run `oxagen` for an interactive REPL, or `oxagen "fix the failing auth test"` for a one-shot run. The agent plans, edits, runs commands, and verifies.
 - **Dispatch a fleet.** `oxagen agents "migrate the billing module to the new schema"` plans a goal into tasks and runs several agents in parallel, optionally each in its own git worktree.
+- **Run models on-device.** The agent's coordinator can run entirely on a local open-source code model — auto-provisioned and fit to your hardware — for a private, offline loop with no API key. `oxagen models` manages it; see [On-device models](/docs/cli/models).
 - **Ground it in your graph.** `oxagen graph pull` downloads an incremental snapshot of your workspace knowledge graph into a local replica; the agent uses it for context, and `oxagen graph search` lets you query it directly.
 - **Manage your workspace.** Inspect environments (`oxagen env`) and the encrypted credential vault (`oxagen secret`) without leaving the shell.
 - **Extend it.** Define custom agents, slash commands, and hard-enforced rules as Markdown files in your repo, and connect external MCP servers to the loop.
@@ -28,7 +29,7 @@ The CLI uses **two independent credentials**. Knowing which is which saves a lot
 | **`AI_GATEWAY_API_KEY`** | The agentic coding loop — every model call the agent makes. This is **your own** [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) key (bring your own key). | Shell env → `~/.oxagen/settings.json` (`env.AI_GATEWAY_API_KEY`) → `gatewayKey` in `~/.config/oxagen/config.json` → nearest `.env.local`. |
 | **Oxagen platform token** (+ org + workspace) | Platform commands that call `api.oxagen.sh`: `graph`, `env`, `secret`. This is an Oxagen **API key** (`oxk_live_…`) minted in the web app. | `oxagen config token` / `OXAGEN_API_TOKEN`, plus `org` and `workspace`. |
 
-You can use the coding agent with **just** a gateway key — no Oxagen account required for the local loop. The platform token only matters once you want to pull your knowledge graph or touch workspace environments and secrets.
+You can use the coding agent with **just** a gateway key — no Oxagen account required for the local loop. The platform token only matters once you want to pull your knowledge graph or touch workspace environments and secrets. And with an [on-device coordinator](/docs/cli/models) you can go further still — running the agent with **no gateway key at all**, though cloud workers (for heavier code generation) will still need one.
 
 ## Next steps
 

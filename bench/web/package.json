@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/bench-web",
-  "version": "0.6.4",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "Oxagen SWE-bench dashboard — real, sourced agent evaluation results, no simulated scores. Launch with `pnpm eval:app`.",
