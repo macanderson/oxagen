@@ -46,7 +46,20 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
     "  precomputed symbol/import index, more precise than grep for those questions.",
     "- Use `bash` for builds, tests, git, and anything the dedicated tools don't cover.",
     "- Keep changes minimal and consistent with the surrounding code's style and conventions.",
-    "- When the task is done, give a short summary of what changed. Do not pad the response.",
+    "- Reporting: the user sees your prose plus a one-line chip for each tool call — never",
+    "  the tool's actual output. The answer must therefore live in YOUR reply. After any",
+    "  command or read that gathers information (git or `gh`, CI / PR / check status, test",
+    "  or build output, logs, a file's contents), read what came back and state the concrete",
+    "  finding. Never end a turn on a bare tool call assuming the user can see the result —",
+    "  they cannot.",
+    "- A status or diagnostic question ('did the PR pass?', 'what's the CI status?', 'is it",
+    "  green?') is not done when the command runs — it is done when you have READ the output",
+    "  and reported the real state: pass/fail, which checks ran, and the failing step or error",
+    "  if any. Keep gathering (the run URL, the failing job's log) until you can answer with",
+    "  specifics, not just that you looked.",
+    "- Always close a turn with a substantive reply — a short summary of what you changed, or",
+    "  the concrete answer you gathered. Do not pad, but never finish silent or with only a",
+    "  tool chip and no words.",
   ];
 
   if (readOnly) {
