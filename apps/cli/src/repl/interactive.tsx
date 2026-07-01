@@ -10,7 +10,7 @@
  *
  * Presentational pieces live in ./components; this file is the container.
  */
-import { Box, Static, Text, useApp, useInput, useStdout } from "ink";
+import { Box, Static, Text, useApp, useInput } from "ink";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import type { ModelMessage } from "ai";
 import { existsSync, readFileSync } from "node:fs";
@@ -82,6 +82,7 @@ import {
   type ApprovalResponse,
   type PermissionMode,
 } from "../agent/permissions.js";
+import { loadSettings } from "../settings/resolve.js";
 import pkg from "../../package.json" with { type: "json" };
 
 export interface ReplOptions {
@@ -288,6 +289,10 @@ export function ReplApp({
     brokerRef.current = new PermissionBroker({
       mode: modeRef.current,
       cwd,
+      // settings.json allow/deny (e.g. `Bash(*)` to auto-approve every shell
+      // command, with `Bash(rm -rf*)` in deny still blocking it) so the broker
+      // stops prompting for calls the user has already allow-listed.
+      permissions: loadSettings({ cwd }).settings.permissions,
       approver: (req) =>
         new Promise<ApprovalResponse>((resolve) => setApproval({ req, resolve })),
     });

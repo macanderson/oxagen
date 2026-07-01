@@ -33,6 +33,7 @@ import { formatVerboseSection } from "../agent/trace-format.js";
 import { readConfig } from "../lib/config.js";
 import { resolveEffort } from "../agent/model.js";
 import { PermissionBroker, type PermissionMode } from "../agent/permissions.js";
+import { loadSettings } from "../settings/resolve.js";
 import { formatToolCall, formatToolCallWithSpacing } from "../agent/tool-formatter.js";
 import { debugLog } from "../lib/debug-log.js";
 import {
@@ -88,7 +89,15 @@ export async function runOneShot(
   // scripted edits. The model-router never under-spends on safety regardless.
   const broker =
     options.mode && options.mode !== "readonly"
-      ? new PermissionBroker({ mode: options.mode, cwd })
+      ? new PermissionBroker({
+          mode: options.mode,
+          cwd,
+          // Honor the same settings.json allow/deny lists the interactive REPL
+          // uses: a `Bash(*)` allow lets scripted shell commands run without an
+          // approver (which would otherwise fail closed), while a matching deny
+          // still blocks the call.
+          permissions: loadSettings({ cwd }).settings.permissions,
+        })
       : undefined;
   const readOnly = options.readOnly || options.mode === "readonly";
 
