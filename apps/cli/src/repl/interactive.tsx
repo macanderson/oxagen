@@ -899,7 +899,7 @@ export function ReplApp({
         // a timeout/stall (the turn deadline or stall detector fired on
         // turnController with a typed AgentTimeoutError reason), or a real error.
         const userCancelled = controller.signal.aborted;
-        const timeoutReason = turnController.signal.aborted
+        const timeoutReason: unknown = turnController.signal.aborted
           ? turnController.signal.reason
           : undefined;
         const content = userCancelled

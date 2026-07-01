@@ -15,6 +15,7 @@ import type {
 } from "@oxagen/agent-engine";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { streamText, generateObject } from "ai";
+import { debugLog } from "../../lib/debug-log.js";
 
 export interface PlatformAgentAiOptions {
   apiUrl: string;
@@ -38,6 +39,13 @@ export function createPlatformAgentAi(opts: PlatformAgentAiOptions): AgentAi {
 
   return {
     stream(args: ModelRunArgs) {
+      // Per-turn LLM telemetry: record the request shape routed through the
+      // platform (which meters + instruments it server-side) when debugging.
+      void debugLog("llm", "llm.stream.request", {
+        model: args.model,
+        messageCount: Array.isArray(args.messages) ? args.messages.length : 0,
+        toolNames: args.tools ? Object.keys(args.tools) : [],
+      });
       return streamText({
         model: provider(args.model),
         system: args.system,
@@ -66,17 +74,20 @@ export function createPlatformAgentAi(opts: PlatformAgentAiOptions): AgentAi {
         system: args.system,
         abortSignal: args.abortSignal,
       };
+      void debugLog("llm", "llm.object.request", { model: args.model });
       // generateObject takes a `prompt` XOR `messages` — pass exactly one.
       const result = args.messages
         ? await generateObject({ ...common, messages: args.messages })
         : await generateObject({ ...common, prompt: args.prompt ?? "" });
+      const usage = {
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+        totalTokens: result.usage.totalTokens,
+      };
+      void debugLog("llm", "llm.object.response", { model: args.model, usage });
       return {
         object: result.object,
-        usage: {
-          inputTokens: result.usage.inputTokens,
-          outputTokens: result.usage.outputTokens,
-          totalTokens: result.usage.totalTokens,
-        },
+        usage,
       };
     },
   };

@@ -12,6 +12,17 @@
  *     tearing the whole session down with process.exit.
  */
 import { getApiUrl, getToken, getOrgId, getWorkspaceId } from "./config.js";
+import { debugLog, type DebugCategory } from "./debug-log.js";
+
+/**
+ * Route a request to its debug-log category so a `graph push` (the code-graph
+ * envelope synced to the workspace graph) is logged distinctly from ordinary
+ * command traffic. Lineage sync bypasses this client (raw fetch in
+ * graph-sync-provider.ts) and is logged there.
+ */
+function debugCategoryForPath(path: string): DebugCategory {
+  return path.includes("graph/sync/push") ? "code-graph" : "api";
+}
 
 interface ApiContext {
   apiUrl: string;
@@ -71,6 +82,7 @@ export async function apiGetOrThrow<T>(
       }
     }
   }
+  void debugLog("api", "api.get.request", { path, query });
   let res: Response;
   try {
     res = await fetch(url, {
@@ -80,15 +92,19 @@ export async function apiGetOrThrow<T>(
       },
     });
   } catch (err) {
+    void debugLog("error", "api.get.network", { path, error: err });
     throw new ApiError(
       `Network error calling ${path}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
+    void debugLog("error", "api.get.response", { path, status: res.status, body: text });
     throw new ApiError(`Error ${res.status} from ${path}: ${text}`, res.status);
   }
-  return (await res.json()) as T;
+  const json = (await res.json()) as T;
+  void debugLog("api", "api.get.response", { path, status: res.status, body: json });
+  return json;
 }
 
 /**
@@ -103,6 +119,7 @@ export async function userApiPostOrThrow<T>(
   const token = getToken();
   if (!token) throw new ApiError(NOT_LOGGED_IN);
   const apiUrl = getApiUrl();
+  void debugLog("api", "api.user-post.request", { path, body });
   let res: Response;
   try {
     res = await fetch(`${apiUrl}/v1/user/${path}`, {
@@ -114,15 +131,19 @@ export async function userApiPostOrThrow<T>(
       body: JSON.stringify(body ?? {}),
     });
   } catch (err) {
+    void debugLog("error", "api.user-post.network", { path, error: err });
     throw new ApiError(
       `Network error calling ${path}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
+    void debugLog("error", "api.user-post.response", { path, status: res.status, body: text });
     throw new ApiError(`Error ${res.status} from ${path}: ${text}`, res.status);
   }
-  return (await res.json()) as T;
+  const json = (await res.json()) as T;
+  void debugLog("api", "api.user-post.response", { path, status: res.status, body: json });
+  return json;
 }
 
 /**
@@ -132,6 +153,10 @@ export async function userApiPostOrThrow<T>(
 export async function apiPostOrThrow<T>(path: string, body: unknown): Promise<T> {
   const ctx = resolveApiContext();
   if (!ctx) throw new ApiError(NOT_LOGGED_IN);
+  // Log the full request body — for `graph push` this is the code-graph
+  // envelope (nodes/edges/tombstones) synced back to the workspace graph.
+  const category = debugCategoryForPath(path);
+  void debugLog(category, "api.post.request", { path, body });
   let res: Response;
   try {
     res = await fetch(`${ctx.apiUrl}/v1/${ctx.org}/${ctx.ws}/${path}`, {
@@ -143,15 +168,19 @@ export async function apiPostOrThrow<T>(path: string, body: unknown): Promise<T>
       body: JSON.stringify(body ?? {}),
     });
   } catch (err) {
+    void debugLog("error", "api.post.network", { path, error: err });
     throw new ApiError(
       `Network error calling ${path}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
+    void debugLog("error", "api.post.response", { path, status: res.status, body: text });
     throw new ApiError(`Error ${res.status} from ${path}: ${text}`, res.status);
   }
-  return (await res.json()) as T;
+  const json = (await res.json()) as T;
+  void debugLog(category, "api.post.response", { path, status: res.status, body: json });
+  return json;
 }
 
 /** POST an org-scoped capability and return the parsed JSON, or exit(1) on error. */
