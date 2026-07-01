@@ -259,6 +259,51 @@ export function buildProgram(): Command {
       await handleCost(merged);
     });
 
+  // ── models: on-device runtime + coordinator selection ───────────────────────
+
+  const models = program
+    .command("models")
+    .description("Inspect and manage the model runtime (on-device + cloud)");
+  models
+    .command("list")
+    .description("Show the registry, capability scores, and what fits this device")
+    .option("--json", "Output JSON", false)
+    .action(async (opts: { json?: boolean }) => {
+      const { handleModelsList } = await import("./commands/models.js");
+      await handleModelsList(opts);
+    });
+  models
+    .command("active")
+    .description("Show the current coordinator model and its kind (on-device | cloud)")
+    .option("--json", "Output JSON", false)
+    .action(async (opts: { json?: boolean }) => {
+      const { handleModelsActive } = await import("./commands/models.js");
+      await handleModelsActive(opts);
+    });
+  models
+    .command("pull")
+    .description("Download and cache the resolved on-device model weights")
+    .option("--json", "Output JSON", false)
+    .action(async (opts: { json?: boolean }) => {
+      const { handleModelsPull } = await import("./commands/models.js");
+      await handleModelsPull(opts);
+    });
+  models
+    .command("status")
+    .description("Show cache location, size, checksum state, and device fit")
+    .option("--json", "Output JSON", false)
+    .action(async (opts: { json?: boolean }) => {
+      const { handleModelsStatus } = await import("./commands/models.js");
+      await handleModelsStatus(opts);
+    });
+  models
+    .command("use <id>")
+    .description("Choose the coordinator model (on-device is always allowed)")
+    .action(async (id: string) => {
+      const { handleModelsUse } = await import("./commands/models.js");
+      await handleModelsUse(id);
+    });
+
   // ── graph: knowledge-graph search + pull + status ───────────────────────────
 
   const graph = program.command("graph").description("Query the knowledge graph");

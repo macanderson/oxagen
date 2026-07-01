@@ -29,7 +29,7 @@
   "scripts": {
     "dev": "tsx src/index.tsx",
     "start": "tsx src/index.tsx",
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-runtime-assets.mjs",
     "bundle": "node scripts/bundle.mjs",
     "prepublish:standalone": "node scripts/prepare-standalone-publish.mjs",
     "publish:standalone": "pnpm run bundle && pnpm run prepublish:standalone",
@@ -50,6 +50,9 @@
     "ink": "7.1.0",
     "react": "19.2.6",
     "zod": "3.25.76"
+  },
+  "optionalDependencies": {
+    "node-llama-cpp": "3.19.0"
   },
   "devDependencies": {
     "@types/node": "25.9.1",
