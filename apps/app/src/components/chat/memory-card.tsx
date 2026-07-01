@@ -2,6 +2,7 @@
 import * as React from "react";
 import { Brain } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import type { MemoryRecallHit } from "./stream-event-types";
 
 export interface MemoryCardProps {
@@ -50,7 +51,7 @@ export function MemoryCard({ memories, topN = 5 }: MemoryCardProps) {
                 </a>
               ) : null}
             </div>
-            <p className="whitespace-pre-wrap leading-relaxed">{m.lesson}</p>
+            <TruncatedText text={m.lesson} lines={3} className="leading-relaxed" />
           </li>
         ))}
       </ul>

@@ -13,6 +13,16 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { MemoryCard } from "./memory-card";
 
+// TruncatedText (the lesson body renderer) measures scroll overflow via
+// ResizeObserver, which isn't implemented in JSDOM.
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 afterEach(cleanup);
 
 vi.mock("@/components/ui/badge", () => ({
@@ -146,5 +156,14 @@ describe("MemoryCard", () => {
     const mutedBadge = container.querySelector("[data-variant='muted']");
     // The count badge is also 'muted'; there should be at least one 'muted' badge
     expect(mutedBadge).not.toBeNull();
+  });
+
+  it("renders the lesson body through TruncatedText, not a raw <p> element", () => {
+    const memories = [makeMemory("m1", "A recalled lesson.", "fact", 0.9)];
+    const { container } = render(<MemoryCard queryId="q1" memories={memories} />);
+    // The old plain-text renderer used <p className="whitespace-pre-wrap ...">
+    // directly; TruncatedText replaces it with a clamped <span> preview.
+    expect(container.querySelector("p.whitespace-pre-wrap")).toBeNull();
+    expect(screen.getByText("A recalled lesson.")).toBeInTheDocument();
   });
 });

@@ -9,6 +9,7 @@
  * props that wire up the edit/delete affordances in the detail sheet.
  */
 
+import * as React from "react";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { MemoriesClient } from "./memories-client";
@@ -18,6 +19,65 @@ import { MemoriesClient } from "./memories-client";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
+
+// MarkdownCodeEditor wraps CodeMirror, which renders a contenteditable
+// `.cm-content` div (role="textbox") rather than a native <textarea>. For
+// component tests we stand in a plain <textarea> so existing
+// getByLabelText/fireEvent.change assertions keep working without dragging in
+// CodeMirror's DOM/measurement APIs (unavailable in jsdom). Mirrors the same
+// pattern used by prompt-settings-form.test.tsx.
+vi.mock("@/components/ui/markdown-code-editor", () => ({
+  MarkdownCodeEditor: ({
+    id,
+    value,
+    onChange,
+    disabled,
+    placeholder,
+    maxLength,
+    ariaLabel,
+  }: {
+    id?: string;
+    value?: string;
+    onChange?: (value: string) => void;
+    disabled?: boolean;
+    placeholder?: string;
+    maxLength?: number;
+    ariaLabel?: string;
+    className?: string;
+    minHeight?: string;
+    maxHeight?: string;
+  }) => (
+    <textarea
+      id={id}
+      value={value}
+      onChange={(e) => onChange?.(e.target.value)}
+      disabled={disabled}
+      placeholder={placeholder}
+      maxLength={maxLength}
+      aria-label={ariaLabel}
+    />
+  ),
+}));
+
+// MarkdownContent (detail-sheet view mode + TruncatedText's reveal popover)
+// wraps the chat MarkdownMessage renderer. Stand in a plain div so these
+// tests assert on the lesson text without pulling in Streamdown/Shiki —
+// mirrors the pattern used by message-bubble.test.tsx.
+vi.mock("@/components/chat/markdown-message", () => ({
+  MarkdownMessage: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="markdown-message">{children}</div>
+  ),
+}));
+
+// TruncatedText (list rows + detail markdown reveal) measures scroll overflow
+// via ResizeObserver, which isn't implemented in JSDOM.
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
 
 afterEach(cleanup);
 
@@ -697,5 +757,94 @@ describe("MemoriesClient — create memory UI", () => {
     );
     // Sheet stays open — the lesson field is still present.
     expect(screen.getByLabelText("Lesson text")).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MemoryRow nested-button fix (row is role="button", not a native <button>,
+// so TruncatedText's own popover-trigger button never nests inside another
+// button) + detail sheet wiring through the shared markdown components.
+// ---------------------------------------------------------------------------
+
+describe("MemoriesClient — row accessibility and detail sheet", () => {
+  it("renders each row as a role=button element, not a native <button>, so TruncatedText's popover trigger never nests inside another button", () => {
+    render(<MemoriesClient {...baseProps} initialRecords={[routineRecord]} />);
+    const row = screen
+      .getByText(routineRecord.lesson)
+      .closest('[role="button"]') as HTMLElement;
+    expect(row.tagName).toBe("DIV");
+    // No <button> descendant of the row itself (the filter bar elsewhere in
+    // the tree legitimately has its own <button> kind chips, so we scope this
+    // check to the row, not the whole container). The lesson doesn't overflow
+    // in JSDOM's default (0-height) layout, so TruncatedText renders no
+    // reveal trigger here — but this also guards against ever nesting a
+    // <button> inside the row again.
+    expect(row.querySelector("button")).toBeNull();
+  });
+
+  it("opens the detail sheet when a row is clicked", () => {
+    render(
+      <MemoriesClient {...baseProps} initialRecords={[routineRecord]} />,
+    );
+    const row = screen
+      .getByText(routineRecord.lesson)
+      .closest('[role="button"]') as HTMLElement;
+    fireEvent.click(row);
+
+    // Detail sheet view mode renders the lesson through MarkdownContent
+    // (mocked to a plain div here) rather than a raw <p>.
+    const markdownNodes = screen.getAllByTestId("markdown-message");
+    expect(
+      markdownNodes.some((n) => n.textContent === routineRecord.lesson),
+    ).toBe(true);
+  });
+
+  it("opens the detail sheet when Enter is pressed on a focused row (keyboard equivalent of click)", () => {
+    render(
+      <MemoriesClient {...baseProps} initialRecords={[routineRecord]} />,
+    );
+    const row = screen
+      .getByText(routineRecord.lesson)
+      .closest('[role="button"]') as HTMLElement;
+    fireEvent.keyDown(row, { key: "Enter" });
+
+    const markdownNodes = screen.getAllByTestId("markdown-message");
+    expect(
+      markdownNodes.some((n) => n.textContent === routineRecord.lesson),
+    ).toBe(true);
+  });
+
+  it("saves an edited lesson typed into the (mocked) MarkdownCodeEditor", async () => {
+    const mockUpdate = vi.fn().mockResolvedValue({
+      ok: true,
+      memory: { ...routineRecord, lesson: "Updated lesson text." },
+    });
+    render(
+      <MemoriesClient
+        {...baseProps}
+        initialRecords={[routineRecord]}
+        updateMemory={mockUpdate}
+      />,
+    );
+    const row = screen
+      .getByText(routineRecord.lesson)
+      .closest('[role="button"]') as HTMLElement;
+    fireEvent.click(row);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit memory" }));
+
+    const lessonEditor = screen.getByLabelText("Lesson text");
+    fireEvent.change(lessonEditor, {
+      target: { value: "Updated lesson text." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await vi.waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        memoryId: routineRecord.id,
+        lesson: "Updated lesson text.",
+      }),
+    );
   });
 });
