@@ -675,11 +675,13 @@ export function ReplApp({
           if (token && config.orgSlug && config.workspaceSlug) {
             const masked = token.length <= 8 ? "****" : token.slice(0, 4) + "…" + token.slice(-4);
             pushAssistant(
-              `Logged in to Oxagen:\n` +
+                `Success! You are logged in to Oxagen:\n` +
+                `-------------------------------------\n` +
                 `  token:     ${masked}\n` +
                 `  org:       ${config.orgSlug}\n` +
                 `  workspace: ${config.workspaceSlug}\n` +
-                `\nRun \`oxagen logout\` in your shell to clear the session.`,
+                `-------------------------------------\n` +
+                `\nTip: run \`oxagen logout\` in your shell to clear the session.`,
             );
           } else {
             pushAssistant(
