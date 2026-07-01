@@ -1,10 +1,10 @@
 import { defineConfig } from "vitest/config";
 
-// The benchmark simulation engine (src/lib/**) holds all of the app's logic and
-// is pure/deterministic, so coverage is scoped to it — the React view layer in
-// src/components and src/app is presentational and exercised by the dev server,
-// not unit tests. Thresholds follow the repo ratchet rule (>=2.5% headroom,
-// capped at 90).
+// The schema validation + aggregation logic (src/lib/**) holds all of the
+// app's non-trivial behavior and is pure, so coverage is scoped to it — the
+// React view layer in src/components and src/app is presentational and
+// exercised by the dev server, not unit tests. Thresholds follow the repo
+// ratchet rule (>=2.5% headroom, capped at 90).
 export default defineConfig({
   test: {
     environment: "node",

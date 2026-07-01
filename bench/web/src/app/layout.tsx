@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./global.css";
 
 export const metadata: Metadata = {
-  title: "Oxagen Benchmark Suite",
+  title: "Oxagen SWE-bench Benchmarks",
   description:
-    "Compare AI code agents — Oxagen CLI, Claude Code, GitHub Copilot, Google Gemini — across 12 evaluations.",
+    "Reproducible SWE-bench evaluations for AI coding agents. Every number is measured (with a reproduce command) or cited from a primary source — no simulated scores.",
 };
 
 export const viewport: Viewport = {
