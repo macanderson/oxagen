@@ -15,8 +15,8 @@ describe("agent.memory.write schema", () => {
 
   const validPayload = {
     nodeRef: "node-abc",
-    weight: "high",
-    kind: "gotcha",
+    memoryClass: "OBSERVATION",
+    memoryKind: "gotcha",
     lesson: "Always flush the cache before deploy.",
     source: "fix",
   };
@@ -25,40 +25,45 @@ describe("agent.memory.write schema", () => {
     expect(() => Schema.parse(validPayload)).not.toThrow();
   });
 
-  it("accepts all valid weight values", () => {
-    for (const weight of ["low", "high", "critical"] as const) {
-      expect(() => Schema.parse({ ...validPayload, weight })).not.toThrow();
+  it("accepts all valid memoryClass values", () => {
+    for (const memoryClass of ["OBSERVATION", "RULE", "FACT"] as const) {
+      expect(() => Schema.parse({ ...validPayload, memoryClass })).not.toThrow();
     }
   });
 
-  it("rejects an invalid weight enum", () => {
-    expect(() => Schema.parse({ ...validPayload, weight: "medium" })).toThrow();
+  it("defaults memoryClass to OBSERVATION when omitted", () => {
+    const { memoryClass: _omit, ...withoutClass } = validPayload;
+    const result = Schema.parse(withoutClass);
+    expect(result.memoryClass).toBe("OBSERVATION");
   });
 
-  it("rejects weight 'urgent' (not in enum)", () => {
-    expect(() => Schema.parse({ ...validPayload, weight: "urgent" })).toThrow();
-  });
-
-  it("accepts all valid kind values", () => {
-    for (const kind of [
-      "routine-change",
-      "constraint",
-      "bug-root-cause",
-      "convention-deviation",
-      "gotcha",
-    ] as const) {
-      expect(() => Schema.parse({ ...validPayload, kind })).not.toThrow();
-    }
-  });
-
-  it("rejects an invalid kind enum", () => {
+  it("rejects an invalid memoryClass enum", () => {
     expect(() =>
-      Schema.parse({ ...validPayload, kind: "feature" }),
+      Schema.parse({ ...validPayload, memoryClass: "MAYBE" }),
     ).toThrow();
   });
 
-  it("rejects kind 'tip' (not in enum)", () => {
-    expect(() => Schema.parse({ ...validPayload, kind: "tip" })).toThrow();
+  it("accepts an arbitrary open-string memoryKind", () => {
+    // memoryKind is an extensible open string, not a closed enum.
+    for (const memoryKind of ["STYLE", "PREFERENCE", "custom-kind", "gotcha"]) {
+      expect(() => Schema.parse({ ...validPayload, memoryKind })).not.toThrow();
+    }
+  });
+
+  it("rejects an empty memoryKind (min 1)", () => {
+    expect(() => Schema.parse({ ...validPayload, memoryKind: "" })).toThrow();
+  });
+
+  it("accepts an optional enforcementScore within 1-100", () => {
+    expect(() =>
+      Schema.parse({ ...validPayload, memoryClass: "RULE", enforcementScore: 80 }),
+    ).not.toThrow();
+  });
+
+  it("rejects an enforcementScore above 100", () => {
+    expect(() =>
+      Schema.parse({ ...validPayload, enforcementScore: 101 }),
+    ).toThrow();
   });
 
   it("accepts all valid source values", () => {
