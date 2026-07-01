@@ -75,6 +75,7 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
     system,
     messages,
     tools,
+    effort: opts.effort,
     stopWhen: stepCountIs(opts.maxSteps ?? 32),
     abortSignal: opts.signal,
     onError: ({ error }) => {
@@ -130,6 +131,18 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
     streamError ??= err;
   }
   if (streamError) throw streamError instanceof Error ? streamError : new Error(String(streamError));
+
+  // A user cancel (Esc/Ctrl-C) or timeout aborts the signal, but some transports
+  // end the stream cleanly instead of throwing an AbortError. Detect that here
+  // and throw, so callers (the pipeline's judge/revise loop, the bare path, the
+  // named-agent loop) stop IMMEDIATELY on abort rather than spending another
+  // model call summarizing/judging a turn the user already stopped.
+  if (opts.signal?.aborted) {
+    const reason = (opts.signal as AbortSignal & { reason?: unknown }).reason;
+    throw reason instanceof Error
+      ? reason
+      : new DOMException("The agent turn was aborted.", "AbortError");
+  }
 
   const steps = (await result.steps).length;
   const usage = await result.usage;

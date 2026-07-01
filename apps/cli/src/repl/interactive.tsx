@@ -25,7 +25,13 @@ import {
 } from "../agent/adapters/index.js";
 import { queryCodeGraph } from "../agent/code-graph.js";
 import type { Session } from "../lib/session.js";
-import { resolveModelId } from "../agent/model.js";
+import {
+  resolveModelId,
+  resolveEffort,
+  isReasoningEffort,
+  EFFORT_LEVELS,
+  type ReasoningEffort,
+} from "../agent/model.js";
 import { loadProjectContext } from "../agent/project-context.js";
 import { loadAndExpand, parseInvocation } from "../slash/expand.js";
 import { buildSlashCatalog, type SlashCatalogEntry } from "../slash/catalog.js";
@@ -71,6 +77,8 @@ export interface ReplOptions {
   /** Authenticated platform session (token, org, workspace). */
   session: Session;
   model?: string;
+  /** Initial reasoning effort for models that support it (low|medium|high). */
+  effort?: string;
   readOnly?: boolean;
   /** Initial permission posture; defaults to `ask` (or `readonly` when readOnly). */
   mode?: PermissionMode;
@@ -133,6 +141,11 @@ export function ReplApp({
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [model, setModel] = useState<string>(resolveModelId(options.model));
+  // Reasoning effort for models that support a thinking mode (undefined = let
+  // the model/server default decide). Driven by /effort; forwarded per turn.
+  const [effort, setEffort] = useState<ReasoningEffort | undefined>(
+    resolveEffort(options.effort),
+  );
   const [turns, setTurns] = useState(0);
   // Cumulative session token usage (exact, from the model's reported usage).
   const [usage, setUsage] = useState<{ input: number; output: number }>({
@@ -221,6 +234,8 @@ export function ReplApp({
   const streamingRef = useRef(false);
   const modelRef = useRef(model);
   modelRef.current = model;
+  const effortRef = useRef(effort);
+  effortRef.current = effort;
   const modeRef = useRef(mode);
   modeRef.current = mode;
   const tuiModeRef = useRef(tuiMode);
@@ -299,7 +314,16 @@ export function ReplApp({
     // Release any pending permission prompt as a denial so the tool unblocks.
     approvalRef.current?.resolve({ decision: "deny" });
     setApproval(null);
+    // Abort the turn signal. The engine now throws on an aborted signal the
+    // moment the current stream ends (no extra judge/summarize call), and the
+    // stream callbacks below no-op once aborted, so no late text renders.
     abortRef.current?.abort();
+    // Return the UI to idle IMMEDIATELY so Esc feels instant even if the
+    // underlying HTTP stream takes a moment to unwind. The turn's own finally
+    // block also clears this state when the aborted promise finally settles.
+    streamingRef.current = false;
+    setIsStreaming(false);
+    setTurnStartedAt(null);
   }, []);
 
   /**
@@ -462,10 +486,42 @@ export function ReplApp({
       if (text.startsWith("/model")) {
         const slug = text.slice("/model".length).trim();
         if (slug) {
+          // Any gateway/Vercel-SDK model slug that supports text I/O is accepted
+          // — there is no allowlist. If the gateway rejects the slug the next
+          // turn surfaces a clear 4xx; switch with /model <vendor/model>.
           setModel(slug);
-          pushAssistant(`Model set to ${slug}.`);
+          pushAssistant(
+            `Model set to ${slug}. (Any valid text model slug is accepted; ` +
+              `the gateway resolves it at request time.)`,
+          );
         } else {
           pushAssistant(`Current model: ${modelRef.current}`);
+        }
+        return;
+      }
+      if (text.startsWith("/effort")) {
+        const arg = text.slice("/effort".length).trim().toLowerCase();
+        if (!arg) {
+          pushAssistant(
+            `Reasoning effort: ${effortRef.current ?? "model default"}. ` +
+              `Use /effort ${EFFORT_LEVELS.join("|")}|default (applies to models with a thinking mode).`,
+          );
+        } else if (arg === "default" || arg === "off" || arg === "none") {
+          setEffort(undefined);
+          pushAssistant(
+            "Reasoning effort cleared — the model/server default now governs.",
+          );
+        } else if (isReasoningEffort(arg)) {
+          setEffort(arg);
+          pushAssistant(
+            `Reasoning effort set to ${arg}. Models with a thinking mode will ` +
+              `think ${arg === "high" ? "harder (more tokens, higher cost)" : arg}; ` +
+              `models without one ignore it.`,
+          );
+        } else {
+          pushAssistant(
+            `Unknown effort "${arg}". Use ${EFFORT_LEVELS.join(", ")}, or default.`,
+          );
         }
         return;
       }
@@ -787,6 +843,7 @@ export function ReplApp({
           ),
           ai: aiRef.current,
           model: modelRef.current,
+          effort: effortRef.current,
           readOnly: modeRef.current === "readonly",
           bare: bareRef.current,
           verbose: verboseRef.current,
@@ -800,6 +857,7 @@ export function ReplApp({
           graphSync: graphSyncRef.current,
           signal: turnController.signal,
           onStage: (stage) => {
+            if (turnController.signal.aborted) return;
             stall.reset();
             void debugLog("turn", "turn.stage", { label: stage.label, detail: stage.detail });
             closeStreamingBlocks();
@@ -812,6 +870,7 @@ export function ReplApp({
             render();
           },
           onToolCall: (name, input) => {
+            if (turnController.signal.aborted) return;
             stall.reset();
             void debugLog("turn", "turn.tool-call", { name, input });
             closeStreamingBlocks();
@@ -824,6 +883,7 @@ export function ReplApp({
             render();
           },
           onReasoning: (delta) => {
+            if (turnController.signal.aborted) return;
             stall.reset();
             // Reasoning and answer text interleave across steps — close the
             // assistant block when thinking resumes so they never merge.
@@ -842,6 +902,7 @@ export function ReplApp({
             render();
           },
           onText: (delta) => {
+            if (turnController.signal.aborted) return;
             stall.reset();
             streamCharsRef.current += delta.length;
             if (reasoningOpen) closeStreamingBlocks();

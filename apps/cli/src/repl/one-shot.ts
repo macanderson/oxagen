@@ -31,6 +31,7 @@ import { getAgent } from "../agents/loader.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
 import { readConfig } from "../lib/config.js";
+import { resolveEffort } from "../agent/model.js";
 import { PermissionBroker, type PermissionMode } from "../agent/permissions.js";
 import { formatToolCallWithSpacing } from "../agent/tool-formatter.js";
 import { debugLog } from "../lib/debug-log.js";
@@ -46,6 +47,8 @@ export interface OneShotOptions {
   session: Session;
   readOnly?: boolean;
   model?: string;
+  /** Reasoning effort for models that support it (low|medium|high). */
+  effort?: string;
   /**
    * Permission posture. One-shot is non-interactive, so there is no approver:
    * `ask` fails closed (mutations are denied), `acceptEdits` auto-allows file
@@ -119,6 +122,7 @@ export async function runOneShot(
       codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
       trace: traceStore,
       graphSync: createGraphSyncProvider({ ...options.session, cwd }),
+      effort: resolveEffort(options.effort),
       signal: turnController.signal,
       // Pipeline stage progress goes to stderr so stdout stays the clean answer.
       onStage: (stage) => {
