@@ -509,7 +509,12 @@ describe("MemoriesClient — stats row", () => {
     render(
       <MemoriesClient
         {...baseProps}
-        initialRecords={[routineRecord, constraintRecord, routineRecord]}
+        initialRecords={[
+          routineRecord,
+          constraintRecord,
+          // A second OBSERVATION with a distinct id (real Neo4j ids are unique).
+          { ...routineRecord, id: `${routineRecord.id}-2`, publicId: `${routineRecord.publicId}-2` },
+        ]}
       />,
     );
     // The stats row shows counts as numbers; we don't assert exact DOM position,
