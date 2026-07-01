@@ -56,15 +56,30 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
     onEvent,
   });
 
+  const recalled = opts.memory ? await opts.memory.recallContext().catch(() => "") : "";
+
+  // Keep `system` STABLE across turns so Anthropic prompt caching keeps its
+  // ephemeral breakpoint (set on the system block in @oxagen/ai's streamAgentReply)
+  // warm — a warm prefix re-bills at ~1/10th the input price. Recalled memory
+  // changes every turn, so folding it into `system` (as this used to) busted the
+  // cached prefix on every single turn. Instead it rides as a volatile user
+  // message placed right before the instruction: the model still sees it, but it
+  // sits AFTER the cached system block, and it is a `user` (not `system`) message
+  // so the platform's /v1/agent/llm route does not hoist it back into the cached
+  // system string.
+  const system = opts.system ?? DEFAULT_SYSTEM;
   const messages: ModelMessage[] = [
     ...(opts.history ?? []),
+    ...(recalled
+      ? [
+          {
+            role: "user",
+            content: "## Recalled context (from prior sessions)\n" + recalled,
+          } as ModelMessage,
+        ]
+      : []),
     { role: "user", content: opts.instruction },
   ];
-
-  const recalled = opts.memory ? await opts.memory.recallContext().catch(() => "") : "";
-  const system =
-    (opts.system ?? DEFAULT_SYSTEM) +
-    (recalled ? "\n\n## Recalled context (from prior sessions)\n" + recalled : "");
 
   let streamError: unknown = null;
   // Per-step timing: the tools in a step ran between the previous step's finish
