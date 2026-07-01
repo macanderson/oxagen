@@ -9,8 +9,9 @@ import { Box, Text, useInput, useStdout } from "ink";
 import React, { useState, useEffect } from "react";
 import { theme } from "../tui/theme.js";
 import { formatUsd } from "../agent/model-router.js";
-import { AGENT_TURN_TIMEOUT_MS } from "../agent/timeouts.js";
 import { getToolEmoji } from "../agent/tool-formatter.js";
+import { DiffView } from "./diff-view.js";
+import type { DiffTheme } from "../tui/terminal-theme.js";
 import { SlashMenu } from "./slash-menu.js";
 import {
   slashQuery,
@@ -21,7 +22,7 @@ import type { StageEvent, StageKind, TurnTrace, JudgeVerdict } from "../agent/tr
 import type { ApprovalRequest, ApprovalResponse, PermissionMode } from "../agent/permissions.js";
 
 export interface Message {
-  role: "user" | "assistant" | "reasoning" | "tool" | "stage";
+  role: "user" | "assistant" | "reasoning" | "tool" | "stage" | "diff";
   content: string;
   timestamp: number;
   toolName?: string;
@@ -30,6 +31,10 @@ export interface Message {
   stage?: StageEvent;
   /** When present, the message renders the full replay view for a turn. */
   trace?: TurnTrace;
+  /** Present on `role: "diff"` — the unified git diff to render (highlighted). */
+  diff?: string;
+  /** Present on `role: "diff"` — the changed-file paths, for the header line. */
+  changedFiles?: string[];
 }
 
 export const HELP = [
@@ -289,8 +294,51 @@ export function StageBadge({ stage }: { stage: StageEvent }): React.ReactElement
   );
 }
 
-export function MessageView({ msg }: { msg: Message }): React.ReactElement {
+/**
+ * A code-change message: a header naming the changed files, then the unified
+ * git diff rendered with syntax highlighting in a theme matched to the terminal
+ * background (light diff on light terminals, dark on dark).
+ */
+export function DiffMessage({
+  msg,
+  theme: diffTheme,
+}: {
+  msg: Message;
+  theme?: DiffTheme;
+}): React.ReactElement {
+  const files = msg.changedFiles ?? [];
+  const header =
+    files.length === 0
+      ? "code changes"
+      : files.length === 1
+        ? files[0]!
+        : `${files.length} files changed`;
+  return (
+    <Box flexDirection="column" marginY={1} paddingX={1}>
+      <Box>
+        <Text color={theme.violet} bold>
+          {"◆ "}
+        </Text>
+        <Text dimColor>{header}</Text>
+        {files.length > 1 ? (
+          <Text dimColor> · {files.slice(0, 4).join(", ")}{files.length > 4 ? " …" : ""}</Text>
+        ) : null}
+      </Box>
+      <DiffView diff={msg.diff ?? ""} theme={diffTheme} />
+    </Box>
+  );
+}
+
+export function MessageView({
+  msg,
+  diffTheme,
+}: {
+  msg: Message;
+  /** Theme for `role: "diff"` rendering; derived from the terminal background. */
+  diffTheme?: DiffTheme;
+}): React.ReactElement {
   if (msg.trace) return <TraceView trace={msg.trace} />;
+  if (msg.role === "diff" && msg.diff) return <DiffMessage msg={msg} theme={diffTheme} />;
   if (msg.role === "stage" && msg.stage) return <StageBadge stage={msg.stage} />;
   if (msg.role === "user") {
     return (
@@ -346,21 +394,32 @@ export function MessageView({ msg }: { msg: Message }): React.ReactElement {
 
 // ── Thinking Indicator ────────────────────────────────────────────────────────
 
-/** Width (cells) of the turn-budget bar in the thinking indicator. */
-const BUDGET_BAR_WIDTH = 6;
+/**
+ * After this many seconds with no *completed* call (progress), the turn is close
+ * to the inactivity guard's window and we warn the user. This is NOT a turn cap —
+ * a turn runs as long as calls keep completing (see agent/timeouts.ts). It just
+ * signals "nothing has landed in a while" so a genuinely hung turn is visible.
+ */
+const IDLE_WARN_SEC = 60;
 
 /**
  * Animated "the agent is working" indicator: a braille spinner, elapsed
- * seconds, a live output-token estimate, and a best-guess "time remaining" bar
- * toward the turn's auto-cancel deadline. It runs its own ~100ms timer so it
- * animates independently of streaming updates.
+ * seconds, a live output-token estimate, and — crucially — seconds since the
+ * last completed call (progress). There is NO countdown to an auto-cancel
+ * deadline, because a turn is bounded by progress and per-call timeouts, not by
+ * total elapsed time: long, healthy work must not look like it is "running out
+ * of time". The idle figure warms dim → amber → red only when progress genuinely
+ * stalls. It runs its own ~100ms timer so it animates independently of streaming.
  */
 export function ThinkingIndicator({
   startedAt,
   getTokens,
+  getLastProgressAt,
 }: {
   startedAt: number;
   getTokens: () => number;
+  /** Live getter for the timestamp of the last completed call (delta/tool/stage). */
+  getLastProgressAt?: () => number | null;
 }): React.ReactElement {
   const [frame, setFrame] = useState(0);
   useEffect(() => {
@@ -368,20 +427,17 @@ export function ThinkingIndicator({
     return () => clearInterval(id);
   }, []);
 
-  const elapsedMs = Math.max(0, Date.now() - startedAt);
-  const elapsed = Math.round(elapsedMs / 1000);
+  const now = Date.now();
+  const elapsed = Math.round(Math.max(0, now - startedAt) / 1000);
   const tokens = getTokens();
 
-  // Best-guess "time remaining" = the budget left before the turn hits its
-  // auto-cancel backstop (AGENT_TURN_TIMEOUT_MS). The bar fills as the turn runs
-  // and the remaining time warms dim → amber → red as the deadline nears, so a
-  // slow turn shows honest progress instead of an opaque, possibly-hung spinner.
-  const remainingSec = Math.ceil(Math.max(0, AGENT_TURN_TIMEOUT_MS - elapsedMs) / 1000);
-  const frac = Math.min(1, elapsedMs / AGENT_TURN_TIMEOUT_MS);
-  const filled = Math.round(frac * BUDGET_BAR_WIDTH);
-  const bar = "▰".repeat(filled) + "▱".repeat(BUDGET_BAR_WIDTH - filled);
-  const remainingColor =
-    remainingSec <= 30 ? "#F87171" : remainingSec <= 90 ? "#FBBF24" : undefined;
+  // Seconds since the last unit of progress landed. Only surfaced once it grows
+  // past the warn threshold, so a normal fast turn stays clean.
+  const lastProgressAt = getLastProgressAt?.() ?? null;
+  const idleSec =
+    lastProgressAt != null ? Math.round(Math.max(0, now - lastProgressAt) / 1000) : 0;
+  const idleColor =
+    idleSec >= IDLE_WARN_SEC * 2 ? "#F87171" : idleSec >= IDLE_WARN_SEC ? "#FBBF24" : undefined;
 
   return (
     <Box paddingX={1}>
@@ -391,12 +447,10 @@ export function ThinkingIndicator({
       <Text color="#FBBF24">Thinking… </Text>
       <Text dimColor>
         {elapsed}s{tokens > 0 ? ` · ~${humanizeTokens(tokens)} tok` : ""}
-        {" · "}
-        {bar}{" "}
       </Text>
-      <Text dimColor={remainingColor === undefined} color={remainingColor}>
-        ~{remainingSec}s left
-      </Text>
+      {idleSec >= IDLE_WARN_SEC ? (
+        <Text color={idleColor}>{` · idle ${idleSec}s`}</Text>
+      ) : null}
       <Text dimColor> · esc to cancel</Text>
     </Box>
   );
@@ -430,6 +484,8 @@ export function StatusLine({
   verboseOn,
   effort,
   mode = "ask",
+  turnOutputTokens = 0,
+  turnCostUsd = 0,
 }: {
   model: string;
   /** Current git branch (undefined = not a repo / unknown; the chip is hidden). */
@@ -442,6 +498,10 @@ export function StatusLine({
   cacheMiss: number;
   /** Cumulative estimated session cost, USD. */
   costUsd: number;
+  /** Output tokens accumulated in the CURRENT turn (live; 0 = idle/none). */
+  turnOutputTokens?: number;
+  /** Estimated cost of the CURRENT turn, USD (live; 0 = idle/none). */
+  turnCostUsd?: number;
   /** Whether the eval→enhance→judge pipeline is active (undefined = don't show). */
   pipelineOn?: boolean;
   /** Whether verbose telemetry capture is active (undefined = don't show). */
@@ -479,6 +539,13 @@ export function StatusLine({
         <Text color="#FB7185">{humanizeTokens(cacheMiss)}miss</Text>
         {sep}
         <Text color="#FBBF24">{cost}</Text>
+        {turnOutputTokens > 0 || turnCostUsd > 0 ? (
+          <Text color="#34D399">
+            {"  ▲ turn +"}
+            {humanizeTokens(turnOutputTokens)}
+            {turnCostUsd > 0 ? ` ${formatUsd(turnCostUsd)}` : ""}
+          </Text>
+        ) : null}
         {effort ? (
           <>
             {sep}

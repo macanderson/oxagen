@@ -16,16 +16,16 @@ import { z } from "zod";
 import { enhancePrompt } from "./prompt-enhancer.js";
 import { classifyTier, modelForTier } from "./model-router.js";
 import { ensureGatewayKey, MissingGatewayKeyError } from "./env.js";
-import { AgentTimeoutError, makeTurnController, withTimeout } from "./timeouts.js";
+import {
+  AgentTimeoutError,
+  DEFAULT_TIMEOUTS,
+  callModelWithTimeout,
+  makeTurnController,
+  withTimeout,
+} from "./timeouts.js";
 import { emptyUsage, type ModelTier, type Plan, type Task } from "./fleet/types.js";
 import type { FleetMemory } from "./fleet/memory.js";
 import type { AgentDefinition } from "../agents/types.js";
-
-/**
- * Timeout budget for the planning phase (ms).
- * Prompt enhancement + one structured-output LLM call must fit inside this.
- */
-const PLANNER_TIMEOUT_MS = 120_000; // 2 min; ample for a generateObject call
 
 /**
  * Timeout for prompt enhancement alone. This involves code-graph queries (fast,
@@ -119,9 +119,10 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
   const cwd = opts.cwd;
   if (!ensureGatewayKey(cwd)) throw new MissingGatewayKeyError();
 
-  // Merge the caller's abort signal with a planning-phase deadline. If either
-  // fires, every sub-operation (enhancement + LLM call) is cancelled.
-  const planController = makeTurnController(opts.signal, PLANNER_TIMEOUT_MS);
+  // Wire the caller's abort signal (Esc/Ctrl-C) into a controller. There is NO
+  // planning-phase wall-clock cap: timeouts live on the individual calls below
+  // (enhancement via withTimeout; the LLM call via callModelWithTimeout).
+  const planController = makeTurnController(opts.signal);
   const planSignal = planController.signal;
 
   // Enhance the goal so the planner sees the real code involved. Bound
@@ -161,15 +162,23 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
       : "";
 
   const model = opts.model ?? modelForTier("balanced");
-  const { object } = await generateObject({
-    model,
-    schema: planSchema,
-    system: PLANNER_SYSTEM,
-    prompt: `Goal:\n${enhanced.prompt}${rosterBlock}`,
-    // Pass the planner-scoped signal so the LLM call aborts with the planning
-    // deadline rather than hanging indefinitely.
-    abortSignal: planSignal,
-  });
+  // The planner's model call is bounded per-call (perModelCallMs) and retried on
+  // timeout — the timeout lives on the call, not on a turn/phase clock. The
+  // per-attempt signal aborts the in-flight request; the outer planSignal
+  // (user cancel) propagates without a retry.
+  const { object } = await callModelWithTimeout(
+    (signal) =>
+      generateObject({
+        model,
+        schema: planSchema,
+        system: PLANNER_SYSTEM,
+        prompt: `Goal:\n${enhanced.prompt}${rosterBlock}`,
+        abortSignal: signal,
+      }),
+    DEFAULT_TIMEOUTS,
+    { callId: "planner", model },
+    planSignal,
+  );
 
   const now = Date.now();
   const seen = new Set<string>();

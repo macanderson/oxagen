@@ -17,11 +17,14 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { z } from "zod";
 import type { ToolSet } from "ai";
+import * as timeoutsModule from "../timeouts.js";
 import {
   AgentTimeoutError,
   TIMEOUTS,
-  AGENT_TURN_TIMEOUT_MS,
+  DEFAULT_TIMEOUTS,
   withTimeout,
+  callModelWithTimeout,
+  createTurnRunner,
   makeTurnController,
   makeStallDetector,
   wrapToolsWithTimeout,
@@ -64,15 +67,27 @@ describe("AgentTimeoutError", () => {
   });
 });
 
-// ── AGENT_TURN_TIMEOUT_MS export ──────────────────────────────────────────────
+// ── No turn-level wall-clock cap (Group 8, Bug 1) ─────────────────────────────
 
-describe("AGENT_TURN_TIMEOUT_MS", () => {
-  it("matches TIMEOUTS.turnMs so the TUI and the loop agree", () => {
-    expect(AGENT_TURN_TIMEOUT_MS).toBe(TIMEOUTS.turnMs);
+describe("no wall-clock turn cap", () => {
+  it("removes the old TIMEOUTS.turnMs constant", () => {
+    expect((TIMEOUTS as Record<string, unknown>)["turnMs"]).toBeUndefined();
   });
 
-  it("is a positive number > 0", () => {
-    expect(AGENT_TURN_TIMEOUT_MS).toBeGreaterThan(0);
+  it("removes the old AGENT_TURN_TIMEOUT_MS export", () => {
+    expect(
+      (timeoutsModule as Record<string, unknown>)["AGENT_TURN_TIMEOUT_MS"],
+    ).toBeUndefined();
+  });
+
+  it("defaults the hard ceiling to disabled (undefined)", () => {
+    expect(DEFAULT_TIMEOUTS.turnHardCeilingMs).toBeUndefined();
+  });
+
+  it("guards the turn by progress (inactivity), not total time", () => {
+    // The default inactivity window is a *no-progress* window, not a turn cap.
+    expect(DEFAULT_TIMEOUTS.turnInactivityMs).toBeGreaterThan(0);
+    expect(DEFAULT_TIMEOUTS.perModelCallMs).toBeGreaterThan(0);
   });
 });
 
@@ -131,20 +146,20 @@ describe("withTimeout", () => {
 
 describe("makeTurnController", () => {
   it("returns an AbortController whose signal is initially not aborted", () => {
-    const ctrl = makeTurnController(null, 60_000);
+    const ctrl = makeTurnController(null);
     expect(ctrl.signal.aborted).toBe(false);
   });
 
   it("aborts immediately when the caller signal is already aborted", () => {
     const callerCtrl = new AbortController();
     callerCtrl.abort("user cancelled");
-    const ctrl = makeTurnController(callerCtrl.signal, 60_000);
+    const ctrl = makeTurnController(callerCtrl.signal);
     expect(ctrl.signal.aborted).toBe(true);
   });
 
   it("aborts when the caller signal fires after construction", async () => {
     const callerCtrl = new AbortController();
-    const ctrl = makeTurnController(callerCtrl.signal, 60_000);
+    const ctrl = makeTurnController(callerCtrl.signal);
     expect(ctrl.signal.aborted).toBe(false);
     callerCtrl.abort("esc");
     // Allow microtask queue to drain.
@@ -152,29 +167,182 @@ describe("makeTurnController", () => {
     expect(ctrl.signal.aborted).toBe(true);
   });
 
-  it("aborts after the deadline elapses", async () => {
+  it("does NOT impose a wall-clock deadline by default (no hard ceiling)", async () => {
     vi.useFakeTimers();
-    const ctrl = makeTurnController(null, 2_000);
+    const ctrl = makeTurnController(null);
+    // Advance far past any old turn cap — the turn must NOT be aborted by a clock.
+    vi.advanceTimersByTime(60 * 60 * 1000);
+    await Promise.resolve();
+    expect(ctrl.signal.aborted).toBe(false);
+  });
+
+  it("fires the optional hard ceiling only when explicitly set", async () => {
+    vi.useFakeTimers();
+    const ctrl = makeTurnController(null, { hardCeilingMs: 2_000 });
     expect(ctrl.signal.aborted).toBe(false);
     vi.advanceTimersByTime(2_001);
     await Promise.resolve();
     expect(ctrl.signal.aborted).toBe(true);
-  });
-
-  it("aborts with an AgentTimeoutError reason when the deadline fires", async () => {
-    vi.useFakeTimers();
-    const ctrl = makeTurnController(null, 500);
-    vi.advanceTimersByTime(501);
-    await Promise.resolve();
     expect(ctrl.signal.reason).toBeInstanceOf(AgentTimeoutError);
   });
+});
 
-  it("works with no caller signal (deadline-only mode)", async () => {
+// ── callModelWithTimeout (per-model-call timeout + retry) ──────────────────────
+
+const RETRY_CFG = { perModelCallMs: 1_000, retry: { maxRetries: 2, backoffMs: 0 } };
+
+describe("callModelWithTimeout", () => {
+  it("passes through the value when the call completes before the deadline", async () => {
+    const value = await callModelWithTimeout(
+      async () => "ok",
+      RETRY_CFG,
+      { callId: "c1", model: "test/model" },
+    );
+    expect(value).toBe("ok");
+  });
+
+  it("aborts a hung call and retries, then succeeds — the turn continues", async () => {
     vi.useFakeTimers();
-    const ctrl = makeTurnController(undefined, 1_000);
-    vi.advanceTimersByTime(1_001);
-    await Promise.resolve();
-    expect(ctrl.signal.aborted).toBe(true);
+    const logs: string[] = [];
+    let attempts = 0;
+    const promise = callModelWithTimeout(
+      (signal: AbortSignal) => {
+        attempts++;
+        // First attempt hangs until aborted; second resolves immediately.
+        if (attempts === 1) {
+          return new Promise<string>((_resolve, reject) => {
+            signal.addEventListener("abort", () => reject(new AgentTimeoutError("aborted", 1_000)), {
+              once: true,
+            });
+          });
+        }
+        return Promise.resolve("recovered");
+      },
+      RETRY_CFG,
+      { callId: "c2", model: "test/model", onLog: (l) => logs.push(l) },
+    );
+    // Trip the per-call deadline on attempt 1.
+    await vi.advanceTimersByTimeAsync(1_001);
+    const value = await promise;
+    expect(value).toBe("recovered");
+    expect(attempts).toBe(2);
+    expect(logs.some((l) => l.includes("scope=model_call") && l.includes("action=retry"))).toBe(true);
+  });
+
+  it("throws after retries are exhausted", async () => {
+    vi.useFakeTimers();
+    const promise = callModelWithTimeout(
+      (signal: AbortSignal) =>
+        new Promise<string>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(new AgentTimeoutError("aborted", 1_000)), {
+            once: true,
+          });
+        }),
+      { perModelCallMs: 1_000, retry: { maxRetries: 1, backoffMs: 0 } },
+      { callId: "c3", model: "test/model" },
+    );
+    const settled = promise.catch((e: unknown) => e);
+    // Two attempts (initial + 1 retry), each tripping the 1s deadline.
+    await vi.advanceTimersByTimeAsync(1_001);
+    await vi.advanceTimersByTimeAsync(1_001);
+    await expect(settled).resolves.toBeInstanceOf(AgentTimeoutError);
+  });
+
+  it("does not retry when the outer signal aborts (user cancel)", async () => {
+    const controller = new AbortController();
+    let attempts = 0;
+    const promise = callModelWithTimeout(
+      (signal: AbortSignal) => {
+        attempts++;
+        return new Promise<string>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(new Error("cancelled")), { once: true });
+        });
+      },
+      RETRY_CFG,
+      { callId: "c4", model: "test/model" },
+      controller.signal,
+    );
+    const settled = promise.catch((e: unknown) => e);
+    controller.abort();
+    await settled;
+    expect(attempts).toBe(1);
+  });
+});
+
+// ── createTurnRunner (progress-guarded turn; no wall-clock cap) ────────────────
+
+describe("createTurnRunner", () => {
+  it("runs a turn of 200 sequential model calls to completion — never aborted by a turn timer", async () => {
+    // Real timers: 200 near-instant calls finish in ~0ms, far under the 300s
+    // inactivity window. The whole point of Bug 1 — a turn with hundreds of
+    // calls must not be capped by a turn timer.
+    const runner = createTurnRunner({ turnInactivityMs: 300_000 });
+    const reason = await runner.run(async () => {
+      for (let i = 0; i < 200; i++) {
+        await Promise.resolve();
+        runner.onProgress({ kind: "model_call_done", callId: `c${i}`, at: Date.now() });
+      }
+    });
+    expect(reason).toBe("completed");
+  });
+
+  it("aborts a stalled turn with reason=inactivity", async () => {
+    vi.useFakeTimers();
+    const logs: string[] = [];
+    const runner = createTurnRunner(
+      { turnInactivityMs: 5_000 },
+      { onLog: (l) => logs.push(l) },
+    );
+    // Work that never completes and never reports progress.
+    const reason = runner.run(
+      () =>
+        new Promise<void>((resolve) => {
+          runner.signal.addEventListener("abort", () => resolve(), { once: true });
+        }),
+    );
+    await vi.advanceTimersByTimeAsync(5_001);
+    await expect(reason).resolves.toBe("inactivity");
+    expect(logs.some((l) => l.includes("scope=turn") && l.includes("reason=inactivity"))).toBe(true);
+  });
+
+  it("does NOT abort a progressing turn even past the inactivity window", async () => {
+    // Real timers, tiny window: 5 iterations spaced 30ms apart (total 150ms ≫
+    // the 50ms window) — but each reports progress within the window, so the
+    // inactivity guard keeps resetting and never fires.
+    const runner = createTurnRunner({ turnInactivityMs: 50 });
+    const reason = await runner.run(async () => {
+      for (let i = 0; i < 5; i++) {
+        await new Promise((r) => setTimeout(r, 30));
+        runner.onProgress({ kind: "tool_call_done", callId: `t${i}`, at: Date.now() });
+      }
+    });
+    expect(reason).toBe("completed");
+  });
+
+  it("has no hard ceiling by default", async () => {
+    vi.useFakeTimers();
+    const runner = createTurnRunner({ turnInactivityMs: undefined });
+    let done = false;
+    const reason = runner.run(async () => {
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000); // 1 hour of pure work
+      done = true;
+    });
+    await vi.runAllTimersAsync();
+    await expect(reason).resolves.toBe("completed");
+    expect(done).toBe(true);
+  });
+
+  it("fires the optional hard ceiling when explicitly configured", async () => {
+    vi.useFakeTimers();
+    const runner = createTurnRunner({ turnHardCeilingMs: 2_000 });
+    const reason = runner.run(
+      () =>
+        new Promise<void>((resolve) => {
+          runner.signal.addEventListener("abort", () => resolve(), { once: true });
+        }),
+    );
+    await vi.advanceTimersByTimeAsync(2_001);
+    await expect(reason).resolves.toBe("hard_ceiling");
   });
 });
 

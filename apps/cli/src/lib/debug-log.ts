@@ -54,6 +54,7 @@ export type DebugCategory =
   | "graph-sync" // execution-lineage telemetry synced to the workspace graph
   | "llm" // per-turn LLM telemetry (model, usage) routed through the platform
   | "pipeline" // assist-tool lifecycle: prompt enhancer, judge, survey (Group 4)
+  | "timeout" // per-model-call timeout retries + turn inactivity guard (Group 8)
   | "error";
 
 /** Is file logging enabled for this process? */

@@ -118,6 +118,12 @@ export interface RunTurnOptions {
   onReasoning?: (delta: string) => void;
   /** Fired when the model invokes a tool. */
   onToolCall?: (name: string, input: unknown) => void;
+  /**
+   * Fired at the end of each execution round with the cumulative `git diff` of
+   * the changed files and the changed-file list. Lets the UI render the code
+   * changes (syntax-highlighted diff) as they land.
+   */
+  onFileChange?: (diff: string, changedFiles: string[]) => void;
 }
 
 export interface RunTurnResult {
@@ -297,6 +303,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         if (e.type === "text") opts.onText?.(e.delta);
         if (e.type === "reasoning") opts.onReasoning?.(e.delta);
         if (e.type === "tool-call") onToolCall(e.name, e.input);
+        if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
         captureToolEvent(e, toolEvents, opts.verbose);
       },
     });
@@ -553,6 +560,7 @@ async function runBare(
       if (e.type === "text") opts.onText?.(e.delta);
       if (e.type === "reasoning") opts.onReasoning?.(e.delta);
       if (e.type === "tool-call") onToolCall(e.name, e.input);
+      if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
       captureToolEvent(e, toolEvents, opts.verbose);
     },
   });

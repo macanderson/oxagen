@@ -46,6 +46,7 @@
     "@oxagen/engram": "workspace:*",
     "@oxagen/mcp-config": "workspace:*",
     "ai": "6.0.197",
+    "cli-highlight": "2.1.11",
     "commander": "12.1.0",
     "ink": "7.1.0",
     "react": "19.2.6",
