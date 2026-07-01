@@ -18,6 +18,12 @@ export interface CliConfig {
   verbose?: boolean;
   /** Model-runtime settings (Group 1: on-device runtime + coordinator choice). */
   runtime?: RuntimeConfig;
+  /**
+   * Pipeline / assist-tool settings (Group 4: prompt enhancer, judge, survey).
+   * A partial override layered over the defaults; read through the typed
+   * accessors in `pipeline/config.ts`, not the flat `oxagen config` command.
+   */
+  pipeline?: import("../pipeline/config.js").AssistPipelineConfigPatch;
 }
 
 /**
