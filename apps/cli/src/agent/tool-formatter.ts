@@ -40,6 +40,58 @@ export function getToolEmoji(toolName: string): string {
   return TOOL_EMOJIS[toolName] ?? "🔧";
 }
 
+/**
+ * Accent color (hex) for a tool chip, grouped by what the tool *does* so the
+ * transcript reads at a glance: green = it wrote something, red = it destroyed
+ * something, amber = it ran a command, violet = it delegated to a subagent,
+ * cyan = it read/searched (the safe default).
+ */
+export function getToolAccent(toolName: string): string {
+  const n = toolName.toLowerCase();
+  if (isSubagentDispatch(toolName)) return "#A78BFA"; // violet — delegation
+  if (/(^|[.\-_])(delete|remove|rm|drop)([.\-_]|$)/.test(n)) return "#FB7185"; // red
+  if (/(^|[.\-_])(write|edit|create|update|patch|apply)([.\-_]|$)/.test(n)) return "#34D399"; // green
+  if (/(bash|shell|exec|command|run|terminal)/.test(n)) return "#FBBF24"; // amber
+  return "#7CE8F4"; // cyan — read / search / query
+}
+
+/**
+ * Human-facing label for a tool chip. Single-word core tools (Read, Edit, Bash)
+ * read best Title-cased; dotted capability names (`semantic.edge.suggest`) are
+ * precise identifiers a developer recognizes, so they're kept verbatim.
+ */
+export function toolDisplayLabel(toolName: string): string {
+  if (!toolName.includes(".")) {
+    return toolName.charAt(0).toUpperCase() + toolName.slice(1);
+  }
+  return toolName;
+}
+
+/** True when a tool call is a subagent delegation (dispatch / spawn / task). */
+export function isSubagentDispatch(toolName: string): boolean {
+  return /subagent|dispatch|spawn/i.test(toolName);
+}
+
+/**
+ * Pull the agent slug and task summary out of a subagent-dispatch input,
+ * tolerating the several field names the fleet/engine use for each. Either may
+ * be undefined when the input doesn't carry it.
+ */
+export function subagentInfo(input: unknown): { slug?: string; task?: string } {
+  if (typeof input !== "object" || input === null) return {};
+  const o = input as Record<string, unknown>;
+  const pick = (...keys: string[]): string | undefined => {
+    for (const k of keys) {
+      if (typeof o[k] === "string" && o[k]) return o[k] as string;
+    }
+    return undefined;
+  };
+  return {
+    slug: pick("agent", "agentType", "subagent", "slug", "type", "role"),
+    task: pick("task", "prompt", "description", "goal", "objective", "title"),
+  };
+}
+
 /** Cap a summary string so a tool line never wraps into a wall of text. */
 const ARG_MAX = 80;
 
@@ -62,6 +114,16 @@ function cap(s: string): string {
  */
 export function formatToolArgs(toolName: string, input: unknown): string {
   const toolLower = toolName.toLowerCase();
+
+  // Subagent delegation reads best as `slug → task`, so the transcript shows
+  // who was dispatched and to do what — not the raw dispatch payload.
+  if (isSubagentDispatch(toolName) && typeof input === "object" && input !== null) {
+    const { slug, task } = subagentInfo(input);
+    const t = task ? cap(task) : "";
+    if (slug && t) return `${slug} → ${t}`;
+    if (slug) return slug;
+    if (t) return t;
+  }
 
   // Scalars: show as-is (capped).
   if (typeof input !== "object" || input === null) {

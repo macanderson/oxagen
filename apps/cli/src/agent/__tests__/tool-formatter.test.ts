@@ -4,7 +4,15 @@
  * argument object at the user.
  */
 import { describe, it, expect } from "vitest";
-import { formatToolArgs, formatToolCall, getToolEmoji } from "../tool-formatter.js";
+import {
+  formatToolArgs,
+  formatToolCall,
+  getToolEmoji,
+  getToolAccent,
+  toolDisplayLabel,
+  isSubagentDispatch,
+  subagentInfo,
+} from "../tool-formatter.js";
 
 describe("formatToolArgs", () => {
   it("shows the file path for file operations (not the whole object)", () => {
@@ -63,5 +71,58 @@ describe("formatToolCall", () => {
     const line = formatToolCall("semantic.edge.suggest", { nodeId: "n1", limit: 3 });
     expect(line).toContain("semantic-edge-suggest(");
     expect(line).not.toContain("{");
+  });
+});
+
+describe("toolDisplayLabel", () => {
+  it("Title-cases single-word core tools", () => {
+    expect(toolDisplayLabel("bash")).toBe("Bash");
+    expect(toolDisplayLabel("Read")).toBe("Read");
+    expect(toolDisplayLabel("edit")).toBe("Edit");
+  });
+
+  it("keeps dotted capability names verbatim (precise identifiers)", () => {
+    expect(toolDisplayLabel("semantic.edge.suggest")).toBe("semantic.edge.suggest");
+    expect(toolDisplayLabel("knowledge.query")).toBe("knowledge.query");
+  });
+});
+
+describe("getToolAccent", () => {
+  it("colors by what the tool does", () => {
+    expect(getToolAccent("Write")).toBe("#34D399"); // green — mutation
+    expect(getToolAccent("Edit")).toBe("#34D399");
+    expect(getToolAccent("Delete")).toBe("#FB7185"); // red — destruction
+    expect(getToolAccent("Bash")).toBe("#FBBF24"); // amber — command
+    expect(getToolAccent("Read")).toBe("#7CE8F4"); // cyan — read
+    expect(getToolAccent("agent.subagent.dispatch")).toBe("#A78BFA"); // violet — delegation
+  });
+});
+
+describe("isSubagentDispatch / subagentInfo", () => {
+  it("detects delegation tools", () => {
+    expect(isSubagentDispatch("agent.subagent.dispatch")).toBe(true);
+    expect(isSubagentDispatch("spawnAgent")).toBe(true);
+    expect(isSubagentDispatch("Read")).toBe(false);
+  });
+
+  it("extracts slug + task across the field names the engine uses", () => {
+    expect(subagentInfo({ agent: "break-fix", task: "fix the bug" })).toEqual({
+      slug: "break-fix",
+      task: "fix the bug",
+    });
+    expect(subagentInfo({ subagent: "judge", prompt: "review it" })).toEqual({
+      slug: "judge",
+      task: "review it",
+    });
+    expect(subagentInfo("nope")).toEqual({});
+  });
+
+  it("formats a dispatch call as `slug → task`", () => {
+    expect(
+      formatToolArgs("agent.subagent.dispatch", { agent: "show-agent", task: "wire the indicator" }),
+    ).toBe("show-agent → wire the indicator");
+    // Slug-only and task-only inputs still degrade gracefully.
+    expect(formatToolArgs("agent.subagent.dispatch", { agent: "solo" })).toBe("solo");
+    expect(formatToolArgs("agent.subagent.dispatch", { task: "just do it" })).toBe("just do it");
   });
 });

@@ -4,9 +4,13 @@ import {
   ApprovalPrompt,
   humanizeTokens,
   modeLabel,
+  MessageView,
   PromptInput,
   StatusLine,
+  StageBadge,
   ThinkingIndicator,
+  TurnSummaryView,
+  type Message,
 } from "../components.js";
 import type { SlashCatalogEntry } from "../../slash/catalog.js";
 import type { ApprovalRequest, ApprovalResponse } from "../../agent/permissions.js";
@@ -278,6 +282,113 @@ describe("ApprovalPrompt", () => {
       expect(calls).toEqual([expected]);
       unmount();
     }
+  });
+});
+
+describe("MessageView", () => {
+  const msg = (m: Partial<Message>): Message => ({
+    role: "assistant",
+    content: "",
+    timestamp: 0,
+    ...m,
+  });
+
+  it("renders a tool call as an ⚡ [emoji Tool] chip with the arg", () => {
+    const { lastFrame } = render(
+      <MessageView msg={msg({ role: "tool", toolName: "Bash", content: "git push origin main" })} />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("⚡");
+    expect(frame).toContain("[💻 Bash]");
+    expect(frame).toContain("git push origin main");
+  });
+
+  it("keeps dotted capability tool names verbatim in the chip", () => {
+    const { lastFrame } = render(
+      <MessageView msg={msg({ role: "tool", toolName: "knowledge.query", content: "who owns billing" })} />,
+    );
+    expect(lastFrame() ?? "").toContain("[🔍 knowledge.query]");
+  });
+
+  it("renders a subagent dispatch as a Task chip", () => {
+    const { lastFrame } = render(
+      <MessageView
+        msg={msg({
+          role: "tool",
+          toolName: "agent.subagent.dispatch",
+          content: "break-fix → fix the failing test",
+        })}
+      />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("[🚀 Task]");
+    expect(frame).toContain("break-fix → fix the failing test");
+  });
+
+  it("gutters assistant prose with the ◆ Oxagen marker", () => {
+    const { lastFrame } = render(
+      <MessageView msg={msg({ role: "assistant", content: "Found and fixed the spot." })} />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("◆");
+    expect(frame).toContain("Found and fixed the spot.");
+  });
+
+  it("labels reasoning as thinking", () => {
+    const { lastFrame } = render(
+      <MessageView msg={msg({ role: "reasoning", content: "weighing two approaches" })} />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("💭 thinking");
+    expect(frame).toContain("weighing two approaches");
+  });
+});
+
+describe("StageBadge", () => {
+  it("renders the pipeline stage as a bracketed chip with its label", () => {
+    const { lastFrame } = render(
+      <StageBadge stage={{ kind: "judge", label: "reviewing completeness", detail: "advisor" }} />,
+    );
+    const frame = lastFrame() ?? "";
+    // The judge stage reads as "Review" in the chip.
+    expect(frame).toContain("[Review]");
+    expect(frame).toContain("reviewing completeness");
+    expect(frame).toContain("advisor");
+  });
+});
+
+describe("TurnSummaryView", () => {
+  it("shows completeness, quality score, files and cost when judged", () => {
+    const { lastFrame } = render(
+      <TurnSummaryView
+        summary={{
+          complete: true,
+          quality: 94,
+          filesTouched: ["interactive.tsx", "components.tsx"],
+          costUsd: 0.03,
+          judged: true,
+        }}
+      />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("✓ complete");
+    expect(frame).toContain("quality");
+    expect(frame).toContain("94/100");
+    expect(frame).toContain("interactive.tsx (+1)");
+    expect(frame).toContain("cost");
+  });
+
+  it("marks gaps and omits the quality score in bare mode", () => {
+    const { lastFrame } = render(
+      <TurnSummaryView
+        summary={{ complete: false, filesTouched: [], costUsd: 0, judged: false }}
+      />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("⚠ gaps remain");
+    expect(frame).toContain("not judged (bare mode)");
+    expect(frame).not.toContain("/100");
+    expect(frame).toContain("none");
   });
 });
 
