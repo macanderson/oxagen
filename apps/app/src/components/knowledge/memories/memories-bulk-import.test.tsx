@@ -343,8 +343,10 @@ describe("MemoriesBulkImport — review stage", () => {
   it("returns to the select stage when Back is clicked", async () => {
     await toReview([draft()]);
     fireEvent.click(screen.getByRole("button", { name: /back/i }));
+    // findByText: the stage transition back to select renders a tick after the
+    // click, so wait for the dropzone rather than asserting it synchronously.
     expect(
-      screen.getByText("Drop markdown files here, or click to choose"),
+      await screen.findByText("Drop markdown files here, or click to choose"),
     ).toBeInTheDocument();
     expect(screen.queryByText("Review draft memories")).not.toBeInTheDocument();
   });

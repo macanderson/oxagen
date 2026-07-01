@@ -41,7 +41,7 @@ import {
   WEIGHT_CONFIG,
   type MemoryKind,
   type MemoryWeight,
-} from "./memories-client";
+} from "./memory-kinds";
 
 // ---------------------------------------------------------------------------
 // Types — structural mirrors of the server-action exports (avoids importing
