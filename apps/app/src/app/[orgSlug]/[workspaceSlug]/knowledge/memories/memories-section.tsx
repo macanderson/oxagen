@@ -21,6 +21,8 @@ import {
   createMemoryAction,
   updateMemoryAction,
   deleteMemoryAction,
+  promoteMemoryAction,
+  promotionCandidatesAction,
 } from "./actions";
 import { parseImportAction, commitImportAction } from "./bulk-import-actions";
 
@@ -79,6 +81,8 @@ export async function MemoriesSection({
       createMemory={createMemoryAction}
       updateMemory={updateMemoryAction}
       deleteMemory={deleteMemoryAction}
+      promoteMemory={promoteMemoryAction}
+      promotionCandidates={promotionCandidatesAction}
       parseImport={parseImportAction}
       commitImport={commitImportAction}
     />

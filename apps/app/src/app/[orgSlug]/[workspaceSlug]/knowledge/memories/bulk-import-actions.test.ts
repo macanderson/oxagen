@@ -55,13 +55,18 @@ import { parseImportAction, commitImportAction } from "./bulk-import-actions";
 
 const BASE = { orgSlug: "oxagen", workspaceSlug: "main" };
 
-type Kind = "routine-change" | "constraint" | "bug-root-cause" | "convention-deviation" | "gotcha";
-type Weight = "low" | "high" | "critical";
+type MemoryClass = "OBSERVATION" | "RULE" | "FACT";
 
 function draft(
-  overrides: Partial<{ lesson: string; kind: Kind; weight: Weight }> = {},
+  overrides: Partial<{ lesson: string; memoryKind: string; memoryClass: MemoryClass; enforcementScore: number }> = {},
 ) {
-  return { lesson: "Never push to main.", kind: "constraint" as Kind, weight: "critical" as Weight, ...overrides };
+  return {
+    lesson: "Never push to main.",
+    memoryKind: "constraint",
+    memoryClass: "RULE" as MemoryClass,
+    enforcementScore: 95,
+    ...overrides,
+  };
 }
 
 beforeEach(() => {

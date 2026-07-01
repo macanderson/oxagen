@@ -45,8 +45,9 @@ function md(name: string, content: string): File {
 function draft(overrides: Partial<DraftMemory> = {}): DraftMemory {
   return {
     lesson: "Always open a PR — never push to main.",
-    kind: "constraint",
-    weight: "critical",
+    memoryClass: "RULE",
+    memoryKind: "constraint",
+    enforcementScore: 95,
     source: "user",
     nodeRef: "user-memory",
     sourceDocument: "rules.md",
@@ -235,7 +236,7 @@ describe("MemoriesBulkImport — review stage", () => {
   it("renders each draft lesson in an editable field", async () => {
     await toReview([
       draft({ lesson: "Never push to main." }),
-      draft({ lesson: "Use withTenantDb, never raw db().", kind: "gotcha" }),
+      draft({ lesson: "Use withTenantDb, never raw db().", memoryKind: "gotcha" }),
     ]);
     expect(
       screen.getByDisplayValue("Never push to main."),
@@ -295,7 +296,7 @@ describe("MemoriesBulkImport — review stage", () => {
     expect(payload.drafts[0]).toMatchObject({
       lesson: "Keep this one, edited.",
       source: "imported-rules",
-      kind: "routine-change",
+      memoryKind: "routine-change",
       // editing kind marks it as user-supplied, not auto-classified
       classified: false,
     });
