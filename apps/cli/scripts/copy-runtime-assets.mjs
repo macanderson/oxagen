@@ -16,7 +16,10 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const cliRoot = resolve(here, "..");
 
-const assets = [["src/runtime/models.json", "dist/runtime/models.json"]];
+const assets = [
+  ["src/runtime/models.json", "dist/runtime/models.json"],
+  ["src/orchestrator/routing-policy.json", "dist/orchestrator/routing-policy.json"],
+];
 
 for (const [from, to] of assets) {
   const src = resolve(cliRoot, from);
