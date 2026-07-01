@@ -75,7 +75,6 @@ import {
 // CodeMirror-laden component. Re-exported here for existing consumers.
 import {
   ALL_KINDS,
-  KIND_CONFIG,
   WEIGHT_CONFIG,
   type MemoryKind,
   type MemoryWeight,
