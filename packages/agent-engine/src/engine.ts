@@ -153,7 +153,9 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
   // named-agent loop) stop IMMEDIATELY on abort rather than spending another
   // model call summarizing/judging a turn the user already stopped.
   if (opts.signal?.aborted) {
-    const reason = (opts.signal as AbortSignal & { reason?: unknown }).reason;
+    // `AbortSignal.reason` is typed `any` in lib.dom; funnel it through an
+    // explicit `unknown` local so downstream narrowing stays type-safe.
+    const reason: unknown = opts.signal.reason;
     throw reason instanceof Error
       ? reason
       : new DOMException("The agent turn was aborted.", "AbortError");
@@ -185,6 +187,7 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       totalTokens: usage.totalTokens,
+      cachedInputTokens: (usage as { cachedInputTokens?: number }).cachedInputTokens,
     },
     messages: [...messages, ...response.messages],
   };

@@ -22,7 +22,7 @@ export interface ModelRunArgs {
   tools: ToolSet;
   stopWhen: ReturnType<typeof stepCountIs>;
   abortSignal?: AbortSignal;
-  effort?: "low" | "medium" | "high";
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
   onError?: (e: { error: unknown }) => void;
   onStepFinish?: (s: { toolCalls?: unknown[]; toolResults?: unknown[] }) => void;
 }

@@ -141,7 +141,7 @@ export interface RunCodingAgentOptions {
   instruction: string;
   model?: string;
   /** Reasoning effort for models that support it (forwarded to the AI port). */
-  effort?: "low" | "medium" | "high";
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
   system?: string;
   history?: ModelMessage[];
   maxSteps?: number;
@@ -164,6 +164,8 @@ export interface RunCodingAgentResult {
     inputTokens?: number;
     outputTokens?: number;
     totalTokens?: number;
+    /** Prompt tokens served from the provider cache (a cache "hit"). */
+    cachedInputTokens?: number;
   };
   messages: ModelMessage[];
 }

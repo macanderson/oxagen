@@ -372,6 +372,14 @@ describe("reasoningRequestConfig (@oxagen/ai)", () => {
       const opts = result.providerOptions?.anthropic as { outputConfig: { effort: string } };
       expect(opts.outputConfig.effort).toBe("high");
     });
+
+    it("passes the Anthropic-only xhigh/max levels through verbatim (Opus/Sonnet)", () => {
+      for (const effort of ["xhigh", "max"] as const) {
+        const result = reasoningRequestConfig("anthropic/claude-opus-4.8", effort);
+        const opts = result.providerOptions?.anthropic as { outputConfig: { effort: string } };
+        expect(opts.outputConfig.effort).toBe(effort);
+      }
+    });
   });
 
   describe("openai vendor", () => {
@@ -383,10 +391,17 @@ describe("reasoningRequestConfig (@oxagen/ai)", () => {
       });
     });
 
-    it("passes through each effort level unchanged", () => {
+    it("passes through each portable effort level unchanged", () => {
       for (const effort of ["low", "medium", "high"] as const) {
         const result = reasoningRequestConfig("openai/o4", effort);
         expect((result.providerOptions?.openai as { reasoningEffort: string }).reasoningEffort).toBe(effort);
+      }
+    });
+
+    it("clamps the Anthropic-only xhigh/max levels down to high", () => {
+      for (const effort of ["xhigh", "max"] as const) {
+        const result = reasoningRequestConfig("openai/gpt-5.2", effort);
+        expect((result.providerOptions?.openai as { reasoningEffort: string }).reasoningEffort).toBe("high");
       }
     });
   });
@@ -406,6 +421,17 @@ describe("reasoningRequestConfig (@oxagen/ai)", () => {
       const result = reasoningRequestConfig("google/gemini-3-pro", "high");
       const cfg = (result.providerOptions?.google as { thinkingConfig: { thinkingBudget: number } }).thinkingConfig;
       expect(cfg.thinkingBudget).toBe(12288);
+    });
+
+    it("maps the deeper xhigh/max levels to their larger thinking budgets", () => {
+      for (const [effort, budget] of [
+        ["xhigh", 24576],
+        ["max", 49152],
+      ] as const) {
+        const result = reasoningRequestConfig("google/gemini-3-pro", effort);
+        const cfg = (result.providerOptions?.google as { thinkingConfig: { thinkingBudget: number } }).thinkingConfig;
+        expect(cfg.thinkingBudget).toBe(budget);
+      }
     });
   });
 

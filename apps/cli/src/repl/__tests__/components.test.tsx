@@ -39,78 +39,68 @@ describe("humanizeTokens", () => {
   });
 });
 
-describe("StatusLine (token counter)", () => {
-  it("renders the session token counter and model", () => {
+describe("StatusLine (model, tokens, cache, cost)", () => {
+  it("renders model, branch, tokens, cache hit/miss and cost", () => {
+    // Compact inputs keep the single line within the 80-col test terminal so
+    // substrings aren't split by wrapping (real terminals are wider).
     const { lastFrame } = render(
       <StatusLine
-        model="anthropic/claude-sonnet-4.5"
-        readOnly={false}
-        turns={2}
+        model="x/sonnet"
+        branch="main"
         inputTokens={1234}
         outputTokens={5678}
+        cacheHit={87_100_000}
+        cacheMiss={1_000_000}
+        costUsd={58.74}
+        mode="ask"
       />,
     );
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("tokens:");
-    expect(frame).toContain("1.2k"); // input ↑
-    expect(frame).toContain("5.7k"); // output ↓
-    expect(frame).toContain("claude-sonnet-4.5");
+    expect(frame).toContain("sonnet");
+    expect(frame).toContain("main");
+    expect(frame).toContain("↑1.2k");
+    expect(frame).toContain("↓5.7k");
+    expect(frame).toContain("87.1Mhit");
+    expect(frame).toContain("1.0Mmiss");
+    expect(frame).toContain("~$58.74");
   });
 
-  it("shows a read-only badge when enabled", () => {
+  it("omits the branch chip when no branch is provided", () => {
     const { lastFrame } = render(
       <StatusLine
         model="x/y"
-        readOnly
-        turns={0}
         inputTokens={0}
         outputTokens={0}
+        cacheHit={0}
+        cacheMiss={0}
+        costUsd={0}
       />,
     );
-    expect(lastFrame() ?? "").toContain("read-only");
+    expect(lastFrame() ?? "").not.toContain("│  ‌"); // no dangling branch separator
   });
 });
 
-describe("StatusLine (permission mode)", () => {
-  it("shows the mode chip when a mode is provided", () => {
+describe("StatusLine (permission line)", () => {
+  it.each([
+    ["bypass", "bypass permissions on"],
+    ["acceptEdits", "auto-accept edits on"],
+    ["readonly", "read-only"],
+    ["ask", "ask before edits"],
+  ] as const)("shows the %s permission line", (mode, label) => {
     const { lastFrame } = render(
       <StatusLine
         model="x/y"
-        readOnly={false}
-        turns={0}
         inputTokens={0}
         outputTokens={0}
-        mode="acceptEdits"
+        cacheHit={0}
+        cacheMiss={0}
+        costUsd={0}
+        mode={mode}
       />,
     );
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("mode:");
-    expect(frame).toContain("auto-edit");
-  });
-});
-
-describe("StatusLine (layout chip)", () => {
-  it("shows the layout chip with the active tui mode", () => {
-    const { lastFrame } = render(
-      <StatusLine
-        model="x/y"
-        readOnly={false}
-        turns={0}
-        inputTokens={0}
-        outputTokens={0}
-        tuiMode="fullscreen"
-      />,
-    );
-    const frame = lastFrame() ?? "";
-    expect(frame).toContain("layout:");
-    expect(frame).toContain("fullscreen");
-  });
-
-  it("omits the layout chip when no tui mode is provided", () => {
-    const { lastFrame } = render(
-      <StatusLine model="x/y" readOnly={false} turns={0} inputTokens={0} outputTokens={0} />,
-    );
-    expect(lastFrame() ?? "").not.toContain("layout:");
+    expect(frame).toContain(label);
+    expect(frame).toContain("shift+tab to cycle");
   });
 });
 

@@ -13,6 +13,8 @@
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import type { ModelMessage } from "ai";
+import { existsSync, readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { theme } from "../tui/theme.js";
 import { runTurn } from "@oxagen/agent-engine";
 import {
@@ -66,12 +68,6 @@ import {
   TIMEOUTS,
 } from "../agent/timeouts.js";
 import {
-  makeTurnController,
-  makeStallDetector,
-  AgentTimeoutError,
-  TIMEOUTS,
-} from "../agent/timeouts.js";
-import {
   PermissionBroker,
   parseModeArg,
   resolveMode,
@@ -105,6 +101,31 @@ export interface ReplOptions {
  */
 function summarizeInput(toolName: string, input: unknown): string {
   return formatToolArgs(toolName, input);
+}
+
+/**
+ * Best-effort current git branch by walking up from `cwd` to the nearest `.git`
+ * and reading `HEAD`. No subprocess — just a file read — so it is cheap and safe.
+ * Returns undefined outside a repo or on a detached HEAD.
+ */
+function readGitBranch(cwd: string): string | undefined {
+  try {
+    let dir = cwd;
+    for (let i = 0; i < 64; i++) {
+      const head = join(dir, ".git", "HEAD");
+      if (existsSync(head)) {
+        const ref = readFileSync(head, "utf8").trim();
+        const m = ref.match(/^ref:\s*refs\/heads\/(.+)$/);
+        return m ? m[1] : undefined; // detached HEAD → undefined
+      }
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  } catch {
+    /* not a repo / unreadable — no branch chip */
+  }
+  return undefined;
 }
 
 // Alternate-screen control sequences: 1049h swaps to the alt buffer (and 1049l
@@ -157,11 +178,14 @@ export function ReplApp({
     resolveEffort(options.effort),
   );
   const [turns, setTurns] = useState(0);
-  // Cumulative session token usage (exact, from the model's reported usage).
-  const [usage, setUsage] = useState<{ input: number; output: number }>({
-    input: 0,
-    output: 0,
-  });
+  // Cumulative session usage (exact, from the model's reported usage): input /
+  // output tokens, cache-read tokens (a "hit"), and estimated cost.
+  const [usage, setUsage] = useState<{
+    input: number;
+    output: number;
+    cacheHit: number;
+    costUsd: number;
+  }>({ input: 0, output: 0, cacheHit: 0, costUsd: 0 });
   // When the active turn began (drives the thinking indicator); null when idle.
   const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
   // Output chars streamed this turn, for the live token estimate in the indicator.
@@ -185,11 +209,16 @@ export function ReplApp({
   // Layout mode: "compact" (inline scrollback) vs. "fullscreen" (alternate
   // screen, pinned to the terminal height). Defaults from config; toggled by
   // /tui. useFullscreen swaps the alt buffer + reports the live row count.
-  const [tuiMode, setTuiMode] = useState<TuiMode>(
-    // Fullscreen is the default REPL experience; opt out with `/tui compact`
-    // or a persisted `tui: "compact"` in config.
-    readConfig().tui === "compact" ? "compact" : "fullscreen",
-  );
+  const [tuiMode, setTuiMode] = useState<TuiMode>(() => {
+    // An explicit config value always wins. Otherwise fullscreen is the default
+    // on a real interactive TTY (the only place the alternate screen buffer makes
+    // sense); non-TTY contexts (pipes, CI, ink-testing-library) fall back to
+    // compact so inline rendering stays capturable and the alt-screen effect
+    // never runs.
+    const configured = readConfig().tui;
+    if (configured === "compact" || configured === "fullscreen") return configured;
+    return process.stdout.isTTY ? "fullscreen" : "compact";
+  });
   const fullscreen = tuiMode === "fullscreen";
   const rows = useFullscreen(fullscreen);
   // Permission posture (drives the broker + status chip) and the in-flight
@@ -203,6 +232,8 @@ export function ReplApp({
   } | null>(null);
 
   const cwd = process.cwd();
+  // Current git branch for the status line (read once from .git/HEAD).
+  const branchRef = useRef<string | undefined>(readGitBranch(cwd));
   // Engine ports — created once for the session. The workspace stays bare here;
   // it's wrapped with the permission broker (createGatedWorkspace) at call time
   // so /mode changes take effect without re-creating the workspace.
@@ -389,6 +420,18 @@ export function ReplApp({
     }
     // While a permission prompt is up, ApprovalPrompt owns Esc and the answer keys.
     if (approvalRef.current) return;
+
+    // Shift+Tab cycles the permission posture (ask → auto-edit → bypass →
+    // read-only → …), mirroring Claude Code. The status line's second line
+    // reflects the new mode immediately.
+    if (key.tab && key.shift) {
+      const order: PermissionMode[] = ["ask", "acceptEdits", "bypass", "readonly"];
+      const idx = order.indexOf(modeRef.current);
+      const next = order[(idx + 1) % order.length]!;
+      setMode(next);
+      brokerRef.current?.setMode(next);
+      return;
+    }
 
     if (key.escape) {
       // If the reset-confirmation prompt is already visible, Esc cancels it
@@ -1024,6 +1067,9 @@ export function ReplApp({
         setUsage((u) => ({
           input: u.input + (result.usage.inputTokens ?? 0),
           output: u.output + (result.usage.outputTokens ?? 0),
+          cacheHit: u.cacheHit + (result.usage.cachedInputTokens ?? 0),
+          // The pipeline already priced the turn (rate card) onto the trace.
+          costUsd: u.costUsd + (result.trace?.usage?.costUsd ?? 0),
         }));
       } catch (err) {
         closeStreamingBlocks();
@@ -1154,14 +1200,16 @@ export function ReplApp({
       {/* Status line */}
       <StatusLine
         model={model}
-        readOnly={mode === "readonly"}
-        turns={turns}
+        branch={branchRef.current}
         inputTokens={usage.input}
         outputTokens={usage.output}
+        cacheHit={usage.cacheHit}
+        cacheMiss={Math.max(0, usage.input - usage.cacheHit)}
+        costUsd={usage.costUsd}
         pipelineOn={pipelineOn}
         verboseOn={verboseOn}
+        effort={effort}
         mode={mode}
-        tuiMode={tuiMode}
       />
 
       {/* Esc-twice reset confirmation — shown above the input row until the

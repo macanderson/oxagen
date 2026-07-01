@@ -20,7 +20,18 @@ const REASONING_BUDGET: Record<EffortLevel, number> = {
   low: 4096,
   medium: 8192,
   high: 12288,
+  xhigh: 24576,
+  max: 49152,
 };
+
+/**
+ * Vendors whose effort knob only understands `low | medium | high` (OpenAI's
+ * `reasoning_effort`, xAI's Grok). The deeper Anthropic tiers `xhigh`/`max` are
+ * clamped to `high` for them so a request never sends an unsupported value.
+ */
+function clampEffortToHigh(effort: EffortLevel): "low" | "medium" | "high" {
+  return effort === "xhigh" || effort === "max" ? "high" : effort;
+}
 
 /**
  * Per-vendor configuration required to surface reasoning/thinking tokens
@@ -86,7 +97,9 @@ export function reasoningRequestConfig(
       return {
         providerOptions: {
           openai: {
-            reasoningEffort: effort,
+            // OpenAI's reasoning_effort tops out at "high" — clamp the deeper
+            // Anthropic-only tiers down so the request is never rejected.
+            reasoningEffort: clampEffortToHigh(effort),
             // "detailed" streams the model's reasoning summary into fullStream
             // (as reasoning-delta parts); "auto" frequently yields no summary at
             // all through the gateway, leaving the reasoning card unfed.
@@ -111,10 +124,11 @@ export function reasoningRequestConfig(
       };
 
     case "xai":
-      // Grok exposes a reasoning effort knob but does not lock temperature.
+      // Grok exposes a reasoning effort knob (low|medium|high) but does not lock
+      // temperature; clamp the deeper Anthropic-only tiers to "high".
       return {
         providerOptions: {
-          xai: { reasoningEffort: effort },
+          xai: { reasoningEffort: clampEffortToHigh(effort) },
         },
         temperatureLocked: false,
       };
@@ -128,7 +142,7 @@ export function reasoningRequestConfig(
       // namespace behaviour so existing callers don't regress silently.
       return {
         providerOptions: {
-          openai: { reasoningEffort: effort },
+          openai: { reasoningEffort: clampEffortToHigh(effort) },
         },
         temperatureLocked: false,
       };
