@@ -947,6 +947,34 @@ export function ReplApp({
         }
         render();
         historyRef.current = result.messages;
+        // End-of-turn summary card — the headline outcome, built only from data
+        // the pipeline actually produced (advisor verdict + confidence, files
+        // touched, priced cost). Shown when the turn did real work (touched
+        // files, ran commands, or was judged); a pure Q&A reply gets no card so
+        // casual chat stays uncluttered.
+        {
+          const t = result.trace;
+          const judged = (t?.judgeRounds?.length ?? 0) > 0;
+          const didWork =
+            (t?.filesTouched?.length ?? 0) > 0 ||
+            (t?.commandsRun?.length ?? 0) > 0 ||
+            judged;
+          if (t && didWork) {
+            turn.push({
+              role: "assistant",
+              content: "",
+              timestamp: Date.now(),
+              summary: {
+                complete: t.finalComplete,
+                quality: judged ? t.judgeRounds[t.judgeRounds.length - 1]?.confidence : undefined,
+                filesTouched: t.filesTouched ?? [],
+                costUsd: t.usage?.costUsd ?? 0,
+                judged,
+              },
+            });
+            render();
+          }
+        }
         // Debug mode: surface the exact prompt the model received after the
         // enhance stage (code-graph refs + recalled memory injected). This is
         // what the agent actually reasoned over, printed into the messages list

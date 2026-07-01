@@ -10,7 +10,12 @@ import React, { useState, useEffect } from "react";
 import { theme } from "../tui/theme.js";
 import { formatUsd } from "../agent/model-router.js";
 import { AGENT_TURN_TIMEOUT_MS } from "../agent/timeouts.js";
-import { getToolEmoji } from "../agent/tool-formatter.js";
+import {
+  getToolEmoji,
+  getToolAccent,
+  toolDisplayLabel,
+  isSubagentDispatch,
+} from "../agent/tool-formatter.js";
 import { SlashMenu } from "./slash-menu.js";
 import {
   slashQuery,
@@ -30,6 +35,28 @@ export interface Message {
   stage?: StageEvent;
   /** When present, the message renders the full replay view for a turn. */
   trace?: TurnTrace;
+  /** When present, the message renders the end-of-turn summary card. */
+  summary?: TurnSummary;
+}
+
+/**
+ * Headline outcome of a turn, rendered as a boxed card once the work settles.
+ * Only fields the pipeline actually produces are populated — completeness +
+ * confidence from the advisor judge, the files the agent touched, and the
+ * priced cost. Test/PR/CI status is intentionally absent (the REPL turn does
+ * not run those) rather than shown as fabricated data.
+ */
+export interface TurnSummary {
+  /** Whether the advisor judged the work complete (or the turn simply finished). */
+  complete: boolean;
+  /** Advisor confidence 0–100 → shown as the "quality" score. Absent in bare mode. */
+  quality?: number;
+  /** Relative paths the agent wrote or edited. */
+  filesTouched: string[];
+  /** Priced cost of the turn, USD. */
+  costUsd: number;
+  /** True when the pipeline ran (judged); false for the bare agent. */
+  judged: boolean;
 }
 
 export const HELP = [
@@ -278,19 +305,75 @@ const STAGE_COLOR: Record<StageKind, string> = {
   complete: "#34D399",
 };
 
-/** A compact, dim line announcing one pipeline stage as it happens. */
+/**
+ * A compact line announcing one pipeline stage as it happens. Rendered in the
+ * same bracketed-chip grammar as tool calls, but with the stage's own dim glyph
+ * (not the ⚡ action bolt) so pipeline chatter stays visually subordinate to the
+ * concrete actions the agent takes.
+ */
 export function StageBadge({ stage }: { stage: StageEvent }): React.ReactElement {
+  const color = STAGE_COLOR[stage.kind];
   return (
     <Box paddingX={1}>
-      <Text color={STAGE_COLOR[stage.kind]}>{STAGE_GLYPH[stage.kind]} </Text>
-      <Text dimColor>{stage.label}</Text>
+      <Text color={color}>{STAGE_GLYPH[stage.kind]} </Text>
+      <Text color={color} dimColor>
+        [{STAGE_LABEL[stage.kind]}]
+      </Text>
+      <Text>{"  "}</Text>
+      <Text dimColor wrap="truncate-end">
+        {stage.label}
+      </Text>
       {stage.detail ? <Text dimColor> · {stage.detail}</Text> : null}
+    </Box>
+  );
+}
+
+/** Title-cased chip label for each pipeline stage. */
+const STAGE_LABEL: Record<StageKind, string> = {
+  evaluate: "Evaluate",
+  enhance: "Enhance",
+  route: "Route",
+  execute: "Execute",
+  judge: "Review",
+  revise: "Revise",
+  complete: "Complete",
+};
+
+// ── Action chips ────────────────────────────────────────────────────────────
+
+/** The ⚡ action bolt that gutters every concrete agent action. */
+const ACTION_BOLT = "⚡";
+
+/**
+ * One tool call, rendered as `⚡ [📖 Read]  src/foo.ts`. The bracket is tinted
+ * by what the tool does (see getToolAccent) so writes/deletes/commands/reads are
+ * distinguishable at a glance; the argument trails, truncated to one line.
+ */
+function ToolChip({ msg }: { msg: Message }): React.ReactElement {
+  const name = msg.toolName ?? "tool";
+  const subagent = isSubagentDispatch(name);
+  // Subagent delegation gets its own grammar (`⚡ [🚀 Task]  slug → what`) and a
+  // violet accent; every other tool keeps the amber bolt with a use-colored chip.
+  const accent = subagent ? "#A78BFA" : getToolAccent(name);
+  return (
+    <Box paddingX={1} marginTop={1}>
+      <Text color={subagent ? accent : "#FBBF24"} bold>
+        {ACTION_BOLT}{" "}
+      </Text>
+      <Text color={accent}>
+        [{getToolEmoji(name)} {subagent ? "Task" : toolDisplayLabel(name)}]
+      </Text>
+      <Text>{"  "}</Text>
+      <Text dimColor={!subagent} wrap="truncate-end">
+        {msg.content}
+      </Text>
     </Box>
   );
 }
 
 export function MessageView({ msg }: { msg: Message }): React.ReactElement {
   if (msg.trace) return <TraceView trace={msg.trace} />;
+  if (msg.summary) return <TurnSummaryView summary={msg.summary} />;
   if (msg.role === "stage" && msg.stage) return <StageBadge stage={msg.stage} />;
   if (msg.role === "user") {
     return (
@@ -304,13 +387,13 @@ export function MessageView({ msg }: { msg: Message }): React.ReactElement {
   }
 
   if (msg.role === "reasoning") {
-    // The model's chain-of-thought, rendered dim and prefixed so it reads as an
-    // aside distinct from the answer. Shown live so the user sees every step of
-    // the agent's thinking, not just its conclusion.
+    // The model's chain-of-thought, rendered dim under a 💭 label so it reads as
+    // an aside distinct from the answer. Shown live so the user sees every step
+    // of the agent's thinking, not just its conclusion.
     return (
       <Box paddingX={1} marginY={0} flexDirection="column">
         <Text dimColor wrap="wrap">
-          {"💭 "}
+          <Text color={theme.violet}>💭 thinking </Text>
           {msg.content}
           {msg.streaming && <Text color={theme.violet}>▊</Text>}
         </Text>
@@ -318,28 +401,90 @@ export function MessageView({ msg }: { msg: Message }): React.ReactElement {
     );
   }
 
-  if (msg.role === "tool") {
-    const emoji = getToolEmoji(msg.toolName ?? "");
-    return (
-      <Box paddingX={1} marginY={1} flexDirection="column">
-        <Box>
-          <Text>{emoji + " "}</Text>
-          <Text dimColor>{msg.toolName?.toLowerCase() ?? "tool"}</Text>
-          <Text dimColor>{"("}</Text>
-          <Text wrap="truncate">{msg.content}</Text>
-          <Text dimColor>{")"}</Text>
-        </Box>
-      </Box>
-    );
-  }
+  if (msg.role === "tool") return <ToolChip msg={msg} />;
 
-  // assistant
+  // assistant — Oxagen speaking. A violet ◆ marker gutters the block so the
+  // agent's prose is instantly separable from tool output and thinking asides.
   return (
     <Box paddingX={1} marginY={0} flexDirection="column">
-      <Text>
+      <Text wrap="wrap">
+        <Text color={theme.violet} bold>
+          ◆{" "}
+        </Text>
         {msg.content}
         {msg.streaming && <Text color={theme.cyan}>▊</Text>}
       </Text>
+    </Box>
+  );
+}
+
+// ── End-of-turn summary card ──────────────────────────────────────────────────
+
+/** One right-aligned label/value row inside the summary card. */
+function SummaryRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <Box>
+      <Text dimColor>{label.padEnd(9)}</Text>
+      <Text>{children}</Text>
+    </Box>
+  );
+}
+
+/**
+ * The headline outcome of a turn, as a rounded card: the completeness verdict
+ * and advisor "quality" score, the files touched, and the priced cost. The
+ * border warms green when complete and amber when the judge still sees gaps.
+ */
+export function TurnSummaryView({ summary }: { summary: TurnSummary }): React.ReactElement {
+  const { complete, quality, filesTouched, costUsd, judged } = summary;
+  const color = complete ? "#34D399" : "#FBBF24";
+  const files =
+    filesTouched.length === 0
+      ? "none"
+      : filesTouched.length === 1
+        ? (filesTouched[0] as string)
+        : `${filesTouched[0]} (+${filesTouched.length - 1})`;
+  return (
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={color}
+      paddingX={1}
+      marginY={1}
+      alignSelf="flex-start"
+    >
+      <Box>
+        <Text color={color} bold>
+          {complete ? "✓ complete" : "⚠ gaps remain"}
+        </Text>
+        {judged && typeof quality === "number" ? (
+          <>
+            <Text dimColor>{"     quality "}</Text>
+            <Text color={scoreColor(quality)} bold>
+              {quality}/100
+            </Text>
+          </>
+        ) : null}
+      </Box>
+      {!judged ? (
+        <SummaryRow label="review">
+          <Text dimColor>not judged (bare mode)</Text>
+        </SummaryRow>
+      ) : null}
+      <SummaryRow label="files">
+        <Text color={filesTouched.length > 0 ? theme.cyan : undefined} dimColor={filesTouched.length === 0}>
+          {files}
+        </Text>
+      </SummaryRow>
+      <SummaryRow label="cost">
+        <Text color="#FBBF24">{formatUsd(costUsd)}</Text>
+      </SummaryRow>
     </Box>
   );
 }
