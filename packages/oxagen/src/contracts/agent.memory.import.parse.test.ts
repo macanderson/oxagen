@@ -68,12 +68,14 @@ describe("agent.memory.import.parse capability", () => {
   it("validates output drafts/documentCount/skipped", () => {
     const parsed = agentMemoryImportParse.output.parse({
       drafts: [
-        { lesson: "L", kind: "constraint", weight: "high" },
+        { lesson: "L", memoryClass: "RULE", memoryKind: "constraint", enforcementScore: 80 },
       ],
       documentCount: 1,
       skipped: [{ filename: "empty.md", reason: "No durable rules found." }],
     });
     expect(parsed.drafts).toHaveLength(1);
+    expect(parsed.drafts[0]?.memoryClass).toBe("RULE");
+    expect(parsed.drafts[0]?.enforcementScore).toBe(80);
     // Output drafts get the schema defaults too.
     expect(parsed.drafts[0]?.source).toBe("user");
     expect(parsed.skipped[0]?.filename).toBe("empty.md");

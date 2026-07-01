@@ -397,7 +397,7 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
 
       {/* Label Dialog */}
       <Dialog open={!!labelDialog} onOpenChange={(open) => !open && setLabelDialog(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {labelDialog?.initial ? "Edit Label" : "Add Label"}
@@ -419,7 +419,7 @@ export function SchemaBuilder({ slugs, isAdmin }: SchemaBuilderProps) {
         open={!!relationshipDialog}
         onOpenChange={(open) => !open && setRelationshipDialog(null)}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {relationshipDialog?.initial ? "Edit Relationship" : "Add Relationship"}

@@ -747,7 +747,10 @@ export function ChatShellClient({
                 {
                   id: w.memoryId,
                   lesson: `Memory written → ${w.nodeRef}`,
-                  weight: w.weight,
+                  memoryClass: w.memoryClass,
+                  memoryKind: "gotcha",
+                  confidenceScore: 100,
+                  enforcementScore: w.enforcementScore,
                   score: 1,
                   nodeRef: w.nodeRef,
                 },

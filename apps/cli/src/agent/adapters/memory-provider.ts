@@ -9,7 +9,7 @@
  *     the agents-screen memory panel and future offline runs.
  *
  * `recallContext` reads recent project activity from the session store. `remember`
- * writes to the session store always, and *mirrors* the weighted-lesson kinds
+ * writes to the session store always, and *mirrors* the two-axis lesson kinds
  * (gotcha / routine-change / bug-root-cause) into the fleet store so a lesson the
  * engine records this turn survives for later sessions even when DuckDB is absent.
  */
@@ -17,8 +17,8 @@ import type { MemoryProvider } from "@oxagen/agent-engine";
 import type { SessionMemory, Outcome } from "../memory.js";
 import type { FleetMemory, MemoryRecord } from "../fleet/memory.js";
 
-/** Kinds the engine records that we mirror into the fleet weighted-lesson store. */
-const FLEET_KINDS = new Set<MemoryRecord["kind"]>([
+/** Kinds the engine records that we mirror into the fleet two-axis lesson store. */
+const FLEET_KINDS = new Set<MemoryRecord["memoryKind"]>([
   "gotcha",
   "routine-change",
   "bug-root-cause",
@@ -55,16 +55,17 @@ export function createCombinedMemory(
         () => {},
       );
 
-      // Mirror weighted-lesson kinds into the guaranteed fleet store.
-      if (fleet && FLEET_KINDS.has(kind as MemoryRecord["kind"])) {
+      // Mirror two-axis lesson kinds into the guaranteed fleet store.
+      if (fleet && FLEET_KINDS.has(kind as MemoryRecord["memoryKind"])) {
         const payload = (content ?? {}) as {
           lesson?: string;
           files?: string[];
           outcome?: string;
         };
         fleet.record({
-          kind: kind as MemoryRecord["kind"],
-          weight: kind === "gotcha" ? "critical" : "low",
+          memoryKind: kind as MemoryRecord["memoryKind"],
+          memoryClass: kind === "gotcha" ? "RULE" : "OBSERVATION",
+          enforcementScore: kind === "gotcha" ? 95 : null,
           lesson: payload.lesson ?? JSON.stringify(content),
           files: payload.files ?? [],
           outcome: payload.outcome === "failure" ? "failure" : "success",

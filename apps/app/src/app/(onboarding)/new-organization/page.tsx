@@ -21,8 +21,11 @@ export default async function NewTenantPage() {
   });
 
   return (
-    <div className="flex min-h-dvh items-start justify-center p-4 py-8">
-      <Panel title="Create organization" className="w-full max-w-3xl">
+    <div className="relative z-10 flex min-h-dvh items-start justify-center p-4 py-8">
+      <Panel
+        title="Create organization"
+        className="w-full max-w-3xl border-border/60 bg-card/80 shadow-xl backdrop-blur-xl"
+      >
         <p className="mb-4 text-sm text-muted-foreground">
           Organizations own billing and member access. A default workspace is created for you.
         </p>

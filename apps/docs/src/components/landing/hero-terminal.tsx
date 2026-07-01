@@ -129,7 +129,7 @@ export function HeroTerminal() {
         {lines.map((l) =>
           l.kind === "cmd" ? (
             <div key={l.id} className="lp-line flex items-start gap-2">
-              <span className="select-none text-[var(--_ember-flame,#FF7E5F)]">$</span>
+              <span className="select-none text-[var(--_ember-flame,#F07650)]">$</span>
               <span className="break-all">
                 {l.text}
                 {l.caret && <span className="lp-caret ml-0.5 align-baseline" />}

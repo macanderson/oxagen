@@ -61,26 +61,6 @@ test.describe("Page Screenshots", () => {
     });
   });
 
-  test("Activity Audit page", async ({ page }) => {
-    await page.goto(`${BASE}/${ORG}/${WS}/activity/audit`);
-    await page.waitForLoadState("networkidle");
-    await page.waitForTimeout(1000);
-    await page.screenshot({
-      path: `${SCREENSHOT_DIR}/02-activity-audit.png`,
-      fullPage: true,
-    });
-  });
-
-  test("Automation Triggers page", async ({ page }) => {
-    await page.goto(`${BASE}/${ORG}/${WS}/automation/triggers`);
-    await page.waitForLoadState("networkidle");
-    await page.waitForTimeout(1000);
-    await page.screenshot({
-      path: `${SCREENSHOT_DIR}/03-automation-triggers.png`,
-      fullPage: true,
-    });
-  });
-
   test("Settings Skills page", async ({ page }) => {
     await page.goto(`${BASE}/${ORG}/${WS}/settings/skills`);
     await page.waitForLoadState("networkidle");

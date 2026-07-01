@@ -2,6 +2,7 @@
 import * as React from "react";
 import { Brain } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import type { MemoryRecallHit } from "./stream-event-types";
 
 export interface MemoryCardProps {
@@ -10,10 +11,13 @@ export interface MemoryCardProps {
   topN?: number;
 }
 
-const WEIGHT_VARIANT: Record<string, "success" | "warning" | "muted" | "default"> = {
-  fact: "success",
-  consider: "warning",
-  ignore: "muted",
+// Epistemic class → badge variant. FACT is the most trustworthy (success);
+// RULE is policy-enforced (warning, draws attention to enforcement); a plain
+// OBSERVATION is muted since it is the lowest rung of the confidence ladder.
+const CLASS_VARIANT: Record<string, "success" | "warning" | "muted" | "default"> = {
+  FACT: "success",
+  RULE: "warning",
+  OBSERVATION: "muted",
 };
 
 export function MemoryCard({ memories, topN = 5 }: MemoryCardProps) {
@@ -34,10 +38,18 @@ export function MemoryCard({ memories, topN = 5 }: MemoryCardProps) {
       <ul className="space-y-2">
         {top.map((m) => (
           <li key={m.id} className="rounded-xl bg-muted p-2 text-xs">
-            <div className="mb-1 flex items-center gap-2">
-              <Badge variant={WEIGHT_VARIANT[m.weight] ?? "default"} className="uppercase">
-                {m.weight}
+            <div className="mb-1 flex items-center gap-2 flex-wrap">
+              <Badge variant={CLASS_VARIANT[m.memoryClass] ?? "default"} className="uppercase">
+                {m.memoryClass}
               </Badge>
+              <span className="text-muted-foreground tabular-nums">
+                confidence {Math.round(m.confidenceScore)}%
+              </span>
+              {m.enforcementScore != null && (
+                <span className="text-muted-foreground tabular-nums">
+                  enforcement {m.enforcementScore}
+                </span>
+              )}
               <span className="text-muted-foreground tabular-nums">
                 score {m.score.toFixed(2)}
               </span>
@@ -50,7 +62,7 @@ export function MemoryCard({ memories, topN = 5 }: MemoryCardProps) {
                 </a>
               ) : null}
             </div>
-            <p className="whitespace-pre-wrap leading-relaxed">{m.lesson}</p>
+            <TruncatedText text={m.lesson} lines={3} className="leading-relaxed" />
           </li>
         ))}
       </ul>

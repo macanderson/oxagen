@@ -107,15 +107,10 @@ describe("chatSystemPrompt — connection-create-inline intent", () => {
 describe("chatSystemPrompt — resource-link guidance (no fabricated /api/v1 URLs)", () => {
   const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
 
-  it("points created/referenced agents at the slug-based in-app route, scoped to org+workspace", () => {
+  it("directs links at in-app page URLs, not internal API endpoints", () => {
     const prompt = chatSystemPrompt(CTX);
-    expect(prompt).toContain("/acme/main/automation/agents/<slug>");
-  });
-
-  it("tells the model to use the agent slug, not its publicId", () => {
-    const prompt = chatSystemPrompt(CTX);
-    expect(prompt).toContain("`slug`");
-    expect(prompt).toContain("`publicId`");
+    expect(prompt).toContain("in-app page URL");
+    expect(prompt).toContain("never an internal API endpoint");
   });
 
   it("forbids constructing /api/v1/... links and clarifies /api/v1/assets is media-only", () => {

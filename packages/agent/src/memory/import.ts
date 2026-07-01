@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { generateObjectFor } from "@oxagen/ai";
 import {
-  memoryKindEnum,
-  memoryWeightEnum,
-} from "@oxagen/oxagen/contracts/agent.memory.import.shared";
+  memoryClassEnum,
+  memoryKindSchema,
+} from "@oxagen/oxagen/contracts/agent.memory.model";
 import type { CapabilityContext } from "../types";
-import { MEMORY_KIND_GUIDE, MEMORY_WEIGHT_GUIDE } from "./taxonomy";
+import { MEMORY_CLASS_GUIDE, MEMORY_KIND_GUIDE } from "./taxonomy";
 
 /**
  * import.ts — document → draft-memory extraction for bulk memory import.
@@ -13,17 +13,21 @@ import { MEMORY_KIND_GUIDE, MEMORY_WEIGHT_GUIDE } from "./taxonomy";
  * Where embed.ts/neo4j.ts handle persistence, this module is the read-only
  * "understand the document" half: it asks the AI gateway to break one markdown
  * document (a skill file, rule set, runbook) into atomic, self-contained
- * memories and classify each by kind + weight. agent.memory.import.parse calls
- * this once per uploaded document; nothing here writes to the graph.
+ * memories and classify each by the two-axis class + kind. agent.memory.import.parse
+ * calls this once per uploaded document; nothing here writes to the graph.
  */
 
-type MemoryKind = z.infer<typeof memoryKindEnum>;
-type MemoryWeight = z.infer<typeof memoryWeightEnum>;
+// The classifier only ever proposes OBSERVATION or RULE — FACT is reachable
+// solely through agent.memory.promote (requires human confirmation).
+const draftClassEnum = memoryClassEnum.exclude(["FACT"]);
+type DraftClass = z.infer<typeof draftClassEnum>;
 
 export interface ExtractedMemory {
   lesson: string;
-  kind: MemoryKind;
-  weight: MemoryWeight;
+  memoryClass: DraftClass;
+  memoryKind: string;
+  /** Set (1-100) only when memoryClass is RULE. */
+  enforcementScore?: number;
 }
 
 // The model returns a flat list of atomic memories for a single document. Cap at
@@ -34,8 +38,9 @@ const extractionSchema = z.object({
     .array(
       z.object({
         lesson: z.string().min(1).max(2000),
-        kind: memoryKindEnum,
-        weight: memoryWeightEnum,
+        memoryClass: draftClassEnum,
+        memoryKind: memoryKindSchema,
+        enforcementScore: z.number().int().min(1).max(100).optional(),
       }),
     )
     .max(50),
@@ -48,11 +53,11 @@ const EXTRACTION_SYSTEM = [
   "- Extract each distinct rule, constraint, convention, gotcha, or durable fact as its OWN memory. Split compound guidance into separate memories.",
   "- Each lesson must stand alone WITHOUT the document: rewrite it as one or two imperative, present-tense sentences an agent can act on. Never reference 'this document', 'above', or 'the section'.",
   "- Skip pure narrative prose, headings, tables of contents, and examples that carry no durable rule. Merge near-duplicate statements.",
-  "- Classify every memory with a kind and a weight:",
+  "- Classify every memory with a class and a kind. When class is RULE, also set enforcementScore (1-100) for how strongly it should be followed:",
+  "",
+  MEMORY_CLASS_GUIDE,
   "",
   MEMORY_KIND_GUIDE,
-  "",
-  MEMORY_WEIGHT_GUIDE,
   "",
   "Return the structured object only. If the document contains no durable rules, return an empty array.",
 ].join("\n");

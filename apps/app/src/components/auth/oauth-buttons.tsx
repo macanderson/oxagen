@@ -7,12 +7,29 @@ export function OAuthButtons({ callbackURL = "/" }: { callbackURL?: string }) {
   const handle = (provider: "google" | "github") => () =>
     authClient.signIn.social({ provider, callbackURL });
 
+  // Docs-style outline CTA: translucent surface + backdrop blur that reads
+  // against the ember hero, with the border warming to ember-flame on hover.
+  const outlineCta =
+    "bg-card/60 backdrop-blur transition-colors hover:border-ember-flame/60";
+
   return (
     <div className="flex flex-col gap-2">
-      <Button type="button" variant="outline" size="lg" onClick={handle("google")}>
+      <Button
+        type="button"
+        variant="outline"
+        size="lg"
+        className={outlineCta}
+        onClick={handle("google")}
+      >
         <GoogleIcon /> Continue with Google
       </Button>
-      <Button type="button" variant="outline" size="lg" onClick={handle("github")}>
+      <Button
+        type="button"
+        variant="outline"
+        size="lg"
+        className={outlineCta}
+        onClick={handle("github")}
+      >
         <Github className="h-4 w-4" /> Continue with GitHub
       </Button>
     </div>

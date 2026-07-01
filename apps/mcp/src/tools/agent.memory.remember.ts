@@ -12,11 +12,14 @@ export const schema = {
   nodeRef: agentMemoryRemember.input.shape.nodeRef.describe(
     "Graph node id to anchor on; defaults to the user-memory bucket",
   ),
-  weight: agentMemoryRemember.input.shape.weight.describe(
-    "Pin the salience bucket; omit to let the model infer it",
+  memoryClass: agentMemoryRemember.input.shape.memoryClass.describe(
+    "Pin the epistemic class; omit to let the classifier infer it (defaults to OBSERVATION)",
   ),
-  kind: agentMemoryRemember.input.shape.kind.describe(
-    "Pin the kind; omit to let the model infer it",
+  memoryKind: agentMemoryRemember.input.shape.memoryKind.describe(
+    "Pin the content-domain kind; omit to let the classifier infer it",
+  ),
+  enforcementScore: agentMemoryRemember.input.shape.enforcementScore.describe(
+    "Enforcement (1-100) when memoryClass is RULE",
   ),
   source: agentMemoryRemember.input.shape.source.describe(
     "Provenance; defaults to 'user'",

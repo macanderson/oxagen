@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * suggested-prompts-extended.test.tsx — covers the remaining sections of
- * deriveSuggestions (automation, activity, members, developer) and the
- * useSuggestedPrompts hook (requires jsdom + PageContextProvider + usePathname mock).
+ * deriveSuggestions (members, developer) and the useSuggestedPrompts hook
+ * (requires jsdom + PageContextProvider + usePathname mock).
  */
 import { describe, it, expect, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
@@ -29,38 +29,6 @@ function ctx(
 ): SuggestionCtx {
   return { pathname, entity, fillableForm };
 }
-
-// ---------------------------------------------------------------------------
-// Automation route
-// ---------------------------------------------------------------------------
-describe("deriveSuggestions — automation route", () => {
-  const prompts = deriveSuggestions(ctx("/acme/prod/automation/agents"));
-
-  it("returns exactly 3 prompts", () => {
-    expect(prompts).toHaveLength(3);
-  });
-
-  it("prompts are automation-specific", () => {
-    const texts = prompts.map((p) => p.prompt.toLowerCase()).join(" ");
-    expect(texts).toMatch(/automation|agent|optimize/i);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Activity route
-// ---------------------------------------------------------------------------
-describe("deriveSuggestions — activity route", () => {
-  const prompts = deriveSuggestions(ctx("/acme/prod/activity/runs"));
-
-  it("returns exactly 3 prompts", () => {
-    expect(prompts).toHaveLength(3);
-  });
-
-  it("prompts are activity-specific", () => {
-    const texts = prompts.map((p) => p.prompt.toLowerCase()).join(" ");
-    expect(texts).toMatch(/activity|run|fail/i);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Members route

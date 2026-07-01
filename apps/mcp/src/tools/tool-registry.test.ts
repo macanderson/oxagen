@@ -274,6 +274,12 @@ import { metadata as graphSyncPushMetadata } from "./graph.sync.push";
 // Memory import tools (agent.memory.import.*)
 import { metadata as agentMemoryImportCommitMetadata } from "./agent.memory.import.commit";
 import { metadata as agentMemoryImportParseMetadata } from "./agent.memory.import.parse";
+// Two-axis memory: promotion, citation, evidence (docs/specs/two-axis-memory)
+import { metadata as agentMemoryPromoteMetadata } from "./agent.memory.promote";
+import { metadata as agentMemoryPromotionCandidatesMetadata } from "./agent.memory.promotion.candidates";
+import { metadata as agentMemoryCiteMetadata } from "./agent.memory.cite";
+import { metadata as agentMemoryEvidenceAttachMetadata } from "./agent.memory.evidence.attach";
+import { metadata as agentMemoryCitationsListMetadata } from "./agent.memory.citations.list";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -510,6 +516,12 @@ const allToolMetadata = [
   // Memory import
   agentMemoryImportCommitMetadata,
   agentMemoryImportParseMetadata,
+  // Two-axis memory: promotion, citation, evidence
+  agentMemoryPromoteMetadata,
+  agentMemoryPromotionCandidatesMetadata,
+  agentMemoryCiteMetadata,
+  agentMemoryEvidenceAttachMetadata,
+  agentMemoryCitationsListMetadata,
   // Agent feature verification
   agentFeatureVerifyMetadata,
   // Sandbox lifecycle

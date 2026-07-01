@@ -2,7 +2,7 @@
  * Fleet orchestrator — proves the army schedules safely: dependencies gate
  * ordering, overlapping file ownership serializes agents, the concurrency cap is
  * honoured, a failed dependency blocks its dependents, and every finished task
- * records a weighted memory. The coding loop is injected as a fake runner, so no
+ * records a two-axis memory. The coding loop is injected as a fake runner, so no
  * gateway or filesystem is touched. The prompt enhancer is mocked to a no-op.
  */
 import { describe, it, expect, vi } from "vitest";
@@ -151,7 +151,7 @@ describe("Fleet scheduling", () => {
     expect(statusOf(fleet, "t2")).toBe("blocked");
     expect(fleet.snapshot().failedCount).toBe(2); // failed + blocked
     expect(memory.record).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: "failure", kind: "gotcha" }),
+      expect.objectContaining({ outcome: "failure", memoryKind: "gotcha" }),
     );
   });
 
@@ -167,7 +167,7 @@ describe("Fleet scheduling", () => {
     await fleet.start();
 
     expect(memory.record).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: "success", kind: "bug-root-cause" }),
+      expect.objectContaining({ outcome: "success", memoryKind: "bug-root-cause" }),
     );
     // 1M Haiku input tokens = $1.00.
     expect(fleet.snapshot().totals.costUsd).toBeCloseTo(1, 6);

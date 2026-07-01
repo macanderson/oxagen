@@ -45,7 +45,7 @@ describe("defaultTab — config-derived completeness", () => {
   it("contains all expected top-level workspace parent keys", () => {
     // These are the parents defined in the IA spec §5 rule 3.
     // Derived from the object — no hardcoded count.
-    const workspaceParents = ["knowledge", "automation", "activity", "settings"];
+    const workspaceParents = ["knowledge", "settings"];
     for (const k of workspaceParents) {
       expect(defaultTab).toHaveProperty(k);
     }
@@ -90,10 +90,8 @@ describe("defaultTab — value format", () => {
 
 describe("defaultTab — known mappings", () => {
   it("knowledge → sources", () => expect(defaultTab["knowledge"]).toBe("sources"));
-  it("automation → playbooks", () => expect(defaultTab["automation"]).toBe("playbooks"));
-  it("activity → runs", () => expect(defaultTab["activity"]).toBe("runs"));
   it("settings → general", () => expect(defaultTab["settings"]).toBe("general"));
-  it("access → grants", () => expect(defaultTab["access"]).toBe("grants"));
+  it("access → sessions", () => expect(defaultTab["access"]).toBe("sessions"));
   it("security → audit", () => expect(defaultTab["security"]).toBe("audit"));
   it("billing → subscription", () => expect(defaultTab["billing"]).toBe("subscription"));
   it("developer → mcp", () => expect(defaultTab["developer"]).toBe("mcp"));
@@ -118,7 +116,7 @@ describe("org route builders", () => {
   it("root → /{org}", () => expect(org.root(orgCtx)).toBe("/acme"));
   it("members → /{org}/members", () => expect(org.members(orgCtx)).toBe("/acme/members"));
   it("access.root → /{org}/access", () => expect(org.access.root(orgCtx)).toBe("/acme/access"));
-  it("access.grants → /{org}/access/grants", () => expect(org.access.grants(orgCtx)).toBe("/acme/access/grants"));
+  it("access.sessions → /{org}/access/sessions", () => expect(org.access.sessions(orgCtx)).toBe("/acme/access/sessions"));
   it("security.audit → /{org}/security/audit", () => expect(org.security.audit(orgCtx)).toBe("/acme/security/audit"));
   it("billing.subscription → /{org}/billing/subscription", () => expect(org.billing.subscription(orgCtx)).toBe("/acme/billing/subscription"));
   it("developer.mcp → /{org}/developer/mcp", () => expect(org.developer.mcp(orgCtx)).toBe("/acme/developer/mcp"));
@@ -133,17 +131,8 @@ describe("workspace route builders", () => {
   it("ask → /{org}/{ws}/ask", () => expect(workspace.ask(wsCtx)).toBe("/acme/prod/ask"));
   it("knowledge.root → /{org}/{ws}/knowledge", () => expect(workspace.knowledge.root(wsCtx)).toBe("/acme/prod/knowledge"));
   it("knowledge.sources → /{org}/{ws}/knowledge/sources", () => expect(workspace.knowledge.sources(wsCtx)).toBe("/acme/prod/knowledge/sources"));
-  it("automation.agents → /{org}/{ws}/automation/agents", () => expect(workspace.automation.agents(wsCtx)).toBe("/acme/prod/automation/agents"));
-  // Agents live under Automation (IA spec §4/§5).
-  it("agents.root → /{org}/{ws}/automation/agents", () => expect(workspace.agents.root(wsCtx)).toBe("/acme/prod/automation/agents"));
-  it("agents.create → /{org}/{ws}/automation/agents/new", () => expect(workspace.agents.create(wsCtx)).toBe("/acme/prod/automation/agents/new"));
-  it("agents.detail → /{org}/{ws}/automation/agents/:slug", () => expect(workspace.agents.detail(wsCtx, "repo-review")).toBe("/acme/prod/automation/agents/repo-review"));
-  it("agents.edit → /{org}/{ws}/automation/agents/:slug/edit", () => expect(workspace.agents.edit(wsCtx, "repo-review")).toBe("/acme/prod/automation/agents/repo-review/edit"));
-  it("activity.runs → /{org}/{ws}/activity/runs", () => expect(workspace.activity.runs(wsCtx)).toBe("/acme/prod/activity/runs"));
-  // All run kinds (incl. subagent fan-outs) drill down under Activity → Runs.
-  it("activity.run → /{org}/{ws}/activity/runs/:id", () => expect(workspace.activity.run(wsCtx, "fan-123")).toBe("/acme/prod/activity/runs/fan-123"));
   it("settings.root → /{org}/{ws}/settings", () => expect(workspace.settings.root(wsCtx)).toBe("/acme/prod/settings"));
-  it("settings.modelKeys → /{org}/{ws}/settings/model-keys", () => expect(workspace.settings.modelKeys(wsCtx)).toBe("/acme/prod/settings/model-keys"));
+  it("settings.models → /{org}/{ws}/settings/models", () => expect(workspace.settings.models(wsCtx)).toBe("/acme/prod/settings/models"));
 });
 
 // ---------------------------------------------------------------------------

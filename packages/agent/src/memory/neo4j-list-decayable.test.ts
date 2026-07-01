@@ -33,14 +33,15 @@ describe("listDecayableMemories", () => {
     expect(sessionClose).toHaveBeenCalledTimes(1);
   });
 
-  it("queries MATCH on AgentMemory with weight != 'critical' and confidence > 0", async () => {
+  it("queries MATCH on AgentMemory, excluding FACT and memories at/below the decay floor", async () => {
     sessionRun.mockResolvedValueOnce({ records: [] });
     await withTestScope(() => listDecayableMemories());
     expect(sessionRun).toHaveBeenCalledTimes(1);
     const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
     expect(cypher).toContain("MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})");
-    expect(cypher).toContain("m.weight <> 'critical'");
-    expect(cypher).toContain("coalesce(m.confidence, 1.0) > 0");
+    expect(cypher).toContain("coalesce(m.status, 'ACTIVE') = 'ACTIVE'");
+    expect(cypher).toContain("coalesce(m.memory_class, 'OBSERVATION') <> 'FACT'");
+    expect(cypher).toContain("coalesce(m.decay_floor, 5.0)");
   });
 
   it("returns projected fields mapped from Cypher columns", async () => {
@@ -48,9 +49,10 @@ describe("listDecayableMemories", () => {
       records: [
         fakeRecord({
           id: "m_decay_1",
-          weight: "low",
-          confidence: 0.75,
-          lastReinforcedAt: "2026-06-01T00:00:00Z",
+          confidenceScore: 75,
+          halfLifeDays: 30,
+          decayFloor: 5,
+          lastEvidenceAt: "2026-06-01T00:00:00Z",
           createdAt: "2026-05-01T00:00:00Z",
           nodeRef: "Function:computeSum",
         }),
@@ -61,9 +63,10 @@ describe("listDecayableMemories", () => {
     expect(result).toHaveLength(1);
     const mem = result[0]!;
     expect(mem.id).toBe("m_decay_1");
-    expect(mem.weight).toBe("low");
-    expect(mem.confidence).toBe(0.75);
-    expect(mem.lastReinforcedAt).toBe("2026-06-01T00:00:00Z");
+    expect(mem.confidenceScore).toBe(75);
+    expect(mem.halfLifeDays).toBe(30);
+    expect(mem.decayFloor).toBe(5);
+    expect(mem.lastEvidenceAt).toBe("2026-06-01T00:00:00Z");
     expect(mem.createdAt).toBe("2026-05-01T00:00:00Z");
     expect(mem.nodeRef).toBe("Function:computeSum");
   });
@@ -73,17 +76,19 @@ describe("listDecayableMemories", () => {
       records: [
         fakeRecord({
           id: "m_1",
-          weight: "high",
-          confidence: 0.9,
-          lastReinforcedAt: null,
+          confidenceScore: 90,
+          halfLifeDays: 90,
+          decayFloor: 5,
+          lastEvidenceAt: null,
           createdAt: "2026-04-01T00:00:00Z",
           nodeRef: "Class:Foo",
         }),
         fakeRecord({
           id: "m_2",
-          weight: "low",
-          confidence: 0.4,
-          lastReinforcedAt: "2026-05-10T00:00:00Z",
+          confidenceScore: 40,
+          halfLifeDays: 30,
+          decayFloor: 5,
+          lastEvidenceAt: "2026-05-10T00:00:00Z",
           createdAt: "2026-03-15T00:00:00Z",
           nodeRef: "",
         }),
@@ -94,19 +99,20 @@ describe("listDecayableMemories", () => {
     expect(result).toHaveLength(2);
     expect(result[0]!.id).toBe("m_1");
     expect(result[1]!.id).toBe("m_2");
-    expect(result[1]!.lastReinforcedAt).toBe("2026-05-10T00:00:00Z");
+    expect(result[1]!.lastEvidenceAt).toBe("2026-05-10T00:00:00Z");
     expect(result[1]!.nodeRef).toBe("");
   });
 
-  it("converts confidence to Number (coalesce)", async () => {
+  it("converts confidenceScore to Number (coalesce)", async () => {
     // neo4j-driver returns numeric types; Number() coerces safely.
     sessionRun.mockResolvedValueOnce({
       records: [
         fakeRecord({
           id: "m_num",
-          weight: "low",
-          confidence: 0.55,
-          lastReinforcedAt: null,
+          confidenceScore: 55,
+          halfLifeDays: 30,
+          decayFloor: 5,
+          lastEvidenceAt: null,
           createdAt: "2026-06-10T00:00:00Z",
           nodeRef: "Fn:add",
         }),
@@ -114,20 +120,21 @@ describe("listDecayableMemories", () => {
     });
 
     const result = await withTestScope(() => listDecayableMemories());
-    expect(typeof result[0]!.confidence).toBe("number");
-    expect(result[0]!.confidence).toBeCloseTo(0.55, 5);
+    expect(typeof result[0]!.confidenceScore).toBe("number");
+    expect(result[0]!.confidenceScore).toBeCloseTo(55, 5);
   });
 
-  it("defaults confidence to 1.0 when the driver returns null", async () => {
-    // The Cypher uses coalesce(m.confidence, 1.0); when the driver returns
-    // null for a null DB value, Number(null ?? 1.0) = 1.
+  it("defaults confidenceScore to 100 when the driver returns null", async () => {
+    // The Cypher uses coalesce(m.confidence_score, ..., 1.0) * 100.0; when the
+    // mock (bypassing the real coalesce) returns null, Number(null ?? 100) = 100.
     sessionRun.mockResolvedValueOnce({
       records: [
         fakeRecord({
           id: "m_null_conf",
-          weight: "high",
-          confidence: null,
-          lastReinforcedAt: null,
+          confidenceScore: null,
+          halfLifeDays: 30,
+          decayFloor: 5,
+          lastEvidenceAt: null,
           createdAt: "2026-06-20T00:00:00Z",
           nodeRef: "Fn:noop",
         }),
@@ -135,17 +142,18 @@ describe("listDecayableMemories", () => {
     });
 
     const result = await withTestScope(() => listDecayableMemories());
-    expect(result[0]!.confidence).toBe(1.0);
+    expect(result[0]!.confidenceScore).toBe(100);
   });
 
-  it("coerces null lastReinforcedAt to null in output", async () => {
+  it("coerces null lastEvidenceAt to null in output", async () => {
     sessionRun.mockResolvedValueOnce({
       records: [
         fakeRecord({
-          id: "m_no_reinforce",
-          weight: "low",
-          confidence: 0.8,
-          lastReinforcedAt: null,
+          id: "m_no_evidence",
+          confidenceScore: 80,
+          halfLifeDays: 30,
+          decayFloor: 5,
+          lastEvidenceAt: null,
           createdAt: "2026-05-01T00:00:00Z",
           nodeRef: "Module:utils",
         }),
@@ -153,7 +161,7 @@ describe("listDecayableMemories", () => {
     });
 
     const result = await withTestScope(() => listDecayableMemories());
-    expect(result[0]!.lastReinforcedAt).toBeNull();
+    expect(result[0]!.lastEvidenceAt).toBeNull();
   });
 
   it("coerces empty nodeRef string to empty string (not null)", async () => {
@@ -161,9 +169,10 @@ describe("listDecayableMemories", () => {
       records: [
         fakeRecord({
           id: "m_empty_ref",
-          weight: "low",
-          confidence: 0.6,
-          lastReinforcedAt: null,
+          confidenceScore: 60,
+          halfLifeDays: 30,
+          decayFloor: 5,
+          lastEvidenceAt: null,
           createdAt: "2026-06-01T00:00:00Z",
           nodeRef: "",
         }),
@@ -188,15 +197,16 @@ describe("listDecayableMemories", () => {
     expect(sessionClose).toHaveBeenCalledTimes(1);
   });
 
-  it("the Cypher returns id, weight, confidence, lastReinforcedAt, createdAt, nodeRef columns", async () => {
+  it("the Cypher returns id, confidenceScore, halfLifeDays, decayFloor, lastEvidenceAt, createdAt, nodeRef columns", async () => {
     sessionRun.mockResolvedValueOnce({ records: [] });
     await withTestScope(() => listDecayableMemories());
     const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
-    expect(cypher).toContain("m.id");
-    expect(cypher).toContain("m.weight");
-    expect(cypher).toContain("m.confidence");
-    expect(cypher).toContain("m.lastReinforcedAt");
-    expect(cypher).toContain("m.createdAt");
-    expect(cypher).toContain("m.nodeRef");
+    expect(cypher).toContain("m.id AS id");
+    expect(cypher).toContain("AS confidenceScore");
+    expect(cypher).toContain("AS halfLifeDays");
+    expect(cypher).toContain("AS decayFloor");
+    expect(cypher).toContain("AS lastEvidenceAt");
+    expect(cypher).toContain("AS createdAt");
+    expect(cypher).toContain("AS nodeRef");
   });
 });

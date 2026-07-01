@@ -22,6 +22,7 @@ import { Check, Clock, Copy, ExternalLink, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CopyableId } from "@/components/knowledge/graph-explorer/copyable-id";
 import { detectKind, humanizeKey, truncate } from "@/components/knowledge/graph-explorer/lib/format";
+import { TruncatedText } from "@/components/ui/truncated-text";
 
 /** Serialize a value to JSON for the copy affordance; never throws. Kept local
  *  so this module stays a leaf (no import cycle with the cards that use it). */
@@ -94,12 +95,22 @@ function isScalar(value: unknown): boolean {
 
 // ── leaf renderers ──────────────────────────────────────────────────────────
 
-/** A subtle bordered chip — the visual base for enums, tags, and array items. */
-function Chip({ tone, children }: { tone?: string; children: React.ReactNode }) {
+/** A subtle bordered chip — the visual base for enums, tags, and array items.
+ *  `title` carries the full (untruncated) value so the CSS `truncate` ellipsis
+ *  is always paired with a hover tooltip revealing the complete text. */
+function Chip({
+  tone,
+  title,
+  children,
+}: {
+  tone?: string;
+  title?: string;
+  children: React.ReactNode;
+}) {
   return (
     <span className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/50 px-1.5 py-0.5 text-[11px] font-medium text-foreground">
       {tone ? <span className={cn("size-1.5 shrink-0 rounded-full", tone)} aria-hidden="true" /> : null}
-      <span className="truncate">{children}</span>
+      <span className="truncate" title={title}>{children}</span>
     </span>
   );
 }
@@ -149,8 +160,10 @@ function ScalarValue({ value, keyHint }: { value: unknown; keyHint?: string }) {
       const s = value as string;
       if (s.length === 0) return <span className="text-muted-foreground">—</span>;
       if (looksLikeId(s, keyHint)) return <CopyableId value={s} max={24} />;
-      if (looksLikeEnum(s)) return <Chip tone={statusToneDot(s)}>{s}</Chip>;
-      return <span className="break-words">{s}</span>;
+      if (looksLikeEnum(s)) return <Chip tone={statusToneDot(s)} title={s}>{s}</Chip>;
+      // Genuine free text (not an id/enum) — clamp to a few lines with a
+      // click-to-reveal popover for the full, formatted content.
+      return <TruncatedText text={s} lines={3} />;
     }
     default:
       return null;
@@ -191,9 +204,10 @@ function ArrayValue({ items, keyHint, depth }: { items: unknown[]; keyHint?: str
         {items.map((item, i) => {
           const s = typeof item === "string" ? item : null;
           if (s !== null && looksLikeId(s, keyHint)) return <CopyableId key={i} value={s} max={20} />;
+          const label = typeof item === "object" ? "—" : String(item ?? "—");
           return (
-            <Chip key={i} tone={s !== null ? statusToneDot(s) : undefined}>
-              {typeof item === "object" ? "—" : String(item ?? "—")}
+            <Chip key={i} tone={s !== null ? statusToneDot(s) : undefined} title={label}>
+              {label}
             </Chip>
           );
         })}

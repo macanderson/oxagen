@@ -2,12 +2,14 @@
  * `oxagen memory` + `oxagen remember` — manage the workspace's agent memories
  * from the shell.
  *
- *   oxagen memory list [--kind k] [--weight w] [--json]
+ *   oxagen memory list [--class OBSERVATION|RULE|FACT] [--kind k] [--min-enforcement n] [--json]
  *   oxagen memory show <id> [--json]
  *   oxagen memory edit <id> [--lesson t] [--kind k] [--source s]
- *   oxagen memory salience <id> <low|high|critical> [--confidence n]
+ *   oxagen memory salience <id> [--confidence n] [--enforcement n] [--status s]
+ *   oxagen memory promote <id> --to rule|fact [--enforcement n] --rationale "…"
+ *   oxagen memory candidates [--limit n]
  *   oxagen memory rm <id>
- *   oxagen remember <text...> [--kind k] [--weight w] [--node ref]
+ *   oxagen remember <text...> [--class c] [--kind k] [--enforcement n] [--node ref]
  *
  * Every command delegates to lib/memory-client (the shared transport +
  * formatters the REPL slash commands also use) and exits non-zero with a
@@ -21,17 +23,21 @@ import {
   rememberMemory,
   updateMemory,
   deleteMemory,
+  promoteMemory,
+  promotionCandidates,
   parseImportMemories,
   commitImportMemories,
   formatMemoryLines,
   formatMemoryDetail,
   formatRememberResult,
+  formatPromoteResult,
+  formatPromotionCandidates,
   formatImportDrafts,
   formatImportResults,
-  MEMORY_KINDS,
-  MEMORY_WEIGHTS,
-  type MemoryKind,
-  type MemoryWeight,
+  RECOMMENDED_MEMORY_KINDS,
+  MEMORY_CLASSES,
+  type MemoryClass,
+  type MemoryStatus,
 } from "../lib/memory-client.js";
 
 /** Print an error and exit(1) — the one-shot CLI failure contract. */
@@ -40,20 +46,36 @@ function fail(message: string): never {
   process.exit(1);
 }
 
-function parseKind(v: string | undefined): MemoryKind | undefined {
-  if (v === undefined) return undefined;
-  if (!MEMORY_KINDS.includes(v as MemoryKind)) {
-    fail(`Invalid kind "${v}". Use one of: ${MEMORY_KINDS.join(", ")}.`);
-  }
-  return v as MemoryKind;
+// memoryKind is an open string per the two-axis model — accept anything, but
+// keep the recommended set around for hinting.
+function normalizeKind(v: string | undefined): string | undefined {
+  return v === undefined ? undefined : v;
 }
 
-function parseWeight(v: string | undefined): MemoryWeight | undefined {
+function parseClass(v: string | undefined): MemoryClass | undefined {
   if (v === undefined) return undefined;
-  if (!MEMORY_WEIGHTS.includes(v as MemoryWeight)) {
-    fail(`Invalid weight "${v}". Use one of: ${MEMORY_WEIGHTS.join(", ")}.`);
+  const upper = v.toUpperCase();
+  if (!MEMORY_CLASSES.includes(upper as MemoryClass)) {
+    fail(`Invalid class "${v}". Use one of: ${MEMORY_CLASSES.join(", ")}.`);
   }
-  return v as MemoryWeight;
+  return upper as MemoryClass;
+}
+
+function parseStatus(v: string | undefined): MemoryStatus | undefined {
+  if (v === undefined) return undefined;
+  const upper = v.toUpperCase();
+  const STATUSES = ["ACTIVE", "SUPERSEDED", "RETRACTED", "ARCHIVED"];
+  if (!STATUSES.includes(upper)) {
+    fail(`Invalid status "${v}". Use one of: ${STATUSES.join(", ")}.`);
+  }
+  return upper as MemoryStatus;
+}
+
+function parseIntOpt(v: string | undefined, label: string): number | undefined {
+  if (v === undefined) return undefined;
+  const n = parseInt(v, 10);
+  if (Number.isNaN(n)) fail(`Invalid ${label} "${v}". Use an integer.`);
+  return n;
 }
 
 function handleApiError(err: unknown): never {
@@ -62,8 +84,9 @@ function handleApiError(err: unknown): never {
 }
 
 export interface MemoryListCliOptions {
+  class?: string;
   kind?: string;
-  weight?: string;
+  minEnforcement?: string;
   node?: string;
   limit?: string;
   offset?: string;
@@ -73,8 +96,9 @@ export interface MemoryListCliOptions {
 export async function handleMemoryList(opts: MemoryListCliOptions): Promise<void> {
   try {
     const result = await listMemories({
-      kind: parseKind(opts.kind),
-      minWeight: parseWeight(opts.weight),
+      memoryClass: parseClass(opts.class),
+      memoryKind: normalizeKind(opts.kind),
+      minEnforcement: parseIntOpt(opts.minEnforcement, "--min-enforcement"),
       nodeRef: opts.node,
       limit: opts.limit ? parseInt(opts.limit, 10) : undefined,
       offset: opts.offset ? parseInt(opts.offset, 10) : undefined,
@@ -131,7 +155,7 @@ export async function handleMemoryEdit(
     const updated = await updateMemory({
       memoryId: id,
       lesson: opts.lesson,
-      kind: parseKind(opts.kind),
+      memoryKind: normalizeKind(opts.kind),
       source: opts.source,
     });
     if (opts.json) {
@@ -144,28 +168,126 @@ export async function handleMemoryEdit(
   }
 }
 
+export interface MemorySalienceCliOptions {
+  confidence?: string;
+  enforcement?: string;
+  status?: string;
+  json?: boolean;
+}
+
+/**
+ * `oxagen memory salience <id>` — adjust a memory's confidence/enforcement
+ * scores or lifecycle status. Class changes go through `oxagen memory promote`
+ * (the only path that can move a memory up the confidence ladder).
+ */
 export async function handleMemorySalience(
   id: string,
-  weight: string,
-  opts: { confidence?: string; json?: boolean },
+  opts: MemorySalienceCliOptions,
 ): Promise<void> {
-  const w = parseWeight(weight);
-  let confidence: number | undefined;
+  if (!opts.confidence && !opts.enforcement && !opts.status) {
+    fail("Nothing to update. Pass at least one of --confidence, --enforcement, or --status.");
+  }
+  let confidenceScore: number | undefined;
   if (opts.confidence !== undefined) {
-    confidence = Number(opts.confidence);
-    if (Number.isNaN(confidence) || confidence < 0 || confidence > 1) {
-      fail(`Invalid --confidence "${opts.confidence}". Use a number between 0 and 1.`);
+    confidenceScore = Number(opts.confidence);
+    if (Number.isNaN(confidenceScore) || confidenceScore < 0 || confidenceScore > 100) {
+      fail(`Invalid --confidence "${opts.confidence}". Use a number between 0 and 100.`);
     }
   }
+  let enforcementScore: number | undefined;
+  if (opts.enforcement !== undefined) {
+    enforcementScore = Number(opts.enforcement);
+    if (
+      !Number.isInteger(enforcementScore) ||
+      enforcementScore < 1 ||
+      enforcementScore > 100
+    ) {
+      fail(`Invalid --enforcement "${opts.enforcement}". Use an integer between 1 and 100.`);
+    }
+  }
+  const status = parseStatus(opts.status);
   try {
-    const updated = await updateMemory({ memoryId: id, weight: w, confidence });
+    const updated = await updateMemory({ memoryId: id, confidenceScore, enforcementScore, status });
     if (opts.json) {
       process.stdout.write(JSON.stringify(updated, null, 2) + "\n");
       return;
     }
     process.stdout.write(
-      `✓ Salience updated — weight ${updated.weight}, confidence ${updated.confidence.toFixed(2)} (${updated.id}).\n`,
+      `✓ Salience updated — class ${updated.memoryClass}, confidence ${updated.confidenceScore.toFixed(1)}, enforcement ${updated.enforcementScore ?? "—"} (${updated.id}).\n`,
     );
+  } catch (err) {
+    handleApiError(err);
+  }
+}
+
+export interface MemoryPromoteCliOptions {
+  to?: string;
+  enforcement?: string;
+  rationale?: string;
+  json?: boolean;
+}
+
+/**
+ * `oxagen memory promote <id> --to rule|fact --rationale "…"` — move a memory
+ * up the confidence ladder, recording an auditable :Promotion event. FACT
+ * requires human confirmation server-side, which this CLI invocation provides.
+ */
+export async function handleMemoryPromote(
+  id: string,
+  opts: MemoryPromoteCliOptions,
+): Promise<void> {
+  if (!opts.to) fail("Missing --to. Use `--to rule` or `--to fact`.");
+  const toClass = opts.to.toUpperCase();
+  if (toClass !== "RULE" && toClass !== "FACT") {
+    fail(`Invalid --to "${opts.to}". Use "rule" or "fact".`);
+  }
+  if (!opts.rationale) fail("Missing --rationale. Explain why this memory is being promoted.");
+  let enforcementScore: number | undefined;
+  if (opts.enforcement !== undefined) {
+    enforcementScore = Number(opts.enforcement);
+    if (
+      !Number.isInteger(enforcementScore) ||
+      enforcementScore < 1 ||
+      enforcementScore > 100
+    ) {
+      fail(`Invalid --enforcement "${opts.enforcement}". Use an integer between 1 and 100.`);
+    }
+  }
+  try {
+    const updated = await promoteMemory({
+      memoryId: id,
+      toClass,
+      enforcementScore,
+      rationale: opts.rationale,
+    });
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(updated, null, 2) + "\n");
+      return;
+    }
+    process.stdout.write(formatPromoteResult(updated) + "\n");
+  } catch (err) {
+    handleApiError(err);
+  }
+}
+
+export interface MemoryCandidatesCliOptions {
+  limit?: string;
+  json?: boolean;
+}
+
+/** `oxagen memory candidates` — the OBSERVATIONs most ready to promote. */
+export async function handleMemoryCandidates(
+  opts: MemoryCandidatesCliOptions,
+): Promise<void> {
+  try {
+    const result = await promotionCandidates({
+      limit: parseIntOpt(opts.limit, "--limit"),
+    });
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+      return;
+    }
+    process.stdout.write(formatPromotionCandidates(result) + "\n");
   } catch (err) {
     handleApiError(err);
   }
@@ -266,8 +388,9 @@ export async function handleMemoryImport(
 }
 
 export interface RememberCliOptions {
+  class?: string;
   kind?: string;
-  weight?: string;
+  enforcement?: string;
   node?: string;
   json?: boolean;
 }
@@ -278,12 +401,24 @@ export async function handleRemember(
 ): Promise<void> {
   const trimmed = text.trim();
   if (!trimmed) fail('Nothing to remember. Pass the memory text, e.g. `oxagen remember "…"`.');
+  let enforcementScore: number | undefined;
+  if (opts.enforcement !== undefined) {
+    enforcementScore = Number(opts.enforcement);
+    if (
+      !Number.isInteger(enforcementScore) ||
+      enforcementScore < 1 ||
+      enforcementScore > 100
+    ) {
+      fail(`Invalid --enforcement "${opts.enforcement}". Use an integer between 1 and 100.`);
+    }
+  }
   try {
     // source is omitted so the server defaults it to "user" for a human capture.
     const result = await rememberMemory({
       text: trimmed,
-      kind: parseKind(opts.kind),
-      weight: parseWeight(opts.weight),
+      memoryClass: parseClass(opts.class),
+      memoryKind: normalizeKind(opts.kind),
+      enforcementScore,
       nodeRef: opts.node,
     });
     if (opts.json) {
@@ -295,3 +430,6 @@ export async function handleRemember(
     handleApiError(err);
   }
 }
+
+// Re-exported for command registration help text (e.g. `--kind <k>` hints).
+export { RECOMMENDED_MEMORY_KINDS };

@@ -20,6 +20,7 @@ import {
   fireEvent,
   cleanup,
   within,
+  waitFor,
 } from "@testing-library/react";
 import { MemoriesBulkImport, type DraftMemory } from "./memories-bulk-import";
 
@@ -45,8 +46,9 @@ function md(name: string, content: string): File {
 function draft(overrides: Partial<DraftMemory> = {}): DraftMemory {
   return {
     lesson: "Always open a PR — never push to main.",
-    kind: "constraint",
-    weight: "critical",
+    memoryClass: "RULE",
+    memoryKind: "constraint",
+    enforcementScore: 95,
     source: "user",
     nodeRef: "user-memory",
     sourceDocument: "rules.md",
@@ -229,13 +231,20 @@ describe("MemoriesBulkImport — review stage", () => {
     fireEvent.click(screen.getByRole("button", { name: /parse documents/i }));
     // Wait for the review grid header to appear.
     await screen.findByText("Review draft memories");
+    // The parse runs inside a useTransition; the review heading commits while
+    // isPending is still true, which keeps the Import/Back buttons disabled. Wait
+    // for the transition to settle (Import enabled) before returning so callers'
+    // clicks are not silently swallowed by a disabled button under CI timing.
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /import/i })).toBeEnabled(),
+    );
     return { parseImport, commitImport, onImported };
   }
 
   it("renders each draft lesson in an editable field", async () => {
     await toReview([
       draft({ lesson: "Never push to main." }),
-      draft({ lesson: "Use withTenantDb, never raw db().", kind: "gotcha" }),
+      draft({ lesson: "Use withTenantDb, never raw db().", memoryKind: "gotcha" }),
     ]);
     expect(
       screen.getByDisplayValue("Never push to main."),
@@ -295,7 +304,7 @@ describe("MemoriesBulkImport — review stage", () => {
     expect(payload.drafts[0]).toMatchObject({
       lesson: "Keep this one, edited.",
       source: "imported-rules",
-      kind: "routine-change",
+      memoryKind: "routine-change",
       // editing kind marks it as user-supplied, not auto-classified
       classified: false,
     });
@@ -327,7 +336,10 @@ describe("MemoriesBulkImport — review stage", () => {
       .mockResolvedValue({ ok: false, error: "You must be a workspace member to import memories." });
     await toReview([draft({ lesson: "Keep." })], [], commitImport);
 
-    fireEvent.click(screen.getByRole("button", { name: /import 1 memory/i }));
+    // findByRole (not getByRole): the review heading and the include-flagged
+    // drafts can land in separate renders, so the Import button's count settles
+    // a tick after the heading appears. Wait for the correctly-labelled button.
+    fireEvent.click(await screen.findByRole("button", { name: /import 1 memory/i }));
 
     expect(
       await screen.findByText("You must be a workspace member to import memories."),
@@ -339,9 +351,11 @@ describe("MemoriesBulkImport — review stage", () => {
 
   it("returns to the select stage when Back is clicked", async () => {
     await toReview([draft()]);
-    fireEvent.click(screen.getByRole("button", { name: /back/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /back/i }));
+    // findBy (not getBy): the select stage repaints after the click, so wait for
+    // the drop zone rather than asserting synchronously (flaky under load).
     expect(
-      screen.getByText("Drop markdown files here, or click to choose"),
+      await screen.findByText("Drop markdown files here, or click to choose"),
     ).toBeInTheDocument();
     expect(screen.queryByText("Review draft memories")).not.toBeInTheDocument();
   });
@@ -381,7 +395,11 @@ describe("MemoriesBulkImport — result stage", () => {
     await screen.findByText("rules.md");
     fireEvent.click(screen.getByRole("button", { name: /parse documents/i }));
     await screen.findByText("Review draft memories");
-    fireEvent.click(screen.getByRole("button", { name: /import 2 memories/i }));
+    // Wait for the useTransition to settle so the Import button is enabled and
+    // labelled with the settled selected-count before clicking (see toReview).
+    const importButton = await screen.findByRole("button", { name: /import 2 memories/i });
+    await waitFor(() => expect(importButton).toBeEnabled());
+    fireEvent.click(importButton);
     await screen.findByText("Import complete");
     return { onImported };
   }

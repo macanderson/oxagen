@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { StructuredValue } from "../structured-value";
 
 /**
@@ -134,7 +135,9 @@ function StepRow({ step, index }: { step: ChainStep; index: number }): React.Rea
         </button>
 
         {step.rationale ? (
-          <p className="ml-6 mt-1 text-xs text-foreground/80">{step.rationale}</p>
+          <p className="ml-6 mt-1 text-xs text-foreground/80">
+            <TruncatedText text={step.rationale} lines={2} />
+          </p>
         ) : null}
 
         {open && hasDetail ? (

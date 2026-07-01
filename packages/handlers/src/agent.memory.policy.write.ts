@@ -25,12 +25,16 @@ export const agentMemoryPolicyWriteHandler: CapabilityHandler<typeof agentMemory
       halfLifeLowDays: 30,
       halfLifeHighDays: 90,
       recallThreshold: 0.1,
+      complianceThreshold: 70,
+      defaultDecayFloor: 5,
     };
 
     const next = {
       halfLifeLowDays: input.halfLifeLowDays ?? current.halfLifeLowDays,
       halfLifeHighDays: input.halfLifeHighDays ?? current.halfLifeHighDays,
       recallThreshold: input.recallThreshold ?? (current.recallThreshold ?? 0.1),
+      complianceThreshold: input.complianceThreshold ?? (current.complianceThreshold ?? 70),
+      defaultDecayFloor: input.defaultDecayFloor ?? (current.defaultDecayFloor ?? 5),
     };
 
     await withTenantDb(async (tx) => {

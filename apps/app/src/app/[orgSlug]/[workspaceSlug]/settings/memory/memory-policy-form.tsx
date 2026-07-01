@@ -16,6 +16,8 @@ interface Props {
   initialHalfLifeLow: number;
   initialHalfLifeHigh: number;
   initialRecallThreshold: number;
+  initialComplianceThreshold: number;
+  initialDefaultDecayFloor: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -28,10 +30,14 @@ export function MemoryPolicyForm({
   initialHalfLifeLow,
   initialHalfLifeHigh,
   initialRecallThreshold,
+  initialComplianceThreshold,
+  initialDefaultDecayFloor,
 }: Props) {
   const [halfLifeLow, setHalfLifeLow] = useState(initialHalfLifeLow);
   const [halfLifeHigh, setHalfLifeHigh] = useState(initialHalfLifeHigh);
   const [recallThreshold, setRecallThreshold] = useState(initialRecallThreshold);
+  const [complianceThreshold, setComplianceThreshold] = useState(initialComplianceThreshold);
+  const [defaultDecayFloor, setDefaultDecayFloor] = useState(initialDefaultDecayFloor);
   const [result, setResult] = useState<SaveMemoryPolicyResult | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -44,6 +50,8 @@ export function MemoryPolicyForm({
         halfLifeLowDays: halfLifeLow,
         halfLifeHighDays: halfLifeHigh,
         recallThreshold,
+        complianceThreshold,
+        defaultDecayFloor,
       });
       setResult(res);
     });
@@ -54,8 +62,10 @@ export function MemoryPolicyForm({
       <div>
         <h2 className="text-base font-semibold">Memory Policy</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Configure how agent memories decay over time and the confidence threshold for
-          recall. Critical-weight memories never decay regardless of these settings.
+          Configure how agent memories decay over time, the confidence threshold
+          for recall, and the enforcement threshold that separates a policy
+          discretion from a violation. Facts never decay regardless of these
+          settings.
         </p>
       </div>
 
@@ -65,16 +75,16 @@ export function MemoryPolicyForm({
         className="flex flex-col gap-6"
         noValidate
       >
-        {/* Low-weight half-life */}
+        {/* Observation half-life */}
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="half-life-low"
             className="text-sm font-medium leading-none text-foreground"
           >
-            Low-weight memory half-life (days)
+            Observation half-life (days)
           </label>
           <p className="text-xs text-muted-foreground">
-            Days until a low-weight memory&rsquo;s confidence drops to 50%. Default: 30.
+            Days until an OBSERVATION memory&rsquo;s confidence drops to 50%. Default: 30.
           </p>
           <Input
             id="half-life-low"
@@ -91,16 +101,16 @@ export function MemoryPolicyForm({
           />
         </div>
 
-        {/* High-weight half-life */}
+        {/* Rule half-life */}
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="half-life-high"
             className="text-sm font-medium leading-none text-foreground"
           >
-            High-weight memory half-life (days)
+            Rule half-life (days)
           </label>
           <p className="text-xs text-muted-foreground">
-            Days until a high-weight memory&rsquo;s confidence drops to 50%. Default: 90.
+            Days until a RULE memory&rsquo;s confidence drops to 50%. Default: 90.
           </p>
           <Input
             id="half-life-high"
@@ -140,6 +150,60 @@ export function MemoryPolicyForm({
             value={recallThreshold}
             onChange={(e) => {
               setRecallThreshold(Number(e.target.value));
+              setResult(null);
+            }}
+          />
+        </div>
+
+        {/* Compliance threshold */}
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="compliance-threshold"
+            className="text-sm font-medium leading-none text-foreground"
+          >
+            Compliance threshold
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Enforcement at or above which a RULE deviation counts as a VIOLATION
+            rather than DISCRETION. Default: 70.
+          </p>
+          <Input
+            id="compliance-threshold"
+            name="complianceThreshold"
+            type="number"
+            min={1}
+            max={100}
+            className="w-40"
+            value={complianceThreshold}
+            onChange={(e) => {
+              setComplianceThreshold(Number(e.target.value));
+              setResult(null);
+            }}
+          />
+        </div>
+
+        {/* Default decay floor */}
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="default-decay-floor"
+            className="text-sm font-medium leading-none text-foreground"
+          >
+            Default decay floor
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Confidence never auto-decays below this value for new memories.
+            Default: 5.
+          </p>
+          <Input
+            id="default-decay-floor"
+            name="defaultDecayFloor"
+            type="number"
+            min={0}
+            max={100}
+            className="w-40"
+            value={defaultDecayFloor}
+            onChange={(e) => {
+              setDefaultDecayFloor(Number(e.target.value));
               setResult(null);
             }}
           />

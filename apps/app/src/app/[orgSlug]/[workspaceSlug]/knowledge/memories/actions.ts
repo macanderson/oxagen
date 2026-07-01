@@ -1,7 +1,8 @@
 "use server";
 
 /**
- * actions.ts — server actions for Knowledge → Memories: edit and delete.
+ * actions.ts — server actions for Knowledge → Memories: create, edit, delete,
+ * and promote (two-axis memory model — see docs/specs/two-axis-memory/DESIGN.md).
  *
  * These follow the exact same pattern as settings/memory/actions.ts:
  *   1. getSessionOrRedirect() → session guard
@@ -24,6 +25,7 @@ import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 import { withTenantDb, schema } from "@oxagen/database";
 import type { AgentMemoryRecord } from "@oxagen/oxagen/contracts/agent.memory.list";
+import type { AgentMemoryPromotionCandidatesOutput } from "@oxagen/oxagen/contracts/agent.memory.promotion.candidates";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 
@@ -43,15 +45,15 @@ export type DeleteMemoryResult =
   | { ok: true }
   | { ok: false; error: string };
 
-/** The five AgentMemory kinds — the "type" a manual memory can be filed as. */
-type MemoryKind =
-  | "routine-change"
-  | "constraint"
-  | "bug-root-cause"
-  | "convention-deviation"
-  | "gotcha";
+export type PromoteMemoryResult =
+  | { ok: true; memory: AgentMemoryRecord }
+  | { ok: false; error: string };
 
-type MemoryWeight = "low" | "high" | "critical";
+export type PromotionCandidatesResult =
+  | { ok: true; candidates: AgentMemoryPromotionCandidatesOutput["candidates"] }
+  | { ok: false; error: string };
+
+type MemoryStatus = "ACTIVE" | "SUPERSEDED" | "RETRACTED" | "ARCHIVED";
 
 // ---------------------------------------------------------------------------
 // Shared IAM helper
@@ -86,28 +88,29 @@ async function assertWorkspaceMember(
 // ---------------------------------------------------------------------------
 // createMemoryAction
 //
-// Captures a manual, one-off memory of any kind from the Memories tab. Routes
-// through agent.memory.remember — the human-facing "just remember this" entry
-// point — rather than agent.memory.write: remember takes free-text, infers the
-// kind + weight when the user does not pin them, defaults the anchor to the
-// "user-memory" bucket, and stamps source "user". When the user *does* pick a
-// kind and/or weight we pass them through so the write is deterministic and the
-// classifier (a metered AI call) is skipped.
+// Captures a manual, one-off memory from the Memories tab. Routes through
+// agent.memory.remember — the human-facing "just remember this" entry point —
+// rather than agent.memory.write: remember takes free-text, infers
+// memoryClass/memoryKind when the user does not pin them, defaults the anchor
+// to the "user-memory" bucket, and stamps source "user". FACT is
+// intentionally not offered here (see memories-client.tsx) — it requires
+// human confirmation and is reserved for the promote flow.
 //
-// `source` is fixed to "user" here — this is a human-authored note — and is not
-// exposed as a free-text field because remember's source is a closed enum,
-// unlike update's free-string source.
+// `source` is fixed to "user" here — this is a human-authored note — and is
+// not exposed as a free-text field because remember's source is a closed
+// enum, unlike update's free-string source.
 // ---------------------------------------------------------------------------
 
 export async function createMemoryAction(input: {
   orgSlug: string;
   workspaceSlug: string;
   text: string;
-  kind?: MemoryKind;
-  weight?: MemoryWeight;
+  memoryKind?: string;
+  memoryClass?: "OBSERVATION" | "RULE";
+  enforcementScore?: number;
 }): Promise<CreateMemoryResult> {
   const session = await getSessionOrRedirect();
-  const { orgSlug, workspaceSlug, text, kind, weight } = input;
+  const { orgSlug, workspaceSlug, text, memoryKind, memoryClass, enforcementScore } = input;
 
   const trimmed = text.trim();
   if (trimmed.length === 0) {
@@ -141,14 +144,17 @@ export async function createMemoryAction(input: {
     };
 
     try {
-      // Only send kind/weight when pinned; omitting them lets the handler's
-      // classifier infer the salience bucket and kind from the lesson text.
+      // Only send pinned fields; omitting them lets the handler's classifier
+      // infer the class/kind from the lesson text.
       const out = (await invoke(
         "agent.memory.remember",
         {
           text: trimmed,
-          ...(kind ? { kind } : {}),
-          ...(weight ? { weight } : {}),
+          ...(memoryKind ? { memoryKind } : {}),
+          ...(memoryClass ? { memoryClass } : {}),
+          ...(memoryClass === "RULE" && enforcementScore != null
+            ? { enforcementScore }
+            : {}),
           source: "user" as const,
         },
         ctx,
@@ -168,8 +174,10 @@ export async function createMemoryAction(input: {
 // updateMemoryAction
 //
 // Edits an AgentMemory in place. At least one mutable field (lesson, kind,
-// weight, confidence, source) must differ from the stored value — the contract
-// handler enforces this and the client skips the action if nothing changed.
+// source, confidenceScore, enforcementScore, status) must differ from the
+// stored value — the contract handler enforces this and the client skips the
+// action if nothing changed. Class changes are NOT accepted here — they go
+// through promoteMemoryAction, which records an auditable :Promotion event.
 // ---------------------------------------------------------------------------
 
 export async function updateMemoryAction(input: {
@@ -177,10 +185,11 @@ export async function updateMemoryAction(input: {
   workspaceSlug: string;
   memoryId: string;
   lesson?: string;
-  weight?: MemoryWeight;
-  kind?: MemoryKind;
+  memoryKind?: string;
   source?: string;
-  confidence?: number;
+  confidenceScore?: number;
+  enforcementScore?: number;
+  status?: MemoryStatus;
 }): Promise<UpdateMemoryResult> {
   const session = await getSessionOrRedirect();
   const { orgSlug, workspaceSlug, memoryId, ...updates } = input;
@@ -275,6 +284,125 @@ export async function deleteMemoryAction(input: {
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
       return { ok: false, error: message || "Failed to delete memory." };
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// promoteMemoryAction
+//
+// Moves a memory up the confidence ladder (OBSERVATION → RULE/FACT, or
+// RULE → FACT), recording an auditable :Promotion event. Backs the "Promote"
+// affordance in the memory detail sheet and the "suggested to promote" panel.
+// ---------------------------------------------------------------------------
+
+export async function promoteMemoryAction(input: {
+  orgSlug: string;
+  workspaceSlug: string;
+  memoryId: string;
+  toClass: "RULE" | "FACT";
+  enforcementScore?: number;
+  rationale: string;
+  basedOnEvidenceIds?: string[];
+}): Promise<PromoteMemoryResult> {
+  const session = await getSessionOrRedirect();
+  const { orgSlug, workspaceSlug, memoryId, toClass, enforcementScore, rationale, basedOnEvidenceIds } =
+    input;
+
+  const org = await resolveOrg(orgSlug);
+  const ws = await resolveWorkspace(org.id, workspaceSlug);
+
+  await assertOrgMember(org.id, session.user.id);
+
+  return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
+    const gate = await assertWorkspaceMember(ws.id, session.user.id);
+    if (gate === "denied") {
+      return { ok: false, error: "You must be a workspace member to promote memories." };
+    }
+
+    const ctx = {
+      orgId: org.id,
+      workspaceId: ws.id,
+      userId: session.user.id,
+      apiKeyId: null as string | null,
+      requestId: crypto.randomUUID(),
+      surface: "app" as const,
+      messageId: null as string | null,
+    };
+
+    try {
+      const memory = (await invoke(
+        "agent.memory.promote",
+        {
+          memoryId,
+          toClass,
+          ...(enforcementScore != null ? { enforcementScore } : {}),
+          rationale,
+          ...(basedOnEvidenceIds && basedOnEvidenceIds.length > 0
+            ? { basedOnEvidenceIds }
+            : {}),
+        },
+        ctx,
+        { surface: "agent" },
+      )) as AgentMemoryRecord;
+
+      revalidatePath(`/${orgSlug}/${workspaceSlug}/knowledge/memories`);
+      return { ok: true, memory };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      return { ok: false, error: message || "Failed to promote memory." };
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// promotionCandidatesAction
+//
+// The top OBSERVATIONs by citation pressure that are ripe to promote — backs
+// the "suggested to promote" panel above the memories list.
+// ---------------------------------------------------------------------------
+
+export async function promotionCandidatesAction(input: {
+  orgSlug: string;
+  workspaceSlug: string;
+  limit?: number;
+}): Promise<PromotionCandidatesResult> {
+  const session = await getSessionOrRedirect();
+  const { orgSlug, workspaceSlug, limit } = input;
+
+  const org = await resolveOrg(orgSlug);
+  const ws = await resolveWorkspace(org.id, workspaceSlug);
+
+  await assertOrgMember(org.id, session.user.id);
+
+  return runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
+    const gate = await assertWorkspaceMember(ws.id, session.user.id);
+    if (gate === "denied") {
+      return { ok: false, error: "You must be a workspace member to view memories." };
+    }
+
+    const ctx = {
+      orgId: org.id,
+      workspaceId: ws.id,
+      userId: session.user.id,
+      apiKeyId: null as string | null,
+      requestId: crypto.randomUUID(),
+      surface: "app" as const,
+      messageId: null as string | null,
+    };
+
+    try {
+      const out = (await invoke(
+        "agent.memory.promotion.candidates",
+        { ...(limit != null ? { limit } : {}) },
+        ctx,
+        { surface: "agent" },
+      )) as AgentMemoryPromotionCandidatesOutput;
+
+      return { ok: true, candidates: out.candidates };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      return { ok: false, error: message || "Failed to load promotion candidates." };
     }
   });
 }
