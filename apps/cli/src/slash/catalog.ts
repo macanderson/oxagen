@@ -2,7 +2,7 @@
  * catalog.ts — The unified slash-command catalog that powers the REPL menu.
  *
  * Three tiers, merged into one list the typeahead reads from:
- *   1. Built-in REPL commands   (/help, /model, /tui, …) — handled inline by the
+ *   1. Built-in REPL commands   (/help, /model, /mode, …) — handled inline by the
  *      REPL. Productized.
  *   2. CLI commands             (every `oxagen --help` command, via
  *      describeCliCommands) — discoverable from the REPL. Productized.
@@ -50,12 +50,6 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
   {
     name: "logout",
     description: "Clear the stored Oxagen session (token + org + workspace) from the global config.",
-  },
-  {
-    name: "tui",
-    description:
-      "Switch the terminal layout between compact (inline) and fullscreen (alternate screen). Omit the argument to toggle.",
-    argumentHint: "[compact|fullscreen]",
   },
   {
     name: "init",

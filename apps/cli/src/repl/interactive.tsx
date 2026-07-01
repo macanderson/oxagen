@@ -44,7 +44,7 @@ import { openFleetMemory } from "../agent/fleet/memory.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
-import { readConfig, writeConfig } from "../lib/config.js";
+import { readConfig } from "../lib/config.js";
 import { debugLog } from "../lib/debug-log.js";
 import { formatToolArgs } from "../agent/tool-formatter.js";
 import {
@@ -56,7 +56,6 @@ import {
   ThinkingIndicator,
   summarizeTrace,
   type Message,
-  type TuiMode,
 } from "./components.js";
 import { resolveEscapeAction } from "./escape-action.js";
 import { isDebugEnabled } from "../lib/debug-log.js";
@@ -135,21 +134,21 @@ const ALT_SCREEN_ENTER = "\x1b[?1049h\x1b[H";
 const ALT_SCREEN_LEAVE = "\x1b[?1049l";
 
 /**
- * Drive fullscreen (alternate-screen) layout for the REPL.
+ * Drive the REPL's alternate-screen layout and report the live terminal height.
  *
- * When `active`, the app swaps to the terminal's alternate screen buffer and
- * reports its current row count so the root Box can be pinned to the full
- * terminal height (header at top, input pinned at the bottom). When inactive —
- * or on unmount/exit — the alt buffer is left so the user's shell scrollback is
- * restored untouched. Toggling at runtime re-runs the effect, so `/tui` flips
- * cleanly between compact and fullscreen.
+ * The REPL always runs full-height: it swaps to the terminal's alternate screen
+ * buffer on mount and reports the current row count so the root column can be
+ * pinned to the full terminal height — the conversation fills the space and the
+ * prompt input + status line stay glued to the bottom. On unmount/exit the alt
+ * buffer is left so the user's shell is restored untouched. The row count tracks
+ * `resize`, so the layout re-pins when the window changes size.
  */
-function useFullscreen(active: boolean): number {
+function useAltScreen(): number {
   const { stdout } = useStdout();
   const [rows, setRows] = useState<number>(stdout?.rows ?? 24);
 
   useEffect(() => {
-    if (!active || !stdout) return;
+    if (!stdout) return;
     stdout.write(ALT_SCREEN_ENTER);
     const sync = (): void => setRows(stdout.rows ?? 24);
     sync();
@@ -158,7 +157,7 @@ function useFullscreen(active: boolean): number {
       stdout.off("resize", sync);
       stdout.write(ALT_SCREEN_LEAVE);
     };
-  }, [active, stdout]);
+  }, [stdout]);
 
   return rows;
 }
@@ -206,21 +205,11 @@ export function ReplApp({
   const initialVerbose = options.verbose ?? readConfig().verbose ?? false;
   const [verboseOn, setVerboseOn] = useState(initialVerbose);
   const verboseRef = useRef(initialVerbose);
-  // Layout mode: "compact" (inline scrollback) vs. "fullscreen" (alternate
-  // screen, pinned to the terminal height). Defaults from config; toggled by
-  // /tui. useFullscreen swaps the alt buffer + reports the live row count.
-  const [tuiMode, setTuiMode] = useState<TuiMode>(() => {
-    // An explicit config value always wins. Otherwise fullscreen is the default
-    // on a real interactive TTY (the only place the alternate screen buffer makes
-    // sense); non-TTY contexts (pipes, CI, ink-testing-library) fall back to
-    // compact so inline rendering stays capturable and the alt-screen effect
-    // never runs.
-    const configured = readConfig().tui;
-    if (configured === "compact" || configured === "fullscreen") return configured;
-    return process.stdout.isTTY ? "fullscreen" : "compact";
-  });
-  const fullscreen = tuiMode === "fullscreen";
-  const rows = useFullscreen(fullscreen);
+  // The REPL always runs full-height on the alternate screen: the conversation
+  // fills the terminal and the prompt input + status line stay pinned to the
+  // bottom. `rows` tracks the live terminal height so the layout re-pins on
+  // resize. (There is no compact/inline layout — one pinned layout, always.)
+  const rows = useAltScreen();
   // Permission posture (drives the broker + status chip) and the in-flight
   // approval request (drives the inline ApprovalPrompt; null when none).
   const [mode, setMode] = useState<PermissionMode>(
@@ -281,8 +270,6 @@ export function ReplApp({
   effortRef.current = effort;
   const modeRef = useRef(mode);
   modeRef.current = mode;
-  const tuiModeRef = useRef(tuiMode);
-  tuiModeRef.current = tuiMode;
   const approvalRef = useRef(approval);
   approvalRef.current = approval;
 
@@ -537,30 +524,6 @@ export function ReplApp({
       // ── Slash commands ──
       if (text === "/help") {
         pushAssistant(HELP);
-        return;
-      }
-      if (text === "/tui" || text.startsWith("/tui ")) {
-        const arg = text.slice("/tui".length).trim().toLowerCase();
-        let next: TuiMode;
-        if (arg === "") {
-          // No argument toggles between the two layouts.
-          next = tuiModeRef.current === "fullscreen" ? "compact" : "fullscreen";
-        } else if (arg === "compact" || arg === "fullscreen") {
-          next = arg;
-        } else {
-          pushAssistant(
-            `Unknown layout "${arg}". Use /tui compact|fullscreen (or /tui alone to toggle).`,
-          );
-          return;
-        }
-        setTuiMode(next);
-        // Remember the choice so the next session starts in the same layout.
-        writeConfig({ tui: next });
-        pushAssistant(
-          next === "fullscreen"
-            ? "Layout: fullscreen — the REPL fills the alternate screen. /tui compact returns to inline scrollback."
-            : "Layout: compact — the REPL renders inline in your scrollback. /tui fullscreen uses the alternate screen.",
-        );
         return;
       }
       if (text === "/init") {
@@ -1144,18 +1107,23 @@ export function ReplApp({
   );
 
   return (
-    // Fullscreen pins the column to the terminal height (alt screen); compact
-    // leaves height unset so the conversation grows inline in the scrollback.
-    <Box flexDirection="column" height={fullscreen ? rows : undefined}>
+    // The column is always pinned to the full terminal height (alt screen), so
+    // the messages region flex-grows to fill the space and the input + status
+    // stay glued to the bottom regardless of how long the conversation is.
+    <Box flexDirection="column" height={rows}>
       {/* Header — the Oxagen ASCII wordmark. It animates (reveals top-to-bottom)
           the first time the REPL mounts, then stays as the logo header. */}
       <Banner version={pkg.version} animate />
 
-      {/* Messages — fullscreen fills + clips to the screen; compact grows inline */}
+      {/* Messages — fill the space between the banner and the input. `flex-end`
+          anchors the conversation to the bottom so the newest lines sit just
+          above the input; older lines overflow off the top and are clipped. */}
       <Box
         flexDirection="column"
-        flexGrow={fullscreen ? 1 : undefined}
-        overflow={fullscreen ? "hidden" : undefined}
+        flexGrow={1}
+        overflow="hidden"
+        minHeight={0}
+        justifyContent="flex-end"
       >
         {messages.length === 0 ? (
           <Box paddingX={1} flexDirection="column">

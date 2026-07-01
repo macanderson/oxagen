@@ -20,9 +20,6 @@ import {
 import type { StageEvent, StageKind, TurnTrace, JudgeVerdict } from "../agent/trace.js";
 import type { ApprovalRequest, ApprovalResponse, PermissionMode } from "../agent/permissions.js";
 
-/** Layout mode for the REPL: inline scrollback vs. alternate-screen fullscreen. */
-export type TuiMode = "compact" | "fullscreen";
-
 export interface Message {
   role: "user" | "assistant" | "reasoning" | "tool" | "stage";
   content: string;
@@ -38,7 +35,6 @@ export interface Message {
 export const HELP = [
   "Slash commands (type / to browse them with descriptions):",
   "  /help          show this help",
-  "  /tui [compact|fullscreen]  switch the terminal layout (omit to toggle)",
   "  /model [slug]  show or set the gateway model",
   "  /mode [ask|auto-edit|bypass|readonly]  show or set the permission mode",
   "  /replay [n|id] show how a turn was handled (default: last turn)",

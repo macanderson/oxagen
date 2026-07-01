@@ -20,30 +20,30 @@ const CLI: CliCommandMeta[] = [
 ];
 
 describe("BUILTIN_SLASH_COMMANDS", () => {
-  it("includes the REPL-native commands with /tui and /init", () => {
-    expect(BUILTIN_SLASH_NAMES.has("tui")).toBe(true);
+  it("includes the REPL-native commands with /mode and /init", () => {
+    expect(BUILTIN_SLASH_NAMES.has("mode")).toBe(true);
     expect(BUILTIN_SLASH_NAMES.has("init")).toBe(true);
     expect(BUILTIN_SLASH_NAMES.has("help")).toBe(true);
     expect(BUILTIN_SLASH_NAMES.has("exit")).toBe(true);
   });
 
-  it("gives /tui a compact|fullscreen argument hint", () => {
-    const tui = BUILTIN_SLASH_COMMANDS.find((c) => c.name === "tui");
-    expect(tui?.argumentHint).toBe("[compact|fullscreen]");
-    expect(tui?.description.length).toBeGreaterThan(0);
+  it("gives /mode a permission-posture argument hint", () => {
+    const mode = BUILTIN_SLASH_COMMANDS.find((c) => c.name === "mode");
+    expect(mode?.argumentHint).toBe("[ask|auto-edit|bypass|readonly]");
+    expect(mode?.description.length).toBeGreaterThan(0);
   });
 });
 
 describe("slashQuery", () => {
   it("returns the lowercased partial while typing a single /word token", () => {
     expect(slashQuery("/mo")).toBe("mo");
-    expect(slashQuery("/TUI")).toBe("tui");
+    expect(slashQuery("/MODE")).toBe("mode");
     expect(slashQuery("/")).toBe("");
   });
 
   it("closes the menu (null) once arguments begin or it isn't a slash token", () => {
-    expect(slashQuery("/tui compact")).toBeNull();
-    expect(slashQuery("/tui ")).toBeNull();
+    expect(slashQuery("/mode ask")).toBeNull();
+    expect(slashQuery("/mode ")).toBeNull();
     expect(slashQuery("find the bug")).toBeNull();
     expect(slashQuery("")).toBeNull();
   });
@@ -74,11 +74,11 @@ describe("buildSlashCatalog", () => {
       "utf8",
     );
     const catalog = build();
-    const tui = catalog.find((c) => c.name === "tui");
+    const mode = catalog.find((c) => c.name === "mode");
     const cost = catalog.find((c) => c.name === "cost");
     const shipit = catalog.find((c) => c.name === "shipit");
 
-    expect(tui).toMatchObject({ source: "builtin", productized: true });
+    expect(mode).toMatchObject({ source: "builtin", productized: true });
     expect(cost).toMatchObject({ source: "cli", productized: true });
     expect(shipit).toMatchObject({ source: "custom", productized: false });
     expect(shipit?.description).toBe("Ship the branch");
@@ -86,11 +86,11 @@ describe("buildSlashCatalog", () => {
 
   it("dedupes on name with precedence builtin > cli > custom", () => {
     // A custom command that shadows a built-in name must not displace the built-in.
-    writeFileSync(join(userDir, "tui.md"), "---\ndescription: custom tui\n---\nbody\n", "utf8");
+    writeFileSync(join(userDir, "mode.md"), "---\ndescription: custom mode\n---\nbody\n", "utf8");
     const catalog = build();
-    const tuiEntries = catalog.filter((c) => c.name === "tui");
-    expect(tuiEntries).toHaveLength(1);
-    expect(tuiEntries[0]).toMatchObject({ source: "builtin", productized: true });
+    const modeEntries = catalog.filter((c) => c.name === "mode");
+    expect(modeEntries).toHaveLength(1);
+    expect(modeEntries[0]).toMatchObject({ source: "builtin", productized: true });
 
     // The CLI `replay` collides with the built-in /replay → built-in wins.
     const replayEntries = catalog.filter((c) => c.name === "replay");
