@@ -492,7 +492,12 @@ export function StatusLine({
             <Text color={theme.cyan}>verbose</Text>
           </>
         ) : null}
-        {pipelineOn === false ? (
+        {pipelineOn === true ? (
+          <>
+            {sep}
+            <Text color="#34D399" bold>🏋️ pipeline activated</Text>
+          </>
+        ) : pipelineOn === false ? (
           <>
             {sep}
             <Text color="#FB7185">bare</Text>
