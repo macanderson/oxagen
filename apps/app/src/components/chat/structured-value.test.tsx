@@ -19,6 +19,16 @@ import {
   statusToneDot,
 } from "./structured-value";
 
+// TruncatedText (free-text scalar values) measures scroll overflow via
+// ResizeObserver, which isn't implemented in JSDOM.
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 afterEach(cleanup);
 
 // The exact payload from the research.swarm.start card in the bug report.
