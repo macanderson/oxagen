@@ -16,6 +16,31 @@ export interface CliConfig {
   gatewayKey?: string;
   /** Default verbose mode: capture + emit full per-turn telemetry. */
   verbose?: boolean;
+  /** Model-runtime settings (Group 1: on-device runtime + coordinator choice). */
+  runtime?: RuntimeConfig;
+}
+
+/**
+ * Model-runtime config. Nested under `runtime` in the config file. Every field
+ * is optional; unset fields fall back to the baked-in defaults in
+ * `runtime/models.json`. Read/written through typed accessors in
+ * `runtime/config.ts` (not the flat `oxagen config` command).
+ */
+export interface RuntimeConfig {
+  /** Which model coordinates the agent: "on-device" or a cloud id like "haiku". */
+  coordinator?: string;
+  onDevice?: {
+    /** Auto-download the resolved model on first on-device coordinator use. */
+    autoDownload?: boolean;
+    /** "auto" (resolve best for device) or a pinned capability-table modelId. */
+    modelId?: string;
+    /** Override the weights cache directory (defaults to ~/.oxagen/models). */
+    cacheDir?: string;
+    /** Verify downloads against a checksum before caching. */
+    verifyChecksum?: boolean;
+    /** Quantization preference, best quality first (e.g. ["q8","q6","q5","q4"]). */
+    quantizationPreference?: ("q4" | "q5" | "q6" | "q8")[];
+  };
 }
 
 const CONFIG_DIR = join(homedir(), ".config", "oxagen");

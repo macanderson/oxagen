@@ -34,6 +34,11 @@ onlyBuiltDependencies:
 
 ignoredBuiltDependencies:
   - "@swc/core"
+  # Optional on-device runtime (apps/cli). We deliberately skip its install-time
+  # native build: node-llama-cpp fetches its prebuilt llama.cpp binary lazily on
+  # first use (when the developer opts into an on-device coordinator), so the
+  # shared install stays light and the CLI runs fine without it.
+  - node-llama-cpp
 
 allowBuilds:
   "@swc/core": true
@@ -43,6 +48,7 @@ allowBuilds:
   esbuild: true
   inngest-cli: true
   lefthook: true
+  node-llama-cpp: false
   protobufjs: true
   sharp: true
   ssh2: true

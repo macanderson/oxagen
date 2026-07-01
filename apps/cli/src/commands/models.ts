@@ -1,0 +1,274 @@
+/**
+ * `oxagen models` — inspect and manage the model runtime (Group 1, deliverable 4).
+ *
+ *   oxagen models list      Registry + capability scores + what fits this device.
+ *   oxagen models active    The current coordinator and its kind (on-device|cloud).
+ *   oxagen models pull      Download + cache the resolved on-device weights.
+ *   oxagen models status    Cache location, size, checksum state, device fit.
+ *   oxagen models use <id>  Choose the coordinator (on-device is always allowed).
+ *
+ * Add --json to list/active/status for machine-readable output.
+ */
+import { statSync } from "node:fs";
+import {
+  bestFittingQuant,
+  cloudModel,
+  cloudModelIds,
+  detectDevice,
+  estimateModelRamGB,
+  getCacheDir,
+  getCoordinator,
+  getOnDeviceModelId,
+  getQuantizationPreference,
+  isCached,
+  isOptionalDepInstalled,
+  memoryBudgetGB,
+  OnDeviceProvider,
+  ON_DEVICE_ID,
+  OPTIONAL_DEP,
+  readManifest,
+  resolveBestOnDeviceModel,
+  roles,
+  setCoordinator,
+  verifyIntegrity,
+  type DeviceProfile,
+} from "../runtime/index.js";
+import { capabilityTable } from "../runtime/registry.js";
+
+const out = (s = ""): void => void process.stdout.write(s + "\n");
+
+export interface ModelsOptions {
+  json?: boolean;
+}
+
+// ── models list ──────────────────────────────────────────────────────────────
+
+export async function handleModelsList(opts: ModelsOptions = {}): Promise<void> {
+  const device = detectDevice();
+  const quantPref = getQuantizationPreference();
+  const table = capabilityTable();
+  const resolution = resolveBestOnDeviceModel(device, quantPref, getOnDeviceModelId());
+  const coordinator = getCoordinator();
+
+  const rows = table.map((row) => {
+    const quant = bestFittingQuant(device, row, quantPref);
+    return {
+      modelId: row.modelId,
+      codeScore: row.codeScore,
+      params: row.params,
+      contextWindow: row.contextWindow,
+      license: row.license,
+      fits: quant !== undefined,
+      bestQuant: quant ?? null,
+      estRamGB: quant ? estimateModelRamGB(row.params, quant) : null,
+      resolved: resolution.row?.modelId === row.modelId,
+    };
+  });
+
+  const cloud = cloudModelIds().map((id) => {
+    const entry = cloudModel(id)!;
+    return { id, slug: entry.slug, vendor: entry.vendor, contextWindow: entry.contextWindow };
+  });
+
+  if (opts.json) {
+    out(
+      JSON.stringify(
+        { device, coordinator, resolved: resolution, onDevice: rows, cloud, roles: roles() },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
+  out(deviceLine(device));
+  out(`Coordinator: ${coordinator}`);
+  out("");
+  out("On-device code models (highest codeScore first):");
+  for (const r of rows) {
+    const mark = r.resolved ? "→" : r.fits ? " " : "✗";
+    const fit = r.fits ? `fits @ ${r.bestQuant} (~${r.estRamGB} GB)` : "does not fit this device";
+    out(`  ${mark} ${r.modelId.padEnd(34)} score ${r.codeScore.toFixed(2)}  ${r.params.padEnd(9)} ${fit}`);
+  }
+  out("");
+  out("Cloud models:");
+  for (const c of cloud) {
+    out(`    ${c.id.padEnd(34)} ${c.slug}  (${c.vendor})`);
+  }
+  out("");
+  out(`Resolved on-device pick: ${resolution.row ? resolution.row.modelId : "none"} — ${resolution.rationale}`);
+}
+
+// ── models active ────────────────────────────────────────────────────────────
+
+export async function handleModelsActive(opts: ModelsOptions = {}): Promise<void> {
+  const coordinator = getCoordinator();
+
+  if (coordinator === ON_DEVICE_ID) {
+    const provider = new OnDeviceProvider();
+    const depInstalled = await isOptionalDepInstalled();
+    const available = await provider.isAvailable();
+    const info = {
+      coordinator,
+      kind: "on-device" as const,
+      resolvedModel: provider.resolvedRow?.modelId ?? null,
+      quant: provider.resolvedQuant,
+      rationale: provider.rationale,
+      optionalDepInstalled: depInstalled,
+      cached: provider.resolvedRow
+        ? isCached(getCacheDir(), provider.resolvedRow.modelId, provider.resolvedQuant!).cached
+        : false,
+      ready: available,
+    };
+    if (opts.json) return out(JSON.stringify(info, null, 2));
+    out(`Coordinator: ${coordinator} (on-device)`);
+    out(`  Resolved model: ${info.resolvedModel ?? "none — nothing fits this device"}`);
+    if (info.resolvedModel) out(`  Quantization:   ${info.quant}`);
+    out(`  Rationale:      ${info.rationale}`);
+    out(`  Optional dep:   ${depInstalled ? "installed" : `not installed (npm install ${OPTIONAL_DEP})`}`);
+    out(`  Weights cached: ${info.cached ? "yes" : "no"}`);
+    out(`  Ready to run:   ${available ? "yes" : "no — run `oxagen models pull`"}`);
+    return;
+  }
+
+  const entry = cloudModel(coordinator);
+  const info = {
+    coordinator,
+    kind: "cloud" as const,
+    slug: entry?.slug ?? null,
+    vendor: entry?.vendor ?? null,
+  };
+  if (opts.json) return out(JSON.stringify(info, null, 2));
+  out(`Coordinator: ${coordinator} (cloud)`);
+  out(`  Gateway slug: ${info.slug ?? "unknown model id"}`);
+  if (info.vendor) out(`  Vendor:       ${info.vendor}`);
+}
+
+// ── models pull ──────────────────────────────────────────────────────────────
+
+export async function handleModelsPull(opts: ModelsOptions = {}): Promise<void> {
+  const provider = new OnDeviceProvider();
+  if (!provider.resolvedRow || !provider.resolvedQuant) {
+    out(`No on-device model fits this device: ${provider.rationale}`);
+    out(`Choose a cloud coordinator with \`oxagen models use haiku\`.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const human = !opts.json;
+  const depInstalled = await isOptionalDepInstalled();
+  if (human && !depInstalled) {
+    out(`Note: the optional runtime is not installed. Weights will be cached, but`);
+    out(`running them needs \`npm install ${OPTIONAL_DEP}\`.`);
+    out("");
+  }
+
+  if (human) out(`Pulling ${provider.resolvedRow.modelId} @ ${provider.resolvedQuant} …`);
+  let lastPct = -1;
+  const result = await provider.pull((received, total) => {
+    if (!total) return;
+    const pct = Math.floor((received / total) * 100);
+    if (human && pct !== lastPct && pct % 5 === 0) {
+      lastPct = pct;
+      process.stderr.write(`\r  ${pct}%  (${fmtBytes(received)} / ${fmtBytes(total)})   `);
+    }
+  });
+  if (human) process.stderr.write("\n");
+
+  if (opts.json) {
+    out(JSON.stringify({ ...result, modelId: provider.resolvedRow.modelId, quant: provider.resolvedQuant }, null, 2));
+    return;
+  }
+  out(result.fromCache ? `Already cached: ${result.path}` : `Downloaded and cached: ${result.path}`);
+}
+
+// ── models status ────────────────────────────────────────────────────────────
+
+export async function handleModelsStatus(opts: ModelsOptions = {}): Promise<void> {
+  const device = detectDevice();
+  const dir = getCacheDir();
+  const quantPref = getQuantizationPreference();
+  const manifest = readManifest(dir);
+
+  const entries = Object.values(manifest.entries).map((e) => {
+    const status = isCached(dir, e.modelId, e.quant);
+    const integrity = status.cached ? verifyIntegrity(dir, e.modelId, e.quant) : { ok: false, reason: status.reason };
+    let sizeBytes = 0;
+    try {
+      if (status.cached) sizeBytes = statSync(status.path).size;
+    } catch {
+      /* file vanished between manifest read and stat */
+    }
+    return {
+      modelId: e.modelId,
+      quant: e.quant,
+      path: status.path,
+      present: status.cached,
+      sizeBytes,
+      checksum: integrity.ok ? "verified" : `invalid (${integrity.reason})`,
+    };
+  });
+
+  if (opts.json) {
+    return out(JSON.stringify({ cacheDir: dir, device, entries }, null, 2));
+  }
+
+  out(deviceLine(device));
+  out(`Cache dir: ${dir}`);
+  out("");
+  if (entries.length === 0) {
+    out("No models cached. Run `oxagen models pull` to download the resolved model.");
+  } else {
+    out("Cached weights:");
+    for (const e of entries) {
+      out(`  ${e.modelId} @ ${e.quant}`);
+      out(`    present:  ${e.present ? "yes" : "no"}  size: ${fmtBytes(e.sizeBytes)}`);
+      out(`    checksum: ${e.checksum}`);
+    }
+  }
+  out("");
+  out("Device fit (best quant per model):");
+  for (const row of capabilityTable()) {
+    const quant = bestFittingQuant(device, row, quantPref);
+    out(
+      `  ${row.modelId.padEnd(34)} ${quant ? `${quant} ~${estimateModelRamGB(row.params, quant)} GB` : "does not fit"}`,
+    );
+  }
+}
+
+// ── models use ───────────────────────────────────────────────────────────────
+
+export async function handleModelsUse(id: string): Promise<void> {
+  const known = [ON_DEVICE_ID, ...cloudModelIds()];
+  if (!known.includes(id)) {
+    out(`Unknown model id "${id}". Choose one of: ${known.join(", ")}.`);
+    process.exitCode = 1;
+    return;
+  }
+  setCoordinator(id);
+  out(`Coordinator set to "${id}".`);
+  if (id === ON_DEVICE_ID) {
+    const provider = new OnDeviceProvider();
+    if (!(await provider.isAvailable())) {
+      out(`Run \`oxagen models pull\` to download the on-device weights before your first turn.`);
+    }
+  }
+}
+
+// ── shared formatting ────────────────────────────────────────────────────────
+
+function deviceLine(device: DeviceProfile): string {
+  const gpu = device.gpu ? `${device.gpu}${device.unifiedMemory ? " (unified)" : ""}, ~${device.vramGB} GB VRAM` : "CPU only";
+  return `Device: ${device.ramGB} GB RAM, ${device.cpuCores} cores, ${gpu} — ~${round1(memoryBudgetGB(device))} GB usable for models`;
+}
+
+function fmtBytes(n: number): string {
+  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GB`;
+  if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)} MB`;
+  if (n >= 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${n} B`;
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
