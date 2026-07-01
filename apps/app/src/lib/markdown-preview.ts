@@ -32,7 +32,7 @@ export function markdownToPlainText(md: string): string {
   // Emphasis / bold / strikethrough markers.
   out = out.replace(/(\*\*|__)(.*?)\1/g, "$2");
   out = out.replace(/(\*|_)(.*?)\1/g, "$2");
-  out = out.replace(/~~(.*?)~~/g, "$2");
+  out = out.replace(/~~(.*?)~~/g, "$1");
   // Horizontal rules.
   out = out.replace(/^\s*([-*_])(?:\s*\1){2,}\s*$/gm, "");
   // Table pipes / separator rows → spaces.
