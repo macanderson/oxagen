@@ -327,7 +327,10 @@ describe("MemoriesBulkImport — review stage", () => {
       .mockResolvedValue({ ok: false, error: "You must be a workspace member to import memories." });
     await toReview([draft({ lesson: "Keep." })], [], commitImport);
 
-    fireEvent.click(screen.getByRole("button", { name: /import 1 memory/i }));
+    // findByRole (not getByRole): the review heading and the include-flagged
+    // drafts can land in separate renders, so the Import button's count settles
+    // a tick after the heading appears. Wait for the correctly-labelled button.
+    fireEvent.click(await screen.findByRole("button", { name: /import 1 memory/i }));
 
     expect(
       await screen.findByText("You must be a workspace member to import memories."),
@@ -381,7 +384,9 @@ describe("MemoriesBulkImport — result stage", () => {
     await screen.findByText("rules.md");
     fireEvent.click(screen.getByRole("button", { name: /parse documents/i }));
     await screen.findByText("Review draft memories");
-    fireEvent.click(screen.getByRole("button", { name: /import 2 memories/i }));
+    // findByRole: the Import button's selected-count label settles a render
+    // after the review heading appears (see the commit-fail test above).
+    fireEvent.click(await screen.findByRole("button", { name: /import 2 memories/i }));
     await screen.findByText("Import complete");
     return { onImported };
   }
