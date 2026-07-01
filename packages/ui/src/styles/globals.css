@@ -974,6 +974,92 @@
     );
     background-size: 22px 22px;
   }
+
+  /* ── Brand hero backdrop + ember button surfaces ─────────────────────────
+   * The canonical ember "hero" system, shared by the docs landing page and the
+   * app (auth, onboarding, in-app shell backdrop). A deliberate, brand-scoped
+   * exception to the flat-surface default: gradients/glow are permitted ONLY on
+   * these opt-in `.ox-hero-*` / `.ox-grad-*` helpers for hero + brand moments,
+   * never on stock surfaces. Every rule is inert unless a consumer opts in.
+   * Colours come from the ember mark primitives so the fill is theme-stable.
+   * Motion is auto-suppressed by the global prefers-reduced-motion kill-switch
+   * at the end of this file.
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  /* Ember gradient fill for CTAs (gold → flame → crimson). Literal fallbacks so
+     the fill renders regardless of which token scope is active. */
+  .ox-grad-surface {
+    background-image: linear-gradient(
+      100deg,
+      var(--_ember-gold, #f9d423) 0%,
+      var(--_ember-flame, #ff7e5f) 46%,
+      var(--_ember-crimson, #c2185b) 100%
+    );
+  }
+
+  /* The same ember sweep clipped to text — for accent words in headings. */
+  .ox-grad-text {
+    background-image: linear-gradient(
+      100deg,
+      var(--_ember-gold) 0%,
+      var(--_ember-flame) 46%,
+      var(--_ember-crimson) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* Ambient lattice the hero sits on — a 46px line grid faded by a radial mask
+     so it dissolves toward the edges. */
+  .ox-hero-grid {
+    background-image:
+      linear-gradient(to right, color-mix(in oklch, var(--foreground) 7%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklch, var(--foreground) 7%, transparent) 1px, transparent 1px);
+    background-size: 46px 46px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 38%, #000 0%, transparent 78%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 38%, #000 0%, transparent 78%);
+  }
+
+  /* A soft ember light source bleeding from behind the hero. */
+  .ox-hero-orb {
+    background: radial-gradient(
+      circle at center,
+      color-mix(in oklch, var(--_ember-flame) 38%, transparent) 0%,
+      color-mix(in oklch, var(--_ember-crimson) 16%, transparent) 40%,
+      transparent 70%
+    );
+    filter: blur(36px);
+    animation: ox-glow 9s ease-in-out infinite;
+  }
+
+  /* Slow bob/rotate for the HexField layer. */
+  .ox-hex-float {
+    animation: ox-float 14s ease-in-out infinite;
+  }
+
+  /* Lit hexagons breathe slowly, out of phase (per-cell animation-delay). */
+  .ox-hex-lit {
+    animation: ox-hexpulse 6s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+}
+
+/* Ember hero keyframes (paired with the .ox-hero-* / .ox-hex-* helpers above).
+   Suppressed by the global prefers-reduced-motion kill-switch below. */
+@keyframes ox-glow {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.08); }
+}
+@keyframes ox-hexpulse {
+  0%, 100% { opacity: 0.22; transform: scale(0.97); }
+  50% { opacity: 0.7; transform: scale(1.03); }
+}
+@keyframes ox-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-12px) rotate(1.5deg); }
 }
 
 /*

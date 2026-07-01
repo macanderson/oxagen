@@ -35,6 +35,7 @@ import {
   type ShellNavData,
 } from "./shell-nav-slots";
 import { Button } from "@/components/ui/button";
+import { HeroBackdrop } from "@/components/brand/hero-backdrop";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
 import { useSidebar } from "./sidebar-context";
 import type { ResolvedOrg, ResolvedWorkspace } from "@/lib/resolve-org";
@@ -89,7 +90,12 @@ export function ShellFrame({
   });
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-background md:gap-2 md:p-2">
+    <div className="relative isolate flex h-dvh w-full overflow-hidden bg-background md:gap-2 md:p-2">
+      {/* Ember hero backdrop — the same brand lattice as the docs/auth surfaces,
+          dialled down. Mostly hidden behind the floating sidebar + content
+          panels; it glows through the gap/padding sliver around them. */}
+      <HeroBackdrop intensity="ambient" />
+
       {/* Skip-to-main link — visually hidden until focused (WCAG 2.4.1). */}
       <a
         href="#main-content"
