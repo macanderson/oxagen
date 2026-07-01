@@ -23,3 +23,37 @@ export {
 } from "./survey.js";
 export { decideClarification, type ClarificationDecision, type ClarificationSignals } from "./decide.js";
 export { assistTools, createAssistToolSet, type AssistToolDeps } from "./tools.js";
+
+// ── Group 6 — the 5-step pipeline, plan tool, verify gate, unified config ────
+export {
+  Pipeline,
+  type PipelineCoordinator,
+  type PipelineDeps,
+  type PipelineRunInput,
+  type PipelineRunResult,
+  type StepResult,
+} from "./state-machine.js";
+export { runPlan, type PlanInput, type PlanOutput, type PlanTask } from "./plan.js";
+export {
+  GrepFallbackResolver,
+  type ContextResolver,
+  type GraphClient,
+  type GraphQueryInput,
+  type GraphResult,
+  type GrepFallbackDeps,
+  type GrepSearch,
+  type ImpactedFile,
+} from "./context-fallback.js";
+export {
+  defaultPipelineLogSink,
+  formatPipelineLine,
+  type PipelineLogEntry,
+  type PipelineLogSink,
+} from "./pipeline-logging.js";
+export {
+  InvalidPipelineConfigError,
+  loadUnifiedConfig,
+  validateUnifiedConfig,
+  type GraphConfig,
+  type UnifiedConfig,
+} from "./unified-config.js";
