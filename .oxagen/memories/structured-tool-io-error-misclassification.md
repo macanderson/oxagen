@@ -11,13 +11,13 @@ date: 2026-06-28
 (and vice-versa) for certain shapes.
 
 **Root cause:** lib/structured-tool-io.ts had its own `isErrorResult` using
-`typeof result === "object" && "error" in result`. That flags a *successful*
+`typeof result === "object" && "error" in result`. That flags a _successful_
 `{ error: null }` or `{ error: false }` as an error (the key is present) and
 misses the `{ isError: true }` convention entirely. It had diverged from the
 canonical heuristic in agent/loop.ts.
 
 **Fix:** align the local heuristic with loop.ts — Error instance, `isError ===
-true`, or a *present-and-truthy* `error` field. Added a zod schema
+true`, or a _present-and-truthy_ `error` field. Added a zod schema
 (`structuredToolResultSchema`) + `parseStructuredToolResult` so a record that
 crossed a trust boundary (IPC/daemon/disk) is validated, not cast blindly.
 (apps/cli/src/lib/structured-tool-io.ts)

@@ -247,6 +247,30 @@ export const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 export const insertExecutionLogs = (rows: readonly ExecutionLogRow[]) =>
   insertRows("execution_logs", rows);
 
+// ── Local dev console capture (tools/scripts/dev.ts) ──────────────────────────
+//
+// One row per line of `pnpm dev`'s combined turbo stream. Written fire-and-forget
+// from the dev orchestrator's log shipper so the terminal output that used to
+// vanish on scroll is queryable. Local-only; 14-day TTL (see schema.sql dev_logs).
+// No org/workspace scope — this is machine-level dev telemetry, not tenant data.
+export interface DevLogRow {
+  /** One id per `pnpm dev` invocation — groups a single session's stream. */
+  dev_session: string;
+  /** Emitting workspace, parsed from turbo's `pkg:task:` prefix (e.g. @oxagen/app). */
+  service: string;
+  /** "stdout" | "stderr". */
+  stream: string;
+  /** Heuristic level parsed from the line content. */
+  level: "debug" | "info" | "warn" | "error";
+  message: string;
+  /** ISO-8601; omit to let ClickHouse default the column to now64(3). */
+  ts?: string;
+  host?: string;
+}
+
+export const insertDevLogs = (rows: readonly DevLogRow[]) =>
+  insertRows("dev_logs", rows);
+
 export const insertEvents = (rows: readonly EventRow[]) => {
   const { trace_id, span_id } = currentTraceIds();
   return insertRows(

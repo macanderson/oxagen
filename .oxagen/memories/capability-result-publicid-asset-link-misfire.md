@@ -14,10 +14,12 @@ date: 2026-06-23
 **Why "Organization not found" (the second defect):** In prod the `/api/v1/assets/agt_…` request fell through the Next rewrite (`/api/v1/:path* → ${API}/v1/:path*`) to the org-scoped Hono API mounted at `/v1/:org_slug/:workspace_slug/*`. The org middleware (`apps/api/src/middleware/org.ts:35`) tried to resolve org slug `"assets"` → not found → threw HTTPException(404, "Organization not found"), which `apps/api/src/middleware/error.ts` serialized as `{"error":{"code":"not_found",…}}`. The local Next route `apps/app/src/app/api/v1/assets/[assetId]/route.ts` already maps a missing asset to a clean 404 text response — but the leak only happens when the request reaches the API rewrite (e.g. an env where the local route didn't catch).
 
 **Fix:**
+
 1. `packages/oxagen/src/capability-meta.ts` — `inferRecordTypeForField(field, value?)` now maps `publicId` → `asset` ONLY when the VALUE starts with the generated-asset prefix `gen_` (from `generated_assets` `idMixin("gen")`). Explicit `assetId`/`asset_id` fields stay asset-typed unconditionally. The heuristic scan in `resolveRecordLinks` passes the value so the gate applies.
 2. `apps/app/src/app/api/v1/assets/[assetId]/route.ts` — defense-in-depth: the catch maps GeneratedAssetNotFound/Forbidden → 404, and any UNEXPECTED error → a controlled plain-text 500 (`console.error` + `new Response("Internal Server Error", {status:500})`) instead of a bare `throw err`. A `<img>`/`<a>` consumer now never receives an unhandled throw or raw JSON.
 
 **Guard:**
+
 - `packages/oxagen/src/capability-meta.test.ts` — `inferRecordTypeForField("publicId","agt_…")` → null (and `cnv_`, `wrk_`, no-value all → null); `gen_` → asset. `resolveRecordLinks` of an agent-shaped output (`publicId: agt_…`) → `[]`; `gen_…` still links to `/api/v1/assets/gen_…`.
 - `packages/handlers/src/generated-asset.serve.test.ts` — an agent-prefixed id with no asset row → clean `GeneratedAssetNotFoundError`.
 

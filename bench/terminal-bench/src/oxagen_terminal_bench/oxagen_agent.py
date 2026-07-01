@@ -110,9 +110,7 @@ def _locate_bundle() -> Path:
     if override:
         p = Path(override).expanduser().resolve()
         if not p.is_file():
-            raise FileNotFoundError(
-                f"OXAGEN_CLI_BUNDLE points at a missing file: {p}"
-            )
+            raise FileNotFoundError(f"OXAGEN_CLI_BUNDLE points at a missing file: {p}")
         return p
 
     # Editable install (`uv pip install -e .`) keeps __file__ inside the repo:
@@ -190,7 +188,7 @@ class OxagenAgent(BaseInstalledAgent):
 
         # 2) Upload the self-contained bundle and install a tiny launcher.
         await environment.upload_file(bundle_path, _BUNDLE_REMOTE_TMP)
-        wrapper = '#!/bin/sh\\nexec node ' + _BUNDLE_INSTALL_PATH + ' "$@"\\n'
+        wrapper = "#!/bin/sh\\nexec node " + _BUNDLE_INSTALL_PATH + ' "$@"\\n'
         await self.exec_as_root(
             environment,
             command=(

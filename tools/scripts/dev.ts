@@ -1,9 +1,12 @@
 #!/usr/bin/env tsx
 import { execa } from "execa";
 import kleur from "kleur";
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { closeClickhouse } from "@oxagen/telemetry";
 import { computeEnvPins } from "./lib/pin-env";
+import { createDevLogShipper, type DevLogShipper } from "./lib/dev-log-shipper";
 import { startStripeTunnel } from "./stripe-tunnel";
 import { startInngestDevServer } from "./inngest-dev";
 import { formatError } from "./lib/format-error";
@@ -170,6 +173,30 @@ async function migrate(): Promise<void> {
   await execa("pnpm", ["db:migrate"], { stdio: "inherit" });
 }
 
+// Tee one of turbo's output streams: write every byte straight to our terminal
+// (preserving ANSI colors) AND hand each complete line to the ClickHouse shipper.
+function tapStream(
+  readable: NodeJS.ReadableStream | null,
+  out: NodeJS.WriteStream,
+  stream: "stdout" | "stderr",
+  shipper: DevLogShipper,
+): void {
+  if (!readable) return;
+  let buf = "";
+  readable.on("data", (chunk: Buffer) => {
+    out.write(chunk);
+    buf += chunk.toString("utf8");
+    let idx: number;
+    while ((idx = buf.indexOf("\n")) >= 0) {
+      shipper.push(stream, buf.slice(0, idx).replace(/\r$/, ""));
+      buf = buf.slice(idx + 1);
+    }
+  });
+  readable.on("end", () => {
+    if (buf.length > 0) shipper.push(stream, buf.replace(/\r$/, ""));
+  });
+}
+
 async function turbo(): Promise<void> {
   console.log(kleur.cyan("[dev] starting turbo dev"));
   // @oxagen/cli is an Ink commander that exits 1 without a subcommand, and
@@ -180,17 +207,44 @@ async function turbo(): Promise<void> {
   // persistent server to every `pnpm dev`. Invoke the cli ad-hoc via
   // `pnpm cli <command>`. Turbo 2 runs `persistent: true` tasks (see turbo.json)
   // in parallel by default — no --parallel flag needed.
-  await execa(
+  //
+  // We capture the combined output into the local ClickHouse `dev_logs` table so
+  // the compile/runtime errors that scroll past in the terminal stay queryable.
+  // That requires tapping the stream line-by-line, so we force turbo's `stream`
+  // UI (turbo.json defaults to the interactive `tui`, which repaints the screen
+  // and can't be tapped) and FORCE_COLOR so the teed terminal output stays
+  // colored. Every line is still written verbatim to this process's
+  // stdout/stderr — the only visible change is tui → prefixed stream lines.
+  const devSession = randomUUID();
+  console.log(
+    kleur.dim(`[dev] mirroring logs to ClickHouse dev_logs (session ${devSession})`),
+  );
+  const shipper = createDevLogShipper(devSession);
+
+  const sub = execa(
     "pnpm",
     [
       "turbo",
       "dev",
+      "--ui=stream",
       "--filter=!@oxagen/cli",
       "--filter=!@oxagen/env-manager",
       "--filter=!@oxagen/bench-web",
     ],
-    { stdio: "inherit" },
+    { stdin: "inherit", stdout: "pipe", stderr: "pipe", env: { FORCE_COLOR: "1" } },
   );
+
+  tapStream(sub.stdout, process.stdout, "stdout", shipper);
+  tapStream(sub.stderr, process.stderr, "stderr", shipper);
+
+  try {
+    await sub;
+  } finally {
+    // Flush the tail of the session and release the CH connection so the
+    // process can exit cleanly on Ctrl-C / turbo shutdown.
+    await shipper.close();
+    await closeClickhouse();
+  }
 }
 
 async function main(): Promise<void> {

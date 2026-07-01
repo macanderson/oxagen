@@ -7,6 +7,7 @@
 ## System Architecture
 
 ### Core Principle
+
 **Single Source of Truth:** Every feature is a capability contract in `packages/oxagen`, invoked through one kernel, exposed identically across all surfaces.
 
 ```
@@ -53,22 +54,22 @@
 
 ### Storage Decision Matrix
 
-| Data Type | PostgreSQL | Neo4j | ClickHouse |
-|-----------|-----------|-------|------------|
-| User accounts | ✅ | ❌ | ❌ |
-| Org/Workspace state | ✅ | ❌ | ❌ |
-| IAM roles/permissions | ✅ | ❌ | ❌ |
-| Billing ledger | ✅ | ❌ | ❌ |
-| Configuration | ✅ | ❌ | ❌ |
-| Entities (people, files, tickets) | ❌ | ✅ | ❌ |
-| Relationships/edges | ❌ | ✅ | ❌ |
-| Agent memory/context | ❌ | ✅ | ❌ |
-| Execution lineage | ❌ | ✅ | ❌ |
-| Vector embeddings | ❌ | ✅ | ❌ |
-| Audit events | ❌ | ❌ | ✅ |
-| Token usage | ❌ | ❌ | ✅ |
-| Performance metrics | ❌ | ❌ | ✅ |
-| Time-series data | ❌ | ❌ | ✅ |
+| Data Type                         | PostgreSQL | Neo4j | ClickHouse |
+| --------------------------------- | ---------- | ----- | ---------- |
+| User accounts                     | ✅         | ❌    | ❌         |
+| Org/Workspace state               | ✅         | ❌    | ❌         |
+| IAM roles/permissions             | ✅         | ❌    | ❌         |
+| Billing ledger                    | ✅         | ❌    | ❌         |
+| Configuration                     | ✅         | ❌    | ❌         |
+| Entities (people, files, tickets) | ❌         | ✅    | ❌         |
+| Relationships/edges               | ❌         | ✅    | ❌         |
+| Agent memory/context              | ❌         | ✅    | ❌         |
+| Execution lineage                 | ❌         | ✅    | ❌         |
+| Vector embeddings                 | ❌         | ✅    | ❌         |
+| Audit events                      | ❌         | ❌    | ✅         |
+| Token usage                       | ❌         | ❌    | ✅         |
+| Performance metrics               | ❌         | ❌    | ✅         |
+| Time-series data                  | ❌         | ❌    | ✅         |
 
 ---
 
@@ -112,16 +113,16 @@
 
 ### Package Dependency Matrix
 
-| Package | Depends On | Used By |
-|---------|-----------|---------|
-| **config** | - | Everything |
-| **tenancy** | config | database, handlers, apps |
-| **database** | config, tenancy, telemetry | handlers, apps |
-| **oxagen** | config, tenancy | Everything |
-| **handlers** | oxagen, database, all domains | apps |
-| **agent** | oxagen, handlers, database | apps/api, apps/app |
-| **apps/api** | handlers, agent, inngest-functions | - |
-| **apps/mcp** | oxagen, handlers | - |
+| Package      | Depends On                         | Used By                  |
+| ------------ | ---------------------------------- | ------------------------ |
+| **config**   | -                                  | Everything               |
+| **tenancy**  | config                             | database, handlers, apps |
+| **database** | config, tenancy, telemetry         | handlers, apps           |
+| **oxagen**   | config, tenancy                    | Everything               |
+| **handlers** | oxagen, database, all domains      | apps                     |
+| **agent**    | oxagen, handlers, database         | apps/api, apps/app       |
+| **apps/api** | handlers, agent, inngest-functions | -                        |
+| **apps/mcp** | oxagen, handlers                   | -                        |
 
 ---
 
@@ -232,12 +233,12 @@ Organization Roles:
   Owner (highest)
     ├─ All permissions
     └─ Billing management
-  
+
   Admin
     ├─ User management
     ├─ Workspace creation
     └─ Settings
-  
+
   Member (lowest)
     └─ Read-only org info
 
@@ -246,12 +247,12 @@ Workspace Roles:
     ├─ All workspace operations
     ├─ User management
     └─ Settings
-  
+
   Member
     ├─ Chat operations
     ├─ Agent interactions
     └─ Connector usage
-  
+
   Viewer (lowest)
     └─ Read-only access
 ```
@@ -266,21 +267,25 @@ Workspace Roles:
 defineContract({
   // Unique identifier (dot notation)
   name: 'domain.feature.action',
-  
+
   // Input/output schemas (Zod)
-  input: z.object({ /* ... */ }),
-  output: z.object({ /* ... */ }),
-  
+  input: z.object({
+    /* ... */
+  }),
+  output: z.object({
+    /* ... */
+  }),
+
   // Where exposed
   surfaces: ['api', 'mcp', 'agent', 'cli'],
-  
+
   // IAM defaults
   defaultEffect: 'deny', // or 'allow'
   sensitivity: 'medium', // 'low' | 'medium' | 'high'
-  
+
   // Billing
   noBillingGate: false, // true = skip credit check
-  
+
   // Default permissions
   defaultRoles: {
     org: {
@@ -294,7 +299,7 @@ defineContract({
       Viewer: 'deny',
     },
   },
-  
+
   // Metadata
   description: 'Human-readable description',
   tags: ['category', 'feature'],
@@ -303,12 +308,12 @@ defineContract({
 
 ### Surface Mapping
 
-| Surface | Entry Point | Protocol | Use Case |
-|---------|-------------|----------|----------|
-| **api** | `apps/api/src/routes/v1/` | HTTP REST | Web app, mobile, external integrations |
-| **mcp** | `apps/mcp/src/tools/` | MCP (stdio/HTTP) | IDE plugins, Claude Desktop, agents |
-| **agent** | `packages/agent/src/` | Internal | AI agent tool dispatch |
-| **cli** | `apps/cli/src/commands/` | Commander | Terminal, scripts, CI/CD |
+| Surface   | Entry Point               | Protocol         | Use Case                               |
+| --------- | ------------------------- | ---------------- | -------------------------------------- |
+| **api**   | `apps/api/src/routes/v1/` | HTTP REST        | Web app, mobile, external integrations |
+| **mcp**   | `apps/mcp/src/tools/`     | MCP (stdio/HTTP) | IDE plugins, Claude Desktop, agents    |
+| **agent** | `packages/agent/src/`     | Internal         | AI agent tool dispatch                 |
+| **cli**   | `apps/cli/src/commands/`  | Commander        | Terminal, scripts, CI/CD               |
 
 ### Handler Registration
 
@@ -555,7 +560,7 @@ LLM Response (streamed)
 async function materializeTools(context) {
   // Get all capabilities for this agent
   const capabilities = getAgentCapabilities(context.agentId);
-  
+
   // Filter by IAM permissions
   const allowed = [];
   for (const cap of capabilities) {
@@ -564,9 +569,9 @@ async function materializeTools(context) {
       allowed.push(cap);
     }
   }
-  
+
   // Convert to LLM tool format
-  return allowed.map(cap => ({
+  return allowed.map((cap) => ({
     type: 'function',
     function: {
       name: cap.name,
@@ -609,15 +614,17 @@ If capability.noBillingGate === false:
 
 ```typescript
 // Token cost formula
-const baseCost = (inputTokens * modelInputPrice) + (outputTokens * modelOutputPrice);
+const baseCost =
+  inputTokens * modelInputPrice + outputTokens * modelOutputPrice;
 const margin = baseCost * OXAGEN_TARGET_MARGIN;
 const markupPercent = OXAGEN_METER_MARKUP;
 const finalCost = (baseCost + margin) * (1 + markupPercent);
 
 // Discount tiers (usage-based)
 const discount = min(
-  (totalSpendUSD / OXAGEN_USAGE_DISCOUNT_INCREMENT) * OXAGEN_USAGE_DISCOUNT_PERCENT,
-  OXAGEN_USAGE_DISCOUNT_CEILING_USD
+  (totalSpendUSD / OXAGEN_USAGE_DISCOUNT_INCREMENT) *
+    OXAGEN_USAGE_DISCOUNT_PERCENT,
+  OXAGEN_USAGE_DISCOUNT_CEILING_USD,
 );
 
 const chargeAmount = finalCost - discount;
@@ -643,11 +650,11 @@ const chargeAmount = finalCost - discount;
 
 ### Test File Locations
 
-| Test Type | Location | Filename Pattern |
-|-----------|----------|------------------|
-| **Unit** | Next to source | `<file>.test.ts` |
-| **Integration** | Next to source | `<file>.integration.test.ts` |
-| **E2E** | `apps/app/e2e/` | `<feature>.spec.ts` |
+| Test Type       | Location        | Filename Pattern             |
+| --------------- | --------------- | ---------------------------- |
+| **Unit**        | Next to source  | `<file>.test.ts`             |
+| **Integration** | Next to source  | `<file>.integration.test.ts` |
+| **E2E**         | `apps/app/e2e/` | `<feature>.spec.ts`          |
 
 ### Test Setup Patterns
 
@@ -659,10 +666,10 @@ import { clearBillingAdmissionGate } from '@oxagen/billing';
 beforeEach(() => {
   // Reset kernel state
   clearHandlersForTests();
-  
+
   // Reset billing gate
   clearBillingAdmissionGate();
-  
+
   // Other resets as needed
 });
 ```
@@ -711,15 +718,18 @@ If ALLOW → continue
 ### Data Encryption
 
 **At Rest:**
+
 - PostgreSQL: TDE (Transparent Data Encryption)
 - Backups: AES-256
 - Secrets: Encrypted in `.env.local` (dev) or Vercel (prod)
 
 **In Transit:**
+
 - HTTPS (TLS 1.3)
 - Database connections: SSL required
 
 **Application-Level:**
+
 ```typescript
 import { encrypt, decrypt } from '@oxagen/crypto';
 
@@ -752,7 +762,7 @@ const workspaces = await db.query.workspaces.findMany({
 });
 
 // ✅ Batch query
-const workspaceIds = workspaces.map(w => w.id);
+const workspaceIds = workspaces.map((w) => w.id);
 const allMembers = await db.query.members.findMany({
   where: inArray(members.workspaceId, workspaceIds),
 });
@@ -817,15 +827,15 @@ External Services:
 
 ### Environment Variables by Service
 
-| Variable | API | App | MCP | CLI |
-|----------|-----|-----|-----|-----|
-| DATABASE_URL | ✅ | ✅ | ✅ | ❌ |
-| NEO4J_URI | ✅ | ✅ | ✅ | ❌ |
-| CLICKHOUSE_URL | ✅ | ✅ | ❌ | ❌ |
-| BETTER_AUTH_SECRET | ✅ | ✅ | ❌ | ❌ |
-| STRIPE_SECRET_KEY | ✅ | ❌ | ❌ | ❌ |
-| INNGEST_EVENT_KEY | ✅ | ❌ | ❌ | ❌ |
-| AI_GATEWAY_API_KEY | ✅ | ✅ | ✅ | ✅ |
+| Variable           | API | App | MCP | CLI |
+| ------------------ | --- | --- | --- | --- |
+| DATABASE_URL       | ✅  | ✅  | ✅  | ❌  |
+| NEO4J_URI          | ✅  | ✅  | ✅  | ❌  |
+| CLICKHOUSE_URL     | ✅  | ✅  | ❌  | ❌  |
+| BETTER_AUTH_SECRET | ✅  | ✅  | ❌  | ❌  |
+| STRIPE_SECRET_KEY  | ✅  | ❌  | ❌  | ❌  |
+| INNGEST_EVENT_KEY  | ✅  | ❌  | ❌  | ❌  |
+| AI_GATEWAY_API_KEY | ✅  | ✅  | ✅  | ✅  |
 
 ---
 
@@ -846,7 +856,7 @@ export async function handler(input: Input): Promise<Output> {
     { orgId: input.orgId, workspaceId: input.workspaceId },
     async (db) => {
       // Implementation
-    }
+    },
   );
 }
 ```
@@ -883,9 +893,7 @@ await db
   .where(eq(workspaces.id, workspaceId));
 
 // Delete
-await db
-  .delete(workspaces)
-  .where(eq(workspaces.id, workspaceId));
+await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
 ```
 
 ### React Server Component Template
@@ -914,24 +922,25 @@ async function DataComponent({ params }) {
 
 ## ADR Quick Reference
 
-| ADR | Decision | Rationale |
-|-----|----------|-----------|
-| [001](../docs/adr/ADR-001-drizzle-as-postgres-orm.md) | Drizzle ORM | Type-safe, minimal runtime, migration-first |
-| [002](../docs/adr/ADR-002-inngest-as-job-orchestration.md) | Inngest for jobs | Durable, observable, retryable workflows |
-| [003](../docs/adr/ADR-003-neo4j-as-vector-store.md) | Neo4j for graph | Graph queries + vectors in one store |
-| [004](../docs/adr/ADR-004-env-vars-not-secret-manager.md) | Env vars | Simpler, portable, version-controlled |
-| [005](../docs/adr/ADR-005-single-version-monorepo.md) | Single version | Eliminates version drift, simpler CI |
-| [006](../docs/adr/ADR-006-better-auth-bound-to-canonical-users.md) | Better Auth | Auth tables bound to canonical users |
-| [007](../docs/adr/ADR-007-docker-as-code-sandbox.md) | Docker sandbox | Vendor-neutral, portable |
-| [009](../docs/adr/ADR-009-unified-capability-tool-model.md) | Unified capability model | Single source of truth, no drift |
-| [012](../docs/adr/ADR-012-connector-dual-write-pattern.md) | Dual-write pattern | Postgres + Neo4j consistency |
-| [015](../docs/adr/ADR-015-graph-edge-driven-git-hooks-and-biome.md) | Import-graph hooks | Only test affected code |
+| ADR                                                                 | Decision                 | Rationale                                   |
+| ------------------------------------------------------------------- | ------------------------ | ------------------------------------------- |
+| [001](../docs/adr/ADR-001-drizzle-as-postgres-orm.md)               | Drizzle ORM              | Type-safe, minimal runtime, migration-first |
+| [002](../docs/adr/ADR-002-inngest-as-job-orchestration.md)          | Inngest for jobs         | Durable, observable, retryable workflows    |
+| [003](../docs/adr/ADR-003-neo4j-as-vector-store.md)                 | Neo4j for graph          | Graph queries + vectors in one store        |
+| [004](../docs/adr/ADR-004-env-vars-not-secret-manager.md)           | Env vars                 | Simpler, portable, version-controlled       |
+| [005](../docs/adr/ADR-005-single-version-monorepo.md)               | Single version           | Eliminates version drift, simpler CI        |
+| [006](../docs/adr/ADR-006-better-auth-bound-to-canonical-users.md)  | Better Auth              | Auth tables bound to canonical users        |
+| [007](../docs/adr/ADR-007-docker-as-code-sandbox.md)                | Docker sandbox           | Vendor-neutral, portable                    |
+| [009](../docs/adr/ADR-009-unified-capability-tool-model.md)         | Unified capability model | Single source of truth, no drift            |
+| [012](../docs/adr/ADR-012-connector-dual-write-pattern.md)          | Dual-write pattern       | Postgres + Neo4j consistency                |
+| [015](../docs/adr/ADR-015-graph-edge-driven-git-hooks-and-biome.md) | Import-graph hooks       | Only test affected code                     |
 
 ---
 
 ## Quick Debugging Checklist
 
 ### Issue: "Database connection failed"
+
 ```bash
 docker ps | grep postgres
 docker logs oxagen-postgres-1
@@ -940,6 +949,7 @@ pnpm env:check
 ```
 
 ### Issue: "Tenant scope error"
+
 ```typescript
 // Missing wrapper
 await runInTenantScope({ orgId, workspaceId }, async (db) => {
@@ -948,18 +958,21 @@ await runInTenantScope({ orgId, workspaceId }, async (db) => {
 ```
 
 ### Issue: "Manifest check failed"
+
 ```bash
 pnpm check:manifest
 # Add capability to MCP or adjust surfaces
 ```
 
 ### Issue: "Coverage dropped"
+
 ```bash
 pnpm test:coverage
 # Add tests or update threshold
 ```
 
 ### Issue: "Build failed"
+
 ```bash
 pnpm clean:cache
 rm -rf node_modules/.cache
@@ -970,4 +983,5 @@ pnpm build
 ---
 
 ## Version: 0.5.0
+
 **Last Updated:** June 2024

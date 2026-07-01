@@ -113,6 +113,7 @@ pnpm db:atlas-validate
 ## Critical Patterns
 
 ### Tenant Scoping (ALWAYS)
+
 ```typescript
 import { runInTenantScope } from '@oxagen/tenancy';
 
@@ -122,6 +123,7 @@ await runInTenantScope({ orgId, workspaceId }, async (db) => {
 ```
 
 ### Component Imports (RE-EXPORT LAYER)
+
 ```typescript
 // ✅ Correct
 import { Button } from '@/components/ui/button';
@@ -131,6 +133,7 @@ import { Button } from '@oxagen/ui/components/button';
 ```
 
 ### Test Setup
+
 ```typescript
 import { beforeEach } from 'vitest';
 import { clearHandlersForTests } from '@oxagen/oxagen';
@@ -146,12 +149,12 @@ beforeEach(() => {
 
 ## Storage Decision
 
-| Data Type | Use |
-|-----------|-----|
+| Data Type                | Use        |
+| ------------------------ | ---------- |
 | User/Org/Workspace state | PostgreSQL |
-| IAM/Billing/Config | PostgreSQL |
-| Entities/Relationships | Neo4j |
-| Agent memory/context | Neo4j |
+| IAM/Billing/Config       | PostgreSQL |
+| Entities/Relationships   | Neo4j      |
+| Agent memory/context     | Neo4j      |
 | Audit events/Token usage | ClickHouse |
 
 ---
@@ -205,29 +208,29 @@ pnpm dev
 
 ## Common Errors
 
-| Error | Fix |
-|-------|-----|
-| TenantScopeError | Add `runInTenantScope` wrapper |
-| Contract not found | Add to barrel export |
-| Handler not registered | Register in `register.ts` |
-| Manifest check failed | Sync surfaces or adjust |
-| Coverage dropped | Add tests |
-| Direct import lint error | Use re-export layer |
+| Error                    | Fix                            |
+| ------------------------ | ------------------------------ |
+| TenantScopeError         | Add `runInTenantScope` wrapper |
+| Contract not found       | Add to barrel export           |
+| Handler not registered   | Register in `register.ts`      |
+| Manifest check failed    | Sync surfaces or adjust        |
+| Coverage dropped         | Add tests                      |
+| Direct import lint error | Use re-export layer            |
 
 ---
 
 ## IAM Defaults
 
 ```typescript
-defaultEffect: 'deny'      // Most capabilities
-defaultEffect: 'allow'     // Only for public reads
+defaultEffect: 'deny'; // Most capabilities
+defaultEffect: 'allow'; // Only for public reads
 
-sensitivity: 'high'        // PII, financial, admin
-sensitivity: 'medium'      // User data, business logic
-sensitivity: 'low'         // Public info, read-only
+sensitivity: 'high'; // PII, financial, admin
+sensitivity: 'medium'; // User data, business logic
+sensitivity: 'low'; // Public info, read-only
 
-noBillingGate: true        // Settings/mgmt (no AI)
-noBillingGate: false       // AI-powered features
+noBillingGate: true; // Settings/mgmt (no AI)
+noBillingGate: false; // AI-powered features
 ```
 
 ---
@@ -250,7 +253,9 @@ const workspaces = await db.query.workspaces.findMany({
 // ❌ Overfetch
 const workspace = await db.query.workspaces.findFirst({
   where: eq(workspaces.id, id),
-  with: { /* everything */ },
+  with: {
+    /* everything */
+  },
 });
 
 // ✅ Select only needed
