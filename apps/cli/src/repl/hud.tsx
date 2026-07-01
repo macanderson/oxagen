@@ -20,7 +20,7 @@ import {
   type RunningAgent,
 } from "../agent/agent-registry.js";
 
-/** Glyph + colour per status, matching the fleet-view vocabulary. */
+/** Glyph + color per status, matching the fleet-view vocabulary. */
 function statusStyle(status: AgentStatus): { glyph: string; color: string } {
   switch (status) {
     case "running":

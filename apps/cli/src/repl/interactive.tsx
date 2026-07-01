@@ -175,7 +175,7 @@ export function ReplApp({
   // by a wall clock (Bug 1). A ref (not state) so streaming deltas don't thrash
   // React; the indicator polls it on its own 100ms tick.
   const lastProgressRef = useRef<number | null>(null);
-  // Diff colour theme, matched once to the terminal background (light diff on a
+  // Diff color theme, matched once to the terminal background (light diff on a
   // light terminal, dark on dark) — Feature C. Detection is cheap + synchronous.
   const diffThemeRef = useRef(diffThemeFor(detectTerminalBackground()));
   // When the active turn began (drives the thinking indicator); null when idle.

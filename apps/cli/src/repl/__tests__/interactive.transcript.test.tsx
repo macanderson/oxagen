@@ -9,11 +9,12 @@
  * messages to Ink's <Static>, which writes each line to the terminal's real
  * scrollback exactly once (never re-diffed).
  *
- * These tests lock both halves of the fix:
- *   1. The REPL never emits the alternate-screen switch (…[?1049h/l), so the
- *      terminal's native scrollback stays live.
- *   2. Finalized assistant answers are committed to the transcript output (the
- *      Static scrollback path), i.e. they still render.
+ * These tests lock the scrollback half of the fix: finalized assistant answers
+ * are committed to the transcript output (the Static scrollback path), i.e. they
+ * still render, exactly once. The other half — the REPL never switching to the
+ * alternate screen — is locked deterministically in interactive.launch.test.tsx
+ * by asserting Ink's render options (inline mode) rather than scraping frames for
+ * the `?1049h` DECSET, which couples to Ink's global TTY/CI heuristics and flakes.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render } from "ink-testing-library";
@@ -101,16 +102,6 @@ async function waitFor(cond: () => boolean, ms = 3000): Promise<void> {
 describe("REPL transcript rendering (Static, no alt screen)", () => {
   beforeEach(() => {
     runTurnSpy.mockClear();
-  });
-
-  it("never switches to the alternate screen — native scrollback stays available", async () => {
-    const { frames, unmount } = render(<ReplApp options={{ session: TEST_SESSION }} />);
-    await tick(80);
-    const all = frames.join("");
-    // The alternate-screen enter/leave DECSET (…?1049h / …?1049l) must never be
-    // written: it is what disabled scrollback and (over-height) garbled redraws.
-    expect(all).not.toContain("1049");
-    unmount();
   });
 
   it("commits a finalized assistant answer to the transcript output", async () => {
