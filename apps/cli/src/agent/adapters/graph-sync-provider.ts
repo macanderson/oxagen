@@ -14,6 +14,7 @@
  * files generates a single push rather than one-per-file.
  */
 import type { GraphSyncProvider } from "@oxagen/agent-engine";
+import { debugLog } from "../../lib/debug-log.js";
 
 export interface GraphSyncOptions {
   apiUrl: string;
@@ -92,7 +93,22 @@ async function pushLineage(opts: GraphSyncOptions, entry: PendingLineage): Promi
     properties: { source: "cli" },
   }));
 
-  await fetch(
+  const payload = {
+    source: "lineage",
+    idempotencyKey: `lineage:cli:${executionId}`,
+    nodes,
+    edges,
+  };
+
+  // When OXAGEN_CLI_DEBUG=1, record the exact lineage telemetry synced back to
+  // the workspace graph (this path bypasses lib/api.ts with a raw fetch).
+  void debugLog("graph-sync", "lineage.push.request", {
+    executionId,
+    touchedCount: touchedFiles.length,
+    payload,
+  });
+
+  const res = await fetch(
     `${opts.apiUrl}/v1/${opts.orgSlug}/${opts.workspaceSlug}/graph/sync/push`,
     {
       method: "POST",
@@ -100,12 +116,13 @@ async function pushLineage(opts: GraphSyncOptions, entry: PendingLineage): Promi
         "Content-Type": "application/json",
         Authorization: `Bearer ${opts.token}`,
       },
-      body: JSON.stringify({
-        source: "lineage",
-        idempotencyKey: `lineage:cli:${executionId}`,
-        nodes,
-        edges,
-      }),
+      body: JSON.stringify(payload),
     },
   );
+
+  void debugLog("graph-sync", "lineage.push.response", {
+    executionId,
+    status: res.status,
+    ok: res.ok,
+  });
 }

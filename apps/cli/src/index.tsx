@@ -28,9 +28,17 @@ import { buildProgram } from "./program.js";
 
 async function main(): Promise<void> {
   // Project settings.json (env, apiUrl, model) into the environment before any
-  // command runs — filling only unset vars, so the shell always wins.
+  // command runs — filling only unset vars, so the shell always wins. This is
+  // also what lets `OXAGEN_CLI_DEBUG=1` be enabled from settings.json `env`.
   const { applySettingsToEnv } = await import("./settings/runtime.js");
   applySettingsToEnv();
+  // When OXAGEN_CLI_DEBUG=1, record the invocation to ~/.oxagen/logs/cli.output
+  // before dispatching. Fire-and-forget: never blocks or breaks a command.
+  const { debugLog } = await import("./lib/debug-log.js");
+  void debugLog("invoke", "cli.start", {
+    argv: process.argv.slice(2),
+    cwd: process.cwd(),
+  });
   await buildProgram().parseAsync(process.argv);
 }
 
