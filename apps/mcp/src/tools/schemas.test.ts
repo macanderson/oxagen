@@ -138,18 +138,20 @@ describe("agent.memory.recall schema", () => {
 
   it("accepts a minimal valid payload", () => {
     const result = Schema.parse({ query: "user preferences" });
-    expect(result.minWeight).toBe("high"); // default
+    expect(result.memoryClass).toBeUndefined();
     expect(result.limit).toBe(10); // default
   });
 
   it("accepts a fully-specified payload", () => {
     const result = Schema.parse({
       query: "recent tasks",
-      minWeight: "critical",
+      memoryClass: "RULE",
+      minEnforcement: 80,
       limit: 25,
       nodeRef: "node-abc",
     });
-    expect(result.minWeight).toBe("critical");
+    expect(result.memoryClass).toBe("RULE");
+    expect(result.minEnforcement).toBe(80);
     expect(result.limit).toBe(25);
     expect(result.nodeRef).toBe("node-abc");
   });
@@ -166,8 +168,12 @@ describe("agent.memory.recall schema", () => {
     expect(() => Schema.parse({ query: "q", limit: 0 })).toThrow();
   });
 
-  it("rejects an invalid minWeight value", () => {
-    expect(() => Schema.parse({ query: "q", minWeight: "medium" })).toThrow();
+  it("rejects an invalid memoryClass value", () => {
+    expect(() => Schema.parse({ query: "q", memoryClass: "MEDIUM" })).toThrow();
+  });
+
+  it("rejects a minEnforcement above 100", () => {
+    expect(() => Schema.parse({ query: "q", minEnforcement: 101 })).toThrow();
   });
 });
 

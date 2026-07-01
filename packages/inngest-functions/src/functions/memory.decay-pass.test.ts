@@ -19,13 +19,11 @@ vi.mock("@oxagen/database", () => ({
   withSystemDb: mocks.withSystemDb,
   schema: {
     workspaces: { id: "id" },
-    workspaceMemoryPolicy: { workspaceId: "workspace_id" },
   },
 }));
 
 vi.mock("drizzle-orm", () => ({
   asc: vi.fn((col: unknown) => col),
-  eq: vi.fn((...args: unknown[]) => args),
   gt: vi.fn((...args: unknown[]) => args),
 }));
 
@@ -72,23 +70,41 @@ function makeStep(): StepCtx {
 
 // ── DB tx factories ───────────────────────────────────────────────────────────
 interface WorkspaceRow { id: string; orgId: string }
-interface PolicyRow {
-  halfLifeLowDays: number | null;
-  halfLifeHighDays: number | null;
-}
 
-function makeSystemTx(workspaceRows: WorkspaceRow[], policyRow?: PolicyRow) {
+function makeSystemTx(workspaceRows: WorkspaceRow[]) {
   const workspacesFindMany = vi.fn().mockResolvedValue(workspaceRows);
-  const policyFindMany = vi.fn().mockResolvedValue(policyRow ? [policyRow] : []);
 
   const tx = {
     query: {
       workspaces: { findMany: workspacesFindMany },
-      workspaceMemoryPolicy: { findMany: policyFindMany },
     },
   };
 
-  return { tx, workspacesFindMany, policyFindMany };
+  return { tx, workspacesFindMany };
+}
+
+// ── decayable-memory fixture builder ─────────────────────────────────────────
+interface DecayableMemoryFixture {
+  id: string;
+  confidenceScore: number;
+  halfLifeDays: number;
+  decayFloor: number;
+  lastEvidenceAt: string | null;
+  createdAt: string;
+  nodeRef: string;
+}
+
+function makeMemory(overrides: Partial<DecayableMemoryFixture> = {}): DecayableMemoryFixture {
+  return {
+    id: "mem-default",
+    confidenceScore: 90,
+    halfLifeDays: 90,
+    decayFloor: 5,
+    lastEvidenceAt: null,
+    createdAt: "2025-01-01T00:00:00.000Z",
+    nodeRef: "",
+    ...overrides,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -127,27 +143,7 @@ describe("memoryDecayPass Inngest handler", () => {
     expect(mocks.applyDecayToMemory).not.toHaveBeenCalled();
   });
 
-  it("skips critical memories (halfLifeForWeight returns null)", async () => {
-    const { tx } = makeSystemTx([{ id: "ws-1", orgId: "org-1" }]);
-    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
-    mocks.listDecayableMemories.mockResolvedValue([
-      {
-        id: "mem-1",
-        weight: "critical",
-        confidence: 0.95,
-        createdAt: "2020-01-01T00:00:00.000Z",
-        lastReinforcedAt: null,
-        nodeRef: null,
-      },
-    ]);
-
-    const result = await capturedHandler!({ step: makeStep() });
-
-    expect(result).toEqual({ totalDecayed: 0 });
-    expect(mocks.applyDecayToMemory).not.toHaveBeenCalled();
-  });
-
-  it("decays a high-weight memory created long ago and returns totalDecayed:1", async () => {
+  it("decays a memory created long ago using its own half-life/decay-floor and returns totalDecayed:1", async () => {
     // Pin time so decay is deterministic
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-27T04:00:00.000Z"));
@@ -155,16 +151,18 @@ describe("memoryDecayPass Inngest handler", () => {
     const { tx } = makeSystemTx([{ id: "ws-2", orgId: "org-2" }]);
     mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
 
-    // Created 543 days ago → massive decay for high (halfLife=90 days)
+    // Created 543 days ago, halfLife=90 days, confidenceScore=90 (0-100 scale),
+    // decayFloor=5 → massive decay toward the floor.
     mocks.listDecayableMemories.mockResolvedValue([
-      {
+      makeMemory({
         id: "mem-2",
-        weight: "high",
-        confidence: 0.9,
+        confidenceScore: 90,
+        halfLifeDays: 90,
+        decayFloor: 5,
         createdAt: "2025-01-01T00:00:00.000Z",
-        lastReinforcedAt: null,
+        lastEvidenceAt: null,
         nodeRef: "entity-1",
-      },
+      }),
     ]);
 
     const result = await capturedHandler!({ step: makeStep() });
@@ -174,6 +172,54 @@ describe("memoryDecayPass Inngest handler", () => {
     expect(mocks.applyDecayToMemory).toHaveBeenCalledWith(
       expect.objectContaining({ memoryId: "mem-2" }),
     );
+
+    // new_conf = floor + (conf - floor) * 0.5^(daysSince/halfLife)
+    //          = 5 + 85 * 0.5^(543/90) ≈ 6.3
+    const { newConfidence } = mocks.applyDecayToMemory.mock.calls[0]![0] as {
+      newConfidence: number;
+    };
+    expect(newConfidence).toBeGreaterThan(5);
+    expect(newConfidence).toBeLessThan(10);
+
+    // Telemetry: confidence axis moved, enforcement axis untouched (decay
+    // never touches enforcement).
+    expect(mocks.insertMemoryChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        memory_id: "mem-2",
+        cause: "decayed",
+        confidence_before: 90,
+        enforcement_before: 0,
+        enforcement_after: 0,
+      }),
+    );
+  });
+
+  it("never decays below the memory's own decay_floor", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-27T04:00:00.000Z"));
+
+    const { tx } = makeSystemTx([{ id: "ws-floor", orgId: "org-floor" }]);
+    mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
+
+    // Extremely old memory — decay curve asymptotically approaches the floor
+    // but must never go below it.
+    mocks.listDecayableMemories.mockResolvedValue([
+      makeMemory({
+        id: "mem-floor",
+        confidenceScore: 40,
+        halfLifeDays: 30,
+        decayFloor: 12,
+        createdAt: "2000-01-01T00:00:00.000Z",
+        lastEvidenceAt: null,
+      }),
+    ]);
+
+    await capturedHandler!({ step: makeStep() });
+
+    const { newConfidence } = mocks.applyDecayToMemory.mock.calls[0]![0] as {
+      newConfidence: number;
+    };
+    expect(newConfidence).toBeGreaterThanOrEqual(12);
   });
 
   it("skips memory when confidence change is below epsilon (0.001)", async () => {
@@ -184,16 +230,16 @@ describe("memoryDecayPass Inngest handler", () => {
     const { tx } = makeSystemTx([{ id: "ws-3", orgId: "org-3" }]);
     mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(tx));
 
-    // lastReinforcedAt is only 1 minute ago — epsilon check should skip it
+    // lastEvidenceAt is only 1 minute ago — epsilon check should skip it
     mocks.listDecayableMemories.mockResolvedValue([
-      {
+      makeMemory({
         id: "mem-3",
-        weight: "high",
-        confidence: 0.9,
+        confidenceScore: 90,
+        halfLifeDays: 90,
+        decayFloor: 5,
         createdAt: "2026-06-27T03:59:00.000Z",
-        lastReinforcedAt: "2026-06-27T03:59:00.000Z", // 1 minute ago
-        nodeRef: null,
-      },
+        lastEvidenceAt: "2026-06-27T03:59:00.000Z", // 1 minute ago
+      }),
     ]);
 
     const result = await capturedHandler!({ step: makeStep() });
@@ -232,19 +278,9 @@ describe("memoryDecayPass Inngest handler", () => {
     const tx1 = makeSystemTx(page1);
     const tx2 = makeSystemTx(page2);
 
-    // Each withSystemDb call may be for workspaces OR for policy.
-    // We simulate two pagination pages by making the workspaces.findMany
-    // return different values on sequential calls via distinct tx objects.
     let callCount = 0;
     mocks.withSystemDb.mockImplementation(async (fn: (tx: unknown) => unknown) => {
-      // The decay-pass step calls withSystemDb once per page for workspaces
-      // and once per workspace for policy. We return page1 for the 1st
-      // workspaces query, empty policy for all policy queries, then page2.
-      const rawTx = callCount === 0
-        ? tx1.tx
-        : callCount === 1
-          ? makeSystemTx([]).tx     // policy for ws-0 (using defaults)
-          : tx2.tx;
+      const rawTx = callCount === 0 ? tx1.tx : tx2.tx;
       callCount++;
       return fn(rawTx);
     });

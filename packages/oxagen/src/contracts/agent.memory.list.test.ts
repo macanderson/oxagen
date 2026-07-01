@@ -8,20 +8,23 @@ describe("agent.memory.list capability", () => {
     expect(parsed.limit).toBe(100);
     expect(parsed.offset).toBe(0);
     expect(parsed.nodeRef).toBeUndefined();
-    expect(parsed.minWeight).toBeUndefined();
-    expect(parsed.kind).toBeUndefined();
+    expect(parsed.memoryClass).toBeUndefined();
+    expect(parsed.memoryKind).toBeUndefined();
+    expect(parsed.minEnforcement).toBeUndefined();
   });
 
   it("accepts the optional filters", () => {
     const parsed = agentMemoryList.input.parse({
       nodeRef: "user:mac-anderson",
-      minWeight: "critical",
-      kind: "gotcha",
+      memoryClass: "RULE",
+      memoryKind: "gotcha",
+      minEnforcement: 50,
       limit: 25,
       offset: 50,
     });
-    expect(parsed.minWeight).toBe("critical");
-    expect(parsed.kind).toBe("gotcha");
+    expect(parsed.memoryClass).toBe("RULE");
+    expect(parsed.memoryKind).toBe("gotcha");
+    expect(parsed.minEnforcement).toBe(50);
     expect(parsed.limit).toBe(25);
     expect(parsed.offset).toBe(50);
   });
@@ -34,9 +37,13 @@ describe("agent.memory.list capability", () => {
     expect(() => agentMemoryList.input.parse({ offset: -1 })).toThrow();
   });
 
-  it("rejects an unknown weight and an unknown kind", () => {
-    expect(() => agentMemoryList.input.parse({ minWeight: "medium" })).toThrow();
-    expect(() => agentMemoryList.input.parse({ kind: "note" })).toThrow();
+  it("rejects an unknown memoryClass", () => {
+    expect(() => agentMemoryList.input.parse({ memoryClass: "MAYBE" })).toThrow();
+  });
+
+  it("rejects a minEnforcement out of the 1-100 range", () => {
+    expect(() => agentMemoryList.input.parse({ minEnforcement: 0 })).toThrow();
+    expect(() => agentMemoryList.input.parse({ minEnforcement: 101 })).toThrow();
   });
 
   it("parses a valid output", () => {
@@ -46,11 +53,24 @@ describe("agent.memory.list capability", () => {
           id: "mem_1",
           publicId: "pub_1",
           nodeRef: "user:mac-anderson",
-          weight: "high",
-          kind: "constraint",
+          memoryClass: "OBSERVATION",
+          memoryKind: "constraint",
           lesson: "The user's name is Mac Anderson.",
           source: "feature",
-          confidence: 1,
+          confidenceScore: 100,
+          enforcementScore: null,
+          status: "ACTIVE",
+          subjectHint: "user:mac-anderson",
+          halfLifeDays: 30,
+          decayFloor: 5,
+          lastEvidenceAt: new Date().toISOString(),
+          citationCount: 0,
+          influenceCount: 0,
+          violationCount: 0,
+          createdByKind: "AGENT",
+          createdById: "feature",
+          confirmedByKind: null,
+          confirmedById: null,
           createdAt: new Date().toISOString(),
           lastReinforcedAt: null,
         },

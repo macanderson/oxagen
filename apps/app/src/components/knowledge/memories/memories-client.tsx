@@ -3,31 +3,56 @@
 /**
  * MemoriesClient — AgentMemory browser for the Knowledge → Memories tab.
  *
- * Renders the list of :AgentMemory nodes written to Neo4j by agent.memory.write.
+ * Renders the list of :AgentMemory nodes written to Neo4j by agent.memory.write,
+ * on the two-axis memory model (see docs/specs/two-axis-memory/DESIGN.md):
+ *   - memoryClass: epistemic status — OBSERVATION → RULE → FACT
+ *   - memoryKind: content domain (open string; recommended set + free text)
+ *   - confidenceScore (0-100): evidence measure, auto-decays
+ *   - enforcementScore (1-100 | null): policy strength; null for OBSERVATION,
+ *     1-100 for RULE, always 100 for FACT
+ *
  * Features:
- * - Filter by memory kind (5 kinds), min-confidence slider, text search
- * - Row: lesson (primary), kind badge, weight badge, confidence bar, createdAt, source, nodeRef
+ * - Filter by class, kind, min-confidence slider, text search
+ * - Row: lesson (primary), kind badge, class badge, confidence bar, createdAt, source, nodeRef
+ * - "Suggested to promote" panel: top OBSERVATIONs by citation pressure, with a
+ *   one-click inline promote flow
  * - Click a row to open a detail sheet with all metadata
- * - Detail sheet: edit lesson/kind/salience (weight+confidence)/source via updateMemory action
+ * - Detail sheet: edit lesson/kind/confidence/enforcement/source/status via
+ *   updateMemory action; promote OBSERVATION → RULE/FACT via promoteMemory
  * - Detail sheet: delete with a two-step confirm via deleteMemory action
- * - Stats row with per-kind counts
+ * - Stats row with per-class counts
  * - Empty state with helpful guidance
  */
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowUpCircle,
+  BadgeCheck,
+  Bug,
   BrainCircuit,
-  Filter,
-  Clock,
-  Fingerprint,
   ChevronRight,
-  Search,
-  X,
+  Clock,
   Copy,
+  Eye,
+  Filter,
+  FileText,
+  Fingerprint,
+  Gauge,
+  Heart,
+  Lock,
+  Mic,
+  Palette,
   Pencil,
-  Trash2,
   Plus,
+  RefreshCw,
+  Search,
+  ShieldAlert,
+  Sparkles,
+  Trash2,
   Upload,
+  X,
+  Zap,
+  MessageSquare,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,20 +90,71 @@ export {
 } from "./memory-kinds";
 
 // ---------------------------------------------------------------------------
-// Types — mirrors AgentMemoryRecord from @oxagen/oxagen/contracts/agent.memory.list
+// Types — structural mirror of AgentMemoryRecord from
+// @oxagen/oxagen/contracts/agent.memory.list (agent.memory.model is the single
+// source of truth). Mirrored locally rather than imported so this "use client"
+// file never pulls the server contracts/zod bundle in — see agent.memory.model.
 // ---------------------------------------------------------------------------
 
-interface AgentMemoryRecord {
+export type MemoryClass = "OBSERVATION" | "RULE" | "FACT";
+export type MemoryStatus = "ACTIVE" | "SUPERSEDED" | "RETRACTED" | "ARCHIVED";
+type ActorKind = "AGENT" | "USER" | "SYSTEM";
+
+// Canonical content-domain kinds (agent.memory.model#RECOMMENDED_MEMORY_KINDS).
+// memoryKind is an open string — these are suggestions, not a closed enum.
+export const RECOMMENDED_MEMORY_KINDS = [
+  "FEEDBACK",
+  "PERFORMANCE",
+  "STYLE",
+  "PREFERENCE",
+  "VOICE",
+  "PROSE",
+  "routine-change",
+  "constraint",
+  "bug-root-cause",
+  "convention-deviation",
+  "gotcha",
+] as const;
+
+export interface AgentMemoryRecord {
   id: string;
   publicId: string;
   nodeRef: string;
-  weight: MemoryWeight;
-  kind: string;
+  memoryClass: MemoryClass;
+  memoryKind: string;
   lesson: string;
   source: string;
-  confidence: number;
+  /** 0-100. Evidence measure; auto-decays. */
+  confidenceScore: number;
+  /** 1-100 for RULE, 100 for FACT, null for OBSERVATION. */
+  enforcementScore: number | null;
+  status: MemoryStatus;
+  subjectHint: string;
+  halfLifeDays: number;
+  decayFloor: number;
+  lastEvidenceAt: string | null;
+  citationCount: number;
+  influenceCount: number;
+  violationCount: number;
+  createdByKind: ActorKind;
+  createdById: string | null;
+  confirmedByKind: ActorKind | null;
+  confirmedById: string | null;
   createdAt: string;
   lastReinforcedAt: string | null;
+}
+
+/** A promotion candidate from agent.memory.promotion.candidates — a slimmer
+ * projection than the full record (id/lesson/kind + the citation-pressure
+ * signals that make it a candidate). */
+export interface PromotionCandidate {
+  id: string;
+  publicId: string;
+  lesson: string;
+  memoryKind: string;
+  citationCount: number;
+  influenceCount: number;
+  confidenceScore: number;
 }
 
 // Action result shapes (structural mirror of the server action exports — avoids
@@ -95,6 +171,23 @@ type DeleteMemoryResult =
   | { ok: true }
   | { ok: false; error: string };
 
+type PromoteMemoryResult =
+  | { ok: true; memory: AgentMemoryRecord }
+  | { ok: false; error: string };
+
+type PromoteMemoryInput = {
+  orgSlug: string;
+  workspaceSlug: string;
+  memoryId: string;
+  toClass: "RULE" | "FACT";
+  enforcementScore?: number;
+  rationale: string;
+};
+
+type PromotionCandidatesResult =
+  | { ok: true; candidates: PromotionCandidate[] }
+  | { ok: false; error: string };
+
 interface MemoriesClientProps {
   initialRecords: AgentMemoryRecord[];
   total: number;
@@ -103,32 +196,37 @@ interface MemoriesClientProps {
   orgSlug: string;
   workspaceSlug: string;
   /**
-   * Server action for adding a manual one-off memory of any kind. Passed from
+   * Server action for adding a manual one-off memory. Passed from
    * MemoriesSection as a server action ref. When absent the "New Memory"
-   * affordance is not rendered. `kind`/`weight` are optional — omitting them
-   * lets the agent.memory.remember classifier infer them from the lesson.
+   * affordance is not rendered. `memoryKind`/`memoryClass` are optional —
+   * omitting them lets the agent.memory.remember classifier infer them from
+   * the lesson. FACT is intentionally not offered here — it requires human
+   * confirmation and is reserved for the dedicated promote flow.
    */
   createMemory?: (input: {
     orgSlug: string;
     workspaceSlug: string;
     text: string;
-    kind?: MemoryKind;
-    weight?: MemoryWeight;
+    memoryKind?: string;
+    memoryClass?: "OBSERVATION" | "RULE";
+    enforcementScore?: number;
   }) => Promise<CreateMemoryResult>;
   /**
    * Server action for editing a memory. Passed from MemoriesSection (server
    * component) so it crosses the RSC → client boundary as a server action ref.
-   * When absent the edit affordance is not rendered.
+   * When absent the edit affordance is not rendered. Class changes are NOT
+   * exposed here — they go through `promoteMemory`.
    */
   updateMemory?: (input: {
     orgSlug: string;
     workspaceSlug: string;
     memoryId: string;
     lesson?: string;
-    weight?: MemoryWeight;
-    kind?: MemoryKind;
+    memoryKind?: string;
     source?: string;
-    confidence?: number;
+    confidenceScore?: number;
+    enforcementScore?: number;
+    status?: MemoryStatus;
   }) => Promise<UpdateMemoryResult>;
   /**
    * Server action for deleting a memory. When absent the delete affordance is
@@ -139,6 +237,21 @@ interface MemoriesClientProps {
     workspaceSlug: string;
     memoryId: string;
   }) => Promise<DeleteMemoryResult>;
+  /**
+   * Server action for promoting a memory up the confidence ladder
+   * (OBSERVATION → RULE/FACT, or RULE → FACT). When absent the promote
+   * affordance is not rendered.
+   */
+  promoteMemory?: (input: PromoteMemoryInput) => Promise<PromoteMemoryResult>;
+  /**
+   * Server action for the "suggested to promote" panel — the top OBSERVATIONs
+   * by citation pressure. When absent the panel is not rendered.
+   */
+  promotionCandidates?: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    limit?: number;
+  }) => Promise<PromotionCandidatesResult>;
   /**
    * Server action for stage 1 of bulk import — parse uploaded markdown into
    * editable draft memories (read-only). Paired with `commitImport`; when both
@@ -186,14 +299,113 @@ interface MemoriesClientProps {
 // Kind configuration helper
 // ---------------------------------------------------------------------------
 
-function getKindConfig(kind: string): (typeof KIND_CONFIG)[MemoryKind] {
+const KIND_CONFIG: Record<
+  string,
+  {
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    color: string;
+  }
+> = {
+  FEEDBACK: {
+    label: "Feedback",
+    icon: MessageSquare,
+    color: "bg-sky-500/15 text-sky-700 dark:text-sky-400",
+  },
+  PERFORMANCE: {
+    label: "Performance",
+    icon: Gauge,
+    color: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-400",
+  },
+  STYLE: {
+    label: "Style",
+    icon: Palette,
+    color: "bg-pink-500/15 text-pink-700 dark:text-pink-400",
+  },
+  PREFERENCE: {
+    label: "Preference",
+    icon: Heart,
+    color: "bg-rose-500/15 text-rose-700 dark:text-rose-400",
+  },
+  VOICE: {
+    label: "Voice",
+    icon: Mic,
+    color: "bg-violet-500/15 text-violet-700 dark:text-violet-400",
+  },
+  PROSE: {
+    label: "Prose",
+    icon: FileText,
+    color: "bg-teal-500/15 text-teal-700 dark:text-teal-400",
+  },
+  "routine-change": {
+    label: "Routine Change",
+    icon: RefreshCw,
+    color: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
+  },
+  constraint: {
+    label: "Constraint",
+    icon: Lock,
+    color: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
+  },
+  "bug-root-cause": {
+    label: "Bug Root Cause",
+    icon: Bug,
+    color: "bg-red-500/15 text-red-700 dark:text-red-400",
+  },
+  "convention-deviation": {
+    label: "Convention Deviation",
+    icon: ShieldAlert,
+    color: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  },
+  gotcha: {
+    label: "Gotcha",
+    icon: Zap,
+    color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  },
+};
+
+export function getKindConfig(kind: string): (typeof KIND_CONFIG)[string] {
   return (
-    KIND_CONFIG[kind as MemoryKind] ?? {
+    KIND_CONFIG[kind] ?? {
       label: kind,
       icon: BrainCircuit,
       color: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400",
     }
   );
+}
+
+// ---------------------------------------------------------------------------
+// Class (epistemic status) configuration — the primary axis of the model
+// ---------------------------------------------------------------------------
+
+export const ALL_CLASSES: MemoryClass[] = ["OBSERVATION", "RULE", "FACT"];
+
+export const CLASS_CONFIG: Record<
+  MemoryClass,
+  { label: string; icon: React.ComponentType<{ className?: string }>; color: string }
+> = {
+  OBSERVATION: {
+    label: "Observation",
+    icon: Eye,
+    color: "bg-zinc-400/20 text-zinc-600 dark:text-zinc-400",
+  },
+  RULE: {
+    label: "Rule",
+    icon: ShieldAlert,
+    color: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  },
+  FACT: {
+    label: "Fact",
+    icon: BadgeCheck,
+    color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  },
+};
+
+/** The next rung(s) up the confidence ladder a memory can be promoted to. */
+function nextClassTargets(current: MemoryClass): Array<"RULE" | "FACT"> {
+  if (current === "OBSERVATION") return ["RULE", "FACT"];
+  if (current === "RULE") return ["FACT"];
+  return [];
 }
 
 // ---------------------------------------------------------------------------
@@ -228,13 +440,20 @@ function truncateId(id: string): string {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function ConfidenceBar({ value }: { value: number }) {
-  const clamped = Math.max(0, Math.min(1, value));
-  const pct = Math.round(clamped * 100);
+/** A 0-100 score meter — used for both confidenceScore and enforcementScore. */
+function ScoreMeter({
+  value,
+  label,
+}: {
+  value: number;
+  label: string;
+}) {
+  const clamped = Math.max(0, Math.min(100, value));
+  const pct = Math.round(clamped);
   const barColor =
-    clamped >= 0.7
+    clamped >= 70
       ? "bg-emerald-500"
-      : clamped >= 0.4
+      : clamped >= 40
         ? "bg-amber-500"
         : "bg-zinc-400";
   return (
@@ -244,7 +463,7 @@ function ConfidenceBar({ value }: { value: number }) {
         aria-valuenow={pct}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-label={`Confidence ${pct}%`}
+        aria-label={`${label} ${pct}%`}
         className="h-1.5 w-16 rounded-full bg-muted overflow-hidden"
       >
         <div
@@ -283,20 +502,63 @@ function CopyableId({ id }: { id: string }) {
   );
 }
 
+/** Datalist-backed free-text input for the open-string memoryKind field —
+ * surfaces the recommended kinds as suggestions without closing the taxonomy. */
+function KindInput({
+  id,
+  value,
+  onChange,
+  disabled,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const listId = `${id}-options`;
+  return (
+    <>
+      <input
+        id={id}
+        type="text"
+        list={listId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        maxLength={64}
+        disabled={disabled}
+        aria-label="Memory kind"
+        placeholder="e.g. constraint, gotcha, PREFERENCE…"
+        className={FIELD_INPUT_CLS}
+      />
+      <datalist id={listId}>
+        {RECOMMENDED_MEMORY_KINDS.map((k) => (
+          <option key={k} value={k} />
+        ))}
+      </datalist>
+    </>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Filter bar
 // ---------------------------------------------------------------------------
 
 function FilterBar({
+  availableKinds,
   activeKinds,
   toggleKind,
+  activeClasses,
+  toggleClass,
   searchQuery,
   setSearchQuery,
   minConfidence,
   setMinConfidence,
 }: {
+  availableKinds: string[];
   activeKinds: Set<string>;
-  toggleKind: (k: MemoryKind) => void;
+  toggleKind: (k: string) => void;
+  activeClasses: Set<MemoryClass>;
+  toggleClass: (c: MemoryClass) => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   minConfidence: number;
@@ -340,29 +602,29 @@ function FilterBar({
             type="range"
             min="0"
             max="100"
-            value={Math.round(minConfidence * 100)}
-            onChange={(e) => setMinConfidence(Number(e.target.value) / 100)}
+            value={minConfidence}
+            onChange={(e) => setMinConfidence(Number(e.target.value))}
             className="h-1 w-20 cursor-pointer accent-primary"
           />
           <span className="text-[10px] tabular-nums text-muted-foreground w-7">
-            {Math.round(minConfidence * 100)}%
+            {minConfidence}%
           </span>
         </div>
       </div>
 
-      {/* Kind filter chips */}
+      {/* Class filter chips — the primary epistemic axis */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        {ALL_KINDS.map((kind) => {
-          const cfg = KIND_CONFIG[kind];
-          const active = activeKinds.has(kind);
+        {ALL_CLASSES.map((cls) => {
+          const cfg = CLASS_CONFIG[cls];
+          const active = activeClasses.has(cls);
           const Icon = cfg.icon;
           return (
             <button
-              key={kind}
+              key={cls}
               type="button"
               aria-pressed={active}
               aria-label={`Filter by ${cfg.label}`}
-              onClick={() => toggleKind(kind)}
+              onClick={() => toggleClass(cls)}
               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all border ${
                 active
                   ? `${cfg.color} border-current/20`
@@ -374,20 +636,48 @@ function FilterBar({
             </button>
           );
         })}
-        {activeKinds.size > 0 && activeKinds.size < ALL_KINDS.length && (
-          <button
-            type="button"
-            onClick={() => {
-              for (const k of ALL_KINDS) {
-                if (activeKinds.has(k)) toggleKind(k);
-              }
-            }}
-            className="text-[10px] text-muted-foreground hover:text-foreground ml-1"
-          >
-            Clear filters
-          </button>
-        )}
       </div>
+
+      {/* Kind filter chips — dynamic, since memoryKind is an open string */}
+      {availableKinds.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {availableKinds.map((kind) => {
+            const cfg = getKindConfig(kind);
+            const active = activeKinds.has(kind);
+            const Icon = cfg.icon;
+            return (
+              <button
+                key={kind}
+                type="button"
+                aria-pressed={active}
+                aria-label={`Filter by ${cfg.label}`}
+                onClick={() => toggleKind(kind)}
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all border ${
+                  active
+                    ? `${cfg.color} border-current/20`
+                    : "bg-muted/40 text-muted-foreground border-transparent hover:bg-muted"
+                }`}
+              >
+                <Icon className="h-3 w-3" />
+                {cfg.label}
+              </button>
+            );
+          })}
+          {activeKinds.size > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                for (const k of availableKinds) {
+                  if (activeKinds.has(k)) toggleKind(k);
+                }
+              }}
+              className="text-[10px] text-muted-foreground hover:text-foreground ml-1"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -403,9 +693,8 @@ function MemoryRow({
   record: AgentMemoryRecord;
   onSelect: () => void;
 }) {
-  const kindCfg = getKindConfig(record.kind);
-  const weightCfg =
-    WEIGHT_CONFIG[record.weight] ?? WEIGHT_CONFIG["low"];
+  const kindCfg = getKindConfig(record.memoryKind);
+  const classCfg = CLASS_CONFIG[record.memoryClass];
   const KindIcon = kindCfg.icon;
 
   function handleRowKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -455,10 +744,15 @@ function MemoryRow({
             {kindCfg.label}
           </Badge>
           <Badge
-            className={`${weightCfg.color} text-[10px] px-1.5 py-0 border-0 font-medium`}
+            className={`${classCfg.color} text-[10px] px-1.5 py-0 border-0 font-medium`}
           >
-            {weightCfg.label}
+            {classCfg.label}
           </Badge>
+          {record.enforcementScore != null && (
+            <span className="text-[10px] text-muted-foreground">
+              enforcement {record.enforcementScore}
+            </span>
+          )}
         </div>
 
         {/* Meta row */}
@@ -483,9 +777,245 @@ function MemoryRow({
 
       {/* Confidence + arrow */}
       <div className="flex items-center gap-3 flex-shrink-0">
-        <ConfidenceBar value={record.confidence} />
+        <ScoreMeter value={record.confidenceScore} label="Confidence" />
         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Promote flow — shared between the detail sheet and the candidates panel
+// ---------------------------------------------------------------------------
+
+function PromoteFlow({
+  memoryId,
+  currentClass,
+  orgSlug,
+  workspaceSlug,
+  promoteMemory,
+  onPromoted,
+  onCancelAll,
+}: {
+  memoryId: string;
+  currentClass: MemoryClass;
+  orgSlug: string;
+  workspaceSlug: string;
+  promoteMemory: (input: PromoteMemoryInput) => Promise<PromoteMemoryResult>;
+  onPromoted: (updated: AgentMemoryRecord) => void;
+  /** Called when the whole flow is dismissed without promoting (candidates panel removes its inline form). */
+  onCancelAll?: () => void;
+}) {
+  const targets = nextClassTargets(currentClass);
+  const [target, setTarget] = React.useState<"RULE" | "FACT" | null>(null);
+  const [enforcementScore, setEnforcementScore] = React.useState(50);
+  const [rationale, setRationale] = React.useState("");
+  const [isPending, startTransition] = React.useTransition();
+  const [error, setError] = React.useState<string | null>(null);
+
+  if (targets.length === 0) {
+    return (
+      <p className="text-[11px] text-muted-foreground">
+        FACT is the top of the confidence ladder — nothing left to promote to.
+      </p>
+    );
+  }
+
+  function cancel() {
+    setTarget(null);
+    setError(null);
+    onCancelAll?.();
+  }
+
+  function confirmPromote() {
+    if (!target) return;
+    const trimmedRationale = rationale.trim();
+    if (trimmedRationale.length === 0) {
+      setError("Explain why this memory is being promoted.");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await promoteMemory({
+        orgSlug,
+        workspaceSlug,
+        memoryId,
+        toClass: target,
+        ...(target === "RULE" ? { enforcementScore } : {}),
+        rationale: trimmedRationale,
+      });
+      if (result.ok) {
+        onPromoted(result.memory);
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  if (!target) {
+    return (
+      <div className="flex items-center gap-2 flex-wrap">
+        {targets.map((t) => (
+          <Button
+            key={t}
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setTarget(t);
+              setEnforcementScore(50);
+              setRationale("");
+              setError(null);
+            }}
+          >
+            <ArrowUpCircle className="h-3 w-3 mr-1.5" aria-hidden="true" />
+            Promote to {CLASS_CONFIG[t].label}
+          </Button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-border/60 p-3">
+      <p className="text-xs font-medium text-foreground">
+        Promote to {CLASS_CONFIG[target].label}
+      </p>
+
+      {target === "RULE" ? (
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor={`promote-enforcement-${memoryId}`}
+            className="text-[11px] text-muted-foreground"
+          >
+            Enforcement: <span className="tabular-nums">{enforcementScore}</span>
+          </label>
+          <input
+            id={`promote-enforcement-${memoryId}`}
+            type="range"
+            min="1"
+            max="100"
+            value={enforcementScore}
+            onChange={(e) => setEnforcementScore(Number(e.target.value))}
+            disabled={isPending}
+            aria-label="Enforcement score"
+            className="h-1 w-full cursor-pointer accent-primary"
+          />
+        </div>
+      ) : (
+        <p className="text-[10px] text-muted-foreground">
+          Facts are always fully enforced (100) and represent a human-confirmed
+          truth, not just policy.
+        </p>
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        <label
+          htmlFor={`promote-rationale-${memoryId}`}
+          className="text-[11px] text-muted-foreground"
+        >
+          Rationale
+        </label>
+        <textarea
+          id={`promote-rationale-${memoryId}`}
+          rows={2}
+          value={rationale}
+          onChange={(e) => setRationale(e.target.value)}
+          disabled={isPending}
+          maxLength={1000}
+          placeholder="Why is this memory ready to promote?"
+          className={FIELD_INPUT_CLS}
+        />
+      </div>
+
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="gradient" onClick={confirmPromote} disabled={isPending}>
+          {isPending ? "Promoting…" : `Confirm promote to ${CLASS_CONFIG[target].label}`}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={cancel} disabled={isPending}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Suggested-to-promote panel — top OBSERVATIONs by citation pressure
+// ---------------------------------------------------------------------------
+
+function PromotionCandidatesPanel({
+  candidates,
+  orgSlug,
+  workspaceSlug,
+  promoteMemory,
+  onPromoted,
+}: {
+  candidates: PromotionCandidate[];
+  orgSlug: string;
+  workspaceSlug: string;
+  promoteMemory: (input: PromoteMemoryInput) => Promise<PromoteMemoryResult>;
+  onPromoted: (updated: AgentMemoryRecord) => void;
+}) {
+  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+
+  if (candidates.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+      <div className="flex items-center gap-1.5">
+        <Sparkles className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+          Suggested to promote
+        </span>
+      </div>
+      <ul className="flex flex-col gap-2">
+        {candidates.map((c) => (
+          <li key={c.id} className="flex flex-col gap-1.5 rounded-md bg-background/60 p-2">
+            <div className="flex items-center justify-between gap-2">
+              <TruncatedText text={c.lesson} lines={1} className="text-xs text-foreground flex-1" />
+              {expandedId !== c.id && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setExpandedId(c.id)}
+                  aria-label={`Promote candidate: ${c.lesson}`}
+                >
+                  <ArrowUpCircle className="h-3 w-3 mr-1.5" aria-hidden="true" />
+                  Promote
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+              <Badge className={`${getKindConfig(c.memoryKind).color} text-[10px] px-1.5 py-0 border-0 font-medium`}>
+                {getKindConfig(c.memoryKind).label}
+              </Badge>
+              <span>{c.citationCount} citation{c.citationCount === 1 ? "" : "s"}</span>
+              <span>{c.influenceCount} influential</span>
+              <span>{Math.round(c.confidenceScore)}% confidence</span>
+            </div>
+            {expandedId === c.id && (
+              <PromoteFlow
+                memoryId={c.id}
+                currentClass="OBSERVATION"
+                orgSlug={orgSlug}
+                workspaceSlug={workspaceSlug}
+                promoteMemory={promoteMemory}
+                onPromoted={(updated) => {
+                  setExpandedId(null);
+                  onPromoted(updated);
+                }}
+                onCancelAll={() => setExpandedId(null)}
+              />
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -520,6 +1050,7 @@ function MemoryDetail({
   onDeleted,
   updateMemory,
   deleteMemory,
+  promoteMemory,
 }: {
   record: AgentMemoryRecord;
   orgSlug: string;
@@ -529,21 +1060,9 @@ function MemoryDetail({
   onUpdated: (updated: AgentMemoryRecord) => void;
   /** Called after a successful delete with the deleted memory's id. */
   onDeleted: (memoryId: string) => void;
-  updateMemory?: (input: {
-    orgSlug: string;
-    workspaceSlug: string;
-    memoryId: string;
-    lesson?: string;
-    weight?: MemoryWeight;
-    kind?: MemoryKind;
-    source?: string;
-    confidence?: number;
-  }) => Promise<UpdateMemoryResult>;
-  deleteMemory?: (input: {
-    orgSlug: string;
-    workspaceSlug: string;
-    memoryId: string;
-  }) => Promise<DeleteMemoryResult>;
+  updateMemory?: MemoriesClientProps["updateMemory"];
+  deleteMemory?: MemoriesClientProps["deleteMemory"];
+  promoteMemory?: MemoriesClientProps["promoteMemory"];
 }) {
   // Local record state — updated optimistically on a successful save.
   const [record, setRecord] = React.useState(initialRecord);
@@ -554,20 +1073,22 @@ function MemoryDetail({
 
   // Edit form state — reset to current record when entering edit mode.
   const [editLesson, setEditLesson] = React.useState(record.lesson);
-  const [editKind, setEditKind] = React.useState(record.kind);
-  const [editWeight, setEditWeight] = React.useState<MemoryWeight>(record.weight);
-  const [editConfidence, setEditConfidence] = React.useState(record.confidence);
+  const [editKind, setEditKind] = React.useState(record.memoryKind);
+  const [editConfidence, setEditConfidence] = React.useState(record.confidenceScore);
+  const [editEnforcement, setEditEnforcement] = React.useState(
+    record.enforcementScore ?? 50,
+  );
   const [editSource, setEditSource] = React.useState(record.source);
 
-  const kindCfg = getKindConfig(record.kind);
-  const weightCfg = WEIGHT_CONFIG[record.weight] ?? WEIGHT_CONFIG["low"];
+  const kindCfg = getKindConfig(record.memoryKind);
+  const classCfg = CLASS_CONFIG[record.memoryClass];
 
   function enterEdit() {
     // Sync form fields to the current (potentially already-updated) record.
     setEditLesson(record.lesson);
-    setEditKind(record.kind);
-    setEditWeight(record.weight);
-    setEditConfidence(record.confidence);
+    setEditKind(record.memoryKind);
+    setEditConfidence(record.confidenceScore);
+    setEditEnforcement(record.enforcementScore ?? 50);
     setEditSource(record.source);
     setError(null);
     setConfirmDelete(false);
@@ -585,9 +1106,9 @@ function MemoryDetail({
     // Collect only changed fields so we don't send no-op patches.
     const updates: {
       lesson?: string;
-      kind?: MemoryKind;
-      weight?: MemoryWeight;
-      confidence?: number;
+      memoryKind?: string;
+      confidenceScore?: number;
+      enforcementScore?: number;
       source?: string;
     } = {};
 
@@ -595,14 +1116,20 @@ function MemoryDetail({
     if (trimmedLesson !== record.lesson && trimmedLesson.length > 0) {
       updates.lesson = trimmedLesson;
     }
-    if (editKind !== record.kind) {
-      updates.kind = editKind as MemoryKind;
+    const trimmedKind = editKind.trim();
+    if (trimmedKind !== record.memoryKind && trimmedKind.length > 0) {
+      updates.memoryKind = trimmedKind;
     }
-    if (editWeight !== record.weight) {
-      updates.weight = editWeight;
+    if (Math.abs(editConfidence - record.confidenceScore) > 0.5) {
+      updates.confidenceScore = editConfidence;
     }
-    if (Math.abs(editConfidence - record.confidence) > 0.001) {
-      updates.confidence = editConfidence;
+    // Enforcement is only editable for RULE — OBSERVATION has none, FACT is
+    // always forced to 100 by the class invariant.
+    if (
+      record.memoryClass === "RULE" &&
+      editEnforcement !== (record.enforcementScore ?? 50)
+    ) {
+      updates.enforcementScore = editEnforcement;
     }
     const trimmedSource = editSource.trim();
     if (trimmedSource !== record.source && trimmedSource.length > 0) {
@@ -655,6 +1182,11 @@ function MemoryDetail({
     });
   }
 
+  function handlePromoted(updated: AgentMemoryRecord) {
+    setRecord(updated);
+    onUpdated(updated);
+  }
+
   return (
     <Sheet
       open
@@ -666,7 +1198,7 @@ function MemoryDetail({
         <SheetHeader className="pb-4">
           <SheetTitle className="flex items-center gap-2">
             <Badge className={kindCfg.color}>{kindCfg.label}</Badge>
-            <Badge className={weightCfg.color}>{weightCfg.label}</Badge>
+            <Badge className={classCfg.color}>{classCfg.label}</Badge>
           </SheetTitle>
           <SheetDescription className="text-xs font-mono break-all text-muted-foreground">
             {record.publicId}
@@ -685,10 +1217,14 @@ function MemoryDetail({
             {/* Metadata grid */}
             <div className="grid grid-cols-2 gap-3">
               <MetaField label="Kind" value={kindCfg.label} />
-              <MetaField label="Weight" value={weightCfg.label} />
+              <MetaField label="Class" value={classCfg.label} />
               <MetaField
                 label="Confidence"
-                value={`${Math.round(Math.max(0, Math.min(1, record.confidence)) * 100)}%`}
+                value={`${Math.round(record.confidenceScore)}%`}
+              />
+              <MetaField
+                label="Enforcement"
+                value={record.enforcementScore == null ? "—" : `${record.enforcementScore}`}
               />
               <MetaField
                 label="Created"
@@ -704,7 +1240,26 @@ function MemoryDetail({
               {record.nodeRef && (
                 <MetaField label="Node Ref" value={record.nodeRef} />
               )}
+              <MetaField
+                label="Citations"
+                value={`${record.citationCount} (${record.influenceCount} influential, ${record.violationCount} violations)`}
+              />
             </div>
+
+            {/* Promote */}
+            {promoteMemory && (
+              <div className="flex flex-col gap-2">
+                <h3 className={SECTION_LABEL_CLS}>Promote</h3>
+                <PromoteFlow
+                  memoryId={record.id}
+                  currentClass={record.memoryClass}
+                  orgSlug={orgSlug}
+                  workspaceSlug={workspaceSlug}
+                  promoteMemory={promoteMemory}
+                  onPromoted={handlePromoted}
+                />
+              </div>
+            )}
 
             {/* IDs */}
             <div className="flex flex-col gap-2">
@@ -817,55 +1372,31 @@ function MemoryDetail({
               />
             </div>
 
-            {/* Kind */}
+            {/* Kind — open string, recommended values suggested */}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="edit-memory-kind" className={SECTION_LABEL_CLS}>
                 Kind
               </label>
-              <select
+              <KindInput
                 id="edit-memory-kind"
                 value={editKind}
-                onChange={(e) => setEditKind(e.target.value)}
+                onChange={setEditKind}
                 disabled={isPending}
-                aria-label="Memory kind"
-                className={FIELD_INPUT_CLS}
-              >
-                {ALL_KINDS.map((k) => (
-                  <option key={k} value={k}>
-                    {KIND_CONFIG[k].label}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
-            {/* Salience: weight + confidence */}
+            {/* Salience: class (read-only, promote to change) + confidence + enforcement */}
             <div className="flex flex-col gap-3">
               <h3 className={SECTION_LABEL_CLS}>Salience</h3>
 
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="edit-memory-weight"
-                  className="text-[11px] text-muted-foreground"
-                >
-                  Weight
-                </label>
-                <select
-                  id="edit-memory-weight"
-                  value={editWeight}
-                  onChange={(e) => setEditWeight(e.target.value as MemoryWeight)}
-                  disabled={isPending}
-                  aria-label="Memory weight"
-                  className={FIELD_INPUT_CLS}
-                >
-                  {(["low", "high", "critical"] as const).map((w) => (
-                    <option key={w} value={w}>
-                      {WEIGHT_CONFIG[w].label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-muted-foreground">
-                  Low sinks below recall; Critical never decays.
-                </p>
+              <div className="flex flex-col gap-1">
+                <span className="text-[11px] text-muted-foreground">Class</span>
+                <div className="flex items-center gap-2">
+                  <Badge className={classCfg.color}>{classCfg.label}</Badge>
+                  <span className="text-[10px] text-muted-foreground">
+                    Use Promote (in view mode) to move up the confidence ladder.
+                  </span>
+                </div>
               </div>
 
               <div className="flex flex-col gap-1.5">
@@ -874,24 +1405,53 @@ function MemoryDetail({
                   className="text-[11px] text-muted-foreground"
                 >
                   Confidence:{" "}
-                  <span className="tabular-nums">
-                    {Math.round(editConfidence * 100)}%
-                  </span>
+                  <span className="tabular-nums">{Math.round(editConfidence)}%</span>
                 </label>
                 <input
                   id="edit-memory-confidence"
                   type="range"
                   min="0"
                   max="100"
-                  value={Math.round(editConfidence * 100)}
-                  onChange={(e) =>
-                    setEditConfidence(Number(e.target.value) / 100)
-                  }
+                  value={Math.round(editConfidence)}
+                  onChange={(e) => setEditConfidence(Number(e.target.value))}
                   disabled={isPending}
                   aria-label="Confidence level"
                   className="h-1 w-full cursor-pointer accent-primary disabled:cursor-not-allowed"
                 />
               </div>
+
+              {record.memoryClass === "RULE" && (
+                <div className="flex flex-col gap-1.5">
+                  <label
+                    htmlFor="edit-memory-enforcement"
+                    className="text-[11px] text-muted-foreground"
+                  >
+                    Enforcement:{" "}
+                    <span className="tabular-nums">{editEnforcement}</span>
+                  </label>
+                  <input
+                    id="edit-memory-enforcement"
+                    type="range"
+                    min="1"
+                    max="100"
+                    value={editEnforcement}
+                    onChange={(e) => setEditEnforcement(Number(e.target.value))}
+                    disabled={isPending}
+                    aria-label="Enforcement level"
+                    className="h-1 w-full cursor-pointer accent-primary disabled:cursor-not-allowed"
+                  />
+                </div>
+              )}
+              {record.memoryClass === "FACT" && (
+                <p className="text-[10px] text-muted-foreground">
+                  Enforcement is fixed at 100 for a FACT.
+                </p>
+              )}
+              {record.memoryClass === "OBSERVATION" && (
+                <p className="text-[10px] text-muted-foreground">
+                  An OBSERVATION has no enforcement — promote it to a RULE to set one.
+                </p>
+              )}
             </div>
 
             {/* Source */}
@@ -947,13 +1507,18 @@ function MemoryDetail({
 }
 
 // ---------------------------------------------------------------------------
-// New memory sheet — manual one-off capture, any kind
+// New memory sheet — manual one-off capture
 // ---------------------------------------------------------------------------
 
-// Sentinel for the "let the classifier decide" option in the kind/weight
+// Sentinel for the "let the classifier decide" option in the kind/class
 // selects. The empty string is falsy, so it maps cleanly to "omit the field"
 // when building the action payload, and agent.memory.remember then infers it.
 const INFER = "" as const;
+
+// FACT is intentionally excluded: it requires human confirmation and forces
+// enforcement to 100, so it is reserved for the dedicated promote flow rather
+// than one-off creation.
+const CREATABLE_CLASSES: Array<"OBSERVATION" | "RULE"> = ["OBSERVATION", "RULE"];
 
 function MemoryCreate({
   orgSlug,
@@ -967,17 +1532,14 @@ function MemoryCreate({
   onClose: () => void;
   /** Called after a successful create with the new record shape. */
   onCreated: (created: AgentMemoryRecord) => void;
-  createMemory: (input: {
-    orgSlug: string;
-    workspaceSlug: string;
-    text: string;
-    kind?: MemoryKind;
-    weight?: MemoryWeight;
-  }) => Promise<CreateMemoryResult>;
+  createMemory: NonNullable<MemoriesClientProps["createMemory"]>;
 }) {
   const [text, setText] = React.useState("");
-  const [kind, setKind] = React.useState<MemoryKind | typeof INFER>(INFER);
-  const [weight, setWeight] = React.useState<MemoryWeight | typeof INFER>(INFER);
+  const [kind, setKind] = React.useState("");
+  const [memoryClass, setMemoryClass] = React.useState<
+    "OBSERVATION" | "RULE" | typeof INFER
+  >(INFER);
+  const [enforcementScore, setEnforcementScore] = React.useState(50);
   const [isPending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
 
@@ -985,15 +1547,17 @@ function MemoryCreate({
     const trimmed = text.trim();
     if (trimmed.length === 0) return;
     setError(null);
+    const trimmedKind = kind.trim();
     startTransition(async () => {
       const result = await createMemory({
         orgSlug,
         workspaceSlug,
         text: trimmed,
-        // Only send a pinned kind/weight; the empty sentinel is omitted so the
+        // Only send pinned fields; the empty sentinel is omitted so the
         // handler classifier infers it.
-        ...(kind ? { kind } : {}),
-        ...(weight ? { weight } : {}),
+        ...(trimmedKind ? { memoryKind: trimmedKind } : {}),
+        ...(memoryClass ? { memoryClass } : {}),
+        ...(memoryClass === "RULE" ? { enforcementScore } : {}),
       });
 
       if (result.ok) {
@@ -1020,8 +1584,9 @@ function MemoryCreate({
           </SheetTitle>
           <SheetDescription className="text-xs text-muted-foreground">
             Capture a lesson, constraint, or gotcha for agents in this
-            workspace. Leave Kind or Weight on &ldquo;Auto-detect&rdquo; to let
-            the assistant classify it.
+            workspace. Leave Kind or Class on &ldquo;Auto-detect&rdquo; to let
+            the assistant classify it. Facts require human confirmation — use
+            Promote on an existing memory instead.
           </SheetDescription>
         </SheetHeader>
 
@@ -1043,56 +1608,79 @@ function MemoryCreate({
             />
           </div>
 
-          {/* Kind — any of the five types, or Auto-detect */}
+          {/* Kind — open string, Auto-detect or free text */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="create-memory-kind" className={SECTION_LABEL_CLS}>
               Kind
             </label>
-            <select
+            <input
               id="create-memory-kind"
+              type="text"
+              list="create-memory-kind-options"
               value={kind}
-              onChange={(e) =>
-                setKind(e.target.value as MemoryKind | typeof INFER)
-              }
+              onChange={(e) => setKind(e.target.value)}
               disabled={isPending}
               aria-label="Memory kind"
+              placeholder="Auto-detect"
+              maxLength={64}
               className={FIELD_INPUT_CLS}
-            >
-              <option value={INFER}>Auto-detect</option>
-              {ALL_KINDS.map((k) => (
-                <option key={k} value={k}>
-                  {KIND_CONFIG[k].label}
-                </option>
+            />
+            <datalist id="create-memory-kind-options">
+              {RECOMMENDED_MEMORY_KINDS.map((k) => (
+                <option key={k} value={k} />
               ))}
-            </select>
+            </datalist>
           </div>
 
-          {/* Weight */}
+          {/* Class */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="create-memory-weight" className={SECTION_LABEL_CLS}>
-              Weight
+            <label htmlFor="create-memory-class" className={SECTION_LABEL_CLS}>
+              Class
             </label>
             <select
-              id="create-memory-weight"
-              value={weight}
+              id="create-memory-class"
+              value={memoryClass}
               onChange={(e) =>
-                setWeight(e.target.value as MemoryWeight | typeof INFER)
+                setMemoryClass(e.target.value as "OBSERVATION" | "RULE" | typeof INFER)
               }
               disabled={isPending}
-              aria-label="Memory weight"
+              aria-label="Memory class"
               className={FIELD_INPUT_CLS}
             >
               <option value={INFER}>Auto-detect</option>
-              {(["low", "high", "critical"] as const).map((w) => (
-                <option key={w} value={w}>
-                  {WEIGHT_CONFIG[w].label}
+              {CREATABLE_CLASSES.map((c) => (
+                <option key={c} value={c}>
+                  {CLASS_CONFIG[c].label}
                 </option>
               ))}
             </select>
             <p className="text-[10px] text-muted-foreground">
-              Low sinks below recall; Critical never decays.
+              Observation sinks below recall as confidence decays; Rule sets a
+              policy that agents must weigh against enforcement.
             </p>
           </div>
+
+          {memoryClass === "RULE" && (
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="create-memory-enforcement"
+                className="text-[11px] text-muted-foreground"
+              >
+                Enforcement: <span className="tabular-nums">{enforcementScore}</span>
+              </label>
+              <input
+                id="create-memory-enforcement"
+                type="range"
+                min="1"
+                max="100"
+                value={enforcementScore}
+                onChange={(e) => setEnforcementScore(Number(e.target.value))}
+                disabled={isPending}
+                aria-label="Enforcement level"
+                className="h-1 w-full cursor-pointer accent-primary"
+              />
+            </div>
+          )}
 
           {/* Error */}
           {error && (
@@ -1140,16 +1728,20 @@ export function MemoriesClient({
   createMemory,
   updateMemory,
   deleteMemory,
+  promoteMemory,
+  promotionCandidates,
   parseImport,
   commitImport,
 }: MemoriesClientProps) {
   const router = useRouter();
   const [records, setRecords] = React.useState<AgentMemoryRecord[]>(initialRecords);
+  const [candidates, setCandidates] = React.useState<PromotionCandidate[]>([]);
   const [selectedRecord, setSelectedRecord] =
     React.useState<AgentMemoryRecord | null>(null);
   const [showCreate, setShowCreate] = React.useState(false);
   const [showBulkImport, setShowBulkImport] = React.useState(false);
   const [activeKinds, setActiveKinds] = React.useState<Set<string>>(new Set());
+  const [activeClasses, setActiveClasses] = React.useState<Set<MemoryClass>>(new Set());
   const [searchQuery, setSearchQuery] = React.useState("");
   const [minConfidence, setMinConfidence] = React.useState(0);
 
@@ -1158,13 +1750,36 @@ export function MemoriesClient({
     setRecords(initialRecords);
   }, [initialRecords]);
 
-  const toggleKind = React.useCallback((kind: MemoryKind) => {
+  const loadCandidates = React.useCallback(() => {
+    if (!promotionCandidates) return;
+    void promotionCandidates({ orgSlug, workspaceSlug, limit: 3 }).then((result) => {
+      if (result.ok) setCandidates(result.candidates);
+    });
+  }, [promotionCandidates, orgSlug, workspaceSlug]);
+
+  React.useEffect(() => {
+    loadCandidates();
+  }, [loadCandidates]);
+
+  const toggleKind = React.useCallback((kind: string) => {
     setActiveKinds((prev) => {
       const next = new Set(prev);
       if (next.has(kind)) {
         next.delete(kind);
       } else {
         next.add(kind);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleClass = React.useCallback((cls: MemoryClass) => {
+    setActiveClasses((prev) => {
+      const next = new Set(prev);
+      if (next.has(cls)) {
+        next.delete(cls);
+      } else {
+        next.add(cls);
       }
       return next;
     });
@@ -1184,6 +1799,9 @@ export function MemoriesClient({
     setRecords((prev) =>
       prev.map((r) => (r.id === updated.id ? updated : r)),
     );
+    // A promotion or edit can change candidate eligibility (e.g. it's no
+    // longer an OBSERVATION) — refresh the suggestions too.
+    loadCandidates();
     router.refresh();
   }
 
@@ -1196,10 +1814,12 @@ export function MemoriesClient({
   // Client-side filtering
   const filtered = React.useMemo(() => {
     return records.filter((r) => {
+      // Class filter
+      if (activeClasses.size > 0 && !activeClasses.has(r.memoryClass)) return false;
       // Kind filter
-      if (activeKinds.size > 0 && !activeKinds.has(r.kind)) return false;
+      if (activeKinds.size > 0 && !activeKinds.has(r.memoryKind)) return false;
       // Confidence filter
-      if (r.confidence < minConfidence) return false;
+      if (r.confidenceScore < minConfidence) return false;
       // Text search over lesson, source, nodeRef
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -1213,15 +1833,24 @@ export function MemoriesClient({
       }
       return true;
     });
-  }, [records, activeKinds, minConfidence, searchQuery]);
+  }, [records, activeClasses, activeKinds, minConfidence, searchQuery]);
 
-  // Kind distribution for stats row
-  const kindCounts = React.useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const k of ALL_KINDS) counts[k] = 0;
-    for (const r of records) {
-      if (r.kind in counts) counts[r.kind] = (counts[r.kind] ?? 0) + 1;
-    }
+  // Kinds present in the current record set, for the dynamic filter chips.
+  const availableKinds = React.useMemo(() => {
+    const seen = new Set<string>();
+    for (const r of records) seen.add(r.memoryKind);
+    return Array.from(seen).sort((a, b) => {
+      const aKnown = a in KIND_CONFIG;
+      const bKnown = b in KIND_CONFIG;
+      if (aKnown !== bKnown) return aKnown ? -1 : 1;
+      return a.localeCompare(b);
+    });
+  }, [records]);
+
+  // Class distribution for stats row — the primary epistemic axis.
+  const classCounts = React.useMemo(() => {
+    const counts: Record<MemoryClass, number> = { OBSERVATION: 0, RULE: 0, FACT: 0 };
+    for (const r of records) counts[r.memoryClass] = (counts[r.memoryClass] ?? 0) + 1;
     return counts;
   }, [records]);
 
@@ -1268,14 +1897,25 @@ export function MemoriesClient({
         </div>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-5 gap-2" data-testid="memory-stats-row">
-        {ALL_KINDS.map((kind) => {
-          const cfg = KIND_CONFIG[kind];
+      {/* Suggested to promote */}
+      {promoteMemory && candidates.length > 0 && (
+        <PromotionCandidatesPanel
+          candidates={candidates}
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          promoteMemory={promoteMemory}
+          onPromoted={handleMemoryUpdated}
+        />
+      )}
+
+      {/* Stats row — per-class counts, the primary epistemic axis */}
+      <div className="grid grid-cols-3 gap-2" data-testid="memory-stats-row">
+        {ALL_CLASSES.map((cls) => {
+          const cfg = CLASS_CONFIG[cls];
           const Icon = cfg.icon;
           return (
             <div
-              key={kind}
+              key={cls}
               className="flex items-center gap-2 rounded-lg border border-border/50 px-3 py-2"
             >
               <Icon
@@ -1283,7 +1923,7 @@ export function MemoriesClient({
               />
               <div className="flex flex-col min-w-0">
                 <span className="text-sm font-semibold tabular-nums text-foreground">
-                  {kindCounts[kind] ?? 0}
+                  {classCounts[cls]}
                 </span>
                 <span className="text-[10px] text-muted-foreground truncate">
                   {cfg.label}
@@ -1296,8 +1936,11 @@ export function MemoriesClient({
 
       {/* Filters */}
       <FilterBar
+        availableKinds={availableKinds}
         activeKinds={activeKinds}
         toggleKind={toggleKind}
+        activeClasses={activeClasses}
+        toggleClass={toggleClass}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         minConfidence={minConfidence}
@@ -1310,7 +1953,7 @@ export function MemoriesClient({
           <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5 bg-muted/30">
             <span className="text-[11px] font-medium text-muted-foreground">
               {filtered.length} memor{filtered.length !== 1 ? "ies" : "y"}
-              {activeKinds.size > 0 || minConfidence > 0 || searchQuery
+              {activeClasses.size > 0 || activeKinds.size > 0 || minConfidence > 0 || searchQuery
                 ? " (filtered)"
                 : ""}
             </span>
@@ -1340,7 +1983,7 @@ export function MemoriesClient({
             <p className="text-xs text-muted-foreground/70 mt-1 max-w-xs">
               {records.length === 0
                 ? "Memories appear here as agents learn during this workspace's sessions, when you ask the assistant to remember something, or when you add one with “New Memory”."
-                : "Try adjusting your kind filters, confidence threshold, or search query."}
+                : "Try adjusting your class/kind filters, confidence threshold, or search query."}
             </p>
           </div>
         </div>
@@ -1364,6 +2007,7 @@ export function MemoriesClient({
           onDeleted={handleMemoryDeleted}
           updateMemory={updateMemory}
           deleteMemory={deleteMemory}
+          promoteMemory={promoteMemory}
         />
       )}
 

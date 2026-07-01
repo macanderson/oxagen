@@ -10,7 +10,13 @@
  * runInTenantScope before the handler fires).
  */
 import pino from "pino";
-import { recallMemories, writeMemory } from "../memory/neo4j";
+import {
+  recallMemories,
+  writeMemory,
+  recordExecution,
+  recordCitation,
+} from "../memory/neo4j";
+import { deriveCompliance } from "@oxagen/oxagen/contracts/agent.memory.model";
 import { embedText } from "../memory/embed";
 import type { MemoryProvider } from "@oxagen/agent-engine";
 
@@ -41,14 +47,52 @@ export function createPlatformMemoryProvider(args: MemoryAdapterArgs): MemoryPro
           executionStepId: args.telemetry.messageId,
         },
       });
+      // No memoryClass/minEnforcement filter — coding-turn recall wants the
+      // broadest context (OBSERVATION through FACT), the same "recall
+      // everything above threshold" intent the old minWeight:"low" filter had.
       const rows = await recallMemories({
         embedding: emb,
-        minWeight: "low",
         limit: 8,
         recallThreshold: 0.7,
       });
       if (rows.length === 0) return "";
-      return rows.map((r) => `- [${r.kind}] ${r.lesson}`).join("\n");
+
+      // Auto-record the turn as an :Execution and cite every memory it surfaced
+      // (CONSIDERED). This builds the citation pressure that promotes recurring
+      // observations to rules. Best-effort and fire-and-forget: a Neo4j hiccup
+      // must never terminate a coding run. Keyed on the turn's messageId so all
+      // of a turn's citations group under one execution.
+      const executionRef = args.telemetry.messageId;
+      if (executionRef) {
+        void (async () => {
+          try {
+            const { executionId } = await recordExecution({
+              executionRef,
+              agentId: "coding-agent",
+              taskSummary: args.recallQuery.slice(0, 500),
+            });
+            await Promise.all(
+              rows.map((r) =>
+                recordCitation({
+                  executionId,
+                  memoryId: r.id,
+                  influence: "CONSIDERED",
+                  compliance: deriveCompliance({
+                    enforcement: r.enforcementScore,
+                    deviated: false,
+                  }),
+                  enforcementAtCite: r.enforcementScore,
+                  confidenceAtCite: r.confidenceScore,
+                }),
+              ),
+            );
+          } catch (err) {
+            logger.warn({ err }, "agent.memory-adapter: auto-citation failed — skipping");
+          }
+        })();
+      }
+
+      return rows.map((r) => `- [${r.memoryKind}] ${r.lesson}`).join("\n");
     },
 
     async remember(kind: string, content: unknown): Promise<void> {
@@ -69,10 +113,14 @@ export function createPlatformMemoryProvider(args: MemoryAdapterArgs): MemoryPro
           // the AgentMemory MERGE proceeds normally.
           nodeRef: "coding-agent",
           embedding,
-          weight: "low",
-          kind,
+          // A coding-turn note is an unconfirmed OBSERVATION — the lowest-
+          // salience rung of the confidence ladder (mirrors the old weight:"low").
+          memoryClass: "OBSERVATION",
+          memoryKind: kind,
           lesson,
           source: "coding-agent",
+          createdByKind: "AGENT",
+          createdById: "coding-agent",
         });
       } catch (err) {
         logger.warn({ err }, "agent.memory-adapter: remember() failed — skipping");

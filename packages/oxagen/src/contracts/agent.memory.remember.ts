@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { agentMemoryRecordSchema } from "./agent.memory.list";
+import { memoryClassEnum, memoryKindSchema } from "./agent.memory.model";
 
 /**
  * agent.memory.remember — the one-shot "just remember this" entry point.
@@ -43,20 +44,19 @@ export const agentMemoryRemember = registerCapability({
       .describe(
         "Graph node id to anchor the memory on. Defaults to the 'user-memory' bucket for free-form notes with no code anchor.",
       ),
-    weight: z
-      .enum(["low", "high", "critical"])
+    memoryClass: memoryClassEnum
       .optional()
-      .describe("Pin the salience bucket; omit to let the classifier infer it"),
-    kind: z
-      .enum([
-        "routine-change",
-        "constraint",
-        "bug-root-cause",
-        "convention-deviation",
-        "gotcha",
-      ])
+      .describe("Pin the epistemic class; omit to let the classifier infer it (defaults to OBSERVATION)"),
+    memoryKind: memoryKindSchema
       .optional()
-      .describe("Pin the kind; omit to let the classifier infer it"),
+      .describe("Pin the content-domain kind; omit to let the classifier infer it"),
+    enforcementScore: z
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .optional()
+      .describe("Enforcement (1-100) when memoryClass is RULE"),
     source: z
       .enum(["user", "feature", "fix", "exception-watcher", "bug-report"])
       .default("user")
@@ -71,19 +71,13 @@ export const agentMemoryRemember = registerCapability({
     memory: agentMemoryRecordSchema,
     inferred: z
       .object({
-        kind: z.enum([
-          "routine-change",
-          "constraint",
-          "bug-root-cause",
-          "convention-deviation",
-          "gotcha",
-        ]),
-        weight: z.enum(["low", "high", "critical"]),
+        memoryClass: memoryClassEnum,
+        memoryKind: memoryKindSchema,
         classified: z
           .boolean()
-          .describe("true when kind/weight were inferred by the model rather than supplied or defaulted"),
+          .describe("true when class/kind were inferred by the model rather than supplied or defaulted"),
       })
-      .describe("The kind + weight actually used, and whether the model inferred them"),
+      .describe("The class + kind actually used, and whether the model inferred them"),
   }),
 });
 

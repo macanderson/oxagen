@@ -158,7 +158,10 @@ export function scriptedScenarioEvents(args: {
         {
           id: "mem_1",
           lesson: "Prior summary noted three top-level packages.",
-          weight: "consider",
+          memoryClass: "OBSERVATION",
+          memoryKind: "routine-change",
+          confidenceScore: 65,
+          enforcementScore: null,
           score: 0.81,
         },
       ],
@@ -261,7 +264,8 @@ export function scriptedScenarioEvents(args: {
       type: "memory-written",
       memoryId: "mem_new",
       nodeRef: "AgentMemory:mem_new",
-      weight: "fact",
+      memoryClass: "FACT",
+      enforcementScore: 100,
     },
     {
       type: "tool-call-end",

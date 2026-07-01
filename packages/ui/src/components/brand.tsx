@@ -71,9 +71,9 @@ export function OxagenLogomark({
             x2="1"
             y2="0"
           >
-            <stop offset="0" stopColor="#F9D423" />
-            <stop offset=".5" stopColor="#FF7E5F" />
-            <stop offset="1" stopColor="#C2185B" />
+            <stop offset="0" stopColor="#FD9A4B" />
+            <stop offset=".5" stopColor="#F07650" />
+            <stop offset="1" stopColor="#EB5C5E" />
           </linearGradient>
           <linearGradient
             id={EMBER_ID_2}
@@ -84,9 +84,9 @@ export function OxagenLogomark({
             x2="1"
             y2="0"
           >
-            <stop offset="0" stopColor="#F9D423" />
-            <stop offset=".5" stopColor="#FF7E5F" />
-            <stop offset="1" stopColor="#C2185B" />
+            <stop offset="0" stopColor="#FD9A4B" />
+            <stop offset=".5" stopColor="#F07650" />
+            <stop offset="1" stopColor="#EB5C5E" />
           </linearGradient>
         </defs>
       )}

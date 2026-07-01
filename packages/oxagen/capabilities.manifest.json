@@ -312,6 +312,42 @@
       }
     },
     {
+      "name": "agent.memory.citations.list",
+      "file": "agent.memory.citations.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.memory.cite",
+      "file": "agent.memory.cite.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "agent.memory.delete",
       "file": "agent.memory.delete.ts",
       "domain": "agent",
@@ -326,6 +362,24 @@
         "api": true,
         "mcp": true,
         "unit": true,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.memory.evidence.attach",
+      "file": "agent.memory.evidence.attach.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "docs": false
       }
     },
@@ -396,6 +450,17 @@
       }
     },
     {
+      "name": "agent.memory.model",
+      "file": "agent.memory.model.ts",
+      "domain": "unknown",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {}
+    },
+    {
       "name": "agent.memory.policy.read",
       "file": "agent.memory.policy.read.ts",
       "domain": "agent",
@@ -428,6 +493,42 @@
         "api": true,
         "mcp": true,
         "unit": true,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.memory.promote",
+      "file": "agent.memory.promote.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.memory.promotion.candidates",
+      "file": "agent.memory.promotion.candidates.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
         "docs": false
       }
     },

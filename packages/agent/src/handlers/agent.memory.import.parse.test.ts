@@ -27,11 +27,11 @@ describe("agent.memory.import.parse handler", () => {
   it("flattens extracted memories from all documents into drafts", async () => {
     mocks.extractMock.mockImplementation(async ({ filename }: { filename: string }) => {
       if (filename === "a.md") {
-        return [{ lesson: "Lesson A1", kind: "constraint", weight: "high" }];
+        return [{ lesson: "Lesson A1", memoryClass: "OBSERVATION", memoryKind: "constraint" }];
       }
       return [
-        { lesson: "Lesson B1", kind: "gotcha", weight: "low" },
-        { lesson: "Lesson B2", kind: "routine-change", weight: "high" },
+        { lesson: "Lesson B1", memoryClass: "OBSERVATION", memoryKind: "gotcha" },
+        { lesson: "Lesson B2", memoryClass: "RULE", memoryKind: "routine-change", enforcementScore: 60 },
       ];
     });
 
@@ -47,11 +47,13 @@ describe("agent.memory.import.parse handler", () => {
     expect(out.drafts.every((d) => d.source === "user")).toBe(true);
     expect(out.drafts.every((d) => d.classified === true)).toBe(true);
     expect(out.drafts.find((d) => d.lesson === "Lesson A1")?.sourceDocument).toBe("a.md");
+    expect(out.drafts.find((d) => d.lesson === "Lesson B2")?.memoryClass).toBe("RULE");
+    expect(out.drafts.find((d) => d.lesson === "Lesson B2")?.enforcementScore).toBe(60);
   });
 
   it("anchors drafts to the default nodeRef when supplied", async () => {
     mocks.extractMock.mockResolvedValue([
-      { lesson: "L", kind: "constraint", weight: "high" },
+      { lesson: "L", memoryClass: "OBSERVATION", memoryKind: "constraint" },
     ]);
     const out = await agentMemoryImportParseHandler(
       { documents: [doc("a.md")], defaultNodeRef: "team:platform" },
@@ -62,7 +64,7 @@ describe("agent.memory.import.parse handler", () => {
 
   it("defaults the nodeRef to 'user-memory' when none is supplied", async () => {
     mocks.extractMock.mockResolvedValue([
-      { lesson: "L", kind: "constraint", weight: "high" },
+      { lesson: "L", memoryClass: "OBSERVATION", memoryKind: "constraint" },
     ]);
     const out = await agentMemoryImportParseHandler(
       { documents: [doc("a.md")] },
@@ -73,7 +75,7 @@ describe("agent.memory.import.parse handler", () => {
 
   it("trims a blank default nodeRef back to the 'user-memory' bucket", async () => {
     mocks.extractMock.mockResolvedValue([
-      { lesson: "L", kind: "constraint", weight: "high" },
+      { lesson: "L", memoryClass: "OBSERVATION", memoryKind: "constraint" },
     ]);
     const out = await agentMemoryImportParseHandler(
       { documents: [doc("a.md")], defaultNodeRef: "   " },
@@ -86,7 +88,7 @@ describe("agent.memory.import.parse handler", () => {
     mocks.extractMock.mockImplementation(async ({ filename }: { filename: string }) =>
       filename === "empty.md"
         ? []
-        : [{ lesson: "Real", kind: "gotcha", weight: "low" }],
+        : [{ lesson: "Real", memoryClass: "OBSERVATION", memoryKind: "gotcha" }],
     );
     const out = await agentMemoryImportParseHandler(
       { documents: [doc("empty.md"), doc("good.md")] },
@@ -101,7 +103,7 @@ describe("agent.memory.import.parse handler", () => {
   it("records a document whose extraction throws as skipped, without failing the batch", async () => {
     mocks.extractMock.mockImplementation(async ({ filename }: { filename: string }) => {
       if (filename === "bad.md") throw new Error("model exploded");
-      return [{ lesson: "Survivor", kind: "constraint", weight: "high" }];
+      return [{ lesson: "Survivor", memoryClass: "OBSERVATION", memoryKind: "constraint" }];
     });
     const out = await agentMemoryImportParseHandler(
       { documents: [doc("bad.md"), doc("ok.md")] },

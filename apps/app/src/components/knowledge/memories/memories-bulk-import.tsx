@@ -7,13 +7,18 @@
  *   1. select  — drop / pick markdown documents (skill files, rule docs,
  *      playbooks); set an optional default anchor; "Parse documents".
  *   2. review  — an editable grid of the draft memories the parser proposed.
- *      Every row is editable (lesson, kind, weight, source) and can be
- *      included/excluded; skipped documents are surfaced. "Import N memories".
+ *      Every row is editable (lesson, class, kind, enforcement, source) and
+ *      can be included/excluded; skipped documents are surfaced. "Import N
+ *      memories".
  *   3. result  — per-row import outcome (imported / failed counts), then Done.
  *
  * parse + commit are server actions threaded in from MemoriesSection. parse is
  * read-only (returns drafts); commit writes each draft into the AgentMemory
  * graph with per-item error capture, so one bad row never fails the batch.
+ *
+ * Drafts follow the two-axis memory model (docs/specs/two-axis-memory/DESIGN.md):
+ * memoryClass (OBSERVATION/RULE/FACT) + memoryKind (open string), with
+ * enforcementScore only meaningful for RULE.
  */
 
 import * as React from "react";
@@ -42,6 +47,11 @@ import {
   type MemoryKind,
   type MemoryWeight,
 } from "./memory-kinds";
+  ALL_CLASSES,
+  CLASS_CONFIG,
+  RECOMMENDED_MEMORY_KINDS,
+  type MemoryClass,
+} from "./memories-client";
 
 // ---------------------------------------------------------------------------
 // Types — structural mirrors of the server-action exports (avoids importing
@@ -51,8 +61,9 @@ import {
 /** The draft memory shape that round-trips through the grid (= MemoryImportDraft). */
 export interface DraftMemory {
   lesson: string;
-  kind: MemoryKind;
-  weight: MemoryWeight;
+  memoryClass: MemoryClass;
+  memoryKind: string;
+  enforcementScore?: number;
   source: string;
   nodeRef: string;
   sourceDocument: string;
@@ -108,8 +119,6 @@ interface MemoriesBulkImportProps {
 const MAX_DOCS = 25;
 const MAX_DOC_BYTES = 100_000;
 const ACCEPTED_EXTENSIONS = [".md", ".markdown", ".mdx", ".txt"];
-
-const ALL_WEIGHTS: MemoryWeight[] = ["low", "high", "critical"];
 
 const FIELD_CLS =
   "w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50";
@@ -471,13 +480,14 @@ function ReviewStage({
 
           {/* Editable grid */}
           <div className="overflow-x-auto rounded-lg border border-border/60">
-            <div className="min-w-[760px]">
+            <div className="min-w-[900px]">
               {/* Header row */}
-              <div className="grid grid-cols-[2rem_minmax(0,1fr)_9rem_7rem_9rem] gap-2 border-b border-border/60 bg-muted/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="grid grid-cols-[2rem_minmax(0,1fr)_8rem_7rem_6rem_8rem] gap-2 border-b border-border/60 bg-muted/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 <span aria-hidden="true" />
                 <span>Lesson</span>
                 <span>Kind</span>
-                <span>Weight</span>
+                <span>Class</span>
+                <span>Enforce</span>
                 <span>Source</span>
               </div>
               {/* Body rows */}
@@ -485,7 +495,7 @@ function ReviewStage({
                 {drafts.map((draft, i) => (
                   <div
                     key={i}
-                    className={`grid grid-cols-[2rem_minmax(0,1fr)_9rem_7rem_9rem] items-start gap-2 border-b border-border/30 px-3 py-2 last:border-b-0 ${
+                    className={`grid grid-cols-[2rem_minmax(0,1fr)_8rem_7rem_6rem_8rem] items-start gap-2 border-b border-border/30 px-3 py-2 last:border-b-0 ${
                       draft.include ? "" : "opacity-50"
                     }`}
                   >
@@ -522,45 +532,69 @@ function ReviewStage({
                       )}
                     </div>
 
-                    {/* Kind */}
+                    {/* Kind — open string, recommended values suggested */}
+                    <div>
+                      <input
+                        type="text"
+                        list={`draft-kind-options-${i}`}
+                        value={draft.memoryKind}
+                        aria-label={`Kind for draft ${i + 1}`}
+                        maxLength={64}
+                        disabled={isPending}
+                        onChange={(e) =>
+                          patch(i, { memoryKind: e.target.value, classified: false })
+                        }
+                        className={FIELD_CLS}
+                      />
+                      <datalist id={`draft-kind-options-${i}`}>
+                        {RECOMMENDED_MEMORY_KINDS.map((k) => (
+                          <option key={k} value={k} />
+                        ))}
+                      </datalist>
+                    </div>
+
+                    {/* Class */}
                     <select
-                      value={draft.kind}
-                      aria-label={`Kind for draft ${i + 1}`}
+                      value={draft.memoryClass}
+                      aria-label={`Class for draft ${i + 1}`}
                       disabled={isPending}
                       onChange={(e) =>
                         patch(i, {
-                          kind: e.target.value as MemoryKind,
+                          memoryClass: e.target.value as MemoryClass,
                           classified: false,
                         })
                       }
                       className={FIELD_CLS}
                     >
-                      {ALL_KINDS.map((k) => (
-                        <option key={k} value={k}>
-                          {KIND_CONFIG[k].label}
+                      {ALL_CLASSES.map((c) => (
+                        <option key={c} value={c}>
+                          {CLASS_CONFIG[c].label}
                         </option>
                       ))}
                     </select>
 
-                    {/* Weight */}
-                    <select
-                      value={draft.weight}
-                      aria-label={`Weight for draft ${i + 1}`}
-                      disabled={isPending}
-                      onChange={(e) =>
-                        patch(i, {
-                          weight: e.target.value as MemoryWeight,
-                          classified: false,
-                        })
-                      }
-                      className={FIELD_CLS}
-                    >
-                      {ALL_WEIGHTS.map((w) => (
-                        <option key={w} value={w}>
-                          {WEIGHT_CONFIG[w].label}
-                        </option>
-                      ))}
-                    </select>
+                    {/* Enforcement — only meaningful for RULE */}
+                    {draft.memoryClass === "RULE" ? (
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={draft.enforcementScore ?? 50}
+                        aria-label={`Enforcement for draft ${i + 1}`}
+                        disabled={isPending}
+                        onChange={(e) =>
+                          patch(i, {
+                            enforcementScore: Number(e.target.value),
+                            classified: false,
+                          })
+                        }
+                        className={FIELD_CLS}
+                      />
+                    ) : (
+                      <span className="pt-1.5 text-[10px] text-muted-foreground">
+                        {draft.memoryClass === "FACT" ? "100" : "—"}
+                      </span>
+                    )}
 
                     {/* Source */}
                     <input
@@ -749,8 +783,9 @@ export function MemoriesBulkImport({
       .filter((d) => d.include)
       .map((d) => ({
         lesson: d.lesson,
-        kind: d.kind,
-        weight: d.weight,
+        memoryClass: d.memoryClass,
+        memoryKind: d.memoryKind,
+        ...(d.memoryClass === "RULE" ? { enforcementScore: d.enforcementScore ?? 50 } : {}),
         source: d.source,
         nodeRef: d.nodeRef,
         sourceDocument: d.sourceDocument,
@@ -792,7 +827,7 @@ export function MemoriesBulkImport({
     select:
       "Upload markdown skill files, rule docs, or runbooks. Each is parsed into atomic memories you can review before importing.",
     review:
-      "Edit any field, deselect rows you don't want, then import. Kind and weight were classified by the assistant.",
+      "Edit any field, deselect rows you don't want, then import. Kind and class were classified by the assistant.",
     result: "",
   };
 

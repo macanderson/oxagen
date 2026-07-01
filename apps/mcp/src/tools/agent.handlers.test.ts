@@ -167,7 +167,13 @@ describe("agent.memory.recall handler", () => {
 
   it("calls invoke with recall args", async () => {
     mocks.invoke.mockResolvedValue(validOutput);
-    const args = { query: "user prefs", minWeight: "high" as const, limit: 10, nodeRef: undefined };
+    const args = {
+      query: "user prefs",
+      memoryClass: "RULE" as const,
+      minEnforcement: 70,
+      limit: 10,
+      nodeRef: undefined,
+    };
     await handler_agentMemoryRecall(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -198,8 +204,9 @@ describe("agent.memory.write handler", () => {
     mocks.invoke.mockResolvedValue(validOutput);
     const args = {
       nodeRef: "node-abc",
-      weight: "high" as const,
-      kind: "gotcha" as const,
+      memoryClass: "RULE" as const,
+      memoryKind: "gotcha" as const,
+      enforcementScore: 70,
       lesson: "Always flush cache",
       source: "fix" as const,
       relatedNodeIds: undefined,

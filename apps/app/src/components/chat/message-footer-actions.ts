@@ -65,8 +65,10 @@ export async function saveAsKnowledgeAction(
 
 /**
  * Save the given assistant message text as an agent memory via agent.memory.write.
- * Uses a sensible default weight ("consider") and "convention-deviation" kind so
- * the lesson is retrievable across turns without being over-weighted.
+ * Uses the two-axis model's default epistemic class (OBSERVATION — no
+ * enforcement) and a "gotcha" kind so the lesson is retrievable across turns
+ * without asserting a policy the memory hasn't earned yet (that happens via
+ * agent.memory.promote once it accrues citation evidence).
  */
 export async function saveAsMemoryAction(
   ctx: MessageFooterActionCtx,
@@ -74,8 +76,8 @@ export async function saveAsMemoryAction(
 ): Promise<MessageFooterActionResult> {
   const parsed = agentMemoryWrite.input.safeParse({
     nodeRef: `chat-message:${Date.now()}`,
-    weight: "high",
-    kind: "gotcha",
+    memoryClass: "OBSERVATION",
+    memoryKind: "gotcha",
     lesson: text.slice(0, 2000),
     source: "exception-watcher",
   });

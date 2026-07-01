@@ -13,11 +13,24 @@ const PERSISTED_RECORD = {
   id: "m_new",
   publicId: "pub_new",
   nodeRef: "user-memory",
-  weight: "high",
-  kind: "constraint",
+  memoryClass: "OBSERVATION",
+  memoryKind: "constraint",
   lesson: "A captured lesson",
   source: "user",
-  confidence: 1,
+  confidenceScore: 100,
+  enforcementScore: null,
+  status: "ACTIVE",
+  subjectHint: "user-memory",
+  halfLifeDays: 30,
+  decayFloor: 5,
+  lastEvidenceAt: "2026-06-28T00:00:00Z",
+  citationCount: 0,
+  influenceCount: 0,
+  violationCount: 0,
+  createdByKind: "USER",
+  createdById: "user",
+  confirmedByKind: "USER",
+  confirmedById: "u_1",
   createdAt: "2026-06-28T00:00:00Z",
   lastReinforcedAt: "2026-06-28T00:00:00Z",
 };
@@ -27,9 +40,9 @@ mocks.getMemoryByIdMock.mockResolvedValue(PERSISTED_RECORD);
 mocks.embedTextMock.mockImplementation(async () => new Array(1536).fill(0.05));
 // Default: KG enabled so tests that don't override it work correctly.
 mocks.isKnowledgeGraphEnabledMock.mockReturnValue(true);
-// Default: classifier succeeds and returns constraint/high
+// Default: classifier succeeds and returns constraint/OBSERVATION
 mocks.generateObjectForMock.mockResolvedValue({
-  object: { kind: "constraint", weight: "high" },
+  object: { memoryClass: "OBSERVATION", memoryKind: "constraint" },
 });
 
 vi.mock("../memory/neo4j", () => ({
@@ -60,81 +73,123 @@ describe("agent.memory.remember handler", () => {
     mocks.getMemoryByIdMock.mockResolvedValue(PERSISTED_RECORD);
     mocks.embedTextMock.mockImplementation(async () => new Array(1536).fill(0.05));
     mocks.generateObjectForMock.mockResolvedValue({
-      object: { kind: "constraint", weight: "high" },
+      object: { memoryClass: "OBSERVATION", memoryKind: "constraint" },
     });
   });
 
-  it("when kind AND weight are both provided, skips classification (classified: false)", async () => {
+  it("when memoryClass AND memoryKind are both provided, skips classification (classified: false)", async () => {
     const res = await agentMemoryRememberHandler(
-      { text: "A captured lesson", kind: "gotcha", weight: "critical" },
+      { text: "A captured lesson", memoryClass: "OBSERVATION", memoryKind: "gotcha" },
       CTX,
     );
     expect(mocks.generateObjectForMock).not.toHaveBeenCalled();
     expect(res.inferred.classified).toBe(false);
-    expect(res.inferred.kind).toBe("gotcha");
-    expect(res.inferred.weight).toBe("critical");
+    expect(res.inferred.memoryKind).toBe("gotcha");
+    expect(res.inferred.memoryClass).toBe("OBSERVATION");
   });
 
-  it("when kind+weight are both provided, calls writeMemory and getMemoryById", async () => {
+  it("when memoryClass+memoryKind are both provided, calls writeMemory and getMemoryById", async () => {
     await agentMemoryRememberHandler(
-      { text: "A captured lesson", kind: "constraint", weight: "high" },
+      { text: "A captured lesson", memoryClass: "OBSERVATION", memoryKind: "constraint" },
       CTX,
     );
     expect(mocks.writeMemoryMock).toHaveBeenCalledTimes(1);
     expect(mocks.getMemoryByIdMock).toHaveBeenCalledWith("m_new");
   });
 
-  it("when kind is omitted, classifies and sets classified: true", async () => {
+  it("when memoryClass is omitted, classifies and sets classified: true", async () => {
     mocks.generateObjectForMock.mockResolvedValueOnce({
-      object: { kind: "gotcha", weight: "high" },
+      object: { memoryClass: "RULE", memoryKind: "gotcha" },
     });
     const res = await agentMemoryRememberHandler(
-      { text: "A surprising trap", weight: "high" },
+      { text: "A surprising trap", memoryKind: "gotcha" },
       CTX,
     );
     expect(mocks.generateObjectForMock).toHaveBeenCalledTimes(1);
     expect(res.inferred.classified).toBe(true);
-    expect(res.inferred.kind).toBe("gotcha");
+    expect(res.inferred.memoryClass).toBe("RULE");
   });
 
-  it("when weight is omitted, classifies and sets classified: true", async () => {
+  it("when memoryKind is omitted, classifies and sets classified: true", async () => {
     mocks.generateObjectForMock.mockResolvedValueOnce({
-      object: { kind: "bug-root-cause", weight: "critical" },
+      object: { memoryClass: "OBSERVATION", memoryKind: "bug-root-cause" },
     });
     const res = await agentMemoryRememberHandler(
-      { text: "Root cause discovered", kind: "bug-root-cause" },
+      { text: "Root cause discovered", memoryClass: "OBSERVATION" },
       CTX,
     );
     expect(mocks.generateObjectForMock).toHaveBeenCalledTimes(1);
     expect(res.inferred.classified).toBe(true);
-    expect(res.inferred.weight).toBe("critical");
+    expect(res.inferred.memoryKind).toBe("bug-root-cause");
   });
 
-  it("when both kind and weight are omitted, classifies and returns model values", async () => {
+  it("when both memoryClass and memoryKind are omitted, classifies and returns model values", async () => {
     mocks.generateObjectForMock.mockResolvedValueOnce({
-      object: { kind: "convention-deviation", weight: "low" },
+      object: { memoryClass: "OBSERVATION", memoryKind: "convention-deviation" },
     });
     const res = await agentMemoryRememberHandler({ text: "Changed pattern" }, CTX);
     expect(res.inferred.classified).toBe(true);
-    expect(res.inferred.kind).toBe("convention-deviation");
-    expect(res.inferred.weight).toBe("low");
+    expect(res.inferred.memoryClass).toBe("OBSERVATION");
+    expect(res.inferred.memoryKind).toBe("convention-deviation");
   });
 
-  it("falls back to constraint/high and classified:false when generateObjectFor throws", async () => {
+  it("falls back to OBSERVATION/constraint and classified:false when generateObjectFor throws", async () => {
     mocks.generateObjectForMock.mockRejectedValueOnce(new Error("gateway unavailable"));
     const res = await agentMemoryRememberHandler({ text: "A lesson" }, CTX);
     expect(res.inferred.classified).toBe(false);
-    expect(res.inferred.kind).toBe("constraint");
-    expect(res.inferred.weight).toBe("high");
+    expect(res.inferred.memoryClass).toBe("OBSERVATION");
+    expect(res.inferred.memoryKind).toBe("constraint");
     // writeMemory should still be called (graph is enabled) with the safe defaults.
     expect(mocks.writeMemoryMock).toHaveBeenCalledTimes(1);
   });
 
+  it("defaults enforcementScore to a mid-strength value when classified RULE has no explicit score", async () => {
+    mocks.generateObjectForMock.mockResolvedValueOnce({
+      object: { memoryClass: "RULE", memoryKind: "constraint" },
+    });
+    await agentMemoryRememberHandler({ text: "Always do X" }, CTX);
+    const arg = mocks.writeMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.memoryClass).toBe("RULE");
+    expect(typeof arg.enforcementScore).toBe("number");
+    expect(arg.enforcementScore).toBeGreaterThanOrEqual(1);
+    expect(arg.enforcementScore).toBeLessThanOrEqual(100);
+  });
+
+  it("passes a caller-pinned enforcementScore through for a pinned RULE", async () => {
+    await agentMemoryRememberHandler(
+      { text: "Always do X", memoryClass: "RULE", memoryKind: "constraint", enforcementScore: 90 },
+      CTX,
+    );
+    const arg = mocks.writeMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.enforcementScore).toBe(90);
+  });
+
+  it("confirms a user-sourced FACT pin using ctx.userId (source defaults to 'user')", async () => {
+    await agentMemoryRememberHandler(
+      { text: "A confirmed fact", memoryClass: "FACT", memoryKind: "constraint" },
+      CTX,
+    );
+    const arg = mocks.writeMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.memoryClass).toBe("FACT");
+    expect(arg.enforcementScore).toBe(100);
+    expect(arg.confirmedByKind).toBe("USER");
+    expect(arg.confirmedById).toBe(CTX.userId);
+  });
+
+  it("throws when a non-user-sourced FACT is pinned (no confirmation available)", async () => {
+    await expect(
+      agentMemoryRememberHandler(
+        { text: "Unconfirmed fact", memoryClass: "FACT", memoryKind: "constraint", source: "fix" },
+        CTX,
+      ),
+    ).rejects.toThrow("confirmed_by_kind = USER");
+  });
+
   it("when graph is disabled, returns a sentinel record with empty id (no Neo4j or embed calls)", async () => {
     mocks.isKnowledgeGraphEnabledMock.mockReturnValue(false);
-    // Both kind and weight supplied so we can isolate the graph-disabled branch.
+    // Both axes supplied so we can isolate the graph-disabled branch.
     const res = await agentMemoryRememberHandler(
-      { text: "A lesson", kind: "routine-change", weight: "low" },
+      { text: "A lesson", memoryClass: "OBSERVATION", memoryKind: "routine-change" },
       CTX,
     );
     expect(res.memory.id).toBe("");
@@ -148,17 +203,27 @@ describe("agent.memory.remember handler", () => {
   it("when graph is disabled, the returned sentinel record is schema-valid (has required fields)", async () => {
     mocks.isKnowledgeGraphEnabledMock.mockReturnValue(false);
     const res = await agentMemoryRememberHandler(
-      { text: "Sentinel test", kind: "gotcha", weight: "critical" },
+      { text: "Sentinel test", memoryClass: "RULE", memoryKind: "gotcha", enforcementScore: 90 },
       CTX,
     );
     expect(typeof res.memory.createdAt).toBe("string");
     expect(res.memory.lastReinforcedAt).toBeNull();
-    expect(res.memory.confidence).toBe(1);
+    expect(res.memory.confidenceScore).toBe(100);
+    expect(res.memory.enforcementScore).toBe(90);
+    expect(res.memory.status).toBe("ACTIVE");
+    expect(res.memory.citationCount).toBe(0);
+    expect(res.memory.influenceCount).toBe(0);
+    expect(res.memory.violationCount).toBe(0);
   });
 
   it("uses the nodeRef from input when provided", async () => {
     await agentMemoryRememberHandler(
-      { text: "Anchored lesson", kind: "constraint", weight: "high", nodeRef: "Function:auth#validate" },
+      {
+        text: "Anchored lesson",
+        memoryClass: "OBSERVATION",
+        memoryKind: "constraint",
+        nodeRef: "Function:auth#validate",
+      },
       CTX,
     );
     const writeArg = mocks.writeMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
@@ -167,7 +232,7 @@ describe("agent.memory.remember handler", () => {
 
   it("defaults nodeRef to 'user-memory' when not supplied", async () => {
     await agentMemoryRememberHandler(
-      { text: "Free-form note", kind: "constraint", weight: "high" },
+      { text: "Free-form note", memoryClass: "OBSERVATION", memoryKind: "constraint" },
       CTX,
     );
     const writeArg = mocks.writeMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
@@ -176,7 +241,7 @@ describe("agent.memory.remember handler", () => {
 
   it("returns the record from getMemoryById as the memory field", async () => {
     const res = await agentMemoryRememberHandler(
-      { text: "A lesson", kind: "constraint", weight: "high" },
+      { text: "A lesson", memoryClass: "OBSERVATION", memoryKind: "constraint" },
       CTX,
     );
     expect(res.memory).toEqual(PERSISTED_RECORD);
@@ -185,7 +250,7 @@ describe("agent.memory.remember handler", () => {
   it("falls back to a constructed record when getMemoryById returns null", async () => {
     mocks.getMemoryByIdMock.mockResolvedValueOnce(null);
     const res = await agentMemoryRememberHandler(
-      { text: "A lesson", kind: "gotcha", weight: "high" },
+      { text: "A lesson", memoryClass: "OBSERVATION", memoryKind: "gotcha" },
       CTX,
     );
     // Falls back to the constructed record — id equals memoryId from writeMemory

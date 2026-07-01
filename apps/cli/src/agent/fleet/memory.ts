@@ -6,22 +6,24 @@
  * That store is best-effort and silently disables itself when its optional native
  * dependency is missing; this one is plain JSON Lines on disk, so memory
  * recording is *guaranteed* — which is what the user asked for ("record the
- * memories as it fixes/builds things"). It mirrors the platform's weighted
- * `agent.memory.write` shape (kind + weight + lesson) so the same lessons can be
- * promoted to the knowledge graph later.
+ * memories as it fixes/builds things"). It mirrors the platform's two-axis
+ * `agent.memory.write` shape (memoryKind + memoryClass/enforcementScore + lesson)
+ * so the same lessons can be promoted to the knowledge graph later.
  *
- * Recall is a transparent lexical scorer (term overlap + file overlap + weight),
- * not embeddings: it needs no model call, works offline, and is good enough to
- * surface the handful of relevant lessons that should steer the next task.
+ * Recall is a transparent lexical scorer (term overlap + file overlap + class/
+ * enforcement boost), not embeddings: it needs no model call, works offline, and
+ * is good enough to surface the handful of relevant lessons that should steer
+ * the next task.
  */
 import { mkdirSync, appendFileSync, readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
 /**
- * A weighted lesson recorded as the CLI builds/fixes code, persisted as one JSON
- * line in this store. Mirrors the platform's `agent.memory.write` shape (kind +
- * weight + lesson) so the same lessons can be promoted to the knowledge graph.
+ * A two-axis lesson recorded as the CLI builds/fixes code, persisted as one
+ * JSON line in this store. Mirrors the platform's `agent.memory.write` shape
+ * (memoryKind + memoryClass/enforcementScore + lesson) so the same lessons can
+ * be promoted to the knowledge graph.
  *
  * This type lives here (with its only store) rather than in the deleted
  * `fleet/types.ts` — task/plan/snapshot types now come from `@oxagen/agent-engine`,
@@ -30,15 +32,17 @@ import { basename, dirname, join } from "node:path";
 export interface MemoryRecord {
   id: string;
   createdAt: number;
-  /** What kind of lesson this is — mirrors the platform `agent.memory.write` kinds. */
-  kind:
+  /** Content domain — mirrors the platform `agent.memory.write` memoryKind values. */
+  memoryKind:
     | "routine-change"
     | "constraint"
     | "bug-root-cause"
     | "convention-deviation"
     | "gotcha";
-  /** How much it should influence future work. */
-  weight: "low" | "high" | "critical";
+  /** Epistemic class — mirrors the platform `agent.memory.write` memoryClass ladder. */
+  memoryClass: "OBSERVATION" | "RULE" | "FACT";
+  /** How strongly it should influence future work; 1-100 for RULE, null otherwise. */
+  enforcementScore: number | null;
   /** The lesson itself, in one or two sentences. */
   lesson: string;
   /** Files the lesson is about (used for lexical recall scoring). */
@@ -134,7 +138,6 @@ export function openFleetMemory(cwd: string): FleetMemory {
       const limit = opts.limit ?? 5;
       const qTerms = new Set(terms(query));
       const qFiles = new Set((opts.files ?? []).map((f) => f));
-      const weightBoost = { low: 0, high: 1, critical: 2 } as const;
 
       const scored = load()
         .map((r) => {
@@ -143,7 +146,7 @@ export function openFleetMemory(cwd: string): FleetMemory {
           for (const t of rTerms) if (qTerms.has(t)) overlap++;
           let fileOverlap = 0;
           for (const f of r.files) if (qFiles.has(f)) fileOverlap++;
-          const score = overlap + fileOverlap * 3 + weightBoost[r.weight];
+          const score = overlap + fileOverlap * 3 + classBoost(r);
           return { r, score };
         })
         .filter((s) => s.score > 0)
@@ -158,14 +161,32 @@ export function openFleetMemory(cwd: string): FleetMemory {
   };
 }
 
+/**
+ * Recall boost from a lesson's epistemic class + enforcement — mirrors the old
+ * weight tiers (low=0, high=1, critical=2): OBSERVATION never boosts, a RULE
+ * boosts by its enforcement strength, and FACT (always enforcement 100) boosts
+ * like a strong RULE.
+ */
+function classBoost(r: MemoryRecord): number {
+  if (r.memoryClass === "OBSERVATION") return 0;
+  if (r.memoryClass === "FACT") return 2;
+  return (r.enforcementScore ?? 0) >= 90 ? 2 : 1;
+}
+
+/** Marker glyph for a lesson's class/enforcement, mirroring the old weight marks. */
+function classMark(r: MemoryRecord): string {
+  if (r.memoryClass === "OBSERVATION") return "·";
+  return classBoost(r) >= 2 ? "‼" : "!";
+}
+
 /** Render recalled lessons as a compact context block for prompt injection. */
 export function formatLessons(records: MemoryRecord[]): string {
   if (records.length === 0) return "";
   return records
     .map((r) => {
-      const mark = r.weight === "critical" ? "‼" : r.weight === "high" ? "!" : "·";
+      const mark = classMark(r);
       const files = r.files.length ? ` [${r.files.slice(0, 3).join(", ")}]` : "";
-      return `${mark} (${r.kind}) ${r.lesson}${files}`;
+      return `${mark} (${r.memoryKind}) ${r.lesson}${files}`;
     })
     .join("\n");
 }

@@ -53,7 +53,8 @@ export type PlanDecision = "approved" | "denied" | "amended";
 
 export type SubagentStatus = "running" | "completed" | "partial" | "timed_out";
 
-export type MemoryWeight = "ignore" | "consider" | "fact";
+/** Epistemic status on the confidence ladder (agent.memory.model#memoryClassEnum). */
+export type MemoryClass = "OBSERVATION" | "RULE" | "FACT";
 
 export interface PlanStep {
   id: string;
@@ -67,7 +68,14 @@ export interface PlanStep {
 export interface MemoryRecallHit {
   id: string;
   lesson: string;
-  weight: MemoryWeight | string;
+  /** Epistemic class: OBSERVATION → RULE → FACT. */
+  memoryClass: MemoryClass | string;
+  /** Content-domain kind (open string, e.g. "constraint", "gotcha"). */
+  memoryKind: string;
+  /** 0-100 evidence measure; auto-decays. */
+  confidenceScore: number;
+  /** 1-100 for RULE, 100 for FACT, null for OBSERVATION. */
+  enforcementScore: number | null;
   score: number;
   nodeRef?: string;
 }
@@ -190,7 +198,8 @@ export type StreamEvent =
       type: "memory-written";
       memoryId: string;
       nodeRef: string;
-      weight: MemoryWeight | string;
+      memoryClass: MemoryClass | string;
+      enforcementScore: number | null;
     }
   | {
       /**

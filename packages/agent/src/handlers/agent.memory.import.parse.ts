@@ -75,13 +75,14 @@ export async function agentMemoryImportParseHandler(
     for (const memory of result.extracted) {
       drafts.push({
         lesson: memory.lesson,
-        kind: memory.kind,
-        weight: memory.weight,
+        memoryClass: memory.memoryClass,
+        memoryKind: memory.memoryKind,
+        enforcementScore: memory.enforcementScore,
         // Imported documents are human-curated knowledge → source "user".
         source: "user",
         nodeRef: defaultNodeRef,
         sourceDocument: result.filename,
-        // Every draft's kind/weight came from the model here.
+        // Every draft's class/kind came from the model here.
         classified: true,
       });
     }

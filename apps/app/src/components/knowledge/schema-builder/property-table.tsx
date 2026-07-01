@@ -51,20 +51,26 @@ export function PropertyTable({
   return (
     <div className="space-y-2">
       <div className="rounded-lg border border-border overflow-hidden">
-        <table className="w-full text-sm">
+        {/* table-fixed so column widths are honored regardless of cell content
+            (auto layout let Key/Type hog space and truncated Description/Example).
+            Description + Example get the largest share since that's the data the
+            user is typing and reading back. */}
+        <table className="w-full table-fixed text-sm">
           <thead className="bg-muted/50">
             <tr>
-              <th className="px-3 py-2 text-left font-medium text-muted-foreground w-1/4">Key</th>
-              <th className="px-3 py-2 text-left font-medium text-muted-foreground w-1/4">Type</th>
-              <th className="px-3 py-2 text-center font-medium text-muted-foreground w-16">
+              <th className="px-3 py-2 text-left font-medium text-muted-foreground w-[16%]">Key</th>
+              <th className="px-3 py-2 text-left font-medium text-muted-foreground w-[14%]">Type</th>
+              <th className="px-3 py-2 text-center font-medium text-muted-foreground w-[9%]">
                 Required
               </th>
-              <th className="px-3 py-2 text-left font-medium text-muted-foreground">Description</th>
-              <th className="px-3 py-2 text-left font-medium text-muted-foreground w-1/5">
+              <th className="px-3 py-2 text-left font-medium text-muted-foreground w-[33%]">
+                Description
+              </th>
+              <th className="px-3 py-2 text-left font-medium text-muted-foreground w-[22%]">
                 Example
               </th>
               {!readOnly && (
-                <th className="px-3 py-2 w-10" aria-label="Actions" />
+                <th className="px-3 py-2 w-[6%]" aria-label="Actions" />
               )}
             </tr>
           </thead>

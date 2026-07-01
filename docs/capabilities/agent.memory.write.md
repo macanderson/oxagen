@@ -8,42 +8,43 @@
 
 ## Intent
 
-Persist a weighted memory tied to a graph node per the
-`oxagen-feature` skill's memory contract. Memories are the durable
-record of what an agent learned during a task; later turns recall
-them via `agent.memory.recall`.
+Persist a two-axis memory tied to a graph node. Memory has two independent
+axes — `memoryClass` (epistemic status: OBSERVATION → RULE → FACT) and
+`memoryKind` (content domain) — and two independent weights: `confidenceScore`
+(how sure it is true; auto-decays) and `enforcementScore` (how strongly it must
+be followed; policy). New writes start as OBSERVATION at confidence 100. See
+`docs/specs/two-axis-memory/DESIGN.md`.
 
 ## Input
 
-| Field      | Type                                                                                            | Notes                                                |
-| ---------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `nodeRef`  | `string`                                                                                        | Graph node ref the memory anchors to.                |
-| `weight`   | `"low" \| "high" \| "critical"`                                                                 | Retrieval weight.                                    |
-| `kind`     | `"routine-change" \| "constraint" \| "bug-root-cause" \| "convention-deviation" \| "gotcha"`    | Memory category.                                     |
-| `lesson`   | `string` (1 – 2000)                                                                             | The actual lesson, in prose.                         |
-| `source`   | `"feature" \| "fix" \| "exception-watcher" \| "bug-report"`                                     | Provenance.                                          |
+| Field              | Type                                             | Notes                                                     |
+| ------------------ | ------------------------------------------------ | --------------------------------------------------------- |
+| `nodeRef`          | `string`                                         | Graph node ref the memory anchors to.                     |
+| `memoryClass`      | `"OBSERVATION" \| "RULE" \| "FACT"`              | Defaults to OBSERVATION.                                   |
+| `memoryKind`       | `string`                                         | Content domain (extensible; e.g. STYLE, PREFERENCE).      |
+| `enforcementScore` | `int 1–100` (optional)                           | Required when `memoryClass` is RULE; ignored otherwise.   |
+| `lesson`           | `string` (1 – 2000)                              | The memory body, in prose.                                |
+| `source`           | `"feature" \| "fix" \| "exception-watcher" \| "bug-report"` | Provenance → `createdByKind`/`createdById`.     |
+| `relatedNodeIds`   | `string[]` (≤20, optional)                       | KnowledgeNode publicIds → `:ABOUT` edges.                 |
 
 ## Output
 
-| Field      | Type     | Notes                              |
-| ---------- | -------- | ---------------------------------- |
-| `memoryId` | `string` | Prefixed with `mem_`.              |
-| `nodeRef`  | `string` | Echoes the anchored node ref.      |
+| Field          | Type     | Notes                                        |
+| -------------- | -------- | -------------------------------------------- |
+| `memoryId`     | `string` | Neo4j node id.                               |
+| `nodeRef`      | `string` | Echoes the anchored node ref.                |
+| `edgesCreated` | `number` | Count of `:ABOUT` edges created.             |
+
+## Invariants
+
+- FACT ⟹ confirmed by a USER and enforcement 100 (set via `agent.memory.promote`, not here).
+- OBSERVATION ⟹ enforcement is null.
+- RULE ⟹ enforcement 1–100.
 
 ## Side effects
 
-- Neo4j: create `(:AgentMemory)-[:ABOUT]->(:GraphNode { ref })`.
-- ClickHouse: emit `agent.memory.written` row.
-
-## Errors
-
-| code              | meaning                                          |
-| ----------------- | ------------------------------------------------ |
-| `unknown_node`    | `nodeRef` does not resolve to a graph node.      |
-| `graph_unavailable` | Neo4j unreachable.                             |
+- Neo4j: MERGE `(:AgentMemory)` on (org, workspace, nodeRef, lesson); create `:REMEMBERS`/`:ABOUT` edges.
 
 ## SPEC references
 
-- §3 — memory write
-- §4 — new capabilities
-- `oxagen-feature` skill — memory weighting contract
+- `docs/specs/two-axis-memory/DESIGN.md`

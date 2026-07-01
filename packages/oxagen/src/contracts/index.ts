@@ -61,6 +61,12 @@ import { agentMemoryRemember } from "./agent.memory.remember";
 // Bulk memory import (parse → editable review grid → commit).
 import { agentMemoryImportParse } from "./agent.memory.import.parse";
 import { agentMemoryImportCommit } from "./agent.memory.import.commit";
+// Two-axis memory: promotion (confidence ladder), citation/evidence mechanism.
+import { agentMemoryPromote } from "./agent.memory.promote";
+import { agentMemoryPromotionCandidates } from "./agent.memory.promotion.candidates";
+import { agentMemoryCite } from "./agent.memory.cite";
+import { agentMemoryEvidenceAttach } from "./agent.memory.evidence.attach";
+import { agentMemoryCitationsList } from "./agent.memory.citations.list";
 import { agentPlanApprove } from "./agent.plan.approve";
 import { agentPlanCreate } from "./agent.plan.create";
 import { agentSkillList } from "./agent.skill.list";
@@ -283,10 +289,48 @@ export type { AgentMemoryPolicyWriteInput, AgentMemoryPolicyWriteOutput } from "
 // Bulk memory import: shared draft schema/types + per-contract IO types. The
 // shared file is not a capability, so it is exported here to satisfy the
 // check-contracts file-coverage guard (same reason as schema.shared above).
-export { memoryImportDraftSchema, memoryKindEnum, memoryWeightEnum } from "./agent.memory.import.shared";
+export { memoryImportDraftSchema } from "./agent.memory.import.shared";
 export type { MemoryImportDraft, MemoryImportDraftInput } from "./agent.memory.import.shared";
 export type { AgentMemoryImportParseInput, AgentMemoryImportParseOutput } from "./agent.memory.import.parse";
 export type { AgentMemoryImportCommitInput, AgentMemoryImportCommitOutput } from "./agent.memory.import.commit";
+// Two-axis memory model — shared enums, record schema, and invariant helpers.
+// Not a capability, so exported here to satisfy the file-coverage guard.
+export {
+  agentMemoryRecordSchema,
+  memoryClassEnum,
+  memoryKindSchema,
+  memoryStatusEnum,
+  actorKindEnum,
+  influenceEnum,
+  complianceEnum,
+  evidenceSourceKindEnum,
+  RECOMMENDED_MEMORY_KINDS,
+  assertMemoryClassInvariants,
+  deriveCompliance,
+} from "./agent.memory.model";
+export type {
+  AgentMemoryRecord,
+  MemoryClass,
+  MemoryStatus,
+  ActorKind,
+  Influence,
+  Compliance,
+  EvidenceSourceKind,
+} from "./agent.memory.model";
+export type { AgentMemoryPromoteInput, AgentMemoryPromoteOutput } from "./agent.memory.promote";
+export type {
+  AgentMemoryPromotionCandidatesInput,
+  AgentMemoryPromotionCandidatesOutput,
+} from "./agent.memory.promotion.candidates";
+export type { AgentMemoryCiteInput, AgentMemoryCiteOutput } from "./agent.memory.cite";
+export type {
+  AgentMemoryEvidenceAttachInput,
+  AgentMemoryEvidenceAttachOutput,
+} from "./agent.memory.evidence.attach";
+export type {
+  AgentMemoryCitationsListInput,
+  AgentMemoryCitationsListOutput,
+} from "./agent.memory.citations.list";
 
 export {
   apiKeyCreate,
@@ -341,6 +385,11 @@ export {
   agentMemoryRemember,
   agentMemoryImportParse,
   agentMemoryImportCommit,
+  agentMemoryPromote,
+  agentMemoryPromotionCandidates,
+  agentMemoryCite,
+  agentMemoryEvidenceAttach,
+  agentMemoryCitationsList,
   agentPlanApprove,
   agentPlanCreate,
   agentSkillList,
@@ -607,6 +656,11 @@ export const contracts = [
   agentMemoryRemember,
   agentMemoryImportParse,
   agentMemoryImportCommit,
+  agentMemoryPromote,
+  agentMemoryPromotionCandidates,
+  agentMemoryCite,
+  agentMemoryEvidenceAttach,
+  agentMemoryCitationsList,
   agentPlanApprove,
   agentPlanCreate,
   agentSkillList,
