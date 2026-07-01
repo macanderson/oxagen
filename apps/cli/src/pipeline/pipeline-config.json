@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Unified pipeline config (Group 6) — the single source of truth the Pipeline state machine reads. Merges the config slices Groups 1-5 own. Group 6 owns the graph, plan, screenshots, verifyWork, and the master pipeline.enabled switch; the runtime/routing/monitors/assist slices are read from their owning modules at load time and only defaulted here.",
+
+  "config": {
+    "pipeline": {
+      "enabled": true,
+      "verifyWork": true,
+      "promptEnhancement": { "enabled": true, "minAcceptableScore": 0.7 },
+      "survey": {
+        "enabled": true,
+        "maxQuestions": 3,
+        "alwaysAllowFreeText": true,
+        "preferBestPracticeOverAsking": true
+      },
+      "judge": {
+        "enabled": true,
+        "defaultModel": "openai-most-capable-coding-model",
+        "mustDifferFromWorker": true
+      },
+      "plan": { "minComplexity": "medium" },
+      "screenshots": { "requireWhenScreenImpacted": true }
+    },
+
+    "graph": {
+      "enabled": true,
+      "endpoint": "http://localhost:0/graphrag",
+      "maxNodes": 200,
+      "fallbackToGrep": true
+    },
+
+    "routing": {
+      "trivialMaxComplexity": "low",
+      "switchCostTokenBudget": 1500,
+      "defaultCodeWorker": "sonnet-5",
+      "cheapBasicWorker": "haiku"
+    },
+
+    "monitors": {
+      "askBeforeMonitoring": true,
+      "dispatchOnPullRequest": true,
+      "dispatchOnCiFix": true,
+      "pollIntervalSeconds": 30
+    }
+  },
+
+  "loop": {
+    "maxJudgeRetries": 2,
+    "note": "On a judge fail the pipeline loops back to step 3 with the notes, up to maxJudgeRetries times, then reports the task incomplete."
+  }
+}

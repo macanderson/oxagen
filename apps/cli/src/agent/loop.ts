@@ -184,11 +184,11 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   const cwd = opts.cwd ?? process.cwd();
   if (!ensureGatewayKey(cwd)) throw new MissingGatewayKeyError();
 
-  // Create a single AbortController for the entire turn. It fires as soon as
-  // EITHER the caller's signal fires (Esc / Ctrl-C) OR the per-turn deadline
-  // (TIMEOUTS.turnMs) elapses — whichever comes first. Every sub-operation
-  // (LLM call, tool executes, hook runners) receives this signal so they all
-  // cancel together with no dangling work.
+  // Create a single AbortController for the entire turn. It fires when the
+  // caller's signal fires (Esc / Ctrl-C) — there is NO per-turn wall-clock cap
+  // (Bug 1). A hung stream is caught by the stall detector below; every
+  // sub-operation (LLM call, tool executes, hook runners) receives this signal
+  // so they all cancel together with no dangling work.
   const turnController = makeTurnController(opts.signal);
   const turnSignal = turnController.signal;
 

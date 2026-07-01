@@ -39,7 +39,7 @@ import {
   makeTurnController,
   makeStallDetector,
   AgentTimeoutError,
-  TIMEOUTS,
+  DEFAULT_TIMEOUTS,
 } from "../agent/timeouts.js";
 
 export interface OneShotOptions {
@@ -92,16 +92,17 @@ export async function runOneShot(
       : undefined;
   const readOnly = options.readOnly || options.mode === "readonly";
 
-  // Bound the non-interactive turn: a per-turn deadline (TIMEOUTS.turnMs) plus a
-  // stall detector (aborts if no stream progress within TIMEOUTS.llmStallMs) so a
-  // scripted/CI `oxagen "…"` invocation can never hang a pipeline forever. Esc is
-  // not available here, so these timers are the only backstop.
+  // Bound the non-interactive turn by PROGRESS, not by a wall clock (Bug 1):
+  // there is NO per-turn time cap, so a long but healthy scripted/CI run
+  // completes. The inactivity guard aborts only if no progress — a stream delta,
+  // stage, or tool call — lands within turnInactivityMs. Esc is not available
+  // here, so this progress guard is the only backstop against a truly hung turn.
+  const inactivityMs = DEFAULT_TIMEOUTS.turnInactivityMs ?? 300_000;
   const turnController = makeTurnController();
-  const stall = makeStallDetector(TIMEOUTS.llmStallMs, () => {
+  const stall = makeStallDetector(inactivityMs, () => {
     if (!turnController.signal.aborted) {
-      turnController.abort(
-        new AgentTimeoutError("LLM stream stall", TIMEOUTS.llmStallMs),
-      );
+      void debugLog("timeout", "[timeout] scope=turn reason=inactivity");
+      turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
     }
   });
 
