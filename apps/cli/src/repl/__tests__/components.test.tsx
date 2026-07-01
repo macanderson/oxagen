@@ -80,6 +80,39 @@ describe("StatusLine (model, tokens, cache, cost)", () => {
   });
 });
 
+describe("StatusLine (pipeline indicator)", () => {
+  const base = {
+    model: "x/y",
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheHit: 0,
+    cacheMiss: 0,
+    costUsd: 0,
+  } as const;
+
+  it("shows the dumbbell + 'pipeline activated' when pipelineOn is true", () => {
+    const { lastFrame } = render(<StatusLine {...base} pipelineOn={true} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("🏋️");
+    expect(frame).toContain("pipeline activated");
+    expect(frame).not.toContain("bare");
+  });
+
+  it("shows 'bare' in red when pipelineOn is false", () => {
+    const { lastFrame } = render(<StatusLine {...base} pipelineOn={false} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("bare");
+    expect(frame).not.toContain("pipeline activated");
+  });
+
+  it("shows neither indicator when pipelineOn is undefined", () => {
+    const { lastFrame } = render(<StatusLine {...base} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).not.toContain("pipeline activated");
+    expect(frame).not.toContain("bare");
+  });
+});
+
 describe("StatusLine (permission line)", () => {
   it.each([
     ["bypass", "bypass permissions on"],

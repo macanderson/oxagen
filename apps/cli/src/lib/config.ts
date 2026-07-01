@@ -24,6 +24,12 @@ export interface CliConfig {
    * accessors in `pipeline/config.ts`, not the flat `oxagen config` command.
    */
   pipeline?: import("../pipeline/config.js").AssistPipelineConfigPatch;
+  /**
+   * Background-monitor settings (Group 5: ask-before-monitoring, dispatch
+   * triggers, poll cadence). A partial override layered over the defaults;
+   * read through the typed accessors in `monitors/config.ts`.
+   */
+  monitors?: import("../monitors/config.js").MonitorsConfigPatch;
 }
 
 /**

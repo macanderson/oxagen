@@ -10,7 +10,7 @@
  *
  * Presentational pieces live in ./components; this file is the container.
  */
-import { Box, Text, useApp, useInput, useStdout } from "ink";
+import { Box, Static, Text, useApp, useInput } from "ink";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import type { ModelMessage } from "ai";
 import { existsSync, readFileSync } from "node:fs";
@@ -1255,26 +1255,50 @@ export function ReplApp({
     [enqueue, resetConversation, pushAssistant],
   );
 
-  return (
-    // The column is always pinned to the full terminal height (alt screen), so
-    // the messages region flex-grows to fill the space and the input + status
-    // stay glued to the bottom regardless of how long the conversation is.
-    <Box flexDirection="column" height={rows}>
-      {/* Header — the Oxagen ASCII wordmark. It animates (reveals top-to-bottom)
-          the first time the REPL mounts, then stays as the logo header. */}
-      <Banner version={pkg.version} animate />
+  // ── Static / live split ────────────────────────────────────────────────────
+  // The transcript is rendered in two parts. Everything that is FINALIZED goes
+  // into Ink's <Static>, which writes each item to the terminal's real scrollback
+  // exactly once and never re-diffs it again — so it can never garble on redraw,
+  // and the user can scroll up through it with their terminal's native
+  // scrollback. Only the currently-STREAMING tail (the one message still being
+  // appended to) stays in the live, re-rendered region below. Because at most the
+  // last message is ever mutated (see the streaming callbacks in handleSubmit —
+  // closeStreamingBlocks() finalizes a block before the next opens), the split
+  // point is simply the first message still marked `streaming`.
+  const firstStreamingIdx = messages.findIndex((m) => m.streaming);
+  const splitAt = firstStreamingIdx === -1 ? messages.length : firstStreamingIdx;
+  const settled = messages.slice(0, splitAt);
+  const live = messages.slice(splitAt);
+  // The Oxagen wordmark is the first Static item so it sits at the very top of
+  // the session and scrolls up into history as the conversation grows. It draws
+  // fully (no reveal animation) because Static renders an item once and never
+  // updates it — an animating banner would freeze mid-reveal.
+  const staticItems: Array<{ kind: "banner" } | { kind: "message"; msg: Message }> = [
+    { kind: "banner" },
+    ...settled.map((msg) => ({ kind: "message" as const, msg })),
+  ];
 
-      {/* Messages — fill the space between the banner and the input. `flex-end`
-          anchors the conversation to the bottom so the newest lines sit just
-          above the input; older lines overflow off the top and are clipped. */}
-      <Box
-        flexDirection="column"
-        flexGrow={1}
-        overflow="hidden"
-        minHeight={0}
-        justifyContent="flex-end"
-      >
-        {messages.length === 0 ? (
+  return (
+    // No fixed height and no alternate screen: the REPL renders inline in the
+    // normal terminal buffer so native scrollback works. Static history is
+    // written above; the live region (streaming tail + input + status) follows
+    // the latest output and is the only part Ink continuously redraws.
+    <Box flexDirection="column">
+      <Static items={staticItems}>
+        {(item, i) =>
+          item.kind === "banner" ? (
+            <Banner key="banner" version={pkg.version} />
+          ) : (
+            <MessageView key={i} msg={item.msg} />
+          )
+        }
+      </Static>
+
+      {/* Live region — the streaming tail, plus the empty-state hint before any
+          turn has run. Only these lines re-render as tokens arrive, so the frame
+          Ink redraws stays small and never overflows the viewport. */}
+      <Box flexDirection="column">
+        {messages.length === 0 && (
           <Box paddingX={1} flexDirection="column">
             <Text dimColor>Ready. Type a prompt to start coding.</Text>
             <Text dimColor>
@@ -1301,6 +1325,9 @@ export function ReplApp({
             diffTheme={diffThemeRef.current}
           />
         )}
+        {live.map((msg, i) => (
+          <MessageView key={splitAt + i} msg={msg} />
+        ))}
       </Box>
 
       {/* Queued prompts (submitted while a turn is running) */}
