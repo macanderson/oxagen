@@ -32,6 +32,12 @@ async function main(): Promise<void> {
   // also what lets `OXAGEN_CLI_DEBUG=1` be enabled from settings.json `env`.
   const { applySettingsToEnv } = await import("./settings/runtime.js");
   applySettingsToEnv();
+  // Silence the benign "responseFormat not supported" AI SDK warning emitted by
+  // every generateObject call routed through the platform proxy (which handles
+  // JSON via prompt fallback, not schema response_format). Must run before any
+  // model call. See lib/ai-warnings.ts for why the fallback is correct by design.
+  const { installAiSdkWarningFilter } = await import("./lib/ai-warnings.js");
+  installAiSdkWarningFilter();
   // When OXAGEN_CLI_DEBUG=1, record the invocation to ~/.oxagen/logs/cli.output
   // before dispatching. Fire-and-forget: never blocks or breaks a command.
   const { debugLog } = await import("./lib/debug-log.js");
