@@ -57,5 +57,5 @@ ClickHouse column or `uuid` Postgres column. If a human-readable key is needed,
 add a SEPARATE `String` column via a forward migration. The exact same class
 recurs across every `embedText` / `generateObjectFor` / `generateImageFor`
 caller — grep for `` executionStepId: ` `` / `` messageId: ` `` and `?? "unknown"`.
-The CH UUID parse failure also greedily corrupts the *next* column's value in the
+The CH UUID parse failure also greedily corrupts the _next_ column's value in the
 error message, which can mislead diagnosis. See [[clickhouse-key-column-not-nullable]].

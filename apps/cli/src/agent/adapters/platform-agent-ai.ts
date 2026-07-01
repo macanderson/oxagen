@@ -53,6 +53,19 @@ export function createPlatformAgentAi(opts: PlatformAgentAiOptions): AgentAi {
         tools: args.tools,
         stopWhen: args.stopWhen,
         abortSignal: args.abortSignal,
+        // Forward the requested reasoning effort as an extra body field. The
+        // openai-compatible provider merges `providerOptions[<name>]` into the
+        // request body verbatim, so `reasoning_effort` (OpenAI's canonical field)
+        // reaches the platform's /v1/agent/llm endpoint, which applies it to the
+        // upstream model. Omitted entirely when no effort is set, so the server's
+        // per-slug default still governs.
+        ...(args.effort
+          ? {
+              providerOptions: {
+                "oxagen-platform": { reasoning_effort: args.effort },
+              },
+            }
+          : {}),
         onError: args.onError,
         // Forward step completion (carries the tool call/result trace events the
         // engine turns into ToolEvents), narrowing the SDK's StepResult to the

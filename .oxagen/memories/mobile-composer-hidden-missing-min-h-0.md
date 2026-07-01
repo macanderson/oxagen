@@ -10,7 +10,7 @@ date: 2026-06-23
 **Symptom:** On mobile portrait the Ask/chat composer's Send button was pushed
 far below the fold and sat behind the fixed `MobileBottomBar` — users could not
 see or tap Send. On desktop the composer was fine. (#126 had already scoped the
-shell `<main>` bottom-bar clearance to `max-md:` to fix a *separate* desktop
+shell `<main>` bottom-bar clearance to `max-md:` to fix a _separate_ desktop
 excess-padding bug; this mobile occlusion was a distinct, deeper layout fault.)
 
 **Root cause:** The chat content column in

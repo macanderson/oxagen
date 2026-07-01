@@ -75,6 +75,8 @@ export interface RunTurnOptions {
   history?: ModelMessage[];
   /** Manual model override — pins the executor and skips auto-routing. */
   model?: string;
+  /** Reasoning effort for models that support it (forwarded to the AI port). */
+  effort?: "low" | "medium" | "high";
   /** Max tool-loop steps per execution round (default 32). */
   maxSteps?: number;
   /** Loaded project rules (CLAUDE.md/AGENTS.md). */
@@ -273,6 +275,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       ai: opts.ai,
       instruction: prompt,
       model: routed.model,
+      effort: opts.effort,
       system: opts.projectContext?.text,
       history,
       maxSteps: opts.maxSteps,
@@ -524,6 +527,7 @@ async function runBare(
     ai: opts.ai,
     instruction: opts.prompt,
     model: opts.model,
+    effort: opts.effort,
     history: opts.history,
     maxSteps: opts.maxSteps,
     readOnly: opts.readOnly,

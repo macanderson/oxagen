@@ -156,6 +156,51 @@ describe("registry-client", () => {
     expect(icon?.color).toBe("#6366f1");
   });
 
+  it("parses a server whose repository omits url/source without dropping the page", async () => {
+    // The live MCP Registry returns records whose `repository` object is present
+    // but omits `url`/`source`. When those were required, a SINGLE such server
+    // threw a ZodError that rejected the ENTIRE /v0.1/servers page (catalog
+    // browse/sync returned 0 results). They are now nullish.
+    mockFetchOnce({
+      servers: [
+        {
+          server: {
+            name: "io.x/partial-repo",
+            description: "A server with a repository missing url/source",
+            version: "1.0.0",
+            repository: { id: "abc123" },
+          },
+        },
+        {
+          server: { name: "io.x/ok", description: "Fully-formed", version: "1.0.0" },
+        },
+      ],
+    });
+    const res = await listServers(BASE, {});
+    // Both servers survive — the partial repository must not nuke the batch.
+    expect(res.servers).toHaveLength(2);
+    expect(res.servers[0]!.server.repository?.url).toBeUndefined();
+    expect(res.servers[0]!.server.repository?.source).toBeUndefined();
+  });
+
+  it("parses a server whose repository has null url/source", async () => {
+    mockFetchOnce({
+      servers: [
+        {
+          server: {
+            name: "io.x/null-repo",
+            description: "repository with explicit null url/source",
+            version: "1.0.0",
+            repository: { url: null, source: null },
+          },
+        },
+      ],
+    });
+    const res = await listServers(BASE, {});
+    expect(res.servers).toHaveLength(1);
+    expect(res.servers[0]!.server.repository?.url).toBeNull();
+  });
+
   it("throws a descriptive error (not a ZodError) when listServers response is malformed", async () => {
     // A response with a server missing required `name` field should fail safeParse
     // and produce a descriptive thrown error (not a raw ZodError crash).

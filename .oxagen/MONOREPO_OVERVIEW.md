@@ -1,7 +1,7 @@
 # Oxagen Monorepo Overview
 
-**Version:** 0.5.0  
-**Last Updated:** June 2024  
+**Version:** 0.5.0
+**Last Updated:** June 2024
 **Purpose:** Complete reference documentation for agent coders building features on Oxagen
 
 ---
@@ -73,21 +73,21 @@ oxagen-monorepo/
 
 ## Tech Stack
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **Frontend** | Next.js 16 + React 19 | App Router, streaming RSC, Turbopack |
-| **API** | Hono | Type-safe routes, zero-overhead middleware |
-| **AI Runtime** | Vercel AI SDK Core | Streaming, structured output, multi-model |
-| **Primary Database** | PostgreSQL 16 | ACID transactions, RLS, JSON, CDC |
-| **Knowledge Graph** | Neo4j 5+ | APOC, vectors, graph traversal |
-| **Analytics** | ClickHouse | Append-only events, OLAP queries |
-| **Jobs** | Inngest | Durable workflows, retries, scheduling |
-| **Auth** | Better Auth | Passkeys, OAuth, role-based access |
-| **Storage** | Vercel Blob | Signed URLs, public/private assets |
-| **Language** | TypeScript 6 | Strict mode, no `any` allowed |
-| **Testing** | Vitest + Playwright | Fast unit tests, real browser E2E |
-| **Build** | Turbo | Monorepo caching & task orchestration |
-| **Package Manager** | pnpm 11 | Efficient, strict dependency isolation |
+| Layer                | Technology            | Purpose                                    |
+| -------------------- | --------------------- | ------------------------------------------ |
+| **Frontend**         | Next.js 16 + React 19 | App Router, streaming RSC, Turbopack       |
+| **API**              | Hono                  | Type-safe routes, zero-overhead middleware |
+| **AI Runtime**       | Vercel AI SDK Core    | Streaming, structured output, multi-model  |
+| **Primary Database** | PostgreSQL 16         | ACID transactions, RLS, JSON, CDC          |
+| **Knowledge Graph**  | Neo4j 5+              | APOC, vectors, graph traversal             |
+| **Analytics**        | ClickHouse            | Append-only events, OLAP queries           |
+| **Jobs**             | Inngest               | Durable workflows, retries, scheduling     |
+| **Auth**             | Better Auth           | Passkeys, OAuth, role-based access         |
+| **Storage**          | Vercel Blob           | Signed URLs, public/private assets         |
+| **Language**         | TypeScript 6          | Strict mode, no `any` allowed              |
+| **Testing**          | Vitest + Playwright   | Fast unit tests, real browser E2E          |
+| **Build**            | Turbo                 | Monorepo caching & task orchestration      |
+| **Package Manager**  | pnpm 11               | Efficient, strict dependency isolation     |
 
 ---
 
@@ -96,6 +96,7 @@ oxagen-monorepo/
 ### 1. Capability System
 
 Every feature in Oxagen is a **capability** with:
+
 - Unique dot-notation name (e.g., `chat.message.send`)
 - Zod contract defining input/output schemas
 - IAM policy (defaultEffect: "allow" or "deny")
@@ -109,6 +110,7 @@ Every feature in Oxagen is a **capability** with:
 **Location:** `packages/oxagen/src/kernel.ts`
 
 The single `invoke()` function that:
+
 1. Validates input against the capability contract
 2. Checks IAM permissions (if enforced)
 3. Gates on billing credits (if enabled)
@@ -121,17 +123,18 @@ The single `invoke()` function that:
 
 ### 3. Storage Boundaries (Critical!)
 
-| Store | Use For | Never Use For |
-|-------|---------|---------------|
-| **PostgreSQL** | Transactional state, users, orgs, billing, IAM, config | Analytics, graph relationships |
-| **Neo4j** | Entities, relationships, execution lineage, agent memory | Transactional state, counters |
-| **ClickHouse** | Audit events, token usage, telemetry (append-only) | Mutable state, graph data |
+| Store          | Use For                                                  | Never Use For                  |
+| -------------- | -------------------------------------------------------- | ------------------------------ |
+| **PostgreSQL** | Transactional state, users, orgs, billing, IAM, config   | Analytics, graph relationships |
+| **Neo4j**      | Entities, relationships, execution lineage, agent memory | Transactional state, counters  |
+| **ClickHouse** | Audit events, token usage, telemetry (append-only)       | Mutable state, graph data      |
 
 **Cross-domain queries:** Use Drizzle relations in `packages/database/src/relations.ts` - never raw JOINs in handlers.
 
 ### 4. Tenancy Enforcement
 
 **Critical pattern:** Every DB query inside a scoped capability MUST run inside:
+
 ```typescript
 import { runInTenantScope } from '@oxagen/tenancy';
 
@@ -203,11 +206,13 @@ oxagen auth whoami
 ### Before Every Push
 
 **The gate MUST pass:**
+
 ```bash
 pnpm gate
 ```
 
 This runs:
+
 - ✅ ESLint (zero warnings)
 - ✅ TypeScript strict
 - ✅ Manifest check (API ↔ MCP parity)
@@ -229,6 +234,7 @@ This runs:
 6. Mac performs all pushes one at a time
 
 **For large work:** Use worktrees:
+
 ```bash
 git worktree add ../oxagen-feature -b feature/your-feature
 cd ../oxagen-feature
@@ -244,31 +250,38 @@ cd ../oxagen-feature
 **Required files:**
 
 1. **Contract:** `packages/oxagen/src/contracts/<name>.ts`
+
 ```typescript
 import { defineContract } from '../define-contract';
 import { z } from 'zod';
 
 export const myCapability = defineContract({
   name: 'my.capability.name',
-  input: z.object({ /* ... */ }),
-  output: z.object({ /* ... */ }),
+  input: z.object({
+    /* ... */
+  }),
+  output: z.object({
+    /* ... */
+  }),
   surfaces: ['api', 'mcp'], // where it's exposed
   defaultEffect: 'deny', // or 'allow'
   sensitivity: 'medium', // 'low', 'medium', 'high'
   noBillingGate: false, // set true for settings/mgmt ops
   defaultRoles: {
     org: { Owner: 'allow', Admin: 'allow' },
-    workspace: { Member: 'allow' }
-  }
+    workspace: { Member: 'allow' },
+  },
 });
 ```
 
 2. **Barrel export:** Add to `packages/oxagen/src/contracts/index.ts`
+
 ```typescript
 export * from './my.capability.name';
 ```
 
 3. **Handler:** `packages/handlers/src/<name>.ts`
+
 ```typescript
 export async function handler(input: Input): Promise<Output> {
   // Implementation
@@ -276,6 +289,7 @@ export async function handler(input: Input): Promise<Output> {
 ```
 
 4. **Registration:** In `packages/handlers/src/register.ts`
+
 ```typescript
 registerHandler('my.capability.name', async () => {
   const { handler } = await import('./my-capability-name');
@@ -292,6 +306,7 @@ registerHandler('my.capability.name', async () => {
 - **API route:** Usually auto-exposed via kernel
 
 **Verification:**
+
 ```bash
 pnpm check:manifest      # Verify API ↔ MCP parity
 pnpm check:contracts     # Verify barrel export
@@ -312,6 +327,7 @@ export const myTable = someSchema.table('my_table', {
 ```
 
 **Create migration:**
+
 ```bash
 pnpm db:migrate:diff      # Generate Atlas migration
 pnpm db:lint-migrations   # Verify integrity
@@ -332,7 +348,7 @@ export const myFunction = inngest.createFunction(
   { event: 'my/event' },
   async ({ event, step }) => {
     // Idempotent implementation
-  }
+  },
 );
 ```
 
@@ -343,6 +359,7 @@ export const myFunction = inngest.createFunction(
 **Location:** `packages/ingestion/src/connectors/<name>/`
 
 Implement:
+
 - `verifyWebhook(req, secret)` - HMAC verification
 - `normalizeRecord(raw)` - Map to NormalizedRecord
 - `previewRecordTypes()` - Available types
@@ -380,6 +397,7 @@ Implement:
 ### Test Patterns
 
 **Setup/Teardown:**
+
 ```typescript
 import { clearHandlersForTests } from '@oxagen/oxagen';
 import { clearBillingAdmissionGate } from '@oxagen/billing';
@@ -391,6 +409,7 @@ beforeEach(() => {
 ```
 
 **Tenant Scoping:**
+
 ```typescript
 import { runInTenantScope } from '@oxagen/tenancy';
 
@@ -419,6 +438,7 @@ await runInTenantScope({ orgId, workspaceId }, async (db) => {
 ### Component Conventions
 
 **UI Component Imports (Critical!):**
+
 ```typescript
 // ✅ Correct - use re-export layer
 import { Button } from '@/components/ui/button';
@@ -430,12 +450,13 @@ import { Button } from '@oxagen/ui/components/button';
 **Why:** Re-export layer allows app-specific overrides without changing consumers.
 
 **Design Tokens:** Use component-level tokens in shell components:
+
 ```typescript
 // ✅ Correct
-className="bg-app-topbar-bg text-app-topbar-fg"
+className = 'bg-app-topbar-bg text-app-topbar-fg';
 
 // ❌ Wrong
-className="bg-background text-foreground"
+className = 'bg-background text-foreground';
 ```
 
 ---
@@ -480,6 +501,7 @@ All env vars MUST be declared in `packages/config/src/registry.ts` with Zod vali
 **Adding a new variable:**
 
 1. Add to registry:
+
 ```typescript
 export const MY_VAR = defineEnvVar({
   key: 'MY_VAR',
@@ -504,6 +526,7 @@ export const MY_VAR = defineEnvVar({
 ## Common Commands Reference
 
 ### Development
+
 ```bash
 pnpm dev                 # Start all apps + Docker
 pnpm kill                # Stop everything
@@ -512,6 +535,7 @@ pnpm clean:cache         # Clear Next.js cache
 ```
 
 ### Testing & Verification
+
 ```bash
 pnpm gate                # Full CI locally
 pnpm test                # Unit tests
@@ -524,6 +548,7 @@ pnpm check:connector-schemas  # Connector schemas
 ```
 
 ### Database
+
 ```bash
 pnpm db:migrate          # Apply migrations
 pnpm db:migrate:diff     # Create migration
@@ -534,6 +559,7 @@ pnpm db:atlas-validate   # Validate Atlas schema
 ```
 
 ### Releases (Maintainers Only)
+
 ```bash
 pnpm release:patch       # Bug fixes (0.5.0 → 0.5.1)
 pnpm release:minor       # Features (0.5.0 → 0.6.0)
@@ -541,6 +567,7 @@ pnpm release:major       # Breaking (0.5.0 → 1.0.0)
 ```
 
 ### Utilities
+
 ```bash
 pnpm env:check           # Validate .env.local
 pnpm docs:schemas        # Generate capability docs
@@ -553,12 +580,12 @@ lsof -ti:4100            # Check MCP server
 
 ## Access Points (Local Development)
 
-| Service | URL | Purpose |
-|---------|-----|---------|
-| **Web App** | http://localhost:3000 | Interactive UI |
-| **API** | http://localhost:4000 | REST endpoints |
-| **MCP** | http://localhost:4100 | Tool protocol |
-| **Docs** | http://localhost:3300 | Documentation |
+| Service       | URL                   | Purpose           |
+| ------------- | --------------------- | ----------------- |
+| **Web App**   | http://localhost:3000 | Interactive UI    |
+| **API**       | http://localhost:4000 | REST endpoints    |
+| **MCP**       | http://localhost:4100 | Tool protocol     |
+| **Docs**      | http://localhost:3300 | Documentation     |
 | **Storybook** | http://localhost:6007 | Component library |
 
 ---
@@ -568,6 +595,7 @@ lsof -ti:4100            # Check MCP server
 **GitHub Actions:** `.github/workflows/pipeline.yml`
 
 **Steps:**
+
 1. Lint (ESLint)
 2. Typecheck (TypeScript)
 3. Unit tests (Vitest)
@@ -580,6 +608,7 @@ lsof -ti:4100            # Check MCP server
 10. Deploy (Vercel)
 
 **Requirements:**
+
 - ✅ All checks must pass
 - ✅ No warnings allowed
 - ✅ Coverage thresholds met
@@ -591,18 +620,21 @@ lsof -ti:4100            # Check MCP server
 ## Important Documentation References
 
 ### Core Specs
+
 - [README.md](../README.md) - Product overview
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution guide
 - [AGENTS.md](../AGENTS.md) - Agent coder quick reference
 - [CONTEXT_ENGINE_SPEC.md](../CONTEXT_ENGINE_SPEC.md) - CLI context engine design
 
 ### Architecture
+
 - [docs/adr/](../docs/adr/) - Architecture Decision Records (16 ADRs)
 - [.agents/summary/architecture.md](../.agents/summary/architecture.md) - System architecture
 - [.agents/summary/components.md](../.agents/summary/components.md) - Package/app breakdown
 - [.agents/summary/data_models.md](../.agents/summary/data_models.md) - Schema documentation
 
 ### Capabilities
+
 - [docs/capabilities/](../docs/capabilities/) - 140+ capability docs
 - [packages/oxagen/src/contracts/](../packages/oxagen/src/contracts/) - 383 contract definitions
 
@@ -611,8 +643,10 @@ lsof -ti:4100            # Check MCP server
 ## Common Gotchas & Solutions
 
 ### 1. TenantScopeError
-**Problem:** Missing `runInTenantScope` wrapper  
+
+**Problem:** Missing `runInTenantScope` wrapper
 **Solution:** Wrap all DB queries in scoped capabilities:
+
 ```typescript
 await runInTenantScope({ orgId, workspaceId }, async (db) => {
   // queries here
@@ -620,19 +654,23 @@ await runInTenantScope({ orgId, workspaceId }, async (db) => {
 ```
 
 ### 2. Manifest Check Fails
-**Problem:** API and MCP capabilities out of sync  
+
+**Problem:** API and MCP capabilities out of sync
 **Solution:** Ensure capability is registered in both or excluded from one via `surfaces` field
 
 ### 3. Migration Conflicts
-**Problem:** Multiple migrations touch same table  
+
+**Problem:** Multiple migrations touch same table
 **Solution:** Always pull latest `main` before creating migrations
 
 ### 4. Test Coverage Drop
-**Problem:** New code without tests  
+
+**Problem:** New code without tests
 **Solution:** Add tests before committing - thresholds are enforced
 
 ### 5. Import Errors
-**Problem:** Direct imports from `@oxagen/ui/components/*`  
+
+**Problem:** Direct imports from `@oxagen/ui/components/*`
 **Solution:** Use re-export layer: `@/components/ui/<name>`
 
 ---
@@ -640,17 +678,20 @@ await runInTenantScope({ orgId, workspaceId }, async (db) => {
 ## Performance Targets
 
 ### Latency Budgets
+
 - **API Response:** p50 < 100ms (excluding LLM)
 - **Web App FCP:** < 1.5s
 - **Database Query:** p99 < 50ms
 - **Graph Traversal:** p99 < 200ms
 
 ### Build Times
+
 - **Turbo (cached):** < 10s
 - **Turbo (uncached):** < 3min
 - **Full gate:** < 5min
 
 ### Test Times
+
 - **Unit tests:** < 30s
 - **Integration tests:** < 2min
 - **E2E suite:** < 5min
@@ -660,18 +701,21 @@ await runInTenantScope({ orgId, workspaceId }, async (db) => {
 ## Security & Compliance
 
 ### Access Control
+
 - **IAM:** Role-based, capability-level
 - **RLS:** PostgreSQL Row-Level Security
 - **Tenancy:** Enforced at kernel + DB layer
 - **Audit:** All capability invocations logged to ClickHouse
 
 ### Privacy
+
 - **GDPR:** Right to erasure supported
 - **Encryption:** At-rest and in-transit
 - **PII:** Marked fields, automated handling
 - **Retention:** Configurable per data type
 
 ### Secrets Management
+
 - **Local:** `.env.local` (gitignored)
 - **CI:** GitHub Secrets
 - **Production:** Vercel Environment Variables
@@ -682,6 +726,7 @@ await runInTenantScope({ orgId, workspaceId }, async (db) => {
 ## Troubleshooting
 
 ### Development Server Won't Start
+
 ```bash
 # Kill hanging processes
 pnpm kill
@@ -697,6 +742,7 @@ pnpm dev
 ```
 
 ### Database Connection Issues
+
 ```bash
 # Check Docker status
 docker ps
@@ -710,6 +756,7 @@ pnpm db:migrate
 ```
 
 ### Build Failures
+
 ```bash
 # Clear Turbo cache
 rm -rf .turbo node_modules/.cache
@@ -722,6 +769,7 @@ pnpm build
 ```
 
 ### Test Failures
+
 ```bash
 # Clear test caches
 rm -rf coverage/ .vitest/
@@ -738,16 +786,19 @@ pnpm test -- <test-file>
 ## Support & Resources
 
 ### Documentation
+
 - **Main Docs:** https://docs.oxagen.sh
 - **API Reference:** https://api.oxagen.sh/docs
 - **Component Library:** http://localhost:6007 (Storybook)
 
 ### Internal Resources
+
 - **ADRs:** [docs/adr/](../docs/adr/)
 - **Guides:** [docs/guides/](../docs/guides/)
 - **Specs:** [docs/specs/](../docs/specs/)
 
 ### Community
+
 - **GitHub:** https://github.com/oxagenai/oxagen-monorepo
 - **Linear:** Project tracking
 - **Slack:** Team communication
@@ -764,6 +815,6 @@ pnpm test -- <test-file>
 
 ---
 
-**Last Updated:** June 2024  
-**Maintained By:** Oxagen Platform Team  
+**Last Updated:** June 2024
+**Maintained By:** Oxagen Platform Team
 **License:** Proprietary

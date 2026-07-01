@@ -27,7 +27,9 @@ interface HastNode {
 /** Parse https://github.com/<owner>/<repo>[.git] into owner/repo. */
 function parseGithub(repository: Repository): GithubRef | null {
   if (repository.source !== "github") return null;
-  const m = repository.url.match(/github\.com\/([^/]+)\/([^/#?]+)/i);
+  // url is nullish in the schema (the live registry omits it on some records),
+  // so guard before .match — a "github" source with no url yields no ref.
+  const m = repository.url?.match(/github\.com\/([^/]+)\/([^/#?]+)/i);
   if (!m || !m[1] || !m[2]) return null;
   const owner = m[1];
   const repo = m[2].replace(/\.git$/, "");

@@ -26,4 +26,4 @@ then resolves it and asserts `close()` is called (fails on the old code).
 
 **Watch-outs:** any React effect that assigns an async-acquired resource to a
 ref must guard the unmount-before-resolve race — the cleanup closure captures
-the *local* at unmount time, not the value that lands later.
+the _local_ at unmount time, not the value that lands later.

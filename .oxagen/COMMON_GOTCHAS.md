@@ -9,11 +9,13 @@
 ### ❌ Missing Tenant Scope Wrapper
 
 **Error:**
+
 ```
 TenantScopeError: Database query attempted outside tenant scope
 ```
 
 **Bad:**
+
 ```typescript
 export async function handler(input: Input): Promise<Output> {
   const workspace = await db.query.workspaces.findFirst({
@@ -24,6 +26,7 @@ export async function handler(input: Input): Promise<Output> {
 ```
 
 **Good:**
+
 ```typescript
 import { runInTenantScope } from '@oxagen/tenancy';
 
@@ -35,7 +38,7 @@ export async function handler(input: Input): Promise<Output> {
         where: eq(workspaces.id, input.workspaceId),
       });
       return { workspace };
-    }
+    },
   );
 }
 ```
@@ -45,12 +48,14 @@ export async function handler(input: Input): Promise<Output> {
 ### ❌ Manual Migration Files
 
 **Bad:**
+
 ```bash
 # Manually creating migration file
 touch packages/database/migrations/001_add_table.sql
 ```
 
 **Good:**
+
 ```bash
 # Let Atlas generate migrations
 pnpm db:migrate:diff
@@ -64,6 +69,7 @@ pnpm db:migrate:diff
 ### ❌ N+1 Queries
 
 **Bad:**
+
 ```typescript
 const workspaces = await db.query.workspaces.findMany();
 
@@ -76,6 +82,7 @@ for (const workspace of workspaces) {
 ```
 
 **Good:**
+
 ```typescript
 // Option 1: Use Drizzle relations
 const workspaces = await db.query.workspaces.findMany({
@@ -85,7 +92,7 @@ const workspaces = await db.query.workspaces.findMany({
 });
 
 // Option 2: Batch query
-const workspaceIds = workspaces.map(w => w.id);
+const workspaceIds = workspaces.map((w) => w.id);
 const allMembers = await db.query.members.findMany({
   where: inArray(members.workspaceId, workspaceIds),
 });
@@ -98,6 +105,7 @@ const allMembers = await db.query.members.findMany({
 **Problem:** Running migrations against production instead of local
 
 **Prevention:**
+
 ```bash
 # Always verify before migrations
 echo $DATABASE_URL
@@ -113,6 +121,7 @@ pnpm db:migrate
 ### ❌ Cross-Schema Foreign Keys in Schema Files
 
 **Bad:**
+
 ```typescript
 // In packages/database/src/schema/workspace.ts
 import { users } from './org';
@@ -124,6 +133,7 @@ export const workspaces = workspaceSchema.table('workspaces', {
 ```
 
 **Good:**
+
 ```typescript
 // In packages/database/src/schema/workspace.ts
 export const workspaces = workspaceSchema.table('workspaces', {
@@ -153,6 +163,7 @@ export const workspaceRelations = relations(workspaces, ({ one }) => ({
 ### ❌ Forgetting Barrel Export
 
 **Error:**
+
 ```
 Contract 'my.new.capability' not found in registry
 ```
@@ -160,12 +171,14 @@ Contract 'my.new.capability' not found in registry
 **Problem:** Defined contract but didn't add to barrel
 
 **Solution:**
+
 ```typescript
 // packages/oxagen/src/contracts/index.ts
 export * from './my.new.capability'; // Add this line
 ```
 
 **Verification:**
+
 ```bash
 pnpm check:contracts
 ```
@@ -175,6 +188,7 @@ pnpm check:contracts
 ### ❌ Handler Not Registered
 
 **Error:**
+
 ```
 No handler registered for capability 'my.new.capability'
 ```
@@ -182,6 +196,7 @@ No handler registered for capability 'my.new.capability'
 **Problem:** Implemented handler but didn't register it
 
 **Solution:**
+
 ```typescript
 // packages/handlers/src/register.ts
 registerHandler('my.new.capability', async () => {
@@ -195,6 +210,7 @@ registerHandler('my.new.capability', async () => {
 ### ❌ Wrong defaultEffect
 
 **Bad:**
+
 ```typescript
 defineContract({
   name: 'org.settings.update',
@@ -204,6 +220,7 @@ defineContract({
 ```
 
 **Good:**
+
 ```typescript
 defineContract({
   name: 'org.settings.update',
@@ -225,6 +242,7 @@ defineContract({
 ### ❌ Missing noBillingGate for Management Ops
 
 **Bad:**
+
 ```typescript
 defineContract({
   name: 'workspace.settings.update',
@@ -234,6 +252,7 @@ defineContract({
 ```
 
 **Good:**
+
 ```typescript
 defineContract({
   name: 'workspace.settings.update',
@@ -249,6 +268,7 @@ defineContract({
 ### ❌ API/MCP Surface Mismatch
 
 **Error:**
+
 ```
 Manifest check failed: capability 'chat.message.send' exposed on API but not MCP
 ```
@@ -256,6 +276,7 @@ Manifest check failed: capability 'chat.message.send' exposed on API but not MCP
 **Problem:** Capability surfaces don't match intent
 
 **Solution:**
+
 ```typescript
 // If should be on both
 defineContract({
@@ -271,6 +292,7 @@ defineContract({
 ```
 
 **Verification:**
+
 ```bash
 pnpm check:manifest
 ```
@@ -282,16 +304,19 @@ pnpm check:manifest
 ### ❌ Direct Import from @oxagen/ui/components
 
 **Error:**
+
 ```
 ESLint: Do not import directly from @oxagen/ui/components/*
 ```
 
 **Bad:**
+
 ```typescript
 import { Button } from '@oxagen/ui/components/button'; // ❌
 ```
 
 **Good:**
+
 ```typescript
 import { Button } from '@/components/ui/button'; // ✅
 ```
@@ -303,6 +328,7 @@ import { Button } from '@/components/ui/button'; // ✅
 ### ❌ Using Generic Tokens in Shell Components
 
 **Bad:**
+
 ```typescript
 <div className="bg-background text-foreground"> {/* ❌ */}
   <nav className="border-b border-border">
@@ -314,6 +340,7 @@ import { Button } from '@/components/ui/button'; // ✅
 ```
 
 **Good:**
+
 ```typescript
 <div className="bg-app-panel-bg text-app-panel-fg"> {/* ✅ */}
   <nav className="border-b border-app-topbar-border">
@@ -331,6 +358,7 @@ import { Button } from '@/components/ui/button'; // ✅
 ### ❌ Client Component Where Server Component Would Work
 
 **Bad:**
+
 ```typescript
 'use client'; // ❌ Unnecessary
 
@@ -341,6 +369,7 @@ export default function Page() {
 ```
 
 **Good:**
+
 ```typescript
 // No 'use client' directive
 export default async function Page() {
@@ -350,6 +379,7 @@ export default async function Page() {
 ```
 
 **Rule:** Use Server Components by default. Only add `'use client'` when you need:
+
 - Browser APIs (localStorage, window)
 - React hooks (useState, useEffect)
 - Event handlers (onClick, onChange)
@@ -360,6 +390,7 @@ export default async function Page() {
 ### ❌ Missing Suspense Boundary
 
 **Bad:**
+
 ```typescript
 export default async function Page() {
   const data = await fetchData(); // ❌ Blocks entire page
@@ -368,6 +399,7 @@ export default async function Page() {
 ```
 
 **Good:**
+
 ```typescript
 import { Suspense } from 'react';
 
@@ -395,6 +427,7 @@ async function DataComponent() {
 ### ❌ Not Clearing Test State
 
 **Bad:**
+
 ```typescript
 import { describe, it } from 'vitest';
 import { invoke } from '@oxagen/oxagen';
@@ -404,7 +437,7 @@ describe('my capability', () => {
     await invoke('my.capability', input);
     // Handler state leaks to next test
   });
-  
+
   it('test 2', async () => {
     // May fail due to leaked state
   });
@@ -412,6 +445,7 @@ describe('my capability', () => {
 ```
 
 **Good:**
+
 ```typescript
 import { describe, it, beforeEach } from 'vitest';
 import { clearHandlersForTests } from '@oxagen/oxagen';
@@ -422,11 +456,11 @@ describe('my capability', () => {
     clearHandlersForTests();
     clearBillingAdmissionGate();
   });
-  
+
   it('test 1', async () => {
     // Clean state
   });
-  
+
   it('test 2', async () => {
     // Clean state
   });
@@ -438,19 +472,23 @@ describe('my capability', () => {
 ### ❌ Committed .skip() or .only()
 
 **Bad:**
+
 ```typescript
-describe.only('my tests', () => { // ❌ Will skip all other tests
+describe.only('my tests', () => {
+  // ❌ Will skip all other tests
   it('works', () => {
     // ...
   });
 });
 
-it.skip('broken test', () => { // ❌ Hiding broken test
+it.skip('broken test', () => {
+  // ❌ Hiding broken test
   // ...
 });
 ```
 
 **Good:**
+
 ```typescript
 describe('my tests', () => {
   it('works', () => {
@@ -468,26 +506,26 @@ describe('my tests', () => {
 ### ❌ Missing E2E Screenshots for UI Changes
 
 **Bad:**
+
 ```typescript
 test('updates workspace name', async ({ page }) => {
   await page.fill('[name="name"]', 'New Name');
   await page.click('button[type="submit"]');
-  
-  await expect(page.locator('[role="alert"]'))
-    .toContainText('Updated');
+
+  await expect(page.locator('[role="alert"]')).toContainText('Updated');
   // ❌ No screenshot
 });
 ```
 
 **Good:**
+
 ```typescript
 test('updates workspace name', async ({ page }) => {
   await page.fill('[name="name"]', 'New Name');
   await page.click('button[type="submit"]');
-  
-  await expect(page.locator('[role="alert"]'))
-    .toContainText('Updated');
-  
+
+  await expect(page.locator('[role="alert"]')).toContainText('Updated');
+
   // ✅ Screenshot success state
   await page.screenshot({
     path: 'screenshots/workspace-name-updated.png',
@@ -502,6 +540,7 @@ test('updates workspace name', async ({ page }) => {
 ### ❌ Lowering Coverage Thresholds
 
 **Bad:**
+
 ```typescript
 // vitest.config.ts
 export default defineConfig({
@@ -516,6 +555,7 @@ export default defineConfig({
 ```
 
 **Good:**
+
 ```typescript
 // vitest.config.ts
 export default defineConfig({
@@ -538,6 +578,7 @@ export default defineConfig({
 ### ❌ Non-Idempotent Inngest Functions
 
 **Bad:**
+
 ```typescript
 export const processEvent = inngest.createFunction(
   { id: 'process-event' },
@@ -546,11 +587,12 @@ export const processEvent = inngest.createFunction(
     // ❌ No idempotency check
     await db.insert(records).values({ data: event.data });
     return { success: true };
-  }
+  },
 );
 ```
 
 **Good:**
+
 ```typescript
 import { computeEventHash } from '../lib/hash';
 
@@ -560,25 +602,25 @@ export const processEvent = inngest.createFunction(
   async ({ event, step }) => {
     // ✅ Check if already processed
     const eventHash = computeEventHash(event);
-    
+
     const exists = await step.run('check-duplicate', async () => {
       return await checkIfProcessed(eventHash);
     });
-    
+
     if (exists) {
       return { skipped: true, reason: 'already processed' };
     }
-    
+
     await step.run('process', async () => {
       await db.insert(records).values({ data: event.data });
     });
-    
+
     await step.run('mark-complete', async () => {
       await markProcessed(eventHash);
     });
-    
+
     return { success: true };
-  }
+  },
 );
 ```
 
@@ -589,6 +631,7 @@ export const processEvent = inngest.createFunction(
 ### ❌ Throwing Non-Retriable Errors
 
 **Bad:**
+
 ```typescript
 export const myFunction = inngest.createFunction(
   { id: 'my-function' },
@@ -598,11 +641,12 @@ export const myFunction = inngest.createFunction(
     if (!data.isValid) {
       throw new Error('Invalid data'); // ❌ Will retry indefinitely
     }
-  }
+  },
 );
 ```
 
 **Good:**
+
 ```typescript
 import { NonRetriableError } from 'inngest';
 
@@ -615,7 +659,7 @@ export const myFunction = inngest.createFunction(
       // ✅ Don't retry validation errors
       throw new NonRetriableError('Invalid data');
     }
-  }
+  },
 );
 ```
 
@@ -628,6 +672,7 @@ export const myFunction = inngest.createFunction(
 ### ❌ Undeclared Environment Variables
 
 **Error:**
+
 ```
 Environment variable MY_VAR is required but not found
 ```
@@ -635,6 +680,7 @@ Environment variable MY_VAR is required but not found
 **Problem:** Used env var without declaring it in registry
 
 **Solution:**
+
 ```typescript
 // packages/config/src/registry.ts
 export const MY_VAR = defineEnvVar({
@@ -646,12 +692,14 @@ export const MY_VAR = defineEnvVar({
 ```
 
 **Also update:**
+
 ```bash
 # .env.example
 MY_VAR=example-value
 ```
 
 **Verification:**
+
 ```bash
 pnpm env:check
 ```
@@ -661,11 +709,13 @@ pnpm env:check
 ### ❌ Hardcoded Configuration
 
 **Bad:**
+
 ```typescript
 const API_URL = 'https://api.production.com'; // ❌ Hardcoded
 ```
 
 **Good:**
+
 ```typescript
 import { envConfig } from '@oxagen/config';
 
@@ -681,12 +731,14 @@ const API_URL = envConfig.NEXT_PUBLIC_API_URL; // ✅ From env
 ### ❌ Pushing Without Running Gate
 
 **Bad:**
+
 ```bash
 git commit -m "feat: add feature"
 git push # ❌ Skipped gate
 ```
 
 **Good:**
+
 ```bash
 pnpm gate # ✅ Run gate first
 
@@ -702,12 +754,14 @@ git commit -m "feat: add feature"
 ### ❌ Committing .env.local
 
 **Bad:**
+
 ```bash
 git add .env.local # ❌ Contains secrets
 git commit
 ```
 
 **Good:**
+
 ```bash
 # .env.local is gitignored by default
 # If accidentally staged:
@@ -721,11 +775,13 @@ git reset .env.local
 ### ❌ Large Files in Git
 
 **Bad:**
+
 ```bash
 git add large-dataset.json # ❌ 50MB file
 ```
 
 **Good:**
+
 ```bash
 # Store large files externally
 # Use Vercel Blob for assets:
@@ -742,23 +798,25 @@ await put('large-dataset.json', file, { access: 'public' });
 ### ❌ Fetching Data in Client Components
 
 **Bad:**
+
 ```typescript
 'use client';
 
 export default function Page() {
   const [data, setData] = useState(null);
-  
+
   useEffect(() => {
     fetch('/api/data')
       .then(r => r.json())
       .then(setData);
   }, []); // ❌ Client-side fetch, waterfall
-  
+
   return <div>{data?.value}</div>;
 }
 ```
 
 **Good:**
+
 ```typescript
 // Server Component (no 'use client')
 export default async function Page() {
@@ -772,6 +830,7 @@ export default async function Page() {
 ### ❌ Not Using Indexes
 
 **Bad:**
+
 ```typescript
 // Frequent query with no index
 const workspaces = await db.query.workspaces.findMany({
@@ -780,10 +839,12 @@ const workspaces = await db.query.workspaces.findMany({
 ```
 
 **Good:**
+
 ```typescript
 // packages/database/src/schema/workspace.ts
-export const workspaceOrgIndex = pgIndex('workspace_org_idx')
-  .on(workspaces.orgId); // ✅ Index on orgId
+export const workspaceOrgIndex = pgIndex('workspace_org_idx').on(
+  workspaces.orgId,
+); // ✅ Index on orgId
 
 // Query is now fast
 const workspaces = await db.query.workspaces.findMany({
@@ -798,6 +859,7 @@ const workspaces = await db.query.workspaces.findMany({
 ### ❌ Overfetching Data
 
 **Bad:**
+
 ```typescript
 // Fetch entire workspace object
 const workspace = await db.query.workspaces.findFirst({
@@ -814,6 +876,7 @@ return { name: workspace.name }; // Only need name
 ```
 
 **Good:**
+
 ```typescript
 // Fetch only needed fields
 const workspace = await db
@@ -832,6 +895,7 @@ return { name: workspace[0].name };
 ### ❌ SQL Injection via String Interpolation
 
 **Bad:**
+
 ```typescript
 // ❌ SQL injection vulnerability
 const query = `SELECT * FROM workspaces WHERE id = '${input.id}'`;
@@ -839,6 +903,7 @@ await db.execute(query);
 ```
 
 **Good:**
+
 ```typescript
 // ✅ Parameterized query (Drizzle handles this)
 const workspace = await db.query.workspaces.findFirst({
@@ -853,18 +918,20 @@ const workspace = await db.query.workspaces.findFirst({
 ### ❌ Exposing Sensitive Data in Logs
 
 **Bad:**
+
 ```typescript
 console.log('User input:', input); // ❌ May contain passwords, tokens
 ```
 
 **Good:**
+
 ```typescript
 import pino from 'pino';
 const logger = pino();
 
 logger.info(
   { userId: input.userId, action: input.action }, // ✅ Sanitized
-  'Processing user action'
+  'Processing user action',
 );
 ```
 
@@ -875,6 +942,7 @@ logger.info(
 ### ❌ Missing Input Validation
 
 **Bad:**
+
 ```typescript
 export async function handler(input: Input): Promise<Output> {
   // ❌ Trusts input without validation
@@ -886,6 +954,7 @@ export async function handler(input: Input): Promise<Output> {
 ```
 
 **Good:**
+
 ```typescript
 // Validation happens in contract
 defineContract({
@@ -908,15 +977,19 @@ defineContract({
 ### ❌ Using `any`
 
 **Bad:**
+
 ```typescript
-function processData(data: any) { // ❌
+function processData(data: any) {
+  // ❌
   return data.value;
 }
 ```
 
 **Good:**
+
 ```typescript
-function processData(data: { value: string }) { // ✅
+function processData(data: { value: string }) {
+  // ✅
   return data.value;
 }
 
@@ -936,8 +1009,10 @@ function processData(data: Data) {
 ### ❌ Missing Return Types
 
 **Bad:**
+
 ```typescript
-async function fetchWorkspace(id: string) { // ❌ Inferred return type
+async function fetchWorkspace(id: string) {
+  // ❌ Inferred return type
   return await db.query.workspaces.findFirst({
     where: eq(workspaces.id, id),
   });
@@ -945,8 +1020,10 @@ async function fetchWorkspace(id: string) { // ❌ Inferred return type
 ```
 
 **Good:**
+
 ```typescript
-async function fetchWorkspace(id: string): Promise<Workspace | null> { // ✅
+async function fetchWorkspace(id: string): Promise<Workspace | null> {
+  // ✅
   return await db.query.workspaces.findFirst({
     where: eq(workspaces.id, id),
   });
@@ -960,13 +1037,15 @@ async function fetchWorkspace(id: string): Promise<Workspace | null> { // ✅
 ### ❌ Non-Null Assertions Without Comments
 
 **Bad:**
+
 ```typescript
-const workspace = workspaces.find(w => w.id === id)!; // ❌ Dangerous
+const workspace = workspaces.find((w) => w.id === id)!; // ❌ Dangerous
 ```
 
 **Good:**
+
 ```typescript
-const workspace = workspaces.find(w => w.id === id);
+const workspace = workspaces.find((w) => w.id === id);
 if (!workspace) {
   throw new Error('Workspace not found');
 }
@@ -982,6 +1061,7 @@ if (!workspace) {
 ### ❌ Not Using Debugger
 
 **Bad:**
+
 ```typescript
 console.log('1'); // ❌ Console spam
 console.log('2');
@@ -990,6 +1070,7 @@ console.log('3');
 ```
 
 **Good:**
+
 ```typescript
 // Set breakpoint in VS Code
 debugger; // ✅ Or use this
@@ -1003,6 +1084,7 @@ debugger; // ✅ Or use this
 **Problem:** Error happens but no investigation
 
 **Solution:**
+
 ```bash
 # Check application logs
 docker logs <container-name>
@@ -1021,6 +1103,7 @@ docker logs oxagen-postgres-1
 **Problem:** "It works on my machine" (but fails in CI)
 
 **Solution:**
+
 ```bash
 # Reset local environment
 pnpm kill -- --volumes

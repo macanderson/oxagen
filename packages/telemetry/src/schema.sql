@@ -214,3 +214,21 @@ CREATE TABLE IF NOT EXISTS eval_results (
 PARTITION BY toYYYYMM(created_at)
 ORDER BY (harness, suite, task_id, agent_version, created_at)
 TTL toDateTime(created_at) + INTERVAL 365 DAY;
+
+-- Local dev console capture. `pnpm dev` tees turbo's combined output stream to
+-- the terminal AND batch-inserts every line here (see tools/scripts/dev.ts +
+-- lib/dev-log-shipper.ts), so the compile/runtime errors that used to scroll
+-- past in the terminal become queryable. Local-only telemetry: short 14-day TTL,
+-- keyed by dev_session so one `pnpm dev` run is one queryable stream.
+CREATE TABLE IF NOT EXISTS dev_logs (
+  ts DateTime64(3) DEFAULT now64(3) CODEC(DoubleDelta, ZSTD(1)),
+  dev_session String,
+  service LowCardinality(String),
+  stream LowCardinality(String),
+  level LowCardinality(String),
+  message String CODEC(ZSTD(3)),
+  host LowCardinality(String) DEFAULT ''
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMMDD(ts)
+ORDER BY (dev_session, service, ts)
+TTL toDateTime(ts) + INTERVAL 14 DAY;

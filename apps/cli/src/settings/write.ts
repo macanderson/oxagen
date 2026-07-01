@@ -71,7 +71,7 @@ export function writeSettingsValue(opts: WriteValueOptions): string {
 }
 
 const STARTER: OxagenSettings = {
-  $schema: "https://oxagen.sh/schemas/cli-settings.json",
+  $schema: "https://schemas.oxagen.sh/oxagen-cli-settings-schema.json",
   model: "anthropic/claude-sonnet-4.6",
   env: {},
   permissions: {

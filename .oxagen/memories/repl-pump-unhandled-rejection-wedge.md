@@ -15,7 +15,7 @@ initialization left the thinking indicator stuck on forever.
 **Root cause:** The prompt-queue pump awaited `handleSubmit` inside its drain
 loop with no per-turn try/catch — a rejection broke the `while` loop, so the
 remaining `queueRef` items were never drained, and the rejected pump promise
-had no handler. `handleSubmit` also ran `initializeProject` *before* its own
+had no handler. `handleSubmit` also ran `initializeProject` _before_ its own
 try/finally, so a throw there skipped the streaming-state reset.
 
 **Fix:** wrap each `await handleSubmitRef.current(next)` in a try/catch that

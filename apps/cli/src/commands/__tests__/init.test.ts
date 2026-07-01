@@ -94,7 +94,7 @@ describe("ensureSettingsFiles", () => {
     mkdirSync(oxagenDir, { recursive: true });
     const projectPath = join(oxagenDir, "settings.json");
     const customContent = JSON.stringify({
-      $schema: "https://oxagen.sh/schemas/cli-settings.json",
+      $schema: "https://schemas.oxagen.sh/oxagen-cli-settings-schema.json",
       model: "my-custom-model",
       permissions: {
         allow: ["Bash(git*)"],
@@ -117,7 +117,7 @@ describe("ensureSettingsFiles", () => {
   it("does not clobber existing user settings", () => {
     const userPath = join(tmpDir, "user-settings.json");
     const customUserContent = JSON.stringify({
-      $schema: "https://oxagen.sh/schemas/cli-settings.json",
+      $schema: "https://schemas.oxagen.sh/oxagen-cli-settings-schema.json",
       model: "my-global-model",
     });
     writeFileSync(userPath, customUserContent, "utf8");

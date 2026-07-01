@@ -147,6 +147,12 @@ export const oxagenSettingsSchema = z
     $schema: z.string().optional(),
     /** Default gateway model slug for the agent loop (e.g. "anthropic/claude-sonnet-4.6"). */
     model: z.string().optional(),
+    /**
+     * Reasoning effort for models that support it. Forwarded to the model as
+     * `reasoning_effort`; ignored by models without a reasoning mode. Higher
+     * effort = deeper thinking, more tokens, higher cost.
+     */
+    effort: z.enum(["low", "medium", "high"]).optional(),
     /** Oxagen platform API base URL (overrides config.json; env still wins). */
     apiUrl: z.string().url().optional(),
     /** Environment variables exported into the session (fills only unset vars; shell wins). */
