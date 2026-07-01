@@ -6,17 +6,24 @@ component references a raw Tailwind palette color (`bg-blue-500`) or an arbitrar
 hex. **Reskinning the entire app — light and dark — is done by editing one file:
 `packages/ui/src/styles/globals.css`.**
 
-The current skin is **Oxagen Graphite**: neutral graphite surfaces (a barely-warm
-hue at near-zero chroma, so they read as gray/charcoal — never brown) tuned for
-DRAMATIC light/dark contrast. Light = off-white page + crisp white panels; dark =
-near-black page + stepped charcoal panels. **Card and table headers are dark bars
-in both modes.** Warmth is concentrated in the **ember accent** (`--ox-rust`,
-`#F87854`) — primary CTAs, focus rings, the active-tab underline, and the ember
-mark — and never smeared across every surface. The topbar matches the page
-background. Links/charts use a cool **indigo** accent for categorical contrast;
-app-chrome icons (support, notifications, mobile nav) are neutral, not blue. The
-wordmark is lowercase **`oxagen`** in Space Grotesk (`--font-wordmark`). Surfaces
-use moderate rounding (`0.5rem`) and a subtle neutral shadow.
+The current skin is **Oxagen Tangerine**: a **split-hue neutral** palette — WARM
+off-white surfaces in light, COOL narwhal near-black surfaces in dark — tuned for
+DRAMATIC light/dark contrast. Light = warm paper page + crisp white panels; dark =
+narwhal (`#0B0D16`) page + stepped inky-blue panels. **Card and table headers are
+dark bars in both modes.** Colour lives in the **tangerine primary** (`--ox-rust` →
+`--ox-tangerine`, `#FD9A4B`) — primary CTAs, focus rings, the active-tab underline,
+default badges, the brand mark start — plus a **rose secondary** (`--ox-rose`,
+`#EB5C5E`, secondary buttons/badges + the brand-mark end) and a **teak accent**
+(`#794036`) for hover/selected surfaces. Colour is never smeared across every
+surface (the system stays flat — no gradients/glows on chrome; see §7). The topbar
+matches the page background. Text links/charts use a cool **indigo** accent for
+categorical contrast; app-chrome icons (support, notifications, mobile nav) are
+neutral, not blue. Errors use a true **red** (`hsl 0 72% 51%`) so they never read
+as the tangerine primary. The wordmark is lowercase **`oxagen`** in Space Grotesk
+(`--font-wordmark`). Surfaces use moderate rounding (`0.5rem`) and a subtle shadow.
+
+The brand mark gradient is **tangerine → flame (`#F07650`) → rose**
+(`--_ember-*`).
 
 ---
 
@@ -67,50 +74,56 @@ The only literal colors in the system. Swap these to reskin.
 
 | Token | oklch | hex | Purpose |
 |---|---|---|---|
-| `--_paper` | `oklch(0.971 0.009 82.7)` | `#FAF7F2` | Light mode background (warm paper) |
-| `--_ink` | `oklch(0.178 0.014 280)` | `#16181D` | Primary text + wordmark ink (light) |
-| `--_ink-white` | `oklch(0.965 0.005 78.3)` | `#F5F4F2` | Primary text + wordmark ink (dark) |
+| `--_paper` | `oklch(0.980 0.004 84.6)` | `#F8F6F1` | Light mode background (warm paper) |
+| `--_ink` | `oklch(0.182 0.019 266.5)` | `#101319` | Primary text + wordmark ink (light, cool) |
+| `--_ink-white` | `oklch(0.948 0.006 67.8)` | `#F1EEEA` | Primary text + wordmark ink (dark, warm) |
 
-### Violet-tinted neutral ramp (stone)
+### Split-hue neutral ramp (stone) — warm light, cool narwhal dark
 
-| Token | approx hex | Purpose |
-|---|---|---|
-| `--_stone-50` | `#FAFAFD` | Near-white |
-| `--_stone-100` | `#F5F3FA` | Muted background |
-| `--_stone-150` | `#F2EEF7` | Surface-alt (light) |
-| `--_stone-200` | `#E8E2F3` | Secondary surfaces |
-| `--_stone-300` | `#D4CAE9` | Input borders (light) |
-| `--_stone-400` | `#AEA0CC` | — |
-| `--_stone-500` | `#837C92` | Tertiary text / muted-foreground (dark) |
-| `--_stone-600` | `#4A4458` | Secondary text (light) |
-| `--_stone-700` | `#3A3050` | — |
-| `--_stone-800` | `#2A2040` | Accent surface (dark) |
-| `--_stone-850` | `#1E1A2E` | Popover / muted (dark) |
-| `--_stone-900` | `#15131F` | Card / sidebar (dark) |
-| `--_stone-950` | `#0B0D16` | Background (dark) |
+| Token | approx hex | hue | Purpose |
+|---|---|---|---|
+| `--_stone-50` | `#FCFBF9` | warm | Near-white |
+| `--_stone-100` | `#F4F2EE` | warm | Muted background / card-header |
+| `--_stone-150` | `#EFEDE8` | warm | Surface-alt (light) |
+| `--_stone-200` | `#E7E4DE` | warm | Secondary surfaces |
+| `--_stone-300` | `#DCD8D1` | warm | Input borders (light) |
+| `--_stone-400` | `#B4B0A9` | warm | muted-foreground (dark) |
+| `--_stone-500` | `#78767E` | cool | Tertiary text |
+| `--_stone-600` | `#6A6874` | cool | Secondary text (light) |
+| `--_stone-700` | `#45454E` | cool | Graphite |
+| `--_stone-800` | `#33343D` | cool | Narwhal accent surface (dark) |
+| `--_stone-850` | `#23252E` | cool | Popover / muted (dark) |
+| `--_stone-900` | `#191B23` | cool | Card / sidebar (dark) |
+| `--_stone-950` | `#0B0D16` | cool | Narwhal background (dark) |
 
-### Violet accent ramp
+### Tangerine accent ramp
+
+The `--_violet-*` **names** are retained for zero-churn; the **values** are tangerine.
 
 | Token | oklch | approx hex | Purpose |
 |---|---|---|---|
-| `--_violet-50` | `oklch(0.955 0.025 295)` | `#F1ECFB` | Accent subtle (light) |
-| `--_violet-100` | `oklch(0.89 0.06 295)` | `#DDD2F4` | — |
-| `--_violet-200` | `oklch(0.81 0.1 295)` | `#C2AFEC` | Accent-foreground (dark) |
-| `--_violet-300` | `oklch(0.72 0.14 290)` | `#A78BFA` | **Primary accent (dark)** |
-| `--_violet-400` | `oklch(0.62 0.17 290)` | `#8B6BDD` | Brand-2 (dark) |
-| `--_violet-500` | `oklch(0.53 0.2 290)` | `#6E48CE` | **Primary accent (light)** — links, focus, CTAs |
-| `--_violet-600` | `oklch(0.46 0.18 285)` | `#5733B0` | Brand-2 (light) |
-| `--_violet-700` | `oklch(0.39 0.16 285)` | `#452894` | Accent-foreground (light) |
-| `--_violet-800` | `oklch(0.32 0.13 280)` | `#361E73` | — |
-| `--_violet-900` | `oklch(0.24 0.1 275)` | `#241149` | — |
+| `--_violet-50` | `oklch(0.965 0.020 60)` | `#FCEBDA` | Accent subtle (light) |
+| `--_violet-100` | `oklch(0.917 0.050 59.5)` | `#FBD9BB` | — |
+| `--_violet-200` | `oklch(0.852 0.093 58.5)` | `#F9BE8B` | — |
+| `--_violet-300` | `oklch(0.803 0.128 57.1)` | `#FCA95F` | — |
+| `--_violet-400` | `oklch(0.775 0.150 56.4)` | `#FD9A4B` | **Tangerine** — primary accent |
+| `--_violet-500` | `oklch(0.699 0.168 49.5)` | `#E87F32` | — |
+| `--_violet-600` | `oklch(0.618 0.175 42.3)` | `#CB621C` | — |
+| `--_violet-700` | `oklch(0.508 0.144 38.9)` | `#A24E1B` | — |
+| `--_violet-800` | `oklch(0.398 0.098 37.5)` | `#7A3D1C` | — |
+| `--_violet-900` | `oklch(0.313 0.065 35.1)` | `#5A2E18` | — |
 
-### Ember mark (fixed — never recolor)
+### Brand mark (tangerine → flame → rose)
 
 | Token | hex | Note |
 |---|---|---|
-| `--_ember-gold` | `#F9D423` | Gradient start |
-| `--_ember-flame` | `#FF7E5F` | Gradient midpoint |
-| `--_ember-crimson` | `#C2185B` | Gradient end (also used as `--error` in light) |
+| `--_ember-gold` | `#FD9A4B` | Gradient start (tangerine) |
+| `--_ember-flame` | `#F07650` | Gradient midpoint (flame) |
+| `--_ember-crimson` | `#EB5C5E` | Gradient end (rose) |
+| `--_ember-navy` | `#0B0D16` | Narwhal ink anchor |
+
+Named brand swatches: `--ox-tangerine` (#FD9A4B), `--ox-rose` (#EB5C5E),
+`--ox-teak` (#794036). `--ox-rust` is retained as a legacy name → tangerine.
 
 ### Status hues
 
@@ -118,7 +131,7 @@ The only literal colors in the system. Swap these to reskin.
 |---|---|---|
 | `--_moss` / `--_moss-light` | `#1D9E75` adj. | Success |
 | `--_ochre` / `--_ochre-light` | `#BA7517` adj. | Warning |
-| `--_clay` / `--_clay-light` | `#B23A2A` adj. | Error (light uses ember-crimson instead) |
+| `--_clay` / `--_clay-light` | `#E23B3B` adj. | Error — **true red** (`hsl 0 72%`) in both modes |
 | `--_slate` / `--_slate-light` | `#4E6A7A` adj. | Info |
 
 ---
@@ -130,23 +143,24 @@ These ~30 tokens (mapped to `--color-*` → utilities `bg-background`,
 
 | Token | Light | Dark |
 |---|---|---|
-| `--background` | `--_paper` (#FAF7F2) | `--_stone-950` (#0B0D16) |
-| `--foreground` | `--_ink` (#16181D) | `--_ink-white` (#F5F4F2) |
+| `--background` | `--_paper` (#F8F6F1) | `--_stone-950` (#0B0D16) |
+| `--foreground` | `--_ink` (#101319) | `--_ink-white` (#F1EEEA) |
 | `--card` / `--popover` | white / white | stone-900 / stone-850 |
-| `--primary` | **violet-500** (#6E48CE) | **violet-300** (#A78BFA) |
-| `--primary-foreground` | white | stone-950 |
-| `--secondary` | stone-150 | stone-850 |
-| `--muted` / `--muted-foreground` | stone-100 / stone-600 | stone-850 / stone-500 |
-| `--accent` / `--accent-foreground` | violet-50 / violet-700 | stone-800 / violet-200 |
-| `--border` | violet-tinted 50% | violet-tinted 50% (darker) |
-| `--input` | stone-300 | violet-tinted |
-| `--ring` | **violet-500** | **violet-300** |
+| `--primary` | **tangerine** (#FD9A4B) | **tangerine** (#FD9A4B) |
+| `--primary-foreground` | ink (dark) | ink (dark) |
+| `--secondary` | **rose** (deep, #C63C42) | **rose** (bright, #EB5C5E) |
+| `--secondary-foreground` | white | ink (dark) |
+| `--muted` / `--muted-foreground` | stone-100 / stone-600 | stone-850 / stone-400 |
+| `--accent` / `--accent-foreground` | pale teak / deep teak | teak (#794036 adj.) / ink-white |
+| `--border` | warm hairline 40 18% 86% | cool narwhal 220 18% ~ |
+| `--input` | stone-300 | cool narwhal |
+| `--ring` | **tangerine** | **tangerine** |
 | `--success/-foreground` | moss / white | moss-light / dark |
 | `--warning/-foreground` | ochre / dark | ochre-light / dark |
-| `--error/-foreground` | ember-crimson / white | clay-light / white |
+| `--error/-foreground` | true red / white | true red / white |
 | `--info/-foreground` | slate / white | slate-light / dark |
-| `--chart-1 … 5` | violet-500 · ember-flame · moss · ochre · slate | violet-300 equivalents |
-| `--sidebar*` | white, violet accent | stone-900, violet accent |
+| `--chart-1 … 5` | tangerine · indigo · moss · ochre · slate | bright equivalents |
+| `--sidebar*` | white, tangerine accent | stone-900, tangerine accent |
 
 ---
 
@@ -206,32 +220,36 @@ Base UI data-attributes:
 
 ## 7. Motion policy — **motion is retained**
 
-Tune feel via `--motion-*` / `--ease-*` tokens. The Nocturne Violet skin keeps
-all motion from the system: button hover-grow, tab slide, overlay enter/exit,
-control transitions, `.hover-lift`, `.hover-glow` (violet ring), `.animate-in`,
-`.stream-caret`, wand pulse.
+Tune feel via `--motion-*` / `--ease-*` tokens. The Tangerine skin keeps all
+motion from the system: button hover-grow, tab slide, overlay enter/exit, control
+transitions, `.hover-lift`, `.hover-glow` (tangerine ring), `.animate-in`,
+`.stream-caret`, wand pulse. The skin stays **flat** — no gradients, glows, mesh,
+or glassmorphism on chrome (depth is a 1px border); the tangerine→rose gradient is
+reserved for the brand mark and marketing surfaces only.
 
 Global `prefers-reduced-motion` kill-switch zeroes animation/transition durations.
 
 ---
 
-## 8. Worked reskin example — swap the violet accent hue
+## 8. Worked reskin example — swap the tangerine accent hue
 
-Goal: change the violet accent to a teal, light + dark, in one edit.
+Goal: change the tangerine accent to a teal, light + dark, in one edit. `--ox-rust`
+(→ `--ox-tangerine`) drives `--primary`, `--ring`, sidebar accent, the active-tab
+underline and chart-1, so repointing the tangerine anchor re-skins them all.
 
 ### Before
 
 ```css
 /* packages/ui/src/styles/globals.css — :root, PRIMITIVES block */
---_violet-500: oklch(0.53 0.2 290);   /* #6E48CE — violet */
---_violet-300: oklch(0.72 0.14 290);  /* #A78BFA — violet (dark primary) */
+--ox-tangerine: oklch(0.775 0.150 56.4);   /* #FD9A4B — tangerine */
+--_violet-400: oklch(0.775 0.150 56.4);    /* tangerine (accent-subtle anchor) */
 ```
 
 ### After
 
 ```css
---_violet-500: oklch(0.53 0.15 185);  /* teal */
---_violet-300: oklch(0.72 0.12 185);  /* teal (dark primary) */
+--ox-tangerine: oklch(0.72 0.14 185);   /* teal */
+--_violet-400: oklch(0.72 0.14 185);    /* teal */
 ```
 
 That's it. `--brand`, `--primary`, `--ring`, `--accent`, sidebar accent, button
@@ -252,6 +270,11 @@ To flatten corners or remove shadows, edit the two control knobs (§2):
   context available).
 - **`field-fill-transition.tsx` / wand button** — self-contained keyframes
   (motion-only, flat).
-- **Ember mark** — the `--brand-gradient` and `--_ember-*` tokens are
-  theme-independent and must **never** be recolored; only the ink (wordmark
-  strokes) flips via `--_ink` / `--_ink-white`.
+- **Brand mark** — the `--brand-gradient` and `--_ember-*` tokens are
+  theme-independent (identical light/dark): the tangerine → flame → rose sweep.
+  Recolor them only as a deliberate brand change (as in the Tangerine reskin), in
+  lockstep with the named `--ox-tangerine` / `--ox-rose` swatches — never per-theme.
+  Only the ink (wordmark strokes) flips via `--_ink` / `--_ink-white`.
+- **`global-error.tsx`** — its hardcoded crash-page hexes are NOT theme-aware; if
+  the brand hues change, update them there too (no `@oxagen/ui` tokens are loaded
+  on the top-level crash boundary).
