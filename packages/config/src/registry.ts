@@ -1276,6 +1276,39 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_COORDINATOR: {
+    group: "CLI",
+    description:
+      "Coordinator model for the CLI agent: \"on-device\" (default) or a cloud registry id " +
+      "like \"haiku\". Overrides `runtime.coordinator` in ~/.config/oxagen/config.json.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_ONDEVICE_MODEL: {
+    group: "CLI",
+    description:
+      "On-device model id: \"auto\" (resolve the best code model for this device) or a pinned " +
+      "capability-table modelId. Overrides `runtime.onDevice.modelId` in the CLI config.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_MODELS_CACHE_DIR: {
+    group: "CLI",
+    description:
+      "Override the on-device model weights cache directory (defaults to ~/.oxagen/models). " +
+      "Overrides `runtime.onDevice.cacheDir` in the CLI config.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_LLM_EVALUATOR: {
     group: "CLI",
     description:
