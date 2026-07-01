@@ -53,6 +53,7 @@ export type DebugCategory =
   | "code-graph" // code-graph push envelope synced to the workspace graph
   | "graph-sync" // execution-lineage telemetry synced to the workspace graph
   | "llm" // per-turn LLM telemetry (model, usage) routed through the platform
+  | "pipeline" // assist-tool lifecycle: prompt enhancer, judge, survey (Group 4)
   | "error";
 
 /** Is file logging enabled for this process? */
