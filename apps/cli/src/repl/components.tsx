@@ -9,7 +9,6 @@ import { Box, Text, useInput, useStdout } from "ink";
 import React, { useState, useEffect } from "react";
 import { theme } from "../tui/theme.js";
 import { formatUsd } from "../agent/model-router.js";
-import { AGENT_TURN_TIMEOUT_MS } from "../agent/timeouts.js";
 import {
   getToolEmoji,
   getToolAccent,
@@ -35,6 +34,10 @@ export interface Message {
   streaming?: boolean;
   /** Present on `role: "stage"` messages — a live pipeline progress event. */
   stage?: StageEvent;
+  /** Present on `role: "diff"` messages — the unified git diff to render. */
+  diff?: string;
+  /** Present on `role: "diff"` messages — the relative paths the diff touches. */
+  changedFiles?: string[];
   /** When present, the message renders the full replay view for a turn. */
   trace?: TurnTrace;
   /** When present, the message renders the end-of-turn summary card. */
@@ -373,6 +376,10 @@ function ToolChip({ msg }: { msg: Message }): React.ReactElement {
       <Text dimColor={!subagent} wrap="truncate-end">
         {msg.content}
       </Text>
+    </Box>
+  );
+}
+
 /**
  * A code-change message: a header naming the changed files, then the unified
  * git diff rendered with syntax highlighting in a theme matched to the terminal
@@ -408,9 +415,6 @@ export function DiffMessage({
   );
 }
 
-export function MessageView({ msg }: { msg: Message }): React.ReactElement {
-  if (msg.trace) return <TraceView trace={msg.trace} />;
-  if (msg.summary) return <TurnSummaryView summary={msg.summary} />;
 export function MessageView({
   msg,
   diffTheme,
@@ -420,6 +424,7 @@ export function MessageView({
   diffTheme?: DiffTheme;
 }): React.ReactElement {
   if (msg.trace) return <TraceView trace={msg.trace} />;
+  if (msg.summary) return <TurnSummaryView summary={msg.summary} />;
   if (msg.role === "diff" && msg.diff) return <DiffMessage msg={msg} theme={diffTheme} />;
   if (msg.role === "stage" && msg.stage) return <StageBadge stage={msg.stage} />;
   if (msg.role === "user") {
