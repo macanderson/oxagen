@@ -106,11 +106,17 @@ export function MarkdownMessage({ children, streaming = false, className }: Mark
        * Register both plugins: code highlighting (Shiki) + diagram rendering
        * (Mermaid). Math and CJK are omitted — add here if needed.
        */
-      plugins={{
-        // @ts-expect-error — @streamdown/code has shiki@3.23.0 but streamdown expects @1.29.2; type mismatch is safe at runtime
-        code: codePlugin,
-        mermaid: mermaidPlugin,
-      }}
+      plugins={
+        // @streamdown/code ships shiki@3.x while streamdown's types expect
+        // @1.29.2; the plugin shapes are runtime-compatible. Assert the whole
+        // object to Streamdown's plugins prop type so the cast is stable
+        // regardless of how the shiki peer resolves — a per-line ts directive
+        // would flip to "unused" whenever the versions happen to align.
+        {
+          code: codePlugin,
+          mermaid: mermaidPlugin,
+        } as React.ComponentProps<typeof Streamdown>["plugins"]
+      }
       /**
        * Show copy/download controls on code blocks and mermaid diagrams.
        * Disable table fullscreen (not needed in chat bubbles).
