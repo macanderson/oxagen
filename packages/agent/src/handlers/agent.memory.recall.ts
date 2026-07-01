@@ -1,11 +1,21 @@
 import type { CapabilityContext } from "../types";
-import { recallMemories, reinforceMemory } from "../memory/neo4j";
+import {
+  recallMemories,
+  reinforceMemory,
+  recordExecution,
+  recordCitation,
+} from "../memory/neo4j";
 import { embedText } from "../memory/embed";
 import { isKnowledgeGraphEnabled } from "../runtime/knowledge-graph";
 import type { AgentMemoryRecallInput, AgentMemoryRecallOutput } from "@oxagen/oxagen/contracts/agent.memory.recall";
+import { deriveCompliance } from "@oxagen/oxagen/contracts/agent.memory.model";
 import { insertMemoryChange } from "@oxagen/telemetry";
 
 export type { AgentMemoryRecallInput, AgentMemoryRecallOutput };
+
+// Fixed recovery bump per recall citation, on the 0-100 confidence_score scale
+// (mirrors the legacy 0.05 bump on the pre-two-axis 0-1 `confidence` scale).
+const RECALL_REINFORCEMENT_AMOUNT = 5;
 
 export async function agentMemoryRecallHandler(
   input: AgentMemoryRecallInput,
@@ -22,21 +32,22 @@ export async function agentMemoryRecallHandler(
       executionStepId: ctx.messageId ?? ctx.requestId,
     },
   });
-  const memories = await recallMemories({
+  const rows = await recallMemories({
     embedding,
-    minWeight: input.minWeight,
     limit: input.limit,
     nodeRef: input.nodeRef,
+    memoryClass: input.memoryClass,
+    minEnforcement: input.minEnforcement,
   });
 
   // Fire-and-forget: reinforce each recalled memory and emit a telemetry event.
   // These are not awaited — they must not block the critical recall path.
   const occurredAt = new Date().toISOString();
-  for (const m of memories) {
-    const confidenceBefore = m.confidence;
-    const confidenceAfter = Math.min(confidenceBefore + 0.05, 1.0);
+  for (const m of rows) {
+    const confidenceBefore = m.confidenceScore;
+    const confidenceAfter = Math.min(confidenceBefore + RECALL_REINFORCEMENT_AMOUNT, 100);
 
-    void reinforceMemory({ memoryId: m.id, reinforcementAmount: 0.05 }).catch((err) => {
+    void reinforceMemory({ memoryId: m.id, reinforcementAmount: RECALL_REINFORCEMENT_AMOUNT }).catch((err) => {
       console.warn("reinforceMemory fire-and-forget failed", err);
     });
 
@@ -55,5 +66,55 @@ export async function agentMemoryRecallHandler(
     });
   }
 
-  return { memories };
+  // Opt-in automatic citation: when the caller passes an executionRef (the agent
+  // runtime does this per turn), MERGE the :Execution and record a CONSIDERED
+  // citation of every recalled memory. We only know the memory was retrieved and
+  // considered — not whether it was decisive — so influence is CONSIDERED and
+  // deviated is false (compliance derives to NA for observations, COMPLIED for
+  // rules). This is the citation pressure that feeds agent.memory.promotion.candidates.
+  // Fully fire-and-forget: it must never block or fail the recall path.
+  if (input.executionRef) {
+    const executionRef = input.executionRef;
+    void (async () => {
+      try {
+        const { executionId } = await recordExecution({
+          executionRef,
+          agentId: input.agentId ?? null,
+          taskSummary: input.query.slice(0, 500),
+        });
+        await Promise.all(
+          rows.map((m) =>
+            recordCitation({
+              executionId,
+              memoryId: m.id,
+              influence: "CONSIDERED",
+              compliance: deriveCompliance({
+                enforcement: m.enforcementScore,
+                deviated: false,
+              }),
+              enforcementAtCite: m.enforcementScore,
+              confidenceAtCite: m.confidenceScore,
+            }),
+          ),
+        );
+      } catch (err) {
+        console.warn("recall auto-citation fire-and-forget failed", err);
+      }
+    })();
+  }
+
+  return {
+    memories: rows.map((m) => ({
+      id: m.id,
+      nodeRef: m.nodeRef,
+      memoryClass: m.memoryClass,
+      memoryKind: m.memoryKind,
+      lesson: m.lesson,
+      source: m.source,
+      confidenceScore: m.confidenceScore,
+      enforcementScore: m.enforcementScore,
+      score: m.score,
+      createdAt: m.createdAt,
+    })),
+  };
 }

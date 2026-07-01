@@ -10,7 +10,6 @@
 
 import type { PlanTier } from "@oxagen/oxagen/types";
 import {
-  Activity,
   ArrowLeft,
   BookOpen,
   Building2,
@@ -26,7 +25,6 @@ import {
   Terminal,
   User,
   Users,
-  Workflow,
   type LucideIcon,
 } from "lucide-react";
 
@@ -68,13 +66,8 @@ export type SidebarConfig = {
 // Workspace mode config — IA spec §4 tree.
 // /{org}/{ws}/... — daily operational surface
 //
-// Groups:  primary (ask, knowledge, automation, activity)
+// Groups:  primary (ask, knowledge)
 //          footer  (marketplace, settings — pinned to bottom)
-//
-// Agents live under Automation (a tab), all run kinds live under Activity →
-// Runs, and "Workflows" is gone (folded into Activity → Runs; the word is a
-// banned term per spec §19). No standalone Agents / Subagent Runs / Workflows
-// sidebar entries.
 // ---------------------------------------------------------------------------
 
 const workspaceConfig: SidebarConfig = {
@@ -101,26 +94,6 @@ const workspaceConfig: SidebarConfig = {
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.knowledge.root(ctx as Required<ScopeContext>)
-          : `/${ctx.orgSlug}`,
-      group: "primary",
-    },
-    {
-      id: "automation",
-      label: "Automation",
-      icon: Workflow,
-      href: (ctx) =>
-        ctx.workspaceSlug
-          ? workspace.automation.root(ctx as Required<ScopeContext>)
-          : `/${ctx.orgSlug}`,
-      group: "primary",
-    },
-    {
-      id: "activity",
-      label: "Activity",
-      icon: Activity,
-      href: (ctx) =>
-        ctx.workspaceSlug
-          ? workspace.activity.root(ctx as Required<ScopeContext>)
           : `/${ctx.orgSlug}`,
       group: "primary",
     },
@@ -430,16 +403,6 @@ export function enumerateNavTargets(
       parent: "knowledge",
     });
     targets.push({
-      label: "Automation",
-      href: workspace.automation.root(wsCtx),
-      parent: "automation",
-    });
-    targets.push({
-      label: "Activity",
-      href: workspace.activity.root(wsCtx),
-      parent: "activity",
-    });
-    targets.push({
       label: "Settings",
       href: workspace.settings.root(wsCtx),
       parent: "settings",
@@ -467,50 +430,6 @@ export function enumerateNavTargets(
       parent: "knowledge",
     });
 
-    // Automation tabs
-    targets.push({
-      label: "Automation · Agents",
-      href: workspace.automation.agents(wsCtx),
-      parent: "automation",
-    });
-    targets.push({
-      label: "Automation · Agents · New",
-      href: workspace.agents.create(wsCtx),
-      parent: "automation",
-    });
-    targets.push({
-      label: "Automation · Playbooks",
-      href: workspace.automation.playbooks(wsCtx),
-      parent: "automation",
-    });
-    targets.push({
-      label: "Automation · Event Sources",
-      href: workspace.automation.eventSources(wsCtx),
-      parent: "automation",
-    });
-    targets.push({
-      label: "Automation · Triggers",
-      href: workspace.automation.triggers(wsCtx),
-      parent: "automation",
-    });
-
-    // Activity tabs
-    targets.push({
-      label: "Activity · Runs",
-      href: workspace.activity.runs(wsCtx),
-      parent: "activity",
-    });
-    targets.push({
-      label: "Activity · Approvals",
-      href: workspace.activity.approvals(wsCtx),
-      parent: "activity",
-    });
-    targets.push({
-      label: "Activity · Audit",
-      href: workspace.activity.audit(wsCtx),
-      parent: "activity",
-    });
-
     // Settings tabs
     targets.push({
       label: "Settings · General",
@@ -525,11 +444,6 @@ export function enumerateNavTargets(
     targets.push({
       label: "Settings · Models",
       href: workspace.settings.models(wsCtx),
-      parent: "settings",
-    });
-    targets.push({
-      label: "Settings · Model Keys",
-      href: workspace.settings.modelKeys(wsCtx),
       parent: "settings",
     });
   }
@@ -567,35 +481,15 @@ export function enumerateNavTargets(
     parent: "org-settings",
   });
 
-  // Access tabs
-  targets.push({
-    label: "Access · Grants",
-    href: org.access.grants(ctx),
-    parent: "access",
-  });
-  targets.push({
-    label: "Access · Roles",
-    href: org.access.roles(ctx),
-    parent: "access",
-  });
-  targets.push({
-    label: "Access · Policies",
-    href: org.access.policies(ctx),
-    parent: "access",
-  });
-  targets.push({
-    label: "Access · Requests",
-    href: org.access.requests(ctx),
-    parent: "access",
-  });
+  // Access tabs (only wired tabs surfaced)
   targets.push({
     label: "Access · Sessions",
     href: org.access.sessions(ctx),
     parent: "access",
   });
   targets.push({
-    label: "Access · Principals",
-    href: org.access.principals(ctx),
+    label: "Access · Reviews",
+    href: org.access.reviews(ctx),
     parent: "access",
   });
 
@@ -633,20 +527,10 @@ export function enumerateNavTargets(
     parent: "billing",
   });
 
-  // Developer tabs
+  // Developer tabs (wired tabs only)
   targets.push({
     label: "Developer · MCP",
     href: org.developer.mcp(ctx),
-    parent: "developer",
-  });
-  targets.push({
-    label: "Developer · Webhooks",
-    href: org.developer.webhooks(ctx),
-    parent: "developer",
-  });
-  targets.push({
-    label: "Developer · Docs",
-    href: org.developer.docs(ctx),
     parent: "developer",
   });
   targets.push({

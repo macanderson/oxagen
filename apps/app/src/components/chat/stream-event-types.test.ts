@@ -23,7 +23,7 @@ import type {
   ConsentResolution,
   PlanDecision,
   SubagentStatus,
-  MemoryWeight,
+  MemoryClass,
   PlanStep,
   MemoryRecallHit,
   SubagentChild,
@@ -421,12 +421,15 @@ describe("MemoryRecallContentBlock and MemoryRecallHit", () => {
     const hit: MemoryRecallHit = {
       id: "mem-001",
       lesson: "Always validate input",
-      weight: "fact",
+      memoryClass: "FACT",
+      memoryKind: "constraint",
+      confidenceScore: 95,
+      enforcementScore: 100,
       score: 0.95,
     };
     expect(hit.id).toBe("mem-001");
     expect(hit.lesson).toBe("Always validate input");
-    expect(hit.weight).toBe("fact");
+    expect(hit.memoryClass).toBe("FACT");
     expect(hit.score).toBe(0.95);
     expect(hit.nodeRef).toBeUndefined();
   });
@@ -435,34 +438,43 @@ describe("MemoryRecallContentBlock and MemoryRecallHit", () => {
     const hit: MemoryRecallHit = {
       id: "mem-002",
       lesson: "Use strict types",
-      weight: "consider",
+      memoryClass: "OBSERVATION",
+      memoryKind: "convention-deviation",
+      confidenceScore: 70,
+      enforcementScore: null,
       score: 0.7,
       nodeRef: "neo4j:node:42",
     };
     expect(hit.nodeRef).toBe("neo4j:node:42");
   });
 
-  it("MemoryWeight covers all values: ignore, consider, fact", () => {
-    const weights: MemoryWeight[] = ["ignore", "consider", "fact"];
-    for (const weight of weights) {
+  it("MemoryClass covers all values: OBSERVATION, RULE, FACT", () => {
+    const classes: MemoryClass[] = ["OBSERVATION", "RULE", "FACT"];
+    for (const memoryClass of classes) {
       const hit: MemoryRecallHit = {
         id: "mem-w",
         lesson: "test",
-        weight,
+        memoryClass,
+        memoryKind: "gotcha",
+        confidenceScore: 50,
+        enforcementScore: memoryClass === "OBSERVATION" ? null : 80,
         score: 0.5,
       };
-      expect(hit.weight).toBe(weight);
+      expect(hit.memoryClass).toBe(memoryClass);
     }
   });
 
-  it("weight accepts arbitrary string (open union with MemoryWeight)", () => {
+  it("memoryClass accepts arbitrary string (open union with MemoryClass)", () => {
     const hit: MemoryRecallHit = {
       id: "mem-003",
-      lesson: "Custom weight",
-      weight: "custom-weight-value",
+      lesson: "Custom class",
+      memoryClass: "custom-class-value",
+      memoryKind: "gotcha",
+      confidenceScore: 30,
+      enforcementScore: null,
       score: 0.3,
     };
-    expect(hit.weight).toBe("custom-weight-value");
+    expect(hit.memoryClass).toBe("custom-class-value");
   });
 
   it("MemoryRecallContentBlock constructs with memories array", () => {
@@ -470,7 +482,15 @@ describe("MemoryRecallContentBlock and MemoryRecallHit", () => {
       type: "memory-recall",
       queryId: "q-001",
       memories: [
-        { id: "m1", lesson: "L1", weight: "fact", score: 1.0 },
+        {
+          id: "m1",
+          lesson: "L1",
+          memoryClass: "FACT",
+          memoryKind: "constraint",
+          confidenceScore: 100,
+          enforcementScore: 100,
+          score: 1.0,
+        },
       ],
     };
     expect(block.type).toBe("memory-recall");
@@ -893,7 +913,15 @@ describe("StreamEvent union — member shapes", () => {
       type: "memory-recalled",
       queryId: "qid-1",
       memories: [
-        { id: "m1", lesson: "be careful", weight: "fact", score: 0.9 },
+        {
+          id: "m1",
+          lesson: "be careful",
+          memoryClass: "FACT",
+          memoryKind: "constraint",
+          confidenceScore: 90,
+          enforcementScore: 100,
+          score: 0.9,
+        },
       ],
     };
     expect(evt.type).toBe("memory-recalled");

@@ -258,8 +258,8 @@ describe("agent.memory.write route", () => {
   const PATH = "/agent/memory";
   const VALID_BODY = {
     nodeRef: "node-1",
-    weight: "high",
-    kind: "constraint",
+    memoryClass: "OBSERVATION",
+    memoryKind: "constraint",
     lesson: "Always check auth first",
     source: "feature",
   };
@@ -279,9 +279,9 @@ describe("agent.memory.write route", () => {
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
-  it("invalid weight enum → 400", async () => {
+  it("invalid memoryClass enum → 400", async () => {
     const res = await app.fetch(
-      post(PATH, { ...VALID_BODY, weight: "extreme" }),
+      post(PATH, { ...VALID_BODY, memoryClass: "MAYBE" }),
     );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();

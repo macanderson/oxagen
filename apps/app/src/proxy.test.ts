@@ -1,10 +1,11 @@
 /**
  * proxy.test.ts — edge redirect + auth-boundary behavior.
  *
- * Locks the IA realignment redirects (§16) and, critically, the fix for the
- * agents redirect loop: /agents 301s to /automation/agents, and
- * /automation/agents must NOT redirect (it renders the real page). If those two
- * ever both redirect again the app dead-loops with ERR_TOO_MANY_REDIRECTS.
+ * Locks the IA realignment redirects (§16). The Automation and Activity
+ * feature areas (agents, playbooks, workflows, executions, runs) were removed
+ * entirely, so their legacy paths no longer redirect anywhere — they fall
+ * through to the normal auth/next handling like any other unmatched route.
+ * The only surviving rename redirect is the legacy /chat → /ask alias.
  */
 import { describe, it, expect } from "vitest";
 import { NextRequest } from "next/server";
@@ -27,48 +28,32 @@ function status(path: string, opts?: { authed?: boolean }): number {
 }
 
 describe("proxy — IA realignment redirects (§16)", () => {
-  it("301s /agents → /automation/agents (agents are an Automation tab)", () => {
-    expect(location("/acme/prod/agents")).toBe(`${ORIGIN}/acme/prod/automation/agents`);
-    expect(status("/acme/prod/agents")).toBe(301);
-  });
-
-  it("301s nested /agents/:slug → /automation/agents/:slug (tail preserved)", () => {
-    expect(location("/acme/prod/agents/repo-review/edit")).toBe(
-      `${ORIGIN}/acme/prod/automation/agents/repo-review/edit`,
-    );
-  });
-
-  it("301s /agents/runs → /activity/runs BEFORE the general /agents rule", () => {
-    expect(location("/acme/prod/agents/runs")).toBe(`${ORIGIN}/acme/prod/activity/runs`);
-    expect(location("/acme/prod/agents/runs/fan_1")).toBe(
-      `${ORIGIN}/acme/prod/activity/runs/fan_1`,
-    );
-  });
-
-  it("301s /workflows → /activity/runs (folded in; banned term §19)", () => {
-    expect(location("/acme/prod/workflows")).toBe(`${ORIGIN}/acme/prod/activity/runs`);
-    expect(location("/acme/prod/workflows/anything")).toBe(`${ORIGIN}/acme/prod/activity/runs`);
-  });
-
-  it("301s legacy /executions and /playbooks and /chat", () => {
-    expect(location("/acme/prod/executions")).toBe(`${ORIGIN}/acme/prod/activity/runs`);
-    expect(location("/acme/prod/playbooks")).toBe(`${ORIGIN}/acme/prod/automation/playbooks`);
+  it("301s legacy /chat → /ask (only surviving rename redirect)", () => {
     expect(location("/acme/prod/chat")).toBe(`${ORIGIN}/acme/prod/ask`);
+    expect(status("/acme/prod/chat")).toBe(301);
+  });
+
+  it("301s nested /chat/* → /ask (tail collapses to the ask route)", () => {
+    expect(location("/acme/prod/chat/anything")).toBe(`${ORIGIN}/acme/prod/ask`);
+  });
+
+  it("does NOT redirect the deleted Automation/Activity legacy paths (authed request falls through)", () => {
+    // /agents, /agents/:slug, /agents/runs, /workflows, /executions, /playbooks
+    // used to redirect into the Automation/Activity areas; those areas were
+    // deleted entirely, so these paths no longer redirect anywhere — they
+    // fall through to the normal auth/next handling (no 301).
+    expect(location("/acme/prod/agents")).toBeNull();
+    expect(location("/acme/prod/agents/repo-review/edit")).toBeNull();
+    expect(location("/acme/prod/agents/runs")).toBeNull();
+    expect(location("/acme/prod/agents/runs/fan_1")).toBeNull();
+    expect(location("/acme/prod/workflows")).toBeNull();
+    expect(location("/acme/prod/workflows/anything")).toBeNull();
+    expect(location("/acme/prod/executions")).toBeNull();
+    expect(location("/acme/prod/playbooks")).toBeNull();
   });
 });
 
 describe("proxy — no redirect loop", () => {
-  it("does NOT redirect the canonical /automation/agents target", () => {
-    // The real agents page lives here; redirecting it would re-loop into /agents.
-    expect(location("/acme/prod/automation/agents")).toBeNull();
-    expect(location("/acme/prod/automation/agents/repo-review")).toBeNull();
-  });
-
-  it("does NOT redirect the canonical /activity/runs target", () => {
-    expect(location("/acme/prod/activity/runs")).toBeNull();
-    expect(location("/acme/prod/activity/runs/fan_1")).toBeNull();
-  });
-
   it("leaves unrelated workspace and org routes untouched", () => {
     expect(location("/acme/prod/knowledge/sources")).toBeNull();
     expect(location("/acme/settings/general")).toBeNull();

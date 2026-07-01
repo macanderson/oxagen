@@ -378,16 +378,25 @@ describe("agent.memory.list route", () => {
   });
 
   it("passes optional filters to invoke", async () => {
-    await app.fetch(post(PATH, { minWeight: "high", kind: "gotcha", limit: 20, offset: 5 }));
+    await app.fetch(
+      post(PATH, {
+        memoryClass: "RULE",
+        memoryKind: "gotcha",
+        minEnforcement: 50,
+        limit: 20,
+        offset: 5,
+      }),
+    );
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.minWeight).toBe("high");
-    expect(body.kind).toBe("gotcha");
+    expect(body.memoryClass).toBe("RULE");
+    expect(body.memoryKind).toBe("gotcha");
+    expect(body.minEnforcement).toBe(50);
     expect(body.limit).toBe(20);
     expect(body.offset).toBe(5);
   });
 
-  it("invalid minWeight → 400, invoke not called", async () => {
-    const res = await app.fetch(post(PATH, { minWeight: "extreme" }));
+  it("invalid memoryClass → 400, invoke not called", async () => {
+    const res = await app.fetch(post(PATH, { memoryClass: "MAYBE" }));
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });

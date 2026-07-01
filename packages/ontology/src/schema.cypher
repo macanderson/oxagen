@@ -28,6 +28,14 @@ CREATE CONSTRAINT skill_version_public_id IF NOT EXISTS FOR (n:SkillVersion) REQ
 CREATE CONSTRAINT background_task_public_id IF NOT EXISTS FOR (n:BackgroundTask) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT plan_public_id IF NOT EXISTS FOR (n:Plan) REQUIRE n.publicId IS UNIQUE;
 
+// --- Two-axis memory model (docs/specs/two-axis-memory) ---
+// Citation/Promotion/Evidence back the confidence ladder (OBSERVATION→RULE→FACT),
+// citation-driven confidence recovery, and auditable promotions. :Execution
+// already has execution_public_id above; these three are new node types.
+CREATE CONSTRAINT citation_id IF NOT EXISTS FOR (n:Citation) REQUIRE n.id IS UNIQUE;
+CREATE CONSTRAINT promotion_id IF NOT EXISTS FOR (n:Promotion) REQUIRE n.id IS UNIQUE;
+CREATE CONSTRAINT evidence_id IF NOT EXISTS FOR (n:Evidence) REQUIRE n.id IS UNIQUE;
+
 // New edge types (no Cypher DDL required; documented here for the registry):
 //   INVOKED              :Execution -> :ToolVersion (one per tool call)
 //   LOADED_SKILL         :AgentVersion -> :SkillVersion
@@ -44,6 +52,16 @@ CREATE INDEX document_org IF NOT EXISTS FOR (n:Document) ON (n.orgId);
 CREATE INDEX message_conversation IF NOT EXISTS FOR (n:Message) ON (n.conversationId);
 CREATE INDEX agent_memory_org IF NOT EXISTS FOR (n:AgentMemory) ON (n.orgId);
 CREATE INDEX background_task_org IF NOT EXISTS FOR (n:BackgroundTask) ON (n.orgId);
+
+// --- Two-axis memory model — filter/sort indexes ---
+// Reads filter on status='ACTIVE' and the two axes; the promotion-candidate UI
+// sorts promotable observations by citation pressure (memory_class, citation_count).
+CREATE INDEX agent_memory_class_kind IF NOT EXISTS FOR (n:AgentMemory) ON (n.memory_class, n.memory_kind);
+CREATE INDEX agent_memory_status IF NOT EXISTS FOR (n:AgentMemory) ON (n.status);
+CREATE INDEX agent_memory_promotion_pressure IF NOT EXISTS FOR (n:AgentMemory) ON (n.memory_class, n.citation_count);
+CREATE INDEX citation_org IF NOT EXISTS FOR (n:Citation) ON (n.orgId);
+CREATE INDEX promotion_org IF NOT EXISTS FOR (n:Promotion) ON (n.orgId);
+CREATE INDEX evidence_org IF NOT EXISTS FOR (n:Evidence) ON (n.orgId);
 
 // --- Ingestion pipeline — SourceConnection (fixed system node) ---
 // naturalKey on EntityNode: "{connectorId}:{connectionId}:{externalId}"
@@ -157,6 +175,30 @@ MATCH (n:SourceSymbol) WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true
 MATCH (n:Feature)      WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true REMOVE n:KnowledgeNode;
 MATCH (n:Execution)    WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true, n.publicId = coalesce(n.publicId, n.id, randomUUID());
 MATCH (n:AgentMemory)  WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true, n.publicId = coalesce(n.publicId, n.id, randomUUID());
+
+// --- Two-axis memory backfill (docs/specs/two-axis-memory) ---
+// Idempotent: gated on `memory_class IS NULL` so it scans only un-migrated
+// memories and no-ops on every subsequent run. Maps the legacy flat model
+// (weight + kind + confidence 0-1) onto the two-axis model:
+//   - critical/high weight → RULE with enforcement 95/70; low/other → OBSERVATION
+//   - confidence 0-1 → confidence_score 0-100
+//   - source → created_by_kind (user→USER, feature/fix→AGENT, else SYSTEM)
+MATCH (n:AgentMemory)
+WHERE n.memory_class IS NULL
+SET n.confidence_score = coalesce(n.confidence, 1.0) * 100.0,
+    n.memory_class = CASE WHEN n.weight IN ['critical','high'] THEN 'RULE' ELSE 'OBSERVATION' END,
+    n.enforcement_score = CASE n.weight WHEN 'critical' THEN 95 WHEN 'high' THEN 70 ELSE null END,
+    n.memory_kind = coalesce(n.kind, 'constraint'),
+    n.half_life_days = CASE WHEN n.weight IN ['critical','high'] THEN 90.0 ELSE 30.0 END,
+    n.decay_floor = 5.0,
+    n.last_evidence_at = coalesce(n.lastReinforcedAt, n.createdAt, datetime()),
+    n.citation_count = coalesce(n.citation_count, 0),
+    n.influence_count = coalesce(n.influence_count, 0),
+    n.violation_count = coalesce(n.violation_count, 0),
+    n.status = coalesce(n.status, 'ACTIVE'),
+    n.created_by_kind = CASE n.source WHEN 'user' THEN 'USER' WHEN 'feature' THEN 'AGENT' WHEN 'fix' THEN 'AGENT' WHEN 'exception-watcher' THEN 'AGENT' ELSE 'SYSTEM' END,
+    n.created_by_id = coalesce(n.source, 'system'),
+    n.subject_hint = coalesce(n.nodeRef, '');
 MATCH (n:Message)      WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true, n.publicId = coalesce(n.publicId, n.id, randomUUID());
 MATCH (n:Document)     WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = true, n.publicId = coalesce(n.publicId, n.id, randomUUID());
 MATCH (n:KnowledgeNode) WHERE NOT n:GraphNode SET n:GraphNode, n.is_system = false REMOVE n:KnowledgeNode;

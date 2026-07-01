@@ -8,50 +8,33 @@
 
 ## Intent
 
-Enumerate the `AgentMemory` nodes a workspace has accumulated in Neo4j,
-newest first, with optional weight / kind / node filters. This is the
-non-semantic **browse** counterpart to `agent.memory.recall`: recall needs a
-query string to vector-search, whereas the Knowledge → Memories surface needs
-to list everything that exists.
-
-Both `agent.memory.list` and `agent.memory.recall` read the same Neo4j
-`:AgentMemory` nodes written by `agent.memory.write`, so every surface (API,
-MCP, in-app agent, the Knowledge → Memories tab) sees an identical memory set
-with no store drift.
+Enumerate the ACTIVE `:AgentMemory` nodes a workspace has accumulated, newest
+first, with optional class / kind / enforcement / node filters. The non-semantic
+**browse** counterpart to `agent.memory.recall`. Both read the same `:AgentMemory`
+nodes, so every surface sees an identical memory set with no store drift.
 
 ## Input
 
-| Field       | Type                                                                              | Notes                                                  |
-| ----------- | --------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `nodeRef`   | `string?`                                                                         | Scope to memories anchored on a single graph node ref. |
-| `minWeight` | `"low" \| "high" \| "critical"`?                                                  | Only return memories at or above this weight.          |
-| `kind`      | `"routine-change" \| "constraint" \| "bug-root-cause" \| "convention-deviation" \| "gotcha"`? | Filter to a single memory kind.            |
-| `limit`     | `number` (1 – 200)                                                                | Page size. Defaults to 100.                            |
-| `offset`    | `number` (>= 0)                                                                   | Page offset. Defaults to 0.                            |
+| Field            | Type                                | Notes                                                  |
+| ---------------- | ----------------------------------- | ------------------------------------------------------ |
+| `nodeRef`        | `string?`                           | Scope to memories anchored on a single graph node ref. |
+| `memoryClass`    | `"OBSERVATION" \| "RULE" \| "FACT"`? | Filter to a single epistemic class.                   |
+| `memoryKind`     | `string?`                           | Filter to a single content-domain kind.                |
+| `minEnforcement` | `int 1–100`?                        | Only return rules at or above this enforcement.        |
+| `limit`          | `number` (1 – 200)                  | Page size. Defaults to 100.                            |
+| `offset`         | `number` (>= 0)                     | Page offset. Defaults to 0.                            |
 
 ## Output
 
-| Field      | Type                                                                                                          | Notes                                              |
-| ---------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `memories` | `Array<{ id, publicId, nodeRef, weight, kind, lesson, source, confidence, createdAt, lastReinforcedAt }>`      | The page, newest first.                            |
-| `total`    | `number`                                                                                                       | Total matching memories for the tenant, ignoring `limit`/`offset`. |
+| Field      | Type | Notes |
+| ---------- | ---- | ----- |
+| `memories` | `Array<AgentMemoryRecord>` | The page, newest first (full two-axis record). |
+| `total`    | `number` | Total matching memories, ignoring `limit`/`offset`. |
 
 ## Side effects
 
-None — read-only against Neo4j. Unlike `agent.memory.recall`, it does **not**
-reinforce or decay the memories it returns.
-
-## Errors
-
-| code                | meaning            |
-| ------------------- | ------------------ |
-| `graph_unavailable` | Neo4j unreachable. |
-
-When the knowledge graph is not configured the handler returns an empty page
-(`{ memories: [], total: 0 }`) rather than erroring.
+None — read-only. Does not reinforce or decay.
 
 ## SPEC references
 
-- §3 — memory browse / list
-- §4 — new capabilities
-- `oxagen-feature` skill — memory weighting contract
+- `docs/specs/two-axis-memory/DESIGN.md`

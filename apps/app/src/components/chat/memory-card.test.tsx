@@ -4,7 +4,7 @@
  *
  * Render tests for MemoryCard:
  *   - Renders null when memories is empty
- *   - Renders recalled memories with lessons, weight badges, scores
+ *   - Renders recalled memories with lessons, class badges, confidence/enforcement, scores
  *   - Respects topN limit
  *   - Renders node refs as links when present
  */
@@ -12,6 +12,16 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { MemoryCard } from "./memory-card";
+
+// TruncatedText (the lesson body renderer) measures scroll overflow via
+// ResizeObserver, which isn't implemented in JSDOM.
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
 
 afterEach(cleanup);
 
@@ -29,12 +39,21 @@ vi.mock("lucide-react", async (importOriginal) => {
   };
 });
 
-const makeMemory = (id: string, lesson: string, weight: string, score: number, nodeRef?: string) => ({
+const makeMemory = (
+  id: string,
+  lesson: string,
+  memoryClass: string,
+  score: number,
+  opts: { nodeRef?: string; confidenceScore?: number; enforcementScore?: number | null } = {},
+) => ({
   id,
   lesson,
-  weight,
+  memoryClass,
+  memoryKind: "constraint",
+  confidenceScore: opts.confidenceScore ?? 80,
+  enforcementScore: opts.enforcementScore === undefined ? null : opts.enforcementScore,
   score,
-  nodeRef,
+  nodeRef: opts.nodeRef,
 });
 
 describe("MemoryCard", () => {
@@ -44,15 +63,15 @@ describe("MemoryCard", () => {
   });
 
   it("renders the 'Recalled memories' heading when there are memories", () => {
-    const memories = [makeMemory("m1", "Always test your code", "fact", 0.95)];
+    const memories = [makeMemory("m1", "Always test your code", "FACT", 0.95)];
     render(<MemoryCard queryId="q1" memories={memories} />);
     expect(screen.getByText("Recalled memories")).toBeInTheDocument();
   });
 
   it("renders lesson text for each memory", () => {
     const memories = [
-      makeMemory("m1", "First lesson", "fact", 0.9),
-      makeMemory("m2", "Second lesson", "consider", 0.7),
+      makeMemory("m1", "First lesson", "FACT", 0.9),
+      makeMemory("m2", "Second lesson", "RULE", 0.7),
     ];
     render(<MemoryCard queryId="q1" memories={memories} />);
     expect(screen.getByText("First lesson")).toBeInTheDocument();
@@ -60,30 +79,47 @@ describe("MemoryCard", () => {
   });
 
   it("renders score in a tabular-nums span", () => {
-    const memories = [makeMemory("m1", "A lesson", "fact", 0.85)];
+    const memories = [makeMemory("m1", "A lesson", "FACT", 0.85)];
     render(<MemoryCard queryId="q1" memories={memories} />);
     expect(screen.getByText("score 0.85")).toBeInTheDocument();
   });
 
-  it("renders weight badge for each memory", () => {
+  it("renders confidence percentage for each memory", () => {
+    const memories = [makeMemory("m1", "A lesson", "FACT", 0.85, { confidenceScore: 92 })];
+    render(<MemoryCard queryId="q1" memories={memories} />);
+    expect(screen.getByText("confidence 92%")).toBeInTheDocument();
+  });
+
+  it("renders enforcement score only when present (RULE/FACT)", () => {
     const memories = [
-      makeMemory("m1", "Lesson A", "fact", 0.9),
-      makeMemory("m2", "Lesson B", "ignore", 0.5),
+      makeMemory("m1", "A rule", "RULE", 0.9, { enforcementScore: 75 }),
+      makeMemory("m2", "An observation", "OBSERVATION", 0.5, { enforcementScore: null }),
+    ];
+    render(<MemoryCard queryId="q1" memories={memories} />);
+    expect(screen.getByText("enforcement 75")).toBeInTheDocument();
+    // Only one enforcement line rendered (the OBSERVATION has none).
+    expect(screen.getAllByText(/enforcement /)).toHaveLength(1);
+  });
+
+  it("renders class badge for each memory", () => {
+    const memories = [
+      makeMemory("m1", "Lesson A", "FACT", 0.9),
+      makeMemory("m2", "Lesson B", "OBSERVATION", 0.5),
     ];
     render(<MemoryCard queryId="q1" memories={memories} />);
     const badges = screen.getAllByTestId("badge");
-    // First item: count badge + weight badge; second item: weight badge
-    const weights = badges.filter(
-      (b) => b.textContent === "fact" || b.textContent === "ignore",
+    // First item: count badge + class badge; second item: class badge
+    const classes = badges.filter(
+      (b) => b.textContent === "FACT" || b.textContent === "OBSERVATION",
     );
-    expect(weights.length).toBe(2);
+    expect(classes.length).toBe(2);
   });
 
   it("renders count badge matching total memories", () => {
     const memories = [
-      makeMemory("m1", "L1", "fact", 0.9),
-      makeMemory("m2", "L2", "consider", 0.8),
-      makeMemory("m3", "L3", "ignore", 0.5),
+      makeMemory("m1", "L1", "FACT", 0.9),
+      makeMemory("m2", "L2", "RULE", 0.8),
+      makeMemory("m3", "L3", "OBSERVATION", 0.5),
     ];
     render(<MemoryCard queryId="q1" memories={memories} />);
     expect(screen.getByText("3")).toBeInTheDocument();
@@ -91,7 +127,7 @@ describe("MemoryCard", () => {
 
   it("limits rendered items to topN (default 5)", () => {
     const memories = Array.from({ length: 8 }, (_, i) =>
-      makeMemory(`m${i}`, `Lesson ${i}`, "fact", 0.9 - i * 0.05),
+      makeMemory(`m${i}`, `Lesson ${i}`, "FACT", 0.9 - i * 0.05),
     );
     render(<MemoryCard queryId="q1" memories={memories} />);
     // Only first 5 lessons should appear
@@ -102,7 +138,7 @@ describe("MemoryCard", () => {
 
   it("respects a custom topN prop", () => {
     const memories = Array.from({ length: 5 }, (_, i) =>
-      makeMemory(`m${i}`, `Lesson ${i}`, "fact", 0.9),
+      makeMemory(`m${i}`, `Lesson ${i}`, "FACT", 0.9),
     );
     render(<MemoryCard queryId="q1" memories={memories} topN={2} />);
     expect(screen.getByText("Lesson 0")).toBeInTheDocument();
@@ -111,7 +147,7 @@ describe("MemoryCard", () => {
   });
 
   it("renders nodeRef as a link when present", () => {
-    const memories = [makeMemory("m1", "A lesson", "fact", 0.9, "node-abc-123")];
+    const memories = [makeMemory("m1", "A lesson", "FACT", 0.9, { nodeRef: "node-abc-123" })];
     render(<MemoryCard queryId="q1" memories={memories} />);
     const link = screen.getByText("node-abc-123");
     expect(link.tagName).toBe("A");
@@ -119,32 +155,41 @@ describe("MemoryCard", () => {
   });
 
   it("does not render a nodeRef link when nodeRef is absent", () => {
-    const memories = [makeMemory("m1", "A lesson", "consider", 0.7)];
+    const memories = [makeMemory("m1", "A lesson", "RULE", 0.7)];
     render(<MemoryCard queryId="q1" memories={memories} />);
     // No anchor elements should exist in the rendered output
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
-  it("uses 'success' badge variant for 'fact' weight", () => {
-    const memories = [makeMemory("m1", "L", "fact", 0.9)];
+  it("uses 'success' badge variant for 'FACT' class", () => {
+    const memories = [makeMemory("m1", "L", "FACT", 0.9)];
     const { container } = render(<MemoryCard queryId="q1" memories={memories} />);
     const successBadge = container.querySelector("[data-variant='success']");
     expect(successBadge).not.toBeNull();
-    expect(successBadge?.textContent).toBe("fact");
+    expect(successBadge?.textContent).toBe("FACT");
   });
 
-  it("uses 'warning' badge variant for 'consider' weight", () => {
-    const memories = [makeMemory("m1", "L", "consider", 0.7)];
+  it("uses 'warning' badge variant for 'RULE' class", () => {
+    const memories = [makeMemory("m1", "L", "RULE", 0.7)];
     const { container } = render(<MemoryCard queryId="q1" memories={memories} />);
     const warningBadge = container.querySelector("[data-variant='warning']");
     expect(warningBadge).not.toBeNull();
   });
 
-  it("uses 'muted' badge variant for 'ignore' weight", () => {
-    const memories = [makeMemory("m1", "L", "ignore", 0.3)];
+  it("uses 'muted' badge variant for 'OBSERVATION' class", () => {
+    const memories = [makeMemory("m1", "L", "OBSERVATION", 0.3)];
     const { container } = render(<MemoryCard queryId="q1" memories={memories} />);
     const mutedBadge = container.querySelector("[data-variant='muted']");
     // The count badge is also 'muted'; there should be at least one 'muted' badge
     expect(mutedBadge).not.toBeNull();
+  });
+
+  it("renders the lesson body through TruncatedText, not a raw <p> element", () => {
+    const memories = [makeMemory("m1", "A recalled lesson.", "FACT", 0.9)];
+    const { container } = render(<MemoryCard queryId="q1" memories={memories} />);
+    // The old plain-text renderer used <p className="whitespace-pre-wrap ...">
+    // directly; TruncatedText replaces it with a clamped <span> preview.
+    expect(container.querySelector("p.whitespace-pre-wrap")).toBeNull();
+    expect(screen.getByText("A recalled lesson.")).toBeInTheDocument();
   });
 });

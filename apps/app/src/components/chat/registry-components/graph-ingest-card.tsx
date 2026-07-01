@@ -115,11 +115,17 @@ export default function GraphIngestCard(props: GraphIngestCardProps): React.Reac
                       <span className="w-3 shrink-0" />
                     )}
                     {href ? (
-                      <a href={href} className="min-w-0 truncate font-medium text-primary hover:underline">
+                      <a
+                        href={href}
+                        title={e.name}
+                        className="min-w-0 truncate font-medium text-primary hover:underline"
+                      >
                         {e.name}
                       </a>
                     ) : (
-                      <span className="min-w-0 truncate font-medium">{e.name}</span>
+                      <span className="min-w-0 truncate font-medium" title={e.name}>
+                        {e.name}
+                      </span>
                     )}
                     <Badge variant="outline" className="shrink-0 text-[10px]">
                       {e.type}

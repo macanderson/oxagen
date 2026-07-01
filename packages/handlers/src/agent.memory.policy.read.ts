@@ -9,6 +9,8 @@ const DEFAULT_POLICY = {
   halfLifeLowDays: 30,
   halfLifeHighDays: 90,
   recallThreshold: 0.1,
+  complianceThreshold: 70,
+  defaultDecayFloor: 5,
 } as const;
 
 export const agentMemoryPolicyReadHandler: CapabilityHandler<typeof agentMemoryPolicyRead> =
@@ -43,5 +45,7 @@ export const agentMemoryPolicyReadHandler: CapabilityHandler<typeof agentMemoryP
       halfLifeLowDays: row.halfLifeLowDays,
       halfLifeHighDays: row.halfLifeHighDays,
       recallThreshold: row.recallThreshold ?? 0.1,
+      complianceThreshold: row.complianceThreshold ?? DEFAULT_POLICY.complianceThreshold,
+      defaultDecayFloor: row.defaultDecayFloor ?? DEFAULT_POLICY.defaultDecayFloor,
     };
   };

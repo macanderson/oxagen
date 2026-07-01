@@ -4,6 +4,7 @@ import { ExternalLink, ArrowUpRight, Check, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safe-url";
 import { Badge } from "@/components/ui/badge";
+import { TruncatedText } from "@/components/ui/truncated-text";
 
 /**
  * capability-result — the GENERIC chat renderer for any capability output that
@@ -130,7 +131,9 @@ function ScalarValue({ value }: { value: unknown }): React.ReactElement {
       </a>
     );
   }
-  return <span className="break-words">{truncate(str)}</span>;
+  // Genuine free text (not a url) — clamp to a few lines with a click-to-reveal
+  // popover for the full, formatted content instead of a hard character cut.
+  return <TruncatedText text={str} lines={3} />;
 }
 
 function ValueView({

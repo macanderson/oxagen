@@ -34,8 +34,9 @@ function md(name: string, body: string): string {
 function draft(overrides: Record<string, unknown> = {}) {
   return {
     lesson: "Never push to main.",
-    kind: "constraint",
-    weight: "critical",
+    memoryKind: "constraint",
+    memoryClass: "RULE",
+    enforcementScore: 95,
     source: "user",
     nodeRef: "user-memory",
     sourceDocument: "rules.md",

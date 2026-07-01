@@ -69,33 +69,43 @@ vi.mock("@/components/ui/switch", () => ({
   ),
 }));
 
-vi.mock("@/components/ui/textarea", () => ({
-  Textarea: ({
+// MarkdownCodeEditor wraps CodeMirror, which renders a contenteditable
+// `.cm-content` div (role="textbox") rather than a native <textarea>. For
+// component tests we stand in a plain <textarea> so existing
+// getByRole("textbox") / value assertions keep working without dragging in
+// CodeMirror's DOM/measurement APIs (unavailable in jsdom).
+vi.mock("@/components/ui/markdown-code-editor", () => ({
+  MarkdownCodeEditor: ({
     id,
     value,
     onChange,
     disabled,
     placeholder,
     maxLength,
+    ariaLabel,
     className: _c,
-    "aria-describedby": _ad,
+    minHeight: _mh,
+    maxHeight: _mxh,
   }: {
     id?: string;
     value?: string;
-    onChange?: React.ChangeEventHandler<HTMLTextAreaElement>;
+    onChange?: (value: string) => void;
     disabled?: boolean;
     placeholder?: string;
     maxLength?: number;
+    ariaLabel?: string;
     className?: string;
-    "aria-describedby"?: string;
+    minHeight?: string;
+    maxHeight?: string;
   }) => (
     <textarea
       id={id}
       value={value}
-      onChange={onChange}
+      onChange={(e) => onChange?.(e.target.value)}
       disabled={disabled}
       placeholder={placeholder}
       maxLength={maxLength}
+      aria-label={ariaLabel}
     />
   ),
 }));

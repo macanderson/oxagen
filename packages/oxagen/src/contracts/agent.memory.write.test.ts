@@ -3,35 +3,35 @@ import { agentMemoryWrite } from "./agent.memory.write";
 import { getCapability } from "../registry";
 
 describe("agent.memory.write capability", () => {
-  it("parses a valid input", () => {
+  it("parses a valid input and defaults memoryClass to OBSERVATION", () => {
     const parsed = agentMemoryWrite.input.parse({
       nodeRef: "Function:apps/api/src/x.ts#auth",
-      weight: "high",
-      kind: "constraint",
+      memoryKind: "constraint",
       lesson: "Always batch the JWT-verify calls in the middleware.",
       source: "feature",
     });
-    expect(parsed.weight).toBe("high");
+    expect(parsed.memoryClass).toBe("OBSERVATION");
+    expect(parsed.memoryKind).toBe("constraint");
   });
 
-  it("rejects an unknown kind", () => {
-    expect(() =>
-      agentMemoryWrite.input.parse({
-        nodeRef: "x",
-        weight: "high",
-        kind: "note",
-        lesson: "x",
-        source: "feature",
-      }),
-    ).toThrow();
+  it("accepts a pinned RULE with an enforcementScore", () => {
+    const parsed = agentMemoryWrite.input.parse({
+      nodeRef: "x",
+      memoryClass: "RULE",
+      memoryKind: "constraint",
+      enforcementScore: 80,
+      lesson: "x",
+      source: "feature",
+    });
+    expect(parsed.memoryClass).toBe("RULE");
+    expect(parsed.enforcementScore).toBe(80);
   });
 
   it("rejects an unknown source", () => {
     expect(() =>
       agentMemoryWrite.input.parse({
         nodeRef: "x",
-        weight: "high",
-        kind: "constraint",
+        memoryKind: "constraint",
         lesson: "x",
         source: "review",
       }),
@@ -42,9 +42,40 @@ describe("agent.memory.write capability", () => {
     expect(() =>
       agentMemoryWrite.input.parse({
         nodeRef: "x",
-        weight: "high",
-        kind: "constraint",
+        memoryKind: "constraint",
         lesson: "",
+        source: "feature",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects an empty memoryKind", () => {
+    expect(() =>
+      agentMemoryWrite.input.parse({
+        nodeRef: "x",
+        memoryKind: "",
+        lesson: "x",
+        source: "feature",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects an enforcementScore out of the 1-100 range", () => {
+    expect(() =>
+      agentMemoryWrite.input.parse({
+        nodeRef: "x",
+        memoryKind: "constraint",
+        enforcementScore: 0,
+        lesson: "x",
+        source: "feature",
+      }),
+    ).toThrow();
+    expect(() =>
+      agentMemoryWrite.input.parse({
+        nodeRef: "x",
+        memoryKind: "constraint",
+        enforcementScore: 101,
+        lesson: "x",
         source: "feature",
       }),
     ).toThrow();

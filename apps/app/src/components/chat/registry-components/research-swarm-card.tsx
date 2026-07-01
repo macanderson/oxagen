@@ -4,6 +4,7 @@ import { Radar, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/lib/safe-url";
 import { Badge } from "@/components/ui/badge";
+import { TruncatedText } from "@/components/ui/truncated-text";
 
 /**
  * research-swarm-card — renders research.swarm.start and research.swarm.status.
@@ -244,22 +245,30 @@ export default function ResearchSwarmCard(
                       // h.url is untrusted swarm/model output — validate scheme.
                       const safe = safeHref(h.url);
                       return (
-                        <li key={j} className="truncate">
+                        <li key={j}>
                           {safe ? (
                             <a
                               href={safe}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-primary hover:underline"
+                              className="block truncate text-primary hover:underline"
                               title={h.snippet || h.title}
                             >
                               {h.title}
                             </a>
                           ) : (
-                            <span className="text-foreground" title={h.snippet || h.title}>
+                            <span
+                              className="block truncate text-foreground"
+                              title={h.snippet || h.title}
+                            >
                               {h.title}
                             </span>
                           )}
+                          {h.snippet ? (
+                            <p className="text-muted-foreground/80">
+                              <TruncatedText text={h.snippet} lines={1} />
+                            </p>
+                          ) : null}
                         </li>
                       );
                     })}

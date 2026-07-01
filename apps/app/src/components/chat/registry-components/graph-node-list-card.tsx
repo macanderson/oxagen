@@ -4,6 +4,7 @@ import { resolveRecordHref } from "@oxagen/oxagen/capability-meta";
 import { Network, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { TruncatedText } from "@/components/ui/truncated-text";
 
 /**
  * graph-node-list-card — renders the result of graph.node.list / graph.node.search
@@ -83,15 +84,17 @@ export default function GraphNodeListCard(
         <ul className="divide-y divide-border/60">
           {shown.map((row) => {
             const href = resolveRecordHref("graph.node", row.id, slugs);
+            // The description's TruncatedText reveal is an interactive trigger
+            // (a button in a popover), so it must NOT be nested inside the row's
+            // anchor — nested interactive elements are invalid HTML. Only the
+            // title/badges/score row is the click target; the description sits
+            // below it, still inside the <li> but outside the <a>.
             const inner = (
               <div className="flex items-center gap-3 px-4 py-2.5">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium" title={row.displayName}>
                     {row.displayName}
                   </p>
-                  {row.description ? (
-                    <p className="truncate text-xs text-muted-foreground">{row.description}</p>
-                  ) : null}
                 </div>
                 {row.labels.slice(0, 2).map((l) => (
                   <Badge key={l} variant="outline" className="shrink-0">
@@ -122,6 +125,11 @@ export default function GraphNodeListCard(
                 ) : (
                   inner
                 )}
+                {row.description ? (
+                  <p className="px-4 pb-2 text-xs text-muted-foreground">
+                    <TruncatedText text={row.description} lines={1} />
+                  </p>
+                ) : null}
               </li>
             );
           })}

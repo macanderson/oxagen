@@ -44,7 +44,7 @@ import { openFleetMemory } from "../agent/fleet/memory.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
-import { readConfig, writeConfig } from "../lib/config.js";
+import { readConfig } from "../lib/config.js";
 import { debugLog } from "../lib/debug-log.js";
 import { formatToolArgs } from "../agent/tool-formatter.js";
 import {
@@ -56,7 +56,6 @@ import {
   ThinkingIndicator,
   summarizeTrace,
   type Message,
-  type TuiMode,
 } from "./components.js";
 import { resolveEscapeAction } from "./escape-action.js";
 import { isDebugEnabled } from "../lib/debug-log.js";
@@ -135,21 +134,21 @@ const ALT_SCREEN_ENTER = "\x1b[?1049h\x1b[H";
 const ALT_SCREEN_LEAVE = "\x1b[?1049l";
 
 /**
- * Drive fullscreen (alternate-screen) layout for the REPL.
+ * Drive the REPL's alternate-screen layout and report the live terminal height.
  *
- * When `active`, the app swaps to the terminal's alternate screen buffer and
- * reports its current row count so the root Box can be pinned to the full
- * terminal height (header at top, input pinned at the bottom). When inactive —
- * or on unmount/exit — the alt buffer is left so the user's shell scrollback is
- * restored untouched. Toggling at runtime re-runs the effect, so `/tui` flips
- * cleanly between compact and fullscreen.
+ * The REPL always runs full-height: it swaps to the terminal's alternate screen
+ * buffer on mount and reports the current row count so the root column can be
+ * pinned to the full terminal height — the conversation fills the space and the
+ * prompt input + status line stay glued to the bottom. On unmount/exit the alt
+ * buffer is left so the user's shell is restored untouched. The row count tracks
+ * `resize`, so the layout re-pins when the window changes size.
  */
-function useFullscreen(active: boolean): number {
+function useAltScreen(): number {
   const { stdout } = useStdout();
   const [rows, setRows] = useState<number>(stdout?.rows ?? 24);
 
   useEffect(() => {
-    if (!active || !stdout) return;
+    if (!stdout) return;
     stdout.write(ALT_SCREEN_ENTER);
     const sync = (): void => setRows(stdout.rows ?? 24);
     sync();
@@ -158,7 +157,7 @@ function useFullscreen(active: boolean): number {
       stdout.off("resize", sync);
       stdout.write(ALT_SCREEN_LEAVE);
     };
-  }, [active, stdout]);
+  }, [stdout]);
 
   return rows;
 }
@@ -265,7 +264,7 @@ export function ReplApp({
   }
   // Oxagen context-engine memory, opened asynchronously on mount.
   const memoryRef = useRef<SessionMemory | null>(null);
-  // Fleet memory (weighted lessons) and the per-turn trace store, both synchronous.
+  // Fleet memory (class + enforcement lessons) and the per-turn trace store, both synchronous.
   const fleetMemoryRef = useRef(openFleetMemory(cwd));
   const traceStoreRef = useRef(openTraceStore(cwd));
   // Source-of-truth message list (the state mirror), so streaming updates can be
@@ -281,8 +280,6 @@ export function ReplApp({
   effortRef.current = effort;
   const modeRef = useRef(mode);
   modeRef.current = mode;
-  const tuiModeRef = useRef(tuiMode);
-  tuiModeRef.current = tuiMode;
   const approvalRef = useRef(approval);
   approvalRef.current = approval;
 
@@ -476,21 +473,6 @@ export function ReplApp({
 
   const handleSubmit = useCallback(
     async (text: string) => {
-      // ── Reset-confirmation gate ───────────────────────────────────────────
-      // When the Esc-twice prompt is visible, the next submission is treated
-      // as the user's confirmation answer, NOT as a slash command or prompt.
-      if (resetPendingRef.current) {
-        resetPendingRef.current = false;
-        setResetPending(false);
-        const answer = text.trim().toLowerCase();
-        if (answer === "y" || answer === "yes") {
-          resetConversation();
-          pushAssistant("🗑 Conversation reset.");
-        } else {
-          pushAssistant("Reset cancelled.");
-        }
-        return;
-      }
 
       // ── Shell escape (`!cmd`) ──
       // A prompt beginning with "!" runs the rest as a shell command in the
@@ -537,30 +519,6 @@ export function ReplApp({
       // ── Slash commands ──
       if (text === "/help") {
         pushAssistant(HELP);
-        return;
-      }
-      if (text === "/tui" || text.startsWith("/tui ")) {
-        const arg = text.slice("/tui".length).trim().toLowerCase();
-        let next: TuiMode;
-        if (arg === "") {
-          // No argument toggles between the two layouts.
-          next = tuiModeRef.current === "fullscreen" ? "compact" : "fullscreen";
-        } else if (arg === "compact" || arg === "fullscreen") {
-          next = arg;
-        } else {
-          pushAssistant(
-            `Unknown layout "${arg}". Use /tui compact|fullscreen (or /tui alone to toggle).`,
-          );
-          return;
-        }
-        setTuiMode(next);
-        // Remember the choice so the next session starts in the same layout.
-        writeConfig({ tui: next });
-        pushAssistant(
-          next === "fullscreen"
-            ? "Layout: fullscreen — the REPL fills the alternate screen. /tui compact returns to inline scrollback."
-            : "Layout: compact — the REPL renders inline in your scrollback. /tui fullscreen uses the alternate screen.",
-        );
         return;
       }
       if (text === "/init") {
@@ -756,7 +714,7 @@ export function ReplApp({
         const body = text.slice("/remember".length).trim();
         if (!body) {
           pushAssistant(
-            "Usage: /remember <text> — captures a memory (infers its kind + weight) and saves it to the workspace graph.",
+            "Usage: /remember <text> — captures a memory (infers its class + kind) and saves it to the workspace graph.",
           );
           return;
         }
@@ -774,18 +732,25 @@ export function ReplApp({
       if (text === "/memories" || text.startsWith("/memories ")) {
         const arg = text.slice("/memories".length).trim();
         try {
-          const { listMemories, formatMemoryLines, MEMORY_KINDS } = await import(
+          const { listMemories, formatMemoryLines, MEMORY_CLASSES } = await import(
             "../lib/memory-client.js"
           );
-          let kind: (typeof MEMORY_KINDS)[number] | undefined;
+          // The argument may be an epistemic class (OBSERVATION/RULE/FACT) or a
+          // free-text content-domain kind — memoryKind is an open string, so
+          // anything else is passed through verbatim as a kind filter.
+          let memoryClass: (typeof MEMORY_CLASSES)[number] | undefined;
+          let memoryKind: string | undefined;
           if (arg) {
-            if (!MEMORY_KINDS.includes(arg as (typeof MEMORY_KINDS)[number])) {
-              pushAssistant(`Unknown kind "${arg}". Use one of: ${MEMORY_KINDS.join(", ")}.`);
-              return;
+            const upper = arg.toUpperCase();
+            if (MEMORY_CLASSES.includes(upper as (typeof MEMORY_CLASSES)[number])) {
+              memoryClass = upper as (typeof MEMORY_CLASSES)[number];
+            } else {
+              memoryKind = arg;
             }
-            kind = arg as (typeof MEMORY_KINDS)[number];
           }
-          pushAssistant(formatMemoryLines(await listMemories({ kind, limit: 30 })));
+          pushAssistant(
+            formatMemoryLines(await listMemories({ memoryClass, memoryKind, limit: 30 })),
+          );
         } catch (err) {
           pushAssistant(err instanceof Error ? err.message : String(err));
         }
@@ -1143,19 +1108,49 @@ export function ReplApp({
     [pump],
   );
 
+  // Every PromptInput submission funnels through here. The Esc-twice reset
+  // confirmation must be answered SYNCHRONOUSLY — if we let it fall through to
+  // `enqueue`, the "y" lands in the FIFO behind any unwinding turn and is then
+  // run as an ordinary prompt (it visibly shows as "⧗ queued: y") instead of
+  // confirming the reset. Intercepting it here consumes the keystroke as the
+  // answer the instant the user hits Enter, never touching the queue.
+  const handleUserSubmit = useCallback(
+    (text: string) => {
+      if (resetPendingRef.current) {
+        resetPendingRef.current = false;
+        setResetPending(false);
+        const answer = text.trim().toLowerCase();
+        if (answer === "y" || answer === "yes") {
+          resetConversation();
+          pushAssistant("🗑 Conversation reset.");
+        } else {
+          pushAssistant("Reset cancelled.");
+        }
+        return;
+      }
+      enqueue(text);
+    },
+    [enqueue, resetConversation, pushAssistant],
+  );
+
   return (
-    // Fullscreen pins the column to the terminal height (alt screen); compact
-    // leaves height unset so the conversation grows inline in the scrollback.
-    <Box flexDirection="column" height={fullscreen ? rows : undefined}>
+    // The column is always pinned to the full terminal height (alt screen), so
+    // the messages region flex-grows to fill the space and the input + status
+    // stay glued to the bottom regardless of how long the conversation is.
+    <Box flexDirection="column" height={rows}>
       {/* Header — the Oxagen ASCII wordmark. It animates (reveals top-to-bottom)
           the first time the REPL mounts, then stays as the logo header. */}
       <Banner version={pkg.version} animate />
 
-      {/* Messages — fullscreen fills + clips to the screen; compact grows inline */}
+      {/* Messages — fill the space between the banner and the input. `flex-end`
+          anchors the conversation to the bottom so the newest lines sit just
+          above the input; older lines overflow off the top and are clipped. */}
       <Box
         flexDirection="column"
-        flexGrow={fullscreen ? 1 : undefined}
-        overflow={fullscreen ? "hidden" : undefined}
+        flexGrow={1}
+        overflow="hidden"
+        minHeight={0}
+        justifyContent="flex-end"
       >
         {messages.length === 0 ? (
           <Box paddingX={1} flexDirection="column">
@@ -1226,17 +1221,40 @@ export function ReplApp({
         </Box>
       )}
 
-      {/* A pending permission prompt takes over the input row; otherwise the
+      {/* Input row — pinned to the bottom stack, padded above, and never allowed
+          to shrink (flexShrink={0}) so the prompt bar keeps a constant height as
+          the conversation above it grows or the terminal is resized.
+          A pending permission prompt takes over the input row; otherwise the
           input stays live during a turn and submissions queue (FIFO). */}
-      {approval ? (
-        <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
-      ) : (
-        <PromptInput
-          onSubmit={enqueue}
-          busy={isStreaming}
-          catalog={catalogRef.current ?? []}
+      <Box marginTop={1} flexShrink={0} flexDirection="column">
+        {approval ? (
+          <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
+        ) : (
+          <PromptInput
+            onSubmit={handleUserSubmit}
+            busy={isStreaming}
+            catalog={catalogRef.current ?? []}
+          />
+        )}
+      </Box>
+
+      {/* Status line — below the input bar, with a blank row beneath it so it is
+          never flush against the bottom edge of the window. */}
+      <Box marginBottom={1} flexShrink={0}>
+        <StatusLine
+          model={model}
+          branch={branchRef.current}
+          inputTokens={usage.input}
+          outputTokens={usage.output}
+          cacheHit={usage.cacheHit}
+          cacheMiss={Math.max(0, usage.input - usage.cacheHit)}
+          costUsd={usage.costUsd}
+          pipelineOn={pipelineOn}
+          verboseOn={verboseOn}
+          effort={effort}
+          mode={mode}
         />
-      )}
+      </Box>
     </Box>
   );
 }

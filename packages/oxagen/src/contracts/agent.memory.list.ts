@@ -1,9 +1,14 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import {
+  agentMemoryRecordSchema,
+  memoryClassEnum,
+  memoryKindSchema,
+} from "./agent.memory.model";
 
 /**
  * agent.memory.list — enumerate the AgentMemory nodes a workspace has
- * accumulated, newest first, with optional weight/kind/node filters.
+ * accumulated, newest first, with optional class/kind/enforcement/node filters.
  *
  * This is the non-semantic counterpart to `agent.memory.recall`: recall needs
  * a query string to vector-search, whereas the Knowledge → Memories surface
@@ -12,19 +17,9 @@ import { registerCapability } from "../registry";
  * surface sees an identical memory set with no store drift.
  */
 
-/** Shared record shape — also the projection returned by `listMemories()`. */
-export const agentMemoryRecordSchema = z.object({
-  id: z.string(),
-  publicId: z.string(),
-  nodeRef: z.string(),
-  weight: z.enum(["low", "high", "critical"]),
-  kind: z.string(),
-  lesson: z.string(),
-  source: z.string(),
-  confidence: z.number(),
-  createdAt: z.string(),
-  lastReinforcedAt: z.string().nullable(),
-});
+// The canonical record shape lives in agent.memory.model; re-exported here so
+// existing importers of `agentMemoryRecordSchema` from this module keep working.
+export { agentMemoryRecordSchema };
 
 export const agentMemoryList = registerCapability({
   name: "agent.memory.list",
@@ -47,20 +42,19 @@ export const agentMemoryList = registerCapability({
       .string()
       .optional()
       .describe("Scope to memories anchored on a single graph node ref"),
-    minWeight: z
-      .enum(["low", "high", "critical"])
+    memoryClass: memoryClassEnum
       .optional()
-      .describe("Only return memories at or above this weight"),
-    kind: z
-      .enum([
-        "routine-change",
-        "constraint",
-        "bug-root-cause",
-        "convention-deviation",
-        "gotcha",
-      ])
+      .describe("Filter to a single epistemic class (OBSERVATION/RULE/FACT)"),
+    memoryKind: memoryKindSchema
       .optional()
-      .describe("Filter to a single memory kind"),
+      .describe("Filter to a single memory kind (content domain)"),
+    minEnforcement: z
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .optional()
+      .describe("Only return rules at or above this enforcement score"),
     limit: z.number().int().positive().max(200).default(100),
     offset: z.number().int().nonnegative().default(0),
   }),
@@ -74,6 +68,6 @@ export const agentMemoryList = registerCapability({
   }),
 });
 
-export type AgentMemoryRecord = z.output<typeof agentMemoryRecordSchema>;
+export type { AgentMemoryRecord } from "./agent.memory.model";
 export type AgentMemoryListInput = z.output<typeof agentMemoryList.input>;
 export type AgentMemoryListOutput = z.output<typeof agentMemoryList.output>;

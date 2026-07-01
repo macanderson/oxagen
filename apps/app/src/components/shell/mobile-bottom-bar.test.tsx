@@ -56,13 +56,15 @@ afterEach(() => {
 });
 
 describe("MobileBottomBar — primary tabs", () => {
-  it("renders the four primary destinations as client-routed tabs with resolved hrefs", () => {
+  it("renders the workspace destinations as client-routed tabs with resolved hrefs", () => {
+    // Workspace mode now has exactly four nav items (ask, knowledge, marketplace,
+    // settings), so all fit in the bar and none overflow into "More".
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(within(nav).getByRole("link", { name: "Ask" })).toHaveAttribute("href", "/acme/prod/ask");
     expect(within(nav).getByRole("link", { name: "Knowledge" })).toHaveAttribute("href", "/acme/prod/knowledge");
-    expect(within(nav).getByRole("link", { name: "Automation" })).toHaveAttribute("href", "/acme/prod/automation");
-    expect(within(nav).getByRole("link", { name: "Activity" })).toHaveAttribute("href", "/acme/prod/activity");
+    expect(within(nav).getByRole("link", { name: "Marketplace" })).toHaveAttribute("href", "/acme/prod/settings/plugins");
+    expect(within(nav).getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/acme/prod/settings");
   });
 
   it("marks the current destination with aria-current=page", () => {
@@ -71,26 +73,18 @@ describe("MobileBottomBar — primary tabs", () => {
     expect(screen.getByRole("link", { name: "Knowledge" })).not.toHaveAttribute("aria-current");
   });
 
-  it("renders a More tab and keeps overflow destinations out of the bar until opened", () => {
+  it("keeps a More tab for the account control while all nav destinations stay in the bar", () => {
+    // With four items, nothing overflows — the More tab only exists to host the
+    // account control (present because a user is provided).
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
+    const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(screen.getByRole("button", { name: /more navigation/i })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "Marketplace" })).toBeNull();
+    expect(within(nav).getByRole("link", { name: "Marketplace" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Settings" })).toBeInTheDocument();
   });
 });
 
 describe("MobileBottomBar — More sheet", () => {
-  it("opens the bottom sheet exposing the overflow destinations (Marketplace, Settings)", async () => {
-    render(<MobileBottomBar ctx={wsCtx} user={user} />);
-    await userEvent.click(screen.getByRole("button", { name: /more navigation/i }));
-    await waitFor(
-      () => expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument(),
-      { timeout: 2000 },
-    );
-    expect(screen.getByRole("link", { name: "Marketplace" })).toHaveAttribute("href", "/acme/prod/settings/plugins");
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/acme/prod/settings");
-  });
-
   it("surfaces the account control in the More sheet when a user is provided", async () => {
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     await userEvent.click(screen.getByRole("button", { name: /more navigation/i }));
@@ -100,20 +94,18 @@ describe("MobileBottomBar — More sheet", () => {
     );
   });
 
-  it("opens the sheet without an account control when user is undefined", async () => {
+  it("omits the More tab in workspace mode when there is no user (nothing overflows)", () => {
+    // Four items all fit the bar and there is no account control, so the More
+    // sheet would be header-only — the More tab must not render at all.
     render(<MobileBottomBar ctx={wsCtx} user={undefined} />);
-    await userEvent.click(screen.getByRole("button", { name: /more navigation/i }));
-    await waitFor(
-      () => expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument(),
-      { timeout: 2000 },
-    );
-    expect(screen.queryByRole("button", { name: /open account menu/i })).toBeNull();
+    expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /more navigation/i })).toBeNull();
   });
 
-  it("marks the More tab active when the current page lives behind it", () => {
+  it("marks the Settings destination active when the settings route is open", () => {
     pathnameRef.current = "/acme/prod/settings";
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
-    expect(screen.getByRole("button", { name: /more navigation/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
   });
 });
 

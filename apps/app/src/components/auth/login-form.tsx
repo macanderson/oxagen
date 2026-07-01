@@ -71,7 +71,17 @@ export function LoginForm({ mode = "signin" }: { mode?: "signin" | "signup" }) {
         />
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button type="submit" variant="gradient" size="lg" className="w-full" disabled={pending}>
+      {/* Ember gradient CTA — the brand's primary call-to-action treatment
+          (matches the docs landing page). `.ox-grad-surface` paints the
+          gold→flame→crimson fill over the button; the DS button keeps its
+          hover-scale motion. */}
+      <Button
+        type="submit"
+        variant="gradient"
+        size="lg"
+        className="ox-grad-surface w-full border-0 text-white shadow-sm"
+        disabled={pending}
+      >
         {pending ? "Working…" : mode === "signup" ? "Create account" : "Sign in"}
       </Button>
     </form>

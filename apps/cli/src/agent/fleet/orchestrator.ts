@@ -11,7 +11,7 @@
  *   2. File ownership — two tasks whose predicted `files` overlap are serialized,
  *      so two agents never edit the same file at the same time.
  *
- * It records a weighted memory for every task it finishes (success or failure),
+ * It records a two-axis memory for every task it finishes (success or failure),
  * accumulates token/cost totals, and emits a snapshot on every change for the
  * agents screen to render. `runAgent` is injected so the engine is unit-testable
  * without touching the gateway.
@@ -334,8 +334,9 @@ export class Fleet extends EventEmitter {
   private recordSuccess(task: Task, summary: string): void {
     const isFix = /\b(fix|bug|broken|regression|repair|error)\b/i.test(task.title + " " + task.description);
     this.memory?.record({
-      kind: isFix ? "bug-root-cause" : "routine-change",
-      weight: task.tier === "precise" ? "high" : "low",
+      memoryKind: isFix ? "bug-root-cause" : "routine-change",
+      memoryClass: task.tier === "precise" ? "RULE" : "OBSERVATION",
+      enforcementScore: task.tier === "precise" ? 70 : null,
       lesson: summary || task.title,
       files: task.files,
       taskId: task.id,
@@ -345,8 +346,9 @@ export class Fleet extends EventEmitter {
 
   private recordFailure(task: Task, error: string): void {
     this.memory?.record({
-      kind: "gotcha",
-      weight: "high",
+      memoryKind: "gotcha",
+      memoryClass: "RULE",
+      enforcementScore: 70,
       lesson: `Task "${task.title}" failed: ${error}`,
       files: task.files,
       taskId: task.id,

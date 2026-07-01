@@ -57,9 +57,6 @@ type RouteSection =
   | "billing"
   | "conversation"
   | "knowledge"
-  | "agents"
-  | "automation"
-  | "activity"
   | "account"
   | "members"
   | "developer"
@@ -75,12 +72,6 @@ export function classifyRoute(pathname: string): RouteSection {
   if (p.includes("/settings")) return "settings";
   if (p.includes("/ask") || p.includes("/chat")) return "conversation";
   if (p.includes("/knowledge")) return "knowledge";
-  // Check /automation before /agents so the legacy automation/agents tab still
-  // classifies as automation; the top-level /agents route never contains
-  // /automation, so it falls through to the agents section.
-  if (p.includes("/automation")) return "automation";
-  if (p.includes("/agents")) return "agents";
-  if (p.includes("/activity")) return "activity";
   if (p.startsWith("/account")) return "account";
   if (p.includes("/members")) return "members";
   if (p.includes("/developer")) return "developer";
@@ -191,39 +182,6 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
       suggestions.push({
         label: "Find Gaps",
         prompt: "Identify any gaps or stale information in this workspace's knowledge base.",
-      });
-      break;
-
-    case "agents":
-      suggestions.push({
-        label: "Review Agents",
-        prompt: "Review the agents defined in this workspace — their deployment status, published versions, and triggers — and flag any that are misconfigured.",
-      });
-      suggestions.push({
-        label: "Draft an Agent",
-        prompt: "Help me draft a new agent for this workspace: suggest its instructions, graph access, tools, and triggers based on what this workspace does.",
-      });
-      break;
-
-    case "automation":
-      suggestions.push({
-        label: "Review Automations",
-        prompt: "Review the automations configured in this workspace and flag any that are inactive or could be optimized.",
-      });
-      suggestions.push({
-        label: "Suggest Automations",
-        prompt: "Based on this workspace's knowledge and integrations, suggest useful automations I could set up.",
-      });
-      break;
-
-    case "activity":
-      suggestions.push({
-        label: "Recent Activity",
-        prompt: "Summarize recent agent activity in this workspace — what ran, what succeeded, what failed.",
-      });
-      suggestions.push({
-        label: "Failed Runs",
-        prompt: "Show me any failed automation runs and help me understand why they failed.",
       });
       break;
 

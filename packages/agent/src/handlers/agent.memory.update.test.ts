@@ -11,11 +11,24 @@ const UPDATED_RECORD = {
   id: "m_1",
   publicId: "pub_1",
   nodeRef: "Function:foo",
-  weight: "high",
-  kind: "constraint",
+  memoryClass: "RULE",
+  memoryKind: "constraint",
   lesson: "Updated lesson",
   source: "feature",
-  confidence: 0.9,
+  confidenceScore: 90,
+  enforcementScore: 70,
+  status: "ACTIVE",
+  subjectHint: "Function:foo",
+  halfLifeDays: 90,
+  decayFloor: 5,
+  lastEvidenceAt: "2026-06-27T00:00:00Z",
+  citationCount: 0,
+  influenceCount: 0,
+  violationCount: 0,
+  createdByKind: "AGENT",
+  createdById: "feature",
+  confirmedByKind: null,
+  confirmedById: null,
   createdAt: "2026-06-27T00:00:00Z",
   lastReinforcedAt: null,
 };
@@ -54,7 +67,7 @@ describe("agent.memory.update handler", () => {
   it("throws when knowledge graph is disabled, even if a field is supplied", async () => {
     mocks.isKnowledgeGraphEnabledMock.mockReturnValue(false);
     await expect(
-      agentMemoryUpdateHandler({ memoryId: "m_1", weight: "low" }, CTX),
+      agentMemoryUpdateHandler({ memoryId: "m_1", confidenceScore: 50 }, CTX),
     ).rejects.toThrow("Knowledge graph is not configured");
     expect(mocks.updateMemoryMock).not.toHaveBeenCalled();
   });
@@ -79,7 +92,7 @@ describe("agent.memory.update handler", () => {
   });
 
   it("does NOT embed when lesson is absent — embedding is undefined in updateMemory call", async () => {
-    await agentMemoryUpdateHandler({ memoryId: "m_1", weight: "critical" }, CTX);
+    await agentMemoryUpdateHandler({ memoryId: "m_1", enforcementScore: 90 }, CTX);
     expect(mocks.embedTextMock).not.toHaveBeenCalled();
     const updateArg = mocks.updateMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(updateArg.embedding).toBeUndefined();
@@ -89,32 +102,35 @@ describe("agent.memory.update handler", () => {
     await agentMemoryUpdateHandler(
       {
         memoryId: "m_2",
-        weight: "low",
-        kind: "gotcha",
+        memoryKind: "gotcha",
         source: "fix",
-        confidence: 0.5,
+        confidenceScore: 50,
+        enforcementScore: 40,
+        status: "ARCHIVED",
       },
       CTX,
     );
     const updateArg = mocks.updateMemoryMock.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(updateArg.memoryId).toBe("m_2");
-    expect(updateArg.weight).toBe("low");
-    expect(updateArg.kind).toBe("gotcha");
+    expect(updateArg.memoryKind).toBe("gotcha");
     expect(updateArg.source).toBe("fix");
-    expect(updateArg.confidence).toBe(0.5);
+    expect(updateArg.confidenceScore).toBe(50);
+    expect(updateArg.enforcementScore).toBe(40);
+    expect(updateArg.status).toBe("ARCHIVED");
   });
 
   it("returns the updated record produced by updateMemory", async () => {
-    const res = await agentMemoryUpdateHandler({ memoryId: "m_1", kind: "convention-deviation" }, CTX);
-    expect(res.weight).toBe("high");
-    expect(res.kind).toBe("constraint");
-    expect(res.confidence).toBe(0.9);
+    const res = await agentMemoryUpdateHandler({ memoryId: "m_1", memoryKind: "convention-deviation" }, CTX);
+    expect(res.memoryClass).toBe("RULE");
+    expect(res.memoryKind).toBe("constraint");
+    expect(res.confidenceScore).toBe(90);
+    expect(res.enforcementScore).toBe(70);
   });
 
   it("throws (not found) when updateMemory returns null", async () => {
     mocks.updateMemoryMock.mockResolvedValueOnce(null);
     await expect(
-      agentMemoryUpdateHandler({ memoryId: "missing_id", weight: "high" }, CTX),
+      agentMemoryUpdateHandler({ memoryId: "missing_id", confidenceScore: 50 }, CTX),
     ).rejects.toThrow("missing_id");
   });
 });

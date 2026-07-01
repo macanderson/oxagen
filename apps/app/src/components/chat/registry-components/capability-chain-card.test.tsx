@@ -4,6 +4,16 @@ import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import CapabilityChainCard from "./capability-chain-card";
 
+// TruncatedText (the step rationale renderer) measures scroll overflow via
+// ResizeObserver, which isn't implemented in JSDOM.
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 vi.mock("@/components/ui/badge", () => ({
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));

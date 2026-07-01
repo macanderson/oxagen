@@ -3,6 +3,7 @@ import * as React from "react";
 import { Network, ArrowUpRight, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { TruncatedText } from "@/components/ui/truncated-text";
 
 /**
  * graph-node-card — renders a single KnowledgeNode from graph.node.get or
@@ -85,15 +86,19 @@ export default function GraphNodeCard(props: GraphNodeCardProps): React.ReactEle
 
       <div className="space-y-3 px-4 py-3">
         {node.description ? (
-          <p className="text-sm text-foreground">{node.description}</p>
+          <p className="text-sm text-foreground">
+            <TruncatedText text={node.description} lines={2} />
+          </p>
         ) : null}
 
         {propEntries.length > 0 ? (
-          <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(6rem,auto)_1fr]">
+          <dl className="grid gap-x-4 gap-y-1 overflow-x-auto sm:grid-cols-[minmax(6rem,auto)_1fr]">
             {propEntries.map(([k, v]) => (
               <React.Fragment key={k}>
                 <dt className="text-xs font-medium text-muted-foreground">{k}</dt>
-                <dd className="min-w-0 break-words text-sm">{String(v)}</dd>
+                <dd className="min-w-0 break-words text-sm">
+                  <TruncatedText text={String(v)} lines={2} />
+                </dd>
               </React.Fragment>
             ))}
           </dl>
