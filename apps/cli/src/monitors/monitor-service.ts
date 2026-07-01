@@ -19,6 +19,7 @@
  */
 import { getPollIntervalSeconds } from "./config.js";
 import { defaultLogSink, type LogSink } from "./logging.js";
+import { agentRegistry, type AgentHandle } from "../agent/agent-registry.js";
 import type {
   MonitorDispatchInput,
   MonitorDispatchResult,
@@ -59,6 +60,12 @@ export interface MonitorServiceDeps {
   genId?: () => string;
   /** Clock for log timestamps. Defaults to `new Date().toISOString()`. */
   nowIso?: () => string;
+  /**
+   * Registry the dispatched monitor registers itself into so it shows up in the
+   * REPL's `/hud`. Defaults to the process-wide singleton; tests pass their own
+   * (or `null` to opt out) to keep global HUD state out of unrelated assertions.
+   */
+  registry?: { register: (input: Parameters<typeof agentRegistry.register>[0]) => AgentHandle } | null;
 }
 
 /**
@@ -110,10 +117,22 @@ export class BackgroundMonitorService implements MonitorService {
       at: nowIso(),
     });
 
+    // Surface the background monitor in the `/hud` HUD for its whole life. The
+    // registry default is the process-wide singleton; pass `registry: null` to
+    // opt out. Reuse `subagentId` so logs and HUD refer to the same agent.
+    const registry = this.deps.registry === undefined ? agentRegistry : this.deps.registry;
+    const hud =
+      registry?.register({
+        kind: "monitor",
+        id: subagentId,
+        title: `${input.targetType} ${input.targetId}`,
+        detail: "watching",
+      }) ?? null;
+
     // Out-of-process-style dispatch: fire the watch loop and return control
     // right away. A caller awaiting `dispatch` never waits on the target's
     // terminal state — only `onReport` handlers see that, and only once.
-    void this.watch(input, subagentId);
+    void this.watch(input, subagentId, hud);
 
     return { subagentId, background: true };
   }
@@ -125,7 +144,11 @@ export class BackgroundMonitorService implements MonitorService {
    * against a deterministic poller that resolves without throwing, so tests
    * never sleep.
    */
-  private async watch(input: MonitorDispatchInput, subagentId: string): Promise<void> {
+  private async watch(
+    input: MonitorDispatchInput,
+    subagentId: string,
+    hud: AgentHandle | null = null,
+  ): Promise<void> {
     const pollIntervalSeconds = input.pollIntervalSeconds ?? getPollIntervalSeconds();
     const controller = new AbortController();
     const log = this.deps.log ?? defaultLogSink;
@@ -165,6 +188,11 @@ export class BackgroundMonitorService implements MonitorService {
       subagentId,
       at: nowIso(),
     });
+
+    // The monitor did its job the moment the target reached a terminal state.
+    // Reflect the target's outcome in the HUD detail, then retire the entry.
+    hud?.update({ detail: result.status });
+    hud?.done();
 
     for (const handler of this.handlers) handler(report);
   }

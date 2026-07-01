@@ -98,6 +98,7 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
     argumentHint: "[n|id]",
   },
   { name: "traces", description: "List recent turns you can /replay" },
+  { name: "hud", description: "Toggle the heads-up display of running agents" },
   { name: "clear", description: "Reset the conversation history" },
   { name: "exit", description: "Quit the REPL" },
   { name: "quit", description: "Quit the REPL" },
