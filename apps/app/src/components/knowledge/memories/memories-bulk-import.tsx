@@ -47,6 +47,7 @@ import {
   type MemoryKind,
   type MemoryWeight,
 } from "./memory-kinds";
+import {
   ALL_CLASSES,
   CLASS_CONFIG,
   RECOMMENDED_MEMORY_KINDS,
