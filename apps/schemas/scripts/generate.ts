@@ -39,18 +39,31 @@ export function generateOxagenCliSettingsSchema(): Record<string, unknown> {
   };
 }
 
-function main(): void {
-  const outPath = resolve(
+/** Canonical on-disk location of the committed artifact that `schemas.oxagen.sh` serves. */
+export function defaultSchemaOutPath(): string {
+  return resolve(
     dirname(fileURLToPath(import.meta.url)),
     "../public/oxagen-cli-settings-schema.json",
   );
-  const schema = generateOxagenCliSettingsSchema();
-  writeFileSync(outPath, `${JSON.stringify(schema, null, 2)}\n`, "utf8");
-  console.log(`Wrote ${outPath}`);
 }
 
-// Only run when executed directly (tsx scripts/generate.ts), not when
-// imported by the drift test.
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
-  main();
+/**
+ * Regenerate the JSON Schema artifact and write it to `outPath` (defaults to
+ * the committed public path). Returns the path written so callers/CLI can log
+ * it. The trailing newline keeps the file diff-clean under most formatters.
+ */
+export function writeOxagenCliSettingsSchema(outPath: string = defaultSchemaOutPath()): string {
+  const schema = generateOxagenCliSettingsSchema();
+  writeFileSync(outPath, `${JSON.stringify(schema, null, 2)}\n`, "utf8");
+  return outPath;
 }
+
+// Only run when executed directly (tsx scripts/generate.ts), not when imported
+// by the drift test. This process-entry guard cannot be exercised in-process by
+// the unit tests, so it is excluded from coverage; the behaviour it triggers
+// (writeOxagenCliSettingsSchema) is covered directly.
+/* v8 ignore start */
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+  console.log(`Wrote ${writeOxagenCliSettingsSchema()}`);
+}
+/* v8 ignore stop */
