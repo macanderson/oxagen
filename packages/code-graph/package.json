@@ -11,7 +11,8 @@
     "./loader": "./src/loader.ts",
     "./markdown": "./src/markdown.ts",
     "./chunk": "./src/chunk.ts",
-    "./renderers": "./src/renderers.ts"
+    "./renderers": "./src/renderers.ts",
+    "./embed": "./src/embed.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

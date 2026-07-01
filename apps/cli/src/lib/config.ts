@@ -16,19 +16,14 @@ export interface CliConfig {
   gatewayKey?: string;
   /** Default verbose mode: capture + emit full per-turn telemetry. */
   verbose?: boolean;
-  /** Model-runtime settings (Group 1: on-device runtime + coordinator choice). */
+  /** Model-runtime settings */
   runtime?: RuntimeConfig;
-  /**
-   * Pipeline / assist-tool settings (Group 4: prompt enhancer, judge, survey).
-   * A partial override layered over the defaults; read through the typed
-   * accessors in `pipeline/config.ts`, not the flat `oxagen config` command.
-   */
+  /** Pipeline / assist-tool settings */
   pipeline?: import("../pipeline/config.js").AssistPipelineConfigPatch;
-  /**
-   * Background-monitor settings (Group 5: ask-before-monitoring, dispatch
-   * triggers, poll cadence). A partial override layered over the defaults;
-   * read through the typed accessors in `monitors/config.ts`.
-   */
+  /** Graph tool settings */
+  graph?: import("../agent/context/config.js").GraphConfigPatch;
+
+  /** Background-monitor settings */
   monitors?: import("../monitors/config.js").MonitorsConfigPatch;
 }
 

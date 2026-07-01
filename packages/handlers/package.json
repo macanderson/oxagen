@@ -20,6 +20,7 @@
     "@oxagen/agent": "workspace:*",
     "@oxagen/agent-engine": "workspace:*",
     "@oxagen/ai": "workspace:*",
+    "@oxagen/code-graph": "workspace:*",
     "@oxagen/github": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/crypto": "workspace:*",

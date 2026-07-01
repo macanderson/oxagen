@@ -4,6 +4,7 @@ import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relati
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { sanitizeLabel } from "@oxagen/ontology/labels";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { isValidCodeEmbedding } from "@oxagen/code-graph/embed";
 import { logger } from "./logger";
 
 /**
@@ -50,6 +51,12 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
           displayName: n.displayName,
           // Serialise properties as JSON string — same pattern as graph.node.upsert
           properties: n.properties ? JSON.stringify(n.properties) : null,
+          // Best-effort semantic vector. Only a correctly-dimensioned (1536-d)
+          // text-embedding-3-small vector is accepted — any other shape is
+          // dropped to null so a wrong-dimension push never corrupts the
+          // universal graph_node_embedding_index. Absent/invalid → coalesced to
+          // the node's existing vector below (non-fatal, same as node.upsert).
+          embedding: isValidCodeEmbedding(n.embedding) ? n.embedding : null,
         }));
 
         const nodeResult = await session.run(
@@ -74,6 +81,9 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
              node.is_system   = true,
              node.updatedAt   = datetime(),
              node._created    = false
+           SET
+             node.embedding = coalesce(n.embedding, node.embedding),
+             node.embeddingUpdatedAt = CASE WHEN n.embedding IS NULL THEN node.embeddingUpdatedAt ELSE datetime() END
            RETURN count(node) AS total`,
           { nodes: nodeParams },
         );

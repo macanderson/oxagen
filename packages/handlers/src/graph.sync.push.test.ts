@@ -345,6 +345,98 @@ describe("graphSyncPushHandler", () => {
     expect(r2.nodesUpserted).toBe(1);
   });
 
+  it("stores a valid 1536-d embedding — Cypher SETs node.embedding, params carry the vector", async () => {
+    mocks.run
+      .mockResolvedValueOnce(countResult(1)) // node MERGE
+      .mockResolvedValue({ records: [] }); // domain label SET
+
+    const vec = Array.from({ length: 1536 }, () => 0.01);
+    await graphSyncPushHandler(
+      {
+        ...BASE_INPUT,
+        nodes: [
+          {
+            key: "code:r:a.ts",
+            labels: ["SourceFile"],
+            displayName: "a.ts",
+            properties: {},
+            isSystem: true,
+            embedding: vec,
+          },
+        ],
+      },
+      CTX,
+    );
+
+    // The node MERGE Cypher writes the embedding + timestamp.
+    const mergeCypher = mocks.run.mock.calls[0]?.[0] as string;
+    expect(mergeCypher).toContain("node.embedding = coalesce(n.embedding, node.embedding)");
+    expect(mergeCypher).toContain("node.embeddingUpdatedAt");
+    // The vector is carried through as a param on the unwound node.
+    const params = mocks.run.mock.calls[0]?.[1] as {
+      nodes: Array<{ embedding: number[] | null }>;
+    };
+    expect(params.nodes[0]?.embedding).toHaveLength(1536);
+    expect(params.nodes[0]?.embedding?.[0]).toBe(0.01);
+  });
+
+  it("ignores an embedding with the wrong dimension (dropped to null param)", async () => {
+    mocks.run
+      .mockResolvedValueOnce(countResult(1))
+      .mockResolvedValue({ records: [] });
+
+    await graphSyncPushHandler(
+      {
+        ...BASE_INPUT,
+        nodes: [
+          {
+            key: "code:r:a.ts",
+            labels: ["SourceFile"],
+            displayName: "a.ts",
+            properties: {},
+            isSystem: true,
+            embedding: [0.1, 0.2, 0.3], // 3-d — not 1536-d
+          },
+        ],
+      },
+      CTX,
+    );
+
+    const params = mocks.run.mock.calls[0]?.[1] as {
+      nodes: Array<{ embedding: number[] | null }>;
+    };
+    // Invalid dimension → dropped to null so coalesce keeps the existing vector.
+    expect(params.nodes[0]?.embedding).toBeNull();
+  });
+
+  it("drops an absent embedding to null (non-fatal, node still upserted)", async () => {
+    mocks.run
+      .mockResolvedValueOnce(countResult(1))
+      .mockResolvedValue({ records: [] });
+
+    const result = await graphSyncPushHandler(
+      {
+        ...BASE_INPUT,
+        nodes: [
+          {
+            key: "code:r:a.ts",
+            labels: ["SourceFile"],
+            displayName: "a.ts",
+            properties: {},
+            isSystem: true,
+          },
+        ],
+      },
+      CTX,
+    );
+
+    expect(result.nodesUpserted).toBe(1);
+    const params = mocks.run.mock.calls[0]?.[1] as {
+      nodes: Array<{ embedding: number[] | null }>;
+    };
+    expect(params.nodes[0]?.embedding).toBeNull();
+  });
+
   it("groups edges by type and emits one MERGE query per distinct type", async () => {
     mocks.run
       // node MERGE (2 nodes)

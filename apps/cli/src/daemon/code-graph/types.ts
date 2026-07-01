@@ -34,6 +34,16 @@ export interface CodeNode {
    * (local persistence) and Neo4j (workspace knowledge graph).
    */
   domain?: string;
+  /**
+   * Semantic embedding of this node's rendered text (Group 3 context layer).
+   * Present only on file nodes today — the unit the `graph_query` tool ranks
+   * for "impacted files" — and only once the semantic index has embedded it.
+   * The producing provider is recorded in {@link embeddingProvider} so a
+   * provider swap re-embeds rather than comparing incompatible vectors.
+   */
+  embedding?: number[];
+  /** Id of the {@link embedding} provider (e.g. "local-hash-v1"), or undefined. */
+  embeddingProvider?: string;
 }
 
 export type CodeEdgeType =

@@ -52,6 +52,10 @@ import { handleGraphPush } from "../graph.push.js";
 import { apiPost } from "../../lib/api.js";
 import { execFileSync } from "node:child_process";
 import { buildCodeGraph } from "../../daemon/code-graph/builder.js";
+import {
+  CODE_EMBED_GATEWAY_MODEL,
+  CODE_EMBED_DIM,
+} from "@oxagen/code-graph/embed";
 
 const mockApiPost = apiPost as unknown as Mock;
 const mockExecFileSync = execFileSync as unknown as Mock;
@@ -288,6 +292,89 @@ describe("handleGraphPush — envelope structure", () => {
     for (const n of body.nodes) {
       expect(n.isSystem).toBe(true);
     }
+  });
+
+  it("attaches a valid 1536-d local embedding produced by the gateway model", async () => {
+    // A node the CLI embedded locally with the shared gateway model ships its
+    // vector so the graph is searchable in apps/app without re-embedding.
+    const vec = Array.from({ length: CODE_EMBED_DIM }, () => 0.01);
+    setupGit({ lsFiles: "src/foo.ts" });
+    const nodes = new Map();
+    nodes.set("id-1", {
+      id: "id-1",
+      kind: "file",
+      name: "foo.ts",
+      path: "src/foo.ts",
+      range: { start: 0, end: 0 },
+      language: "typescript",
+      embedding: vec,
+      embeddingProvider: CODE_EMBED_GATEWAY_MODEL,
+    });
+    mockBuildCodeGraph.mockResolvedValue({ nodes, edges: [] });
+    mockApiPost.mockResolvedValueOnce(PUSH_RESULT);
+
+    await handleGraphPush({ _duckdbPath: ":memory:", _gitRoot: GIT_ROOT, full: true });
+
+    const body = mockApiPost.mock.calls[0]![1] as {
+      nodes: Array<{ key: string; embedding?: number[] }>;
+    };
+    const fileNode = body.nodes.find((n) => n.key.endsWith("src/foo.ts"));
+    expect(fileNode).toBeDefined();
+    expect(fileNode!.embedding).toHaveLength(CODE_EMBED_DIM);
+    expect(fileNode!.embedding![0]).toBe(0.01);
+  });
+
+  it("omits the embedding when the provider is not the shared gateway model", async () => {
+    const vec = Array.from({ length: CODE_EMBED_DIM }, () => 0.01);
+    setupGit({ lsFiles: "src/foo.ts" });
+    const nodes = new Map();
+    nodes.set("id-1", {
+      id: "id-1",
+      kind: "file",
+      name: "foo.ts",
+      path: "src/foo.ts",
+      range: { start: 0, end: 0 },
+      language: "typescript",
+      embedding: vec,
+      embeddingProvider: "local-hash-v1",
+    });
+    mockBuildCodeGraph.mockResolvedValue({ nodes, edges: [] });
+    mockApiPost.mockResolvedValueOnce(PUSH_RESULT);
+
+    await handleGraphPush({ _duckdbPath: ":memory:", _gitRoot: GIT_ROOT, full: true });
+
+    const body = mockApiPost.mock.calls[0]![1] as {
+      nodes: Array<{ key: string; embedding?: number[] }>;
+    };
+    const fileNode = body.nodes.find((n) => n.key.endsWith("src/foo.ts"));
+    expect(fileNode).toBeDefined();
+    expect(fileNode!.embedding).toBeUndefined();
+  });
+
+  it("omits the embedding when the vector has the wrong dimension", async () => {
+    setupGit({ lsFiles: "src/foo.ts" });
+    const nodes = new Map();
+    nodes.set("id-1", {
+      id: "id-1",
+      kind: "file",
+      name: "foo.ts",
+      path: "src/foo.ts",
+      range: { start: 0, end: 0 },
+      language: "typescript",
+      embedding: [0.1, 0.2, 0.3],
+      embeddingProvider: CODE_EMBED_GATEWAY_MODEL,
+    });
+    mockBuildCodeGraph.mockResolvedValue({ nodes, edges: [] });
+    mockApiPost.mockResolvedValueOnce(PUSH_RESULT);
+
+    await handleGraphPush({ _duckdbPath: ":memory:", _gitRoot: GIT_ROOT, full: true });
+
+    const body = mockApiPost.mock.calls[0]![1] as {
+      nodes: Array<{ key: string; embedding?: number[] }>;
+    };
+    const fileNode = body.nodes.find((n) => n.key.endsWith("src/foo.ts"));
+    expect(fileNode).toBeDefined();
+    expect(fileNode!.embedding).toBeUndefined();
   });
 
   it("symbol nodes carry the :SourceSymbol label (not :Symbol) so the reader resolves them", async () => {
