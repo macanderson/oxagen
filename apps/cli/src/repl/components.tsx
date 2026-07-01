@@ -9,7 +9,6 @@ import { Box, Text, useInput, useStdout } from "ink";
 import React, { useState, useEffect } from "react";
 import { theme } from "../tui/theme.js";
 import { formatUsd } from "../agent/model-router.js";
-import { AGENT_TURN_TIMEOUT_MS } from "../agent/timeouts.js";
 import { getToolEmoji } from "../agent/tool-formatter.js";
 import { SlashMenu } from "./slash-menu.js";
 import {
@@ -346,21 +345,32 @@ export function MessageView({ msg }: { msg: Message }): React.ReactElement {
 
 // ── Thinking Indicator ────────────────────────────────────────────────────────
 
-/** Width (cells) of the turn-budget bar in the thinking indicator. */
-const BUDGET_BAR_WIDTH = 6;
+/**
+ * After this many seconds with no *completed* call (progress), the turn is close
+ * to the inactivity guard's window and we warn the user. This is NOT a turn cap —
+ * a turn runs as long as calls keep completing (see agent/timeouts.ts). It just
+ * signals "nothing has landed in a while" so a genuinely hung turn is visible.
+ */
+const IDLE_WARN_SEC = 60;
 
 /**
  * Animated "the agent is working" indicator: a braille spinner, elapsed
- * seconds, a live output-token estimate, and a best-guess "time remaining" bar
- * toward the turn's auto-cancel deadline. It runs its own ~100ms timer so it
- * animates independently of streaming updates.
+ * seconds, a live output-token estimate, and — crucially — seconds since the
+ * last completed call (progress). There is NO countdown to an auto-cancel
+ * deadline, because a turn is bounded by progress and per-call timeouts, not by
+ * total elapsed time: long, healthy work must not look like it is "running out
+ * of time". The idle figure warms dim → amber → red only when progress genuinely
+ * stalls. It runs its own ~100ms timer so it animates independently of streaming.
  */
 export function ThinkingIndicator({
   startedAt,
   getTokens,
+  lastProgressAt,
 }: {
   startedAt: number;
   getTokens: () => number;
+  /** Timestamp of the last completed call (stream delta / tool / stage). */
+  lastProgressAt?: number;
 }): React.ReactElement {
   const [frame, setFrame] = useState(0);
   useEffect(() => {
@@ -368,20 +378,16 @@ export function ThinkingIndicator({
     return () => clearInterval(id);
   }, []);
 
-  const elapsedMs = Math.max(0, Date.now() - startedAt);
-  const elapsed = Math.round(elapsedMs / 1000);
+  const now = Date.now();
+  const elapsed = Math.round(Math.max(0, now - startedAt) / 1000);
   const tokens = getTokens();
 
-  // Best-guess "time remaining" = the budget left before the turn hits its
-  // auto-cancel backstop (AGENT_TURN_TIMEOUT_MS). The bar fills as the turn runs
-  // and the remaining time warms dim → amber → red as the deadline nears, so a
-  // slow turn shows honest progress instead of an opaque, possibly-hung spinner.
-  const remainingSec = Math.ceil(Math.max(0, AGENT_TURN_TIMEOUT_MS - elapsedMs) / 1000);
-  const frac = Math.min(1, elapsedMs / AGENT_TURN_TIMEOUT_MS);
-  const filled = Math.round(frac * BUDGET_BAR_WIDTH);
-  const bar = "▰".repeat(filled) + "▱".repeat(BUDGET_BAR_WIDTH - filled);
-  const remainingColor =
-    remainingSec <= 30 ? "#F87171" : remainingSec <= 90 ? "#FBBF24" : undefined;
+  // Seconds since the last unit of progress landed. Only surfaced once it grows
+  // past the warn threshold, so a normal fast turn stays clean.
+  const idleSec =
+    lastProgressAt != null ? Math.round(Math.max(0, now - lastProgressAt) / 1000) : 0;
+  const idleColor =
+    idleSec >= IDLE_WARN_SEC * 2 ? "#F87171" : idleSec >= IDLE_WARN_SEC ? "#FBBF24" : undefined;
 
   return (
     <Box paddingX={1}>
@@ -391,12 +397,10 @@ export function ThinkingIndicator({
       <Text color="#FBBF24">Thinking… </Text>
       <Text dimColor>
         {elapsed}s{tokens > 0 ? ` · ~${humanizeTokens(tokens)} tok` : ""}
-        {" · "}
-        {bar}{" "}
       </Text>
-      <Text dimColor={remainingColor === undefined} color={remainingColor}>
-        ~{remainingSec}s left
-      </Text>
+      {idleSec >= IDLE_WARN_SEC ? (
+        <Text color={idleColor}>{` · idle ${idleSec}s`}</Text>
+      ) : null}
       <Text dimColor> · esc to cancel</Text>
     </Box>
   );
