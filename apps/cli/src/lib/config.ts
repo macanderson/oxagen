@@ -24,6 +24,12 @@ export interface CliConfig {
    * accessors in `pipeline/config.ts`, not the flat `oxagen config` command.
    */
   pipeline?: import("../pipeline/config.js").AssistPipelineConfigPatch;
+  /**
+   * Context-layer settings (Group 3: graph before grep). A partial override
+   * layered over the defaults; read through the typed accessors in
+   * `agent/context/config.ts`, not the flat `oxagen config` command.
+   */
+  graph?: import("../agent/context/config.js").GraphConfigPatch;
 }
 
 /**
