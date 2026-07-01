@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Routing policy for the primary-agent coordinator (Group 2). The coordinator only does trivial work itself and dispatches everything above trivial to a worker. The router picks the cheapest capable model and accounts for the token cost of switching mid-turn and for prompt length. Config values here are the baked-in defaults; env vars and the merged pipeline config (Group 6) override them. defaultCodeWorker / cheapBasicWorker live in runtime/models.json -> registry.workerModels and are read from there, not duplicated here.",
+
+  "config": {
+    "routing": {
+      "trivialMaxComplexity": "low",
+      "switchCostTokenBudget": 1500
+    }
+  },
+
+  "complexityScale": ["trivial", "low", "medium", "high", "very_high"],
+
+  "switchCostModel": {
+    "estimate": "switchCostTokens = promptTokens + expectedContextTokens",
+    "expectedContextTokens": 1500,
+    "valueTokenScale": 12000,
+    "defaultTaskValue": 0.3,
+    "decision": "Upgrade to a stronger worker than the cheapest capable one only when qualityGain * taskValue (scaled to token-equivalent benefit) exceeds the switch cost. A longer prompt raises the switch cost, so a marginal gain stops being worth it."
+  },
+
+  "logging": {
+    "route": "[route] complexity=<c> prompt_tokens=<n> selected=<model> coordinator=<bool> reason=\"<...>\"",
+    "dispatch": "[dispatch] worker=<model> task=\"<...>\" est_tokens=<n>",
+    "keptTrivial": "[route] complexity=<c> selected=coordinator reason=\"trivial, no dispatch\""
+  }
+}
