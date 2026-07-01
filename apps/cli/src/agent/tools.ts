@@ -21,6 +21,8 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { resolve, relative, join, isAbsolute } from "node:path";
 import { queryCodeGraph } from "./code-graph.js";
+import { createContextResolver } from "./context/index.js";
+import { formatGraphResultJson } from "./context/format.js";
 import { isMutatingTool, toRequest, type PermissionBroker } from "./permissions.js";
 
 const execAsync = promisify(exec);
@@ -285,6 +287,57 @@ export function buildTools(
           return clip(await queryCodeGraph(cwd, operation, query, limit));
         } catch (err) {
           return `code_graph error: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      },
+    }),
+
+    graph_query: tool({
+      description:
+        "Get structured context from the code graph BEFORE grepping or walking " +
+        "directories — this is the default way to understand the codebase. Give it " +
+        "a natural-language query ('code related to telemetry drains') or focus " +
+        "symbols and it returns JSON: the impacted files (ranked), the symbols, and " +
+        "the edges (calls/imports/contains) that connect them — a self-contained " +
+        "subgraph, so one call replaces many greps. Use `flow: 'callers'` to answer " +
+        "'what invokes X', `flow: 'callees'` for 'what does X call', and `hops` to " +
+        "pull a symbol plus everything within N degrees of separation. Falls back " +
+        "to grep only when the graph cannot answer.",
+      inputSchema: z.object({
+        query: z
+          .string()
+          .describe("Natural-language description of the code you need, or a symbol name."),
+        focusSymbols: z
+          .array(z.string())
+          .optional()
+          .describe("Specific symbol names to anchor on (e.g. ['processPayment'])."),
+        hops: z
+          .number()
+          .int()
+          .optional()
+          .describe("Degrees of separation to expand from each seed (default 2)."),
+        flow: z
+          .enum(["callers", "callees", "both"])
+          .optional()
+          .describe("Walk execution flow instead of a plain neighbourhood."),
+        maxNodes: z
+          .number()
+          .int()
+          .optional()
+          .describe("Cap on nodes in the returned subgraph (default from config, 200)."),
+      }),
+      execute: async ({ query, focusSymbols, hops, flow, maxNodes }) => {
+        try {
+          const resolver = createContextResolver({ cwd });
+          const result = await resolver.query({
+            query,
+            ...(focusSymbols ? { focusSymbols } : {}),
+            ...(hops !== undefined ? { hops } : {}),
+            ...(flow ? { flow } : {}),
+            ...(maxNodes !== undefined ? { maxNodes } : {}),
+          });
+          return clip(formatGraphResultJson(result));
+        } catch (err) {
+          return `graph_query error: ${err instanceof Error ? err.message : String(err)}`;
         }
       },
     }),

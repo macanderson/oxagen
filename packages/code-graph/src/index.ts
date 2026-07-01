@@ -23,6 +23,14 @@ export { parseMarkdown } from "./markdown";
 export type { MarkdownParse } from "./markdown";
 export { inferDomains } from "./domains";
 export type { DomainAI, DomainInferInput, DomainMap } from "./domains";
+export {
+  CODE_EMBED_GATEWAY_MODEL,
+  CODE_EMBED_MODEL,
+  CODE_EMBED_DIM,
+  isValidCodeEmbedding,
+  cosineSimilarity,
+} from "./embed";
+export { renderFileText, renderSymbolText } from "./renderers";
 
 // ---------------------------------------------------------------------------
 // Language detection

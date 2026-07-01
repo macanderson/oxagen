@@ -29,6 +29,12 @@ import { createGraphStore } from "@oxagen/engram";
 import { graphStorePath } from "./graph.pull.js";
 import { inferDomains } from "@oxagen/code-graph";
 import type { DomainAI, DomainMap } from "@oxagen/code-graph";
+import {
+  CODE_EMBED_GATEWAY_MODEL,
+  CODE_EMBED_DIM,
+  isValidCodeEmbedding,
+} from "@oxagen/code-graph/embed";
+import type { CodeNode } from "../daemon/code-graph/types.js";
 import { ensureGatewayKey } from "../agent/env.js";
 import { modelForTier } from "../agent/model-router.js";
 
@@ -60,6 +66,13 @@ interface PushNode {
   displayName: string;
   properties: Record<string, unknown>;
   isSystem: true;
+  /**
+   * Optional local semantic embedding. Attached only when the CLI embedded this
+   * node locally (with a gateway key) using the shared code-graph model — a
+   * 1536-d `text-embedding-3-small` vector. Omitted otherwise; the server drops
+   * any wrong-dimension vector rather than corrupting the index.
+   */
+  embedding?: number[];
 }
 
 interface PushEdge {
@@ -168,6 +181,24 @@ function allTrackedFiles(root: string): string[] {
 // ---------------------------------------------------------------------------
 
 /**
+ * Return the code node's local embedding IFF it was produced by the shared
+ * code-graph gateway model (`openai/text-embedding-3-small`) and is a valid
+ * 1536-d vector — otherwise undefined so the field is omitted from the push.
+ * Only locally-embedded nodes (built with a gateway key) ship a vector; the
+ * rest sync without one and stay searchable via server-side ingestion.
+ */
+function localEmbeddingFor(n: CodeNode): number[] | undefined {
+  if (
+    n.embeddingProvider === CODE_EMBED_GATEWAY_MODEL &&
+    n.embedding?.length === CODE_EMBED_DIM &&
+    isValidCodeEmbedding(n.embedding)
+  ) {
+    return n.embedding;
+  }
+  return undefined;
+}
+
+/**
  * Build nodes and edges for a set of files by running them through the
  * code-graph builder and mapping to the `graph.sync.push` envelope shape.
  *
@@ -196,6 +227,7 @@ async function buildEnvelopeForFiles(
       // File node key is simpler
       const fileKey = `code:${repo}:${n.path}`;
       const fileDomain = domainMap?.get(n.path);
+      const fileEmbedding = localEmbeddingFor(n);
       const pushNode: PushNode = {
         key: fileKey,
         labels: ["SourceFile"],
@@ -206,6 +238,7 @@ async function buildEnvelopeForFiles(
           ...(fileDomain ? { domain: fileDomain } : {}),
         },
         isSystem: true,
+        ...(fileEmbedding ? { embedding: fileEmbedding } : {}),
       };
       nodeMap.set(fileKey, pushNode);
       const existing = nodesByPath.get(n.path) ?? [];
@@ -225,6 +258,7 @@ async function buildEnvelopeForFiles(
       };
       if (n.signature) props["signature"] = n.signature;
       if (n.docstring) props["docstring"] = n.docstring;
+      const symbolEmbedding = localEmbeddingFor(n);
       const pushNode: PushNode = {
         key: symbolKey,
         // Must be "SourceSymbol" (not "Symbol") to match the GitHub-ingestion
@@ -235,6 +269,7 @@ async function buildEnvelopeForFiles(
         displayName: n.name,
         properties: props,
         isSystem: true,
+        ...(symbolEmbedding ? { embedding: symbolEmbedding } : {}),
       };
       nodeMap.set(symbolKey, pushNode);
       // Also track symbol under its file path for edge lookup
