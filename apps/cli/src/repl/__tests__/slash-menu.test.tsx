@@ -10,9 +10,9 @@ import type { SlashCatalogEntry } from "../../slash/catalog.js";
 
 const entries: SlashCatalogEntry[] = [
   {
-    name: "tui",
-    description: "Switch the terminal layout between compact and fullscreen",
-    argumentHint: "[compact|fullscreen]",
+    name: "mode",
+    description: "Show or set the permission posture for tool calls",
+    argumentHint: "[ask|auto-edit|bypass|readonly]",
     source: "builtin",
     productized: true,
   },
@@ -63,8 +63,8 @@ describe("SlashMenu", () => {
   it("displays a description and the argument hint for each command", () => {
     const { lastFrame } = render(<SlashMenu entries={entries} selectedIndex={0} width={70} />);
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("/tui");
-    expect(frame).toContain("[compact|fullscreen]");
+    expect(frame).toContain("/mode");
+    expect(frame).toContain("[ask|auto-edit|bypass|readonly]");
     expect(frame).toContain("Project model cost");
     expect(frame).toContain("Open a PR for the current branch");
   });

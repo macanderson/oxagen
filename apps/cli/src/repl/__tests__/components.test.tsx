@@ -108,9 +108,9 @@ describe("PromptInput typeahead", () => {
   const catalog: SlashCatalogEntry[] = [
     { name: "help", description: "Show the slash-command help", source: "builtin", productized: true },
     {
-      name: "tui",
-      description: "Switch the terminal layout",
-      argumentHint: "[compact|fullscreen]",
+      name: "pipeline",
+      description: "Toggle prompt evaluation and completeness judging",
+      argumentHint: "[on|off]",
       source: "builtin",
       productized: true,
     },
@@ -128,12 +128,12 @@ describe("PromptInput typeahead", () => {
     const { lastFrame, stdin, unmount } = render(
       <PromptInput onSubmit={() => {}} busy={false} catalog={catalog} />,
     );
-    stdin.write("/tu");
+    stdin.write("/pi");
     await tick();
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("/tui");
-    expect(frame).toContain("Switch the terminal layout");
-    expect(frame).toContain("[compact|fullscreen]");
+    expect(frame).toContain("/pipeline");
+    expect(frame).toContain("Toggle prompt evaluation");
+    expect(frame).toContain("[on|off]");
     expect(frame).not.toContain("/cost"); // filtered out
     unmount();
   });
