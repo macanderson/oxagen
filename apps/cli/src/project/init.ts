@@ -11,6 +11,7 @@
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { DEFAULT_CODING_MODEL } from "../agent/model-catalog.js";
 
 export interface ProjectInitOptions {
   cwd: string;
@@ -55,7 +56,7 @@ export async function initializeProject(opts: ProjectInitOptions): Promise<boole
     JSON.stringify(
       {
         $schema: "https://schemas.oxagen.sh/oxagen-cli-settings-schema.json",
-        model: "anthropic/claude-sonnet-4.6",
+        model: DEFAULT_CODING_MODEL,
         env: {},
         permissions: {
           defaultMode: "default",
