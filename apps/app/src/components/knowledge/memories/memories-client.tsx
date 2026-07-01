@@ -18,11 +18,6 @@ import { useRouter } from "next/navigation";
 import {
   BrainCircuit,
   Filter,
-  RefreshCw,
-  Lock,
-  Bug,
-  AlertTriangle,
-  Zap,
   Clock,
   Fingerprint,
   ChevronRight,
@@ -50,20 +45,28 @@ import {
   MemoriesBulkImport,
   type DraftMemory,
 } from "./memories-bulk-import";
+// Shared kind/weight taxonomy lives in its own lightweight module (see
+// memory-kinds.ts) so the bulk-import grid can reuse it without importing this
+// CodeMirror-laden component. Re-exported here for existing consumers.
+import {
+  ALL_KINDS,
+  KIND_CONFIG,
+  WEIGHT_CONFIG,
+  type MemoryKind,
+  type MemoryWeight,
+} from "./memory-kinds";
+
+export {
+  ALL_KINDS,
+  KIND_CONFIG,
+  WEIGHT_CONFIG,
+  type MemoryKind,
+  type MemoryWeight,
+} from "./memory-kinds";
 
 // ---------------------------------------------------------------------------
 // Types — mirrors AgentMemoryRecord from @oxagen/oxagen/contracts/agent.memory.list
 // ---------------------------------------------------------------------------
-
-// Exported so the bulk-import grid shares the exact kind/weight taxonomy,
-// labels, and colors — one source of truth for the Memories surface.
-export type MemoryWeight = "low" | "high" | "critical";
-export type MemoryKind =
-  | "routine-change"
-  | "constraint"
-  | "bug-root-cause"
-  | "convention-deviation"
-  | "gotcha";
 
 interface AgentMemoryRecord {
   id: string;
@@ -180,51 +183,8 @@ interface MemoriesClientProps {
 }
 
 // ---------------------------------------------------------------------------
-// Kind configuration
+// Kind configuration helper
 // ---------------------------------------------------------------------------
-
-export const KIND_CONFIG: Record<
-  MemoryKind,
-  {
-    label: string;
-    icon: React.ComponentType<{ className?: string }>;
-    color: string;
-  }
-> = {
-  "routine-change": {
-    label: "Routine Change",
-    icon: RefreshCw,
-    color: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
-  },
-  constraint: {
-    label: "Constraint",
-    icon: Lock,
-    color: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
-  },
-  "bug-root-cause": {
-    label: "Bug Root Cause",
-    icon: Bug,
-    color: "bg-red-500/15 text-red-700 dark:text-red-400",
-  },
-  "convention-deviation": {
-    label: "Convention Deviation",
-    icon: AlertTriangle,
-    color: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
-  },
-  gotcha: {
-    label: "Gotcha",
-    icon: Zap,
-    color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  },
-};
-
-export const ALL_KINDS: MemoryKind[] = [
-  "routine-change",
-  "constraint",
-  "bug-root-cause",
-  "convention-deviation",
-  "gotcha",
-];
 
 function getKindConfig(kind: string): (typeof KIND_CONFIG)[MemoryKind] {
   return (
@@ -235,28 +195,6 @@ function getKindConfig(kind: string): (typeof KIND_CONFIG)[MemoryKind] {
     }
   );
 }
-
-// ---------------------------------------------------------------------------
-// Weight configuration
-// ---------------------------------------------------------------------------
-
-export const WEIGHT_CONFIG: Record<
-  MemoryWeight,
-  { label: string; color: string }
-> = {
-  low: {
-    label: "Low",
-    color: "bg-zinc-400/20 text-zinc-600 dark:text-zinc-400",
-  },
-  high: {
-    label: "High",
-    color: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
-  },
-  critical: {
-    label: "Critical",
-    color: "bg-red-500/15 text-red-700 dark:text-red-400",
-  },
-};
 
 // ---------------------------------------------------------------------------
 // Helpers
