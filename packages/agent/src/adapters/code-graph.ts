@@ -30,8 +30,14 @@ const SEMANTIC_NOT_AVAILABLE =
 
 export function createNeo4jCodeGraphProvider(): CodeGraphProvider {
   return {
+    // Operation type is derived from CodeGraphProvider["query"] itself (see
+    // apps/cli/src/agent/code-graph.ts for the same pattern) rather than a
+    // hand-kept copy of the literal union, so the two can't drift apart on
+    // their own. This does NOT make handling a new operation here automatic —
+    // the if-chain below still needs an explicit branch for it, the way
+    // semantic_search now has one — only the type annotation stays in sync.
     async query(
-      operation: "search" | "file_symbols" | "dependents" | "imports" | "semantic_search",
+      operation: Parameters<CodeGraphProvider["query"]>[0],
       q: string,
       limit = 25,
     ): Promise<string> {
