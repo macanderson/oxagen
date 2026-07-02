@@ -10,15 +10,12 @@
  *      loader) — user-authored. NOT productized.
  *
  * "Productized" (pre-installed / first-party) entries are flagged so the menu can
- * tell them apart from user commands. Built-in commands additionally carry a
- * stable `color` (see `theme.commandPalette`) so the menu renders their `/name`
- * in that color; CLI and custom entries carry no `color` and render as default
- * text. Names are deduped with precedence builtin > cli > custom, so a
- * REPL-native command always wins over a same-named CLI or user command.
+ * mark them (a lock glyph) and tell them apart from user commands. Names are
+ * deduped with precedence builtin > cli > custom, so a REPL-native command always
+ * wins over a same-named CLI or user command.
  */
 import { loadCommands, type LoadCommandsOptions } from "./loader.js";
 import type { CliCommandMeta } from "../program.js";
-import { theme } from "../tui/theme.js";
 
 /** Where a catalog entry originates. */
 export type SlashSource = "builtin" | "cli" | "custom";
@@ -35,117 +32,66 @@ export interface SlashCatalogEntry {
   /** First-party / pre-installed (built-in or CLI). Custom commands are false. */
   productized: boolean;
   /**
-   * Stable hex color for this command's `/name` in the menu, from
-   * `theme.commandPalette`. Only builtin commands carry one — CLI and custom
-   * entries render as default text.
+   * @deprecated No longer set — the menu renders every command name/args in one
+   * uniform color scheme (amber name, green args) and marks productized commands
+   * with a lock glyph instead of per-command colors. Kept optional for one
+   * release so any lingering reader compiles; safe to delete once unused.
    */
   color?: string;
 }
 
-// theme.commandPalette, named for readability where BUILTIN_SLASH_COMMANDS
-// assigns them below. Related commands share a tone (e.g. all memory commands
-// are PINK) so color also communicates feature grouping in the menu.
-const [CYAN, VIOLET, GREEN, AMBER, PINK, BLUE, TEAL, INDIGO] = theme.commandPalette;
-
 /**
  * The REPL-native slash commands — the ones `handleSubmit` interprets directly
  * (they never shell out). Kept here as the single source of truth so the menu,
- * `/help`, and the handler can't drift. Order is the natural menu order.
+ * `/help`, and the handler can't drift. Ordered by group (session · project ·
+ * turn config · memory · history · interface · lifecycle) — `buildSlashCatalog`
+ * preserves this order for built-ins, so the menu reads top-to-bottom by group.
  */
 export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
   Omit<SlashCatalogEntry, "source" | "productized">
 > = [
-  { name: "help", description: "Show the slash-command help", color: AMBER },
-  {
-    name: "login",
-    description:
-      "Show the current Oxagen session. To authenticate interactively, run `oxagen login` in your shell.",
-    color: CYAN,
-  },
-  {
-    name: "logout",
-    description: "Clear the stored Oxagen session (token + org + workspace) from the global config.",
-    color: CYAN,
-  },
-  {
-    name: "init",
-    description:
-      "Scaffold .oxagen/ project settings, build the local code graph, and print graph statistics + inferred domains",
-    color: GREEN,
-  },
-  {
-    name: "model",
-    description: "Show the active gateway model, or set it for this session",
-    argumentHint: "[slug]",
-    color: VIOLET,
-  },
+  { name: "help", description: "List the slash commands" },
+
+  // Session
+  { name: "login", description: "Show the current session (run `oxagen login` to sign in)" },
+  { name: "logout", description: "Clear the stored session — token, org, workspace" },
+
+  // Project
+  { name: "init", description: "Scaffold .oxagen/ and build the local code graph" },
+
+  // Turn configuration
+  { name: "model", description: "Show or set the gateway model for this session", argumentHint: "[slug]" },
   {
     name: "coordinator",
-    description:
-      "Run turns on the remote gateway or the local on-device LLM (downloads weights on first local use)",
+    description: "Run turns on the remote gateway or a local on-device model",
     argumentHint: "[remote|local]",
-    color: VIOLET,
   },
   {
     name: "effort",
-    description:
-      "Show or set the reasoning effort for models with a thinking mode (ignored by models without one)",
+    description: "Show or set reasoning effort for thinking-capable models",
     argumentHint: "[low|medium|high|xhigh|max|default]",
-    color: VIOLET,
   },
-  {
-    name: "mode",
-    description: "Show or set the permission posture for tool calls",
-    argumentHint: "[ask|auto-edit|bypass|readonly]",
-    color: BLUE,
-  },
-  {
-    name: "pipeline",
-    description: "Toggle prompt evaluation, context injection, and completeness judging",
-    argumentHint: "[on|off]",
-    color: BLUE,
-  },
-  {
-    name: "verbose",
-    description: "Toggle per-phase timing, model+token+cost breakdown, and tool-result telemetry",
-    argumentHint: "[on|off]",
-    color: BLUE,
-  },
-  {
-    name: "remember",
-    description:
-      "Capture a memory — infers its kind + weight and saves it to the workspace graph",
-    argumentHint: "<text>",
-    color: PINK,
-  },
-  {
-    name: "memories",
-    description: "Browse this workspace's saved memories (optionally filter by kind)",
-    argumentHint: "[kind]",
-    color: PINK,
-  },
-  {
-    name: "forget",
-    description: "Delete a memory by id",
-    argumentHint: "<id>",
-    color: PINK,
-  },
-  {
-    name: "replay",
-    description: "Show how a past turn was handled (prompt, scores, context, model, judge)",
-    argumentHint: "[n|id]",
-    color: TEAL,
-  },
-  { name: "traces", description: "List recent turns you can /replay", color: TEAL },
-  { name: "hud", description: "Toggle the heads-up display of running agents", color: TEAL },
-  {
-    name: "panel",
-    description: "Pin or hide the Agent Team + Task Progress side panel (right dock)",
-    color: INDIGO,
-  },
-  { name: "clear", description: "Reset the conversation history", color: INDIGO },
-  { name: "exit", description: "Quit the REPL", color: INDIGO },
-  { name: "quit", description: "Quit the REPL", color: INDIGO },
+  { name: "mode", description: "Show or set the tool-permission mode", argumentHint: "[ask|auto-edit|bypass|readonly]" },
+  { name: "pipeline", description: "Toggle prompt evaluation, context injection, and judging", argumentHint: "[on|off]" },
+  { name: "verbose", description: "Toggle per-phase timing, token/cost, and tool telemetry", argumentHint: "[on|off]" },
+
+  // Memory
+  { name: "remember", description: "Save a memory to the workspace (kind + weight inferred)", argumentHint: "<text>" },
+  { name: "memories", description: "Browse saved memories, optionally by kind", argumentHint: "[kind]" },
+  { name: "forget", description: "Delete a memory by id", argumentHint: "<id>" },
+
+  // History
+  { name: "replay", description: "Replay how a past turn was handled", argumentHint: "[n|id]" },
+  { name: "traces", description: "List recent turns you can /replay" },
+
+  // Interface
+  { name: "hud", description: "Toggle the running-agents heads-up display" },
+  { name: "panel", description: "Toggle the Agent Team + Task side panel" },
+  { name: "clear", description: "Clear the conversation history" },
+
+  // Lifecycle
+  { name: "exit", description: "Quit the REPL" },
+  { name: "quit", description: "Quit the REPL (alias of /exit)" },
 ];
 
 /** The set of built-in names, for fast membership checks + dedupe. */
@@ -163,6 +109,9 @@ export interface BuildCatalogOptions extends LoadCommandsOptions {
 /**
  * Merge the three tiers into one deduped, menu-ordered catalog. Precedence on a
  * name collision is builtin > cli > custom (the higher tier keeps the slot).
+ * Within a tier, insertion order is preserved (stable sort by tier only): so
+ * built-ins keep their grouped BUILTIN_SLASH_COMMANDS order, CLI keep program
+ * order, custom keep load order — no alphabetical reshuffle.
  */
 export function buildSlashCatalog(opts: BuildCatalogOptions): SlashCatalogEntry[] {
   const byName = new Map<string, SlashCatalogEntry>();
@@ -193,9 +142,7 @@ export function buildSlashCatalog(opts: BuildCatalogOptions): SlashCatalogEntry[
     });
   }
 
-  return [...byName.values()].sort(
-    (a, b) => SOURCE_RANK[a.source] - SOURCE_RANK[b.source] || a.name.localeCompare(b.name),
-  );
+  return [...byName.values()].sort((a, b) => SOURCE_RANK[a.source] - SOURCE_RANK[b.source]);
 }
 
 /**
