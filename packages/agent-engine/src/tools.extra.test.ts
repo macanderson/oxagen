@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { MemoryWorkspace } from "./workspaces/memory";
-import { buildWorkspaceTools, formatWithLineNumbers, describeEditFailure } from "./tools";
+import { buildWorkspaceTools, formatWithLineNumbers, describeEditFailure, clip } from "./tools";
 import type { CodingEvent } from "./types";
 
 async function run(tool: unknown, input: unknown): Promise<string> {
@@ -260,11 +260,28 @@ describe("buildWorkspaceTools – read_file line numbers", () => {
     expect(out).toBe("2\tl2\n3\tl3");
   });
 
-  it("still clips output over the 30k cap", async () => {
+  it("still clips output over the 30k cap (middle-out)", async () => {
     const ws = new MemoryWorkspace({ "big.txt": "x".repeat(40_000) });
     const tools = buildWorkspaceTools(ws);
     const out = await run(tools.read_file, { path: "big.txt" });
-    expect(out).toContain("[truncated");
+    expect(out).toContain("truncated from the middle");
+    expect(out.length).toBeLessThan(31_000);
+  });
+});
+
+describe("clip (middle-out truncation)", () => {
+  it("returns short text unchanged", () => {
+    expect(clip("hello")).toBe("hello");
+  });
+
+  it("keeps BOTH the head and the tail, dropping the middle", () => {
+    // HEAD marker at the very start, TAIL marker at the very end — the tail is
+    // where a failing test/build puts its verdict, which head-only truncation lost.
+    const text = "HEAD_START" + "m".repeat(40_000) + "TAIL_END";
+    const out = clip(text);
+    expect(out.startsWith("HEAD_START")).toBe(true);
+    expect(out.endsWith("TAIL_END")).toBe(true);
+    expect(out).toContain("truncated from the middle");
     expect(out.length).toBeLessThan(31_000);
   });
 });

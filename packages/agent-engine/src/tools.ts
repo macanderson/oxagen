@@ -11,13 +11,25 @@ import { z } from "zod";
 import type { Workspace, CodeGraphProvider, CodeMapProvider, CodingEvent } from "./types";
 
 const MAX_OUTPUT = 30_000; // chars; keep tool output from blowing the context window
+// When truncating, keep this fraction of the budget as the HEAD; the rest is the
+// TAIL. A failing test/build run puts its most actionable content — the failure
+// summary, the assertion, the stack — at the very END, so head-only truncation
+// (the old behavior) routinely discarded exactly what the model needed. Keeping
+// both ends preserves the command/context (head) AND the verdict (tail).
+const HEAD_FRACTION = 0.6;
 
-function clip(text: string): string {
+/**
+ * Clip over-long tool output to {@link MAX_OUTPUT} chars, MIDDLE-OUT: keep the
+ * head and the tail, drop the middle. Exported for tests.
+ */
+export function clip(text: string): string {
   if (text.length <= MAX_OUTPUT) return text;
-  return (
-    text.slice(0, MAX_OUTPUT) +
-    `\n… [truncated ${text.length - MAX_OUTPUT} chars]`
-  );
+  const dropped = text.length - MAX_OUTPUT;
+  const headLen = Math.floor(MAX_OUTPUT * HEAD_FRACTION);
+  const tailLen = MAX_OUTPUT - headLen;
+  const head = text.slice(0, headLen);
+  const tail = text.slice(text.length - tailLen);
+  return `${head}\n… [${dropped} chars truncated from the middle — head + tail kept]\n${tail}`;
 }
 
 // ── read_file line numbering ─────────────────────────────────────────────────
