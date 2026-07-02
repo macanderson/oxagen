@@ -48,6 +48,7 @@ describe("createEngineRunner", () => {
         name: "break-fix",
         description: "fixer",
         systemPrompt: "You fix bugs.",
+        source: "test",
         tools: ["read_file", "edit_file", "bash"],
         model: "anthropic/claude-fable-5",
       },
@@ -70,7 +71,7 @@ describe("createEngineRunner", () => {
       prompt: "x",
       cwd: "/repo",
       model: "openai/gpt-5",
-      agent: { name: "a", description: "", systemPrompt: "s", model: "anthropic/claude-fable-5" },
+      agent: { name: "a", description: "", systemPrompt: "s", source: "test", model: "anthropic/claude-fable-5" },
     });
     const args = runTurnMock.mock.calls[0]![0] as Record<string, unknown>;
     expect(args["model"]).toBe("openai/gpt-5");
@@ -81,7 +82,7 @@ describe("createEngineRunner", () => {
     await run({
       prompt: "x",
       cwd: "/repo",
-      agent: { name: "a", description: "", systemPrompt: "s", tools: ["read_file"] },
+      agent: { name: "a", description: "", systemPrompt: "s", source: "test", tools: ["read_file"] },
     });
     const extrasArg = (buildTurnExtras as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0] as Record<
       string,
