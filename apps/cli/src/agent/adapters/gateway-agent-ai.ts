@@ -26,6 +26,7 @@ import type {
   ObjectRunResult,
 } from "@oxagen/agent-engine";
 import { streamText, generateObject } from "ai";
+import type { JSONObject } from "@ai-sdk/provider";
 import { debugLog } from "../../lib/debug-log.js";
 import { ensureGatewayKey, MissingGatewayKeyError } from "../env.js";
 
@@ -55,7 +56,7 @@ function clampEffortToHigh(effort: string): "low" | "medium" | "high" {
 export function gatewayReasoningOptions(
   modelId: string,
   effort: string | undefined,
-): Record<string, Record<string, unknown>> | undefined {
+): Record<string, JSONObject> | undefined {
   if (!effort) return undefined;
   const vendor = modelId.includes("/") ? modelId.split("/")[0] : "unknown";
   const budget = REASONING_BUDGET[effort] ?? REASONING_BUDGET["medium"];

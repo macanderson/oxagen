@@ -9,15 +9,17 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-const streamTextMock = vi.fn(() => ({ fullStream: (async function* () {})() }));
-const generateObjectMock = vi.fn(async () => ({
+const streamTextMock = vi.fn((_args: unknown) => ({
+  fullStream: (async function* () {})(),
+}));
+const generateObjectMock = vi.fn(async (_args: unknown) => ({
   object: { ok: true },
   usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
 }));
 
 vi.mock("ai", () => ({
-  streamText: (args: unknown) => streamTextMock(args as never),
-  generateObject: (args: unknown) => generateObjectMock(args as never),
+  streamText: (args: unknown) => streamTextMock(args),
+  generateObject: (args: unknown) => generateObjectMock(args),
 }));
 
 vi.mock("../../env.js", async (importOriginal) => {
