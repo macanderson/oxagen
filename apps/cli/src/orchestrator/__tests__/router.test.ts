@@ -120,8 +120,8 @@ describe("ModelRouter", () => {
     });
     it("adds prompt tokens to the re-sent context (prompt length is a factor)", () => {
       const { router } = capturingRouter();
-      const short = router.estimateSwitchCost("sonnet-5", "opus", 100);
-      const long = router.estimateSwitchCost("sonnet-5", "opus", 100000);
+      const short = router.estimateSwitchCost("sonnet-5", "fable", 100);
+      const long = router.estimateSwitchCost("sonnet-5", "fable", 100000);
       expect(long).toBeGreaterThan(short);
       expect(short).toBe(100 + 1500);
     });

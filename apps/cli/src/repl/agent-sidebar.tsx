@@ -32,12 +32,15 @@ import { taskRegistry, type TaskStatus, type TrackedTask } from "../agent/task-r
 export type PanelMode = "auto" | "on" | "off";
 
 /**
- * A navigable side-panel item, as tracked by the REPL's focus model. `zone`
- * says which list it lives in; `id` is the registry id of the highlighted row.
- * `null` (or a `zone: "input"` focus) means the input bar owns focus, not the
- * panel.
+ * One navigable side-panel row: which list it lives in (`zone`) and the registry
+ * id of the row (`id`).
  */
 export type PanelTarget = { zone: "agent" | "task"; id: string };
+
+/**
+ * The panel focus, as tracked by the REPL's focus model — a highlighted row, or
+ * `null` (equivalently a `zone: "input"` focus) meaning the input bar owns focus.
+ */
 export type PanelFocus = PanelTarget | null;
 
 /** Fixed panel width — wide enough for a title + status, narrow enough to dock. */

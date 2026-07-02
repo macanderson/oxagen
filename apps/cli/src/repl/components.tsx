@@ -33,6 +33,11 @@ export interface Message {
   timestamp: number;
   toolName?: string;
   streaming?: boolean;
+  /** Present on `role: "terminal"` messages — a finished `!command` run folded
+   *  into the transcript as a collapsible accordion (Ctrl-O toggles it). */
+  terminalRun?: TerminalRun;
+  /** Present on `role: "terminal"` messages — whether the accordion is expanded. */
+  terminalExpanded?: boolean;
   /** Present on `role: "stage"` messages — a live pipeline progress event. */
   stage?: StageEvent;
   /** Present on `role: "diff"` messages — the unified git diff to render. */
@@ -168,13 +173,16 @@ export function PromptInput({
   // edit, or a clear). Keyed on the nonce so the same text can be re-injected
   // (e.g. clearing to "" twice in a row). `dismissed` is set so injected text
   // never pops the typeahead; typing afterwards clears it as usual.
+  // Deps intentionally list only `injectNonce`: the effect must fire once per
+  // distinct injection, reading the latest text at that instant — not re-run
+  // when the text alone changes.
   const injectNonce = inject?.nonce;
+  const injectedText = inject?.text ?? "";
   useEffect(() => {
     if (injectNonce === undefined) return;
-    setValue(inject?.text ?? "");
+    setValue(injectedText);
     setSelected(0);
     setDismissed(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire only on nonce change
   }, [injectNonce]);
 
   // Derive the live typeahead state from the current buffer. The menu is open
@@ -312,8 +320,9 @@ export function PromptInput({
           {shown}
           {/* The block cursor shows only while the input holds focus; when the
               panel has focus the bar dims and drops the cursor so the highlight
-              clearly lives in the side panel instead. */}
-          {focused ? <Text color={theme.cyan}>█</Text> : null}
+              clearly lives in the side panel instead. In terminal mode it takes
+              the shell-red accent so the whole bar reads as a live terminal. */}
+          {focused ? <Text color={accent}>█</Text> : null}
         </Text>
       </Box>
       {terminalMode && (
@@ -526,6 +535,11 @@ export function MessageView({
     return <TerminalRunCard run={msg.terminalRun} expanded={msg.terminalExpanded ?? false} />;
   if (msg.role === "diff" && msg.diff) return <DiffMessage msg={msg} theme={diffTheme} />;
   if (msg.role === "stage" && msg.stage) return <StageBadge stage={msg.stage} />;
+  if (msg.role === "terminal" && msg.terminalRun) {
+    // A finished `!command` run parked in the transcript. Folded to its header by
+    // default (collapsed); Ctrl-O expands the latest one to show its output.
+    return <TerminalPanel run={msg.terminalRun} collapsed={!msg.terminalExpanded} />;
+  }
   if (msg.role === "user") {
     return (
       <Box paddingX={1} marginY={0}>
