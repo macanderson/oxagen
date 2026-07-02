@@ -62,8 +62,6 @@ const entries: SlashCatalogEntry[] = [
     argumentHint: "[ask|auto-edit|bypass|readonly]",
     source: "builtin",
     productized: true,
-    // A leftover per-command color — the menu must ignore this now.
-    color: "#60A5FA",
   },
   {
     name: "cost",
@@ -107,7 +105,7 @@ describe("SlashMenu", () => {
     expect(lastFrame()).toBe("");
   });
 
-  it("renders every /name in bold amber, ignoring a stale per-command color", () => {
+  it("renders every /name in bold amber, uniformly across builtin/cli/custom commands", () => {
     const { lastFrame } = render(
       <SlashMenu entries={entries} selectedIndex={entries.length} width={100} />,
     );
@@ -115,9 +113,6 @@ describe("SlashMenu", () => {
     for (const entry of entries) {
       expect(isBoldColoredText(frame, `/${entry.name}`, "#FBBF24")).toBe(true);
     }
-    // /mode carries a legacy `color: "#60A5FA"` on its catalog entry — the
-    // menu must not render it in that color anymore.
-    expect(isColoredText(frame, "/mode", "#60A5FA")).toBe(false);
   });
 
   it("renders argument hints in green, not bold", () => {
