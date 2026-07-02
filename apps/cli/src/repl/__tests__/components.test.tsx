@@ -248,6 +248,69 @@ describe("PromptInput typeahead", () => {
   });
 });
 
+describe("PromptInput focus + injection", () => {
+  it("shows the block cursor while focused and drops it when the panel owns focus", () => {
+    const focused = render(<PromptInput onSubmit={() => {}} busy={false} focused />);
+    expect(focused.lastFrame() ?? "").toContain("█");
+    focused.unmount();
+
+    const blurred = render(<PromptInput onSubmit={() => {}} busy={false} focused={false} />);
+    expect(blurred.lastFrame() ?? "").not.toContain("█");
+    blurred.unmount();
+  });
+
+  it("ignores keystrokes while not focused (the panel handler owns them)", async () => {
+    const calls: string[] = [];
+    const { lastFrame, stdin, unmount } = render(
+      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} focused={false} />,
+    );
+    stdin.write("hello");
+    await tick();
+    stdin.write("\r");
+    await tick();
+    // Nothing typed reached the buffer, and Enter submitted nothing.
+    expect(lastFrame() ?? "").not.toContain("hello");
+    expect(calls).toEqual([]);
+    unmount();
+  });
+
+  it("replaces the buffer when the parent bumps the injection nonce", async () => {
+    const { lastFrame, rerender, unmount } = render(
+      <PromptInput onSubmit={() => {}} busy={false} inject={{ text: "", nonce: 0 }} />,
+    );
+    await tick();
+    rerender(
+      <PromptInput onSubmit={() => {}} busy={false} inject={{ text: "recall these prompts", nonce: 1 }} />,
+    );
+    await tick();
+    expect(lastFrame() ?? "").toContain("recall these prompts");
+    unmount();
+  });
+
+  it("reports menu open/close to the parent via onMenuOpenChange", async () => {
+    const states: boolean[] = [];
+    const catalog = [
+      { name: "help", description: "help", source: "builtin" as const, productized: true },
+    ];
+    const { stdin, unmount } = render(
+      <PromptInput
+        onSubmit={() => {}}
+        busy={false}
+        catalog={catalog}
+        onMenuOpenChange={(open) => states.push(open)}
+      />,
+    );
+    await tick();
+    stdin.write("/h"); // opens the menu
+    await tick();
+    stdin.write(ESC); // dismisses it
+    await tick();
+    expect(states).toContain(true);
+    expect(states).toContain(false);
+    unmount();
+  });
+});
+
 describe("modeLabel", () => {
   it("maps modes to friendly labels", () => {
     expect(modeLabel("acceptEdits")).toBe("auto-edit");

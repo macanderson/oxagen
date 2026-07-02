@@ -142,6 +142,16 @@ export class TaskRegistry {
     return () => this.bus.off("change", listener);
   }
 
+  /**
+   * Drop a single task by id — powers the REPL panel's "delete highlighted
+   * task" (Ctrl-X twice). No-op if the id is unknown. Ordering of the survivors
+   * is preserved (their `order` values are untouched, so the plan still reads
+   * top-to-bottom around the gap).
+   */
+  remove(id: string): void {
+    if (this.tasks.delete(id)) this.emitChange();
+  }
+
   /** Drop every task and reset ordering — called at the start of each turn. */
   clear(): void {
     this.tasks.clear();

@@ -31,6 +31,18 @@ import { taskRegistry, type TaskStatus, type TrackedTask } from "../agent/task-r
 /** How the sidebar decides whether to show: pinned on, forced off, or automatic. */
 export type PanelMode = "auto" | "on" | "off";
 
+/**
+ * One navigable side-panel row: which list it lives in (`zone`) and the registry
+ * id of the row (`id`).
+ */
+export type PanelTarget = { zone: "agent" | "task"; id: string };
+
+/**
+ * The panel focus, as tracked by the REPL's focus model — a highlighted row, or
+ * `null` (equivalently a `zone: "input"` focus) meaning the input bar owns focus.
+ */
+export type PanelFocus = PanelTarget | null;
+
 /** Fixed panel width — wide enough for a title + status, narrow enough to dock. */
 const PANEL_WIDTH = 34;
 /**
@@ -39,6 +51,48 @@ const PANEL_WIDTH = 34;
  * small window keeps the full width for the conversation.
  */
 const MIN_TERMINAL_COLS = PANEL_WIDTH + 48;
+
+/**
+ * Exported so the REPL can refuse to move focus into a panel that isn't docked
+ * (a narrow terminal hides it) — navigating into an invisible list would strand
+ * the highlight off-screen.
+ */
+export const SIDEBAR_MIN_COLS = MIN_TERMINAL_COLS;
+
+/**
+ * The flat, ordered list of navigable panel items — every Agent Team row (in
+ * roster order) followed by every Task Progress row (in plan order). This is the
+ * single source of truth for arrow-key traversal: the REPL walks this list so
+ * the visual order and the navigation order can never drift apart.
+ */
+export function panelNavTargets(agents: RunningAgent[], tasks: TrackedTask[]): PanelTarget[] {
+  return [
+    ...agents.map((a) => ({ zone: "agent" as const, id: a.id })),
+    ...tasks.map((t) => ({ zone: "task" as const, id: t.id })),
+  ];
+}
+
+/**
+ * Pure arrow-step over the flat nav list. Given the current highlighted row and
+ * a direction (`+1` down, `-1` up), returns the next focus:
+ *   • a {@link PanelTarget} to move to,
+ *   • `null` to return to the input bar — stepping UP off the first row, or from
+ *     a `current` whose row no longer exists (finished + pruned, or deleted),
+ *   • the SAME `current` reference to stay put — stepping DOWN past the last row.
+ * The caller distinguishes "stay" (`result === current`) from "move".
+ */
+export function stepPanelFocus(
+  targets: PanelTarget[],
+  current: PanelTarget,
+  dir: 1 | -1,
+): PanelTarget | null {
+  const idx = targets.findIndex((t) => t.zone === current.zone && t.id === current.id);
+  if (idx === -1) return null; // stale highlight → back to the input bar
+  const next = idx + dir;
+  if (next < 0) return null; // up off the top → input bar
+  if (next >= targets.length) return current; // down past the bottom → stay
+  return targets[next]!;
+}
 
 /** Glyph + color for an agent's run status (matches the `/hud` vocabulary). */
 function agentStatusStyle(status: AgentStatus): { glyph: string; color: string } {
@@ -82,17 +136,39 @@ function elapsed(from: number, to: number): string {
   return `${m}m${rem.toString().padStart(2, "0")}s`;
 }
 
-function AgentTeamRow({ agent, now }: { agent: RunningAgent; now: number }): React.ReactElement {
+/** Leading marker cell: a bright pointer when highlighted, else blank alignment. */
+function FocusMarker({ on }: { on: boolean }): React.ReactElement {
+  return on ? (
+    <Text color={theme.cyan} bold>
+      {theme.pointer}
+    </Text>
+  ) : (
+    <Text> </Text>
+  );
+}
+
+function AgentTeamRow({
+  agent,
+  now,
+  highlighted = false,
+}: {
+  agent: RunningAgent;
+  now: number;
+  highlighted?: boolean;
+}): React.ReactElement {
   const { glyph, color } = agentStatusStyle(agent.status);
   const model = agent.model ? tierLabel(tierForSlug(agent.model)) : null;
   return (
     <Box flexDirection="column">
       <Box gap={1}>
+        <FocusMarker on={highlighted} />
         <Text color={color} bold>
           {glyph}
         </Text>
         <Text color={theme.violet}>{kindLabel(agent.kind)}</Text>
-        <Text wrap="truncate-end">{agent.title}</Text>
+        <Text bold={highlighted} inverse={highlighted} wrap="truncate-end">
+          {agent.title}
+        </Text>
       </Box>
       <Box paddingLeft={2} gap={1}>
         <Text dimColor>{elapsed(agent.startedAt, now)}</Text>
@@ -115,16 +191,23 @@ function AgentTeamRow({ agent, now }: { agent: RunningAgent; now: number }): Rea
   );
 }
 
-function TaskRow({ task }: { task: TrackedTask }): React.ReactElement {
+function TaskRow({
+  task,
+  highlighted = false,
+}: {
+  task: TrackedTask;
+  highlighted?: boolean;
+}): React.ReactElement {
   const { glyph, color } = taskStatusStyle(task.status);
   const strike = task.status === "done";
   return (
     <Box flexDirection="column">
       <Box gap={1}>
+        <FocusMarker on={highlighted} />
         <Text color={color} bold>
           {glyph}
         </Text>
-        <Text dimColor={strike} wrap="truncate-end">
+        <Text dimColor={strike && !highlighted} bold={highlighted} inverse={highlighted} wrap="truncate-end">
           {task.title}
         </Text>
       </Box>
@@ -181,10 +264,17 @@ export function AgentSidebar({
   mode = "auto",
   nowFn,
   widthFn,
+  focus = null,
+  active = false,
 }: {
   mode?: PanelMode;
   nowFn?: () => number;
   widthFn?: () => number;
+  /** The currently-highlighted panel item, or null when the input owns focus. */
+  focus?: PanelFocus;
+  /** Force the dock visible (the user has navigated into it) even when `auto`
+   *  would otherwise hide it while idle. */
+  active?: boolean;
 }): React.ReactElement | null {
   const now = nowFn ?? (() => Date.now());
   const width = widthFn ?? (() => process.stdout.columns ?? 80);
@@ -212,7 +302,9 @@ export function AgentSidebar({
   // A narrow terminal can't spare the columns — never crush the chat.
   if (width() < MIN_TERMINAL_COLS) return null;
   const hasActivity = agents.length > 0 || tasks.length > 0;
-  if (mode === "auto" && !hasActivity) return null;
+  // `active` (the user has navigated into the dock) forces it visible even when
+  // auto would hide an idle dock, so the highlight never lands on a hidden list.
+  if (mode === "auto" && !hasActivity && !active) return null;
 
   const at = now();
   const runningAgents = agents.filter((a) => a.status === "running").length;
@@ -231,7 +323,12 @@ export function AgentSidebar({
         ) : (
           <Box flexDirection="column" gap={1}>
             {agents.map((a) => (
-              <AgentTeamRow key={a.id} agent={a} now={at} />
+              <AgentTeamRow
+                key={a.id}
+                agent={a}
+                now={at}
+                highlighted={focus?.zone === "agent" && focus.id === a.id}
+              />
             ))}
           </Box>
         )}
@@ -248,11 +345,109 @@ export function AgentSidebar({
         ) : (
           <Box flexDirection="column">
             {tasks.map((t) => (
-              <TaskRow key={t.id} task={t} />
+              <TaskRow
+                key={t.id}
+                task={t}
+                highlighted={focus?.zone === "task" && focus.id === t.id}
+              />
             ))}
           </Box>
         )}
       </Panel>
+
+      {/* Keybinding legend — shown only while the dock holds focus, so the
+          arrow-navigation controls are discoverable exactly when they apply. */}
+      {focus !== null && (
+        <Box paddingX={1} flexDirection="column">
+          <Text dimColor>↑↓ move · Ctrl-E open · Ctrl-X×2 delete</Text>
+          <Text dimColor>Esc back to prompt</Text>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * The drilled-in agent log — shown in the main conversation column (above the
+ * prompt bar) when the user opens an Agent Team row with Ctrl-E. There is no
+ * per-step transcript stored for a running agent, so this surfaces the live
+ * roster record we do have (status, kind, model, elapsed, current step) and
+ * refreshes on the registry's `change` events plus a 1s tick so the elapsed
+ * timer and current detail stay live while the agent works.
+ *
+ * Returns null when the id no longer resolves (the agent finished and was
+ * pruned, or was deleted) so a stale focus never renders an empty frame.
+ */
+export function AgentFocusView({
+  agentId,
+  nowFn,
+}: {
+  agentId: string;
+  nowFn?: () => number;
+}): React.ReactElement | null {
+  const now = nowFn ?? (() => Date.now());
+  const [, setTick] = useState(0);
+  const [agents, setAgents] = useState<RunningAgent[]>(() => agentRegistry.snapshot());
+  useEffect(() => {
+    const refresh = (): void => setAgents(agentRegistry.snapshot());
+    const unsub = agentRegistry.on(refresh);
+    refresh();
+    const timer = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => {
+      unsub();
+      clearInterval(timer);
+    };
+  }, []);
+
+  const agent = agents.find((a) => a.id === agentId);
+  if (!agent) return null;
+  const { glyph, color } = agentStatusStyle(agent.status);
+  const model = agent.model ? tierLabel(tierForSlug(agent.model)) : null;
+
+  return (
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={theme.cyan}
+      paddingX={1}
+      marginX={1}
+    >
+      <Box gap={1}>
+        <Text color={theme.cyan} bold>
+          {theme.ring}
+        </Text>
+        <Text color={theme.cyan} bold>
+          Agent log
+        </Text>
+        <Text color={theme.violet}>{kindLabel(agent.kind)}</Text>
+      </Box>
+      <Box marginTop={1} gap={1}>
+        <Text color={color} bold>
+          {glyph}
+        </Text>
+        <Text wrap="truncate-end">{agent.title}</Text>
+      </Box>
+      <Box paddingLeft={2} gap={1}>
+        <Text dimColor>{agent.status}</Text>
+        <Text dimColor>·</Text>
+        <Text dimColor>{elapsed(agent.startedAt, now())}</Text>
+        {model ? (
+          <>
+            <Text dimColor>·</Text>
+            <Text dimColor>{model}</Text>
+          </>
+        ) : null}
+      </Box>
+      {agent.detail ? (
+        <Box paddingLeft={2}>
+          <Text dimColor wrap="truncate-end">
+            {agent.detail}
+          </Text>
+        </Box>
+      ) : null}
+      <Box marginTop={1}>
+        <Text dimColor>Esc to close this log.</Text>
+      </Box>
     </Box>
   );
 }
