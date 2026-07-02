@@ -1460,6 +1460,33 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "~/.oxagen/commit-ledger.jsonl",
   },
+  OXAGEN_PROMPT_PROFILE: {
+    group: "CLI",
+    description:
+      "Force the agent system-prompt profile: 'interactive' (narrates for a live " +
+      "watcher) or 'headless' (strips narration, adds a verification protocol for " +
+      "autonomous/one-shot/SWE-bench runs). Unset ⇒ auto (headless when stdout is " +
+      "not a TTY, interactive otherwise).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "headless",
+  },
+  OXAGEN_JUDGE_PANEL: {
+    group: "CLI",
+    description:
+      "Comma-separated gateway model slugs to use as a CROSS-VENDOR completeness " +
+      "judge panel instead of a single judge (majority rules, findings unioned). " +
+      "Higher cost, higher recall on incomplete work. Unset ⇒ single judge.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "openai/gpt-5,google/gemini-2.5-pro",
+  },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",
     description: "Credential encryption backend for ingestion: 'env' (AES-256-GCM via INGESTION_ENCRYPTION_KEY) or 'kms' (AWS KMS).",
