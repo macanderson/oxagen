@@ -99,12 +99,31 @@ await build({
   // Native, optional deps reached lazily via require() — safe to leave external
   // (they are NOT eagerly imported, and the CLI degrades gracefully when absent).
   external: ["duckdb", "blake3"],
-  // A real `require` for any externalized CJS native (e.g. duckdb) reached via
-  // require()/createRequire under ESM. The node shebang is fixed up post-build.
+  // A real `require`, `__filename`, and `__dirname` for bundled CJS code reached
+  // under ESM. Two distinct needs:
+  //  - `require`: externalized natives (e.g. duckdb) reached via require()/
+  //    createRequire, plus any bundled dep with a runtime (non-static) require()
+  //    esbuild can't hoist to a static import in ESM output.
+  //  - `__filename`/`__dirname`: web-tree-sitter's tree-sitter.js is Emscripten-
+  //    generated UMD glue with a Node-environment branch
+  //    (`ENVIRONMENT_IS_NODE`) that reads `__dirname` directly (to locate its own
+  //    tree-sitter.wasm runtime blob next to itself) — undeclared in real ESM,
+  //    so without this shim Parser.init() throws "__dirname is not defined" on
+  //    every call, and since the failure happens before loader.ts's `initialized`
+  //    flag is set, EVERY parseSourceFile() call re-throws it — the whole code
+  //    graph silently comes back empty (P0 2026-07-02: 2,644/2,644 files failed
+  //    on a Django repo smoke run). loader.ts's own moduleDir()/resolveWasm()
+  //    already prefer import.meta.url and are unaffected — this shim is for the
+  //    bundled *dependency* code, not our own.
+  // The node shebang is fixed up post-build.
   banner: {
     js: [
       'import { createRequire as __ox_createRequire } from "node:module";',
+      'import { fileURLToPath as __ox_fileURLToPath } from "node:url";',
+      'import { dirname as __ox_dirname } from "node:path";',
       "const require = globalThis.require ?? __ox_createRequire(import.meta.url);",
+      "const __filename = __ox_fileURLToPath(import.meta.url);",
+      "const __dirname = __ox_dirname(__filename);",
     ].join("\n"),
   },
   plugins: [stubDevOnlyModules, tsExtensionResolver],
