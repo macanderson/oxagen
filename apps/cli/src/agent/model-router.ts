@@ -2,7 +2,7 @@
  * Cost-aware model routing for the local agent.
  *
  * The CLI's job is to be the most cost-effective coding agent: spend Haiku money
- * on Haiku-sized work and only reach for Opus when the task actually needs it.
+ * on Haiku-sized work and only reach for Fable when the task actually needs it.
  * This module turns a task description (plus a few cheap structural signals) into
  * a {@link ModelTier} and a concrete gateway slug, deterministically and without
  * an extra LLM round-trip — encoding the CLAUDE.md operating-model table in code.
@@ -31,7 +31,7 @@ function tierSlug(tier: ModelTier): string {
     case "balanced":
       return process.env["OXAGEN_LLM_BALANCED"] ?? LATEST_ANTHROPIC.sonnet;
     case "precise":
-      return process.env["OXAGEN_LLM_PRECISE"] ?? LATEST_ANTHROPIC.opus;
+      return process.env["OXAGEN_LLM_PRECISE"] ?? LATEST_ANTHROPIC.fable;
   }
 }
 
@@ -39,7 +39,7 @@ export const TIERS: ModelTier[] = ["fast", "balanced", "precise"];
 
 /** Human label for a tier, for the agents screen and `--explain` output. */
 export function tierLabel(tier: ModelTier): string {
-  return tier === "fast" ? "Haiku" : tier === "balanced" ? "Sonnet" : "Opus";
+  return tier === "fast" ? "Haiku" : tier === "balanced" ? "Sonnet" : "Fable";
 }
 
 // ── Usage accumulation ───────────────────────────────────────────────────────
@@ -171,15 +171,21 @@ export function routeModel(
 // `gemini-3.5-flash`) is never mislabelled as precise.
 const SMALL_MARKER = /\b(mini|nano|flash|lite|small|nemo)\b|\b\d{1,3}b\b/;
 const PRECISE_MARKER =
-  /\b(opus|codex|pro|large|o1|o3|deepseek-v4|deepseek-r1|magistral-medium)\b/;
+  /\b(fable|opus|codex|pro|large|o1|o3|deepseek-v4|deepseek-r1|magistral-medium)\b/;
 
 /** Best-effort tier label for an arbitrary slug (for display of pinned models). */
 export function tierForSlug(model: string): ModelTier {
   const family = (model.split("/").pop() ?? model).toLowerCase();
   // Cheap/small variants win first — every vendor marks them the same way.
   if (family.startsWith("claude-haiku") || SMALL_MARKER.test(family)) return "fast";
-  // Frontier / high-capability families across vendors → precise.
-  if (family.startsWith("claude-opus") || family.startsWith("gpt-5") || PRECISE_MARKER.test(family))
+  // Frontier / high-capability families across vendors → precise. Fable is the
+  // Claude 5 flagship; a pinned Opus slug still classifies precise via the marker.
+  if (
+    family.startsWith("claude-fable") ||
+    family.startsWith("claude-opus") ||
+    family.startsWith("gpt-5") ||
+    PRECISE_MARKER.test(family)
+  )
     return "precise";
   return "balanced";
 }
