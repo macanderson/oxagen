@@ -99,6 +99,10 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
   },
   { name: "traces", description: "List recent turns you can /replay" },
   { name: "hud", description: "Toggle the heads-up display of running agents" },
+  {
+    name: "panel",
+    description: "Pin or hide the Agent Team + Task Progress side panel (right dock)",
+  },
   { name: "clear", description: "Reset the conversation history" },
   { name: "exit", description: "Quit the REPL" },
   { name: "quit", description: "Quit the REPL" },
