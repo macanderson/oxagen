@@ -110,13 +110,17 @@ test.describe("chat.connection-create-inline", () => {
       path: path.join(SCREENSHOT_DIR, "connection-create-inline-card.png"),
     });
 
-    // Clicking the button opens the GitHubConnectionWizard dialog at step 1.
+    // Clicking the button opens the GitHubConnectionWizard dialog. A fresh
+    // user has no GitHub App installation, so the wizard opens at the gate
+    // step directing them to Workspace Settings (see #300).
     await card.locator('[data-testid="connection-create-inline-github-btn"]').click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible({ timeout: 5_000 });
     await expect(dialog).toContainText("Connect GitHub");
-    await expect(dialog).toContainText("Authorize Oxagen to access your GitHub account.");
+    await expect(dialog).toContainText(
+      "The Oxagen GitHub App must be installed for this workspace.",
+    );
 
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, "connection-create-inline-wizard-open.png"),
