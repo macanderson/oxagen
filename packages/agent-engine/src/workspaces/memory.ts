@@ -1,5 +1,6 @@
 import type { CommandResult, Workspace } from "../types";
 import { globToRegExp } from "../internal/glob";
+import { describeEditFailure } from "../tools";
 
 export class MemoryWorkspace implements Workspace {
   readonly root: string;
@@ -36,13 +37,27 @@ export class MemoryWorkspace implements Workspace {
     this.files.set(p, content);
   }
 
-  async editFile(p: string, oldString: string, newString: string): Promise<void> {
+  async editFile(
+    p: string,
+    oldString: string,
+    newString: string,
+    opts?: { replaceAll?: boolean },
+  ): Promise<number> {
     const text = this.files.get(p);
     if (text === undefined) throw new Error(`ENOENT: ${p}`);
-    const count = text.split(oldString).length - 1;
-    if (count === 0) throw new Error(`old_string not found in ${p}`);
-    if (count > 1) throw new Error(`old_string appears ${count} times in ${p}; must be unique`);
+    const count = oldString === "" ? 0 : text.split(oldString).length - 1;
+    if (opts?.replaceAll) {
+      if (count === 0) {
+        throw new Error(describeEditFailure(text, oldString) ?? `old_string not found in ${p}`);
+      }
+      this.files.set(p, text.split(oldString).join(newString));
+      return count;
+    }
+    if (count !== 1) {
+      throw new Error(describeEditFailure(text, oldString) ?? `old_string not found in ${p}`);
+    }
     this.files.set(p, text.replace(oldString, newString));
+    return 1;
   }
 
   async list(dir = "."): Promise<string[]> {

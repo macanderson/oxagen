@@ -49,11 +49,22 @@ export interface Workspace {
   root: string;
   readFile(p: string, opts?: { offset?: number; limit?: number }): Promise<string>;
   writeFile(p: string, content: string): Promise<void>;
-  editFile(p: string, oldString: string, newString: string): Promise<void>;
+  /**
+   * Replace `oldString` with `newString`, returning the number of replacements.
+   * Default (no opts): `oldString` must appear exactly once, else throws. With
+   * `{ replaceAll: true }` every occurrence is replaced. A miss throws an Error
+   * whose message is corrective feedback (see `describeEditFailure`).
+   */
+  editFile(
+    p: string,
+    oldString: string,
+    newString: string,
+    opts?: { replaceAll?: boolean },
+  ): Promise<number>;
   list(dir?: string): Promise<string[]>;
   glob(pattern: string): Promise<string[]>;
   grep(pattern: string, opts?: { path?: string; glob?: string }): Promise<string[]>;
-  exec(command: string, opts?: { timeoutMs?: number }): Promise<CommandResult>;
+  exec(command: string, opts?: { timeoutMs?: number; signal?: AbortSignal }): Promise<CommandResult>;
   diff(): Promise<string>;
 }
 

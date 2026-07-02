@@ -107,3 +107,36 @@ describe("runShellCommandBuffered", () => {
     expect(Date.now() - start).toBeLessThan(10_000);
   });
 });
+
+describe("runShellCommandBuffered — abort signal", () => {
+  it("kills the process group when the signal fires mid-run (does not wait for timeout)", async () => {
+    const ac = new AbortController();
+    const start = Date.now();
+    const p = runShellCommandBuffered({
+      command: "sleep 30 & echo started; wait",
+      cwd,
+      timeoutMs: 60_000, // long — the abort, not the timeout, must end it
+      signal: ac.signal,
+    });
+    // Abort shortly after it starts.
+    setTimeout(() => ac.abort(), 200);
+    const res = await p;
+    // Resolved well before the 60s timeout because the abort killed the subtree.
+    expect(Date.now() - start).toBeLessThan(10_000);
+    expect(res.exitCode).toBeGreaterThanOrEqual(1);
+  });
+
+  it("never spawns when the signal is already aborted", async () => {
+    const ac = new AbortController();
+    ac.abort();
+    const start = Date.now();
+    const res = await runShellCommandBuffered({
+      command: "echo should-not-run",
+      cwd,
+      signal: ac.signal,
+    });
+    expect(res.exitCode).toBe(124);
+    expect(res.stdout).toBe("");
+    expect(Date.now() - start).toBeLessThan(1_000);
+  });
+});

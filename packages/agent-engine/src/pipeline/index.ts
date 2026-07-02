@@ -78,6 +78,7 @@ function composeAgentSystem(opts: RunTurnOptions, cwd: string): string {
     cwd,
     projectContext: opts.projectContext,
     readOnly: opts.readOnly,
+    profile: opts.profile,
   });
 }
 
@@ -100,6 +101,14 @@ export interface RunTurnOptions {
   projectContext?: ProjectContext;
   /** Read-only mode: no file mutation, and the auto-revise loop is disabled. */
   readOnly?: boolean;
+  /**
+   * System-prompt behavioural profile, forwarded to {@link buildSystemPrompt}.
+   * "interactive" (default) narrates for a live watcher; "headless" strips the
+   * narration and swaps in a verification protocol for autonomous/one-shot runs
+   * (SWE-bench, CI, piped stdout). Undefined ⇒ "interactive". Chosen once per
+   * run, so the cached system prefix stays stable across turns.
+   */
+  profile?: "interactive" | "headless";
   /** Episodic session memory (recalled before, written after). */
   memory?: MemoryProvider | null;
   /** Code graph provider for prompt enhancement. */

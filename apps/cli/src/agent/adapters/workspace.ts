@@ -15,13 +15,20 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { Workspace, CommandResult } from "@oxagen/agent-engine";
+import { describeEditFailure } from "@oxagen/agent-engine";
 import { toRequest, type PermissionBroker } from "../permissions.js";
 import { runShellCommandBuffered } from "../../repl/shell-runner.js";
+import { hasRipgrep, runRipgrep, parseRipgrepOutput } from "./ripgrep.js";
 
 const execFileAsync = promisify(execFile);
 
-/** Directories never walked by `list` / `glob` / `grep` — noise and huge trees. */
+/**
+ * Directories never walked by `list` / `glob` / `grep` — build noise and huge
+ * trees. Covers JS (node_modules, dist, …) and Python (.venv, __pycache__, …)
+ * ecosystems so SWE-bench task repos don't drown grep/glob in generated files.
+ */
 const IGNORE_DIRS = [
+  // JS / tooling
   "node_modules",
   ".git",
   ".next",
@@ -30,8 +37,25 @@ const IGNORE_DIRS = [
   "coverage",
   ".turbo",
   ".vercel",
+  // Python
+  ".venv",
+  "venv",
+  "__pycache__",
+  ".tox",
+  ".mypy_cache",
+  ".pytest_cache",
+  ".eggs",
+  ".ruff_cache",
+  "__pypackages__",
 ];
 const IGNORE_SET = new Set(IGNORE_DIRS);
+
+/** Whether a directory name should be skipped when walking the tree. */
+function isIgnoredDir(name: string): boolean {
+  // `*.egg-info` dirs are per-package build metadata (name varies), so match by
+  // suffix rather than listing them all.
+  return IGNORE_SET.has(name) || name.endsWith(".egg-info");
+}
 
 /** Minimal glob → RegExp: `**` spans directories, `*` a segment, `?` one char. */
 function globToRegExp(pattern: string): RegExp {
@@ -65,7 +89,7 @@ async function* walk(
   const dirents = await fs.readdir(dir, { withFileTypes: true }).catch(() => null);
   if (!dirents) return; // unreadable directory — skip
   for (const entry of dirents) {
-    if (entry.isDirectory() && IGNORE_SET.has(entry.name)) continue;
+    if (entry.isDirectory() && isIgnoredDir(entry.name)) continue;
     const abs = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       yield* walk(abs, cwd);
@@ -98,20 +122,28 @@ export function createCwdWorkspace(cwd: string): Workspace {
       await fs.writeFile(target, content, "utf-8");
     },
 
-    async editFile(filePath, oldString, newString) {
+    async editFile(filePath, oldString, newString, opts) {
       const target = abs(filePath);
       const content = await fs.readFile(target, "utf-8");
-      const count = content.split(oldString).length - 1;
-      if (count === 0) throw new Error(`String not found in ${filePath}`);
-      if (count > 1)
-        throw new Error(`String matches ${count} times in ${filePath} — must be unique`);
+      const count = oldString === "" ? 0 : content.split(oldString).length - 1;
+      if (opts?.replaceAll) {
+        if (count === 0)
+          throw new Error(describeEditFailure(content, oldString) ?? `String not found in ${filePath}`);
+        await fs.writeFile(target, content.split(oldString).join(newString), "utf-8");
+        return count;
+      }
+      // Structured feedback on a miss (closest line / ambiguous matches) so the
+      // model can self-correct instead of blindly retrying the same string.
+      if (count !== 1)
+        throw new Error(describeEditFailure(content, oldString) ?? `String not found in ${filePath}`);
       await fs.writeFile(target, content.replace(oldString, newString), "utf-8");
+      return 1;
     },
 
     async list(dirPath) {
       const dirents = await fs.readdir(abs(dirPath ?? "."), { withFileTypes: true });
       return dirents
-        .filter((e) => !IGNORE_SET.has(e.name))
+        .filter((e) => !isIgnoredDir(e.name))
         .map((e) => e.name + (e.isDirectory() ? "/" : ""))
         .sort();
     },
@@ -127,6 +159,25 @@ export function createCwdWorkspace(cwd: string): Workspace {
     },
 
     async grep(pattern, opts) {
+      // Prefer ripgrep when available: far faster on large trees, .gitignore-aware,
+      // and it skips binaries. Any real rg error (unsupported regex, spawn failure)
+      // falls through to the in-process JS walk below, which also validates the
+      // regex and enforces the Python-aware ignore set.
+      if (await hasRipgrep()) {
+        const args = [
+          "--line-number",
+          "--no-heading",
+          "--color=never",
+          ...(opts?.glob ? ["--glob", opts.glob] : []),
+          "--",
+          pattern,
+          opts?.path ?? ".",
+        ];
+        const { ok, stdout } = await runRipgrep(args, cwd);
+        if (ok) return parseRipgrepOutput(stdout, 500);
+        // else fall through to the JS walk
+      }
+
       let re: RegExp;
       try {
         re = new RegExp(pattern);
@@ -164,8 +215,9 @@ export function createCwdWorkspace(cwd: string): Workspace {
       // Runs in its own process group so the timeout kills the whole subtree.
       // Node's `execFile({ timeout })` only signals the top-level `bash`, so a
       // grandchild that keeps the stdout pipe open (e.g. `npm run test | tail`)
-      // would leave the streams open and hang this promise forever.
-      return runShellCommandBuffered({ command, cwd, timeoutMs });
+      // would leave the streams open and hang this promise forever. The turn
+      // signal is threaded through so an aborted turn kills the subtree too.
+      return runShellCommandBuffered({ command, cwd, timeoutMs, signal: opts?.signal });
     },
 
     async diff() {
@@ -280,10 +332,10 @@ export function createGatedWorkspace(
       return workspace.writeFile(filePath, content);
     },
 
-    async editFile(filePath, oldString, newString) {
+    async editFile(filePath, oldString, newString, opts) {
       const { allowed, reason } = await decide("edit_file", { path: filePath });
       if (!allowed) throw new Error(`Permission denied: ${reason || "edit_file blocked"}`);
-      return workspace.editFile(filePath, oldString, newString);
+      return workspace.editFile(filePath, oldString, newString, opts);
     },
 
     async exec(command, opts): Promise<CommandResult> {
