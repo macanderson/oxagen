@@ -30,7 +30,7 @@ import type { ModelMessage } from "ai";
 import { runCodingAgent } from "../engine";
 import { buildSystemPrompt } from "../prompt/system-prompt";
 import { evaluatePrompt } from "../evaluate/evaluator";
-import { judgeCompleteness, buildRevisionPrompt } from "../evaluate/judge";
+import { judgeCompleteness, judgePanel, buildRevisionPrompt } from "../evaluate/judge";
 import { enhancePrompt } from "../evaluate/prompt-enhancer";
 import {
   classifyTier,
@@ -127,6 +127,13 @@ export interface RunTurnOptions {
   graphSync?: GraphSyncProvider | null;
   /** Max judge→revise rounds (default 1; 0 disables auto-revision). */
   maxReviseRounds?: number;
+  /**
+   * Judge with a PANEL of these (distinct, cross-vendor) advisor models instead
+   * of a single judge — majority rules, findings unioned. Empty/undefined ⇒
+   * single judge, unless `OXAGEN_JUDGE_PANEL` is set. Higher cost, higher recall
+   * on incomplete work; worth it for a bench push.
+   */
+  judgeModels?: string[];
   /** Skip the eval/enhance/judge pipeline and run the bare agent. */
   bare?: boolean;
   /**
@@ -378,24 +385,27 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     // all execution environments — e.g. when onStepFinish is not called).
     for (const f of result.changedFiles) filesTouched.add(f);
 
-    // ── 5. JUDGE ──
+    // ── 5. JUDGE (single, or a cross-vendor panel) ──
     const judgeStart = Date.now();
-    const verdict = await judgeCompleteness(
-      {
-        request: opts.prompt,
-        response: result.text,
-        filesTouched: [...filesTouched],
-        commandsRun,
-        // Ground-truth evidence: the real diff + the outputs of commands run
-        // this round (test results are decisive for completeness).
-        diff: result.diff,
-        commandOutputs: roundCommandOutputs,
-        steps: result.steps,
-        executorModel: routed.model,
-        signal: opts.signal,
-      },
-      opts.ai,
-    );
+    const judgeInput = {
+      request: opts.prompt,
+      response: result.text,
+      filesTouched: [...filesTouched],
+      commandsRun,
+      // Ground-truth evidence: the real diff + the outputs of commands run
+      // this round (test results are decisive for completeness).
+      diff: result.diff,
+      commandOutputs: roundCommandOutputs,
+      steps: result.steps,
+      executorModel: routed.model,
+      signal: opts.signal,
+    };
+    const usePanel =
+      (opts.judgeModels && opts.judgeModels.length > 0) ||
+      !!process.env["OXAGEN_JUDGE_PANEL"];
+    const verdict = usePanel
+      ? await judgePanel(judgeInput, opts.ai, opts.judgeModels)
+      : await judgeCompleteness(judgeInput, opts.ai);
     phases.push(phaseStat("judge", round, judgeStart, verdict.model, verdict.usage));
     usage = mergeUsage(usage, verdict.usage);
     judgeRounds.push(verdict);

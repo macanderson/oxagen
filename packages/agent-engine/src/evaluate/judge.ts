@@ -254,6 +254,76 @@ export async function judgeCompleteness(opts: JudgeOptions, ai: AgentAi): Promis
 }
 
 /**
+ * Cross-vendor judge panel. Different providers share none of each other's blind
+ * spots, so a panel that spans vendors (e.g. OpenAI + Google + Anthropic) catches
+ * more than any single judge — the "high-powered but different-provider judges"
+ * design. Returns distinct slugs, none equal to the executor, from an explicit
+ * `OXAGEN_JUDGE_PANEL` (comma-separated) or a sensible cross-vendor default.
+ * Exported for tests.
+ */
+export function pickJudgePanel(executorModel: string, override?: string): string[] {
+  const raw = override ?? process.env["OXAGEN_JUDGE_PANEL"];
+  const explicit = raw
+    ? raw.split(",").map((s) => s.trim()).filter(Boolean)
+    : [DEFAULT_ADVISOR_MODEL, "google/gemini-2.5-pro", modelForTier("precise")];
+  // Distinct, and never the executor (self-grading defeats the point).
+  const seen = new Set<string>();
+  const panel = explicit.filter((m) => m !== executorModel && !seen.has(m) && seen.add(m));
+  // Guarantee at least one judge distinct from the executor.
+  if (panel.length === 0) panel.push(pickAdvisorModel(executorModel));
+  return panel;
+}
+
+/** Dedup a list of strings, preserving first-seen order. */
+function dedup(items: string[]): string[] {
+  const seen = new Set<string>();
+  return items.filter((s) => !seen.has(s) && seen.add(s));
+}
+
+/**
+ * Run a PANEL of judges (distinct cross-vendor models) concurrently and
+ * aggregate: the work is complete only if a MAJORITY say so; findings and
+ * remaining work are the union across the dissenting judges; confidence is the
+ * mean. A single judge failing degrades to its heuristic (handled inside
+ * {@link judgeCompleteness}) rather than sinking the panel.
+ */
+export async function judgePanel(
+  opts: JudgeOptions,
+  ai: AgentAi,
+  advisorModels?: string[],
+): Promise<JudgeVerdict> {
+  const models = dedup(advisorModels ?? pickJudgePanel(opts.executorModel));
+  if (models.length <= 1) {
+    return judgeCompleteness({ ...opts, advisorModel: models[0] }, ai);
+  }
+  const verdicts = await Promise.all(
+    models.map((m) => judgeCompleteness({ ...opts, advisorModel: m }, ai)),
+  );
+  const completes = verdicts.filter((v) => v.complete).length;
+  const complete = completes * 2 > verdicts.length; // strict majority
+  const dissenting = verdicts.filter((v) => !v.complete);
+  const findings = dedup(dissenting.flatMap((v) => v.findings));
+  const remainingWork = dedup(dissenting.flatMap((v) => v.remainingWork));
+  const confidence = Math.round(
+    verdicts.reduce((s, v) => s + v.confidence, 0) / verdicts.length,
+  );
+  const usage = verdicts.reduce((acc, v) => accumulateUsage(acc, v.model, v.usage), emptyUsage());
+  return {
+    complete,
+    confidence,
+    findings: complete ? [] : findings,
+    remainingWork: complete ? [] : remainingWork,
+    reasoning:
+      `Panel of ${verdicts.length} (${models.map((m) => m.split("/").pop()).join(", ")}): ` +
+      `${completes}/${verdicts.length} judged complete. ` +
+      dissenting.map((v) => `${v.model.split("/").pop()}: ${v.reasoning}`).join(" | "),
+    model: `panel(${models.join(",")})`,
+    fallback: verdicts.every((v) => v.fallback),
+    usage,
+  };
+}
+
+/**
  * Compose the follow-up prompt that drives the agent to finish incomplete work.
  * Exported so the REPL and tests can show/inspect exactly what the agent is told.
  */
