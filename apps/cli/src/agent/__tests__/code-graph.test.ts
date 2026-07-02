@@ -12,6 +12,7 @@ import {
   codeGraphStats,
   clearCodeGraphCache,
 } from "../code-graph.js";
+import type { EmbeddingClient } from "../context/embedding.js";
 
 let root = "";
 
@@ -106,5 +107,45 @@ describe("code-graph retrieval", () => {
     // computeAlpha, AlphaShape, BetaEngine, runBeta, GammaKind
     expect(stats.symbols).toBeGreaterThanOrEqual(5);
     expect(stats.edges).toBeGreaterThan(0);
+  });
+});
+
+describe("code-graph semantic_search", () => {
+  it("degrades gracefully (never throws) when no embedding client is available", async () => {
+    // `client: null` simulates the offline / no-gateway-key case directly,
+    // without needing to fake out AI_GATEWAY_API_KEY resolution.
+    const out = await queryCodeGraph(root, "semantic_search", "project level configuration", 5, {
+      client: null,
+    });
+    expect(out).toContain("No file matching semantic query");
+  });
+
+  it("ranks files by cosine similarity to a conceptual query with zero literal tokens", async () => {
+    // A deterministic 2-axis fake client: alpha.ts's rendered text starts with
+    // its own path ("alpha.ts"), so only its embedding lands on the [1, 0] axis;
+    // everything else (including beta.ts, whose content merely imports
+    // "./alpha.js") lands on [0, 1]. `store: null` skips DuckDB I/O — the ranked
+    // result should still come back, just unpersisted.
+    const fakeClient: EmbeddingClient = {
+      providerId: "fake-test-v1",
+      dimensions: 2,
+      async embed(text) {
+        return text.toLowerCase().includes("alpha") ? [1, 0] : [0, 1];
+      },
+      async embedBatch(texts) {
+        return texts.map((t) => (t.toLowerCase().includes("alpha.ts") ? [1, 0] : [0, 1]));
+      },
+    };
+
+    const out = await queryCodeGraph(
+      root,
+      "semantic_search",
+      "tell me everything about alpha",
+      5,
+      { client: fakeClient, store: null },
+    );
+
+    expect(out).not.toContain("No file matching");
+    expect(out).toContain("alpha.ts");
   });
 });

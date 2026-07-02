@@ -3,7 +3,7 @@
  * and the agents screen.
  *
  * A *plan* decomposes a goal into *tasks*. A task is assigned to a subagent,
- * which runs the local coding loop ({@link runAgent}) against the working tree.
+ * which runs the ONE engine loop ({@link runTurn}) against the working tree.
  * The fleet orchestrates many of these at once under a concurrency cap, records
  * what each one built/fixed as memory, and feeds the agents screen its live
  * roster.

@@ -27,7 +27,6 @@ vi.mock("../../agent/adapters/index.js", () => ({
 vi.mock("../../agent/metered-ai.js", () => ({
   createMeteredAi: vi.fn((base: unknown) => base),
 }));
-vi.mock("../../agent/loop.js", () => ({ runAgent: vi.fn() }));
 vi.mock("../../agent/memory.js", () => ({
   openSessionMemory: vi.fn(async () => ({ close: vi.fn() })),
 }));

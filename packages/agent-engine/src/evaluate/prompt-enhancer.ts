@@ -49,6 +49,14 @@ export interface EnhanceResult {
   context: string;
   /** Symbol/path tokens that resolved to something in the code graph. */
   resolved: string[];
+  /**
+   * True when literal candidate lookups resolved little or nothing and a
+   * semantic (embedding) search over the raw prompt was used instead. Lets a
+   * conceptual prompt that names no exact symbol or path — e.g. "project level
+   * configurations for the cli app" — still retrieve real files instead of
+   * leaving the agent to blind grep.
+   */
+  usedSemanticFallback: boolean;
   /** Whether any memory context was injected. */
   hasMemory: boolean;
   /** Epoch ms context-gathering started. */
@@ -63,6 +71,16 @@ export interface EnhanceResult {
 
 const CODEY_EXT =
   /\.(ts|tsx|js|jsx|mjs|cjs|json|md|mdx|css|scss|sql|py|go|rs|sh|yml|yaml|toml)$/;
+
+/**
+ * Literal candidates resolved at or below this count → the prompt is probably
+ * conceptual (names no exact symbol/path), so fall back to one embedding
+ * search over the raw prompt. "Few", not only "zero": a prompt that names one
+ * thing precisely can still be mostly about a subsystem it never names.
+ */
+const SEMANTIC_FALLBACK_MAX_RESOLVED = 1;
+/** Bounded — a few files to orient the agent, not a second exploration budget. */
+const SEMANTIC_FALLBACK_LIMIT = 5;
 
 /**
  * Pull likely code references out of a natural-language prompt: backticked spans,
@@ -121,6 +139,7 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
   const resolved: string[] = [];
   const symbolsQueried: string[] = [];
   const pathsQueried: string[] = [];
+  let usedSemanticFallback = false;
 
   if (codeGraph) {
     try {
@@ -161,6 +180,25 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
           if (isHit(deps)) sections.push(deps);
         }
       }
+
+      // Semantic fallback — literal candidates resolved little or nothing,
+      // which is the common case for a conceptual prompt ("project level
+      // configurations for the cli app") that names no symbol or path
+      // directly. Embed the raw prompt once and cosine-rank file nodes so the
+      // agent gets real context instead of falling through to blind grep.
+      if (resolved.length <= SEMANTIC_FALLBACK_MAX_RESOLVED) {
+        const semanticHits = await codeGraph.query(
+          "semantic_search",
+          prompt,
+          SEMANTIC_FALLBACK_LIMIT,
+        );
+        if (isHit(semanticHits)) {
+          sections.push(
+            `Semantically relevant files (auto-retrieved via embeddings):\n${semanticHits}`,
+          );
+          usedSemanticFallback = true;
+        }
+      }
     } catch {
       /* code graph unavailable — enhancement is optional */
     }
@@ -196,6 +234,7 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
     prompt: enhanced,
     context,
     resolved,
+    usedSemanticFallback,
     hasMemory,
     startedAt,
     finishedAt,

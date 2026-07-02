@@ -24,16 +24,27 @@ function formatRow(r: Neo4jRecord): string {
 
 const NOT_AVAILABLE =
   "(import graph not available for this connection — use grep to find references)";
+const SEMANTIC_NOT_AVAILABLE =
+  "(semantic_search is not implemented for the platform code graph — use the " +
+  "`code_map` tool for conceptual queries, which is backed by the Neo4j vector index)";
 
 export function createNeo4jCodeGraphProvider(): CodeGraphProvider {
   return {
     async query(
-      operation: "search" | "file_symbols" | "dependents" | "imports",
+      operation: "search" | "file_symbols" | "dependents" | "imports" | "semantic_search",
       q: string,
       limit = 25,
     ): Promise<string> {
       if (operation === "dependents" || operation === "imports") {
         return NOT_AVAILABLE;
+      }
+      // The CLI's local DuckDB code graph embeds file nodes lazily via the AI
+      // gateway (see apps/cli/src/agent/context/semantic-index.ts); the platform
+      // has no equivalent wired into this provider — `code_map` is the platform's
+      // real semantic entry point (Neo4j vector index). Answer explicitly rather
+      // than silently falling through to the file_symbols query below.
+      if (operation === "semantic_search") {
+        return SEMANTIC_NOT_AVAILABLE;
       }
 
       const sess = scopedSession();

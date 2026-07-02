@@ -90,7 +90,7 @@ export type CodingEvent =
 
 export interface CodeGraphProvider {
   query(
-    operation: "search" | "file_symbols" | "dependents" | "imports",
+    operation: "search" | "file_symbols" | "dependents" | "imports" | "semantic_search",
     query: string,
     limit?: number,
   ): Promise<string>;
