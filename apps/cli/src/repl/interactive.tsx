@@ -10,7 +10,7 @@
  *
  * Presentational pieces live in ./components; this file is the container.
  */
-import { Box, Text, useApp, useInput } from "ink";
+import { Box, Static, Text, useApp, useInput } from "ink";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import type { ModelMessage } from "ai";
 import { existsSync, readFileSync } from "node:fs";
@@ -68,12 +68,6 @@ import {
 import { resolveEscapeAction } from "./escape-action.js";
 import { isDebugEnabled } from "../lib/debug-log.js";
 import { Banner } from "../tui/banner.js";
-import {
-  useTerminalSize,
-  ENTER_ALT_SCREEN,
-  LEAVE_ALT_SCREEN,
-  CURSOR_HOME,
-} from "./use-terminal-size.js";
 import {
   makeTurnController,
   makeStallDetector,
