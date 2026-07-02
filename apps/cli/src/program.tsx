@@ -215,20 +215,26 @@ export function buildProgram(): Command {
       false,
     )
     .option(
-      "--isolate",
-      "Run each agent in its own git worktree; commit + merge work back (no clobbering)",
-      false,
+      "--no-isolate",
+      "Run all agents directly against the working tree instead of one git worktree per task (default: isolated, commit + merge back)",
     )
+    .option("--json", "Headless: stream JSONL task events instead of the live view", false)
     .action(
-      async (goal: string[], opts: { concurrency: number; readonly: boolean; isolate: boolean }) => {
+      async (
+        goal: string[],
+        opts: { concurrency: number; readonly: boolean; isolate: boolean; json: boolean },
+      ) => {
         const { launchFleetView } = await import("./tui/fleet-view/index.js");
-        await launchFleetView({
+        const snap = await launchFleetView({
           cwd: process.cwd(),
           goal: goal.join(" ").trim() || undefined,
           concurrency: opts.concurrency,
           readOnly: opts.readonly,
           isolate: opts.isolate,
+          headless: opts.json,
         });
+        // Non-zero exit when anything failed, so scripts/CI can branch on it.
+        if (snap.failedCount > 0) process.exitCode = 1;
       },
     );
 
