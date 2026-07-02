@@ -12,7 +12,7 @@
 
 # Oxagen Platform
 
-> **Building the future, so we'll be ready to meet you when you get there.**
+> **The best context IS THE DIFFERENCE**
 
 <p align="center">
   <a href="https://github.com/oxagenai/oxagen-monorepo/actions/workflows/pipeline.yml">
@@ -28,7 +28,7 @@
   <img alt="Maintained" src="https://img.shields.io/badge/Maintained%3F-yes-brightgreen.svg" />
 </p>
 
-> v0.4.0 · [CONTRIBUTING.md](CONTRIBUTING.md) · [AGENTS.md](AGENTS.md) · [Docs](.agents/summary/index.md)
+> [CONTRIBUTING.md](CONTRIBUTING.md) · [AGENTS.md](AGENTS.md) · [Docs](.agents/summary/index.md)
 
 ---
 

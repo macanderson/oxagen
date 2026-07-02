@@ -16,6 +16,7 @@ import {
   isSubagentDispatch,
 } from "../agent/tool-formatter.js";
 import { DiffView } from "./diff-view.js";
+import { TerminalRunCard, type TerminalRun } from "./terminal-panel.js";
 import type { DiffTheme } from "../tui/terminal-theme.js";
 import { SlashMenu } from "./slash-menu.js";
 import {
@@ -27,7 +28,7 @@ import type { StageEvent, StageKind, TurnTrace, JudgeVerdict } from "../agent/tr
 import type { ApprovalRequest, ApprovalResponse, PermissionMode } from "../agent/permissions.js";
 
 export interface Message {
-  role: "user" | "assistant" | "reasoning" | "tool" | "stage" | "diff";
+  role: "user" | "assistant" | "reasoning" | "tool" | "stage" | "diff" | "terminal";
   content: string;
   timestamp: number;
   toolName?: string;
@@ -42,6 +43,14 @@ export interface Message {
   trace?: TurnTrace;
   /** When present, the message renders the end-of-turn summary card. */
   summary?: TurnSummary;
+  /**
+   * Present on `role: "terminal"` messages — a FINISHED `!command` folded inline
+   * into the transcript as a collapsed, expandable accordion once its live red
+   * panel has timed out. See {@link TerminalRunCard}.
+   */
+  terminalRun?: TerminalRun;
+  /** Whether the terminal accordion is expanded (Ctrl-O toggles the latest). */
+  terminalExpanded?: boolean;
 }
 
 /**
@@ -72,6 +81,7 @@ export const HELP = [
   "Slash commands (type / to browse them with descriptions):",
   "  /help          show this help",
   "  /model [slug]  show or set the gateway model",
+  "  /coordinator [remote|local]  run turns on the remote gateway or the local on-device LLM",
   "  /mode [ask|auto-edit|bypass|readonly]  show or set the permission mode",
   "  /replay [n|id] show how a turn was handled (default: last turn)",
   "  /traces        list recent turns you can /replay",
@@ -83,7 +93,9 @@ export const HELP = [
   "  /exit, /quit   quit",
   "  !<command>     run a shell command live — the bar turns into a red terminal,",
   "                 output streams into a pinned panel, and it runs immediately",
-  "                 (even mid-turn). Esc/Ctrl-C kills the running command.",
+  "                 (even mid-turn). Esc/Ctrl-C kills the running command. When it",
+  "                 finishes the red panel folds into the chat as a collapsed card.",
+  "  Ctrl-O         expand/collapse the most recent folded !command output",
   "Type / to open the command menu — 📦 marks built-in & CLI commands; every",
   "`oxagen --help` command is browsable there too (custom commands show no glyph).",
   "Permission prompt: y allow once · a allow + remember · n/Esc deny",
@@ -156,14 +168,16 @@ export function PromptInput({
   // edit, or a clear). Keyed on the nonce so the same text can be re-injected
   // (e.g. clearing to "" twice in a row). `dismissed` is set so injected text
   // never pops the typeahead; typing afterwards clears it as usual.
+  // Deps intentionally list only `injectNonce`: the effect must fire once per
+  // distinct injection, reading the latest text at that instant — not re-run
+  // when the text alone changes.
   const injectNonce = inject?.nonce;
+  const injectedText = inject?.text ?? "";
   useEffect(() => {
     if (injectNonce === undefined) return;
-    setValue(inject?.text ?? "");
+    setValue(injectedText);
     setSelected(0);
     setDismissed(true);
-    // Deps are intentionally just [injectNonce] — fire only on nonce change, not
-    // when inject.text changes without a new nonce (avoids clobbering typing).
   }, [injectNonce]);
 
   // Derive the live typeahead state from the current buffer. The menu is open
@@ -301,7 +315,8 @@ export function PromptInput({
           {shown}
           {/* The block cursor shows only while the input holds focus; when the
               panel has focus the bar dims and drops the cursor so the highlight
-              clearly lives in the side panel instead. */}
+              clearly lives in the side panel instead. In terminal mode it takes
+              the shell-red accent so the whole bar reads as a live terminal. */}
           {focused ? <Text color={accent}>█</Text> : null}
         </Text>
       </Box>
@@ -511,6 +526,8 @@ export function MessageView({
 }): React.ReactElement {
   if (msg.trace) return <TraceView trace={msg.trace} />;
   if (msg.summary) return <TurnSummaryView summary={msg.summary} />;
+  if (msg.role === "terminal" && msg.terminalRun)
+    return <TerminalRunCard run={msg.terminalRun} expanded={msg.terminalExpanded ?? false} />;
   if (msg.role === "diff" && msg.diff) return <DiffMessage msg={msg} theme={diffTheme} />;
   if (msg.role === "stage" && msg.stage) return <StageBadge stage={msg.stage} />;
   if (msg.role === "user") {

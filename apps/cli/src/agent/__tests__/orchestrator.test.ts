@@ -5,7 +5,7 @@
  * records a two-axis memory. The coding loop is injected as a fake runner, so no
  * gateway or filesystem is touched. The prompt enhancer is mocked to a no-op.
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../prompt-enhancer.js", () => ({
   enhancePrompt: async ({ prompt }: { prompt: string }) => ({
@@ -22,6 +22,14 @@ vi.mock("../../lib/config.js", () => ({
   readConfig: () => ({}),
   writeConfig: () => undefined,
 }));
+
+// Clear env-var tier overrides so the model router uses the catalog defaults,
+// not whatever the developer has pinned in their shell.
+beforeEach(() => {
+  for (const key of ["OXAGEN_LLM_FAST", "OXAGEN_LLM_BALANCED", "OXAGEN_LLM_PRECISE", "OXAGEN_MODEL"]) {
+    delete process.env[key];
+  }
+});
 
 import { Fleet, type AgentRunner } from "../fleet/orchestrator.js";
 import type { FleetMemory } from "../fleet/memory.js";

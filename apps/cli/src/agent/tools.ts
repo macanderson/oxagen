@@ -17,15 +17,12 @@
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 import { promises as fs } from "node:fs";
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
 import { resolve, relative, join, isAbsolute } from "node:path";
 import { queryCodeGraph } from "./code-graph.js";
 import { createContextResolver } from "./context/index.js";
 import { formatGraphResultJson } from "./context/format.js";
 import { isMutatingTool, toRequest, type PermissionBroker } from "./permissions.js";
-
-const execAsync = promisify(exec);
+import { runShellCommandBuffered } from "../repl/shell-runner.js";
 
 const MAX_OUTPUT = 30_000; // chars; keep tool output from blowing the context window
 const IGNORE_DIRS = new Set([
@@ -355,21 +352,19 @@ export function buildTools(
       }),
       execute: async ({ command, timeout_ms }) => {
         const timeout = Math.min(timeout_ms ?? 120_000, 600_000);
-        try {
-          const { stdout, stderr } = await execAsync(command, {
-            cwd,
-            timeout,
-            maxBuffer: 10 * 1024 * 1024,
-            shell: "/bin/bash",
-          });
-          const out = [stdout, stderr].filter(Boolean).join("\n").trim();
-          return clip(out || "(no output)");
-        } catch (err) {
-          const e = err as { stdout?: string; stderr?: string; message?: string; killed?: boolean };
-          if (e.killed) return `Command timed out after ${timeout}ms.`;
-          const out = [e.stdout, e.stderr, e.message].filter(Boolean).join("\n").trim();
-          return clip(`Command failed:\n${out}`);
-        }
+        // Runs in its own process group so a timeout kills the whole subtree —
+        // Node's `exec({ timeout })` only signals the top-level shell, so a
+        // command like `npm run lint | tail` whose real work is a grandchild
+        // holding the stdout pipe would hang the agent forever.
+        const { exitCode, stdout, stderr, timedOut } = await runShellCommandBuffered({
+          command,
+          cwd,
+          timeoutMs: timeout,
+        });
+        if (timedOut) return `Command timed out after ${timeout}ms (process group killed).`;
+        const out = [stdout, stderr].filter(Boolean).join("\n").trim();
+        if (exitCode !== 0) return clip(`Command failed (exit ${exitCode}):\n${out || "(no output)"}`);
+        return clip(out || "(no output)");
       },
     }),
   };
