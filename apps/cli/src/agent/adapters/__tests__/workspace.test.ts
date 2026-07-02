@@ -202,5 +202,34 @@ describe("createCwdWorkspace", () => {
       expect(diff).toContain("tracked.txt");
       expect(diff).toContain("+v2");
     });
+
+    it("includes untracked (newly created) files alongside tracked changes", async () => {
+      const root = await makeRepo({ "tracked.txt": "v1\n" });
+      const ws = createCwdWorkspace(root);
+      await ws.exec("git init -q && git add -A && git -c user.email=a@b.c -c user.name=t commit -qm init");
+      // Modify a tracked file AND create a brand-new untracked file.
+      await ws.writeFile("tracked.txt", "v2\n");
+      await ws.writeFile("created.txt", "brand new\n");
+      const diff = await ws.diff();
+      // The tracked modification is still present (existing `git diff HEAD` hunk).
+      expect(diff).toContain("+++ b/tracked.txt");
+      expect(diff).toContain("+v2");
+      // The untracked creation — invisible to `git diff HEAD` — is now included.
+      expect(diff).toContain("+++ b/created.txt");
+      expect(diff).toContain("+brand new");
+    });
+
+    it("skips untracked files larger than 1 MiB", async () => {
+      const root = await makeRepo({ "tracked.txt": "v1\n" });
+      const ws = createCwdWorkspace(root);
+      await ws.exec("git init -q && git add -A && git -c user.email=a@b.c -c user.name=t commit -qm init");
+      // A small untracked file is included; a >1 MiB sibling is silently skipped.
+      await ws.writeFile("small.txt", "keep me\n");
+      await ws.writeFile("huge.bin", "x".repeat(1024 * 1024 + 1));
+      const diff = await ws.diff();
+      expect(diff).toContain("+++ b/small.txt");
+      expect(diff).toContain("+keep me");
+      expect(diff).not.toContain("huge.bin");
+    });
   });
 });
