@@ -418,6 +418,9 @@ importers:
       '@ai-sdk/openai-compatible':
         specifier: 2.0.54
         version: 2.0.54(zod@3.25.76)
+      '@ai-sdk/provider':
+        specifier: 3.0.10
+        version: 3.0.10
       '@inkjs/ui':
         specifier: 2.0.0
         version: 2.0.0(ink@7.1.0(@types/react@19.2.15)(react@19.2.6))
