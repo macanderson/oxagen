@@ -1447,6 +1447,19 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_COMMIT_LEDGER: {
+    group: "CLI",
+    description:
+      "Path to the append-only JSON-lines commit ledger that records every agent commit " +
+      "so work is never lost even if a branch is force-moved or a worktree removed. " +
+      "Defaults to ~/.oxagen/commit-ledger.jsonl.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "~/.oxagen/commit-ledger.jsonl",
+  },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",
     description: "Credential encryption backend for ingestion: 'env' (AES-256-GCM via INGESTION_ENCRYPTION_KEY) or 'kms' (AWS KMS).",
