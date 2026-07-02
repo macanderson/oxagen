@@ -556,4 +556,68 @@ describe("enhancePrompt", () => {
     expect(result.retrieval.unresolved).toContain("xyz");
     expect(result.retrieval.resolved).toHaveLength(0);
   });
+
+  it("falls back to semantic_search for a conceptual prompt with zero literal tokens", async () => {
+    // "project level configurations for the cli app" names no symbol or path —
+    // extractCandidates yields nothing, so without the fallback no context
+    // would be injected at all (the exact gap this feature closes).
+    const codeGraph = {
+      query: vi.fn(async (operation: string) => {
+        if (operation === "semantic_search") {
+          return "apps/cli/oxagen.config.ts (0.81)\napps/cli/src/lib/config.ts (0.63)";
+        }
+        return "No symbols matching.";
+      }),
+    };
+
+    const result = await enhancePrompt({
+      prompt: "project level configurations for the cli app",
+      codeGraph,
+    });
+
+    expect(codeGraph.query).toHaveBeenCalledWith(
+      "semantic_search",
+      "project level configurations for the cli app",
+      expect.any(Number),
+    );
+    expect(result.usedSemanticFallback).toBe(true);
+    expect(result.context).toContain("Semantically relevant files");
+    expect(result.context).toContain("oxagen.config.ts");
+  });
+
+  it("skips the semantic fallback once literal candidates already resolved enough", async () => {
+    const codeGraph = {
+      query: vi.fn(async (operation: string, q: string) => {
+        if (operation === "search" && q === "loginUser") {
+          return "src/auth/session.ts:5: loginUser function";
+        }
+        if (operation === "file_symbols" && q === "session.ts") {
+          return "session.ts:\nfunction loginUser — session.ts:5";
+        }
+        if (operation === "semantic_search") return "should-not-be-used.ts (0.99)";
+        return "No symbols matching.";
+      }),
+    };
+
+    const result = await enhancePrompt({
+      prompt: "where is `loginUser` defined and what does `session.ts` contain?",
+      codeGraph,
+    });
+
+    expect(result.usedSemanticFallback).toBe(false);
+    expect(result.context).not.toContain("should-not-be-used.ts");
+  });
+
+  it("degrades gracefully when the code graph throws on the semantic query", async () => {
+    const codeGraph = {
+      query: vi.fn(async (operation: string) => {
+        if (operation === "semantic_search") throw new Error("gateway unavailable");
+        return "No symbols matching.";
+      }),
+    };
+
+    const result = await enhancePrompt({ prompt: "do something conceptual", codeGraph });
+    expect(result.usedSemanticFallback).toBe(false);
+    expect(result.prompt).toBe("do something conceptual");
+  });
 });
