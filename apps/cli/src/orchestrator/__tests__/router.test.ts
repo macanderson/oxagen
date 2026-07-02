@@ -77,7 +77,7 @@ describe("ModelRouter", () => {
   it("requires the strongest model for very-high complexity code", () => {
     const { router } = capturingRouter();
     const d = router.route({ complexity: "very_high", writesCode: true, promptTokens: 100 });
-    expect(d.model).toBe("opus");
+    expect(d.model).toBe("fable");
   });
 
   it("does NOT switch to a stronger model for a small gain on a long prompt", () => {
@@ -102,7 +102,7 @@ describe("ModelRouter", () => {
       promptTokens: 10,
       taskValue: 1,
     });
-    expect(d.model).toBe("opus");
+    expect(d.model).toBe("fable");
     expect(d.reason).toContain("upgrade");
   });
 
@@ -120,8 +120,8 @@ describe("ModelRouter", () => {
     });
     it("adds prompt tokens to the re-sent context (prompt length is a factor)", () => {
       const { router } = capturingRouter();
-      const short = router.estimateSwitchCost("sonnet-5", "opus", 100);
-      const long = router.estimateSwitchCost("sonnet-5", "opus", 100000);
+      const short = router.estimateSwitchCost("sonnet-5", "fable", 100);
+      const long = router.estimateSwitchCost("sonnet-5", "fable", 100000);
       expect(long).toBeGreaterThan(short);
       expect(short).toBe(100 + 1500);
     });
@@ -142,9 +142,9 @@ describe("ModelRouter", () => {
     const { router } = capturingRouter();
     const d = router.route({ complexity: "high", writesCode: true, promptTokens: 100 });
     expect(d.isCoordinator).toBe(false);
-    expect(d.model).toBe("opus"); // strongest dispatchable worker
+    expect(d.model).toBe("fable"); // strongest dispatchable worker
     expect(d.reason).toContain("no worker meets required quality");
-    expect(d.workerModelRecorded).toBe("opus");
+    expect(d.workerModelRecorded).toBe("fable");
   });
 
   it("createRouter builds a working router", () => {

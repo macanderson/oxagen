@@ -77,7 +77,7 @@ describe("planTasks", () => {
     ]);
     const plan = await planTasks({ goal: "billing", cwd: tmpdir() });
     expect(plan.tasks[0]?.tier).toBe("precise");
-    expect(plan.tasks[0]?.model).toContain("opus");
+    expect(plan.tasks[0]?.model).toContain("fable");
   });
 
   it("never downgrades a precise task the model already flagged", async () => {
