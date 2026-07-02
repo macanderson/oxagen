@@ -309,6 +309,17 @@ export function ReplApp({
   // only while a turn is monitoring work; /panel pins it "on" or hides it "off".
   const [panelMode, setPanelMode] = useState<PanelMode>("auto");
   const panelModeRef = useRef<PanelMode>("auto");
+  // The `!command` terminal panel (red-outlined, pinned above the agent
+  // messages). Null when no command has run this session. A `!cmd` submission
+  // runs IMMEDIATELY — bypassing the turn queue so it works mid-turn — streaming
+  // stdout/stderr live into this state. `terminalRunRef` mirrors it for the
+  // synchronous key handler + streaming callbacks; `terminalHandleRef` holds the
+  // live child process so Ctrl-C/Esc can kill it; `terminalIdRef` mints run ids.
+  const [terminalRun, setTerminalRun] = useState<TerminalRun | null>(null);
+  const terminalRunRef = useRef<TerminalRun | null>(null);
+  terminalRunRef.current = terminalRun;
+  const terminalHandleRef = useRef<ShellRunHandle | null>(null);
+  const terminalIdRef = useRef(0);
   // How far the transcript is scrolled back from the latest message, counted in
   // messages hidden below the fold. 0 = pinned to the newest output (the default,
   // auto-following as tokens stream in); PgUp raises it to reveal older history,
@@ -475,6 +486,21 @@ export function ReplApp({
       const next = order[(idx + 1) % order.length]!;
       setMode(next);
       brokerRef.current?.setMode(next);
+      return;
+    }
+
+    // PgUp / PgDn scroll the transcript history within the full-screen viewport
+    // (the app owns the screen now, so there is no native terminal scrollback to
+    // defer to). PgUp reveals older messages; PgDn returns toward the latest.
+    // Clamp to [0, count-1] so you can never scroll past the first message or
+    // below the newest. Plain Up/Down stay owned by the prompt input's editing.
+    if (key.pageUp || key.pageDown) {
+      const step = 5;
+      const maxOffset = Math.max(0, allRef.current.length - 1);
+      setScrollOffset((o) => {
+        const next = key.pageUp ? o + step : o - step;
+        return Math.max(0, Math.min(maxOffset, next));
+      });
       return;
     }
 
