@@ -12,6 +12,7 @@ import React, { useEffect, useReducer } from "react";
 import { Box, Text, useApp } from "ink";
 import type { EventEmitter } from "node:events";
 import { theme } from "../theme.js";
+import { activityGlyph } from "../activity.js";
 import type { BestOfNEvent } from "../../agent/best-of-n.js";
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];

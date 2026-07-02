@@ -20,6 +20,7 @@ import { TerminalRunCard, type TerminalRun } from "./terminal-panel.js";
 import type { DiffTheme } from "../tui/terminal-theme.js";
 import { SlashMenu } from "./slash-menu.js";
 import {
+  BUILTIN_SLASH_COMMANDS,
   slashQuery,
   filterSlashCatalog,
   type SlashCatalogEntry,
@@ -77,20 +78,28 @@ export interface TurnSummary {
   changedFiles?: string[];
 }
 
+/**
+ * One `/name [hint]  description` line per built-in command, generated from
+ * {@link BUILTIN_SLASH_COMMANDS} — the same catalog the menu and typeahead
+ * read from — so `/help` can never drift out of sync with what `/` actually
+ * lists (it previously did: /login, /logout, /init, /remember, /memories,
+ * and /forget were all real, working commands `/help` never mentioned).
+ */
+function formatBuiltinCommandLines(): string[] {
+  const invocations = BUILTIN_SLASH_COMMANDS.map(
+    (c) => `/${c.name}${c.argumentHint ? ` ${c.argumentHint}` : ""}`,
+  );
+  const width = Math.max(...invocations.map((s) => s.length));
+  return BUILTIN_SLASH_COMMANDS.map(
+    (c, i) => `  ${(invocations[i] as string).padEnd(width)}  ${c.description}`,
+  );
+}
+
 export const HELP = [
   "Slash commands (type / to browse them with descriptions):",
-  "  /help          show this help",
-  "  /model [slug]  show or set the gateway model",
-  "  /coordinator [remote|local]  run turns on the remote gateway or the local on-device LLM",
-  "  /mode [ask|auto-edit|bypass|readonly]  show or set the permission mode",
-  "  /replay [n|id] show how a turn was handled (default: last turn)",
-  "  /traces        list recent turns you can /replay",
-  "  /pipeline [on|off]  toggle prompt evaluation + completeness judging",
-  "  /verbose [on|off]   per-phase timing, model+token+cost breakdown, tool results",
-  "  /hud           toggle the heads-up display of all agents running this session",
-  "  /panel         pin/hide the Agent Team + Task Progress side panel (right dock)",
-  "  /clear         reset the conversation",
-  "  /exit, /quit   quit",
+  ...formatBuiltinCommandLines(),
+  "  ←/→, Home/End  move the cursor to edit the prompt bar mid-line",
+  "  Ctrl-J         insert a newline (multiline prompt) instead of submitting",
   "  !<command>     run a shell command live — the bar turns into a red terminal,",
   "                 output streams into a pinned panel, and it runs immediately",
   "                 (even mid-turn). Esc/Ctrl-C kills the running command. When it",
@@ -158,6 +167,11 @@ export function PromptInput({
   onMenuOpenChange?: (open: boolean) => void;
 }): React.ReactElement {
   const [value, setValue] = useState("");
+  // Flat character offset into `value` (0..value.length). Left/Right/Home/End
+  // move it; typing, backspace, and delete all act relative to it instead of
+  // always at the end — so a prompt can be edited in the middle, not just
+  // appended to.
+  const [cursorPos, setCursorPos] = useState(0);
   // Highlighted suggestion + whether the user dismissed the menu (Esc). Both
   // reset to their defaults whenever the buffer changes via typing.
   const [selected, setSelected] = useState(0);
@@ -176,6 +190,7 @@ export function PromptInput({
   useEffect(() => {
     if (injectNonce === undefined) return;
     setValue(injectedText);
+    setCursorPos(injectedText.length);
     setSelected(0);
     setDismissed(true);
   }, [injectNonce]);
@@ -199,6 +214,17 @@ export function PromptInput({
 
   const resetInput = (): void => {
     setValue("");
+    setCursorPos(0);
+    setSelected(0);
+    setDismissed(false);
+  };
+
+  /** Splice `text` in at the cursor and advance the cursor past it — the one
+   *  path every insert (typed chars, a paste, an explicit newline) goes
+   *  through, so the cursor never drifts out of sync with the buffer. */
+  const insertAtCursor = (text: string): void => {
+    setValue((v) => v.slice(0, cursorPos) + text + v.slice(cursorPos));
+    setCursorPos((p) => p + text.length);
     setSelected(0);
     setDismissed(false);
   };
@@ -226,7 +252,9 @@ export function PromptInput({
         if (pick) {
           // Complete to `/name `; commands taking args keep the trailing space
           // (and a closed menu) so the user types arguments next.
-          setValue(`/${pick.name}${pick.argumentHint ? " " : ""}`);
+          const completed = `/${pick.name}${pick.argumentHint ? " " : ""}`;
+          setValue(completed);
+          setCursorPos(completed.length);
           setSelected(0);
           setDismissed(false);
         }
@@ -247,7 +275,9 @@ export function PromptInput({
           } else {
             // Selected a different/partial command that takes args: complete it
             // and keep editing rather than firing the wrong command.
-            setValue(`/${pick.name} `);
+            const completed = `/${pick.name} `;
+            setValue(completed);
+            setCursorPos(completed.length);
             setSelected(0);
             setDismissed(false);
           }
@@ -265,16 +295,50 @@ export function PromptInput({
       }
       return;
     }
-    if (key.backspace || key.delete) {
-      setValue((v) => v.slice(0, -1));
+    // Cursor movement — active whenever the menu isn't consuming the key
+    // (i.e. always, since the menuOpen block above never claims arrows).
+    if (key.leftArrow) {
+      setCursorPos((p) => Math.max(0, p - 1));
+      return;
+    }
+    if (key.rightArrow) {
+      setCursorPos((p) => Math.min(value.length, p + 1));
+      return;
+    }
+    if (key.home) {
+      setCursorPos(0);
+      return;
+    }
+    if (key.end) {
+      setCursorPos(value.length);
+      return;
+    }
+    // Explicit newline — Ctrl-J sends a bare linefeed on every terminal,
+    // unlike Shift+Enter, whose byte sequence is terminal-dependent and often
+    // indistinguishable from plain Enter. Named explicitly rather than left as
+    // an accidental fall-through of the generic insert branch below (which
+    // would also happen to catch it, since it's non-ctrl/non-meta input).
+    if (input === "\n") {
+      insertAtCursor("\n");
+      return;
+    }
+    if (key.backspace) {
+      if (cursorPos > 0) {
+        setValue((v) => v.slice(0, cursorPos - 1) + v.slice(cursorPos));
+        setCursorPos((p) => Math.max(0, p - 1));
+        setSelected(0);
+        setDismissed(false);
+      }
+      return;
+    }
+    if (key.delete) {
+      setValue((v) => v.slice(0, cursorPos) + v.slice(cursorPos + 1));
       setSelected(0);
       setDismissed(false);
       return;
     }
     if (input && !key.ctrl && !key.meta) {
-      setValue((v) => v + input);
-      setSelected(0);
-      setDismissed(false);
+      insertAtCursor(input);
     }
   });
 
@@ -294,13 +358,24 @@ export function PromptInput({
   // In terminal mode the visible command drops the leading "!" — the `$` prompt
   // already conveys "this is a shell", so echoing the bang too is redundant.
   const shown = terminalMode ? value.replace(/^!/, "") : value;
+  // cursorPos is an offset into `value`; shift it left by one in terminal mode
+  // to stay valid against `shown`, which is one character shorter (the
+  // stripped leading "!").
+  const shownCursor = Math.max(0, cursorPos - (terminalMode ? 1 : 0));
+  const beforeCursor = shown.slice(0, shownCursor);
+  // The character the cursor sits on (highlighted in place); empty when the
+  // cursor is at the end of the buffer — the common case, and the only one
+  // the pre-cursor-tracking bar ever had, so it keeps the same solid block.
+  const atCursor = shown.slice(shownCursor, shownCursor + 1);
+  const afterCursor = shown.slice(shownCursor + 1);
 
   return (
     <Box flexDirection="column">
       {menuOpen && <SlashMenu entries={suggestions} selectedIndex={sel} width={menuWidth} />}
       {/* The bordered input keeps a constant height (one text row inside a round
           border = 3 rows). minHeight + flexShrink={0} guarantee it never
-          collapses or is squeezed as the conversation above grows. */}
+          collapses or is squeezed as the conversation above grows — though a
+          multi-line buffer (Ctrl-J) grows it further, unconstrained. */}
       <Box
         borderStyle="round"
         borderColor={accent}
@@ -312,12 +387,24 @@ export function PromptInput({
           {glyph}
         </Text>
         <Text dimColor={!focused}>
-          {shown}
-          {/* The block cursor shows only while the input holds focus; when the
-              panel has focus the bar dims and drops the cursor so the highlight
-              clearly lives in the side panel instead. In terminal mode it takes
-              the shell-red accent so the whole bar reads as a live terminal. */}
-          {focused ? <Text color={accent}>█</Text> : null}
+          {beforeCursor}
+          {/* The cursor shows only while the input holds focus; when the panel
+              has focus the bar dims and drops it so the highlight clearly
+              lives in the side panel instead. Mid-string it inverts the
+              character it sits on; at the end of the buffer (the common case)
+              there's no character to invert, so it falls back to the same
+              solid block the bar always drew. In terminal mode it takes the
+              shell-red accent so the whole bar reads as a live terminal. */}
+          {focused ? (
+            atCursor ? (
+              <Text inverse>{atCursor}</Text>
+            ) : (
+              <Text color={accent}>█</Text>
+            )
+          ) : (
+            atCursor
+          )}
+          {afterCursor}
         </Text>
       </Box>
       {terminalMode && (
