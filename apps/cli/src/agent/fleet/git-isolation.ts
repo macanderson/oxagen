@@ -74,6 +74,17 @@ export function defaultGitRunner(repoRoot: string): GitRunner {
   };
 }
 
+/**
+ * True when `cwd` is inside a git working tree. Isolation now defaults on
+ * (see {@link WorktreeManager}), so callers use this to fall back to the
+ * shared-tree mode gracefully — a plain (non-git) directory should not make
+ * every task fail at `spawn()` — rather than asserting a repo exists.
+ */
+export async function isGitRepo(cwd: string, git: GitRunner = defaultGitRunner(cwd)): Promise<boolean> {
+  const res = await git(["rev-parse", "--is-inside-work-tree"]);
+  return res.code === 0 && res.stdout.trim() === "true";
+}
+
 /** Outcome of integrating one task branch into the integration branch. */
 export interface IntegrationResult {
   /** True when the task branch merged cleanly (or had nothing new to merge). */

@@ -8,8 +8,9 @@
  * vitals, the roster lists every agent, and the dispatch line adds ad-hoc agents.
  *
  * Keys (handled at this level): typing edits the dispatch line · Enter dispatches
- * a new agent · Ctrl-T toggles per-agent detail · Ctrl-C cancels all in-flight
- * agents and exits.
+ * a new agent · Ctrl-T toggles per-agent detail · Ctrl-C cancel-drains — stops
+ * dispatching new agents and exits once every in-flight one finishes and its
+ * worktree is cleaned up (see {@link Fleet.drain}) — rather than aborting mid-edit.
  */
 import { Box, Text, useApp, useInput } from "ink";
 import React, { useState, useEffect } from "react";
@@ -41,6 +42,7 @@ export function FleetApp({
   const [phase, setPhase] = useState<Phase>(goal && plan ? "planning" : "running");
   const [error, setError] = useState("");
   const [showDetail, setShowDetail] = useState(false);
+  const [draining, setDraining] = useState(false);
 
   // Drive re-render from fleet events and from a steady animation tick (so the
   // running spinners advance even when no "update" has fired recently).
@@ -88,11 +90,16 @@ export function FleetApp({
     return () => clearTimeout(id);
   }, [phase, exit]);
 
-  // App-level keys: Ctrl-C cancels everything and quits; Ctrl-T toggles detail.
+  // App-level keys: Ctrl-C cancel-drains (stop dispatching, let in-flight
+  // agents finish + clean up their worktrees normally) and quits once
+  // settled; Ctrl-T toggles detail. A repeat Ctrl-C while draining is a no-op
+  // — drain() is idempotent and there's no force-kill path (aborting mid-edit
+  // can lose an agent's uncommitted work, which drain exists to avoid).
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
-      fleet.cancelAll();
-      exit();
+      if (draining) return;
+      setDraining(true);
+      void fleet.drain().then(() => exit());
       return;
     }
     if (key.ctrl && input === "t") {
@@ -130,6 +137,18 @@ export function FleetApp({
         </Box>
       ) : null}
 
+      {draining ? (
+        <Box paddingX={1} marginBottom={1}>
+          <Text color="#FBBF24" bold>
+            {SPINNER[frame % SPINNER.length] ?? "⠋"}{" "}
+          </Text>
+          <Text color="#FBBF24">Draining </Text>
+          <Text dimColor>
+            — waiting for {snap.runningCount} agent{snap.runningCount === 1 ? "" : "s"} to finish…
+          </Text>
+        </Box>
+      ) : null}
+
       {agents.length > 0 ? <RosterHeader /> : null}
       {agents.length === 0 && phase !== "planning" ? (
         <Box paddingX={1} marginBottom={1}>
@@ -163,7 +182,7 @@ export function FleetApp({
           </Text>
         </Box>
         <Text dimColor>
-          <Text bold>ctrl+c</Text> cancel all · quit
+          <Text bold>ctrl+c</Text> {draining ? "draining…" : "cancel · quit"}
         </Text>
       </Box>
     </Box>
