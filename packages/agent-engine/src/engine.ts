@@ -95,7 +95,7 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
     { role: "user", content: opts.instruction },
   ];
 
-  const model = opts.model ?? "anthropic/claude-opus-4-8";
+  const model = opts.model ?? "anthropic/claude-fable-5";
   const maxSteps = opts.maxSteps ?? 256;
   const contextWindow = opts.contextWindow ?? contextWindowFor(model);
   const compactionThreshold = opts.compactionThreshold ?? 0.8;

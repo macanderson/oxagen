@@ -11,6 +11,10 @@ describe("agent.memory.list capability", () => {
     expect(parsed.memoryClass).toBeUndefined();
     expect(parsed.memoryKind).toBeUndefined();
     expect(parsed.minEnforcement).toBeUndefined();
+    expect(parsed.minCitations).toBeUndefined();
+    // Sort defaults to recency, descending — unchanged legacy behaviour.
+    expect(parsed.sort).toBe("createdAt");
+    expect(parsed.sortDir).toBe("desc");
   });
 
   it("accepts the optional filters", () => {
@@ -19,14 +23,25 @@ describe("agent.memory.list capability", () => {
       memoryClass: "RULE",
       memoryKind: "gotcha",
       minEnforcement: 50,
+      minCitations: 3,
+      sort: "citationCount",
+      sortDir: "asc",
       limit: 25,
       offset: 50,
     });
     expect(parsed.memoryClass).toBe("RULE");
     expect(parsed.memoryKind).toBe("gotcha");
     expect(parsed.minEnforcement).toBe(50);
+    expect(parsed.minCitations).toBe(3);
+    expect(parsed.sort).toBe("citationCount");
+    expect(parsed.sortDir).toBe("asc");
     expect(parsed.limit).toBe(25);
     expect(parsed.offset).toBe(50);
+  });
+
+  it("rejects a negative minCitations and an unknown sort axis", () => {
+    expect(() => agentMemoryList.input.parse({ minCitations: -1 })).toThrow();
+    expect(() => agentMemoryList.input.parse({ sort: "sideways" })).toThrow();
   });
 
   it("rejects a limit above the cap", () => {

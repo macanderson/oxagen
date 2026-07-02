@@ -36,6 +36,7 @@ export interface RateCardEntry {
  * "gpt-4o-mini" wins over "gpt-4o". Add a row to price a new family.
  */
 export const RATE_CARD: RateCardEntry[] = [
+  { family: "claude-fable", label: "Claude Fable", vendor: "anthropic", rate: { inputPer1M: 15.0, outputPer1M: 75.0 } },
   { family: "claude-opus", label: "Claude Opus", vendor: "anthropic", rate: { inputPer1M: 15.0, outputPer1M: 75.0 } },
   { family: "claude-sonnet", label: "Claude Sonnet", vendor: "anthropic", rate: { inputPer1M: 3.0, outputPer1M: 15.0 } },
   { family: "claude-haiku", label: "Claude Haiku", vendor: "anthropic", rate: { inputPer1M: 1.0, outputPer1M: 5.0 } },

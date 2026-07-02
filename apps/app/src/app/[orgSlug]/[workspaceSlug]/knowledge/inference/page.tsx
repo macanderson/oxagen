@@ -26,7 +26,7 @@ interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
 }
 
-export default async function KnowledgeGraphPage({ params }: PageProps) {
+export default async function KnowledgeInferencePage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
   const session = await getSessionOrRedirect();
 

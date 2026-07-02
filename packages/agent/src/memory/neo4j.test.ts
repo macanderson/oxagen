@@ -395,6 +395,7 @@ describe("listMemories", () => {
     expect(pageParams.memoryClass).toBeNull();
     expect(pageParams.memoryKind).toBeNull();
     expect(pageParams.minEnforcement).toBeNull();
+    expect(pageParams.minCitations).toBeNull();
   });
 
   it("forwards memoryClass/memoryKind/minEnforcement/nodeRef filters", async () => {
@@ -417,6 +418,55 @@ describe("listMemories", () => {
     const countCypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
     expect(countCypher).toContain("$memoryClass IS NULL OR");
     expect(countCypher).toContain("$minEnforcement IS NULL OR");
+  });
+
+  it("applies the minCitations floor as a WHERE predicate on both queries", async () => {
+    mockCountThenPage(0, []);
+    await withTestScope(() =>
+      listMemories({ limit: 100, offset: 0, minCitations: 3 }),
+    );
+    const countCypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
+    const pageCypher = String(sessionRun.mock.calls[1]?.[0] ?? "");
+    expect(countCypher).toContain(
+      "$minCitations IS NULL OR coalesce(m.citation_count, 0) >= $minCitations",
+    );
+    expect(pageCypher).toContain("$minCitations IS NULL OR");
+    const countParams = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(countParams.minCitations).toBe(3);
+  });
+
+  it("orders by citation count (desc, recency tie-break) when sort=citationCount", async () => {
+    mockCountThenPage(0, []);
+    await withTestScope(() =>
+      listMemories({ limit: 100, offset: 0, sort: "citationCount" }),
+    );
+    const pageCypher = String(sessionRun.mock.calls[1]?.[0] ?? "");
+    expect(pageCypher).toContain(
+      "ORDER BY coalesce(m.citation_count, 0) DESC, m.createdAt DESC",
+    );
+  });
+
+  it("orders by citation count ascending when sortDir=asc", async () => {
+    mockCountThenPage(0, []);
+    await withTestScope(() =>
+      listMemories({
+        limit: 100,
+        offset: 0,
+        sort: "citationCount",
+        sortDir: "asc",
+      }),
+    );
+    const pageCypher = String(sessionRun.mock.calls[1]?.[0] ?? "");
+    expect(pageCypher).toContain(
+      "ORDER BY coalesce(m.citation_count, 0) ASC, m.createdAt DESC",
+    );
+  });
+
+  it("defaults to newest-first ordering when no sort is supplied", async () => {
+    mockCountThenPage(0, []);
+    await withTestScope(() => listMemories({ limit: 100, offset: 0 }));
+    const pageCypher = String(sessionRun.mock.calls[1]?.[0] ?? "");
+    expect(pageCypher).toContain("ORDER BY m.createdAt DESC");
   });
 
   it("returns an empty page and total 0 when the tenant has no memories", async () => {

@@ -46,15 +46,26 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       type="button"
       onClick={handleCopy}
       aria-label={copied ? `${label} copied` : `Copy ${label}`}
-      className="flex-shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-white/60 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {copied ? (
-        <Check className="size-3.5 text-success" aria-hidden="true" />
+        <>
+          <Check className="size-3.5 text-success" aria-hidden="true" />
+          Copied
+        </>
       ) : (
-        <Copy className="size-3.5" aria-hidden="true" />
+        <>
+          <Copy className="size-3.5" aria-hidden="true" />
+          Copy
+        </>
       )}
     </button>
   );
+}
+
+/** Language tag shown in the code-frame header strip. */
+function langLabel(key: string): string {
+  return key === "claude_code" ? "bash" : "json";
 }
 
 // ---------------------------------------------------------------------------
@@ -69,9 +80,10 @@ export interface McpInstallTabsProps {
  * Renders a tabbed code-block switcher. One tab per MCP client; each panel
  * shows the pre-highlighted snippet with a copy-to-clipboard button.
  *
- * Shiki dual-theme CSS vars (`--shiki-light` / `--shiki-dark`) are set as
- * inline token styles by `codeToHtml`; the `.dark` class on `<html>` switches
- * them via the Tailwind `dark:` variant — zero JS required for theme switching.
+ * Snippets are highlighted server-side with a single vibrant dark Shiki theme
+ * (see page.tsx) and rendered on the always-dark `.ox-code-frame` terminal
+ * surface, so the block reads identically — and high-contrast — in both light
+ * and dark app modes.
  */
 export function McpInstallTabs({ entries }: McpInstallTabsProps) {
   if (entries.length === 0) return null;
@@ -95,10 +107,19 @@ export function McpInstallTabs({ entries }: McpInstallTabsProps) {
       {/* Panels */}
       {entries.map((entry) => (
         <TabsPanel key={entry.key} value={entry.key} className="mt-0">
-          {/* Code block wrapper — matches the surrounding card style */}
-          <div className="group relative overflow-hidden rounded-b-xl rounded-tr-xl border border-border/40 bg-muted/50">
-            {/* Copy button — positioned top-right */}
-            <div className="absolute right-2 top-2 z-10 opacity-0 transition-opacity group-hover:opacity-100">
+          {/* Code block — a bold ember-framed dark terminal surface (see
+              `.ox-code-frame` in globals.css). Identical in light and dark so it
+              reads high-contrast on the light page. */}
+          <div className="ox-code-frame group relative overflow-hidden rounded-b-xl rounded-tr-xl shadow-md">
+            {/* Header strip: ember gradient dot + language tag · always-visible copy. */}
+            <div className="flex items-center justify-between border-b border-white/10 px-3 py-1.5">
+              <span className="flex items-center gap-2 font-mono text-[11px] text-white/50">
+                <span
+                  className="ox-grad-surface size-2.5 rounded-full"
+                  aria-hidden="true"
+                />
+                {langLabel(entry.key)}
+              </span>
               <CopyButton
                 text={entry.raw}
                 label={`${entry.client} install command`}
@@ -110,25 +131,21 @@ export function McpInstallTabs({ entries }: McpInstallTabsProps) {
              * Shiki emits a <pre><code> tree; we let it own the full block.
              * The wrapping div provides scroll containment.
              *
-             * `[&_pre]:!bg-transparent` strips Shiki's inline bg so our
-             * Tailwind `bg-muted/50` shows through.
+             * `[&_pre]:!bg-transparent` strips Shiki's inline theme bg so the
+             * `.ox-code-frame` dark fill shows through.
              * `[&_pre]:overflow-x-auto` keeps long lines scrollable.
-             * `[&_pre]:px-4 [&_pre]:py-3` matches the original snippet padding.
-             * `[&_code]:text-xs [&_code]:font-mono [&_code]:leading-relaxed`
-             * matches the surrounding typography.
-             *
-             * Shiki light/dark vars:
-             *   color tokens → `--shiki-light` (used by default)
-             *   dark override → `dark:` class on <html> flips to `--shiki-dark`
-             * The CSS for the var-swap lives in globals.css via Streamdown's
-             * @source registration, which covers the same dual-theme output.
+             * `[&_pre]:px-4 [&_pre]:py-3.5` sets the snippet padding.
+             * `[&_code]:text-[13px] [&_code]:font-mono [&_code]:leading-relaxed`
+             * sets the code typography. Token colours are baked inline by the
+             * single dark Shiki theme; the frame's `--code-fg` covers the plain
+             * text fallback if Shiki fails to load.
              */}
             <div
               data-mcp-code
               aria-label={`${entry.client} install command`}
                
               dangerouslySetInnerHTML={{ __html: entry.highlightedHtml }}
-              className="[&_pre]:!bg-transparent [&_pre]:overflow-x-auto [&_pre]:px-4 [&_pre]:py-3 [&_code]:text-xs [&_code]:font-mono [&_code]:leading-relaxed"
+              className="[&_pre]:!bg-transparent [&_pre]:overflow-x-auto [&_pre]:px-4 [&_pre]:py-3.5 [&_code]:text-[13px] [&_code]:font-mono [&_code]:leading-relaxed"
             />
           </div>
         </TabsPanel>

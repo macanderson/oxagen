@@ -97,6 +97,22 @@ export const MEDIA_TIERS: { id: MediaTier; name: string; blurb: string }[] = [
 export const gatewayModels: GatewayModel[] = [
   // ── Anthropic (also back the Oxagen text tiers) ──
   {
+    id: "anthropic/claude-fable-5",
+    name: "Claude Fable 5",
+    vendor: "anthropic",
+    released: "2026-06-24",
+    capabilities: ["reasoning", "vision", "tools"],
+    context: "1M",
+  },
+  {
+    id: "anthropic/claude-sonnet-5",
+    name: "Claude Sonnet 5",
+    vendor: "anthropic",
+    released: "2026-06-24",
+    capabilities: ["reasoning", "vision", "tools"],
+    context: "1M",
+  },
+  {
     id: "anthropic/claude-opus-4.8",
     name: "Claude Opus 4.8",
     vendor: "anthropic",

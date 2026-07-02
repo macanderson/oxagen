@@ -107,8 +107,17 @@ export function ShellFrame({
       {/* Floating, collapsible sidebar (desktop). Mobile uses MobileBottomBar. */}
       <Sidebar ctx={ctx} user={user} planTier={planTier} />
 
-      {/* Inset content panel — the majority-width right side. */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-app-topbar-border bg-app-panel-bg text-app-panel-fg md:rounded-xl md:border md:shadow-sm">
+      {/* Inset content panel — the majority-width right side. The panel fill stays
+          opaque for guaranteed text contrast; a dedicated `-z-10` grid layer below
+          paints the login's crisp, top-fading "chart paper" texture ABOVE the fill
+          but BELOW content (the mask must live on its own layer, never on the panel
+          itself, or it would fade the whole panel + its content). The ember hero
+          backdrop glows through the gap/padding sliver around the panel. */}
+      <div className="relative isolate flex min-w-0 flex-1 flex-col overflow-hidden border-app-topbar-border bg-app-panel-bg text-app-panel-fg md:rounded-xl md:border md:shadow-sm">
+        <div
+          aria-hidden="true"
+          className="ox-panel-grid pointer-events-none absolute inset-0 -z-10"
+        />
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-app-topbar-border bg-app-topbar-bg px-3 text-app-topbar-fg">
           {/* Desktop: sidebar collapse toggle. Mobile nav lives in the
               bottom bar (MobileBottomBar), so no header trigger here. */}

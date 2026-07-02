@@ -39,7 +39,7 @@ function makeQueries(overrides: {
 describe("buildSourcesPath", () => {
   it("builds the knowledge sources URL with the github setup marker", () => {
     expect(buildSourcesPath("acme", "research")).toBe(
-      "/acme/research/knowledge/sources?setup=github",
+      "/acme/research/knowledge/repos?setup=github",
     );
   });
 });
@@ -52,7 +52,7 @@ describe("resolveGithubSetupTarget", () => {
 
     const target = await resolveGithubSetupTarget("user-1", "12345", queries);
 
-    expect(target).toBe("/acme/research/knowledge/sources?setup=github");
+    expect(target).toBe("/acme/research/knowledge/repos?setup=github");
     expect(matchInstallation).toHaveBeenCalledWith("user-1", "12345");
     expect(mostRecentMembership).not.toHaveBeenCalled();
   });
@@ -68,7 +68,7 @@ describe("resolveGithubSetupTarget", () => {
 
     const target = await resolveGithubSetupTarget("user-1", "12345", queries);
 
-    expect(target).toBe("/newest-tenant/ws-new/knowledge/sources?setup=github");
+    expect(target).toBe("/newest-tenant/ws-new/knowledge/repos?setup=github");
   });
 
   it("(d) falls back to most recent membership when no connection matches", async () => {
@@ -79,7 +79,7 @@ describe("resolveGithubSetupTarget", () => {
 
     const target = await resolveGithubSetupTarget("user-1", "12345", queries);
 
-    expect(target).toBe("/acme/research/knowledge/sources?setup=github");
+    expect(target).toBe("/acme/research/knowledge/repos?setup=github");
     expect(mostRecentMembership).toHaveBeenCalledWith("user-1");
   });
 
@@ -90,7 +90,7 @@ describe("resolveGithubSetupTarget", () => {
 
     const target = await resolveGithubSetupTarget("user-1", undefined, queries);
 
-    expect(target).toBe("/acme/research/knowledge/sources?setup=github");
+    expect(target).toBe("/acme/research/knowledge/repos?setup=github");
     expect(matchInstallation).not.toHaveBeenCalled();
   });
 
@@ -102,7 +102,7 @@ describe("resolveGithubSetupTarget", () => {
 
     const target = await resolveGithubSetupTarget("user-1", "12345", queries);
 
-    expect(target).toBe("/acme/research/knowledge/sources?setup=github");
+    expect(target).toBe("/acme/research/knowledge/repos?setup=github");
     expect(mostRecentMembership).toHaveBeenCalledTimes(1);
   });
 
@@ -113,7 +113,7 @@ describe("resolveGithubSetupTarget", () => {
 
     const target = await resolveGithubSetupTarget("user-1", undefined, queries);
 
-    expect(target).toBe("/beta/main/knowledge/sources?setup=github");
+    expect(target).toBe("/beta/main/knowledge/repos?setup=github");
   });
 
   it("(h) sends the user to the org root when their org has no workspace yet", async () => {

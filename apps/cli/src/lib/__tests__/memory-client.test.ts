@@ -1,10 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+// Mock the transport so listMemories()'s request body can be asserted without
+// hitting the network. Hoisted above the import of memory-client.
+const { apiPostOrThrow } = vi.hoisted(() => ({ apiPostOrThrow: vi.fn() }));
+vi.mock("../api.js", () => ({ apiPostOrThrow }));
+
 import {
   formatMemoryLines,
   formatMemoryDetail,
   formatRememberResult,
   formatPromoteResult,
   formatPromotionCandidates,
+  listMemories,
   RECOMMENDED_MEMORY_KINDS,
   MEMORY_CLASSES,
   type MemoryRecord,
@@ -38,6 +45,33 @@ const REC: MemoryRecord = {
   createdAt: "2026-06-28T00:00:00Z",
   lastReinforcedAt: null,
 };
+
+describe("listMemories transport", () => {
+  beforeEach(() => {
+    apiPostOrThrow.mockReset();
+    apiPostOrThrow.mockResolvedValue({ memories: [], total: 0 });
+  });
+
+  it("forwards the citation sort axis and minCitations floor in the request body", async () => {
+    await listMemories({ minCitations: 3, sort: "citationCount", sortDir: "desc" });
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "agent/memory/list",
+      expect.objectContaining({
+        minCitations: 3,
+        sort: "citationCount",
+        sortDir: "desc",
+      }),
+    );
+  });
+
+  it("defaults limit/offset and leaves sort undefined when unset", async () => {
+    await listMemories();
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "agent/memory/list",
+      expect.objectContaining({ limit: 100, offset: 0, sort: undefined }),
+    );
+  });
+});
 
 describe("memory-client constants", () => {
   it("exposes the recommended kinds and the three classes the contract defines", () => {

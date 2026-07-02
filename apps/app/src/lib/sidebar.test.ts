@@ -40,7 +40,7 @@ describe("resolveSidebarMode", () => {
 
   it("returns 'workspace' when workspaceSlug is present and path is not /account", () => {
     expect(resolveSidebarMode("/acme/production/ask", wsCtx)).toBe("workspace");
-    expect(resolveSidebarMode("/acme/production/knowledge/sources", wsCtx)).toBe("workspace");
+    expect(resolveSidebarMode("/acme/production/knowledge/repos", wsCtx)).toBe("workspace");
   });
 
   it("returns 'workspace' from pathname when ctx has no workspaceSlug (org-layout boundary)", () => {
@@ -251,7 +251,7 @@ describe("enumerateNavTargets", () => {
 
     // Spot-check a workspace path and a tab path
     expect(hrefs).toContain("/acme/production/ask");
-    expect(hrefs).toContain("/acme/production/knowledge/sources");
+    expect(hrefs).toContain("/acme/production/knowledge/repos");
     expect(hrefs).toContain("/acme/production/settings");
   });
 
@@ -282,7 +282,7 @@ describe("enumerateNavTargets", () => {
     const hrefs = targets.map((t) => t.href);
 
     expect(hrefs).not.toContain("/acme/production/ask");
-    expect(hrefs).not.toContain("/acme/production/knowledge/sources");
+    expect(hrefs).not.toContain("/acme/production/knowledge/repos");
   });
 
   it("all entries have non-empty label and href", () => {
@@ -302,7 +302,7 @@ describe("enumerateNavTargets", () => {
 
 describe("resolveSidebarCtx", () => {
   it("recovers workspaceSlug from the URL so workspace hrefs do not collapse", () => {
-    const eff = resolveSidebarCtx("/acme/production/knowledge/sources", orgCtx);
+    const eff = resolveSidebarCtx("/acme/production/knowledge/repos", orgCtx);
     expect(eff.workspaceSlug).toBe("production");
 
     // Regression: before the fix every item's href fell back to "/acme".
@@ -338,7 +338,7 @@ describe("activeHrefFor", () => {
 
   it("prefers the longest (most specific) prefix match", () => {
     const hrefs = ["/acme/production/knowledge", "/acme/production/ask"];
-    expect(activeHrefFor("/acme/production/knowledge/sources", hrefs)).toBe("/acme/production/knowledge");
+    expect(activeHrefFor("/acme/production/knowledge/repos", hrefs)).toBe("/acme/production/knowledge");
   });
 
   it("does not let an ancestor root stay active on a sibling page", () => {
