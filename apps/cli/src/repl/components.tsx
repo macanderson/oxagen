@@ -78,6 +78,7 @@ export const HELP = [
   "  /pipeline [on|off]  toggle prompt evaluation + completeness judging",
   "  /verbose [on|off]   per-phase timing, model+token+cost breakdown, tool results",
   "  /hud           toggle the heads-up display of all agents running this session",
+  "  /panel         pin/hide the Agent Team + Task Progress side panel (right dock)",
   "  /clear         reset the conversation",
   "  /exit, /quit   quit",
   "Type / to open the command menu — 📦 marks built-in & CLI commands; every",

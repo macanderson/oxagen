@@ -42,7 +42,10 @@ import { isProjectInitialized, initializeProject } from "../project/init.js";
 import { openSessionMemory, type SessionMemory } from "../agent/memory.js";
 import { openFleetMemory } from "../agent/fleet/memory.js";
 import { agentRegistry, type AgentHandle } from "../agent/agent-registry.js";
+import { taskRegistry } from "../agent/task-registry.js";
+import { isSubagentDispatch, subagentInfo } from "../agent/tool-formatter.js";
 import { HudPanel } from "./hud.js";
+import { AgentSidebar, type PanelMode } from "./agent-sidebar.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
@@ -294,6 +297,10 @@ export function ReplApp({
   // closure.
   const [hudVisible, setHudVisible] = useState(false);
   const hudVisibleRef = useRef(false);
+  // Visibility of the right-hand Agent Team / Task Progress dock. "auto" shows it
+  // only while a turn is monitoring work; /panel pins it "on" or hides it "off".
+  const [panelMode, setPanelMode] = useState<PanelMode>("auto");
+  const panelModeRef = useRef<PanelMode>("auto");
   // Timestamp of the most-recent Escape press (for the double-Esc detection
   // window). Null means no previous Esc has been recorded (or the window was
   // explicitly cleared after a 'prompt-reset' fires).
@@ -577,6 +584,19 @@ export function ReplApp({
         const next = !hudVisibleRef.current;
         hudVisibleRef.current = next;
         setHudVisible(next);
+        return;
+      }
+      if (text === "/panel") {
+        // Pin/unpin the right-hand Agent Team / Task Progress dock. From "auto"
+        // (or "off") the first toggle pins it "on"; toggling again hides it "off".
+        const next: PanelMode = panelModeRef.current === "on" ? "off" : "on";
+        panelModeRef.current = next;
+        setPanelMode(next);
+        pushAssistant(
+          next === "on"
+            ? "Agent panel pinned open (Agent Team · Task Progress). /panel to hide."
+            : "Agent panel hidden. /panel to show it again.",
+        );
         return;
       }
       if (text.startsWith("/model")) {
@@ -912,6 +932,41 @@ export function ReplApp({
       // in the try) so the finally can mark it done. Assigned only once we're past
       // project-init, so a skipped init never leaves a phantom "turn" in the HUD.
       let hudHandle: AgentHandle | null = null;
+      // Subagents dispatched during this turn, surfaced in the Agent Team panel.
+      // A tool call only tells us a subagent STARTED (MCP dispatch returns no
+      // result here), so we mark each one done when the turn ends.
+      const subagentHandles: AgentHandle[] = [];
+
+      // Fresh Task Progress checklist for this turn: the pipeline's stages are the
+      // planning agent's plan, recorded live as they run.
+      taskRegistry.clear();
+      /** Friendly, stable titles for each pipeline stage (the plan's steps). */
+      const stageTitles: Record<string, string> = {
+        evaluate: "Evaluate the request",
+        enhance: "Enhance the prompt",
+        route: "Route to a model",
+        revise: "Revise incomplete work",
+        execute: "Execute the work",
+        judge: "Judge the result",
+        complete: "Complete",
+      };
+      const recordStageTask = (kind: string, detail?: string): void => {
+        if (kind === "complete") {
+          taskRegistry.finalizeOpen("done");
+          return;
+        }
+        // Stages run sequentially — close any other open step before opening this.
+        for (const t of taskRegistry.snapshot()) {
+          if (t.status === "in_progress" && t.id !== kind) {
+            taskRegistry.update(t.id, { status: "done" });
+          }
+        }
+        taskRegistry.upsert(kind, {
+          title: stageTitles[kind] ?? kind,
+          status: "in_progress",
+          ...(detail !== undefined ? { detail } : {}),
+        });
+      };
 
       // Project initialization and runTurn both live inside this try so the
       // finally below always restores the streaming UI state — otherwise a throw
@@ -985,6 +1040,8 @@ export function ReplApp({
             void debugLog("turn", "turn.stage", { label: stage.label, detail: stage.detail });
             // Keep the HUD's live detail on the current stage.
             hudHandle?.update({ detail: stage.detail ?? stage.label });
+            // Advance the Task Progress checklist to this stage.
+            recordStageTask(stage.kind, stage.detail ?? undefined);
             closeStreamingBlocks();
             turn.push({
               role: "stage",
@@ -998,6 +1055,18 @@ export function ReplApp({
             if (turnController.signal.aborted) return;
             noteProgress();
             void debugLog("turn", "turn.tool-call", { name, input });
+            // A subagent dispatch joins the Agent Team panel for the rest of the
+            // turn (marked done in the finally, since dispatch returns no result).
+            if (isSubagentDispatch(name)) {
+              const { slug, task } = subagentInfo(input);
+              subagentHandles.push(
+                agentRegistry.register({
+                  kind: "subagent",
+                  title: slug ?? "subagent",
+                  ...(task !== undefined ? { detail: task } : {}),
+                }),
+              );
+            }
             closeStreamingBlocks();
             turn.push({
               role: "tool",
@@ -1166,6 +1235,9 @@ export function ReplApp({
         // It's this turn's own handle, so retiring it is safe even when an
         // overlapped later turn now owns the shared UI state guarded below.
         hudHandle?.done();
+        // Retire this turn's subagents from the Agent Team panel. These are the
+        // turn's own handles, so it's safe even under overlapped turns.
+        for (const h of subagentHandles) h.done();
         // Only tear down SHARED turn/UI state if THIS turn still owns it. When a
         // turn is interrupted (Esc), the pump moves on to the next prompt right
         // away — so a cancelled turn's stream can settle here LONG after a newer
@@ -1183,6 +1255,10 @@ export function ReplApp({
           streamingRef.current = false;
           setIsStreaming(false);
           setTurnStartedAt(null);
+          // Settle the Task Progress checklist so no step lingers half-lit. Guarded
+          // on ownership so a cancelled turn's late finally never marks a newer
+          // turn's freshly-cleared plan done.
+          taskRegistry.finalizeOpen("done");
         }
       }
     },
@@ -1308,6 +1384,16 @@ export function ReplApp({
         }
       </Static>
 
+      {/* Everything below <Static> is the live, re-rendered frame, laid out as a
+          row: the chat + input column on the left (flexGrow so it fills the space)
+          and the Agent Team / Task Progress dock on the right. The dock hides
+          itself when idle (auto), when pinned off (/panel), or on a narrow
+          terminal, so the single-column experience is unchanged until there's work
+          to monitor. minWidth={0} lets the left column truncate instead of forcing
+          the row wider than the terminal. */}
+      <Box flexDirection="row">
+      <Box flexDirection="column" flexGrow={1} minWidth={0}>
+
       {/* Live region — the streaming tail, plus the empty-state hint before any
           turn has run. Only these lines re-render as tokens arrive, so the frame
           Ink redraws stays small and never overflows the viewport. */}
@@ -1420,6 +1506,13 @@ export function ReplApp({
           mode={mode}
         />
       </Box>
+
+      </Box>{/* end left (chat + input) column */}
+
+      {/* Right-hand dock: Agent Team (live roster) + Task Progress (the planning
+          agent's checklist). Renders nothing until there's work to show. */}
+      <AgentSidebar mode={panelMode} />
+      </Box>{/* end live-frame row */}
     </Box>
   );
 }
