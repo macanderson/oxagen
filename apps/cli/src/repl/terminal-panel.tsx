@@ -59,10 +59,14 @@ function statusStyle(run: TerminalRun, frame: number): { glyph: string; label: s
 export function TerminalPanel({
   run,
   nowFn,
+  collapsed = false,
 }: {
   run: TerminalRun;
   /** Injectable clock for deterministic tests; production uses Date.now. */
   nowFn?: () => number;
+  /** Folded accordion form (a finished run parked in the transcript): show only
+   *  the header line + an expand hint, hiding the output body. Ctrl-O toggles it. */
+  collapsed?: boolean;
 }): React.ReactElement {
   const now = nowFn ?? (() => Date.now());
   const [frame, setFrame] = useState(0);
@@ -96,17 +100,25 @@ export function TerminalPanel({
           {glyph} {label}
         </Text>
         <Text dimColor> · {elapsed(run.startedAt, at)}</Text>
-      </Box>
-      {/* Body — the tailed output. */}
-      <Box flexDirection="column" marginTop={hasOutput || run.status === "running" ? 1 : 0}>
-        {elided > 0 ? <Text dimColor>… {elided} earlier line{elided === 1 ? "" : "s"} hidden</Text> : null}
-        {shown.map((line, i) => (
-          <Text key={i} wrap="truncate-end">
-            {line}
+        {collapsed ? (
+          <Text dimColor>
+            {" · "}
+            {allLines.length} line{allLines.length === 1 ? "" : "s"} · Ctrl-O to expand
           </Text>
-        ))}
-        {run.status === "running" && !hasOutput ? <Text dimColor>waiting for output…</Text> : null}
+        ) : null}
       </Box>
+      {/* Body — the tailed output. Hidden in the folded (collapsed) accordion form. */}
+      {collapsed ? null : (
+        <Box flexDirection="column" marginTop={hasOutput || run.status === "running" ? 1 : 0}>
+          {elided > 0 ? <Text dimColor>… {elided} earlier line{elided === 1 ? "" : "s"} hidden</Text> : null}
+          {shown.map((line, i) => (
+            <Text key={i} wrap="truncate-end">
+              {line}
+            </Text>
+          ))}
+          {run.status === "running" && !hasOutput ? <Text dimColor>waiting for output…</Text> : null}
+        </Box>
+      )}
     </Box>
   );
 }
