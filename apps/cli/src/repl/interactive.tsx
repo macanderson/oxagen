@@ -51,6 +51,7 @@ import { debugLog } from "../lib/debug-log.js";
 import { formatToolArgs } from "../agent/tool-formatter.js";
 import {
   ApprovalPrompt,
+  CatMouseChase,
   HELP,
   MessageView,
   PromptInput,
@@ -1399,8 +1400,13 @@ export function ReplApp({
       </Box>
 
       {/* Status line — below the input bar, with a blank row beneath it so it is
-          never flush against the bottom edge of the window. */}
-      <Box marginBottom={1} flexShrink={0}>
+          never flush against the bottom edge of the window. A whimsical cat
+          chases a mouse on the rail above it while a turn is running (opt out
+          with OXAGEN_CLI_FUN=0). */}
+      <Box marginBottom={1} flexShrink={0} flexDirection="column">
+        {process.env.OXAGEN_CLI_FUN !== "0" ? (
+          <CatMouseChase active={isStreaming} />
+        ) : null}
         <StatusLine
           model={model}
           branch={branchRef.current}

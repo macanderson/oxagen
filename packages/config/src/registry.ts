@@ -1266,6 +1266,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_CLI_FUN: {
+    group: "CLI",
+    description:
+      "When '0', disables the whimsical cat-and-mouse chase animation on the REPL status rail. " +
+      "Any other value (or unset) keeps the animation on while a turn is running.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_GRAPH_DISABLED: {
     group: "CLI",
     description:
