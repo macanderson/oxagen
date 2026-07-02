@@ -231,7 +231,12 @@ export function AgentSidebar({
         ) : (
           <Box flexDirection="column" gap={1}>
             {agents.map((a) => (
-              <AgentTeamRow key={a.id} agent={a} now={at} />
+              <AgentTeamRow
+                key={a.id}
+                agent={a}
+                now={at}
+                highlighted={focus?.zone === "agent" && focus.id === a.id}
+              />
             ))}
           </Box>
         )}
@@ -248,11 +253,109 @@ export function AgentSidebar({
         ) : (
           <Box flexDirection="column">
             {tasks.map((t) => (
-              <TaskRow key={t.id} task={t} />
+              <TaskRow
+                key={t.id}
+                task={t}
+                highlighted={focus?.zone === "task" && focus.id === t.id}
+              />
             ))}
           </Box>
         )}
       </Panel>
+
+      {/* Keybinding legend — shown only while the dock holds focus, so the
+          arrow-navigation controls are discoverable exactly when they apply. */}
+      {focus !== null && (
+        <Box paddingX={1} flexDirection="column">
+          <Text dimColor>↑↓ move · Ctrl-E open · Ctrl-X×2 delete</Text>
+          <Text dimColor>Esc back to prompt</Text>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * The drilled-in agent log — shown in the main conversation column (above the
+ * prompt bar) when the user opens an Agent Team row with Ctrl-E. There is no
+ * per-step transcript stored for a running agent, so this surfaces the live
+ * roster record we do have (status, kind, model, elapsed, current step) and
+ * refreshes on the registry's `change` events plus a 1s tick so the elapsed
+ * timer and current detail stay live while the agent works.
+ *
+ * Returns null when the id no longer resolves (the agent finished and was
+ * pruned, or was deleted) so a stale focus never renders an empty frame.
+ */
+export function AgentFocusView({
+  agentId,
+  nowFn,
+}: {
+  agentId: string;
+  nowFn?: () => number;
+}): React.ReactElement | null {
+  const now = nowFn ?? (() => Date.now());
+  const [, setTick] = useState(0);
+  const [agents, setAgents] = useState<RunningAgent[]>(() => agentRegistry.snapshot());
+  useEffect(() => {
+    const refresh = (): void => setAgents(agentRegistry.snapshot());
+    const unsub = agentRegistry.on(refresh);
+    refresh();
+    const timer = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => {
+      unsub();
+      clearInterval(timer);
+    };
+  }, []);
+
+  const agent = agents.find((a) => a.id === agentId);
+  if (!agent) return null;
+  const { glyph, color } = agentStatusStyle(agent.status);
+  const model = agent.model ? tierLabel(tierForSlug(agent.model)) : null;
+
+  return (
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={theme.cyan}
+      paddingX={1}
+      marginX={1}
+    >
+      <Box gap={1}>
+        <Text color={theme.cyan} bold>
+          {theme.ring}
+        </Text>
+        <Text color={theme.cyan} bold>
+          Agent log
+        </Text>
+        <Text color={theme.violet}>{kindLabel(agent.kind)}</Text>
+      </Box>
+      <Box marginTop={1} gap={1}>
+        <Text color={color} bold>
+          {glyph}
+        </Text>
+        <Text wrap="truncate-end">{agent.title}</Text>
+      </Box>
+      <Box paddingLeft={2} gap={1}>
+        <Text dimColor>{agent.status}</Text>
+        <Text dimColor>·</Text>
+        <Text dimColor>{elapsed(agent.startedAt, now())}</Text>
+        {model ? (
+          <>
+            <Text dimColor>·</Text>
+            <Text dimColor>{model}</Text>
+          </>
+        ) : null}
+      </Box>
+      {agent.detail ? (
+        <Box paddingLeft={2}>
+          <Text dimColor wrap="truncate-end">
+            {agent.detail}
+          </Text>
+        </Box>
+      ) : null}
+      <Box marginTop={1}>
+        <Text dimColor>Esc to close this log.</Text>
+      </Box>
     </Box>
   );
 }

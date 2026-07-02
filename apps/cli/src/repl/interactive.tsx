@@ -434,9 +434,13 @@ export function ReplApp({
 
   useInput((input, key) => {
     // Ctrl-C is handled first so it works even while a permission prompt is up
-    // (cancelTurn releases the prompt as a denial before aborting).
+    // (cancelTurn releases the prompt as a denial before aborting). A live
+    // `!command` takes priority: Ctrl-C kills it (like a real shell) rather than
+    // cancelling the agent turn or quitting.
     if (key.ctrl && input === "c") {
-      if (streamingRef.current && abortRef.current) {
+      if (terminalRunRef.current?.status === "running") {
+        terminalHandleRef.current?.kill();
+      } else if (streamingRef.current && abortRef.current) {
         cancelTurn();
       } else {
         void memoryRef.current?.close();
@@ -464,6 +468,14 @@ export function ReplApp({
     }
 
     if (key.escape) {
+      // A live `!command` takes priority: Esc kills it (like Ctrl-C in a shell)
+      // before it can interrupt a turn or seed a reset.
+      if (terminalRunRef.current?.status === "running") {
+        terminalHandleRef.current?.kill();
+        lastEscapeRef.current = null;
+        return;
+      }
+
       // If the HUD is open, Esc just closes it — it never interrupts a turn or
       // seeds a reset. This is the lightest possible dismissal.
       if (hudVisibleRef.current) {
@@ -516,45 +528,12 @@ export function ReplApp({
   const handleSubmit = useCallback(
     async (text: string) => {
 
-      // ── Shell escape (`!cmd`) ──
-      // A prompt beginning with "!" runs the rest as a shell command in the
-      // workspace, like Claude Code. The user typed it explicitly, so it runs
-      // directly (not through the agent's permission broker). Output is shown in
-      // the conversation AND fed into history so the model sees it next turn.
+      // `!cmd` is intercepted synchronously in handleUserSubmit (it runs
+      // immediately, bypassing this queue, so it works mid-turn) — it never
+      // reaches the pump. Guard here too so a `!` that somehow slips through the
+      // queue path is still handled rather than sent to the model as a prompt.
       if (text.startsWith("!")) {
-        const command = text.slice(1).trim();
-        if (!command) {
-          pushAssistant("Usage: !<shell command> — runs it in the workspace and shows the output.");
-          return;
-        }
-        commit([...allRef.current, { role: "user", content: text, timestamp: Date.now() }]);
-        try {
-          const res = await workspaceRef.current.exec(command, {
-            timeoutMs: TIMEOUTS.toolLongMs,
-          });
-          const merged = [res.stdout, res.stderr].filter(Boolean).join("\n").trimEnd();
-          const body = merged || "(no output)";
-          const tail = res.timedOut
-            ? "\n(timed out)"
-            : res.exitCode !== 0
-              ? `\n(exit ${res.exitCode})`
-              : "";
-          pushAssistant("```\n$ " + command + "\n" + body + "\n```" + tail);
-          // Make the model aware of what the user ran and what it produced.
-          historyRef.current = [
-            ...historyRef.current,
-            {
-              role: "user",
-              content:
-                `I ran \`${command}\` in the shell (exit ${res.exitCode}). Output:\n` +
-                body.slice(0, 4000),
-            },
-          ];
-        } catch (err) {
-          pushAssistant(
-            `Command failed: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
+        runShellCommand(text);
         return;
       }
 
@@ -1263,7 +1242,7 @@ export function ReplApp({
         }
       }
     },
-    [exit, commit, pushAssistant, resetConversation, cwd, options.readOnly],
+    [exit, commit, pushAssistant, resetConversation, runShellCommand, cwd, options.readOnly],
   );
 
   // The pump reads the latest handleSubmit via a ref so it never closes over a
@@ -1341,9 +1320,16 @@ export function ReplApp({
         }
         return;
       }
+      // `!cmd` runs IMMEDIATELY, bypassing the turn queue — so a terminal command
+      // fires without delay even while an agent turn is streaming. It never joins
+      // the FIFO (which would make it wait for the current turn to finish).
+      if (text.startsWith("!")) {
+        runShellCommand(text);
+        return;
+      }
       enqueue(text);
     },
-    [enqueue, resetConversation, pushAssistant],
+    [enqueue, resetConversation, pushAssistant, runShellCommand],
   );
 
   // ── Static / live split ────────────────────────────────────────────────────
@@ -1394,6 +1380,12 @@ export function ReplApp({
           the row wider than the terminal. */}
       <Box flexDirection="row">
       <Box flexDirection="column" flexGrow={1} minWidth={0}>
+
+      {/* Terminal panel — a `!command`'s live stdout/stderr, red-outlined and
+          pinned just ABOVE the agent messages so shell output is visually
+          separate from the agent speaking. Streams while the command runs; the
+          agent keeps posting messages below it. Null until a command has run. */}
+      {terminalRun && <TerminalPanel run={terminalRun} />}
 
       {/* Live region — the streaming tail, plus the empty-state hint before any
           turn has run. Only these lines re-render as tokens arrive, so the frame
