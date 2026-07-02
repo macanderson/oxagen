@@ -16,6 +16,13 @@ vi.mock("../prompt-enhancer.js", () => ({
   }),
 }));
 
+// Isolate from the developer's local ~/.config/oxagen/config.json so a pinned
+// model in that file does not override the router and break tier-routing tests.
+vi.mock("../../lib/config.js", () => ({
+  readConfig: () => ({}),
+  writeConfig: () => undefined,
+}));
+
 import { Fleet, type AgentRunner } from "../fleet/orchestrator.js";
 import type { FleetMemory } from "../fleet/memory.js";
 import type { Plan, Task } from "../fleet/types.js";

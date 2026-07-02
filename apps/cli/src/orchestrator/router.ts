@@ -40,7 +40,7 @@ import type { Complexity, Router, RoutingDecision, RoutingTask, WorkerTier } fro
 const WORKER_QUALITY: Record<string, number> = {
   haiku: 0.55,
   "sonnet-5": 0.8,
-  opus: 0.93,
+  fable: 0.93,
   "openai-most-capable-coding-model": 0.95,
 };
 
