@@ -253,6 +253,61 @@ describe("judgeCompleteness", () => {
 
     expect(result.confidence).toBe(100);
   });
+
+  it("puts the git diff and command outputs (evidence) into the judge prompt", async () => {
+    const gen = vi.fn().mockResolvedValue({
+      object: { complete: true, confidence: 90, findings: [], remainingWork: [], reasoning: "ok" },
+      usage: emptyUsage(),
+    });
+    const ai = makeAi({ generateObject: gen });
+
+    await judgeCompleteness(
+      {
+        request: "fix add()",
+        response: "fixed it",
+        filesTouched: ["math_utils.py"],
+        commandsRun: ["pytest -q"],
+        diff: "--- a/math_utils.py\n+++ b/math_utils.py\n-    return a - b\n+    return a + b",
+        commandOutputs: [{ command: "pytest -q", output: "2 passed in 0.01s", ok: true }],
+        steps: 4,
+        executorModel: "anthropic/claude-sonnet-4.6",
+      },
+      ai,
+    );
+
+    const promptArg = (gen.mock.calls[0]?.[0] as { prompt: string }).prompt;
+    expect(promptArg).toContain("GIT DIFF");
+    expect(promptArg).toContain("return a + b"); // the actual change
+    expect(promptArg).toContain("2 passed"); // the test output
+    expect(promptArg).toContain("pytest -q");
+    expect(promptArg).toContain("exit 0");
+  });
+
+  it("marks a command FAILED and preserves the failing tail of its output", async () => {
+    const gen = vi.fn().mockResolvedValue({
+      object: { complete: false, confidence: 85, findings: ["tests fail"], remainingWork: ["fix"], reasoning: "failing tests" },
+      usage: emptyUsage(),
+    });
+    const ai = makeAi({ generateObject: gen });
+    const longOutput = "collecting…\n".repeat(500) + "E   assert add(2,3)==5\nFAILED test_math.py::test_add";
+
+    await judgeCompleteness(
+      {
+        request: "fix add()",
+        response: "done",
+        filesTouched: ["math_utils.py"],
+        commandsRun: ["pytest"],
+        commandOutputs: [{ command: "pytest", output: longOutput, ok: false }],
+        steps: 3,
+        executorModel: "anthropic/claude-sonnet-4.6",
+      },
+      ai,
+    );
+
+    const promptArg = (gen.mock.calls[0]?.[0] as { prompt: string }).prompt;
+    expect(promptArg).toContain("FAILED"); // the exit label
+    expect(promptArg).toContain("FAILED test_math.py::test_add"); // tail preserved (headTail keeps the end)
+  });
 });
 
 describe("pickAdvisorModel", () => {
