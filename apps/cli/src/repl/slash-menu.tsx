@@ -1,16 +1,21 @@
 /**
  * slash-menu.tsx — The typeahead dropdown for slash commands.
  *
- * Rendered above the prompt while the user is typing a `/command` token. Each
- * command is a single-line cell: `❯ /name <args>   description`, with a blank
- * line of padding above and below, and a dim horizontal rule separating one
- * cell from the next. The `❯` pointer appears only on the selected row.
+ * Rendered above the prompt while the user is typing a `/command` token. Every
+ * command is a fixed two-line cell — a command line (`<pointer><lock> /name
+ * <args>`) followed by a description line — with exactly one blank line
+ * between cells and no rule. Height never varies: the description is
+ * truncated to a single line with an ellipsis instead of wrapping, and
+ * selecting a row only swaps the pointer glyph in place, so navigating and
+ * scrolling never reflow the list.
  *
- * Color — not an icon — marks a productized builtin command: its `/name`
- * renders bold in a stable, curated color from `theme.commandPalette` (set on
- * the catalog entry, see slash/catalog.ts). CLI and custom commands carry no
- * `color` and render `/name` as default text. The description is always dim,
- * truncated with an ellipsis so the whole row stays on one line.
+ * `/name` always renders bold amber; an argument hint renders green; the
+ * description is plain, default-color text (no dim). All argument hints and
+ * descriptions line up on one fixed column (`argCol`), sized to the widest
+ * `/name` currently on screen. A productized (first-party) command carries a
+ * monochrome lock marker — `\u{1F512}︎`, the *text*-presentation glyph,
+ * not a color emoji — in a reserved column so custom commands' `/name` still
+ * lines up with it.
  *
  * Long catalogs scroll within a fixed window around the selection.
  */
@@ -24,8 +29,20 @@ export const MAX_VISIBLE_SUGGESTIONS = 6;
 
 /** Width the `❯ ` pointer column reserves so names stay aligned when absent. */
 const POINTER_WIDTH = 2;
-/** Gap between the command (+ its argument hint) and its description. */
-const GAP = "   ";
+/**
+ * Monochrome productized marker: the lock glyph plus U+FE0E (VARIATION
+ * SELECTOR-15), which forces the single-color *text* presentation instead of
+ * the full-color emoji glyph.
+ */
+const LOCK = "\u{1F512}︎";
+/** Width the lock column reserves — measured against how Ink itself sizes
+ *  `LOCK` (2 columns), so a blank placeholder of the same width keeps a
+ *  custom command's `/name` aligned with a productized one either way. */
+const LOCK_COL_WIDTH = 2;
+/** Columns before `/name` starts: the pointer column plus the lock column. */
+const PREFIX_WIDTH = POINTER_WIDTH + LOCK_COL_WIDTH;
+/** Gap between the (padded) command name column and its argument hint / description column. */
+const GAP_WIDTH = 2;
 
 /** Compute the [start, end) slice of a list that keeps `selected` in view. */
 export function visibleWindow(
@@ -37,12 +54,6 @@ export function visibleWindow(
   const half = Math.floor(max / 2);
   const start = Math.min(Math.max(0, selected - half), total - max);
   return { start, end: start + max };
-}
-
-/** Columns consumed by the pointer + `/name` + optional argument hint + gap. */
-function prefixWidth(entry: SlashCatalogEntry): number {
-  const argWidth = entry.argumentHint ? entry.argumentHint.length + 1 : 0; // +1 leading space
-  return POINTER_WIDTH + 1 + entry.name.length + argWidth + GAP.length; // +1 for "/"
 }
 
 export function SlashMenu({
@@ -61,6 +72,13 @@ export function SlashMenu({
   const visible = entries.slice(start, end);
   const innerWidth = Math.max(width - 4, 10); // border (2) + paddingX*2 (2)
 
+  // Fixed column every visible row's args + description align to, sized to
+  // the widest `/name` currently on screen (recomputed as the window
+  // scrolls, so it never depends on off-screen entries).
+  const maxNameWidth = Math.max(...visible.map((entry) => entry.name.length + 1)); // +1 for "/"
+  const argCol = PREFIX_WIDTH + maxNameWidth + GAP_WIDTH;
+  const descWidth = Math.max(innerWidth - argCol, 0);
+
   return (
     <Box
       flexDirection="column"
@@ -73,30 +91,41 @@ export function SlashMenu({
         const idx = start + i;
         const selected = idx === selectedIndex;
         const isLast = i === visible.length - 1;
-        const descWidth = Math.max(innerWidth - prefixWidth(entry), 0);
+        const namePad = maxNameWidth - (entry.name.length + 1);
         return (
-          <Box key={entry.name} flexDirection="column">
-            <Box flexDirection="column" paddingY={1}>
+          // Two fixed-height lines per cell (command + description) plus a
+          // single blank separator — never a rule, never conditional on
+          // `selected`, so every cell occupies the same number of rows.
+          <React.Fragment key={entry.name}>
+            <Box flexDirection="column">
               <Box width={innerWidth}>
                 <Text color={selected ? theme.cyan : undefined} bold={selected}>
                   {selected ? "❯ " : "  "}
                 </Text>
-                <Text bold={Boolean(entry.color) || selected} color={entry.color}>
+                <Box width={LOCK_COL_WIDTH}>
+                  <Text dimColor>{entry.productized ? LOCK : ""}</Text>
+                </Box>
+                <Text color={theme.amber} bold>
                   /{entry.name}
                 </Text>
-                {entry.argumentHint ? <Text dimColor> {entry.argumentHint}</Text> : null}
-                <Text>{GAP}</Text>
+                {entry.argumentHint ? (
+                  <>
+                    <Text>{" ".repeat(namePad + GAP_WIDTH)}</Text>
+                    <Text color={theme.green}>{entry.argumentHint}</Text>
+                  </>
+                ) : null}
+              </Box>
+              <Box width={innerWidth}>
+                <Text>{" ".repeat(argCol)}</Text>
                 {descWidth > 0 ? (
                   <Box width={descWidth}>
-                    <Text dimColor wrap="truncate-end">
-                      {entry.description}
-                    </Text>
+                    <Text wrap="truncate-end">{entry.description}</Text>
                   </Box>
                 ) : null}
               </Box>
             </Box>
-            {isLast ? null : <Text dimColor>{"─".repeat(innerWidth)}</Text>}
-          </Box>
+            {isLast ? null : <Text> </Text>}
+          </React.Fragment>
         );
       })}
       <Box marginTop={1}>
