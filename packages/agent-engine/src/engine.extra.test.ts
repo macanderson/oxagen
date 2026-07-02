@@ -185,3 +185,147 @@ describe("runCodingAgent – default model and system", () => {
     expect(observed[0]!.system).toContain("expert software engineer");
   });
 });
+
+describe("runCodingAgent – explicit step loop (multi-step, retry, compaction)", () => {
+  type Part = Record<string, unknown>;
+  /** A scriptable AgentAi: `scripts[i]` drives the i-th stream() call. */
+  function scriptedAi(
+    scripts: Array<{
+      parts?: Part[];
+      throwError?: unknown; // thrown from inside fullStream on this call
+      finishReason?: string; // default inferred: "tool-calls" if a tool-call part present else "stop"
+    }>,
+  ): { ai: AgentAi; calls: () => number } {
+    let call = 0;
+    const ai: AgentAi = {
+      stream(_args: ModelRunArgs) {
+        const script = scripts[Math.min(call, scripts.length - 1)]!;
+        call++;
+        const hasToolCall = (script.parts ?? []).some((p) => p["type"] === "tool-call");
+        const finishReason = script.finishReason ?? (hasToolCall ? "tool-calls" : "stop");
+        return {
+          fullStream: (async function* () {
+            for (const p of script.parts ?? []) yield p;
+            if (script.throwError) throw script.throwError;
+          })(),
+          steps: Promise.resolve([{}]),
+          usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+          response: Promise.resolve({ messages: [{ role: "assistant", content: "" }] }),
+          finishReason: Promise.resolve(finishReason),
+        } as unknown as ReturnType<AgentAi["stream"]>;
+      },
+      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+    };
+    return { ai, calls: () => call };
+  }
+
+  it("continues to the next step while finishReason is tool-calls, stops on stop", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "x" });
+    const { ai, calls } = scriptedAi([
+      { parts: [{ type: "tool-call", toolCallId: "c1", toolName: "read_file", input: { path: "a.ts" } }] }, // → tool-calls, loop
+      { parts: [{ type: "tool-call", toolCallId: "c2", toolName: "grep", input: { pattern: "x" } }] }, // → tool-calls, loop
+      { parts: [{ type: "text-delta", text: "all done" }] }, // → stop
+    ]);
+    const result = await runCodingAgent({ workspace: ws, ai, instruction: "go" });
+    expect(calls()).toBe(3);
+    expect(result.text).toBe("all done");
+    expect(result.steps).toBe(3);
+    // usage accumulated across the 3 steps (2 tokens each).
+    expect(result.usage.totalTokens).toBe(6);
+  });
+
+  it("retries a transient stream error on the SAME step, then succeeds without double-counting text", async () => {
+    const ws = new MemoryWorkspace({});
+    const overloaded = new Error("service unavailable (503) — overloaded");
+    const { ai, calls } = scriptedAi([
+      { parts: [{ type: "text-delta", text: "partial" }], throwError: overloaded }, // step fails after emitting
+      { parts: [{ type: "text-delta", text: "final answer" }] }, // retry succeeds
+    ]);
+    const result = await runCodingAgent({ workspace: ws, ai, instruction: "go" });
+    expect(calls()).toBe(2);
+    // Only the SUCCESSFUL step's text is committed — the failed attempt's
+    // "partial" delta is not double-counted into the return text.
+    expect(result.text).toBe("final answer");
+    expect(result.steps).toBe(1);
+  });
+
+  it("gives up after the retry budget is exhausted and throws", async () => {
+    const ws = new MemoryWorkspace({});
+    const err = new Error("429 rate limit");
+    const { ai } = scriptedAi([{ throwError: err }]); // every call throws (script repeats last)
+    await expect(
+      runCodingAgent({ workspace: ws, ai, instruction: "go", maxRetries: 2 }),
+    ).rejects.toThrow(/rate limit/);
+  });
+
+  it("does NOT retry a non-retryable error (bad request)", async () => {
+    const ws = new MemoryWorkspace({});
+    const { ai, calls } = scriptedAi([{ throwError: { statusCode: 400, message: "bad request" } }]);
+    await expect(runCodingAgent({ workspace: ws, ai, instruction: "go" })).rejects.toBeTruthy();
+    expect(calls()).toBe(1); // one attempt, no retry
+  });
+
+  it("stops immediately on an aborted signal without another model call", async () => {
+    const ws = new MemoryWorkspace({});
+    const ac = new AbortController();
+    ac.abort();
+    const { ai, calls } = scriptedAi([{ parts: [{ type: "text-delta", text: "x" }] }]);
+    await expect(
+      runCodingAgent({ workspace: ws, ai, instruction: "go", signal: ac.signal }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(calls()).toBe(0);
+  });
+
+  it("respects maxSteps as a runaway backstop", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "x" });
+    // Every step wants to call a tool → would loop forever without the cap.
+    const { ai, calls } = scriptedAi([
+      { parts: [{ type: "tool-call", toolCallId: "c", toolName: "read_file", input: { path: "a.ts" } }] },
+    ]);
+    const result = await runCodingAgent({ workspace: ws, ai, instruction: "go", maxSteps: 3 });
+    expect(calls()).toBe(3);
+    expect(result.steps).toBe(3);
+  });
+});
+
+describe("runCodingAgent – loop detection", () => {
+  it("injects a corrective nudge after 3 identical failing tool calls", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "x" });
+    // Each step: the model issues the SAME edit that errors, until (after the
+    // nudge) a final step stops. We assert a nudge user-message was appended.
+    let call = 0;
+    const failPart = {
+      type: "tool-error",
+      toolCallId: "c",
+      toolName: "edit_file",
+      input: { path: "a.ts", old_string: "nope", new_string: "y" },
+      error: new Error("String not found in a.ts"),
+    };
+    const ai: AgentAi = {
+      stream(_args: ModelRunArgs) {
+        call++;
+        const stop = call >= 4; // steps 1-3 fail identically, step 4 stops
+        return {
+          fullStream: (async function* () {
+            if (stop) {
+              yield { type: "text-delta", text: "giving up, different approach" };
+            } else {
+              yield failPart;
+            }
+          })(),
+          steps: Promise.resolve([{}]),
+          usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+          response: Promise.resolve({ messages: [{ role: "assistant", content: "" }] }),
+          finishReason: Promise.resolve(stop ? "stop" : "tool-calls"),
+        } as unknown as ReturnType<AgentAi["stream"]>;
+      },
+      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+    };
+    const result = await runCodingAgent({ workspace: ws, ai, instruction: "fix it", maxSteps: 10 });
+    // A nudge (role user, mentions the repeated tool) was injected into history.
+    const nudge = result.messages.find(
+      (m) => m.role === "user" && typeof m.content === "string" && m.content.includes("edit_file") && m.content.includes("times"),
+    );
+    expect(nudge).toBeTruthy();
+  });
+});

@@ -145,6 +145,12 @@ export interface RunCodingAgentOptions {
   system?: string;
   history?: ModelMessage[];
   maxSteps?: number;
+  /** Per-turn budget of retries for transient model/transport errors (default 4). */
+  maxRetries?: number;
+  /** Model context window in tokens; auto-detected from the model slug when omitted. */
+  contextWindow?: number;
+  /** Compact the transcript once its estimated tokens exceed this fraction of the window (default 0.8). */
+  compactionThreshold?: number;
   readOnly?: boolean;
   codeGraph?: CodeGraphProvider;
   /** Optional semantic code-map provider — enables the `code_map` tool. */
