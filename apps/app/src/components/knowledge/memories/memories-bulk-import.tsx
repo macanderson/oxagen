@@ -41,13 +41,6 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import {
-  ALL_KINDS,
-  KIND_CONFIG,
-  WEIGHT_CONFIG,
-  type MemoryKind,
-  type MemoryWeight,
-} from "./memory-kinds";
-import {
   ALL_CLASSES,
   CLASS_CONFIG,
   RECOMMENDED_MEMORY_KINDS,
