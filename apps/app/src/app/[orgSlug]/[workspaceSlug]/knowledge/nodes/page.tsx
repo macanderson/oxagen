@@ -7,5 +7,5 @@ export default async function Page({
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
 }) {
   const { orgSlug, workspaceSlug } = await params;
-  redirect(workspace.knowledge.graph({ orgSlug, workspaceSlug }));
+  redirect(workspace.knowledge.inference({ orgSlug, workspaceSlug }));
 }

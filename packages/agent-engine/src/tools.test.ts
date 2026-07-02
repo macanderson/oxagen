@@ -9,10 +9,10 @@ async function run(tool: unknown, input: unknown): Promise<string> {
 }
 
 describe("buildWorkspaceTools", () => {
-  it("read_file returns file content", async () => {
-    const ws = new MemoryWorkspace({ "a.ts": "hello" });
+  it("read_file returns line-numbered file content", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "hello\nworld" });
     const tools = buildWorkspaceTools(ws);
-    expect(await run(tools.read_file, { path: "a.ts" })).toBe("hello");
+    expect(await run(tools.read_file, { path: "a.ts" })).toBe("1\thello\n2\tworld");
   });
 
   it("edit_file emits a file-edit event and mutates the workspace", async () => {

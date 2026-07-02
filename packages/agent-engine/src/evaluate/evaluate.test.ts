@@ -8,6 +8,8 @@ import { describe, it, expect, vi } from "vitest";
 import { evaluatePrompt } from "./evaluator";
 import {
   judgeCompleteness,
+  judgePanel,
+  pickJudgePanel,
   buildRevisionPrompt,
   pickAdvisorModel,
   DEFAULT_ADVISOR_MODEL,
@@ -252,6 +254,128 @@ describe("judgeCompleteness", () => {
     );
 
     expect(result.confidence).toBe(100);
+  });
+
+  it("puts the git diff and command outputs (evidence) into the judge prompt", async () => {
+    const gen = vi.fn().mockResolvedValue({
+      object: { complete: true, confidence: 90, findings: [], remainingWork: [], reasoning: "ok" },
+      usage: emptyUsage(),
+    });
+    const ai = makeAi({ generateObject: gen });
+
+    await judgeCompleteness(
+      {
+        request: "fix add()",
+        response: "fixed it",
+        filesTouched: ["math_utils.py"],
+        commandsRun: ["pytest -q"],
+        diff: "--- a/math_utils.py\n+++ b/math_utils.py\n-    return a - b\n+    return a + b",
+        commandOutputs: [{ command: "pytest -q", output: "2 passed in 0.01s", ok: true }],
+        steps: 4,
+        executorModel: "anthropic/claude-sonnet-4.6",
+      },
+      ai,
+    );
+
+    const promptArg = (gen.mock.calls[0]?.[0] as { prompt: string }).prompt;
+    expect(promptArg).toContain("GIT DIFF");
+    expect(promptArg).toContain("return a + b"); // the actual change
+    expect(promptArg).toContain("2 passed"); // the test output
+    expect(promptArg).toContain("pytest -q");
+    expect(promptArg).toContain("exit 0");
+  });
+
+  it("marks a command FAILED and preserves the failing tail of its output", async () => {
+    const gen = vi.fn().mockResolvedValue({
+      object: { complete: false, confidence: 85, findings: ["tests fail"], remainingWork: ["fix"], reasoning: "failing tests" },
+      usage: emptyUsage(),
+    });
+    const ai = makeAi({ generateObject: gen });
+    const longOutput = "collecting…\n".repeat(500) + "E   assert add(2,3)==5\nFAILED test_math.py::test_add";
+
+    await judgeCompleteness(
+      {
+        request: "fix add()",
+        response: "done",
+        filesTouched: ["math_utils.py"],
+        commandsRun: ["pytest"],
+        commandOutputs: [{ command: "pytest", output: longOutput, ok: false }],
+        steps: 3,
+        executorModel: "anthropic/claude-sonnet-4.6",
+      },
+      ai,
+    );
+
+    const promptArg = (gen.mock.calls[0]?.[0] as { prompt: string }).prompt;
+    expect(promptArg).toContain("FAILED"); // the exit label
+    expect(promptArg).toContain("FAILED test_math.py::test_add"); // tail preserved (headTail keeps the end)
+  });
+});
+
+describe("pickJudgePanel", () => {
+  it("returns distinct cross-vendor models, excluding the executor", () => {
+    const panel = pickJudgePanel("anthropic/claude-opus-4-8", "openai/gpt-5,google/gemini-2.5-pro,anthropic/claude-opus-4-8,openai/gpt-5");
+    expect(panel).toContain("openai/gpt-5");
+    expect(panel).toContain("google/gemini-2.5-pro");
+    expect(panel).not.toContain("anthropic/claude-opus-4-8"); // executor excluded
+    expect(new Set(panel).size).toBe(panel.length); // distinct
+  });
+
+  it("always yields at least one judge distinct from the executor", () => {
+    const panel = pickJudgePanel("openai/gpt-5", "openai/gpt-5");
+    expect(panel.length).toBeGreaterThanOrEqual(1);
+    expect(panel).not.toContain("openai/gpt-5");
+  });
+});
+
+describe("judgePanel", () => {
+  function judgeAi(perModel: Record<string, boolean>): AgentAi {
+    return makeAi({
+      generateObject: vi.fn().mockImplementation((args: { model: string }) => {
+        const complete = perModel[args.model] ?? true;
+        return Promise.resolve({
+          object: {
+            complete,
+            confidence: complete ? 90 : 70,
+            findings: complete ? [] : [`${args.model} says: missing tests`],
+            remainingWork: complete ? [] : ["add tests"],
+            reasoning: complete ? "looks done" : "incomplete",
+          },
+          usage: emptyUsage(),
+        });
+      }),
+    });
+  }
+  const base = {
+    request: "fix it",
+    response: "done",
+    filesTouched: ["a.ts"],
+    commandsRun: [],
+    steps: 2,
+    executorModel: "anthropic/claude-opus-4-8",
+  };
+
+  it("is complete only on a strict majority; unions dissenting findings otherwise", async () => {
+    // 2 of 3 say incomplete → panel INCOMPLETE, findings unioned.
+    const ai = judgeAi({ "openai/gpt-5": false, "google/gemini-2.5-pro": false, "x/y": true });
+    const verdict = await judgePanel(base, ai, ["openai/gpt-5", "google/gemini-2.5-pro", "x/y"]);
+    expect(verdict.complete).toBe(false);
+    expect(verdict.findings.length).toBeGreaterThanOrEqual(2);
+    expect(verdict.model).toContain("panel(");
+  });
+
+  it("is complete when a majority agree it's complete", async () => {
+    const ai = judgeAi({ "openai/gpt-5": true, "google/gemini-2.5-pro": true, "x/y": false });
+    const verdict = await judgePanel(base, ai, ["openai/gpt-5", "google/gemini-2.5-pro", "x/y"]);
+    expect(verdict.complete).toBe(true);
+    expect(verdict.findings).toEqual([]);
+  });
+
+  it("delegates to a single judge when the panel has one model", async () => {
+    const ai = judgeAi({ "openai/gpt-5": false });
+    const verdict = await judgePanel(base, ai, ["openai/gpt-5"]);
+    expect(verdict.complete).toBe(false);
+    expect(verdict.model).not.toContain("panel("); // single-judge path
   });
 });
 

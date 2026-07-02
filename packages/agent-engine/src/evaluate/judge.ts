@@ -88,6 +88,17 @@ export interface JudgeOptions {
   filesTouched: string[];
   /** Shell commands the agent ran this turn. */
   commandsRun: string[];
+  /**
+   * The actual `git diff` of the turn — the ground-truth change, not the agent's
+   * description of it. When present the judge is told to read THIS, not the prose.
+   */
+  diff?: string;
+  /**
+   * Outputs of shell commands the agent ran, especially test runs. A failing
+   * test here means the work is incomplete regardless of what the agent claims —
+   * this is the strongest completeness signal there is.
+   */
+  commandOutputs?: Array<{ command: string; output: string; ok: boolean }>;
   /** Tool-loop steps the agent took. */
   steps: number;
   /** The executor model, so the advisor is chosen to differ from it. */
@@ -97,21 +108,37 @@ export interface JudgeOptions {
   signal?: AbortSignal;
 }
 
+/** Keep a string's head + tail, dropping the middle (test verdicts live at the tail). */
+function headTail(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const head = Math.floor(max * 0.5);
+  const tail = max - head;
+  return `${s.slice(0, head)}\n… [${s.length - max} chars elided]\n${s.slice(s.length - tail)}`;
+}
+
 const JUDGE_SYSTEM = [
   "You are a skeptical completeness judge auditing another AI agent's coding work.",
   "Agents frequently CLAIM a task is done when it is not: they describe edits without",
   "making them, leave TODOs, skip promised tests, or finish only part of the request.",
   "Your job is to catch exactly that. Default to skepticism.",
   "",
-  "You are given the user's request, the agent's final message, and the concrete",
-  "evidence of what it did (files written/edited, commands run, step count). Judge the",
-  "WORK, not the prose. A confident closing message with no matching file changes is a",
-  "red flag, not proof.",
+  "You are given the user's request, the agent's final message, and — crucially — the",
+  "GROUND-TRUTH EVIDENCE of what it did: the actual git diff, the output of the commands",
+  "it ran, the files touched, and the step count. Judge the EVIDENCE, not the prose.",
   "",
-  "Mark complete=true ONLY when every distinct part of the request is satisfied by real,",
-  "verifiable changes. Otherwise list concrete findings and the remaining work. If the",
-  "request was a question or read-only analysis, completeness means the question is fully",
-  "answered — file changes are not required.",
+  "Evidence priority, highest first:",
+  "1. TEST OUTPUT. If the agent ran tests, their output is decisive. A failing test,",
+  "   error, traceback, or non-zero exit means the work is INCOMPLETE — no matter how",
+  "   confident the agent's message is. Passing tests that actually exercise the change",
+  "   are the strongest completeness signal.",
+  "2. THE GIT DIFF. This is the real change. If it is empty, or does not implement what",
+  "   was asked, the work is incomplete regardless of the closing message. Read it.",
+  "3. The agent's message is a CLAIM to verify against 1 and 2, never proof on its own.",
+  "",
+  "Mark complete=true ONLY when the diff implements every distinct part of the request AND",
+  "any tests that were run pass. If tests were promised/relevant but never run, that is a",
+  "finding. If the request was a question or read-only analysis, completeness means the",
+  "question is fully answered — file changes are not required.",
 ].join("\n");
 
 function evidenceBlock(opts: JudgeOptions): string {
@@ -119,15 +146,30 @@ function evidenceBlock(opts: JudgeOptions): string {
     opts.filesTouched.length > 0
       ? opts.filesTouched.map((f) => `  - ${f}`).join("\n")
       : "  (none — the agent wrote or edited no files)";
-  const cmds =
-    opts.commandsRun.length > 0
-      ? opts.commandsRun.map((c) => `  - ${c}`).join("\n")
-      : "  (none)";
+  const diff =
+    opts.diff && opts.diff.trim()
+      ? "```diff\n" + headTail(opts.diff, 8000) + "\n```"
+      : "  (empty — the agent changed no tracked files)";
+  const cmdOutputs =
+    opts.commandOutputs && opts.commandOutputs.length > 0
+      ? opts.commandOutputs
+          .map(
+            (c) =>
+              `  $ ${c.command}  → ${c.ok ? "exit 0" : "FAILED"}\n${headTail(c.output || "(no output)", 3000)
+                .split("\n")
+                .map((l) => `    ${l}`)
+                .join("\n")}`,
+          )
+          .join("\n\n")
+      : opts.commandsRun.length > 0
+        ? opts.commandsRun.map((c) => `  - ${c} (output not captured)`).join("\n")
+        : "  (none)";
   return [
     `## User's request\n${opts.request}`,
-    `## Agent's final message\n${opts.response || "(empty)"}`,
+    `## Agent's final message (a CLAIM — verify it)\n${opts.response || "(empty)"}`,
+    `## GIT DIFF (ground truth)\n${diff}`,
+    `## Command outputs (test results are decisive)\n${cmdOutputs}`,
     `## Files the agent wrote/edited (${opts.filesTouched.length})\n${files}`,
-    `## Commands the agent ran (${opts.commandsRun.length})\n${cmds}`,
     `## Tool-loop steps taken: ${opts.steps}`,
   ].join("\n\n");
 }
@@ -209,6 +251,76 @@ export async function judgeCompleteness(opts: JudgeOptions, ai: AgentAi): Promis
   } catch {
     return heuristicVerdict(opts, model);
   }
+}
+
+/**
+ * Cross-vendor judge panel. Different providers share none of each other's blind
+ * spots, so a panel that spans vendors (e.g. OpenAI + Google + Anthropic) catches
+ * more than any single judge — the "high-powered but different-provider judges"
+ * design. Returns distinct slugs, none equal to the executor, from an explicit
+ * `OXAGEN_JUDGE_PANEL` (comma-separated) or a sensible cross-vendor default.
+ * Exported for tests.
+ */
+export function pickJudgePanel(executorModel: string, override?: string): string[] {
+  const raw = override ?? process.env["OXAGEN_JUDGE_PANEL"];
+  const explicit = raw
+    ? raw.split(",").map((s) => s.trim()).filter(Boolean)
+    : [DEFAULT_ADVISOR_MODEL, "google/gemini-2.5-pro", modelForTier("precise")];
+  // Distinct, and never the executor (self-grading defeats the point).
+  const seen = new Set<string>();
+  const panel = explicit.filter((m) => m !== executorModel && !seen.has(m) && seen.add(m));
+  // Guarantee at least one judge distinct from the executor.
+  if (panel.length === 0) panel.push(pickAdvisorModel(executorModel));
+  return panel;
+}
+
+/** Dedup a list of strings, preserving first-seen order. */
+function dedup(items: string[]): string[] {
+  const seen = new Set<string>();
+  return items.filter((s) => !seen.has(s) && seen.add(s));
+}
+
+/**
+ * Run a PANEL of judges (distinct cross-vendor models) concurrently and
+ * aggregate: the work is complete only if a MAJORITY say so; findings and
+ * remaining work are the union across the dissenting judges; confidence is the
+ * mean. A single judge failing degrades to its heuristic (handled inside
+ * {@link judgeCompleteness}) rather than sinking the panel.
+ */
+export async function judgePanel(
+  opts: JudgeOptions,
+  ai: AgentAi,
+  advisorModels?: string[],
+): Promise<JudgeVerdict> {
+  const models = dedup(advisorModels ?? pickJudgePanel(opts.executorModel));
+  if (models.length <= 1) {
+    return judgeCompleteness({ ...opts, advisorModel: models[0] }, ai);
+  }
+  const verdicts = await Promise.all(
+    models.map((m) => judgeCompleteness({ ...opts, advisorModel: m }, ai)),
+  );
+  const completes = verdicts.filter((v) => v.complete).length;
+  const complete = completes * 2 > verdicts.length; // strict majority
+  const dissenting = verdicts.filter((v) => !v.complete);
+  const findings = dedup(dissenting.flatMap((v) => v.findings));
+  const remainingWork = dedup(dissenting.flatMap((v) => v.remainingWork));
+  const confidence = Math.round(
+    verdicts.reduce((s, v) => s + v.confidence, 0) / verdicts.length,
+  );
+  const usage = verdicts.reduce((acc, v) => accumulateUsage(acc, v.model, v.usage), emptyUsage());
+  return {
+    complete,
+    confidence,
+    findings: complete ? [] : findings,
+    remainingWork: complete ? [] : remainingWork,
+    reasoning:
+      `Panel of ${verdicts.length} (${models.map((m) => m.split("/").pop()).join(", ")}): ` +
+      `${completes}/${verdicts.length} judged complete. ` +
+      dissenting.map((v) => `${v.model.split("/").pop()}: ${v.reasoning}`).join(" | "),
+    model: `panel(${models.join(",")})`,
+    fallback: verdicts.every((v) => v.fallback),
+    usage,
+  };
 }
 
 /**

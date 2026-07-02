@@ -11,12 +11,144 @@ import { z } from "zod";
 import type { Workspace, CodeGraphProvider, CodeMapProvider, CodingEvent } from "./types";
 
 const MAX_OUTPUT = 30_000; // chars; keep tool output from blowing the context window
+// When truncating, keep this fraction of the budget as the HEAD; the rest is the
+// TAIL. A failing test/build run puts its most actionable content — the failure
+// summary, the assertion, the stack — at the very END, so head-only truncation
+// (the old behavior) routinely discarded exactly what the model needed. Keeping
+// both ends preserves the command/context (head) AND the verdict (tail).
+const HEAD_FRACTION = 0.6;
 
-function clip(text: string): string {
+/**
+ * Clip over-long tool output to {@link MAX_OUTPUT} chars, MIDDLE-OUT: keep the
+ * head and the tail, drop the middle. Exported for tests.
+ */
+export function clip(text: string): string {
   if (text.length <= MAX_OUTPUT) return text;
+  const dropped = text.length - MAX_OUTPUT;
+  const headLen = Math.floor(MAX_OUTPUT * HEAD_FRACTION);
+  const tailLen = MAX_OUTPUT - headLen;
+  const head = text.slice(0, headLen);
+  const tail = text.slice(text.length - tailLen);
+  return `${head}\n… [${dropped} chars truncated from the middle — head + tail kept]\n${tail}`;
+}
+
+// ── read_file line numbering ─────────────────────────────────────────────────
+
+/**
+ * Prefix each line with its true 1-based file line number, `cat -n` style:
+ * a right-aligned number, a tab, then the line text. `startLine` is the real
+ * file line number of the FIRST line of `text`, so a range read (offset/limit)
+ * reports true line numbers rather than 1..N. The number column is sized to the
+ * largest number in the block so every number right-aligns.
+ *
+ * Shared by the engine `read_file` tool and the legacy CLI `read_file` tool so
+ * the model sees identical, line-addressable output from either path. Pure.
+ */
+export function formatWithLineNumbers(text: string, startLine = 1): string {
+  if (text === "") return "";
+  const lines = text.split("\n");
+  // A trailing newline yields an empty final segment; don't number it — `cat -n`
+  // and editors count lines of content, not the empty tail after the last "\n".
+  if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+  const width = String(startLine + lines.length - 1).length;
+  return lines
+    .map((line, i) => `${String(startLine + i).padStart(width)}\t${line}`)
+    .join("\n");
+}
+
+// ── edit_file corrective feedback ────────────────────────────────────────────
+
+/** Levenshtein edit distance between two strings (callers cap length first). */
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  let curr = new Array<number>(n + 1);
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    const ai = a.charCodeAt(i - 1);
+    for (let j = 1; j <= n; j++) {
+      const cost = ai === b.charCodeAt(j - 1) ? 0 : 1;
+      curr[j] = Math.min(
+        (prev[j] as number) + 1,
+        (curr[j - 1] as number) + 1,
+        (prev[j - 1] as number) + cost,
+      );
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n] as number;
+}
+
+/** Similarity in [0,1] (1 = identical) over trimmed, length-capped strings. */
+function similarity(a: string, b: string): number {
+  const x = a.trim().slice(0, 200);
+  const y = b.trim().slice(0, 200);
+  const max = Math.max(x.length, y.length);
+  if (max === 0) return 1; // both empty
+  return 1 - levenshtein(x, y) / max;
+}
+
+/** The file line (1-based) most similar to `target`, or null for empty input. */
+function closestLine(
+  content: string,
+  target: string,
+): { line: number; text: string } | null {
+  const lines = content.split("\n");
+  let best: { line: number; text: string; score: number } | null = null;
+  for (let i = 0; i < lines.length; i++) {
+    const score = similarity(lines[i] as string, target);
+    if (!best || score > best.score) best = { line: i + 1, text: lines[i] as string, score };
+  }
+  return best ? { line: best.line, text: best.text } : null;
+}
+
+/** 1-based line numbers where `oldString` begins, up to `cap` occurrences. */
+function occurrenceLines(content: string, oldString: string, cap: number): number[] {
+  if (oldString === "") return [];
+  const out: number[] = [];
+  let from = 0;
+  while (out.length < cap) {
+    const idx = content.indexOf(oldString, from);
+    if (idx === -1) break;
+    let line = 1;
+    for (let i = 0; i < idx; i++) if (content.charCodeAt(i) === 10) line++;
+    out.push(line);
+    from = idx + oldString.length;
+  }
+  return out;
+}
+
+/**
+ * Corrective feedback for an `edit_file` miss so the model can self-correct
+ * instead of blindly retrying. Returns `null` when `oldString` already appears
+ * exactly once (no failure). Shared by every mutating Workspace impl and the
+ * legacy CLI tool so the guidance is identical across paths. Pure.
+ *
+ *  - not found  → the closest line by fuzzy similarity + a whitespace hint.
+ *  - ambiguous  → the first few matching line numbers + how to disambiguate.
+ */
+export function describeEditFailure(content: string, oldString: string): string | null {
+  const count = oldString === "" ? 0 : content.split(oldString).length - 1;
+  if (count === 1) return null;
+  if (count === 0) {
+    const near = closestLine(content, oldString.split("\n")[0] ?? "");
+    const where = near
+      ? `Closest match at line ${near.line}: ${near.text.slice(0, 200)}`
+      : "No similar line found.";
+    return (
+      `old_string not found. ${where}\n` +
+      `Check exact whitespace/indentation; read_file the region first.`
+    );
+  }
+  const lines = occurrenceLines(content, oldString, 5);
+  const more = count > lines.length ? ` (+${count - lines.length} more)` : "";
   return (
-    text.slice(0, MAX_OUTPUT) +
-    `\n… [truncated ${text.length - MAX_OUTPUT} chars]`
+    `old_string appears ${count} times (lines ${lines.join(", ")}${more}); it must be unique. ` +
+    `Add surrounding context to old_string, or pass replace_all:true to replace every occurrence.`
   );
 }
 
@@ -115,9 +247,16 @@ export function buildWorkspaceTools(
     codeGraph?: CodeGraphProvider;
     codeMap?: CodeMapProvider;
     onEvent?: (e: CodingEvent) => void;
+    /**
+     * Turn abort signal, forwarded to `workspace.exec` so an aborted turn kills
+     * the `bash` process subtree instead of leaving it running to its own
+     * timeout. Undefined ⇒ bash is bounded only by its timeout (unchanged).
+     */
+    signal?: AbortSignal;
   } = {},
 ): ToolSet {
   const onEvent = opts.onEvent ?? (() => undefined);
+  const signal = opts.signal;
 
   const tools: ToolSet = {
     read_file: tool({
@@ -138,7 +277,10 @@ export function buildWorkspaceTools(
       }),
       execute: async ({ path, offset, limit }) => {
         try {
-          return clip(await workspace.readFile(path, { offset, limit }));
+          const text = await workspace.readFile(path, { offset, limit });
+          // Number lines cat -n style so the model can cite/target exact lines;
+          // `offset` (1-based) is the true line number of the first line read.
+          return clip(formatWithLineNumbers(text, offset ?? 1));
         } catch (err) {
           return `Error reading ${path}: ${err instanceof Error ? err.message : String(err)}`;
         }
@@ -165,18 +307,29 @@ export function buildWorkspaceTools(
 
     edit_file: tool({
       description:
-        "Replace an exact substring in a file. old_string must appear exactly once. Use for surgical edits.",
+        "Replace an exact substring in a file. By default old_string must appear " +
+        "exactly once; set replace_all:true to replace every occurrence. Use for " +
+        "surgical edits.",
       inputSchema: z.object({
         path: z.string(),
-        old_string: z.string().describe("Exact text to replace (must be unique)."),
+        old_string: z.string().describe("Exact text to replace."),
         new_string: z.string().describe("Replacement text."),
+        replace_all: z
+          .boolean()
+          .optional()
+          .describe(
+            "Replace every occurrence instead of requiring a unique match (default false).",
+          ),
       }),
-      execute: async ({ path, old_string, new_string }) => {
+      execute: async ({ path, old_string, new_string, replace_all }) => {
         try {
-          await workspace.editFile(path, old_string, new_string);
-          const bytes = new_string.length;
-          onEvent({ type: "file-edit", path, bytes });
-          return `Edited ${path}`;
+          const count = await workspace.editFile(path, old_string, new_string, {
+            replaceAll: replace_all,
+          });
+          onEvent({ type: "file-edit", path, bytes: new_string.length });
+          return replace_all
+            ? `Edited ${path} (${count} replacement${count === 1 ? "" : "s"})`
+            : `Edited ${path}`;
         } catch (err) {
           return `Error editing ${path}: ${err instanceof Error ? err.message : String(err)}`;
         }
@@ -366,7 +519,7 @@ export function buildWorkspaceTools(
     execute: async ({ command, timeout_ms }) => {
       const timeoutMs = Math.min(timeout_ms ?? 120_000, 600_000);
       try {
-        const result = await workspace.exec(command, { timeoutMs });
+        const result = await workspace.exec(command, { timeoutMs, signal });
         onEvent({ type: "command", command, exitCode: result.exitCode });
         if (result.timedOut) return `Command timed out after ${timeoutMs}ms.`;
         const out = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();

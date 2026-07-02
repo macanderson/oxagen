@@ -3,11 +3,24 @@
  * by the local filesystem + shell: read/write/edit, directory listing, glob,
  * grep, command execution (incl. timeout + non-zero exit), and git diff.
  */
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createCwdWorkspace } from "../workspace.js";
+import { hasRipgrep, runRipgrep, parseRipgrepOutput } from "../ripgrep.js";
+
+// grep prefers ripgrep when it's on PATH; mock the probe + runner so the JS-walk
+// tests stay deterministic (rg IS installed on many dev/CI hosts) and the rg
+// branch can be exercised with a faked backend. parseRipgrepOutput stays real.
+vi.mock("../ripgrep.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../ripgrep.js")>();
+  return {
+    ...actual,
+    hasRipgrep: vi.fn(async () => false),
+    runRipgrep: vi.fn(async () => ({ ok: false, stdout: "" })),
+  };
+});
 
 const tmpDirs: string[] = [];
 
@@ -27,6 +40,12 @@ afterEach(async () => {
     const dir = tmpDirs.pop();
     if (dir) await fs.rm(dir, { recursive: true, force: true });
   }
+});
+
+beforeEach(() => {
+  // Default to the JS walk; rg-branch tests opt in per test.
+  vi.mocked(hasRipgrep).mockResolvedValue(false);
+  vi.mocked(runRipgrep).mockResolvedValue({ ok: false, stdout: "" });
 });
 
 describe("createCwdWorkspace", () => {
@@ -83,6 +102,28 @@ describe("createCwdWorkspace", () => {
       const ws = createCwdWorkspace(root);
       await expect(ws.editFile("e.txt", "x", "y")).rejects.toThrow("3 times");
     });
+
+    it("returns 1 for a single replacement", async () => {
+      const root = await makeRepo({ "e.txt": "foo bar baz" });
+      const ws = createCwdWorkspace(root);
+      expect(await ws.editFile("e.txt", "bar", "QUX")).toBe(1);
+    });
+
+    it("replaceAll replaces every occurrence and returns the count", async () => {
+      const root = await makeRepo({ "e.txt": "x\nx\nx" });
+      const ws = createCwdWorkspace(root);
+      const n = await ws.editFile("e.txt", "x", "y", { replaceAll: true });
+      expect(n).toBe(3);
+      expect(await fs.readFile(join(root, "e.txt"), "utf-8")).toBe("y\ny\ny");
+    });
+
+    it("names the closest line when the string is not found", async () => {
+      const root = await makeRepo({ "e.txt": "const foo = 1;\nconst bar = 2;" });
+      const ws = createCwdWorkspace(root);
+      await expect(
+        ws.editFile("e.txt", "const fooo = 1;", "x"),
+      ).rejects.toThrow(/Closest match at line 1/);
+    });
   });
 
   describe("list", () => {
@@ -123,6 +164,19 @@ describe("createCwdWorkspace", () => {
       expect(matches).not.toContain("src/c.js");
       expect(matches.some((m) => m.includes("node_modules"))).toBe(false);
     });
+
+    it("skips Python cache / *.egg-info dirs", async () => {
+      const root = await makeRepo({
+        "src/a.py": "",
+        ".venv/lib/x.py": "",
+        "pkg.egg-info/y.py": "",
+      });
+      const ws = createCwdWorkspace(root);
+      const matches = await ws.glob("**/*.py");
+      expect(matches).toContain("src/a.py");
+      expect(matches.some((m) => m.includes(".venv"))).toBe(false);
+      expect(matches.some((m) => m.includes("egg-info"))).toBe(false);
+    });
   });
 
   describe("grep", () => {
@@ -148,6 +202,65 @@ describe("createCwdWorkspace", () => {
       const root = await makeRepo();
       const ws = createCwdWorkspace(root);
       await expect(ws.grep("(")).rejects.toThrow("Invalid grep regex");
+    });
+
+    it("uses ripgrep when available and maps its output to file:line:text", async () => {
+      vi.mocked(hasRipgrep).mockResolvedValue(true);
+      vi.mocked(runRipgrep).mockResolvedValue({
+        ok: true,
+        stdout: "src/a.ts:12:const target = 1;\nsrc/b.ts:3:target again\n",
+      });
+      const root = await makeRepo({ "src/a.ts": "irrelevant" });
+      const ws = createCwdWorkspace(root);
+      expect(await ws.grep("target")).toEqual([
+        "src/a.ts:12:const target = 1;",
+        "src/b.ts:3:target again",
+      ]);
+      // rg is invoked with an argv array (never a shell string).
+      const argv = vi.mocked(runRipgrep).mock.calls[0]?.[0];
+      expect(argv).toEqual(
+        expect.arrayContaining([
+          "--line-number",
+          "--no-heading",
+          "--color=never",
+          "target",
+        ]),
+      );
+    });
+
+    it("passes --glob to ripgrep when a glob is given", async () => {
+      vi.mocked(hasRipgrep).mockResolvedValue(true);
+      vi.mocked(runRipgrep).mockResolvedValue({ ok: true, stdout: "" });
+      const root = await makeRepo({ "a.ts": "x" });
+      const ws = createCwdWorkspace(root);
+      await ws.grep("x", { glob: "*.ts" });
+      const argv = vi.mocked(runRipgrep).mock.calls[0]?.[0] ?? [];
+      expect(argv).toEqual(expect.arrayContaining(["--glob", "*.ts"]));
+    });
+
+    it("falls back to the JS walk when ripgrep reports a failure", async () => {
+      vi.mocked(hasRipgrep).mockResolvedValue(true);
+      vi.mocked(runRipgrep).mockResolvedValue({ ok: false, stdout: "" });
+      const root = await makeRepo({ "one.ts": "const target = 1;" });
+      const ws = createCwdWorkspace(root);
+      expect(await ws.grep("target")).toEqual(["one.ts:1:const target = 1;"]);
+    });
+
+    it("skips Python virtualenv / cache / *.egg-info dirs in the JS walk", async () => {
+      const root = await makeRepo({
+        "keep.py": "import target",
+        ".venv/lib/pkg.py": "target",
+        "__pycache__/mod.py": "target",
+        "pkg.egg-info/PKG-INFO": "target",
+        "src/real.py": "target here",
+      });
+      const ws = createCwdWorkspace(root);
+      const files = (await ws.grep("target")).map((h) => h.split(":")[0]);
+      expect(files).toContain("keep.py");
+      expect(files).toContain("src/real.py");
+      expect(files.some((f) => f?.includes(".venv"))).toBe(false);
+      expect(files.some((f) => f?.includes("__pycache__"))).toBe(false);
+      expect(files.some((f) => f?.includes("egg-info"))).toBe(false);
     });
   });
 
@@ -231,5 +344,31 @@ describe("createCwdWorkspace", () => {
       expect(diff).toContain("+keep me");
       expect(diff).not.toContain("huge.bin");
     });
+  });
+});
+
+describe("parseRipgrepOutput", () => {
+  it("parses path:line:text and preserves colons in the text column", () => {
+    expect(parseRipgrepOutput("a.ts:5:const x = { y: 1 };\n")).toEqual([
+      "a.ts:5:const x = { y: 1 };",
+    ]);
+  });
+
+  it("strips a leading ./ from the path for parity with the JS walk", () => {
+    expect(parseRipgrepOutput("./src/a.ts:1:hi\n")).toEqual(["src/a.ts:1:hi"]);
+  });
+
+  it("caps the number of hits", () => {
+    const lines = Array.from({ length: 10 }, (_, i) => `f.ts:${i + 1}:m`).join("\n");
+    expect(parseRipgrepOutput(lines, 3)).toHaveLength(3);
+  });
+
+  it("clips the text column to 200 chars", () => {
+    const [hit] = parseRipgrepOutput(`f.ts:1:${"x".repeat(300)}\n`);
+    expect(hit).toBe(`f.ts:1:${"x".repeat(200)}`);
+  });
+
+  it("skips lines without at least two colons", () => {
+    expect(parseRipgrepOutput("garbage line\na.ts:1:ok\n")).toEqual(["a.ts:1:ok"]);
   });
 });

@@ -146,6 +146,13 @@ export interface RunBufferedOptions {
    * chatty build can't OOM the CLI. Default 10 MiB.
    */
   maxBuffer?: number;
+  /**
+   * Turn abort signal. When it fires (Esc / turn timeout / cancelled turn) the
+   * whole process group is killed — otherwise a detached `bash -c` subtree would
+   * keep running to its own `timeoutMs` (≤600s) after the turn was abandoned,
+   * leaking work across a long bench run. Already-aborted ⇒ never spawns.
+   */
+  signal?: AbortSignal;
 }
 
 const TRUNCATION_NOTE = "\n… (output truncated)";
@@ -164,8 +171,14 @@ export function runShellCommandBuffered({
   cwd,
   timeoutMs = 120_000,
   maxBuffer = 10 * 1024 * 1024,
+  signal,
 }: RunBufferedOptions): Promise<BufferedShellResult> {
   return new Promise<BufferedShellResult>((resolve) => {
+    // Already-aborted turn: don't spawn at all.
+    if (signal?.aborted) {
+      resolve({ exitCode: 124, stdout: "", stderr: "Aborted before start.", timedOut: false });
+      return;
+    }
     const child = spawn("bash", ["-c", command], {
       cwd,
       detached: true, // own group so a timeout can kill the whole subtree
@@ -198,6 +211,7 @@ export function runShellCommandBuffered({
       settled = true;
       clearTimeout(timer);
       if (hardTimer) clearTimeout(hardTimer);
+      if (signal) signal.removeEventListener("abort", onAbort);
       resolve({ exitCode, stdout, stderr, timedOut });
     };
 
@@ -213,6 +227,19 @@ export function runShellCommandBuffered({
       }, 2_000);
       hardTimer.unref();
     }, timeoutMs);
+
+    // Turn abort: kill the whole group (same SIGTERM→SIGKILL→hard-resolve dance
+    // as the timeout) so an abandoned turn doesn't leak a running subtree.
+    const onAbort = (): void => {
+      if (settled) return;
+      killProcessTree(child, "SIGTERM");
+      hardTimer = setTimeout(() => {
+        killProcessTree(child, "SIGKILL");
+        setTimeout(() => finish(124), 500).unref();
+      }, 2_000);
+      hardTimer.unref();
+    };
+    if (signal) signal.addEventListener("abort", onAbort, { once: true });
 
     child.on("error", () => finish(127)); // e.g. bash not found
     child.on("close", (code, signal) => {

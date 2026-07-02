@@ -1301,6 +1301,19 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_PROMPT_PROFILE: {
+    group: "CLI",
+    description:
+      "Selects the CLI one-shot runner's system-prompt profile. 'interactive' forces the narrating " +
+      "profile; 'headless' forces the terse verification profile. An explicit value always wins; " +
+      "when unset, a non-TTY stdout (piped one-shot, SWE-bench, CI) defaults to 'headless' and an " +
+      "interactive TTY uses the engine's default 'interactive' profile.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_ROUTING_TRIVIAL_MAX: {
     group: "CLI",
     description:
@@ -1446,6 +1459,46 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
+  },
+  OXAGEN_COMMIT_LEDGER: {
+    group: "CLI",
+    description:
+      "Path to the append-only JSON-lines commit ledger that records every agent commit " +
+      "so work is never lost even if a branch is force-moved or a worktree removed. " +
+      "Defaults to ~/.oxagen/commit-ledger.jsonl.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "~/.oxagen/commit-ledger.jsonl",
+  },
+  OXAGEN_PROMPT_PROFILE: {
+    group: "CLI",
+    description:
+      "Force the agent system-prompt profile: 'interactive' (narrates for a live " +
+      "watcher) or 'headless' (strips narration, adds a verification protocol for " +
+      "autonomous/one-shot/SWE-bench runs). Unset ⇒ auto (headless when stdout is " +
+      "not a TTY, interactive otherwise).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "headless",
+  },
+  OXAGEN_JUDGE_PANEL: {
+    group: "CLI",
+    description:
+      "Comma-separated gateway model slugs to use as a CROSS-VENDOR completeness " +
+      "judge panel instead of a single judge (majority rules, findings unioned). " +
+      "Higher cost, higher recall on incomplete work. Unset ⇒ single judge.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "openai/gpt-5,google/gemini-2.5-pro",
   },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",
