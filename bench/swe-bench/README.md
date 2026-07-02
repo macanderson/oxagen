@@ -140,7 +140,7 @@ that didn't happen.
 | `OXAGEN_WARM` / `OXAGEN_WARM_MEMORY_DIR` | unset | Cross-trial memory persistence (oxagen only) — see the terminal-bench README's "Warm / self-improvement mode". |
 | `OXAGEN_CLI_BUNDLE` | repo build path | Override the path to `oxagen.mjs` (oxagen only). |
 | `DATASET` | `swe-bench/swe-bench-verified` | Any Harbor dataset slug from [the Hub](https://hub.harborframework.com/datasets) (e.g. `swe-bench/swe-smith`, `scale-ai/swe-bench-pro`). |
-| `TASK_IDS` | — | Space-separated task ids, expanded to repeated `--task-id` flags (smoke-testing a subset). |
+| `TASK_IDS` | — | Space-separated task ids, expanded to repeated `--include-task-name` flags (smoke-testing a subset). |
 | `N_CONCURRENT` / `N_ATTEMPTS` | `4` / `1` | Parallelism and attempts per task. |
 | `JOBS_DIR` | `./results-$AGENT` | Where Harbor writes per-trial output. |
 | `HARBOR_EXTRA` | — | Extra raw flags (e.g. `--env daytona`). |

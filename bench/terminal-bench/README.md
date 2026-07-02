@@ -4,7 +4,7 @@ Benchmark the **Oxagen coding CLI** on [Terminal-Bench](https://www.tbench.ai/)
 via the [Harbor](https://www.harborframework.com/) harness, head-to-head with
 Claude Code, Codex CLI, OpenHands, and friends.
 
-This is a Harbor **external agent** ([`--agent-import-path`](https://www.harborframework.com/docs/agents#external-agents))
+This is a Harbor **external agent** ([`--agent <module.path:ClassName>`](https://www.harborframework.com/docs/agents#external-agents))
 that implements `BaseInstalledAgent`. It installs Oxagen into each task container
 and runs it headlessly, fully autonomous (`--mode bypass`: file edits + shell, no
 human in the loop).
@@ -51,7 +51,7 @@ cd bench/terminal-bench
 export AI_GATEWAY_API_KEY=...           # from repo .env.local
 
 # Smoke-test a single task first (fast, ~1 container):
-HARBOR_EXTRA="--task-id hello-world" N_CONCURRENT=1 ./run.sh
+HARBOR_EXTRA="--include-task-name *hello-world" N_CONCURRENT=1 ./run.sh
 
 # Full Terminal-Bench, pinned model, 4 in parallel:
 OXAGEN_MODEL_SLUG=anthropic/claude-opus-4.8 ./run.sh
@@ -63,7 +63,7 @@ OXAGEN_MODEL_SLUG=anthropic/claude-opus-4.8 ./run.sh
 ```bash
 uv run harbor run \
   -d terminal-bench@2.0 \
-  --agent-import-path oxagen_terminal_bench:OxagenAgent \
+  --agent oxagen_terminal_bench:OxagenAgent \
   -m anthropic/claude-sonnet-4.5 \
   --n-concurrent 4 --n-attempts 1 \
   --jobs-dir ./oxagen-tbench-results
@@ -80,7 +80,7 @@ uv pip install -e ".[dev]"
 export AI_GATEWAY_API_KEY=...
 export OXAGEN_CLI_BUNDLE="$(cd ../.. && pwd)/apps/cli/dist-standalone/oxagen.mjs"
 uv run harbor run -d terminal-bench@2.0 \
-  --agent-import-path oxagen_terminal_bench:OxagenAgent \
+  --agent oxagen_terminal_bench:OxagenAgent \
   -m anthropic/claude-sonnet-4.5 -n 4
 ```
 
@@ -91,7 +91,7 @@ rate (and cost/latency):
 
 ```bash
 # Oxagen
-uv run harbor run -d terminal-bench@2.0 --agent-import-path oxagen_terminal_bench:OxagenAgent -m anthropic/claude-opus-4.8 -n 4
+uv run harbor run -d terminal-bench@2.0 --agent oxagen_terminal_bench:OxagenAgent -m anthropic/claude-opus-4.8 -n 4
 # Claude Code (built into Harbor)
 uv run harbor run -d terminal-bench@2.0 --agent claude-code -m anthropic/claude-opus-4.8 -n 4
 ```
@@ -112,7 +112,7 @@ per task) and compare cost at similar pass rate.
 | `OXAGEN_CLI_BUNDLE` | repo build path | Override the path to `oxagen.mjs`. |
 | `DATASET` | `terminal-bench@2.0` | Any Harbor dataset slug. |
 | `N_CONCURRENT` / `N_ATTEMPTS` | `4` / `1` | Parallelism and attempts per task. |
-| `HARBOR_EXTRA` | — | Extra raw flags (e.g. `--task-id <id>`, `--env daytona`). |
+| `HARBOR_EXTRA` | — | Extra raw flags (e.g. `--include-task-name *<id>`, `--env daytona`). |
 
 ### Is DuckDB important here?
 
