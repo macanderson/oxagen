@@ -156,13 +156,16 @@ export function PromptInput({
   // edit, or a clear). Keyed on the nonce so the same text can be re-injected
   // (e.g. clearing to "" twice in a row). `dismissed` is set so injected text
   // never pops the typeahead; typing afterwards clears it as usual.
+  // Deps intentionally list only `injectNonce`: the effect must fire once per
+  // distinct injection, reading the latest text at that instant — not re-run
+  // when the text alone changes.
   const injectNonce = inject?.nonce;
+  const injectedText = inject?.text ?? "";
   useEffect(() => {
     if (injectNonce === undefined) return;
-    setValue(inject?.text ?? "");
+    setValue(injectedText);
     setSelected(0);
     setDismissed(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire only on nonce change
   }, [injectNonce]);
 
   // Derive the live typeahead state from the current buffer. The menu is open
@@ -288,20 +291,21 @@ export function PromptInput({
           collapses or is squeezed as the conversation above grows. */}
       <Box
         borderStyle="round"
-        borderColor={!focused ? theme.dim : busy ? "#FBBF24" : theme.cyan}
+        borderColor={accent}
         paddingX={1}
         minHeight={3}
         flexShrink={0}
       >
-        <Text color={!focused ? theme.dim : busy ? "#FBBF24" : theme.cyan} bold>
-          {busy ? "⧗ " : "❯ "}
+        <Text color={accent} bold>
+          {glyph}
         </Text>
         <Text dimColor={!focused}>
-          {value}
+          {shown}
           {/* The block cursor shows only while the input holds focus; when the
               panel has focus the bar dims and drops the cursor so the highlight
-              clearly lives in the side panel instead. */}
-          {focused ? <Text color={theme.cyan}>█</Text> : null}
+              clearly lives in the side panel instead. In terminal mode it takes
+              the shell-red accent so the whole bar reads as a live terminal. */}
+          {focused ? <Text color={accent}>█</Text> : null}
         </Text>
       </Box>
       {terminalMode && (
