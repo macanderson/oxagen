@@ -8,7 +8,33 @@ import {
   estimateMessageTokens,
   isContextOverflowError,
   isRetryableModelError,
+  loopNudgeMessage,
+  toolCallSignature,
 } from "./loop-driver";
+
+describe("toolCallSignature", () => {
+  it("is stable for identical name+input and differs otherwise", () => {
+    expect(toolCallSignature("edit_file", { path: "a", old_string: "x" })).toBe(
+      toolCallSignature("edit_file", { path: "a", old_string: "x" }),
+    );
+    expect(toolCallSignature("edit_file", { path: "a" })).not.toBe(
+      toolCallSignature("edit_file", { path: "b" }),
+    );
+    expect(toolCallSignature("bash", { command: "ls" })).not.toBe(
+      toolCallSignature("grep", { command: "ls" }),
+    );
+  });
+});
+
+describe("loopNudgeMessage", () => {
+  it("names the tool, the repeat count, and truncates the error", () => {
+    const msg = loopNudgeMessage("edit_file", 3, "X".repeat(1000));
+    expect(msg).toContain("edit_file");
+    expect(msg).toContain("3 times");
+    expect(msg.toLowerCase()).toContain("different approach");
+    expect(msg.length).toBeLessThan(700); // error truncated to 400
+  });
+});
 
 describe("estimateMessageTokens", () => {
   it("estimates ~chars/4 across string and structured content", () => {
@@ -51,11 +77,11 @@ describe("compactMessages", () => {
     // Task preserved verbatim.
     expect(out[0]!.content).toBe("TASK: fix the bug");
     // Old tool result truncated.
-    const oldOut = (out[2]!.content as Array<{ output: string }>)[0]!.output;
+    const oldOut = (out[2]!.content as unknown as Array<{ output: string }>)[0]!.output;
     expect(oldOut.length).toBeLessThan(big.length);
     expect(oldOut).toContain("elided");
     // Recent tool result (within last 3) kept full.
-    const recentOut = (out[5]!.content as Array<{ output: string }>)[0]!.output;
+    const recentOut = (out[5]!.content as unknown as Array<{ output: string }>)[0]!.output;
     expect(recentOut).toBe(big);
   });
 
@@ -79,7 +105,7 @@ describe("compactMessages", () => {
       { role: "assistant", content: "b" },
     ];
     const { messages: out } = compactMessages(messages, { keepLastN: 2, contentCap: 200 });
-    const val = (out[1]!.content as Array<{ output: { value: string } }>)[0]!.output.value;
+    const val = (out[1]!.content as unknown as Array<{ output: { value: string } }>)[0]!.output.value;
     expect(val.length).toBeLessThan(big.length);
     expect(val).toContain("elided");
   });

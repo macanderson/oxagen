@@ -9,6 +9,9 @@ import {
   estimateMessageTokens,
   isContextOverflowError,
   isRetryableModelError,
+  LOOP_NUDGE_THRESHOLD,
+  loopNudgeMessage,
+  toolCallSignature,
 } from "./loop-driver";
 
 const DEFAULT_SYSTEM =
@@ -116,9 +119,18 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
   // commits, tool-result/tool-error when execution settles) — live progress for
   // the UI and for callers' inactivity guards, not step-granular after-the-fact.
   const toolStartedAt = new Map<string, number>();
+  // Loop detection: count consecutive failures of the SAME tool call (by
+  // signature). A success clears it; N identical failures inject a corrective
+  // nudge so the model stops re-issuing a doomed call (a common way agents burn
+  // the step budget on SWE-bench).
+  const failingCounts = new Map<string, number>();
+  const nudged = new Set<string>();
 
   while (steps < maxSteps) {
     if (opts.signal?.aborted) break;
+    // A nudge queued by the previous step's repeated failure — inject it as the
+    // next instruction so the model changes tack.
+    let pendingNudge: string | null = null;
 
     // Compact BEFORE the call so the request itself fits. Keep the task + recent
     // working set verbatim; truncate the bulky content of older tool results.
@@ -157,18 +169,37 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
           if (!part.preliminary) {
             const started = toolStartedAt.get(part.toolCallId);
             toolStartedAt.delete(part.toolCallId);
+            const ok = !isErrorResult(part.output);
+            const sig = toolCallSignature(part.toolName, part.input);
+            if (ok) {
+              failingCounts.delete(sig); // progress — reset the loop counter
+            } else {
+              const count = (failingCounts.get(sig) ?? 0) + 1;
+              failingCounts.set(sig, count);
+              if (count >= LOOP_NUDGE_THRESHOLD && !nudged.has(sig)) {
+                pendingNudge = loopNudgeMessage(part.toolName, count, stringifyCapped(part.output, 400));
+                nudged.add(sig);
+              }
+            }
             onEvent({
               type: "tool-result",
               name: part.toolName,
               input: stringifyCapped(part.input, 1000),
               result: stringifyCapped(part.output, 2000),
               durationMs: started ? Date.now() - started : 0,
-              ok: !isErrorResult(part.output),
+              ok,
             });
           }
         } else if (part.type === "tool-error") {
           const started = toolStartedAt.get(part.toolCallId);
           toolStartedAt.delete(part.toolCallId);
+          const sig = toolCallSignature(part.toolName, part.input);
+          const count = (failingCounts.get(sig) ?? 0) + 1;
+          failingCounts.set(sig, count);
+          if (count >= LOOP_NUDGE_THRESHOLD && !nudged.has(sig)) {
+            pendingNudge = loopNudgeMessage(part.toolName, count, stringifyCapped(part.error, 400));
+            nudged.add(sig);
+          }
           onEvent({
             type: "tool-result",
             name: part.toolName,
@@ -202,6 +233,12 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
       // `tool-calls` means the model wants to act again — keep looping. Any other
       // finish reason (stop / length / content-filter / error) ends the turn.
       if (finishReason !== "tool-calls") break;
+
+      // The model just repeated an identical failing call past the threshold —
+      // inject a corrective instruction so the next step changes approach.
+      if (pendingNudge) {
+        conversation = [...conversation, { role: "user", content: pendingNudge }];
+      }
     } catch (err) {
       // User cancel — never retry; fall through to the post-loop abort throw.
       if (opts.signal?.aborted) break;

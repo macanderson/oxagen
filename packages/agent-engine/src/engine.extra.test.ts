@@ -287,3 +287,45 @@ describe("runCodingAgent – explicit step loop (multi-step, retry, compaction)"
     expect(result.steps).toBe(3);
   });
 });
+
+describe("runCodingAgent – loop detection", () => {
+  it("injects a corrective nudge after 3 identical failing tool calls", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "x" });
+    // Each step: the model issues the SAME edit that errors, until (after the
+    // nudge) a final step stops. We assert a nudge user-message was appended.
+    let call = 0;
+    const failPart = {
+      type: "tool-error",
+      toolCallId: "c",
+      toolName: "edit_file",
+      input: { path: "a.ts", old_string: "nope", new_string: "y" },
+      error: new Error("String not found in a.ts"),
+    };
+    const ai: AgentAi = {
+      stream(_args: ModelRunArgs) {
+        call++;
+        const stop = call >= 4; // steps 1-3 fail identically, step 4 stops
+        return {
+          fullStream: (async function* () {
+            if (stop) {
+              yield { type: "text-delta", text: "giving up, different approach" };
+            } else {
+              yield failPart;
+            }
+          })(),
+          steps: Promise.resolve([{}]),
+          usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+          response: Promise.resolve({ messages: [{ role: "assistant", content: "" }] }),
+          finishReason: Promise.resolve(stop ? "stop" : "tool-calls"),
+        } as unknown as ReturnType<AgentAi["stream"]>;
+      },
+      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+    };
+    const result = await runCodingAgent({ workspace: ws, ai, instruction: "fix it", maxSteps: 10 });
+    // A nudge (role user, mentions the repeated tool) was injected into history.
+    const nudge = result.messages.find(
+      (m) => m.role === "user" && typeof m.content === "string" && m.content.includes("edit_file") && m.content.includes("times"),
+    );
+    expect(nudge).toBeTruthy();
+  });
+});

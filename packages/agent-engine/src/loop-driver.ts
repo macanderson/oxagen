@@ -12,6 +12,40 @@
  */
 import type { ModelMessage } from "ai";
 
+// ── Loop detection ─────────────────────────────────────────────────────────────
+
+/**
+ * Stable signature for a tool call (name + normalized input), used to detect the
+ * model repeating an identical FAILING call. A successful call clears its
+ * signature; the same failing call N times triggers a corrective nudge. Exported
+ * for tests.
+ */
+export function toolCallSignature(name: string, input: unknown): string {
+  let inputKey: string;
+  try {
+    inputKey = JSON.stringify(input) ?? String(input);
+  } catch {
+    inputKey = String(input);
+  }
+  return `${name}::${inputKey}`;
+}
+
+/** Repeats of the SAME failing tool call before we nudge the model to change tack. */
+export const LOOP_NUDGE_THRESHOLD = 3;
+
+/**
+ * The corrective message injected when the model repeats an identical failing
+ * call `LOOP_NUDGE_THRESHOLD` times. Exported for tests.
+ */
+export function loopNudgeMessage(name: string, count: number, lastError: string): string {
+  return (
+    `You have called \`${name}\` with the same arguments ${count} times and it ` +
+    `keeps failing: ${lastError.slice(0, 400)}. Stop repeating this exact call — ` +
+    `it will not start working. Inspect the current state (re-read the file or run ` +
+    `a diagnostic), then take a DIFFERENT approach.`
+  );
+}
+
 // ── Token estimation ─────────────────────────────────────────────────────────
 
 /**
