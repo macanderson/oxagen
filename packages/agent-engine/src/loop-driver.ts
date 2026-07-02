@@ -135,7 +135,7 @@ function truncateContent(
   }
   if (Array.isArray(content)) {
     let changed = false;
-    const parts = content.map((part) => {
+    const parts = content.map((part: unknown) => {
       if (part && typeof part === "object") {
         const p = part as Record<string, unknown>;
         // Assistant text part: { type: "text", text }
