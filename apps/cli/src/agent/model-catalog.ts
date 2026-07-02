@@ -7,7 +7,7 @@
  * agent files, the pipeline judge, the runtime registry) and drifted — Sonnet
  * appeared as `4.5`, `4.6`, and `5` across the tree at the same time. Now every
  * default imports from here, so when a provider ships a new GA version of a
- * family (Sonnet 5 → Sonnet 6, Opus 4.8 → Opus 5, …) you update EXACTLY ONE
+ * family (Sonnet 5 → Sonnet 6, Fable 5 → Fable 6, …) you update EXACTLY ONE
  * line below and every default across the CLI moves with it.
  *
  * These are floating major-version aliases, not dated snapshots: the Vercel AI
@@ -25,15 +25,19 @@
  * Latest-GA Anthropic gateway slug per cost tier.
  *
  * As of the current cutoff the newest GA build of each family is: Haiku 4.5,
- * Sonnet 5, Opus 4.8. Bump a line the instant that family's next major is GA.
+ * Sonnet 5, Fable 5. Bump a line the instant that family's next major is GA.
+ *
+ * Fable is the flagship of the Claude 5 generation and holds the precise/
+ * high-stakes tier (the slot Opus used to fill). Every default that reached for
+ * Opus now reaches for Fable via this one line.
  */
 export const LATEST_ANTHROPIC = {
   /** Cheapest tier — mechanical / single-file work. */
   haiku: "anthropic/claude-haiku-4.5",
   /** Balanced tier — the general-purpose default coding model. */
   sonnet: "anthropic/claude-sonnet-5",
-  /** Precise tier — high-stakes / architectural work. */
-  opus: "anthropic/claude-opus-4.8",
+  /** Precise tier — high-stakes / architectural work (flagship Claude 5). */
+  fable: "anthropic/claude-fable-5",
 } as const;
 
 /**

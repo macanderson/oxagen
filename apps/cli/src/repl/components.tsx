@@ -81,6 +81,9 @@ export const HELP = [
   "  /panel         pin/hide the Agent Team + Task Progress side panel (right dock)",
   "  /clear         reset the conversation",
   "  /exit, /quit   quit",
+  "  !<command>     run a shell command live — the bar turns into a red terminal,",
+  "                 output streams into a pinned panel, and it runs immediately",
+  "                 (even mid-turn). Esc/Ctrl-C kills the running command.",
   "Type / to open the command menu — 📦 marks built-in & CLI commands; every",
   "`oxagen --help` command is browsable there too (custom commands show no glyph).",
   "Permission prompt: y allow once · a allow + remember · n/Esc deny",
@@ -263,6 +266,23 @@ export function PromptInput({
     }
   });
 
+  // Terminal-emulator mode: the instant the buffer opens with "!", the prompt
+  // bar turns into a shell — red border, a `$` prompt — signalling that Enter
+  // runs the rest as a live command (immediately, even mid-turn) rather than
+  // sending it to the agent. See the `!command` handler in interactive.tsx.
+  const terminalMode = focused && value.startsWith("!");
+  const accent = !focused
+    ? theme.dim
+    : terminalMode
+      ? TERMINAL_RED
+      : busy
+        ? "#FBBF24"
+        : theme.cyan;
+  const glyph = terminalMode ? "$ " : busy ? "⧗ " : "❯ ";
+  // In terminal mode the visible command drops the leading "!" — the `$` prompt
+  // already conveys "this is a shell", so echoing the bang too is redundant.
+  const shown = terminalMode ? value.replace(/^!/, "") : value;
+
   return (
     <Box flexDirection="column">
       {menuOpen && <SlashMenu entries={suggestions} selectedIndex={sel} width={menuWidth} />}
@@ -287,9 +307,19 @@ export function PromptInput({
           {focused ? <Text color={theme.cyan}>█</Text> : null}
         </Text>
       </Box>
+      {terminalMode && (
+        <Box paddingX={1}>
+          <Text color={TERMINAL_RED} dimColor>
+            terminal · Enter runs · Esc/Ctrl-C kills
+          </Text>
+        </Box>
+      )}
     </Box>
   );
 }
+
+/** Terminal red — shared with the TerminalPanel outline (repl/terminal-panel.tsx). */
+const TERMINAL_RED = "#F87171";
 
 // ── Permission approval prompt ─────────────────────────────────────────────────
 

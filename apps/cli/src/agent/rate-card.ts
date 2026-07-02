@@ -21,7 +21,7 @@ export interface ModelRate {
 
 /** One priced model family. Matched by longest `family` prefix on the slug. */
 export interface RateCardEntry {
-  /** Bare family prefix matched against the slug (e.g. "claude-opus"). */
+  /** Bare family prefix matched against the slug (e.g. "claude-fable"). */
   family: string;
   /** Human label for tables and reports. */
   label: string;
@@ -35,6 +35,7 @@ export interface RateCardEntry {
  * "gpt-4o-mini" wins over "gpt-4o". Add a row to price a new family.
  */
 export const RATE_CARD: RateCardEntry[] = [
+  { family: "claude-fable", label: "Claude Fable", vendor: "anthropic", rate: { inputPer1M: 15.0, outputPer1M: 75.0 } },
   { family: "claude-opus", label: "Claude Opus", vendor: "anthropic", rate: { inputPer1M: 15.0, outputPer1M: 75.0 } },
   { family: "claude-sonnet", label: "Claude Sonnet", vendor: "anthropic", rate: { inputPer1M: 3.0, outputPer1M: 15.0 } },
   { family: "claude-haiku", label: "Claude Haiku", vendor: "anthropic", rate: { inputPer1M: 1.0, outputPer1M: 5.0 } },
@@ -52,7 +53,7 @@ export function familyOf(model: string): string {
   return model.split("/").pop() ?? model;
 }
 
-/** Resolve a gateway slug (e.g. "anthropic/claude-opus-4.8") to its token rate. */
+/** Resolve a gateway slug (e.g. "anthropic/claude-fable-5") to its token rate. */
 export function rateFor(model: string): ModelRate {
   const family = familyOf(model);
   for (const entry of RATE_CARD) {

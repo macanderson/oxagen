@@ -10,7 +10,7 @@
  *
  * Presentational pieces live in ./components; this file is the container.
  */
-import { Box, Static, Text, useApp, useInput } from "ink";
+import { Box, Text, measureElement, useApp, useInput, type DOMElement } from "ink";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import type { ModelMessage } from "ai";
 import { existsSync, readFileSync } from "node:fs";
@@ -79,7 +79,6 @@ import {
   makeStallDetector,
   AgentTimeoutError,
   DEFAULT_TIMEOUTS,
-  TIMEOUTS,
 } from "../agent/timeouts.js";
 import { createMetricsBus, type SessionMetrics } from "../agent/metrics.js";
 import { createMeteredAi } from "../agent/metered-ai.js";
@@ -227,11 +226,12 @@ export function ReplApp({
   const initialVerbose = options.verbose ?? readConfig().verbose ?? false;
   const [verboseOn, setVerboseOn] = useState(initialVerbose);
   const verboseRef = useRef(initialVerbose);
-  // The REPL renders inline in the normal terminal buffer (no alternate screen):
-  // finalized transcript is committed to the terminal's own scrollback via
-  // <Static> and only the streaming tail + input + status re-render. Scrolling
-  // back through history is the terminal's native scrollback — there is no custom
-  // in-app viewport windowing (which cannot coexist with <Static>).
+  // The REPL runs full-screen (alternate buffer; see launchRepl): the root box is
+  // sized to the terminal so the prompt bar + status line stay pinned to the
+  // bottom edge, while the transcript fills — and scrolls within — the space
+  // above them. History is scrolled IN-APP (PgUp/PgDn drive scrollOffset) over a
+  // rendered window of messages; the frame is clipped to the viewport so it never
+  // grows taller than the terminal.
   // Permission posture (drives the broker + status chip) and the in-flight
   // approval request (drives the inline ApprovalPrompt; null when none).
   const [mode, setMode] = useState<PermissionMode>(
@@ -317,6 +317,50 @@ export function ReplApp({
   // only while a turn is monitoring work; /panel pins it "on" or hides it "off".
   const [panelMode, setPanelMode] = useState<PanelMode>("auto");
   const panelModeRef = useRef<PanelMode>("auto");
+  // The `!command` terminal panel (red-outlined, pinned above the agent
+  // messages). Null when no command has run this session. A `!cmd` submission
+  // runs IMMEDIATELY — bypassing the turn queue so it works mid-turn — streaming
+  // stdout/stderr live into this state. `terminalRunRef` mirrors it for the
+  // synchronous key handler + streaming callbacks; `terminalHandleRef` holds the
+  // live child process so Ctrl-C/Esc can kill it; `terminalIdRef` mints run ids.
+  const [terminalRun, setTerminalRun] = useState<TerminalRun | null>(null);
+  const terminalRunRef = useRef<TerminalRun | null>(null);
+  terminalRunRef.current = terminalRun;
+  const terminalHandleRef = useRef<ShellRunHandle | null>(null);
+  const terminalIdRef = useRef(0);
+  // How far the transcript is scrolled back from the latest message, counted in
+  // messages hidden below the fold. 0 = pinned to the newest output (the default,
+  // auto-following as tokens stream in); PgUp raises it to reveal older history,
+  // PgDown lowers it, and any new submission snaps it back to 0. The ref mirrors
+  // the state so the synchronous key handler clamps against the live count.
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const scrollOffsetRef = useRef(0);
+  scrollOffsetRef.current = scrollOffset;
+  // Live terminal geometry. `fullscreen` is true only on a real TTY; it gates
+  // both the alternate-screen takeover (launchRepl) and sizing the root box to
+  // the terminal so the prompt bar can pin to the bottom edge.
+  const { rows, cols, fullscreen } = useTerminalSize();
+  // Transcript overflow measurement: refs to the viewport and its inner content,
+  // plus whether the content currently exceeds the viewport. When it does, the
+  // transcript anchors its tail to the bottom (newest visible, older scrolls off
+  // the top); when it fits, it anchors to the top so a short session reads
+  // top-down with the empty space falling above the pinned prompt bar.
+  const viewportRef = useRef<DOMElement | null>(null);
+  const contentRef = useRef<DOMElement | null>(null);
+  const [overflowing, setOverflowing] = useState(false);
+  // Re-measure the transcript against its viewport after every render (Ink lays
+  // the tree out synchronously, so the measured sizes are current here). Only
+  // flip `overflowing` when the boolean actually changes, so this settles in at
+  // most one extra render and never loops. Skipped when not full-screen: without
+  // a height-bounded root there is nothing to overflow.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const vp = viewportRef.current;
+    const ct = contentRef.current;
+    if (!vp || !ct) return;
+    const next = measureElement(ct).height > measureElement(vp).height;
+    setOverflowing((prev) => (prev === next ? prev : next));
+  });
   // Timestamp of the most-recent Escape press (for the double-Esc detection
   // window). Null means no previous Esc has been recorded (or the window was
   // explicitly cleared after a 'prompt-reset' fires).
@@ -465,6 +509,87 @@ export function ReplApp({
     pumpingRef.current = false;
     void pumpRef.current?.();
   }, []);
+
+  /**
+   * Run a `!command` immediately as a live terminal, bypassing the turn queue so
+   * it works even while an agent turn is in flight. The user typed it explicitly,
+   * so it runs directly in the workspace (not through the permission broker),
+   * exactly like a shell. Output streams into the red terminal panel in real time
+   * and — once finished — is fed into the model's history so the next turn sees
+   * what the user ran and what it produced.
+   */
+  const runShellCommand = useCallback(
+    (raw: string) => {
+      const command = raw.replace(/^!/, "").trim();
+      if (!command) {
+        pushAssistant("Usage: !<shell command> — runs it live in the workspace (works mid-turn).");
+        return;
+      }
+      // Only one terminal panel at a time: kill any command still running.
+      terminalHandleRef.current?.kill();
+      // Echo the command into the transcript so scrollback records what was run.
+      commit([...allRef.current, { role: "user", content: "! " + command, timestamp: Date.now() }]);
+
+      const id = ++terminalIdRef.current;
+      const startedAt = Date.now();
+      let buf = "";
+      const seed: TerminalRun = { id, command, output: "", status: "running", startedAt };
+      terminalRunRef.current = seed;
+      setTerminalRun(seed);
+
+      // Coalesce chunks: chatty output would otherwise re-render Ink on every
+      // write. Buffer and flush to state at most ~every 60ms; flush finally at end.
+      let flushTimer: ReturnType<typeof setTimeout> | null = null;
+      const flush = (): void => {
+        flushTimer = null;
+        if (terminalRunRef.current?.id !== id) return; // superseded by a newer run
+        const next = { ...terminalRunRef.current, output: buf };
+        terminalRunRef.current = next;
+        setTerminalRun(next);
+      };
+      const scheduleFlush = (): void => {
+        if (flushTimer == null) flushTimer = setTimeout(flush, 60);
+      };
+
+      const handle = runShellCommand_impl({
+        command,
+        cwd,
+        onData: (chunk) => {
+          buf += chunk;
+          scheduleFlush();
+        },
+      });
+      terminalHandleRef.current = handle;
+
+      void handle.done.then((res) => {
+        if (flushTimer != null) clearTimeout(flushTimer);
+        if (terminalHandleRef.current === handle) terminalHandleRef.current = null;
+        if (terminalRunRef.current?.id !== id) return; // a newer run replaced us
+        const status: TerminalRun["status"] = res.killed ? "killed" : "exited";
+        const finished: TerminalRun = {
+          ...terminalRunRef.current,
+          output: buf,
+          status,
+          exitCode: res.exitCode,
+          endedAt: Date.now(),
+        };
+        terminalRunRef.current = finished;
+        setTerminalRun(finished);
+        // Make the model aware of what the user ran and what it produced.
+        const body = buf.trimEnd() || "(no output)";
+        historyRef.current = [
+          ...historyRef.current,
+          {
+            role: "user",
+            content:
+              `I ran \`${command}\` in the shell (${res.timedOut ? "timed out" : `exit ${res.exitCode}`}). Output:\n` +
+              body.slice(0, 4000),
+          },
+        ];
+      });
+    },
+    [commit, pushAssistant, cwd],
+  );
 
   /**
    * Shared conversation reset — used by both the /clear slash command and the
@@ -616,9 +741,13 @@ export function ReplApp({
 
   useInput((input, key) => {
     // Ctrl-C is handled first so it works even while a permission prompt is up
-    // (cancelTurn releases the prompt as a denial before aborting).
+    // (cancelTurn releases the prompt as a denial before aborting). A live
+    // `!command` takes priority: Ctrl-C kills it (like a real shell) rather than
+    // cancelling the agent turn or quitting.
     if (key.ctrl && input === "c") {
-      if (streamingRef.current && abortRef.current) {
+      if (terminalRunRef.current?.status === "running") {
+        terminalHandleRef.current?.kill();
+      } else if (streamingRef.current && abortRef.current) {
         cancelTurn();
       } else {
         void memoryRef.current?.close();
@@ -690,7 +819,30 @@ export function ReplApp({
       return;
     }
 
+    // PgUp / PgDn scroll the transcript history within the full-screen viewport
+    // (the app owns the screen now, so there is no native terminal scrollback to
+    // defer to). PgUp reveals older messages; PgDn returns toward the latest.
+    // Clamp to [0, count-1] so you can never scroll past the first message or
+    // below the newest. Plain Up/Down stay owned by the prompt input's editing.
+    if (key.pageUp || key.pageDown) {
+      const step = 5;
+      const maxOffset = Math.max(0, allRef.current.length - 1);
+      setScrollOffset((o) => {
+        const next = key.pageUp ? o + step : o - step;
+        return Math.max(0, Math.min(maxOffset, next));
+      });
+      return;
+    }
+
     if (key.escape) {
+      // A live `!command` takes priority: Esc kills it (like Ctrl-C in a shell)
+      // before it can interrupt a turn or seed a reset.
+      if (terminalRunRef.current?.status === "running") {
+        terminalHandleRef.current?.kill();
+        lastEscapeRef.current = null;
+        return;
+      }
+
       // If the HUD is open, Esc just closes it — it never interrupts a turn or
       // seeds a reset. This is the lightest possible dismissal.
       if (hudVisibleRef.current) {
@@ -760,45 +912,12 @@ export function ReplApp({
   const handleSubmit = useCallback(
     async (text: string) => {
 
-      // ── Shell escape (`!cmd`) ──
-      // A prompt beginning with "!" runs the rest as a shell command in the
-      // workspace, like Claude Code. The user typed it explicitly, so it runs
-      // directly (not through the agent's permission broker). Output is shown in
-      // the conversation AND fed into history so the model sees it next turn.
+      // `!cmd` is intercepted synchronously in handleUserSubmit (it runs
+      // immediately, bypassing this queue, so it works mid-turn) — it never
+      // reaches the pump. Guard here too so a `!` that somehow slips through the
+      // queue path is still handled rather than sent to the model as a prompt.
       if (text.startsWith("!")) {
-        const command = text.slice(1).trim();
-        if (!command) {
-          pushAssistant("Usage: !<shell command> — runs it in the workspace and shows the output.");
-          return;
-        }
-        commit([...allRef.current, { role: "user", content: text, timestamp: Date.now() }]);
-        try {
-          const res = await workspaceRef.current.exec(command, {
-            timeoutMs: TIMEOUTS.toolLongMs,
-          });
-          const merged = [res.stdout, res.stderr].filter(Boolean).join("\n").trimEnd();
-          const body = merged || "(no output)";
-          const tail = res.timedOut
-            ? "\n(timed out)"
-            : res.exitCode !== 0
-              ? `\n(exit ${res.exitCode})`
-              : "";
-          pushAssistant("```\n$ " + command + "\n" + body + "\n```" + tail);
-          // Make the model aware of what the user ran and what it produced.
-          historyRef.current = [
-            ...historyRef.current,
-            {
-              role: "user",
-              content:
-                `I ran \`${command}\` in the shell (exit ${res.exitCode}). Output:\n` +
-                body.slice(0, 4000),
-            },
-          ];
-        } catch (err) {
-          pushAssistant(
-            `Command failed: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
+        runShellCommand(text);
         return;
       }
 
@@ -1450,6 +1569,12 @@ export function ReplApp({
           });
           render();
         }
+        void debugLog("turn", "turn.end", {
+          mode: "repl",
+          steps: result.steps,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+        });
         setTurns((n) => n + 1);
         setUsage((u) => ({
           input: u.input + (result.usage.inputTokens ?? 0),
@@ -1472,6 +1597,20 @@ export function ReplApp({
           : timeoutReason instanceof AgentTimeoutError
             ? timeoutReason.message
             : `Error: ${err instanceof Error ? err.message : String(err)}`;
+        // Persist the exception to cli.output. The REPL previously only rendered
+        // the error to the terminal — nothing reached the debug log, so a failed
+        // or hung turn left only its `turn.tool-call`/agent messages behind with no
+        // exception data to diagnose. A user cancel isn't an error, so skip it.
+        if (!userCancelled) {
+          void debugLog("error", "turn.error", {
+            mode: "repl",
+            kind: timeoutReason instanceof AgentTimeoutError ? "timeout" : "error",
+            message: content.replace(/^Error: /, ""),
+            // Pass the raw value so debugLog captures name/message/stack for a
+            // thrown Error; the timeout reason's message is already user-facing.
+            error: timeoutReason instanceof AgentTimeoutError ? timeoutReason.message : err,
+          });
+        }
         turn.push({ role: "assistant", content, timestamp: Date.now() });
         render();
       } finally {
@@ -1507,7 +1646,7 @@ export function ReplApp({
         }
       }
     },
-    [exit, commit, pushAssistant, resetConversation, cwd, options.readOnly],
+    [exit, commit, pushAssistant, resetConversation, runShellCommand, cwd, options.readOnly],
   );
 
   // The pump reads the latest handleSubmit via a ref so it never closes over a
@@ -1560,6 +1699,10 @@ export function ReplApp({
     (text: string) => {
       queueRef.current = [...queueRef.current, text];
       setQueued(queueRef.current);
+      // Snap the transcript back to the newest output whenever a fresh prompt is
+      // submitted — a user who had scrolled up to read history expects the view
+      // to follow their new turn rather than stay parked in the past.
+      setScrollOffset(0);
       void pump();
     },
     [pump],
@@ -1598,132 +1741,133 @@ export function ReplApp({
         }
         return;
       }
+      // `!cmd` runs IMMEDIATELY, bypassing the turn queue — so a terminal command
+      // fires without delay even while an agent turn is streaming. It never joins
+      // the FIFO (which would make it wait for the current turn to finish).
+      if (text.startsWith("!")) {
+        runShellCommand(text);
+        return;
+      }
       enqueue(text);
     },
     [enqueue, resetConversation, pushAssistant, setEditingTaskId],
   );
 
-  // ── Static / live split ────────────────────────────────────────────────────
-  // The transcript is rendered in two parts. Everything that is FINALIZED goes
-  // into Ink's <Static>, which writes each item to the terminal's real scrollback
-  // exactly once and never re-diffs it again — so it can never garble on redraw,
-  // and the user can scroll up through it with their terminal's native
-  // scrollback. Only the currently-STREAMING tail (the one message still being
-  // appended to) stays in the live, re-rendered region below. Because at most the
-  // last message is ever mutated (see the streaming callbacks in handleSubmit —
-  // closeStreamingBlocks() finalizes a block before the next opens), the split
-  // point is simply the first message still marked `streaming`.
-  const firstStreamingIdx = messages.findIndex((m) => m.streaming);
-  const splitAt = firstStreamingIdx === -1 ? messages.length : firstStreamingIdx;
-  const settled = messages.slice(0, splitAt);
-  const live = messages.slice(splitAt);
-  // The Oxagen wordmark is the first Static item so it sits at the very top of
-  // the session and scrolls up into history as the conversation grows. It draws
-  // fully (no reveal animation) because Static renders an item once and never
-  // updates it — an animating banner would freeze mid-reveal.
-  const staticItems: Array<{ kind: "banner" } | { kind: "message"; msg: Message }> = [
-    { kind: "banner" },
-    ...settled.map((msg) => ({ kind: "message" as const, msg })),
-  ];
+  // ── Full-screen transcript viewport ─────────────────────────────────────────
+  // The REPL owns the whole screen (alternate buffer; see launchRepl). The root
+  // box is sized to the live terminal so the prompt bar + status line can stay
+  // PINNED to the bottom edge while the transcript fills — and scrolls within —
+  // the space above them. Because the root is height-bounded and the transcript
+  // viewport clips its overflow, the frame Ink redraws is never taller than the
+  // terminal, which is exactly what kept the old inline model from garbling.
+  //
+  // Only a WINDOW of messages is rendered — enough to overflow the viewport a few
+  // times over — so a long session never pays to re-render its whole history each
+  // frame. `scrollOffset` (driven by PgUp/PgDn) slides that window back through
+  // history; at offset 0 the window ends on the newest message and auto-follows.
+  const totalMessages = messages.length;
+  const windowEnd = Math.max(0, totalMessages - scrollOffset);
+  const windowSize = Math.max(rows, 40);
+  const windowStart = Math.max(0, windowEnd - windowSize);
+  const windowMessages = messages.slice(windowStart, windowEnd);
+  const scrolledBack = scrollOffset > 0;
 
   return (
-    // No fixed height and no alternate screen: the REPL renders inline in the
-    // normal terminal buffer so native scrollback works. Static history is
-    // written above; the live region (streaming tail + input + status) follows
-    // the latest output and is the only part Ink continuously redraws.
-    <Box flexDirection="column">
-      <Static items={staticItems}>
-        {(item, i) =>
-          item.kind === "banner" ? (
-            <Banner key="banner" version={pkg.version} />
-          ) : (
-            <MessageView key={i} msg={item.msg} diffTheme={diffThemeRef.current} />
-          )
-        }
-      </Static>
+    // Root — sized to the terminal only when we truly own a TTY (full-screen);
+    // otherwise (tests / piped output) it stays auto-height and renders inline so
+    // the component is trivially testable under ink-testing-library.
+    <Box
+      flexDirection="column"
+      {...(fullscreen ? { height: rows, width: cols } : {})}
+    >
+      {/* Growing top region: the transcript (left, fills width) and the Agent
+          Team / Task Progress dock (right). It flexGrows to consume everything
+          above the pinned bottom stack; overflow="hidden" bounds it to the
+          available rows so neither the transcript nor a tall sidebar can push the
+          prompt bar off the bottom. */}
+      <Box flexDirection="row" flexGrow={1} minHeight={0} overflow="hidden">
+        <Box flexDirection="column" flexGrow={1} minWidth={0}>
+          {/* Terminal panel — a `!command`'s live stdout/stderr, red-outlined and
+              pinned just ABOVE the transcript so shell output stays visually
+              separate from the agent speaking. Null until a command has run. */}
+          {terminalRun && <TerminalPanel run={terminalRun} />}
 
-      {/* Everything below <Static> is the live, re-rendered frame, laid out as a
-          row: the chat + input column on the left (flexGrow so it fills the space)
-          and the Agent Team / Task Progress dock on the right. The dock hides
-          itself when idle (auto), when pinned off (/panel), or on a narrow
-          terminal, so the single-column experience is unchanged until there's work
-          to monitor. minWidth={0} lets the left column truncate instead of forcing
-          the row wider than the terminal. */}
-      <Box flexDirection="row">
-      <Box flexDirection="column" flexGrow={1} minWidth={0}>
-
-      {/* Live region — the streaming tail, plus the empty-state hint before any
-          turn has run. Only these lines re-render as tokens arrive, so the frame
-          Ink redraws stays small and never overflows the viewport. */}
-      <Box flexDirection="column">
-        {messages.length === 0 ? (
-          <Box paddingX={1} flexDirection="column">
-            <Text dimColor>Ready. Type a prompt to start coding.</Text>
-            <Text dimColor>
-              Backed by Oxagen's knowledge-graph context engine. Type /help for
-              commands.
-            </Text>
-            {projectContextRef.current.sources.length > 0 && (
-              <Text dimColor>
-                Loaded rules: {projectContextRef.current.sources.join(", ")}
-              </Text>
-            )}
+          {/* Transcript viewport. It clips its overflow and anchors its content to
+              the TOP while it fits (so a short session reads top-down with the gap
+              falling between the last message and the pinned prompt) and to the
+              BOTTOM once it overflows (so the newest output stays visible just
+              above the prompt and older lines scroll off the top). `overflowing`
+              is measured from the laid-out content vs. the viewport each frame. */}
+          <Box
+            ref={viewportRef}
+            flexDirection="column"
+            flexGrow={1}
+            minHeight={0}
+            overflow="hidden"
+            justifyContent={overflowing ? "flex-end" : "flex-start"}
+          >
+            {/* Inner content keeps its natural height (flexShrink={0}) so the
+                measurement reflects the true content size, not a squeezed one. */}
+            <Box ref={contentRef} flexDirection="column" flexShrink={0}>
+              {totalMessages === 0 ? (
+                <Box paddingX={1} flexDirection="column">
+                  <Banner version={pkg.version} />
+                  <Text dimColor>Ready. Type a prompt to start coding.</Text>
+                  <Text dimColor>
+                    Backed by Oxagen's knowledge-graph context engine. Type /help
+                    for commands.
+                  </Text>
+                  {projectContextRef.current.sources.length > 0 && (
+                    <Text dimColor>
+                      Loaded rules: {projectContextRef.current.sources.join(", ")}
+                    </Text>
+                  )}
+                </Box>
+              ) : (
+                windowMessages.map((msg, i) => (
+                  <MessageView
+                    key={windowStart + i}
+                    msg={msg}
+                    diffTheme={diffThemeRef.current}
+                  />
+                ))
+              )}
+            </Box>
           </Box>
-        ) : (
-          // Only the streaming tail lives here; everything settled was already
-          // committed to <Static> above. Rendering the full `messages` list here
-          // too would double every finalized message on screen.
-          live.map((msg, i) => (
-            <MessageView
-              key={splitAt + i}
-              msg={msg}
-              diffTheme={diffThemeRef.current}
-            />
-          ))
-        )}
+        </Box>
+
+        {/* Right-hand dock: Agent Team (live roster) + Task Progress (the planning
+            agent's checklist). Renders nothing until there's work to show. */}
+        <AgentSidebar mode={panelMode} />
       </Box>
 
-      {/* Queued prompts (submitted while a turn is running) */}
-      {queued.length > 0 && (
-        <Box flexDirection="column" paddingX={1}>
-          {queued.map((q, i) => (
-            <Box key={i}>
-              <Text color="#FBBF24">{"⧗ queued: "}</Text>
-              <Text dimColor wrap="truncate">
-                {q}
-              </Text>
-            </Box>
-          ))}
-        </Box>
-      )}
+      {/* Pinned bottom stack — everything here keeps its height (flexShrink={0})
+          and sits flush against the bottom edge of the terminal: transient
+          notices, then the input row, then the status line. */}
+      <Box flexDirection="column" flexShrink={0}>
+        {/* Scrolled-back-through-history hint */}
+        {scrolledBack && (
+          <Box paddingX={1}>
+            <Text color="#FBBF24">⌃ history </Text>
+            <Text dimColor>
+              (PgDn to return to the latest{scrollOffset >= totalMessages - 1 ? " · at oldest" : ""})
+            </Text>
+          </Box>
+        )}
 
-      {/* Thinking indicator — visible only while a turn is in flight */}
-      {isStreaming && turnStartedAt !== null && (
-        <ThinkingIndicator
-          startedAt={turnStartedAt}
-          getTokens={() => Math.round(streamCharsRef.current / 4)}
-          getLastProgressAt={() => lastProgressRef.current}
-        />
-      )}
-
-      {/* Esc-twice reset confirmation — shown above the input row until the
-          user types y/yes to confirm or anything else to cancel. */}
-      {resetPending && (
-        <Box paddingX={1} flexDirection="column">
-          <Text color={theme.cyan}>
-            Are you sure you want to reset the conversation?
-          </Text>
-          <Text dimColor>
-            Type <Text bold>y</Text> or <Text bold>yes</Text> to confirm, or
-            anything else (or Esc) to cancel.
-          </Text>
-        </Box>
-      )}
-
-      {/* Heads-up display — every agent running this session. Toggled by /hud
-          (and closed by Esc); sits just above the input so it reads as a live
-          status overlay without disturbing the scrollback history above. */}
-      {hudVisible && <HudPanel />}
+        {/* Queued prompts (submitted while a turn is running) */}
+        {queued.length > 0 && (
+          <Box flexDirection="column" paddingX={1}>
+            {queued.map((q, i) => (
+              <Box key={i}>
+                <Text color="#FBBF24">{"⧗ queued: "}</Text>
+                <Text dimColor wrap="truncate">
+                  {q}
+                </Text>
+              </Box>
+            ))}
+          </Box>
+        )}
 
       {/* Drilled-in agent log — opened with Ctrl-E on an Agent Team row. It sits
           directly above the prompt bar (the bar is cleared and re-focused when
@@ -1756,37 +1900,25 @@ export function ReplApp({
             onMenuOpenChange={handleMenuOpenChange}
           />
         )}
-      </Box>
 
-      {/* Status line — below the input bar, with a blank row beneath it so it is
-          never flush against the bottom edge of the window. A whimsical cat
-          chases a mouse on the rail above it while a turn is running (opt out
-          with OXAGEN_CLI_FUN=0). */}
-      <Box marginBottom={1} flexShrink={0} flexDirection="column">
-        {process.env.OXAGEN_CLI_FUN !== "0" ? (
-          <CatMouseChase active={isStreaming} />
-        ) : null}
-        <StatusLine
-          model={model}
-          branch={branchRef.current}
-          // Tokens + cost come from the live metrics bus (every model call —
-          // evaluator, worker, judge — contributes), so they update as calls
-          // complete during a turn and settle correctly at the end (Bug 2).
-          inputTokens={metrics.sessionTokensIn}
-          outputTokens={metrics.sessionTokensOut}
-          cacheHit={usage.cacheHit}
-          cacheMiss={Math.max(0, metrics.sessionTokensIn - usage.cacheHit)}
-          costUsd={metrics.sessionCostUsd}
-          turnOutputTokens={metrics.turnTokensOut}
-          turnCostUsd={metrics.turnCostUsd}
-          pipelineOn={pipelineOn}
-          verboseOn={verboseOn}
-          effort={effort}
-          mode={mode}
-        />
-      </Box>
+        {/* Esc-twice reset confirmation — shown above the input row until the
+            user types y/yes to confirm or anything else to cancel. */}
+        {resetPending && (
+          <Box paddingX={1} flexDirection="column">
+            <Text color={theme.cyan}>
+              Are you sure you want to reset the conversation?
+            </Text>
+            <Text dimColor>
+              Type <Text bold>y</Text> or <Text bold>yes</Text> to confirm, or
+              anything else (or Esc) to cancel.
+            </Text>
+          </Box>
+        )}
 
-      </Box>{/* end left (chat + input) column */}
+        {/* Heads-up display — every agent running this session. Toggled by /hud
+            (and closed by Esc); sits just above the input so it reads as a live
+            status overlay. */}
+        {hudVisible && <HudPanel />}
 
       {/* Right-hand dock: Agent Team (live roster) + Task Progress (the planning
           agent's checklist). Renders nothing until there's work to show. `focus`
@@ -1806,6 +1938,29 @@ export function ReplApp({
 
 export async function launchRepl(options: ReplOptions): Promise<void> {
   const { render: renderInk } = await import("ink");
-  const { waitUntilExit } = renderInk(<ReplApp options={options} />);
-  await waitUntilExit();
+  // Take over the screen so the prompt bar can pin to the bottom edge: switch to
+  // the alternate buffer (which preserves the user's real terminal + scrollback
+  // to restore on exit) BEFORE Ink's first paint, so no frame ever lands in the
+  // normal buffer. Only on a real TTY — piped/redirected output (and tests) must
+  // never emit these control sequences.
+  const isTTY = Boolean(process.stdout.isTTY);
+  // Restore the normal screen exactly once, however we exit (clean unmount, Esc,
+  // Ctrl-C, or a hard signal), so the terminal is never left stuck in the alt
+  // buffer. Guarded so double-invocation (finally + exit handler) is a no-op.
+  let restored = false;
+  const restore = (): void => {
+    if (restored || !isTTY) return;
+    restored = true;
+    process.stdout.write(LEAVE_ALT_SCREEN);
+  };
+  if (isTTY) {
+    process.stdout.write(ENTER_ALT_SCREEN + CURSOR_HOME);
+    process.once("exit", restore);
+  }
+  try {
+    const { waitUntilExit } = renderInk(<ReplApp options={options} />);
+    await waitUntilExit();
+  } finally {
+    restore();
+  }
 }

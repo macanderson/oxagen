@@ -1,23 +1,21 @@
 /**
  * Regression guard for the REPL's render *mode*.
  *
- * A long-standing bug ran the REPL as a full-screen *alternate-screen* Ink app:
- * it re-rendered the whole conversation on every stream delta, which (a) garbled
- * output above the viewport on redraw and (b) left no terminal scrollback. The
- * fix renders the REPL INLINE in the normal terminal buffer (Ink's default —
- * `alternateScreen: false`) and commits finalized messages to <Static>.
+ * The REPL runs FULL-SCREEN so the prompt bar can stay pinned to the bottom edge
+ * of the terminal: `launchRepl` switches to the alternate screen buffer before
+ * Ink's first paint (so no frame lands in the normal buffer) and restores the
+ * normal buffer on exit (so the user's terminal + scrollback come back intact).
+ * The alternate-screen dance must happen ONLY on a real TTY — piped/redirected
+ * output and tests must never see the control sequences.
  *
- * This test locks the production launch path: `launchRepl` must never opt into
- * Ink's alternate screen. Asserting Ink's render OPTIONS is deterministic —
- * unlike scraping rendered frames for the `?1049h` DECSET, which couples the
- * assertion to Ink's global TTY/CI-driven alternate-screen heuristics and so
- * flakes across environments. The alternate-screen buffer is the only thing that
- * emits `?1049h`; refusing to enable it is the invariant that matters.
+ * This test locks that contract deterministically by driving `process.stdout`'s
+ * `isTTY` and capturing writes, rather than scraping Ink's frames (which couples
+ * to Ink's global TTY/CI heuristics and flakes).
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 
-// Typed params so `mock.calls[n]` is a two-arg tuple (Ink's `render(node,
-// options)`), letting the test read the options argument at index 1.
+// Ink's render is mocked so launchRepl exercises only the terminal setup/teardown
+// around it — no real component render, no real Ink stdout writes.
 const renderSpy = vi.fn((_node?: unknown, _options?: unknown) => ({
   waitUntilExit: async () => undefined,
 }));
@@ -27,6 +25,9 @@ vi.mock("ink", () => ({
 }));
 
 const { launchRepl } = await import("../interactive.js");
+const { ENTER_ALT_SCREEN, LEAVE_ALT_SCREEN } = await import(
+  "../use-terminal-size.js"
+);
 
 const TEST_SESSION = {
   token: "test-token",
@@ -35,17 +36,61 @@ const TEST_SESSION = {
   apiUrl: "http://localhost:4000",
 };
 
-describe("launchRepl render mode", () => {
-  it("renders the REPL inline — never enables Ink's alternate screen", async () => {
+/** Replace process.stdout.isTTY for one test, restoring it afterwards. */
+function setTTY(value: boolean): void {
+  Object.defineProperty(process.stdout, "isTTY", {
+    value,
+    configurable: true,
+  });
+}
+
+describe("launchRepl full-screen setup", () => {
+  const originalIsTTY = process.stdout.isTTY;
+
+  afterEach(() => {
+    Object.defineProperty(process.stdout, "isTTY", {
+      value: originalIsTTY,
+      configurable: true,
+    });
+    renderSpy.mockClear();
+    vi.restoreAllMocks();
+  });
+
+  it("enters the alternate screen before render and restores it on exit (TTY)", async () => {
+    setTTY(true);
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
+      writes.push(String(chunk));
+      return true;
+    }) as typeof process.stdout.write);
+
     await launchRepl({ session: TEST_SESSION });
 
+    const enterIdx = writes.findIndex((w) => w.includes(ENTER_ALT_SCREEN));
+    const leaveIdx = writes.findIndex((w) => w.includes(LEAVE_ALT_SCREEN));
+    // Both the enter and the restore happened…
+    expect(enterIdx).toBeGreaterThanOrEqual(0);
+    expect(leaveIdx).toBeGreaterThanOrEqual(0);
+    // …and the alt buffer was entered before it was left.
+    expect(enterIdx).toBeLessThan(leaveIdx);
     expect(renderSpy).toHaveBeenCalledTimes(1);
-    const options = renderSpy.mock.calls[0]?.[1] as
-      | { alternateScreen?: boolean }
-      | undefined;
-    // Inline mode is Ink's default: `launchRepl` must not flip the alternate
-    // screen on. `undefined` (no options) and an explicit `false` both satisfy
-    // the invariant; anything truthy would disable native scrollback.
-    expect(options?.alternateScreen ?? false).toBe(false);
+  });
+
+  it("never emits alt-screen control sequences off a TTY (pipes / tests)", async () => {
+    setTTY(false);
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
+      writes.push(String(chunk));
+      return true;
+    }) as typeof process.stdout.write);
+
+    await launchRepl({ session: TEST_SESSION });
+
+    expect(
+      writes.some(
+        (w) => w.includes(ENTER_ALT_SCREEN) || w.includes(LEAVE_ALT_SCREEN),
+      ),
+    ).toBe(false);
+    expect(renderSpy).toHaveBeenCalledTimes(1);
   });
 });
