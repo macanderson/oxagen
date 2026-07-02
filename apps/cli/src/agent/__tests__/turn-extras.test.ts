@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import type { ToolSet } from "ai";
 import { buildTurnExtras } from "../turn-extras.js";
-import type { Rule } from "../rules/types.js";
+import type { Rule } from "../../rules/types.js";
 import type { OxagenSettings } from "../../settings/schema.js";
 
 const migrationsRule: Rule = {
