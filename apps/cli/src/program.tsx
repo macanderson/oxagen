@@ -267,35 +267,6 @@ export function buildProgram(): Command {
       },
     );
 
-  // ── solve: best-of-N task solving ───────────────────────────────────────────
-
-  program
-    .command("solve")
-    .description("Solve a task best-of-N — run N candidates in parallel, keep the winner")
-    .argument("<prompt...>", "The task to solve")
-    .option("-n, --candidates <n>", "How many candidates to run (default 3, max 10)", (v) => parseInt(v, 10))
-    .option("--verify <cmd>", "Command run in each candidate; its output decides the winner (e.g. 'pnpm test:unit')")
-    .option("--models <slugs>", "Comma-separated gateway slugs cycled across candidates for diversity")
-    .option("--selector <slug>", "Model that picks the winning candidate")
-    .option("-m, --model <slug>", "Pin every candidate to one model")
-    .option("--readonly", "Read-only candidates: do not apply a winner", false)
-    .option("--json", "Headless: stream JSONL events instead of the live view", false)
-    .action(
-      async (
-        promptWords: string[],
-        opts: { candidates?: number; verify?: string; models?: string; selector?: string; model?: string; readonly?: boolean; json?: boolean },
-      ) => {
-        const prompt = promptWords.join(" ").trim();
-        if (!prompt) {
-          process.stderr.write("Error: solve requires a task, e.g. `oxagen solve \"fix the failing test\"`.\n");
-          process.exitCode = 1;
-          return;
-        }
-        const { handleSolve } = await import("./commands/solve.js");
-        await handleSolve(prompt, opts);
-      },
-    );
-
   // ── daemon: context daemon lifecycle ────────────────────────────────────────
 
   const daemon = program
