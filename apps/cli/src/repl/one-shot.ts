@@ -165,6 +165,17 @@ export async function runOneShot(
     process.stdout.write(JSON.stringify(obj) + "\n");
   };
 
+  // System-prompt profile: an explicit OXAGEN_PROMPT_PROFILE wins; otherwise a
+  // non-TTY stdout (piped one-shot, SWE-bench, CI) selects the terse "headless"
+  // verification profile, while an interactive TTY leaves it undefined so the
+  // engine's default narrating "interactive" profile applies.
+  const promptProfile: "interactive" | "headless" | undefined =
+    process.env["OXAGEN_PROMPT_PROFILE"] === "interactive"
+      ? "interactive"
+      : process.env["OXAGEN_PROMPT_PROFILE"] === "headless" || !process.stdout.isTTY
+        ? "headless"
+        : undefined;
+
   try {
     let streamed = false;
     const result = await runTurn({
@@ -173,6 +184,7 @@ export async function runOneShot(
       ai,
       projectContext,
       readOnly,
+      profile: promptProfile,
       model: options.model,
       bare: options.bare,
       verbose,
