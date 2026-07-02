@@ -215,20 +215,55 @@ export function buildProgram(): Command {
       false,
     )
     .option(
-      "--isolate",
-      "Run each agent in its own git worktree; commit + merge work back (no clobbering)",
-      false,
+      "--no-isolate",
+      "Run all agents directly against the working tree instead of one git worktree per task (default: isolated, commit + merge back)",
     )
+    .option("--json", "Headless: stream JSONL task events instead of the live view", false)
     .action(
-      async (goal: string[], opts: { concurrency: number; readonly: boolean; isolate: boolean }) => {
+      async (
+        goal: string[],
+        opts: { concurrency: number; readonly: boolean; isolate: boolean; json: boolean },
+      ) => {
         const { launchFleetView } = await import("./tui/fleet-view/index.js");
-        await launchFleetView({
+        const snap = await launchFleetView({
           cwd: process.cwd(),
           goal: goal.join(" ").trim() || undefined,
           concurrency: opts.concurrency,
           readOnly: opts.readonly,
           isolate: opts.isolate,
+          headless: opts.json,
         });
+        // Non-zero exit when anything failed, so scripts/CI can branch on it.
+        if (snap.failedCount > 0) process.exitCode = 1;
+      },
+    );
+
+  // ── solve: best-of-N task solving ───────────────────────────────────────────
+
+  program
+    .command("solve")
+    .description("Solve a task best-of-N — run N candidates in parallel, keep the winner")
+    .argument("<prompt...>", "The task to solve")
+    .option("-n, --candidates <n>", "How many candidates to run (default 3, max 10)", (v) => parseInt(v, 10))
+    .option("--verify <cmd>", "Command run in each candidate; its output decides the winner (e.g. 'pnpm test:unit')")
+    .option("--models <slugs>", "Comma-separated gateway slugs cycled across candidates for diversity")
+    .option("--selector <slug>", "Model that picks the winning candidate")
+    .option("-m, --model <slug>", "Pin every candidate to one model")
+    .option("--readonly", "Read-only candidates: do not apply a winner", false)
+    .option("--json", "Headless: stream JSONL events instead of the live view", false)
+    .action(
+      async (
+        promptWords: string[],
+        opts: { candidates?: number; verify?: string; models?: string; selector?: string; model?: string; readonly?: boolean; json?: boolean },
+      ) => {
+        const prompt = promptWords.join(" ").trim();
+        if (!prompt) {
+          process.stderr.write("Error: solve requires a task, e.g. `oxagen solve \"fix the failing test\"`.\n");
+          process.exitCode = 1;
+          return;
+        }
+        const { handleSolve } = await import("./commands/solve.js");
+        await handleSolve(prompt, opts);
       },
     );
 
@@ -304,6 +339,35 @@ export function buildProgram(): Command {
           await handlePrWatch(number, opts);
         },
       );
+    pr
+      .command("fix")
+      // The root's global `-m, --model` is reused (commander binds it to the
+      // parent), so the action reads merged opts via optsWithGlobals().
+      .description(
+        "Actively fix a failing PR: diagnose, patch, push, repeat until green — then ask before merging",
+      )
+      .argument("[number]", "PR number; omit for the current branch's PR")
+      .option("--max-rounds <n>", "Max fix attempts before giving up (default 3)", (v) => parseInt(v, 10))
+      .option("--interval <seconds>", "Poll interval seconds while waiting on checks (default 30)", (v) =>
+        parseInt(v, 10),
+      )
+      .option(
+        "--timeout <minutes>",
+        "Give up waiting on a single check run after this many minutes (default 60)",
+        (v) => parseInt(v, 10),
+      )
+      .option("--yes", "Merge once green without an interactive prompt", false)
+      .action(async (number: string | undefined, _opts, command: Command) => {
+        const merged = command.optsWithGlobals() as {
+          maxRounds?: number;
+          interval?: number;
+          timeout?: number;
+          yes?: boolean;
+          model?: string;
+        };
+        const { handlePrFix } = await import("./commands/pr.js");
+        await handlePrFix(number, merged);
+      });
   }
 
   // ── recover: find + restore agent work from the commit ledger ───────────────
@@ -905,7 +969,9 @@ export function buildProgram(): Command {
 
   const rules = program
     .command("rules")
-    .description("Manage workspace rules the agent is told about and hard-blocked from violating");
+    .description(
+      "Manage workspace rules the agent is told about and hard-blocked from violating (list, show, new, check, candidates, promote)",
+    );
   rules
     .command("list")
     .description("List rules (and which are hard-enforced)")
@@ -937,6 +1003,28 @@ export function buildProgram(): Command {
     .action(async (tool: string, subject: string) => {
       const { rulesCheck } = await import("./commands/rules.js");
       rulesCheck(tool, subject);
+    });
+  rules
+    .command("candidates")
+    .description(
+      "Mine recurring lessons from local thinking logs + fleet memory into rule promotion candidates",
+    )
+    .option("--limit <n>", "Max candidates (default 10)")
+    .option("--json", "Output JSON")
+    .action(async (opts: { limit?: string; json?: boolean }) => {
+      const { rulesCandidates } = await import("./commands/rules.js");
+      rulesCandidates(opts);
+    });
+  rules
+    .command("promote <id>")
+    .description(
+      "Promote a mined candidate (from `rules candidates`) to an enforced .oxagen/rules/<id>.md — never writes without --yes",
+    )
+    .option("-y, --yes", "Write the rule (default previews only — never auto-writes)")
+    .option("--json", "Output JSON")
+    .action(async (id: string, opts: { yes?: boolean; json?: boolean }) => {
+      const { rulesPromote } = await import("./commands/rules.js");
+      rulesPromote(id, opts);
     });
 
   // ── mcp: external MCP servers ───────────────────────────────────────────────

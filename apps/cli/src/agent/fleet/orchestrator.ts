@@ -1,10 +1,11 @@
 /**
  * The fleet orchestrator — an army of coding subagents working one tree at once.
  *
- * Each task is run by a subagent: the local coding loop ({@link runAgent}) on the
- * cheapest sufficient model, against the same working directory. The orchestrator
- * keeps as many running as the concurrency cap allows while respecting two safety
- * rules so parallel agents never corrupt the tree or each other:
+ * Each task is run by a subagent: the ONE engine loop ({@link runTurn} via the
+ * injected {@link AgentRunner}) on the cheapest sufficient model, against the same
+ * working directory. The orchestrator keeps as many running as the concurrency cap
+ * allows while respecting two safety rules so parallel agents never corrupt the
+ * tree or each other:
  *
  *   1. Dependencies — a task waits until every task it `dependsOn` is `done`; if a
  *      dependency fails, the task (and its dependents) are marked `blocked`.
@@ -13,7 +14,7 @@
  *
  * It records a two-axis memory for every task it finishes (success or failure),
  * accumulates token/cost totals, and emits a snapshot on every change for the
- * agents screen to render. `runAgent` is injected so the engine is unit-testable
+ * agents screen to render. The runner is injected so the engine is unit-testable
  * without touching the gateway.
  */
 import { EventEmitter } from "node:events";
@@ -34,11 +35,14 @@ import {
   emptyUsage,
   type AgentSnapshot,
   type FleetSnapshot,
+  type ModelTier,
   type Plan,
   type Task,
+  type TaskStatus,
+  type UsageTotals,
 } from "./types.js";
 
-/** The subset of {@link runAgent} the fleet depends on (injectable for tests). */
+/** The runner interface the fleet depends on — backed by {@link runTurn} via {@link createEngineRunner} (injectable for tests). */
 export type AgentRunner = (opts: {
   prompt: string;
   cwd: string;
@@ -56,6 +60,27 @@ export type AgentRunner = (opts: {
   usage: { inputTokens?: number; outputTokens?: number };
 }>;
 
+/**
+ * A discrete lifecycle transition for one task — emitted (as the "task" event)
+ * every time a task's status changes, alongside the existing whole-fleet
+ * "update" snapshot. Consumers that want per-task events instead of diffing
+ * consecutive snapshots (e.g. the headless JSONL runner) listen to this
+ * instead; the TUI still drives off "update".
+ */
+export interface FleetTaskEvent {
+  taskId: string;
+  status: TaskStatus;
+  title: string;
+  tier: ModelTier;
+  model: string;
+  agent?: string;
+  startedAt?: number;
+  finishedAt?: number;
+  summary?: string;
+  error?: string;
+  usage: UsageTotals;
+}
+
 export interface FleetOptions {
   cwd: string;
   /** Max subagents running at once (default 4). */
@@ -72,7 +97,7 @@ export interface FleetOptions {
   projectContext?: ProjectContext;
   /** Named agent registry; a task's `agent` is looked up here at dispatch. */
   agents?: Map<string, AgentDefinition>;
-  /** Inject a fake runner in tests; defaults to the real {@link runAgent}. */
+  /** Inject a fake runner in tests; defaults to the real {@link createEngineRunner} result. */
   runner?: AgentRunner;
   /** Read-only subagents (explain, don't edit). */
   readOnly?: boolean;
@@ -104,6 +129,8 @@ export class Fleet extends EventEmitter {
   private readonly controllers = new Map<string, AbortController>();
   private readonly running = new Set<string>();
   private planId: string | null = null;
+  /** Set by {@link drain}: stop dispatching new tasks, let in-flight ones finish. */
+  private draining = false;
 
   private settle: (() => void) | null = null;
   private donePromise: Promise<void> | null = null;
@@ -129,6 +156,7 @@ export class Fleet extends EventEmitter {
     for (const task of plan.tasks) {
       this.tasks.set(task.id, task);
       this.snapshots.set(task.id, this.toSnapshot(task, ""));
+      this.emitTask(task);
     }
     this.store?.setStatus(plan.id, "executing");
     this.emitUpdate();
@@ -152,6 +180,7 @@ export class Fleet extends EventEmitter {
     };
     this.tasks.set(id, task);
     this.snapshots.set(id, this.toSnapshot(task, ""));
+    this.emitTask(task);
     this.emitUpdate();
     this.pump();
     return id;
@@ -189,6 +218,31 @@ export class Fleet extends EventEmitter {
     }
   }
 
+  /**
+   * Cancel-drain: stop dispatching new tasks, but let every already-running
+   * task finish on its own — its worktree is then checkpointed, integrated,
+   * and disposed through the normal completion path in {@link run}'s
+   * `finally`, instead of being torn down mid-edit. Unlike {@link cancelAll},
+   * running agents' controllers are never aborted, so no worktree is ever
+   * orphaned. Tasks that never started have no worktree to lose, so they're
+   * cancelled immediately. Resolves once every task has reached a terminal
+   * state — the same contract as {@link start}.
+   */
+  drain(): Promise<void> {
+    this.draining = true;
+    for (const task of this.tasks.values()) {
+      if (task.status === "queued") this.update(task.id, { status: "cancelled", finishedAt: Date.now() });
+    }
+    if (this.tasks.size === 0) return Promise.resolve(); // nothing was ever loaded
+    if (!this.donePromise) {
+      this.donePromise = new Promise<void>((resolve) => {
+        this.settle = resolve;
+      });
+    }
+    this.checkDone();
+    return this.donePromise;
+  }
+
   snapshot(): FleetSnapshot {
     const agents = [...this.snapshots.values()];
     const totals = agents.reduce(
@@ -214,14 +268,27 @@ export class Fleet extends EventEmitter {
 
   /** Fill open slots with ready tasks, honouring deps and file-ownership locks. */
   private pump(): void {
-    // First, mark tasks whose dependencies can never succeed as blocked.
-    for (const task of this.tasks.values()) {
-      if (task.status !== "queued") continue;
-      const deps = task.dependsOn.map((d) => this.tasks.get(d));
-      if (deps.some((d) => d && (d.status === "failed" || d.status === "blocked" || d.status === "cancelled"))) {
-        this.update(task.id, { status: "blocked" });
+    // First, mark tasks whose dependencies can never succeed as blocked —
+    // iterate to a fixed point so a multi-level cascade (A fails → B blocked
+    // → C, which depends on B, is also blocked) fully resolves in this one
+    // pump(), regardless of task insertion order. Bounded and terminating:
+    // each round either blocks at least one more task or nothing changes.
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const task of this.tasks.values()) {
+        if (task.status !== "queued") continue;
+        const deps = task.dependsOn.map((d) => this.tasks.get(d));
+        if (deps.some((d) => d && (d.status === "failed" || d.status === "blocked" || d.status === "cancelled"))) {
+          this.update(task.id, { status: "blocked" });
+          changed = true;
+        }
       }
     }
+
+    // Cancel-drain: dispatching stops, but tasks already running are left
+    // alone so they finish naturally (see drain()).
+    if (this.draining) return;
 
     while (this.running.size < this.concurrency) {
       const next = this.pickReady();
@@ -412,6 +479,7 @@ export class Fleet extends EventEmitter {
   private update(id: string, patch: Partial<Task> & Partial<AgentSnapshot>): void {
     const task = this.tasks.get(id);
     if (!task) return;
+    const statusChanged = patch.status !== undefined && patch.status !== task.status;
     // Apply task-level fields.
     if (patch.status !== undefined) task.status = patch.status;
     if (patch.startedAt !== undefined) task.startedAt = patch.startedAt;
@@ -434,11 +502,30 @@ export class Fleet extends EventEmitter {
     if (patch.lastTool !== undefined) snap.lastTool = patch.lastTool;
     if (patch.logTail !== undefined) snap.logTail = patch.logTail;
     this.snapshots.set(id, snap);
+    if (statusChanged) this.emitTask(task);
     this.emitUpdate();
   }
 
   private emitUpdate(): void {
     this.emit("update", this.snapshot());
+  }
+
+  /** Emit a discrete {@link FleetTaskEvent} for `task`'s current status. */
+  private emitTask(task: Task): void {
+    const event: FleetTaskEvent = {
+      taskId: task.id,
+      status: task.status,
+      title: task.title,
+      tier: task.tier,
+      model: task.model,
+      agent: task.agent,
+      startedAt: task.startedAt,
+      finishedAt: task.finishedAt,
+      summary: task.summary,
+      error: task.error,
+      usage: task.usage,
+    };
+    this.emit("task", event);
   }
 
   private checkDone(): void {

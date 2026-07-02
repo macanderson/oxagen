@@ -60,22 +60,36 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
       ];
 
   // Profile-independent tool rules — BOTH profiles get these verbatim.
+  // The code-graph mandate goes FIRST and hardest: agents default to grep/read/
+  // list to explore, which is slow, imprecise, and burns the context window. The
+  // graph is a precomputed symbol/import index built for THIS repo — it must be
+  // the first move for any structural question.
   const lines = [
     ...preamble,
     "",
     "Operating rules:",
-    "- Act, don't narrate intentions at length. Read before you edit, and edit precisely.",
-    "- Prefer `edit_file` for surgical changes; only `write_file` for new files or full rewrites.",
-    "- Before editing a file you have not read this session, `read_file` it first.",
     ...(hasCodeGraph
       ? [
-          "- GRAPH FIRST: `code_graph` is your FIRST choice for gathering context about code —",
-          "  it is a precomputed symbol/import index, more precise and cheaper than grepping.",
-          "  Use `search` for symbol lookups, `file_symbols` to understand a file before",
-          "  editing it, `dependents` before changing any shared file (what a change could",
-          "  break), and `imports` to trace dependencies.",
+          "- CODE GRAPH FIRST — non-negotiable. `code_graph` is a precomputed symbol + import",
+          "  index for THIS repository. It is faster, more precise, and far cheaper than listing",
+          "  directories, grepping, or reading files to hunt for code. BEFORE you `grep`, `glob`,",
+          "  `list_dir`, `read_file`, or `bash`-find to locate or understand code, you MUST query",
+          "  `code_graph`. The operations and exactly when to use each:",
+          "    • `search <symbol>`   — where a function/class/type/interface is defined. Use this",
+          "      INSTEAD of grepping for a name.",
+          "    • `file_symbols <file>` — what a file defines/exports. Call it BEFORE you `read_file`",
+          "      a file you don't know, to see what's there without reading the whole thing.",
+          "    • `dependents <file>`  — who imports a file (the blast radius). Call it BEFORE you",
+          "      change any shared/exported file, to know what a change could break.",
+          "    • `imports <file>`     — what a file depends on.",
+          "  If you catch yourself about to `grep`/`glob`/`list_dir`/`read_file` to FIND or MAP code",
+          "  and have not called `code_graph` yet, STOP and call it first. State the graph result",
+          "  before you act on it.",
+          "- Only fall back to `grep`/`glob` when the graph genuinely returns nothing for your",
+          "  query, or the target is plain text (a string literal, comment, config key, or prose)",
+          "  rather than a code symbol — never as your first move for a symbol.",
         ]
-      : []),
+      : ["- Use `grep` and `glob` to locate code instead of guessing paths."]),
     ...(hasCodeMap
       ? [
           "- For conceptual or multi-word queries ('everything related to payments', 'auth session",
@@ -84,12 +98,9 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
           "  than grepping.",
         ]
       : []),
-    ...(hasCodeGraph
-      ? [
-          "- Only fall back to `grep`/`glob` when the graph returns no results or the target",
-          "  is plain text (strings, comments, config keys) rather than a code symbol.",
-        ]
-      : ["- Use `grep` and `glob` to locate code instead of guessing paths."]),
+    "- Act, don't narrate intentions at length. Read before you edit, and edit precisely.",
+    "- Prefer `edit_file` for surgical changes; only `write_file` for new files or full rewrites.",
+    "- Before editing a file you have not read this session, `read_file` it first.",
     "- Use `bash` for builds, tests, git, and anything the dedicated tools don't cover.",
     "- Keep changes minimal and consistent with the surrounding code's style and conventions.",
   ];

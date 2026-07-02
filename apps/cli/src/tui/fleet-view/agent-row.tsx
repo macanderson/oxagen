@@ -12,6 +12,7 @@
 import { Box, Text } from "ink";
 import React from "react";
 import { theme } from "../theme.js";
+import { activityGlyph } from "../activity.js";
 import { tierLabel, formatUsd } from "../../agent/model-router.js";
 import { humanizeTokens } from "../../repl/components.js";
 import type {
@@ -19,9 +20,6 @@ import type {
   ModelTier,
   TaskStatus,
 } from "../../agent/fleet/types.js";
-
-/** Braille spinner frames, matching the REPL thinking indicator. */
-const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 // Column widths, shared with {@link RosterHeader} so headings line up with cells.
 const W = {
@@ -43,26 +41,14 @@ function tierColor(tier: ModelTier): string {
       : theme.violet;
 }
 
-/** Status glyph + colour. Running animates via the shared frame counter. */
-function glyphFor(
-  status: TaskStatus,
-  frame: number,
-): { ch: string; color: string } {
-  switch (status) {
-    case "running":
-      return { ch: SPINNER[frame % SPINNER.length] ?? "⠋", color: theme.cyan };
-    case "done":
-      return { ch: "✓", color: "#34D399" };
-    case "failed":
-      return { ch: "✗", color: "#F87171" };
-    case "blocked":
-      return { ch: "⊘", color: "#F87171" };
-    case "cancelled":
-      return { ch: "⊘", color: theme.dim };
-    case "queued":
-    default:
-      return { ch: "·", color: theme.dim };
-  }
+/**
+ * Status glyph + colour, via the shared {@link activityGlyph} vocabulary
+ * (`TaskStatus` is a literal subset of `ActivityStatus`) — running animates
+ * through the shared frame counter, matching the HUD and best-of-N lanes.
+ */
+function glyphFor(status: TaskStatus, frame: number): { ch: string; color: string } {
+  const { glyph, color } = activityGlyph(status, frame);
+  return { ch: glyph, color };
 }
 
 /** Whole-seconds elapsed for a running / finished agent. */
