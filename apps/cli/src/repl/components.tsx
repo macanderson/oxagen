@@ -16,7 +16,7 @@ import {
   isSubagentDispatch,
 } from "../agent/tool-formatter.js";
 import { DiffView } from "./diff-view.js";
-import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
+import { TerminalRunCard, type TerminalRun } from "./terminal-panel.js";
 import type { DiffTheme } from "../tui/terminal-theme.js";
 import { SlashMenu } from "./slash-menu.js";
 import {
@@ -33,11 +33,6 @@ export interface Message {
   timestamp: number;
   toolName?: string;
   streaming?: boolean;
-  /** Present on `role: "terminal"` messages — a finished `!command` run folded
-   *  into the transcript as a collapsible accordion (Ctrl-O toggles it). */
-  terminalRun?: TerminalRun;
-  /** Present on `role: "terminal"` messages — whether the accordion is expanded. */
-  terminalExpanded?: boolean;
   /** Present on `role: "stage"` messages — a live pipeline progress event. */
   stage?: StageEvent;
   /** Present on `role: "diff"` messages — the unified git diff to render. */
@@ -48,6 +43,14 @@ export interface Message {
   trace?: TurnTrace;
   /** When present, the message renders the end-of-turn summary card. */
   summary?: TurnSummary;
+  /**
+   * Present on `role: "terminal"` messages — a FINISHED `!command` folded inline
+   * into the transcript as a collapsed, expandable accordion once its live red
+   * panel has timed out. See {@link TerminalRunCard}.
+   */
+  terminalRun?: TerminalRun;
+  /** Whether the terminal accordion is expanded (Ctrl-O toggles the latest). */
+  terminalExpanded?: boolean;
 }
 
 /**
@@ -78,6 +81,7 @@ export const HELP = [
   "Slash commands (type / to browse them with descriptions):",
   "  /help          show this help",
   "  /model [slug]  show or set the gateway model",
+  "  /coordinator [remote|local]  run turns on the remote gateway or the local on-device LLM",
   "  /mode [ask|auto-edit|bypass|readonly]  show or set the permission mode",
   "  /replay [n|id] show how a turn was handled (default: last turn)",
   "  /traces        list recent turns you can /replay",
@@ -89,7 +93,9 @@ export const HELP = [
   "  /exit, /quit   quit",
   "  !<command>     run a shell command live — the bar turns into a red terminal,",
   "                 output streams into a pinned panel, and it runs immediately",
-  "                 (even mid-turn). Esc/Ctrl-C kills the running command.",
+  "                 (even mid-turn). Esc/Ctrl-C kills the running command. When it",
+  "                 finishes the red panel folds into the chat as a collapsed card.",
+  "  Ctrl-O         expand/collapse the most recent folded !command output",
   "Type / to open the command menu — 📦 marks built-in & CLI commands; every",
   "`oxagen --help` command is browsable there too (custom commands show no glyph).",
   "Permission prompt: y allow once · a allow + remember · n/Esc deny",
@@ -520,13 +526,10 @@ export function MessageView({
 }): React.ReactElement {
   if (msg.trace) return <TraceView trace={msg.trace} />;
   if (msg.summary) return <TurnSummaryView summary={msg.summary} />;
+  if (msg.role === "terminal" && msg.terminalRun)
+    return <TerminalRunCard run={msg.terminalRun} expanded={msg.terminalExpanded ?? false} />;
   if (msg.role === "diff" && msg.diff) return <DiffMessage msg={msg} theme={diffTheme} />;
   if (msg.role === "stage" && msg.stage) return <StageBadge stage={msg.stage} />;
-  if (msg.role === "terminal" && msg.terminalRun) {
-    // A finished `!command` run parked in the transcript. Folded to its header by
-    // default (collapsed); Ctrl-O expands the latest one to show its output.
-    return <TerminalPanel run={msg.terminalRun} collapsed={!msg.terminalExpanded} />;
-  }
   if (msg.role === "user") {
     return (
       <Box paddingX={1} marginY={0}>
