@@ -1,10 +1,11 @@
 /**
  * The fleet orchestrator — an army of coding subagents working one tree at once.
  *
- * Each task is run by a subagent: the local coding loop ({@link runAgent}) on the
- * cheapest sufficient model, against the same working directory. The orchestrator
- * keeps as many running as the concurrency cap allows while respecting two safety
- * rules so parallel agents never corrupt the tree or each other:
+ * Each task is run by a subagent: the ONE engine loop ({@link runTurn} via the
+ * injected {@link AgentRunner}) on the cheapest sufficient model, against the same
+ * working directory. The orchestrator keeps as many running as the concurrency cap
+ * allows while respecting two safety rules so parallel agents never corrupt the
+ * tree or each other:
  *
  *   1. Dependencies — a task waits until every task it `dependsOn` is `done`; if a
  *      dependency fails, the task (and its dependents) are marked `blocked`.
@@ -13,7 +14,7 @@
  *
  * It records a two-axis memory for every task it finishes (success or failure),
  * accumulates token/cost totals, and emits a snapshot on every change for the
- * agents screen to render. `runAgent` is injected so the engine is unit-testable
+ * agents screen to render. The runner is injected so the engine is unit-testable
  * without touching the gateway.
  */
 import { EventEmitter } from "node:events";
@@ -38,7 +39,7 @@ import {
   type Task,
 } from "./types.js";
 
-/** The subset of {@link runAgent} the fleet depends on (injectable for tests). */
+/** The runner interface the fleet depends on — backed by {@link runTurn} via {@link createEngineRunner} (injectable for tests). */
 export type AgentRunner = (opts: {
   prompt: string;
   cwd: string;
@@ -72,7 +73,7 @@ export interface FleetOptions {
   projectContext?: ProjectContext;
   /** Named agent registry; a task's `agent` is looked up here at dispatch. */
   agents?: Map<string, AgentDefinition>;
-  /** Inject a fake runner in tests; defaults to the real {@link runAgent}. */
+  /** Inject a fake runner in tests; defaults to the real {@link createEngineRunner} result. */
   runner?: AgentRunner;
   /** Read-only subagents (explain, don't edit). */
   readOnly?: boolean;
