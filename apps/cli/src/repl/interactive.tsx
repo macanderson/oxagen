@@ -69,12 +69,6 @@ import { resolveEscapeAction } from "./escape-action.js";
 import { isDebugEnabled } from "../lib/debug-log.js";
 import { Banner } from "../tui/banner.js";
 import {
-  useTerminalSize,
-  ENTER_ALT_SCREEN,
-  LEAVE_ALT_SCREEN,
-  CURSOR_HOME,
-} from "./use-terminal-size.js";
-import {
   makeTurnController,
   makeStallDetector,
   AgentTimeoutError,
@@ -1332,6 +1326,12 @@ export function ReplApp({
           });
           render();
         }
+        void debugLog("turn", "turn.end", {
+          mode: "repl",
+          steps: result.steps,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+        });
         setTurns((n) => n + 1);
         setUsage((u) => ({
           input: u.input + (result.usage.inputTokens ?? 0),
@@ -1354,6 +1354,20 @@ export function ReplApp({
           : timeoutReason instanceof AgentTimeoutError
             ? timeoutReason.message
             : `Error: ${err instanceof Error ? err.message : String(err)}`;
+        // Persist the exception to cli.output. The REPL previously only rendered
+        // the error to the terminal — nothing reached the debug log, so a failed
+        // or hung turn left only its `turn.tool-call`/agent messages behind with no
+        // exception data to diagnose. A user cancel isn't an error, so skip it.
+        if (!userCancelled) {
+          void debugLog("error", "turn.error", {
+            mode: "repl",
+            kind: timeoutReason instanceof AgentTimeoutError ? "timeout" : "error",
+            message: content.replace(/^Error: /, ""),
+            // Pass the raw value so debugLog captures name/message/stack for a
+            // thrown Error; the timeout reason's message is already user-facing.
+            error: timeoutReason instanceof AgentTimeoutError ? timeoutReason.message : err,
+          });
+        }
         turn.push({ role: "assistant", content, timestamp: Date.now() });
         render();
       } finally {

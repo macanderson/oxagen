@@ -190,8 +190,8 @@
       "contextWindow": 200000,
       "tools": true
     },
-    "opus": {
-      "slug": "anthropic/claude-opus-4.8",
+    "fable": {
+      "slug": "anthropic/claude-fable-5",
       "vendor": "anthropic",
       "contextWindow": 200000,
       "tools": true

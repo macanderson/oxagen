@@ -20,6 +20,7 @@ import { runHooks } from "../settings/hooks.js";
 import { loadMcpTools, type McpServerStatus } from "../mcp/client.js";
 import { filterToolsForAgent } from "../agents/tools.js";
 import { loadRules, renderRulesSection, guardsToDeny } from "../rules/index.js";
+import { debugLog } from "../lib/debug-log.js";
 import {
   AgentTimeoutError,
   TIMEOUTS,
@@ -314,9 +315,19 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
         opts.onToolCall?.(call.toolName, input);
         void opts.memory?.remember("tool_call", { tool: call.toolName, input });
 
+        const out = call.toolCallId ? resultsById.get(call.toolCallId) : undefined;
+        const ok = !isErrorResult(out);
+        // A tool that returns an error PAYLOAD (rather than throwing) is otherwise
+        // silent in the log — only `turn.tool-call` (the start) is recorded, which
+        // reads as "the agent hung on this tool". Record the failing result so the
+        // exception data is actually in cli.output.
+        if (!ok) {
+          void debugLog("error", "turn.tool-error", {
+            tool: call.toolName,
+            result: stringifyCapped(out, 2000),
+          });
+        }
         if (opts.onToolEvent) {
-          const out = call.toolCallId ? resultsById.get(call.toolCallId) : undefined;
-          const ok = !isErrorResult(out);
           opts.onToolEvent({
             name: call.toolName,
             input: stringifyCapped(input, 1000),

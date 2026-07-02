@@ -32,7 +32,7 @@ export function resolveModelId(override?: string): string {
 
 /**
  * Reasoning effort levels forwarded to models that support a thinking mode.
- * `xhigh`/`max` are the deepest Anthropic (Claude Opus) tiers; vendors without
+ * `xhigh`/`max` are the deepest Anthropic (Claude Fable) tiers; vendors without
  * them clamp to `high` server-side.
  */
 export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
