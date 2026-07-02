@@ -240,10 +240,13 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // Verbose telemetry accumulators (left empty/undefined when verbose is off).
   const phases: PhaseStat[] = [];
   const toolEvents: ToolEvent[] = [];
+  // Reasoning captured per execution round — persisted on the trace so the
+  // agent's thinking survives the turn (it used to be streamed then discarded).
+  const thinkingLog: Array<{ round: number; text: string }> = [];
 
   // ── Bare mode: skip the pipeline, run the agent directly. ──
   if (opts.bare) {
-    return runBare(opts, cwd, startedAt, filesTouched, commandsRun, onToolCall, phases, toolEvents);
+    return runBare(opts, cwd, startedAt, filesTouched, commandsRun, onToolCall, phases, toolEvents, thinkingLog);
   }
 
   let usage = emptyUsage();
@@ -322,6 +325,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     // Capture bash command outputs THIS round so the judge sees test results
     // (the decisive completeness signal), not just the command strings.
     const roundCommandOutputs: Array<{ command: string; output: string; ok: boolean }> = [];
+    // Accumulate this round's reasoning to persist on the trace.
+    let roundReasoning = "";
     const result = await runCodingAgent({
       workspace: opts.workspace,
       ai: opts.ai,
@@ -337,7 +342,10 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       signal: opts.signal,
       onEvent: (e) => {
         if (e.type === "text") opts.onText?.(e.delta);
-        if (e.type === "reasoning") opts.onReasoning?.(e.delta);
+        if (e.type === "reasoning") {
+          opts.onReasoning?.(e.delta);
+          roundReasoning += e.delta;
+        }
         if (e.type === "tool-call") onToolCall(e.name, e.input);
         if (e.type === "tool-result") {
           opts.onToolEvent?.({ name: e.name, ok: e.ok, durationMs: e.durationMs });
@@ -363,6 +371,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     lastText = result.text;
     totalSteps += result.steps;
     cachedInputTokens += result.usage.cachedInputTokens ?? 0;
+    if (roundReasoning.trim()) thinkingLog.push({ round, text: roundReasoning });
 
     // Union the git-diff file list into filesTouched. This is the ground truth
     // for what changed and supplements tool-call events (which may not fire in
@@ -430,6 +439,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     verbose: opts.verbose,
     phases,
     toolEvents,
+    thinkingLog,
   });
 
   // ── Graph sync: always-on, fire-and-forget, non-blocking. ──
@@ -548,9 +558,18 @@ interface AssembleArgs {
   verbose?: boolean;
   phases?: PhaseStat[];
   toolEvents?: ToolEvent[];
+  thinkingLog?: Array<{ round: number; text: string }>;
 }
 
 function assembleTrace(a: AssembleArgs): TurnTrace {
+  // Persist the reasoning per round, truncated for storage (each round capped;
+  // at most the last 8 rounds retained). Always stored when present — the
+  // thinking log is useful outside verbose mode too (it's what `/replay` shows
+  // and what a memory-distiller mines).
+  const thinking = (a.thinkingLog ?? [])
+    .filter((t) => t.text.trim())
+    .slice(-8)
+    .map((t) => ({ round: t.round, text: truncate(t.text, 6000) }));
   return {
     id: newTraceId(),
     createdAt: a.startedAt,
@@ -573,6 +592,7 @@ function assembleTrace(a: AssembleArgs): TurnTrace {
     steps: a.steps,
     usage: a.usage,
     durationMs: Date.now() - a.startedAt,
+    ...(thinking.length > 0 ? { thinkingLog: thinking } : {}),
     ...(a.verbose
       ? {
           verbose: true,
@@ -593,10 +613,12 @@ async function runBare(
   onToolCall: (name: string, input: unknown) => void,
   phases: PhaseStat[],
   toolEvents: ToolEvent[],
+  thinkingLog: Array<{ round: number; text: string }>,
 ): Promise<RunTurnResult> {
   const model = opts.model ?? modelForTier("balanced");
   opts.onStage?.({ kind: "execute", label: "executing (pipeline off)" });
   const execStart = Date.now();
+  let bareReasoning = "";
   const result = await runCodingAgent({
     workspace: opts.workspace,
     ai: opts.ai,
@@ -612,7 +634,10 @@ async function runBare(
     signal: opts.signal,
     onEvent: (e) => {
       if (e.type === "text") opts.onText?.(e.delta);
-      if (e.type === "reasoning") opts.onReasoning?.(e.delta);
+      if (e.type === "reasoning") {
+        opts.onReasoning?.(e.delta);
+        bareReasoning += e.delta;
+      }
       if (e.type === "tool-call") onToolCall(e.name, e.input);
       if (e.type === "tool-result")
         opts.onToolEvent?.({ name: e.name, ok: e.ok, durationMs: e.durationMs });
@@ -620,6 +645,7 @@ async function runBare(
       captureToolEvent(e, toolEvents, opts.verbose);
     },
   });
+  if (bareReasoning.trim()) thinkingLog.push({ round: 0, text: bareReasoning });
   const usage = accumulateUsage(emptyUsage(), model, result.usage);
   phases.push(phaseStat("execute", 0, execStart, model, usage));
 
@@ -662,6 +688,7 @@ async function runBare(
     verbose: opts.verbose,
     phases,
     toolEvents,
+    thinkingLog,
   });
 
   if (opts.graphSync && filesTouched.size > 0) {
