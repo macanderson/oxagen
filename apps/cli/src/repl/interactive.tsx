@@ -64,7 +64,7 @@ import {
 import {
   runShellCommand as runShellCommand_impl,
   type ShellRunHandle,
-} from "./shell-runner.js";
+} from "../lib/shell-runner.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";

@@ -17,7 +17,7 @@ import { promisify } from "node:util";
 import type { Workspace, CommandResult } from "@oxagen/agent-engine";
 import { describeEditFailure } from "@oxagen/agent-engine";
 import { toRequest, type PermissionBroker } from "../permissions.js";
-import { runShellCommandBuffered } from "../../repl/shell-runner.js";
+import { runShellCommandBuffered } from "../../lib/shell-runner.js";
 import { hasRipgrep, runRipgrep, parseRipgrepOutput } from "./ripgrep.js";
 
 const execFileAsync = promisify(execFile);
