@@ -16,7 +16,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createModalSandbox } from "./modal";
 import { getSandbox, setSandboxForTests } from "./index";
-import type { SandboxRequest } from "./types";
+import type {
+  SandboxRequest,
+  SandboxExecRequest,
+  SandboxSessionSpec,
+} from "./types";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -39,6 +43,32 @@ const BASE_CONFIG = {
   runnerUrl: "https://example.modal.run",
   runnerToken: "tok_test",
 };
+
+function makeSessionSpec(
+  overrides: Partial<SandboxSessionSpec> = {},
+): SandboxSessionSpec {
+  return {
+    image: "node",
+    memoryMb: 512,
+    ttlSeconds: 86_400,
+    idleTimeoutSeconds: 300,
+    network: "deny",
+    orgId: "org_test",
+    workspaceId: "wrk_test",
+    ...overrides,
+  };
+}
+
+function makeExecReq(
+  overrides: Partial<SandboxExecRequest> = {},
+): SandboxExecRequest {
+  return {
+    sandboxId: "sb-123",
+    command: "echo hi",
+    timeoutMs: 5_000,
+    ...overrides,
+  };
+}
 
 function makeFetch(
   status: number,
@@ -338,5 +368,322 @@ describe("getSandbox() with SANDBOX_DRIVER=modal", () => {
     delete process.env.MODAL_RUNNER_TOKEN;
 
     expect(() => getSandbox()).toThrow(/MODAL_RUNNER_TOKEN/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Durable sessions — create / exec / snapshot / restore / stop / status
+// ---------------------------------------------------------------------------
+
+// The driver's session methods are declared optional on SandboxDriver, but the
+// Modal driver always implements them (supportsSessions === true), so narrow
+// once here to keep the tests free of repeated existence guards.
+type SessionDriver = ReturnType<typeof createModalSandbox> &
+  Required<
+    Pick<
+      ReturnType<typeof createModalSandbox>,
+      | "createSession"
+      | "execInSession"
+      | "snapshotSession"
+      | "restoreSession"
+      | "stopSession"
+      | "sessionStatus"
+    >
+  >;
+
+function makeSessionDriver(fetchImpl: typeof fetch): SessionDriver {
+  return createModalSandbox({ ...BASE_CONFIG, fetchImpl }) as SessionDriver;
+}
+
+function lastCall(fetchSpy: typeof fetch): [string, RequestInit] {
+  const calls = (fetchSpy as ReturnType<typeof vi.fn>).mock.calls;
+  return calls[calls.length - 1] as [string, RequestInit];
+}
+
+describe("createModalSandbox — supportsSessions", () => {
+  it("advertises durable-session support", () => {
+    const driver = createModalSandbox(BASE_CONFIG);
+    expect(driver.supportsSessions).toBe(true);
+  });
+});
+
+describe("createModalSandbox — createSession()", () => {
+  const handleBody = {
+    sandbox_id: "sb-abc",
+    status: "running" as const,
+    created_at: "2026-07-02T00:00:00Z",
+  };
+
+  it("POSTs to /sandbox/create and maps the handle to camelCase", async () => {
+    const fetchSpy = makeFetch(200, handleBody);
+    const driver = makeSessionDriver(fetchSpy);
+
+    const handle = await driver.createSession(makeSessionSpec());
+
+    expect(handle).toEqual({
+      sandboxId: "sb-abc",
+      status: "running",
+      createdAt: "2026-07-02T00:00:00Z",
+    });
+    const [url, init] = lastCall(fetchSpy);
+    expect(url).toBe("https://example.modal.run/sandbox/create");
+    expect(init.method).toBe("POST");
+    expect((init.headers as Record<string, string>).authorization).toBe(
+      "Bearer tok_test",
+    );
+  });
+
+  it("maps the session spec fields onto the snake_case runner body", async () => {
+    const fetchSpy = makeFetch(200, handleBody);
+    const driver = makeSessionDriver(fetchSpy);
+
+    await driver.createSession(
+      makeSessionSpec({
+        image: "python",
+        memoryMb: 1_024,
+        ttlSeconds: 3_600,
+        idleTimeoutSeconds: 120,
+        network: "allow",
+        orgId: "org_z",
+        workspaceId: "wrk_z",
+        setupCmd: "git clone repo",
+      }),
+    );
+
+    const [, init] = lastCall(fetchSpy);
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body).toEqual({
+      image: "python",
+      memory_mb: 1_024,
+      ttl_seconds: 3_600,
+      idle_timeout_seconds: 120,
+      network: "allow",
+      org_id: "org_z",
+      workspace_id: "wrk_z",
+      setup_cmd: "git clone repo",
+    });
+  });
+
+  it("sends setup_cmd: null when no setupCmd is provided", async () => {
+    const fetchSpy = makeFetch(200, handleBody);
+    const driver = makeSessionDriver(fetchSpy);
+
+    await driver.createSession(makeSessionSpec());
+
+    const [, init] = lastCall(fetchSpy);
+    const body = JSON.parse(init.body as string) as { setup_cmd: unknown };
+    expect(body.setup_cmd).toBeNull();
+  });
+
+  it("throws with status + path + body when the runner returns an error", async () => {
+    const driver = makeSessionDriver(makeFetch(500, "provision failed"));
+
+    await expect(driver.createSession(makeSessionSpec())).rejects.toThrow(
+      /modal runner 500 \/sandbox\/create: provision failed/,
+    );
+  });
+});
+
+describe("createModalSandbox — execInSession()", () => {
+  const execBody = {
+    exit_code: 2,
+    stdout: "out",
+    stderr: "err",
+    duration_ms: 33,
+    timed_out: false,
+    gone: false,
+  };
+
+  it("POSTs to /sandbox/exec and maps the result to camelCase", async () => {
+    const fetchSpy = makeFetch(200, execBody);
+    const driver = makeSessionDriver(fetchSpy);
+
+    const result = await driver.execInSession(makeExecReq());
+
+    expect(result).toEqual({
+      exitCode: 2,
+      stdout: "out",
+      stderr: "err",
+      durationMs: 33,
+      timedOut: false,
+      gone: false,
+    });
+    const [url] = lastCall(fetchSpy);
+    expect(url).toBe("https://example.modal.run/sandbox/exec");
+  });
+
+  it("forwards command, env and stdin on the request body", async () => {
+    const fetchSpy = makeFetch(200, execBody);
+    const driver = makeSessionDriver(fetchSpy);
+
+    await driver.execInSession(
+      makeExecReq({
+        sandboxId: "sb-999",
+        command: "pytest -q",
+        env: { CI: "1" },
+        stdin: "input\n",
+      }),
+    );
+
+    const [, init] = lastCall(fetchSpy);
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body).toEqual({
+      sandbox_id: "sb-999",
+      command: "pytest -q",
+      timeout_ms: 5_000,
+      env: { CI: "1" },
+      stdin: "input\n",
+    });
+  });
+
+  it("sends null env and stdin when omitted", async () => {
+    const fetchSpy = makeFetch(200, execBody);
+    const driver = makeSessionDriver(fetchSpy);
+
+    await driver.execInSession(makeExecReq());
+
+    const [, init] = lastCall(fetchSpy);
+    const body = JSON.parse(init.body as string) as {
+      env: unknown;
+      stdin: unknown;
+    };
+    expect(body.env).toBeNull();
+    expect(body.stdin).toBeNull();
+  });
+
+  it("surfaces gone: true when the runner reports the sandbox was reaped", async () => {
+    const driver = makeSessionDriver(
+      makeFetch(200, { ...execBody, gone: true }),
+    );
+
+    const result = await driver.execInSession(makeExecReq());
+
+    expect(result.gone).toBe(true);
+  });
+});
+
+describe("createModalSandbox — snapshotSession()", () => {
+  it("POSTs the sandbox id and returns the snapshot id", async () => {
+    const fetchSpy = makeFetch(200, { snapshot_id: "snap-1" });
+    const driver = makeSessionDriver(fetchSpy);
+
+    const result = await driver.snapshotSession("sb-abc");
+
+    expect(result).toEqual({ snapshotId: "snap-1" });
+    const [url, init] = lastCall(fetchSpy);
+    expect(url).toBe("https://example.modal.run/sandbox/snapshot");
+    const body = JSON.parse(init.body as string) as { sandbox_id: string };
+    expect(body.sandbox_id).toBe("sb-abc");
+  });
+});
+
+describe("createModalSandbox — restoreSession()", () => {
+  const handleBody = {
+    sandbox_id: "sb-restored",
+    status: "running" as const,
+    created_at: "2026-07-02T01:00:00Z",
+  };
+
+  it("POSTs the snapshot id alongside the session spec and maps the handle", async () => {
+    const fetchSpy = makeFetch(200, handleBody);
+    const driver = makeSessionDriver(fetchSpy);
+
+    const handle = await driver.restoreSession("snap-9", makeSessionSpec());
+
+    expect(handle).toEqual({
+      sandboxId: "sb-restored",
+      status: "running",
+      createdAt: "2026-07-02T01:00:00Z",
+    });
+    const [url, init] = lastCall(fetchSpy);
+    expect(url).toBe("https://example.modal.run/sandbox/restore");
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body.snapshot_id).toBe("snap-9");
+    // Spreads the same snake_case session body as create.
+    expect(body.image).toBe("node");
+    expect(body.memory_mb).toBe(512);
+  });
+});
+
+describe("createModalSandbox — stopSession()", () => {
+  it("POSTs to /sandbox/terminate and resolves void", async () => {
+    const fetchSpy = makeFetch(200, { ok: true });
+    const driver = makeSessionDriver(fetchSpy);
+
+    await expect(driver.stopSession("sb-abc")).resolves.toBeUndefined();
+    const [url, init] = lastCall(fetchSpy);
+    expect(url).toBe("https://example.modal.run/sandbox/terminate");
+    const body = JSON.parse(init.body as string) as { sandbox_id: string };
+    expect(body.sandbox_id).toBe("sb-abc");
+  });
+
+  it("throws when the runner rejects the terminate call", async () => {
+    const driver = makeSessionDriver(makeFetch(404, "no such sandbox"));
+
+    await expect(driver.stopSession("sb-gone")).rejects.toThrow(
+      /modal runner 404 \/sandbox\/terminate/,
+    );
+  });
+});
+
+describe("createModalSandbox — sessionStatus()", () => {
+  it("returns 'running' when the runner reports a live sandbox", async () => {
+    const driver = makeSessionDriver(
+      makeFetch(200, { sandbox_id: "sb-abc", status: "running" }),
+    );
+
+    await expect(driver.sessionStatus("sb-abc")).resolves.toBe("running");
+  });
+
+  it("returns 'gone' when the runner reports a reaped sandbox", async () => {
+    const fetchSpy = makeFetch(200, { sandbox_id: "sb-abc", status: "gone" });
+    const driver = makeSessionDriver(fetchSpy);
+
+    await expect(driver.sessionStatus("sb-abc")).resolves.toBe("gone");
+    const [url] = lastCall(fetchSpy);
+    expect(url).toBe("https://example.modal.run/sandbox/status");
+  });
+});
+
+describe("createModalSandbox — postJson error body handling", () => {
+  it("tolerates a text() failure and still throws with the status", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      text: () => Promise.reject(new Error("stream read failed")),
+      json: () => Promise.resolve({}),
+    }) as unknown as typeof fetch;
+    const driver = makeSessionDriver(fetchImpl);
+
+    await expect(driver.sessionStatus("sb-abc")).rejects.toThrow(
+      /modal runner 502 \/sandbox\/status/,
+    );
+  });
+
+  it("aborts the session request after the per-endpoint timeout budget", async () => {
+    vi.useFakeTimers();
+
+    let capturedSignal: AbortSignal | undefined;
+    const hangingFetch = vi.fn((_url: unknown, init: RequestInit) => {
+      const sig = init.signal as AbortSignal;
+      capturedSignal = sig;
+      return new Promise<Response>((_resolve, reject) => {
+        sig.addEventListener("abort", () => {
+          reject(new DOMException("The operation was aborted.", "AbortError"));
+        });
+      });
+    }) as unknown as typeof fetch;
+
+    const driver = makeSessionDriver(hangingFetch);
+    // sessionStatus uses a 30 s budget.
+    const statusPromise = driver.sessionStatus("sb-abc");
+    const rejectAssertion = expect(statusPromise).rejects.toBeDefined();
+
+    await vi.advanceTimersByTimeAsync(30_001);
+
+    expect(capturedSignal?.aborted).toBe(true);
+    await rejectAssertion;
+
+    vi.useRealTimers();
   });
 });
