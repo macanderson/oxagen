@@ -247,9 +247,16 @@ export function buildWorkspaceTools(
     codeGraph?: CodeGraphProvider;
     codeMap?: CodeMapProvider;
     onEvent?: (e: CodingEvent) => void;
+    /**
+     * Turn abort signal, forwarded to `workspace.exec` so an aborted turn kills
+     * the `bash` process subtree instead of leaving it running to its own
+     * timeout. Undefined ⇒ bash is bounded only by its timeout (unchanged).
+     */
+    signal?: AbortSignal;
   } = {},
 ): ToolSet {
   const onEvent = opts.onEvent ?? (() => undefined);
+  const signal = opts.signal;
 
   const tools: ToolSet = {
     read_file: tool({
@@ -512,7 +519,7 @@ export function buildWorkspaceTools(
     execute: async ({ command, timeout_ms }) => {
       const timeoutMs = Math.min(timeout_ms ?? 120_000, 600_000);
       try {
-        const result = await workspace.exec(command, { timeoutMs });
+        const result = await workspace.exec(command, { timeoutMs, signal });
         onEvent({ type: "command", command, exitCode: result.exitCode });
         if (result.timedOut) return `Command timed out after ${timeoutMs}ms.`;
         const out = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();

@@ -66,6 +66,8 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
     codeGraph: opts.codeGraph,
     codeMap: opts.codeMap,
     onEvent,
+    // Forward the turn signal so an aborted turn kills any in-flight bash subtree.
+    signal: opts.signal,
   });
 
   const recalled = opts.memory ? await opts.memory.recallContext().catch(() => "") : "";

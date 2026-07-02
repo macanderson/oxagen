@@ -215,8 +215,9 @@ export function createCwdWorkspace(cwd: string): Workspace {
       // Runs in its own process group so the timeout kills the whole subtree.
       // Node's `execFile({ timeout })` only signals the top-level `bash`, so a
       // grandchild that keeps the stdout pipe open (e.g. `npm run test | tail`)
-      // would leave the streams open and hang this promise forever.
-      return runShellCommandBuffered({ command, cwd, timeoutMs });
+      // would leave the streams open and hang this promise forever. The turn
+      // signal is threaded through so an aborted turn kills the subtree too.
+      return runShellCommandBuffered({ command, cwd, timeoutMs, signal: opts?.signal });
     },
 
     async diff() {
