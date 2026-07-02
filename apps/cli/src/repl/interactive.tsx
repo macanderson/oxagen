@@ -1303,7 +1303,7 @@ export function ReplApp({
         }
         void debugLog("turn", "turn.end", {
           mode: "repl",
-          steps: result.usage.steps,
+          steps: result.steps,
           inputTokens: result.usage.inputTokens,
           outputTokens: result.usage.outputTokens,
         });
