@@ -186,14 +186,26 @@ class OxagenAgent(BaseInstalledAgent):
             timeout_sec=600,
         )
 
-        # 2) Upload the self-contained bundle and install a tiny launcher.
+        # 2) Upload the self-contained bundle AND its sibling tree-sitter WASM
+        #    assets, then install a tiny launcher. The bundle loads web-tree-sitter
+        #    (the code graph) which reads tree-sitter.wasm + the grammar wasms from
+        #    its own directory (dist-standalone/) at runtime; esbuild can't inline
+        #    binary wasm, so bundle.mjs copies them next to oxagen.mjs. If we upload
+        #    only oxagen.mjs, Parser.init() hits ENOENT on tree-sitter.wasm and
+        #    Emscripten ABORTS the whole process (exit 1) — so upload them too.
         await environment.upload_file(bundle_path, _BUNDLE_REMOTE_TMP)
+        wasm_copies = ""
+        for wasm in sorted(bundle_path.parent.glob("*.wasm")):
+            remote_tmp = f"/tmp/{wasm.name}"
+            await environment.upload_file(wasm, remote_tmp)
+            wasm_copies += f"cp {remote_tmp} {_BUNDLE_INSTALL_DIR}/{wasm.name} && "
         wrapper = "#!/bin/sh\\nexec node " + _BUNDLE_INSTALL_PATH + ' "$@"\\n'
         await self.exec_as_root(
             environment,
             command=(
                 f"mkdir -p {_BUNDLE_INSTALL_DIR} && "
                 f"cp {_BUNDLE_REMOTE_TMP} {_BUNDLE_INSTALL_PATH} && "
+                f"{wasm_copies}"
                 f"printf '{wrapper}' > {_WRAPPER_PATH} && "
                 f"chmod +x {_WRAPPER_PATH} && "
                 f"oxagen --version"
