@@ -80,6 +80,14 @@ export function buildProgram(): Command {
       "Capture + emit full per-turn telemetry (per-phase timing, model+token+cost, tool results)",
       false,
     )
+    .option(
+      "--output-format <format>",
+      "One-shot output format: text | json (single result envelope) | stream-json (JSONL events)",
+    )
+    .option(
+      "--max-steps <n>",
+      "Cap the agent tool loop at n steps per execution round (default 256)",
+    )
     .action(
       async (
         promptWords: string[],
@@ -91,6 +99,8 @@ export function buildProgram(): Command {
           pipeline?: boolean;
           verbose?: boolean;
           agent?: string;
+          outputFormat?: string;
+          maxSteps?: string;
         },
       ) => {
         const prompt = promptWords.join(" ").trim();
@@ -100,6 +110,28 @@ export function buildProgram(): Command {
           if (!mode) {
             process.stderr.write(
               `Error: invalid --mode "${opts.mode}". Use ask, accept-edits, bypass, or readonly.\n`,
+            );
+            process.exitCode = 1;
+            return;
+          }
+        }
+        let outputFormat: "text" | "json" | "stream-json" | undefined;
+        if (opts.outputFormat) {
+          if (!["text", "json", "stream-json"].includes(opts.outputFormat)) {
+            process.stderr.write(
+              `Error: invalid --output-format "${opts.outputFormat}". Use text, json, or stream-json.\n`,
+            );
+            process.exitCode = 1;
+            return;
+          }
+          outputFormat = opts.outputFormat as "text" | "json" | "stream-json";
+        }
+        let maxSteps: number | undefined;
+        if (opts.maxSteps !== undefined) {
+          maxSteps = Number.parseInt(opts.maxSteps, 10);
+          if (!Number.isFinite(maxSteps) || maxSteps < 1) {
+            process.stderr.write(
+              `Error: invalid --max-steps "${opts.maxSteps}". Use a positive integer.\n`,
             );
             process.exitCode = 1;
             return;
@@ -121,12 +153,21 @@ export function buildProgram(): Command {
           mode,
           bare: opts.pipeline === false,
           verbose: opts.verbose,
+          outputFormat,
+          maxSteps,
         };
 
         // --agent: run the prompt as a named agent (its prompt, tools, model).
         if (opts.agent) {
           if (!prompt) {
             process.stderr.write("Error: --agent requires a prompt, e.g. `oxagen --agent reviewer \"…\"`.\n");
+            process.exitCode = 1;
+            return;
+          }
+          if (outputFormat && outputFormat !== "text") {
+            process.stderr.write(
+              "Error: --output-format json/stream-json is not supported with --agent (text only).\n",
+            );
             process.exitCode = 1;
             return;
           }

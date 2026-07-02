@@ -63,6 +63,16 @@ export interface OneShotOptions {
   bare?: boolean;
   /** Capture + emit full per-turn telemetry (overrides config default). */
   verbose?: boolean;
+  /**
+   * stdout format. `text` (default) streams the answer; `json` prints ONE
+   * result envelope at the end; `stream-json` prints JSONL events (stage /
+   * tool / text / reasoning) as they happen, ending with the result envelope.
+   * Both JSON modes keep stdout machine-pure — human progress stays on stderr
+   * in `json` mode and is omitted in `stream-json` mode.
+   */
+  outputFormat?: "text" | "json" | "stream-json";
+  /** Cap the agent tool loop at n steps per execution round (default 256). */
+  maxSteps?: number;
 }
 
 export async function runOneShot(
@@ -147,6 +157,14 @@ export async function runOneShot(
 
   void debugLog("turn", "turn.start", { mode: "one-shot", readOnly, model: options.model, prompt });
 
+  // Output routing. `text` streams the answer to stdout; the JSON modes keep
+  // stdout machine-pure: `json` emits ONE result envelope at the end, and
+  // `stream-json` emits JSONL events as they happen plus the final envelope.
+  const format = options.outputFormat ?? "text";
+  const emitJson = (obj: unknown): void => {
+    process.stdout.write(JSON.stringify(obj) + "\n");
+  };
+
   try {
     let streamed = false;
     const result = await runTurn({
@@ -158,6 +176,7 @@ export async function runOneShot(
       model: options.model,
       bare: options.bare,
       verbose,
+      maxSteps: options.maxSteps,
       memory: createCombinedMemory(memory, fleetMemory),
       codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
       trace: traceStore,
@@ -172,20 +191,27 @@ export async function runOneShot(
       onStage: (stage) => {
         stall.reset();
         void debugLog("turn", "turn.stage", { label: stage.label, detail: stage.detail });
-        process.stderr.write(
-          `  ${stage.label}${stage.detail ? ` · ${stage.detail}` : ""}\n`,
-        );
+        if (format === "stream-json") {
+          emitJson({ type: "stage", label: stage.label, detail: stage.detail });
+        } else {
+          process.stderr.write(
+            `  ${stage.label}${stage.detail ? ` · ${stage.detail}` : ""}\n`,
+          );
+        }
       },
       onText: (delta) => {
         stall.reset();
         streamed = true;
-        process.stdout.write(delta);
+        if (format === "text") process.stdout.write(delta);
+        else if (format === "stream-json") emitJson({ type: "text", delta });
+        // json: silent — the full text rides in the final envelope.
       },
       // Reasoning / chain-of-thought goes to stderr (dim), so the piped stdout
       // stays the clean answer while the thinking is still visible on a TTY.
       onReasoning: (delta) => {
         stall.reset();
-        process.stderr.write(`\x1b[2m${delta}\x1b[22m`);
+        if (format === "stream-json") emitJson({ type: "reasoning", delta });
+        else process.stderr.write(`\x1b[2m${delta}\x1b[22m`);
       },
       // Tool activity goes to stderr so stdout stays the clean final answer
       // (pipeable). e.g. `oxagen "..." > out.md` captures only the answer.
@@ -193,16 +219,40 @@ export async function runOneShot(
         inFlightTools++;
         stall.reset();
         void debugLog("turn", "turn.tool-call", { name, input });
-        process.stderr.write(formatToolCallWithSpacing(name, input));
+        if (format === "stream-json") {
+          emitJson({ type: "tool", phase: "start", name });
+        } else {
+          process.stderr.write(formatToolCallWithSpacing(name, input));
+        }
       },
       onToolEvent: ({ name, ok, durationMs }) => {
         inFlightTools = Math.max(0, inFlightTools - 1);
         stall.reset();
         void debugLog("turn", "turn.tool-result", { name, ok, durationMs });
+        if (format === "stream-json") {
+          emitJson({ type: "tool", phase: "end", name, ok, durationMs });
+        }
       },
     });
-    if (streamed) process.stdout.write("\n");
-    void debugLog("turn", "turn.end", { mode: "one-shot", streamed });
+    if (format === "text") {
+      if (streamed) process.stdout.write("\n");
+    } else {
+      // One machine-readable result envelope, shared by json and stream-json.
+      emitJson({
+        type: "result",
+        ok: true,
+        text: result.text,
+        steps: result.steps,
+        usage: result.usage,
+        model: result.trace.selectedModel,
+        filesTouched: result.trace.filesTouched,
+        commandsRun: result.trace.commandsRun,
+        complete: result.trace.finalComplete,
+        traceId: result.trace.id,
+        durationMs: result.trace.durationMs,
+      });
+    }
+    void debugLog("turn", "turn.end", { mode: "one-shot", streamed, format });
     // The engine persists the trace via the injected `trace` port. Verbose mode
     // additionally appends the structured record to the JSONL stream and prints
     // the per-phase / per-model / cost breakdown to stderr (stdout stays the
@@ -225,6 +275,9 @@ export async function runOneShot(
           ? err.message
           : String(err);
     void debugLog("error", "turn.error", { mode: "one-shot", message });
+    if (format !== "text") {
+      emitJson({ type: "result", ok: false, error: message });
+    }
     process.stderr.write(`Error: ${message}\n`);
     process.exitCode = 1;
   } finally {
@@ -260,6 +313,7 @@ export async function runAgentOneShot(
       agent,
       readOnly: options.readOnly,
       model: options.model,
+      maxSteps: options.maxSteps,
       projectContext,
       memory,
       onText: (delta) => {
