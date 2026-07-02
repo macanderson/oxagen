@@ -1,4 +1,4 @@
-import { withTenantDb, schema } from "@oxagen/database";
+import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { and, asc, eq, isNull, or, sql, gt } from "drizzle-orm";
 import { CREDIT_REASONS } from "./constants";
 
@@ -176,10 +176,20 @@ export async function grantCredits(args: GrantCreditsArgs): Promise<{ balanceCen
  * Returns the org's effective credit balance: SUM(remaining_cents) for lots
  * that are not yet expired. Lazy expiry — expired lots are excluded from the
  * sum without being deleted.
+ *
+ * `opts.system` routes the read through {@link withSystemDb} instead of
+ * {@link withTenantDb}. Request paths always run inside a tenant scope and must
+ * leave this false so RLS stays load-bearing; only trusted cross-tenant crons
+ * that sweep every org with no active scope (e.g. billing.dunning-sweep) pass
+ * `system: true`, mirroring sweepDunning()'s own withSystemDb usage.
  */
-export async function effectiveBalance(orgId: string): Promise<bigint> {
+export async function effectiveBalance(
+  orgId: string,
+  opts?: { system?: boolean },
+): Promise<bigint> {
   const now = new Date();
-  const rows = await withTenantDb((tx) =>
+  const runner = opts?.system ? withSystemDb : withTenantDb;
+  const rows = await runner((tx) =>
     tx
       .select({ remaining: schema.creditLots.remainingCents })
       .from(schema.creditLots)

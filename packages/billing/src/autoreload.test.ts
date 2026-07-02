@@ -154,6 +154,27 @@ describe("isLowBalance", () => {
     const result = await isLowBalance("org-abc");
     expect(result.low).toBe(false);
   });
+
+  it("forwards no db options by default (request path → RLS-enforced reads)", async () => {
+    getOrgBillingSettingsMock.mockResolvedValue(makeSettings({ lowBalanceThresholdCents: 500n }));
+    effectiveBalanceMock.mockResolvedValue(200n);
+    await isLowBalance("org-abc");
+    expect(getOrgBillingSettingsMock).toHaveBeenCalledWith("org-abc", undefined);
+    expect(effectiveBalanceMock).toHaveBeenCalledWith("org-abc", undefined);
+  });
+
+  it("forwards { system: true } to both reads for trusted cron use (no tenant scope)", async () => {
+    // Regression: the billing.dunning-sweep cron runs with NO active tenant
+    // scope, so its billing reads must go through withSystemDb. isLowBalance
+    // must thread the system flag down to getOrgBillingSettings AND
+    // effectiveBalance, or the withTenantDb inside them throws TenantScopeError.
+    getOrgBillingSettingsMock.mockResolvedValue(makeSettings({ lowBalanceThresholdCents: 500n }));
+    effectiveBalanceMock.mockResolvedValue(200n);
+    const result = await isLowBalance("org-abc", { system: true });
+    expect(result.low).toBe(true);
+    expect(getOrgBillingSettingsMock).toHaveBeenCalledWith("org-abc", { system: true });
+    expect(effectiveBalanceMock).toHaveBeenCalledWith("org-abc", { system: true });
+  });
 });
 
 describe("maybeAutoReload", () => {
