@@ -125,9 +125,20 @@ export async function runOneShot(
   // completes. The inactivity guard aborts only if no progress — a stream delta,
   // stage, or tool call — lands within turnInactivityMs. Esc is not available
   // here, so this progress guard is the only backstop against a truly hung turn.
+  //
+  // A tool that is EXECUTING is progress, even though no events arrive until it
+  // finishes: a real test suite legitimately runs longer than the guard window
+  // (bash allows up to 600s; the window is 300s). Every engine tool carries its
+  // own timeout backstop, so an in-flight tool ALWAYS returns — when the guard
+  // fires mid-tool it defers instead of killing a healthy run.
   const inactivityMs = DEFAULT_TIMEOUTS.turnInactivityMs ?? 300_000;
   const turnController = makeTurnController();
+  let inFlightTools = 0;
   const stall = makeStallDetector(inactivityMs, () => {
+    if (inFlightTools > 0) {
+      stall.reset(); // a tool is executing (bounded by its own timeout) — defer
+      return;
+    }
     if (!turnController.signal.aborted) {
       void debugLog("timeout", "[timeout] scope=turn reason=inactivity");
       turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
@@ -179,9 +190,15 @@ export async function runOneShot(
       // Tool activity goes to stderr so stdout stays the clean final answer
       // (pipeable). e.g. `oxagen "..." > out.md` captures only the answer.
       onToolCall: (name, input) => {
+        inFlightTools++;
         stall.reset();
         void debugLog("turn", "turn.tool-call", { name, input });
         process.stderr.write(formatToolCallWithSpacing(name, input));
+      },
+      onToolEvent: ({ name, ok, durationMs }) => {
+        inFlightTools = Math.max(0, inFlightTools - 1);
+        stall.reset();
+        void debugLog("turn", "turn.tool-result", { name, ok, durationMs });
       },
     });
     if (streamed) process.stdout.write("\n");

@@ -20,6 +20,94 @@ function clip(text: string): string {
   );
 }
 
+// ── Per-tool timeout backstop ────────────────────────────────────────────────
+// Every tool must ALWAYS return: callers' turn-level inactivity guards treat an
+// in-flight tool as legitimate progress precisely because a tool cannot hang
+// forever. bash is bounded by the workspace's own exec timeout (this backstop
+// sits a grace period above the declared/default value so the real timeout,
+// with its better message, always fires first); everything else — fs walks,
+// graph/code-map queries — gets the standard bound.
+
+/** Standard bound for read/search/list/graph tools. */
+const TOOL_TIMEOUT_MS = 60_000;
+/** Default + max bash timeout — must mirror the bash tool's inputSchema. */
+const BASH_DEFAULT_TIMEOUT_MS = 120_000;
+const BASH_MAX_TIMEOUT_MS = 600_000;
+/** Backstop margin above the tool's own timeout. */
+const TOOL_TIMEOUT_GRACE_MS = 30_000;
+
+/** Backstop deadline for one call, honoring bash's declared `timeout_ms`. */
+export function toolBackstopMs(name: string, input: unknown): number {
+  if (name === "bash") {
+    const declared = (input as { timeout_ms?: unknown } | null)?.timeout_ms;
+    const own = Math.min(
+      typeof declared === "number" && Number.isFinite(declared)
+        ? declared
+        : BASH_DEFAULT_TIMEOUT_MS,
+      BASH_MAX_TIMEOUT_MS,
+    );
+    return own + TOOL_TIMEOUT_GRACE_MS;
+  }
+  return TOOL_TIMEOUT_MS;
+}
+
+/**
+ * Race a tool's execute against its backstop deadline. A timed-out tool
+ * RESOLVES to a string result (never throws) so the turn stays alive and the
+ * model can adapt. The underlying promise is left to settle in the background;
+ * its eventual value is discarded.
+ */
+function withBackstop(
+  name: string,
+  input: unknown,
+  run: () => PromiseLike<unknown>,
+): Promise<unknown> {
+  const ms = toolBackstopMs(name, input);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      resolve(
+        `Tool ${name} timed out after ${Math.round(ms / 1000)}s (backstop) — ` +
+          `it did not return. Try a narrower call${name === "bash" ? " or a larger timeout_ms" : ""}.`,
+      );
+    }, ms);
+    (timer as { unref?: () => void }).unref?.();
+    Promise.resolve()
+      .then(run)
+      .then(
+        (v) => {
+          clearTimeout(timer);
+          resolve(v);
+        },
+        (err: unknown) => {
+          clearTimeout(timer);
+          resolve(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        },
+      );
+  });
+}
+
+/** Wrap every tool's execute in {@link withBackstop}. Returns a new ToolSet. */
+function wrapToolsWithBackstop(tools: ToolSet): ToolSet {
+  const out: ToolSet = {};
+  for (const [name, toolDef] of Object.entries(tools)) {
+    const exec = toolDef.execute;
+    if (!exec) {
+      out[name] = toolDef;
+      continue;
+    }
+    out[name] = {
+      ...toolDef,
+      execute: (input: unknown, options: unknown) =>
+        withBackstop(name, input, () =>
+          Promise.resolve(
+            (exec as (i: unknown, o: unknown) => unknown)(input, options),
+          ),
+        ),
+    };
+  }
+  return out;
+}
+
 export function buildWorkspaceTools(
   workspace: Workspace,
   opts: {
@@ -298,5 +386,7 @@ export function buildWorkspaceTools(
     delete tools["bash"];
   }
 
-  return tools;
+  // Every tool gets the timeout backstop LAST so it bounds the whole execute
+  // (including permission-broker wrapping applied by gated workspaces).
+  return wrapToolsWithBackstop(tools);
 }

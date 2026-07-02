@@ -35,6 +35,7 @@ import {
   makeStallDetector,
   wrapToolsWithTimeout,
   toolTimeoutCategory,
+  toolWrapperTimeoutMs,
 } from "../timeouts.js";
 
 afterEach(() => {
@@ -564,5 +565,55 @@ describe("wrapToolsWithTimeout", () => {
     const wrapped = wrapToolsWithTimeout(tools);
     expect(wrapped["t"]?.description).toBe("my description");
     expect(wrapped["t"]?.inputSchema).toEqual(tools["t"]?.inputSchema);
+  });
+});
+
+describe("toolWrapperTimeoutMs", () => {
+  it("gives standard tools the fixed standard deadline", () => {
+    expect(toolWrapperTimeoutMs("read_file", {})).toBe(TIMEOUTS.toolMs);
+    expect(toolWrapperTimeoutMs("grep", null)).toBe(TIMEOUTS.toolMs);
+  });
+
+  it("honors bash's declared timeout_ms plus the grace margin", () => {
+    expect(toolWrapperTimeoutMs("bash", { timeout_ms: 500_000 })).toBe(
+      500_000 + TIMEOUTS.toolGraceMs,
+    );
+  });
+
+  it("uses bash's schema default when no timeout_ms is declared", () => {
+    expect(toolWrapperTimeoutMs("bash", {})).toBe(
+      TIMEOUTS.bashDefaultMs + TIMEOUTS.toolGraceMs,
+    );
+  });
+
+  it("caps a declared timeout_ms at bash's schema max", () => {
+    expect(toolWrapperTimeoutMs("bash", { timeout_ms: 9_999_999 })).toBe(
+      TIMEOUTS.bashMaxMs + TIMEOUTS.toolGraceMs,
+    );
+  });
+
+  it("never fires before the tool's own timeout: a bash call declaring 500s survives 240s", async () => {
+    vi.useFakeTimers();
+    try {
+      const tools: ToolSet = {
+        bash: {
+          description: "bash",
+          inputSchema: z.object({ command: z.string(), timeout_ms: z.number().optional() }),
+          // Resolves at 480s — inside its declared 500s budget, but past the
+          // old fixed 240s wrapper that used to kill it.
+          execute: () =>
+            new Promise<string>((resolve) => {
+              setTimeout(() => resolve("done after 480s"), 480_000);
+            }),
+        },
+      };
+      const wrapped = wrapToolsWithTimeout(tools);
+      // @ts-expect-error — execute is callable
+      const promise = wrapped.bash.execute({ command: "pytest", timeout_ms: 500_000 }, {});
+      await vi.advanceTimersByTimeAsync(480_001);
+      await expect(promise).resolves.toBe("done after 480s");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

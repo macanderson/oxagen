@@ -16,8 +16,8 @@
  *     retried per {@link TimeoutConfig.retry}, **without ending the turn**
  *     ({@link callModelWithTimeout}).
  *   - **Per tool call** — every tool call is bounded ({@link wrapToolsWithTimeout});
- *     bash/build/test calls get the longer {@link TIMEOUTS.toolLongMs}, all others
- *     the standard {@link TIMEOUTS.toolMs}.
+ *     bash honors its declared `timeout_ms` plus a grace margin
+ *     ({@link toolWrapperTimeoutMs}), all others the standard {@link TIMEOUTS.toolMs}.
  *   - **Turn guarded by PROGRESS, not by the clock** — the optional
  *     {@link TimeoutConfig.turnInactivityMs} guard aborts the turn only when *no*
  *     model or tool call has completed within that window. Any completed call
@@ -107,8 +107,20 @@ export const TIMEOUTS = {
   llmStallMs: DEFAULT_TIMEOUTS.perModelCallMs,
   /** ms — abort a standard read/search/list/lookup tool call. */
   toolMs: 60_000,
-  /** ms — abort a long-running tool call (bash builds, tests, git ops). */
-  toolLongMs: 240_000,
+  /**
+   * ms — bash's own default timeout when the model declares no `timeout_ms`.
+   * MUST mirror the bash tool's inputSchema default (agent/tools.ts).
+   */
+  bashDefaultMs: 120_000,
+  /** ms — bash's maximum allowed `timeout_ms`. MUST mirror the inputSchema max. */
+  bashMaxMs: 600_000,
+  /**
+   * ms — margin the long-tool wrapper adds ABOVE the tool's own timeout. The
+   * tool's internal timeout (which kills the process group and returns a
+   * useful message) must always fire first; the wrapper is a pure backstop
+   * against a wedged tool implementation.
+   */
+  toolGraceMs: 30_000,
 } as const;
 
 // ── Core race helper ──────────────────────────────────────────────────────────
@@ -474,10 +486,34 @@ export function toolTimeoutCategory(toolName: string): ToolTimeoutCategory {
 }
 
 /**
- * Wrap every tool execute in a per-call timeout appropriate for its category.
- * Returns a new ToolSet; never mutates the input. A timed-out tool surfaces as a
- * tool-result string (not a throw) so the turn stays alive and the model can
- * adapt.
+ * The wrapper deadline for one tool call. Long tools (bash) declare their own
+ * timeout via `timeout_ms` — the tool's INTERNAL timeout (which kills the
+ * process group and returns a real message) is authoritative, so the wrapper
+ * sits a grace period above the declared/default value and never contradicts
+ * it. Before this, the wrapper raced bash at a fixed 240s while the tool
+ * advertised `timeout_ms` up to 600s — a model that asked for a 10-minute test
+ * run was killed at 4 with a misleading message. Exported for tests.
+ */
+export function toolWrapperTimeoutMs(name: string, input: unknown): number {
+  if (toolTimeoutCategory(name) === "long") {
+    const declared = (input as { timeout_ms?: unknown } | null)?.timeout_ms;
+    const own = Math.min(
+      typeof declared === "number" && Number.isFinite(declared)
+        ? declared
+        : TIMEOUTS.bashDefaultMs,
+      TIMEOUTS.bashMaxMs,
+    );
+    return own + TIMEOUTS.toolGraceMs;
+  }
+  return TIMEOUTS.toolMs;
+}
+
+/**
+ * Wrap every tool execute in a per-call timeout appropriate for its category
+ * (long tools honor their declared `timeout_ms` — see
+ * {@link toolWrapperTimeoutMs}). Returns a new ToolSet; never mutates the
+ * input. A timed-out tool surfaces as a tool-result string (not a throw) so
+ * the turn stays alive and the model can adapt.
  */
 export function wrapToolsWithTimeout(
   tools: ToolSet,
@@ -492,12 +528,12 @@ export function wrapToolsWithTimeout(
     }
 
     const category = toolTimeoutCategory(name);
-    const ms = category === "long" ? TIMEOUTS.toolLongMs : TIMEOUTS.toolMs;
 
     out[name] = {
       ...toolDef,
-      execute: (input: unknown, options: unknown): Promise<unknown> =>
-        withTimeout(
+      execute: (input: unknown, options: unknown): Promise<unknown> => {
+        const ms = toolWrapperTimeoutMs(name, input);
+        return withTimeout(
           Promise.resolve((exec as (i: unknown, o: unknown) => unknown)(input, options)),
           ms,
           signal,
@@ -520,7 +556,8 @@ export function wrapToolsWithTimeout(
           // stack via debugLog's Error handling) before re-throwing to the turn.
           void debugLog("error", "turn.tool-throw", { tool: name, error: err });
           throw err;
-        }),
+        });
+      },
     };
   }
   return out;

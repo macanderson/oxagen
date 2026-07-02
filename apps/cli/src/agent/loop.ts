@@ -267,9 +267,10 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
       }
     : settings.permissions;
   // Layer 1: permission gate + Pre/PostToolUse hooks.
-  // Layer 2: per-tool timeouts (standard: 60s, bash: 240s) so no single tool
-  // call can block the turn indefinitely. Tool timeouts return a string result
-  // the model reads — the turn stays alive for the model to explain or adapt.
+  // Layer 2: per-tool timeouts (standard: 60s; bash: its declared timeout_ms —
+  // up to 600s — plus a grace margin) so no single tool call can block the turn
+  // indefinitely. Tool timeouts return a string result the model reads — the
+  // turn stays alive for the model to explain or adapt.
   const gatedTools = wrapToolsWithGate(availableTools, {
     cwd,
     permissions: gatePermissions,
@@ -344,12 +345,22 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   });
 
   let text = "";
-  // Stall detector: if no text delta or streaming progress arrives within
-  // TIMEOUTS.llmStallMs, abort the turn. This catches a stalled TCP connection
-  // that keeps the socket open but stops delivering bytes — without this, such
-  // a connection could hang the turn for minutes. The detector is reset on each
-  // delta and stopped when the stream ends (success or error).
+  // Stall detector: if no streaming progress arrives within TIMEOUTS.llmStallMs,
+  // abort the turn. This catches a stalled TCP connection that keeps the socket
+  // open but stops delivering bytes — without this, such a connection could
+  // hang the turn for minutes. EVERY stream part resets the window (any bytes
+  // prove the connection is alive), and while a tool call is EXECUTING —
+  // between its `tool-call` and `tool-result` parts, when the stream is
+  // legitimately silent for up to the tool's own timeout (bash: up to 600s,
+  // longer than the stall window) — the detector defers instead of aborting.
+  // Tools are timeout-wrapped (wrapToolsWithTimeout), so a result part is
+  // guaranteed to eventually arrive and re-arm the window.
+  let inFlightTools = 0;
   const stall = makeStallDetector(TIMEOUTS.llmStallMs, () => {
+    if (inFlightTools > 0) {
+      stall.reset(); // a tool is executing (bounded by its own timeout) — defer
+      return;
+    }
     if (!turnController.signal.aborted) {
       turnController.abort(
         new AgentTimeoutError("LLM stream stall", TIMEOUTS.llmStallMs),
@@ -358,17 +369,17 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   });
   try {
     // Consume the full stream so reasoning deltas surface alongside answer text.
-    // Both `text-delta` and `reasoning-delta` reset the stall window — a model
-    // that is actively "thinking" (emitting reasoning) is making progress even
-    // before any answer text arrives.
     for await (const part of result.fullStream) {
+      stall.reset();
       if (part.type === "text-delta") {
-        stall.reset();
         text += part.text;
         opts.onText?.(part.text);
       } else if (part.type === "reasoning-delta") {
-        stall.reset();
         opts.onReasoning?.(part.text);
+      } else if (part.type === "tool-call") {
+        inFlightTools++;
+      } else if (part.type === "tool-result" || part.type === "tool-error") {
+        inFlightTools = Math.max(0, inFlightTools - 1);
       }
     }
   } catch (err) {
