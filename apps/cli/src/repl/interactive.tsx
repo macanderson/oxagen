@@ -1323,6 +1323,20 @@ export function ReplApp({
           : timeoutReason instanceof AgentTimeoutError
             ? timeoutReason.message
             : `Error: ${err instanceof Error ? err.message : String(err)}`;
+        // Persist the exception to cli.output. The REPL previously only rendered
+        // the error to the terminal — nothing reached the debug log, so a failed
+        // or hung turn left only its `turn.tool-call`/agent messages behind with no
+        // exception data to diagnose. A user cancel isn't an error, so skip it.
+        if (!userCancelled) {
+          void debugLog("error", "turn.error", {
+            mode: "repl",
+            kind: timeoutReason instanceof AgentTimeoutError ? "timeout" : "error",
+            message: content.replace(/^Error: /, ""),
+            // Pass the raw value so debugLog captures name/message/stack for a
+            // thrown Error; the timeout reason's message is already user-facing.
+            error: timeoutReason instanceof AgentTimeoutError ? timeoutReason.message : err,
+          });
+        }
         turn.push({ role: "assistant", content, timestamp: Date.now() });
         render();
       } finally {
@@ -1487,15 +1501,17 @@ export function ReplApp({
         }
       </Static>
 
-      {/* Everything below <Static> is the live, re-rendered frame, laid out as a
-          row: the chat + input column on the left (flexGrow so it fills the space)
-          and the Agent Team / Task Progress dock on the right. The dock hides
-          itself when idle (auto), when pinned off (/panel), or on a narrow
-          terminal, so the single-column experience is unchanged until there's work
-          to monitor. minWidth={0} lets the left column truncate instead of forcing
-          the row wider than the terminal. */}
-      <Box flexDirection="row">
-      <Box flexDirection="column" flexGrow={1} minWidth={0}>
+      {/* Everything below <Static> is the live, re-rendered frame. The streaming
+          transcript and the status footer span the FULL width; only the bottom
+          bar (the prompt input + the Agent Team / Task Progress dock) is a row,
+          so the dock sits beside the prompt bar rather than beside the whole
+          conversation — and their bottom edges align. */}
+
+      {/* Live region — full width above the bottom bar: the terminal panel, the
+          streaming tail (or empty-state hint), queued prompts, the thinking
+          indicator, the reset confirmation, and the HUD. Rendering these at full
+          width keeps long output and diffs from being squeezed by the dock. */}
+      <Box flexDirection="column">
 
       {/* Terminal panel — a `!command`'s live stdout/stderr, red-outlined and
           pinned just ABOVE the agent messages so shell output is visually
@@ -1576,27 +1592,42 @@ export function ReplApp({
           status overlay without disturbing the scrollback history above. */}
       {hudVisible && <HudPanel />}
 
-      {/* Input row — pinned to the bottom stack, padded above, and never allowed
-          to shrink (flexShrink={0}) so the prompt bar keeps a constant height as
-          the conversation above it grows or the terminal is resized.
-          A pending permission prompt takes over the input row; otherwise the
-          input stays live during a turn and submissions queue (FIFO). */}
-      <Box marginTop={1} flexShrink={0} flexDirection="column">
-        {approval ? (
-          <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
-        ) : (
-          <PromptInput
-            onSubmit={handleUserSubmit}
-            busy={isStreaming}
-            catalog={catalogRef.current ?? []}
-          />
-        )}
+      </Box>{/* end full-width live region */}
+
+      {/* Bottom bar — the pinned prompt input occupies the left (flexGrow, ~2/3
+          of the width) and the Agent Team / Task Progress dock is stacked on the
+          right. alignItems="flex-end" BOTTOM-ALIGNS the two, so the bottom border
+          of the Task Progress panel lines up exactly with the bottom of the
+          prompt input. The dock keeps its fixed width, stays flush right, and
+          hides itself when idle (auto), pinned off (/panel), or on a narrow
+          terminal — in which case the prompt spans the full width. */}
+      <Box flexDirection="row" alignItems="flex-end" marginTop={1}>
+        {/* Input column — never allowed to shrink (flexShrink={0}) so the prompt
+            bar keeps a constant height as the conversation grows or the terminal
+            is resized. A pending permission prompt takes over the input row;
+            otherwise the input stays live during a turn and submissions queue. */}
+        <Box flexDirection="column" flexGrow={1} minWidth={0} flexShrink={0}>
+          {approval ? (
+            <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
+          ) : (
+            <PromptInput
+              onSubmit={handleUserSubmit}
+              busy={isStreaming}
+              catalog={catalogRef.current ?? []}
+            />
+          )}
+        </Box>
+
+        {/* Right-hand dock: Agent Team (live roster) + Task Progress (the
+            planning agent's checklist), stacked. Renders nothing until there's
+            work to show; bottom-aligned with the prompt via the row above. */}
+        <AgentSidebar mode={panelMode} />
       </Box>
 
-      {/* Status line — below the input bar, with a blank row beneath it so it is
-          never flush against the bottom edge of the window. A whimsical cat
-          chases a mouse on the rail above it while a turn is running (opt out
-          with OXAGEN_CLI_FUN=0). */}
+      {/* Status line — a full-width footer BENEATH the bottom bar, so it sits
+          below the aligned prompt/dock bottom edges rather than pushing the dock
+          down and breaking the alignment. A whimsical cat chases a mouse on the
+          rail above it while a turn is running (opt out with OXAGEN_CLI_FUN=0). */}
       <Box marginBottom={1} flexShrink={0} flexDirection="column">
         {process.env.OXAGEN_CLI_FUN !== "0" ? (
           <CatMouseChase active={isStreaming} />
@@ -1620,13 +1651,6 @@ export function ReplApp({
           mode={mode}
         />
       </Box>
-
-      </Box>{/* end left (chat + input) column */}
-
-      {/* Right-hand dock: Agent Team (live roster) + Task Progress (the planning
-          agent's checklist). Renders nothing until there's work to show. */}
-      <AgentSidebar mode={panelMode} />
-      </Box>{/* end live-frame row */}
     </Box>
   );
 }
