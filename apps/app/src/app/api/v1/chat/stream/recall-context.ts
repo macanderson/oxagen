@@ -115,7 +115,11 @@ export async function recallWorkspaceMemory(args: {
           executionRef: args.executionRef,
         },
         args.ctx,
-        { surface: "app" },
+        // This recall runs on behalf of the chat agent — mark it the `agent`
+        // surface (matching the route's other agent-capability invokes) so IAM
+        // and metering attribute it correctly. agent.memory.recall does not
+        // expose an `app` surface.
+        { surface: "agent" },
       ).catch(() => null),
       timeout,
     ]);

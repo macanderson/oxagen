@@ -119,7 +119,7 @@ describe("recallWorkspaceMemory", () => {
       executionRef: "exec-42",
     });
     expect(ctxArg).toBe(CTX);
-    expect(opts).toMatchObject({ surface: "app" });
+    expect(opts).toMatchObject({ surface: "agent" });
 
     expect(msg?.role).toBe("user");
     expect(String(msg?.content)).toContain("Prior lesson");
