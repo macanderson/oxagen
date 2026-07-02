@@ -59,7 +59,10 @@ import {
   type PanelTarget,
 } from "./agent-sidebar.js";
 import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
-import { runShellCommand as runShellCommand_impl, type ShellRunHandle } from "./shell-runner.js";
+import {
+  runShellCommand as runShellCommand_impl,
+  type ShellRunHandle,
+} from "./shell-runner.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
