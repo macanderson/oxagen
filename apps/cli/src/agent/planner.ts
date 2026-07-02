@@ -143,6 +143,7 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
         prompt: opts.goal,
         context: "",
         resolved: [],
+        usedSemanticFallback: false,
         lessons: [],
         startedAt: Date.now(),
         finishedAt: Date.now(),

@@ -32,6 +32,11 @@ export interface EnhanceOptions {
    * to is injected.
    */
   extraQueries?: string[];
+  /**
+   * Code-graph query override (tests). Defaults to the real {@link queryCodeGraph},
+   * which reads the on-disk DuckDB store and (for `semantic_search`) the gateway.
+   */
+  queryCodeGraph?: typeof queryCodeGraph;
 }
 
 export interface EnhanceResult {
@@ -41,6 +46,14 @@ export interface EnhanceResult {
   context: string;
   /** Symbol/path tokens that resolved to something in the code graph. */
   resolved: string[];
+  /**
+   * True when literal candidate lookups resolved little or nothing and a
+   * semantic (embedding) search over the raw prompt was used instead. Lets a
+   * conceptual prompt that names no exact symbol or path — e.g. "project level
+   * configurations for the cli app" — still retrieve real files instead of
+   * leaving the agent to blind grep.
+   */
+  usedSemanticFallback: boolean;
   /** Lessons recalled from fleet memory. */
   lessons: MemoryRecord[];
   /** Epoch ms context-gathering started. */
@@ -55,6 +68,16 @@ export interface EnhanceResult {
 
 const CODEY_EXT =
   /\.(ts|tsx|js|jsx|mjs|cjs|json|md|mdx|css|scss|sql|py|go|rs|sh|yml|yaml|toml)$/;
+
+/**
+ * Literal candidates resolved at or below this count → the prompt is probably
+ * conceptual (names no exact symbol/path), so fall back to one embedding
+ * search over the raw prompt. "Few", not only "zero": a prompt that names one
+ * thing precisely can still be mostly about a subsystem it never names.
+ */
+const SEMANTIC_FALLBACK_MAX_RESOLVED = 1;
+/** Bounded — a few files to orient the agent, not a second exploration budget. */
+const SEMANTIC_FALLBACK_LIMIT = 5;
 
 /**
  * Pull likely code references out of a natural-language prompt: backticked spans,
@@ -94,6 +117,7 @@ function isHit(result: string): boolean {
 export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult> {
   const { prompt, cwd } = opts;
   const max = opts.maxSymbols ?? 6;
+  const runQuery = opts.queryCodeGraph ?? queryCodeGraph;
   const startedAt = Date.now();
 
   // Lessons first — they need no code graph and must surface even if it fails.
@@ -103,6 +127,7 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
   const resolved: string[] = [];
   const symbolsQueried: string[] = [];
   const pathsQueried: string[] = [];
+  let usedSemanticFallback = false;
 
   try {
     const { symbols, paths } = extractCandidates(prompt);
@@ -122,7 +147,7 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
     // Symbol definitions — "where is X defined".
     for (const sym of [...symSet].slice(0, max)) {
       symbolsQueried.push(sym);
-      const res = await queryCodeGraph(cwd, "search", sym, 4);
+      const res = await runQuery(cwd, "search", sym, 4);
       if (isHit(res)) {
         sections.push(`Definitions of \`${sym}\`:\n${res}`);
         resolved.push(sym);
@@ -134,12 +159,27 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
     // would otherwise have to discover by hand.
     for (const p of [...pathSet].slice(0, max)) {
       pathsQueried.push(p);
-      const syms = await queryCodeGraph(cwd, "file_symbols", p, 12);
+      const syms = await runQuery(cwd, "file_symbols", p, 12);
       if (isHit(syms)) {
         sections.push(`Symbols in ${p}:\n${syms}`);
         resolved.push(p);
-        const deps = await queryCodeGraph(cwd, "dependents", p, 8);
+        const deps = await runQuery(cwd, "dependents", p, 8);
         if (isHit(deps)) sections.push(deps);
+      }
+    }
+
+    // Semantic fallback — literal candidates resolved little or nothing, which
+    // is the common case for a conceptual prompt ("project level configurations
+    // for the cli app") that names no symbol or path directly. Embed the raw
+    // prompt once and cosine-rank file nodes so the agent gets real context
+    // instead of falling through to blind grep.
+    if (resolved.length <= SEMANTIC_FALLBACK_MAX_RESOLVED) {
+      const semanticHits = await runQuery(cwd, "semantic_search", prompt, SEMANTIC_FALLBACK_LIMIT);
+      if (isHit(semanticHits)) {
+        sections.push(
+          `Semantically relevant files (auto-retrieved via embeddings):\n${semanticHits}`,
+        );
+        usedSemanticFallback = true;
       }
     }
   } catch {
@@ -176,6 +216,7 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
     prompt: enhanced,
     context,
     resolved,
+    usedSemanticFallback,
     lessons,
     startedAt,
     finishedAt,

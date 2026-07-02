@@ -404,14 +404,25 @@ export function buildWorkspaceTools(
         "symbol (function/class/type/interface) is defined by name; 'file_symbols' " +
         "lists the top-level symbols a file defines; 'dependents' lists the files " +
         "that import a given file (what a change could break); 'imports' lists the " +
-        "local files a given file imports.",
+        "local files a given file imports; 'semantic_search' finds files " +
+        "conceptually related to a natural-language description (e.g. 'project " +
+        "level configuration for the cli app') via embedding similarity — use it " +
+        "when the other operations return nothing because the query names no " +
+        "exact symbol or path.",
       inputSchema: z.object({
-        operation: z.enum(["search", "file_symbols", "dependents", "imports"]),
+        operation: z.enum([
+          "search",
+          "file_symbols",
+          "dependents",
+          "imports",
+          "semantic_search",
+        ]),
         query: z
           .string()
           .describe(
             "A symbol name for 'search'; a file path (relative to cwd, or a suffix " +
-              "like 'agent/loop.ts') for 'file_symbols' / 'dependents' / 'imports'.",
+              "like 'agent/loop.ts') for 'file_symbols' / 'dependents' / 'imports'; " +
+              "a natural-language concept for 'semantic_search'.",
           ),
         limit: z
           .number()
