@@ -16,7 +16,7 @@ import type { ModelMessage } from "ai";
 import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { theme } from "../tui/theme.js";
-import { runTurn } from "@oxagen/agent-engine";
+import { runTurn, type AgentAi } from "@oxagen/agent-engine";
 import {
   createCwdWorkspace,
   createGatedWorkspace,
@@ -25,6 +25,11 @@ import {
   createGraphSyncProvider,
   createPlatformAgentAi,
 } from "../agent/adapters/index.js";
+import {
+  prepareOnDeviceCoordinator,
+  type OnDeviceCoordinator,
+} from "../agent/adapters/on-device-agent-ai.js";
+import { getCoordinator, setCoordinator } from "../runtime/config.js";
 import { queryCodeGraph } from "../agent/code-graph.js";
 import type { Session } from "../lib/session.js";
 import {
@@ -44,7 +49,6 @@ import { openFleetMemory } from "../agent/fleet/memory.js";
 import { agentRegistry, type AgentHandle } from "../agent/agent-registry.js";
 import { taskRegistry } from "../agent/task-registry.js";
 import { isSubagentDispatch, subagentInfo } from "../agent/tool-formatter.js";
-import { HudPanel } from "./hud.js";
 import {
   AgentSidebar,
   AgentFocusView,
@@ -64,16 +68,16 @@ import { debugLog } from "../lib/debug-log.js";
 import { formatToolArgs } from "../agent/tool-formatter.js";
 import {
   ApprovalPrompt,
-  CatMouseChase,
   HELP,
   MessageView,
   PromptInput,
   StatusLine,
-  ThinkingIndicator,
   summarizeTrace,
   type Message,
 } from "./components.js";
 import { resolveEscapeAction } from "./escape-action.js";
+import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
+import { runShellCommand as runShellCommand_impl, type ShellRunHandle } from "./shell-runner.js";
 import { isDebugEnabled } from "../lib/debug-log.js";
 import { Banner } from "../tui/banner.js";
 import {
@@ -105,6 +109,13 @@ import {
 } from "../agent/permissions.js";
 import { loadSettings } from "../settings/resolve.js";
 import pkg from "../../package.json" with { type: "json" };
+
+/**
+ * How long a finished `!command`'s red live panel lingers before folding into
+ * the transcript as a collapsed accordion. Long enough to read a quick result,
+ * short enough that the red box never overstays into the next turn.
+ */
+const TERMINAL_FOLD_DELAY_MS = 6000;
 
 export interface ReplOptions {
   /** Authenticated platform session (token, org, workspace). */
@@ -195,6 +206,11 @@ export function ReplApp({
     metricsBusRef.current.snapshot(),
   );
   useEffect(() => metricsBusRef.current.subscribe(setMetrics), []);
+  // Cancel the terminal fold timer on unmount so it never fires setState on a
+  // torn-down component.
+  useEffect(() => () => {
+    if (foldTimerRef.current) clearTimeout(foldTimerRef.current);
+  }, []);
   // Timestamp of the last unit of turn progress (stream delta / stage / tool /
   // completed call). Drives the thinking indicator's idle figure and is the
   // signal the inactivity guard watches — the turn is bounded by PROGRESS, not
@@ -205,7 +221,7 @@ export function ReplApp({
   // light terminal, dark on dark) — Feature C. Detection is cheap + synchronous.
   const diffThemeRef = useRef(diffThemeFor(detectTerminalBackground()));
   // When the active turn began (drives the thinking indicator); null when idle.
-  const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
+  const [, setTurnStartedAt] = useState<number | null>(null);
   // Output chars streamed this turn, for the live token estimate in the indicator.
   const streamCharsRef = useRef(0);
   // Prompts submitted while a turn is in flight wait here and run FIFO when the
@@ -274,6 +290,20 @@ export function ReplApp({
       },
     ),
   );
+  // The AI port each turn actually runs on. Starts as the remote metered gateway
+  // (`aiRef`); `/coordinator local` swaps it to the on-device port. `runTurn`
+  // reads `activeAiRef.current` per turn, so a swap takes effect on the next turn
+  // with no workspace re-creation.
+  const activeAiRef = useRef<AgentAi>(aiRef.current);
+  // The lazily-built local coordinator (loaded GGUF weights). Null until the
+  // first `/coordinator local`; cached so re-toggling never reloads the weights.
+  const localCoordinatorRef = useRef<OnDeviceCoordinator | null>(null);
+  // Where the coordinator runs: "remote" (platform gateway) or "local" (on-device).
+  // Persisted coordinator drives the initial label, but the active port always
+  // starts remote so REPL boot never blocks on loading local weights.
+  const [coordinatorLoc, setCoordinatorLoc] = useState<"remote" | "local">("remote");
+  const coordinatorLocRef = useRef<"remote" | "local">("remote");
+  coordinatorLocRef.current = coordinatorLoc;
   const codeGraphRef = useRef(
     createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
   );
@@ -314,12 +344,12 @@ export function ReplApp({
 
   // Whether we are showing the "reset conversation?" confirmation prompt.
   // The ref is the synchronous source of truth; the state drives the render.
-  const [resetPending, setResetPending] = useState(false);
+  const [, setResetPending] = useState(false);
   const resetPendingRef = useRef(false);
   // Whether the `/hud` heads-up display (all running agents) is showing. The ref
   // mirrors the state so the synchronous Esc handler can read it without a stale
   // closure.
-  const [hudVisible, setHudVisible] = useState(false);
+  const [, setHudVisible] = useState(false);
   const hudVisibleRef = useRef(false);
   // Visibility of the right-hand Agent Team / Task Progress dock. "auto" shows it
   // only while a turn is monitoring work; /panel pins it "on" or hides it "off".
@@ -336,6 +366,11 @@ export function ReplApp({
   terminalRunRef.current = terminalRun;
   const terminalHandleRef = useRef<ShellRunHandle | null>(null);
   const terminalIdRef = useRef(0);
+  // After a `!command` finishes, its red live panel lingers briefly so the user
+  // can read the result, then FOLDS: the pinned panel clears and the run drops
+  // into the transcript as a collapsed, expandable accordion (see
+  // foldTerminalInline). This timer drives that time-based hand-off.
+  const foldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // How far the transcript is scrolled back from the latest message, counted in
   // messages hidden below the fold. 0 = pinned to the newest output (the default,
   // auto-following as tokens stream in); PgUp raises it to reveal older history,
@@ -526,6 +561,52 @@ export function ReplApp({
    * and — once finished — is fed into the model's history so the next turn sees
    * what the user ran and what it produced.
    */
+  /**
+   * Fold a finished run out of the pinned red panel and into the transcript as a
+   * collapsed, expandable accordion — placed inline in chronological order with
+   * the surrounding chat. Clears the pinned panel only if this run still owns it
+   * (a newer command may already have taken the slot).
+   */
+  const foldTerminalInline = useCallback(
+    (run: TerminalRun) => {
+      if (foldTimerRef.current) {
+        clearTimeout(foldTimerRef.current);
+        foldTimerRef.current = null;
+      }
+      if (terminalRunRef.current?.id === run.id) {
+        terminalRunRef.current = null;
+        setTerminalRun(null);
+      }
+      commit([
+        ...allRef.current,
+        {
+          role: "terminal",
+          content: "",
+          terminalRun: run,
+          terminalExpanded: false,
+          timestamp: run.endedAt ?? Date.now(),
+        },
+      ]);
+    },
+    [commit],
+  );
+
+  /**
+   * Toggle the most recent folded terminal accordion open/closed (Ctrl-O). No-op
+   * when no `!command` has folded into the transcript yet.
+   */
+  const toggleLatestTerminal = useCallback(() => {
+    const next = [...allRef.current];
+    for (let i = next.length - 1; i >= 0; i--) {
+      const m = next[i];
+      if (m && m.role === "terminal") {
+        next[i] = { ...m, terminalExpanded: !m.terminalExpanded };
+        commit(next);
+        return;
+      }
+    }
+  }, [commit]);
+
   const runShellCommand = useCallback(
     (raw: string) => {
       const command = raw.replace(/^!/, "").trim();
@@ -533,10 +614,13 @@ export function ReplApp({
         pushAssistant("Usage: !<shell command> — runs it live in the workspace (works mid-turn).");
         return;
       }
-      // Only one terminal panel at a time: kill any command still running.
+      // A prior run still lingering in the red panel (finished, waiting to fold)
+      // folds NOW so a new command never stacks a second live panel.
+      const lingering = terminalRunRef.current;
+      if (lingering && lingering.status !== "running") foldTerminalInline(lingering);
+      // Only one terminal panel at a time: kill any command still running. Its
+      // `.done` handler folds it inline once it's been superseded below.
       terminalHandleRef.current?.kill();
-      // Echo the command into the transcript so scrollback records what was run.
-      commit([...allRef.current, { role: "user", content: "! " + command, timestamp: Date.now() }]);
 
       const id = ++terminalIdRef.current;
       const startedAt = Date.now();
@@ -572,17 +656,16 @@ export function ReplApp({
       void handle.done.then((res) => {
         if (flushTimer != null) clearTimeout(flushTimer);
         if (terminalHandleRef.current === handle) terminalHandleRef.current = null;
-        if (terminalRunRef.current?.id !== id) return; // a newer run replaced us
         const status: TerminalRun["status"] = res.killed ? "killed" : "exited";
         const finished: TerminalRun = {
-          ...terminalRunRef.current,
+          id,
+          command,
           output: buf,
           status,
           exitCode: res.exitCode,
+          startedAt,
           endedAt: Date.now(),
         };
-        terminalRunRef.current = finished;
-        setTerminalRun(finished);
         // Make the model aware of what the user ran and what it produced.
         const body = buf.trimEnd() || "(no output)";
         historyRef.current = [
@@ -594,9 +677,20 @@ export function ReplApp({
               body.slice(0, 4000),
           },
         ];
+        if (terminalRunRef.current?.id === id) {
+          // Still the pinned run: show the finished result in the red panel, then
+          // fold it into the transcript after a short, readable linger.
+          terminalRunRef.current = finished;
+          setTerminalRun(finished);
+          foldTimerRef.current = setTimeout(() => foldTerminalInline(finished), TERMINAL_FOLD_DELAY_MS);
+        } else {
+          // A newer command already took the panel (or killed us): drop straight
+          // into the transcript so the run is never lost.
+          foldTerminalInline(finished);
+        }
       });
     },
-    [commit, pushAssistant, cwd],
+    [commit, pushAssistant, cwd, foldTerminalInline],
   );
 
   /**
@@ -765,6 +859,14 @@ export function ReplApp({
     }
     // While a permission prompt is up, ApprovalPrompt owns Esc and the answer keys.
     if (approvalRef.current) return;
+
+    // Ctrl-O expands/collapses the most recent folded `!command` accordion. Bound
+    // before the focus-zone gate so it works whether focus is on the input or a
+    // dock row.
+    if (key.ctrl && input === "o") {
+      toggleLatestTerminal();
+      return;
+    }
 
     // ── Side-panel navigation (focus is on a panel row) ──
     // While focus is in the dock, PromptInput's `focused` is false so it ignores
@@ -985,6 +1087,89 @@ export function ReplApp({
         } else {
           pushAssistant(`Current model: ${modelRef.current}`);
         }
+        return;
+      }
+      if (text.startsWith("/coordinator")) {
+        const arg = text.slice("/coordinator".length).trim().toLowerCase();
+
+        if (!arg) {
+          const where =
+            coordinatorLocRef.current === "local"
+              ? `local on-device (${localCoordinatorRef.current?.modelId ?? "not yet loaded"})`
+              : "remote platform gateway";
+          const persisted = getCoordinator() === "on-device" ? "local" : "remote";
+          pushAssistant(
+            `Coordinator: ${coordinatorLocRef.current} — ${where}.\n` +
+              `Persisted preference: ${persisted}. Use /coordinator remote|local.`,
+          );
+          return;
+        }
+
+        if (arg === "remote") {
+          activeAiRef.current = aiRef.current;
+          coordinatorLocRef.current = "remote";
+          setCoordinatorLoc("remote");
+          setCoordinator("haiku");
+          pushAssistant(
+            "Coordinator set to REMOTE — turns run on the metered platform gateway " +
+              `(${modelRef.current}). /coordinator local to run fully on-device.`,
+          );
+          return;
+        }
+
+        if (arg === "local") {
+          // Already loaded this session — just re-point the active port (no reload).
+          if (localCoordinatorRef.current) {
+            activeAiRef.current = localCoordinatorRef.current.ai;
+            coordinatorLocRef.current = "local";
+            setCoordinatorLoc("local");
+            setCoordinator("on-device");
+            pushAssistant(
+              `Coordinator set to LOCAL — turns run on-device (${localCoordinatorRef.current.modelId}). ` +
+                "No tokens leave your machine. /coordinator remote to switch back.",
+            );
+            return;
+          }
+
+          pushAssistant(
+            "Preparing the on-device coordinator… first use downloads the model weights, " +
+              "which can take a while.",
+          );
+          try {
+            let lastPct = -1;
+            const coord = await prepareOnDeviceCoordinator({
+              onProgress: (received, total) => {
+                if (!total) return;
+                const pct = Math.floor((received / total) * 100);
+                // Throttle to ~every 10% so we don't flood the transcript.
+                if (pct >= lastPct + 10) {
+                  lastPct = pct;
+                  pushAssistant(`  downloading weights… ${pct}%`);
+                }
+              },
+            });
+            localCoordinatorRef.current = coord;
+            activeAiRef.current = coord.ai;
+            coordinatorLocRef.current = "local";
+            setCoordinatorLoc("local");
+            setCoordinator("on-device");
+            pushAssistant(
+              `Coordinator set to LOCAL — turns now run on-device (${coord.modelId}). ` +
+                "No tokens leave your machine. Tool-calling on a local model is best-effort; " +
+                "/coordinator remote to switch back.",
+            );
+          } catch (err) {
+            // The runtime throws typed, actionable errors (dep missing / nothing
+            // fits / not cached) — surface the guidance verbatim, stay on remote.
+            pushAssistant(
+              "Couldn't start the on-device coordinator (staying on remote):\n" +
+                (err instanceof Error ? err.message : String(err)),
+            );
+          }
+          return;
+        }
+
+        pushAssistant(`Unknown coordinator "${arg}". Use /coordinator remote|local.`);
         return;
       }
       if (text.startsWith("/effort")) {
@@ -1391,7 +1576,7 @@ export function ReplApp({
             workspaceRef.current,
             brokerRef.current ?? undefined,
           ),
-          ai: aiRef.current,
+          ai: activeAiRef.current,
           model: modelRef.current,
           effort: effortRef.current,
           readOnly: modeRef.current === "readonly",
@@ -1845,9 +2030,10 @@ export function ReplApp({
         </Box>
 
         {/* Right-hand dock: Agent Team (live roster) + Task Progress (the planning
-            agent's checklist). Renders nothing until there's work to show. `focus`
-            highlights the arrow-navigated row; `active` forces it visible while the
-            user is navigating it even if `auto` would otherwise hide an idle dock. */}
+            agent's checklist). Renders nothing until there's work to show.
+            `focus` highlights the navigated-to row and `active` forces the dock
+            visible while it holds focus, so arrow-nav / Ctrl-E drill-in / Ctrl-X
+            never land on a hidden or unmarked list. */}
         <AgentSidebar
           mode={panelMode}
           focus={focus.zone === "input" ? null : focus}

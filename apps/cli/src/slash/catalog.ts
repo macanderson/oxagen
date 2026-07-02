@@ -62,6 +62,12 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
     argumentHint: "[slug]",
   },
   {
+    name: "coordinator",
+    description:
+      "Run turns on the remote gateway or the local on-device LLM (downloads weights on first local use)",
+    argumentHint: "[remote|local]",
+  },
+  {
     name: "mode",
     description: "Show or set the permission posture for tool calls",
     argumentHint: "[ask|auto-edit|bypass|readonly]",
