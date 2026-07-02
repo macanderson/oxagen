@@ -61,7 +61,7 @@ test("Sources tab skips the install and points to Settings when GitHub is not co
 }) => {
   const user = await signUpFreshUser(page);
 
-  await page.goto(`/${user.orgSlug}/default/knowledge/sources`);
+  await page.goto(`/${user.orgSlug}/default/knowledge/repos`);
   // Empty state → open the GitHub add-source wizard.
   await page.getByTestId("connect-github-btn").click();
 

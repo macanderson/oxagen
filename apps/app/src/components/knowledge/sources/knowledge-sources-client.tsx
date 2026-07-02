@@ -330,7 +330,7 @@ export function KnowledgeSourcesClient({
       // the connect flow started in. Self-correct to the originating workspace so
       // the resume targets the connection that actually lives there.
       window.location.replace(
-        `/${pending.orgSlug}/${pending.workspaceSlug}/knowledge/sources?setup=github`,
+        `/${pending.orgSlug}/${pending.workspaceSlug}/knowledge/repos?setup=github`,
       );
       return;
     }
@@ -437,7 +437,7 @@ export function KnowledgeSourcesClient({
             data-testid="connect-source-btn"
           >
             <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-            Connect source
+            Add Repo
           </button>
         )}
       </div>

@@ -15,8 +15,8 @@ export default async function KnowledgeLayout({
   const ctx: Required<ScopeContext> = { orgSlug, workspaceSlug };
 
   const tabs = [
-    { label: "Sources", href: workspace.knowledge.sources(ctx) },
-    { label: "Graph", href: workspace.knowledge.graph(ctx) },
+    { label: "Repos", href: workspace.knowledge.repos(ctx) },
+    { label: "Inference", href: workspace.knowledge.inference(ctx) },
     { label: "Explore", href: workspace.knowledge.explore(ctx) },
     { label: "Memories", href: workspace.knowledge.memories(ctx) },
   ];

@@ -98,10 +98,10 @@ export const workspace = {
   // Knowledge
   knowledge: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/knowledge`,
-    sources: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/knowledge/sources`,
-    graph: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/knowledge/graph`,
+    repos: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/repos`,
+    inference: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/knowledge/inference`,
     explore: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/knowledge/explore`,
     memories: (ctx: Required<ScopeContext>): string =>
@@ -151,7 +151,7 @@ export const workspace = {
 
 export const defaultTab: Record<string, string> = {
   // Workspace-scope parents
-  knowledge: "sources",
+  knowledge: "repos",
   settings: "general",
 
   // Org-scope parents
