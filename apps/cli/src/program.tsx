@@ -934,7 +934,9 @@ export function buildProgram(): Command {
 
   const rules = program
     .command("rules")
-    .description("Manage workspace rules the agent is told about and hard-blocked from violating");
+    .description(
+      "Manage workspace rules the agent is told about and hard-blocked from violating (list, show, new, check, candidates, promote)",
+    );
   rules
     .command("list")
     .description("List rules (and which are hard-enforced)")
@@ -966,6 +968,28 @@ export function buildProgram(): Command {
     .action(async (tool: string, subject: string) => {
       const { rulesCheck } = await import("./commands/rules.js");
       rulesCheck(tool, subject);
+    });
+  rules
+    .command("candidates")
+    .description(
+      "Mine recurring lessons from local thinking logs + fleet memory into rule promotion candidates",
+    )
+    .option("--limit <n>", "Max candidates (default 10)")
+    .option("--json", "Output JSON")
+    .action(async (opts: { limit?: string; json?: boolean }) => {
+      const { rulesCandidates } = await import("./commands/rules.js");
+      rulesCandidates(opts);
+    });
+  rules
+    .command("promote <id>")
+    .description(
+      "Promote a mined candidate (from `rules candidates`) to an enforced .oxagen/rules/<id>.md — never writes without --yes",
+    )
+    .option("-y, --yes", "Write the rule (default previews only — never auto-writes)")
+    .option("--json", "Output JSON")
+    .action(async (id: string, opts: { yes?: boolean; json?: boolean }) => {
+      const { rulesPromote } = await import("./commands/rules.js");
+      rulesPromote(id, opts);
     });
 
   // ── mcp: external MCP servers ───────────────────────────────────────────────

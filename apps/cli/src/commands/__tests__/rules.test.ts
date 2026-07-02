@@ -2,7 +2,17 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { rulesList, rulesShow, rulesNew, rulesCheck, type RulesCmdCtx } from "../rules.js";
+import {
+  rulesList,
+  rulesShow,
+  rulesNew,
+  rulesCheck,
+  rulesCandidates,
+  rulesPromote,
+  type RulesCmdCtx,
+  type RulesCandidatesCtx,
+} from "../rules.js";
+import type { TurnTrace } from "../../agent/trace.js";
 
 let dir: string;
 let ctx: RulesCmdCtx;
@@ -105,5 +115,99 @@ describe("rules command handlers", () => {
       expect(errText()).toContain("Unknown tool");
       expect(process.exitCode).toBe(1);
     });
+  });
+});
+
+describe("rules candidates + promote (mined from local logs, never auto-written)", () => {
+  function trace(id: string, findings: string[]): TurnTrace {
+    return {
+      id,
+      createdAt: 1000,
+      cwd: dir,
+      originalPrompt: "x",
+      evaluation: {
+        completeness: 80,
+        complexity: 40,
+        recommendedTier: "balanced",
+        missing: [],
+        contextQueries: [],
+        refinedPrompt: "x",
+        removed: [],
+        reasoning: "",
+        fallback: false,
+        model: "m",
+        usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      },
+      enhancement: { prompt: "x", context: "", resolved: [], lessonCount: 0, source: "none" },
+      selectedModel: "m",
+      selectedTier: "balanced",
+      selectionRationale: "",
+      response: "done",
+      filesTouched: [],
+      commandsRun: [],
+      judgeRounds: [
+        {
+          complete: false,
+          confidence: 80,
+          findings,
+          remainingWork: [],
+          reasoning: "",
+          model: "m",
+          fallback: false,
+          usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+        },
+      ],
+      finalComplete: true,
+      steps: 1,
+      usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      durationMs: 100,
+    };
+  }
+
+  const recurring = [
+    trace("t1", ["recurring gap in the onboarding flow"]),
+    trace("t2", ["recurring gap in the onboarding flow"]),
+    trace("t3", ["recurring gap in the onboarding flow"]),
+  ];
+
+  function mineCtx(traces: TurnTrace[]): RulesCandidatesCtx {
+    return { ...ctx, _traces: traces, _memories: [] };
+  }
+
+  it("lists mined candidates with evidence", () => {
+    const candidates = rulesCandidates({}, mineCtx(recurring));
+    expect(candidates).toHaveLength(1);
+    expect(text()).toContain("rule promotion candidate");
+    expect(text()).toContain("recurring gap in the onboarding flow");
+  });
+
+  it("prints a friendly message when nothing recurs yet", () => {
+    rulesCandidates({}, mineCtx([]));
+    expect(text()).toContain("No promotion candidates yet");
+  });
+
+  it("previews without writing when --yes is omitted (the decline path)", () => {
+    const [candidate] = rulesCandidates({}, mineCtx(recurring));
+    out = [];
+    rulesPromote(candidate!.id, {}, mineCtx(recurring));
+    expect(text()).toContain("Not written");
+    expect(existsSync(join(dir, ".oxagen", "rules", `${candidate!.id}.md`))).toBe(false);
+  });
+
+  it("writes the rule with --yes, and it is then visible to `rules list`", () => {
+    const [candidate] = rulesCandidates({}, mineCtx(recurring));
+    out = [];
+    rulesPromote(candidate!.id, { yes: true }, mineCtx(recurring));
+    expect(text()).toContain("Promoted to rule");
+    expect(existsSync(join(dir, ".oxagen", "rules", `${candidate!.id}.md`))).toBe(true);
+    out = [];
+    rulesList(ctx);
+    expect(text()).toContain(candidate!.id);
+  });
+
+  it("errors on an unknown candidate id", () => {
+    rulesPromote("ghost-id", { yes: true }, mineCtx([]));
+    expect(errText()).toContain("Unknown candidate");
+    expect(process.exitCode).toBe(1);
   });
 });
