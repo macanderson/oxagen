@@ -16,6 +16,11 @@ import type { McpServerSummary } from "./mcp-types";
 
 afterEach(cleanup);
 
+// The first `await import("./chat-shell-client")` pulls a heavy module graph;
+// under coverage instrumentation on a loaded CI runner it can blow past the
+// 5s default, and the timed-out test's stray render then breaks the next one.
+vi.setConfig({ testTimeout: 20_000 });
+
 // ── Next.js navigation stubs ────────────────────────────────────────────────
 const mockReplace = vi.fn();
 const mockRefresh = vi.fn();

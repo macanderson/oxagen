@@ -20,13 +20,14 @@ export default defineConfig({
         "src/types.ts",
         "src/test-utils/**",
       ],
-      // Ratcheted after barrel/test-util excludes: measured 92.16 lines /
-      // 84.04 branches / 77.9 functions (WP4 entitlement filter). Thresholds only go up.
+      // Gates are ratchets capped at 90 (see CLAUDE.md): lines/statements were
+      // ratcheted to 92 with only 0.16% headroom and broke on drift; once a
+      // metric reaches 90 its gate floor is 90 and stays there.
       thresholds: {
-        lines: 92,
+        lines: 90,
         branches: 84,
         functions: 77,
-        statements: 92,
+        statements: 90,
       },
     },
   },

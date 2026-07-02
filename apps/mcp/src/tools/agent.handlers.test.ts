@@ -173,6 +173,8 @@ describe("agent.memory.recall handler", () => {
       minEnforcement: 70,
       limit: 10,
       nodeRef: undefined,
+      executionRef: undefined,
+      agentId: undefined,
     };
     await handler_agentMemoryRecall(args);
 
