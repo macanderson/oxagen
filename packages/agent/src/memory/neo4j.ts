@@ -187,6 +187,9 @@ export async function listMemories(args: {
   memoryClass?: MemoryClass;
   memoryKind?: string;
   minEnforcement?: number;
+  minCitations?: number;
+  sort?: "createdAt" | "citationCount";
+  sortDir?: "asc" | "desc";
 }): Promise<{ memories: MemoryListRow[]; total: number }> {
   const s = scopedSession();
   const where = /* cypher */ `
@@ -195,12 +198,22 @@ export async function listMemories(args: {
       AND ($memoryClass IS NULL OR coalesce(m.memory_class, 'OBSERVATION') = $memoryClass)
       AND ($memoryKind IS NULL OR coalesce(m.memory_kind, m.kind) = $memoryKind)
       AND ($minEnforcement IS NULL OR coalesce(m.enforcement_score, 0) >= $minEnforcement)
+      AND ($minCitations IS NULL OR coalesce(m.citation_count, 0) >= $minCitations)
   `;
+  // ORDER BY cannot be parameterised in Cypher, so build it from a fixed
+  // whitelist of (axis, direction) pairs — never interpolate caller strings.
+  const dir = args.sortDir === "asc" ? "ASC" : "DESC";
+  const orderBy =
+    args.sort === "citationCount"
+      ? // Tie-break by recency so equal citation counts stay deterministic.
+        `coalesce(m.citation_count, 0) ${dir}, m.createdAt DESC`
+      : `m.createdAt ${dir}`;
   const params = {
     nodeRef: args.nodeRef ?? null,
     memoryClass: args.memoryClass ?? null,
     memoryKind: args.memoryKind ?? null,
     minEnforcement: args.minEnforcement ?? null,
+    minCitations: args.minCitations ?? null,
   };
   try {
     const countResult = await s.run(
@@ -217,7 +230,7 @@ export async function listMemories(args: {
       /* cypher */ `
         MATCH (m:AgentMemory {orgId: $orgId, workspaceId: $workspaceId})
         ${where}
-        WITH m ORDER BY m.createdAt DESC SKIP $offset LIMIT $limit
+        WITH m ORDER BY ${orderBy} SKIP $offset LIMIT $limit
         ${MEMORY_RETURN}
       `,
       { ...params, offset: BigInt(args.offset), limit: BigInt(args.limit) },

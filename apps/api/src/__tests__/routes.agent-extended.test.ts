@@ -395,8 +395,31 @@ describe("agent.memory.list route", () => {
     expect(body.offset).toBe(5);
   });
 
+  it("passes the citation sort axis and minCitations floor to invoke", async () => {
+    await app.fetch(
+      post(PATH, { minCitations: 3, sort: "citationCount", sortDir: "desc" }),
+    );
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.minCitations).toBe(3);
+    expect(body.sort).toBe("citationCount");
+    expect(body.sortDir).toBe("desc");
+  });
+
+  it("defaults sort to createdAt/desc when unspecified", async () => {
+    await app.fetch(post(PATH, {}));
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.sort).toBe("createdAt");
+    expect(body.sortDir).toBe("desc");
+  });
+
   it("invalid memoryClass → 400, invoke not called", async () => {
     const res = await app.fetch(post(PATH, { memoryClass: "MAYBE" }));
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("invalid sort axis → 400, invoke not called", async () => {
+    const res = await app.fetch(post(PATH, { sort: "sideways" }));
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });

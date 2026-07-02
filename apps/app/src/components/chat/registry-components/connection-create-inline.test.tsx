@@ -158,7 +158,7 @@ describe("ConnectionCreateInline — non-github fallback", () => {
     const { default: ConnectionCreateInline } = await import("./connection-create-inline");
     render(<ConnectionCreateInline connectorId="salesforce" orgSlug="acme" workspaceSlug="main" />);
     const link = screen.getByTestId("connection-create-inline-sources-link");
-    expect(link).toHaveAttribute("href", "/acme/main/knowledge/sources");
+    expect(link).toHaveAttribute("href", "/acme/main/knowledge/repos");
     expect(link).toHaveTextContent("Open Sources");
   });
 

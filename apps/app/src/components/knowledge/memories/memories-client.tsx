@@ -53,6 +53,8 @@ import {
   X,
   Zap,
   MessageSquare,
+  ArrowUpDown,
+  Quote,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -535,6 +537,14 @@ function KindInput({
 // Filter bar
 // ---------------------------------------------------------------------------
 
+/** Ordering axes offered by the memories browser (mirrors agent.memory.list). */
+type MemorySort = "createdAt" | "citationCount";
+
+const SORT_LABELS: Record<MemorySort, string> = {
+  createdAt: "Newest first",
+  citationCount: "Most cited",
+};
+
 function FilterBar({
   availableKinds,
   activeKinds,
@@ -545,6 +555,10 @@ function FilterBar({
   setSearchQuery,
   minConfidence,
   setMinConfidence,
+  minCitations,
+  setMinCitations,
+  sortBy,
+  setSortBy,
 }: {
   availableKinds: string[];
   activeKinds: Set<string>;
@@ -555,6 +569,10 @@ function FilterBar({
   setSearchQuery: (q: string) => void;
   minConfidence: number;
   setMinConfidence: (v: number) => void;
+  minCitations: number;
+  setMinCitations: (v: number) => void;
+  sortBy: MemorySort;
+  setSortBy: (v: MemorySort) => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -601,6 +619,49 @@ function FilterBar({
           <span className="text-[10px] tabular-nums text-muted-foreground w-7">
             {minConfidence}%
           </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Quote className="h-3.5 w-3.5 text-muted-foreground" />
+          <label
+            htmlFor="min-citations"
+            className="text-[11px] text-muted-foreground whitespace-nowrap"
+          >
+            Min citations
+          </label>
+          <input
+            id="min-citations"
+            type="number"
+            min="0"
+            step="1"
+            value={minCitations}
+            onChange={(e) =>
+              setMinCitations(Math.max(0, Math.floor(Number(e.target.value) || 0)))
+            }
+            aria-label="Minimum number of citations"
+            className="h-6 w-14 rounded-md border border-border/60 bg-background px-1.5 text-[11px] tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+          <label
+            htmlFor="sort-by"
+            className="text-[11px] text-muted-foreground whitespace-nowrap"
+          >
+            Sort
+          </label>
+          <select
+            id="sort-by"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as MemorySort)}
+            aria-label="Sort memories"
+            className="h-6 rounded-md border border-border/60 bg-background px-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            {(Object.keys(SORT_LABELS) as MemorySort[]).map((key) => (
+              <option key={key} value={key}>
+                {SORT_LABELS[key]}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -1736,6 +1797,8 @@ export function MemoriesClient({
   const [activeClasses, setActiveClasses] = React.useState<Set<MemoryClass>>(new Set());
   const [searchQuery, setSearchQuery] = React.useState("");
   const [minConfidence, setMinConfidence] = React.useState(0);
+  const [minCitations, setMinCitations] = React.useState(0);
+  const [sortBy, setSortBy] = React.useState<MemorySort>("createdAt");
 
   // Sync records when the server re-renders with fresh data after router.refresh().
   React.useEffect(() => {
@@ -1803,15 +1866,17 @@ export function MemoriesClient({
     router.refresh();
   }
 
-  // Client-side filtering
+  // Client-side filtering + sorting
   const filtered = React.useMemo(() => {
-    return records.filter((r) => {
+    const matched = records.filter((r) => {
       // Class filter
       if (activeClasses.size > 0 && !activeClasses.has(r.memoryClass)) return false;
       // Kind filter
       if (activeKinds.size > 0 && !activeKinds.has(r.memoryKind)) return false;
       // Confidence filter
       if (r.confidenceScore < minConfidence) return false;
+      // Citation-count floor
+      if (r.citationCount < minCitations) return false;
       // Text search over lesson, source, nodeRef
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -1825,7 +1890,26 @@ export function MemoriesClient({
       }
       return true;
     });
-  }, [records, activeClasses, activeKinds, minConfidence, searchQuery]);
+    if (sortBy === "citationCount") {
+      // Descending by citations; tie-break on recency so equal counts stay
+      // deterministic (mirrors the listMemories ORDER BY on the server).
+      return [...matched].sort(
+        (a, b) =>
+          b.citationCount - a.citationCount ||
+          b.createdAt.localeCompare(a.createdAt),
+      );
+    }
+    // Records arrive newest-first from the server; keep that order.
+    return matched;
+  }, [
+    records,
+    activeClasses,
+    activeKinds,
+    minConfidence,
+    minCitations,
+    searchQuery,
+    sortBy,
+  ]);
 
   // Kinds present in the current record set, for the dynamic filter chips.
   const availableKinds = React.useMemo(() => {
@@ -1937,6 +2021,10 @@ export function MemoriesClient({
         setSearchQuery={setSearchQuery}
         minConfidence={minConfidence}
         setMinConfidence={setMinConfidence}
+        minCitations={minCitations}
+        setMinCitations={setMinCitations}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
       />
 
       {/* Record list */}
@@ -1945,12 +2033,16 @@ export function MemoriesClient({
           <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5 bg-muted/30">
             <span className="text-[11px] font-medium text-muted-foreground">
               {filtered.length} memor{filtered.length !== 1 ? "ies" : "y"}
-              {activeClasses.size > 0 || activeKinds.size > 0 || minConfidence > 0 || searchQuery
+              {activeClasses.size > 0 ||
+              activeKinds.size > 0 ||
+              minConfidence > 0 ||
+              minCitations > 0 ||
+              searchQuery
                 ? " (filtered)"
                 : ""}
             </span>
             <span className="text-[10px] text-muted-foreground">
-              Newest first
+              {SORT_LABELS[sortBy]}
             </span>
           </div>
           <div className="max-h-[600px] overflow-y-auto">

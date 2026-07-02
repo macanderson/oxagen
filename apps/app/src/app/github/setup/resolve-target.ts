@@ -42,7 +42,7 @@ export type GithubSetupQueries = {
 
 /** Build the GitHub connections (knowledge sources) URL for a workspace. */
 export function buildSourcesPath(orgSlug: string, workspaceSlug: string): string {
-  return `/${orgSlug}/${workspaceSlug}/knowledge/sources?setup=github`;
+  return `/${orgSlug}/${workspaceSlug}/knowledge/repos?setup=github`;
 }
 
 /**

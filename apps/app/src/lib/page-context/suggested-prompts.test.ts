@@ -194,7 +194,7 @@ describe("E: account route with user entity + form", () => {
 // ---------------------------------------------------------------------------
 
 describe("F: knowledge route", () => {
-  const prompts = deriveSuggestions(ctx("/acme/prod/knowledge/sources"));
+  const prompts = deriveSuggestions(ctx("/acme/prod/knowledge/repos"));
 
   it("prompts are knowledge-specific", () => {
     const texts = prompts.map((p) => p.prompt.toLowerCase()).join(" ");
@@ -212,7 +212,7 @@ describe("classifyRoute", () => {
     ["/acme/prod/settings/general", "settings"],
     ["/acme/prod/ask", "conversation"],
     ["/acme/prod/chat", "conversation"],
-    ["/acme/prod/knowledge/sources", "knowledge"],
+    ["/acme/prod/knowledge/repos", "knowledge"],
     ["/acme/prod/agents", "default"],
     ["/acme/prod/agents/repo-review", "default"],
     ["/acme/prod/automation/agents", "default"],

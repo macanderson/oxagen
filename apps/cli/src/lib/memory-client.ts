@@ -95,12 +95,18 @@ export interface ListMemoriesOptions {
   memoryClass?: MemoryClass;
   memoryKind?: MemoryKind;
   minEnforcement?: number;
+  minCitations?: number;
+  sort?: "createdAt" | "citationCount";
+  sortDir?: "asc" | "desc";
   nodeRef?: string;
   limit?: number;
   offset?: number;
 }
 
-/** List the workspace's memories, newest first, with optional filters. */
+/**
+ * List the workspace's memories with optional filters, sorted by recency
+ * (default) or citation count.
+ */
 export async function listMemories(
   opts: ListMemoriesOptions = {},
 ): Promise<MemoryListResult> {
@@ -108,6 +114,9 @@ export async function listMemories(
     memoryClass: opts.memoryClass,
     memoryKind: opts.memoryKind,
     minEnforcement: opts.minEnforcement,
+    minCitations: opts.minCitations,
+    sort: opts.sort,
+    sortDir: opts.sortDir,
     nodeRef: opts.nodeRef,
     limit: opts.limit ?? 100,
     offset: opts.offset ?? 0,
