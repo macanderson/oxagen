@@ -108,6 +108,9 @@ export function PromptInput({
   onSubmit,
   busy,
   catalog = [],
+  focused = true,
+  inject,
+  onMenuOpenChange,
 }: {
   onSubmit: (text: string) => void;
   /** A turn is in flight. The input stays live — submissions queue (Claude
@@ -115,6 +118,24 @@ export function PromptInput({
   busy: boolean;
   /** Slash-command catalog powering the live typeahead menu (empty = no menu). */
   catalog?: ReadonlyArray<SlashCatalogEntry>;
+  /**
+   * Whether the input owns the keyboard. When false the parent has moved focus
+   * into the side panel (arrow-key navigation), so the input ignores every
+   * keystroke and hides its block cursor — the panel handler owns arrows,
+   * Ctrl-E, and Ctrl-X until focus returns here. Defaults true (standalone use).
+   */
+  focused?: boolean;
+  /**
+   * External buffer injection. When `nonce` changes the buffer is replaced with
+   * `text` (cursor to end) — used to recall queued prompts for editing (Up),
+   * load a task's title for editing (Ctrl-E on a task), and clear the bar as
+   * focus moves between agents. The menu is suppressed for injected text so a
+   * recalled slash string doesn't reopen the typeahead unbidden.
+   */
+  inject?: { text: string; nonce: number };
+  /** Notifies the parent when the typeahead menu opens/closes so it knows
+   *  whether the arrow keys belong to menu navigation or panel navigation. */
+  onMenuOpenChange?: (open: boolean) => void;
 }): React.ReactElement {
   const [value, setValue] = useState("");
   // Highlighted suggestion + whether the user dismissed the menu (Esc). Both
@@ -123,12 +144,31 @@ export function PromptInput({
   const [dismissed, setDismissed] = useState(false);
   const { stdout } = useStdout();
 
+  // Replace the buffer when the parent injects new text (queue recall, task
+  // edit, or a clear). Keyed on the nonce so the same text can be re-injected
+  // (e.g. clearing to "" twice in a row). `dismissed` is set so injected text
+  // never pops the typeahead; typing afterwards clears it as usual.
+  const injectNonce = inject?.nonce;
+  useEffect(() => {
+    if (injectNonce === undefined) return;
+    setValue(inject?.text ?? "");
+    setSelected(0);
+    setDismissed(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire only on nonce change
+  }, [injectNonce]);
+
   // Derive the live typeahead state from the current buffer. The menu is open
   // only while the buffer is a single `/word` token and the user hasn't
   // dismissed it.
   const query = dismissed ? null : slashQuery(value);
   const suggestions = query === null ? [] : filterSlashCatalog(catalog, query);
   const menuOpen = suggestions.length > 0;
+  // Surface menu open/close to the parent so it can route arrow keys: while the
+  // menu is open the arrows navigate suggestions; while it's closed they belong
+  // to the parent (Up = recall queue, Down = enter the side panel).
+  useEffect(() => {
+    onMenuOpenChange?.(menuOpen);
+  }, [menuOpen, onMenuOpenChange]);
   // `selected` may lag the (shrinking) suggestion list; clamp for rendering/use.
   const sel = suggestions.length === 0 ? 0 : Math.min(selected, suggestions.length - 1);
   const cols = stdout?.columns ?? 80;
@@ -141,6 +181,11 @@ export function PromptInput({
   };
 
   useInput((input, key) => {
+    // When focus has moved into the side panel the input owns no keys: the
+    // parent's panel handler drives arrows / Ctrl-E / Ctrl-X. Ignoring here
+    // (rather than in the parent) keeps a single, race-free owner per keystroke.
+    if (!focused) return;
+
     // ── Typeahead navigation (only while the menu is open) ──
     if (menuOpen) {
       if (key.downArrow) {
@@ -218,17 +263,20 @@ export function PromptInput({
           collapses or is squeezed as the conversation above grows. */}
       <Box
         borderStyle="round"
-        borderColor={busy ? "#FBBF24" : theme.cyan}
+        borderColor={!focused ? theme.dim : busy ? "#FBBF24" : theme.cyan}
         paddingX={1}
         minHeight={3}
         flexShrink={0}
       >
-        <Text color={busy ? "#FBBF24" : theme.cyan} bold>
+        <Text color={!focused ? theme.dim : busy ? "#FBBF24" : theme.cyan} bold>
           {busy ? "⧗ " : "❯ "}
         </Text>
-        <Text>
+        <Text dimColor={!focused}>
           {value}
-          <Text color={theme.cyan}>█</Text>
+          {/* The block cursor shows only while the input holds focus; when the
+              panel has focus the bar dims and drops the cursor so the highlight
+              clearly lives in the side panel instead. */}
+          {focused ? <Text color={theme.cyan}>█</Text> : null}
         </Text>
       </Box>
     </Box>
