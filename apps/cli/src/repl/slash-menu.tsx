@@ -2,29 +2,30 @@
  * slash-menu.tsx — The typeahead dropdown for slash commands.
  *
  * Rendered above the prompt while the user is typing a `/command` token. Each
- * row shows:
- *   - a package glyph (📦) for productized / pre-installed commands; nothing for
- *     user-authored custom commands
- *   - the `/name` and its argument hint
- *   - the full description, wrapped across lines so a long description never gets
- *     truncated into ambiguity (the user must be able to tell commands apart
- *     before selecting one)
+ * command is a single-line cell: `❯ /name <args>   description`, with a blank
+ * line of padding above and below, and a dim horizontal rule separating one
+ * cell from the next. The `❯` pointer appears only on the selected row.
  *
- * The highlighted row is marked with a pointer and brightened so it's
- * unmistakable which command Enter/Tab will act on. Long catalogs scroll within a
- * fixed window around the selection.
+ * Color — not an icon — marks a productized builtin command: its `/name`
+ * renders bold in a stable, curated color from `theme.commandPalette` (set on
+ * the catalog entry, see slash/catalog.ts). CLI and custom commands carry no
+ * `color` and render `/name` as default text. The description is always dim,
+ * truncated with an ellipsis so the whole row stays on one line.
+ *
+ * Long catalogs scroll within a fixed window around the selection.
  */
 import { Box, Text } from "ink";
 import React from "react";
 import { theme } from "../tui/theme.js";
 import type { SlashCatalogEntry } from "../slash/catalog.js";
 
-/** The package glyph marking a productized (pre-installed) command. */
-export const PRODUCTIZED_GLYPH = "📦";
-/** Width the custom-command marker reserves so names stay column-aligned. */
-const CUSTOM_MARKER = "   ";
 /** Max rows shown at once; the window scrolls to keep the selection visible. */
 export const MAX_VISIBLE_SUGGESTIONS = 6;
+
+/** Width the `❯ ` pointer column reserves so names stay aligned when absent. */
+const POINTER_WIDTH = 2;
+/** Gap between the command (+ its argument hint) and its description. */
+const GAP = "   ";
 
 /** Compute the [start, end) slice of a list that keeps `selected` in view. */
 export function visibleWindow(
@@ -38,6 +39,12 @@ export function visibleWindow(
   return { start, end: start + max };
 }
 
+/** Columns consumed by the pointer + `/name` + optional argument hint + gap. */
+function prefixWidth(entry: SlashCatalogEntry): number {
+  const argWidth = entry.argumentHint ? entry.argumentHint.length + 1 : 0; // +1 leading space
+  return POINTER_WIDTH + 1 + entry.name.length + argWidth + GAP.length; // +1 for "/"
+}
+
 export function SlashMenu({
   entries,
   selectedIndex,
@@ -45,13 +52,14 @@ export function SlashMenu({
 }: {
   entries: ReadonlyArray<SlashCatalogEntry>;
   selectedIndex: number;
-  /** Outer width in columns; descriptions wrap within it. */
+  /** Outer width in columns; rows and separators fit within it. */
   width?: number;
 }): React.ReactElement | null {
   if (entries.length === 0) return null;
 
   const { start, end } = visibleWindow(entries.length, selectedIndex, MAX_VISIBLE_SUGGESTIONS);
   const visible = entries.slice(start, end);
+  const innerWidth = Math.max(width - 4, 10); // border (2) + paddingX*2 (2)
 
   return (
     <Box
@@ -64,24 +72,30 @@ export function SlashMenu({
       {visible.map((entry, i) => {
         const idx = start + i;
         const selected = idx === selectedIndex;
-        const marker = entry.productized ? `${PRODUCTIZED_GLYPH} ` : CUSTOM_MARKER;
+        const isLast = i === visible.length - 1;
+        const descWidth = Math.max(innerWidth - prefixWidth(entry), 0);
         return (
           <Box key={entry.name} flexDirection="column">
-            <Box>
-              <Text color={selected ? theme.cyan : undefined} bold={selected}>
-                {selected ? "❯ " : "  "}
-              </Text>
-              <Text>{marker}</Text>
-              <Text bold color={selected ? theme.cyan : theme.violet}>
-                /{entry.name}
-              </Text>
-              {entry.argumentHint ? <Text dimColor> {entry.argumentHint}</Text> : null}
+            <Box flexDirection="column" paddingY={1}>
+              <Box width={innerWidth}>
+                <Text color={selected ? theme.cyan : undefined} bold={selected}>
+                  {selected ? "❯ " : "  "}
+                </Text>
+                <Text bold={Boolean(entry.color) || selected} color={entry.color}>
+                  /{entry.name}
+                </Text>
+                {entry.argumentHint ? <Text dimColor> {entry.argumentHint}</Text> : null}
+                <Text>{GAP}</Text>
+                {descWidth > 0 ? (
+                  <Box width={descWidth}>
+                    <Text dimColor wrap="truncate-end">
+                      {entry.description}
+                    </Text>
+                  </Box>
+                ) : null}
+              </Box>
             </Box>
-            <Box paddingLeft={4} width={width - 2}>
-              <Text dimColor={!selected} wrap="wrap">
-                {entry.description}
-              </Text>
-            </Box>
+            {isLast ? null : <Text dimColor>{"─".repeat(innerWidth)}</Text>}
           </Box>
         );
       })}
