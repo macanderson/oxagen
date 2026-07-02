@@ -256,6 +256,15 @@ class OxagenAgent(BaseInstalledAgent):
         for k, v in os.environ.items():
             if k.startswith("OXAGEN_") and k != "OXAGEN_CLI_BUNDLE":
                 env[k] = v
+        # Session bypass + memory isolation defaults (host env wins via the
+        # forwarding loop above): trials never log in, so requireSession()
+        # must return the synthetic bench session; and unless warm memory is
+        # explicitly enabled, recall is disabled — SWE-bench reuses the same
+        # repos across instances, so recalled context would cross-contaminate
+        # trials.
+        env.setdefault("OXAGEN_ALLOW_NO_SESSION", "1")
+        if not os.environ.get("OXAGEN_WARM_MEMORY_DIR"):
+            env.setdefault("OXAGEN_DISABLE_MEMORY", "1")
         # Warm mode: pin HOME to a stable in-container path so all of Oxagen's
         # node:os.homedir() calls resolve to _WARM_HOME_IN_CONTAINER rather than
         # whatever the trial container's default user home happens to be.  This
