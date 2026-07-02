@@ -21,11 +21,13 @@ import {
   createCwdWorkspace,
   createGatedWorkspace,
   createCombinedMemory,
+  createServerMemory,
   createCodeGraphProvider,
   createGraphSyncProvider,
   createPlatformAgentAi,
   createGatewayAgentAi,
 } from "../agent/adapters/index.js";
+import { resolveApiContext } from "../lib/api.js";
 import {
   prepareOnDeviceCoordinator,
   type OnDeviceCoordinator,
@@ -323,6 +325,19 @@ export function ReplApp({
     options.session.synthetic
       ? null
       : createGraphSyncProvider({ ...options.session, cwd }),
+  );
+  // Platform memory port — recall prior-session lessons + mirror new ones. Only
+  // when authenticated and not a synthetic benchmark session; null degrades the
+  // combined memory to local-only exactly as before. The kill switch
+  // (OXAGEN_DISABLE_MEMORY=1) is enforced inside the combined adapter.
+  const serverMemoryRef = useRef(
+    options.session.synthetic || !resolveApiContext()
+      ? null
+      : createServerMemory({
+          agentId: "coding-agent",
+          executionRef: `cli:repl-${Date.now()}`,
+          projectName: cwd.split("/").pop() || undefined,
+        }),
   );
   // Project rules (CLAUDE.md/AGENTS.md) loaded once for the session.
   const projectContextRef = useRef(loadProjectContext(cwd));
@@ -1602,6 +1617,7 @@ export function ReplApp({
           memory: createCombinedMemory(
             memoryRef.current,
             fleetMemoryRef.current,
+            { server: serverMemoryRef.current, recallQuery: submission },
           ),
           codeGraph: codeGraphRef.current,
           trace: traceStoreRef.current,

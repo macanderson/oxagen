@@ -33,6 +33,8 @@ beforeEach(() => {
 
 import { Fleet, type AgentRunner } from "../fleet/orchestrator.js";
 import type { FleetMemory } from "../fleet/memory.js";
+import type { ServerMemory } from "../adapters/memory-provider.js";
+import type { RecalledMemory } from "../../lib/memory-client.js";
 import type { Plan, Task } from "../fleet/types.js";
 
 function task(id: string, over: Partial<Task> = {}): Task {
@@ -237,5 +239,77 @@ describe("Fleet scheduling", () => {
     fleet.loadPlan(plan([task("a")]));
     await fleet.start();
     expect(seen.length).toBeGreaterThan(0);
+  });
+});
+
+function fakeServer(
+  recallRows: RecalledMemory[] = [],
+): ServerMemory & { recall: ReturnType<typeof vi.fn>; remember: ReturnType<typeof vi.fn> } {
+  return {
+    recall: vi.fn().mockResolvedValue(recallRows),
+    remember: vi.fn(),
+  };
+}
+
+describe("Fleet platform memory", () => {
+  it("gives each subagent a memory provider that recalls the workspace lessons for its task", async () => {
+    const server = fakeServer([
+      {
+        id: "m1",
+        nodeRef: "coding-agent",
+        memoryClass: "RULE",
+        memoryKind: "gotcha",
+        lesson: "use withTenantDb, never raw db()",
+        source: "fix",
+        confidenceScore: 90,
+        enforcementScore: 95,
+        score: 0.9,
+        createdAt: "2026-07-01T00:00:00Z",
+      },
+    ]);
+    let recalledForRunner = "";
+    const runner: AgentRunner = async (o) => {
+      recalledForRunner = o.memory ? await o.memory.recallContext() : "";
+      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+    };
+    const fleet = new Fleet({ cwd: "/x", runner, serverMemory: server });
+    fleet.loadPlan(plan([task("t1", { description: "wire the db access" })]));
+    await fleet.start();
+
+    expect(server.recall).toHaveBeenCalledWith("wire the db access");
+    expect(recalledForRunner).toContain("## Lessons from prior sessions");
+    expect(recalledForRunner).toContain("use withTenantDb, never raw db()");
+  });
+
+  it("mirrors a finished task's lesson to the platform on success and failure", async () => {
+    const server = fakeServer();
+    const runner: AgentRunner = async (o) => {
+      if (o.prompt === "boom") throw new Error("kaboom");
+      return { text: "rewired the thing", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+    };
+    const fleet = new Fleet({ cwd: "/x", runner, serverMemory: server });
+    fleet.loadPlan(
+      plan([
+        task("ok", { title: "fix the bug", description: "fix the bug" }),
+        task("boom", { title: "risky", description: "boom" }),
+      ]),
+    );
+    await fleet.start();
+
+    const kinds = server.remember.mock.calls.map((c) => c[0]);
+    expect(kinds).toContain("bug-root-cause"); // success on a fix task
+    expect(kinds).toContain("gotcha"); // failure
+  });
+
+  it("passes no memory provider to the runner when no server handle is configured", async () => {
+    let sawMemory: unknown = "unset";
+    const runner: AgentRunner = async (o) => {
+      sawMemory = o.memory;
+      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+    };
+    const fleet = new Fleet({ cwd: "/x", runner });
+    fleet.loadPlan(plan([task("t1")]));
+    await fleet.start();
+    expect(sawMemory).toBeNull();
   });
 });

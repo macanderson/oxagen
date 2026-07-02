@@ -32,7 +32,7 @@ import type { Rule } from "../rules/types.js";
 import type { AgentDefinition } from "../agents/types.js";
 import type { OxagenSettings } from "../settings/schema.js";
 import type { ProjectContext } from "./project-context.js";
-import type { SessionMemory } from "./memory.js";
+import type { MemoryProvider } from "@oxagen/agent-engine";
 import type { ToolEvent } from "./trace.js";
 import type { PermissionBroker } from "./permissions.js";
 
@@ -58,8 +58,12 @@ export interface RunAgentOptions {
   readOnly?: boolean;
   /** Permission broker gating mutating tools (absent ⇒ ungated). */
   broker?: PermissionBroker;
-  /** Session memory (Oxagen context engine). Recalled before, written after. */
-  memory?: SessionMemory | null;
+  /**
+   * Memory port (Oxagen context engine). Recalled before the turn, written
+   * after. A combined provider (local session + fleet + platform) so a named
+   * agent recalls prior-session lessons the same way the main coding path does.
+   */
+  memory?: MemoryProvider | null;
   /** Abort the turn (e.g. user hit Ctrl-C). */
   signal?: AbortSignal;
   /** Streamed assistant text deltas. */

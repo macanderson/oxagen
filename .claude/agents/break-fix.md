@@ -104,6 +104,10 @@ Bug fixes and behavioral observations are persisted in the project at **`.oxagen
 - **Maintain `.oxagen/memories/_index.md`.** After writing a memory, add a one-line pointer to `_index.md` (`- [title](file-name.md) — one-line hook · type · date`). **If `_index.md` does not exist, create it** with a heading (`# Oxagen break-fix memories`) and then the pointer line. Check the index first to avoid duplicating an existing memory — update the existing file instead of creating a near-duplicate.
 - Because parallel agents touch this directory, create the directory if missing (`mkdir -p .oxagen/memories`) and commit your memory file together with the fix so it is never lost.
 
+### Platform mirror (best-effort)
+After you write the `.oxagen/memories/*.md` file, ALSO mirror the lesson into the platform memory store so agents in other checkouts/sessions recall it. If the `oxagen` CLI is authenticated (skip silently if not), run:
+`oxagen remember "<one-sentence lesson>" --kind bug-root-cause` (use `--kind gotcha` or `--kind convention-deviation` for observations). This is best-effort — a failure or an unauthenticated CLI must not block the fix or its commit.
+
 ### Memory file shape
 ```markdown
 ---

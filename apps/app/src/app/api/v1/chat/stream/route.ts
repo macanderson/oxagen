@@ -39,6 +39,7 @@ import { streamMediaGeneration } from "./media-generation";
 import { translateAgentStream } from "./translate-stream";
 import { formatStreamError } from "./stream-parts";
 import { buildHistoryMessages } from "./history";
+import { recallWorkspaceMemory, injectRecalledMemory } from "./recall-context";
 
 // Side-effect imports: bind every handler into the shared kernel BEFORE
 // materializeTools runs so invoke() can resolve both agent.* and all
@@ -383,6 +384,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           promptConfig,
           skillIndex,
           pinnedSkillBodies,
+          recalledMemoryMessage,
         ] = await runInTenantScope(
           { orgId: tenant.id, workspaceId: workspace.id },
           () =>
@@ -462,6 +464,18 @@ export async function POST(request: NextRequest): Promise<Response> {
                     )
                     .catch((): Array<{ slug: string; body: string }> => [])
                 : Promise.resolve([] as Array<{ slug: string; body: string }>),
+              // Deterministic memory recall for this turn: query workspace memory
+              // with the latest user text so relevant prior lessons are injected
+              // BEFORE the model runs — the agent never re-discovers something it
+              // already remembered. executionRef ties recalled memories to this
+              // turn as CONSIDERED citations (the promotion/self-improvement
+              // flywheel). Best-effort + time-boxed inside the helper: a slow or
+              // down Neo4j yields null and the turn proceeds untouched.
+              recallWorkspaceMemory({
+                query: content,
+                executionRef: capCtx.messageId,
+                ctx: capCtx,
+              }),
             ]),
         );
 
@@ -578,8 +592,16 @@ export async function POST(request: NextRequest): Promise<Response> {
           ? { ...agentTools, ...pageFormFillTool }
           : agentTools;
 
+        // Inject the recalled-memory volatile message right before the latest
+        // user message (after the cached system block). No-op when recall
+        // returned nothing.
+        const messagesForModel = injectRecalledMemory(
+          coreMessages,
+          recalledMemoryMessage,
+        );
+
         const result = streamAgentReply({
-          messages: coreMessages,
+          messages: messagesForModel,
           model: turnModel,
           tools: allTools,
           // Bound the agentic tool loop. WITHOUT this, streamText inherits the

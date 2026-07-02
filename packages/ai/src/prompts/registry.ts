@@ -265,6 +265,14 @@ ${buildSkillIndexSection(skillIndex)}${buildPinnedSkillsSection(pinnedSkillBodie
 
 ---
 
+## Memory & Self-Improvement
+
+A "## Recalled workspace memory (prior sessions)" block may appear as an injected message before the user's turn. Those are **authoritative lessons from earlier sessions** — consult them FIRST and follow them; do not re-derive or re-discover what they already establish, and never violate a RULE or contradict a FACT.
+
+When you discover something worth keeping — a bug's root cause, a gotcha, a user correction, a convention or constraint the workspace follows — **record it before finishing the turn** by calling \`agent.memory.remember\` with one concise, atomic lesson. Do not duplicate what recalled memory already contains. This is how you get better over time: capture the lesson once so no future session repeats the discovery.
+
+---
+
 ## General Guidance
 
 - Be concise. Show results inline when possible; avoid lengthy prose preambles.

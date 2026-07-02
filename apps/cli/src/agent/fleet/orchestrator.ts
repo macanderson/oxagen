@@ -17,7 +17,12 @@
  * without touching the gateway.
  */
 import { EventEmitter } from "node:events";
+import type { MemoryProvider } from "@oxagen/agent-engine";
 import { runAgent } from "../loop.js";
+import {
+  createCombinedMemory,
+  type ServerMemory,
+} from "../adapters/memory-provider.js";
 import { enhancePrompt } from "../prompt-enhancer.js";
 import { accumulateUsage, routeModel } from "../model-router.js";
 import type { ProjectContext } from "../project-context.js";
@@ -42,6 +47,7 @@ export type AgentRunner = (opts: {
   agent?: AgentDefinition;
   readOnly?: boolean;
   signal?: AbortSignal;
+  memory?: MemoryProvider | null;
   onText?: (delta: string) => void;
   onToolCall?: (name: string, input: unknown) => void;
 }) => Promise<{
@@ -55,6 +61,13 @@ export interface FleetOptions {
   /** Max subagents running at once (default 4). */
   concurrency?: number;
   memory?: FleetMemory | null;
+  /**
+   * Platform memory handle shared across all tasks. When present (CLI is
+   * authenticated), each subagent recalls the workspace's prior-session lessons
+   * before it acts, and every finished task's lesson is mirrored back. Null
+   * degrades the fleet to local-only exactly as before.
+   */
+  serverMemory?: ServerMemory | null;
   store?: PlanStore | null;
   projectContext?: ProjectContext;
   /** Named agent registry; a task's `agent` is looked up here at dispatch. */
@@ -78,6 +91,7 @@ export class Fleet extends EventEmitter {
   private readonly cwd: string;
   private readonly concurrency: number;
   private readonly memory: FleetMemory | null;
+  private readonly serverMemory: ServerMemory | null;
   private readonly store: PlanStore | null;
   private readonly projectContext: ProjectContext | undefined;
   private readonly agents: Map<string, AgentDefinition>;
@@ -100,6 +114,7 @@ export class Fleet extends EventEmitter {
     this.cwd = opts.cwd;
     this.concurrency = Math.max(1, opts.concurrency ?? 4);
     this.memory = opts.memory ?? null;
+    this.serverMemory = opts.serverMemory ?? null;
     this.store = opts.store ?? null;
     this.projectContext = opts.projectContext;
     this.agents = opts.agents ?? new Map<string, AgentDefinition>();
@@ -262,6 +277,18 @@ export class Fleet extends EventEmitter {
         memory: this.memory,
       });
 
+      // Per-task recall of the workspace's prior-session lessons (best-effort,
+      // timeout-guarded inside the combined provider). The server handle is
+      // shared across tasks; the recall query is this task's description. No
+      // local session/fleet store is threaded here — the fleet records its own
+      // two-axis lesson after the task in recordSuccess/recordFailure.
+      const taskMemory: MemoryProvider | null = this.serverMemory
+        ? createCombinedMemory(null, null, {
+            server: this.serverMemory,
+            recallQuery: task.description,
+          })
+        : null;
+
       const result = await this.runner({
         prompt: enhanced.prompt,
         cwd: workdir,
@@ -270,6 +297,7 @@ export class Fleet extends EventEmitter {
         agent: task.agent ? this.agents.get(task.agent) : undefined,
         readOnly: this.readOnly,
         signal: controller.signal,
+        memory: taskMemory,
         onText: (delta) => {
           appendLog(delta);
           this.update(task.id, { logTail: log });
@@ -333,27 +361,34 @@ export class Fleet extends EventEmitter {
 
   private recordSuccess(task: Task, summary: string): void {
     const isFix = /\b(fix|bug|broken|regression|repair|error)\b/i.test(task.title + " " + task.description);
+    const kind = isFix ? "bug-root-cause" : "routine-change";
+    const lesson = summary || task.title;
     this.memory?.record({
-      memoryKind: isFix ? "bug-root-cause" : "routine-change",
+      memoryKind: kind,
       memoryClass: task.tier === "precise" ? "RULE" : "OBSERVATION",
       enforcementScore: task.tier === "precise" ? 70 : null,
-      lesson: summary || task.title,
+      lesson,
       files: task.files,
       taskId: task.id,
       outcome: "success",
     });
+    // Mirror the lesson to the platform so other sessions recall it (fire-and-
+    // forget; the handle swallows its own errors).
+    this.serverMemory?.remember(kind, { lesson, files: task.files });
   }
 
   private recordFailure(task: Task, error: string): void {
+    const lesson = `Task "${task.title}" failed: ${error}`;
     this.memory?.record({
       memoryKind: "gotcha",
       memoryClass: "RULE",
       enforcementScore: 70,
-      lesson: `Task "${task.title}" failed: ${error}`,
+      lesson,
       files: task.files,
       taskId: task.id,
       outcome: "failure",
     });
+    this.serverMemory?.remember("gotcha", { lesson, files: task.files });
   }
 
   // ── State plumbing ────────────────────────────────────────────────────────────
