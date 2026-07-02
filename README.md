@@ -12,7 +12,7 @@
 
 # Oxagen Platform
 
-> **Building the future, so we'll be ready to meet you when you get there.**
+> **The best context IS THE DIFFERENCE**
 
 <p align="center">
   <a href="https://github.com/oxagenai/oxagen-monorepo/actions/workflows/pipeline.yml">
