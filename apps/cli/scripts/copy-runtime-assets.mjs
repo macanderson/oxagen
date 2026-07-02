@@ -18,8 +18,6 @@ const cliRoot = resolve(here, "..");
 
 const assets = [
   ["src/runtime/models.json", "dist/runtime/models.json"],
-  ["src/orchestrator/routing-policy.json", "dist/orchestrator/routing-policy.json"],
-  ["src/pipeline/pipeline-config.json", "dist/pipeline/pipeline-config.json"],
 ];
 
 for (const [from, to] of assets) {
