@@ -30,7 +30,7 @@ import type { ModelMessage } from "ai";
 import { runCodingAgent } from "../engine";
 import { buildSystemPrompt } from "../prompt/system-prompt";
 import { evaluatePrompt } from "../evaluate/evaluator";
-import { judgeCompleteness, buildRevisionPrompt } from "../evaluate/judge";
+import { judgeCompleteness, judgePanel, buildRevisionPrompt } from "../evaluate/judge";
 import { enhancePrompt } from "../evaluate/prompt-enhancer";
 import {
   classifyTier,
@@ -83,6 +83,7 @@ function composeAgentSystem(opts: RunTurnOptions, cwd: string): string {
     // on the pipeline path (RunTurnOptions has no codeMap provider).
     hasCodeGraph: Boolean(opts.codeGraph),
     hasCodeMap: false,
+    profile: opts.profile,
   });
 }
 
@@ -105,6 +106,14 @@ export interface RunTurnOptions {
   projectContext?: ProjectContext;
   /** Read-only mode: no file mutation, and the auto-revise loop is disabled. */
   readOnly?: boolean;
+  /**
+   * System-prompt behavioural profile, forwarded to {@link buildSystemPrompt}.
+   * "interactive" (default) narrates for a live watcher; "headless" strips the
+   * narration and swaps in a verification protocol for autonomous/one-shot runs
+   * (SWE-bench, CI, piped stdout). Undefined ⇒ "interactive". Chosen once per
+   * run, so the cached system prefix stays stable across turns.
+   */
+  profile?: "interactive" | "headless";
   /** Episodic session memory (recalled before, written after). */
   memory?: MemoryProvider | null;
   /** Code graph provider for prompt enhancement. */
@@ -123,6 +132,13 @@ export interface RunTurnOptions {
   graphSync?: GraphSyncProvider | null;
   /** Max judge→revise rounds (default 1; 0 disables auto-revision). */
   maxReviseRounds?: number;
+  /**
+   * Judge with a PANEL of these (distinct, cross-vendor) advisor models instead
+   * of a single judge — majority rules, findings unioned. Empty/undefined ⇒
+   * single judge, unless `OXAGEN_JUDGE_PANEL` is set. Higher cost, higher recall
+   * on incomplete work; worth it for a bench push.
+   */
+  judgeModels?: string[];
   /** Skip the eval/enhance/judge pipeline and run the bare agent. */
   bare?: boolean;
   /**
@@ -236,10 +252,13 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // Verbose telemetry accumulators (left empty/undefined when verbose is off).
   const phases: PhaseStat[] = [];
   const toolEvents: ToolEvent[] = [];
+  // Reasoning captured per execution round — persisted on the trace so the
+  // agent's thinking survives the turn (it used to be streamed then discarded).
+  const thinkingLog: Array<{ round: number; text: string }> = [];
 
   // ── Bare mode: skip the pipeline, run the agent directly. ──
   if (opts.bare) {
-    return runBare(opts, cwd, startedAt, filesTouched, commandsRun, onToolCall, phases, toolEvents);
+    return runBare(opts, cwd, startedAt, filesTouched, commandsRun, onToolCall, phases, toolEvents, thinkingLog);
   }
 
   let usage = emptyUsage();
@@ -315,6 +334,11 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     });
 
     const execStart = Date.now();
+    // Capture bash command outputs THIS round so the judge sees test results
+    // (the decisive completeness signal), not just the command strings.
+    const roundCommandOutputs: Array<{ command: string; output: string; ok: boolean }> = [];
+    // Accumulate this round's reasoning to persist on the trace.
+    let roundReasoning = "";
     const result = await runCodingAgent({
       workspace: opts.workspace,
       ai: opts.ai,
@@ -330,10 +354,24 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       signal: opts.signal,
       onEvent: (e) => {
         if (e.type === "text") opts.onText?.(e.delta);
-        if (e.type === "reasoning") opts.onReasoning?.(e.delta);
+        if (e.type === "reasoning") {
+          opts.onReasoning?.(e.delta);
+          roundReasoning += e.delta;
+        }
         if (e.type === "tool-call") onToolCall(e.name, e.input);
-        if (e.type === "tool-result")
+        if (e.type === "tool-result") {
           opts.onToolEvent?.({ name: e.name, ok: e.ok, durationMs: e.durationMs });
+          if (e.name === "bash") {
+            let command = e.input;
+            try {
+              const parsed = JSON.parse(e.input) as { command?: unknown };
+              if (typeof parsed.command === "string") command = parsed.command;
+            } catch {
+              /* input wasn't JSON — keep the stringified form */
+            }
+            roundCommandOutputs.push({ command, output: e.result, ok: e.ok });
+          }
+        }
         if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
         captureToolEvent(e, toolEvents, opts.verbose);
       },
@@ -345,26 +383,34 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     lastText = result.text;
     totalSteps += result.steps;
     cachedInputTokens += result.usage.cachedInputTokens ?? 0;
+    if (roundReasoning.trim()) thinkingLog.push({ round, text: roundReasoning });
 
     // Union the git-diff file list into filesTouched. This is the ground truth
     // for what changed and supplements tool-call events (which may not fire in
     // all execution environments — e.g. when onStepFinish is not called).
     for (const f of result.changedFiles) filesTouched.add(f);
 
-    // ── 5. JUDGE ──
+    // ── 5. JUDGE (single, or a cross-vendor panel) ──
     const judgeStart = Date.now();
-    const verdict = await judgeCompleteness(
-      {
-        request: opts.prompt,
-        response: result.text,
-        filesTouched: [...filesTouched],
-        commandsRun,
-        steps: result.steps,
-        executorModel: routed.model,
-        signal: opts.signal,
-      },
-      opts.ai,
-    );
+    const judgeInput = {
+      request: opts.prompt,
+      response: result.text,
+      filesTouched: [...filesTouched],
+      commandsRun,
+      // Ground-truth evidence: the real diff + the outputs of commands run
+      // this round (test results are decisive for completeness).
+      diff: result.diff,
+      commandOutputs: roundCommandOutputs,
+      steps: result.steps,
+      executorModel: routed.model,
+      signal: opts.signal,
+    };
+    const usePanel =
+      (opts.judgeModels && opts.judgeModels.length > 0) ||
+      !!process.env["OXAGEN_JUDGE_PANEL"];
+    const verdict = usePanel
+      ? await judgePanel(judgeInput, opts.ai, opts.judgeModels)
+      : await judgeCompleteness(judgeInput, opts.ai);
     phases.push(phaseStat("judge", round, judgeStart, verdict.model, verdict.usage));
     usage = mergeUsage(usage, verdict.usage);
     judgeRounds.push(verdict);
@@ -408,6 +454,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     verbose: opts.verbose,
     phases,
     toolEvents,
+    thinkingLog,
   });
 
   // ── Graph sync: always-on, fire-and-forget, non-blocking. ──
@@ -526,9 +573,18 @@ interface AssembleArgs {
   verbose?: boolean;
   phases?: PhaseStat[];
   toolEvents?: ToolEvent[];
+  thinkingLog?: Array<{ round: number; text: string }>;
 }
 
 function assembleTrace(a: AssembleArgs): TurnTrace {
+  // Persist the reasoning per round, truncated for storage (each round capped;
+  // at most the last 8 rounds retained). Always stored when present — the
+  // thinking log is useful outside verbose mode too (it's what `/replay` shows
+  // and what a memory-distiller mines).
+  const thinking = (a.thinkingLog ?? [])
+    .filter((t) => t.text.trim())
+    .slice(-8)
+    .map((t) => ({ round: t.round, text: truncate(t.text, 6000) }));
   return {
     id: newTraceId(),
     createdAt: a.startedAt,
@@ -551,6 +607,7 @@ function assembleTrace(a: AssembleArgs): TurnTrace {
     steps: a.steps,
     usage: a.usage,
     durationMs: Date.now() - a.startedAt,
+    ...(thinking.length > 0 ? { thinkingLog: thinking } : {}),
     ...(a.verbose
       ? {
           verbose: true,
@@ -571,10 +628,12 @@ async function runBare(
   onToolCall: (name: string, input: unknown) => void,
   phases: PhaseStat[],
   toolEvents: ToolEvent[],
+  thinkingLog: Array<{ round: number; text: string }>,
 ): Promise<RunTurnResult> {
   const model = opts.model ?? modelForTier("balanced");
   opts.onStage?.({ kind: "execute", label: "executing (pipeline off)" });
   const execStart = Date.now();
+  let bareReasoning = "";
   const result = await runCodingAgent({
     workspace: opts.workspace,
     ai: opts.ai,
@@ -590,7 +649,10 @@ async function runBare(
     signal: opts.signal,
     onEvent: (e) => {
       if (e.type === "text") opts.onText?.(e.delta);
-      if (e.type === "reasoning") opts.onReasoning?.(e.delta);
+      if (e.type === "reasoning") {
+        opts.onReasoning?.(e.delta);
+        bareReasoning += e.delta;
+      }
       if (e.type === "tool-call") onToolCall(e.name, e.input);
       if (e.type === "tool-result")
         opts.onToolEvent?.({ name: e.name, ok: e.ok, durationMs: e.durationMs });
@@ -598,6 +660,7 @@ async function runBare(
       captureToolEvent(e, toolEvents, opts.verbose);
     },
   });
+  if (bareReasoning.trim()) thinkingLog.push({ round: 0, text: bareReasoning });
   const usage = accumulateUsage(emptyUsage(), model, result.usage);
   phases.push(phaseStat("execute", 0, execStart, model, usage));
 
@@ -640,6 +703,7 @@ async function runBare(
     verbose: opts.verbose,
     phases,
     toolEvents,
+    thinkingLog,
   });
 
   if (opts.graphSync && filesTouched.size > 0) {

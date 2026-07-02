@@ -40,4 +40,27 @@ describe("buildSystemPrompt", () => {
     });
     expect(prompt).toContain("READ-ONLY MODE");
   });
+
+  it("interactive (default) narrates; headless swaps in the verification protocol", () => {
+    const interactive = buildSystemPrompt({ cwd: "/repo" });
+    // Source wraps "watches this stream\nlive", so assert the contiguous slice.
+    expect(interactive).toContain("watches this stream");
+    expect(interactive).toContain("NARRATE AS YOU GO");
+    expect(interactive).not.toContain("Verification protocol");
+    // The default equals an explicit "interactive".
+    expect(buildSystemPrompt({ cwd: "/repo", profile: "interactive" })).toBe(interactive);
+
+    const headless = buildSystemPrompt({ cwd: "/repo", profile: "headless" });
+    expect(headless).toContain("Verification protocol");
+    expect(headless).toContain("Reproduce");
+    expect(headless).toContain("SMALLEST");
+    expect(headless.toLowerCase()).toContain("regress");
+    expect(headless).not.toContain("watches this stream");
+    expect(headless).not.toContain("NARRATE AS YOU GO");
+
+    // Both profiles keep the shared tool rules.
+    const shared = "Prefer `edit_file` for surgical changes";
+    expect(interactive).toContain(shared);
+    expect(headless).toContain(shared);
+  });
 });

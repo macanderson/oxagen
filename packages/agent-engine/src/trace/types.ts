@@ -193,6 +193,14 @@ export interface TurnTrace {
   phases?: PhaseStat[];
   /** Every tool call + result with timing (verbose turns). */
   toolEvents?: ToolEvent[];
+  /**
+   * The model's reasoning / chain-of-thought, captured per execution round.
+   * Previously these deltas were streamed dim to the terminal and DISCARDED;
+   * persisting them makes the agent's thinking inspectable in `/replay`, and is
+   * the substrate for mining durable lessons (a wrong assumption the model
+   * voiced) into memory candidates. Each round's text is truncated for storage.
+   */
+  thinkingLog?: Array<{ round: number; text: string }>;
   /** True when this turn was captured in verbose mode. */
   verbose?: boolean;
 }

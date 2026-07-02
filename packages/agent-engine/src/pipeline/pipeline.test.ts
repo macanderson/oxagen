@@ -152,3 +152,47 @@ describe("runTurn — GraphSyncProvider", () => {
     expect(recordLineage).not.toHaveBeenCalled();
   });
 });
+
+describe("runTurn — thinking-log persistence", () => {
+  function aiWithReasoning(reasoning: string): AgentAi {
+    return {
+      stream(_args: ModelRunArgs) {
+        return {
+          fullStream: (async function* () {
+            yield { type: "reasoning-delta", text: reasoning };
+            yield { type: "text-delta", text: "done" };
+          })(),
+          steps: Promise.resolve([{}]),
+          usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+          response: Promise.resolve({ messages: [] }),
+          finishReason: Promise.resolve("stop"),
+        } as unknown as ReturnType<AgentAi["stream"]>;
+      },
+      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+    };
+  }
+
+  it("persists the model's reasoning onto the trace (bare path)", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "x" });
+    const result = await runTurn({
+      prompt: "think about it",
+      workspace: ws,
+      ai: aiWithReasoning("I should check the imports before editing."),
+      bare: true,
+    });
+    expect(result.trace.thinkingLog).toBeDefined();
+    expect(result.trace.thinkingLog?.[0]?.text).toContain("check the imports");
+    expect(result.trace.thinkingLog?.[0]?.round).toBe(0);
+  });
+
+  it("omits the thinking log when the model emits no reasoning", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "x" });
+    const result = await runTurn({
+      prompt: "no reasoning here",
+      workspace: ws,
+      ai: makeAi(),
+      bare: true,
+    });
+    expect(result.trace.thinkingLog).toBeUndefined();
+  });
+});

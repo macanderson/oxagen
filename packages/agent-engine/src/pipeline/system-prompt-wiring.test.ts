@@ -55,6 +55,44 @@ describe("runTurn — system prompt wiring", () => {
     expect(captured).toContain("Operating rules:");
   });
 
+  it("threads profile:'headless' into the composed prompt (strips narration, adds protocol)", async () => {
+    let captured = "";
+    await runTurn({
+      prompt: "fix the failing test",
+      workspace: new MemoryWorkspace({ "a.ts": "x" }),
+      ai: makeCapturingAi((s) => (captured = s)),
+      bare: true,
+      profile: "headless",
+    });
+
+    // Verification protocol reached the model…
+    expect(captured).toContain("Verification protocol");
+    expect(captured).toContain("Reproduce");
+    expect(captured).toContain("SMALLEST");
+    expect(captured.toLowerCase()).toContain("regress");
+    // …the live-narration tax was stripped (source wraps "watches this stream\nlive")…
+    expect(captured).not.toContain("watches this stream");
+    expect(captured).not.toContain("NARRATE AS YOU GO");
+    // …and the shared tool rules survived.
+    expect(captured).toContain("Prefer `edit_file` for surgical changes");
+  });
+
+  it("defaults to the interactive (narrating) profile when none is given", async () => {
+    let captured = "";
+    await runTurn({
+      prompt: "fix the failing test",
+      workspace: new MemoryWorkspace({ "a.ts": "x" }),
+      ai: makeCapturingAi((s) => (captured = s)),
+      bare: true,
+      // no profile ⇒ interactive
+    });
+
+    expect(captured).toContain("watches this stream");
+    expect(captured).toContain("NARRATE AS YOU GO");
+    expect(captured).not.toContain("Verification protocol");
+    expect(captured).toContain("Prefer `edit_file` for surgical changes");
+  });
+
   it("composes the operating rules WITH the repo's project rules (does not replace them)", async () => {
     let captured = "";
     await runTurn({

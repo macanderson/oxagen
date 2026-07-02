@@ -275,6 +275,50 @@ export function buildProgram(): Command {
       await handleReplay(turn, opts);
     });
 
+  // ── pr: watch a PR's CI, report, merge when green ───────────────────────────
+
+  {
+    const pr = program.command("pr").description("Watch a pull request's CI and merge it when green");
+    pr
+      .command("status")
+      .description("One-shot CI verdict for a PR (exit 0 green / 1 failing / 2 pending)")
+      .argument("[number]", "PR number; omit for the current branch's PR")
+      .option("--json", "Output JSON", false)
+      .action(async (number: string | undefined, opts: { json?: boolean }) => {
+        const { handlePrStatus } = await import("./commands/pr.js");
+        await handlePrStatus(number, opts);
+      });
+    pr
+      .command("watch")
+      .description("Stream a PR's CI until green or failing; offer to merge when green")
+      .argument("[number]", "PR number; omit for the current branch's PR")
+      .option("--merge", "Squash-merge automatically the moment it's green", false)
+      .option("--interval <seconds>", "Poll interval seconds (default 30)", (v) => parseInt(v, 10))
+      .option("--timeout <minutes>", "Give up after this many minutes (default 60)", (v) => parseInt(v, 10))
+      .action(
+        async (
+          number: string | undefined,
+          opts: { merge?: boolean; interval?: number; timeout?: number },
+        ) => {
+          const { handlePrWatch } = await import("./commands/pr.js");
+          await handlePrWatch(number, opts);
+        },
+      );
+  }
+
+  // ── recover: find + restore agent work from the commit ledger ───────────────
+
+  program
+    .command("recover")
+    .description("List or restore recorded agent commits (never lose work)")
+    .argument("[hash]", "A commit hash to show restore instructions for; omit to list")
+    .option("--all", "List across all repos, not just this one", false)
+    .option("--json", "Output JSON", false)
+    .action(async (hash: string | undefined, opts: { all?: boolean; json?: boolean }) => {
+      const { handleRecover } = await import("./commands/recover.js");
+      await handleRecover(hash, opts);
+    });
+
   // ── cost: project + report model cost from the baked-in rate card ───────────
 
   program

@@ -67,7 +67,7 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
   }
 
   const scope = { orgSlug, workspaceSlug };
-  const backToGraph = workspace.knowledge.graph(scope);
+  const backToInference = workspace.knowledge.inference(scope);
 
   if (!node) {
     return (
@@ -80,10 +80,10 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
           workspace, or you don&apos;t have access to it.
         </p>
         <Link
-          href={backToGraph}
+          href={backToInference}
           className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
         >
-          <ArrowLeft className="size-4" aria-hidden="true" /> Back to graph
+          <ArrowLeft className="size-4" aria-hidden="true" /> Back to inference
         </Link>
       </div>
     );
@@ -96,10 +96,10 @@ export default async function KnowledgeNodePage({ params }: PageProps) {
   return (
     <div className="space-y-5">
       <Link
-        href={backToGraph}
+        href={backToInference}
         className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft className="size-3.5" aria-hidden="true" /> Knowledge graph
+        <ArrowLeft className="size-3.5" aria-hidden="true" /> Knowledge inference
       </Link>
 
       <div className="overflow-hidden rounded-xl border border-border bg-card">
