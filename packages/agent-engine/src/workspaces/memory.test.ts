@@ -38,6 +38,13 @@ describe("MemoryWorkspace", () => {
     await expect(ws.editFile("a.txt", "zzz", "x")).rejects.toThrow(/not found/i);
   });
 
+  it("editFile replaceAll replaces every occurrence and returns the count", async () => {
+    const ws = new MemoryWorkspace({ "a.txt": "foo bar foo" });
+    const n = await ws.editFile("a.txt", "foo", "X", { replaceAll: true });
+    expect(n).toBe(2);
+    expect(await ws.readFile("a.txt")).toBe("X bar X");
+  });
+
   it("list returns immediate children only (non-recursive)", async () => {
     const ws = new MemoryWorkspace({ "src/x.ts": "", "src/deep/y.ts": "" });
     expect((await ws.list("src")).sort()).toEqual(["deep", "x.ts"]);

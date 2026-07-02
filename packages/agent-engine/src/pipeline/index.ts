@@ -78,6 +78,7 @@ function composeAgentSystem(opts: RunTurnOptions, cwd: string): string {
     cwd,
     projectContext: opts.projectContext,
     readOnly: opts.readOnly,
+    profile: opts.profile,
   });
 }
 
@@ -100,6 +101,14 @@ export interface RunTurnOptions {
   projectContext?: ProjectContext;
   /** Read-only mode: no file mutation, and the auto-revise loop is disabled. */
   readOnly?: boolean;
+  /**
+   * System-prompt behavioural profile, forwarded to {@link buildSystemPrompt}.
+   * "interactive" (default) narrates for a live watcher; "headless" strips the
+   * narration and swaps in a verification protocol for autonomous/one-shot runs
+   * (SWE-bench, CI, piped stdout). Undefined ⇒ "interactive". Chosen once per
+   * run, so the cached system prefix stays stable across turns.
+   */
+  profile?: "interactive" | "headless";
   /** Episodic session memory (recalled before, written after). */
   memory?: MemoryProvider | null;
   /** Code graph provider for prompt enhancement. */
@@ -310,6 +319,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     });
 
     const execStart = Date.now();
+    // Capture bash command outputs THIS round so the judge sees test results
+    // (the decisive completeness signal), not just the command strings.
+    const roundCommandOutputs: Array<{ command: string; output: string; ok: boolean }> = [];
     const result = await runCodingAgent({
       workspace: opts.workspace,
       ai: opts.ai,
@@ -327,8 +339,19 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         if (e.type === "text") opts.onText?.(e.delta);
         if (e.type === "reasoning") opts.onReasoning?.(e.delta);
         if (e.type === "tool-call") onToolCall(e.name, e.input);
-        if (e.type === "tool-result")
+        if (e.type === "tool-result") {
           opts.onToolEvent?.({ name: e.name, ok: e.ok, durationMs: e.durationMs });
+          if (e.name === "bash") {
+            let command = e.input;
+            try {
+              const parsed = JSON.parse(e.input) as { command?: unknown };
+              if (typeof parsed.command === "string") command = parsed.command;
+            } catch {
+              /* input wasn't JSON — keep the stringified form */
+            }
+            roundCommandOutputs.push({ command, output: e.result, ok: e.ok });
+          }
+        }
         if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
         captureToolEvent(e, toolEvents, opts.verbose);
       },
@@ -354,6 +377,10 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         response: result.text,
         filesTouched: [...filesTouched],
         commandsRun,
+        // Ground-truth evidence: the real diff + the outputs of commands run
+        // this round (test results are decisive for completeness).
+        diff: result.diff,
+        commandOutputs: roundCommandOutputs,
         steps: result.steps,
         executorModel: routed.model,
         signal: opts.signal,

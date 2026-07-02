@@ -60,8 +60,17 @@ export type RateCard = Record<string, ProviderModelRate>;
  * resolves to the longest matching prefix via {@link resolveRate}.
  */
 export const PROVIDER_RATE_CARD: RateCard = {
+  // Claude Fable 5 is Anthropic's most capable model — priced at (and above) the
+  // Opus tier. The bare `claude-fable-5` / gateway `anthropic/claude-fable-5`
+  // keys never prefix-match any `claude-opus`/`claude-sonnet` row, so without an
+  // explicit entry Fable would fall back to the Sonnet rate and silently
+  // UNDER-charge. Matches the CLI/agent-engine fable rows ($15/$75).
+  "claude-fable-5": { provider: "anthropic", inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
   "claude-opus-4-8": { provider: "anthropic", inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
   "claude-opus-4": { provider: "anthropic", inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
+  // Claude Sonnet 5 — same $3/$15 Sonnet-tier rate. An explicit key keeps it off
+  // the fallback path (the `claude-sonnet-4` prefix does not match `-5`).
+  "claude-sonnet-5": { provider: "anthropic", inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
   "claude-sonnet-4-6": { provider: "anthropic", inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
   "claude-sonnet-4": { provider: "anthropic", inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
   "claude-haiku-4-5": { provider: "anthropic", inputPer1M: 1.0, outputPer1M: 5.0, cachedInputPer1M: 0.1 },
@@ -76,7 +85,9 @@ export const PROVIDER_RATE_CARD: RateCard = {
   // the Sonnet rate (over-charging Opus, under-charging Haiku). The `…-4` keys
   // are deliberate PREFIXES so a future dotted minor (e.g. "…-4.7") still
   // resolves to the right family via {@link resolveRate}.
+  "anthropic/claude-fable-5": { provider: "anthropic", inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
   "anthropic/claude-opus-4": { provider: "anthropic", inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 },
+  "anthropic/claude-sonnet-5": { provider: "anthropic", inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
   "anthropic/claude-sonnet-4": { provider: "anthropic", inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 },
   "anthropic/claude-haiku-4": { provider: "anthropic", inputPer1M: 1.0, outputPer1M: 5.0, cachedInputPer1M: 0.1 },
   "openai/gpt-4o-mini": { provider: "openai", inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 },
