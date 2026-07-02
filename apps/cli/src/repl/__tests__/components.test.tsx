@@ -177,13 +177,17 @@ describe("PromptInput typeahead", () => {
     unmount();
   });
 
-  it("marks productized commands with the package glyph in the menu", async () => {
+  it("denotes productized commands with color, not a glyph, in the menu", async () => {
     const { lastFrame, stdin, unmount } = render(
       <PromptInput onSubmit={() => {}} busy={false} catalog={catalog} />,
     );
     stdin.write("/h");
     await tick();
-    expect(lastFrame() ?? "").toContain("📦");
+    const frame = lastFrame() ?? "";
+    // The redesign replaced the 📦 glyph with per-command color (see slash-menu.tsx):
+    // the command still renders, but the icon is gone — color now marks productized.
+    expect(frame).toContain("/help");
+    expect(frame).not.toContain("📦");
     unmount();
   });
 
