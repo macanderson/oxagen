@@ -23,7 +23,7 @@ import { queryCodeGraph } from "./code-graph.js";
 import { createContextResolver } from "./context/index.js";
 import { formatGraphResultJson } from "./context/format.js";
 import { isMutatingTool, toRequest, type PermissionBroker } from "./permissions.js";
-import { runShellCommandBuffered } from "../repl/shell-runner.js";
+import { runShellCommandBuffered } from "../lib/shell-runner.js";
 
 const MAX_OUTPUT = 30_000; // chars; keep tool output from blowing the context window
 const IGNORE_DIRS = new Set([
