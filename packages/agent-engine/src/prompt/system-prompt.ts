@@ -38,6 +38,15 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
   const hasCodeGraph = opts.hasCodeGraph ?? true;
   const hasCodeMap = opts.hasCodeMap ?? false;
   const profile = opts.profile ?? "interactive";
+  // Tools the model may use to locate code, best-first — the headless
+  // localization step must list only the tools actually wired for this run.
+  const locateToolList = [
+    ...(hasCodeGraph ? ["`code_graph`"] : []),
+    ...(hasCodeMap ? ["`code_map`"] : []),
+    "`grep`",
+  ];
+  const locateTools =
+    locateToolList.join("/") + (locateToolList.length > 1 ? " (in that order)" : "");
   const preamble = agent
     ? [
         agent.systemPrompt.trim(),
@@ -93,7 +102,7 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
       "let the tools carry the work and speak only in the final answer):",
       "- Reproduce the failure FIRST: run the failing test, or write a minimal repro, and",
       "  confirm it actually fails before you change anything.",
-      "- Localize before editing: use `code_map`/`code_graph`/`grep` to find the real source",
+      `- Localize before editing: use ${locateTools} to find the real source`,
       "  of the failure, and `read_file` a file before you edit it.",
       "- Make the SMALLEST root-cause fix that matches the surrounding style — no drive-by",
       "  rewrites, no unrelated cleanups.",
