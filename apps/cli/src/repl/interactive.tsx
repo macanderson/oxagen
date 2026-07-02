@@ -80,8 +80,8 @@ import {
   summarizeTrace,
   type Message,
 } from "./components.js";
-import { resolveEscapeAction } from "./escape-action.js";
 import { HudPanel } from "./hud.js";
+import { resolveEscapeAction } from "./escape-action.js";
 import { isDebugEnabled } from "../lib/debug-log.js";
 import { Banner } from "../tui/banner.js";
 import {

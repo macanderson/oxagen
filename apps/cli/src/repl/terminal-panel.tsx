@@ -59,10 +59,14 @@ function statusStyle(run: TerminalRun, frame: number): { glyph: string; label: s
 export function TerminalPanel({
   run,
   nowFn,
+  collapsed = false,
 }: {
   run: TerminalRun;
   /** Injectable clock for deterministic tests; production uses Date.now. */
   nowFn?: () => number;
+  /** Folded accordion form (a finished run parked in the transcript): show only
+   *  the header line + an expand hint, hiding the output body. Ctrl-O toggles it. */
+  collapsed?: boolean;
 }): React.ReactElement {
   const now = nowFn ?? (() => Date.now());
   const [frame, setFrame] = useState(0);
@@ -96,76 +100,25 @@ export function TerminalPanel({
           {glyph} {label}
         </Text>
         <Text dimColor> · {elapsed(run.startedAt, at)}</Text>
-      </Box>
-      {/* Body — the tailed output. */}
-      <Box flexDirection="column" marginTop={hasOutput || run.status === "running" ? 1 : 0}>
-        {elided > 0 ? <Text dimColor>… {elided} earlier line{elided === 1 ? "" : "s"} hidden</Text> : null}
-        {shown.map((line, i) => (
-          <Text key={i} wrap="truncate-end">
-            {line}
-          </Text>
-        ))}
-        {run.status === "running" && !hasOutput ? <Text dimColor>waiting for output…</Text> : null}
-      </Box>
-    </Box>
-  );
-}
-
-/** How many output lines the expanded accordion shows before tailing. */
-const CARD_MAX_LINES = 40;
-
-/**
- * TerminalRunCard — a FINISHED `!command` folded inline into the chat transcript
- * as a collapsed, expandable accordion.
- *
- * Once a shell command exits, its live red {@link TerminalPanel} disappears (see
- * interactive.tsx's fold timer) and the run reappears here, in chronological
- * order alongside the agent/user messages that surround it. Collapsed it is a
- * single quiet line — command, exit status, elapsed, line count — so scrollback
- * stays skimmable; expanded (Ctrl-O toggles the most recent) it reveals the
- * captured output. Deliberately NOT red: the red outline means "live", and a
- * folded card is history, not a running process.
- */
-export function TerminalRunCard({ run, expanded }: { run: TerminalRun; expanded: boolean }): React.ReactElement {
-  const { glyph, label, color } = statusStyle(run, 0);
-  const at = run.endedAt ?? run.startedAt;
-  const allLines = run.output.replace(/\n$/, "").split("\n");
-  const lineCount = run.output.trim().length === 0 ? 0 : allLines.length;
-  const elided = expanded ? Math.max(0, allLines.length - CARD_MAX_LINES) : 0;
-  const shown = elided > 0 ? allLines.slice(-CARD_MAX_LINES) : allLines;
-
-  return (
-    <Box flexDirection="column" paddingX={1}>
-      {/* Header — the accordion toggle line. Always one row. */}
-      <Box>
-        <Text dimColor>{expanded ? "▾ " : "▸ "}</Text>
-        <Text dimColor>{"$ "}</Text>
-        <Text bold wrap="truncate-end">
-          {run.command}
-        </Text>
-        <Text>{"  "}</Text>
-        <Text color={color}>
-          {glyph} {label}
-        </Text>
-        <Text dimColor> · {elapsed(run.startedAt, at)}</Text>
-        {lineCount > 0 ? (
+        {collapsed ? (
           <Text dimColor>
             {" · "}
-            {lineCount} line{lineCount === 1 ? "" : "s"}
+            {allLines.length} line{allLines.length === 1 ? "" : "s"} · Ctrl-O to expand
           </Text>
         ) : null}
       </Box>
-      {/* Body — only when expanded. A dim left gutter marks it as shell output. */}
-      {expanded && lineCount > 0 ? (
-        <Box flexDirection="column" paddingLeft={2}>
+      {/* Body — the tailed output. Hidden in the folded (collapsed) accordion form. */}
+      {collapsed ? null : (
+        <Box flexDirection="column" marginTop={hasOutput || run.status === "running" ? 1 : 0}>
           {elided > 0 ? <Text dimColor>… {elided} earlier line{elided === 1 ? "" : "s"} hidden</Text> : null}
           {shown.map((line, i) => (
-            <Text key={i} dimColor wrap="truncate-end">
+            <Text key={i} wrap="truncate-end">
               {line}
             </Text>
           ))}
+          {run.status === "running" && !hasOutput ? <Text dimColor>waiting for output…</Text> : null}
         </Box>
-      ) : null}
+      )}
     </Box>
   );
 }
