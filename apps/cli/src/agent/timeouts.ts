@@ -30,6 +30,7 @@
  * This module is the SINGLE source of truth for CLI timeout values.
  */
 import type { ToolSet } from "ai";
+import { debugLog } from "../lib/debug-log.js";
 
 // ── Error type ───────────────────────────────────────────────────────────────
 
@@ -502,7 +503,22 @@ export function wrapToolsWithTimeout(
           signal,
           `tool:${name}`,
         ).catch((err: unknown) => {
-          if (err instanceof AgentTimeoutError) return err.message;
+          // A hung tool is THE most common way a turn appears "stuck". It's
+          // converted to a tool-result string (not a throw) so the turn survives,
+          // which means it never reaches the turn-level error path — log it here or
+          // it vanishes from cli.output entirely.
+          if (err instanceof AgentTimeoutError) {
+            void debugLog("error", "turn.tool-timeout", {
+              tool: name,
+              category,
+              timeoutMs: ms,
+              message: err.message,
+            });
+            return err.message;
+          }
+          // A tool that threw a real error: capture the exception (name/message/
+          // stack via debugLog's Error handling) before re-throwing to the turn.
+          void debugLog("error", "turn.tool-throw", { tool: name, error: err });
           throw err;
         }),
     };
