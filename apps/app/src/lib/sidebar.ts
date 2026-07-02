@@ -380,7 +380,7 @@ export function activeHrefFor(
  * routes.ts into a single searchable list.
  *
  * Each entry has:
- *   label  — display string (e.g. "Knowledge · Sources")
+ *   label  — display string (e.g. "Knowledge · Repos")
  *   href   — resolved path for the given ctx
  *   parent — the parent sidebar item id when applicable
  *
@@ -410,13 +410,13 @@ export function enumerateNavTargets(
 
     // Knowledge tabs
     targets.push({
-      label: "Knowledge · Sources",
-      href: workspace.knowledge.sources(wsCtx),
+      label: "Knowledge · Repos",
+      href: workspace.knowledge.repos(wsCtx),
       parent: "knowledge",
     });
     targets.push({
-      label: "Knowledge · Graph",
-      href: workspace.knowledge.graph(wsCtx),
+      label: "Knowledge · Inference",
+      href: workspace.knowledge.inference(wsCtx),
       parent: "knowledge",
     });
     targets.push({

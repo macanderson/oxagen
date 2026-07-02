@@ -55,7 +55,7 @@ describe("proxy — IA realignment redirects (§16)", () => {
 
 describe("proxy — no redirect loop", () => {
   it("leaves unrelated workspace and org routes untouched", () => {
-    expect(location("/acme/prod/knowledge/sources")).toBeNull();
+    expect(location("/acme/prod/knowledge/repos")).toBeNull();
     expect(location("/acme/settings/general")).toBeNull();
     expect(location("/acme/developer/mcp")).toBeNull();
   });
