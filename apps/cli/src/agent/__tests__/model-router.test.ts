@@ -165,8 +165,8 @@ describe("routeModel + tier helpers", () => {
     expect(tierForSlug("deepseek/deepseek-v3.2-thinking")).toBe("balanced");
     expect(tierLabel("fast")).toBe("Haiku");
     expect(tierLabel("balanced")).toBe("Sonnet");
-    expect(tierLabel("precise")).toBe("Opus");
-    expect(modelForTier("precise")).toContain("opus");
+    expect(tierLabel("precise")).toBe("Fable");
+    expect(modelForTier("precise")).toContain("fable");
   });
 
   it("respects env overrides for tier slugs", () => {

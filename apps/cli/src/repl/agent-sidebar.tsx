@@ -37,7 +37,8 @@ export type PanelMode = "auto" | "on" | "off";
  * `null` (or a `zone: "input"` focus) means the input bar owns focus, not the
  * panel.
  */
-export type PanelFocus = { zone: "agent" | "task"; id: string } | null;
+export type PanelTarget = { zone: "agent" | "task"; id: string };
+export type PanelFocus = PanelTarget | null;
 
 /** Fixed panel width — wide enough for a title + status, narrow enough to dock. */
 const PANEL_WIDTH = 34;
