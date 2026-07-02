@@ -34,13 +34,15 @@ import type { CodeGraphStore } from "../daemon/code-graph/store.js";
 import type { CodeGraph, CodeNode } from "../daemon/code-graph/types.js";
 import { resolveEmbeddingClient, type EmbeddingClient } from "./context/embedding.js";
 import { ensureFileEmbeddings, rankFilesBySimilarity } from "./context/semantic-index.js";
+import type { CodeGraphProvider } from "@oxagen/agent-engine";
 
-export type CodeGraphOperation =
-  | "search"
-  | "file_symbols"
-  | "dependents"
-  | "imports"
-  | "semantic_search";
+/**
+ * Derived from — not duplicated from — CodeGraphProvider.query's own operation
+ * parameter. @oxagen/agent-engine's types.ts is the single source of truth for
+ * this union; adding a new operation there flows here automatically instead of
+ * needing a hand-kept copy to stay in sync.
+ */
+export type CodeGraphOperation = Parameters<CodeGraphProvider["query"]>[0];
 
 /**
  * Test-only override seam for the `semantic_search` operation; every other
