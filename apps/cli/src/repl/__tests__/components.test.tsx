@@ -2,10 +2,12 @@ import { describe, it, expect } from "vitest";
 import { render } from "ink-testing-library";
 import {
   ApprovalPrompt,
+  CatMouseChase,
   humanizeTokens,
   modeLabel,
   MessageView,
   PromptInput,
+  renderChaseLane,
   StatusLine,
   StageBadge,
   ThinkingIndicator,
@@ -246,6 +248,69 @@ describe("PromptInput typeahead", () => {
   });
 });
 
+describe("PromptInput focus + injection", () => {
+  it("shows the block cursor while focused and drops it when the panel owns focus", () => {
+    const focused = render(<PromptInput onSubmit={() => {}} busy={false} focused />);
+    expect(focused.lastFrame() ?? "").toContain("█");
+    focused.unmount();
+
+    const blurred = render(<PromptInput onSubmit={() => {}} busy={false} focused={false} />);
+    expect(blurred.lastFrame() ?? "").not.toContain("█");
+    blurred.unmount();
+  });
+
+  it("ignores keystrokes while not focused (the panel handler owns them)", async () => {
+    const calls: string[] = [];
+    const { lastFrame, stdin, unmount } = render(
+      <PromptInput onSubmit={(t) => calls.push(t)} busy={false} focused={false} />,
+    );
+    stdin.write("hello");
+    await tick();
+    stdin.write("\r");
+    await tick();
+    // Nothing typed reached the buffer, and Enter submitted nothing.
+    expect(lastFrame() ?? "").not.toContain("hello");
+    expect(calls).toEqual([]);
+    unmount();
+  });
+
+  it("replaces the buffer when the parent bumps the injection nonce", async () => {
+    const { lastFrame, rerender, unmount } = render(
+      <PromptInput onSubmit={() => {}} busy={false} inject={{ text: "", nonce: 0 }} />,
+    );
+    await tick();
+    rerender(
+      <PromptInput onSubmit={() => {}} busy={false} inject={{ text: "recall these prompts", nonce: 1 }} />,
+    );
+    await tick();
+    expect(lastFrame() ?? "").toContain("recall these prompts");
+    unmount();
+  });
+
+  it("reports menu open/close to the parent via onMenuOpenChange", async () => {
+    const states: boolean[] = [];
+    const catalog = [
+      { name: "help", description: "help", source: "builtin" as const, productized: true },
+    ];
+    const { stdin, unmount } = render(
+      <PromptInput
+        onSubmit={() => {}}
+        busy={false}
+        catalog={catalog}
+        onMenuOpenChange={(open) => states.push(open)}
+      />,
+    );
+    await tick();
+    stdin.write("/h"); // opens the menu
+    await tick();
+    stdin.write(ESC); // dismisses it
+    await tick();
+    expect(states).toContain(true);
+    expect(states).toContain(false);
+    unmount();
+  });
+});
+
 describe("modeLabel", () => {
   it("maps modes to friendly labels", () => {
     expect(modeLabel("acceptEdits")).toBe("auto-edit");
@@ -401,6 +466,68 @@ describe("ThinkingIndicator", () => {
     expect(frame).toContain("Thinking…");
     expect(frame).toMatch(/\d+s/);
     expect(frame).toContain("800 tok");
+    unmount();
+  });
+});
+
+describe("renderChaseLane", () => {
+  const W = 24;
+
+  it("naps when idle: cat curls up at the left, mouse waits at the far end", () => {
+    const lane = renderChaseLane(0, W, false);
+    expect(lane).toHaveLength(W); // fixed width — no layout jitter frame to frame
+    expect(lane.startsWith("=^.^= z")).toBe(true); // sleepy cat
+    expect(lane.trimEnd().endsWith("~o")).toBe(true); // mouse peeking at the end
+    expect(lane).not.toContain("·"); // no dust while still
+  });
+
+  it("runs the chase when active: cat pursues the mouse, kicking up dust", () => {
+    // tick 2 is mid-lap (not the pounce frame), so both sprites are on the lane.
+    const lane = renderChaseLane(2, W, true);
+    expect(lane).toHaveLength(W);
+    const catIdx = lane.indexOf("=^");
+    const mouseIdx = lane.indexOf("~");
+    expect(catIdx).toBeGreaterThanOrEqual(0);
+    expect(mouseIdx).toBeGreaterThan(catIdx); // the mouse stays ahead of the cat
+    expect(lane).toContain("·"); // dust speck trails the running cat
+  });
+
+  it("lunges into a pounce at the end of a lap and the mouse squeaks free", () => {
+    const span = Math.max(1, W - (5 + 3 + 2)); // mirrors the renderer's lap length
+    const lane = renderChaseLane(span, W, true); // p === span → pounce frame
+    expect(lane).toContain("=>^o^="); // the lunge
+    expect(lane).toContain("!"); // the squeak
+  });
+
+  it("advances deterministically and loops over a lap", () => {
+    const span = Math.max(1, W - (5 + 3 + 2));
+    // The lap has odd length, and the cat's eye-twitch toggles on tick parity,
+    // so the full cycle is two laps — assert identity there.
+    expect(renderChaseLane(1, W, true)).toBe(renderChaseLane(1 + 2 * (span + 1), W, true));
+    // Adjacent ticks differ — the sprites actually move.
+    expect(renderChaseLane(1, W, true)).not.toBe(renderChaseLane(2, W, true));
+  });
+
+  it("clamps width into a sane range so a tiny or huge terminal still renders", () => {
+    expect(renderChaseLane(0, 2, true)).toHaveLength(14); // floor
+    expect(renderChaseLane(0, 999, true)).toHaveLength(30); // ceiling
+  });
+});
+
+describe("CatMouseChase", () => {
+  it("shows the sleepy cat and paused mouse when idle", () => {
+    const { lastFrame, unmount } = render(<CatMouseChase active={false} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("=^.^= z"); // napping
+    expect(frame).toContain("😴");
+    unmount();
+  });
+
+  it("renders the running cat with the paw marker while active", () => {
+    const { lastFrame, unmount } = render(<CatMouseChase active={true} />);
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("🐾");
+    expect(frame).toMatch(/=\^/); // a cat sprite is on the lane
     unmount();
   });
 });

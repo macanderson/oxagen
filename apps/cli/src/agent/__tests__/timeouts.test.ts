@@ -17,6 +17,12 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { z } from "zod";
 import type { ToolSet } from "ai";
+// Spy on the debug log so we can assert a hung/failed tool actually gets recorded
+// to cli.output (the "just agent messages, no exception data" bug).
+const debugLogMock = vi.fn();
+vi.mock("../../lib/debug-log.js", () => ({
+  debugLog: (...args: unknown[]) => debugLogMock(...args),
+}));
 import * as timeoutsModule from "../timeouts.js";
 import {
   AgentTimeoutError,
@@ -503,6 +509,48 @@ describe("wrapToolsWithTimeout", () => {
     expect((result as string)).toContain("timed out");
     // The real execute must not have been called.
     expect(result as string).not.toBe("should not run");
+  });
+
+  it("logs a turn.tool-timeout error entry when a tool hangs past its deadline", async () => {
+    vi.useFakeTimers();
+    debugLogMock.mockClear();
+    const tools: ToolSet = {
+      slow_tool: {
+        description: "slow",
+        inputSchema: z.object({}),
+        execute: () => new Promise<string>(() => { /* never resolves */ }),
+      },
+    };
+    const wrapped = wrapToolsWithTimeout(tools);
+    // @ts-expect-error — execute is callable
+    const promise = wrapped.slow_tool.execute({}, {});
+    vi.advanceTimersByTime(TIMEOUTS.toolMs + 1);
+    await promise;
+    const call = debugLogMock.mock.calls.find((c) => c[1] === "turn.tool-timeout");
+    expect(call).toBeDefined();
+    expect(call?.[0]).toBe("error");
+    expect(call?.[2]).toMatchObject({ tool: "slow_tool", timeoutMs: TIMEOUTS.toolMs });
+  });
+
+  it("logs a turn.tool-throw error entry (with the exception) when a tool throws", async () => {
+    debugLogMock.mockClear();
+    const boom = new Error("kaboom");
+    const tools: ToolSet = {
+      bad_tool: {
+        description: "bad",
+        inputSchema: z.object({}),
+        execute: async () => {
+          throw boom;
+        },
+      },
+    };
+    const wrapped = wrapToolsWithTimeout(tools);
+    // @ts-expect-error — execute is callable
+    await expect(wrapped.bad_tool.execute({}, {})).rejects.toThrow("kaboom");
+    const call = debugLogMock.mock.calls.find((c) => c[1] === "turn.tool-throw");
+    expect(call).toBeDefined();
+    expect(call?.[0]).toBe("error");
+    expect(call?.[2]).toMatchObject({ tool: "bad_tool", error: boom });
   });
 
   it("preserves other tool properties (description, inputSchema)", () => {

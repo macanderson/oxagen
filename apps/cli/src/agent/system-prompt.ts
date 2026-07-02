@@ -60,6 +60,13 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
     "- Always close a turn with a substantive reply — a short summary of what you changed, or",
     "  the concrete answer you gathered. Do not pad, but never finish silent or with only a",
     "  tool chip and no words.",
+    "- NARRATE AS YOU GO — never work silently. Before a slow or multi-step action (a build,",
+    "  a test run, a broad search, dispatching a subagent), say in one short line what you are",
+    "  about to do and why; after it returns, say what you found. The user watches this stream",
+    "  live, and a long tool call with no words looks like a hang. A steady trickle of brief,",
+    "  concrete progress lines ('running the billing unit tests…', 'tests green, now wiring the",
+    "  route') is required — the goal is that the user is NEVER left staring at a spinner for",
+    "  30+ seconds with no idea what is happening. Think out loud; keep each line short.",
   ];
 
   if (readOnly) {

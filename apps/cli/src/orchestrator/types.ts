@@ -61,7 +61,7 @@ export interface Router {
  * (cheapest first) and gates by `quality` against the complexity's requirement.
  */
 export interface WorkerTier {
-  /** Registry id (e.g. "haiku", "sonnet-5", "opus"). */
+  /** Registry id (e.g. "haiku", "sonnet-5", "fable"). */
   id: string;
   /** 0..1 code-quality ranking used to gate capability. Higher is stronger. */
   quality: number;

@@ -48,8 +48,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return {
     ...real,
   db: () => dbMocks,
-  withTenantDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
-  withSystemDb: async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks),
+  // Spies (not bare passthroughs) so tests can assert WHICH runner a call routed
+  // through — the dunning-sweep fix depends on getOrgBillingSettings using
+  // withSystemDb (no tenant scope) when { system: true } is passed.
+  withTenantDb: vi.fn(async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks)),
+  withSystemDb: vi.fn(async (fn: (tx: typeof dbMocks) => unknown) => fn(dbMocks)),
 
   };
 });
@@ -58,6 +61,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 const { getOrgBillingSettings, updateAutoReloadSettings } = await import(
   "./billing-settings"
 );
+const { withTenantDb, withSystemDb } = await import("@oxagen/database");
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -87,6 +91,23 @@ describe("getOrgBillingSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     insertOnConflictDoNothingMock.mockResolvedValue(undefined);
+  });
+
+  it("routes through withTenantDb by default (request path → RLS enforced)", async () => {
+    findFirstMock.mockResolvedValue(makeSettingsRow());
+    await getOrgBillingSettings("org-001");
+    expect(withTenantDb).toHaveBeenCalledOnce();
+    expect(withSystemDb).not.toHaveBeenCalled();
+  });
+
+  it("routes through withSystemDb when { system: true } (trusted cron, no tenant scope)", async () => {
+    // Regression: billing.dunning-sweep calls this with no active tenant scope.
+    // withTenantDb would throw TenantScopeError; the system flag must select
+    // withSystemDb instead so the low-balance sweep works for every org.
+    findFirstMock.mockResolvedValue(makeSettingsRow());
+    await getOrgBillingSettings("org-001", { system: true });
+    expect(withSystemDb).toHaveBeenCalledOnce();
+    expect(withTenantDb).not.toHaveBeenCalled();
   });
 
   it("creates default row on first call and returns it", async () => {

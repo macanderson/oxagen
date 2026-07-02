@@ -92,4 +92,27 @@ describe("TaskRegistry", () => {
     reg.update("a", { status: "done" });
     expect(reg.snapshot()[0]?.updatedAt).toBe(5_000);
   });
+
+  it("remove() drops one task, keeps the rest in order, and no-ops on unknown ids", () => {
+    const reg = fresh();
+    reg.upsert("a", { title: "A" });
+    reg.upsert("b", { title: "B" });
+    reg.upsert("c", { title: "C" });
+    reg.remove("b");
+    expect(reg.snapshot().map((t) => t.id)).toEqual(["a", "c"]);
+    // Unknown id is a no-op (no throw, no change).
+    reg.remove("zzz");
+    expect(reg.snapshot().map((t) => t.id)).toEqual(["a", "c"]);
+  });
+
+  it("remove() notifies subscribers only when it actually deletes", () => {
+    const reg = fresh();
+    reg.upsert("a", { title: "A" });
+    const listener = vi.fn();
+    reg.on(listener);
+    reg.remove("nope"); // unknown → no notification
+    expect(listener).not.toHaveBeenCalled();
+    reg.remove("a"); // real delete → one notification
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
 });
