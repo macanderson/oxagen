@@ -156,16 +156,13 @@ export function PromptInput({
   // edit, or a clear). Keyed on the nonce so the same text can be re-injected
   // (e.g. clearing to "" twice in a row). `dismissed` is set so injected text
   // never pops the typeahead; typing afterwards clears it as usual.
-  // Deps intentionally list only `injectNonce`: the effect must fire once per
-  // distinct injection, reading the latest `inject.text` at that instant — not
-  // re-run when the text alone changes.
   const injectNonce = inject?.nonce;
-  const injectText = inject?.text ?? "";
   useEffect(() => {
     if (injectNonce === undefined) return;
-    setValue(injectText);
+    setValue(inject?.text ?? "");
     setSelected(0);
     setDismissed(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire only on nonce change
   }, [injectNonce]);
 
   // Derive the live typeahead state from the current buffer. The menu is open

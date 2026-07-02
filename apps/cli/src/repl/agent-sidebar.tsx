@@ -32,16 +32,12 @@ import { taskRegistry, type TaskStatus, type TrackedTask } from "../agent/task-r
 export type PanelMode = "auto" | "on" | "off";
 
 /**
- * One navigable side-panel row: which list it lives in (`zone`) and the registry
- * id of the row (`id`).
+ * A navigable side-panel item, as tracked by the REPL's focus model. `zone`
+ * says which list it lives in; `id` is the registry id of the highlighted row.
+ * `null` (or a `zone: "input"` focus) means the input bar owns focus, not the
+ * panel.
  */
-export type PanelTarget = { zone: "agent" | "task"; id: string };
-
-/**
- * The panel focus, as tracked by the REPL's focus model — a highlighted row, or
- * `null` (equivalently a `zone: "input"` focus) meaning the input bar owns focus.
- */
-export type PanelFocus = PanelTarget | null;
+export type PanelFocus = { zone: "agent" | "task"; id: string } | null;
 
 /** Fixed panel width — wide enough for a title + status, narrow enough to dock. */
 const PANEL_WIDTH = 34;
@@ -65,7 +61,10 @@ export const SIDEBAR_MIN_COLS = MIN_TERMINAL_COLS;
  * single source of truth for arrow-key traversal: the REPL walks this list so
  * the visual order and the navigation order can never drift apart.
  */
-export function panelNavTargets(agents: RunningAgent[], tasks: TrackedTask[]): PanelTarget[] {
+export function panelNavTargets(
+  agents: RunningAgent[],
+  tasks: TrackedTask[],
+): Array<{ zone: "agent" | "task"; id: string }> {
   return [
     ...agents.map((a) => ({ zone: "agent" as const, id: a.id })),
     ...tasks.map((t) => ({ zone: "task" as const, id: t.id })),

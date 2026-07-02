@@ -75,6 +75,12 @@ import { resolveEscapeAction } from "./escape-action.js";
 import { isDebugEnabled } from "../lib/debug-log.js";
 import { Banner } from "../tui/banner.js";
 import {
+  useTerminalSize,
+  ENTER_ALT_SCREEN,
+  LEAVE_ALT_SCREEN,
+  CURSOR_HOME,
+} from "./use-terminal-size.js";
+import {
   makeTurnController,
   makeStallDetector,
   AgentTimeoutError,
@@ -1901,34 +1907,34 @@ export function ReplApp({
           />
         )}
 
-        {/* Esc-twice reset confirmation — shown above the input row until the
-            user types y/yes to confirm or anything else to cancel. */}
-        {resetPending && (
-          <Box paddingX={1} flexDirection="column">
-            <Text color={theme.cyan}>
-              Are you sure you want to reset the conversation?
-            </Text>
-            <Text dimColor>
-              Type <Text bold>y</Text> or <Text bold>yes</Text> to confirm, or
-              anything else (or Esc) to cancel.
-            </Text>
-          </Box>
-        )}
+      {/* Status line — below the input bar, with a blank row beneath it so it is
+          never flush against the bottom edge of the window. */}
+      <Box marginBottom={1} flexShrink={0}>
+        <StatusLine
+          model={model}
+          branch={branchRef.current}
+          // Tokens + cost come from the live metrics bus (every model call —
+          // evaluator, worker, judge — contributes), so they update as calls
+          // complete during a turn and settle correctly at the end (Bug 2).
+          inputTokens={metrics.sessionTokensIn}
+          outputTokens={metrics.sessionTokensOut}
+          cacheHit={usage.cacheHit}
+          cacheMiss={Math.max(0, metrics.sessionTokensIn - usage.cacheHit)}
+          costUsd={metrics.sessionCostUsd}
+          turnOutputTokens={metrics.turnTokensOut}
+          turnCostUsd={metrics.turnCostUsd}
+          pipelineOn={pipelineOn}
+          verboseOn={verboseOn}
+          effort={effort}
+          mode={mode}
+        />
+      </Box>
 
-        {/* Heads-up display — every agent running this session. Toggled by /hud
-            (and closed by Esc); sits just above the input so it reads as a live
-            status overlay. */}
-        {hudVisible && <HudPanel />}
+      </Box>{/* end left (chat + input) column */}
 
       {/* Right-hand dock: Agent Team (live roster) + Task Progress (the planning
-          agent's checklist). Renders nothing until there's work to show. `focus`
-          highlights the navigated row; `active` forces it visible while the user
-          is arrow-navigating it even if `auto` would otherwise hide an idle dock. */}
-      <AgentSidebar
-        mode={panelMode}
-        focus={focus.zone === "input" ? null : focus}
-        active={focus.zone !== "input"}
-      />
+          agent's checklist). Renders nothing until there's work to show. */}
+      <AgentSidebar mode={panelMode} />
       </Box>{/* end live-frame row */}
     </Box>
   );
