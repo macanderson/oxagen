@@ -11,6 +11,7 @@ import {
   type SlashCatalogEntry,
 } from "../catalog.js";
 import type { CliCommandMeta } from "../../program.js";
+import { theme } from "../../tui/theme.js";
 
 const CLI: CliCommandMeta[] = [
   { name: "cost", description: "Project model cost", argumentHint: undefined },
@@ -82,6 +83,29 @@ describe("buildSlashCatalog", () => {
     expect(cost).toMatchObject({ source: "cli", productized: true });
     expect(shipit).toMatchObject({ source: "custom", productized: false });
     expect(shipit?.description).toBe("Ship the branch");
+
+    // Only builtin commands carry a menu color — CLI commands are productized
+    // but uncolored, same as custom commands, so the menu renders them plain.
+    expect(mode?.color).toBeDefined();
+    expect(cost?.color).toBeUndefined();
+    expect(shipit?.color).toBeUndefined();
+  });
+
+  it("assigns every builtin command a stable color from theme.commandPalette", () => {
+    const catalog = build();
+    const builtinEntries = catalog.filter((c) => c.source === "builtin");
+    expect(builtinEntries.length).toBe(BUILTIN_SLASH_COMMANDS.length);
+    for (const entry of builtinEntries) {
+      expect(entry.color).toBeDefined();
+      expect(theme.commandPalette).toContain(entry.color);
+    }
+
+    // Stable per command: rebuilding the catalog assigns the same color again.
+    const rebuilt = build();
+    for (const entry of builtinEntries) {
+      const again = rebuilt.find((c) => c.name === entry.name);
+      expect(again?.color).toBe(entry.color);
+    }
   });
 
   it("dedupes on name with precedence builtin > cli > custom", () => {
