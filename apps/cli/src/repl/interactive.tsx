@@ -59,8 +59,10 @@ import {
   type PanelMode,
   type PanelTarget,
 } from "./agent-sidebar.js";
-import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
-import { runShellCommand as runShellCommand_impl, type ShellRunHandle } from "./shell-runner.js";
+import {
+  runShellCommand as runShellCommand_impl,
+  type ShellRunHandle,
+} from "./shell-runner.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
@@ -74,12 +76,13 @@ import {
   MessageView,
   PromptInput,
   StatusLine,
-  ThinkingIndicator,
   summarizeTrace,
+  ThinkingIndicator,
   type Message,
 } from "./components.js";
 import { HudPanel } from "./hud.js";
 import { resolveEscapeAction } from "./escape-action.js";
+import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
 import { isDebugEnabled } from "../lib/debug-log.js";
 import { Banner } from "../tui/banner.js";
 import {
