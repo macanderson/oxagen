@@ -181,7 +181,7 @@ describe("runCodingAgent – default model and system", () => {
     };
 
     await runCodingAgent({ workspace: ws, ai, instruction: "go" });
-    expect(observed[0]!.model).toBe("anthropic/claude-opus-4-8");
+    expect(observed[0]!.model).toBe("anthropic/claude-fable-5");
     expect(observed[0]!.system).toContain("expert software engineer");
   });
 });

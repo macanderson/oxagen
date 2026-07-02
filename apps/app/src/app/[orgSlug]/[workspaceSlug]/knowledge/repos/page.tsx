@@ -44,7 +44,7 @@ export default async function KnowledgeSourcesPage({ params, searchParams }: Pag
         <div className="flex items-start gap-3">
           <Database className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
-            <p className="text-sm font-semibold text-foreground">Sources</p>
+            <p className="text-sm font-semibold text-foreground">Repos</p>
             <p className="text-xs text-muted-foreground">
               Authenticated data connections and ingest pipelines. Connect a source and your
               agents gain access to the data within their knowledge graph.
