@@ -8,7 +8,7 @@
 #   OXAGEN_ROUTE=1 ./run.sh                   # let Oxagen's cost-aware router pick
 #   N_CONCURRENT=8 N_ATTEMPTS=3 ./run.sh
 #   DATASET="terminal-bench@2.0" ./run.sh
-#   HARBOR_EXTRA="--task-id hello-world" ./run.sh   # smoke-test a single task
+#   HARBOR_EXTRA="--include-task-name *hello-world" ./run.sh   # smoke-test a single task
 #
 # Prereqs: docker running, uv installed, AI_GATEWAY_API_KEY exported.
 set -euo pipefail
@@ -98,7 +98,7 @@ fi
 echo "==> harbor run  dataset=$DATASET  agent=oxagen  model=${MODEL_SLUG}  n=$N_CONCURRENT  attempts=$N_ATTEMPTS"
 exec uv run harbor run \
   -d "$DATASET" \
-  --agent-import-path oxagen_terminal_bench:OxagenAgent \
+  --agent oxagen_terminal_bench:OxagenAgent \
   "${MODEL_ARGS[@]}" \
   --n-concurrent "$N_CONCURRENT" \
   --n-attempts "$N_ATTEMPTS" \

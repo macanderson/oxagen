@@ -10,7 +10,7 @@
 #   AGENT=claude-code ./run.sh                # Harbor built-in competitor
 #   DATASET=swe-bench/swe-smith ./run.sh      # a different Harbor dataset slug
 #   TASK_IDS="django__django-11099" ./run.sh  # smoke-test one instance
-#   HARBOR_EXTRA="--task-id django__django-11099" N_CONCURRENT=1 ./run.sh
+#   HARBOR_EXTRA="--include-task-name *django__django-11099" N_CONCURRENT=1 ./run.sh
 #
 # Prereqs: docker running; AI_GATEWAY_API_KEY exported when AGENT=oxagen
 # (competitor agents may need their own provider keys — see their docs).
@@ -31,12 +31,17 @@ N_CONCURRENT="${N_CONCURRENT:-4}"
 N_ATTEMPTS="${N_ATTEMPTS:-1}"
 JOBS_DIR="${JOBS_DIR:-./results-$AGENT}"
 
-# TASK_IDS is a convenience alias for "--task-id <id>" (repeat for multiple).
+# TASK_IDS is a convenience alias for "--include-task-name <id>" (repeat for
+# multiple). Harbor fnmatch-globs each pattern against the dataset's task
+# names (harbor/models/job/config.py: _filter_task_ids), and package task
+# names are namespaced by their source (e.g. "swe-bench/django__django-11099"
+# for -d swe-bench/swe-bench-verified) — so a leading "*" matches the bare
+# instance id regardless of the exact namespace prefix.
 # HARBOR_EXTRA is raw passthrough for anything else Harbor supports.
 TASK_ID_ARGS=()
 if [ -n "${TASK_IDS:-}" ]; then
   for t in $TASK_IDS; do
-    TASK_ID_ARGS+=(--task-id "$t")
+    TASK_ID_ARGS+=(--include-task-name "*$t")
   done
 fi
 
@@ -90,7 +95,12 @@ fi
 #    swe-agent, oracle, nop, ...).
 AGENT_ARGS=()
 if [ "$AGENT" = "oxagen" ]; then
-  AGENT_ARGS=(--agent-import-path oxagen_swe_bench:OxagenAgent)
+  # --agent accepts either a built-in agent name or a custom import path
+  # (module.path:ClassName) — the same flag Harbor uses for both. The old
+  # dedicated --agent-import-path flag still works but is a deprecated,
+  # hidden alias (harbor/cli/trials.py: warn_deprecated_flag) that prints a
+  # warning on every run and may be removed in a future Harbor release.
+  AGENT_ARGS=(--agent oxagen_swe_bench:OxagenAgent)
 else
   AGENT_ARGS=(--agent "$AGENT")
 fi
