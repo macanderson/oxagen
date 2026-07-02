@@ -103,7 +103,9 @@ describe("enhancePrompt", () => {
     const memory: FleetMemory = { record: () => undefined, recall: () => [lesson], all: () => [] };
     const res = await enhancePrompt({ prompt: "touch beta.ts", cwd: root, memory });
     expect(res.lessons).toHaveLength(1);
-    expect(res.context).toContain("Lessons from past work");
+    // Header text comes from the shared @oxagen/agent-engine enhancePrompt this
+    // adapter now delegates to, not a CLI-local "Lessons from past work" string.
+    expect(res.context).toContain("Recalled context");
     expect(res.context).toContain("must keep its default export");
   });
 
