@@ -1,5 +1,5 @@
 /**
- * page.tsx — Workspace → Knowledge → Graph.
+ * page.tsx — Workspace → Knowledge → Inference.
  *
  * Renders three independent <Suspense> sections that stream concurrently:
  *  - Graph statistics (graph.stats)
@@ -26,7 +26,7 @@ interface PageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
 }
 
-export default async function KnowledgeGraphPage({ params }: PageProps) {
+export default async function KnowledgeInferencePage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
   const session = await getSessionOrRedirect();
 
