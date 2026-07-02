@@ -2,12 +2,12 @@ import { describe, it, expect } from "vitest";
 import { render } from "ink-testing-library";
 import {
   ApprovalPrompt,
-  CatMouseChase,
   humanizeTokens,
   modeLabel,
   MessageView,
   PromptInput,
-  renderChaseLane,
+  renderInvadersLane,
+  SpaceInvaders,
   StatusLine,
   StageBadge,
   ThinkingIndicator,
@@ -474,64 +474,97 @@ describe("ThinkingIndicator", () => {
   });
 });
 
-describe("renderChaseLane", () => {
+describe("renderInvadersLane", () => {
   const W = 24;
 
-  it("naps when idle: cat curls up at the left, mouse waits at the far end", () => {
-    const lane = renderChaseLane(0, W, false);
+  it("stands down when idle: rocket parked at the left, UFO calm at the far end", () => {
+    const lane = renderInvadersLane(0, W, false);
     expect(lane).toHaveLength(W); // fixed width — no layout jitter frame to frame
-    expect(lane.startsWith("=^.^= z")).toBe(true); // sleepy cat
-    expect(lane.trimEnd().endsWith("~o")).toBe(true); // mouse peeking at the end
-    expect(lane).not.toContain("·"); // no dust while still
+    expect(lane.startsWith("|=>")).toBe(true); // powered-down rocket, thrust off
+    expect(lane.trimEnd().endsWith("<●>")).toBe(true); // UFO holding position
+    expect(lane).not.toContain("•"); // no bolt in flight while still
   });
 
-  it("runs the chase when active: cat pursues the mouse, kicking up dust", () => {
-    // tick 2 is mid-lap (not the pounce frame), so both sprites are on the lane.
-    const lane = renderChaseLane(2, W, true);
+  it("fires when active: the bolt streaks out ahead of the rocket toward the UFO", () => {
+    // Tick 2 is mid-flight (well before the tick-6 hit for this width), so
+    // rocket, bolt, and UFO are all on the lane at once.
+    const lane = renderInvadersLane(2, W, true);
     expect(lane).toHaveLength(W);
-    const catIdx = lane.indexOf("=^");
-    const mouseIdx = lane.indexOf("~");
-    expect(catIdx).toBeGreaterThanOrEqual(0);
-    expect(mouseIdx).toBeGreaterThan(catIdx); // the mouse stays ahead of the cat
-    expect(lane).toContain("·"); // dust speck trails the running cat
+    expect(lane).toMatch(/^[{}-]=>/); // a rocket frame (idle flicker or recoil) at the nose
+    const noseIdx = lane.indexOf(">"); // always index 2 — first char after the rocket sprite
+    const boltIdx = lane.indexOf("•");
+    const ufoIdx = lane.search(/<[●○]>/);
+    expect(boltIdx).toBeGreaterThan(noseIdx);
+    expect(ufoIdx).toBeGreaterThan(boltIdx); // the UFO is still further out ahead of the bolt
   });
 
-  it("lunges into a pounce at the end of a lap and the mouse squeaks free", () => {
-    const span = Math.max(1, W - (5 + 3 + 2)); // mirrors the renderer's lap length
-    const lane = renderChaseLane(span, W, true); // p === span → pounce frame
-    expect(lane).toContain("=>^o^="); // the lunge
-    expect(lane).toContain("!"); // the squeak
+  it("advances the bolt frame over frame as it streaks across the lane", () => {
+    const boltAt = (tick: number): number => renderInvadersLane(tick, W, true).indexOf("•");
+    // Ticks 0-2 are the opening flight of the first volley at this width —
+    // the bolt moves BOLT_SPEED (3) cells closer to the UFO each tick.
+    expect(boltAt(0)).toBe(3);
+    expect(boltAt(1)).toBe(6);
+    expect(boltAt(2)).toBe(9);
   });
 
-  it("advances deterministically and loops over a lap", () => {
-    const span = Math.max(1, W - (5 + 3 + 2));
-    // The lap has odd length, and the cat's eye-twitch toggles on tick parity,
-    // so the full cycle is two laps — assert identity there.
-    expect(renderChaseLane(1, W, true)).toBe(renderChaseLane(1 + 2 * (span + 1), W, true));
-    // Adjacent ticks differ — the sprites actually move.
-    expect(renderChaseLane(1, W, true)).not.toBe(renderChaseLane(2, W, true));
+  it("blooms into a brief explosion on a hit, then reforms the UFO", () => {
+    // Verified fixture: at W=24 the first volley's bolt connects on tick 6.
+    const impact = renderInvadersLane(6, W, true);
+    expect(impact).toMatch(/[✳✸]/);
+    expect(impact).not.toContain("•"); // the bolt is spent on impact
+    expect(impact.search(/<[●○]>/)).toBe(-1); // the explosion replaces the UFO glyph
+    const dissipating = renderInvadersLane(7, W, true);
+    expect(dissipating).toMatch(/[✳✸]/);
+    // Later in the same beat (before the next volley reloads) the UFO reforms.
+    const reformed = renderInvadersLane(8, W, true);
+    expect(reformed).toMatch(/<[●○]>/);
+    expect(reformed).not.toMatch(/[✳✸]/);
+  });
+
+  it("occasionally lets the UFO's weave carry it clear of the bolt for a near-miss", () => {
+    // Verified fixture: at W=24 (fire cycle 9, weave period 10 — coprime, so
+    // the phase drifts volley to volley) the 9th volley (ticks 72-80) never
+    // lines up — the bolt streaks past and the UFO is never touched.
+    const frames = Array.from({ length: 9 }, (_, i) => renderInvadersLane(72 + i, W, true));
+    expect(frames.some((f) => /[✳✸]/.test(f))).toBe(false);
+    expect(frames.some((f) => f.includes("•"))).toBe(true); // the rocket still fired
+    expect(frames.every((f) => /<[●○]>/.test(f))).toBe(true); // the UFO is untouched throughout
+  });
+
+  it("is deterministic: the same tick always renders the same frame", () => {
+    expect(renderInvadersLane(5, W, true)).toBe(renderInvadersLane(5, W, true));
+    expect(renderInvadersLane(37, W, true)).toBe(renderInvadersLane(37, W, true));
+    // Adjacent ticks differ — the scene actually moves.
+    expect(renderInvadersLane(1, W, true)).not.toBe(renderInvadersLane(2, W, true));
+  });
+
+  it("loops cleanly: the rocket-fire cadence and UFO weave realign after one full beat", () => {
+    // lcm(fire cycle 9, weave period 10) = 90 for this width.
+    for (const t of [0, 1, 6, 7, 15, 37]) {
+      expect(renderInvadersLane(t, W, true)).toBe(renderInvadersLane(t + 90, W, true));
+    }
   });
 
   it("clamps width into a sane range so a tiny or huge terminal still renders", () => {
-    expect(renderChaseLane(0, 2, true)).toHaveLength(14); // floor
-    expect(renderChaseLane(0, 999, true)).toHaveLength(30); // ceiling
+    expect(renderInvadersLane(0, 2, true)).toHaveLength(14); // floor
+    expect(renderInvadersLane(0, 999, true)).toHaveLength(30); // ceiling
   });
 });
 
-describe("CatMouseChase", () => {
-  it("shows the sleepy cat and paused mouse when idle", () => {
-    const { lastFrame, unmount } = render(<CatMouseChase active={false} />);
+describe("SpaceInvaders", () => {
+  it("shows the parked rocket and standby marker when idle", () => {
+    const { lastFrame, unmount } = render(<SpaceInvaders active={false} />);
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("=^.^= z"); // napping
-    expect(frame).toContain("😴");
+    expect(frame).toContain("|=>"); // powered down
+    expect(frame).toContain("·"); // standby marker
     unmount();
   });
 
-  it("renders the running cat with the paw marker while active", () => {
-    const { lastFrame, unmount } = render(<CatMouseChase active={true} />);
+  it("renders the firing rocket with the active marker while active", () => {
+    const { lastFrame, unmount } = render(<SpaceInvaders active={true} />);
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("🐾");
-    expect(frame).toMatch(/=\^/); // a cat sprite is on the lane
+    expect(frame).toContain("▸"); // active marker
+    expect(frame).toMatch(/[{}-]=>/); // a rocket frame is on the lane
     unmount();
   });
 });
