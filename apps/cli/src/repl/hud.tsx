@@ -11,28 +11,14 @@
 import { Box, Text } from "ink";
 import React, { useEffect, useState } from "react";
 import { theme } from "../tui/theme.js";
+import { activityGlyph } from "../tui/activity.js";
 import { formatUsd, tierForSlug, tierLabel } from "../agent/model-router.js";
 import { humanizeTokens } from "./components.js";
 import {
   agentRegistry,
   type AgentKind,
-  type AgentStatus,
   type RunningAgent,
 } from "../agent/agent-registry.js";
-
-/** Glyph + color per status, matching the fleet-view vocabulary. */
-function statusStyle(status: AgentStatus): { glyph: string; color: string } {
-  switch (status) {
-    case "running":
-      return { glyph: "●", color: theme.cyan };
-    case "queued":
-      return { glyph: "⧗", color: "#FBBF24" };
-    case "done":
-      return { glyph: "✓", color: "#34D399" };
-    case "failed":
-      return { glyph: "✗", color: "#F87171" };
-  }
-}
 
 /** Short label for what kind of agent this is. */
 function kindLabel(kind: AgentKind): string {
@@ -58,7 +44,7 @@ function elapsed(from: number, to: number): string {
 }
 
 function AgentLine({ agent, now }: { agent: RunningAgent; now: number }): React.ReactElement {
-  const { glyph, color } = statusStyle(agent.status);
+  const { glyph, color } = activityGlyph(agent.status);
   const model = agent.model ? tierLabel(tierForSlug(agent.model)) : null;
   return (
     <Box flexDirection="column">

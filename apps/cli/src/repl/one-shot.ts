@@ -39,6 +39,7 @@ import { PermissionBroker, type PermissionMode } from "../agent/permissions.js";
 import { loadSettings } from "../settings/resolve.js";
 import { buildTurnExtras, type TurnExtras } from "../agent/turn-extras.js";
 import { formatToolCall, formatToolCallWithSpacing } from "../agent/tool-formatter.js";
+import { formatActivityLine } from "../tui/activity.js";
 import { debugLog } from "../lib/debug-log.js";
 import {
   makeTurnController,
@@ -256,9 +257,7 @@ export async function runOneShot(
         if (format === "stream-json") {
           emitJson({ type: "stage", label: stage.label, detail: stage.detail });
         } else {
-          process.stderr.write(
-            `  ${stage.label}${stage.detail ? ` · ${stage.detail}` : ""}\n`,
-          );
+          process.stderr.write(`  ${formatActivityLine(stage)}\n`);
         }
       },
       onText: (delta) => {
