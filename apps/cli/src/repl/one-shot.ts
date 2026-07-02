@@ -38,6 +38,7 @@ import { readConfig } from "../lib/config.js";
 import { resolveEffort } from "../agent/model.js";
 import { PermissionBroker, type PermissionMode } from "../agent/permissions.js";
 import { loadSettings } from "../settings/resolve.js";
+import { buildTurnExtras, type TurnExtras } from "../agent/turn-extras.js";
 import { formatToolCall, formatToolCallWithSpacing } from "../agent/tool-formatter.js";
 import { debugLog } from "../lib/debug-log.js";
 import {
@@ -127,6 +128,10 @@ export async function runOneShot(
     onLog: (line) => void debugLog("timeout", line),
   });
 
+  // Resolved settings.json for this turn — drives the broker's permissions, the
+  // rule/hook/MCP extras, and the tool gate.
+  const settings = loadSettings({ cwd }).settings;
+
   // Non-interactive: build a broker only when a mode is requested. With no
   // approver, `ask` denies mutations (fail closed); acceptEdits/bypass enable
   // scripted edits. The model-router never under-spends on safety regardless.
@@ -139,7 +144,7 @@ export async function runOneShot(
           // uses: a `Bash(*)` allow lets scripted shell commands run without an
           // approver (which would otherwise fail closed), while a matching deny
           // still blocks the call.
-          permissions: loadSettings({ cwd }).settings.permissions,
+          permissions: settings.permissions,
         })
       : undefined;
   const readOnly = options.readOnly || options.mode === "readonly";
@@ -190,13 +195,42 @@ export async function runOneShot(
         ? "headless"
         : undefined;
 
+  // Workspace rules (Tier 1 prompt + Tier 2 gate denies), SessionStart/Pre/Post
+  // hooks, and external MCP tools — assembled into the engine's extraTools /
+  // wrapTools seams so the primary one-shot path runs the ONE engine loop with
+  // the same wiring the legacy loop had. Permissions stay with the broker
+  // (gatePermissions:false), so this gate adds only rule-guard denies + hooks —
+  // no double-gating.
+  const extras: TurnExtras = await buildTurnExtras({
+    cwd,
+    settings,
+    readOnly,
+    gatePermissions: false,
+    signal: turnController.signal,
+    onBlocked: (name, reason) => {
+      void debugLog("turn", "turn.tool-blocked", { name, reason });
+      process.stderr.write(`  ⛔ ${name}: ${reason}\n`);
+    },
+    onMcpServer: (s) =>
+      void debugLog("turn", "mcp.server", s as unknown as Record<string, unknown>),
+  });
+  // Fold the rules + session-start context into what the model sees as project rules.
+  const enrichedContext = extras.systemAppend
+    ? {
+        text: (projectContext?.text ?? "") + extras.systemAppend,
+        sources: [...(projectContext?.sources ?? []), "workspace rules + hooks"],
+      }
+    : projectContext;
+
   try {
     let streamed = false;
     const result = await runTurn({
       prompt,
       workspace: createGatedWorkspace(workspace, broker),
       ai,
-      projectContext,
+      projectContext: enrichedContext,
+      extraTools: extras.extraTools,
+      wrapTools: extras.wrapTools,
       readOnly,
       profile: promptProfile,
       model: options.model,
@@ -311,6 +345,7 @@ export async function runOneShot(
     process.exitCode = 1;
   } finally {
     stall.stop();
+    await extras.closeMcp();
     await memory?.close();
   }
 }
