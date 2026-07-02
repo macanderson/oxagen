@@ -12,6 +12,7 @@ import React, { useEffect, useReducer } from "react";
 import { Box, Text, useApp } from "ink";
 import type { EventEmitter } from "node:events";
 import { theme } from "../theme.js";
+import { activityGlyph } from "../activity.js";
 import type { BestOfNEvent } from "../../agent/best-of-n.js";
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -93,11 +94,17 @@ function reducer(s: State, a: Action): State {
   }
 }
 
+// Status glyph via the shared activityGlyph vocabulary (LaneStatus is a
+// literal subset of ActivityStatus), matching the HUD and fleet roster.
 function StatusGlyph({ lane, frame }: { lane: Lane; frame: number }): React.JSX.Element {
-  if (lane.status === "done")
-    return <Text color={lane.testsPassed === false ? "yellow" : "green"}>{lane.testsPassed === false ? "✗" : "✓"}</Text>;
-  if (lane.status === "failed") return <Text color="red">✗</Text>;
-  return <Text color={theme.cyan}>{SPINNER[frame % SPINNER.length]}</Text>;
+  // A lane that finished but whose tests failed reads as a caution (amber ✗),
+  // not the plain failed-run red — a domain-specific override of the shared
+  // "done" glyph kept local, since no other surface has this nuance.
+  if (lane.status === "done" && lane.testsPassed === false) {
+    return <Text color={theme.amber}>✗</Text>;
+  }
+  const { glyph, color } = activityGlyph(lane.status, frame);
+  return <Text color={color}>{glyph}</Text>;
 }
 
 function LaneRow({ index, lane, frame }: { index: number; lane: Lane; frame: number }): React.JSX.Element {
