@@ -54,6 +54,11 @@ import {
   type PanelMode,
   type PanelTarget,
 } from "./agent-sidebar.js";
+import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
+import {
+  runShellCommand as runShellCommand_impl,
+  type ShellRunHandle,
+} from "./shell-runner.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
@@ -62,12 +67,10 @@ import { debugLog } from "../lib/debug-log.js";
 import { formatToolArgs } from "../agent/tool-formatter.js";
 import {
   ApprovalPrompt,
-  CatMouseChase,
   HELP,
   MessageView,
   PromptInput,
   StatusLine,
-  ThinkingIndicator,
   summarizeTrace,
   type Message,
 } from "./components.js";
@@ -202,10 +205,6 @@ export function ReplApp({
   // Diff color theme, matched once to the terminal background (light diff on a
   // light terminal, dark on dark) — Feature C. Detection is cheap + synchronous.
   const diffThemeRef = useRef(diffThemeFor(detectTerminalBackground()));
-  // When the active turn began (drives the thinking indicator); null when idle.
-  const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
-  // Output chars streamed this turn, for the live token estimate in the indicator.
-  const streamCharsRef = useRef(0);
   // Prompts submitted while a turn is in flight wait here and run FIFO when the
   // current turn finishes (Claude Code-style prompt queue). `queued` drives the
   // visible list; `queueRef` is the synchronous source of truth the pump reads.
@@ -504,7 +503,6 @@ export function ReplApp({
     // block also clears this state when the aborted promise finally settles.
     streamingRef.current = false;
     setIsStreaming(false);
-    setTurnStartedAt(null);
     // Free the pump NOW. The aborted turn's runTurn may take a moment — or, if
     // the stream ignores the abort, a long time — to settle, and until it does
     // the pump would still be awaiting it and refuse (`pumpingRef`) to drain
@@ -1251,8 +1249,6 @@ export function ReplApp({
       commit(base);
       setIsStreaming(true);
       streamingRef.current = true;
-      setTurnStartedAt(Date.now());
-      streamCharsRef.current = 0;
       // Reset the per-turn metrics totals; seed the progress clock.
       metricsBusRef.current.startTurn();
       lastProgressRef.current = Date.now();
@@ -1468,7 +1464,6 @@ export function ReplApp({
           onText: (delta) => {
             if (turnController.signal.aborted) return;
             noteProgress();
-            streamCharsRef.current += delta.length;
             if (reasoningOpen) closeStreamingBlocks();
             if (!assistantOpen) {
               turn.push({
@@ -1644,7 +1639,6 @@ export function ReplApp({
           abortRef.current = null;
           streamingRef.current = false;
           setIsStreaming(false);
-          setTurnStartedAt(null);
           // Settle the Task Progress checklist so no step lingers half-lit. Guarded
           // on ownership so a cancelled turn's late finally never marks a newer
           // turn's freshly-cleared plan done.
@@ -1843,8 +1837,14 @@ export function ReplApp({
         </Box>
 
         {/* Right-hand dock: Agent Team (live roster) + Task Progress (the planning
-            agent's checklist). Renders nothing until there's work to show. */}
-        <AgentSidebar mode={panelMode} />
+            agent's checklist). Renders nothing until there's work to show. `focus`
+            highlights the navigated row; `active` forces it visible while the user
+            is arrow-navigating it even if `auto` would otherwise hide an idle dock. */}
+        <AgentSidebar
+          mode={panelMode}
+          focus={focus.zone === "input" ? null : focus}
+          active={focus.zone !== "input"}
+        />
       </Box>
 
       {/* Pinned bottom stack — everything here keeps its height (flexShrink={0})
@@ -1888,6 +1888,25 @@ export function ReplApp({
         </Box>
       )}
 
+      {/* Esc-twice reset confirmation — shown above the input row until the
+          user types y/yes to confirm or anything else to cancel. */}
+      {resetPending && (
+        <Box paddingX={1} flexDirection="column">
+          <Text color={theme.cyan}>
+            Are you sure you want to reset the conversation?
+          </Text>
+          <Text dimColor>
+            Type <Text bold>y</Text> or <Text bold>yes</Text> to confirm, or
+            anything else (or Esc) to cancel.
+          </Text>
+        </Box>
+      )}
+
+      {/* Heads-up display — every agent running this session. Toggled by /hud
+          (and closed by Esc); sits just above the input so it reads as a live
+          status overlay. */}
+      {hudVisible && <HudPanel />}
+
       {/* Input row — pinned to the bottom stack, padded above, and never allowed
           to shrink (flexShrink={0}) so the prompt bar keeps a constant height as
           the conversation above it grows or the terminal is resized.
@@ -1930,12 +1949,8 @@ export function ReplApp({
         />
       </Box>
 
-      </Box>{/* end left (chat + input) column */}
-
-      {/* Right-hand dock: Agent Team (live roster) + Task Progress (the planning
-          agent's checklist). Renders nothing until there's work to show. */}
-      <AgentSidebar mode={panelMode} />
-      </Box>{/* end live-frame row */}
+      </Box>{/* end input row */}
+      </Box>{/* end pinned bottom stack */}
     </Box>
   );
 }

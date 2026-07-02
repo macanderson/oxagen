@@ -32,12 +32,17 @@ import { taskRegistry, type TaskStatus, type TrackedTask } from "../agent/task-r
 export type PanelMode = "auto" | "on" | "off";
 
 /**
- * A navigable side-panel item, as tracked by the REPL's focus model. `zone`
- * says which list it lives in; `id` is the registry id of the highlighted row.
+ * A single navigable side-panel row. `zone` says which list it lives in
+ * (`agent` roster or `task` progress); `id` is the registry id of the row.
+ */
+export type PanelTarget = { zone: "agent" | "task"; id: string };
+
+/**
+ * A navigable side-panel focus, as tracked by the REPL's focus model.
  * `null` (or a `zone: "input"` focus) means the input bar owns focus, not the
  * panel.
  */
-export type PanelFocus = { zone: "agent" | "task"; id: string } | null;
+export type PanelFocus = PanelTarget | null;
 
 /** Fixed panel width — wide enough for a title + status, narrow enough to dock. */
 const PANEL_WIDTH = 34;
@@ -64,7 +69,7 @@ export const SIDEBAR_MIN_COLS = MIN_TERMINAL_COLS;
 export function panelNavTargets(
   agents: RunningAgent[],
   tasks: TrackedTask[],
-): Array<{ zone: "agent" | "task"; id: string }> {
+): PanelTarget[] {
   return [
     ...agents.map((a) => ({ zone: "agent" as const, id: a.id })),
     ...tasks.map((t) => ({ zone: "task" as const, id: t.id })),

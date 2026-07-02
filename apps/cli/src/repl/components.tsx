@@ -162,7 +162,8 @@ export function PromptInput({
     setValue(inject?.text ?? "");
     setSelected(0);
     setDismissed(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire only on nonce change
+    // Deps are intentionally just [injectNonce] — fire only on nonce change, not
+    // when inject.text changes without a new nonce (avoids clobbering typing).
   }, [injectNonce]);
 
   // Derive the live typeahead state from the current buffer. The menu is open
@@ -288,20 +289,20 @@ export function PromptInput({
           collapses or is squeezed as the conversation above grows. */}
       <Box
         borderStyle="round"
-        borderColor={!focused ? theme.dim : busy ? "#FBBF24" : theme.cyan}
+        borderColor={accent}
         paddingX={1}
         minHeight={3}
         flexShrink={0}
       >
-        <Text color={!focused ? theme.dim : busy ? "#FBBF24" : theme.cyan} bold>
-          {busy ? "⧗ " : "❯ "}
+        <Text color={accent} bold>
+          {glyph}
         </Text>
         <Text dimColor={!focused}>
-          {value}
+          {shown}
           {/* The block cursor shows only while the input holds focus; when the
               panel has focus the bar dims and drops the cursor so the highlight
               clearly lives in the side panel instead. */}
-          {focused ? <Text color={theme.cyan}>█</Text> : null}
+          {focused ? <Text color={accent}>█</Text> : null}
         </Text>
       </Box>
       {terminalMode && (
