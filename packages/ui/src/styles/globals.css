@@ -68,8 +68,12 @@
      * smeared across surfaces (design system stays flat — see THEME.md §7).
      * ════════════════════════════════════════════════════════════════════════ */
 
-    /* Brand anchors — warm paper, cool near-black ink, warm soft white. */
-    --_paper: oklch(0.980 0.004 84.6);   /* #F8F6F1 — warm off-white (hsl 40 30% 97%) */
+    /* Brand anchors — clean cool paper, cool near-black ink, warm soft white.
+       The page was previously a warm off-white (hue ~85°) which read as a muddy
+       pinkish-orange cast across every surface. Retuned to a near-neutral cool
+       white (hue ~264°, near-zero chroma) so neutrals stay honest and colour is
+       introduced intentionally via the brand accents + hero gradients instead. */
+    --_paper: oklch(0.981 0.0015 264);   /* clean cool off-white (was warm #F8F6F1) */
     --_ink: oklch(0.182 0.019 266.5);    /* #101319 — cool near-black ink (hsl 222 30% 8%) */
     --_ink-white: oklch(0.948 0.006 67.8); /* #F1EEEA — warm soft white (hsl 30 20% 93%) */
 
@@ -97,14 +101,14 @@
     /* Neutral ramp — split-hue: light steps are WARM off-whites (~85°), dark steps
        are COOL narwhal near-blacks (~267°) so light reads cozy and dark reads
        inky-blue. Stepped elevation in dark for dramatic contrast. */
-    --_stone-50: oklch(0.990 0.002 84.6);   /* warm near-white */
-    --_stone-100: oklch(0.965 0.005 84.6);   /* warm muted / card-header */
-    --_stone-150: oklch(0.951 0.007 84.6);   /* warm surface-alt */
-    --_stone-200: oklch(0.929 0.009 84.6);   /* warm secondary surface */
-    --_stone-300: oklch(0.900 0.012 84.6);   /* warm input border (light) */
+    --_stone-50: oklch(0.992 0.001 264);    /* clean near-white */
+    --_stone-100: oklch(0.966 0.003 264);   /* muted / card-header */
+    --_stone-150: oklch(0.950 0.004 264);   /* surface-alt */
+    --_stone-200: oklch(0.924 0.005 264);   /* secondary surface */
+    --_stone-300: oklch(0.890 0.007 264);   /* input border (light) — a touch darker for contrast */
     --_stone-400: oklch(0.770 0.017 67.6);   /* muted-foreground (dark) */
     --_stone-500: oklch(0.567 0.024 264.4);   /* cool tertiary text */
-    --_stone-600: oklch(0.506 0.038 266.8);   /* cool secondary text (light) */
+    --_stone-600: oklch(0.486 0.040 266.8);   /* cool secondary text (light) — darker for contrast */
     --_stone-700: oklch(0.346 0.028 264.1);   /* cool graphite */
     --_stone-800: oklch(0.274 0.029 266.5);   /* narwhal accent surface (dark) */
     --_stone-850: oklch(0.214 0.022 267.8);   /* narwhal popover / muted (dark) */
@@ -174,11 +178,11 @@
     --secondary-foreground: oklch(1 0 0);
     --muted: var(--_stone-100);
     --muted-foreground: var(--_stone-600);
-    --accent: oklch(0.902 0.019 37.7);   /* pale teak hover/selected (hsl 14 35% 88%) */
-    --accent-foreground: oklch(0.315 0.044 37.7);   /* deep teak ink (hsl 14 35% 20%) */
+    --accent: oklch(0.930 0.032 62);   /* soft tangerine-tinted hover/selected — brand-aligned, replaces the old pinkish teak */
+    --accent-foreground: oklch(0.400 0.115 52);   /* deep rust ink on the tint */
     --destructive: var(--_clay);         /* true red */
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.900 0.012 84.6 / 0.9);   /* warm hairline (hsl 40 18% 86%) */
+    --border: oklch(0.884 0.006 264 / 0.9);   /* cool hairline — slightly darker for definition/contrast */
     --input: var(--_stone-300);
     --ring: var(--ox-rust);
     --link: var(--ox-indigo);
@@ -214,7 +218,7 @@
     --sidebar-primary-foreground: var(--ox-ink);
     --sidebar-accent: var(--_stone-150);       /* neutral nav hover/active */
     --sidebar-accent-foreground: var(--_ink);
-    --sidebar-border: oklch(0.855 0.004 80 / 0.5);
+    --sidebar-border: oklch(0.884 0.006 264 / 0.5);
     --sidebar-ring: var(--ring);
 
     /* ════════════════════════════════════════════════════════════════════════
@@ -373,7 +377,7 @@
     --muted: var(--_stone-850);
     /* Brighter secondary ink in dark for legibility on the narwhal surfaces. */
     --muted-foreground: var(--_stone-400);
-    --accent: oklch(0.456 0.070 37.7);   /* teak accent (hsl 14 35% 35%) */
+    --accent: oklch(0.452 0.078 52);   /* deep tangerine-tinted accent — brand-aligned hover/selected */
     --accent-foreground: var(--_ink-white);
     --destructive: var(--_clay-light);
     --destructive-foreground: oklch(1 0 0);
@@ -1029,6 +1033,35 @@
     background-size: 46px 46px;
     mask-image: radial-gradient(ellipse 80% 60% at 50% 38%, #000 0%, transparent 78%);
     -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 38%, #000 0%, transparent 78%);
+  }
+
+  /* In-app graph-paper texture — a crisp, very faint line grid painted onto the
+     content panel so the login's "chart paper" reads subtly inside the app. It
+     is a real background on the panel (NOT the blurred backdrop), so the lines
+     stay crisp behind the frosting, and a top-down linear mask dissolves it so
+     it is densest near the header and gone by mid-page. Token-driven (foreground
+     at 4% alpha) so it flips with the theme. Kept deliberately subtle — a touch. */
+  .ox-panel-grid {
+    background-image:
+      linear-gradient(to right, color-mix(in oklch, var(--foreground) 4%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklch, var(--foreground) 4%, transparent) 1px, transparent 1px);
+    background-size: 40px 40px;
+    mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
+  }
+
+  /* Vibrant code/terminal surface — a dark narwhal fill with the ember brand
+     gradient painted into a 1px border (padding-box fill + border-box gradient),
+     identical in light and dark so a code block reads as a high-contrast, bold
+     terminal on the light page. A real transparent `border` keeps a system line
+     in forced-colors mode where the gradient background is stripped. */
+  .ox-code-frame {
+    --code-fg: var(--_ink-white);
+    color: var(--code-fg);
+    background:
+      linear-gradient(180deg in oklab, oklch(0.196 0.021 268), oklch(0.150 0.012 266.5)) padding-box,
+      var(--brand-gradient) border-box;
+    border: 1px solid transparent;
   }
 
   /* A soft ember light source bleeding from behind the hero. */
