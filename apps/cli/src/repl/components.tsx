@@ -878,16 +878,24 @@ export function ThinkingIndicator({
   );
 }
 
-// ── Fun: a cat chasing a mouse across the status rail ──────────────────────────
+// ── Fun: a rocket duels a UFO across the status rail ────────────────────────
 
-// Sprites kept short and Latin-1-safe (no wide/exotic codepoints) so the lane
-// renders and aligns in any terminal. The cat twitches its eyes as it runs and
-// lunges into a pounce at the end of each lap; the mouse scurries just out of
-// reach and squeaks ("!") when nearly caught.
-const CHASE_CAT = ["=^.^=", "=^o^="];
-const CHASE_CAT_POUNCE = "=>^o^=";
-const CHASE_CAT_NAP = "=^.^= z";
-const CHASE_MOUSE = ["~o", "~°"];
+// Sprites are monochrome geometric glyphs — no color emoji — so they read the
+// same in any terminal theme. The rocket idles on a flickering thrust flame
+// and snaps into a recoil frame the instant it fires; the UFO patrols a
+// weaving beat and pulses its running light, mostly taking the hit and
+// blooming into a brief explosion, occasionally weaving clear for a
+// near-miss flyby.
+const ROCKET = ["}=>", "-=>"];
+const ROCKET_RECOIL = "{=>";
+const ROCKET_IDLE = "|=>";
+const ROCKET_LEN = 3;
+const UFO = ["<●>", "<○>"];
+const UFO_LEN = 3;
+const EXPLOSION = ["✳✳✳", " ✸ "]; // flash, then dissipate to a single spark
+const BOLT_HEAD = "•";
+const BOLT_TRAIL = "·";
+const BOLT_SPEED = 3; // cells advanced per tick — a snappy tracer, not a crawl
 
 /** Write `sprite` into the fixed-width lane at `at`, clipping at both edges. */
 function placeSprite(lane: string[], at: number, sprite: string): void {
@@ -897,47 +905,97 @@ function placeSprite(lane: string[], at: number, sprite: string): void {
   }
 }
 
+/** Bounces `n` back and forth across [0, span] — the UFO's weaving patrol. */
+function triangleWave(n: number, span: number): number {
+  if (span <= 0) return 0;
+  const period = span * 2;
+  const m = ((n % period) + period) % period;
+  return m <= span ? m : period - m;
+}
+
+/** Whether half-open ranges [aStart, aStart+aLen) and [bStart, bStart+bLen) intersect. */
+function overlaps(aStart: number, aLen: number, bStart: number, bLen: number): boolean {
+  return aStart < bStart + bLen && bStart < aStart + aLen;
+}
+
 /**
- * Pure renderer for one row of the cat-and-mouse chase, at a fixed `width`.
- * When `active` the cat pursues the fleeing mouse across the lane, kicking up a
- * dust speck behind it and lunging into a pounce as the lap closes; when idle
- * the cat curls up for a nap while the mouse peeks from the far end. Kept pure
- * (no timers, no React) so every frame is deterministic and unit-testable.
+ * Pure renderer for one row of the rocket-vs-UFO duel, at a fixed `width`.
+ * When `active` the rocket fires on a steady cadence while the UFO weaves a
+ * patrol near the far end of the lane; most bolts land and bloom into a brief
+ * explosion before the UFO reforms, but the weave occasionally carries it
+ * clear of the shot for a near-miss flyby instead. Kept pure (no timers, no
+ * React) so every frame is deterministic and unit-testable.
  */
-export function renderChaseLane(tick: number, width: number, active: boolean): string {
+export function renderInvadersLane(tick: number, width: number, active: boolean): string {
   const W = Math.max(14, Math.min(width, 30));
   const lane: string[] = new Array<string>(W).fill(" ");
+  const muzzle = ROCKET_LEN; // column right after the rocket's nose
+
   if (!active) {
-    placeSprite(lane, 0, CHASE_CAT_NAP);
-    placeSprite(lane, W - 2, CHASE_MOUSE[0] as string);
+    placeSprite(lane, 0, ROCKET_IDLE);
+    placeSprite(lane, W - UFO_LEN, UFO[0] as string);
     return lane.join("");
   }
-  const gap = 3;
-  const catW = 5;
-  // Lap length leaves room for the cat sprite, the gap, and the trailing mouse.
-  const span = Math.max(1, W - (catW + gap + 2));
-  const p = tick % (span + 1);
-  const catPos = p;
-  const mousePos = p + catW + gap;
-  if (catPos - 1 >= 0) lane[catPos - 1] = "·"; // dust behind the cat
-  if (p === span) {
-    // End of the lap: the cat lunges and the mouse squeaks free.
-    placeSprite(lane, catPos, CHASE_CAT_POUNCE);
-    if (mousePos < W) lane[Math.min(W - 1, mousePos)] = "!";
-  } else {
-    placeSprite(lane, catPos, CHASE_CAT[tick % 2] as string);
-    placeSprite(lane, mousePos, CHASE_MOUSE[tick % 2] as string);
+
+  // The UFO patrols a weave zone near the far end, well clear of the rocket.
+  const ufoRight = W - UFO_LEN;
+  const ufoLeft = Math.max(muzzle + 3, ufoRight - 5);
+  const weaveSpan = Math.max(1, ufoRight - ufoLeft);
+  const ufoAt = (t: number): number => ufoLeft + triangleWave(t, weaveSpan);
+
+  // The rocket fires every `cycle` ticks: a recoil/muzzle-flash tick spawns
+  // the bolt, which streaks out at BOLT_SPEED cells/tick until it lands a hit
+  // or clears the lane, followed by a short beat before it reloads.
+  const flightTicks = Math.ceil((W - muzzle) / BOLT_SPEED);
+  const cycle = flightTicks + 2;
+  const cyclePos = tick % cycle;
+  const volleyStart = tick - cyclePos;
+
+  // Whether (and when) this volley's bolt connects is a pure function of the
+  // volley's start tick, so hits and near-misses fall out of the rocket/UFO
+  // phase relationship instead of a coin flip.
+  let hitFrame = -1;
+  for (let f = 0; f < flightTicks; f++) {
+    const boltAt = muzzle + f * BOLT_SPEED;
+    if (overlaps(boltAt, 1, ufoAt(volleyStart + f), UFO_LEN)) {
+      hitFrame = f;
+      break;
+    }
   }
+
+  placeSprite(lane, 0, cyclePos === 0 ? ROCKET_RECOIL : (ROCKET[tick % 2] as string));
+
+  if (hitFrame >= 0 && cyclePos >= hitFrame) {
+    // The bolt has landed — flash the impact, then let the UFO reform and
+    // resume its patrol for the rest of the beat before the next volley.
+    const sinceHit = cyclePos - hitFrame;
+    if (sinceHit < EXPLOSION.length) {
+      placeSprite(lane, ufoAt(volleyStart + hitFrame), EXPLOSION[sinceHit] as string);
+    } else {
+      placeSprite(lane, ufoAt(tick), UFO[tick % 2] as string);
+    }
+    return lane.join("");
+  }
+
+  if (cyclePos < flightTicks) {
+    // Still in flight (a miss this volley, or a hit not yet reached) — the
+    // bolt leaves a fading trail behind its head as it streaks across.
+    const boltAt = muzzle + cyclePos * BOLT_SPEED;
+    if (boltAt - 1 >= muzzle) lane[boltAt - 1] = BOLT_TRAIL;
+    if (boltAt < W) lane[boltAt] = BOLT_HEAD;
+  }
+  placeSprite(lane, ufoAt(tick), UFO[tick % 2] as string);
   return lane.join("");
 }
 
 /**
- * A whimsical bottom-rail animation: an ASCII cat chasing a mouse while the
- * agent is busy, curling up for a nap when idle. Runs its own ~160ms timer (only
- * while `active`) so it animates independently of the stream, then goes still —
- * no perpetual redraw — the moment the turn ends.
+ * A whimsical bottom-rail animation: a rocket dueling a weaving UFO while the
+ * agent is busy, standing down to a parked rocket and a calm UFO when idle.
+ * Runs its own ~140ms timer (only while `active`) so it animates independently
+ * of the stream, then goes still — no perpetual redraw — the moment the turn
+ * ends.
  */
-export function CatMouseChase({
+export function SpaceInvaders({
   active,
   width = 24,
 }: {
@@ -947,13 +1005,13 @@ export function CatMouseChase({
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (!active) return;
-    const id = setInterval(() => setTick((t) => t + 1), 160);
+    const id = setInterval(() => setTick((t) => t + 1), 140);
     return () => clearInterval(id);
   }, [active]);
-  const lane = renderChaseLane(active ? tick : 0, width, active);
+  const lane = renderInvadersLane(active ? tick : 0, width, active);
   return (
     <Box paddingX={1}>
-      <Text dimColor>{active ? "🐾 " : "😴 "}</Text>
+      <Text dimColor>{active ? "▸ " : "· "}</Text>
       <Text color={theme.cyan}>{lane}</Text>
     </Box>
   );
