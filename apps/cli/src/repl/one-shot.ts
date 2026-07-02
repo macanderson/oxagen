@@ -11,7 +11,7 @@
  * loads project rules (CLAUDE.md/AGENTS.md), and records the turn into Oxagen's
  * context engine. Model calls go through the Vercel AI Gateway.
  */
-import { runTurn } from "@oxagen/agent-engine";
+import { runTurn, type AgentAi } from "@oxagen/agent-engine";
 import {
   createCwdWorkspace,
   createGatedWorkspace,
@@ -19,7 +19,9 @@ import {
   createCodeGraphProvider,
   createGraphSyncProvider,
   createPlatformAgentAi,
+  createGatewayAgentAi,
 } from "../agent/adapters/index.js";
+import { createMeteredAi } from "../agent/metered-ai.js";
 import { queryCodeGraph } from "../agent/code-graph.js";
 import type { Session } from "../lib/session.js";
 import { runAgent } from "../agent/loop.js";
@@ -69,19 +71,36 @@ export async function runOneShot(
 ): Promise<void> {
   const cwd = process.cwd();
   const projectContext = loadProjectContext(cwd);
-  const memory = await openSessionMemory(cwd, `one-shot-${Date.now()}`);
-  const fleetMemory = openFleetMemory(cwd);
+  // OXAGEN_DISABLE_MEMORY=1 skips recall/remember entirely. Benchmark runs set
+  // it so recalled context from one instance can never leak into another
+  // (SWE-bench reuses the same repos across many instances).
+  const memoryDisabled = process.env["OXAGEN_DISABLE_MEMORY"] === "1";
+  const memory = memoryDisabled
+    ? null
+    : await openSessionMemory(cwd, `one-shot-${Date.now()}`);
+  const fleetMemory = memoryDisabled ? null : openFleetMemory(cwd);
   const traceStore = openTraceStore(cwd);
   const verbose = options.verbose ?? readConfig().verbose ?? false;
 
-  // Engine ports for this invocation: local workspace + platform-routed AI,
-  // combined local memory, the local code graph, and best-effort graph sync.
+  // Engine ports for this invocation: local workspace, combined local memory,
+  // the local code graph, and best-effort graph sync. Model calls route through
+  // the platform (metered, session-authenticated) for real sessions, or
+  // gateway-direct for the synthetic benchmark session — a synthetic token
+  // cannot authenticate against /v1/agent/llm, and bench containers supply
+  // AI_GATEWAY_API_KEY instead. Both are wrapped in the metered port so every
+  // engine model call gets the per-call timeout + retry (Bug 1) that the REPL
+  // path already has.
   const workspace = createCwdWorkspace(cwd);
-  const ai = createPlatformAgentAi({
-    apiUrl: options.session.apiUrl,
-    token: options.session.token,
-    orgSlug: options.session.orgSlug,
-    workspaceSlug: options.session.workspaceSlug,
+  const baseAi: AgentAi = options.session.synthetic
+    ? createGatewayAgentAi({ cwd })
+    : createPlatformAgentAi({
+        apiUrl: options.session.apiUrl,
+        token: options.session.token,
+        orgSlug: options.session.orgSlug,
+        workspaceSlug: options.session.workspaceSlug,
+      });
+  const ai = createMeteredAi(baseAi, {
+    onLog: (line) => void debugLog("timeout", line),
   });
 
   // Non-interactive: build a broker only when a mode is requested. With no
@@ -131,7 +150,11 @@ export async function runOneShot(
       memory: createCombinedMemory(memory, fleetMemory),
       codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
       trace: traceStore,
-      graphSync: createGraphSyncProvider({ ...options.session, cwd }),
+      // Graph sync posts to the platform API — meaningless (and unauthenticated)
+      // for the synthetic benchmark session, so skip it entirely there.
+      graphSync: options.session.synthetic
+        ? null
+        : createGraphSyncProvider({ ...options.session, cwd }),
       effort: resolveEffort(options.effort),
       signal: turnController.signal,
       // Pipeline stage progress goes to stderr so stdout stays the clean answer.

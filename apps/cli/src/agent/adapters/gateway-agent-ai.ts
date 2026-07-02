@@ -1,0 +1,167 @@
+/**
+ * Gateway-direct `AgentAi` adapter — routes engine LLM calls straight to the
+ * Vercel AI Gateway using `AI_GATEWAY_API_KEY`, with NO platform round-trip.
+ *
+ * Where {@link createPlatformAgentAi} posts through the platform's metered
+ * `/v1/agent/llm` endpoint (requires a logged-in session), this adapter passes
+ * plain gateway slugs (`vendor/model`) directly to the AI SDK, which resolves
+ * them against the gateway. It exists for exactly two callers:
+ *
+ *   1. Headless benchmark containers (`OXAGEN_ALLOW_NO_SESSION=1` — see
+ *      `lib/session.ts`): there is no account to meter against, and the bench
+ *      harness supplies `AI_GATEWAY_API_KEY` itself.
+ *   2. Any future explicit `--local` BYOK path.
+ *
+ * Reasoning effort is applied client-side here (the platform normally does this
+ * server-side). The per-vendor mapping below is a faithful copy of
+ * `reasoningRequestConfig` in `packages/ai/src/stream.ts` — the canonical
+ * source of truth. It is replicated (not imported) because `@oxagen/ai` pulls
+ * in billing/database/tenancy, none of which belong in the CLI. If the mapping
+ * changes there, update this copy.
+ */
+import type {
+  AgentAi,
+  ModelRunArgs,
+  ObjectRunArgs,
+  ObjectRunResult,
+} from "@oxagen/agent-engine";
+import { streamText, generateObject } from "ai";
+import { debugLog } from "../../lib/debug-log.js";
+import { ensureGatewayKey, MissingGatewayKeyError } from "../env.js";
+
+/** Reasoning token budget per effort level (tokens allocated to thinking). */
+const REASONING_BUDGET: Record<string, number> = {
+  low: 4096,
+  medium: 8192,
+  high: 12288,
+  xhigh: 24576,
+  max: 49152,
+};
+
+/** Clamp the deeper Anthropic-only tiers for vendors that top out at "high". */
+function clampEffortToHigh(effort: string): "low" | "medium" | "high" {
+  return effort === "xhigh" || effort === "max"
+    ? "high"
+    : (effort as "low" | "medium" | "high");
+}
+
+/**
+ * Vendor-specific `providerOptions` for reasoning/thinking, derived from the
+ * gateway slug prefix. Mirrors `reasoningRequestConfig` in
+ * `packages/ai/src/stream.ts`. Neither AgentAi adapter passes `temperature`,
+ * so the canonical helper's `temperatureLocked` flag is not needed here.
+ * Exported for tests.
+ */
+export function gatewayReasoningOptions(
+  modelId: string,
+  effort: string | undefined,
+): Record<string, Record<string, unknown>> | undefined {
+  if (!effort) return undefined;
+  const vendor = modelId.includes("/") ? modelId.split("/")[0] : "unknown";
+  const budget = REASONING_BUDGET[effort] ?? REASONING_BUDGET["medium"];
+
+  switch (vendor) {
+    case "anthropic":
+      // Claude 4.x adaptive thinking: `thinking.type: "adaptive"` + depth via
+      // `output_config.effort` (older `enabled`+`budgetTokens` is rejected).
+      return {
+        anthropic: {
+          thinking: { type: "adaptive" },
+          outputConfig: { effort },
+        },
+      };
+    case "openai":
+      return {
+        openai: {
+          reasoningEffort: clampEffortToHigh(effort),
+          // "detailed" streams the reasoning summary into fullStream as
+          // reasoning-delta parts; "auto" frequently yields none via the gateway.
+          reasoningSummary: "detailed",
+        },
+      };
+    case "google":
+      return {
+        google: {
+          thinkingConfig: { includeThoughts: true, thinkingBudget: budget },
+        },
+      };
+    case "xai":
+      return { xai: { reasoningEffort: clampEffortToHigh(effort) } };
+    case "deepseek":
+      // R1-style models stream reasoning natively with no effort knob.
+      return undefined;
+    default:
+      return { openai: { reasoningEffort: clampEffortToHigh(effort) } };
+  }
+}
+
+export interface GatewayAgentAiOptions {
+  /** Working directory used to resolve `AI_GATEWAY_API_KEY` from .env.local. */
+  cwd?: string;
+}
+
+/**
+ * Build a gateway-direct {@link AgentAi}. Throws {@link MissingGatewayKeyError}
+ * immediately when no gateway credential can be resolved — callers get one
+ * clear, actionable failure instead of a per-call auth error mid-turn.
+ */
+export function createGatewayAgentAi(opts: GatewayAgentAiOptions = {}): AgentAi {
+  if (!ensureGatewayKey(opts.cwd ?? process.cwd())) {
+    throw new MissingGatewayKeyError();
+  }
+
+  return {
+    stream(args: ModelRunArgs) {
+      void debugLog("llm", "llm.stream.request", {
+        transport: "gateway-direct",
+        model: args.model,
+        messageCount: Array.isArray(args.messages) ? args.messages.length : 0,
+        toolNames: args.tools ? Object.keys(args.tools) : [],
+      });
+      const providerOptions = gatewayReasoningOptions(args.model, args.effort);
+      return streamText({
+        // A plain string model id resolves through the Vercel AI Gateway using
+        // AI_GATEWAY_API_KEY (same mechanism as the legacy local loop).
+        model: args.model,
+        system: args.system,
+        messages: args.messages,
+        tools: args.tools,
+        stopWhen: args.stopWhen,
+        abortSignal: args.abortSignal,
+        ...(providerOptions ? { providerOptions } : {}),
+        onError: args.onError,
+        onStepFinish: args.onStepFinish
+          ? (step) =>
+              args.onStepFinish?.({
+                toolCalls: step.toolCalls,
+                toolResults: step.toolResults,
+              })
+          : undefined,
+      });
+    },
+
+    async generateObject<T>(args: ObjectRunArgs<T>): Promise<ObjectRunResult<T>> {
+      const common = {
+        model: args.model,
+        schema: args.schema,
+        system: args.system,
+        abortSignal: args.abortSignal,
+      };
+      void debugLog("llm", "llm.object.request", {
+        transport: "gateway-direct",
+        model: args.model,
+      });
+      // generateObject takes a `prompt` XOR `messages` — pass exactly one.
+      const result = args.messages
+        ? await generateObject({ ...common, messages: args.messages })
+        : await generateObject({ ...common, prompt: args.prompt ?? "" });
+      const usage = {
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+        totalTokens: result.usage.totalTokens,
+      };
+      void debugLog("llm", "llm.object.response", { model: args.model, usage });
+      return { object: result.object, usage };
+    },
+  };
+}

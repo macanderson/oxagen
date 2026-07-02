@@ -24,6 +24,7 @@ import {
   createCodeGraphProvider,
   createGraphSyncProvider,
   createPlatformAgentAi,
+  createGatewayAgentAi,
 } from "../agent/adapters/index.js";
 import {
   prepareOnDeviceCoordinator,
@@ -273,17 +274,22 @@ export function ReplApp({
   // it's wrapped with the permission broker (createGatedWorkspace) at call time
   // so /mode changes take effect without re-creating the workspace.
   const workspaceRef = useRef(createCwdWorkspace(cwd));
-  // The base BYOK AI port, wrapped by the metered port so every engine model
+  // The base AI port, wrapped by the metered port so every engine model
   // call (evaluator, worker, judge) gets a per-call timeout + retry (Bug 1) and
-  // records a priced metrics event for the live status line (Bug 2).
+  // records a priced metrics event for the live status line (Bug 2). Real
+  // sessions route through the platform (metered server-side); the synthetic
+  // benchmark session (OXAGEN_ALLOW_NO_SESSION=1) goes gateway-direct — a
+  // synthetic token cannot authenticate against /v1/agent/llm.
   const aiRef = useRef(
     createMeteredAi(
-      createPlatformAgentAi({
-        apiUrl: options.session.apiUrl,
-        token: options.session.token,
-        orgSlug: options.session.orgSlug,
-        workspaceSlug: options.session.workspaceSlug,
-      }),
+      options.session.synthetic
+        ? createGatewayAgentAi({ cwd })
+        : createPlatformAgentAi({
+            apiUrl: options.session.apiUrl,
+            token: options.session.token,
+            orgSlug: options.session.orgSlug,
+            workspaceSlug: options.session.workspaceSlug,
+          }),
       {
         onMetrics: (ev) => metricsBusRef.current.record(ev),
         onLog: (line) => void debugLog("timeout", line),
@@ -307,7 +313,13 @@ export function ReplApp({
   const codeGraphRef = useRef(
     createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
   );
-  const graphSyncRef = useRef(createGraphSyncProvider({ ...options.session, cwd }));
+  // Graph sync posts to the platform API — skip it for the synthetic
+  // benchmark session (unauthenticated there, and bench runs shouldn't sync).
+  const graphSyncRef = useRef(
+    options.session.synthetic
+      ? null
+      : createGraphSyncProvider({ ...options.session, cwd }),
+  );
   // Project rules (CLAUDE.md/AGENTS.md) loaded once for the session.
   const projectContextRef = useRef(loadProjectContext(cwd));
   // Unified slash-command catalog — built-in REPL commands + every `oxagen --help`
