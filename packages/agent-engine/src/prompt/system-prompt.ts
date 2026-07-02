@@ -16,10 +16,25 @@ export interface SystemPromptOptions {
   readOnly?: boolean;
   /** A named agent persona whose prompt replaces the default identity. */
   agent?: { name: string; systemPrompt: string };
+  /**
+   * Whether the `code_graph` tool is wired for this run (a CodeGraphProvider
+   * was supplied). Defaults to true — it is the common case; pass false when
+   * running without a provider so the prompt never references a missing tool.
+   */
+  hasCodeGraph?: boolean;
+  /**
+   * Whether the `code_map` tool is wired for this run (a CodeMapProvider was
+   * supplied). Defaults to false — the tool is optional and rarely wired, and
+   * a prompt rule pointing at a tool the model does not have silently breaks
+   * the whole context-gathering habit.
+   */
+  hasCodeMap?: boolean;
 }
 
 export function buildSystemPrompt(opts: SystemPromptOptions): string {
   const { cwd, projectContext, readOnly, agent } = opts;
+  const hasCodeGraph = opts.hasCodeGraph ?? true;
+  const hasCodeMap = opts.hasCodeMap ?? false;
 
   const preamble = agent
     ? [
@@ -40,14 +55,29 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
     "- Act, don't narrate intentions at length. Read before you edit, and edit precisely.",
     "- Prefer `edit_file` for surgical changes; only `write_file` for new files or full rewrites.",
     "- Before editing a file you have not read this session, `read_file` it first.",
-    "- For conceptual or multi-word queries ('everything related to payments', 'auth session",
-    "  handling'), call `code_map` BEFORE `grep` or `bash`. It returns semantically matched",
-    "  files, symbols, call edges, and recent commits in one structured bundle — far faster",
-    "  than grepping.",
-    "- Use `grep` and `glob` to locate code when you know the exact name or pattern.",
-    "- Use `code_graph` for structural questions — `search` to find where a symbol is",
-    "  defined, `dependents` to see what imports a file before you change it. It is a",
-    "  precomputed symbol/import index, more precise than grep for those questions.",
+    ...(hasCodeGraph
+      ? [
+          "- GRAPH FIRST: `code_graph` is your FIRST choice for gathering context about code —",
+          "  it is a precomputed symbol/import index, more precise and cheaper than grepping.",
+          "  Use `search` for symbol lookups, `file_symbols` to understand a file before",
+          "  editing it, `dependents` before changing any shared file (what a change could",
+          "  break), and `imports` to trace dependencies.",
+        ]
+      : []),
+    ...(hasCodeMap
+      ? [
+          "- For conceptual or multi-word queries ('everything related to payments', 'auth session",
+          "  handling'), call `code_map` BEFORE `grep` or `bash`. It returns semantically matched",
+          "  files, symbols, call edges, and recent commits in one structured bundle — far faster",
+          "  than grepping.",
+        ]
+      : []),
+    ...(hasCodeGraph
+      ? [
+          "- Only fall back to `grep`/`glob` when the graph returns no results or the target",
+          "  is plain text (strings, comments, config keys) rather than a code symbol.",
+        ]
+      : ["- Use `grep` and `glob` to locate code instead of guessing paths."]),
     "- Use `bash` for builds, tests, git, and anything the dedicated tools don't cover.",
     "- Keep changes minimal and consistent with the surrounding code's style and conventions.",
     "- Reporting: the user sees your prose plus a one-line chip for each tool call — never",
