@@ -167,6 +167,17 @@ export class AgentRegistry {
     return () => this.bus.off("change", listener);
   }
 
+  /**
+   * Drop a single agent by id — powers the REPL panel's "delete highlighted
+   * agent" (Ctrl-X twice), which dismisses the entry from the Agent Team roster.
+   * No-op if the id is unknown or already pruned. Note this only removes the
+   * entry from the in-memory roster; it does not abort the underlying work (a
+   * running turn keeps running), it just hides it from the panel.
+   */
+  remove(id: string): void {
+    if (this.entries.delete(id)) this.emitChange();
+  }
+
   /** Test/reset helper — drop everything without emitting per-entry churn. */
   clear(): void {
     this.entries.clear();

@@ -31,6 +31,14 @@ import { taskRegistry, type TaskStatus, type TrackedTask } from "../agent/task-r
 /** How the sidebar decides whether to show: pinned on, forced off, or automatic. */
 export type PanelMode = "auto" | "on" | "off";
 
+/**
+ * A navigable side-panel item, as tracked by the REPL's focus model. `zone`
+ * says which list it lives in; `id` is the registry id of the highlighted row.
+ * `null` (or a `zone: "input"` focus) means the input bar owns focus, not the
+ * panel.
+ */
+export type PanelFocus = { zone: "agent" | "task"; id: string } | null;
+
 /** Fixed panel width — wide enough for a title + status, narrow enough to dock. */
 const PANEL_WIDTH = 34;
 /**
@@ -39,6 +47,29 @@ const PANEL_WIDTH = 34;
  * small window keeps the full width for the conversation.
  */
 const MIN_TERMINAL_COLS = PANEL_WIDTH + 48;
+
+/**
+ * Exported so the REPL can refuse to move focus into a panel that isn't docked
+ * (a narrow terminal hides it) — navigating into an invisible list would strand
+ * the highlight off-screen.
+ */
+export const SIDEBAR_MIN_COLS = MIN_TERMINAL_COLS;
+
+/**
+ * The flat, ordered list of navigable panel items — every Agent Team row (in
+ * roster order) followed by every Task Progress row (in plan order). This is the
+ * single source of truth for arrow-key traversal: the REPL walks this list so
+ * the visual order and the navigation order can never drift apart.
+ */
+export function panelNavTargets(
+  agents: RunningAgent[],
+  tasks: TrackedTask[],
+): Array<{ zone: "agent" | "task"; id: string }> {
+  return [
+    ...agents.map((a) => ({ zone: "agent" as const, id: a.id })),
+    ...tasks.map((t) => ({ zone: "task" as const, id: t.id })),
+  ];
+}
 
 /** Glyph + color for an agent's run status (matches the `/hud` vocabulary). */
 function agentStatusStyle(status: AgentStatus): { glyph: string; color: string } {
@@ -82,17 +113,39 @@ function elapsed(from: number, to: number): string {
   return `${m}m${rem.toString().padStart(2, "0")}s`;
 }
 
-function AgentTeamRow({ agent, now }: { agent: RunningAgent; now: number }): React.ReactElement {
+/** Leading marker cell: a bright pointer when highlighted, else blank alignment. */
+function FocusMarker({ on }: { on: boolean }): React.ReactElement {
+  return on ? (
+    <Text color={theme.cyan} bold>
+      {theme.pointer}
+    </Text>
+  ) : (
+    <Text> </Text>
+  );
+}
+
+function AgentTeamRow({
+  agent,
+  now,
+  highlighted = false,
+}: {
+  agent: RunningAgent;
+  now: number;
+  highlighted?: boolean;
+}): React.ReactElement {
   const { glyph, color } = agentStatusStyle(agent.status);
   const model = agent.model ? tierLabel(tierForSlug(agent.model)) : null;
   return (
     <Box flexDirection="column">
       <Box gap={1}>
+        <FocusMarker on={highlighted} />
         <Text color={color} bold>
           {glyph}
         </Text>
         <Text color={theme.violet}>{kindLabel(agent.kind)}</Text>
-        <Text wrap="truncate-end">{agent.title}</Text>
+        <Text bold={highlighted} inverse={highlighted} wrap="truncate-end">
+          {agent.title}
+        </Text>
       </Box>
       <Box paddingLeft={2} gap={1}>
         <Text dimColor>{elapsed(agent.startedAt, now)}</Text>
@@ -115,16 +168,23 @@ function AgentTeamRow({ agent, now }: { agent: RunningAgent; now: number }): Rea
   );
 }
 
-function TaskRow({ task }: { task: TrackedTask }): React.ReactElement {
+function TaskRow({
+  task,
+  highlighted = false,
+}: {
+  task: TrackedTask;
+  highlighted?: boolean;
+}): React.ReactElement {
   const { glyph, color } = taskStatusStyle(task.status);
   const strike = task.status === "done";
   return (
     <Box flexDirection="column">
       <Box gap={1}>
+        <FocusMarker on={highlighted} />
         <Text color={color} bold>
           {glyph}
         </Text>
-        <Text dimColor={strike} wrap="truncate-end">
+        <Text dimColor={strike && !highlighted} bold={highlighted} inverse={highlighted} wrap="truncate-end">
           {task.title}
         </Text>
       </Box>
@@ -181,10 +241,17 @@ export function AgentSidebar({
   mode = "auto",
   nowFn,
   widthFn,
+  focus = null,
+  active = false,
 }: {
   mode?: PanelMode;
   nowFn?: () => number;
   widthFn?: () => number;
+  /** The currently-highlighted panel item, or null when the input owns focus. */
+  focus?: PanelFocus;
+  /** Force the dock visible (the user has navigated into it) even when `auto`
+   *  would otherwise hide it while idle. */
+  active?: boolean;
 }): React.ReactElement | null {
   const now = nowFn ?? (() => Date.now());
   const width = widthFn ?? (() => process.stdout.columns ?? 80);
@@ -212,7 +279,9 @@ export function AgentSidebar({
   // A narrow terminal can't spare the columns — never crush the chat.
   if (width() < MIN_TERMINAL_COLS) return null;
   const hasActivity = agents.length > 0 || tasks.length > 0;
-  if (mode === "auto" && !hasActivity) return null;
+  // `active` (the user has navigated into the dock) forces it visible even when
+  // auto would hide an idle dock, so the highlight never lands on a hidden list.
+  if (mode === "auto" && !hasActivity && !active) return null;
 
   const at = now();
   const runningAgents = agents.filter((a) => a.status === "running").length;

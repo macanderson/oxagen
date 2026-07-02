@@ -10,7 +10,7 @@
  *
  * Presentational pieces live in ./components; this file is the container.
  */
-import { Box, Static, Text, useApp, useInput } from "ink";
+import { Box, Text, useApp, useInput } from "ink";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import type { ModelMessage } from "ai";
 import { existsSync, readFileSync } from "node:fs";
@@ -46,6 +46,8 @@ import { taskRegistry } from "../agent/task-registry.js";
 import { isSubagentDispatch, subagentInfo } from "../agent/tool-formatter.js";
 import { HudPanel } from "./hud.js";
 import { AgentSidebar, type PanelMode } from "./agent-sidebar.js";
+import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
+import { runShellCommand as runShellCommand_impl, type ShellRunHandle } from "./shell-runner.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
@@ -66,6 +68,12 @@ import {
 import { resolveEscapeAction } from "./escape-action.js";
 import { isDebugEnabled } from "../lib/debug-log.js";
 import { Banner } from "../tui/banner.js";
+import {
+  useTerminalSize,
+  ENTER_ALT_SCREEN,
+  LEAVE_ALT_SCREEN,
+  CURSOR_HOME,
+} from "./use-terminal-size.js";
 import {
   makeTurnController,
   makeStallDetector,
@@ -302,6 +310,25 @@ export function ReplApp({
   // only while a turn is monitoring work; /panel pins it "on" or hides it "off".
   const [panelMode, setPanelMode] = useState<PanelMode>("auto");
   const panelModeRef = useRef<PanelMode>("auto");
+  // The `!command` terminal panel (red-outlined, pinned above the agent
+  // messages). Null when no command has run this session. A `!cmd` submission
+  // runs IMMEDIATELY — bypassing the turn queue so it works mid-turn — streaming
+  // stdout/stderr live into this state. `terminalRunRef` mirrors it for the
+  // synchronous key handler + streaming callbacks; `terminalHandleRef` holds the
+  // live child process so Ctrl-C/Esc can kill it; `terminalIdRef` mints run ids.
+  const [terminalRun, setTerminalRun] = useState<TerminalRun | null>(null);
+  const terminalRunRef = useRef<TerminalRun | null>(null);
+  terminalRunRef.current = terminalRun;
+  const terminalHandleRef = useRef<ShellRunHandle | null>(null);
+  const terminalIdRef = useRef(0);
+  // How far the transcript is scrolled back from the latest message, counted in
+  // messages hidden below the fold. 0 = pinned to the newest output (the default,
+  // auto-following as tokens stream in); PgUp raises it to reveal older history,
+  // PgDown lowers it, and any new submission snaps it back to 0. The ref mirrors
+  // the state so the synchronous key handler clamps against the live count.
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const scrollOffsetRef = useRef(0);
+  scrollOffsetRef.current = scrollOffset;
   // Timestamp of the most-recent Escape press (for the double-Esc detection
   // window). Null means no previous Esc has been recorded (or the window was
   // explicitly cleared after a 'prompt-reset' fires).
@@ -396,6 +423,87 @@ export function ReplApp({
   }, []);
 
   /**
+   * Run a `!command` immediately as a live terminal, bypassing the turn queue so
+   * it works even while an agent turn is in flight. The user typed it explicitly,
+   * so it runs directly in the workspace (not through the permission broker),
+   * exactly like a shell. Output streams into the red terminal panel in real time
+   * and — once finished — is fed into the model's history so the next turn sees
+   * what the user ran and what it produced.
+   */
+  const runShellCommand = useCallback(
+    (raw: string) => {
+      const command = raw.replace(/^!/, "").trim();
+      if (!command) {
+        pushAssistant("Usage: !<shell command> — runs it live in the workspace (works mid-turn).");
+        return;
+      }
+      // Only one terminal panel at a time: kill any command still running.
+      terminalHandleRef.current?.kill();
+      // Echo the command into the transcript so scrollback records what was run.
+      commit([...allRef.current, { role: "user", content: "! " + command, timestamp: Date.now() }]);
+
+      const id = ++terminalIdRef.current;
+      const startedAt = Date.now();
+      let buf = "";
+      const seed: TerminalRun = { id, command, output: "", status: "running", startedAt };
+      terminalRunRef.current = seed;
+      setTerminalRun(seed);
+
+      // Coalesce chunks: chatty output would otherwise re-render Ink on every
+      // write. Buffer and flush to state at most ~every 60ms; flush finally at end.
+      let flushTimer: ReturnType<typeof setTimeout> | null = null;
+      const flush = (): void => {
+        flushTimer = null;
+        if (terminalRunRef.current?.id !== id) return; // superseded by a newer run
+        const next = { ...terminalRunRef.current, output: buf };
+        terminalRunRef.current = next;
+        setTerminalRun(next);
+      };
+      const scheduleFlush = (): void => {
+        if (flushTimer == null) flushTimer = setTimeout(flush, 60);
+      };
+
+      const handle = runShellCommand_impl({
+        command,
+        cwd,
+        onData: (chunk) => {
+          buf += chunk;
+          scheduleFlush();
+        },
+      });
+      terminalHandleRef.current = handle;
+
+      void handle.done.then((res) => {
+        if (flushTimer != null) clearTimeout(flushTimer);
+        if (terminalHandleRef.current === handle) terminalHandleRef.current = null;
+        if (terminalRunRef.current?.id !== id) return; // a newer run replaced us
+        const status: TerminalRun["status"] = res.killed ? "killed" : "exited";
+        const finished: TerminalRun = {
+          ...terminalRunRef.current,
+          output: buf,
+          status,
+          exitCode: res.exitCode,
+          endedAt: Date.now(),
+        };
+        terminalRunRef.current = finished;
+        setTerminalRun(finished);
+        // Make the model aware of what the user ran and what it produced.
+        const body = buf.trimEnd() || "(no output)";
+        historyRef.current = [
+          ...historyRef.current,
+          {
+            role: "user",
+            content:
+              `I ran \`${command}\` in the shell (${res.timedOut ? "timed out" : `exit ${res.exitCode}`}). Output:\n` +
+              body.slice(0, 4000),
+          },
+        ];
+      });
+    },
+    [commit, pushAssistant, cwd],
+  );
+
+  /**
    * Shared conversation reset — used by both the /clear slash command and the
    * Esc-twice flow. Wipes all in-memory conversation and history state.
    */
@@ -460,6 +568,21 @@ export function ReplApp({
       const next = order[(idx + 1) % order.length]!;
       setMode(next);
       brokerRef.current?.setMode(next);
+      return;
+    }
+
+    // PgUp / PgDn scroll the transcript history within the full-screen viewport
+    // (the app owns the screen now, so there is no native terminal scrollback to
+    // defer to). PgUp reveals older messages; PgDn returns toward the latest.
+    // Clamp to [0, count-1] so you can never scroll past the first message or
+    // below the newest. Plain Up/Down stay owned by the prompt input's editing.
+    if (key.pageUp || key.pageDown) {
+      const step = 5;
+      const maxOffset = Math.max(0, allRef.current.length - 1);
+      setScrollOffset((o) => {
+        const next = key.pageUp ? o + step : o - step;
+        return Math.max(0, Math.min(maxOffset, next));
+      });
       return;
     }
 
