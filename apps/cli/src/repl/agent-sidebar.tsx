@@ -68,7 +68,7 @@ export const SIDEBAR_MIN_COLS = MIN_TERMINAL_COLS;
 export function panelNavTargets(
   agents: RunningAgent[],
   tasks: TrackedTask[],
-): Array<{ zone: "agent" | "task"; id: string }> {
+): PanelTarget[] {
   return [
     ...agents.map((a) => ({ zone: "agent" as const, id: a.id })),
     ...tasks.map((t) => ({ zone: "task" as const, id: t.id })),
