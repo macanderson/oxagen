@@ -61,7 +61,7 @@ export function stringifyCapped(v: unknown, max: number): string {
  */
 export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCodingAgentResult> {
   const onEvent = opts.onEvent ?? (() => undefined);
-  const tools = buildWorkspaceTools(opts.workspace, {
+  let tools = buildWorkspaceTools(opts.workspace, {
     readOnly: opts.readOnly,
     codeGraph: opts.codeGraph,
     codeMap: opts.codeMap,
@@ -69,6 +69,12 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
     // Forward the turn signal so an aborted turn kills any in-flight bash subtree.
     signal: opts.signal,
   });
+  // Merge caller-supplied extra tools (e.g. MCP), then apply the caller's final
+  // wrapper (e.g. the CLI's permission-gate + hooks + per-tool-timeout). This is
+  // what lets a SINGLE loop replace the old duplicate legacy loop: every entry
+  // point injects its safety wiring here instead of maintaining a second engine.
+  if (opts.extraTools) tools = { ...tools, ...opts.extraTools };
+  if (opts.wrapTools) tools = opts.wrapTools(tools);
 
   const recalled = opts.memory ? await opts.memory.recallContext().catch(() => "") : "";
 

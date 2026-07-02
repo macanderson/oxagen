@@ -26,7 +26,7 @@
  * {@link AgentAi} port rather than a `cwd` string and CLI-specific modules.
  * It also does NOT check for a gateway key — that is the caller's responsibility.
  */
-import type { ModelMessage } from "ai";
+import type { ModelMessage, ToolSet } from "ai";
 import { runCodingAgent } from "../engine";
 import { buildSystemPrompt } from "../prompt/system-prompt";
 import { evaluatePrompt } from "../evaluate/evaluator";
@@ -102,6 +102,15 @@ export interface RunTurnOptions {
   effort?: "low" | "medium" | "high" | "xhigh" | "max";
   /** Runaway backstop for the tool loop per execution round (default 256). */
   maxSteps?: number;
+  /** Extra tools merged with the workspace tools (e.g. external MCP tools). */
+  extraTools?: ToolSet;
+  /**
+   * Final transform over the tool set — the CLI's permission-gate + lifecycle-
+   * hook + per-tool-timeout wrapper. Applied on every execution round so the
+   * `--agent` and fleet paths get the same safety wiring the legacy loop had,
+   * through the ONE engine loop.
+   */
+  wrapTools?: (tools: ToolSet) => ToolSet;
   /** Loaded project rules (CLAUDE.md/AGENTS.md). */
   projectContext?: ProjectContext;
   /** Read-only mode: no file mutation, and the auto-revise loop is disabled. */
@@ -348,6 +357,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       system: composeAgentSystem(opts, cwd),
       history,
       maxSteps: opts.maxSteps,
+      extraTools: opts.extraTools,
+      wrapTools: opts.wrapTools,
       readOnly: opts.readOnly,
       codeGraph: opts.codeGraph ?? undefined,
       memory: opts.memory ?? undefined,
@@ -643,6 +654,8 @@ async function runBare(
     system: composeAgentSystem(opts, cwd),
     history: opts.history,
     maxSteps: opts.maxSteps,
+    extraTools: opts.extraTools,
+    wrapTools: opts.wrapTools,
     readOnly: opts.readOnly,
     codeGraph: opts.codeGraph ?? undefined,
     memory: opts.memory ?? undefined,
