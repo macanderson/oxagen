@@ -1277,6 +1277,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_DISABLE_MEMORY: {
+    group: "CLI",
+    description:
+      "When '1', the CLI one-shot runner skips session/fleet memory recall and remember entirely. " +
+      "Benchmark harnesses (SWE-bench) set it so recalled context from one instance can never leak " +
+      "into another when the same repo is reused across instances.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_GRAPH_DISABLED: {
     group: "CLI",
     description:

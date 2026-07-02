@@ -59,7 +59,6 @@ import {
   type PanelMode,
   type PanelTarget,
 } from "./agent-sidebar.js";
-import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
 import {
   runShellCommand as runShellCommand_impl,
   type ShellRunHandle,
@@ -72,17 +71,18 @@ import { debugLog } from "../lib/debug-log.js";
 import { formatToolArgs } from "../agent/tool-formatter.js";
 import {
   ApprovalPrompt,
+  CatMouseChase,
   HELP,
   MessageView,
   PromptInput,
   StatusLine,
   summarizeTrace,
+  ThinkingIndicator,
   type Message,
 } from "./components.js";
 import { HudPanel } from "./hud.js";
 import { resolveEscapeAction } from "./escape-action.js";
 import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
-import { runShellCommand as runShellCommand_impl, type ShellRunHandle } from "./shell-runner.js";
 import { isDebugEnabled } from "../lib/debug-log.js";
 import { Banner } from "../tui/banner.js";
 import {
@@ -226,7 +226,7 @@ export function ReplApp({
   // light terminal, dark on dark) — Feature C. Detection is cheap + synchronous.
   const diffThemeRef = useRef(diffThemeFor(detectTerminalBackground()));
   // When the active turn began (drives the thinking indicator); null when idle.
-  const [, setTurnStartedAt] = useState<number | null>(null);
+  const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
   // Output chars streamed this turn, for the live token estimate in the indicator.
   const streamCharsRef = useRef(0);
   // Prompts submitted while a turn is in flight wait here and run FIFO when the
@@ -360,12 +360,12 @@ export function ReplApp({
 
   // Whether we are showing the "reset conversation?" confirmation prompt.
   // The ref is the synchronous source of truth; the state drives the render.
-  const [, setResetPending] = useState(false);
+  const [resetPending, setResetPending] = useState(false);
   const resetPendingRef = useRef(false);
   // Whether the `/hud` heads-up display (all running agents) is showing. The ref
   // mirrors the state so the synchronous Esc handler can read it without a stale
   // closure.
-  const [, setHudVisible] = useState(false);
+  const [hudVisible, setHudVisible] = useState(false);
   const hudVisibleRef = useRef(false);
   // Visibility of the right-hand Agent Team / Task Progress dock. "auto" shows it
   // only while a turn is monitoring work; /panel pins it "on" or hides it "off".
