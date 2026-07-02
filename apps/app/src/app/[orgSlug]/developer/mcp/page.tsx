@@ -65,13 +65,20 @@ function buildSnippets(apiKey: string): Omit<McpTabEntry, "highlightedHtml">[] {
   ];
 }
 
-/** Shiki is an optional enhancement — fall back to plain text on failure. */
+/**
+ * Shiki is an optional enhancement — fall back to plain text on failure.
+ *
+ * A single vibrant dark theme is used in BOTH light and dark app modes: the code
+ * block renders on the always-dark ember-framed terminal surface (`.ox-code-frame`),
+ * so a light syntax theme would be unreadable. `one-dark-pro` gives punchy,
+ * high-contrast token colours that pop against the dark fill.
+ */
 async function highlight(code: string, lang: string): Promise<string> {
   try {
     const { codeToHtml } = await import("shiki");
     return await codeToHtml(code, {
       lang,
-      themes: { light: "github-light", dark: "github-dark" },
+      theme: "one-dark-pro",
     });
   } catch {
     // Shiki not available or failed — return plain pre-escaped HTML.
