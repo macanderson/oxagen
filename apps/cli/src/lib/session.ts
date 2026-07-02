@@ -7,6 +7,7 @@
  * is missing so the user knows exactly what to do next.
  */
 import { getApiUrl, getOrgId, getToken, getWorkspaceId } from "./config.js";
+import { ensureGatewayKey } from "../agent/env.js";
 
 export interface Session {
   token: string;
@@ -44,6 +45,28 @@ export function allowNoSession(): boolean {
   return process.env["OXAGEN_ALLOW_NO_SESSION"] === "1";
 }
 
+/** True when the user explicitly forces local BYOK even while logged in. */
+export function forceLocalByok(): boolean {
+  return process.env["OXAGEN_LOCAL"] === "1";
+}
+
+/**
+ * A local BYOK session: no Oxagen account, model calls go gateway-direct with
+ * the user's own `AI_GATEWAY_API_KEY` (the coordinator/router, workers, and
+ * judges all run locally against the gateway — any model the gateway supports).
+ * `synthetic: true` so the run paths route through `createGatewayAgentAi` and
+ * skip platform-bound side channels, exactly like the bench session.
+ */
+function localByokSession(): Session {
+  return {
+    token: "",
+    orgSlug: "local",
+    workspaceSlug: "local",
+    apiUrl: getApiUrl(),
+    synthetic: true,
+  };
+}
+
 /**
  * Load the session from config/env.
  * Returns null if any required field (token, orgSlug, workspaceSlug) is absent.
@@ -68,11 +91,28 @@ export function requireSession(): Session {
   const orgSlug = getOrgId();
   const workspaceSlug = getWorkspaceId();
 
+  // Explicit local BYOK (OXAGEN_LOCAL=1 / `--local`): use the gateway key even
+  // when logged in — the user wants their own key/models, not the platform.
+  if (forceLocalByok() && ensureGatewayKey() !== null) return localByokSession();
+
   if (!token || !orgSlug || !workspaceSlug) {
     // Benchmark bypass (OXAGEN_ALLOW_NO_SESSION=1): headless bench containers
     // have no account; return the synthetic session instead of exiting. The
     // run paths detect `synthetic` and go gateway-direct for model calls.
     if (allowNoSession()) return syntheticBenchSession();
+
+    // Local BYOK fallback: not logged in, but an AI_GATEWAY_API_KEY is available
+    // (shell env, ~/.config/oxagen/config.json, or a nearby .env.local). Run
+    // locally against the gateway with the user's own key instead of exiting —
+    // the coordinator + workers + judges all go gateway-direct. Explicit stderr
+    // notice so this is never a silent auth bypass.
+    if (ensureGatewayKey() !== null) {
+      process.stderr.write(
+        "Not logged in — running locally with AI_GATEWAY_API_KEY (BYOK). " +
+          "Run `oxagen login` to use your Oxagen account instead.\n",
+      );
+      return localByokSession();
+    }
 
     const missing: string[] = [];
     if (!token) missing.push("token");
@@ -81,7 +121,7 @@ export function requireSession(): Session {
 
     process.stderr.write(
       `Not logged in (missing: ${missing.join(", ")}).\n` +
-        `Run \`oxagen login\` to authenticate with your Oxagen account.\n`,
+        "Run `oxagen login` to authenticate, or set AI_GATEWAY_API_KEY to run locally (BYOK).\n",
     );
     process.exit(1);
   }

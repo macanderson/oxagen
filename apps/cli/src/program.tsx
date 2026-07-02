@@ -72,6 +72,11 @@ export function buildProgram(): Command {
       "Permission mode: ask | accept-edits | bypass | readonly (REPL default: ask; one-shot ungated unless set)",
     )
     .option(
+      "--local",
+      "Run locally with your own AI_GATEWAY_API_KEY (BYOK) — coordinator + workers gateway-direct, no Oxagen account",
+      false,
+    )
+    .option(
       "--no-pipeline",
       "Skip prompt evaluation, context injection, and completeness judging",
     )
@@ -96,6 +101,7 @@ export function buildProgram(): Command {
           effort?: string;
           readonly?: boolean;
           mode?: string;
+          local?: boolean;
           pipeline?: boolean;
           verbose?: boolean;
           agent?: string;
@@ -137,11 +143,14 @@ export function buildProgram(): Command {
             return;
           }
         }
-        // ADR-019 §4: require an Oxagen account before any agent-path command.
-        // Non-agent utility commands (config, settings, login, logout, etc.) are
-        // separate sub-commands and bypass this gate automatically. The resolved
-        // session (token + org + workspace) is threaded into every run path so
-        // the agent loop, graph sync, and metering share one authenticated scope.
+        // --local forces BYOK: run against the shell's AI_GATEWAY_API_KEY, not
+        // the platform account (requireSession reads OXAGEN_LOCAL).
+        if (opts.local) process.env["OXAGEN_LOCAL"] = "1";
+        // ADR-019 §4: require an Oxagen account before any agent-path command —
+        // UNLESS BYOK applies: `--local`/OXAGEN_LOCAL, or (when not logged in) an
+        // AI_GATEWAY_API_KEY is present, in which case the CLI runs locally
+        // gateway-direct instead of exiting. Non-agent utility commands (config,
+        // settings, login, logout, etc.) bypass this gate automatically.
         const { requireSession } = await import("./lib/session.js");
         const session = requireSession();
 

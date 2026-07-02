@@ -1447,6 +1447,20 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_LOCAL: {
+    group: "CLI",
+    description:
+      "Set to '1' (or pass `--local`) to force local BYOK mode even when logged in: " +
+      "the CLI runs the coordinator + workers gateway-direct with your own " +
+      "AI_GATEWAY_API_KEY instead of routing through your Oxagen account. When not " +
+      "logged in, BYOK is used automatically if AI_GATEWAY_API_KEY is present, so this " +
+      "flag is only needed to override an existing login.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_COMMIT_LEDGER: {
     group: "CLI",
     description:
