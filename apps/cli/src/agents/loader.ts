@@ -59,7 +59,7 @@ export function parseFrontmatter(raw: string): Frontmatter {
 }
 
 /** Parse a `tools:` value: `a, b` or `[a, b]` → ["a","b"]; empty → undefined. */
-function parseToolList(value: string | undefined): string[] | undefined {
+export function parseToolList(value: string | undefined): string[] | undefined {
   if (value === undefined) return undefined;
   const inner = value.trim().replace(/^\[/, "").replace(/\]$/, "");
   const list = inner

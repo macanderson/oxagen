@@ -771,9 +771,18 @@ export function buildProgram(): Command {
       await handleInit({ json: opts.json, noLink: opts.link === false });
     });
 
-  // ── config: local configuration ─────────────────────────────────────────────
+  // ── config: local CLI config (legacy) + Oxagen Workspace Config ─────────────
+  //
+  // Two surfaces share one Commander command: the legacy `[key] [value]` form
+  // below (local CLI credentials/session — token/model/api-url/org/workspace)
+  // and the structured, multi-scope subcommands registered after it (init/get/
+  // set/add/remove/explain/build/lint/pull — docs/specs/oxagen-workspace-config/
+  // design.md §7). Commander routes a first positional arg to a matching
+  // subcommand when one exists and falls back to this action otherwise, so
+  // `oxagen config token sk-…` and `oxagen config get vision.statement` both
+  // resolve correctly — see the header comment in commands/config.ts.
 
-  program
+  const config = program
     .command("config")
     .description("View or set configuration (api key, model, etc.)")
     .argument("[key]", "Config key to get/set")
@@ -781,6 +790,105 @@ export function buildProgram(): Command {
     .action(async (key?: string, value?: string) => {
       const { handleConfig } = await import("./commands/config.js");
       await handleConfig(key, value);
+    });
+
+  config
+    .command("init")
+    .description("Write a starter workspace config file (default: workspace scope)")
+    .option("--scope <scope>", "org | user | workspace | repo (default: workspace)")
+    .action(async (opts: { scope?: string }) => {
+      const { configInit } = await import("./commands/config.js");
+      configInit(opts.scope);
+    });
+  config
+    .command("get")
+    .description("Print the merged value at a dotted path (e.g. vision.statement, commands.dev)")
+    .argument("<path>", "Dotted config path")
+    .action(async (path: string) => {
+      const { configGet } = await import("./commands/config.js");
+      configGet(path);
+    });
+  config
+    .command("set")
+    .description("Set a value at a dotted path in one scope")
+    .argument("<path>", "Dotted config path")
+    .argument("<value>", "Value to write (parsed as JSON when possible)")
+    .option("--scope <scope>", "user | workspace | repo (default: workspace)")
+    .action(async (path: string, value: string, opts: { scope?: string }) => {
+      const { configSet } = await import("./commands/config.js");
+      configSet(path, value, opts.scope);
+    });
+  config
+    .command("add")
+    .description("Add a rule/preference/policy/convention/reference for a language")
+    .argument("<lang>", 'Language key, e.g. "typescript", "english"')
+    .argument("<kind>", "rule | preference | policy | convention | reference")
+    .argument("<text>", "Inline item text")
+    .option("--scope <scope>", "user | workspace | repo (default: workspace)")
+    .option("--id <id>", "Stable id (default: slugified from <text>)")
+    .option("--doc <path>", "Path/URL to a doc with the full detail")
+    .option("--enforced", "Surface in the agent's hard-rules section")
+    .option("--locked", "Cannot be overridden or removed by a less-authoritative scope")
+    .option("--source <source>", "File path / URL this item was derived from")
+    .option("--confidence <n>", "0–1 confidence score (origin: research)")
+    .action(
+      async (
+        lang: string,
+        kind: string,
+        text: string,
+        opts: {
+          scope?: string;
+          id?: string;
+          doc?: string;
+          enforced?: boolean;
+          locked?: boolean;
+          source?: string;
+          confidence?: string;
+        },
+      ) => {
+        const { configAdd } = await import("./commands/config.js");
+        configAdd(lang, kind, text, opts);
+      },
+    );
+  config
+    .command("remove")
+    .description("Remove a language item by id")
+    .argument("<id>", "Item id")
+    .option("--scope <scope>", "user | workspace | repo (default: workspace)")
+    .action(async (id: string, opts: { scope?: string }) => {
+      const { configRemove } = await import("./commands/config.js");
+      configRemove(id, opts.scope);
+    });
+  config
+    .command("explain")
+    .description("Report which scope wins at a dotted path, and why")
+    .argument("<path>", "Dotted config path")
+    .action(async (path: string) => {
+      const { configExplain } = await import("./commands/config.js");
+      configExplain(path);
+    });
+  config
+    .command("build")
+    .description("Scan sources (workspace + user) and write the consolidated capability index")
+    .option("--live-mcp", "Best-effort live-connect to MCP servers to list their tools (slower, network-dependent)")
+    .option("--json", "Print the consolidated index as JSON instead of a summary")
+    .action(async (opts: { liveMcp?: boolean; json?: boolean }) => {
+      const { configBuild } = await import("./commands/config.js");
+      await configBuild(opts);
+    });
+  config
+    .command("lint")
+    .description("Validate every scope file against the schema and report consolidated-index drift")
+    .action(async () => {
+      const { configLint } = await import("./commands/config.js");
+      await configLint();
+    });
+  config
+    .command("pull")
+    .description("Sync user.json (and org-provisioned managed.json) from the platform")
+    .action(async () => {
+      const { configPull } = await import("./commands/config.js");
+      await configPull();
     });
 
   // ── logs: see + debug the OXAGEN_CLI_DEBUG .output stream ────────────────────
