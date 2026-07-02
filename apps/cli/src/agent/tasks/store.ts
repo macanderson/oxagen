@@ -177,9 +177,9 @@ export class TaskStore extends EventEmitter {
   }
 
   /** Subscribe to any change. Returns an unsubscribe fn. */
-  on(_event: "change", listener: () => void): this;
-  on(event: string, listener: (...args: unknown[]) => void): this;
-  on(event: string, listener: (...args: unknown[]) => void): this {
+  override on(_event: "change", listener: () => void): this;
+  override on(event: string, listener: (...args: unknown[]) => void): this;
+  override on(event: string, listener: (...args: unknown[]) => void): this {
     return super.on(event, listener);
   }
 
