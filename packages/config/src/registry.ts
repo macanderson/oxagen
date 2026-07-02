@@ -1301,19 +1301,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
-  OXAGEN_PROMPT_PROFILE: {
-    group: "CLI",
-    description:
-      "Selects the CLI one-shot runner's system-prompt profile. 'interactive' forces the narrating " +
-      "profile; 'headless' forces the terse verification profile. An explicit value always wins; " +
-      "when unset, a non-TTY stdout (piped one-shot, SWE-bench, CI) defaults to 'headless' and an " +
-      "interactive TTY uses the engine's default 'interactive' profile.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
   OXAGEN_ROUTING_TRIVIAL_MAX: {
     group: "CLI",
     description:
