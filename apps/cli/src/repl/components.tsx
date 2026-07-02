@@ -16,6 +16,7 @@ import {
   isSubagentDispatch,
 } from "../agent/tool-formatter.js";
 import { DiffView } from "./diff-view.js";
+import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
 import type { DiffTheme } from "../tui/terminal-theme.js";
 import { SlashMenu } from "./slash-menu.js";
 import {
@@ -27,11 +28,16 @@ import type { StageEvent, StageKind, TurnTrace, JudgeVerdict } from "../agent/tr
 import type { ApprovalRequest, ApprovalResponse, PermissionMode } from "../agent/permissions.js";
 
 export interface Message {
-  role: "user" | "assistant" | "reasoning" | "tool" | "stage" | "diff";
+  role: "user" | "assistant" | "reasoning" | "tool" | "stage" | "diff" | "terminal";
   content: string;
   timestamp: number;
   toolName?: string;
   streaming?: boolean;
+  /** Present on `role: "terminal"` messages — a finished `!command` run folded
+   *  into the transcript as a collapsible accordion (Ctrl-O toggles it). */
+  terminalRun?: TerminalRun;
+  /** Present on `role: "terminal"` messages — whether the accordion is expanded. */
+  terminalExpanded?: boolean;
   /** Present on `role: "stage"` messages — a live pipeline progress event. */
   stage?: StageEvent;
   /** Present on `role: "diff"` messages — the unified git diff to render. */
@@ -516,6 +522,11 @@ export function MessageView({
   if (msg.summary) return <TurnSummaryView summary={msg.summary} />;
   if (msg.role === "diff" && msg.diff) return <DiffMessage msg={msg} theme={diffTheme} />;
   if (msg.role === "stage" && msg.stage) return <StageBadge stage={msg.stage} />;
+  if (msg.role === "terminal" && msg.terminalRun) {
+    // A finished `!command` run parked in the transcript. Folded to its header by
+    // default (collapsed); Ctrl-O expands the latest one to show its output.
+    return <TerminalPanel run={msg.terminalRun} collapsed={!msg.terminalExpanded} />;
+  }
   if (msg.role === "user") {
     return (
       <Box paddingX={1} marginY={0}>
