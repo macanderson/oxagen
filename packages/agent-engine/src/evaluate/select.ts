@@ -12,7 +12,7 @@
  * fewest-files → fewest-steps) selects, so a best-of-N run always resolves.
  */
 import { z } from "zod";
-import { modelForTier, accumulateUsage } from "../router/model-router";
+import { accumulateUsage } from "../router/model-router";
 import { emptyUsage, type UsageTotals } from "../types";
 import type { AgentAi } from "../ports";
 
