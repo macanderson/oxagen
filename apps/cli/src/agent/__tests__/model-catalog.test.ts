@@ -23,7 +23,6 @@ import {
 } from "../model-catalog.js";
 import { modelForTier } from "../model-router.js";
 import { DEFAULT_MODEL } from "../model.js";
-import { DEFAULT_JUDGE_MODEL } from "../../pipeline/config.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI_SRC = resolve(HERE, "../..");
@@ -56,10 +55,6 @@ describe("model catalog is the single source of truth", () => {
   it("the agent-loop default is the catalog's balanced/Sonnet slug", () => {
     expect(DEFAULT_MODEL).toBe(DEFAULT_CODING_MODEL);
     expect(DEFAULT_MODEL).toBe(LATEST_ANTHROPIC.sonnet);
-  });
-
-  it("the pipeline judge default is the catalog's OpenAI coding slug", () => {
-    expect(DEFAULT_JUDGE_MODEL).toBe(LATEST_OPENAI_CODING);
   });
 
   it("the runtime registry slugs match the catalog", () => {

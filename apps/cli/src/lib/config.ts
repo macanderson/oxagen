@@ -18,13 +18,8 @@ export interface CliConfig {
   verbose?: boolean;
   /** Model-runtime settings */
   runtime?: RuntimeConfig;
-  /** Pipeline / assist-tool settings */
-  pipeline?: import("../pipeline/config.js").AssistPipelineConfigPatch;
   /** Graph tool settings */
   graph?: import("../agent/context/config.js").GraphConfigPatch;
-
-  /** Background-monitor settings */
-  monitors?: import("../monitors/config.js").MonitorsConfigPatch;
 }
 
 /**
