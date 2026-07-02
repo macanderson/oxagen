@@ -168,16 +168,23 @@ function AgentTeamRow({
   );
 }
 
-function TaskRow({ task }: { task: TrackedTask }): React.ReactElement {
+function TaskRow({
+  task,
+  highlighted = false,
+}: {
+  task: TrackedTask;
+  highlighted?: boolean;
+}): React.ReactElement {
   const { glyph, color } = taskStatusStyle(task.status);
   const strike = task.status === "done";
   return (
     <Box flexDirection="column">
       <Box gap={1}>
+        <FocusMarker on={highlighted} />
         <Text color={color} bold>
           {glyph}
         </Text>
-        <Text dimColor={strike} wrap="truncate-end">
+        <Text dimColor={strike && !highlighted} bold={highlighted} inverse={highlighted} wrap="truncate-end">
           {task.title}
         </Text>
       </Box>
@@ -234,10 +241,17 @@ export function AgentSidebar({
   mode = "auto",
   nowFn,
   widthFn,
+  focus = null,
+  active = false,
 }: {
   mode?: PanelMode;
   nowFn?: () => number;
   widthFn?: () => number;
+  /** The currently-highlighted panel item, or null when the input owns focus. */
+  focus?: PanelFocus;
+  /** Force the dock visible (the user has navigated into it) even when `auto`
+   *  would otherwise hide it while idle. */
+  active?: boolean;
 }): React.ReactElement | null {
   const now = nowFn ?? (() => Date.now());
   const width = widthFn ?? (() => process.stdout.columns ?? 80);
