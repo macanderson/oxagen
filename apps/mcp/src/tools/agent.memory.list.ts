@@ -18,6 +18,15 @@ export const schema = {
   minEnforcement: agentMemoryList.input.shape.minEnforcement.describe(
     "Only return rules at or above this enforcement score",
   ),
+  minCitations: agentMemoryList.input.shape.minCitations.describe(
+    "Only return memories cited at least this many times",
+  ),
+  sort: agentMemoryList.input.shape.sort.describe(
+    "Ordering axis: createdAt (recency) or citationCount (how often the memory has been cited)",
+  ),
+  sortDir: agentMemoryList.input.shape.sortDir.describe(
+    "Sort direction; defaults to descending (newest / most-cited first)",
+  ),
   limit: agentMemoryList.input.shape.limit.describe(
     "Maximum number of memories to return",
   ),

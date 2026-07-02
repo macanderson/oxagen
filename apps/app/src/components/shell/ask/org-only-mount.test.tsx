@@ -59,8 +59,8 @@ describe("OrgOnlyMount", () => {
     expect(screen.queryByTestId("overlay")).toBeNull();
   });
 
-  it("returns null on workspace knowledge path (/{org}/{ws}/knowledge/sources)", () => {
-    mockPathname.mockReturnValue("/acme/prod/knowledge/sources");
+  it("returns null on workspace knowledge path (/{org}/{ws}/knowledge/repos)", () => {
+    mockPathname.mockReturnValue("/acme/prod/knowledge/repos");
     render(
       <OrgOnlyMount orgSlug="acme">
         <div data-testid="overlay">overlay</div>

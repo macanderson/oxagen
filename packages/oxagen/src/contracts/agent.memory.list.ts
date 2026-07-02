@@ -25,7 +25,7 @@ export const agentMemoryList = registerCapability({
   name: "agent.memory.list",
   domain: "agent",
   description:
-    "List the workspace's AgentMemory nodes (newest first) with optional weight/kind/node filters; non-semantic browse counterpart to agent.memory.recall",
+    "List the workspace's AgentMemory nodes with optional weight/kind/node/citation filters and sort by recency or citation count; non-semantic browse counterpart to agent.memory.recall",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
@@ -55,6 +55,22 @@ export const agentMemoryList = registerCapability({
       .max(100)
       .optional()
       .describe("Only return rules at or above this enforcement score"),
+    minCitations: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe("Only return memories cited at least this many times"),
+    sort: z
+      .enum(["createdAt", "citationCount"])
+      .default("createdAt")
+      .describe(
+        "Ordering axis: createdAt (recency, the default) or citationCount (how often the memory has been cited)",
+      ),
+    sortDir: z
+      .enum(["asc", "desc"])
+      .default("desc")
+      .describe("Sort direction; defaults to descending (newest / most-cited first)"),
     limit: z.number().int().positive().max(200).default(100),
     offset: z.number().int().nonnegative().default(0),
   }),
