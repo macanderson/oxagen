@@ -25,6 +25,7 @@ import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
 import type { ComposerModelState } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
+import type { ConversationMessageSummary } from "@/lib/page-context/suggested-prompts";
 import { ConversationFiles } from "./conversation-files";
 import { useLatestRef } from "@/lib/use-latest-ref";
 import type { FieldDescriptor } from "@/lib/ask/fill-types";
@@ -225,6 +226,11 @@ export function ChatShellClient({
   // Track whether the current turn is streaming (to show live events).
   const [isStreaming, setIsStreaming] = React.useState(false);
   const isStreamingValueRef = useLatestRef(isStreaming);
+
+  // Track whether the composer textarea currently has content. When true,
+  // suggested-prompt chips are hidden so they don't compete with the user's
+  // in-progress message. Chips reappear as soon as the input is cleared.
+  const [inputHasContent, setInputHasContent] = React.useState(false);
 
   // Stream error — set when the SSE fetch returns a non-2xx response or throws
   // a non-abort error. Cleared at the start of each new turn.
