@@ -606,6 +606,87 @@ export function ThinkingIndicator({
   );
 }
 
+// ── Fun: a cat chasing a mouse across the status rail ──────────────────────────
+
+// Sprites kept short and Latin-1-safe (no wide/exotic codepoints) so the lane
+// renders and aligns in any terminal. The cat twitches its eyes as it runs and
+// lunges into a pounce at the end of each lap; the mouse scurries just out of
+// reach and squeaks ("!") when nearly caught.
+const CHASE_CAT = ["=^.^=", "=^o^="];
+const CHASE_CAT_POUNCE = "=>^o^=";
+const CHASE_CAT_NAP = "=^.^= z";
+const CHASE_MOUSE = ["~o", "~°"];
+
+/** Write `sprite` into the fixed-width lane at `at`, clipping at both edges. */
+function placeSprite(lane: string[], at: number, sprite: string): void {
+  for (let i = 0; i < sprite.length; i++) {
+    const idx = at + i;
+    if (idx >= 0 && idx < lane.length) lane[idx] = sprite[i] as string;
+  }
+}
+
+/**
+ * Pure renderer for one row of the cat-and-mouse chase, at a fixed `width`.
+ * When `active` the cat pursues the fleeing mouse across the lane, kicking up a
+ * dust speck behind it and lunging into a pounce as the lap closes; when idle
+ * the cat curls up for a nap while the mouse peeks from the far end. Kept pure
+ * (no timers, no React) so every frame is deterministic and unit-testable.
+ */
+export function renderChaseLane(tick: number, width: number, active: boolean): string {
+  const W = Math.max(14, Math.min(width, 30));
+  const lane: string[] = new Array<string>(W).fill(" ");
+  if (!active) {
+    placeSprite(lane, 0, CHASE_CAT_NAP);
+    placeSprite(lane, W - 2, CHASE_MOUSE[0] as string);
+    return lane.join("");
+  }
+  const gap = 3;
+  const catW = 5;
+  // Lap length leaves room for the cat sprite, the gap, and the trailing mouse.
+  const span = Math.max(1, W - (catW + gap + 2));
+  const p = tick % (span + 1);
+  const catPos = p;
+  const mousePos = p + catW + gap;
+  if (catPos - 1 >= 0) lane[catPos - 1] = "·"; // dust behind the cat
+  if (p === span) {
+    // End of the lap: the cat lunges and the mouse squeaks free.
+    placeSprite(lane, catPos, CHASE_CAT_POUNCE);
+    if (mousePos < W) lane[Math.min(W - 1, mousePos)] = "!";
+  } else {
+    placeSprite(lane, catPos, CHASE_CAT[tick % 2] as string);
+    placeSprite(lane, mousePos, CHASE_MOUSE[tick % 2] as string);
+  }
+  return lane.join("");
+}
+
+/**
+ * A whimsical bottom-rail animation: an ASCII cat chasing a mouse while the
+ * agent is busy, curling up for a nap when idle. Runs its own ~160ms timer (only
+ * while `active`) so it animates independently of the stream, then goes still —
+ * no perpetual redraw — the moment the turn ends.
+ */
+export function CatMouseChase({
+  active,
+  width = 24,
+}: {
+  active: boolean;
+  width?: number;
+}): React.ReactElement {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => setTick((t) => t + 1), 160);
+    return () => clearInterval(id);
+  }, [active]);
+  const lane = renderChaseLane(active ? tick : 0, width, active);
+  return (
+    <Box paddingX={1}>
+      <Text dimColor>{active ? "🐾 " : "😴 "}</Text>
+      <Text color={theme.cyan}>{lane}</Text>
+    </Box>
+  );
+}
+
 // ── Status Bar ────────────────────────────────────────────────────────────────
 
 /** Second-line description of the active permission posture. */
