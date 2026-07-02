@@ -137,3 +137,13 @@ describe("createNeo4jCodeGraphProvider — dependents / imports", () => {
     expect(mocks.run).not.toHaveBeenCalled();
   });
 });
+
+describe("createNeo4jCodeGraphProvider — semantic_search", () => {
+  it("returns a not-implemented string pointing at code_map, without touching Neo4j or falling through to file_symbols", async () => {
+    const result = await createNeo4jCodeGraphProvider().query("semantic_search", "auth config");
+
+    expect(result).toMatch(/semantic_search is not implemented/);
+    expect(result).toContain("code_map");
+    expect(mocks.run).not.toHaveBeenCalled();
+  });
+});
