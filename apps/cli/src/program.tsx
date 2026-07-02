@@ -333,6 +333,35 @@ export function buildProgram(): Command {
           await handlePrWatch(number, opts);
         },
       );
+    pr
+      .command("fix")
+      // The root's global `-m, --model` is reused (commander binds it to the
+      // parent), so the action reads merged opts via optsWithGlobals().
+      .description(
+        "Actively fix a failing PR: diagnose, patch, push, repeat until green — then ask before merging",
+      )
+      .argument("[number]", "PR number; omit for the current branch's PR")
+      .option("--max-rounds <n>", "Max fix attempts before giving up (default 3)", (v) => parseInt(v, 10))
+      .option("--interval <seconds>", "Poll interval seconds while waiting on checks (default 30)", (v) =>
+        parseInt(v, 10),
+      )
+      .option(
+        "--timeout <minutes>",
+        "Give up waiting on a single check run after this many minutes (default 60)",
+        (v) => parseInt(v, 10),
+      )
+      .option("--yes", "Merge once green without an interactive prompt", false)
+      .action(async (number: string | undefined, _opts, command: Command) => {
+        const merged = command.optsWithGlobals() as {
+          maxRounds?: number;
+          interval?: number;
+          timeout?: number;
+          yes?: boolean;
+          model?: string;
+        };
+        const { handlePrFix } = await import("./commands/pr.js");
+        await handlePrFix(number, merged);
+      });
   }
 
   // ── recover: find + restore agent work from the commit ledger ───────────────
