@@ -47,7 +47,7 @@ import { isSubagentDispatch, subagentInfo } from "../agent/tool-formatter.js";
 import { HudPanel } from "./hud.js";
 import { AgentSidebar, type PanelMode } from "./agent-sidebar.js";
 import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
-import { runShellCommand, type ShellRunHandle } from "./shell-runner.js";
+import { runShellCommand as runShellCommand_impl, type ShellRunHandle } from "./shell-runner.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
@@ -420,6 +420,87 @@ export function ReplApp({
     pumpingRef.current = false;
     void pumpRef.current?.();
   }, []);
+
+  /**
+   * Run a `!command` immediately as a live terminal, bypassing the turn queue so
+   * it works even while an agent turn is in flight. The user typed it explicitly,
+   * so it runs directly in the workspace (not through the permission broker),
+   * exactly like a shell. Output streams into the red terminal panel in real time
+   * and — once finished — is fed into the model's history so the next turn sees
+   * what the user ran and what it produced.
+   */
+  const runShellCommand = useCallback(
+    (raw: string) => {
+      const command = raw.replace(/^!/, "").trim();
+      if (!command) {
+        pushAssistant("Usage: !<shell command> — runs it live in the workspace (works mid-turn).");
+        return;
+      }
+      // Only one terminal panel at a time: kill any command still running.
+      terminalHandleRef.current?.kill();
+      // Echo the command into the transcript so scrollback records what was run.
+      commit([...allRef.current, { role: "user", content: "! " + command, timestamp: Date.now() }]);
+
+      const id = ++terminalIdRef.current;
+      const startedAt = Date.now();
+      let buf = "";
+      const seed: TerminalRun = { id, command, output: "", status: "running", startedAt };
+      terminalRunRef.current = seed;
+      setTerminalRun(seed);
+
+      // Coalesce chunks: chatty output would otherwise re-render Ink on every
+      // write. Buffer and flush to state at most ~every 60ms; flush finally at end.
+      let flushTimer: ReturnType<typeof setTimeout> | null = null;
+      const flush = (): void => {
+        flushTimer = null;
+        if (terminalRunRef.current?.id !== id) return; // superseded by a newer run
+        const next = { ...terminalRunRef.current, output: buf };
+        terminalRunRef.current = next;
+        setTerminalRun(next);
+      };
+      const scheduleFlush = (): void => {
+        if (flushTimer == null) flushTimer = setTimeout(flush, 60);
+      };
+
+      const handle = runShellCommand_impl({
+        command,
+        cwd,
+        onData: (chunk) => {
+          buf += chunk;
+          scheduleFlush();
+        },
+      });
+      terminalHandleRef.current = handle;
+
+      void handle.done.then((res) => {
+        if (flushTimer != null) clearTimeout(flushTimer);
+        if (terminalHandleRef.current === handle) terminalHandleRef.current = null;
+        if (terminalRunRef.current?.id !== id) return; // a newer run replaced us
+        const status: TerminalRun["status"] = res.killed ? "killed" : "exited";
+        const finished: TerminalRun = {
+          ...terminalRunRef.current,
+          output: buf,
+          status,
+          exitCode: res.exitCode,
+          endedAt: Date.now(),
+        };
+        terminalRunRef.current = finished;
+        setTerminalRun(finished);
+        // Make the model aware of what the user ran and what it produced.
+        const body = buf.trimEnd() || "(no output)";
+        historyRef.current = [
+          ...historyRef.current,
+          {
+            role: "user",
+            content:
+              `I ran \`${command}\` in the shell (${res.timedOut ? "timed out" : `exit ${res.exitCode}`}). Output:\n` +
+              body.slice(0, 4000),
+          },
+        ];
+      });
+    },
+    [commit, pushAssistant, cwd],
+  );
 
   /**
    * Shared conversation reset — used by both the /clear slash command and the

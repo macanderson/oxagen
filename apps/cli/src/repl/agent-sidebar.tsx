@@ -279,7 +279,9 @@ export function AgentSidebar({
   // A narrow terminal can't spare the columns — never crush the chat.
   if (width() < MIN_TERMINAL_COLS) return null;
   const hasActivity = agents.length > 0 || tasks.length > 0;
-  if (mode === "auto" && !hasActivity) return null;
+  // `active` (the user has navigated into the dock) forces it visible even when
+  // auto would hide an idle dock, so the highlight never lands on a hidden list.
+  if (mode === "auto" && !hasActivity && !active) return null;
 
   const at = now();
   const runningAgents = agents.filter((a) => a.status === "running").length;
