@@ -13,6 +13,8 @@ import React from "react";
 import { Fleet } from "../../agent/fleet/orchestrator.js";
 import { planTasks } from "../../agent/planner.js";
 import { openFleetMemory } from "../../agent/fleet/memory.js";
+import { createServerMemory } from "../../agent/adapters/index.js";
+import { resolveApiContext } from "../../lib/api.js";
 import { openPlanStore } from "../../agent/fleet/store.js";
 import { WorktreeManager } from "../../agent/fleet/git-isolation.js";
 import { loadProjectContext } from "../../agent/project-context.js";
@@ -40,6 +42,17 @@ export async function launchFleetView(opts: FleetViewOptions): Promise<void> {
   // `loadProjectContext` is synchronous (it just reads CLAUDE.md/AGENTS.md).
   const projectContext = loadProjectContext(cwd);
   const memory = openFleetMemory(cwd);
+  // Platform memory shared across all subagents: recall prior-session lessons
+  // before each task, mirror finished-task lessons back. Only when the CLI is
+  // authenticated; null degrades the fleet to local-only. The kill switch
+  // (OXAGEN_DISABLE_MEMORY=1) is enforced inside the handle itself.
+  const serverMemory = resolveApiContext()
+    ? createServerMemory({
+        agentId: "fleet",
+        executionRef: `cli:fleet-${Date.now()}`,
+        projectName: cwd.split("/").pop() || undefined,
+      })
+    : null;
   const store = openPlanStore(cwd);
   // Named agents the planner may assign tasks to, and the fleet dispatches by.
   const agents = loadAgents({ cwd });
@@ -56,6 +69,7 @@ export async function launchFleetView(opts: FleetViewOptions): Promise<void> {
     cwd,
     concurrency: opts.concurrency,
     memory,
+    serverMemory,
     store,
     projectContext,
     agents,

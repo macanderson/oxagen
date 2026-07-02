@@ -111,6 +111,9 @@ function contentFiles(content: unknown): string[] {
 export function createServerMemory(opts: ServerMemoryOptions = {}): ServerMemory {
   return {
     async recall(query) {
+      // Respect the kill switch even on the direct (non-combined) call path used
+      // by the fleet orchestrator's per-task recall.
+      if (memoryDisabled()) return [];
       const res = await recallMemories({
         query,
         limit: opts.recallLimit ?? 6,
@@ -121,6 +124,8 @@ export function createServerMemory(opts: ServerMemoryOptions = {}): ServerMemory
     },
 
     remember(kind, content) {
+      // Direct call path (fleet lesson mirror) also honors the kill switch.
+      if (memoryDisabled()) return;
       const lesson = lessonText(content);
       if (!lesson.trim()) return;
       const files = contentFiles(content);

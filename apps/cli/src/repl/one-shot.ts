@@ -333,7 +333,23 @@ export async function runAgentOneShot(
     return;
   }
   const projectContext = loadProjectContext(cwd);
-  const memory = await openSessionMemory(cwd, `agent-${agentName}-${Date.now()}`);
+  // Combined memory so a named agent (e.g. break-fix) recalls prior-session
+  // lessons before it acts and mirrors high-signal lessons after — the same
+  // wiring the main coding path uses. Degrades to local-only when logged out /
+  // synthetic, and is fully skipped under OXAGEN_DISABLE_MEMORY=1.
+  const memoryDisabled = process.env["OXAGEN_DISABLE_MEMORY"] === "1";
+  const memory = memoryDisabled
+    ? null
+    : await openSessionMemory(cwd, `agent-${agentName}-${Date.now()}`);
+  const fleetMemory = memoryDisabled ? null : openFleetMemory(cwd);
+  const serverMemory =
+    memoryDisabled || options.session.synthetic || !resolveApiContext()
+      ? null
+      : createServerMemory({
+          agentId: agentName,
+          executionRef: `cli:agent-${agentName}-${Date.now()}`,
+          projectName: cwd.split("/").pop() || undefined,
+        });
   try {
     let streamed = false;
     await runAgent({
@@ -344,7 +360,10 @@ export async function runAgentOneShot(
       model: options.model,
       maxSteps: options.maxSteps,
       projectContext,
-      memory,
+      memory: createCombinedMemory(memory, fleetMemory, {
+        server: serverMemory,
+        recallQuery: prompt,
+      }),
       onText: (delta) => {
         streamed = true;
         process.stdout.write(delta);
