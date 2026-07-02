@@ -24,7 +24,7 @@ describe("agent.memory.list handler", () => {
   it("returns an empty, schema-valid page when the knowledge graph is disabled", async () => {
     isKnowledgeGraphEnabled.mockReturnValue(false);
     const out = await agentMemoryListHandler(
-      { limit: 100, offset: 0 },
+      { limit: 100, offset: 0, sort: "createdAt", sortDir: "desc" },
       CTX,
     );
     expect(out).toEqual({ memories: [], total: 0 });
@@ -73,6 +73,8 @@ describe("agent.memory.list handler", () => {
         memoryKind: "constraint",
         minEnforcement: 50,
         nodeRef: "user:mac-anderson",
+        sort: "createdAt",
+        sortDir: "desc",
       },
       CTX,
     );
@@ -83,10 +85,37 @@ describe("agent.memory.list handler", () => {
       memoryClass: "RULE",
       memoryKind: "constraint",
       minEnforcement: 50,
+      minCitations: undefined,
+      sort: "createdAt",
+      sortDir: "desc",
       nodeRef: "user:mac-anderson",
     });
     expect(out.total).toBe(1);
     expect(out.memories).toHaveLength(1);
     expect(out.memories[0]!.nodeRef).toBe("user:mac-anderson");
+  });
+
+  it("forwards the citation sort axis and minCitations floor to listMemories", async () => {
+    isKnowledgeGraphEnabled.mockReturnValue(true);
+    listMemories.mockResolvedValueOnce({ memories: [], total: 0 });
+
+    await agentMemoryListHandler(
+      {
+        limit: 100,
+        offset: 0,
+        minCitations: 3,
+        sort: "citationCount",
+        sortDir: "desc",
+      },
+      CTX,
+    );
+
+    expect(listMemories).toHaveBeenCalledWith(
+      expect.objectContaining({
+        minCitations: 3,
+        sort: "citationCount",
+        sortDir: "desc",
+      }),
+    );
   });
 });

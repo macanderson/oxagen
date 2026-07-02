@@ -2,7 +2,7 @@
  * `oxagen memory` + `oxagen remember` — manage the workspace's agent memories
  * from the shell.
  *
- *   oxagen memory list [--class OBSERVATION|RULE|FACT] [--kind k] [--min-enforcement n] [--json]
+ *   oxagen memory list [--class OBSERVATION|RULE|FACT] [--kind k] [--min-enforcement n] [--min-citations n] [--sort createdAt|citations] [--json]
  *   oxagen memory show <id> [--json]
  *   oxagen memory edit <id> [--lesson t] [--kind k] [--source s]
  *   oxagen memory salience <id> [--confidence n] [--enforcement n] [--status s]
@@ -83,10 +83,20 @@ function handleApiError(err: unknown): never {
   fail(err instanceof Error ? err.message : String(err));
 }
 
+function parseSort(v: string | undefined): "createdAt" | "citationCount" | undefined {
+  if (v === undefined) return undefined;
+  if (v === "createdAt" || v === "citations" || v === "citationCount") {
+    return v === "citations" ? "citationCount" : v;
+  }
+  fail(`Invalid --sort "${v}". Use "createdAt" or "citations".`);
+}
+
 export interface MemoryListCliOptions {
   class?: string;
   kind?: string;
   minEnforcement?: string;
+  minCitations?: string;
+  sort?: string;
   node?: string;
   limit?: string;
   offset?: string;
@@ -99,6 +109,8 @@ export async function handleMemoryList(opts: MemoryListCliOptions): Promise<void
       memoryClass: parseClass(opts.class),
       memoryKind: normalizeKind(opts.kind),
       minEnforcement: parseIntOpt(opts.minEnforcement, "--min-enforcement"),
+      minCitations: parseIntOpt(opts.minCitations, "--min-citations"),
+      sort: parseSort(opts.sort),
       nodeRef: opts.node,
       limit: opts.limit ? parseInt(opts.limit, 10) : undefined,
       offset: opts.offset ? parseInt(opts.offset, 10) : undefined,

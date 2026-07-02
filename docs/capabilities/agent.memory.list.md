@@ -8,10 +8,11 @@
 
 ## Intent
 
-Enumerate the ACTIVE `:AgentMemory` nodes a workspace has accumulated, newest
-first, with optional class / kind / enforcement / node filters. The non-semantic
-**browse** counterpart to `agent.memory.recall`. Both read the same `:AgentMemory`
-nodes, so every surface sees an identical memory set with no store drift.
+Enumerate the ACTIVE `:AgentMemory` nodes a workspace has accumulated with
+optional class / kind / enforcement / node / citation filters, sorted by recency
+(the default) or citation count. The non-semantic **browse** counterpart to
+`agent.memory.recall`. Both read the same `:AgentMemory` nodes, so every surface
+sees an identical memory set with no store drift.
 
 ## Input
 
@@ -21,6 +22,9 @@ nodes, so every surface sees an identical memory set with no store drift.
 | `memoryClass`    | `"OBSERVATION" \| "RULE" \| "FACT"`? | Filter to a single epistemic class.                   |
 | `memoryKind`     | `string?`                           | Filter to a single content-domain kind.                |
 | `minEnforcement` | `int 1–100`?                        | Only return rules at or above this enforcement.        |
+| `minCitations`   | `int >= 0`?                         | Only return memories cited at least this many times.   |
+| `sort`           | `"createdAt" \| "citationCount"`    | Ordering axis. Defaults to `createdAt` (recency).      |
+| `sortDir`        | `"asc" \| "desc"`                   | Sort direction. Defaults to `desc`.                    |
 | `limit`          | `number` (1 – 200)                  | Page size. Defaults to 100.                            |
 | `offset`         | `number` (>= 0)                     | Page offset. Defaults to 0.                            |
 
@@ -28,7 +32,7 @@ nodes, so every surface sees an identical memory set with no store drift.
 
 | Field      | Type | Notes |
 | ---------- | ---- | ----- |
-| `memories` | `Array<AgentMemoryRecord>` | The page, newest first (full two-axis record). |
+| `memories` | `Array<AgentMemoryRecord>` | The page, ordered by the requested `sort`/`sortDir` (full two-axis record). |
 | `total`    | `number` | Total matching memories, ignoring `limit`/`offset`. |
 
 ## Side effects

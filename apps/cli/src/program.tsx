@@ -448,13 +448,15 @@ export function buildProgram(): Command {
     );
   memory
     .command("list")
-    .description("List the workspace's memories, newest first")
+    .description("List the workspace's memories, sorted by recency or citation count")
     .option("--class <memoryClass>", "Filter by epistemic class (OBSERVATION|RULE|FACT)")
     .option(
       "--kind <kind>",
       "Filter by content-domain kind (e.g. FEEDBACK, PERFORMANCE, constraint, gotcha)",
     )
     .option("--min-enforcement <n>", "Only rules at or above this enforcement score (1-100)")
+    .option("--min-citations <n>", "Only memories cited at least this many times")
+    .option("--sort <axis>", "Sort by 'createdAt' (recency, default) or 'citations'")
     .option("--node <ref>", "Scope to memories anchored on a graph node ref")
     .option("--limit <n>", "Max rows (default 100)")
     .option("--offset <n>", "Skip N rows (paging)")
@@ -464,6 +466,8 @@ export function buildProgram(): Command {
         class?: string;
         kind?: string;
         minEnforcement?: string;
+        minCitations?: string;
+        sort?: string;
         node?: string;
         limit?: string;
         offset?: string;
