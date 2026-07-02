@@ -1,4 +1,4 @@
-import type { ModelMessage } from "ai";
+import type { ModelMessage, ToolSet } from "ai";
 import type { AgentAi, MemoryProvider, TraceStore } from "./ports";
 
 // ── Model tiers + usage accounting ──────────────────────────────────────────
@@ -170,6 +170,20 @@ export interface RunCodingAgentOptions {
   trace?: TraceStore;
   signal?: AbortSignal;
   onEvent?: (e: CodingEvent) => void;
+  /**
+   * Extra tools merged with the built-in workspace tools — e.g. external MCP
+   * server tools the CLI materialises. Merged AFTER the workspace tools, so a
+   * name collision lets an MCP tool shadow a built-in (caller's responsibility).
+   */
+  extraTools?: ToolSet;
+  /**
+   * Final transform applied to the complete tool set before the model sees it.
+   * The single seam through which a caller layers cross-cutting behaviour on
+   * EVERY tool — the CLI passes its permission-gate + lifecycle-hook +
+   * per-tool-timeout wrapper here so one engine loop serves the REPL, one-shot,
+   * `--agent`, and the fleet with identical safety wiring (no second loop).
+   */
+  wrapTools?: (tools: ToolSet) => ToolSet;
 }
 
 export interface RunCodingAgentResult {

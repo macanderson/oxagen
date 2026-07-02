@@ -329,3 +329,50 @@ describe("runCodingAgent – loop detection", () => {
     expect(nudge).toBeTruthy();
   });
 });
+
+describe("runCodingAgent – extraTools + wrapTools seams (engine unification)", () => {
+  it("merges extraTools and applies wrapTools to the tool set the model sees", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "x" });
+    let seenToolNames: string[] = [];
+    let wrapApplied = false;
+
+    const ai: AgentAi = {
+      stream(args: ModelRunArgs) {
+        // Capture the tool set the model was handed.
+        seenToolNames = Object.keys(args.tools);
+        return {
+          fullStream: (async function* () {
+            yield { type: "text-delta", text: "ok" };
+          })(),
+          steps: Promise.resolve([{}]),
+          usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+          response: Promise.resolve({ messages: [] }),
+          finishReason: Promise.resolve("stop"),
+        } as unknown as ReturnType<AgentAi["stream"]>;
+      },
+      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+    };
+
+    const extraTools = {
+      mcp_search: { description: "external MCP tool", inputSchema: {}, execute: async () => "hit" },
+    } as unknown as import("ai").ToolSet;
+
+    await runCodingAgent({
+      workspace: ws,
+      ai,
+      instruction: "go",
+      extraTools,
+      wrapTools: (tools) => {
+        wrapApplied = true;
+        return tools; // identity wrapper is enough to prove it ran
+      },
+    });
+
+    // The built-in workspace tools AND the injected MCP tool are present.
+    expect(seenToolNames).toContain("read_file");
+    expect(seenToolNames).toContain("bash");
+    expect(seenToolNames).toContain("mcp_search");
+    // The final wrapper ran over the complete set.
+    expect(wrapApplied).toBe(true);
+  });
+});
