@@ -1,6 +1,15 @@
 import { stepCountIs, type ModelMessage } from "ai";
 import { buildWorkspaceTools } from "./tools";
 import type { RunCodingAgentOptions, RunCodingAgentResult } from "./types";
+import {
+  backoffMs,
+  compactMessages,
+  contextWindowFor,
+  delay,
+  estimateMessageTokens,
+  isContextOverflowError,
+  isRetryableModelError,
+} from "./loop-driver";
 
 const DEFAULT_SYSTEM =
   "You are an expert software engineer working in a checked-out repository. " +
@@ -81,78 +90,148 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
     { role: "user", content: opts.instruction },
   ];
 
-  let streamError: unknown = null;
-  const result = opts.ai.stream({
-    model: opts.model ?? "anthropic/claude-opus-4-8",
-    system,
-    messages,
-    tools,
-    effort: opts.effort,
-    stopWhen: stepCountIs(opts.maxSteps ?? 256),
-    abortSignal: opts.signal,
-    onError: ({ error }) => {
-      streamError = error;
-    },
-  });
+  const model = opts.model ?? "anthropic/claude-opus-4-8";
+  const maxSteps = opts.maxSteps ?? 256;
+  const contextWindow = opts.contextWindow ?? contextWindowFor(model);
+  const compactionThreshold = opts.compactionThreshold ?? 0.8;
+  const maxRetries = opts.maxRetries ?? 4;
 
+  // The EXPLICIT STEP LOOP. Instead of one `streamText(stopWhen: stepCountIs(256))`
+  // call — which loses the whole turn to a transient error and can only grow the
+  // transcript until it overflows the context window — we drive one model call
+  // per step (`stepCountIs(1)`: the SDK generates one assistant message, executes
+  // its tool calls, then stops), accumulating messages ourselves. That gives us a
+  // boundary at every step to (a) compact the transcript before it overflows and
+  // (b) retry a transient failure by re-running the step, since nothing is
+  // committed until the step fully succeeds. Same number of round-trips as the
+  // SDK's internal multi-step loop; the prompt cache keeps each resend cheap.
+  let conversation: ModelMessage[] = messages;
   let text = "";
+  const usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedInputTokens: 0 };
+  let steps = 0;
+  let retriesUsed = 0;
+  let overflowRetries = 0;
   // Start times by toolCallId, so tool-result events carry REAL per-tool
-  // durations. The old onStepFinish emission could only offer step-granular
-  // timing and — worse — only fired after the whole step completed, so callers'
-  // inactivity guards saw zero progress while a long tool executed and would
-  // abort healthy multi-minute test runs.
+  // durations, and are emitted as parts stream (tool-call the moment the model
+  // commits, tool-result/tool-error when execution settles) — live progress for
+  // the UI and for callers' inactivity guards, not step-granular after-the-fact.
   const toolStartedAt = new Map<string, number>();
-  try {
-    // Consume the FULL stream (not just textStream) so the model's reasoning /
-    // chain-of-thought is surfaced alongside its answer — the CLI renders it dim
-    // and inline so the user sees everything the agent is thinking, not only the
-    // final prose. `text-delta` carries answer text; `reasoning-delta` carries
-    // the thinking trace. Both parts expose their content on `.text` in ai@6.
-    // Tool lifecycle parts are emitted as they stream: `tool-call` the moment
-    // the model commits to a call (BEFORE it executes), `tool-result` /
-    // `tool-error` when execution settles — live progress for the UI and for
-    // the callers' inactivity guards.
-    for await (const part of result.fullStream) {
-      if (part.type === "text-delta") {
-        text += part.text;
-        onEvent({ type: "text", delta: part.text });
-      } else if (part.type === "reasoning-delta") {
-        onEvent({ type: "reasoning", delta: part.text });
-      } else if (part.type === "tool-call") {
-        toolStartedAt.set(part.toolCallId, Date.now());
-        onEvent({ type: "tool-call", name: part.toolName, input: part.input });
-      } else if (part.type === "tool-result") {
-        // `preliminary` results (streamed partial tool output) are progress,
-        // not completion — the final result for the same call follows.
-        if (!part.preliminary) {
+
+  while (steps < maxSteps) {
+    if (opts.signal?.aborted) break;
+
+    // Compact BEFORE the call so the request itself fits. Keep the task + recent
+    // working set verbatim; truncate the bulky content of older tool results.
+    if (estimateMessageTokens(conversation) > contextWindow * compactionThreshold) {
+      conversation = compactMessages(conversation, { keepLastN: 8, contentCap: 2000 }).messages;
+    }
+
+    let streamError: unknown = null;
+    let stepText = "";
+    try {
+      const result = opts.ai.stream({
+        model,
+        system,
+        messages: conversation,
+        tools,
+        effort: opts.effort,
+        stopWhen: stepCountIs(1),
+        abortSignal: opts.signal,
+        onError: ({ error }) => {
+          streamError = error;
+        },
+      });
+
+      for await (const part of result.fullStream) {
+        if (part.type === "text-delta") {
+          stepText += part.text;
+          onEvent({ type: "text", delta: part.text });
+        } else if (part.type === "reasoning-delta") {
+          onEvent({ type: "reasoning", delta: part.text });
+        } else if (part.type === "tool-call") {
+          toolStartedAt.set(part.toolCallId, Date.now());
+          onEvent({ type: "tool-call", name: part.toolName, input: part.input });
+        } else if (part.type === "tool-result") {
+          // `preliminary` results (streamed partial output) are progress, not
+          // completion — the final result for the same call follows.
+          if (!part.preliminary) {
+            const started = toolStartedAt.get(part.toolCallId);
+            toolStartedAt.delete(part.toolCallId);
+            onEvent({
+              type: "tool-result",
+              name: part.toolName,
+              input: stringifyCapped(part.input, 1000),
+              result: stringifyCapped(part.output, 2000),
+              durationMs: started ? Date.now() - started : 0,
+              ok: !isErrorResult(part.output),
+            });
+          }
+        } else if (part.type === "tool-error") {
           const started = toolStartedAt.get(part.toolCallId);
           toolStartedAt.delete(part.toolCallId);
           onEvent({
             type: "tool-result",
             name: part.toolName,
             input: stringifyCapped(part.input, 1000),
-            result: stringifyCapped(part.output, 2000),
+            result: stringifyCapped(part.error, 2000),
             durationMs: started ? Date.now() - started : 0,
-            ok: !isErrorResult(part.output),
+            ok: false,
           });
         }
-      } else if (part.type === "tool-error") {
-        const started = toolStartedAt.get(part.toolCallId);
-        toolStartedAt.delete(part.toolCallId);
-        onEvent({
-          type: "tool-result",
-          name: part.toolName,
-          input: stringifyCapped(part.input, 1000),
-          result: stringifyCapped(part.error, 2000),
-          durationMs: started ? Date.now() - started : 0,
-          ok: false,
-        });
       }
+
+      if (streamError) {
+        throw streamError instanceof Error ? streamError : new Error(String(streamError));
+      }
+      if (opts.signal?.aborted) break;
+
+      const finishReason = await result.finishReason;
+      const stepUsage = await result.usage;
+      const response = await result.response;
+
+      // Commit the step: nothing above this line mutated turn state, so a throw
+      // before here leaves the step safely retryable.
+      text += stepText;
+      usage.inputTokens += stepUsage.inputTokens ?? 0;
+      usage.outputTokens += stepUsage.outputTokens ?? 0;
+      usage.totalTokens += stepUsage.totalTokens ?? 0;
+      usage.cachedInputTokens += (stepUsage as { cachedInputTokens?: number }).cachedInputTokens ?? 0;
+      conversation = [...conversation, ...response.messages];
+      steps += (await result.steps).length || 1;
+
+      // `tool-calls` means the model wants to act again — keep looping. Any other
+      // finish reason (stop / length / content-filter / error) ends the turn.
+      if (finishReason !== "tool-calls") break;
+    } catch (err) {
+      // User cancel — never retry; fall through to the post-loop abort throw.
+      if (opts.signal?.aborted) break;
+      if (err instanceof Error && err.name === "AbortError") break;
+
+      // Context overflow despite pre-call compaction: compact harder and retry
+      // the step (bounded), rather than losing the turn.
+      if (isContextOverflowError(err) && overflowRetries < 2) {
+        overflowRetries++;
+        const before = estimateMessageTokens(conversation);
+        conversation = compactMessages(conversation, { keepLastN: 4, contentCap: 800 }).messages;
+        if (estimateMessageTokens(conversation) < before) continue;
+        throw err; // couldn't shrink — give up rather than spin
+      }
+
+      // Transient 429/5xx/network/stream error: back off and retry the SAME step
+      // (nothing was committed), up to the per-turn budget.
+      if (isRetryableModelError(err) && retriesUsed < maxRetries) {
+        retriesUsed++;
+        try {
+          await delay(backoffMs(retriesUsed), opts.signal);
+        } catch {
+          break; // aborted during backoff
+        }
+        if (opts.signal?.aborted) break;
+        continue;
+      }
+      throw err;
     }
-  } catch (err) {
-    streamError ??= err;
   }
-  if (streamError) throw streamError instanceof Error ? streamError : new Error(String(streamError));
 
   // A user cancel (Esc/Ctrl-C) or timeout aborts the signal, but some transports
   // end the stream cleanly instead of throwing an AbortError. Detect that here
@@ -168,10 +247,6 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
       ? reason
       : new DOMException("The agent turn was aborted.", "AbortError");
   }
-
-  const steps = (await result.steps).length;
-  const usage = await result.usage;
-  const response = await result.response;
 
   const diff = await opts.workspace.diff();
   const changedFiles = changedFilesFromDiff(diff);
@@ -195,8 +270,11 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       totalTokens: usage.totalTokens,
-      cachedInputTokens: (usage as { cachedInputTokens?: number }).cachedInputTokens,
+      cachedInputTokens: usage.cachedInputTokens,
     },
-    messages: [...messages, ...response.messages],
+    // The final transcript is `conversation` — it started as `messages` and grew
+    // (and may have been compacted) across steps, so it already includes every
+    // assistant/tool message from this turn.
+    messages: conversation,
   };
 }
