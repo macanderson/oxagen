@@ -2,7 +2,7 @@
  * Paste placeholder registry for {@link PromptInput}.
  *
  * A large text paste or an image paste collapses to a compact token —
- * `[CopiedText-N]` / `[Image#N]` — inserted at the cursor so the bar shows a
+ * `[Text #N]` / `[Image #N]` — inserted at the cursor so the bar shows a
  * short reference instead of a wall of pasted content (mirrors Claude Code).
  * The registry maps each token's N back to the real content; it is owned by
  * `PromptInput` (same lifecycle as its buffer) and reset every submit, so
@@ -34,7 +34,7 @@ export function resetPasteRegistry(registry: PasteRegistry): void {
   registry.nextImageId = 1;
 }
 
-/** A paste collapses to `[CopiedText-N]` once it exceeds either bound. */
+/** A paste collapses to `[Text #N]` once it exceeds either bound. */
 export const PASTE_TEXT_CHAR_THRESHOLD = 400;
 export const PASTE_TEXT_LINE_THRESHOLD = 6;
 
@@ -45,19 +45,19 @@ export function shouldCollapseText(text: string): boolean {
   );
 }
 
-export function copiedTextToken(n: number): string {
-  return `[CopiedText-${n}]`;
+export function textToken(n: number): string {
+  return `[Text #${n}]`;
 }
 
 export function imageToken(n: number): string {
-  return `[Image#${n}]`;
+  return `[Image #${n}]`;
 }
 
 /** Register a large pasted text blob; returns the compact token to insert at the cursor. */
 export function registerPastedText(registry: PasteRegistry, fullText: string): string {
   const n = registry.nextTextId++;
   registry.texts.set(n, fullText);
-  return copiedTextToken(n);
+  return textToken(n);
 }
 
 /** Register a pasted image; returns the compact token to insert at the cursor. */
@@ -67,9 +67,9 @@ export function registerPastedImage(registry: PasteRegistry, attachment: PastedI
   return imageToken(n);
 }
 
-const TOKEN_RE = /\[(?:CopiedText-(\d+)|Image#(\d+))\]/g;
-const TOKEN_AT_END_RE = /\[(?:CopiedText-\d+|Image#\d+)\]$/;
-const TOKEN_AT_START_RE = /^\[(?:CopiedText-\d+|Image#\d+)\]/;
+const TOKEN_RE = /\[(?:Text #(\d+)|Image #(\d+))\]/g;
+const TOKEN_AT_END_RE = /\[(?:Text #\d+|Image #\d+)\]$/;
+const TOKEN_AT_START_RE = /^\[(?:Text #\d+|Image #\d+)\]/;
 
 /** The span `[start, end)` of a full token immediately BEFORE `pos`, or null if there isn't one. */
 export function tokenEndingAt(text: string, pos: number): { start: number; end: number } | null {
@@ -90,12 +90,12 @@ export function dropTokenAt(
   span: { start: number; end: number },
 ): void {
   const token = text.slice(span.start, span.end);
-  const textMatch = /^\[CopiedText-(\d+)\]$/.exec(token);
+  const textMatch = /^\[Text #(\d+)\]$/.exec(token);
   if (textMatch) {
     registry.texts.delete(Number(textMatch[1]));
     return;
   }
-  const imgMatch = /^\[Image#(\d+)\]$/.exec(token);
+  const imgMatch = /^\[Image #(\d+)\]$/.exec(token);
   if (imgMatch) registry.images.delete(Number(imgMatch[1]));
 }
 
@@ -108,7 +108,7 @@ export function dropTokenAt(
  */
 export function pruneMissingTokens(registry: PasteRegistry, text: string): void {
   for (const n of registry.texts.keys()) {
-    if (!text.includes(copiedTextToken(n))) registry.texts.delete(n);
+    if (!text.includes(textToken(n))) registry.texts.delete(n);
   }
   for (const n of registry.images.keys()) {
     if (!text.includes(imageToken(n))) registry.images.delete(n);
@@ -116,10 +116,10 @@ export function pruneMissingTokens(registry: PasteRegistry, text: string): void 
 }
 
 export interface PasteSubmission {
-  /** `text` with every `[CopiedText-N]` token expanded inline to its full stored content, and every
-   *  `[Image#N]` token replaced by a short literal note (the real bytes travel via `images`). */
+  /** `text` with every `[Text #N]` token expanded inline to its full stored content, and every
+   *  `[Image #N]` token replaced by a short literal note (the real bytes travel via `images`). */
   expandedText: string;
-  /** Image attachments referenced by `[Image#N]` tokens still present in `text`, in submission order. */
+  /** Image attachments referenced by `[Image #N]` tokens still present in `text`, in submission order. */
   images: PastedImageAttachment[];
 }
 

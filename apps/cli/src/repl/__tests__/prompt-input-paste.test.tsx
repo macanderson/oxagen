@@ -1,9 +1,9 @@
 /**
  * PromptInput paste UX — proves the whole loop end to end through real ink
- * stdin: bracketed-paste TEXT collapsing to `[CopiedText-N]` above the
- * threshold (small pastes insert inline), Ctrl-V IMAGE paste via the
- * injectable `readClipboardImage` prop collapsing to `[Image#N]`, atomic
- * token deletion, per-prompt counter reset, and — the whole point — that
+ * stdin: bracketed-paste TEXT collapsing to `[Text #N]` above the threshold
+ * (small pastes insert inline), Ctrl-V IMAGE paste via the injectable
+ * `readClipboardImage` prop collapsing to `[Image #N]`, atomic token
+ * deletion, per-prompt counter reset, and — the whole point — that
  * submitting expands every placeholder back to full content for the model
  * while the bar itself only ever showed the compact token.
  */
@@ -51,20 +51,20 @@ describe("PromptInput — text paste (bracketed paste → usePaste)", () => {
     await tick();
     const frame = lastFrame() ?? "";
     expect(frame).toContain("short paste");
-    expect(frame).not.toContain("[CopiedText");
+    expect(frame).not.toContain("[Text #");
   });
 
-  it("collapses a paste over the threshold to [CopiedText-1]", async () => {
+  it("collapses a paste over the threshold to [Text #1]", async () => {
     const { lastFrame, stdin } = render(<PromptInput onSubmit={() => {}} busy={false} />);
     const big = bigPaste("A");
     stdin.write(bracketedPaste(big));
     await tick();
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("[CopiedText-1]");
+    expect(frame).toContain("[Text #1]");
     expect(frame).not.toContain(big);
   });
 
-  it("numbers a second large paste in the same prompt [CopiedText-2]", async () => {
+  it("numbers a second large paste in the same prompt [Text #2]", async () => {
     const { lastFrame, stdin } = render(<PromptInput onSubmit={() => {}} busy={false} />);
     stdin.write(bracketedPaste(bigPaste("A")));
     await tick();
@@ -73,9 +73,9 @@ describe("PromptInput — text paste (bracketed paste → usePaste)", () => {
     stdin.write(bracketedPaste(bigPaste("B")));
     await tick();
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("[CopiedText-1]");
+    expect(frame).toContain("[Text #1]");
     expect(frame).toContain("and");
-    expect(frame).toContain("[CopiedText-2]");
+    expect(frame).toContain("[Text #2]");
   });
 
   it("expands every placeholder back to full content, in order, on submit", async () => {
@@ -94,7 +94,7 @@ describe("PromptInput — text paste (bracketed paste → usePaste)", () => {
 
     expect(captured.calls).toHaveLength(1);
     const submission = captured.calls[0]!;
-    expect(submission.text).toBe("[CopiedText-1] and [CopiedText-2]");
+    expect(submission.text).toBe("[Text #1] and [Text #2]");
     expect(submission.paste).toBeDefined();
     expect(submission.paste!.expandedText).toBe(`${a} and ${b}`);
     expect(submission.paste!.images).toEqual([]);
@@ -122,8 +122,8 @@ describe("PromptInput — text paste (bracketed paste → usePaste)", () => {
     stdin.write(bracketedPaste(bigPaste("B")));
     await tick();
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("[CopiedText-1]");
-    expect(frame).not.toContain("[CopiedText-2]");
+    expect(frame).toContain("[Text #1]");
+    expect(frame).not.toContain("[Text #2]");
   });
 
   it("clearing counters via inject (e.g. queue recall) restarts numbering at 1", async () => {
@@ -143,7 +143,7 @@ describe("PromptInput — text paste (bracketed paste → usePaste)", () => {
     stdin.write(bracketedPaste(bigPaste("B")));
     await tick();
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("[CopiedText-1]"); // not [CopiedText-2] — the old registry was reset
+    expect(frame).toContain("[Text #1]"); // not [Text #2] — the old registry was reset
   });
 });
 
@@ -152,13 +152,13 @@ describe("PromptInput — atomic token deletion", () => {
     const { lastFrame, stdin } = render(<PromptInput onSubmit={() => {}} busy={false} />);
     stdin.write(bracketedPaste(bigPaste("A")));
     await tick();
-    expect(lastFrame() ?? "").toContain("[CopiedText-1]");
+    expect(lastFrame() ?? "").toContain("[Text #1]");
 
     stdin.write(BACKSPACE);
     await tick();
     const frame = lastFrame() ?? "";
-    expect(frame).not.toContain("[CopiedText-1]");
-    expect(frame).not.toContain("CopiedText"); // no partial "[CopiedText-" left dangling
+    expect(frame).not.toContain("[Text #1]");
+    expect(frame).not.toContain("Text #"); // no partial "[Text #" left dangling
   });
 
   it("dropping a token's registry entry means retyping the same text by hand is NOT expanded", async () => {
@@ -170,7 +170,7 @@ describe("PromptInput — atomic token deletion", () => {
     await tick();
 
     // Hand-type a string that LOOKS like the token that was just deleted.
-    stdin.write("[CopiedText-1]");
+    stdin.write("[Text #1]");
     await tick();
     stdin.write("\r");
     await tick();
@@ -179,7 +179,7 @@ describe("PromptInput — atomic token deletion", () => {
     // No live registry entry for id 1 anymore, so it is NOT expanded — proving
     // the deletion actually dropped the stored content, not just hid it.
     expect(submission.paste).toBeUndefined();
-    expect(submission.text).toBe("[CopiedText-1]");
+    expect(submission.text).toBe("[Text #1]");
   });
 });
 
@@ -189,13 +189,13 @@ describe("PromptInput — image paste (Ctrl-V + injectable clipboard reader)", (
     mediaType: "image/png",
   };
 
-  it("Ctrl-V with an image on the clipboard inserts [Image#1] and stores its path", async () => {
+  it("Ctrl-V with an image on the clipboard inserts [Image #1] and stores its path", async () => {
     const { lastFrame, stdin } = render(
       <PromptInput onSubmit={() => {}} busy={false} readClipboardImage={async () => fakeAttachment} />,
     );
     stdin.write(CTRL_V);
     await tick(50);
-    expect(lastFrame() ?? "").toContain("[Image#1]");
+    expect(lastFrame() ?? "").toContain("[Image #1]");
   });
 
   it("submitting after an image paste produces an image content part with the stored path", async () => {
@@ -211,7 +211,7 @@ describe("PromptInput — image paste (Ctrl-V + injectable clipboard reader)", (
     await tick();
 
     const submission = captured.calls[0]!;
-    expect(submission.text).toBe("check this out: [Image#1]");
+    expect(submission.text).toBe("check this out: [Image #1]");
     expect(submission.paste).toBeDefined();
     expect(submission.paste!.images).toEqual([fakeAttachment]);
     expect(submission.paste!.expandedText).toBe("check this out: (attached image)");
@@ -221,13 +221,13 @@ describe("PromptInput — image paste (Ctrl-V + injectable clipboard reader)", (
     const { lastFrame, stdin } = render(
       <PromptInput onSubmit={() => {}} busy={false} readClipboardImage={async () => fakeAttachment} />,
     );
-    stdin.write(bracketedPaste(bigPaste("A"))); // [CopiedText-1]
+    stdin.write(bracketedPaste(bigPaste("A"))); // [Text #1]
     await tick();
-    stdin.write(CTRL_V); // [Image#1] — independent counter
+    stdin.write(CTRL_V); // [Image #1] — independent counter
     await tick(50);
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("[CopiedText-1]");
-    expect(frame).toContain("[Image#1]");
+    expect(frame).toContain("[Text #1]");
+    expect(frame).toContain("[Image #1]");
   });
 
   it("gracefully no-ops when there is no image on the clipboard", async () => {
@@ -240,7 +240,7 @@ describe("PromptInput — image paste (Ctrl-V + injectable clipboard reader)", (
     await tick(50);
     const frame = lastFrame() ?? "";
     expect(frame).toContain("typed before");
-    expect(frame).not.toContain("[Image#");
+    expect(frame).not.toContain("[Image #");
   });
 
   it("gracefully no-ops when the clipboard reader itself is unavailable (no pngpaste/osascript)", async () => {
@@ -252,6 +252,6 @@ describe("PromptInput — image paste (Ctrl-V + injectable clipboard reader)", (
     );
     stdin.write(CTRL_V);
     await tick(50);
-    expect(lastFrame() ?? "").not.toContain("[Image#");
+    expect(lastFrame() ?? "").not.toContain("[Image #");
   });
 });

@@ -10,7 +10,7 @@ import {
   shouldCollapseText,
   PASTE_TEXT_CHAR_THRESHOLD,
   PASTE_TEXT_LINE_THRESHOLD,
-  copiedTextToken,
+  textToken,
   imageToken,
   registerPastedText,
   registerPastedImage,
@@ -51,14 +51,14 @@ describe("shouldCollapseText — the >400 chars OR >=6 lines threshold", () => {
 describe("registry — registration + per-prompt counters", () => {
   it("numbers text and image tokens independently, starting at 1", () => {
     const registry = createPasteRegistry();
-    expect(registerPastedText(registry, "first paste")).toBe("[CopiedText-1]");
-    expect(registerPastedText(registry, "second paste")).toBe("[CopiedText-2]");
+    expect(registerPastedText(registry, "first paste")).toBe("[Text #1]");
+    expect(registerPastedText(registry, "second paste")).toBe("[Text #2]");
     expect(registerPastedImage(registry, { path: "/tmp/a.png", mediaType: "image/png" })).toBe(
-      "[Image#1]",
+      "[Image #1]",
     );
-    expect(registerPastedText(registry, "third paste")).toBe("[CopiedText-3]");
+    expect(registerPastedText(registry, "third paste")).toBe("[Text #3]");
     expect(registerPastedImage(registry, { path: "/tmp/b.png", mediaType: "image/png" })).toBe(
-      "[Image#2]",
+      "[Image #2]",
     );
   });
 
@@ -69,32 +69,32 @@ describe("registry — registration + per-prompt counters", () => {
     resetPasteRegistry(registry);
     expect(registry.texts.size).toBe(0);
     expect(registry.images.size).toBe(0);
-    expect(registerPastedText(registry, "fresh")).toBe("[CopiedText-1]");
+    expect(registerPastedText(registry, "fresh")).toBe("[Text #1]");
     expect(registerPastedImage(registry, { path: "/tmp/c.png", mediaType: "image/png" })).toBe(
-      "[Image#1]",
+      "[Image #1]",
     );
   });
 
-  it("token helpers format the exact grammar", () => {
-    expect(copiedTextToken(7)).toBe("[CopiedText-7]");
-    expect(imageToken(3)).toBe("[Image#3]");
+  it("token helpers format the exact grammar (space before #)", () => {
+    expect(textToken(7)).toBe("[Text #7]");
+    expect(imageToken(3)).toBe("[Image #3]");
   });
 });
 
 describe("tokenEndingAt / tokenStartingAt — atomic deletion spans", () => {
-  it("finds a full CopiedText token ending exactly at the cursor", () => {
-    const text = "see [CopiedText-1] please";
-    const pos = "see [CopiedText-1]".length;
+  it("finds a full Text token ending exactly at the cursor", () => {
+    const text = "see [Text #1] please";
+    const pos = "see [Text #1]".length;
     expect(tokenEndingAt(text, pos)).toEqual({ start: 4, end: pos });
   });
 
   it("finds a full Image token ending exactly at the cursor", () => {
-    const text = "look [Image#12]";
+    const text = "look [Image #12]";
     expect(tokenEndingAt(text, text.length)).toEqual({ start: 5, end: text.length });
   });
 
   it("returns null when the cursor is mid-token, not at its end", () => {
-    const text = "[CopiedText-1]";
+    const text = "[Text #1]";
     // Cursor sits before the closing bracket — no full token ends here.
     expect(tokenEndingAt(text, text.length - 1)).toBeNull();
   });
@@ -104,8 +104,8 @@ describe("tokenEndingAt / tokenStartingAt — atomic deletion spans", () => {
   });
 
   it("finds a full token starting exactly at the cursor (forward delete)", () => {
-    const text = "[Image#1] trailing";
-    expect(tokenStartingAt(text, 0)).toEqual({ start: 0, end: "[Image#1]".length });
+    const text = "[Image #1] trailing";
+    expect(tokenStartingAt(text, 0)).toEqual({ start: 0, end: "[Image #1]".length });
   });
 
   it("returns null when no token starts at the cursor", () => {
@@ -117,7 +117,7 @@ describe("dropTokenAt — removing the registry entry for a deleted token", () =
   it("drops the matching text entry", () => {
     const registry = createPasteRegistry();
     registerPastedText(registry, "full content");
-    const text = "[CopiedText-1]";
+    const text = "[Text #1]";
     dropTokenAt(registry, text, { start: 0, end: text.length });
     expect(registry.texts.has(1)).toBe(false);
   });
@@ -125,7 +125,7 @@ describe("dropTokenAt — removing the registry entry for a deleted token", () =
   it("drops the matching image entry", () => {
     const registry = createPasteRegistry();
     registerPastedImage(registry, { path: "/tmp/a.png", mediaType: "image/png" });
-    const text = "[Image#1]";
+    const text = "[Image #1]";
     dropTokenAt(registry, text, { start: 0, end: text.length });
     expect(registry.images.has(1)).toBe(false);
   });
@@ -144,7 +144,7 @@ describe("pruneMissingTokens — the 'at minimum, drop at submit' contract", () 
     registerPastedText(registry, "gone"); // 1
     registerPastedText(registry, "kept"); // 2
     // Token 1 was mangled by mid-token editing and no longer reads intact.
-    pruneMissingTokens(registry, "some [CopiedTex partial and [CopiedText-2] intact");
+    pruneMissingTokens(registry, "some [Text mangled and [Text #2] intact");
     expect(registry.texts.has(1)).toBe(false);
     expect(registry.texts.get(2)).toBe("kept");
   });
@@ -152,25 +152,25 @@ describe("pruneMissingTokens — the 'at minimum, drop at submit' contract", () 
   it("leaves intact entries alone", () => {
     const registry = createPasteRegistry();
     registerPastedText(registry, "content");
-    pruneMissingTokens(registry, "[CopiedText-1] still here");
+    pruneMissingTokens(registry, "[Text #1] still here");
     expect(registry.texts.get(1)).toBe("content");
   });
 });
 
 describe("expandPasteSubmission — the model-bound expansion", () => {
-  it("expands a single CopiedText token inline", () => {
+  it("expands a single Text token inline", () => {
     const registry = createPasteRegistry();
     registerPastedText(registry, "the FULL pasted body\nacross lines");
-    const result = expandPasteSubmission(registry, "please review [CopiedText-1] now");
+    const result = expandPasteSubmission(registry, "please review [Text #1] now");
     expect(result.expandedText).toBe("please review the FULL pasted body\nacross lines now");
     expect(result.images).toEqual([]);
   });
 
-  it("expands multiple CopiedText tokens in order", () => {
+  it("expands multiple Text tokens in order", () => {
     const registry = createPasteRegistry();
     registerPastedText(registry, "AAA");
     registerPastedText(registry, "BBB");
-    const result = expandPasteSubmission(registry, "[CopiedText-1] then [CopiedText-2]");
+    const result = expandPasteSubmission(registry, "[Text #1] then [Text #2]");
     expect(result.expandedText).toBe("AAA then BBB");
   });
 
@@ -178,7 +178,7 @@ describe("expandPasteSubmission — the model-bound expansion", () => {
     const registry = createPasteRegistry();
     const attachment = { path: "/tmp/shot.png", mediaType: "image/png" };
     registerPastedImage(registry, attachment);
-    const result = expandPasteSubmission(registry, "what's wrong here: [Image#1]");
+    const result = expandPasteSubmission(registry, "what's wrong here: [Image #1]");
     expect(result.expandedText).toBe("what's wrong here: (attached image)");
     expect(result.images).toEqual([attachment]);
   });
@@ -190,7 +190,7 @@ describe("expandPasteSubmission — the model-bound expansion", () => {
     registerPastedImage(registry, first); // #1
     registerPastedImage(registry, second); // #2
     // Referenced in reverse order in the final text.
-    const result = expandPasteSubmission(registry, "[Image#2] before [Image#1]");
+    const result = expandPasteSubmission(registry, "[Image #2] before [Image #1]");
     expect(result.images).toEqual([second, first]);
   });
 
@@ -198,15 +198,15 @@ describe("expandPasteSubmission — the model-bound expansion", () => {
     const registry = createPasteRegistry();
     registerPastedText(registry, "stack trace here");
     registerPastedImage(registry, { path: "/tmp/a.png", mediaType: "image/png" });
-    const result = expandPasteSubmission(registry, "[CopiedText-1] and [Image#1]");
+    const result = expandPasteSubmission(registry, "[Text #1] and [Image #1]");
     expect(result.expandedText).toBe("stack trace here and (attached image)");
     expect(result.images).toHaveLength(1);
   });
 
   it("leaves a token with no registry entry as literal text (never silently dropped)", () => {
     const registry = createPasteRegistry();
-    const result = expandPasteSubmission(registry, "please handle ticket [Image#99]");
-    expect(result.expandedText).toBe("please handle ticket [Image#99]");
+    const result = expandPasteSubmission(registry, "please handle ticket [Image #99]");
+    expect(result.expandedText).toBe("please handle ticket [Image #99]");
     expect(result.images).toEqual([]);
   });
 

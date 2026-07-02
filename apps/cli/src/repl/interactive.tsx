@@ -1642,7 +1642,7 @@ export function ReplApp({
         }
 
         const result = await runTurn({
-          // Paste placeholders (`[CopiedText-N]`) expand to their full stored
+          // Paste placeholders (`[Text #N]`) expand to their full stored
           // text here — the model sees the real content even though the
           // transcript above and the HUD title stay on the compact `submission`.
           prompt: paste?.expandedText ?? submission,

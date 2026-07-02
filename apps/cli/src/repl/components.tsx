@@ -158,10 +158,10 @@ export function PromptInput({
 }: {
   /**
    * Fires on Enter. `text` is exactly what the bar showed (paste placeholders
-   * left compact, e.g. `[CopiedText-1]`) — for the transcript/HUD. `paste` is
+   * left compact, e.g. `[Text #1]`) — for the transcript/HUD. `paste` is
    * present only when the buffer held at least one placeholder token: its
-   * `expandedText` has every `[CopiedText-N]` inlined to full content (for the
-   * model instruction) and `images` lists the `[Image#N]` attachments, in
+   * `expandedText` has every `[Text #N]` inlined to full content (for the
+   * model instruction) and `images` lists the `[Image #N]` attachments, in
    * order. Omitted (no paste occurred) is the common case.
    */
   onSubmit: (text: string, paste?: PasteSubmission) => void;
@@ -206,7 +206,7 @@ export function PromptInput({
   const [selected, setSelected] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const { stdout } = useStdout();
-  // Paste placeholder registry (`[CopiedText-N]` / `[Image#N]` → real content).
+  // Paste placeholder registry (`[Text #N]` / `[Image #N]` → real content).
   // Same lifecycle as `value`: lives for one prompt, reset in `resetInput`.
   const pasteRegistryRef = useRef(createPasteRegistry());
 
@@ -416,7 +416,7 @@ export function PromptInput({
   // ink auto-enables bracketed paste mode and never forwards paste content to
   // `useInput` once a `usePaste` listener is registered, so this and the
   // keystroke handler above never race over the same paste. A small paste
-  // inserts inline unchanged; a large one collapses to a `[CopiedText-N]`
+  // inserts inline unchanged; a large one collapses to a `[Text #N]`
   // placeholder (see paste.ts) so the bar shows a compact reference instead
   // of a wall of text.
   usePaste((text) => {
