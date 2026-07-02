@@ -64,7 +64,7 @@ export interface Workspace {
   list(dir?: string): Promise<string[]>;
   glob(pattern: string): Promise<string[]>;
   grep(pattern: string, opts?: { path?: string; glob?: string }): Promise<string[]>;
-  exec(command: string, opts?: { timeoutMs?: number }): Promise<CommandResult>;
+  exec(command: string, opts?: { timeoutMs?: number; signal?: AbortSignal }): Promise<CommandResult>;
   diff(): Promise<string>;
 }
 

@@ -254,7 +254,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<RunAgentResult> {
   // Merge local + MCP tools, restrict to the agent's allowlist (if any), then
   // gate with the settings-driven permission rules and Pre/PostToolUse hooks.
   const availableTools = filterToolsForAgent(
-    { ...buildTools(cwd, { readOnly: opts.readOnly, broker: opts.broker }), ...(mcp?.tools ?? {}) },
+    { ...buildTools(cwd, { readOnly: opts.readOnly, broker: opts.broker, signal: turnSignal }), ...(mcp?.tools ?? {}) },
     opts.agent?.tools,
   );
   // Tier 2 adherence: guarded rules become permission deny entries the gate

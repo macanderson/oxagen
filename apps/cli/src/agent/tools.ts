@@ -99,7 +99,7 @@ async function* walk(
 
 export function buildTools(
   cwd: string,
-  opts: { readOnly?: boolean; broker?: PermissionBroker } = {},
+  opts: { readOnly?: boolean; broker?: PermissionBroker; signal?: AbortSignal } = {},
 ): ToolSet {
   const tools: ToolSet = {
     read_file: tool({
@@ -381,6 +381,7 @@ export function buildTools(
           command,
           cwd,
           timeoutMs: timeout,
+          signal: opts.signal,
         });
         if (timedOut) return `Command timed out after ${timeout}ms (process group killed).`;
         const out = [stdout, stderr].filter(Boolean).join("\n").trim();
