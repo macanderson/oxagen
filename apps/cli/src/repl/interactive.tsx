@@ -54,6 +54,8 @@ import {
   type PanelMode,
   type PanelTarget,
 } from "./agent-sidebar.js";
+import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
+import { runShellCommand as runShellCommand_impl, type ShellRunHandle } from "./shell-runner.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
@@ -1843,8 +1845,14 @@ export function ReplApp({
         </Box>
 
         {/* Right-hand dock: Agent Team (live roster) + Task Progress (the planning
-            agent's checklist). Renders nothing until there's work to show. */}
-        <AgentSidebar mode={panelMode} />
+            agent's checklist). Renders nothing until there's work to show. `focus`
+            highlights the arrow-navigated row; `active` forces it visible while the
+            user is navigating it even if `auto` would otherwise hide an idle dock. */}
+        <AgentSidebar
+          mode={panelMode}
+          focus={focus.zone === "input" ? null : focus}
+          active={focus.zone !== "input"}
+        />
       </Box>
 
       {/* Pinned bottom stack — everything here keeps its height (flexShrink={0})
@@ -1874,6 +1882,33 @@ export function ReplApp({
             ))}
           </Box>
         )}
+
+      {/* Thinking indicator — visible only while a turn is in flight. */}
+      {isStreaming && turnStartedAt !== null && (
+        <ThinkingIndicator
+          startedAt={turnStartedAt}
+          getTokens={() => Math.round(streamCharsRef.current / 4)}
+          getLastProgressAt={() => lastProgressRef.current}
+        />
+      )}
+
+      {/* Esc-twice reset confirmation — shown above the input row until the user
+          types y/yes to confirm or anything else to cancel. */}
+      {resetPending && (
+        <Box paddingX={1} flexDirection="column">
+          <Text color={theme.cyan}>
+            Are you sure you want to reset the conversation?
+          </Text>
+          <Text dimColor>
+            Type <Text bold>y</Text> or <Text bold>yes</Text> to confirm, or
+            anything else (or Esc) to cancel.
+          </Text>
+        </Box>
+      )}
+
+      {/* Heads-up display — every agent running this session. Toggled by /hud
+          (and closed by Esc); sits just above the input as a live status overlay. */}
+      {hudVisible && <HudPanel />}
 
       {/* Drilled-in agent log — opened with Ctrl-E on an Agent Team row. It sits
           directly above the prompt bar (the bar is cleared and re-focused when
@@ -1908,8 +1943,13 @@ export function ReplApp({
         )}
 
       {/* Status line — below the input bar, with a blank row beneath it so it is
-          never flush against the bottom edge of the window. */}
-      <Box marginBottom={1} flexShrink={0}>
+          never flush against the bottom edge of the window. A whimsical cat
+          chases a mouse on the rail above it while a turn is running (opt out
+          with OXAGEN_CLI_FUN=0). */}
+      <Box marginBottom={1} flexShrink={0} flexDirection="column">
+        {process.env.OXAGEN_CLI_FUN !== "0" ? (
+          <CatMouseChase active={isStreaming} />
+        ) : null}
         <StatusLine
           model={model}
           branch={branchRef.current}
@@ -1930,12 +1970,8 @@ export function ReplApp({
         />
       </Box>
 
-      </Box>{/* end left (chat + input) column */}
-
-      {/* Right-hand dock: Agent Team (live roster) + Task Progress (the planning
-          agent's checklist). Renders nothing until there's work to show. */}
-      <AgentSidebar mode={panelMode} />
-      </Box>{/* end live-frame row */}
+      </Box>{/* end input row */}
+      </Box>{/* end pinned bottom stack */}
     </Box>
   );
 }
