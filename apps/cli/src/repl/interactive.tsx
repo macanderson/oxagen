@@ -45,9 +45,15 @@ import { agentRegistry, type AgentHandle } from "../agent/agent-registry.js";
 import { taskRegistry } from "../agent/task-registry.js";
 import { isSubagentDispatch, subagentInfo } from "../agent/tool-formatter.js";
 import { HudPanel } from "./hud.js";
-import { AgentSidebar, type PanelMode } from "./agent-sidebar.js";
-import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
-import { runShellCommand as runShellCommand_impl, type ShellRunHandle } from "./shell-runner.js";
+import {
+  AgentSidebar,
+  AgentFocusView,
+  panelNavTargets,
+  stepPanelFocus,
+  SIDEBAR_MIN_COLS,
+  type PanelMode,
+  type PanelTarget,
+} from "./agent-sidebar.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
@@ -116,6 +122,13 @@ export interface ReplOptions {
 function summarizeInput(toolName: string, input: unknown): string {
   return formatToolArgs(toolName, input);
 }
+
+/**
+ * Ctrl-X double-press window (ms): a second Ctrl-X on the same panel row within
+ * this window deletes it; otherwise the press just re-arms. Mirrors the
+ * double-Esc reset window's "confirm by repeating" feel.
+ */
+const CTRL_X_WINDOW_MS = 1500;
 
 /**
  * Best-effort current git branch by walking up from `cwd` to the nearest `.git`
@@ -353,6 +366,62 @@ export function ReplApp({
   // explicitly cleared after a 'prompt-reset' fires).
   const lastEscapeRef = useRef<number | null>(null);
 
+  // ── Keyboard focus / side-panel navigation ──────────────────────────────────
+  // Focus is either the prompt bar (the default) or a highlighted row in the
+  // side panel. Down from the bar enters the panel (first Agent Team row); Up /
+  // Down walk the flat Agent-Team-then-Task-Progress list; Up off the first row
+  // (or Esc) returns to the bar. The ref is the synchronous source of truth the
+  // key handler reads; the state drives the render (dimmed bar + highlighted row).
+  type ReplFocus = { zone: "input" } | { zone: "agent" | "task"; id: string };
+  const [focus, setFocusState] = useState<ReplFocus>({ zone: "input" });
+  const focusRef = useRef<ReplFocus>({ zone: "input" });
+  const setFocus = useCallback((next: ReplFocus): void => {
+    focusRef.current = next;
+    setFocusState(next);
+  }, []);
+
+  // The agent whose live log is pinned into the main conversation column (Ctrl-E
+  // on an Agent Team row). Null = no log open. Cleared on Esc.
+  const [focusedAgentId, setFocusedAgentIdState] = useState<string | null>(null);
+  const focusedAgentIdRef = useRef<string | null>(null);
+  const setFocusedAgentId = useCallback((id: string | null): void => {
+    focusedAgentIdRef.current = id;
+    setFocusedAgentIdState(id);
+  }, []);
+
+  // The task being edited (Ctrl-E on a Task Progress row loads its title into the
+  // bar). While set, the next submit rewrites that task's title instead of
+  // enqueuing a prompt. Null = the bar submits normal prompts.
+  const [editingTaskId, setEditingTaskIdState] = useState<string | null>(null);
+  const editingTaskIdRef = useRef<string | null>(null);
+  const setEditingTaskId = useCallback((id: string | null): void => {
+    editingTaskIdRef.current = id;
+    setEditingTaskIdState(id);
+  }, []);
+
+  // Buffer-injection channel into PromptInput: bump the nonce to push `text` into
+  // the (otherwise self-managed) input — recall the queue, load a task title, or
+  // clear the bar. A monotonic ref makes each push distinct even for equal text.
+  const [inject, setInject] = useState<{ text: string; nonce: number } | undefined>(undefined);
+  const injectNonceRef = useRef(0);
+  const injectText = useCallback((text: string): void => {
+    injectNonceRef.current += 1;
+    setInject({ text, nonce: injectNonceRef.current });
+  }, []);
+
+  // Whether PromptInput's slash-command menu is open. When it is, Up/Down belong
+  // to the menu; when closed, they belong to focus navigation (recall / enter
+  // panel). Mirrored into a ref so the synchronous key handler reads it fresh.
+  const menuOpenRef = useRef(false);
+  const handleMenuOpenChange = useCallback((open: boolean): void => {
+    menuOpenRef.current = open;
+  }, []);
+
+  // Double-press tracker for Ctrl-X delete: the first press on a row arms; a
+  // second press on the SAME row within the window deletes it. Switching rows
+  // (or letting the window lapse) re-arms rather than firing.
+  const lastCtrlXRef = useRef<{ id: string; at: number } | null>(null);
+
   // The permission broker, created once. Its approver surfaces an inline prompt
   // and resolves when the user answers (see ApprovalPrompt / resolveApproval).
   const brokerRef = useRef<PermissionBroker | null>(null);
@@ -559,6 +628,117 @@ export function ReplApp({
     [cwd, pushAssistant],
   );
 
+  // ── Side-panel navigation helpers ───────────────────────────────────────────
+  // The flat nav order (Agent Team rows, then Task Progress rows) is recomputed
+  // from the live registries at each keypress so it always matches what's drawn.
+  const navTargets = useCallback(
+    (): PanelTarget[] => panelNavTargets(agentRegistry.snapshot(), taskRegistry.snapshot()),
+    [],
+  );
+
+  // Only move focus into the dock when it is actually docked (terminal wide
+  // enough) AND has a row to land on — never strand the highlight off-screen.
+  const panelReachable = useCallback((): boolean => {
+    const cols = process.stdout.columns ?? 80;
+    return cols >= SIDEBAR_MIN_COLS && navTargets().length > 0;
+  }, [navTargets]);
+
+  const setInputFocus = useCallback((): void => {
+    setFocus({ zone: "input" });
+    lastCtrlXRef.current = null;
+  }, [setFocus]);
+
+  // Down from the prompt bar: land on the first navigable row. No-op if the
+  // panel isn't reachable (hidden or empty).
+  const enterPanel = useCallback((): void => {
+    if (!panelReachable()) return;
+    const first = navTargets()[0];
+    if (!first) return;
+    setFocus(first);
+    lastCtrlXRef.current = null;
+  }, [navTargets, panelReachable, setFocus]);
+
+  // Walk the flat list: +1 down, -1 up. Delegates the boundary math to the pure
+  // stepPanelFocus — null means "return to the bar", the same ref means "stay".
+  const movePanelFocus = useCallback(
+    (dir: 1 | -1): void => {
+      const cur = focusRef.current;
+      if (cur.zone === "input") return;
+      const next = stepPanelFocus(navTargets(), cur, dir);
+      if (next === null) {
+        setInputFocus();
+      } else if (next !== cur) {
+        setFocus(next);
+        lastCtrlXRef.current = null;
+      }
+    },
+    [navTargets, setFocus, setInputFocus],
+  );
+
+  // Up on the prompt bar (menu closed): pull EVERY queued prompt back into the
+  // bar for editing (Claude Code-style), oldest first, and empty the queue.
+  // No-op when nothing is queued.
+  const recallQueue = useCallback((): void => {
+    const q = queueRef.current;
+    if (q.length === 0) return;
+    const text = q.join("\n");
+    queueRef.current = [];
+    setQueued([]);
+    injectText(text);
+  }, [injectText]);
+
+  // Ctrl-E on the highlighted row. Agent → pin its live log into the
+  // conversation column and drop focus back into a freshly-cleared bar. Task →
+  // load its title into the bar for editing (a submit then rewrites the task).
+  const drillIn = useCallback((): void => {
+    const cur = focusRef.current;
+    if (cur.zone === "agent") {
+      setFocusedAgentId(cur.id);
+      setEditingTaskId(null);
+      injectText(""); // always clear the bar as an agent takes focus
+      setInputFocus();
+    } else if (cur.zone === "task") {
+      const task = taskRegistry.snapshot().find((t) => t.id === cur.id);
+      if (!task) {
+        setInputFocus();
+        return;
+      }
+      setEditingTaskId(cur.id);
+      setFocusedAgentId(null);
+      injectText(task.title);
+      setInputFocus();
+    }
+  }, [injectText, setEditingTaskId, setFocusedAgentId, setInputFocus]);
+
+  // Ctrl-X on the highlighted row: first press arms; a second on the SAME row
+  // within the window deletes it from its registry and re-homes focus onto the
+  // next surviving row (or the bar).
+  const handleCtrlX = useCallback((): void => {
+    const cur = focusRef.current;
+    if (cur.zone === "input") return;
+    const now = Date.now();
+    const prev = lastCtrlXRef.current;
+    const armed = prev !== null && prev.id === cur.id && now - prev.at <= CTRL_X_WINDOW_MS;
+    if (!armed) {
+      lastCtrlXRef.current = { id: cur.id, at: now };
+      return;
+    }
+    lastCtrlXRef.current = null;
+    const idx = navTargets().findIndex((t) => t.zone === cur.zone && t.id === cur.id);
+    if (cur.zone === "agent") agentRegistry.remove(cur.id);
+    else taskRegistry.remove(cur.id);
+    // Tear down any view tied to the deleted row.
+    if (focusedAgentIdRef.current === cur.id) setFocusedAgentId(null);
+    if (editingTaskIdRef.current === cur.id) {
+      setEditingTaskId(null);
+      injectText("");
+    }
+    const after = navTargets();
+    const fallback = after.length === 0 ? null : after[Math.min(idx, after.length - 1)];
+    if (fallback) setFocus(fallback);
+    else setInputFocus();
+  }, [navTargets, setFocus, setInputFocus, setFocusedAgentId, setEditingTaskId, injectText]);
+
   useInput((input, key) => {
     // Ctrl-C is handled first so it works even while a permission prompt is up
     // (cancelTurn releases the prompt as a denial before aborting). A live
@@ -578,8 +758,54 @@ export function ReplApp({
     // While a permission prompt is up, ApprovalPrompt owns Esc and the answer keys.
     if (approvalRef.current) return;
 
-    // The app owns the whole screen, so there is no native terminal scrollback to
-    // fall back on — PgUp/PgDn scroll the transcript in-app (handled below).
+    // ── Side-panel navigation (focus is on a panel row) ──
+    // While focus is in the dock, PromptInput's `focused` is false so it ignores
+    // every key — this handler is the sole owner of arrows / Ctrl-E / Ctrl-X,
+    // which avoids any same-keystroke double-processing race between the two.
+    if (focusRef.current.zone !== "input") {
+      if (key.escape) {
+        setInputFocus();
+        return;
+      }
+      if (key.upArrow) {
+        movePanelFocus(-1);
+        return;
+      }
+      if (key.downArrow) {
+        movePanelFocus(1);
+        return;
+      }
+      if (key.ctrl && input === "e") {
+        drillIn();
+        return;
+      }
+      if (key.ctrl && input === "x") {
+        handleCtrlX();
+        return;
+      }
+      // Every other key is swallowed while a panel row holds focus — the bar has
+      // no focus, so stray characters must never leak into it or the transcript.
+      return;
+    }
+
+    // Scrolling back through history is handled by the terminal's own scrollback
+    // (the transcript is committed to it via <Static>), so the REPL does not bind
+    // PageUp/PageDown/Ctrl-U/Ctrl-D — they pass through to the terminal.
+
+    // ── Prompt-bar arrows (focus is on the input) ──
+    // Only when the slash menu is CLOSED — while it's open the arrows navigate
+    // suggestions inside PromptInput. Up recalls the queued prompts for editing;
+    // Down moves focus into the Agent Team / Task Progress dock.
+    if (!menuOpenRef.current) {
+      if (key.upArrow) {
+        recallQueue();
+        return;
+      }
+      if (key.downArrow) {
+        enterPanel();
+        return;
+      }
+    }
 
     // Shift+Tab cycles the permission posture (ask → auto-edit → bypass →
     // read-only → …), mirroring Claude Code. The status line's second line
@@ -633,6 +859,23 @@ export function ReplApp({
         setResetPending(false);
         pushAssistant("Reset cancelled.");
         // Clear the window so this cancellation Esc doesn't seed a new pair.
+        lastEscapeRef.current = null;
+        return;
+      }
+
+      // A task edit in progress: Esc abandons it and clears the bar rather than
+      // stopping a turn or seeding a reset.
+      if (editingTaskIdRef.current) {
+        setEditingTaskId(null);
+        injectText("");
+        lastEscapeRef.current = null;
+        return;
+      }
+
+      // A pinned agent log open in the conversation column: Esc closes it (back
+      // to the plain transcript) before Esc means "stop" or "reset".
+      if (focusedAgentIdRef.current) {
+        setFocusedAgentId(null);
         lastEscapeRef.current = null;
         return;
       }
@@ -1473,6 +1716,19 @@ export function ReplApp({
   // answer the instant the user hits Enter, never touching the queue.
   const handleUserSubmit = useCallback(
     (text: string) => {
+      // A task edit committed (Ctrl-E on a Task Progress row loaded its title):
+      // rewrite that task's title instead of enqueuing a prompt, then return the
+      // bar to normal. An empty submit simply cancels the edit.
+      if (editingTaskIdRef.current) {
+        const id = editingTaskIdRef.current;
+        setEditingTaskId(null);
+        const title = text.trim();
+        if (title) {
+          taskRegistry.update(id, { title });
+          pushAssistant(`✎ Task updated: ${title}`);
+        }
+        return;
+      }
       if (resetPendingRef.current) {
         resetPendingRef.current = false;
         setResetPending(false);
@@ -1494,7 +1750,7 @@ export function ReplApp({
       }
       enqueue(text);
     },
-    [enqueue, resetConversation, pushAssistant, runShellCommand],
+    [enqueue, resetConversation, pushAssistant, setEditingTaskId],
   );
 
   // ── Full-screen transcript viewport ─────────────────────────────────────────
@@ -1613,12 +1869,35 @@ export function ReplApp({
           </Box>
         )}
 
-        {/* Thinking indicator — visible only while a turn is in flight */}
-        {isStreaming && turnStartedAt !== null && (
-          <ThinkingIndicator
-            startedAt={turnStartedAt}
-            getTokens={() => Math.round(streamCharsRef.current / 4)}
-            getLastProgressAt={() => lastProgressRef.current}
+      {/* Drilled-in agent log — opened with Ctrl-E on an Agent Team row. It sits
+          directly above the prompt bar (the bar is cleared and re-focused when
+          it opens) and closes on Esc. Renders nothing once the agent is pruned. */}
+      {focusedAgentId && <AgentFocusView agentId={focusedAgentId} />}
+
+      {/* Task-edit hint — while editing a task title (Ctrl-E on a Task Progress
+          row), Enter rewrites the task instead of sending a prompt. */}
+      {editingTaskId && (
+        <Box paddingX={1}>
+          <Text color={theme.violet}>✎ Editing task — Enter saves the title, Esc cancels.</Text>
+        </Box>
+      )}
+
+      {/* Input row — pinned to the bottom stack, padded above, and never allowed
+          to shrink (flexShrink={0}) so the prompt bar keeps a constant height as
+          the conversation above it grows or the terminal is resized.
+          A pending permission prompt takes over the input row; otherwise the
+          input stays live during a turn and submissions queue (FIFO). */}
+      <Box marginTop={1} flexShrink={0} flexDirection="column">
+        {approval ? (
+          <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
+        ) : (
+          <PromptInput
+            onSubmit={handleUserSubmit}
+            busy={isStreaming}
+            catalog={catalogRef.current ?? []}
+            focused={focus.zone === "input"}
+            inject={inject}
+            onMenuOpenChange={handleMenuOpenChange}
           />
         )}
 
@@ -1641,51 +1920,16 @@ export function ReplApp({
             status overlay. */}
         {hudVisible && <HudPanel />}
 
-        {/* Input row — padded above and never allowed to shrink (flexShrink={0})
-            so the prompt bar keeps a constant height as the conversation above it
-            grows or the terminal is resized. A pending permission prompt takes
-            over the input row; otherwise the input stays live during a turn and
-            submissions queue (FIFO). */}
-        <Box marginTop={1} flexShrink={0} flexDirection="column">
-          {approval ? (
-            <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
-          ) : (
-            <PromptInput
-              onSubmit={handleUserSubmit}
-              busy={isStreaming}
-              catalog={catalogRef.current ?? []}
-            />
-          )}
-        </Box>
-
-        {/* Status line — below the input bar, with a blank row beneath it so it is
-            never flush against the bottom edge of the window. A whimsical cat
-            chases a mouse on the rail above it while a turn is running (opt out
-            with OXAGEN_CLI_FUN=0). */}
-        <Box marginBottom={1} flexShrink={0} flexDirection="column">
-          {process.env.OXAGEN_CLI_FUN !== "0" ? (
-            <CatMouseChase active={isStreaming} />
-          ) : null}
-          <StatusLine
-            model={model}
-            branch={branchRef.current}
-            // Tokens + cost come from the live metrics bus (every model call —
-            // evaluator, worker, judge — contributes), so they update as calls
-            // complete during a turn and settle correctly at the end (Bug 2).
-            inputTokens={metrics.sessionTokensIn}
-            outputTokens={metrics.sessionTokensOut}
-            cacheHit={usage.cacheHit}
-            cacheMiss={Math.max(0, metrics.sessionTokensIn - usage.cacheHit)}
-            costUsd={metrics.sessionCostUsd}
-            turnOutputTokens={metrics.turnTokensOut}
-            turnCostUsd={metrics.turnCostUsd}
-            pipelineOn={pipelineOn}
-            verboseOn={verboseOn}
-            effort={effort}
-            mode={mode}
-          />
-        </Box>
-      </Box>
+      {/* Right-hand dock: Agent Team (live roster) + Task Progress (the planning
+          agent's checklist). Renders nothing until there's work to show. `focus`
+          highlights the navigated row; `active` forces it visible while the user
+          is arrow-navigating it even if `auto` would otherwise hide an idle dock. */}
+      <AgentSidebar
+        mode={panelMode}
+        focus={focus.zone === "input" ? null : focus}
+        active={focus.zone !== "input"}
+      />
+      </Box>{/* end live-frame row */}
     </Box>
   );
 }

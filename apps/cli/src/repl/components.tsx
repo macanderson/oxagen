@@ -89,6 +89,11 @@ export const HELP = [
   "Permission prompt: y allow once · a allow + remember · n/Esc deny",
   "  Esc            stop the turn · press Esc twice to reset the conversation (confirm y/yes)",
   "  Ctrl-C         cancel the current turn (quits when idle)",
+  "Side-panel navigation (Agent Team + Task Progress dock):",
+  "  ↑ (on the bar) recall every queued prompt back into the bar to edit",
+  "  ↓ / ↑          move focus into the dock and walk the agent/task rows (Esc = back to bar)",
+  "  Ctrl-E         open the highlighted agent's log · or edit the highlighted task's title",
+  "  Ctrl-X twice   delete the highlighted agent or task",
 ].join("\n");
 
 /** Friendly label for a permission mode (matches the `/mode` argument spelling). */
@@ -130,10 +135,10 @@ export function PromptInput({
   focused?: boolean;
   /**
    * External buffer injection. When `nonce` changes the buffer is replaced with
-   * `text` (cursor to end) — used to recall queued prompts for editing (Up),
-   * load a task's title for editing (Ctrl-E on a task), and clear the bar as
-   * focus moves between agents. The menu is suppressed for injected text so a
-   * recalled slash string doesn't reopen the typeahead unbidden.
+   * `text` — used to recall queued prompts for editing (Up), load a task's
+   * title for editing (Ctrl-E on a task), and clear the bar as focus moves
+   * between agents. The menu is suppressed for injected text so a recalled
+   * slash string doesn't reopen the typeahead unbidden.
    */
   inject?: { text: string; nonce: number };
   /** Notifies the parent when the typeahead menu opens/closes so it knows
@@ -151,13 +156,16 @@ export function PromptInput({
   // edit, or a clear). Keyed on the nonce so the same text can be re-injected
   // (e.g. clearing to "" twice in a row). `dismissed` is set so injected text
   // never pops the typeahead; typing afterwards clears it as usual.
+  // Deps intentionally list only `injectNonce`: the effect must fire once per
+  // distinct injection, reading the latest `inject.text` at that instant — not
+  // re-run when the text alone changes.
   const injectNonce = inject?.nonce;
+  const injectText = inject?.text ?? "";
   useEffect(() => {
     if (injectNonce === undefined) return;
-    setValue(inject?.text ?? "");
+    setValue(injectText);
     setSelected(0);
     setDismissed(true);
-    // Intentionally fire only on nonce change; other deps are read-once refs.
   }, [injectNonce]);
 
   // Derive the live typeahead state from the current buffer. The menu is open
@@ -283,20 +291,20 @@ export function PromptInput({
           collapses or is squeezed as the conversation above grows. */}
       <Box
         borderStyle="round"
-        borderColor={accent}
+        borderColor={!focused ? theme.dim : busy ? "#FBBF24" : theme.cyan}
         paddingX={1}
         minHeight={3}
         flexShrink={0}
       >
-        <Text color={accent} bold>
-          {glyph}
+        <Text color={!focused ? theme.dim : busy ? "#FBBF24" : theme.cyan} bold>
+          {busy ? "⧗ " : "❯ "}
         </Text>
         <Text dimColor={!focused}>
-          {shown}
+          {value}
           {/* The block cursor shows only while the input holds focus; when the
               panel has focus the bar dims and drops the cursor so the highlight
               clearly lives in the side panel instead. */}
-          {focused ? <Text color={accent}>█</Text> : null}
+          {focused ? <Text color={theme.cyan}>█</Text> : null}
         </Text>
       </Box>
       {terminalMode && (

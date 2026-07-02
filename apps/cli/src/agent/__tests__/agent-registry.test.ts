@@ -87,4 +87,25 @@ describe("AgentRegistry", () => {
     reg.register({ kind: "turn", title: "y" });
     expect(listener.mock.calls.length).toBe(countAfterRegister);
   });
+
+  it("remove() drops one entry from the roster and no-ops on unknown ids", () => {
+    const { reg } = makeRegistry();
+    const a = reg.register({ kind: "turn", title: "keep" });
+    const b = reg.register({ kind: "subagent", title: "dismiss" });
+    reg.remove(b.id);
+    expect(reg.snapshot().map((e) => e.id)).toEqual([a.id]);
+    reg.remove("does-not-exist"); // no throw, no change
+    expect(reg.snapshot().map((e) => e.id)).toEqual([a.id]);
+  });
+
+  it("remove() notifies subscribers only when it actually deletes", () => {
+    const { reg } = makeRegistry();
+    const a = reg.register({ kind: "turn", title: "x" });
+    const listener = vi.fn();
+    reg.on(listener);
+    reg.remove("nope");
+    expect(listener).not.toHaveBeenCalled();
+    reg.remove(a.id);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
 });
