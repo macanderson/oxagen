@@ -5,7 +5,7 @@
  * down a long-running command.
  */
 import { describe, it, expect } from "vitest";
-import { runShellCommand } from "../shell-runner.js";
+import { runShellCommand, runShellCommandBuffered } from "../shell-runner.js";
 
 const cwd = process.cwd();
 
@@ -54,5 +54,56 @@ describe("runShellCommand", () => {
     expect(res.killed).toBe(true);
     // A SIGTERM'd process never reaches a clean exit 0.
     expect(res.exitCode).not.toBe(0);
+  });
+});
+
+describe("runShellCommandBuffered", () => {
+  it("captures stdout and resolves with exit 0", async () => {
+    const res = await runShellCommandBuffered({ command: "echo hi-buffered", cwd });
+    expect(res.exitCode).toBe(0);
+    expect(res.timedOut).toBe(false);
+    expect(res.stdout).toContain("hi-buffered");
+  });
+
+  it("separates stderr from stdout", async () => {
+    const res = await runShellCommandBuffered({
+      command: "echo out; echo err 1>&2",
+      cwd,
+    });
+    expect(res.stdout).toContain("out");
+    expect(res.stderr).toContain("err");
+    expect(res.stdout).not.toContain("err");
+  });
+
+  it("reports a non-zero exit code", async () => {
+    const res = await runShellCommandBuffered({ command: "exit 7", cwd });
+    expect(res.exitCode).toBe(7);
+    expect(res.timedOut).toBe(false);
+  });
+
+  it("times out and reports timedOut instead of hanging", async () => {
+    const start = Date.now();
+    const res = await runShellCommandBuffered({
+      command: "sleep 30",
+      cwd,
+      timeoutMs: 300,
+    });
+    expect(res.timedOut).toBe(true);
+    expect(Date.now() - start).toBeLessThan(10_000);
+  });
+
+  it("REGRESSION: times out even when a grandchild keeps the stdout pipe open", async () => {
+    // The original hang: `bash -c` spawns a backgrounded child that inherits the
+    // stdout pipe and outlives the shell. Node's `exec({ timeout })` signals only
+    // the shell, so the pipe never EOFs and the promise never settles. Killing
+    // the whole process group must let this resolve within the timeout window.
+    const start = Date.now();
+    const res = await runShellCommandBuffered({
+      command: "sleep 30 & echo started; wait",
+      cwd,
+      timeoutMs: 500,
+    });
+    expect(res.timedOut).toBe(true);
+    expect(Date.now() - start).toBeLessThan(10_000);
   });
 });

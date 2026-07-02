@@ -16,6 +16,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { Workspace, CommandResult } from "@oxagen/agent-engine";
 import { toRequest, type PermissionBroker } from "../permissions.js";
+import { runShellCommandBuffered } from "../../repl/shell-runner.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -160,30 +161,11 @@ export function createCwdWorkspace(cwd: string): Workspace {
 
     async exec(command, opts): Promise<CommandResult> {
       const timeoutMs = Math.min(opts?.timeoutMs ?? 120_000, 600_000);
-      try {
-        const { stdout, stderr } = await execFileAsync("bash", ["-c", command], {
-          cwd,
-          timeout: timeoutMs,
-          maxBuffer: 10 * 1024 * 1024,
-          killSignal: "SIGTERM",
-        });
-        return { exitCode: 0, stdout, stderr, timedOut: false };
-      } catch (e: unknown) {
-        const err = e as {
-          code?: number;
-          stdout?: string;
-          stderr?: string;
-          killed?: boolean;
-          signal?: string;
-        };
-        const timedOut = err.killed === true || err.signal === "SIGTERM";
-        return {
-          exitCode: typeof err.code === "number" ? err.code : 1,
-          stdout: err.stdout ?? "",
-          stderr: err.stderr ?? "",
-          timedOut,
-        };
-      }
+      // Runs in its own process group so the timeout kills the whole subtree.
+      // Node's `execFile({ timeout })` only signals the top-level `bash`, so a
+      // grandchild that keeps the stdout pipe open (e.g. `npm run test | tail`)
+      // would leave the streams open and hang this promise forever.
+      return runShellCommandBuffered({ command, cwd, timeoutMs });
     },
 
     async diff() {
