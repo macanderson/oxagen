@@ -20,6 +20,7 @@ import { TerminalRunCard, type TerminalRun } from "./terminal-panel.js";
 import type { DiffTheme } from "../tui/terminal-theme.js";
 import { SlashMenu } from "./slash-menu.js";
 import {
+  BUILTIN_SLASH_COMMANDS,
   slashQuery,
   filterSlashCatalog,
   type SlashCatalogEntry,
@@ -77,20 +78,26 @@ export interface TurnSummary {
   changedFiles?: string[];
 }
 
+/**
+ * One `/name [hint]  description` line per built-in command, generated from
+ * {@link BUILTIN_SLASH_COMMANDS} — the same catalog the menu and typeahead
+ * read from — so `/help` can never drift out of sync with what `/` actually
+ * lists (it previously did: /login, /logout, /init, /remember, /memories,
+ * and /forget were all real, working commands `/help` never mentioned).
+ */
+function formatBuiltinCommandLines(): string[] {
+  const invocations = BUILTIN_SLASH_COMMANDS.map(
+    (c) => `/${c.name}${c.argumentHint ? ` ${c.argumentHint}` : ""}`,
+  );
+  const width = Math.max(...invocations.map((s) => s.length));
+  return BUILTIN_SLASH_COMMANDS.map(
+    (c, i) => `  ${(invocations[i] as string).padEnd(width)}  ${c.description}`,
+  );
+}
+
 export const HELP = [
   "Slash commands (type / to browse them with descriptions):",
-  "  /help          show this help",
-  "  /model [slug]  show or set the gateway model",
-  "  /coordinator [remote|local]  run turns on the remote gateway or the local on-device LLM",
-  "  /mode [ask|auto-edit|bypass|readonly]  show or set the permission mode",
-  "  /replay [n|id] show how a turn was handled (default: last turn)",
-  "  /traces        list recent turns you can /replay",
-  "  /pipeline [on|off]  toggle prompt evaluation + completeness judging",
-  "  /verbose [on|off]   per-phase timing, model+token+cost breakdown, tool results",
-  "  /hud           toggle the heads-up display of all agents running this session",
-  "  /panel         pin/hide the Agent Team + Task Progress side panel (right dock)",
-  "  /clear         reset the conversation",
-  "  /exit, /quit   quit",
+  ...formatBuiltinCommandLines(),
   "  !<command>     run a shell command live — the bar turns into a red terminal,",
   "                 output streams into a pinned panel, and it runs immediately",
   "                 (even mid-turn). Esc/Ctrl-C kills the running command. When it",

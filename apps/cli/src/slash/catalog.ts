@@ -68,6 +68,12 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
     argumentHint: "[remote|local]",
   },
   {
+    name: "effort",
+    description:
+      "Show or set the reasoning effort for models with a thinking mode (ignored by models without one)",
+    argumentHint: "[low|medium|high|xhigh|max|default]",
+  },
+  {
     name: "mode",
     description: "Show or set the permission posture for tool calls",
     argumentHint: "[ask|auto-edit|bypass|readonly]",
