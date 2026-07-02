@@ -83,28 +83,20 @@ describe("buildSlashCatalog", () => {
     expect(cost).toMatchObject({ source: "cli", productized: true });
     expect(shipit).toMatchObject({ source: "custom", productized: false });
     expect(shipit?.description).toBe("Ship the branch");
-
-    // Only builtin commands carry a menu color — CLI commands are productized
-    // but uncolored, same as custom commands, so the menu renders them plain.
-    expect(mode?.color).toBeDefined();
-    expect(cost?.color).toBeUndefined();
-    expect(shipit?.color).toBeUndefined();
   });
 
-  it("assigns every builtin command a stable color from theme.commandPalette", () => {
+  it("keeps built-ins in grouped BUILTIN_SLASH_COMMANDS order (not alphabetical) with no per-command color", () => {
     const catalog = build();
     const builtinEntries = catalog.filter((c) => c.source === "builtin");
     expect(builtinEntries.length).toBe(BUILTIN_SLASH_COMMANDS.length);
+    // Order matches the source array's grouped order — no alphabetical reshuffle.
+    expect(builtinEntries.map((c) => c.name)).toEqual(
+      BUILTIN_SLASH_COMMANDS.map((c) => c.name),
+    );
+    expect(builtinEntries[0]?.name).toBe("help");
+    // Per-command color is gone — the menu colors uniformly now.
     for (const entry of builtinEntries) {
-      expect(entry.color).toBeDefined();
-      expect(theme.commandPalette).toContain(entry.color);
-    }
-
-    // Stable per command: rebuilding the catalog assigns the same color again.
-    const rebuilt = build();
-    for (const entry of builtinEntries) {
-      const again = rebuilt.find((c) => c.name === entry.name);
-      expect(again?.color).toBe(entry.color);
+      expect(entry.color).toBeUndefined();
     }
   });
 
