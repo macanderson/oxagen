@@ -275,6 +275,19 @@ export function buildProgram(): Command {
       await handleReplay(turn, opts);
     });
 
+  // ── recover: find + restore agent work from the commit ledger ───────────────
+
+  program
+    .command("recover")
+    .description("List or restore recorded agent commits (never lose work)")
+    .argument("[hash]", "A commit hash to show restore instructions for; omit to list")
+    .option("--all", "List across all repos, not just this one", false)
+    .option("--json", "Output JSON", false)
+    .action(async (hash: string | undefined, opts: { all?: boolean; json?: boolean }) => {
+      const { handleRecover } = await import("./commands/recover.js");
+      await handleRecover(hash, opts);
+    });
+
   // ── cost: project + report model cost from the baked-in rate card ───────────
 
   program
