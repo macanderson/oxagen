@@ -906,10 +906,10 @@ describe("MemoriesClient — row accessibility and detail sheet", () => {
     );
   });
 
-  it("edits the kind, weight, confidence and source fields and saves the changes", async () => {
+  it("edits the kind, confidence, enforcement and source fields and saves the changes", async () => {
     const mockUpdate = vi.fn().mockResolvedValue({
       ok: true,
-      memory: { ...routineRecord, kind: "gotcha", weight: "low" },
+      memory: { ...routineRecord, memoryKind: "gotcha", enforcementScore: 30 },
     });
     render(
       <MemoriesClient
@@ -928,11 +928,12 @@ describe("MemoriesClient — row accessibility and detail sheet", () => {
     fireEvent.change(screen.getByLabelText("Memory kind"), {
       target: { value: "gotcha" },
     });
-    fireEvent.change(screen.getByLabelText("Memory weight"), {
-      target: { value: "low" },
-    });
     fireEvent.change(screen.getByLabelText("Confidence level"), {
       target: { value: "42" },
+    });
+    // routineRecord is a RULE, so the Enforcement slider is rendered.
+    fireEvent.change(screen.getByLabelText("Enforcement level"), {
+      target: { value: "30" },
     });
     fireEvent.change(screen.getByLabelText("Source"), {
       target: { value: "manual-review" },
@@ -944,8 +945,9 @@ describe("MemoriesClient — row accessibility and detail sheet", () => {
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         memoryId: routineRecord.id,
-        kind: "gotcha",
-        weight: "low",
+        memoryKind: "gotcha",
+        confidenceScore: 42,
+        enforcementScore: 30,
         source: "manual-review",
       }),
     );
