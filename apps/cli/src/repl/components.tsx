@@ -5,8 +5,8 @@
  * they render instantly and are unit-testable in isolation with
  * ink-testing-library.
  */
-import { Box, Text, useInput, useStdout } from "ink";
-import React, { useState, useEffect } from "react";
+import { Box, Text, useInput, usePaste, useStdout } from "ink";
+import React, { useState, useEffect, useRef } from "react";
 import { theme } from "../tui/theme.js";
 import { formatUsd } from "../agent/model-router.js";
 import {
@@ -27,6 +27,20 @@ import {
 } from "../slash/catalog.js";
 import type { StageEvent, StageKind, TurnTrace, JudgeVerdict } from "../agent/trace.js";
 import type { ApprovalRequest, ApprovalResponse, PermissionMode } from "../agent/permissions.js";
+import { readClipboardImage as readClipboardImageDefault } from "../lib/clipboard-image.js";
+import {
+  createPasteRegistry,
+  resetPasteRegistry,
+  shouldCollapseText,
+  registerPastedText,
+  registerPastedImage,
+  tokenEndingAt,
+  tokenStartingAt,
+  dropTokenAt,
+  expandPasteSubmission,
+  type PasteSubmission,
+  type PastedImageAttachment,
+} from "./paste.js";
 
 export interface Message {
   role: "user" | "assistant" | "reasoning" | "tool" | "stage" | "diff" | "terminal";
@@ -140,8 +154,17 @@ export function PromptInput({
   focused = true,
   inject,
   onMenuOpenChange,
+  readClipboardImage = readClipboardImageDefault,
 }: {
-  onSubmit: (text: string) => void;
+  /**
+   * Fires on Enter. `text` is exactly what the bar showed (paste placeholders
+   * left compact, e.g. `[Text #1]`) — for the transcript/HUD. `paste` is
+   * present only when the buffer held at least one placeholder token: its
+   * `expandedText` has every `[Text #N]` inlined to full content (for the
+   * model instruction) and `images` lists the `[Image #N]` attachments, in
+   * order. Omitted (no paste occurred) is the common case.
+   */
+  onSubmit: (text: string, paste?: PasteSubmission) => void;
   /** A turn is in flight. The input stays live — submissions queue (Claude
    *  Code-style) instead of being blocked — but the glyph shows the busy state. */
   busy: boolean;
@@ -165,6 +188,12 @@ export function PromptInput({
   /** Notifies the parent when the typeahead menu opens/closes so it knows
    *  whether the arrow keys belong to menu navigation or panel navigation. */
   onMenuOpenChange?: (open: boolean) => void;
+  /**
+   * Reads a system-clipboard image to a temp PNG (Ctrl-V). Injectable for
+   * tests; defaults to the real macOS pngpaste/osascript implementation.
+   * Resolves `null` (never throws) when there's no image to attach.
+   */
+  readClipboardImage?: () => Promise<PastedImageAttachment | null>;
 }): React.ReactElement {
   const [value, setValue] = useState("");
   // Flat character offset into `value` (0..value.length). Left/Right/Home/End
@@ -177,6 +206,9 @@ export function PromptInput({
   const [selected, setSelected] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const { stdout } = useStdout();
+  // Paste placeholder registry (`[Text #N]` / `[Image #N]` → real content).
+  // Same lifecycle as `value`: lives for one prompt, reset in `resetInput`.
+  const pasteRegistryRef = useRef(createPasteRegistry());
 
   // Replace the buffer when the parent injects new text (queue recall, task
   // edit, or a clear). Keyed on the nonce so the same text can be re-injected
@@ -193,6 +225,12 @@ export function PromptInput({
     setCursorPos(injectedText.length);
     setSelected(0);
     setDismissed(true);
+    // An injected buffer is a wholesale replacement, not an edit — any of this
+    // prompt's paste tokens the injected text still shows (e.g. a recalled
+    // queued prompt) are now inert history, not live registry entries. Reset
+    // so the NEXT paste numbers from 1 instead of colliding with a stale or
+    // already-submitted token of the same name.
+    resetPasteRegistry(pasteRegistryRef.current);
   }, [injectNonce]);
 
   // Derive the live typeahead state from the current buffer. The menu is open
@@ -217,6 +255,8 @@ export function PromptInput({
     setCursorPos(0);
     setSelected(0);
     setDismissed(false);
+    // Fresh counters for the next prompt — token numbering restarts at 1.
+    resetPasteRegistry(pasteRegistryRef.current);
   };
 
   /** Splice `text` in at the cursor and advance the cursor past it — the one
@@ -289,10 +329,29 @@ export function PromptInput({
     // ── Plain line editing ──
     if (key.tab) return; // never insert a literal tab character
     if (key.return && !key.shift) {
-      if (value.trim()) {
-        onSubmit(value.trim());
+      const trimmed = value.trim();
+      if (trimmed) {
+        // Expand paste placeholders for the model NOW, while the registry
+        // still holds this prompt's entries — resetInput() below wipes them.
+        const paste = expandPasteSubmission(pasteRegistryRef.current, trimmed);
+        const hadTokens = paste.images.length > 0 || paste.expandedText !== trimmed;
+        onSubmit(trimmed, hadTokens ? paste : undefined);
         resetInput();
       }
+      return;
+    }
+    // Ctrl-V: bracketed paste (below, via usePaste) already handles TEXT —
+    // this is the ONLY signal available for an IMAGE paste, since a terminal
+    // sends nothing at all to stdin when Cmd-V's clipboard has no text
+    // representation. Async: the clipboard check shells out, so this fires
+    // and forgets rather than blocking the keystroke.
+    if (key.ctrl && input === "v") {
+      void (async (): Promise<void> => {
+        const image = await readClipboardImage();
+        if (!image) return; // no image on the clipboard, or no tool available
+        const token = registerPastedImage(pasteRegistryRef.current, image);
+        insertAtCursor(token);
+      })();
       return;
     }
     // Cursor movement — active whenever the menu isn't consuming the key
@@ -324,15 +383,26 @@ export function PromptInput({
     }
     if (key.backspace) {
       if (cursorPos > 0) {
-        setValue((v) => v.slice(0, cursorPos - 1) + v.slice(cursorPos));
-        setCursorPos((p) => Math.max(0, p - 1));
+        // A paste placeholder is an atomic unit: backspacing right after one
+        // deletes the WHOLE token (and its registry entry) in one keystroke,
+        // instead of eroding it character by character.
+        const span = tokenEndingAt(value, cursorPos);
+        const deleteFrom = span ? span.start : cursorPos - 1;
+        if (span) dropTokenAt(pasteRegistryRef.current, value, span);
+        setValue((v) => v.slice(0, deleteFrom) + v.slice(cursorPos));
+        setCursorPos(deleteFrom);
         setSelected(0);
         setDismissed(false);
       }
       return;
     }
     if (key.delete) {
-      setValue((v) => v.slice(0, cursorPos) + v.slice(cursorPos + 1));
+      // Symmetric with backspace: forward-delete removes a whole token when
+      // the cursor sits at its start.
+      const span = tokenStartingAt(value, cursorPos);
+      const deleteTo = span ? span.end : cursorPos + 1;
+      if (span) dropTokenAt(pasteRegistryRef.current, value, span);
+      setValue((v) => v.slice(0, cursorPos) + v.slice(deleteTo));
       setSelected(0);
       setDismissed(false);
       return;
@@ -340,6 +410,19 @@ export function PromptInput({
     if (input && !key.ctrl && !key.meta) {
       insertAtCursor(input);
     }
+  });
+
+  // Bracketed-paste TEXT arrives here as one string, on its own channel —
+  // ink auto-enables bracketed paste mode and never forwards paste content to
+  // `useInput` once a `usePaste` listener is registered, so this and the
+  // keystroke handler above never race over the same paste. A small paste
+  // inserts inline unchanged; a large one collapses to a `[Text #N]`
+  // placeholder (see paste.ts) so the bar shows a compact reference instead
+  // of a wall of text.
+  usePaste((text) => {
+    if (!focused) return;
+    const token = shouldCollapseText(text) ? registerPastedText(pasteRegistryRef.current, text) : null;
+    insertAtCursor(token ?? text);
   });
 
   // Terminal-emulator mode: the instant the buffer opens with "!", the prompt
