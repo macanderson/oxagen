@@ -79,7 +79,6 @@ import {
   makeStallDetector,
   AgentTimeoutError,
   DEFAULT_TIMEOUTS,
-  TIMEOUTS,
 } from "../agent/timeouts.js";
 import { createMetricsBus, type SessionMetrics } from "../agent/metrics.js";
 import { createMeteredAi } from "../agent/metered-ai.js";
