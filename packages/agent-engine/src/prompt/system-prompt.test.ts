@@ -49,12 +49,18 @@ describe("buildSystemPrompt — profiles", () => {
 });
 
 describe("buildSystemPrompt — graph-first tool guidance", () => {
-  it("mandates code_graph as the FIRST choice by default and never references the unwired code_map", () => {
+  it("mandates code_graph FIRST as a hard rule, lists every operation, and never references the unwired code_map", () => {
     const prompt = buildSystemPrompt(base);
-    expect(prompt).toContain("GRAPH FIRST");
-    expect(prompt).toContain("`code_graph` is your FIRST choice");
-    expect(prompt).toContain("`file_symbols`");
-    expect(prompt).toContain("`dependents`");
+    // A forceful, prominent mandate — not a soft preference the model shrugs off.
+    expect(prompt).toContain("CODE GRAPH FIRST");
+    expect(prompt).toContain("non-negotiable");
+    expect(prompt).toContain("you MUST query");
+    expect(prompt).toContain("STOP and call it first");
+    // Every operation, with the exact trigger, so the model knows what to call when.
+    expect(prompt).toContain("`search <symbol>`");
+    expect(prompt).toContain("`file_symbols <file>`");
+    expect(prompt).toContain("`dependents <file>`");
+    expect(prompt).toContain("`imports <file>`");
     expect(prompt).toContain("Only fall back to `grep`");
     // code_map is optional and rarely wired — a rule pointing at a missing
     // tool silently breaks the graph-first habit, so it must be opt-in.
