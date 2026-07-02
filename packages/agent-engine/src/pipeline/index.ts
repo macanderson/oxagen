@@ -78,6 +78,11 @@ function composeAgentSystem(opts: RunTurnOptions, cwd: string): string {
     cwd,
     projectContext: opts.projectContext,
     readOnly: opts.readOnly,
+    // Never reference a tool the model does not have: code_graph is only
+    // materialized when a provider is injected, and code_map is never wired
+    // on the pipeline path (RunTurnOptions has no codeMap provider).
+    hasCodeGraph: Boolean(opts.codeGraph),
+    hasCodeMap: false,
     profile: opts.profile,
   });
 }

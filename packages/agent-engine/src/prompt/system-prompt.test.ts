@@ -1,48 +1,38 @@
-/**
- * buildSystemPrompt has two behavioural profiles that must stay distinct:
- *
- * - "interactive" (the default) narrates for a live watcher.
- * - "headless" strips the narration tax and mandates an explicit
- *   reproduce → localize → fix → re-test verification protocol.
- *
- * Both must keep the profile-independent tool rules. These assertions pin the
- * shape so the two profiles can't silently converge or drop their marker text.
- */
 import { describe, it, expect } from "vitest";
 import { buildSystemPrompt } from "./system-prompt";
 
-const base = { cwd: "/repo" } as const;
-
-describe("buildSystemPrompt — profiles", () => {
-  it("headless adds the verification protocol and drops the live narration", () => {
-    const p = buildSystemPrompt({ ...base, profile: "headless" });
-    expect(p).toContain("Verification protocol");
-    expect(p).toContain("Reproduce");
-    expect(p).toContain("SMALLEST");
-    expect(p.toLowerCase()).toContain("regress");
-    // The interactive narration tax must be gone. (Note: the source wraps
-    // "…watches this stream\nlive…" across a line, so assert on the contiguous
-    // "watches this stream" plus the "NARRATE AS YOU GO" header.)
-    expect(p).not.toContain("watches this stream");
-    expect(p).not.toContain("NARRATE AS YOU GO");
+describe("buildSystemPrompt — graph-first tool guidance", () => {
+  it("mandates code_graph as the FIRST choice by default and never references the unwired code_map", () => {
+    const prompt = buildSystemPrompt({ cwd: "/repo" });
+    expect(prompt).toContain("GRAPH FIRST");
+    expect(prompt).toContain("`code_graph` is your FIRST choice");
+    expect(prompt).toContain("`file_symbols`");
+    expect(prompt).toContain("`dependents`");
+    expect(prompt).toContain("Only fall back to `grep`");
+    // code_map is optional and rarely wired — a rule pointing at a missing
+    // tool silently breaks the graph-first habit, so it must be opt-in.
+    expect(prompt).not.toContain("code_map");
   });
 
-  it("interactive (default) keeps the live narration and omits the protocol", () => {
-    const p = buildSystemPrompt(base);
-    expect(p).toContain("watches this stream");
-    expect(p).toContain("NARRATE AS YOU GO");
-    expect(p).not.toContain("Verification protocol");
-    // An explicit "interactive" is identical to the default.
-    expect(buildSystemPrompt({ ...base, profile: "interactive" })).toBe(p);
+  it("mentions code_map only when the tool is wired", () => {
+    const prompt = buildSystemPrompt({ cwd: "/repo", hasCodeMap: true });
+    expect(prompt).toContain("call `code_map` BEFORE `grep` or `bash`");
   });
 
-  it("both profiles share the profile-independent tool rules", () => {
-    const shared = "Prefer `edit_file` for surgical changes";
-    expect(buildSystemPrompt({ ...base, profile: "headless" })).toContain(shared);
-    expect(buildSystemPrompt({ ...base, profile: "interactive" })).toContain(shared);
-    // The shared "read before you edit" rule reaches both, too.
-    const readFirst = "`read_file` it first";
-    expect(buildSystemPrompt({ ...base, profile: "headless" })).toContain(readFirst);
-    expect(buildSystemPrompt({ ...base, profile: "interactive" })).toContain(readFirst);
+  it("drops graph guidance and keeps plain grep guidance when code_graph is not wired", () => {
+    const prompt = buildSystemPrompt({ cwd: "/repo", hasCodeGraph: false });
+    expect(prompt).not.toContain("code_graph");
+    expect(prompt).toContain(
+      "Use `grep` and `glob` to locate code instead of guessing paths.",
+    );
+  });
+
+  it("keeps graph-first guidance alongside a named agent persona", () => {
+    const prompt = buildSystemPrompt({
+      cwd: "/repo",
+      agent: { name: "reviewer", systemPrompt: "You are a reviewer." },
+    });
+    expect(prompt).toContain("You are a reviewer.");
+    expect(prompt).toContain("GRAPH FIRST");
   });
 });

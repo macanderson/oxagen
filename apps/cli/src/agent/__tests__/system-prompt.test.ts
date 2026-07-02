@@ -20,6 +20,18 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("cwd: /repo");
   });
 
+  it("mandates code_graph as the FIRST choice for gathering context, with grep as fallback", () => {
+    const prompt = buildSystemPrompt({ cwd: "/repo" });
+    expect(prompt).toContain("GRAPH FIRST");
+    expect(prompt).toContain("`code_graph` is your FIRST choice");
+    expect(prompt).toContain("`file_symbols`");
+    expect(prompt).toContain("`dependents`");
+    expect(prompt).toContain("Only fall back to `grep`");
+    // The CLI wires code_graph, never code_map — the prompt must not point
+    // the model at a tool it does not have.
+    expect(prompt).not.toContain("code_map");
+  });
+
   it("still appends the read-only notice for an agent", () => {
     const prompt = buildSystemPrompt({
       cwd: "/repo",
