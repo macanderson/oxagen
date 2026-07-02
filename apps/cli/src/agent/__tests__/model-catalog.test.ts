@@ -42,7 +42,7 @@ beforeEach(() => {
 const REGISTRY_EXPECTATIONS: Record<string, string> = {
   haiku: LATEST_ANTHROPIC.haiku,
   "sonnet-5": LATEST_ANTHROPIC.sonnet,
-  opus: LATEST_ANTHROPIC.opus,
+  fable: LATEST_ANTHROPIC.fable,
   "openai-most-capable-coding-model": LATEST_OPENAI_CODING,
 };
 
@@ -50,7 +50,7 @@ describe("model catalog is the single source of truth", () => {
   it("every tier default resolves to the catalog", () => {
     expect(modelForTier("fast")).toBe(LATEST_ANTHROPIC.haiku);
     expect(modelForTier("balanced")).toBe(LATEST_ANTHROPIC.sonnet);
-    expect(modelForTier("precise")).toBe(LATEST_ANTHROPIC.opus);
+    expect(modelForTier("precise")).toBe(LATEST_ANTHROPIC.fable);
   });
 
   it("the agent-loop default is the catalog's balanced/Sonnet slug", () => {
