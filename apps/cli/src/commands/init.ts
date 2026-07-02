@@ -714,6 +714,23 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
       domains = [...counts.entries()]
         .sort((a, b) => b[1] - a[1])
         .map(([name, files]) => ({ name, files }));
+
+      // Persist domains onto the local DuckDB store (reopened — step 2 already
+      // closed its handle) so `code_graph` queries see them without requiring a
+      // `graph push` first. Mirrors graph.push.ts's persistence step exactly.
+      if (domainMap.size > 0) {
+        const domainStore = createCodeGraphStore({ duckdbPath });
+        try {
+          await domainStore.whenReady();
+          await domainStore.updateNodeDomains(cwd, domainMap);
+          await domainStore.updateEdgeDomains(cwd, domainMap);
+        } catch {
+          // Non-fatal: DuckDB may be locked by the daemon. The summary below
+          // still reports the inferred domains; DuckDB catches up next run.
+        } finally {
+          await domainStore.close().catch(() => {});
+        }
+      }
     } catch {
       // AI errors never block init
       domainsSkipped = true;

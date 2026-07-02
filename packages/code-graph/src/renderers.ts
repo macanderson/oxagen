@@ -11,6 +11,7 @@
  * now here; ingestion re-exports for backward compat.
  */
 
+import { chunkText } from "./chunk";
 import type { ParsedSymbol } from "./types";
 
 /**
@@ -36,6 +37,52 @@ export function renderFileText(args: {
   ]
     .filter((p) => p.length > 0)
     .join("\n");
+}
+
+/** Chunk granularity for {@link renderMarkdownFileText} — a handful of these
+ *  windows, not one giant slice, make up the embedded text. */
+const MARKDOWN_CHUNK_CHARS = 1200;
+
+/**
+ * Total character budget for a markdown file's embed text. Larger than
+ * {@link renderFileText}'s 1500-char code head: a doc has no signature/import
+ * list to lean on, so the prose itself has to carry the signal.
+ */
+const MARKDOWN_MAX_CHARS = 6000;
+
+/**
+ * Build the embedding text for a markdown/MDX file's full content.
+ *
+ * `renderFileText`'s blind `content.slice(0, 1500)` is right for code — the top
+ * of a file (imports, exports, signatures) is its most information-dense part —
+ * but a doc's important content can live anywhere: front-matter or a table of
+ * contents at the top would otherwise crowd out the actual prose. This instead
+ * samples sequential `chunkText()` windows (line-aligned, overlap-stitched)
+ * until `maxChars` is spent, so a several-thousand-word doc contributes more
+ * than its first paragraph without embedding the whole file unbounded.
+ */
+export function renderMarkdownFileText(args: {
+  path: string;
+  content: string;
+  title?: string;
+  maxChars?: number;
+}): string {
+  const cap = args.maxChars ?? MARKDOWN_MAX_CHARS;
+  const { chunks } = chunkText(args.content, { maxChars: MARKDOWN_CHUNK_CHARS });
+
+  const picked: string[] = [];
+  let used = 0;
+  for (const chunk of chunks) {
+    // Always take at least the first chunk, even if it alone exceeds the cap
+    // (the final slice() below is the safety net for that case).
+    if (picked.length > 0 && used + chunk.text.length > cap) break;
+    picked.push(chunk.text);
+    used += chunk.text.length;
+    if (used >= cap) break;
+  }
+
+  const body = picked.join("\n\n").slice(0, cap);
+  return [args.path, args.title ?? "", body].filter((p) => p.length > 0).join("\n");
 }
 
 /**

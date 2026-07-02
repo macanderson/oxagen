@@ -18,7 +18,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { cosineSimilarity, renderFileText } from "@oxagen/code-graph";
+import { cosineSimilarity, renderFileText, renderMarkdownFileText } from "@oxagen/code-graph";
 import type { CodeGraph, CodeNode } from "../../daemon/code-graph/types.js";
 import type { CodeGraphStore } from "../../daemon/code-graph/store.js";
 import type { EmbeddingClient } from "./embedding.js";
@@ -114,12 +114,17 @@ export async function ensureFileEmbeddings(
     }
     const content = await read(join(root, node.path));
     if (content === null) continue; // unreadable — no vector, ranked out
-    const text = renderFileText({
-      path: node.path,
-      language: node.language,
-      content,
-      symbolNames: symbolNamesInFile(graph, node.id),
-    });
+    // Docs get the full-content-aware renderer (chunked, no symbol list to
+    // lean on); code gets the head-slice + symbol-name renderer.
+    const text =
+      node.language === "markdown"
+        ? renderMarkdownFileText({ path: node.path, content })
+        : renderFileText({
+            path: node.path,
+            language: node.language,
+            content,
+            symbolNames: symbolNamesInFile(graph, node.id),
+          });
     toEmbed.push({ node, text });
   }
 

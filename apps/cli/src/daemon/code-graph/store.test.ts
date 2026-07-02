@@ -102,6 +102,24 @@ describe("buildAndPersistCodeGraph", () => {
     expect((await store.indexedFiles(repo)).sort()).toEqual(["b.ts"]);
   });
 
+  it("indexes .md files as file nodes (docs carry an embedding + domain too)", async () => {
+    write("README.md", "# Title\n\nSome docs content.\n");
+
+    const delta = await buildAndPersistCodeGraph(repo, store);
+    expect(delta).toEqual({ indexed: 1, skipped: 0, removed: 0 });
+
+    const graph = await store.loadGraph(repo);
+    const node = [...graph.nodes.values()].find((n) => n.path === "README.md");
+    expect(node?.kind).toBe("file");
+    expect(node?.language).toBe("markdown");
+
+    // Headings are parsed (see @oxagen/code-graph markdown.ts) but intentionally
+    // not turned into symbol nodes — only the file node is indexed.
+    const stats = await store.stats(repo);
+    expect(stats.files).toBe(1);
+    expect(stats.symbols).toBe(0);
+  });
+
   it("survives a cold reopen — graph reloads from disk", async () => {
     write("a.ts", "export function foo() {}\n");
     await buildAndPersistCodeGraph(repo, store);

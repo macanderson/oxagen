@@ -425,6 +425,7 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
           try {
             await cgStore.whenReady();
             await cgStore.updateNodeDomains(root, domainMap);
+            await cgStore.updateEdgeDomains(root, domainMap);
           } catch {
             // Non-fatal: DuckDB may be locked by the daemon. Neo4j gets domain
             // properties regardless; DuckDB will be updated on the next full build.
