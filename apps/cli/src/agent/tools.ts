@@ -18,6 +18,7 @@ import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 import { promises as fs } from "node:fs";
 import { resolve, relative, join, isAbsolute } from "node:path";
+import { formatWithLineNumbers, describeEditFailure } from "@oxagen/agent-engine";
 import { queryCodeGraph } from "./code-graph.js";
 import { createContextResolver } from "./context/index.js";
 import { formatGraphResultJson } from "./context/format.js";
@@ -120,11 +121,12 @@ export function buildTools(
       execute: async ({ path, offset, limit }) => {
         try {
           const text = await fs.readFile(resolvePath(cwd, path), "utf8");
-          if (offset == null && limit == null) return clip(text);
+          if (offset == null && limit == null) return clip(formatWithLineNumbers(text, 1));
           const lines = text.split("\n");
           const start = offset ? offset - 1 : 0;
           const end = limit ? start + limit : lines.length;
-          return clip(lines.slice(start, end).join("\n"));
+          // `offset` (1-based) is the true line number of the first line read.
+          return clip(formatWithLineNumbers(lines.slice(start, end).join("\n"), offset ?? 1));
         } catch (err) {
           return `Error reading ${path}: ${err instanceof Error ? err.message : String(err)}`;
         }
@@ -152,20 +154,35 @@ export function buildTools(
 
     edit_file: tool({
       description:
-        "Replace an exact substring in a file. old_string must appear exactly once. Use for surgical edits.",
+        "Replace an exact substring in a file. By default old_string must appear " +
+        "exactly once; set replace_all:true to replace every occurrence. Use for " +
+        "surgical edits.",
       inputSchema: z.object({
         path: z.string(),
-        old_string: z.string().describe("Exact text to replace (must be unique)."),
+        old_string: z.string().describe("Exact text to replace."),
         new_string: z.string().describe("Replacement text."),
+        replace_all: z
+          .boolean()
+          .optional()
+          .describe(
+            "Replace every occurrence instead of requiring a unique match (default false).",
+          ),
       }),
-      execute: async ({ path, old_string, new_string }) => {
+      execute: async ({ path, old_string, new_string, replace_all }) => {
         try {
           const abs = resolvePath(cwd, path);
           const text = await fs.readFile(abs, "utf8");
-          const count = text.split(old_string).length - 1;
-          if (count === 0) return `Error: old_string not found in ${path}.`;
-          if (count > 1)
-            return `Error: old_string appears ${count} times in ${path}; make it unique.`;
+          const count = old_string === "" ? 0 : text.split(old_string).length - 1;
+          if (replace_all) {
+            if (count === 0)
+              return `Error editing ${path}: ${describeEditFailure(text, old_string) ?? "old_string not found."}`;
+            await fs.writeFile(abs, text.split(old_string).join(new_string), "utf8");
+            return `Edited ${path} (${count} replacement${count === 1 ? "" : "s"})`;
+          }
+          // Structured feedback on a miss (closest line / ambiguous matches) so
+          // the model can self-correct instead of blindly retrying.
+          if (count !== 1)
+            return `Error editing ${path}: ${describeEditFailure(text, old_string) ?? "old_string not found."}`;
           await fs.writeFile(abs, text.replace(old_string, new_string), "utf8");
           return `Edited ${path}`;
         } catch (err) {
@@ -193,6 +210,10 @@ export function buildTools(
       },
     }),
 
+    // NOTE: these grep/glob bodies are the LEGACY duplicate; the live,
+    // ripgrep-backed + Python-aware implementation is in adapters/workspace.ts.
+    // This whole tool set is slated for deletion once the engine tools converge,
+    // so grep/glob here are intentionally left as the simple JS walk.
     glob: tool({
       description:
         "Find files matching a glob pattern (e.g. 'src/**/*.ts'). Skips node_modules/.git/dist.",
