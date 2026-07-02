@@ -1301,6 +1301,12 @@ export function ReplApp({
           });
           render();
         }
+        void debugLog("turn", "turn.end", {
+          mode: "repl",
+          steps: result.usage.steps,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+        });
         setTurns((n) => n + 1);
         setUsage((u) => ({
           input: u.input + (result.usage.inputTokens ?? 0),
