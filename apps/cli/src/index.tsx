@@ -16,6 +16,8 @@
  */
 import { createRequire } from "node:module";
 import { buildProgram } from "./program.js";
+import { debugLog, isDebugEnabled } from "./lib/debug-log.js";
+import { formatFatalError } from "./lib/fatal-error.js";
 
 // The Oxagen context engine pulls in DuckDB, a native CommonJS dependency that
 // references a bare `require`. Under pure-ESM execution that global is absent, so
@@ -25,6 +27,28 @@ import { buildProgram } from "./program.js";
   const g = globalThis as { require?: unknown };
   if (typeof g.require === "undefined") g.require = createRequire(import.meta.url);
 }
+
+// Top-level safety net. Without this, a common file error (e.g.
+// `oxagen code diff missing.txt`) prints a raw Node stack trace. Instead, write a
+// single clean `Error: <message>` line to stderr — the full stack only under
+// OXAGEN_CLI_DEBUG — best-effort log it, and exit non-zero. Registered before
+// main() so it also covers failures during command construction.
+function reportFatal(err: unknown): void {
+  process.stderr.write(formatFatalError(err, isDebugEnabled()));
+  void debugLog("error", "cli.fatal", err);
+}
+
+process.on("unhandledRejection", (reason) => {
+  reportFatal(reason);
+  process.exitCode = 1;
+});
+
+process.on("uncaughtException", (err) => {
+  reportFatal(err);
+  // An uncaught exception leaves the process in an undefined state — exit now.
+  // The debugLog above is fire-and-forget and may not flush; that is acceptable.
+  process.exit(1);
+});
 
 async function main(): Promise<void> {
   // Project settings.json (env, apiUrl, model) into the environment before any
@@ -40,7 +64,6 @@ async function main(): Promise<void> {
   installAiSdkWarningFilter();
   // When OXAGEN_CLI_DEBUG=1, record the invocation to ~/.oxagen/logs/cli.output
   // before dispatching. Fire-and-forget: never blocks or breaks a command.
-  const { debugLog } = await import("./lib/debug-log.js");
   void debugLog("invoke", "cli.start", {
     argv: process.argv.slice(2),
     cwd: process.cwd(),
@@ -48,4 +71,7 @@ async function main(): Promise<void> {
   await buildProgram().parseAsync(process.argv);
 }
 
-void main();
+main().catch((err) => {
+  reportFatal(err);
+  process.exitCode = 1;
+});

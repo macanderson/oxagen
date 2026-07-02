@@ -11,7 +11,7 @@
  * loads project rules (CLAUDE.md/AGENTS.md), and records the turn into Oxagen's
  * context engine. Model calls go through the Vercel AI Gateway.
  */
-import { runTurn } from "@oxagen/agent-engine";
+import { runTurn, type AgentAi } from "@oxagen/agent-engine";
 import {
   createCwdWorkspace,
   createGatedWorkspace,
@@ -19,7 +19,9 @@ import {
   createCodeGraphProvider,
   createGraphSyncProvider,
   createPlatformAgentAi,
+  createGatewayAgentAi,
 } from "../agent/adapters/index.js";
+import { createMeteredAi } from "../agent/metered-ai.js";
 import { queryCodeGraph } from "../agent/code-graph.js";
 import type { Session } from "../lib/session.js";
 import { runAgent } from "../agent/loop.js";
@@ -61,6 +63,16 @@ export interface OneShotOptions {
   bare?: boolean;
   /** Capture + emit full per-turn telemetry (overrides config default). */
   verbose?: boolean;
+  /**
+   * stdout format. `text` (default) streams the answer; `json` prints ONE
+   * result envelope at the end; `stream-json` prints JSONL events (stage /
+   * tool / text / reasoning) as they happen, ending with the result envelope.
+   * Both JSON modes keep stdout machine-pure — human progress stays on stderr
+   * in `json` mode and is omitted in `stream-json` mode.
+   */
+  outputFormat?: "text" | "json" | "stream-json";
+  /** Cap the agent tool loop at n steps per execution round (default 256). */
+  maxSteps?: number;
 }
 
 export async function runOneShot(
@@ -69,19 +81,36 @@ export async function runOneShot(
 ): Promise<void> {
   const cwd = process.cwd();
   const projectContext = loadProjectContext(cwd);
-  const memory = await openSessionMemory(cwd, `one-shot-${Date.now()}`);
-  const fleetMemory = openFleetMemory(cwd);
+  // OXAGEN_DISABLE_MEMORY=1 skips recall/remember entirely. Benchmark runs set
+  // it so recalled context from one instance can never leak into another
+  // (SWE-bench reuses the same repos across many instances).
+  const memoryDisabled = process.env["OXAGEN_DISABLE_MEMORY"] === "1";
+  const memory = memoryDisabled
+    ? null
+    : await openSessionMemory(cwd, `one-shot-${Date.now()}`);
+  const fleetMemory = memoryDisabled ? null : openFleetMemory(cwd);
   const traceStore = openTraceStore(cwd);
   const verbose = options.verbose ?? readConfig().verbose ?? false;
 
-  // Engine ports for this invocation: local workspace + platform-routed AI,
-  // combined local memory, the local code graph, and best-effort graph sync.
+  // Engine ports for this invocation: local workspace, combined local memory,
+  // the local code graph, and best-effort graph sync. Model calls route through
+  // the platform (metered, session-authenticated) for real sessions, or
+  // gateway-direct for the synthetic benchmark session — a synthetic token
+  // cannot authenticate against /v1/agent/llm, and bench containers supply
+  // AI_GATEWAY_API_KEY instead. Both are wrapped in the metered port so every
+  // engine model call gets the per-call timeout + retry (Bug 1) that the REPL
+  // path already has.
   const workspace = createCwdWorkspace(cwd);
-  const ai = createPlatformAgentAi({
-    apiUrl: options.session.apiUrl,
-    token: options.session.token,
-    orgSlug: options.session.orgSlug,
-    workspaceSlug: options.session.workspaceSlug,
+  const baseAi: AgentAi = options.session.synthetic
+    ? createGatewayAgentAi({ cwd })
+    : createPlatformAgentAi({
+        apiUrl: options.session.apiUrl,
+        token: options.session.token,
+        orgSlug: options.session.orgSlug,
+        workspaceSlug: options.session.workspaceSlug,
+      });
+  const ai = createMeteredAi(baseAi, {
+    onLog: (line) => void debugLog("timeout", line),
   });
 
   // Non-interactive: build a broker only when a mode is requested. With no
@@ -106,9 +135,20 @@ export async function runOneShot(
   // completes. The inactivity guard aborts only if no progress — a stream delta,
   // stage, or tool call — lands within turnInactivityMs. Esc is not available
   // here, so this progress guard is the only backstop against a truly hung turn.
+  //
+  // A tool that is EXECUTING is progress, even though no events arrive until it
+  // finishes: a real test suite legitimately runs longer than the guard window
+  // (bash allows up to 600s; the window is 300s). Every engine tool carries its
+  // own timeout backstop, so an in-flight tool ALWAYS returns — when the guard
+  // fires mid-tool it defers instead of killing a healthy run.
   const inactivityMs = DEFAULT_TIMEOUTS.turnInactivityMs ?? 300_000;
   const turnController = makeTurnController();
+  let inFlightTools = 0;
   const stall = makeStallDetector(inactivityMs, () => {
+    if (inFlightTools > 0) {
+      stall.reset(); // a tool is executing (bounded by its own timeout) — defer
+      return;
+    }
     if (!turnController.signal.aborted) {
       void debugLog("timeout", "[timeout] scope=turn reason=inactivity");
       turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
@@ -116,6 +156,14 @@ export async function runOneShot(
   });
 
   void debugLog("turn", "turn.start", { mode: "one-shot", readOnly, model: options.model, prompt });
+
+  // Output routing. `text` streams the answer to stdout; the JSON modes keep
+  // stdout machine-pure: `json` emits ONE result envelope at the end, and
+  // `stream-json` emits JSONL events as they happen plus the final envelope.
+  const format = options.outputFormat ?? "text";
+  const emitJson = (obj: unknown): void => {
+    process.stdout.write(JSON.stringify(obj) + "\n");
+  };
 
   try {
     let streamed = false;
@@ -128,41 +176,83 @@ export async function runOneShot(
       model: options.model,
       bare: options.bare,
       verbose,
+      maxSteps: options.maxSteps,
       memory: createCombinedMemory(memory, fleetMemory),
       codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
       trace: traceStore,
-      graphSync: createGraphSyncProvider({ ...options.session, cwd }),
+      // Graph sync posts to the platform API — meaningless (and unauthenticated)
+      // for the synthetic benchmark session, so skip it entirely there.
+      graphSync: options.session.synthetic
+        ? null
+        : createGraphSyncProvider({ ...options.session, cwd }),
       effort: resolveEffort(options.effort),
       signal: turnController.signal,
       // Pipeline stage progress goes to stderr so stdout stays the clean answer.
       onStage: (stage) => {
         stall.reset();
         void debugLog("turn", "turn.stage", { label: stage.label, detail: stage.detail });
-        process.stderr.write(
-          `  ${stage.label}${stage.detail ? ` · ${stage.detail}` : ""}\n`,
-        );
+        if (format === "stream-json") {
+          emitJson({ type: "stage", label: stage.label, detail: stage.detail });
+        } else {
+          process.stderr.write(
+            `  ${stage.label}${stage.detail ? ` · ${stage.detail}` : ""}\n`,
+          );
+        }
       },
       onText: (delta) => {
         stall.reset();
         streamed = true;
-        process.stdout.write(delta);
+        if (format === "text") process.stdout.write(delta);
+        else if (format === "stream-json") emitJson({ type: "text", delta });
+        // json: silent — the full text rides in the final envelope.
       },
       // Reasoning / chain-of-thought goes to stderr (dim), so the piped stdout
       // stays the clean answer while the thinking is still visible on a TTY.
       onReasoning: (delta) => {
         stall.reset();
-        process.stderr.write(`\x1b[2m${delta}\x1b[22m`);
+        if (format === "stream-json") emitJson({ type: "reasoning", delta });
+        else process.stderr.write(`\x1b[2m${delta}\x1b[22m`);
       },
       // Tool activity goes to stderr so stdout stays the clean final answer
       // (pipeable). e.g. `oxagen "..." > out.md` captures only the answer.
       onToolCall: (name, input) => {
+        inFlightTools++;
         stall.reset();
         void debugLog("turn", "turn.tool-call", { name, input });
-        process.stderr.write(formatToolCallWithSpacing(name, input));
+        if (format === "stream-json") {
+          emitJson({ type: "tool", phase: "start", name });
+        } else {
+          process.stderr.write(formatToolCallWithSpacing(name, input));
+        }
+      },
+      onToolEvent: ({ name, ok, durationMs }) => {
+        inFlightTools = Math.max(0, inFlightTools - 1);
+        stall.reset();
+        void debugLog("turn", "turn.tool-result", { name, ok, durationMs });
+        if (format === "stream-json") {
+          emitJson({ type: "tool", phase: "end", name, ok, durationMs });
+        }
       },
     });
-    if (streamed) process.stdout.write("\n");
-    void debugLog("turn", "turn.end", { mode: "one-shot", streamed });
+    if (format === "text") {
+      if (streamed) process.stdout.write("\n");
+    } else {
+      // One machine-readable result envelope, shared by json and stream-json.
+      emitJson({
+        type: "result",
+        ok: true,
+        text: result.text,
+        steps: result.steps,
+        usage: result.usage,
+        model: result.trace.selectedModel,
+        filesTouched: result.trace.filesTouched,
+        commandsRun: result.trace.commandsRun,
+        complete: result.trace.finalComplete,
+        traceId: result.trace.id,
+        durationMs: result.trace.durationMs,
+      });
+    }
+    void debugLog("turn", "turn.end", { mode: "one-shot", streamed, format });
     // The engine persists the trace via the injected `trace` port. Verbose mode
     // additionally appends the structured record to the JSONL stream and prints
     // the per-phase / per-model / cost breakdown to stderr (stdout stays the
@@ -185,6 +275,9 @@ export async function runOneShot(
           ? err.message
           : String(err);
     void debugLog("error", "turn.error", { mode: "one-shot", message });
+    if (format !== "text") {
+      emitJson({ type: "result", ok: false, error: message });
+    }
     process.stderr.write(`Error: ${message}\n`);
     process.exitCode = 1;
   } finally {
@@ -220,6 +313,7 @@ export async function runAgentOneShot(
       agent,
       readOnly: options.readOnly,
       model: options.model,
+      maxSteps: options.maxSteps,
       projectContext,
       memory,
       onText: (delta) => {

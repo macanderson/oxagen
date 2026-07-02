@@ -169,15 +169,73 @@ export function createCwdWorkspace(cwd: string): Workspace {
     },
 
     async diff() {
+      // 1. Tracked changes vs HEAD (the original behavior). A rejection here
+      //    means we're not in a git repo (or git is missing) — return "" exactly
+      //    as before so callers keep their "no diff available" contract.
+      let tracked: string;
       try {
         const { stdout } = await execFileAsync("git", ["diff", "HEAD"], {
           cwd,
           maxBuffer: 50 * 1024 * 1024,
         });
-        return stdout;
+        tracked = stdout;
       } catch {
         return ""; // not a git repo, or git missing — no diff available
       }
+
+      // 2. Untracked files never appear in `git diff HEAD`, yet a fix that
+      //    CREATES a file must show up in the final patch (SWE-bench scores the
+      //    whole diff, so an added file that's missing reads as an incomplete
+      //    patch). Enumerate untracked paths without ever touching the index
+      //    (no `git add`), then synthesize a create-file diff for each.
+      let untracked: string[];
+      try {
+        const { stdout } = await execFileAsync(
+          "git",
+          ["ls-files", "--others", "--exclude-standard"],
+          { cwd, maxBuffer: 50 * 1024 * 1024 },
+        );
+        untracked = stdout
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+      } catch {
+        return tracked; // couldn't enumerate untracked files — return what we have
+      }
+
+      let synthetic = "";
+      for (const rel of untracked) {
+        // Stat first: skip anything that isn't a regular file, and silently skip
+        // files over 1 MiB (binary blobs / huge artifacts aren't patch content).
+        let size: number;
+        try {
+          const info = await fs.stat(path.resolve(cwd, rel));
+          if (!info.isFile()) continue;
+          size = info.size;
+        } catch {
+          continue; // vanished between listing and stat — skip
+        }
+        if (size > 1024 * 1024) continue;
+
+        // `git diff --no-index /dev/null <file>` emits a "new file" hunk. It
+        // exits 1 whenever the two inputs differ (always true vs /dev/null),
+        // which execFile surfaces as a rejection whose `stdout` holds the diff —
+        // that is the SUCCESS path here, not an error. A real failure (code 2)
+        // leaves stdout empty, so appending it is a harmless no-op.
+        try {
+          const { stdout } = await execFileAsync(
+            "git",
+            ["diff", "--no-index", "--binary", "/dev/null", rel],
+            { cwd, maxBuffer: 50 * 1024 * 1024 },
+          );
+          synthetic += stdout;
+        } catch (err) {
+          const out = (err as { stdout?: string }).stdout;
+          if (typeof out === "string") synthetic += out;
+        }
+      }
+
+      return tracked + synthetic;
     },
   };
 }

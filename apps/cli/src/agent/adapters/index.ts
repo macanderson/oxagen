@@ -12,3 +12,8 @@ export {
   createPlatformAgentAi,
   type PlatformAgentAiOptions,
 } from "./platform-agent-ai.js";
+export {
+  createGatewayAgentAi,
+  gatewayReasoningOptions,
+  type GatewayAgentAiOptions,
+} from "./gateway-agent-ai.js";

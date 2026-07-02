@@ -52,23 +52,14 @@ describe("runCodingAgent – stream error handling", () => {
   });
 });
 
-describe("runCodingAgent – onStepFinish tool-call events (lines 51-58)", () => {
-  it("emits a tool-call event for each toolCall reported by onStepFinish", async () => {
-    const ws = new MemoryWorkspace({ "a.ts": "foo" });
-    const events: CodingEvent[] = [];
-
-    const ai: AgentAi = {
-      stream(args: ModelRunArgs) {
+describe("runCodingAgent – tool lifecycle events from stream parts", () => {
+  /** Build a fake AgentAi whose fullStream yields the given parts. */
+  function aiYielding(parts: unknown[]): AgentAi {
+    return {
+      stream(_args: ModelRunArgs) {
         return {
           fullStream: (async function* () {
-            // Simulate the AI SDK calling onStepFinish with tool calls.
-            args.onStepFinish?.({
-              toolCalls: [
-                { toolName: "read_file", args: { path: "a.ts" } },
-                { toolName: "glob", input: { pattern: "**/*.ts" } },
-              ],
-            });
-            yield { type: "text-delta", text: "finished" };
+            for (const p of parts) yield p;
           })(),
           steps: Promise.resolve([{}]),
           usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
@@ -77,6 +68,16 @@ describe("runCodingAgent – onStepFinish tool-call events (lines 51-58)", () =>
       },
       generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
     };
+  }
+
+  it("emits a tool-call event the moment a tool-call part streams in", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "foo" });
+    const events: CodingEvent[] = [];
+    const ai = aiYielding([
+      { type: "tool-call", toolCallId: "c1", toolName: "read_file", input: { path: "a.ts" } },
+      { type: "tool-call", toolCallId: "c2", toolName: "glob", input: { pattern: "**/*.ts" } },
+      { type: "text-delta", text: "finished" },
+    ]);
 
     const result = await runCodingAgent({
       workspace: ws,
@@ -92,24 +93,61 @@ describe("runCodingAgent – onStepFinish tool-call events (lines 51-58)", () =>
     expect(toolCallEvents[1]).toMatchObject({ type: "tool-call", name: "glob" });
   });
 
-  it("handles onStepFinish with empty toolCalls array without throwing", async () => {
+  it("emits a tool-result event with ok flag and per-tool duration when the result part arrives", async () => {
     const ws = new MemoryWorkspace({});
     const events: CodingEvent[] = [];
+    const ai = aiYielding([
+      { type: "tool-call", toolCallId: "c1", toolName: "bash", input: { command: "pytest" } },
+      { type: "tool-result", toolCallId: "c1", toolName: "bash", input: { command: "pytest" }, output: "3 passed" },
+      { type: "text-delta", text: "ok" },
+    ]);
 
-    const ai: AgentAi = {
-      stream(args: ModelRunArgs) {
-        return {
-          fullStream: (async function* () {
-            args.onStepFinish?.({ toolCalls: [] });
-            yield { type: "text-delta", text: "ok" };
-          })(),
-          steps: Promise.resolve([]),
-          usage: Promise.resolve({ inputTokens: 0, outputTokens: 0, totalTokens: 0 }),
-          response: Promise.resolve({ messages: [] }),
-        } as unknown as ReturnType<AgentAi["stream"]>;
-      },
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
-    };
+    await runCodingAgent({ workspace: ws, ai, instruction: "run tests", onEvent: (e) => events.push(e) });
+
+    const results = events.filter((e) => e.type === "tool-result");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ type: "tool-result", name: "bash", ok: true });
+    expect((results[0] as { result: string }).result).toContain("3 passed");
+    expect((results[0] as { durationMs: number }).durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("skips preliminary tool-result parts (only the final result emits an event)", async () => {
+    const ws = new MemoryWorkspace({});
+    const events: CodingEvent[] = [];
+    const ai = aiYielding([
+      { type: "tool-call", toolCallId: "c1", toolName: "bash", input: { command: "ls" } },
+      { type: "tool-result", toolCallId: "c1", toolName: "bash", input: { command: "ls" }, output: "partial", preliminary: true },
+      { type: "tool-result", toolCallId: "c1", toolName: "bash", input: { command: "ls" }, output: "full" },
+      { type: "text-delta", text: "ok" },
+    ]);
+
+    await runCodingAgent({ workspace: ws, ai, instruction: "ls", onEvent: (e) => events.push(e) });
+
+    const results = events.filter((e) => e.type === "tool-result");
+    expect(results).toHaveLength(1);
+    expect((results[0] as { result: string }).result).toContain("full");
+  });
+
+  it("maps a tool-error part to an ok:false tool-result event", async () => {
+    const ws = new MemoryWorkspace({});
+    const events: CodingEvent[] = [];
+    const ai = aiYielding([
+      { type: "tool-call", toolCallId: "c1", toolName: "edit_file", input: { path: "x" } },
+      { type: "tool-error", toolCallId: "c1", toolName: "edit_file", input: { path: "x" }, error: new Error("String not found") },
+      { type: "text-delta", text: "ok" },
+    ]);
+
+    await runCodingAgent({ workspace: ws, ai, instruction: "edit", onEvent: (e) => events.push(e) });
+
+    const results = events.filter((e) => e.type === "tool-result");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ type: "tool-result", name: "edit_file", ok: false });
+  });
+
+  it("handles a stream with no tool parts without emitting tool events", async () => {
+    const ws = new MemoryWorkspace({});
+    const events: CodingEvent[] = [];
+    const ai = aiYielding([{ type: "text-delta", text: "ok" }]);
 
     const result = await runCodingAgent({
       workspace: ws,
@@ -120,29 +158,7 @@ describe("runCodingAgent – onStepFinish tool-call events (lines 51-58)", () =>
 
     expect(result.text).toBe("ok");
     expect(events.filter((e) => e.type === "tool-call")).toHaveLength(0);
-  });
-
-  it("handles onStepFinish with undefined toolCalls (null-coalesce path)", async () => {
-    const ws = new MemoryWorkspace({});
-
-    const ai: AgentAi = {
-      stream(args: ModelRunArgs) {
-        return {
-          fullStream: (async function* () {
-            // toolCalls is undefined — exercises the `?? []` branch
-            args.onStepFinish?.({ toolCalls: undefined });
-            yield { type: "text-delta", text: "ok" };
-          })(),
-          steps: Promise.resolve([]),
-          usage: Promise.resolve({ inputTokens: 0, outputTokens: 0, totalTokens: 0 }),
-          response: Promise.resolve({ messages: [] }),
-        } as unknown as ReturnType<AgentAi["stream"]>;
-      },
-      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
-    };
-
-    const result = await runCodingAgent({ workspace: ws, ai, instruction: "noop" });
-    expect(result.text).toBe("ok");
+    expect(events.filter((e) => e.type === "tool-result")).toHaveLength(0);
   });
 });
 

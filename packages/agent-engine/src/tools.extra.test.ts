@@ -200,3 +200,31 @@ describe("buildWorkspaceTools – bash error paths", () => {
     expect(observed[0]).toBe(600_000);
   });
 });
+
+describe("per-tool timeout backstop", () => {
+  it("toolBackstopMs honors bash's declared timeout_ms plus grace, capped at max", async () => {
+    const { toolBackstopMs } = await import("./tools");
+    expect(toolBackstopMs("bash", { timeout_ms: 500_000 })).toBe(530_000);
+    expect(toolBackstopMs("bash", {})).toBe(150_000); // default 120s + 30s grace
+    expect(toolBackstopMs("bash", { timeout_ms: 9_999_999 })).toBe(630_000); // capped at 600s
+    expect(toolBackstopMs("read_file", {})).toBe(60_000);
+    expect(toolBackstopMs("grep", null)).toBe(60_000);
+  });
+
+  it("a wedged tool resolves to a backstop timeout string instead of hanging", async () => {
+    const { vi } = await import("vitest");
+    vi.useFakeTimers();
+    try {
+      const ws = new MemoryWorkspace({});
+      // Wedge grep: never resolves — the backstop must fire at 60s.
+      ws.grep = () => new Promise(() => {});
+      const tools = buildWorkspaceTools(ws);
+      const pending = run(tools.grep, { pattern: "x" });
+      await vi.advanceTimersByTimeAsync(60_001);
+      const out = await pending;
+      expect(out).toContain("timed out after 60s (backstop)");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

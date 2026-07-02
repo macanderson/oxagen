@@ -13,6 +13,35 @@ export interface Session {
   orgSlug: string;
   workspaceSlug: string;
   apiUrl: string;
+  /**
+   * True when this is the synthetic benchmark session produced by
+   * `OXAGEN_ALLOW_NO_SESSION=1` — there is no real account behind it. Run
+   * paths must route model calls gateway-direct (`createGatewayAgentAi`)
+   * instead of the platform port, and skip platform-bound side channels
+   * (graph sync).
+   */
+  synthetic?: boolean;
+}
+
+/**
+ * The synthetic benchmark session returned when `OXAGEN_ALLOW_NO_SESSION=1`.
+ * Documented in `packages/config/src/registry.ts` (OXAGEN_ALLOW_NO_SESSION):
+ * only for headless benchmark/CI sandboxes (bench/swe-bench,
+ * bench/terminal-bench) that run the agent path with no logged-in account.
+ */
+function syntheticBenchSession(): Session {
+  return {
+    token: "",
+    orgSlug: getOrgId() ?? "bench",
+    workspaceSlug: getWorkspaceId() ?? "bench",
+    apiUrl: getApiUrl(),
+    synthetic: true,
+  };
+}
+
+/** True when the account-required gate is explicitly bypassed for benchmarks. */
+export function allowNoSession(): boolean {
+  return process.env["OXAGEN_ALLOW_NO_SESSION"] === "1";
 }
 
 /**
@@ -40,6 +69,11 @@ export function requireSession(): Session {
   const workspaceSlug = getWorkspaceId();
 
   if (!token || !orgSlug || !workspaceSlug) {
+    // Benchmark bypass (OXAGEN_ALLOW_NO_SESSION=1): headless bench containers
+    // have no account; return the synthetic session instead of exiting. The
+    // run paths detect `synthetic` and go gateway-direct for model calls.
+    if (allowNoSession()) return syntheticBenchSession();
+
     const missing: string[] = [];
     if (!token) missing.push("token");
     if (!orgSlug) missing.push("org");

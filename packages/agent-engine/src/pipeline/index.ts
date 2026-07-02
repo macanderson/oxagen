@@ -133,8 +133,15 @@ export interface RunTurnOptions {
   onText?: (delta: string) => void;
   /** Streamed model reasoning / chain-of-thought deltas (shown dim in the CLI). */
   onReasoning?: (delta: string) => void;
-  /** Fired when the model invokes a tool. */
+  /** Fired when the model invokes a tool (the moment the call streams in). */
   onToolCall?: (name: string, input: unknown) => void;
+  /**
+   * Fired when a tool call completes (or errors), with real per-tool timing.
+   * Together with `onToolCall` this brackets tool execution, so callers'
+   * inactivity guards can treat an in-flight tool as progress instead of
+   * aborting healthy multi-minute test runs.
+   */
+  onToolEvent?: (e: { name: string; ok: boolean; durationMs: number }) => void;
   /**
    * Fired at the end of each execution round with the cumulative `git diff` of
    * the changed files and the changed-file list. Lets the UI render the code
@@ -320,6 +327,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         if (e.type === "text") opts.onText?.(e.delta);
         if (e.type === "reasoning") opts.onReasoning?.(e.delta);
         if (e.type === "tool-call") onToolCall(e.name, e.input);
+        if (e.type === "tool-result")
+          opts.onToolEvent?.({ name: e.name, ok: e.ok, durationMs: e.durationMs });
         if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
         captureToolEvent(e, toolEvents, opts.verbose);
       },
@@ -578,6 +587,8 @@ async function runBare(
       if (e.type === "text") opts.onText?.(e.delta);
       if (e.type === "reasoning") opts.onReasoning?.(e.delta);
       if (e.type === "tool-call") onToolCall(e.name, e.input);
+      if (e.type === "tool-result")
+        opts.onToolEvent?.({ name: e.name, ok: e.ok, durationMs: e.durationMs });
       if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
       captureToolEvent(e, toolEvents, opts.verbose);
     },

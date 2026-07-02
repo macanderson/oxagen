@@ -82,9 +82,6 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
   ];
 
   let streamError: unknown = null;
-  // Per-step timing: the tools in a step ran between the previous step's finish
-  // and this one's. Gives each tool event a real (if step-granular) duration.
-  let prevStepAt = Date.now();
   const result = opts.ai.stream({
     model: opts.model ?? "anthropic/claude-opus-4-8",
     system,
@@ -96,50 +93,60 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
     onError: ({ error }) => {
       streamError = error;
     },
-    onStepFinish: ({ toolCalls, toolResults }) => {
-      const now = Date.now();
-      // Index results by call id so each call is paired with what it returned.
-      const resultsById = new Map<string, unknown>();
-      for (const tr of toolResults ?? []) {
-        const r = tr as { toolCallId?: string; output?: unknown; result?: unknown; error?: unknown };
-        if (r.toolCallId) resultsById.set(r.toolCallId, r.error ?? r.output ?? r.result);
-      }
-      for (const tc of toolCalls ?? []) {
-        const call = tc as {
-          toolCallId?: string;
-          toolName: string;
-          input?: unknown;
-          args?: unknown;
-        };
-        const input = call.input ?? call.args;
-        onEvent({ type: "tool-call", name: call.toolName, input });
-        const out = call.toolCallId ? resultsById.get(call.toolCallId) : undefined;
-        onEvent({
-          type: "tool-result",
-          name: call.toolName,
-          input: stringifyCapped(input, 1000),
-          result: stringifyCapped(out, 2000),
-          durationMs: now - prevStepAt,
-          ok: !isErrorResult(out),
-        });
-      }
-      prevStepAt = now;
-    },
   });
 
   let text = "";
+  // Start times by toolCallId, so tool-result events carry REAL per-tool
+  // durations. The old onStepFinish emission could only offer step-granular
+  // timing and — worse — only fired after the whole step completed, so callers'
+  // inactivity guards saw zero progress while a long tool executed and would
+  // abort healthy multi-minute test runs.
+  const toolStartedAt = new Map<string, number>();
   try {
     // Consume the FULL stream (not just textStream) so the model's reasoning /
     // chain-of-thought is surfaced alongside its answer — the CLI renders it dim
     // and inline so the user sees everything the agent is thinking, not only the
     // final prose. `text-delta` carries answer text; `reasoning-delta` carries
     // the thinking trace. Both parts expose their content on `.text` in ai@6.
+    // Tool lifecycle parts are emitted as they stream: `tool-call` the moment
+    // the model commits to a call (BEFORE it executes), `tool-result` /
+    // `tool-error` when execution settles — live progress for the UI and for
+    // the callers' inactivity guards.
     for await (const part of result.fullStream) {
       if (part.type === "text-delta") {
         text += part.text;
         onEvent({ type: "text", delta: part.text });
       } else if (part.type === "reasoning-delta") {
         onEvent({ type: "reasoning", delta: part.text });
+      } else if (part.type === "tool-call") {
+        toolStartedAt.set(part.toolCallId, Date.now());
+        onEvent({ type: "tool-call", name: part.toolName, input: part.input });
+      } else if (part.type === "tool-result") {
+        // `preliminary` results (streamed partial tool output) are progress,
+        // not completion — the final result for the same call follows.
+        if (!part.preliminary) {
+          const started = toolStartedAt.get(part.toolCallId);
+          toolStartedAt.delete(part.toolCallId);
+          onEvent({
+            type: "tool-result",
+            name: part.toolName,
+            input: stringifyCapped(part.input, 1000),
+            result: stringifyCapped(part.output, 2000),
+            durationMs: started ? Date.now() - started : 0,
+            ok: !isErrorResult(part.output),
+          });
+        }
+      } else if (part.type === "tool-error") {
+        const started = toolStartedAt.get(part.toolCallId);
+        toolStartedAt.delete(part.toolCallId);
+        onEvent({
+          type: "tool-result",
+          name: part.toolName,
+          input: stringifyCapped(part.input, 1000),
+          result: stringifyCapped(part.error, 2000),
+          durationMs: started ? Date.now() - started : 0,
+          ok: false,
+        });
       }
     }
   } catch (err) {
