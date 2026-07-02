@@ -66,15 +66,17 @@ describe("listSourceFiles — honors .gitignore", () => {
     expect(files.some((f) => f.includes(".claude"))).toBe(false);
   });
 
-  it("only returns supported source extensions", async () => {
+  it("returns supported source + doc extensions, excludes the rest", async () => {
     writeFileSync(join(repo, "code.ts"), "export const a = 1;\n");
-    writeFileSync(join(repo, "readme.md"), "# not source\n");
+    writeFileSync(join(repo, "readme.md"), "# docs\n");
     writeFileSync(join(repo, "data.json"), "{}\n");
 
     const files = await listSourceFiles(repo);
 
     expect(files).toContain("code.ts");
-    expect(files).not.toContain("readme.md");
+    // .md/.mdx are indexed too — they carry a content embedding + domain like
+    // any other file node (see builder.ts SUPPORTED_EXTENSIONS).
+    expect(files).toContain("readme.md");
     expect(files).not.toContain("data.json");
   });
 });

@@ -111,9 +111,14 @@ const CREATE_EDGES_SQL = `
     source    VARCHAR NOT NULL,
     target    VARCHAR NOT NULL,
     type      VARCHAR NOT NULL,
+    domain    VARCHAR,
     PRIMARY KEY (root, id)
   )
 `;
+
+// Migration: add domain column to existing DBs that pre-date this schema change.
+const MIGRATE_ADD_EDGE_DOMAIN_SQL =
+  "ALTER TABLE code_edges ADD COLUMN IF NOT EXISTS domain VARCHAR";
 
 const CREATE_FILES_SQL = `
   CREATE TABLE IF NOT EXISTS code_files (
@@ -170,7 +175,11 @@ export class CodeGraphStore {
                 if (e5) return reject(e5);
                 this.conn.run(MIGRATE_ADD_EMBEDDING_PROVIDER_SQL, (e6: Error | null) => {
                   if (e6) return reject(e6);
-                  resolve();
+                  // Edge domain tagging: mirrors the node-level migration above.
+                  this.conn.run(MIGRATE_ADD_EDGE_DOMAIN_SQL, (e7: Error | null) => {
+                    if (e7) return reject(e7);
+                    resolve();
+                  });
                 });
               });
             });
@@ -258,12 +267,12 @@ export class CodeGraphStore {
       for (const e of fileGraph.edges) {
         const id = computeEdgeId(e.source, e.target, e.type);
         await this.runSql(
-          `INSERT INTO code_edges (root, id, file_path, source, target, type)
-           VALUES (?, ?, ?, ?, ?, ?)
+          `INSERT INTO code_edges (root, id, file_path, source, target, type, domain)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (root, id) DO UPDATE SET
              file_path = excluded.file_path, source = excluded.source,
-             target = excluded.target, type = excluded.type`,
-          [root, id, relPath, e.source, e.target, e.type],
+             target = excluded.target, type = excluded.type, domain = excluded.domain`,
+          [root, id, relPath, e.source, e.target, e.type, e.domain ?? null],
         );
       }
       await this.runSql(
@@ -327,6 +336,37 @@ export class CodeGraphStore {
     }
   }
 
+  /**
+   * Bulk-stamp the `domain` property on every code_edge declared by a file
+   * (`file_path`) whose relative path matches a key in `domainMap` — the same
+   * "declaring file owns it" rule `code_edges.file_path` already uses (see the
+   * module doc comment). An edge whose declaring file has no confident domain
+   * is left untouched (null), matching `updateNodeDomains` — never fabricated.
+   *
+   * Called alongside `updateNodeDomains` so a domain slices the whole subgraph
+   * a file contributes, not just its nodes.
+   *
+   * Idempotent: re-running with the same map is a no-op.
+   */
+  async updateEdgeDomains(root: string, domainMap: Map<string, string>): Promise<void> {
+    await this.ready;
+    if (domainMap.size === 0) return;
+
+    await this.runSql("BEGIN TRANSACTION");
+    try {
+      for (const [relPath, domain] of domainMap) {
+        await this.runSql(
+          "UPDATE code_edges SET domain = ? WHERE root = ? AND file_path = ?",
+          [domain, root, relPath],
+        );
+      }
+      await this.runSql("COMMIT");
+    } catch (err) {
+      await this.runSql("ROLLBACK");
+      throw err;
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Embedding updates (Group 3 semantic index)
   // -------------------------------------------------------------------------
@@ -374,7 +414,7 @@ export class CodeGraphStore {
       [root],
     );
     const edgeRows = await this.querySql(
-      "SELECT source, target, type FROM code_edges WHERE root = ?",
+      "SELECT source, target, type, domain FROM code_edges WHERE root = ?",
       [root],
     );
     const nodes = new Map<string, CodeNode>();
@@ -383,6 +423,7 @@ export class CodeGraphStore {
       source: r["source"] as string,
       target: r["target"] as string,
       type: r["type"] as CodeEdgeType,
+      domain: (r["domain"] as string | null) ?? undefined,
     }));
     return { nodes, edges };
   }

@@ -59,6 +59,12 @@ export interface CodeEdge {
   source: string;   // CodeNode ID
   target: string;   // CodeNode ID
   type: CodeEdgeType;
+  /**
+   * LLM-inferred application domain, inherited from the file that declares
+   * this edge (see {@link CodeNode.domain}). Set in bulk by `updateEdgeDomains`
+   * after `inferDomains()` — never fabricated per-edge.
+   */
+  domain?: string;
 }
 
 export interface CodeGraph {

@@ -36,6 +36,10 @@ function codeGraphDebugEnabled(): boolean {
 const SUPPORTED_EXTENSIONS = new Set([
   ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
   ".py", ".go", ".rs", ".java", ".kt",
+  // Docs: parsed by @oxagen/code-graph into heading sections (skipped as
+  // symbols — see symbolKindToNodeKind) but the file itself becomes a node
+  // so it can carry a content embedding + domain like any other file.
+  ".md", ".mdx",
 ]);
 
 const IGNORE_DIRS = new Set([
@@ -469,6 +473,7 @@ function extensionToLanguage(ext: string): string {
     ".jsx": "javascript", ".mjs": "javascript", ".cjs": "javascript",
     ".py": "python", ".go": "go", ".rs": "rust",
     ".java": "java", ".kt": "kotlin",
+    ".md": "markdown", ".mdx": "markdown",
   };
   return map[ext] ?? "unknown";
 }

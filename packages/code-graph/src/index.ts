@@ -30,7 +30,7 @@ export {
   isValidCodeEmbedding,
   cosineSimilarity,
 } from "./embed";
-export { renderFileText, renderSymbolText } from "./renderers";
+export { renderFileText, renderSymbolText, renderMarkdownFileText } from "./renderers";
 
 // ---------------------------------------------------------------------------
 // Language detection
