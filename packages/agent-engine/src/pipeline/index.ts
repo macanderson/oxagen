@@ -84,6 +84,10 @@ function composeAgentSystem(opts: RunTurnOptions, cwd: string): string {
     hasCodeGraph: Boolean(opts.codeGraph),
     hasCodeMap: false,
     profile: opts.profile,
+    // A named-agent persona replaces the default identity (its systemPrompt
+    // becomes the preamble). Lets `--agent` and the fleet run their persona
+    // through the ONE engine loop instead of the legacy loop.
+    agent: opts.agent,
   });
 }
 
@@ -111,6 +115,13 @@ export interface RunTurnOptions {
    * through the ONE engine loop.
    */
   wrapTools?: (tools: ToolSet) => ToolSet;
+  /**
+   * Named-agent persona: its `systemPrompt` replaces the default coding-agent
+   * identity. Combine with `bare: true` (the agent's prompt is authoritative) and
+   * a `wrapTools` that restricts to the agent's tool allowlist. This is how
+   * `--agent` and the fleet run through the ONE engine loop.
+   */
+  agent?: { name: string; systemPrompt: string };
   /** Loaded project rules (CLAUDE.md/AGENTS.md). */
   projectContext?: ProjectContext;
   /** Read-only mode: no file mutation, and the auto-revise loop is disabled. */
