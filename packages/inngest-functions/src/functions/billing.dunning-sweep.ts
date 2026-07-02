@@ -54,7 +54,12 @@ export const [billingDunningSweep] = createFunction(
         let count = 0;
         for (const { orgId } of activeOrgs) {
           try {
-            const balanceResult = await isLowBalance(orgId);
+            // system: true — this is a trusted cross-tenant cron sweeping every
+            // org with NO active tenant scope, so the billing reads must run via
+            // withSystemDb (same bypass sweepDunning() uses above). Without it
+            // the withTenantDb inside isLowBalance throws TenantScopeError and
+            // the low-balance check silently fails for every org.
+            const balanceResult = await isLowBalance(orgId, { system: true });
             if (balanceResult.low) {
               await notifyLowBalance(orgId, balanceResult);
               count++;

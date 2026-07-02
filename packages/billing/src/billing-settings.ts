@@ -6,7 +6,7 @@
  * so callers never deal with a missing row.
  */
 
-import { withTenantDb, schema } from "@oxagen/database";
+import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
@@ -72,13 +72,21 @@ function rowToSettings(row: {
  * Uses INSERT ON CONFLICT DO NOTHING followed by a SELECT so the function is
  * idempotent and race-condition safe. The DB unique constraint on org_id
  * (`org_billing_settings_org_idx`) ensures at most one row per org.
+ *
+ * `opts.system` routes the read/upsert through {@link withSystemDb} instead of
+ * {@link withTenantDb}. Request paths always run inside a tenant scope and must
+ * leave this false so RLS stays load-bearing; only trusted cross-tenant crons
+ * that sweep every org with no active scope (e.g. billing.dunning-sweep) pass
+ * `system: true`, mirroring sweepDunning()'s own withSystemDb usage.
  */
 export async function getOrgBillingSettings(
   orgId: string,
+  opts?: { system?: boolean },
 ): Promise<OrgBillingSettings> {
   const start = Date.now();
 
-  const row = await withTenantDb(async (tx) => {
+  const runner = opts?.system ? withSystemDb : withTenantDb;
+  const row = await runner(async (tx) => {
     // Attempt to create a default row; silently no-ops if one already exists.
     await tx
       .insert(schema.orgBillingSettings)
