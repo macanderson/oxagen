@@ -80,6 +80,29 @@ describe("isOverridablePromptKey", () => {
   });
 });
 
+describe("chatSystemPrompt — knowledge-graph-first context gathering", () => {
+  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+
+  it("declares the knowledge graph the PRIMARY source of context", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("Knowledge Graph FIRST");
+    expect(prompt).toContain("PRIMARY source of context");
+  });
+
+  it("names the graph capabilities to reach for first", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("graph.search");
+    expect(prompt).toContain("ontology.query");
+    expect(prompt).toContain("ontology.neighbors");
+    expect(prompt).toContain("agent.memory.recall");
+  });
+
+  it("frames other tools as a fallback when the graph has nothing", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("Only fall back to other tools");
+  });
+});
+
 describe("chatSystemPrompt — connection-create-inline intent", () => {
   const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
 
