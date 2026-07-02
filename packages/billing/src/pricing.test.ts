@@ -33,6 +33,21 @@ describe("resolveRate", () => {
   it("falls back to the configured fallback model for an unknown id", () => {
     expect(resolveRate("mistral-large-2")).toBe(PROVIDER_RATE_CARD["claude-sonnet-4-6"]);
   });
+
+  it("prices Claude Fable 5 at the Opus tier, not the Sonnet fallback", () => {
+    // Fable is Anthropic's most capable model; without an explicit row it would
+    // resolve to the Sonnet fallback and under-charge. Both the bare and gateway
+    // (creator/model) forms must land on the Opus-tier $15/$75 rate.
+    expect(resolveRate("claude-fable-5")).toBe(PROVIDER_RATE_CARD["claude-fable-5"]);
+    expect(resolveRate("anthropic/claude-fable-5")).toBe(PROVIDER_RATE_CARD["anthropic/claude-fable-5"]);
+    expect(resolveRate("claude-fable-5").outputPer1M).toBe(75.0);
+  });
+
+  it("prices Claude Sonnet 5 explicitly at the Sonnet tier", () => {
+    expect(resolveRate("claude-sonnet-5")).toBe(PROVIDER_RATE_CARD["claude-sonnet-5"]);
+    expect(resolveRate("anthropic/claude-sonnet-5")).toBe(PROVIDER_RATE_CARD["anthropic/claude-sonnet-5"]);
+    expect(resolveRate("claude-sonnet-5").outputPer1M).toBe(15.0);
+  });
 });
 
 describe("providerCostUsd", () => {

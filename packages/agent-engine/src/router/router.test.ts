@@ -34,6 +34,18 @@ describe("rate card", () => {
     expect(opus.outputPer1M).toBe(75.0);
   });
 
+  it("rateFor prices Claude Fable at the Opus tier (not the Sonnet fallback)", () => {
+    const fable = rateFor("anthropic/claude-fable-5");
+    expect(fable.inputPer1M).toBe(15.0);
+    expect(fable.outputPer1M).toBe(75.0);
+  });
+
+  it("rateFor prices Claude Sonnet 5 at the Sonnet tier via family prefix", () => {
+    const sonnet5 = rateFor("anthropic/claude-sonnet-5");
+    expect(sonnet5.inputPer1M).toBe(3.0);
+    expect(sonnet5.outputPer1M).toBe(15.0);
+  });
+
   it("rateFor uses fallback for unknown model", () => {
     const unknown = rateFor("some/unknown-model-xyz");
     expect(unknown).toEqual(FALLBACK_RATE);

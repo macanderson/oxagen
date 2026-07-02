@@ -20,6 +20,22 @@ describe("model catalog (@oxagen/ai/catalog)", () => {
     expect(getModel("does/not-exist")).toBeUndefined();
   });
 
+  it("surfaces the latest Anthropic models (Fable 5, Sonnet 5) in the picker", () => {
+    // Both are reasoning + vision + tools capable, 1M context, and text-selectable
+    // so they appear in every gatewayModels-derived selector (chat picker, model
+    // defaults settings). Guards against accidental removal when the catalog drifts.
+    const fable = getModel("anthropic/claude-fable-5");
+    const sonnet5 = getModel("anthropic/claude-sonnet-5");
+    expect(fable?.name).toBe("Claude Fable 5");
+    expect(sonnet5?.name).toBe("Claude Sonnet 5");
+    for (const m of [fable, sonnet5]) {
+      expect(m?.vendor).toBe("anthropic");
+      expect(m?.context).toBe("1M");
+      expect(supportsReasoning(m)).toBe(true);
+      expect(supportsText(m)).toBe(true);
+    }
+  });
+
   it("reports reasoning support from the capability array", () => {
     // Opus is reasoning-capable; Haiku is not (per the catalog).
     expect(supportsReasoning("anthropic/claude-opus-4.8")).toBe(true);

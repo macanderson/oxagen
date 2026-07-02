@@ -89,7 +89,7 @@ describe("defaultTab — value format", () => {
 // ---------------------------------------------------------------------------
 
 describe("defaultTab — known mappings", () => {
-  it("knowledge → sources", () => expect(defaultTab["knowledge"]).toBe("sources"));
+  it("knowledge → repos", () => expect(defaultTab["knowledge"]).toBe("repos"));
   it("settings → general", () => expect(defaultTab["settings"]).toBe("general"));
   it("access → sessions", () => expect(defaultTab["access"]).toBe("sessions"));
   it("security → audit", () => expect(defaultTab["security"]).toBe("audit"));
@@ -130,7 +130,7 @@ describe("org route builders", () => {
 describe("workspace route builders", () => {
   it("ask → /{org}/{ws}/ask", () => expect(workspace.ask(wsCtx)).toBe("/acme/prod/ask"));
   it("knowledge.root → /{org}/{ws}/knowledge", () => expect(workspace.knowledge.root(wsCtx)).toBe("/acme/prod/knowledge"));
-  it("knowledge.sources → /{org}/{ws}/knowledge/sources", () => expect(workspace.knowledge.sources(wsCtx)).toBe("/acme/prod/knowledge/sources"));
+  it("knowledge.repos → /{org}/{ws}/knowledge/repos", () => expect(workspace.knowledge.repos(wsCtx)).toBe("/acme/prod/knowledge/repos"));
   it("settings.root → /{org}/{ws}/settings", () => expect(workspace.settings.root(wsCtx)).toBe("/acme/prod/settings"));
   it("settings.models → /{org}/{ws}/settings/models", () => expect(workspace.settings.models(wsCtx)).toBe("/acme/prod/settings/models"));
 });
