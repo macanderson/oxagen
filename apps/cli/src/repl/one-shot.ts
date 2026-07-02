@@ -16,11 +16,13 @@ import {
   createCwdWorkspace,
   createGatedWorkspace,
   createCombinedMemory,
+  createServerMemory,
   createCodeGraphProvider,
   createGraphSyncProvider,
   createPlatformAgentAi,
   createGatewayAgentAi,
 } from "../agent/adapters/index.js";
+import { resolveApiContext } from "../lib/api.js";
 import { createMeteredAi } from "../agent/metered-ai.js";
 import { queryCodeGraph } from "../agent/code-graph.js";
 import type { Session } from "../lib/session.js";
@@ -89,6 +91,18 @@ export async function runOneShot(
     ? null
     : await openSessionMemory(cwd, `one-shot-${Date.now()}`);
   const fleetMemory = memoryDisabled ? null : openFleetMemory(cwd);
+  // Platform memory: recall prior lessons + mirror new ones. Only when
+  // authenticated (resolveApiContext non-null) and not a synthetic benchmark
+  // session — a synthetic token can't authenticate, and bench runs must not leak
+  // memory across instances (also gated by memoryDisabled below).
+  const serverMemory =
+    memoryDisabled || options.session.synthetic || !resolveApiContext()
+      ? null
+      : createServerMemory({
+          agentId: "coding-agent",
+          executionRef: `cli:one-shot-${Date.now()}`,
+          projectName: cwd.split("/").pop() || undefined,
+        });
   const traceStore = openTraceStore(cwd);
   const verbose = options.verbose ?? readConfig().verbose ?? false;
 
@@ -189,7 +203,10 @@ export async function runOneShot(
       bare: options.bare,
       verbose,
       maxSteps: options.maxSteps,
-      memory: createCombinedMemory(memory, fleetMemory),
+      memory: createCombinedMemory(memory, fleetMemory, {
+        server: serverMemory,
+        recallQuery: prompt,
+      }),
       codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
       trace: traceStore,
       // Graph sync posts to the platform API — meaningless (and unauthenticated)

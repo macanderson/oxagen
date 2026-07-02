@@ -169,3 +169,31 @@ describe("chatSystemPrompt — page form fill guidance", () => {
     expect(prompt).toContain("Current page form");
   });
 });
+
+describe("chatSystemPrompt — memory & self-improvement", () => {
+  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+
+  it("documents the memory & self-improvement section header", () => {
+    expect(chatSystemPrompt(CTX)).toContain("## Memory & Self-Improvement");
+  });
+
+  it("references the injected recalled-memory block by its exact header", () => {
+    // Must match the header the chat route injects (recall-context.ts) so the
+    // model recognizes the block it is told to treat as authoritative.
+    expect(chatSystemPrompt(CTX)).toContain(
+      "## Recalled workspace memory (prior sessions)",
+    );
+  });
+
+  it("instructs the agent to record new lessons via agent.memory.remember", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("agent.memory.remember");
+    expect(prompt.toLowerCase()).toContain("root cause");
+  });
+
+  it("tells the agent recalled memory is authoritative and RULEs must not be violated", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt.toLowerCase()).toContain("authoritative");
+    expect(prompt).toMatch(/never violate a RULE/i);
+  });
+});

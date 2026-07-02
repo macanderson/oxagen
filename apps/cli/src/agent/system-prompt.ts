@@ -55,6 +55,9 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
     "  precomputed symbol/import index, more precise than grep for those questions.",
     "- Use `bash` for builds, tests, git, and anything the dedicated tools don't cover.",
     "- Keep changes minimal and consistent with the surrounding code's style and conventions.",
+    "- Recalled workspace memories may appear in your context (a \"Lessons from prior sessions\"",
+    "  section). Treat RULE and FACT memories as previously-discovered constraints: honor them,",
+    "  do not re-investigate or re-violate what a past session already established.",
   ];
 
   if (profile === "headless") {
