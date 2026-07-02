@@ -1,5 +1,5 @@
 /**
- * page.tsx — Workspace → Knowledge → Inference.
+ * page.tsx — Workspace → Knowledge → Graph.
  *
  * Renders three independent <Suspense> sections that stream concurrently:
  *  - Graph statistics (graph.stats)
