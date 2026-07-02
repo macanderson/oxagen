@@ -277,6 +277,11 @@ class OxagenAgent(BaseInstalledAgent):
         env.setdefault("OXAGEN_ALLOW_NO_SESSION", "1")
         if not os.environ.get("OXAGEN_WARM_MEMORY_DIR"):
             env.setdefault("OXAGEN_DISABLE_MEMORY", "1")
+        # Grading runs the harness's own hidden, fixed tests — never whatever the
+        # agent leaves on disk — so an agent that edits a test until it passes
+        # "succeeds" locally and self-certifies, then scores 0 for real. Deny
+        # test-file mutations structurally instead of just asking nicely.
+        env.setdefault("OXAGEN_FORBID_TEST_EDITS", "1")
         # Warm mode: pin HOME to a stable in-container path so all of Oxagen's
         # node:os.homedir() calls resolve to _WARM_HOME_IN_CONTAINER rather than
         # whatever the trial container's default user home happens to be.  This
