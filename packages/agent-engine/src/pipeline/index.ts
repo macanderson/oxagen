@@ -69,7 +69,7 @@ function newTraceId(): string {
  * Compose the coding agent's system prompt: persona + operating rules (including
  * "the user cannot see tool output — always interpret and report") + the repo's
  * project rules. Both the pipeline and bare execution paths route through here so
- * the agent gets its full behavioural contract, not just the raw project text.
+ * the agent gets its full behavioral contract, not just the raw project text.
  * Stable within a session (cwd/projectContext/readOnly don't change), so it keeps
  * the provider prompt cache warm across turns.
  */
@@ -84,6 +84,10 @@ function composeAgentSystem(opts: RunTurnOptions, cwd: string): string {
     hasCodeGraph: Boolean(opts.codeGraph),
     hasCodeMap: false,
     profile: opts.profile,
+    // A named-agent persona replaces the default identity (its systemPrompt
+    // becomes the preamble). Lets `--agent` and the fleet run their persona
+    // through the ONE engine loop instead of the legacy loop.
+    agent: opts.agent,
   });
 }
 
@@ -111,12 +115,19 @@ export interface RunTurnOptions {
    * through the ONE engine loop.
    */
   wrapTools?: (tools: ToolSet) => ToolSet;
+  /**
+   * Named-agent persona: its `systemPrompt` replaces the default coding-agent
+   * identity. Combine with `bare: true` (the agent's prompt is authoritative) and
+   * a `wrapTools` that restricts to the agent's tool allowlist. This is how
+   * `--agent` and the fleet run through the ONE engine loop.
+   */
+  agent?: { name: string; systemPrompt: string };
   /** Loaded project rules (CLAUDE.md/AGENTS.md). */
   projectContext?: ProjectContext;
   /** Read-only mode: no file mutation, and the auto-revise loop is disabled. */
   readOnly?: boolean;
   /**
-   * System-prompt behavioural profile, forwarded to {@link buildSystemPrompt}.
+   * System-prompt behavioral profile, forwarded to {@link buildSystemPrompt}.
    * "interactive" (default) narrates for a live watcher; "headless" strips the
    * narration and swaps in a verification protocol for autonomous/one-shot runs
    * (SWE-bench, CI, piped stdout). Undefined ⇒ "interactive". Chosen once per
@@ -130,7 +141,7 @@ export interface RunTurnOptions {
   /** Trace sink for recording the turn record. */
   trace?: TraceStore | null;
   /**
-   * Graph-sync port: on every turn, (1) materialise/refresh the touched files
+   * Graph-sync port: on every turn, (1) materialize/refresh the touched files
    * as `:SourceFile` nodes in Neo4j and (2) record an `:Execution` node with
    * `[:TOUCHED_FILE]` edges to each file. Both writes are async and
    * fire-and-forget — a failure here NEVER blocks or fails the turn.

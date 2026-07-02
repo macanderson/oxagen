@@ -26,7 +26,6 @@ import { resolveApiContext } from "../lib/api.js";
 import { createMeteredAi } from "../agent/metered-ai.js";
 import { queryCodeGraph } from "../agent/code-graph.js";
 import type { Session } from "../lib/session.js";
-import { runAgent } from "../agent/loop.js";
 import { loadProjectContext } from "../agent/project-context.js";
 import { openSessionMemory } from "../agent/memory.js";
 import { openFleetMemory } from "../agent/fleet/memory.js";
@@ -385,20 +384,60 @@ export async function runAgentOneShot(
           executionRef: `cli:agent-${agentName}-${Date.now()}`,
           projectName: cwd.split("/").pop() || undefined,
         });
+  // Route the named agent through the ONE engine loop (runTurn), not the legacy
+  // loop: the persona's systemPrompt replaces the default identity, `bare: true`
+  // makes it authoritative (no eval/enhance/judge), and its tool allowlist +
+  // permissions are enforced via the shared turn-extras gate. --agent has no
+  // interactive broker, so the gate owns permissions (gatePermissions: true).
+  const settings = loadSettings({ cwd }).settings;
+  const baseAi: AgentAi = options.session.synthetic
+    ? createGatewayAgentAi({ cwd })
+    : createPlatformAgentAi({
+        apiUrl: options.session.apiUrl,
+        token: options.session.token,
+        orgSlug: options.session.orgSlug,
+        workspaceSlug: options.session.workspaceSlug,
+      });
+  const ai = createMeteredAi(baseAi, { onLog: (line) => void debugLog("timeout", line) });
+  const turnController = makeTurnController();
+  const extras = await buildTurnExtras({
+    cwd,
+    settings,
+    readOnly: options.readOnly,
+    agentTools: agent.tools,
+    gatePermissions: true,
+    signal: turnController.signal,
+    onBlocked: (name, reason) => process.stderr.write(`  ⛔ ${name}: ${reason}\n`),
+  });
+  const enrichedContext = extras.systemAppend
+    ? {
+        text: (projectContext?.text ?? "") + extras.systemAppend,
+        sources: [...(projectContext?.sources ?? []), "workspace rules + hooks"],
+      }
+    : projectContext;
+
   try {
     let streamed = false;
-    await runAgent({
+    await runTurn({
       prompt,
-      cwd,
-      agent,
+      workspace: createCwdWorkspace(cwd),
+      ai,
+      projectContext: enrichedContext,
+      extraTools: extras.extraTools,
+      wrapTools: extras.wrapTools,
+      agent: { name: agent.name, systemPrompt: agent.systemPrompt },
+      bare: true,
       readOnly: options.readOnly,
-      model: options.model,
+      model: options.model ?? agent.model,
       maxSteps: options.maxSteps,
-      projectContext,
+      effort: resolveEffort(options.effort),
       memory: createCombinedMemory(memory, fleetMemory, {
         server: serverMemory,
         recallQuery: prompt,
       }),
+      codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
+      trace: openTraceStore(cwd),
+      signal: turnController.signal,
       onText: (delta) => {
         streamed = true;
         process.stdout.write(delta);
@@ -408,13 +447,13 @@ export async function runAgentOneShot(
       onToolCall: (name, input) => {
         process.stderr.write(`  · ${formatToolCall(name, input)}\n`);
       },
-      onToolBlocked: (name, reason) => process.stderr.write(`  ⛔ ${name}: ${reason}\n`),
     });
     if (streamed) process.stdout.write("\n");
   } catch (err) {
     process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`);
     process.exitCode = 1;
   } finally {
+    await extras.closeMcp();
     await memory?.close();
   }
 }

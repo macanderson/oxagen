@@ -18,7 +18,7 @@
  */
 import { EventEmitter } from "node:events";
 import type { MemoryProvider } from "@oxagen/agent-engine";
-import { runAgent } from "../loop.js";
+import { createEngineRunner } from "../engine-runner.js";
 import {
   createCombinedMemory,
   type ServerMemory,
@@ -118,7 +118,7 @@ export class Fleet extends EventEmitter {
     this.store = opts.store ?? null;
     this.projectContext = opts.projectContext;
     this.agents = opts.agents ?? new Map<string, AgentDefinition>();
-    this.runner = opts.runner ?? runAgent;
+    this.runner = opts.runner ?? createEngineRunner();
     this.readOnly = opts.readOnly ?? false;
     this.isolation = opts.isolation ?? null;
   }
