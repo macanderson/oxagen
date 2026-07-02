@@ -1447,6 +1447,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_FORBID_TEST_EDITS: {
+    group: "CLI",
+    description:
+      "Set to '1' to make buildWorkspaceTools structurally deny edit_file/write_file on " +
+      "test-shaped paths (tests/, __tests__/, *.test.*, *_spec.rb, *Test.java, …), " +
+      "returning a denial the model sees instead of a silent no-op. For benchmark " +
+      "harnesses (SWE-bench) graded against hidden, fixed tests: an agent that edits the " +
+      "tests it will be scored against 'passes' locally but scores 0, since the edit is " +
+      "discarded before grading — never set this outside a benchmark/CI sandbox.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_LOCAL: {
     group: "CLI",
     description:

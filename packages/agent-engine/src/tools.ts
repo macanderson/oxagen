@@ -152,6 +152,49 @@ export function describeEditFailure(content: string, oldString: string): string 
   );
 }
 
+// ── Test-file path detection (OXAGEN_FORBID_TEST_EDITS) ─────────────────────
+// SWE-bench-style grading runs the SUT's own hidden, fixed test files — never
+// whatever the agent leaves on disk. An agent that edits a test until it
+// passes "succeeds" locally and self-certifies, then scores 0 for real: the
+// edit is discarded before grading. When the env flag is set, buildWorkspaceTools
+// denies every mutation under a test-shaped path so the model is structurally
+// unable to go down that path, rather than merely asked not to.
+
+/** Directory-name path segments that mark everything beneath them as test code. */
+const TEST_DIR_NAMES = new Set(["tests", "test", "__tests__"]);
+
+/** Basename patterns, matched against the lowercased filename only. */
+const TEST_BASENAME_PATTERNS: RegExp[] = [
+  /^test_.*\.py$/, // test_*.py
+  /_test\.py$/, // *_test.py
+  /^conftest\.py$/, // conftest.py
+  /\.test\.(ts|tsx|js|jsx)$/, // *.test.ts(x) / *.test.js(x)
+  /\.spec\.(ts|tsx|js|jsx)$/, // *.spec.ts(x) / *.spec.js(x)
+  /_spec\.rb$/, // *_spec.rb
+  /test\.java$/, // *Test.java
+  /_test\.go$/, // *_test.go
+];
+
+/**
+ * True when `relPath` looks like a test file, by directory convention
+ * (`tests/`, `test/`, `__tests__/` anywhere in the path) or by filename
+ * convention (`test_*.py`, `*.test.ts`, `*_spec.rb`, …). Case-insensitive;
+ * matches anywhere in the path, whether absolute or repo-relative. Pure —
+ * exported for its own unit tests and for reuse by any other mutating tool
+ * that needs the same check.
+ */
+export function isTestPath(relPath: string): boolean {
+  const segments = relPath.replace(/\\/g, "/").toLowerCase().split("/").filter(Boolean);
+  const basename = segments[segments.length - 1] ?? "";
+  if (segments.slice(0, -1).some((seg) => TEST_DIR_NAMES.has(seg))) return true;
+  return TEST_BASENAME_PATTERNS.some((re) => re.test(basename));
+}
+
+/** Denial returned in place of a mutation when OXAGEN_FORBID_TEST_EDITS blocks it. */
+export const TEST_EDIT_DENIED_MESSAGE =
+  "Test files are read-only in this mode. Fix the SOURCE so the existing tests pass — " +
+  "you cannot see or change the tests you're scored against.";
+
 // ── Per-tool timeout backstop ────────────────────────────────────────────────
 // Every tool must ALWAYS return: callers' turn-level inactivity guards treat an
 // in-flight tool as legitimate progress precisely because a tool cannot hang
@@ -257,6 +300,9 @@ export function buildWorkspaceTools(
 ): ToolSet {
   const onEvent = opts.onEvent ?? (() => undefined);
   const signal = opts.signal;
+  // Bench/CI-only gate (see OXAGEN_FORBID_TEST_EDITS in the config registry):
+  // structurally denies mutations to test-shaped paths — see isTestPath above.
+  const forbidTestEdits = process.env["OXAGEN_FORBID_TEST_EDITS"] === "1";
 
   const tools: ToolSet = {
     read_file: tool({
@@ -295,6 +341,7 @@ export function buildWorkspaceTools(
         content: z.string(),
       }),
       execute: async ({ path, content }) => {
+        if (forbidTestEdits && isTestPath(path)) return TEST_EDIT_DENIED_MESSAGE;
         try {
           await workspace.writeFile(path, content);
           onEvent({ type: "file-edit", path, bytes: content.length });
@@ -322,6 +369,7 @@ export function buildWorkspaceTools(
           ),
       }),
       execute: async ({ path, old_string, new_string, replace_all }) => {
+        if (forbidTestEdits && isTestPath(path)) return TEST_EDIT_DENIED_MESSAGE;
         try {
           const count = await workspace.editFile(path, old_string, new_string, {
             replaceAll: replace_all,

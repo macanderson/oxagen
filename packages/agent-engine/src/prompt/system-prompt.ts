@@ -120,7 +120,10 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
       "- Re-run the reproduction and the specific failing test(s); confirm they now pass.",
       "- Run the broader relevant test module to catch regressions, and fix any regression",
       "  you introduced.",
-      "- Do NOT modify, delete, or weaken tests to make them pass — fix the code under test.",
+      "- The tests you are graded on are FIXED and HIDDEN — you cannot see or edit them. Test",
+      "  files are read-only: editing, deleting, or weakening one is blocked and pointless,",
+      "  since grading runs the hidden originals, never your copy. Fix the SOURCE — that is",
+      "  the only path to a real pass. Never declare success based on a test you modified.",
       "- The deliverable is the code change. End only when the tests pass, stating in one or",
       "  two lines what you changed and the test result.",
     );
