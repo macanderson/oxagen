@@ -10,7 +10,7 @@
  *
  * Presentational pieces live in ./components; this file is the container.
  */
-import { Box, Static, Text, useApp, useInput } from "ink";
+import { Box, Text, useApp, useInput } from "ink";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import type { ModelMessage } from "ai";
 import { existsSync, readFileSync } from "node:fs";
@@ -46,6 +46,8 @@ import { taskRegistry } from "../agent/task-registry.js";
 import { isSubagentDispatch, subagentInfo } from "../agent/tool-formatter.js";
 import { HudPanel } from "./hud.js";
 import { AgentSidebar, type PanelMode } from "./agent-sidebar.js";
+import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
+import { runShellCommand, type ShellRunHandle } from "./shell-runner.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
@@ -65,6 +67,12 @@ import {
 import { resolveEscapeAction } from "./escape-action.js";
 import { isDebugEnabled } from "../lib/debug-log.js";
 import { Banner } from "../tui/banner.js";
+import {
+  useTerminalSize,
+  ENTER_ALT_SCREEN,
+  LEAVE_ALT_SCREEN,
+  CURSOR_HOME,
+} from "./use-terminal-size.js";
 import {
   makeTurnController,
   makeStallDetector,
@@ -301,6 +309,14 @@ export function ReplApp({
   // only while a turn is monitoring work; /panel pins it "on" or hides it "off".
   const [panelMode, setPanelMode] = useState<PanelMode>("auto");
   const panelModeRef = useRef<PanelMode>("auto");
+  // How far the transcript is scrolled back from the latest message, counted in
+  // messages hidden below the fold. 0 = pinned to the newest output (the default,
+  // auto-following as tokens stream in); PgUp raises it to reveal older history,
+  // PgDown lowers it, and any new submission snaps it back to 0. The ref mirrors
+  // the state so the synchronous key handler clamps against the live count.
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const scrollOffsetRef = useRef(0);
+  scrollOffsetRef.current = scrollOffset;
   // Timestamp of the most-recent Escape press (for the double-Esc detection
   // window). Null means no previous Esc has been recorded (or the window was
   // explicitly cleared after a 'prompt-reset' fires).
