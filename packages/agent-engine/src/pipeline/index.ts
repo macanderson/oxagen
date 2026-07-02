@@ -40,7 +40,15 @@ import {
   accumulateUsage,
 } from "../router/model-router";
 import { emptyUsage, mergeUsage } from "../types";
-import type { ModelTier, UsageTotals, Workspace, CodeGraphProvider, ProjectContext, CodingEvent } from "../types";
+import type {
+  ModelTier,
+  UsageTotals,
+  Workspace,
+  CodeGraphProvider,
+  ProjectContext,
+  CodingEvent,
+  ImageAttachment,
+} from "../types";
 import type { AgentAi, MemoryProvider, TraceStore, GraphSyncProvider } from "../ports";
 import type {
   EnhancementTrace,
@@ -94,6 +102,13 @@ function composeAgentSystem(opts: RunTurnOptions, cwd: string): string {
 export interface RunTurnOptions {
   /** The user's prompt for this turn, exactly as typed. */
   prompt: string;
+  /**
+   * Images attached to this turn's prompt (REPL Ctrl-V paste support).
+   * Attached only on the FIRST execution round — a judge/revise round already
+   * carries the image in `history` (it's part of round 0's committed
+   * messages), so resending it would just duplicate the bytes.
+   */
+  images?: ImageAttachment[];
   /** Workspace the agent operates on. */
   workspace: Workspace;
   /** Injected AI port — BYOK/unmetered in the CLI, metered on the platform. */
@@ -363,6 +378,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       workspace: opts.workspace,
       ai: opts.ai,
       instruction: prompt,
+      // Round 0 only (see the RunTurnOptions.images doc comment) — later
+      // revise rounds see it already, folded into `history`.
+      images: round === 0 ? opts.images : undefined,
       model: routed.model,
       effort: opts.effort,
       system: composeAgentSystem(opts, cwd),
@@ -660,6 +678,7 @@ async function runBare(
     workspace: opts.workspace,
     ai: opts.ai,
     instruction: opts.prompt,
+    images: opts.images,
     model: opts.model,
     effort: opts.effort,
     system: composeAgentSystem(opts, cwd),

@@ -1,6 +1,17 @@
 import type { ModelMessage, ToolSet } from "ai";
 import type { AgentAi, MemoryProvider, TraceStore } from "./ports";
 
+/**
+ * An image attached to a turn's instruction (REPL Ctrl-V paste support).
+ * Becomes an `ImagePart` alongside the instruction text — see engine.ts.
+ */
+export interface ImageAttachment {
+  /** Raw image bytes. */
+  data: Buffer;
+  /** IANA media type, e.g. "image/png". */
+  mediaType: string;
+}
+
 // ── Model tiers + usage accounting ──────────────────────────────────────────
 // Shared by router, trace types, evaluator, planner, and fleet.
 
@@ -150,6 +161,8 @@ export interface RunCodingAgentOptions {
   /** Injected AI port — BYOK/unmetered in the CLI, streamAgentReply (metered) on the platform. */
   ai: AgentAi;
   instruction: string;
+  /** Images to attach alongside the instruction text (multimodal content parts). Omit for a text-only turn. */
+  images?: ImageAttachment[];
   model?: string;
   /** Reasoning effort for models that support it (forwarded to the AI port). */
   effort?: "low" | "medium" | "high" | "xhigh" | "max";

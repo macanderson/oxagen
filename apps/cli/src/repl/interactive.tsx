@@ -14,6 +14,7 @@ import { Box, Text, measureElement, useApp, useInput, type DOMElement } from "in
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import type { ModelMessage } from "ai";
 import { existsSync, readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { theme } from "../tui/theme.js";
 import { runTurn, type AgentAi } from "@oxagen/agent-engine";
@@ -83,6 +84,7 @@ import {
   type Message,
 } from "./components.js";
 import { HudPanel } from "./hud.js";
+import type { PasteSubmission } from "./paste.js";
 import { resolveEscapeAction } from "./escape-action.js";
 import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
 import { isDebugEnabled } from "../lib/debug-log.js";
@@ -137,6 +139,18 @@ export interface ReplOptions {
   bare?: boolean;
   /** Start in verbose mode: capture + emit full per-turn telemetry. */
   verbose?: boolean;
+}
+
+/**
+ * One FIFO queue entry: the compact text as typed (transcript/HUD display)
+ * plus, when the prompt held a paste placeholder, the resolved model-bound
+ * data — expanded text and image attachments (see paste.ts). `paste` is
+ * resolved once at submit time in PromptInput, so a prompt queued behind a
+ * running turn still carries its full pasted content when it finally runs.
+ */
+interface QueuedPrompt {
+  text: string;
+  paste?: PasteSubmission;
 }
 
 // ── Main App ──────────────────────────────────────────────────────────────────
@@ -234,8 +248,11 @@ export function ReplApp({
   // Prompts submitted while a turn is in flight wait here and run FIFO when the
   // current turn finishes (Claude Code-style prompt queue). `queued` drives the
   // visible list; `queueRef` is the synchronous source of truth the pump reads.
-  const [queued, setQueued] = useState<string[]>([]);
-  const queueRef = useRef<string[]>([]);
+  // `paste` carries this prompt's expanded-text/image data (see paste.ts) —
+  // resolved once at submit time in PromptInput, so it survives however long
+  // the prompt waits in the FIFO before its turn actually runs.
+  const [queued, setQueued] = useState<QueuedPrompt[]>([]);
+  const queueRef = useRef<QueuedPrompt[]>([]);
   const pumpingRef = useRef(false);
   // Bumped every time a turn is interrupted (Esc/Ctrl-C). The pump captures the
   // generation it started under; when a cancel bumps it, the pump that was
@@ -814,7 +831,12 @@ export function ReplApp({
   const recallQueue = useCallback((): void => {
     const q = queueRef.current;
     if (q.length === 0) return;
-    const text = q.join("\n");
+    // Recalled prompts go back into the bar as plain text for editing — any
+    // resolved paste data (expanded text, image attachments) is dropped here.
+    // Re-editing a combined multi-prompt recall is already a fresh compose;
+    // pasting again (or leaving the compact token as inert text) is the
+    // simplest correct behaviour, and never crashes either way.
+    const text = q.map((p) => p.text).join("\n");
     queueRef.current = [];
     setQueued([]);
     injectText(text);
@@ -1051,7 +1073,7 @@ export function ReplApp({
   });
 
   const handleSubmit = useCallback(
-    async (text: string) => {
+    async (text: string, paste?: PasteSubmission) => {
 
       // `!cmd` is intercepted synchronously in handleUserSubmit (it runs
       // immediately, bypassing this queue, so it works mid-turn) — it never
@@ -1600,8 +1622,31 @@ export function ReplApp({
           title: submission,
           model: modelRef.current,
         });
+
+        // Resolve this turn's pasted image attachments (Ctrl-V) into bytes.
+        // Each is read independently — a missing/unreadable temp file (deleted,
+        // permissions) drops just that one image with a visible note in the
+        // transcript, never fails the whole turn (degrade gracefully, never crash).
+        const images: Array<{ data: Buffer; mediaType: string }> = [];
+        for (const img of paste?.images ?? []) {
+          try {
+            images.push({ data: await readFile(img.path), mediaType: img.mediaType });
+          } catch (err) {
+            turn.push({
+              role: "assistant",
+              content: `⚠ Couldn't attach a pasted image (${err instanceof Error ? err.message : String(err)}) — continuing without it.`,
+              timestamp: Date.now(),
+            });
+            render();
+          }
+        }
+
         const result = await runTurn({
-          prompt: submission,
+          // Paste placeholders (`[CopiedText-N]`) expand to their full stored
+          // text here — the model sees the real content even though the
+          // transcript above and the HUD title stay on the compact `submission`.
+          prompt: paste?.expandedText ?? submission,
+          images: images.length > 0 ? images : undefined,
           history: historyRef.current,
           workspace: createGatedWorkspace(
             workspaceRef.current,
@@ -1893,11 +1938,11 @@ export function ReplApp({
     const gen = pumpGenRef.current;
     try {
       while (pumpGenRef.current === gen && queueRef.current.length > 0) {
-        const next = queueRef.current[0] as string;
+        const next = queueRef.current[0] as QueuedPrompt;
         queueRef.current = queueRef.current.slice(1);
         setQueued(queueRef.current);
         try {
-          await handleSubmitRef.current(next);
+          await handleSubmitRef.current(next.text, next.paste);
         } catch (err) {
           // A single failing turn must neither wedge the queue (leaving later
           // prompts undrained forever) nor escape as an unhandled rejection from
@@ -1921,8 +1966,8 @@ export function ReplApp({
   // Every submission goes through the queue. When idle, the pump picks it up
   // immediately; when a turn is in flight, it waits its turn (FIFO).
   const enqueue = useCallback(
-    (text: string) => {
-      queueRef.current = [...queueRef.current, text];
+    (text: string, paste?: PasteSubmission) => {
+      queueRef.current = [...queueRef.current, { text, paste }];
       setQueued(queueRef.current);
       // Snap the transcript back to the newest output whenever a fresh prompt is
       // submitted — a user who had scrolled up to read history expects the view
@@ -1940,7 +1985,7 @@ export function ReplApp({
   // confirming the reset. Intercepting it here consumes the keystroke as the
   // answer the instant the user hits Enter, never touching the queue.
   const handleUserSubmit = useCallback(
-    (text: string) => {
+    (text: string, paste?: PasteSubmission) => {
       // A task edit committed (Ctrl-E on a Task Progress row loaded its title):
       // rewrite that task's title instead of enqueuing a prompt, then return the
       // bar to normal. An empty submit simply cancels the edit.
@@ -1973,7 +2018,7 @@ export function ReplApp({
         runShellCommand(text);
         return;
       }
-      enqueue(text);
+      enqueue(text, paste);
     },
     [enqueue, resetConversation, pushAssistant, setEditingTaskId],
   );
@@ -2094,7 +2139,7 @@ export function ReplApp({
               <Box key={i}>
                 <Text color="#FBBF24">{"⧗ queued: "}</Text>
                 <Text dimColor wrap="truncate">
-                  {q}
+                  {q.text}
                 </Text>
               </Box>
             ))}

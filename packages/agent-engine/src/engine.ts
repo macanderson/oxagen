@@ -88,6 +88,24 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
   // so the platform's /v1/agent/llm route does not hoist it back into the cached
   // system string.
   const system = opts.system ?? DEFAULT_SYSTEM;
+  // Pasted images (REPL Ctrl-V) ride alongside the instruction text as
+  // multimodal content parts. Text-only (the common case, and every retry
+  // step after the first — see the pipeline) keeps the plain-string content
+  // shape, unchanged from before this option existed.
+  const instructionMessage: ModelMessage =
+    opts.images && opts.images.length > 0
+      ? {
+          role: "user",
+          content: [
+            { type: "text", text: opts.instruction },
+            ...opts.images.map((img) => ({
+              type: "image" as const,
+              image: img.data,
+              mediaType: img.mediaType,
+            })),
+          ],
+        }
+      : { role: "user", content: opts.instruction };
   const messages: ModelMessage[] = [
     ...(opts.history ?? []),
     ...(recalled
@@ -98,7 +116,7 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
           } as ModelMessage,
         ]
       : []),
-    { role: "user", content: opts.instruction },
+    instructionMessage,
   ];
 
   const model = opts.model ?? "anthropic/claude-fable-5";
