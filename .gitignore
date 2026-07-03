@@ -134,3 +134,6 @@ tools/eval-out/
 
 # Personal CLI settings scope (may contain MCP credentials) — never commit
 .oxagen/settings.local.json
+
+# stores anthropic api token safe from claude code so it doesn't burn api usage
+.anthropic-api-key

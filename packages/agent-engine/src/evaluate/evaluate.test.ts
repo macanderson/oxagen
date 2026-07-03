@@ -5,7 +5,7 @@
  * extractCandidates via mocked AgentAi ports — never hits the gateway.
  */
 import { describe, it, expect, vi } from "vitest";
-import { evaluatePrompt } from "./evaluator";
+import { evaluatePrompt, LOCAL_EVALUATOR } from "./evaluator";
 import {
   judgeCompleteness,
   judgePanel,
@@ -30,7 +30,26 @@ function makeAi(overrides: Partial<AgentAi> = {}): AgentAi {
 
 // ── evaluatePrompt ────────────────────────────────────────────────────────────
 
+// The default evaluator is the local heuristic; these tests pass an explicit
+// model slug to exercise the LLM-evaluation path.
+const LLM_EVALUATOR = "anthropic/claude-haiku-4.5";
+
 describe("evaluatePrompt", () => {
+  it("defaults to the local heuristic coordinator — no model call", async () => {
+    const generateObject = vi.fn();
+    const ai = makeAi({ generateObject: generateObject as AgentAi["generateObject"] });
+
+    const result = await evaluatePrompt({ prompt: "fix the auth bug" }, ai);
+
+    expect(generateObject).not.toHaveBeenCalled();
+    expect(result.model).toBe(LOCAL_EVALUATOR);
+    expect(result.fallback).toBe(false);
+    // Auth-related prompt → precise tier from the deterministic router
+    expect(result.recommendedTier).toBe("precise");
+    expect(result.refinedPrompt).toBe("fix the auth bug");
+    expect(result.usage.inputTokens).toBe(0);
+  });
+
   it("returns model output when ai.generateObject succeeds", async () => {
     const ai = makeAi({
       generateObject: vi.fn().mockResolvedValue({
@@ -49,7 +68,7 @@ describe("evaluatePrompt", () => {
     });
 
     const result = await evaluatePrompt(
-      { prompt: "please fix the login timeout bug in src/auth/session.ts" },
+      { prompt: "please fix the login timeout bug in src/auth/session.ts", model: LLM_EVALUATOR },
       ai,
     );
 
@@ -67,7 +86,7 @@ describe("evaluatePrompt", () => {
       generateObject: vi.fn().mockRejectedValue(new Error("gateway unavailable")),
     });
 
-    const result = await evaluatePrompt({ prompt: "fix the auth bug" }, ai);
+    const result = await evaluatePrompt({ prompt: "fix the auth bug", model: LLM_EVALUATOR }, ai);
 
     expect(result.fallback).toBe(true);
     // Auth-related prompt → precise tier heuristically
@@ -93,7 +112,7 @@ describe("evaluatePrompt", () => {
       }),
     });
 
-    const result = await evaluatePrompt({ prompt: "rename the thing" }, ai);
+    const result = await evaluatePrompt({ prompt: "rename the thing", model: LLM_EVALUATOR }, ai);
     expect(result.refinedPrompt).toBe("rename the thing");
   });
 
@@ -114,7 +133,7 @@ describe("evaluatePrompt", () => {
       }),
     });
 
-    const result = await evaluatePrompt({ prompt: "do it" }, ai);
+    const result = await evaluatePrompt({ prompt: "do it", model: LLM_EVALUATOR }, ai);
     expect(result.completeness).toBe(100);
     expect(result.complexity).toBe(0);
   });

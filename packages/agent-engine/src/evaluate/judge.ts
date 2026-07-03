@@ -25,21 +25,22 @@ import type { AgentAi } from "../ports";
 import type { JudgeVerdict } from "../trace/types";
 
 /**
- * The default completeness advisor: a capable cross-vendor OpenAI model. The
- * advisor's job is to catch an executor's blind spots, and a different *vendor*
- * shares none of them — an OpenAI model auditing a (typically Claude) executor
- * is maximally independent. Overridable with `OXAGEN_LLM_ADVISOR` to track
- * gateway slug drift or pick a different judge.
+ * The default completeness advisor: the flagship Anthropic model (Fable 5).
+ * The default must work on an Anthropic-only key (the CLI's ANTHROPIC_API_KEY
+ * BYOK fallback resolves no other vendor), so it stays same-vendor; the
+ * distinct-from-executor guarantee below preserves judge independence. Set
+ * `OXAGEN_LLM_ADVISOR` to a cross-vendor slug (e.g. an OpenAI model) when a
+ * gateway key is available and vendor-independent judging is preferred.
  */
-export const DEFAULT_ADVISOR_MODEL = "openai/gpt-4o";
+export const DEFAULT_ADVISOR_MODEL = "anthropic/claude-fable-5";
 
 /**
  * Choose the advisor model — guaranteed distinct from the executor so the work is
  * never graded by the same model that produced it.
  *
- * Order: explicit `OXAGEN_LLM_ADVISOR` (if it differs) → the most powerful OpenAI
- * model (the default cross-vendor judge) → the precise tier → the balanced tier as
- * the last-resort distinct option when the executor is already those models.
+ * Order: explicit `OXAGEN_LLM_ADVISOR` (if it differs) → the default advisor →
+ * the precise tier → the balanced tier as the last-resort distinct option when
+ * the executor is already those models.
  */
 export function pickAdvisorModel(executorModel: string): string {
   const override = process.env["OXAGEN_LLM_ADVISOR"];
