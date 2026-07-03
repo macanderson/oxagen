@@ -59,6 +59,10 @@ oxagen graph search -q "rate limiting per org" -k file,symbol -n 5
 oxagen graph search -q "who owns the billing service?" -l Person --no-system
 ```
 
+Each result is tagged with its node kind and a similarity score:
+
+<TuiGraphSearch />
+
 ## Push code changes
 
 `oxagen graph push` computes a git code delta and up-syncs it to the workspace knowledge graph. It is the write-path counterpart to `graph pull`:

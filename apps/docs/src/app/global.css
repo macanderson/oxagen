@@ -161,12 +161,32 @@
   50% { transform: translateY(-12px) rotate(1.5deg); }
 }
 
+/* TUI screenshot components (apps/docs/src/components/tui/*) — a blinking
+   block caret and a subtle looping status-dot/pointer pulse, reused across
+   every screen instead of each one rolling its own animation. */
+.tui-caret {
+  animation: tui-blink 1s steps(1) infinite;
+}
+.tui-pulse {
+  animation: tui-pulse 2.2s ease-in-out infinite;
+}
+@keyframes tui-blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+@keyframes tui-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lp-orb,
   .lp-caret,
   .lp-line,
   .lp-hex-lit,
-  .lp-float {
+  .lp-float,
+  .tui-caret,
+  .tui-pulse {
     animation: none !important;
   }
   .lp-line { opacity: 1; }
