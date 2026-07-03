@@ -451,6 +451,13 @@ export function ReplApp({
   // listener, which can fight a terminal emulator's native text-selection
   // (click-drag) in some setups — see use-mouse-wheel.ts.
   const [mouseOn, setMouseOn] = useState(process.env.OXAGEN_CLI_MOUSE !== "0");
+  // `/mouse` is handled inside `handleSubmit`, a `useCallback` whose deps don't
+  // include `mouseOn` — reading the state directly there would close over
+  // whatever `mouseOn` was when that callback was last memoized, so `!mouseOn`
+  // would keep recomputing the SAME flip forever (toggle ON→OFF then stuck OFF).
+  // Mirror it into a ref (same pattern as hudVisibleRef/panelModeRef above) so
+  // the handler always reads the latest value.
+  const mouseOnRef = useRef(mouseOn);
   const handleWheel = useCallback((direction: "up" | "down") => {
     dispatchScroll({ type: direction === "up" ? "line-up" : "line-down" });
   }, []);
@@ -1196,7 +1203,8 @@ export function ReplApp({
         return;
       }
       if (text === "/mouse") {
-        const next = !mouseOn;
+        const next = !mouseOnRef.current;
+        mouseOnRef.current = next;
         setMouseOn(next);
         pushAssistant(
           next
@@ -1721,6 +1729,20 @@ export function ReplApp({
           }
         }
 
+        // Headless enhance budget, mirrored here for the interactive REPL: on a
+        // cold store the first code-graph query triggers a full tree-sitter build
+        // (135s+ on a Django-sized repo) — without a bound the ENHANCE stage would
+        // hang the turn on "thinking…" indefinitely (`enhanceTimeoutMs` is
+        // `undefined` ⇒ unbounded in the pipeline). one-shot.ts applies this same
+        // default for headless runs; a human staring at a spinner needs it just as
+        // much. OXAGEN_ENHANCE_TIMEOUT_MS overrides (0 disables the bound).
+        const enhanceTimeoutRaw = Number(process.env["OXAGEN_ENHANCE_TIMEOUT_MS"]);
+        const enhanceTimeoutMs = Number.isFinite(enhanceTimeoutRaw)
+          ? enhanceTimeoutRaw > 0
+            ? enhanceTimeoutRaw
+            : undefined
+          : 15_000;
+
         const result = await runTurn({
           // Paste placeholders (`[Text #N]`) expand to their full stored
           // text here — the model sees the real content even though the
@@ -1738,6 +1760,7 @@ export function ReplApp({
           readOnly: modeRef.current === "readonly",
           bare: bareRef.current,
           verbose: verboseRef.current,
+          enhanceTimeoutMs,
           projectContext: projectContextRef.current,
           memory: createCombinedMemory(
             memoryRef.current,

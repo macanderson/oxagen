@@ -24,6 +24,7 @@
 import { z } from "zod";
 import { classifyTier, accumulateUsage } from "../router/model-router";
 import { emptyUsage } from "../types";
+import { isFatalAuthOrBillingError } from "../loop-driver";
 import type { AgentAi } from "../ports";
 import type { PromptEvaluation } from "../trace/types";
 
@@ -154,7 +155,13 @@ function heuristicEvaluation(
 
 /**
  * Evaluate a prompt with the cheap model. Returns the model's structured read, or
- * a heuristic fallback that never throws — the pipeline must always make progress.
+ * a heuristic fallback for a transient failure — the pipeline should make
+ * progress rather than dying on a hiccup. A FATAL auth/billing error is the
+ * exception: it re-throws instead of falling back, because every later model
+ * call (route, execute, judge) would fail identically — falling back here would
+ * just waste a doomed evaluate→enhance→route detour before the same error
+ * surfaces at execute. Failing fast here gets the real message to the user
+ * immediately instead of after a delay.
  *
  * @param opts  - Evaluation options (prompt, optional model override, abort signal).
  * @param ai    - Injected AI port. The platform wires in a metered implementation;
@@ -194,7 +201,8 @@ export async function evaluatePrompt(
       model,
       usage: accumulateUsage(emptyUsage(), model, usage),
     };
-  } catch {
+  } catch (err) {
+    if (isFatalAuthOrBillingError(err)) throw err;
     return heuristicEvaluation(opts.prompt, model, true);
   }
 }

@@ -119,6 +119,24 @@ describe("selectBestCandidate", () => {
     expect(res.winnerId).toBe("c2"); // the passing one
   });
 
+  it("re-throws instead of falling back when the selector hits a fatal auth/billing error", async () => {
+    // Every other candidate's selector call would fail identically, so a
+    // heuristic fallback here would just mask the real (unrecoverable) error.
+    const ai = makeAi({
+      generateObject: vi.fn().mockRejectedValue(
+        new Error("A positive credit balance is required for all requests, please add credits."),
+      ),
+    });
+    await expect(
+      selectBestCandidate({
+        request: "fix",
+        candidates: [
+          cand("c1", { testOutput: "FAILED", changedFiles: ["a.py"] }),
+          cand("c2", { testOutput: "3 passed", changedFiles: ["a.py"] }),
+        ],
+        ai,
+      }),
+    ).rejects.toThrow(/positive credit balance/);
   it("uses DEFAULT_SELECTOR_MODEL (Fable 5) when no selectorModel or env override is set", async () => {
     const gen = vi.fn().mockResolvedValue({
       object: { winnerId: "c1", reasoning: "x", ranking: [{ id: "c1", score: 90, note: "ok" }, { id: "c2", score: 10, note: "meh" }] },
