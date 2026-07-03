@@ -1,75 +1,69 @@
-import { hexPoints, illustrationClassName } from "./hex-utils";
+import { hexEdgesPath, hexVertices, illustrationClassName } from "./hex-utils";
 
 /**
- * Agent-overview hero: a central agent hex-head orchestrating a ring of tool
- * hexes over thin connector lines — every tool call still passes through the
- * same `invoke()` boundary as the surrounding lines suggest.
+ * Agent-overview hero: a dotted agent hex at center with a loose ring of
+ * dotted tool hexes around it. Every connector is a hairline except the one
+ * currently in use, which carries the single ember thread to a soft-lit
+ * tool node — the one call passing through `invoke()` right now.
  */
 
 const TOOL_HEXES = [
-  { cx: 130, cy: 56, r: 15, lit: true },
-  { cx: 100, cy: 110, r: 15, lit: false },
-  { cx: 148, cy: 156, r: 15, lit: false },
-  { cx: 412, cy: 56, r: 15, lit: false },
-  { cx: 440, cy: 112, r: 15, lit: true },
-  { cx: 400, cy: 158, r: 15, lit: false },
+  { cx: 130, cy: 56, r: 12 },
+  { cx: 100, cy: 116, r: 12 },
+  { cx: 152, cy: 160, r: 12 },
+  { cx: 412, cy: 56, r: 12 },
+  { cx: 440, cy: 118, r: 12, active: true },
+  { cx: 402, cy: 160, r: 12 },
 ];
 
 export function IllustrationAgent({ className }: { className?: string }) {
   return (
-    <svg
-      role="img"
-      viewBox="0 0 560 200"
-      className={illustrationClassName(className)}
-    >
-      <title>A central agent node orchestrating a ring of tool nodes</title>
+    <svg role="img" viewBox="0 0 560 200" className={illustrationClassName(className)}>
+      <title>An agent node orchestrating a ring of tool nodes over a single active thread</title>
       <defs>
-        <linearGradient id="ill-agent-g1" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id="ill-agent-g1" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0" stopColor="var(--_ember-gold, #fd9a4b)" />
-          <stop offset="0.5" stopColor="var(--_ember-flame, #f07650)" />
           <stop offset="1" stopColor="var(--_ember-crimson, #eb5c5e)" />
         </linearGradient>
+        <radialGradient id="ill-agent-glow">
+          <stop offset="0" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0.8} />
+          <stop offset="1" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0} />
+        </radialGradient>
       </defs>
 
       {TOOL_HEXES.map((h, i) => (
         <path
           key={`line-${i}`}
           d={`M${h.cx},${h.cy} L280,100`}
-          stroke="currentColor"
-          strokeWidth={1.5}
-          opacity={h.lit ? 0.4 : 0.2}
+          stroke={h.active ? "url(#ill-agent-g1)" : "currentColor"}
+          strokeWidth={h.active ? 1.25 : 1}
+          strokeDasharray={h.active ? undefined : "0.5 6"}
+          opacity={h.active ? 0.75 : 0.2}
         />
       ))}
 
       {TOOL_HEXES.map((h, i) => (
-        <polygon
-          key={`hex-${i}`}
-          points={hexPoints(h.cx, h.cy, h.r)}
-          fill={h.lit ? "url(#ill-agent-g1)" : "none"}
-          stroke={h.lit ? "none" : "currentColor"}
-          strokeWidth={1.5}
-          opacity={h.lit ? 0.9 : 0.35}
-        />
+        <g key={`hex-${i}`} opacity={h.active ? 0.9 : 0.32}>
+          {hexVertices(h.cx, h.cy, h.r).map((p, j) => (
+            <circle key={j} cx={p.x} cy={p.y} r={1} fill="currentColor" />
+          ))}
+        </g>
       ))}
+      <circle cx={440} cy={118} r={11} fill="url(#ill-agent-glow)" />
 
       {/* agent head */}
-      <polygon
-        points={hexPoints(280, 100, 38)}
+      <g opacity={0.34}>
+        {hexVertices(280, 100, 34).map((p, j) => (
+          <circle key={j} cx={p.x} cy={p.y} r={1.25} fill="currentColor" />
+        ))}
+      </g>
+      <path
+        d={hexEdgesPath(280, 100, 34, [5, 0])}
         fill="none"
         stroke="url(#ill-agent-g1)"
-        strokeWidth={2}
-      />
-      <line x1={280} y1={62} x2={280} y2={46} stroke="currentColor" strokeWidth={1.5} opacity={0.6} />
-      <circle cx={280} cy={42} r={4} fill="url(#ill-agent-g1)" />
-      <rect x={266} y={92} width={8} height={10} rx={2} fill="currentColor" opacity={0.7} />
-      <rect x={286} y={92} width={8} height={10} rx={2} fill="currentColor" opacity={0.7} />
-      <path
-        d="M266,116 Q280,124 294,116"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.75}
+        strokeWidth={1.25}
         strokeLinecap="round"
-        opacity={0.7}
+        opacity={0.6}
       />
     </svg>
   );

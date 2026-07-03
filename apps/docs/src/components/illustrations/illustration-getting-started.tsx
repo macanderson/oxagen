@@ -1,150 +1,113 @@
-import { hexPoints, illustrationClassName } from "./hex-utils";
+import { hexEdgesPath, hexVertices, illustrationClassName } from "./hex-utils";
 
 /**
- * Getting-started hero: the onboarding journey rendered as a launch path —
- * terminal prompt (sign up) to organization hex (create org) to a workspace
- * hex cluster (land in the app shell) — matching the page's three-step flow.
+ * Getting-started hero: a single dotted path drifting left to right, marked
+ * by three quiet way-points (sign up, organization, workspace). Only the
+ * middle way-point — the step that creates lasting state — carries the
+ * ember thread; the rest stay neutral line-art.
  */
 
 const WORKSPACE_HEXES = [
-  { cx: 452, cy: 84, r: 15, lit: false },
-  { cx: 484, cy: 84, r: 15, lit: true },
-  { cx: 452, cy: 116, r: 15, lit: false },
-  { cx: 484, cy: 116, r: 15, lit: false },
+  { cx: 452, cy: 92, r: 11 },
+  { cx: 480, cy: 108, r: 11 },
+  { cx: 452, cy: 124, r: 11 },
 ];
 
 export function IllustrationGettingStarted({ className }: { className?: string }) {
   return (
-    <svg
-      role="img"
-      viewBox="0 0 560 200"
-      className={illustrationClassName(className)}
-    >
-      <title>Launch path from sign-up terminal to organization to workspace</title>
+    <svg role="img" viewBox="0 0 560 200" className={illustrationClassName(className)}>
+      <title>A path drifting from sign-up to organization to workspace</title>
       <defs>
-        <linearGradient id="ill-getting-started-g1" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id="ill-getting-started-g1" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0" stopColor="var(--_ember-gold, #fd9a4b)" />
-          <stop offset="0.5" stopColor="var(--_ember-flame, #f07650)" />
           <stop offset="1" stopColor="var(--_ember-crimson, #eb5c5e)" />
         </linearGradient>
+        <radialGradient id="ill-getting-started-glow">
+          <stop offset="0" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0.8} />
+          <stop offset="1" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0} />
+        </radialGradient>
       </defs>
 
-      {/* stage 1 — sign-up terminal */}
-      <rect
-        x={32}
-        y={70}
-        width={100}
-        height={60}
-        rx={8}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.5}
-        opacity={0.45}
-      />
       <path
-        d="M48,92 L60,100 L48,108"
+        d="M60,100 L500,100"
         fill="none"
         stroke="currentColor"
-        strokeWidth={1.5}
+        strokeWidth={1}
+        strokeDasharray="0.5 7"
+        strokeLinecap="round"
+        opacity={0.35}
+      />
+
+      {/* way-point 1 — sign up */}
+      <path
+        d="M62,90 L74,100 L62,110"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.25}
         strokeLinecap="round"
         strokeLinejoin="round"
-        opacity={0.7}
-      />
-      <rect x={66} y={104} width={8} height={4} rx={1} fill="url(#ill-getting-started-g1)" />
-
-      {/* arrow 1 */}
-      <path
-        d="M138,100 L214,100"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.5}
-        strokeDasharray="4 5"
-        strokeLinecap="round"
         opacity={0.4}
       />
+
+      {/* way-point 2 — organization, the one lasting step */}
       <path
-        d="M206,93 L216,100 L206,107"
+        d={hexEdgesPath(280, 100, 30, [4, 5, 0, 1])}
         fill="none"
         stroke="currentColor"
-        strokeWidth={1.5}
+        strokeWidth={1.25}
         strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity={0.5}
+        opacity={0.3}
       />
-      <circle cx={176} cy={100} r={4} fill="url(#ill-getting-started-g1)" />
-
-      {/* stage 2 — organization hex */}
-      <polygon
-        points={hexPoints(270, 100, 36)}
+      <path
+        d={hexEdgesPath(280, 100, 30, [2, 3])}
         fill="none"
         stroke="url(#ill-getting-started-g1)"
-        strokeWidth={2}
-      />
-      <polygon points={hexPoints(270, 100, 15)} fill="url(#ill-getting-started-g1)" opacity={0.9} />
-
-      {/* arrow 2 */}
-      <path
-        d="M322,100 L398,100"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.5}
-        strokeDasharray="4 5"
+        strokeWidth={1.25}
         strokeLinecap="round"
-        opacity={0.4}
+        opacity={0.85}
       />
-      <path
-        d="M390,93 L400,100 L390,107"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity={0.5}
-      />
-      <circle cx={360} cy={100} r={4} fill="url(#ill-getting-started-g1)" />
+      <circle cx={280} cy={100} r={14} fill="url(#ill-getting-started-glow)" />
+      <circle cx={280} cy={100} r={2.5} fill="url(#ill-getting-started-g1)" />
 
-      {/* stage 3 — workspace hex cluster */}
+      {/* way-point 3 — workspace, a loose cluster of dotted cells */}
       {WORKSPACE_HEXES.map((h, i) => (
-        <polygon
-          key={i}
-          points={hexPoints(h.cx, h.cy, h.r)}
-          fill={h.lit ? "url(#ill-getting-started-g1)" : "none"}
-          stroke={h.lit ? "none" : "currentColor"}
-          strokeWidth={1.5}
-          opacity={h.lit ? 0.92 : 0.4}
-        />
+        <g key={i} opacity={0.32}>
+          {hexVertices(h.cx, h.cy, h.r).map((p, j) => (
+            <circle key={j} cx={p.x} cy={p.y} r={1} fill="currentColor" />
+          ))}
+        </g>
       ))}
 
       <text
-        x={82}
-        y={150}
+        x={68}
+        y={140}
         textAnchor="middle"
         fontFamily="ui-monospace, SFMono-Regular, monospace"
-        fontSize={11}
+        fontSize={10}
         fill="currentColor"
-        opacity={0.5}
+        opacity={0.4}
       >
         sign up
       </text>
       <text
-        x={270}
-        y={158}
+        x={280}
+        y={148}
         textAnchor="middle"
         fontFamily="ui-monospace, SFMono-Regular, monospace"
-        fontSize={11}
+        fontSize={10}
         fill="currentColor"
-        opacity={0.5}
+        opacity={0.45}
       >
         organization
       </text>
       <text
-        x={468}
-        y={150}
+        x={466}
+        y={140}
         textAnchor="middle"
         fontFamily="ui-monospace, SFMono-Regular, monospace"
-        fontSize={11}
+        fontSize={10}
         fill="currentColor"
-        opacity={0.5}
+        opacity={0.4}
       >
         workspace
       </text>

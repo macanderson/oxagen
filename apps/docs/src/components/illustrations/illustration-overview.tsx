@@ -1,123 +1,83 @@
-import { hexPoints, illustrationClassName } from "./hex-utils";
+import { hexVertices, illustrationClassName } from "./hex-utils";
 
 /**
- * Platform-overview hero: scattered knowledge-graph hex nodes converge into a
- * governed context window — the "free, not full" retrieval story that anchors
- * the docs landing page. Two lit hexes (retrieved entities) feed a token grid
- * where only a small, precise cluster is lit, echoing the landing page's
- * ContextWindow component in static line-art form.
+ * Platform-overview hero: a faint, fading field of hex vertices — the
+ * knowledge graph, sensed rather than drawn — resolving into a single
+ * hairline hex and one soft ember node. The gradient appears exactly once,
+ * in the thread that settles from the lattice into that node.
  */
 
-const FAINT_HEXES = [
-  { cx: 56, cy: 62, r: 16 },
-  { cx: 56, cy: 138, r: 16 },
-  { cx: 122, cy: 62, r: 16 },
-  { cx: 122, cy: 138, r: 16 },
+const FIELD = [
+  { cx: 36, cy: 46, r: 15 },
+  { cx: 76, cy: 118, r: 19 },
+  { cx: 126, cy: 58, r: 13 },
+  { cx: 150, cy: 150, r: 17 },
+  { cx: 198, cy: 36, r: 21 },
+  { cx: 224, cy: 116, r: 15 },
+  { cx: 330, cy: 142, r: 17 },
+  { cx: 366, cy: 44, r: 13 },
+  { cx: 408, cy: 112, r: 19 },
+  { cx: 456, cy: 58, r: 15 },
+  { cx: 498, cy: 128, r: 13 },
+  { cx: 522, cy: 48, r: 17 },
 ];
 
-const LIT_HEXES = [
-  { cx: 89, cy: 100, r: 17 },
-  { cx: 155, cy: 100, r: 17 },
-];
-
-const GRID_COLS = 12;
-const GRID_ROWS = 5;
-const CELL = 12;
-const GAP = 2.5;
-const ORIGIN_X = 322;
-const ORIGIN_Y = 58;
-const LIT_CELLS = new Set([
-  1 * GRID_COLS + 6,
-  2 * GRID_COLS + 5,
-  2 * GRID_COLS + 6,
-  2 * GRID_COLS + 7,
-  3 * GRID_COLS + 6,
-]);
+const ANCHOR = { cx: 280, cy: 74, r: 25 };
 
 export function IllustrationOverview({ className }: { className?: string }) {
-  const cells = Array.from({ length: GRID_COLS * GRID_ROWS }, (_, i) => i);
-
   return (
-    <svg
-      role="img"
-      viewBox="0 0 560 200"
-      className={illustrationClassName(className)}
-    >
-      <title>Scattered knowledge-graph nodes converging into a governed context window</title>
+    <svg role="img" viewBox="0 0 560 200" className={illustrationClassName(className)}>
+      <title>A faint knowledge-graph lattice settling into one governed node</title>
       <defs>
-        <linearGradient id="ill-overview-g1" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id="ill-overview-g1" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="var(--_ember-gold, #fd9a4b)" />
-          <stop offset="0.5" stopColor="var(--_ember-flame, #f07650)" />
           <stop offset="1" stopColor="var(--_ember-crimson, #eb5c5e)" />
         </linearGradient>
+        <radialGradient id="ill-overview-glow">
+          <stop offset="0" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0.85} />
+          <stop offset="1" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0} />
+        </radialGradient>
+        <linearGradient id="ill-overview-fade" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#000" />
+          <stop offset="0.18" stopColor="#fff" />
+          <stop offset="0.82" stopColor="#fff" />
+          <stop offset="1" stopColor="#000" />
+        </linearGradient>
+        <mask id="ill-overview-mask">
+          <rect x={0} y={0} width={560} height={200} fill="url(#ill-overview-fade)" />
+        </mask>
       </defs>
 
-      {FAINT_HEXES.map((h, i) => (
-        <polygon
-          key={`faint-${i}`}
-          points={hexPoints(h.cx, h.cy, h.r)}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.5}
-          opacity={0.22}
-        />
-      ))}
+      <g mask="url(#ill-overview-mask)">
+        {FIELD.map((h, i) => (
+          <g key={i} opacity={0.3}>
+            {hexVertices(h.cx, h.cy, h.r).map((p, j) => (
+              <circle key={j} cx={p.x} cy={p.y} r={1} fill="currentColor" />
+            ))}
+          </g>
+        ))}
+      </g>
 
-      {LIT_HEXES.map((h, i) => (
-        <polygon
-          key={`lit-${i}`}
-          points={hexPoints(h.cx, h.cy, h.r)}
-          fill="url(#ill-overview-g1)"
-          opacity={0.92}
-        />
-      ))}
-
-      <path
-        d="M104,96 Q220,60 316,72"
-        fill="none"
-        stroke="url(#ill-overview-g1)"
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        opacity={0.7}
-      />
-      <path
-        d="M170,104 Q240,120 316,110"
-        fill="none"
-        stroke="url(#ill-overview-g1)"
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        opacity={0.7}
-      />
-
-      <rect
-        x={302}
-        y={40}
-        width={224}
-        height={122}
-        rx={12}
+      <polygon
+        points={hexVertices(ANCHOR.cx, ANCHOR.cy, ANCHOR.r)
+          .map((p) => `${p.x},${p.y}`)
+          .join(" ")}
         fill="none"
         stroke="currentColor"
-        strokeWidth={1.5}
-        opacity={0.4}
+        strokeWidth={1.25}
+        opacity={0.32}
       />
 
-      {cells.map((i) => {
-        const col = i % GRID_COLS;
-        const row = Math.floor(i / GRID_COLS);
-        const lit = LIT_CELLS.has(i);
-        return (
-          <rect
-            key={i}
-            x={ORIGIN_X + col * (CELL + GAP)}
-            y={ORIGIN_Y + row * (CELL + GAP)}
-            width={CELL}
-            height={CELL}
-            rx={2.5}
-            fill={lit ? "url(#ill-overview-g1)" : "currentColor"}
-            opacity={lit ? 0.9 : 0.1}
-          />
-        );
-      })}
+      <path
+        d={`M${ANCHOR.cx},${ANCHOR.cy + ANCHOR.r} L${ANCHOR.cx},${ANCHOR.cy + 58}`}
+        fill="none"
+        stroke="url(#ill-overview-g1)"
+        strokeWidth={1.25}
+        strokeLinecap="round"
+        opacity={0.75}
+      />
+      <circle cx={ANCHOR.cx} cy={ANCHOR.cy + 62} r={16} fill="url(#ill-overview-glow)" />
+      <circle cx={ANCHOR.cx} cy={ANCHOR.cy + 62} r={3} fill="url(#ill-overview-g1)" />
     </svg>
   );
 }

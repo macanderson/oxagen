@@ -1,9 +1,9 @@
 import { illustrationClassName } from "./hex-utils";
 
 /**
- * Plugins-overview hero: a row of capability-pack puzzle blocks, one lit and
- * sliding into a dashed workspace socket — a plugin is installed into a
- * single workspace, not switched on globally.
+ * Plugins-overview hero: a row of hairline capability-pack contours, the one
+ * currently installing outlined in a single thin ember thread, drifting
+ * toward a dashed workspace socket.
  */
 
 function puzzlePath(x: number, y: number, w: number, h: number): string {
@@ -25,68 +25,55 @@ function puzzlePath(x: number, y: number, w: number, h: number): string {
   ].join(" ");
 }
 
-const PACKS = [
-  { x: 50, lit: false },
-  { x: 150, lit: false },
-  { x: 250, lit: false },
-];
+const PACKS = [50, 150, 250];
 
 export function IllustrationPlugins({ className }: { className?: string }) {
   return (
-    <svg
-      role="img"
-      viewBox="0 0 560 200"
-      className={illustrationClassName(className)}
-    >
-      <title>Capability-pack blocks, one sliding into a workspace socket</title>
+    <svg role="img" viewBox="0 0 560 200" className={illustrationClassName(className)}>
+      <title>Capability-pack contours, one drifting toward a workspace socket</title>
       <defs>
-        <linearGradient id="ill-plugins-g1" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id="ill-plugins-g1" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0" stopColor="var(--_ember-gold, #fd9a4b)" />
-          <stop offset="0.5" stopColor="var(--_ember-flame, #f07650)" />
           <stop offset="1" stopColor="var(--_ember-crimson, #eb5c5e)" />
         </linearGradient>
+        <radialGradient id="ill-plugins-glow">
+          <stop offset="0" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0.7} />
+          <stop offset="1" stopColor="var(--_ember-flame, #f07650)" stopOpacity={0} />
+        </radialGradient>
       </defs>
 
-      {PACKS.map((p) => (
+      {PACKS.map((x) => (
         <path
-          key={p.x}
-          d={puzzlePath(p.x, 70, 70, 60)}
+          key={x}
+          d={puzzlePath(x, 70, 70, 60)}
           fill="none"
           stroke="currentColor"
-          strokeWidth={1.5}
+          strokeWidth={1}
           strokeLinejoin="round"
-          opacity={0.32}
+          opacity={0.24}
         />
       ))}
 
-      {/* the active pack, mid-slide toward the workspace socket */}
       <path
         d={puzzlePath(360, 70, 70, 60)}
-        fill="url(#ill-plugins-g1)"
-        stroke="none"
-        opacity={0.92}
-      />
-
-      <path
-        d="M436,100 L470,100"
         fill="none"
         stroke="url(#ill-plugins-g1)"
-        strokeWidth={1.5}
-        strokeDasharray="3 4"
-        strokeLinecap="round"
-        opacity={0.7}
-      />
-      <path
-        d="M462,93 L472,100 L462,107"
-        fill="none"
-        stroke="url(#ill-plugins-g1)"
-        strokeWidth={1.5}
-        strokeLinecap="round"
+        strokeWidth={1.25}
         strokeLinejoin="round"
-        opacity={0.7}
+        opacity={0.75}
       />
 
-      {/* workspace socket, dashed to read as the receiving slot */}
+      <path
+        d="M436,100 L468,100"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1}
+        strokeDasharray="0.5 5"
+        strokeLinecap="round"
+        opacity={0.3}
+      />
+      <circle cx={472} cy={100} r={9} fill="url(#ill-plugins-glow)" />
+
       <rect
         x={478}
         y={70}
@@ -95,9 +82,9 @@ export function IllustrationPlugins({ className }: { className?: string }) {
         rx={8}
         fill="none"
         stroke="currentColor"
-        strokeWidth={1.5}
-        strokeDasharray="4 4"
-        opacity={0.45}
+        strokeWidth={1}
+        strokeDasharray="3 4"
+        opacity={0.3}
       />
 
       <text
@@ -105,9 +92,9 @@ export function IllustrationPlugins({ className }: { className?: string }) {
         y={150}
         textAnchor="middle"
         fontFamily="ui-monospace, SFMono-Regular, monospace"
-        fontSize={11}
+        fontSize={10}
         fill="currentColor"
-        opacity={0.5}
+        opacity={0.35}
       >
         workspace
       </text>
