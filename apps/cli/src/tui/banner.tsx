@@ -3,8 +3,10 @@ import React, { useEffect, useState } from "react";
 import { theme } from "./theme.js";
 
 // Block-letter OXAGEN wordmark. Kept as a literal so it renders identically
-// across terminals (no figlet dependency).
-const WORDMARK: string[] = [
+// across terminals (no figlet dependency). Exported so other one-shot reveal
+// animations (see tui/init-reveal.ts) share this exact wordmark instead of
+// forking their own copy.
+export const WORDMARK: string[] = [
   " ██████  ██   ██  █████   ██████  ███████ ███    ██",
   "██    ██  ██ ██  ██   ██ ██       ██      ████   ██",
   "██    ██   ███   ███████ ██   ███ █████   ██ ██  ██",
