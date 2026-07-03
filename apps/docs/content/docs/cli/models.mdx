@@ -57,7 +57,7 @@ oxagen models use on-device     # local model (default)
 oxagen models use haiku         # cloud coordinator — no download, needs a gateway key
 ```
 
-`models use` accepts `on-device`, `haiku`, `sonnet-5`, `opus`, or `openai-most-capable-coding-model`. Cloud coordinators route through the Vercel AI Gateway and need `AI_GATEWAY_API_KEY` set (see [Account setup](/docs/cli/account-setup)).
+`models use` accepts `on-device`, `haiku`, `sonnet-5`, `opus`, or `openai-most-capable-coding-model`. Cloud coordinators route through the Vercel AI Gateway and need `AI_GATEWAY_API_KEY` set (see [Account setup](/docs/cli/account-setup)). With only an `ANTHROPIC_API_KEY`, the Claude coordinators still work (direct against the Anthropic API); non-Anthropic models report unavailable.
 
 ## Offline use
 

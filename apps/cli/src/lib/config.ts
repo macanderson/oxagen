@@ -14,6 +14,11 @@ export interface CliConfig {
   effort?: "low" | "medium" | "high" | "xhigh" | "max";
   /** Vercel AI Gateway key for the local agent loop (falls back to env / .env.local). */
   gatewayKey?: string;
+  /**
+   * Anthropic API key — BYOK fallback when no gateway key exists anywhere.
+   * Anthropic models only; `gatewayKey` / `AI_GATEWAY_API_KEY` wins when present.
+   */
+  anthropicKey?: string;
   /** Default verbose mode: capture + emit full per-turn telemetry. */
   verbose?: boolean;
   /** Model-runtime settings */

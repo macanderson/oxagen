@@ -1,4 +1,17 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Controllable credential for the default (non-injected) resolveKey path.
+// Mocked so a real AI_GATEWAY_API_KEY / ANTHROPIC_API_KEY on this machine
+// (shell, ~/.config/oxagen/config.json, or the repo .env.local) never leaks
+// into the assertions. credentialSupportsModel stays real — it is pure.
+const envState: {
+  credential: { source: "gateway" | "anthropic"; key: string } | null;
+} = { credential: null };
+vi.mock("../../agent/env.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../agent/env.js")>();
+  return { ...actual, resolveAiCredential: () => envState.credential };
+});
+
 import {
   AnthropicProvider,
   GatewayCloudProvider,
@@ -89,6 +102,39 @@ describe("GatewayCloudProvider", () => {
     const est = provider().estimateCost(REQ);
     expect(est.tokens).toBeGreaterThan(0);
     expect(est.usd).toBeGreaterThan(0);
+  });
+});
+
+describe("default credential resolution (no injected resolveKey)", () => {
+  beforeEach(() => {
+    envState.credential = null;
+  });
+
+  it("with only an Anthropic credential, anthropic slugs are available and other vendors are not", async () => {
+    envState.credential = { source: "anthropic", key: "sk-ant-test" };
+    const anthropicProvider = new AnthropicProvider("haiku", HAIKU, {
+      generate: vi.fn(async () => ({ text: "x", usage: {} })),
+    });
+    const openaiProvider = new OpenAiProvider(
+      "judge",
+      { slug: "openai/gpt-5-codex", vendor: "openai", contextWindow: 400000, tools: true },
+      { generate: vi.fn(async () => ({ text: "x", usage: {} })) },
+    );
+    expect(await anthropicProvider.isAvailable()).toBe(true);
+    expect(await openaiProvider.isAvailable()).toBe(false);
+    await expect(openaiProvider.ensureReady()).rejects.toBeInstanceOf(
+      MissingCredentialError,
+    );
+  });
+
+  it("with a gateway credential, every vendor is available", async () => {
+    envState.credential = { source: "gateway", key: "vck_test" };
+    const openaiProvider = new OpenAiProvider(
+      "judge",
+      { slug: "openai/gpt-5-codex", vendor: "openai", contextWindow: 400000, tools: true },
+      { generate: vi.fn(async () => ({ text: "x", usage: {} })) },
+    );
+    expect(await openaiProvider.isAvailable()).toBe(true);
   });
 });
 

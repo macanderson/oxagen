@@ -38,6 +38,7 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "3.0.92",
     "@ai-sdk/gateway": "3.0.125",
     "@ai-sdk/openai-compatible": "2.0.54",
     "@ai-sdk/provider": "3.0.10",

@@ -35,7 +35,7 @@ import {
   createCodeGraphStore,
   defaultCodeGraphDbPath,
 } from "../daemon/code-graph/store.js";
-import { ensureGatewayKey } from "../agent/env.js";
+import { credentialSupportsModel, resolveAiCredential } from "../agent/env.js";
 import { inferDomains } from "@oxagen/code-graph";
 import type { DomainAI, DomainMap } from "@oxagen/code-graph";
 import { modelForTier } from "../agent/model-router.js";
@@ -603,7 +603,7 @@ export function formatInitSummary(result: InitResult): string {
   // Domains
   if (result.domainsSkipped) {
     lines.push(
-      "Domains:   skipped — no AI gateway key (run `oxagen login` or set AI_GATEWAY_API_KEY)",
+      "Domains:   skipped — no usable AI key (run `oxagen login`, or set AI_GATEWAY_API_KEY / ANTHROPIC_API_KEY)",
     );
   } else if (!result.domains || result.domains.length === 0) {
     lines.push("Domains:   none inferred");
@@ -689,12 +689,14 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
 
   const graphStats = computeGraphStats(graph, indexed, skipped);
 
-  // 3. Domain inference — best-effort; gracefully skipped when no gateway key
+  // 3. Domain inference — best-effort; gracefully skipped when no AI key can
+  // run the classification model (no credential at all, or an Anthropic-only
+  // credential with a non-Anthropic tier model configured).
   let domains: Array<{ name: string; files: number }> | null = null;
   let domainsSkipped = false;
 
-  const gatewayKey = ensureGatewayKey(cwd);
-  if (!gatewayKey) {
+  const credential = resolveAiCredential(cwd);
+  if (!credential || !credentialSupportsModel(credential, modelForTier("fast"))) {
     domainsSkipped = true;
   } else {
     try {

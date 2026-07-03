@@ -732,6 +732,20 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
+  ANTHROPIC_API_KEY: {
+    group: "AI providers",
+    description:
+      "CLI-only BYOK fallback: when no AI_GATEWAY_API_KEY exists anywhere, the CLI " +
+      "runs anthropic/* models directly against the Anthropic API with this key " +
+      "(other vendors and embeddings stay unavailable). The gateway key always wins " +
+      "when both are set. Never read by deployed services — platform AI is " +
+      "gateway-only.",
+    secret: true,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_LLM_FAST: {
     group: "AI providers",
     description:
@@ -1466,10 +1480,11 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "CLI",
     description:
       "Set to '1' (or pass `--local`) to force local BYOK mode even when logged in: " +
-      "the CLI runs the coordinator + workers gateway-direct with your own " +
-      "AI_GATEWAY_API_KEY instead of routing through your Oxagen account. When not " +
-      "logged in, BYOK is used automatically if AI_GATEWAY_API_KEY is present, so this " +
-      "flag is only needed to override an existing login.",
+      "the CLI runs the coordinator + workers with your own key — AI_GATEWAY_API_KEY " +
+      "(gateway-direct, any vendor; preferred) or ANTHROPIC_API_KEY (Anthropic API " +
+      "direct, Anthropic models only) — instead of routing through your Oxagen " +
+      "account. When not logged in, BYOK is used automatically if either key is " +
+      "present, so this flag is only needed to override an existing login.",
     secret: false,
     clientExposed: false,
     services: [],

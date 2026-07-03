@@ -20,7 +20,8 @@ vi.mock("../prompt-enhancer.js", () => ({
 
 import { generateObject } from "ai";
 import { planTasks } from "../planner.js";
-import { MissingGatewayKeyError } from "../env.js";
+import { MissingAiKeyError } from "../env.js";
+import { uninstallDirectAnthropicProviderForTests } from "../anthropic-direct.js";
 
 const mockGen = generateObject as unknown as Mock;
 
@@ -42,6 +43,8 @@ function resolveWith(tasks: RawTask[]): void {
 
 beforeEach(() => {
   process.env["AI_GATEWAY_API_KEY"] = "test-key";
+  delete process.env["ANTHROPIC_API_KEY"];
+  uninstallDirectAnthropicProviderForTests();
   delete process.env["OXAGEN_LLM_FAST"];
   delete process.env["OXAGEN_LLM_BALANCED"];
   delete process.env["OXAGEN_LLM_PRECISE"];
@@ -108,12 +111,23 @@ describe("planTasks", () => {
     expect(plan.tasks[0]?.dependsOn).toEqual(["b"]);
   });
 
-  it("throws MissingGatewayKeyError when no gateway key is resolvable", async () => {
+  it("throws MissingAiKeyError when neither a gateway nor an Anthropic key is resolvable", async () => {
     delete process.env["AI_GATEWAY_API_KEY"];
     // cwd in the OS temp dir → no .env.local up the tree, and config is mocked empty.
     await expect(planTasks({ goal: "g", cwd: tmpdir() })).rejects.toBeInstanceOf(
-      MissingGatewayKeyError,
+      MissingAiKeyError,
     );
     expect(mockGen).not.toHaveBeenCalled();
+  });
+
+  it("plans with only ANTHROPIC_API_KEY (direct-Anthropic BYOK fallback)", async () => {
+    delete process.env["AI_GATEWAY_API_KEY"];
+    process.env["ANTHROPIC_API_KEY"] = "sk-ant-test";
+    resolveWith([
+      { id: "a", title: "A", description: "d", dependsOn: [], files: [], tier: "fast" },
+    ]);
+    const plan = await planTasks({ goal: "g", cwd: tmpdir() });
+    expect(plan.tasks).toHaveLength(1);
+    uninstallDirectAnthropicProviderForTests();
   });
 });
