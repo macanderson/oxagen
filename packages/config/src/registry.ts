@@ -1534,6 +1534,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_BEST_OF_N_PIPELINE: {
+    group: "CLI",
+    description:
+      "Set to '1' to default `oxagen solve` (best-of-N) candidates to the full " +
+      "evaluate→enhance→route→execute→judge→revise pipeline instead of the bare engine " +
+      "loop, when the `--pipeline` flag isn't passed explicitly. Lets a caller (e.g. the " +
+      "bench adapter's differentiated config) opt every `solve` invocation into the " +
+      "pricier, more thorough pipeline mode without passing the flag on every call. " +
+      "Neither the flag nor this var set ⇒ bare mode, the cheaper default.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_LOCAL: {
     group: "CLI",
     description:
