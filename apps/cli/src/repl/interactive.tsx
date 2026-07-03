@@ -1035,12 +1035,21 @@ export function ReplApp({
     // behavior below, unchanged.
     if (!menuOpenRef.current) {
       if (fullscreen && inputEmptyRef.current) {
+        // Up/Down on an empty bar KEEP their must-preserve meanings first —
+        // Up recalls the queued prompts for editing, Down enters the Agent
+        // Team / Task Progress dock — and fall through to transcript
+        // line-scroll ONLY when there is nothing to recall / no panel to
+        // enter. Home/End, PageUp/PageDown, Ctrl-U/Ctrl-D and the mouse wheel
+        // always scroll regardless. This restores panel navigation, which an
+        // unconditional line-scroll binding here would have broken.
         if (key.upArrow) {
-          dispatchScroll({ type: "line-up" });
+          if (queueRef.current.length > 0) recallQueue();
+          else dispatchScroll({ type: "line-up" });
           return;
         }
         if (key.downArrow) {
-          dispatchScroll({ type: "line-down" });
+          if (panelReachable() && navTargets()[0]) enterPanel();
+          else dispatchScroll({ type: "line-down" });
           return;
         }
         if (key.home) {
