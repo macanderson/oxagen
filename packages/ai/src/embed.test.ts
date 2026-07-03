@@ -58,11 +58,12 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
   };
 });
 
+import { requireScope, runInTenantScope } from "@oxagen/tenancy";
 import { embedText } from "./embed";
 
 const BASE_TELEMETRY = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
+  orgId: "00000000-0000-4000-8000-000000000001",
+  workspaceId: "00000000-0000-4000-8000-000000000002",
   surface: "runner" as const,
   executionStepId: "req_abc",
 };
@@ -99,8 +100,8 @@ describe("embedText (@oxagen/ai)", () => {
   it("writes exactly ONE token_usage row with the correct fields", async () => {
     await embedText("meter me", {
       telemetry: {
-        orgId: "org_1",
-        workspaceId: "ws_1",
+        orgId: "00000000-0000-4000-8000-000000000001",
+        workspaceId: "00000000-0000-4000-8000-000000000002",
         surface: "runner",
         executionStepId: "req_abc",
       },
@@ -110,8 +111,8 @@ describe("embedText (@oxagen/ai)", () => {
     const rows: unknown[] = firstCall[0];
     expect(rows).toHaveLength(1);
     const row = rows[0] as Record<string, unknown>;
-    expect(row.org_id).toBe("org_1");
-    expect(row.workspace_id).toBe("ws_1");
+    expect(row.org_id).toBe("00000000-0000-4000-8000-000000000001");
+    expect(row.workspace_id).toBe("00000000-0000-4000-8000-000000000002");
     expect(row.surface).toBe("runner");
     expect(row.execution_step_id).toBe("req_abc");
     expect(row.model).toBe("text-embedding-3-small");
@@ -124,8 +125,8 @@ describe("embedText (@oxagen/ai)", () => {
     mocks.insertTokenUsage.mockRejectedValueOnce(new Error("clickhouse down"));
     const v = await embedText("resilient", {
       telemetry: {
-        orgId: "org_2",
-        workspaceId: "ws_2",
+        orgId: "00000000-0000-4000-8000-000000000003",
+        workspaceId: "00000000-0000-4000-8000-000000000004",
         surface: "api",
         executionStepId: "req_xyz",
       },
@@ -138,13 +139,52 @@ describe("embedText (@oxagen/ai)", () => {
     await embedText("charge me", { telemetry: BASE_TELEMETRY });
     expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
     expect(mocks.chargeUsageCredits).toHaveBeenCalledWith({
-      orgId: "org_1",
+      orgId: "00000000-0000-4000-8000-000000000001",
       model: "text-embedding-3-small",
       referenceId: "req_abc",
       inputTokens: 7,
       outputTokens: 0,
       cachedTokens: 0,
     });
+  });
+
+  // ── Tenant-scope regression (Inngest billing leak) ─────────────────────────
+  // chargeUsageCredits → consumeCredits → withTenantDb → requireScope. Old code
+  // charged scopeless when embedText ran inside an Inngest function / ingestion
+  // worker (no ambient scope) → TenantScopeError → swallowed → unbilled embed.
+  // The helper must establish the scope from telemetry around the charge. These
+  // mocks call the real requireScope() gate: FAIL on old code, PASS on new. Uses
+  // mockImplementationOnce because embed's beforeEach only mockClear()s the mock.
+  it("charges inside a tenant scope when none is ambient (Inngest/ingestion path)", async () => {
+    let chargeSucceeded = false;
+    mocks.chargeUsageCredits.mockImplementationOnce(async () => {
+      requireScope();
+      chargeSucceeded = true;
+      return { costUsdMicros: 42, creditsMetered: 1n, creditsCharged: 1n, shortfallCredits: 0n };
+    });
+
+    await embedText("inngest embed", { telemetry: BASE_TELEMETRY });
+
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
+    expect(chargeSucceeded).toBe(true);
+  });
+
+  it("charges successfully when a tenant scope is already active (request path)", async () => {
+    let chargeSucceeded = false;
+    mocks.chargeUsageCredits.mockImplementationOnce(async () => {
+      requireScope();
+      chargeSucceeded = true;
+      return { costUsdMicros: 42, creditsMetered: 1n, creditsCharged: 1n, shortfallCredits: 0n };
+    });
+
+    await runInTenantScope(
+      { orgId: BASE_TELEMETRY.orgId, workspaceId: BASE_TELEMETRY.workspaceId },
+      async () => {
+        await embedText("request embed", { telemetry: BASE_TELEMETRY });
+      },
+    );
+
+    expect(chargeSucceeded).toBe(true);
   });
 
   it("swallows credit-charge errors and still returns the embedding", async () => {
@@ -164,7 +204,7 @@ describe("embedText (@oxagen/ai)", () => {
   // was typed `string`, callers sent `embed:<nodeId>`).
   it("passes null execution_step_id through to token_usage when there is no step", async () => {
     await embedText("ingestion embed", {
-      telemetry: { orgId: "org_1", workspaceId: "ws_1", surface: "ingestion", executionStepId: null },
+      telemetry: { orgId: "00000000-0000-4000-8000-000000000001", workspaceId: "00000000-0000-4000-8000-000000000002", surface: "ingestion", executionStepId: null },
     });
     const rows = (mocks.insertTokenUsage.mock.calls[0] as [Record<string, unknown>[]])[0];
     expect(rows[0]!.execution_step_id).toBeNull();
@@ -174,7 +214,7 @@ describe("embedText (@oxagen/ai)", () => {
 
   it("charges credits with referenceId undefined (not a non-UUID string) when there is no step", async () => {
     await embedText("ingestion embed", {
-      telemetry: { orgId: "org_1", workspaceId: "ws_1", surface: "ingestion", executionStepId: null },
+      telemetry: { orgId: "00000000-0000-4000-8000-000000000001", workspaceId: "00000000-0000-4000-8000-000000000002", surface: "ingestion", executionStepId: null },
     });
     expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
     const arg = mocks.chargeUsageCredits.mock.calls[0]![0] as { referenceId?: string };

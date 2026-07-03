@@ -8,6 +8,7 @@ import {
   type Surface,
 } from "@oxagen/telemetry";
 import { chargeUsageCredits, providerCostUsdMicros } from "@oxagen/billing";
+import { getScope, runInTenantScope, type TenantScope } from "@oxagen/tenancy";
 import { defaultModel, modelIdOf } from "./models";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.object" } });
@@ -174,12 +175,26 @@ export async function generateObjectFor<T>(
 
   // Debit the org's credits for what this call cost us at the target margin.
   // Best-effort and post-call — a metering failure must not fail the caller.
+  //
+  // chargeUsageCredits → consumeCredits → withTenantDb → requireScope, which
+  // needs an active tenant scope. Request-path callers have one; Inngest workers
+  // keep tenant scope tight around their own DB ops and do NOT wrap the LLM step,
+  // so this charge would otherwise run scopeless and throw TenantScopeError
+  // (silently swallowed → unbilled calls, a revenue leak). Prefer the active ALS
+  // scope, else rebuild it from the trusted telemetry org/workspace. Mirrors
+  // stream.ts's onFinish handling.
+  const capturedScope: TenantScope = getScope() ?? {
+    orgId: args.telemetry.orgId,
+    workspaceId: args.telemetry.workspaceId,
+  };
   try {
-    await chargeUsageCredits({
-      orgId: args.telemetry.orgId,
-      // null → undefined → NULL reference_id; never a non-UUID string.
-      referenceId: args.telemetry.messageId ?? undefined,
-      ...usage,
+    await runInTenantScope(capturedScope, async () => {
+      await chargeUsageCredits({
+        orgId: args.telemetry.orgId,
+        // null → undefined → NULL reference_id; never a non-UUID string.
+        referenceId: args.telemetry.messageId ?? undefined,
+        ...usage,
+      });
     });
   } catch (err) {
     // Swallow — credit metering must never fail a capability call.
