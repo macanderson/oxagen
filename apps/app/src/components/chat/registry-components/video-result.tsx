@@ -18,6 +18,12 @@ export interface VideoResultProps {
   prompt?: string;
   /** Poll interval in ms. */
   pollMs?: number;
+  /**
+   * Duration-adjustment notice from the handler — shown when the requested
+   * length wasn't supported by the model and the render was snapped to the
+   * nearest supported duration.
+   */
+  notice?: string;
 }
 
 type Phase = "rendering" | "ready" | "timed-out";
@@ -30,8 +36,17 @@ export default function VideoResult({
   url,
   prompt,
   pollMs = DEFAULT_POLL_MS,
+  notice,
 }: VideoResultProps): React.ReactElement {
   const [phase, setPhase] = React.useState<Phase>("rendering");
+
+  // Duration-adjustment banner — rendered above every phase so the user learns
+  // their requested length was snapped even while the render is still running.
+  const noticeBanner = notice ? (
+    <div className="border-b border-border bg-muted/40 px-4 py-2 dark:bg-muted/15">
+      <p className="text-xs text-muted-foreground">{notice}</p>
+    </div>
+  ) : null;
 
   React.useEffect(() => {
     if (phase !== "rendering") return;
@@ -75,6 +90,7 @@ export default function VideoResult({
         role="figure"
         aria-label={prompt ?? "Generated video"}
       >
+        {noticeBanner}
         <video
           controls
           preload="metadata"
@@ -96,6 +112,7 @@ export default function VideoResult({
         className="overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm"
         role="status"
       >
+        {noticeBanner}
         <div className="flex flex-col items-center justify-center gap-3 bg-muted/30 px-6 py-10 text-center dark:bg-muted/10">
           <div className="rounded-full bg-muted p-3">
             <VideoOff className="size-6 text-muted-foreground" aria-hidden="true" />
@@ -116,6 +133,7 @@ export default function VideoResult({
       role="status"
       aria-live="polite"
     >
+      {noticeBanner}
       <div className="flex flex-col items-center justify-center gap-3 bg-muted/30 px-6 py-10 text-center dark:bg-muted/10">
         <div className="relative">
           <Film className="size-8 text-muted-foreground" aria-hidden="true" />
