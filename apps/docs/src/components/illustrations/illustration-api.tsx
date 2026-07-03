@@ -13,8 +13,6 @@ export function IllustrationApi({ className }: { className?: string }) {
     <svg
       role="img"
       viewBox="0 0 560 200"
-      width="100%"
-      height="auto"
       className={illustrationClassName(className)}
     >
       <title>REST braces framing versioned endpoints with request and response arrows</title>

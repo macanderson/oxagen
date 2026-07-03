@@ -22,8 +22,6 @@ export function IllustrationSecurity({ className }: { className?: string }) {
     <svg
       role="img"
       viewBox="0 0 560 200"
-      width="100%"
-      height="auto"
       className={illustrationClassName(className)}
     >
       <title>A shield with a padlock over a row-level security boundary</title>

@@ -20,8 +20,6 @@ export function IllustrationAgent({ className }: { className?: string }) {
     <svg
       role="img"
       viewBox="0 0 560 200"
-      width="100%"
-      height="auto"
       className={illustrationClassName(className)}
     >
       <title>A central agent node orchestrating a ring of tool nodes</title>

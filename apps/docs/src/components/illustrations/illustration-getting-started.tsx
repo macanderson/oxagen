@@ -18,8 +18,6 @@ export function IllustrationGettingStarted({ className }: { className?: string }
     <svg
       role="img"
       viewBox="0 0 560 200"
-      width="100%"
-      height="auto"
       className={illustrationClassName(className)}
     >
       <title>Launch path from sign-up terminal to organization to workspace</title>

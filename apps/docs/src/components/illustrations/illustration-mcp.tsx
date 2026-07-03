@@ -11,8 +11,6 @@ export function IllustrationMcp({ className }: { className?: string }) {
     <svg
       role="img"
       viewBox="0 0 560 200"
-      width="100%"
-      height="auto"
       className={illustrationClassName(className)}
     >
       <title>A plug and socket meeting at center, representing an MCP protocol handshake</title>

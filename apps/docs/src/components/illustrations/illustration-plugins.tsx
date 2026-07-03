@@ -36,8 +36,6 @@ export function IllustrationPlugins({ className }: { className?: string }) {
     <svg
       role="img"
       viewBox="0 0 560 200"
-      width="100%"
-      height="auto"
       className={illustrationClassName(className)}
     >
       <title>Capability-pack blocks, one sliding into a workspace socket</title>

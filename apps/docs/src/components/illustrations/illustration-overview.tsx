@@ -41,8 +41,6 @@ export function IllustrationOverview({ className }: { className?: string }) {
     <svg
       role="img"
       viewBox="0 0 560 200"
-      width="100%"
-      height="auto"
       className={illustrationClassName(className)}
     >
       <title>Scattered knowledge-graph nodes converging into a governed context window</title>

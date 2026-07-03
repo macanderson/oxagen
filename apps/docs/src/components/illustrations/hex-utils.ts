@@ -13,7 +13,8 @@ export function hexPoints(cx: number, cy: number, r: number): string {
   return pts.join(" ");
 }
 
-/** Joins a fixed base class with an optional caller-supplied className. */
+/** Joins the fixed base classes with an optional caller-supplied className. */
 export function illustrationClassName(className?: string): string {
-  return className ? `text-foreground ${className}` : "text-foreground";
+  const base = "h-auto w-full text-foreground";
+  return className ? `${base} ${className}` : base;
 }

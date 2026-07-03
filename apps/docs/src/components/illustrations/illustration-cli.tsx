@@ -11,8 +11,6 @@ export function IllustrationCli({ className }: { className?: string }) {
     <svg
       role="img"
       viewBox="0 0 560 200"
-      width="100%"
-      height="auto"
       className={illustrationClassName(className)}
     >
       <title>Terminal window with a typed oxagen prompt and an ember cursor</title>
