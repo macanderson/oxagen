@@ -47,8 +47,8 @@ export function IllustrationCli({ className }: { className?: string }) {
       >
         $ oxagen ask &quot;refactor the billing meter&quot;
       </text>
-      <circle cx={392} cy={95} r={10} fill="url(#ill-cli-glow)" />
-      <line x1={392} y1={88} x2={392} y2={102} stroke="url(#ill-cli-g1)" strokeWidth={1.5} strokeLinecap="round" />
+      <circle cx={444} cy={95} r={10} fill="url(#ill-cli-glow)" />
+      <line x1={444} y1={88} x2={444} y2={102} stroke="url(#ill-cli-g1)" strokeWidth={1.5} strokeLinecap="round" />
 
       <text
         x={82}
