@@ -1532,6 +1532,22 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "openai/gpt-5,google/gemini-2.5-pro",
   },
+  OXAGEN_MID_JUDGE_STEPS: {
+    group: "CLI",
+    description:
+      "Step count at which the mid-session completeness judge fires during a headless " +
+      "one-shot run. After this many tool-call steps in round 0, the pipeline pauses, " +
+      "runs judgeCompleteness, and injects any findings as a phase-B instruction before " +
+      "continuing — catching incomplete acceptance criteria (e.g. missing test cases) " +
+      "early rather than only at the end. 0 or unset disables the mid-session check. " +
+      "Default in headless mode: 20. Only for headless/benchmark runs.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "20",
+  },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",
     description: "Credential encryption backend for ingestion: 'env' (AES-256-GCM via INGESTION_ENCRYPTION_KEY) or 'kms' (AWS KMS).",
