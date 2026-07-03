@@ -15,7 +15,7 @@ const STEPS: TerminalStep[] = [
     cmd: "npx @oxagen/skills@latest install",
     out: [
       { kind: "dim", text: "◇ resolving @oxagen/skills · registry.npmjs.org" },
-      { kind: "out", text: "→ 42 agent skill definitions unpacked to ~/.oxagen/skills" },
+      { kind: "out", text: "→ 9 agent skill definitions installed to ~/.oxagen/skills" },
       { kind: "ok", text: "✓ skills installed in 3.4s" },
     ],
   },
