@@ -42,6 +42,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
   };
 });
 
+import { requireScope, runInTenantScope } from "@oxagen/tenancy";
 import { generateImageFor } from "./generate-image";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -52,8 +53,8 @@ const FAKE_MODEL = { modelId: "bfl/flux-2-max" } as Parameters<
 >[0]["model"];
 
 const TELEMETRY = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
+  orgId: "00000000-0000-4000-8000-000000000001",
+  workspaceId: "00000000-0000-4000-8000-000000000002",
   surface: "app" as const,
   executionStepId: "msg_abc",
 };
@@ -116,7 +117,7 @@ describe("generateImageFor (@oxagen/ai)", () => {
     expect(mocks.imageProviderCostUsdMicros).toHaveBeenCalledWith("bfl/flux-2-max", 1, "1536x1024");
     expect(mocks.chargeImageCredits).toHaveBeenCalledTimes(1);
     const chargeArg = mocks.chargeImageCredits.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(chargeArg.orgId).toBe("org_1");
+    expect(chargeArg.orgId).toBe("00000000-0000-4000-8000-000000000001");
     expect(chargeArg.referenceId).toBe("msg_abc");
     expect(chargeArg.model).toBe("bfl/flux-2-max");
     expect(chargeArg.imageCount).toBe(1);
@@ -129,6 +130,44 @@ describe("generateImageFor (@oxagen/ai)", () => {
     expect(mocks.imageProviderCostUsdMicros).toHaveBeenCalledWith("bfl/flux-2-max", 1, "1024x1024");
     const chargeArg = mocks.chargeImageCredits.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(chargeArg.size).toBe("1024x1024");
+  });
+
+  // ── Tenant-scope regression (Inngest billing leak) ─────────────────────────
+  // chargeImageCredits → consumeCredits → withTenantDb → requireScope. Old code
+  // charged scopeless when generateImageFor ran inside an Inngest function (no
+  // ambient scope) → TenantScopeError → swallowed → free image. The helper must
+  // establish the scope from telemetry around the charge. These mocks call the
+  // real requireScope() gate so they FAIL on the old code and PASS on new.
+  it("charges inside a tenant scope when none is ambient (Inngest path)", async () => {
+    let chargeSucceeded = false;
+    mocks.chargeImageCredits.mockImplementation(async () => {
+      requireScope();
+      chargeSucceeded = true;
+      return { costUsdMicros: 80_000, creditsMetered: 1n, creditsCharged: 1n, shortfallCredits: 0n };
+    });
+
+    await generateImageFor({ model: FAKE_MODEL, prompt: "inngest image", telemetry: TELEMETRY });
+
+    expect(mocks.chargeImageCredits).toHaveBeenCalledTimes(1);
+    expect(chargeSucceeded).toBe(true);
+  });
+
+  it("charges successfully when a tenant scope is already active (request path)", async () => {
+    let chargeSucceeded = false;
+    mocks.chargeImageCredits.mockImplementation(async () => {
+      requireScope();
+      chargeSucceeded = true;
+      return { costUsdMicros: 80_000, creditsMetered: 1n, creditsCharged: 1n, shortfallCredits: 0n };
+    });
+
+    await runInTenantScope(
+      { orgId: TELEMETRY.orgId, workspaceId: TELEMETRY.workspaceId },
+      async () => {
+        await generateImageFor({ model: FAKE_MODEL, prompt: "request image", telemetry: TELEMETRY });
+      },
+    );
+
+    expect(chargeSucceeded).toBe(true);
   });
 
   it("swallows an insertTokenUsage error and still returns images", async () => {

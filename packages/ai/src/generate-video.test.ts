@@ -59,6 +59,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
   };
 });
 
+import { requireScope, runInTenantScope } from "@oxagen/tenancy";
 import {
   generateVideoFor,
   supportedVideoDurations,
@@ -73,8 +74,8 @@ const FAKE_MODEL = { modelId: "google/veo-3.0-fast-generate-001" } as Parameters
 >[0]["model"];
 
 const TELEMETRY = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
+  orgId: "00000000-0000-4000-8000-000000000001",
+  workspaceId: "00000000-0000-4000-8000-000000000002",
   surface: "app" as const,
   executionStepId: "asset_abc",
 };
@@ -186,8 +187,8 @@ describe("generateVideoFor (@oxagen/ai)", () => {
     const rows = (mocks.insertTokenUsage.mock.calls[0] as [unknown[]])[0];
     expect(rows).toHaveLength(1);
     const row = rows[0] as Record<string, unknown>;
-    expect(row.org_id).toBe("org_1");
-    expect(row.workspace_id).toBe("ws_1");
+    expect(row.org_id).toBe("00000000-0000-4000-8000-000000000001");
+    expect(row.workspace_id).toBe("00000000-0000-4000-8000-000000000002");
     expect(row.surface).toBe("app");
     expect(row.execution_step_id).toBe("asset_abc");
     expect(row.input_tokens).toBe(1);
@@ -207,10 +208,53 @@ describe("generateVideoFor (@oxagen/ai)", () => {
 
     expect(mocks.chargeVideoCredits).toHaveBeenCalledTimes(1);
     const chargeArg = mocks.chargeVideoCredits.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(chargeArg.orgId).toBe("org_1");
+    expect(chargeArg.orgId).toBe("00000000-0000-4000-8000-000000000001");
     expect(chargeArg.referenceId).toBe("asset_abc");
     expect(chargeArg.model).toBe("google/veo-3.0-fast-generate-001");
     expect(chargeArg.durationSeconds).toBe(6);
+  });
+
+  // ── Tenant-scope regression (Inngest billing leak) ─────────────────────────
+  // chargeVideoCredits → consumeCredits → withTenantDb → requireScope. When
+  // generateVideoFor runs inside an Inngest function (no ambient tenant scope),
+  // the old code charged scopeless → requireScope threw TenantScopeError → the
+  // catch swallowed it → the render was never billed (a revenue leak). The
+  // helper must now establish the scope from telemetry around the charge itself.
+  // These mocks reproduce the real requireScope() gate so they FAIL on the old
+  // code and PASS on the new.
+  it("charges inside a tenant scope when none is ambient (Inngest path)", async () => {
+    let chargeSucceeded = false;
+    mocks.chargeVideoCredits.mockImplementation(async () => {
+      // Reproduces consumeCredits → withTenantDb → requireScope: throws
+      // TenantScopeError when no scope is active.
+      requireScope();
+      chargeSucceeded = true;
+      return { costUsdMicros: 1_750_000, creditsMetered: 1n, creditsCharged: 1n, shortfallCredits: 0n };
+    });
+
+    // Invoked with NO surrounding runInTenantScope — mirrors an Inngest worker.
+    await generateVideoFor({ model: FAKE_MODEL, prompt: "inngest render", telemetry: TELEMETRY });
+
+    expect(mocks.chargeVideoCredits).toHaveBeenCalledTimes(1);
+    expect(chargeSucceeded).toBe(true);
+  });
+
+  it("charges successfully when a tenant scope is already active (request path)", async () => {
+    let chargeSucceeded = false;
+    mocks.chargeVideoCredits.mockImplementation(async () => {
+      requireScope();
+      chargeSucceeded = true;
+      return { costUsdMicros: 1_750_000, creditsMetered: 1n, creditsCharged: 1n, shortfallCredits: 0n };
+    });
+
+    await runInTenantScope(
+      { orgId: TELEMETRY.orgId, workspaceId: TELEMETRY.workspaceId },
+      async () => {
+        await generateVideoFor({ model: FAKE_MODEL, prompt: "request render", telemetry: TELEMETRY });
+      },
+    );
+
+    expect(chargeSucceeded).toBe(true);
   });
 
   it("swallows an insertTokenUsage error and still returns bytes", async () => {

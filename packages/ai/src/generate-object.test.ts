@@ -54,6 +54,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
 });
 vi.mock("./models", () => ({ defaultModel: mocks.defaultModel, modelIdOf: (m: { modelId: string } | string) => (typeof m === "string" ? m : m.modelId) }));
 
+import { requireScope, runInTenantScope } from "@oxagen/tenancy";
 import { generateObjectFor } from "./generate-object";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -64,8 +65,8 @@ const SCHEMA = z.object({
 });
 
 const TELEMETRY = {
-  orgId: "org_1",
-  workspaceId: "ws_1",
+  orgId: "00000000-0000-4000-8000-000000000001",
+  workspaceId: "00000000-0000-4000-8000-000000000002",
   surface: "api" as const,
   messageId: "msg_xyz",
 };
@@ -169,8 +170,8 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     const rows = (mocks.insertTokenUsage.mock.calls[0] as [unknown[]])[0];
     expect(rows).toHaveLength(1);
     const row = rows[0] as Record<string, unknown>;
-    expect(row.org_id).toBe("org_1");
-    expect(row.workspace_id).toBe("ws_1");
+    expect(row.org_id).toBe("00000000-0000-4000-8000-000000000001");
+    expect(row.workspace_id).toBe("00000000-0000-4000-8000-000000000002");
     expect(row.surface).toBe("api");
     expect(row.execution_step_id).toBe("msg_xyz");
     expect(row.input_tokens).toBe(12);
@@ -228,13 +229,51 @@ describe("generateObjectFor (@oxagen/ai)", () => {
 
     expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
     expect(mocks.chargeUsageCredits).toHaveBeenCalledWith({
-      orgId: "org_1",
+      orgId: "00000000-0000-4000-8000-000000000001",
       referenceId: "msg_xyz",
       model: "claude-sonnet-4-6",
       inputTokens: 12,
       outputTokens: 8,
       cachedTokens: 0,
     });
+  });
+
+  // ── Tenant-scope regression (Inngest billing leak) ─────────────────────────
+  // chargeUsageCredits → consumeCredits → withTenantDb → requireScope. Old code
+  // charged scopeless when generateObjectFor ran inside an Inngest function (no
+  // ambient scope) → TenantScopeError → swallowed → unbilled call. The helper
+  // must establish the scope from telemetry around the charge. These mocks call
+  // the real requireScope() gate so they FAIL on the old code and PASS on new.
+  it("charges inside a tenant scope when none is ambient (Inngest path)", async () => {
+    let chargeSucceeded = false;
+    mocks.chargeUsageCredits.mockImplementation(async () => {
+      requireScope();
+      chargeSucceeded = true;
+      return { costUsdMicros: 156, creditsMetered: 1n, creditsCharged: 1n, shortfallCredits: 0n };
+    });
+
+    await generateObjectFor({ schema: SCHEMA, prompt: "inngest step", telemetry: TELEMETRY });
+
+    expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
+    expect(chargeSucceeded).toBe(true);
+  });
+
+  it("charges successfully when a tenant scope is already active (request path)", async () => {
+    let chargeSucceeded = false;
+    mocks.chargeUsageCredits.mockImplementation(async () => {
+      requireScope();
+      chargeSucceeded = true;
+      return { costUsdMicros: 156, creditsMetered: 1n, creditsCharged: 1n, shortfallCredits: 0n };
+    });
+
+    await runInTenantScope(
+      { orgId: TELEMETRY.orgId, workspaceId: TELEMETRY.workspaceId },
+      async () => {
+        await generateObjectFor({ schema: SCHEMA, prompt: "request turn", telemetry: TELEMETRY });
+      },
+    );
+
+    expect(chargeSucceeded).toBe(true);
   });
 
   it("swallows a ClickHouse insertTokenUsage error and still returns the object", async () => {

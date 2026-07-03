@@ -7,6 +7,7 @@ import {
   type Surface,
 } from "@oxagen/telemetry";
 import { chargeVideoCredits, videoProviderCostUsdMicros } from "@oxagen/billing";
+import { getScope, runInTenantScope, type TenantScope } from "@oxagen/tenancy";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.video" } });
 
@@ -328,12 +329,27 @@ export async function generateVideoFor(
   // Debit the org's credits at the target margin. chargeVideoCredits prices the
   // real model + duration via VIDEO_RATE_CARD and applies the same solved meter
   // markup as text calls, so video margin matches the platform target.
+  //
+  // chargeVideoCredits → consumeCredits → withTenantDb → requireScope, which
+  // needs an active tenant scope. Request-path callers have one; Inngest workers
+  // deliberately keep tenant scope tight around their own DB ops and do NOT wrap
+  // the long render step, so this charge would otherwise run scopeless and throw
+  // TenantScopeError (silently swallowed → free renders, a revenue leak). Prefer
+  // the active ALS scope, else rebuild it from the trusted telemetry
+  // org/workspace so the charge always runs inside a valid scope. Mirrors
+  // stream.ts's onFinish handling.
+  const capturedScope: TenantScope = getScope() ?? {
+    orgId: args.telemetry.orgId,
+    workspaceId: args.telemetry.workspaceId,
+  };
   try {
-    await chargeVideoCredits({
-      orgId: args.telemetry.orgId,
-      referenceId: args.telemetry.executionStepId,
-      model: resolvedModelId,
-      durationSeconds: duration.effectiveSeconds,
+    await runInTenantScope(capturedScope, async () => {
+      await chargeVideoCredits({
+        orgId: args.telemetry.orgId,
+        referenceId: args.telemetry.executionStepId,
+        model: resolvedModelId,
+        durationSeconds: duration.effectiveSeconds,
+      });
     });
   } catch (err) {
     // Swallow — credit metering must never fail a capability call.
