@@ -289,8 +289,12 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log(kleur.green("\nDone. New key is live locally and rolling out on Vercel."));
-  console.log(kleur.dim("Old gateway keys remain valid — revoke them in the dashboard once traffic drains."));
+  if (dryRun) {
+    console.log(kleur.green("\nDry-run complete — nothing was created, written, or deployed."));
+  } else {
+    console.log(kleur.green("\nDone. New key is live locally and rolling out on Vercel."));
+    console.log(kleur.dim("Old gateway keys remain valid — revoke them in the dashboard once traffic drains."));
+  }
 }
 
 main().catch((err: unknown) => {
