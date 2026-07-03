@@ -1503,6 +1503,22 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "headless",
   },
+  OXAGEN_ENHANCE_TIMEOUT_MS: {
+    group: "CLI",
+    description:
+      "Wall-clock budget (ms) for the ENHANCE stage's code-graph pass. On a cold " +
+      "store the first graph query triggers a full tree-sitter build (minutes on a " +
+      "large repo), so headless one-shot bounds it to 15s by default; whatever " +
+      "resolved in budget is injected and the build keeps warming in the background. " +
+      "Set explicitly to override; 0 disables the bound. Unset ⇒ 15000 headless, " +
+      "unbounded interactive.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "15000",
+  },
   OXAGEN_JUDGE_PANEL: {
     group: "CLI",
     description:
