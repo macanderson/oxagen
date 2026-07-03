@@ -13,6 +13,14 @@ vi.mock("../config.js", () => ({
   getApiUrl: vi.fn(() => "https://api.oxagen.sh"),
 }));
 
+// No BYOK credential anywhere: these tests prove the exit-1 gate, so the
+// AI_GATEWAY_API_KEY / ANTHROPIC_API_KEY fallback must never resolve (a real
+// key in the shell or the repo .env.local would otherwise flip the behavior).
+// BYOK fallback behavior is covered separately in session-byok.test.ts.
+vi.mock("../../agent/env.js", () => ({
+  resolveAiCredential: () => null,
+}));
+
 import { getToken, getOrgId, getWorkspaceId, getApiUrl } from "../config.js";
 import { allowNoSession, loadSession, requireSession } from "../session.js";
 
