@@ -42,10 +42,25 @@ Environment
 - ``OXAGEN_BEST_OF_N_CANDIDATES`` — how many candidates per task under
   ``OXAGEN_BEST_OF_N=1`` (default 3; mirrors ``solve --candidates``).
 - ``OXAGEN_INSTALL_DUCKDB=1`` — also ``npm i`` DuckDB in the container so the
-  context engine's persistent memory/trace stores are live. Off by default:
-  DuckDB is not load-bearing for a cold single-trial run (no pre-pulled graph,
-  no prior sessions) and the CLI degrades gracefully without it.  Set
-  automatically by ``run.sh`` when ``OXAGEN_WARM=1``.
+  context engine's persistent memory/trace stores are live, AND so the code
+  graph ``oxagen init`` pre-builds in ``install()`` (see ``_INIT_SCRIPT``
+  below) actually persists to disk for ``run()`` to reuse. Off by default: for
+  a cold single-trial run with no warm memory, the CLI degrades gracefully
+  without it (in-memory fallback, no crash — ``init.ts``'s
+  ``createCodeGraphStore()`` call is inside its try/catch precisely so a
+  missing duckdb binding never crashes ``oxagen init``). But that in-memory
+  fallback IS thrown away the moment the ``install()`` process exits, so
+  without this flag the ``oxagen init`` pre-build is pure overhead — it builds
+  a graph nothing downstream ever reads. Set automatically by ``run.sh`` when
+  ``OXAGEN_WARM=1`` or ``OXAGEN_DIFFERENTIATED=1``.
+- ``OXAGEN_DIFFERENTIATED=1`` — a ``run.sh``-level convenience flag (not read
+  by this adapter directly) that turns on the full differentiated config in
+  one shot: persisted code graph + embeddings (``OXAGEN_INSTALL_DUCKDB=1``), a
+  fast gateway-tier coordinator for the pipeline's evaluate/route stage
+  (``OXAGEN_LLM_FAST``), and best-of-N. See "Best-of-N mode" and
+  "Full differentiated config" in the README — including why the on-device
+  local coordinator is NOT part of this recipe (local-dev-only, not
+  container-viable).
 - ``OXAGEN_WARM_MEMORY_DIR`` — host-side directory for cross-trial memory
   persistence (warm / self-improvement mode).  When set the adapter:
     1. uploads the directory's contents into the container during ``install()``

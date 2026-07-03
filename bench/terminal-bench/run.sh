@@ -7,6 +7,7 @@
 #   OXAGEN_MODEL_SLUG=anthropic/claude-opus-4.8 ./run.sh
 #   OXAGEN_ROUTE=1 ./run.sh                   # let Oxagen's cost-aware router pick
 #   OXAGEN_BEST_OF_N=1 OXAGEN_BEST_OF_N_CANDIDATES=3 ./run.sh   # best-of-N (`oxagen solve`) per task
+#   OXAGEN_DIFFERENTIATED=1 ./run.sh          # everything at once — see "Full differentiated config" below
 #   N_CONCURRENT=8 N_ATTEMPTS=3 ./run.sh
 #   DATASET="terminal-bench@2.0" ./run.sh
 #   HARBOR_EXTRA="--include-task-name *hello-world" ./run.sh   # smoke-test a single task
@@ -58,7 +59,44 @@ if [ "${OXAGEN_ROUTE:-}" = "1" ]; then
   MODEL_ARGS=()
 fi
 
-# 4a) Best-of-N: run Oxagen's `solve` differentiator (N independent candidates,
+# 4a) Full differentiated config: engage everything that makes Oxagen unique in
+# ONE flag — persisted local code graph + embeddings, a fast gateway-tier
+# coordinator for the pipeline's evaluate/route stage, and best-of-N. Expands
+# to the individual flags below via bash's ${VAR:=default} (only fills in a
+# var that isn't already set, so any piece can still be overridden
+# individually alongside OXAGEN_DIFFERENTIATED=1).
+#
+#   OXAGEN_DIFFERENTIATED=1 ./run.sh
+#   OXAGEN_DIFFERENTIATED=1 OXAGEN_BEST_OF_N_CANDIDATES=5 ./run.sh   # override just N
+#
+# init (local code graph) and the evaluate→enhance→route→execute→judge→revise
+# pipeline are ALREADY on by default (see OXAGEN_SKIP_INIT / OXAGEN_NO_PIPELINE
+# — this recipe deliberately leaves both unset) — the one piece that's off by
+# default and actually required for "local code graph" to mean anything is
+# OXAGEN_INSTALL_DUCKDB: without it, install()'s `oxagen init` pre-build still
+# runs, but builds an IN-MEMORY graph that's discarded the moment that process
+# exits — the later `run()` invocation (a separate process) starts cold either
+# way. OXAGEN_INSTALL_DUCKDB=1 is what makes the pre-build persist to disk so
+# run() actually reuses it.
+#
+# NOT part of this recipe: the on-device local coordinator
+# (`runtime.coordinator: "on-device"` / `/coordinator local`). It's wired only
+# into the interactive REPL — unreachable from the headless `--mode bypass` /
+# `solve` paths this adapter uses — and even if it were reachable, the
+# container never installs its native runtime dependency (node-llama-cpp) and
+# a cold multi-GB CPU-only weight download+load would not fit a single task's
+# time budget. It is a local-dev-only feature; the fast GATEWAY tier
+# (OXAGEN_LLM_FAST) is the container-viable equivalent and is what "fast
+# coordinator" means below.
+if [ "${OXAGEN_DIFFERENTIATED:-}" = "1" ]; then
+  export OXAGEN_INSTALL_DUCKDB="${OXAGEN_INSTALL_DUCKDB:-1}"
+  export OXAGEN_BEST_OF_N="${OXAGEN_BEST_OF_N:-1}"
+  export OXAGEN_BEST_OF_N_CANDIDATES="${OXAGEN_BEST_OF_N_CANDIDATES:-3}"
+  export OXAGEN_LLM_FAST="${OXAGEN_LLM_FAST:-anthropic/claude-haiku-4-5}"
+  echo "==> OXAGEN_DIFFERENTIATED=1 — persisted code graph + embeddings, fast coordinator (${OXAGEN_LLM_FAST}), pipeline-on, best-of-N."
+fi
+
+# 4b) Best-of-N: run Oxagen's `solve` differentiator (N independent candidates,
 # comparative judge, winner's diff applied) instead of a single one-shot turn.
 # Read directly by the adapter (oxagen_agent.py); nothing to compute here —
 # just surface it in the console output like the other mode flags below.
@@ -66,7 +104,7 @@ if [ "${OXAGEN_BEST_OF_N:-}" = "1" ]; then
   echo "==> OXAGEN_BEST_OF_N=1 — running oxagen solve --candidates ${OXAGEN_BEST_OF_N_CANDIDATES:-3} per task."
 fi
 
-# 4b) Warm / self-improvement mode.
+# 4c) Warm / self-improvement mode.
 #
 # OXAGEN_WARM=1 enables cross-trial memory persistence so that task N's lessons
 # are available to task N+1 — the self-improvement loop from eval-runbook §7.

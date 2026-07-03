@@ -5,15 +5,34 @@
  * init.ts (settings file creation/merge and summary rendering). Code-graph
  * building is covered by the daemon/code-graph builder tests.
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   ensureSettingsFiles,
   formatInitSummary,
+  runInit,
   type InitResult,
 } from "../init.js";
+
+// No gateway key in this hermetic unit test — domain inference must skip
+// cleanly rather than making a real network call (the ambient dev shell may
+// have a real AI_GATEWAY_API_KEY exported).
+vi.mock("../../agent/env.js", () => ({ ensureGatewayKey: () => null }));
+
+// createCodeGraphStore() throws synchronously here, simulating the native
+// duckdb module being unavailable (e.g. a bench/CI container that skipped
+// OXAGEN_INSTALL_DUCKDB) — see the "resilience" describe block below.
+vi.mock("../../daemon/code-graph/store.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../daemon/code-graph/store.js")>();
+  return {
+    ...actual,
+    createCodeGraphStore: () => {
+      throw new Error("duckdb native module not installed");
+    },
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -234,5 +253,33 @@ describe("formatInitSummary", () => {
     expect(summary).toContain("global");
     expect(summary).toContain("project");
     expect(summary).toContain("local");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runInit — code-graph store resilience
+// ---------------------------------------------------------------------------
+
+describe("runInit", () => {
+  it("falls back to an in-memory graph instead of crashing when createCodeGraphStore throws synchronously", async () => {
+    // Regression test: createCodeGraphStore() used to be called OUTSIDE
+    // runInit's try/catch. Its constructor does a bare require("duckdb"),
+    // which throws synchronously when the native module isn't installed (the
+    // default state in a bench/CI container without OXAGEN_INSTALL_DUCKDB) —
+    // that exception was uncaught, crashing `oxagen init` instead of
+    // degrading to the in-memory build the way the agent's own
+    // loadOrBuildCodeGraph() already does.
+    const userPath = join(tmpDir, "user-settings.json");
+
+    // The core assertion IS that this resolves at all: createCodeGraphStore is
+    // mocked to always throw, so the only way runInit() can return (rather
+    // than reject) is via the in-memory fallback's catch block.
+    const result = await runInit({ cwd: tmpDir, userSettingsPath: userPath, noLink: true });
+
+    // tmpDir has no source files, so the in-memory fallback (buildCodeGraph)
+    // finds an empty graph — nothing persisted, so nothing "skipped" either.
+    expect(result.graph.indexed).toBe(0);
+    expect(result.graph.skipped).toBe(0);
+    expect(result.domainsSkipped).toBe(true); // no gateway key mocked in
   });
 });

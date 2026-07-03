@@ -58,6 +58,9 @@ OXAGEN_MODEL_SLUG=anthropic/claude-opus-4.8 ./run.sh
 
 # Best-of-N differentiator (3 candidates/task, judge picks the winner) — see "Best-of-N mode":
 OXAGEN_BEST_OF_N=1 OXAGEN_BEST_OF_N_CANDIDATES=3 ./run.sh
+
+# Everything at once — see "Full differentiated config":
+OXAGEN_DIFFERENTIATED=1 ./run.sh
 ```
 
 `run.sh` builds the bundle, creates a venv, installs Harbor + this adapter
@@ -113,7 +116,9 @@ per task) and compare cost at similar pass rate.
 | `OXAGEN_BEST_OF_N` | unset | `1` → run `oxagen solve --candidates <N> [--model X] "<task>"` instead of a single one-shot turn: N independent candidates, a comparative judge picks the winner, its diff is applied to the container's working directory. See "Best-of-N mode" below. |
 | `OXAGEN_BEST_OF_N_CANDIDATES` | `3` | Candidates per task under `OXAGEN_BEST_OF_N=1`. |
 | `OXAGEN_NO_PIPELINE` | unset | `1` → skip prompt-eval / context-injection / completeness-judge (leaner, cheaper). Default keeps the full Oxagen scaffold on. No effect under `OXAGEN_BEST_OF_N=1` (`solve` candidates already run bare). |
-| `OXAGEN_INSTALL_DUCKDB` | unset | `1` → also `npm i` DuckDB so the context engine's persistent memory/trace stores are live. |
+| `OXAGEN_LLM_FAST` | unset (engine picks) | Gateway slug for the pipeline's fast tier — the model that actually runs the evaluate/route stage in a headless container. See "Full differentiated config" below. No effect under `OXAGEN_BEST_OF_N=1` (no evaluate stage in bare/`solve` candidates). |
+| `OXAGEN_INSTALL_DUCKDB` | unset | `1` → also `npm i` DuckDB so the context engine's persistent memory/trace stores are live, AND so the `oxagen init` code-graph pre-build in `install()` persists to disk for `run()` to reuse (without it, the pre-build is thrown away — see "Is DuckDB important here?" below). |
+| `OXAGEN_DIFFERENTIATED` | unset | `1` → one-shot recipe for everything that makes Oxagen unique at once: sets `OXAGEN_INSTALL_DUCKDB=1`, `OXAGEN_BEST_OF_N=1`, `OXAGEN_BEST_OF_N_CANDIDATES=3`, `OXAGEN_LLM_FAST=anthropic/claude-haiku-4-5` (each individually overridable). See "Full differentiated config" below. |
 | `OXAGEN_CLI_BUNDLE` | repo build path | Override the path to `oxagen.mjs`. |
 | `DATASET` | `terminal-bench@2.0` | Any Harbor dataset slug. |
 | `N_CONCURRENT` / `N_ATTEMPTS` | `4` / `1` | Parallelism and attempts per task. |
@@ -124,20 +129,47 @@ per task) and compare cost at similar pass rate.
 DuckDB powers Oxagen's **context engine** (the local knowledge-graph replica from
 `oxagen graph pull`, episodic/session + fleet memory, the trace store, and the
 daemon's persistent state). In a **cold benchmark trial** none of that is
-load-bearing: the task container is a fresh, unknown repo with no pre-pulled
-graph snapshot and no prior sessions to recall, and a trial is a single one-shot
-run. The agent's actual work — read/edit/grep/bash plus the pipeline's
-prompt-eval, context-injection and completeness-judge — runs fully without it;
-the DuckDB-backed stores degrade gracefully when the module is absent (verified:
-the full loop completes a file-editing task with zero DuckDB errors). DuckDB is
-therefore left **external** in the bundle. Set `OXAGEN_INSTALL_DUCKDB=1` to make
-it live in-container if you want to measure the full context engine.
+load-bearing FOR CORRECTNESS: the task container is a fresh, unknown repo with
+no pre-pulled graph snapshot and no prior sessions to recall, and the agent's
+actual work — read/edit/grep/bash plus the pipeline's prompt-eval,
+context-injection and completeness-judge — runs fully without it. DuckDB is
+therefore left **external** in the bundle by default.
+
+Two more precise claims, since "degrades gracefully" undersells one real gap
+found while wiring this:
+
+- **`oxagen init`'s pre-build no longer crashes without it.** Its DuckDB store
+  constructor does a bare `require("duckdb")`, which throws synchronously when
+  the native module isn't installed. `init.ts` used to call it OUTSIDE its
+  try/catch, so a missing duckdb binding crashed `oxagen init` uncaught in
+  every default (non-`OXAGEN_WARM`, non-`OXAGEN_INSTALL_DUCKDB`) run — masked
+  only because `_INIT_SCRIPT`'s shell wrapper treats a non-zero exit as
+  non-fatal and moves on. Fixed: the store is now constructed inside the try,
+  matching the agent's own runtime code-graph loader — a missing binding now
+  degrades to an in-memory build instead of crashing.
+- **But that in-memory build is still pure overhead without `OXAGEN_INSTALL_DUCKDB=1`.**
+  `install()`'s `oxagen init` and the task's `run()` are two SEPARATE
+  processes. Without DuckDB, the pre-build has nowhere to persist to — it's an
+  in-memory graph that's discarded the instant the `install()` process exits,
+  so `run()` starts its own cold build regardless of whether `install()` "pre-built"
+  anything. If you actually want the local code graph to be a real
+  differentiator (not just a non-crashing no-op), set `OXAGEN_INSTALL_DUCKDB=1`
+  — that's why it's part of the `OXAGEN_DIFFERENTIATED=1` recipe below.
+
+Set `OXAGEN_INSTALL_DUCKDB=1` to make DuckDB live in-container if you want to
+measure the full context engine or a persisted code graph.
 
 ## How it works (per task)
 
 1. **install()** — installs Node 22 (NodeSource/apk), `upload_file`s the bundle
    to `/usr/local/lib/oxagen/oxagen.mjs`, drops a `/usr/local/bin/oxagen`
-   `node`-wrapper, and verifies `oxagen --version`.
+   `node`-wrapper, verifies `oxagen --version`, uploads a static `rg` binary,
+   optionally `npm i`s DuckDB (`OXAGEN_INSTALL_DUCKDB=1`), and — unless
+   `OXAGEN_SKIP_INIT`/`OXAGEN_NO_PIPELINE` — runs `oxagen init --no-link` to
+   pre-build the local tree-sitter code graph + domain index against the task
+   repo before the timed run starts (see "Is DuckDB important here?" for why
+   this pre-build needs `OXAGEN_INSTALL_DUCKDB=1` to actually be worth
+   anything downstream).
 2. **run()** — forwards `AI_GATEWAY_API_KEY` (+ any `OXAGEN_*`), then runs
    `oxagen <flags> "<instruction>"` in the task's working directory with
    `--mode bypass --verbose` (or, under `OXAGEN_BEST_OF_N=1`,
@@ -185,6 +217,77 @@ Notes:
 - **Model pinning applies to every candidate.** Harbor's `-m` becomes `solve
   --model <slug>` — all N candidates use the same benchmarked model (true
   best-of-N sampling), not a diversity mix across different models.
+- **Candidates now reuse the pre-built local code graph.** Each candidate runs
+  in its own isolated git worktree (a different filesystem path than the task
+  repo `oxagen init` pre-built the graph against). The persistent DuckDB store
+  keys rows by exact root path, so a candidate's `code_graph` tool calls used
+  to query its OWN worktree path — which the store had never seen — silently
+  forcing a full from-scratch tree-sitter rebuild in EVERY candidate, N times
+  over, even when `install()` had already pre-built the graph. Fixed in
+  `best-of-n.ts`: candidates now query the code graph against the shared repo
+  root instead (same pattern `one-shot.ts` already used), reusing whatever
+  `oxagen init` pre-built. Trade-off: `code_graph` reflects the pristine
+  pre-worktree state, not a candidate's own in-progress edits — acceptable
+  since it's a navigation aid for orientation (the graph-first mandate fires
+  *before* edits) and the agent still has `read_file`/`grep` as ground truth
+  for files it has already changed. Still requires `OXAGEN_INSTALL_DUCKDB=1`
+  to have anything to reuse — see "Is DuckDB important here?" above.
+- **No full pipeline per candidate.** `solve` candidates always run the ONE
+  engine loop's bare mode (`bare: true`, hardcoded) — no evaluate/enhance/
+  route/judge/revise, by design (the comparative selector across all N
+  candidates replaces the per-candidate judge; double-judging would be
+  redundant and expensive). This means "pipeline ON" and "best-of-N" are
+  mutually exclusive today: the semantic-enhance fallback and the fast
+  coordinator (`OXAGEN_LLM_FAST`) only apply to the one-shot `--mode bypass`
+  path, never to `solve`. See "Full differentiated config" below for what
+  that means in practice.
+
+## Full differentiated config
+
+`OXAGEN_DIFFERENTIATED=1` engages, at once, everything meant to make Oxagen's
+approach distinct from a bare one-shot agent loop: a persisted local code
+graph + embeddings, a fast coordinator for the pipeline, graph-first/semantic
+retrieval, and best-of-N.
+
+```bash
+OXAGEN_DIFFERENTIATED=1 ./run.sh
+```
+
+Expands to (each independently overridable):
+
+```bash
+OXAGEN_INSTALL_DUCKDB=1              # persist the oxagen init pre-build; see "Is DuckDB important here?"
+OXAGEN_BEST_OF_N=1                   # oxagen solve --candidates <N>, not a single one-shot turn
+OXAGEN_BEST_OF_N_CANDIDATES=3
+OXAGEN_LLM_FAST=anthropic/claude-haiku-4-5   # fast-tier coordinator (see below)
+# OXAGEN_SKIP_INIT and OXAGEN_NO_PIPELINE are deliberately left UNSET — both
+# init (local code graph) and the pipeline are already on by default.
+```
+
+What each pillar actually means once you trace it through the CLI, verified by
+reading the code (not assumed from the flag names):
+
+| Pillar | What's true today |
+|---|---|
+| Local code graph + embeddings | `install()` runs `oxagen init --no-link` (front-loads the tree-sitter build) unless `OXAGEN_SKIP_INIT`/`OXAGEN_NO_PIPELINE`. Requires `OXAGEN_INSTALL_DUCKDB=1` to actually persist across the `install()`→`run()` process boundary (see above). Embeddings are lazy-on-first-`semantic_search`-call, not eager in `init` — and already capped at 1500 files per pass (`MAX_EMBED_PER_PASS` in `semantic-index.ts`), so there's no repo-size blowup risk to bound further. |
+| Fast coordinator | The interactive-only on-device local coordinator (`runtime.coordinator: "on-device"` / `/coordinator local`) is **not container-viable** — three independent, each-fatal reasons: (1) it's wired only into the REPL, unreachable from `--mode bypass`/`solve`; (2) its native runtime (`node-llama-cpp`) is never installed in the container; (3) even fixed, its weights (4.7–32.5GB GGUF files) would need a cold CPU-only download+load that won't fit a single task's time budget, with real OOM risk from Docker's `os.totalmem()` reporting host RAM rather than any cgroup limit. It is local-dev-only. The actual "fast coordinator" for a headless run is the pipeline's evaluate/route stage, which already defaults to the fast gateway tier and is overridable via `OXAGEN_LLM_FAST` — pin it explicitly for a deterministic, cheap coordinator. |
+| Graph-first mandate | Active whenever a `CodeGraphProvider` is wired — true for both the one-shot path and `solve` candidates (system prompt in `system-prompt.ts` makes `code_graph` a "non-negotiable" first move for structural questions). Nothing to configure; just don't pass `--no-pipeline`/skip init in a way that leaves no graph to query. |
+| Semantic enhance fallback | Only runs in the FULL pipeline (`enhancePrompt()`, pipeline stage 2) — i.e. only the one-shot `--mode bypass` path when `OXAGEN_NO_PIPELINE` is unset. **Never runs for `solve`** (bare mode skips the whole evaluate/enhance/judge pipeline, not just judge/revise — see "No full pipeline per candidate" above). |
+| Best-of-N | `OXAGEN_BEST_OF_N=1` → `oxagen solve --candidates <N>`. See "Best-of-N mode" above. |
+
+**Bottom line:** "pipeline ON" (evaluate→enhance→route→execute→judge→revise,
+including the semantic-enhance fallback and the fast-coordinator evaluate
+call) and "best-of-N" are two different, currently mutually-exclusive modes of
+the ONE engine loop — not simultaneously-composable layers. Running with
+`OXAGEN_DIFFERENTIATED=1` gets you: a persisted, reusable local code graph,
+the graph-first mandate active in every candidate, and best-of-N sampling —
+but the evaluate/enhance/judge pipeline itself only ever ran in the one-shot
+comparison baseline, not inside `solve`. If the intent is for each `solve`
+candidate to ALSO run the full pipeline (not just bare + code-graph), that's a
+deliberate product decision to make in `best-of-n.ts` (currently `bare: true`
+is hardcoded specifically to avoid double-judging against the comparative
+selector) — flagging this as a decision point rather than resolving it
+unilaterally here.
 
 ## Warm / self-improvement mode
 

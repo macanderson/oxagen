@@ -121,7 +121,21 @@ async function runCandidate(
       profile: "headless", // candidates run their own verification
       readOnly: opts.readOnly,
       projectContext: opts.projectContext,
-      codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(wt, op, q, l)),
+      // Query the code_graph against opts.cwd (the real repo root a caller may
+      // have pre-built via `oxagen init`), NOT `wt`. The persistent DuckDB store
+      // keys rows by exact root path (see daemon/code-graph/store.ts's `WHERE
+      // root = ?`), so a fresh worktree path has no rows even though its files
+      // are byte-identical to opts.cwd at HEAD — querying `wt` would silently
+      // force a full from-scratch tree-sitter rebuild in EVERY candidate,
+      // defeating any pre-build and multiplying the cold-build cost by N.
+      // Pointing at opts.cwd reuses that pre-built graph, same as one-shot.ts's
+      // `queryCodeGraph(cwd, ...)`. Trade-off: a candidate's OWN edits this turn
+      // are invisible to code_graph (it reads the pristine pre-worktree state,
+      // not the candidate's live edits) — acceptable, since code_graph is a
+      // navigation aid for orientation (the graph-first mandate fires before
+      // edits) and the agent still has read_file/grep for ground truth on files
+      // it has already changed.
+      codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(opts.cwd, op, q, l)),
       signal: opts.signal,
       onStage: (s) => emit({ type: "candidate-progress", id, label: s.label }),
       onToolCall: (name) => emit({ type: "candidate-progress", id, label: name }),
