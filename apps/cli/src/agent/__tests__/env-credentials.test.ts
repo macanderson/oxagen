@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { tmpdir } from "node:os";
-import type { ProviderV3 } from "@ai-sdk/provider";
+import type { ProviderV4 } from "@ai-sdk/provider";
 
 const config: { gatewayKey?: string; anthropicKey?: string } = {};
 vi.mock("../../lib/config.js", () => ({ readConfig: () => config }));
@@ -23,8 +23,8 @@ import { uninstallDirectAnthropicProviderForTests } from "../anthropic-direct.js
 // tmpdir(): no .env.local anywhere up the walk on CI or dev machines.
 const cwd = tmpdir();
 
-function globalProvider(): ProviderV3 | undefined {
-  return (globalThis as { AI_SDK_DEFAULT_PROVIDER?: ProviderV3 })
+function globalProvider(): ProviderV4 | undefined {
+  return (globalThis as { AI_SDK_DEFAULT_PROVIDER?: ProviderV4 })
     .AI_SDK_DEFAULT_PROVIDER;
 }
 

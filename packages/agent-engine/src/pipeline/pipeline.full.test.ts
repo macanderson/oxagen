@@ -73,7 +73,13 @@ function makeStream(args: ModelRunArgs, b: StreamBehavior) {
       yield { type: "text-delta", text: "done" };
     })(),
     steps: Promise.resolve([{}]),
-    usage: Promise.resolve({ inputTokens: 5, outputTokens: 3, totalTokens: 8, cachedInputTokens: 1 }),
+    usage: Promise.resolve({
+      inputTokens: 5,
+      outputTokens: 3,
+      totalTokens: 8,
+      // AI SDK v7 usage shape — the engine reads cache hits from inputTokenDetails.
+      inputTokenDetails: { cacheReadTokens: 1 },
+    }),
     response: Promise.resolve({ messages: [] }),
     finishReason: Promise.resolve("stop"),
   } as unknown as ReturnType<AgentAi["stream"]>;
@@ -155,7 +161,7 @@ describe("runTurn — full pipeline path", () => {
     expect(result.trace.finalComplete).toBe(true);
     expect(result.trace.filesTouched).toContain("src/a.ts");
     expect(result.trace.commandsRun).toContain("pytest -q");
-    expect(result.usage.inputTokenDetails.cacheReadTokens).toBe(1);
+    expect(result.usage.cachedInputTokens).toBe(1);
   });
 
   it("raises the tier to the precise safety floor when the refined prompt is high-stakes", async () => {

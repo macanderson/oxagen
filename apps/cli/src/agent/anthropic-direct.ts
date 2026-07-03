@@ -19,7 +19,7 @@
  *     breakpoints behave identically to the gateway path.
  */
 import { createAnthropic } from "@ai-sdk/anthropic";
-import type { ProviderV3 } from "@ai-sdk/provider";
+import type { ProviderV4 } from "@ai-sdk/provider";
 
 const ANTHROPIC_PREFIX = "anthropic/";
 
@@ -56,12 +56,12 @@ export function toDirectAnthropicModelId(modelId: string): string {
  * `process.env` once resolved).
  */
 export function installDirectAnthropicProvider(apiKey: string): void {
-  const g = globalThis as { AI_SDK_DEFAULT_PROVIDER?: ProviderV3 };
+  const g = globalThis as { AI_SDK_DEFAULT_PROVIDER?: ProviderV4 };
   if (g.AI_SDK_DEFAULT_PROVIDER) return;
 
   const anthropic = createAnthropic({ apiKey });
-  const provider: ProviderV3 = {
-    specificationVersion: "v3",
+  const provider: ProviderV4 = {
+    specificationVersion: "v4",
     languageModel: (modelId) =>
       anthropic.languageModel(toDirectAnthropicModelId(modelId)),
     embeddingModel: (modelId) => {
@@ -82,6 +82,6 @@ export function installDirectAnthropicProvider(apiKey: string): void {
 
 /** Test-only: remove an installed direct provider so cases stay independent. */
 export function uninstallDirectAnthropicProviderForTests(): void {
-  delete (globalThis as { AI_SDK_DEFAULT_PROVIDER?: ProviderV3 })
+  delete (globalThis as { AI_SDK_DEFAULT_PROVIDER?: ProviderV4 })
     .AI_SDK_DEFAULT_PROVIDER;
 }

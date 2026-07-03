@@ -32,10 +32,11 @@ function isResponseFormatUnsupported(warning: Warning): boolean {
 /** Replicates the AI SDK's default single-warning console format. */
 function formatWarning(
   warning: Warning,
-  provider: string,
-  model: string,
+  provider: string | undefined,
+  model: string | undefined,
 ): string {
-  const prefix = `AI SDK Warning (${provider} / ${model}):`;
+  // v7 passes provider/model as optional — fall back like the SDK's default logger.
+  const prefix = `AI SDK Warning (${provider ?? "unknown"} / ${model ?? "unknown"}):`;
   switch (warning.type) {
     case "unsupported": {
       const base = `${prefix} The feature "${warning.feature}" is not supported.`;

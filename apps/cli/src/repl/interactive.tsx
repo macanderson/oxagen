@@ -1811,7 +1811,9 @@ export function ReplApp({
         setUsage((u) => ({
           input: u.input + (result.usage.inputTokens ?? 0),
           output: u.output + (result.usage.outputTokens ?? 0),
-          cacheHit: u.cacheHit + (result.usage.inputTokenDetails.cacheReadTokens ?? 0),
+          // `result.usage` is the engine's own aggregate (AgentUsage), which
+          // keeps the `cachedInputTokens` field — not an AI SDK v7 usage object.
+          cacheHit: u.cacheHit + (result.usage.cachedInputTokens ?? 0),
           // The pipeline already priced the turn (rate card) onto the trace.
           costUsd: u.costUsd + (result.trace?.usage?.costUsd ?? 0),
         }));

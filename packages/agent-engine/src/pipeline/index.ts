@@ -540,7 +540,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
           outputTokens: (phaseAResult.usage.outputTokens ?? 0) + (phaseBResult.usage.outputTokens ?? 0),
           totalTokens: (phaseAResult.usage.totalTokens ?? 0) + (phaseBResult.usage.totalTokens ?? 0),
           cachedInputTokens:
-            (phaseAResult.usage.inputTokenDetails.cacheReadTokens ?? 0) + (phaseBResult.usage.inputTokenDetails.cacheReadTokens ?? 0),
+            (phaseAResult.usage.cachedInputTokens ?? 0) + (phaseBResult.usage.cachedInputTokens ?? 0),
         },
       };
       // Reset prompt to original for the end-of-round judge input below.
@@ -597,7 +597,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     history = result.messages;
     lastText = result.text;
     totalSteps += result.steps;
-    cachedInputTokens += result.usage.inputTokenDetails.cacheReadTokens ?? 0;
+    cachedInputTokens += result.usage.cachedInputTokens ?? 0;
 
     // Union the git-diff file list into filesTouched. This is the ground truth
     // for what changed and supplements tool-call events (which may not fire in
@@ -942,7 +942,7 @@ async function runBare(
     usage: {
       inputTokens: result.usage.inputTokens,
       outputTokens: result.usage.outputTokens,
-      cachedInputTokens: result.usage.inputTokenDetails.cacheReadTokens,
+      cachedInputTokens: result.usage.cachedInputTokens,
     },
     trace,
   };

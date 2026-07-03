@@ -5,7 +5,7 @@
  * gaps (embeddings, images) fail with clear messages instead of opaque 404s.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import type { ProviderV3 } from "@ai-sdk/provider";
+import type { ProviderV4 } from "@ai-sdk/provider";
 import {
   AnthropicOnlyModelError,
   installDirectAnthropicProvider,
@@ -13,8 +13,8 @@ import {
   uninstallDirectAnthropicProviderForTests,
 } from "../anthropic-direct.js";
 
-function globalProvider(): ProviderV3 | undefined {
-  return (globalThis as { AI_SDK_DEFAULT_PROVIDER?: ProviderV3 })
+function globalProvider(): ProviderV4 | undefined {
+  return (globalThis as { AI_SDK_DEFAULT_PROVIDER?: ProviderV4 })
     .AI_SDK_DEFAULT_PROVIDER;
 }
 

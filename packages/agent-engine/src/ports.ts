@@ -32,7 +32,7 @@ export interface ModelRunArgs {
  * `response`). Both a `streamText` wrapper (CLI/BYOK) and a `streamAgentReply`
  * wrapper (platform) satisfy this exactly — both return `StreamTextResult`.
  */
-export type StreamRunResult = StreamTextResult<ToolSet, never>;
+export type StreamRunResult = StreamTextResult<ToolSet, Record<string, unknown>, never>;
 
 /** Arguments for one structured-output generation (mirrors `generateObject`). */
 export interface ObjectRunArgs<T> {

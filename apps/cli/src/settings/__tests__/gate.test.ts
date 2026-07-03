@@ -32,7 +32,7 @@ function makeTools(calls: string[]): ToolSet {
 }
 
 type Exec = NonNullable<ToolSet[string]["execute"]>;
-const CALL_OPTS = { toolCallId: "test", messages: [] } as Parameters<Exec>[1];
+const CALL_OPTS = { toolCallId: "test", messages: [] } as unknown as Parameters<Exec>[1];
 
 async function call(tools: ToolSet, name: string, input: unknown): Promise<unknown> {
   const exec = tools[name]?.execute;
