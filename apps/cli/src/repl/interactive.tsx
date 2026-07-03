@@ -200,18 +200,15 @@ export function ReplApp({
     resolveEffort(options.effort),
   );
   const [turns, setTurns] = useState(0);
-  // Cumulative session usage (exact, from the model's reported usage): input /
-  // output tokens, cache-read tokens (a "hit"), and estimated cost.
-  const [usage, setUsage] = useState<{
-    input: number;
-    output: number;
-    cacheHit: number;
-    costUsd: number;
-  }>({ input: 0, output: 0, cacheHit: 0, costUsd: 0 });
-  // Live token/cost metrics (Bug 2). Every model call the engine makes flows
-  // through the metered AI port, which records into this bus; the status line
-  // subscribes and re-renders (throttled) as each call completes, then settles
-  // on the final totals via flush() at turn end.
+  // Live token/cost/cache metrics (Bug 2). Every model call the engine makes
+  // — evaluator, worker (every step), judge — flows through the metered AI
+  // port, which records into this bus; the dock/status line subscribe and
+  // re-render (throttled) as each call completes, then settle on the final
+  // totals via flush() at turn end. This is the SOLE source for session
+  // token/cache/cost figures — a separate one-shot "settle at turn end" state
+  // used to live here too and fed the same displays, which meant the cache
+  // "hit" figure alone went stale mid-turn while tokens/cost next to it kept
+  // updating live; removed in favor of this single, always-live source.
   const metricsBusRef = useRef(createMetricsBus());
   const [metrics, setMetrics] = useState<SessionMetrics>(() =>
     metricsBusRef.current.snapshot(),
@@ -1932,15 +1929,6 @@ export function ReplApp({
           outputTokens: result.usage.outputTokens,
         });
         setTurns((n) => n + 1);
-        setUsage((u) => ({
-          input: u.input + (result.usage.inputTokens ?? 0),
-          output: u.output + (result.usage.outputTokens ?? 0),
-          // `result.usage` is the engine's own aggregate (AgentUsage), which
-          // keeps the `cachedInputTokens` field — not an AI SDK v7 usage object.
-          cacheHit: u.cacheHit + (result.usage.cachedInputTokens ?? 0),
-          // The pipeline already priced the turn (rate card) onto the trace.
-          costUsd: u.costUsd + (result.trace?.usage?.costUsd ?? 0),
-        }));
       } catch (err) {
         closeStreamingBlocks();
         // Distinguish the three exit paths: an explicit user cancel (Esc/Ctrl-C),
@@ -2252,7 +2240,7 @@ export function ReplApp({
           <TelemetryDock
             telemetry={telemetry}
             metrics={metrics}
-            cacheHit={usage.cacheHit}
+            cacheHit={metrics.sessionCachedTokens}
             isStreaming={isStreaming}
             now={now}
             cols={cols}
@@ -2411,13 +2399,15 @@ export function ReplApp({
         <StatusLine
           model={model}
           branch={branchRef.current}
-          // Tokens + cost come from the live metrics bus (every model call —
-          // evaluator, worker, judge — contributes), so they update as calls
-          // complete during a turn and settle correctly at the end (Bug 2).
+          // Tokens + cost + cache all come from the live metrics bus (every
+          // model call — evaluator, worker per-step, judge — contributes), so
+          // they update together as calls complete during a turn and settle
+          // correctly at the end (Bug 2) — cache used to lag behind on a
+          // separate one-shot-per-turn total while tokens/cost updated live.
           inputTokens={metrics.sessionTokensIn}
           outputTokens={metrics.sessionTokensOut}
-          cacheHit={usage.cacheHit}
-          cacheMiss={Math.max(0, metrics.sessionTokensIn - usage.cacheHit)}
+          cacheHit={metrics.sessionCachedTokens}
+          cacheMiss={Math.max(0, metrics.sessionTokensIn - metrics.sessionCachedTokens)}
           costUsd={metrics.sessionCostUsd}
           turnOutputTokens={metrics.turnTokensOut}
           turnCostUsd={metrics.turnCostUsd}

@@ -198,6 +198,21 @@ describe("accumulateUsage", () => {
     expect(result.inputTokens).toBe(0);
     expect(result.outputTokens).toBe(0);
   });
+
+  it("prices a cache hit at the discounted rate — the SAME usage costs less with cachedInputTokens set", () => {
+    const usage = { inputTokens: 1_000_000, outputTokens: 0, cachedInputTokens: 1_000_000 };
+    const withCache = accumulateUsage(emptyUsage(), "anthropic/claude-sonnet-4.6", usage);
+    const withoutCache = accumulateUsage(
+      emptyUsage(),
+      "anthropic/claude-sonnet-4.6",
+      { inputTokens: 1_000_000, outputTokens: 0 },
+    );
+    expect(withCache.costUsd).toBeLessThan(withoutCache.costUsd);
+    expect(withCache.costUsd).toBeCloseTo(0.3); // 1M cached @ $0.3/1M
+    expect(withoutCache.costUsd).toBeCloseTo(3.0); // 1M fresh @ $3/1M
+    // Token totals are unaffected by the cache split — only cost is.
+    expect(withCache.inputTokens).toBe(withoutCache.inputTokens);
+  });
 });
 
 describe("routeModel", () => {

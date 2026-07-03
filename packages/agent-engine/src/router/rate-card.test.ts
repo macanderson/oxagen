@@ -31,20 +31,27 @@ describe("familyOf", () => {
 
 describe("rateFor", () => {
   it("prices Opus at the frontier rate", () => {
-    expect(rateFor("anthropic/claude-opus-4.8")).toEqual({ inputPer1M: 15.0, outputPer1M: 75.0 });
+    expect(rateFor("anthropic/claude-opus-4.8")).toEqual({ inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 });
   });
 
   it("prices Sonnet distinctly from Opus", () => {
-    expect(rateFor("anthropic/claude-sonnet-4.6")).toEqual({ inputPer1M: 3.0, outputPer1M: 15.0 });
+    expect(rateFor("anthropic/claude-sonnet-4.6")).toEqual({ inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 });
   });
 
   it("matches the most-specific family first (gpt-4o-mini before gpt-4o)", () => {
-    expect(rateFor("openai/gpt-4o-mini")).toEqual({ inputPer1M: 0.15, outputPer1M: 0.6 });
-    expect(rateFor("openai/gpt-4o")).toEqual({ inputPer1M: 2.5, outputPer1M: 10.0 });
+    expect(rateFor("openai/gpt-4o-mini")).toEqual({ inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 });
+    expect(rateFor("openai/gpt-4o")).toEqual({ inputPer1M: 2.5, outputPer1M: 10.0, cachedInputPer1M: 1.25 });
   });
 
   it("falls back to the Sonnet-equivalent rate for an unknown family", () => {
     expect(rateFor("mistral/mistral-large-2")).toEqual(FALLBACK_RATE);
+  });
+
+  it("every card entry's cached rate is strictly cheaper than its fresh input rate", () => {
+    for (const entry of listRateCard()) {
+      expect(entry.rate.cachedInputPer1M).toBeGreaterThan(0);
+      expect(entry.rate.cachedInputPer1M).toBeLessThan(entry.rate.inputPer1M);
+    }
   });
 });
 
@@ -70,6 +77,17 @@ describe("estimateCostUsd", () => {
   it("treats a missing direction as zero tokens", () => {
     expect(estimateCostUsd("anthropic/claude-sonnet-4.6", { inputTokens: 1_000_000 })).toBe(3);
     expect(estimateCostUsd("anthropic/claude-sonnet-4.6", {})).toBe(0);
+  });
+
+  it("prices cached-read tokens at the discounted rate, not the fresh-input rate", () => {
+    const allCached = estimateCostUsd("anthropic/claude-sonnet-4.6", {
+      inputTokens: 1_000_000,
+      cachedTokens: 1_000_000,
+    });
+    expect(allCached).toBeCloseTo(0.3);
+    const noneCached = estimateCostUsd("anthropic/claude-sonnet-4.6", { inputTokens: 1_000_000 });
+    expect(noneCached).toBeCloseTo(3.0);
+    expect(allCached).toBeLessThan(noneCached);
   });
 });
 

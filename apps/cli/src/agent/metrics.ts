@@ -27,7 +27,9 @@ export interface MetricsEvent {
   model: string;
   tokensIn: number;
   tokensOut: number;
-  /** Cost for THIS call only — already priced, not cumulative. */
+  /** Subset of `tokensIn` served from the provider's prompt cache (a cache "hit"). */
+  cachedTokens: number;
+  /** Cost for THIS call only — already priced (cache-discounted), not cumulative. */
   costUsd: number;
   /** Epoch ms the event was recorded. */
   at: number;
@@ -37,6 +39,7 @@ export interface MetricsEvent {
 export interface ModelUsage {
   tokensIn: number;
   tokensOut: number;
+  cachedTokens: number;
   costUsd: number;
 }
 
@@ -48,9 +51,11 @@ export interface ModelUsage {
 export interface SessionMetrics {
   turnTokensIn: number;
   turnTokensOut: number;
+  turnCachedTokens: number;
   turnCostUsd: number;
   sessionTokensIn: number;
   sessionTokensOut: number;
+  sessionCachedTokens: number;
   sessionCostUsd: number;
   byModel: Record<string, ModelUsage>;
 }
@@ -89,7 +94,7 @@ const DEFAULT_THROTTLE_TOKENS = 200;
 
 /** A zeroed {@link ModelUsage}. */
 function emptyModelUsage(): ModelUsage {
-  return { tokensIn: 0, tokensOut: 0, costUsd: 0 };
+  return { tokensIn: 0, tokensOut: 0, cachedTokens: 0, costUsd: 0 };
 }
 
 /** A zeroed {@link SessionMetrics}. */
@@ -97,9 +102,11 @@ function emptyMetrics(): SessionMetrics {
   return {
     turnTokensIn: 0,
     turnTokensOut: 0,
+    turnCachedTokens: 0,
     turnCostUsd: 0,
     sessionTokensIn: 0,
     sessionTokensOut: 0,
+    sessionCachedTokens: 0,
     sessionCostUsd: 0,
     byModel: {},
   };
@@ -196,17 +203,21 @@ export function createMetricsBus(opts?: MetricsBusOptions): MetricsBus {
   function record(ev: MetricsEvent): void {
     const tokensIn = ev.tokensIn;
     const tokensOut = ev.tokensOut;
+    const cachedTokens = ev.cachedTokens;
 
     metrics.turnTokensIn += tokensIn;
     metrics.turnTokensOut += tokensOut;
+    metrics.turnCachedTokens += cachedTokens;
     metrics.turnCostUsd += ev.costUsd;
     metrics.sessionTokensIn += tokensIn;
     metrics.sessionTokensOut += tokensOut;
+    metrics.sessionCachedTokens += cachedTokens;
     metrics.sessionCostUsd += ev.costUsd;
 
     const usage = metrics.byModel[ev.model] ?? emptyModelUsage();
     usage.tokensIn += tokensIn;
     usage.tokensOut += tokensOut;
+    usage.cachedTokens += cachedTokens;
     usage.costUsd += ev.costUsd;
     metrics.byModel[ev.model] = usage;
 
@@ -228,6 +239,7 @@ export function createMetricsBus(opts?: MetricsBusOptions): MetricsBus {
   function startTurn(): void {
     metrics.turnTokensIn = 0;
     metrics.turnTokensOut = 0;
+    metrics.turnCachedTokens = 0;
     metrics.turnCostUsd = 0;
     // Session totals and byModel persist across turns.
     clearPending();
@@ -246,7 +258,10 @@ export function createMetricsBus(opts?: MetricsBusOptions): MetricsBus {
 
 /**
  * Build a {@link MetricsEvent} from raw token usage, pricing it via the
- * existing rate card so callers never hand-roll cost math.
+ * existing rate card so callers never hand-roll cost math. `usage.cachedTokens`
+ * (a subset of `inputTokens`) flows straight into the rate card's own cache
+ * discount, so a call that hit the provider's prompt cache is priced — and
+ * reported — correctly instead of as if every input token were billed fresh.
  */
 export function metricsEventFor(
   callId: string,
@@ -261,6 +276,7 @@ export function metricsEventFor(
     model,
     tokensIn: usage.inputTokens ?? 0,
     tokensOut: usage.outputTokens ?? 0,
+    cachedTokens: usage.cachedTokens ?? 0,
     costUsd: estimateCostUsd(model, usage),
     at,
   };

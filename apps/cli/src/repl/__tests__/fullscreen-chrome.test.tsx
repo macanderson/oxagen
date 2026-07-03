@@ -21,9 +21,11 @@ function emptyMetrics(): SessionMetrics {
   return {
     turnTokensIn: 0,
     turnTokensOut: 0,
+    turnCachedTokens: 0,
     turnCostUsd: 0,
     sessionTokensIn: 0,
     sessionTokensOut: 0,
+    sessionCachedTokens: 0,
     sessionCostUsd: 0,
     byModel: {},
   };

@@ -59,6 +59,7 @@ describe("createMeteredAi", () => {
       model: "anthropic/claude-sonnet-4",
       tokensIn: 100,
       tokensOut: 50,
+      cachedTokens: 0,
       at: 1000,
     });
     // Priced via the rate card → a non-zero cost for a paid model.
@@ -78,7 +79,59 @@ describe("createMeteredAi", () => {
     await result.usage; // let the settle handler run
     await Promise.resolve();
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ tokensIn: 500, tokensOut: 200, kind: "model_call" });
+    expect(events[0]).toMatchObject({ tokensIn: 500, tokensOut: 200, cachedTokens: 0, kind: "model_call" });
+  });
+
+  it("flattens a stream's nested cache-read usage into the metrics event, priced at the discounted rate (Bug: live dock was missing cache tokens)", async () => {
+    const events: MetricsEvent[] = [];
+    const ai = createMeteredAi(
+      makeFakeAi({
+        // AI SDK v7 shape: cache reads nest under inputTokenDetails, not a flat field.
+        stream: ((_args) =>
+          ({
+            usage: Promise.resolve({
+              inputTokens: 1_000_000,
+              outputTokens: 0,
+              inputTokenDetails: { cacheReadTokens: 1_000_000 },
+            }),
+          }) as unknown) as AgentAi["stream"],
+      }),
+      { onMetrics: (ev) => events.push(ev) },
+    );
+    const result = ai.stream({
+      model: "anthropic/claude-sonnet-4.6",
+      system: "s",
+      messages: [],
+      tools: {},
+      stopWhen: (() => false) as never,
+    });
+    await result.usage;
+    await Promise.resolve();
+    expect(events).toHaveLength(1);
+    expect(events[0]!.cachedTokens).toBe(1_000_000);
+    // 1M cached @ Sonnet's $0.3/1M cached rate = $0.30, not $3.00 (the fresh rate).
+    expect(events[0]!.costUsd).toBeCloseTo(0.3);
+  });
+
+  it("flattens a generateObject call's nested cache-read usage into the metrics event", async () => {
+    const events: MetricsEvent[] = [];
+    const ai = createMeteredAi(
+      makeFakeAi({
+        generateObject: (async <T,>(_args: ObjectRunArgs<T>): Promise<ObjectRunResult<T>> => ({
+          object: {} as T,
+          usage: {
+            inputTokens: 1_000_000,
+            outputTokens: 0,
+            cachedInputTokens: 1_000_000,
+          },
+        })) as AgentAi["generateObject"],
+      }),
+      { onMetrics: (ev) => events.push(ev) },
+    );
+    await ai.generateObject({ model: "anthropic/claude-sonnet-4.6", schema: {} as never, prompt: "x" });
+    expect(events).toHaveLength(1);
+    expect(events[0]!.cachedTokens).toBe(1_000_000);
+    expect(events[0]!.costUsd).toBeCloseTo(0.3);
   });
 
   it("records evaluator + worker + judge — every path contributes", async () => {
