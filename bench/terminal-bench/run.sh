@@ -69,18 +69,24 @@ fi
 #   OXAGEN_DIFFERENTIATED=1 ./run.sh
 #   OXAGEN_DIFFERENTIATED=1 OXAGEN_BEST_OF_N_CANDIDATES=5 ./run.sh   # override just N
 #
-# init (local code graph) and the evaluate→enhance→route→execute→judge→revise
-# pipeline are ALREADY on by default — see OXAGEN_SKIP_INIT / OXAGEN_NO_PIPELINE
-# (this recipe deliberately leaves both unset). OXAGEN_NO_PIPELINE also gates
-# whether `solve` candidates get `--pipeline` (each candidate runs the full
-# pipeline too, not just the bare engine loop — see "Best-of-N mode" in the
-# README for the cost tradeoff: roughly N extra judge-class calls). The one
-# piece that's off by default and actually required for "local code graph" to
-# mean anything is OXAGEN_INSTALL_DUCKDB: without it, install()'s `oxagen init`
-# pre-build still runs, but builds an IN-MEMORY graph that's discarded the
-# moment that process exits — the later `run()` invocation (a separate
-# process) starts cold either way. OXAGEN_INSTALL_DUCKDB=1 is what makes the
-# pre-build persist to disk so run() actually reuses it.
+# init (local code graph) is ALREADY on by default — see OXAGEN_SKIP_INIT
+# (this recipe leaves it unset). The one piece that's off by default and
+# actually required for "local code graph" to mean anything is
+# OXAGEN_INSTALL_DUCKDB: without it, install()'s `oxagen init` pre-build still
+# runs, but builds an IN-MEMORY graph that's discarded the moment that process
+# exits — the later `run()` invocation (a separate process) starts cold either
+# way. OXAGEN_INSTALL_DUCKDB=1 is what makes the pre-build persist to disk so
+# run() actually reuses it.
+#
+# OXAGEN_BEST_OF_N_PIPELINE=1 (dedicated gate, independent of
+# OXAGEN_NO_PIPELINE, which only affects the one-shot baseline) makes every
+# `solve` candidate run the FULL evaluate→enhance→route→execute→judge→revise
+# pipeline — each candidate self-judges/revises BEFORE the comparative
+# selector ever compares them. The double-judge is intentional (money no
+# object, per the user's call): strongest-candidate-first, then compare.
+# Meaningfully more expensive than a single per-candidate judge would suggest
+# — roughly N extra judge-class calls plus N evaluate/enhance calls on top of
+# what bare candidates already cost. See "Best-of-N mode" in the README.
 #
 # NOT part of this recipe: the on-device local coordinator
 # (`runtime.coordinator: "on-device"` / `/coordinator local`). It's wired only
@@ -104,6 +110,7 @@ if [ "${OXAGEN_DIFFERENTIATED:-}" = "1" ]; then
   export OXAGEN_INSTALL_DUCKDB="${OXAGEN_INSTALL_DUCKDB:-1}"
   export OXAGEN_BEST_OF_N="${OXAGEN_BEST_OF_N:-1}"
   export OXAGEN_BEST_OF_N_CANDIDATES="${OXAGEN_BEST_OF_N_CANDIDATES:-3}"
+  export OXAGEN_BEST_OF_N_PIPELINE="${OXAGEN_BEST_OF_N_PIPELINE:-1}"
   export OXAGEN_LLM_FAST="${OXAGEN_LLM_FAST:-anthropic/claude-haiku-4-5}"
   echo "==> OXAGEN_DIFFERENTIATED=1 — persisted code graph + embeddings, fast coordinator (${OXAGEN_LLM_FAST}), full pipeline per candidate, best-of-N."
 fi
@@ -113,7 +120,9 @@ fi
 # Read directly by the adapter (oxagen_agent.py); nothing to compute here —
 # just surface it in the console output like the other mode flags below.
 if [ "${OXAGEN_BEST_OF_N:-}" = "1" ]; then
-  echo "==> OXAGEN_BEST_OF_N=1 — running oxagen solve --candidates ${OXAGEN_BEST_OF_N_CANDIDATES:-3} per task."
+  _pipeline_note="bare (set OXAGEN_BEST_OF_N_PIPELINE=1 for full evaluate/enhance/judge per candidate)"
+  [ "${OXAGEN_BEST_OF_N_PIPELINE:-}" = "1" ] && _pipeline_note="full pipeline per candidate"
+  echo "==> OXAGEN_BEST_OF_N=1 — running oxagen solve --candidates ${OXAGEN_BEST_OF_N_CANDIDATES:-3} per task (${_pipeline_note})."
 fi
 
 # 4c) Warm / self-improvement mode.

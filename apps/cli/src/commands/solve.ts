@@ -29,15 +29,33 @@ export interface SolveOptions {
   json?: boolean;
   /**
    * Run every candidate through the full evaluate→enhance→route→execute→
-   * judge→revise pipeline instead of the bare engine loop (default: bare —
-   * the comparative selector across all N candidates already judges, so a
-   * per-candidate judge too is normally redundant cost). Turns on the
+   * judge→revise pipeline instead of the bare engine loop. Turns on the
    * semantic-enhance fallback (embeds the prompt, pulls related files from
-   * the code graph before the candidate starts) and a per-candidate
-   * completeness judge/revise round, at roughly N extra judge-class model
-   * calls. See BestOfNOptions.fullPipeline.
+   * the persisted code graph before the candidate starts) and a per-candidate
+   * completeness judge/revise round, on top of the comparative selector that
+   * still picks the winner across all N afterward — each candidate is
+   * self-improved BEFORE comparison, not instead of it. Roughly N extra
+   * judge-class model calls (one per candidate) plus N evaluate/enhance
+   * calls, on top of what bare mode already costs. Undefined here defers to
+   * `OXAGEN_BEST_OF_N_PIPELINE` (env `"1"` ⇒ on); neither set ⇒ bare, the
+   * cheaper default. See BestOfNOptions.fullPipeline.
    */
   pipeline?: boolean;
+}
+
+/**
+ * Whether every candidate should run the full evaluate/enhance/judge/revise
+ * pipeline instead of the bare engine loop. `opts.pipeline` (an explicit
+ * `--pipeline` / a hypothetical future `--no-pipeline`) always wins when set;
+ * otherwise `OXAGEN_BEST_OF_N_PIPELINE` sets the default, so a caller (e.g.
+ * the bench adapter's differentiated config) can opt every `solve` invocation
+ * into the full pipeline without passing the flag on every call. Neither set
+ * ⇒ bare (unchanged default), the cheaper mode. Exported as a pure function
+ * so this branch is unit-testable without standing up `handleSolve`'s full
+ * session/AI-port machinery.
+ */
+export function resolveFullPipeline(opts: Pick<SolveOptions, "pipeline">): boolean {
+  return opts.pipeline ?? process.env["OXAGEN_BEST_OF_N_PIPELINE"] === "1";
 }
 
 export async function handleSolve(prompt: string, opts: SolveOptions): Promise<void> {
@@ -61,8 +79,9 @@ export async function handleSolve(prompt: string, opts: SolveOptions): Promise<v
       : undefined;
 
   const candidates = Math.max(1, Math.min(opts.candidates ?? 3, 10));
+  const fullPipeline = resolveFullPipeline(opts);
 
-  void debugLog("turn", "solve.start", { prompt, candidates, verify: opts.verify, models, pipeline: Boolean(opts.pipeline) });
+  void debugLog("turn", "solve.start", { prompt, candidates, verify: opts.verify, models, fullPipeline });
 
   const result = await launchBestOfN({
     prompt,
@@ -75,7 +94,7 @@ export async function handleSolve(prompt: string, opts: SolveOptions): Promise<v
     readOnly: opts.readonly,
     projectContext: loadProjectContext(cwd),
     headless: opts.json,
-    fullPipeline: opts.pipeline,
+    fullPipeline,
   });
 
   // Exit non-zero when nothing viable was produced, so scripts can branch on it.

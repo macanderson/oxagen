@@ -28,24 +28,31 @@ Environment
 - ``OXAGEN_CLI_BUNDLE`` — path to ``oxagen.mjs`` (defaults to the repo build).
 - ``OXAGEN_ROUTE=1`` — let Oxagen's router pick the model (ignore ``-m``).
 - ``OXAGEN_NO_PIPELINE=1`` — skip prompt-eval / context-injection / completeness
-  judging (leaner + cheaper; the default keeps the full Oxagen scaffold on).
-  Under ``OXAGEN_BEST_OF_N=1`` this ALSO controls whether ``solve`` candidates
-  run the full evaluate/enhance/judge pipeline (``--pipeline``, the default) or
-  the bare engine loop — see ``OXAGEN_BEST_OF_N`` below.
+  judging in the ONE-SHOT ``--mode bypass`` path only (leaner + cheaper; the
+  default keeps the full Oxagen scaffold on). Has no effect under
+  ``OXAGEN_BEST_OF_N=1`` — that mode has its own dedicated gate, below.
 - ``OXAGEN_BEST_OF_N=1`` — run Oxagen's best-of-N differentiator instead of a
-  single one-shot turn: ``oxagen solve --candidates <N> [--model X] --pipeline
-  "<task>"`` runs N independent candidates (each its own isolated worktree +
-  engine loop), a comparative judge picks the winner, and the winner's diff is
-  applied to the container's working directory — so the container's resulting
-  ``git diff`` is still exactly what Harbor's verifier grades. ``--mode
-  bypass`` has no ``solve`` equivalent and none is needed: candidates run
-  headlessly with no confirmation gate to bypass. Every candidate ALSO runs
-  the full evaluate→enhance→route→execute→judge→revise pipeline by default
-  (``--pipeline``; disable with ``OXAGEN_NO_PIPELINE=1`` to fall back to the
-  cheaper bare engine loop — no per-candidate judge, just the comparative
-  selector across all N at the end).
+  single one-shot turn: ``oxagen solve --candidates <N> [--model X]
+  [--pipeline] "<task>"`` runs N independent candidates (each its own isolated
+  worktree + engine loop), a comparative judge picks the winner, and the
+  winner's diff is applied to the container's working directory — so the
+  container's resulting ``git diff`` is still exactly what Harbor's verifier
+  grades. ``--mode bypass`` has no ``solve`` equivalent and none is needed:
+  candidates run headlessly with no confirmation gate to bypass.
 - ``OXAGEN_BEST_OF_N_CANDIDATES`` — how many candidates per task under
   ``OXAGEN_BEST_OF_N=1`` (default 3; mirrors ``solve --candidates``).
+- ``OXAGEN_BEST_OF_N_PIPELINE=1`` — under ``OXAGEN_BEST_OF_N=1``, run every
+  candidate through the full evaluate→enhance→route→execute→judge→revise
+  pipeline (``--pipeline``) instead of the bare engine loop: each candidate
+  gets its OWN completeness judge/revise round AND the semantic-enhance
+  pre-context (embed the prompt, pull related files from the persisted code
+  graph) BEFORE the comparative selector ever compares them. This is a
+  deliberate double-judge — each candidate self-improves first, then the
+  N (already-improved) candidates are compared — not accidental redundancy.
+  Off by default (bare: one comparison judge only, no per-candidate judge/
+  enhance). Costs roughly N extra judge-class calls plus N evaluate/enhance
+  calls on top of what bare already costs. ``run.sh``'s
+  ``OXAGEN_DIFFERENTIATED=1`` recipe turns this on by default.
 - ``OXAGEN_INSTALL_DUCKDB=1`` — also ``npm i`` DuckDB in the container so the
   context engine's persistent memory/trace stores are live, AND so the code
   graph ``oxagen init`` pre-builds in ``install()`` (see ``_INIT_SCRIPT``
@@ -194,6 +201,23 @@ def _is_truthy(value: str | None) -> bool:
 
 def _best_of_n_enabled() -> bool:
     return _is_truthy(os.environ.get("OXAGEN_BEST_OF_N"))
+
+
+def _best_of_n_pipeline_enabled() -> bool:
+    """Whether `solve` candidates run the full evaluate/enhance/judge/revise
+    pipeline (--pipeline) instead of the bare engine loop. Dedicated gate —
+    NOT the same var as OXAGEN_NO_PIPELINE (that one only controls the
+    one-shot `--mode bypass` path's scaffold) — because the two modes have
+    genuinely different default costs: the one-shot pipeline is the
+    established default, while `solve`'s pipeline-per-candidate is an
+    explicit, expensive-by-design opt-in (each candidate self-judges/revises
+    BEFORE the comparative selector ever sees it — the double-judge is
+    intentional, not accidental redundancy). Read directly here rather than
+    only relying on the CLI's own OXAGEN_BEST_OF_N_PIPELINE fallback (see
+    solve.ts) so the constructed command is self-documenting in the trial
+    logs instead of depending on a silent env-var default inside the CLI.
+    """
+    return _is_truthy(os.environ.get("OXAGEN_BEST_OF_N_PIPELINE"))
 
 
 def _best_of_n_candidate_count() -> int:
@@ -489,15 +513,19 @@ class OxagenAgent(BaseInstalledAgent):
         equivalent: every `solve` candidate already runs headlessly with no
         confirmation gate to bypass.
 
-        `--pipeline` reuses the SAME `OXAGEN_NO_PIPELINE` gate as the one-shot
-        path (`_build_flags()`) instead of introducing a second, redundant env
-        var: unless the user explicitly disabled the pipeline, every candidate
-        runs the full evaluate→enhance→route→execute→judge→revise pipeline
-        (semantic-enhance + a per-candidate completeness judge), not just the
-        bare engine loop — otherwise "pipeline on" would silently mean nothing
-        under best-of-N even though the flag says it's on. See
-        BestOfNOptions.fullPipeline in best-of-n.ts for the cost tradeoff
-        (roughly N extra judge-class model calls).
+        `--pipeline` is appended under `OXAGEN_BEST_OF_N_PIPELINE=1` — see
+        `_best_of_n_pipeline_enabled()`. Unlike `_build_flags()`'s
+        `OXAGEN_NO_PIPELINE`, this is a dedicated, separately-gated toggle:
+        every candidate runs the full evaluate→enhance→route→execute→
+        judge→revise pipeline (semantic-enhance pre-context + a per-candidate
+        completeness judge/revise round) BEFORE the comparative selector ever
+        compares them — each candidate is self-improved, not just generated
+        once. That is intentionally MORE expensive than a single per-candidate
+        judge would suggest: roughly N extra judge-class model calls (one per
+        candidate) plus N evaluate/enhance calls, stacked on top of the
+        selector's own judging call. Off by default (bare — cheaper, one
+        comparison judge only); `run.sh`'s `OXAGEN_DIFFERENTIATED=1` recipe
+        turns it on.
 
         `--json` is explicit even though `solve` already auto-detects headless
         via `!process.stdout.isTTY` (true here regardless: this command's
@@ -509,6 +537,7 @@ class OxagenAgent(BaseInstalledAgent):
         route = _is_truthy(os.environ.get("OXAGEN_ROUTE"))
         if self.model_name and not route:
             flags.append(f"--model {shlex.quote(self.model_name)}")
+        if _best_of_n_pipeline_enabled():
         if not _is_truthy(os.environ.get("OXAGEN_NO_PIPELINE")):
             flags.append("--pipeline")
         return " ".join(flags)

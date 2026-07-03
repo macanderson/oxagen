@@ -263,8 +263,8 @@ export function buildProgram(): Command {
     .option("--json", "Headless: stream JSONL events instead of the live view", false)
     .option(
       "--pipeline",
-      "Run each candidate through the full evaluate/enhance/judge pipeline, not just bare (default: bare — the selector already judges across all N)",
-      false,
+      "Run each candidate through the full evaluate/enhance/judge/revise pipeline, not just bare " +
+        "(default: OXAGEN_BEST_OF_N_PIPELINE env var if set, else bare — the selector still judges across all N either way)",
     )
     .action(
       async (

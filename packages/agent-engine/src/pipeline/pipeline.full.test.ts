@@ -331,4 +331,40 @@ describe("runTurn — full pipeline path", () => {
     expect(result.trace.enhancement.lessonCount).toBe(1);
     expect(result.trace.enhancement.resolved).toContain("something");
   });
+
+  it("surfaces the semantic fallback in the enhance stage label instead of narrating 'no extra context found'", async () => {
+    // Regression test: usedSemanticFallback never pushes onto `resolved` (see
+    // enhancePrompt — semantic hits land in `sections`/the injected prompt,
+    // not `resolved`), so a prompt that resolves nothing literally but DOES
+    // get real semantically-retrieved context used to be mislabeled as no
+    // context found at all, even though the agent's prompt carried it.
+    const ws = new MemoryWorkspace({ "src/a.ts": "before" });
+    // "search"/"file_symbols" miss (no literal candidate in this prompt);
+    // "semantic_search" hits — this is the fallback path exactly.
+    const codeGraph = {
+      query: vi.fn().mockImplementation((op: string) =>
+        op === "semantic_search"
+          ? Promise.resolve("src/related.ts (0.82)")
+          : Promise.resolve("No symbols matching."),
+      ),
+    };
+    const { ai } = makeAi({
+      evalObject: { ...DEFAULT_EVAL, refinedPrompt: "improve the login flow" },
+    });
+
+    const stages: string[] = [];
+    const result = await runTurn({
+      prompt: "improve the login flow",
+      workspace: ws,
+      ai,
+      codeGraph,
+      onStage: (e) => {
+        if (e.kind === "enhance") stages.push(e.label);
+      },
+    });
+
+    expect(result.trace.enhancement.resolved).toHaveLength(0);
+    expect(stages[0]).toContain("semantic");
+    expect(stages[0]).not.toContain("no extra context found");
+  });
 });

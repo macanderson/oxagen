@@ -350,11 +350,17 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     durationMs: enhanced.durationMs,
     retrieval: enhanced.retrieval,
   };
+  // usedSemanticFallback never adds to `resolved` (see enhancePrompt: the
+  // semantic hits are pushed to `sections`/the injected prompt, not to
+  // `resolved`), so it must be its own arm of this condition — otherwise a
+  // prompt that resolves nothing literally but DOES get real semantically-
+  // retrieved context wrongly narrates "no extra context found" even though
+  // the agent's prompt actually carries that context.
   opts.onStage?.({
     kind: "enhance",
     label:
-      enhanced.resolved.length || enhanced.hasMemory
-        ? `enhanced · ${enhanced.resolved.length} code refs · ${enhanced.hasMemory ? "memory" : "no memory"}`
+      enhanced.resolved.length || enhanced.hasMemory || enhanced.usedSemanticFallback
+        ? `enhanced · ${enhanced.resolved.length} code refs${enhanced.usedSemanticFallback ? " (+semantic)" : ""} · ${enhanced.hasMemory ? "memory" : "no memory"}`
         : "enhanced · no extra context found",
   });
 
