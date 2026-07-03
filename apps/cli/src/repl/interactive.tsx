@@ -21,9 +21,7 @@
 import { Box, Static, Text, useApp, useInput } from "ink";
 import React, { useState, useCallback, useRef, useEffect, useReducer } from "react";
 import type { ModelMessage } from "ai";
-import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { join, dirname } from "node:path";
 import { theme } from "../tui/theme.js";
 import { runTurn, type AgentAi } from "@oxagen/agent-engine";
 import {
@@ -110,6 +108,8 @@ import { telemetryReducer, INITIAL_TELEMETRY_STATE } from "./telemetry.js";
 import { HeaderBar, TranscriptViewport, TelemetryDock, formatElapsed } from "./fullscreen-chrome.js";
 import { useMouseWheel } from "./use-mouse-wheel.js";
 import { enterFullscreen } from "./alt-screen.js";
+import { resolveGitInfo } from "./git-info.js";
+import { useRepoInfo } from "./use-repo-info.js";
 import {
   makeTurnController,
   makeStallDetector,
@@ -184,31 +184,6 @@ function summarizeInput(toolName: string, input: unknown): string {
  * double-Esc reset window's "confirm by repeating" feel.
  */
 const CTRL_X_WINDOW_MS = 1500;
-
-/**
- * Best-effort current git branch by walking up from `cwd` to the nearest `.git`
- * and reading `HEAD`. No subprocess — just a file read — so it is cheap and safe.
- * Returns undefined outside a repo or on a detached HEAD.
- */
-function readGitBranch(cwd: string): string | undefined {
-  try {
-    let dir = cwd;
-    for (let i = 0; i < 64; i++) {
-      const head = join(dir, ".git", "HEAD");
-      if (existsSync(head)) {
-        const ref = readFileSync(head, "utf8").trim();
-        const m = ref.match(/^ref:\s*refs\/heads\/(.+)$/);
-        return m ? m[1] : undefined; // detached HEAD → undefined
-      }
-      const parent = dirname(dir);
-      if (parent === dir) break;
-      dir = parent;
-    }
-  } catch {
-    /* not a repo / unreadable — no branch chip */
-  }
-  return undefined;
-}
 
 export function ReplApp({
   options,
@@ -306,8 +281,12 @@ export function ReplApp({
   } | null>(null);
 
   const cwd = process.cwd();
-  // Current git branch for the status line (read once from .git/HEAD).
-  const branchRef = useRef<string | undefined>(readGitBranch(cwd));
+  // Current git branch for the status line (read once from .git/HEAD — or, in
+  // a worktree, from the gitdir its `.git` pointer file names; see
+  // git-info.ts). Full-screen mode's REPO panel additionally re-reads this
+  // live via useRepoInfo below, since a `!git checkout` mid-session can
+  // change it; this one-shot ref is what the classic inline StatusLine reads.
+  const branchRef = useRef<string | undefined>(resolveGitInfo(cwd)?.branch);
   // Engine ports — created once for the session. The workspace stays bare here;
   // it's wrapped with the permission broker (createGatedWorkspace) at call time
   // so /mode changes take effect without re-creating the workspace.
@@ -485,6 +464,10 @@ export function ReplApp({
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [fullscreen]);
+  // REPO dock panel: worktree path, live branch (re-read periodically — a
+  // `!git checkout` mid-session changes it), and PR number (async via `gh`,
+  // cached, never blocking). Full-screen only — see use-repo-info.ts.
+  const repoInfo = useRepoInfo(cwd, fullscreen);
   // Timestamp of the most-recent Escape press (for the double-Esc detection
   // window). Null means no previous Esc has been recorded (or the window was
   // explicitly cleared after a 'prompt-reset' fires).
@@ -2178,8 +2161,8 @@ export function ReplApp({
       <Box flexDirection="column" height={rows} width={cols} overflow="hidden">
         <HeaderBar
           model={model}
-          branch={branchRef.current}
-          sessionLabel={cwd.split("/").pop() || "session"}
+          branch={repoInfo.branch}
+          sessionLabel={repoInfo.root.split("/").pop() || "session"}
           sessionCostUsd={metrics.sessionCostUsd}
           now={now}
         />
@@ -2271,6 +2254,7 @@ export function ReplApp({
             isStreaming={isStreaming}
             now={now}
             cols={cols}
+            repo={repoInfo}
           />
         </Box>
       </Box>
