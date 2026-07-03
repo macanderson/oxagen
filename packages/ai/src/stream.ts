@@ -278,6 +278,11 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
   return streamText({
     model,
     messages: [...cachedSystem, ...args.messages],
+    // AI SDK v7 rejects system-role entries inside `messages` by default. We
+    // deliberately carry the system prompt as a leading system message (only
+    // message-level providerOptions can hold the cache_control marker above),
+    // and proxy callers (agent.llm) forward client system messages verbatim.
+    allowSystemInMessages: true,
     tools: args.tools,
     // When the provider locks temperature (Anthropic extended thinking,
     // OpenAI reasoning models) we must omit the field entirely — sending
