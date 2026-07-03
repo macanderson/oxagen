@@ -16,10 +16,15 @@ import {
   type InitResult,
 } from "../init.js";
 
-// No gateway key in this hermetic unit test — domain inference must skip
+// No AI credential in this hermetic unit test — domain inference must skip
 // cleanly rather than making a real network call (the ambient dev shell may
-// have a real AI_GATEWAY_API_KEY exported).
-vi.mock("../../agent/env.js", () => ({ ensureGatewayKey: () => null }));
+// have a real AI_GATEWAY_API_KEY/ANTHROPIC_API_KEY exported). init.ts checks
+// resolveAiCredential()/credentialSupportsModel(), not ensureGatewayKey()
+// directly (see agent/env.ts).
+vi.mock("../../agent/env.js", () => ({
+  resolveAiCredential: () => null,
+  credentialSupportsModel: () => false,
+}));
 
 // createCodeGraphStore() throws synchronously here, simulating the native
 // duckdb module being unavailable (e.g. a bench/CI container that skipped
@@ -280,6 +285,6 @@ describe("runInit", () => {
     // finds an empty graph — nothing persisted, so nothing "skipped" either.
     expect(result.graph.indexed).toBe(0);
     expect(result.graph.skipped).toBe(0);
-    expect(result.domainsSkipped).toBe(true); // no gateway key mocked in
+    expect(result.domainsSkipped).toBe(true); // no AI credential mocked in
   });
 });
