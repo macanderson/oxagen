@@ -766,7 +766,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { "*": "anthropic/claude-sonnet-4.6" },
+    staticValue: { "*": "anthropic/claude-sonnet-5" },
   },
   OXAGEN_LLM_PRECISE: {
     group: "AI providers",
@@ -776,7 +776,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "static",
-    staticValue: { "*": "anthropic/claude-opus-4.8" },
+    staticValue: { "*": "anthropic/claude-fable-5" },
   },
   OXAGEN_LLM_IMAGE_BASIC: {
     group: "AI providers",
@@ -1261,7 +1261,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "CLI",
     description:
       "Vercel AI Gateway model slug used by the CLI's local agent loop (e.g. " +
-      "anthropic/claude-sonnet-4.5). Falls back to the value in ~/.config/oxagen/config.json, then a default.",
+      "anthropic/claude-sonnet-5). Falls back to the value in ~/.config/oxagen/config.json, then a default.",
     secret: false,
     clientExposed: false,
     services: [],
@@ -1407,7 +1407,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "CLI",
     description:
       "Gateway model slug the CLI turn pipeline uses to evaluate each prompt (completeness " +
-      "+ complexity scoring, context hints, refined rewrite). Defaults to the fast tier (Haiku).",
+      "+ complexity scoring, context hints, refined rewrite). Defaults to \"local\" — the " +
+      "deterministic cost-router heuristic, no model call.",
     secret: false,
     clientExposed: false,
     services: [],
@@ -1418,8 +1419,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "CLI",
     description:
       "Gateway model slug the CLI uses as the completeness-judge advisor — always distinct from " +
-      "the executor so work is never graded by the model that produced it. Defaults to the most " +
-      "powerful OpenAI model (cross-vendor independence from a typically-Claude executor).",
+      "the executor so work is never graded by the model that produced it. Defaults to the " +
+      "flagship Anthropic model (Fable 5); set a cross-vendor slug (e.g. an OpenAI model) for " +
+      "vendor-independent judging when a gateway key is available.",
     secret: false,
     clientExposed: false,
     services: [],
