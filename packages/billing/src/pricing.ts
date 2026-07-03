@@ -211,6 +211,9 @@ export const VIDEO_RATE_CARD: Record<string, VideoModelRate> = {
   "google/veo-3.1-fast": { vendor: "google", usdPerSecond: 0.4, defaultSeconds: 5 },
   "google/veo-3.1": { vendor: "google", usdPerSecond: 0.8, defaultSeconds: 5 },
   "google/veo": { vendor: "google", usdPerSecond: 0.75, defaultSeconds: 5 },
+  // OpenAI Sora 2 — ~$0.10/sec, pro ~$0.30–0.50/sec (list, 2026-05; bias high).
+  "openai/sora-2-pro": { vendor: "openai", usdPerSecond: 0.5, defaultSeconds: 4 },
+  "openai/sora-2": { vendor: "openai", usdPerSecond: 0.1, defaultSeconds: 4 },
 };
 
 /**

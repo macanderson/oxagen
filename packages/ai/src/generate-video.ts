@@ -27,6 +27,125 @@ export type VideoModel = string | Experimental_VideoModelV3;
 // video-generation rows. The `model` column carries the real model id.
 const VIDEO_PROMPT_HASH_SENTINEL = "video-generation";
 
+// ── Supported output durations ────────────────────────────────────────────────
+//
+// Video providers accept only a discrete set of output durations, and an
+// unsupported value fails the whole render at the gateway — Veo 3 text_to_video
+// rejects anything outside [4, 6, 8] seconds with a 500. The video.generate
+// contract deliberately keeps a wide, provider-neutral 1–60s input range, so
+// this chokepoint snaps every request to a duration the resolved model actually
+// supports:
+//   - unsupported request → nearest supported duration (ties → longer clip)
+//   - no request → the SHORTEST supported duration (cheapest render)
+//   - unknown model → pass the request through untouched
+// Keyed by gateway model-id prefix (longest match wins) so env-var model swaps
+// (veo-3.0-fast, veo-3.1, …) stay covered. Durations must be listed ascending.
+const VIDEO_MODEL_DURATIONS: Record<string, readonly number[]> = {
+  "google/veo": [4, 6, 8],
+  "openai/sora-2": [4, 8, 12],
+};
+
+/**
+ * The discrete output durations (seconds) the given gateway video model
+ * supports, resolved by longest-prefix match, or `undefined` when the model has
+ * no known constraint (unknown models pass the caller's duration through).
+ */
+export function supportedVideoDurations(modelId: string): readonly number[] | undefined {
+  let best: { key: string; durations: readonly number[] } | null = null;
+  for (const [key, durations] of Object.entries(VIDEO_MODEL_DURATIONS)) {
+    if (modelId.startsWith(key) && (!best || key.length > best.key.length)) {
+      best = { key, durations };
+    }
+  }
+  return best?.durations;
+}
+
+export interface ResolvedVideoDuration {
+  /** The duration actually sent to the provider (undefined only for unknown models with no request). */
+  effectiveSeconds?: number;
+  /** The caller's original request, echoed for messaging. */
+  requestedSeconds?: number;
+  /** True when a requested duration had to be snapped to a supported one. */
+  adjusted: boolean;
+  /** The model's supported duration set, when known. */
+  supportedSeconds?: readonly number[];
+}
+
+/**
+ * Resolve the output duration to send the provider. Requested durations the
+ * model doesn't support snap to the nearest supported value (ties resolve to
+ * the longer clip); an absent request selects the model's shortest supported
+ * duration; unknown models pass the request through untouched.
+ */
+export function resolveVideoDurationSeconds(
+  modelId: string,
+  requestedSeconds?: number,
+): ResolvedVideoDuration {
+  const supported = supportedVideoDurations(modelId);
+  if (!supported || supported.length === 0) {
+    return { effectiveSeconds: requestedSeconds, requestedSeconds, adjusted: false };
+  }
+  if (requestedSeconds === undefined) {
+    return {
+      effectiveSeconds: supported[0],
+      adjusted: false,
+      supportedSeconds: supported,
+    };
+  }
+  if (supported.includes(requestedSeconds)) {
+    return {
+      effectiveSeconds: requestedSeconds,
+      requestedSeconds,
+      adjusted: false,
+      supportedSeconds: supported,
+    };
+  }
+  const nearest = supported.reduce((best, d) => {
+    const dDist = Math.abs(d - requestedSeconds);
+    const bestDist = Math.abs(best - requestedSeconds);
+    return dDist < bestDist || (dDist === bestDist && d > best) ? d : best;
+  });
+  return {
+    effectiveSeconds: nearest,
+    requestedSeconds,
+    adjusted: true,
+    supportedSeconds: supported,
+  };
+}
+
+export interface VideoDurationAlternative {
+  /** Gateway model-id prefix (a valid model selector for video.generate). */
+  model: string;
+  /** Full supported duration set for that model. */
+  supportedSeconds: readonly number[];
+  /** The supported duration closest to the caller's request. */
+  closestSeconds: number;
+}
+
+/**
+ * Rank the known video models by how closely they can match a requested
+ * duration — used to tell the user which providers get nearer their ask when
+ * the selected model can't honour it. The current model is excluded.
+ */
+export function videoDurationAlternatives(
+  requestedSeconds: number,
+  currentModelId?: string,
+): VideoDurationAlternative[] {
+  return Object.entries(VIDEO_MODEL_DURATIONS)
+    .filter(([key]) => !currentModelId?.startsWith(key))
+    .map(([model, supportedSeconds]) => ({
+      model,
+      supportedSeconds,
+      closestSeconds: supportedSeconds.reduce((best, d) =>
+        Math.abs(d - requestedSeconds) < Math.abs(best - requestedSeconds) ||
+        (Math.abs(d - requestedSeconds) === Math.abs(best - requestedSeconds) && d > best)
+          ? d
+          : best,
+      ),
+    }))
+    .sort((a, b) => Math.abs(a.closestSeconds - requestedSeconds) - Math.abs(b.closestSeconds - requestedSeconds));
+}
+
 export interface GenerateVideoForArgs {
   /**
    * The video model to pass to `experimental_generateVideo`. In AI SDK v6
@@ -37,7 +156,12 @@ export interface GenerateVideoForArgs {
   model: VideoModel;
   /** The text prompt describing the video to generate. */
   prompt: string;
-  /** Duration hint in seconds (provider may cap or ignore). */
+  /**
+   * Requested output duration in seconds. Snapped to the model's supported
+   * duration set before the provider call (nearest value; absent → shortest);
+   * see resolveVideoDurationSeconds. The value actually used is returned as
+   * `effectiveDurationSeconds`.
+   */
   durationSeconds?: number;
   /** Aspect ratio in `{width}:{height}` format. */
   aspectRatio?: "16:9" | "9:16" | "1:1";
@@ -63,6 +187,12 @@ export interface GenerateVideoForResult {
   mimeType: string;
   /** Wall-clock duration of the provider call in milliseconds. */
   durationMs: number;
+  /**
+   * The output duration actually requested from the provider after snapping to
+   * the model's supported set (see resolveVideoDurationSeconds). Undefined only
+   * for unknown models called with no duration (provider default applies).
+   */
+  effectiveDurationSeconds?: number;
 }
 
 /**
@@ -119,6 +249,24 @@ export async function generateVideoFor(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+  const resolvedModelId = videoModelIdOf(args.model);
+
+  // Snap the duration to the model's supported set — an unsupported value fails
+  // the whole render at the gateway. Billing below uses the same effective
+  // value so we never charge for seconds the provider didn't produce.
+  const duration = resolveVideoDurationSeconds(resolvedModelId, args.durationSeconds);
+  if (duration.adjusted) {
+    logger.warn(
+      {
+        model: resolvedModelId,
+        requestedSeconds: duration.requestedSeconds,
+        effectiveSeconds: duration.effectiveSeconds,
+        supportedSeconds: duration.supportedSeconds,
+      },
+      "generateVideo: requested duration unsupported by model — snapped to nearest",
+    );
+  }
+
   const startedAt = Date.now();
 
   let result: Awaited<ReturnType<typeof experimental_generateVideo>>;
@@ -126,7 +274,7 @@ export async function generateVideoFor(
     result = await experimental_generateVideo({
       model: args.model,
       prompt: args.prompt,
-      duration: args.durationSeconds,
+      duration: duration.effectiveSeconds,
       aspectRatio: args.aspectRatio as `${number}:${number}` | undefined,
       maxRetries: 0, // Retries are expensive for video; Inngest handles retry policy.
       abortSignal: controller.signal,
@@ -145,8 +293,7 @@ export async function generateVideoFor(
   // GeneratedFile exposes `mediaType` (not `mimeType`) in AI SDK v6.
   const mimeType: string = video.mediaType ?? "video/mp4";
 
-  const resolvedModelId = videoModelIdOf(args.model);
-  const costUsdMicros = videoProviderCostUsdMicros(resolvedModelId, args.durationSeconds);
+  const costUsdMicros = videoProviderCostUsdMicros(resolvedModelId, duration.effectiveSeconds);
 
   // `input_tokens` is repurposed to carry the asset count so the token_usage
   // schema doesn't need a new column. A value of 1 means "1 video generated".
@@ -182,12 +329,12 @@ export async function generateVideoFor(
       orgId: args.telemetry.orgId,
       referenceId: args.telemetry.executionStepId,
       model: resolvedModelId,
-      durationSeconds: args.durationSeconds,
+      durationSeconds: duration.effectiveSeconds,
     });
   } catch (err) {
     // Swallow — credit metering must never fail a capability call.
     logger.error({ err }, "generateVideo credit charge failed");
   }
 
-  return { bytes, mimeType, durationMs };
+  return { bytes, mimeType, durationMs, effectiveDurationSeconds: duration.effectiveSeconds };
 }
