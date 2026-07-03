@@ -8,9 +8,9 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
-import { resolveGitInfo, truncatePathStart } from "../git-info.js";
+import { resolveGitInfo, truncatePathStart, abbreviateHome, abbreviatePath } from "../git-info.js";
 
 let base: string;
 
@@ -135,5 +135,62 @@ describe("truncatePathStart", () => {
   it("is a no-op for a degenerate maxLen", () => {
     expect(truncatePathStart("/anything", 1)).toBe("/anything");
     expect(truncatePathStart("/anything", 0)).toBe("/anything");
+  });
+});
+
+describe("abbreviateHome", () => {
+  const home = homedir();
+
+  it("replaces a leading $HOME with ~", () => {
+    expect(abbreviateHome(join(home, "Workspaces", "oxagen-repl2"))).toBe("~/Workspaces/oxagen-repl2");
+  });
+
+  it("abbreviates $HOME itself to exactly ~", () => {
+    expect(abbreviateHome(home)).toBe("~");
+  });
+
+  it("leaves a path outside $HOME unchanged", () => {
+    expect(abbreviateHome("/var/tmp/somewhere")).toBe("/var/tmp/somewhere");
+  });
+
+  it("doesn't false-positive on a sibling directory that merely SHARES $HOME's prefix", () => {
+    // e.g. $HOME=/Users/mac must not treat /Users/mac2/... as inside it.
+    expect(abbreviateHome(home + "2/not-actually-home")).toBe(home + "2/not-actually-home");
+  });
+});
+
+describe("abbreviatePath", () => {
+  const home = homedir();
+
+  it("returns the $HOME-abbreviated form unchanged when it already fits", () => {
+    const path = join(home, "oxagen-repl2");
+    expect(abbreviatePath(path, 80)).toBe(abbreviateHome(path));
+  });
+
+  it("elides the middle down to the last segment when even the abbreviated form is too long", () => {
+    const path = join(home, "Workspaces", "some", "deeply", "nested", "path", "oxagen-repl2");
+    const result = abbreviatePath(path, 20);
+    expect(result).toBe("~/…/oxagen-repl2");
+  });
+
+  it("prefers keeping 2 trailing segments over 1 when both fit", () => {
+    const path = join(home, "Workspaces", "some", "deeply", "nested", "oxagen-repl2", "apps");
+    const result = abbreviatePath(path, 30);
+    expect(result).toBe("~/…/oxagen-repl2/apps");
+  });
+
+  it("falls back to plain character truncation when not even one segment fits", () => {
+    const path = join(home, "a-genuinely-extremely-long-directory-name-that-cannot-fit");
+    const result = abbreviatePath(path, 10);
+    expect(result.length).toBe(10);
+    expect(result.startsWith("…")).toBe(true);
+  });
+
+  it("handles a path outside $HOME the same way, just without the ~ prefix", () => {
+    // One character narrower than the ~-prefixed form (no "~" to budget for),
+    // so at the same maxLen the last-2-segments form now fits where it didn't
+    // for the $HOME case above.
+    const result = abbreviatePath("/var/data/some/deeply/nested/path/oxagen-repl2", 20);
+    expect(result).toBe("/…/path/oxagen-repl2");
   });
 });
