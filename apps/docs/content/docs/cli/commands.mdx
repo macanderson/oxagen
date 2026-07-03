@@ -157,7 +157,9 @@ oxagen command new  <name>          # scaffold .oxagen/commands/<name>.md
 oxagen command run  <name> [args…]  # expand the template and run it as a turn
 ```
 
-Invoke them as `/name` inside the REPL.
+Invoke them as `/name` inside the REPL. Typing `/` opens a typeahead menu of every built-in, CLI, and custom command — productized (first-party) commands carry a small lock marker; a command you defined yourself, like `/triage` below, doesn't:
+
+<TuiSlashMenu />
 
 ## oxagen rules — workspace rules
 

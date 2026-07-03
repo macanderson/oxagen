@@ -32,6 +32,10 @@ oxagen settings path                   # the three files and their status
 oxagen settings validate               # check every scope against the schema
 ```
 
+`oxagen settings show` tags every resolved key with the scope it came from, so you can see at a glance whether a value is a personal default, a team-committed setting, or the built-in default:
+
+<TuiSettingsShow />
+
 ### What goes in settings.json
 
 ```jsonc

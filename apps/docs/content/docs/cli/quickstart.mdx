@@ -15,6 +15,10 @@ oxagen
 
 Type a request and press Enter. The agent reads relevant files, proposes edits, runs commands, and reports back. By default the REPL runs in **ask** mode: it pauses for your approval before editing a file or running a shell command.
 
+<TuiInteractiveAnswer />
+
+Every action is shown as it happens — tool calls, the agent's streaming answer — and `/hud` opens a heads-up display of every agent running this session (the current turn, any subagents it dispatched, and background monitors), with elapsed time, model, and cost per agent.
+
 Useful in-session slash commands work like `/name` (see [custom slash commands](/docs/cli/configuration#slash-commands)). Press `Ctrl-C` to interrupt a turn, and again to exit.
 
 ## One-shot runs
