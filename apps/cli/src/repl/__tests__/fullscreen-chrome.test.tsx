@@ -15,6 +15,7 @@ import { INITIAL_SCROLL_STATE, type ScrollState } from "../scroll.js";
 import { INITIAL_TELEMETRY_STATE, type TelemetryState } from "../telemetry.js";
 import type { Message } from "../components.js";
 import type { SessionMetrics } from "../../agent/metrics.js";
+import type { RepoInfo } from "../use-repo-info.js";
 
 function emptyMetrics(): SessionMetrics {
   return {
@@ -26,6 +27,10 @@ function emptyMetrics(): SessionMetrics {
     sessionCostUsd: 0,
     byModel: {},
   };
+}
+
+function fixtureRepo(overrides: Partial<RepoInfo> = {}): RepoInfo {
+  return { root: "/Users/mac/Workspaces/oxagen-repl2", branch: "feat/x", prNumber: 486, ...overrides };
 }
 
 describe("formatClock", () => {
@@ -116,10 +121,10 @@ describe("TranscriptViewport", () => {
 });
 
 describe("TelemetryDock", () => {
-  it("renders all four captioned panels with their live values", () => {
+  it("renders all five captioned panels with their live values", () => {
     // ink-testing-library's mocked stdout is a FIXED 100 columns (see its own
     // source) regardless of the `cols` prop passed here, so — exactly as in a
-    // real ~100-col terminal — a 4-panel dock has room for short model names
+    // real ~100-col terminal — a 5-panel dock has room for short model names
     // but not long slugs; long-slug truncation is covered by its own test
     // below, using the SAME cols value a real caller would (see interactive.tsx,
     // which always sources `cols` from the real useTerminalSize()).
@@ -135,13 +140,22 @@ describe("TelemetryDock", () => {
       sessionCostUsd: 0.42,
     };
     const { lastFrame } = render(
-      <TelemetryDock telemetry={telemetry} metrics={metrics} cacheHit={500} isStreaming={true} now={5000} cols={100} />,
+      <TelemetryDock
+        telemetry={telemetry}
+        metrics={metrics}
+        cacheHit={500}
+        isStreaming={true}
+        now={5000}
+        cols={100}
+        repo={fixtureRepo({ root: "/Users/mac/oxagen-repl2", branch: "main", prNumber: 42 })}
+      />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("MODELS");
     expect(frame).toContain("TURN");
     expect(frame).toContain("TOKENS");
     expect(frame).toContain("TOOLS");
+    expect(frame).toContain("REPO");
     expect(frame).toContain("haiku");
     expect(frame).toContain("sonnet");
     expect(frame).toContain("opus");
@@ -149,6 +163,9 @@ describe("TelemetryDock", () => {
     expect(frame).toContain("7/256");
     expect(frame).toContain("code_graph 2");
     expect(frame).toContain("bash 5");
+    expect(frame).toContain("main");
+    expect(frame).toContain("#42");
+    expect(frame).toContain("oxagen-repl2"); // tail of the worktree root path
   });
 
   it("truncates a long model slug rather than overflowing a narrow panel", () => {
@@ -163,7 +180,8 @@ describe("TelemetryDock", () => {
         cacheHit={0}
         isStreaming={false}
         now={0}
-        cols={80} // narrow dock — four ~18-20 col panels
+        cols={80} // narrow dock — five ~14-16 col panels
+        repo={fixtureRepo()}
       />,
     );
     const frame = lastFrame() ?? "";
@@ -182,10 +200,53 @@ describe("TelemetryDock", () => {
         isStreaming={false}
         now={0}
         cols={120}
+        repo={fixtureRepo({ branch: undefined, prNumber: undefined })}
       />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("idle");
     expect(frame.match(/—/g)?.length ?? 0).toBeGreaterThanOrEqual(3); // planner/worker/judge placeholders
+    expect(frame).toContain("—"); // REPO branch placeholder (no branch)
+    expect(frame).toContain("…"); // REPO PR placeholder (still resolving)
+  });
+
+  it("REPO panel shows 'no PR' once the async gh lookup resolves to none", () => {
+    const { lastFrame } = render(
+      <TelemetryDock
+        telemetry={INITIAL_TELEMETRY_STATE}
+        metrics={emptyMetrics()}
+        cacheHit={0}
+        isStreaming={false}
+        now={0}
+        cols={120}
+        repo={fixtureRepo({ prNumber: null })}
+      />,
+    );
+    expect(lastFrame() ?? "").toContain("no PR");
+  });
+
+  it("REPO panel truncates a long worktree path to its most useful (trailing) segment", () => {
+    // cols=100 — matching ink-testing-library's own hardcoded terminal width
+    // (see its source), the only value where the `cols` prop and Ink's
+    // ACTUAL rendered width agree. Anything wider just gets silently
+    // re-shrunk by Ink on top of this component's own truncation (a second,
+    // unaccounted-for clip that broke this test's first attempt at cols=140)
+    // — exactly the same trap the model-slug width tests above already
+    // learned to avoid.
+    const { lastFrame } = render(
+      <TelemetryDock
+        telemetry={INITIAL_TELEMETRY_STATE}
+        metrics={emptyMetrics()}
+        cacheHit={0}
+        isStreaming={false}
+        now={0}
+        cols={100}
+        repo={fixtureRepo({ root: "/Users/mac/Workspaces/some/deeply/nested/path/oxagen-repl2" })}
+      />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).not.toContain("/Users/mac/Workspaces/some/deeply/nested/path/oxagen-repl2");
+    expect(frame).toContain("…");
+    expect(frame).toContain("oxagen-repl2"); // the informative tail survives truncation
   });
 });
