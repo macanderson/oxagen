@@ -1562,6 +1562,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_BEST_OF_N_VERIFY: {
+    group: "CLI",
+    description:
+      "Set to '1' to default `oxagen solve` (best-of-N) candidates to auto-verify: union " +
+      "and re-run the test/lint/build commands any candidate ran, across every surviving " +
+      "candidate's worktree, before selection — when the `--verify-auto` flag isn't passed " +
+      "explicitly. Mirrors OXAGEN_BEST_OF_N_PIPELINE's precedence (flag wins, then env, " +
+      "neither ⇒ off) so the bench adapter's differentiated config can turn it on without " +
+      "passing the flag on every call.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_LOCAL: {
     group: "CLI",
     description:
