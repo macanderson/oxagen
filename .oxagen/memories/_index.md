@@ -5,6 +5,7 @@ Durable instincts recorded by `eval-*` evaluator agents and the break-fix agent.
 Format: `- [title](file-name.md) — one-line hook · type (bug|observation) · YYYY-MM-DD HH:mm[am|pm] GMT`
 
 <!-- entries below, newest first -->
+- [ai-charge-credits-needs-tenant-scope-in-inngest](ai-charge-credits-needs-tenant-scope-in-inngest.md) — @oxagen/ai post-call credit charges (video/object/image/embed) threw TenantScopeError + were swallowed in Inngest context (no ambient scope) → free generations; wrap charge in runInTenantScope from telemetry orgId/workspaceId like stream.ts · bug · 2026-07-02
 - [repl-pump-unhandled-rejection-wedge](repl-pump-unhandled-rejection-wedge.md) — a failing REPL turn abandoned every queued prompt + escaped as an unhandled rejection; init throw left the spinner stuck; per-turn try/catch in the pump + init inside the try/finally · bug · 2026-06-28
 - [repl-session-memory-unmount-leak](repl-session-memory-unmount-leak.md) — REPL leaked its DuckDB session-memory handle when it unmounted before the async open resolved; cancellation guard closes the post-unmount handle · bug · 2026-06-28
 - [structured-tool-io-error-misclassification](structured-tool-io-error-misclassification.md) — `"error" in result` flagged successful `{error:null}`/`{error:false}` as failures and missed `{isError:true}`; align with loop.ts heuristic + zod-validate structured results · bug · 2026-06-28
