@@ -172,8 +172,8 @@ describe("videoGenerateHandler (@oxagen/handlers)", () => {
     });
 
     // The chat UI gets a human-readable notice.
-    expect(result.render.props.notice).toContain("8s video");
-    expect(result.render.props.notice).toContain("30s");
+    expect(result.render.props.notice).toContain("generating 8s");
+    expect(result.render.props.notice).toContain("requested 30s");
     expect(result.render.props.notice).toContain("openai/sora-2");
   });
 
