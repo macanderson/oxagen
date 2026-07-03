@@ -39,6 +39,20 @@ export interface SuggestedPrompt {
 }
 
 // ---------------------------------------------------------------------------
+// Conversation message summary (minimal — only what suggestion logic needs)
+// ---------------------------------------------------------------------------
+
+/**
+ * A minimal summary of a conversation message used for context-aware suggestion
+ * generation. Only role and the first 300 chars of content are needed.
+ */
+export interface ConversationMessageSummary {
+  role: "user" | "assistant";
+  /** First 300 chars of the message text (truncated for perf). */
+  content: string;
+}
+
+// ---------------------------------------------------------------------------
 // Derivation context (pure, no React dependency)
 // ---------------------------------------------------------------------------
 
@@ -46,6 +60,12 @@ export interface SuggestionCtx {
   pathname: string;
   entity: PageEntity | null;
   fillableForm: RegisteredFillableForm | null;
+  /**
+   * Recent conversation messages (last ≤6) for context-aware suggestions.
+   * When provided and non-empty the suggestions shift from page-context
+   * defaults to conversation-continuation prompts.
+   */
+  conversationHistory?: ConversationMessageSummary[];
 }
 
 // ---------------------------------------------------------------------------
@@ -82,19 +102,163 @@ export function classifyRoute(pathname: string): RouteSection {
 // Pure derivation function (exported for tests)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Conversation-history analysis helpers (pure)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the last assistant message text from conversation history.
+ * Returns null when history is empty or has no assistant turn.
+ */
+export function lastAssistantText(
+  history: ConversationMessageSummary[],
+): string | null {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const msg = history[i];
+    if (msg && msg.role === "assistant" && msg.content.trim().length > 0) {
+      return msg.content.trim();
+    }
+  }
+  return null;
+}
+
+/**
+ * Derive conversation-continuation suggestions from the last few turns.
+ * Returns up to 3 prompts that encourage deeper engagement with the thread.
+ */
+export function deriveConversationSuggestions(
+  history: ConversationMessageSummary[],
+): SuggestedPrompt[] {
+  const lastAssistant = lastAssistantText(history);
+  const turnCount = history.filter((m) => m.role === "user").length;
+
+  const suggestions: SuggestedPrompt[] = [];
+
+  // When there's an assistant reply, offer follow-up prompts based on its content.
+  if (lastAssistant) {
+    const snippet = lastAssistant.slice(0, 120);
+    const seemsCodey =
+      snippet.includes("```") ||
+      snippet.includes("function") ||
+      snippet.includes("const ") ||
+      snippet.includes("import ");
+    const seemsListy = snippet.includes("\n-") || snippet.includes("\n1.");
+    const seemsExplainy =
+      snippet.includes("because") ||
+      snippet.includes("means") ||
+      snippet.includes("refers to");
+
+    if (seemsCodey) {
+      suggestions.push({
+        label: "Explain This Code",
+        prompt: "Can you explain how the code you just provided works, step by step?",
+      });
+      suggestions.push({
+        label: "Add Error Handling",
+        prompt: "Please add proper error handling and edge-case coverage to the code you just wrote.",
+      });
+      suggestions.push({
+        label: "Write Tests For It",
+        prompt: "Write unit tests for the code you just provided, covering the main cases and edge cases.",
+      });
+    } else if (seemsListy) {
+      suggestions.push({
+        label: "Go Deeper",
+        prompt: "Pick the most important item from your list and explain it in more detail.",
+      });
+      suggestions.push({
+        label: "Prioritize These",
+        prompt: "Rank the items you listed by importance or impact, and explain your reasoning.",
+      });
+      suggestions.push({
+        label: "Action Plan",
+        prompt: "Turn your list into a concrete step-by-step action plan I can follow right now.",
+      });
+    } else if (seemsExplainy) {
+      suggestions.push({
+        label: "Give An Example",
+        prompt: "Can you give a concrete, real-world example of what you just explained?",
+      });
+      suggestions.push({
+        label: "Simplify This",
+        prompt: "Explain that again in simpler terms — as if I were new to this topic.",
+      });
+      suggestions.push({
+        label: "What's Next?",
+        prompt: "Given what you just explained, what should I do or learn next?",
+      });
+    } else {
+      suggestions.push({
+        label: "Tell Me More",
+        prompt: "Can you expand on what you just said? I'd like more detail.",
+      });
+      suggestions.push({
+        label: "Summarize So Far",
+        prompt: "Summarize the key points from our conversation so far, including any decisions or action items.",
+      });
+      suggestions.push({
+        label: "What Should I Do?",
+        prompt: "Based on everything we've discussed, what concrete next step do you recommend?",
+      });
+    }
+  } else if (turnCount > 0) {
+    // User has sent messages but no assistant reply yet (or history has only user turns).
+    suggestions.push({
+      label: "Summarize So Far",
+      prompt: "Summarize the key points from our conversation so far.",
+    });
+    suggestions.push({
+      label: "What's Next?",
+      prompt: "Based on what we've discussed, what should I focus on next?",
+    });
+    suggestions.push({
+      label: "Open Questions",
+      prompt: "What open questions or unresolved items remain from our conversation?",
+    });
+  }
+
+  return suggestions.slice(0, 3);
+}
+
 /**
  * Derive exactly 3 contextual suggested prompts.
  *
  * Resolution strategy:
- *   1. If a fillable form is registered, one chip always targets form-fill.
- *   2. Remaining slots are filled from entity + route context.
- *   3. Fallback chips are provided when nothing is registered.
+ *   1. When conversation history is present (multi-turn), derive continuation
+ *      suggestions from the last assistant reply — these are more relevant than
+ *      page-context defaults mid-conversation.
+ *   2. If a fillable form is registered, one chip always targets form-fill.
+ *   3. Remaining slots are filled from entity + route context.
+ *   4. Fallback chips are provided when nothing is registered.
  *
  * Always returns exactly 3 items.
  */
 export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
-  const { pathname, entity, fillableForm } = ctx;
+  const { pathname, entity, fillableForm, conversationHistory } = ctx;
   const section = classifyRoute(pathname);
+
+  // ── Conversation-continuation mode (multi-turn) ───────────────────────────
+  // When there are messages in the conversation, derive continuation suggestions
+  // from the conversation history instead of the page-context defaults.
+  // A fillable form chip is still prepended if registered, since form-fill is
+  // always actionable regardless of conversation state.
+  if (conversationHistory && conversationHistory.length > 0) {
+    const convSuggestions = deriveConversationSuggestions(conversationHistory);
+    if (convSuggestions.length === 3) {
+      if (fillableForm) {
+        // Replace the last chip with the form-fill chip so form-fill stays accessible.
+        return [
+          {
+            label: `Fill ${fillableForm.title}`,
+            prompt: `Fill in the ${fillableForm.title} form for me based on the context and best practices.`,
+          },
+          convSuggestions[0]!,
+          convSuggestions[1]!,
+        ];
+      }
+      return convSuggestions;
+    }
+  }
 
   const suggestions: SuggestedPrompt[] = [];
 
@@ -275,14 +439,21 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
  * Consumes `PageContext` (entity + fillableForm) and `usePathname()`.
  * Must be called inside a `PageContextProvider` and a Next.js route.
  *
+ * @param conversationHistory  Optional recent conversation messages. When
+ *   provided and non-empty, suggestions are derived from the conversation
+ *   context rather than page defaults — keeping them relevant as the
+ *   conversation evolves across multiple turns.
+ *
  * @returns Array of exactly 3 `SuggestedPrompt` items.
  *
  * @example
- * const prompts = useSuggestedPrompts();
+ * const prompts = useSuggestedPrompts(history);
  * prompts.forEach(({ label, prompt }) => <Button onClick={() => send(prompt)}>{label}</Button>)
  */
-export function useSuggestedPrompts(): SuggestedPrompt[] {
+export function useSuggestedPrompts(
+  conversationHistory?: ConversationMessageSummary[],
+): SuggestedPrompt[] {
   const { entity, fillableForm } = usePageContext();
   const pathname = usePathname();
-  return deriveSuggestions({ pathname, entity, fillableForm });
+  return deriveSuggestions({ pathname, entity, fillableForm, conversationHistory });
 }
