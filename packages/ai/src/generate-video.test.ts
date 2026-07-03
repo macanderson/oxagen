@@ -280,3 +280,70 @@ describe("generateVideoFor (@oxagen/ai)", () => {
     expect(mocks.providerFromModelId).toHaveBeenCalledWith("google/veo-3.0-generate-001");
   });
 });
+
+describe("supportedVideoDurations", () => {
+  it("resolves Veo variants by prefix", () => {
+    expect(supportedVideoDurations("google/veo-3.0-fast-generate-001")).toEqual([4, 6, 8]);
+    expect(supportedVideoDurations("google/veo-3.1")).toEqual([4, 6, 8]);
+  });
+
+  it("resolves Sora variants by prefix", () => {
+    expect(supportedVideoDurations("openai/sora-2")).toEqual([4, 8, 12]);
+    expect(supportedVideoDurations("openai/sora-2-pro")).toEqual([4, 8, 12]);
+  });
+
+  it("returns undefined for unknown models", () => {
+    expect(supportedVideoDurations("acme/video-x")).toBeUndefined();
+  });
+});
+
+describe("resolveVideoDurationSeconds", () => {
+  it("keeps a supported duration unchanged", () => {
+    expect(resolveVideoDurationSeconds("google/veo-3.0", 6)).toEqual({
+      effectiveSeconds: 6,
+      requestedSeconds: 6,
+      adjusted: false,
+      supportedSeconds: [4, 6, 8],
+    });
+  });
+
+  it("snaps an unsupported duration to the nearest supported", () => {
+    expect(resolveVideoDurationSeconds("google/veo-3.0", 30).effectiveSeconds).toBe(8);
+    expect(resolveVideoDurationSeconds("google/veo-3.0", 30).adjusted).toBe(true);
+    expect(resolveVideoDurationSeconds("openai/sora-2", 30).effectiveSeconds).toBe(12);
+  });
+
+  it("resolves ties toward the longer clip (Veo 5 → 6)", () => {
+    expect(resolveVideoDurationSeconds("google/veo-3.0", 5).effectiveSeconds).toBe(6);
+  });
+
+  it("selects the shortest supported duration when none is requested", () => {
+    const resolved = resolveVideoDurationSeconds("google/veo-3.0");
+    expect(resolved.effectiveSeconds).toBe(4);
+    expect(resolved.adjusted).toBe(false);
+  });
+
+  it("passes unknown models through untouched", () => {
+    expect(resolveVideoDurationSeconds("acme/video-x", 30)).toEqual({
+      effectiveSeconds: 30,
+      requestedSeconds: 30,
+      adjusted: false,
+    });
+    expect(resolveVideoDurationSeconds("acme/video-x").effectiveSeconds).toBeUndefined();
+  });
+});
+
+describe("videoDurationAlternatives", () => {
+  it("ranks other models by closeness to the requested duration", () => {
+    const alts = videoDurationAlternatives(30, "google/veo-3.0-fast-generate-001");
+    expect(alts[0]?.model).toBe("openai/sora-2");
+    expect(alts[0]?.closestSeconds).toBe(12);
+    expect(alts.some((a) => a.model === "google/veo")).toBe(false);
+  });
+
+  it("includes every known model when no current model is given", () => {
+    const alts = videoDurationAlternatives(10);
+    expect(alts.map((a) => a.model)).toContain("google/veo");
+    expect(alts.map((a) => a.model)).toContain("openai/sora-2");
+  });
+});
