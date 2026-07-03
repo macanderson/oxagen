@@ -212,6 +212,50 @@ describe("runTurn — full pipeline path", () => {
     expect(gotcha).toBeDefined();
   });
 
+  it("reads OXAGEN_MAX_REVISE_ROUNDS as the default when maxReviseRounds is not passed", async () => {
+    const ws = new MemoryWorkspace({ "src/a.ts": "before" });
+    const { ai } = makeAi({
+      judgeVerdicts: [{ complete: false, findings: ["no tests"] }, { complete: true }],
+      stream: (round) => ({ editFile: round === 0 ? "src/a.ts" : undefined, reasoning: "r" }),
+    });
+
+    process.env["OXAGEN_MAX_REVISE_ROUNDS"] = "1";
+    try {
+      const result = await runTurn({
+        prompt: "add a feature to src/a.ts",
+        workspace: ws,
+        ai,
+        // No maxReviseRounds option — the env var alone must allow round 1.
+      });
+      expect(result.trace.judgeRounds).toHaveLength(2);
+      expect(result.trace.finalComplete).toBe(true);
+    } finally {
+      delete process.env["OXAGEN_MAX_REVISE_ROUNDS"];
+    }
+  });
+
+  it("an explicit maxReviseRounds option wins over OXAGEN_MAX_REVISE_ROUNDS", async () => {
+    const ws = new MemoryWorkspace({ "src/a.ts": "before" });
+    const { ai } = makeAi({
+      judgeVerdicts: [{ complete: false, findings: ["no tests"] }],
+      stream: (round) => ({ editFile: round === 0 ? "src/a.ts" : undefined, reasoning: "r" }),
+    });
+
+    process.env["OXAGEN_MAX_REVISE_ROUNDS"] = "5";
+    try {
+      const result = await runTurn({
+        prompt: "add a feature to src/a.ts",
+        workspace: ws,
+        ai,
+        maxReviseRounds: 0, // explicit 0 must win, disabling revise despite env=5
+      });
+      expect(result.trace.judgeRounds).toHaveLength(1);
+      expect(result.trace.finalComplete).toBe(false);
+    } finally {
+      delete process.env["OXAGEN_MAX_REVISE_ROUNDS"];
+    }
+  });
+
   it("does not revise in readOnly mode even when judged incomplete", async () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const { ai } = makeAi({

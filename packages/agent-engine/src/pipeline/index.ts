@@ -28,7 +28,7 @@
  * It also does NOT check for a gateway key — that is the caller's responsibility.
  */
 import type { ModelMessage, ToolSet } from "ai";
-import { runCodingAgent } from "../engine";
+import { runCodingAgent, DEFAULT_AGENT_MODEL } from "../engine";
 import { buildSystemPrompt } from "../prompt/system-prompt";
 import { evaluatePrompt } from "../evaluate/evaluator";
 import { judgeCompleteness, judgePanel, buildRevisionPrompt } from "../evaluate/judge";
@@ -166,7 +166,11 @@ export interface RunTurnOptions {
    * Platform: inject the adapter from `@oxagen/agent/adapters`.
    */
   graphSync?: GraphSyncProvider | null;
-  /** Max judge→revise rounds (default 1; 0 disables auto-revision). */
+  /**
+   * Max judge→revise rounds (default 1; 0 disables auto-revision). Set via
+   * `OXAGEN_MAX_REVISE_ROUNDS` env var or this option; the option wins when
+   * both are set.
+   */
   maxReviseRounds?: number;
   /**
    * Enable a mid-session completeness check: after this many steps in the first
@@ -375,7 +379,14 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   });
 
   // ── 4. EXECUTE (+ 5. JUDGE / 6. REVISE loop) ──
-  const maxRounds = Math.max(0, opts.maxReviseRounds ?? 1);
+  // Order: explicit option → OXAGEN_MAX_REVISE_ROUNDS env → default 1 (mirrors
+  // the OXAGEN_MID_JUDGE_STEPS env pattern below). 0 is a meaningful value
+  // (disables auto-revise), so the env parse only falls through on a
+  // genuinely invalid/absent var, not on 0.
+  const maxReviseRoundsEnv = Number(process.env["OXAGEN_MAX_REVISE_ROUNDS"]);
+  const envMaxReviseRounds =
+    Number.isFinite(maxReviseRoundsEnv) && maxReviseRoundsEnv >= 0 ? maxReviseRoundsEnv : undefined;
+  const maxRounds = Math.max(0, opts.maxReviseRounds ?? envMaxReviseRounds ?? 1);
   const judgeRounds: JudgeVerdict[] = [];
   let history = opts.history ?? [];
   let prompt = enhanced.prompt;
@@ -851,7 +862,16 @@ async function runBare(
   toolEvents: ToolEvent[],
   thinkingLog: Array<{ round: number; text: string }>,
 ): Promise<RunTurnResult> {
-  const model = opts.model ?? modelForTier("balanced");
+  // Bare mode has no router — this `model` value is used for accounting/
+  // labeling only (usage tracking, trace.selectedModel below); the execution
+  // call just below passes `opts.model` through as-is, and runCodingAgent
+  // applies its OWN internal default (DEFAULT_AGENT_MODEL) when that's
+  // undefined. Both must resolve to the SAME model in the unpinned case, or
+  // this label silently diverges from what actually ran — so this reuses
+  // DEFAULT_AGENT_MODEL rather than a different literal (previously
+  // modelForTier("balanced"), which mislabeled unpinned bare runs as Sonnet
+  // when they actually executed on Fable 5).
+  const model = opts.model ?? DEFAULT_AGENT_MODEL;
   opts.onStage?.({ kind: "execute", label: "executing (pipeline off)" });
   const execStart = Date.now();
   let bareReasoning = "";
