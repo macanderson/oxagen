@@ -49,7 +49,7 @@ describe("record", () => {
     expect(snap.sessionTokensOut).toBe(75);
     expect(snap.sessionCostUsd).toBeCloseTo(0.15);
 
-    expect(snap.byModel["anthropic/claude-sonnet-4.6"]).toEqual({ tokensIn: 130, tokensOut: 65, cachedTokens: 0, costUsd: 0.13 });
+    expect(snap.byModel["anthropic/claude-sonnet-5"]).toEqual({ tokensIn: 130, tokensOut: 65, cachedTokens: 0, costUsd: 0.13 });
     expect(snap.byModel["openai/gpt-4o"]).toEqual({ tokensIn: 20, tokensOut: 10, cachedTokens: 0, costUsd: 0.02 });
   });
 
@@ -57,14 +57,14 @@ describe("record", () => {
     const bus = createMetricsBus();
     // Simulates three real per-step model_call events within one turn — the
     // exact shape metered-ai.ts emits as each step's usage settles.
-    bus.record(ev({ model: "anthropic/claude-sonnet-4.6", tokensIn: 1000, tokensOut: 50, cachedTokens: 800, costUsd: 0.001 }));
-    bus.record(ev({ model: "anthropic/claude-sonnet-4.6", tokensIn: 1000, tokensOut: 50, cachedTokens: 900, costUsd: 0.0005 }));
-    bus.record(ev({ model: "anthropic/claude-sonnet-4.6", tokensIn: 500, tokensOut: 20, cachedTokens: 0, costUsd: 0.0015 }));
+    bus.record(ev({ model: "anthropic/claude-sonnet-5", tokensIn: 1000, tokensOut: 50, cachedTokens: 800, costUsd: 0.001 }));
+    bus.record(ev({ model: "anthropic/claude-sonnet-5", tokensIn: 1000, tokensOut: 50, cachedTokens: 900, costUsd: 0.0005 }));
+    bus.record(ev({ model: "anthropic/claude-sonnet-5", tokensIn: 500, tokensOut: 20, cachedTokens: 0, costUsd: 0.0015 }));
 
     const snap = bus.snapshot();
     expect(snap.turnCachedTokens).toBe(1700);
     expect(snap.sessionCachedTokens).toBe(1700);
-    expect(snap.byModel["anthropic/claude-sonnet-4.6"]!.cachedTokens).toBe(1700);
+    expect(snap.byModel["anthropic/claude-sonnet-5"]!.cachedTokens).toBe(1700);
   });
 
   it("startTurn resets turnCachedTokens but preserves sessionCachedTokens and byModel", () => {
@@ -75,7 +75,7 @@ describe("record", () => {
     const snap = bus.snapshot();
     expect(snap.turnCachedTokens).toBe(0);
     expect(snap.sessionCachedTokens).toBe(500);
-    expect(snap.byModel["anthropic/claude-sonnet-4.6"]!.cachedTokens).toBe(500);
+    expect(snap.byModel["anthropic/claude-sonnet-5"]!.cachedTokens).toBe(500);
   });
 });
 
@@ -95,7 +95,7 @@ describe("startTurn", () => {
     expect(snap.sessionTokensIn).toBe(100);
     expect(snap.sessionTokensOut).toBe(50);
     expect(snap.sessionCostUsd).toBeCloseTo(0.1);
-    expect(snap.byModel["anthropic/claude-sonnet-4.6"]).toEqual({ tokensIn: 100, tokensOut: 50, cachedTokens: 0, costUsd: 0.1 });
+    expect(snap.byModel["anthropic/claude-sonnet-5"]).toEqual({ tokensIn: 100, tokensOut: 50, cachedTokens: 0, costUsd: 0.1 });
   });
 
   it("notifies subscribers so the status line clears the per-turn figure", () => {
@@ -121,7 +121,7 @@ describe("snapshot", () => {
 
     const snap = bus.snapshot();
     snap.turnTokensIn = 999_999;
-    snap.byModel["anthropic/claude-sonnet-4.6"]!.tokensIn = 999_999;
+    snap.byModel["anthropic/claude-sonnet-5"]!.tokensIn = 999_999;
     snap.byModel["new-model"] = { tokensIn: 1, tokensOut: 1, cachedTokens: 0, costUsd: 1 };
 
     const snap2 = bus.snapshot();
