@@ -65,6 +65,9 @@ const defaultGenerate: GenerateFn = (args) =>
   generateText({
     model: args.model,
     messages: args.messages,
+    // Coordinator/judge requests carry their system prompt as a system-role
+    // message; AI SDK v7 rejects that in `messages` unless explicitly allowed.
+    allowSystemInMessages: true,
     ...(args.maxOutputTokens !== undefined ? { maxOutputTokens: args.maxOutputTokens } : {}),
     ...(args.temperature !== undefined ? { temperature: args.temperature } : {}),
     ...(args.abortSignal ? { abortSignal: args.abortSignal } : {}),

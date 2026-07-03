@@ -1291,6 +1291,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_CLI_MOUSE: {
+    group: "CLI",
+    description:
+      "When '0', the full-screen REPL starts with mouse-wheel transcript scrolling disabled " +
+      "(terminal-native text selection stays available). Any other value (or unset) enables " +
+      "mouse capture on launch; the /mouse command toggles it at runtime either way.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_DISABLE_MEMORY: {
     group: "CLI",
     description:
@@ -1461,6 +1473,50 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
+  },
+  OXAGEN_EMBED_PROVIDER: {
+    group: "CLI",
+    description:
+      "Selects the code-graph embedding backend for `semantic_search`: 'auto' (default — a " +
+      "local Ollama server if reachable, else an in-process ONNX model if installed, else the " +
+      "platform gateway if a key is configured, else no vector ranking), 'ollama', 'onnx' " +
+      "('local' also accepted), 'gateway', or 'off'. Local providers are free, offline, and use " +
+      "no AI SDK, but their vectors are a different, smaller vector space than the platform's " +
+      "1536-d index, so `graph push` never ships them — the server re-embeds those files " +
+      "instead. Overrides the `graph.embedProvider` value in ~/.config/oxagen/config.json; " +
+      "invalid values fall back to 'auto'.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "auto",
+  },
+  OLLAMA_HOST: {
+    group: "CLI",
+    description:
+      "Base URL of the local Ollama server the CLI's 'ollama'/'auto' embedding provider talks " +
+      "to. Same variable name Ollama itself uses, so an existing Ollama setup needs no new " +
+      "config. Defaults to http://localhost:11434 when unset.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "http://localhost:11434",
+  },
+  OXAGEN_EMBED_MODEL: {
+    group: "CLI",
+    description:
+      "Ollama embedding model the 'ollama'/'auto' embedding provider requests (must already be " +
+      "pulled — `ollama pull <model>`). Defaults to 'nomic-embed-text'. Does not affect the ONNX " +
+      "provider, which pins its own bundled model.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "nomic-embed-text",
   },
   OXAGEN_ALLOW_NO_SESSION: {
     group: "CLI",

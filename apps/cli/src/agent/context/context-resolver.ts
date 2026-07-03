@@ -85,7 +85,7 @@ export interface GraphContextResolverDeps {
   /** Load the code graph. Defaults to the daemon-backed {@link getCodeGraph}. */
   loadGraph?: (cwd: string) => Promise<CodeGraph>;
   /** Resolve the embedding client, or null. Defaults to {@link resolveEmbeddingClient}. */
-  resolveClient?: (cwd: string) => EmbeddingClient | null;
+  resolveClient?: (cwd: string) => Promise<EmbeddingClient | null>;
   /** DuckDB store for persisting lazily-computed vectors (optional). */
   store?: CodeGraphStore | null;
   /** The grep fallback. Defaults to {@link grepFallback}. */
@@ -98,7 +98,7 @@ export class GraphContextResolver {
   private readonly cwd: string;
   private readonly config: GraphConfig;
   private readonly loadGraph: (cwd: string) => Promise<CodeGraph>;
-  private readonly resolveClient: (cwd: string) => EmbeddingClient | null;
+  private readonly resolveClient: (cwd: string) => Promise<EmbeddingClient | null>;
   private readonly store: CodeGraphStore | null;
   private readonly grep: (cwd: string, query: string) => Promise<GraphResult["impactedFiles"]>;
   private readonly log: GraphLogFn;
@@ -141,7 +141,7 @@ export class GraphContextResolver {
       input,
       graph,
       root: this.cwd,
-      client: this.resolveClient(this.cwd),
+      client: await this.resolveClient(this.cwd),
       store: this.store,
       config: this.config,
     });

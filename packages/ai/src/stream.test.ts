@@ -116,6 +116,10 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   it("prepends the system prompt as an Anthropic-cacheable system message", () => {
     streamAgentReply({ messages: MESSAGES, system: "You are Oxagen.", telemetry: TELEMETRY });
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    // AI SDK v7 rejects system-role entries in `messages` unless this flag is
+    // set — without it every platform-routed turn fails with "Invalid prompt:
+    // System messages are not allowed in the prompt or messages fields".
+    expect(arg.allowSystemInMessages).toBe(true);
     const msgs = arg.messages as Array<Record<string, unknown>>;
     // Leading system message carries the ephemeral cache_control breakpoint;
     // the `system` param is NOT used (only message-level providerOptions can

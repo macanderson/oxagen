@@ -3,11 +3,20 @@
  * context (symbol definitions, file symbols, dependents) and recalled lessons,
  * and that it degrades to a no-op when there is nothing to add.
  *
- * `../env.js` is mocked at module scope so `resolveEmbeddingClient()` (reached
- * by the semantic fallback whenever a test exercises the real, non-injected
- * `queryCodeGraph`) always sees "no gateway key" regardless of this machine's
- * actual `AI_GATEWAY_API_KEY` / `~/.config/oxagen/config.json` — a real key
- * present locally must never turn a unit test into a live gateway call.
+ * Three modules are mocked at module scope so `resolveEmbeddingClient()`
+ * (reached by the semantic fallback whenever a test exercises the real,
+ * non-injected `queryCodeGraph`) resolves to "no backend available" through
+ * EVERY tier, regardless of this machine's actual environment:
+ *   - `../env.js` — the gateway tier sees no key, regardless of a real
+ *     `AI_GATEWAY_API_KEY` / `~/.config/oxagen/config.json`.
+ *   - `../context/embedding-ollama.js` — the Ollama tier never makes a real
+ *     HTTP call, regardless of whether Ollama actually happens to be running
+ *     on this machine's localhost:11434.
+ *   - `../context/embedding-onnx.js` — the ONNX tier never attempts a real
+ *     dynamic import / model load, regardless of whether the optional
+ *     `fastembed` dependency happens to be installed.
+ * A real backend answering here must never turn a unit test into a live
+ * network call or a multi-second model load.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { promises as fs } from "node:fs";
@@ -22,6 +31,16 @@ vi.mock("../env.js", () => ({
   ensureGatewayKey: () => null,
   resolveAiCredential: () => null,
   MissingAiKeyError: class MissingAiKeyError extends Error {},
+}));
+
+vi.mock("../context/embedding-ollama.js", () => ({
+  createOllamaEmbeddingClient: async () => null,
+  probeOllama: async () => null,
+}));
+
+vi.mock("../context/embedding-onnx.js", () => ({
+  createOnnxEmbeddingClient: async () => null,
+  isOnnxAvailable: async () => false,
 }));
 
 let root = "";
