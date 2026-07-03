@@ -59,11 +59,18 @@ export type {
   GenerateImageForArgs,
   GenerateImageForResult,
 } from "./generate-image";
-export { generateVideoFor } from "./generate-video";
+export {
+  generateVideoFor,
+  supportedVideoDurations,
+  resolveVideoDurationSeconds,
+  videoDurationAlternatives,
+} from "./generate-video";
 export type {
   GenerateVideoForArgs,
   GenerateVideoForResult,
   VideoModel,
+  ResolvedVideoDuration,
+  VideoDurationAlternative,
 } from "./generate-video";
 
 // Model-default resolver (client-safe, also re-exported from @oxagen/ai/catalog).

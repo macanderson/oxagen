@@ -2,7 +2,11 @@ import { requireEnv } from "@oxagen/config/env";
 import { eventClient } from "./event-client";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { videoGenerate } from "@oxagen/oxagen/contracts/video.generate";
-import { videoTierModelId } from "@oxagen/ai";
+import {
+  videoTierModelId,
+  resolveVideoDurationSeconds,
+  videoDurationAlternatives,
+} from "@oxagen/ai";
 import { createPendingGeneratedAsset } from "./generated-asset.persist";
 import { logger } from "./logger";
 
@@ -49,11 +53,44 @@ export const videoGenerateHandler: CapabilityHandler<typeof videoGenerate> = asy
     throw new Error("video.generate requires an authenticated user");
   }
 
-  // Resolve the gateway model id from the basic video tier.
-  const model = videoTierModelId("basic");
+  // Resolve the gateway model id: explicit input.model wins, else the basic tier.
+  const model = input.model ?? videoTierModelId("basic");
+
+  // Snap the requested duration to the model's supported set (absent → the
+  // model's shortest). The render always proceeds at the effective duration;
+  // when the request had to be adjusted we report it in the output — with the
+  // models that get closer to the ask — so the agent/UI can inform the user
+  // and offer a re-render on a different provider.
+  const duration = resolveVideoDurationSeconds(model, input.durationSeconds);
+  const durationAdjustment =
+    duration.adjusted &&
+    duration.requestedSeconds !== undefined &&
+    duration.effectiveSeconds !== undefined &&
+    duration.supportedSeconds !== undefined
+      ? {
+          requestedSeconds: duration.requestedSeconds,
+          effectiveSeconds: duration.effectiveSeconds,
+          supportedSeconds: [...duration.supportedSeconds],
+          alternatives: videoDurationAlternatives(duration.requestedSeconds, model).map(
+            (alt) => ({
+              model: alt.model,
+              supportedSeconds: [...alt.supportedSeconds],
+              closestSeconds: alt.closestSeconds,
+            }),
+          ),
+        }
+      : undefined;
 
   logger.info(
-    { orgId: ctx.orgId, workspaceId: ctx.workspaceId, model, prompt: input.prompt },
+    {
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      model,
+      prompt: input.prompt,
+      requestedSeconds: duration.requestedSeconds,
+      effectiveSeconds: duration.effectiveSeconds,
+      durationAdjusted: duration.adjusted,
+    },
     "video.generate: creating pending asset and queuing render",
   );
 
@@ -85,7 +122,11 @@ export const videoGenerateHandler: CapabilityHandler<typeof videoGenerate> = asy
       prompt: input.prompt,
       model,
       mediaTier: "basic",
-      ...(input.durationSeconds !== undefined && { durationSeconds: input.durationSeconds }),
+      // Dispatch the EFFECTIVE duration — already snapped to the model's
+      // supported set, so the render worker never sends an invalid value.
+      ...(duration.effectiveSeconds !== undefined && {
+        durationSeconds: duration.effectiveSeconds,
+      }),
       ...(input.aspectRatio !== undefined && { aspectRatio: input.aspectRatio }),
     },
   });
@@ -95,15 +136,30 @@ export const videoGenerateHandler: CapabilityHandler<typeof videoGenerate> = asy
     "video.generate: render queued",
   );
 
+  // Human-readable adjustment notice for the chat UI; the agent surface gets
+  // the structured durationAdjustment and can phrase its own message.
+  const notice = durationAdjustment
+    ? `${model} supports ${durationAdjustment.supportedSeconds.join(", ")} second videos — ` +
+      `generating a ${durationAdjustment.effectiveSeconds}s video instead of the requested ` +
+      `${durationAdjustment.requestedSeconds}s.` +
+      (durationAdjustment.alternatives.length > 0
+        ? ` For a length closer to your request, re-run with: ${durationAdjustment.alternatives
+            .map((alt) => `${alt.model} (${alt.supportedSeconds.join("/")}s)`)
+            .join(", ")}.`
+        : "")
+    : undefined;
+
   return {
     status: "queued",
     jobId: pending.publicId,
     serveUrl: pending.serveUrl,
+    ...(durationAdjustment !== undefined && { durationAdjustment }),
     render: {
       componentId: "video-result",
       props: {
         url: pending.serveUrl,
         prompt: input.prompt,
+        ...(notice !== undefined && { notice }),
       },
     },
   };
