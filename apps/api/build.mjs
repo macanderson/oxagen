@@ -98,7 +98,14 @@ await writeFile(
       handler: "index.cjs",
       launcherType: "Nodejs",
       supportsResponseStreaming: true,
-      maxDuration: 60,
+      // 800s (plan maximum). The Inngest worker (/api/inngest) executes long
+      // steps inline in this function — agent.video-render's generate-and-upload
+      // step holds the invocation open for the full Veo render (2–5+ min). At
+      // the previous 60s cap Vercel killed every video render with a 504
+      // ("Task timed out after 60 seconds") despite the function's own
+      // timeouts.finish: "16m" — the platform cap always wins. maxDuration is a
+      // ceiling, not reserved time; short requests are unaffected.
+      maxDuration: 800,
     },
     null,
     2,
