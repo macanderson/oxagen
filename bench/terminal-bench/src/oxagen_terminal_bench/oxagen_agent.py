@@ -183,6 +183,16 @@ def _locate_bundle() -> Path:
 
 # Shell snippet: install Node {major} system-wide if a recent enough Node is
 # absent. Covers Debian/Ubuntu (NodeSource), Alpine (apk), RHEL (NodeSource).
+#
+# Fast path: if the image already ships Node >= _MIN_NODE_MAJOR (e.g. a
+# pre-baked Harbor base image with Node 22) this entire script exits in < 1s
+# after the version check — no package-manager round-trip at all.  That turns
+# the 110s "agent setup" overhead (measured in the smoke run) into < 5s.
+# To pre-bake a base image, add the following to your Dockerfile:
+#   FROM harbor-base:latest
+#   RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+#    && apt-get install -y nodejs
+# and set HARBOR_BASE_IMAGE=<your-image> in harbor's config.
 _NODE_INSTALL_SCRIPT = f"""
 set -eu
 have_node=0
@@ -193,10 +203,10 @@ fi
 if [ "$have_node" -eq 0 ]; then
   if command -v apt-get >/dev/null 2>&1; then
     export DEBIAN_FRONTEND=noninteractive
-    apt-get update
-    apt-get install -y curl ca-certificates
+    apt-get update -qq
+    apt-get install -y -qq curl ca-certificates
     curl -fsSL https://deb.nodesource.com/setup_{_NODE_SETUP_MAJOR}.x | bash -
-    apt-get install -y nodejs
+    apt-get install -y -qq nodejs
   elif command -v apk >/dev/null 2>&1; then
     apk add --no-cache nodejs npm
   elif command -v dnf >/dev/null 2>&1; then
@@ -209,8 +219,29 @@ if [ "$have_node" -eq 0 ]; then
     echo "oxagen-adapter: no supported package manager to install Node" >&2
     exit 1
   fi
+else
+  echo "oxagen-adapter: Node $(node --version) already present — skipping install"
 fi
 node --version
+"""
+
+# Shell snippet: run `oxagen init --no-link` in the task working directory to
+# build the code graph (tree-sitter parse + symbol index) and infer domain names
+# before the agent loop starts.  This front-loads the 135s+ cold graph-build
+# that otherwise blocks the first `code_graph` tool call mid-execution, and
+# makes the `code_graph` tool immediately useful from step 1.
+#
+# Domain inference (Haiku-class LLM call) annotates the graph nodes with domain
+# names (e.g. "auth", "models", "views") so the agent's code_graph queries
+# return richer, domain-aware results.
+#
+# Skipped when OXAGEN_SKIP_INIT=1 (e.g. for tasks where the repo is too large
+# or init is known to be slow).  The agent degrades gracefully without it.
+_INIT_SCRIPT = """
+set -eu
+echo "oxagen-adapter: running oxagen init to pre-build code graph and domain index..."
+oxagen init --no-link --json 2>&1 | tail -5 || echo "oxagen-adapter: init failed (non-fatal)"
+echo "oxagen-adapter: init complete"
 """
 
 
@@ -289,7 +320,27 @@ class OxagenAgent(BaseInstalledAgent):
                 timeout_sec=600,
             )
 
-        # 5) Warm mode: upload prior-trial memory into the container so this
+        # 5) Pre-build code graph + domain index via `oxagen init --no-link`.
+        #    This front-loads the 135s+ cold tree-sitter build that would
+        #    otherwise block the first `code_graph` tool call mid-execution.
+        #    After init the graph is warm in the DuckDB store and domain names
+        #    are indexed, so `code_graph` queries are useful from step 1.
+        #    Skipped when OXAGEN_SKIP_INIT=1 or OXAGEN_NO_PIPELINE=1 (bare mode).
+        if not _is_truthy(os.environ.get("OXAGEN_SKIP_INIT")) and not _is_truthy(
+            os.environ.get("OXAGEN_NO_PIPELINE")
+        ):
+            fwd = self._forwarded_env()
+            # Build env string for the shell command (key=value pairs, shell-quoted).
+            env_prefix = " ".join(
+                f"{k}={shlex.quote(v)}" for k, v in fwd.items()
+            )
+            await self.exec_as_agent(
+                environment,
+                command=f"env {env_prefix} {_INIT_SCRIPT}",
+                timeout_sec=300,  # tree-sitter parse of a large repo can take 2–3 min
+            )
+
+        # 6) Warm mode: upload prior-trial memory into the container so this
         #    trial starts with accumulated state from all preceding trials.
         #
         #    The in-container HOME is pinned to _WARM_HOME_IN_CONTAINER in
@@ -328,6 +379,10 @@ class OxagenAgent(BaseInstalledAgent):
                 "AI_GATEWAY_API_KEY must be set on the host — Oxagen routes all "
                 "LLM calls through the Vercel AI Gateway."
             )
+        # Export the gateway key under both names so it is available to:
+        #   - Oxagen's own ensureGatewayKey() (reads AI_GATEWAY_API_KEY)
+        #   - Any shell command the agent runs that calls the AI Gateway directly
+        #   - The `oxagen init` pre-run that calls inferDomains (needs gateway key)
         env["AI_GATEWAY_API_KEY"] = key
         # Forward any OXAGEN_* tuning (model, tier slugs, etc.).
         for k, v in os.environ.items():

@@ -168,6 +168,17 @@ export interface RunTurnOptions {
   /** Max judge→revise rounds (default 1; 0 disables auto-revision). */
   maxReviseRounds?: number;
   /**
+   * Enable a mid-session completeness check: after this many steps in the first
+   * execution round, pause, run the judge, and if incomplete inject the judge's
+   * findings as a revision instruction before continuing. This catches missing
+   * acceptance criteria (e.g. a required test case) early — before the agent
+   * burns the rest of the step budget on redundant verification loops.
+   *
+   * Only applies to round 0 (the initial execution). Set via
+   * `OXAGEN_MID_JUDGE_STEPS` env var or this option. Undefined / 0 disables.
+   */
+  midJudgeSteps?: number;
+  /**
    * Wall-clock budget (ms) for the ENHANCE stage's code-graph pass. On a cold
    * store the first graph query triggers a full tree-sitter build — minutes on
    * a large repo — so headless callers bound it; whatever resolved in budget
@@ -368,6 +379,70 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // which is cost accounting and has no cache field.
   let cachedInputTokens = 0;
 
+  // Mid-session judge: run the agent in two halves on round 0, checking
+  // completeness at the midpoint so missing acceptance criteria (e.g. a
+  // required test case) are caught before the agent burns the remaining budget
+  // on redundant verification loops. Controlled by `midJudgeSteps` option or
+  // the OXAGEN_MID_JUDGE_STEPS env var. Zero / unset disables.
+  const midJudgeStepsEnv = Number(process.env["OXAGEN_MID_JUDGE_STEPS"]);
+  const midJudgeSteps =
+    opts.midJudgeSteps ??
+    (Number.isFinite(midJudgeStepsEnv) && midJudgeStepsEnv > 0 ? midJudgeStepsEnv : 0);
+
+  /** Run one execution segment and accumulate its results into shared state. */
+  async function runSegment(
+    segPrompt: string,
+    segHistory: typeof history,
+    segMaxSteps: number | undefined,
+    segRound: number,
+    segImages: typeof opts.images,
+    segCommandOutputs: Array<{ command: string; output: string; ok: boolean }>,
+  ) {
+    let segReasoning = "";
+    const segResult = await runCodingAgent({
+      workspace: opts.workspace,
+      ai: opts.ai,
+      instruction: segPrompt,
+      images: segImages,
+      model: routed.model,
+      effort: opts.effort,
+      system: composeAgentSystem(opts, cwd),
+      history: segHistory,
+      maxSteps: segMaxSteps,
+      extraTools: opts.extraTools,
+      wrapTools: opts.wrapTools,
+      readOnly: opts.readOnly,
+      codeGraph: opts.codeGraph ?? undefined,
+      memory: opts.memory ?? undefined,
+      signal: opts.signal,
+      onEvent: (e) => {
+        if (e.type === "text") opts.onText?.(e.delta);
+        if (e.type === "reasoning") {
+          opts.onReasoning?.(e.delta);
+          segReasoning += e.delta;
+        }
+        if (e.type === "tool-call") onToolCall(e.name, e.input);
+        if (e.type === "tool-result") {
+          opts.onToolEvent?.({ name: e.name, ok: e.ok, durationMs: e.durationMs });
+          if (e.name === "bash") {
+            let command = e.input;
+            try {
+              const parsed = JSON.parse(e.input) as { command?: unknown };
+              if (typeof parsed.command === "string") command = parsed.command;
+            } catch {
+              /* input wasn't JSON — keep the stringified form */
+            }
+            segCommandOutputs.push({ command, output: e.result, ok: e.ok });
+          }
+        }
+        if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
+        captureToolEvent(e, toolEvents, opts.verbose);
+      },
+    });
+    if (segReasoning.trim()) thinkingLog.push({ round: segRound, text: segReasoning });
+    return segResult;
+  }
+
   for (let round = 0; ; round++) {
     if (round > 0) {
       opts.onStage?.({ kind: "revise", label: `revising · round ${round} (incomplete work)` });
@@ -381,50 +456,141 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     // Capture bash command outputs THIS round so the judge sees test results
     // (the decisive completeness signal), not just the command strings.
     const roundCommandOutputs: Array<{ command: string; output: string; ok: boolean }> = [];
-    // Accumulate this round's reasoning to persist on the trace.
-    let roundReasoning = "";
-    const result = await runCodingAgent({
-      workspace: opts.workspace,
-      ai: opts.ai,
-      instruction: prompt,
-      // Round 0 only (see the RunTurnOptions.images doc comment) — later
-      // revise rounds see it already, folded into `history`.
-      images: round === 0 ? opts.images : undefined,
-      model: routed.model,
-      effort: opts.effort,
-      system: composeAgentSystem(opts, cwd),
-      history,
-      maxSteps: opts.maxSteps,
-      extraTools: opts.extraTools,
-      wrapTools: opts.wrapTools,
-      readOnly: opts.readOnly,
-      codeGraph: opts.codeGraph ?? undefined,
-      memory: opts.memory ?? undefined,
-      signal: opts.signal,
-      onEvent: (e) => {
-        if (e.type === "text") opts.onText?.(e.delta);
-        if (e.type === "reasoning") {
-          opts.onReasoning?.(e.delta);
-          roundReasoning += e.delta;
-        }
-        if (e.type === "tool-call") onToolCall(e.name, e.input);
-        if (e.type === "tool-result") {
-          opts.onToolEvent?.({ name: e.name, ok: e.ok, durationMs: e.durationMs });
-          if (e.name === "bash") {
-            let command = e.input;
-            try {
-              const parsed = JSON.parse(e.input) as { command?: unknown };
-              if (typeof parsed.command === "string") command = parsed.command;
-            } catch {
-              /* input wasn't JSON — keep the stringified form */
-            }
-            roundCommandOutputs.push({ command, output: e.result, ok: e.ok });
+
+    let result: Awaited<ReturnType<typeof runCodingAgent>>;
+
+    // Round 0 with mid-session judge: run the first half, judge, then continue.
+    // The combined result is returned with merged usage/steps so the standard
+    // post-loop accounting below handles it identically to the non-mid-judge path.
+    if (round === 0 && midJudgeSteps > 0 && !opts.readOnly) {
+      // ── Phase A: first half of execution ──
+      const phaseAResult = await runSegment(
+        prompt,
+        history,
+        midJudgeSteps,
+        round,
+        opts.images,
+        roundCommandOutputs,
+      );
+      for (const f of phaseAResult.changedFiles) filesTouched.add(f);
+
+      // ── Mid-session judge (non-fatal: failure continues to phase B without gap injection) ──
+      if (!opts.signal?.aborted) {
+        opts.onStage?.({ kind: "judge", label: "mid-session check · verifying completeness so far" });
+        const midJudgeStart = Date.now();
+        const midVerdict = await judgeCompleteness(
+          {
+            request: opts.prompt,
+            response: phaseAResult.text,
+            filesTouched: [...filesTouched],
+            commandsRun,
+            diff: phaseAResult.diff,
+            commandOutputs: roundCommandOutputs,
+            steps: phaseAResult.steps,
+            executorModel: routed.model,
+            signal: opts.signal,
+          },
+          opts.ai,
+        ).catch(() => null);
+        if (midVerdict) {
+          phases.push(phaseStat("judge", -1, midJudgeStart, midVerdict.model, midVerdict.usage));
+          usage = mergeUsage(usage, midVerdict.usage);
+          opts.onStage?.({
+            kind: "judge",
+            label: midVerdict.complete
+              ? `mid-session: complete so far · ${midVerdict.confidence}% confident`
+              : `mid-session: ${midVerdict.findings.length} gap(s) found — injecting into phase B`,
+            detail: `advisor: ${midVerdict.model.split("/").pop()}`,
+          });
+          // Inject findings as the phase B instruction so the agent addresses
+          // missing acceptance criteria before burning the remaining step budget.
+          if (!midVerdict.complete && midVerdict.findings.length > 0) {
+            prompt =
+              `[Mid-session review] The following gaps were identified after the first ` +
+              `${phaseAResult.steps} steps. Address them in the remaining work:\n` +
+              midVerdict.findings.map((f) => `- ${f}`).join("\n") +
+              `\n\nContinue working on the original task.`;
           }
         }
-        if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
-        captureToolEvent(e, toolEvents, opts.verbose);
-      },
-    });
+      }
+
+      // ── Phase B: continue with remaining step budget ──
+      opts.onStage?.({
+        kind: "execute",
+        label: "executing · phase B (post mid-session check)",
+      });
+      const remainingSteps =
+        opts.maxSteps !== undefined ? Math.max(1, opts.maxSteps - phaseAResult.steps) : undefined;
+      const phaseBResult = await runSegment(
+        prompt,
+        phaseAResult.messages,
+        remainingSteps,
+        round,
+        undefined, // images already sent in phase A
+        roundCommandOutputs,
+      );
+
+      // Combine A + B into a single result for the standard post-loop accounting.
+      result = {
+        ...phaseBResult,
+        text: (phaseAResult.text ? phaseAResult.text + "\n" : "") + phaseBResult.text,
+        steps: phaseAResult.steps + phaseBResult.steps,
+        usage: {
+          inputTokens: (phaseAResult.usage.inputTokens ?? 0) + (phaseBResult.usage.inputTokens ?? 0),
+          outputTokens: (phaseAResult.usage.outputTokens ?? 0) + (phaseBResult.usage.outputTokens ?? 0),
+          totalTokens: (phaseAResult.usage.totalTokens ?? 0) + (phaseBResult.usage.totalTokens ?? 0),
+          cachedInputTokens:
+            (phaseAResult.usage.cachedInputTokens ?? 0) + (phaseBResult.usage.cachedInputTokens ?? 0),
+        },
+      };
+      // Reset prompt to original for the end-of-round judge input below.
+      prompt = enhanced.prompt;
+    } else {
+      // Standard single-segment execution.
+      let roundReasoning = "";
+      result = await runCodingAgent({
+        workspace: opts.workspace,
+        ai: opts.ai,
+        instruction: prompt,
+        images: round === 0 ? opts.images : undefined,
+        model: routed.model,
+        effort: opts.effort,
+        system: composeAgentSystem(opts, cwd),
+        history,
+        maxSteps: opts.maxSteps,
+        extraTools: opts.extraTools,
+        wrapTools: opts.wrapTools,
+        readOnly: opts.readOnly,
+        codeGraph: opts.codeGraph ?? undefined,
+        memory: opts.memory ?? undefined,
+        signal: opts.signal,
+        onEvent: (e) => {
+          if (e.type === "text") opts.onText?.(e.delta);
+          if (e.type === "reasoning") {
+            opts.onReasoning?.(e.delta);
+            roundReasoning += e.delta;
+          }
+          if (e.type === "tool-call") onToolCall(e.name, e.input);
+          if (e.type === "tool-result") {
+            opts.onToolEvent?.({ name: e.name, ok: e.ok, durationMs: e.durationMs });
+            if (e.name === "bash") {
+              let command = e.input;
+              try {
+                const parsed = JSON.parse(e.input) as { command?: unknown };
+                if (typeof parsed.command === "string") command = parsed.command;
+              } catch {
+                /* input wasn't JSON — keep the stringified form */
+              }
+              roundCommandOutputs.push({ command, output: e.result, ok: e.ok });
+            }
+          }
+          if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
+          captureToolEvent(e, toolEvents, opts.verbose);
+        },
+      });
+      if (roundReasoning.trim()) thinkingLog.push({ round, text: roundReasoning });
+    }
+
     const execUsage = accumulateUsage(emptyUsage(), routed.model, result.usage);
     phases.push(phaseStat("execute", round, execStart, routed.model, execUsage));
     usage = mergeUsage(usage, execUsage);
@@ -432,7 +598,6 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     lastText = result.text;
     totalSteps += result.steps;
     cachedInputTokens += result.usage.cachedInputTokens ?? 0;
-    if (roundReasoning.trim()) thinkingLog.push({ round, text: roundReasoning });
 
     // Union the git-diff file list into filesTouched. This is the ground truth
     // for what changed and supplements tool-call events (which may not fire in

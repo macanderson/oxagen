@@ -9,6 +9,8 @@ import {
   isContextOverflowError,
   isRetryableModelError,
   loopNudgeMessage,
+  successfulRepeatNudgeMessage,
+  SUCCESSFUL_REPEAT_THRESHOLD,
   toolCallSignature,
 } from "./loop-driver";
 
@@ -33,6 +35,20 @@ describe("loopNudgeMessage", () => {
     expect(msg).toContain("3 times");
     expect(msg.toLowerCase()).toContain("different approach");
     expect(msg.length).toBeLessThan(700); // error truncated to 400
+  });
+});
+
+describe("successfulRepeatNudgeMessage", () => {
+  it("names the tool and count, and tells the model to stop re-running", () => {
+    const msg = successfulRepeatNudgeMessage("bash", SUCCESSFUL_REPEAT_THRESHOLD);
+    expect(msg).toContain("bash");
+    expect(msg).toContain(`${SUCCESSFUL_REPEAT_THRESHOLD} times`);
+    expect(msg.toLowerCase()).toContain("do not run this command again");
+  });
+
+  it("SUCCESSFUL_REPEAT_THRESHOLD is a positive integer", () => {
+    expect(SUCCESSFUL_REPEAT_THRESHOLD).toBeGreaterThan(0);
+    expect(Number.isInteger(SUCCESSFUL_REPEAT_THRESHOLD)).toBe(true);
   });
 });
 
