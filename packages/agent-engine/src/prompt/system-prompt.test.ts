@@ -28,6 +28,16 @@ describe("buildSystemPrompt — profiles", () => {
     expect(p).not.toContain("NARRATE AS YOU GO");
   });
 
+  it("headless bounds verification with an explicit stopping budget", () => {
+    const p = buildSystemPrompt({ ...base, profile: "headless" });
+    expect(p).toContain("VERIFICATION BUDGET");
+    expect(p).toContain("exactly three green signals");
+    expect(p).toContain("broader relevant test module ONCE");
+    expect(p).toContain("do not write demonstration or summary");
+    // The budget is a headless concern only — no live watcher to reassure.
+    expect(buildSystemPrompt(base)).not.toContain("VERIFICATION BUDGET");
+  });
+
   it("interactive (default) keeps the live narration and omits the protocol", () => {
     const p = buildSystemPrompt(base);
     expect(p).toContain("watches this stream");
