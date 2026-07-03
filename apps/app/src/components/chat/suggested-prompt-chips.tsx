@@ -15,6 +15,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { useSuggestedPrompts } from "@/lib/page-context/suggested-prompts";
+import type { ConversationMessageSummary } from "@/lib/page-context/suggested-prompts";
 import type { ComposerAction } from "./message-composer";
 
 export interface SuggestedPromptChipsProps {
@@ -36,6 +37,19 @@ export interface SuggestedPromptChipsProps {
    * correct DB node.
    */
   parentMessageId: string | null;
+
+  /**
+   * When true, the chips are hidden because the user is actively typing in
+   * the composer input. Chips reappear when the input is cleared (false).
+   * Defaults to false (chips visible).
+   */
+  inputHasContent?: boolean;
+
+  /**
+   * Recent conversation messages forwarded to `useSuggestedPrompts` so
+   * suggestions stay contextually relevant across multi-turn conversations.
+   */
+  conversationHistory?: ConversationMessageSummary[];
 
   /**
    * Additional className applied to the outer <div> container.
@@ -64,9 +78,11 @@ export function SuggestedPromptChips({
   action,
   conversationId,
   parentMessageId,
+  inputHasContent = false,
+  conversationHistory,
   className,
 }: SuggestedPromptChipsProps) {
-  const prompts = useSuggestedPrompts();
+  const prompts = useSuggestedPrompts(conversationHistory);
   const [pending, startTransition] = React.useTransition();
   const [activatingIndex, setActivatingIndex] = React.useState<number | null>(null);
   const [chipError, setChipError] = React.useState<string | null>(null);
@@ -100,6 +116,11 @@ export function SuggestedPromptChips({
     },
     [handleActivate],
   );
+
+  // Hide the entire chip group while the user is typing. We use CSS visibility
+  // (not conditional render) so the layout space is preserved and there's no
+  // layout shift when the chips reappear on clear.
+  if (inputHasContent) return null;
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>

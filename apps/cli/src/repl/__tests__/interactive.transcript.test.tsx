@@ -1,24 +1,27 @@
 /**
  * Regression guard for the REPL transcript rendering model.
  *
- * The REPL renders the transcript as a single windowed viewport (the newest slice
- * of messages, clipped to the terminal height) — there is no <Static>/live split
- * anymore. A botched earlier model re-rendered the FULL message list in a live
- * region WHILE <Static> also committed every settled message, so once a turn
- * finished each message appeared twice.
+ * The REPL renders inline: finished messages commit to the terminal's real
+ * scrollback via Ink's `<Static>` (printed once, never re-rendered), while the
+ * one message still being streamed into re-renders in a small live frame below
+ * it. An earlier model re-rendered the FULL message list in a live region while
+ * `<Static>` ALSO committed every settled message, so once a turn finished each
+ * message appeared twice — a later model dropped `<Static>` entirely to dodge
+ * that bug, at the cost of native scrollback (see interactive.launch.test.tsx).
+ * This file locks the invariant that survives both: a finalized assistant
+ * answer renders in the transcript, and renders EXACTLY once (never in both the
+ * committed and live regions at once).
  *
- * These tests lock the invariant that survives that history: a finalized
- * assistant answer renders in the transcript, and renders EXACTLY once (no
- * duplication). Under ink-testing-library stdout is not a TTY, so the component
- * takes its inline (non-full-screen) path — the alternate-screen takeover is
- * exercised separately in interactive.launch.test.tsx.
+ * Under ink-testing-library stdout is not a TTY, so the component takes its
+ * non-full-screen path — the alternate-screen takeover (or rather, the absence
+ * of one) is exercised separately in interactive.launch.test.tsx.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render } from "ink-testing-library";
 
 // runTurn resolves immediately with a final answer — no streaming callbacks — so
 // the REPL takes the "closeStreamingBlocks → push final assistant" path and the
-// answer lands as a settled (non-streaming) message in the transcript window.
+// answer lands as a settled (non-streaming) message, eligible for <Static>.
 const runTurnSpy = vi.fn<(opts: { prompt: string }) => void>();
 vi.mock("@oxagen/agent-engine", () => ({
   runTurn: async (opts: { prompt: string }) => {
@@ -96,7 +99,7 @@ async function waitFor(cond: () => boolean, ms = 3000): Promise<void> {
   }
 }
 
-describe("REPL transcript rendering (single windowed viewport)", () => {
+describe("REPL transcript rendering (Static history + live frame)", () => {
   beforeEach(() => {
     runTurnSpy.mockClear();
   });
@@ -112,19 +115,20 @@ describe("REPL transcript rendering (single windowed viewport)", () => {
     stdin.write("\r");
 
     await waitFor(() => runTurnSpy.mock.calls.length === 1);
-    // The settled answer is rendered into the transcript viewport — assert it
-    // shows up in the emitted output.
+    // The settled answer is committed via <Static> — assert it shows up in the
+    // emitted output.
     await waitFor(() => frames.join("").includes("answer-to:build the thing"));
     expect(runTurnSpy.mock.calls[0]?.[0].prompt).toBe("build the thing");
     unmount();
   });
 
   it("renders each finalized message exactly once — no duplication", async () => {
-    // Regression: an earlier model re-rendered the FULL `messages` list in a live
-    // region while <Static> ALSO committed every settled message, so once a turn
-    // finished (nothing streaming) each message rendered twice. The single
-    // windowed viewport renders each message once; the final frame must contain
-    // the settled answer EXACTLY once. Under the old bug it appeared twice.
+    // Regression: an earlier model re-rendered the FULL `messages` list in a
+    // live region while <Static> ALSO committed every settled message, so once
+    // a turn finished (nothing streaming) each message rendered twice. The
+    // current split commits a message to <Static> XOR renders it in the live
+    // frame, never both — the final frame must contain the settled answer
+    // EXACTLY once. Under the old bug it appeared twice.
     const { stdin, lastFrame, frames, unmount } = render(
       <ReplApp options={{ session: TEST_SESSION }} />,
     );
@@ -146,11 +150,13 @@ describe("REPL transcript rendering (single windowed viewport)", () => {
     unmount();
   });
 
-  it("PgUp scrolls back through history (shows the hint); PgDn returns to latest", async () => {
-    // After one turn the transcript holds the user prompt + the assistant answer
-    // (≥2 messages), so there is history to scroll into. PgUp raises the scroll
-    // offset above 0 → the "⌃ history" hint appears; PgDn drops it back to 0 →
-    // the hint clears and the app is pinned to the newest output again.
+  it("does not intercept PageUp/PageDown — scrollback is native now", async () => {
+    // The REPL used to manage its own scroll offset over a windowed transcript
+    // (PgUp/PgDn). That model is gone: finished messages live in the terminal's
+    // real scrollback via <Static>, so the app must never react to PageUp/
+    // PageDown (or show an in-app "scrolled back" hint) — the terminal handles
+    // scrolling on its own, the same as it would for any other normal-buffer
+    // program.
     const { stdin, lastFrame, frames, unmount } = render(
       <ReplApp options={{ session: TEST_SESSION }} />,
     );
@@ -160,16 +166,17 @@ describe("REPL transcript rendering (single windowed viewport)", () => {
     await tick();
     stdin.write("\r");
     await waitFor(() => frames.join("").includes("answer-to:build the thing"));
+    await tick(40);
 
-    // PageUp — control sequence CSI 5 ~
-    stdin.write("[5~");
-    await waitFor(() => (lastFrame() ?? "").includes("history"));
-    expect(lastFrame() ?? "").toContain("PgDn to return to the latest");
+    const before = lastFrame() ?? "";
+    expect(before).not.toContain("history");
 
-    // PageDown — control sequence CSI 6 ~ — snaps back to the newest output.
-    stdin.write("[6~");
-    await waitFor(() => !(lastFrame() ?? "").includes("⌃ history"));
-    expect(lastFrame() ?? "").not.toContain("⌃ history");
+    // PageUp — CSI 5 ~ (ESC [ 5 ~) — must be a no-op.
+    stdin.write("\x1b[5~");
+    await tick(60);
+    const after = lastFrame() ?? "";
+    expect(after).not.toContain("history");
+    expect(after).toBe(before);
     unmount();
   });
 });

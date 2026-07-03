@@ -1,16 +1,24 @@
 /**
  * Interactive REPL — the default `oxagen` experience.
  *
- * Full-screen Ink TUI with:
- *   - Scrollable conversation history (user prompts + assistant responses)
+ * Renders INLINE, in the terminal's normal screen buffer (never the alternate
+ * buffer), so:
+ *   - Finished turns commit to the terminal's own scrollback via Ink's
+ *     `<Static>` — the user scrolls up with a trackpad/mouse/Shift-PageUp the
+ *     same way they would in `less` or any other normal-buffer program.
  *   - A thinking indicator (spinner + elapsed time + live token estimate) and a
  *     session token counter in the status bar
  *   - Multi-turn history, project rules, and Oxagen context-engine memory
  *   - Slash commands (/help, /model, /clear, /exit), prompt queue, Esc/Ctrl-C cancel
  *
+ * Only the in-progress turn + prompt bar + status/side panels re-render each
+ * frame (see "Transcript rendering" below) — the prompt bar is no longer
+ * pinned to the terminal's physical bottom edge; it flows at the bottom of the
+ * current output like a normal CLI.
+ *
  * Presentational pieces live in ./components; this file is the container.
  */
-import { Box, Text, measureElement, useApp, useInput, type DOMElement } from "ink";
+import { Box, Static, Text, useApp, useInput } from "ink";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import type { ModelMessage } from "ai";
 import { existsSync, readFileSync } from "node:fs";
@@ -89,12 +97,7 @@ import { resolveEscapeAction } from "./escape-action.js";
 import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
 import { isDebugEnabled } from "../lib/debug-log.js";
 import { Banner } from "../tui/banner.js";
-import {
-  useTerminalSize,
-  ENTER_ALT_SCREEN,
-  LEAVE_ALT_SCREEN,
-  CURSOR_HOME,
-} from "./use-terminal-size.js";
+import { useTerminalSize } from "./use-terminal-size.js";
 import {
   makeTurnController,
   makeStallDetector,
@@ -274,12 +277,12 @@ export function ReplApp({
   const initialVerbose = options.verbose ?? readConfig().verbose ?? false;
   const [verboseOn, setVerboseOn] = useState(initialVerbose);
   const verboseRef = useRef(initialVerbose);
-  // The REPL runs full-screen (alternate buffer; see launchRepl): the root box is
-  // sized to the terminal so the prompt bar + status line stay pinned to the
-  // bottom edge, while the transcript fills — and scrolls within — the space
-  // above them. History is scrolled IN-APP (PgUp/PgDn drive scrollOffset) over a
-  // rendered window of messages; the frame is clipped to the viewport so it never
-  // grows taller than the terminal.
+  // The REPL renders INLINE (normal screen buffer, never the alternate buffer —
+  // see launchRepl): finished messages commit to the terminal's own scrollback
+  // via `<Static>`, so history scrolling is native (trackpad/mouse/Shift-PageUp),
+  // not app-managed. Only the in-progress turn + prompt bar + status/side panels
+  // re-render each frame, and that live frame is capped to the terminal height so
+  // Ink's redraw never exceeds the viewport — see "Transcript rendering" below.
   // Permission posture (drives the broker + status chip) and the in-flight
   // approval request (drives the inline ApprovalPrompt; null when none).
   const [mode, setMode] = useState<PermissionMode>(
@@ -419,39 +422,11 @@ export function ReplApp({
   // into the transcript as a collapsed, expandable accordion (see
   // foldTerminalInline). This timer drives that time-based hand-off.
   const foldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // How far the transcript is scrolled back from the latest message, counted in
-  // messages hidden below the fold. 0 = pinned to the newest output (the default,
-  // auto-following as tokens stream in); PgUp raises it to reveal older history,
-  // PgDown lowers it, and any new submission snaps it back to 0. The ref mirrors
-  // the state so the synchronous key handler clamps against the live count.
-  const [scrollOffset, setScrollOffset] = useState(0);
-  const scrollOffsetRef = useRef(0);
-  scrollOffsetRef.current = scrollOffset;
   // Live terminal geometry. `fullscreen` is true only on a real TTY; it gates
-  // both the alternate-screen takeover (launchRepl) and sizing the root box to
-  // the terminal so the prompt bar can pin to the bottom edge.
-  const { rows, cols, fullscreen } = useTerminalSize();
-  // Transcript overflow measurement: refs to the viewport and its inner content,
-  // plus whether the content currently exceeds the viewport. When it does, the
-  // transcript anchors its tail to the bottom (newest visible, older scrolls off
-  // the top); when it fits, it anchors to the top so a short session reads
-  // top-down with the empty space falling above the pinned prompt bar.
-  const viewportRef = useRef<DOMElement | null>(null);
-  const contentRef = useRef<DOMElement | null>(null);
-  const [overflowing, setOverflowing] = useState(false);
-  // Re-measure the transcript against its viewport after every render (Ink lays
-  // the tree out synchronously, so the measured sizes are current here). Only
-  // flip `overflowing` when the boolean actually changes, so this settles in at
-  // most one extra render and never loops. Skipped when not full-screen: without
-  // a height-bounded root there is nothing to overflow.
-  useEffect(() => {
-    if (!fullscreen) return;
-    const vp = viewportRef.current;
-    const ct = contentRef.current;
-    if (!vp || !ct) return;
-    const next = measureElement(ct).height > measureElement(vp).height;
-    setOverflowing((prev) => (prev === next ? prev : next));
-  });
+  // capping the live (non-Static) frame's height so Ink's redraw never exceeds
+  // the viewport — see "Transcript rendering" below. History scrolling itself is
+  // native terminal scrollback now, so there is no in-app scroll offset to track.
+  const { rows, fullscreen } = useTerminalSize();
   // Timestamp of the most-recent Escape press (for the double-Esc detection
   // window). Null means no previous Esc has been recorded (or the window was
   // explicitly cleared after a 'prompt-reset' fires).
@@ -951,9 +926,11 @@ export function ReplApp({
       return;
     }
 
-    // Scrolling back through history is handled by the terminal's own scrollback
-    // (the transcript is committed to it via <Static>), so the REPL does not bind
-    // PageUp/PageDown/Ctrl-U/Ctrl-D — they pass through to the terminal.
+    // Scrolling back through history is native terminal scrollback now: finished
+    // messages are committed via <Static> into the real screen buffer, so
+    // PageUp/PageDown (and mouse-wheel/trackpad scroll) are never intercepted
+    // here — they reach the terminal exactly like they would for `less` or any
+    // other normal-buffer program. The REPL does not bind them.
 
     // ── Prompt-bar arrows (focus is on the input) ──
     // Only when the slash menu is CLOSED — while it's open the arrows navigate
@@ -979,21 +956,6 @@ export function ReplApp({
       const next = order[(idx + 1) % order.length]!;
       setMode(next);
       brokerRef.current?.setMode(next);
-      return;
-    }
-
-    // PgUp / PgDn scroll the transcript history within the full-screen viewport
-    // (the app owns the screen now, so there is no native terminal scrollback to
-    // defer to). PgUp reveals older messages; PgDn returns toward the latest.
-    // Clamp to [0, count-1] so you can never scroll past the first message or
-    // below the newest. Plain Up/Down stay owned by the prompt input's editing.
-    if (key.pageUp || key.pageDown) {
-      const step = 5;
-      const maxOffset = Math.max(0, allRef.current.length - 1);
-      setScrollOffset((o) => {
-        const next = key.pageUp ? o + step : o - step;
-        return Math.max(0, Math.min(maxOffset, next));
-      });
       return;
     }
 
@@ -1969,10 +1931,6 @@ export function ReplApp({
     (text: string, paste?: PasteSubmission) => {
       queueRef.current = [...queueRef.current, { text, paste }];
       setQueued(queueRef.current);
-      // Snap the transcript back to the newest output whenever a fresh prompt is
-      // submitted — a user who had scrolled up to read history expects the view
-      // to follow their new turn rather than stay parked in the past.
-      setScrollOffset(0);
       void pump();
     },
     [pump],
@@ -2023,114 +1981,92 @@ export function ReplApp({
     [enqueue, resetConversation, pushAssistant, setEditingTaskId],
   );
 
-  // ── Full-screen transcript viewport ─────────────────────────────────────────
-  // The REPL owns the whole screen (alternate buffer; see launchRepl). The root
-  // box is sized to the live terminal so the prompt bar + status line can stay
-  // PINNED to the bottom edge while the transcript fills — and scrolls within —
-  // the space above them. Because the root is height-bounded and the transcript
-  // viewport clips its overflow, the frame Ink redraws is never taller than the
-  // terminal, which is exactly what kept the old inline model from garbling.
-  //
-  // Only a WINDOW of messages is rendered — enough to overflow the viewport a few
-  // times over — so a long session never pays to re-render its whole history each
-  // frame. `scrollOffset` (driven by PgUp/PgDn) slides that window back through
-  // history; at offset 0 the window ends on the newest message and auto-follows.
-  const totalMessages = messages.length;
-  const windowEnd = Math.max(0, totalMessages - scrollOffset);
-  const windowSize = Math.max(rows, 40);
-  const windowStart = Math.max(0, windowEnd - windowSize);
-  const windowMessages = messages.slice(windowStart, windowEnd);
-  const scrolledBack = scrollOffset > 0;
+  // ── Transcript rendering: Static history + live frame ───────────────────────
+  // The REPL renders inline (normal screen buffer — see launchRepl). A message
+  // is "live" for exactly as long as it is being streamed into (`streaming:
+  // true`), and that is true for at most the LAST element of `messages` at any
+  // time (closeStreamingBlocks always closes the previous block before a new one
+  // opens). Everything before that is finished and handed to `<Static>`, which
+  // commits it to the terminal's real scrollback exactly once and never
+  // re-renders it — so a closed-over message must never be mutated again, or
+  // Static would have already printed a stale snapshot of it. The live message
+  // (if any) re-renders every frame in the small dynamic frame below, alongside
+  // the prompt bar and side panels; once it closes it moves into `committed` on
+  // the next render and is never drawn in both places at once (see
+  // interactive.transcript.test.tsx for the regression guard).
+  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : undefined;
+  const liveMessage = lastMessage?.streaming ? lastMessage : undefined;
+  const committedMessages = liveMessage ? messages.slice(0, -1) : messages;
 
   return (
-    // Root — sized to the terminal only when we truly own a TTY (full-screen);
-    // otherwise (tests / piped output) it stays auto-height and renders inline so
-    // the component is trivially testable under ink-testing-library.
-    <Box
-      flexDirection="column"
-      {...(fullscreen ? { height: rows, width: cols } : {})}
-    >
-      {/* Growing top region: the transcript (left, fills width) and the Agent
-          Team / Task Progress dock (right). It flexGrows to consume everything
-          above the pinned bottom stack; overflow="hidden" bounds it to the
-          available rows so neither the transcript nor a tall sidebar can push the
-          prompt bar off the bottom. */}
-      <Box flexDirection="row" flexGrow={1} minHeight={0} overflow="hidden">
-        <Box flexDirection="column" flexGrow={1} minWidth={0}>
-          {/* Terminal panel — a `!command`'s live stdout/stderr, red-outlined and
-              pinned just ABOVE the transcript so shell output stays visually
-              separate from the agent speaking. Null until a command has run. */}
-          {terminalRun && <TerminalPanel run={terminalRun} />}
+    <>
+      {/* Finished transcript — printed once each, permanently, into the
+          terminal's real scrollback. Never re-rendered once flushed (see the
+          comment above), which is what makes native scroll-up work. */}
+      <Static items={committedMessages}>
+        {(msg, i) => <MessageView key={i} msg={msg} diffTheme={diffThemeRef.current} />}
+      </Static>
 
-          {/* Transcript viewport. It clips its overflow and anchors its content to
-              the TOP while it fits (so a short session reads top-down with the gap
-              falling between the last message and the pinned prompt) and to the
-              BOTTOM once it overflows (so the newest output stays visible just
-              above the prompt and older lines scroll off the top). `overflowing`
-              is measured from the laid-out content vs. the viewport each frame. */}
-          <Box
-            ref={viewportRef}
-            flexDirection="column"
-            flexGrow={1}
-            minHeight={0}
-            overflow="hidden"
-            justifyContent={overflowing ? "flex-end" : "flex-start"}
-          >
-            {/* Inner content keeps its natural height (flexShrink={0}) so the
-                measurement reflects the true content size, not a squeezed one. */}
-            <Box ref={contentRef} flexDirection="column" flexShrink={0}>
-              {totalMessages === 0 ? (
-                <Box paddingX={1} flexDirection="column">
-                  <Banner version={pkg.version} />
-                  <Text dimColor>Ready. Type a prompt to start coding.</Text>
-                  <Text dimColor>
-                    Backed by Oxagen's knowledge-graph context engine. Type /help
-                    for commands.
-                  </Text>
-                  {projectContextRef.current.sources.length > 0 && (
-                    <Text dimColor>
-                      Loaded rules: {projectContextRef.current.sources.join(", ")}
-                    </Text>
-                  )}
-                </Box>
-              ) : (
-                windowMessages.map((msg, i) => (
-                  <MessageView
-                    key={windowStart + i}
-                    msg={msg}
-                    diffTheme={diffThemeRef.current}
-                  />
-                ))
-              )}
-            </Box>
-          </Box>
-        </Box>
-
-        {/* Right-hand dock: Agent Team (live roster) + Task Progress (the planning
-            agent's checklist). Renders nothing until there's work to show.
-            `focus` highlights the navigated-to row and `active` forces the dock
-            visible while it holds focus, so arrow-nav / Ctrl-E drill-in / Ctrl-X
-            never land on a hidden or unmarked list. */}
-        <AgentSidebar
-          mode={panelMode}
-          focus={focus.zone === "input" ? null : focus}
-          active={focus.zone !== "input"}
-        />
-      </Box>
-
-      {/* Pinned bottom stack — everything here keeps its height (flexShrink={0})
-          and sits flush against the bottom edge of the terminal: transient
-          notices, then the input row, then the status line. */}
-      <Box flexDirection="column" flexShrink={0}>
-        {/* Scrolled-back-through-history hint */}
-        {scrolledBack && (
-          <Box paddingX={1}>
-            <Text color="#FBBF24">⌃ history </Text>
+      {/* Live frame — everything that still changes from tick to tick: the
+          in-progress message, terminal panel, side panels, prompt bar, and
+          status line. Kept to its NATURAL (small) height rather than forced
+          full-screen, so a normal turn never pushes a full-terminal-tall frame
+          through Ink's redraw. `maxHeight` + `overflow="hidden"` is only a
+          safety cap for the pathological case (a single streamed block taller
+          than the terminal) — without it an oversized frame is what garbles
+          Ink's cursor-based redraw; `justifyContent="flex-end"` keeps the
+          prompt bar/status visible (not the overflow) if that cap ever bites.
+          Applied only on a real TTY — off one (tests / piped output) the frame
+          stays unbounded so the component renders trivially under
+          ink-testing-library. */}
+      <Box
+        flexDirection="column"
+        justifyContent="flex-end"
+        {...(fullscreen ? { maxHeight: rows, overflow: "hidden" } : {})}
+      >
+        {messages.length === 0 && (
+          <Box paddingX={1} flexDirection="column">
+            <Banner version={pkg.version} />
+            <Text dimColor>Ready. Type a prompt to start coding.</Text>
             <Text dimColor>
-              (PgDn to return to the latest{scrollOffset >= totalMessages - 1 ? " · at oldest" : ""})
+              Backed by Oxagen's knowledge-graph context engine. Type /help
+              for commands.
             </Text>
+            {projectContextRef.current.sources.length > 0 && (
+              <Text dimColor>
+                Loaded rules: {projectContextRef.current.sources.join(", ")}
+              </Text>
+            )}
           </Box>
         )}
+
+        <Box flexDirection="row">
+          <Box flexDirection="column" flexGrow={1} minWidth={0}>
+            {/* Terminal panel — a `!command`'s live stdout/stderr, red-outlined and
+                pinned just ABOVE the in-progress message so shell output stays
+                visually separate from the agent speaking. Null until a command
+                has run. */}
+            {terminalRun && <TerminalPanel run={terminalRun} />}
+
+            {/* The one message still being streamed into, if any. */}
+            {liveMessage && (
+              <MessageView msg={liveMessage} diffTheme={diffThemeRef.current} />
+            )}
+          </Box>
+
+          {/* Agent Team (live roster) + Task Progress (the planning agent's
+              checklist). Renders nothing until there's work to show. `focus`
+              highlights the navigated-to row and `active` forces the dock
+              visible while it holds focus, so arrow-nav / Ctrl-E drill-in /
+              Ctrl-X never land on a hidden or unmarked list. */}
+          <AgentSidebar
+            mode={panelMode}
+            focus={focus.zone === "input" ? null : focus}
+            active={focus.zone !== "input"}
+          />
+        </Box>
+
+        {/* Transient notices, then the input row, then the status line. */}
 
         {/* Queued prompts (submitted while a turn is running) */}
         {queued.length > 0 && (
@@ -2234,8 +2170,8 @@ export function ReplApp({
       </Box>
 
       </Box>{/* end input row */}
-      </Box>{/* end pinned bottom stack */}
-    </Box>
+      </Box>{/* end live frame */}
+    </>
   );
 }
 
@@ -2243,29 +2179,12 @@ export function ReplApp({
 
 export async function launchRepl(options: ReplOptions): Promise<void> {
   const { render: renderInk } = await import("ink");
-  // Take over the screen so the prompt bar can pin to the bottom edge: switch to
-  // the alternate buffer (which preserves the user's real terminal + scrollback
-  // to restore on exit) BEFORE Ink's first paint, so no frame ever lands in the
-  // normal buffer. Only on a real TTY — piped/redirected output (and tests) must
-  // never emit these control sequences.
-  const isTTY = Boolean(process.stdout.isTTY);
-  // Restore the normal screen exactly once, however we exit (clean unmount, Esc,
-  // Ctrl-C, or a hard signal), so the terminal is never left stuck in the alt
-  // buffer. Guarded so double-invocation (finally + exit handler) is a no-op.
-  let restored = false;
-  const restore = (): void => {
-    if (restored || !isTTY) return;
-    restored = true;
-    process.stdout.write(LEAVE_ALT_SCREEN);
-  };
-  if (isTTY) {
-    process.stdout.write(ENTER_ALT_SCREEN + CURSOR_HOME);
-    process.once("exit", restore);
-  }
-  try {
-    const { waitUntilExit } = renderInk(<ReplApp options={options} />);
-    await waitUntilExit();
-  } finally {
-    restore();
-  }
+  // Deliberately no alternate-screen takeover here: the REPL renders into the
+  // terminal's NORMAL screen buffer so finished output commits to the user's
+  // real scrollback (via <Static> in ReplApp) and native trackpad/mouse/
+  // Shift-PageUp scroll-up works. The alternate buffer has no scrollback of its
+  // own, which is exactly the bug this avoids re-introducing — see
+  // interactive.launch.test.tsx for the regression guard.
+  const { waitUntilExit } = renderInk(<ReplApp options={options} />);
+  await waitUntilExit();
 }

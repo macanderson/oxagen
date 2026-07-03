@@ -1,18 +1,25 @@
 /**
  * Regression guard for the REPL's render *mode*.
  *
- * The REPL runs FULL-SCREEN so the prompt bar can stay pinned to the bottom edge
- * of the terminal: `launchRepl` switches to the alternate screen buffer before
- * Ink's first paint (so no frame lands in the normal buffer) and restores the
- * normal buffer on exit (so the user's terminal + scrollback come back intact).
- * The alternate-screen dance must happen ONLY on a real TTY — piped/redirected
- * output and tests must never see the control sequences.
+ * The REPL renders INLINE, in the terminal's normal screen buffer: `launchRepl`
+ * must never switch to the alternate screen buffer (DECSET/DECRST 1049), on a
+ * real TTY or off one. Inline rendering is what lets finished output commit to
+ * the terminal's own scrollback (via Ink's `<Static>`) so the user can scroll
+ * back with a trackpad/mouse/Shift-PageUp — the alternate buffer has no native
+ * scrollback, which is exactly the bug this locks against re-introducing.
  *
  * This test locks that contract deterministically by driving `process.stdout`'s
  * `isTTY` and capturing writes, rather than scraping Ink's frames (which couples
  * to Ink's global TTY/CI heuristics and flakes).
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
+
+// DECSET/DECRST 1049 — switch to / restore from the alternate screen buffer.
+// Hardcoded here (rather than imported) because the REPL no longer has any
+// production code that needs these constants; the test exists solely to prove
+// launchRepl never emits them.
+const ENTER_ALT_SCREEN = "\x1b[?1049h";
+const LEAVE_ALT_SCREEN = "\x1b[?1049l";
 
 // Ink's render is mocked so launchRepl exercises only the terminal setup/teardown
 // around it — no real component render, no real Ink stdout writes.
@@ -25,9 +32,6 @@ vi.mock("ink", () => ({
 }));
 
 const { launchRepl } = await import("../interactive.js");
-const { ENTER_ALT_SCREEN, LEAVE_ALT_SCREEN } = await import(
-  "../use-terminal-size.js"
-);
 
 const TEST_SESSION = {
   token: "test-token",
@@ -44,7 +48,7 @@ function setTTY(value: boolean): void {
   });
 }
 
-describe("launchRepl full-screen setup", () => {
+describe("launchRepl render mode", () => {
   const originalIsTTY = process.stdout.isTTY;
 
   afterEach(() => {
@@ -56,7 +60,7 @@ describe("launchRepl full-screen setup", () => {
     vi.restoreAllMocks();
   });
 
-  it("enters the alternate screen before render and restores it on exit (TTY)", async () => {
+  it("never enters the alternate screen on a real TTY", async () => {
     setTTY(true);
     const writes: string[] = [];
     vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
@@ -66,17 +70,15 @@ describe("launchRepl full-screen setup", () => {
 
     await launchRepl({ session: TEST_SESSION });
 
-    const enterIdx = writes.findIndex((w) => w.includes(ENTER_ALT_SCREEN));
-    const leaveIdx = writes.findIndex((w) => w.includes(LEAVE_ALT_SCREEN));
-    // Both the enter and the restore happened…
-    expect(enterIdx).toBeGreaterThanOrEqual(0);
-    expect(leaveIdx).toBeGreaterThanOrEqual(0);
-    // …and the alt buffer was entered before it was left.
-    expect(enterIdx).toBeLessThan(leaveIdx);
+    expect(
+      writes.some(
+        (w) => w.includes(ENTER_ALT_SCREEN) || w.includes(LEAVE_ALT_SCREEN),
+      ),
+    ).toBe(false);
     expect(renderSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("never emits alt-screen control sequences off a TTY (pipes / tests)", async () => {
+  it("never enters the alternate screen off a TTY (pipes / tests)", async () => {
     setTTY(false);
     const writes: string[] = [];
     vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {

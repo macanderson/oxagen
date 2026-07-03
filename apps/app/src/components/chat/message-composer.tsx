@@ -70,6 +70,7 @@ export function MessageComposer({
   onInterrupt,
   initialModelState,
   availableMcpServers,
+  onInputHasContentChange,
 }: {
   conversationId: string | null;
   parentMessageId: string | null;
@@ -89,6 +90,12 @@ export function MessageComposer({
   initialModelState?: ComposerModelState;
   /** Available MCP servers for the per-turn activation picker. */
   availableMcpServers?: McpServerSummary[];
+  /**
+   * Called whenever the textarea transitions between empty and non-empty.
+   * `true`  → user has typed content (hide suggested prompts).
+   * `false` → input is empty / cleared (show suggested prompts).
+   */
+  onInputHasContentChange?: (hasContent: boolean) => void;
 }) {
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
@@ -97,6 +104,27 @@ export function MessageComposer({
   );
   const [activeServerIds, setActiveServerIds] = React.useState<Set<string>>(new Set());
   const formRef = React.useRef<HTMLFormElement>(null);
+
+  // Stable ref for the callback so the textarea onChange handler never
+  // captures a stale closure — the identity of the ref never changes.
+  const onInputHasContentChangeRef = React.useRef(onInputHasContentChange);
+  React.useEffect(() => {
+    onInputHasContentChangeRef.current = onInputHasContentChange;
+  }, [onInputHasContentChange]);
+
+  // Track whether the textarea currently has content so the parent can hide
+  // the suggested-prompt chips while the user is typing.
+  const inputHasContentRef = React.useRef(false);
+  const handleTextareaChange = React.useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const hasContent = e.target.value.length > 0;
+      if (hasContent !== inputHasContentRef.current) {
+        inputHasContentRef.current = hasContent;
+        onInputHasContentChangeRef.current?.(hasContent);
+      }
+    },
+    [],
+  );
 
   // Refs that always reflect the latest prop values so the queue-drain effect
   // (dep array [isStreaming]) reads the current parentMessageId / conversationId
@@ -227,12 +255,22 @@ export function MessageComposer({
         // Reset the native textarea value directly so the placeholder reappears.
         const ta = formRef.current?.elements.namedItem("content") as HTMLTextAreaElement | null;
         if (ta) ta.value = "";
+        // Notify parent that input is now empty (chips should reappear).
+        if (inputHasContentRef.current) {
+          inputHasContentRef.current = false;
+          onInputHasContentChangeRef.current?.(false);
+        }
       }
       return;
     }
 
     const fd = buildFormData(e.currentTarget, model);
     formRef.current?.reset();
+    // Notify parent that input is now empty after reset (chips should reappear).
+    if (inputHasContentRef.current) {
+      inputHasContentRef.current = false;
+      onInputHasContentChangeRef.current?.(false);
+    }
     dispatch(fd);
   };
 
@@ -407,6 +445,7 @@ export function MessageComposer({
         rows={3}
         disabled={pending || disabled}
         onKeyDown={onKeyDown}
+        onChange={handleTextareaChange}
         className="border-none bg-transparent shadow-none focus-visible:ring-0"
       />
       {/* Queued messages (queue mode): ordered list with reorder / edit /
