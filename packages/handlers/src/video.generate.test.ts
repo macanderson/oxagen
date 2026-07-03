@@ -24,6 +24,53 @@ vi.mock("@oxagen/config/env", () => ({
 
 vi.mock("@oxagen/ai", () => ({
   videoTierModelId: mocks.videoTierModelId,
+  // Real duration-snapping logic is covered by @oxagen/ai's own tests; these
+  // mirror its behaviour for the veo/sora catalog so handler tests stay honest.
+  resolveVideoDurationSeconds: (modelId: string, requested?: number) => {
+    const supported = modelId.startsWith("google/veo")
+      ? [4, 6, 8]
+      : modelId.startsWith("openai/sora-2")
+        ? [4, 8, 12]
+        : undefined;
+    if (!supported) {
+      return { effectiveSeconds: requested, requestedSeconds: requested, adjusted: false };
+    }
+    if (requested === undefined) {
+      return { effectiveSeconds: supported[0], adjusted: false, supportedSeconds: supported };
+    }
+    if (supported.includes(requested)) {
+      return {
+        effectiveSeconds: requested,
+        requestedSeconds: requested,
+        adjusted: false,
+        supportedSeconds: supported,
+      };
+    }
+    const nearest = supported.reduce((best, d) =>
+      Math.abs(d - requested) < Math.abs(best - requested) ||
+      (Math.abs(d - requested) === Math.abs(best - requested) && d > best)
+        ? d
+        : best,
+    );
+    return {
+      effectiveSeconds: nearest,
+      requestedSeconds: requested,
+      adjusted: true,
+      supportedSeconds: supported,
+    };
+  },
+  videoDurationAlternatives: (requested: number, currentModelId?: string) =>
+    [
+      { model: "google/veo", supportedSeconds: [4, 6, 8] },
+      { model: "openai/sora-2", supportedSeconds: [4, 8, 12] },
+    ]
+      .filter((entry) => !currentModelId?.startsWith(entry.model))
+      .map((entry) => ({
+        ...entry,
+        closestSeconds: entry.supportedSeconds.reduce((best, d) =>
+          Math.abs(d - requested) < Math.abs(best - requested) ? d : best,
+        ),
+      })),
 }));
 
 vi.mock("./generated-asset.persist", () => ({
@@ -99,10 +146,51 @@ describe("videoGenerateHandler (@oxagen/handlers)", () => {
     expect(sentEvent.data.prompt).toBe("Forest");
   });
 
-  it("passes durationSeconds to inngest when provided", async () => {
-    await videoGenerateHandler({ prompt: "Waves", durationSeconds: 20 }, CTX);
+  it("dispatches a supported durationSeconds unchanged", async () => {
+    await videoGenerateHandler({ prompt: "Waves", durationSeconds: 6 }, CTX);
     const sentEvent = mocks.inngestSend.mock.calls[0]![0];
-    expect(sentEvent.data.durationSeconds).toBe(20);
+    expect(sentEvent.data.durationSeconds).toBe(6);
+  });
+
+  it("snaps an unsupported durationSeconds and reports the adjustment", async () => {
+    const result = await videoGenerateHandler({ prompt: "Epic", durationSeconds: 30 }, CTX);
+
+    // The render is still queued — at the nearest supported duration.
+    const sentEvent = mocks.inngestSend.mock.calls[0]![0];
+    expect(sentEvent.data.durationSeconds).toBe(8);
+    expect(result.status).toBe("queued");
+
+    // The structured adjustment tells the agent what happened and which models
+    // get closer to the original request.
+    expect(result.durationAdjustment).toEqual({
+      requestedSeconds: 30,
+      effectiveSeconds: 8,
+      supportedSeconds: [4, 6, 8],
+      alternatives: [
+        { model: "openai/sora-2", supportedSeconds: [4, 8, 12], closestSeconds: 12 },
+      ],
+    });
+
+    // The chat UI gets a human-readable notice.
+    expect(result.render.props.notice).toContain("generating 8s");
+    expect(result.render.props.notice).toContain("requested 30s");
+    expect(result.render.props.notice).toContain("openai/sora-2");
+  });
+
+  it("defaults an absent durationSeconds to the model's shortest, with no adjustment notice", async () => {
+    const result = await videoGenerateHandler({ prompt: "Short" }, CTX);
+    const sentEvent = mocks.inngestSend.mock.calls[0]![0];
+    expect(sentEvent.data.durationSeconds).toBe(4);
+    expect(result.durationAdjustment).toBeUndefined();
+    expect(result.render.props.notice).toBeUndefined();
+  });
+
+  it("uses an explicit input.model over the tier default", async () => {
+    await videoGenerateHandler({ prompt: "Sora", model: "openai/sora-2", durationSeconds: 12 }, CTX);
+    expect(mocks.videoTierModelId).not.toHaveBeenCalled();
+    const sentEvent = mocks.inngestSend.mock.calls[0]![0];
+    expect(sentEvent.data.model).toBe("openai/sora-2");
+    expect(sentEvent.data.durationSeconds).toBe(12);
   });
 
   it("passes aspectRatio to inngest when provided", async () => {

@@ -140,7 +140,7 @@ export const videoGenerateHandler: CapabilityHandler<typeof videoGenerate> = asy
   // the structured durationAdjustment and can phrase its own message.
   const notice = durationAdjustment
     ? `${model} supports ${durationAdjustment.supportedSeconds.join(", ")} second videos — ` +
-      `generating a ${durationAdjustment.effectiveSeconds}s video instead of the requested ` +
+      `generating ${durationAdjustment.effectiveSeconds}s instead of the requested ` +
       `${durationAdjustment.requestedSeconds}s.` +
       (durationAdjustment.alternatives.length > 0
         ? ` For a length closer to your request, re-run with: ${durationAdjustment.alternatives

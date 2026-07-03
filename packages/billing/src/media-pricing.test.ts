@@ -55,6 +55,12 @@ describe("videoProviderCostUsd", () => {
     expect(videoProviderCostUsd("google/veo-3.0-generate-001", 4)).toBeCloseTo(3.0, 10);
   });
 
+  it("prices Sora 2 per second, pro tier at its own rate", () => {
+    // sora-2 = $0.10/sec, sora-2-pro = $0.50/sec (longest-prefix match).
+    expect(videoProviderCostUsd("openai/sora-2", 12)).toBeCloseTo(1.2, 10);
+    expect(videoProviderCostUsd("openai/sora-2-pro", 12)).toBeCloseTo(6.0, 10);
+  });
+
   it("uses the model's default duration when seconds are omitted or invalid", () => {
     // defaultSeconds is 5 for veo-3.0-fast → 5 × $0.35.
     expect(videoProviderCostUsd("google/veo-3.0-fast-generate-001")).toBeCloseTo(1.75, 10);
