@@ -1,0 +1,284 @@
+/**
+ * Presentational chrome for the REPL's full-screen TUI mode: the header bar,
+ * the bounded/scrollable transcript viewport, and the live-stats panel dock.
+ *
+ * Kept as pure, focused, prop-driven components (same philosophy as
+ * components.tsx) so each renders and unit-tests in isolation under
+ * ink-testing-library without needing a real TTY, the agent loop, or any of
+ * interactive.tsx's stateful wiring — interactive.tsx composes these directly
+ * in its full-screen render branch, passing in its own state as props.
+ */
+import { Box, Text } from "ink";
+import React from "react";
+import { theme } from "../tui/theme.js";
+import { formatUsd } from "../agent/model-router.js";
+import { MessageView, humanizeTokens, type Message } from "./components.js";
+import type { DiffTheme } from "../tui/terminal-theme.js";
+import type { SessionMetrics } from "../agent/metrics.js";
+import type { TelemetryState } from "./telemetry.js";
+import { ENGINE_DEFAULT_MAX_STEPS, TRACKED_TOOLS } from "./telemetry.js";
+import {
+  estimateMessageRows,
+  computeVisibleWindow,
+  effectiveOffset,
+  maxOffsetFor,
+  type ScrollState,
+} from "./scroll.js";
+
+// Extra accent tones not already named in tui/theme.ts's palette, kept local
+// since they're used only by this dashboard chrome.
+const AMBER = "#FBBF24";
+const GREEN = "#34D399";
+
+/** `HH:MM:SS`, 24h, zero-padded — locale-independent so the header clock never
+ *  reflows width or switches to AM/PM depending on the user's system locale. */
+export function formatClock(epochMs: number): string {
+  const d = new Date(epochMs);
+  const pad = (n: number): string => n.toString().padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+/** Compact elapsed duration: `12s` under a minute, `1m04s` at/above. */
+export function formatElapsed(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  return `${m}m${(s % 60).toString().padStart(2, "0")}s`;
+}
+
+// ── Header bar ──────────────────────────────────────────────────────────────
+
+export function HeaderBar({
+  model,
+  branch,
+  sessionLabel,
+  sessionCostUsd,
+  now,
+}: {
+  model: string;
+  branch?: string;
+  /** Short label for what this session is working on (falls back to the cwd's folder name). */
+  sessionLabel: string;
+  sessionCostUsd: number;
+  now: number;
+}): React.ReactElement {
+  return (
+    <Box justifyContent="space-between" paddingX={1}>
+      <Box gap={1}>
+        <Text color={AMBER} bold>
+          {"◇ OXAGEN"}
+        </Text>
+        <Text dimColor>·</Text>
+        <Text wrap="truncate-end">{sessionLabel}</Text>
+        {branch ? (
+          <>
+            <Text dimColor>·</Text>
+            <Text color={theme.cyan}>{branch}</Text>
+          </>
+        ) : null}
+      </Box>
+      <Box gap={1}>
+        <Text color={theme.violet} bold>
+          {model.split("/").pop()}
+        </Text>
+        <Text dimColor>·</Text>
+        <Text dimColor>{formatClock(now)}</Text>
+        <Text dimColor>·</Text>
+        <Text color={GREEN}>{formatUsd(sessionCostUsd)}</Text>
+      </Box>
+    </Box>
+  );
+}
+
+// ── Transcript viewport ──────────────────────────────────────────────────────
+
+export function TranscriptViewport({
+  committedMessages,
+  liveMessage,
+  diffTheme,
+  width,
+  height,
+  scroll,
+}: {
+  committedMessages: readonly Message[];
+  liveMessage?: Message;
+  diffTheme?: DiffTheme;
+  width: number;
+  /** Total bounded height, in rows, INCLUDING the "N lines above" indicator slot. */
+  height: number;
+  scroll: ScrollState;
+}): React.ReactElement {
+  const all: readonly Message[] = liveMessage
+    ? [...committedMessages, liveMessage]
+    : committedMessages;
+
+  // One row is always reserved for the indicator slot (shown as an amber hint
+  // when scrolled up, an empty spacer at the bottom) so the message area's
+  // height never changes as the user scrolls — no 1-row reflow jump at the
+  // boundary between "scrolled up" and "at bottom".
+  const contentHeight = Math.max(1, height - 1);
+  const rowHeights = all.map((m) => estimateMessageRows(m, width));
+  const totalLines = rowHeights.reduce((a, b) => a + b, 0);
+  const ctx = { totalLines, viewportHeight: contentHeight };
+  const offset = effectiveOffset(scroll, ctx);
+  const atBottom = offset >= maxOffsetFor(ctx);
+  const { startIndex, endIndex, hiddenAbove } = computeVisibleWindow(rowHeights, offset, contentHeight);
+  const visible = all.slice(startIndex, endIndex);
+
+  return (
+    <Box flexDirection="column" height={height} overflow="hidden">
+      <Box>
+        {atBottom ? (
+          <Text> </Text>
+        ) : (
+          <>
+            <Text color={AMBER} bold>
+              {"▲ "}
+              {hiddenAbove}
+              {" lines above"}
+            </Text>
+            <Text dimColor>{" · End to jump"}</Text>
+          </>
+        )}
+      </Box>
+      <Box flexDirection="column" height={contentHeight} overflow="hidden">
+        {visible.map((msg, i) => (
+          <MessageView key={startIndex + i} msg={msg} diffTheme={diffTheme} />
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
+// ── Live-stats panel dock ─────────────────────────────────────────────────────
+
+/** One bordered, captioned panel — the dock's shared shape (mirrors agent-sidebar.tsx's private Panel). */
+function DockPanel({
+  title,
+  accent,
+  width,
+  children,
+}: {
+  title: string;
+  accent: string;
+  width: number;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <Box flexDirection="column" width={width} height={6} borderStyle="round" borderColor={theme.dim} paddingX={1}>
+      <Text color={accent} bold>
+        {title}
+      </Text>
+      <Box flexDirection="column">{children}</Box>
+    </Box>
+  );
+}
+
+/** Right-pads a label so the panel's value column lines up. */
+function label(text: string, width: number): string {
+  return text.padEnd(width);
+}
+
+const PHASE_TITLE: Record<string, string> = {
+  idle: "idle",
+  evaluate: "evaluate",
+  enhance: "enhance",
+  route: "route",
+  execute: "execute",
+  judge: "judge",
+  revise: "revise",
+  complete: "complete",
+};
+
+export function TelemetryDock({
+  telemetry,
+  metrics,
+  cacheHit,
+  isStreaming,
+  now,
+  cols,
+}: {
+  telemetry: TelemetryState;
+  metrics: SessionMetrics;
+  /** Cumulative prompt tokens served from cache (mirrors StatusLine's own cacheHit). */
+  cacheHit: number;
+  isStreaming: boolean;
+  now: number;
+  cols: number;
+}): React.ReactElement {
+  const gap = 1;
+  const panelWidth = Math.max(18, Math.floor((cols - gap * 3) / 4));
+
+  const { models, turn, tools } = telemetry;
+  const elapsedMs = turn.turnStartedAt != null ? now - turn.turnStartedAt : 0;
+  const elapsedSec = Math.max(1, elapsedMs / 1000);
+  const tokPerSec = isStreaming ? Math.round(metrics.turnTokensOut / elapsedSec) : 0;
+
+  const toolCell = (name: string): string => `${name} ${tools[name] ?? 0}`;
+
+  return (
+    <Box flexDirection="row" gap={gap}>
+      <DockPanel title="MODELS" accent={theme.violet} width={panelWidth}>
+        <Text wrap="truncate-end">
+          {label("planner", 8)}
+          <Text dimColor>{models.planner ?? "—"}</Text>
+        </Text>
+        <Text wrap="truncate-end">
+          {label("worker", 8)}
+          <Text dimColor>{models.worker ?? "—"}</Text>
+        </Text>
+        <Text wrap="truncate-end">
+          {label("judge", 8)}
+          <Text dimColor>{models.judge ?? "—"}</Text>
+        </Text>
+      </DockPanel>
+
+      <DockPanel title="TURN" accent={theme.cyan} width={panelWidth}>
+        <Text wrap="truncate-end">
+          {label("phase", 7)}
+          <Text color={theme.cyan}>{PHASE_TITLE[turn.phase] ?? turn.phase}</Text>
+        </Text>
+        <Text wrap="truncate-end">
+          {label("step", 7)}
+          <Text dimColor>
+            {turn.step}/{turn.maxStep ?? ENGINE_DEFAULT_MAX_STEPS}
+          </Text>
+        </Text>
+        <Text wrap="truncate-end">
+          {label("round", 7)}
+          <Text dimColor>
+            {turn.reviseRound} · {turn.turnStartedAt != null ? formatElapsed(elapsedMs) : "—"}
+          </Text>
+        </Text>
+      </DockPanel>
+
+      <DockPanel title="TOKENS" accent={AMBER} width={panelWidth}>
+        <Text wrap="truncate-end">
+          <Text color={theme.cyan}>{"↑"}{humanizeTokens(metrics.sessionTokensIn)}</Text>
+          {"  "}
+          <Text color={GREEN}>{"↓"}{humanizeTokens(metrics.sessionTokensOut)}</Text>
+        </Text>
+        <Text wrap="truncate-end">
+          <Text dimColor>cache </Text>
+          <Text color={GREEN}>{humanizeTokens(cacheHit)}hit</Text>
+        </Text>
+        <Text wrap="truncate-end">
+          <Text color={AMBER}>{formatUsd(metrics.sessionCostUsd)}</Text>
+          <Text dimColor> · {tokPerSec}tok/s</Text>
+        </Text>
+      </DockPanel>
+
+      <DockPanel title="TOOLS" accent={GREEN} width={panelWidth}>
+        <Text wrap="truncate-end" dimColor>
+          {toolCell(TRACKED_TOOLS[0])}  {toolCell(TRACKED_TOOLS[1])}
+        </Text>
+        <Text wrap="truncate-end" dimColor>
+          {toolCell(TRACKED_TOOLS[2])}  {toolCell(TRACKED_TOOLS[3])}
+        </Text>
+        <Text wrap="truncate-end" dimColor>
+          {toolCell(TRACKED_TOOLS[4])}  {toolCell(TRACKED_TOOLS[5])}
+        </Text>
+      </DockPanel>
+    </Box>
+  );
+}

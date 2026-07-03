@@ -1,23 +1,33 @@
 /**
  * Regression guard for the REPL's render *mode*.
  *
- * The REPL renders INLINE, in the terminal's normal screen buffer: `launchRepl`
- * must never switch to the alternate screen buffer (DECSET/DECRST 1049), on a
- * real TTY or off one. Inline rendering is what lets finished output commit to
- * the terminal's own scrollback (via Ink's `<Static>`) so the user can scroll
- * back with a trackpad/mouse/Shift-PageUp — the alternate buffer has no native
- * scrollback, which is exactly the bug this locks against re-introducing.
+ * On a real TTY, `launchRepl` now takes over the alternate screen buffer:
+ * ReplApp renders a full-screen dashboard (header/viewport/dock) with its OWN
+ * in-app scroll (see scroll.ts, fullscreen-chrome.tsx), so it no longer needs
+ * the terminal's native scrollback the way the classic inline mode does. Off a
+ * TTY (tests, pipes) `useTerminalSize` reports `fullscreen: false` and ReplApp
+ * falls back to the original inline render — finished output committed via
+ * Ink's `<Static>` into the terminal's own scrollback — so `launchRepl` must
+ * still never touch the alternate screen there.
  *
- * This test locks that contract deterministically by driving `process.stdout`'s
- * `isTTY` and capturing writes, rather than scraping Ink's frames (which couples
- * to Ink's global TTY/CI heuristics and flakes).
+ * This file locked the OPPOSITE contract before full-screen mode existed (see
+ * git history): inline rendering was the REPL's only mode, and the alternate
+ * buffer's lack of native scrollback was a bug this test locked against
+ * re-introducing. That trade is now made deliberately — full-screen mode
+ * replaces native scrollback with its own bounded, in-app-scrollable viewport
+ * — so the assertion flips for the TTY case; the off-TTY case is unchanged.
+ *
+ * This test locks the contract deterministically by driving `process.stdout`'s
+ * `isTTY` and capturing writes, rather than scraping Ink's frames (which
+ * couples to Ink's global TTY/CI heuristics and flakes). `ink.render` is
+ * mocked, so ReplApp's actual component tree never renders here — only
+ * launchRepl's own terminal setup/teardown is exercised.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 
 // DECSET/DECRST 1049 — switch to / restore from the alternate screen buffer.
-// Hardcoded here (rather than imported) because the REPL no longer has any
-// production code that needs these constants; the test exists solely to prove
-// launchRepl never emits them.
+// Hardcoded here (rather than imported) so this test proves the literal bytes
+// launchRepl writes, independent of alt-screen.ts's own implementation.
 const ENTER_ALT_SCREEN = "\x1b[?1049h";
 const LEAVE_ALT_SCREEN = "\x1b[?1049l";
 
@@ -58,9 +68,10 @@ describe("launchRepl render mode", () => {
     });
     renderSpy.mockClear();
     vi.restoreAllMocks();
+    process.removeAllListeners("exit");
   });
 
-  it("never enters the alternate screen on a real TTY", async () => {
+  it("enters the alternate screen on a real TTY, and leaves it again on exit", async () => {
     setTTY(true);
     const writes: string[] = [];
     vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
@@ -70,11 +81,11 @@ describe("launchRepl render mode", () => {
 
     await launchRepl({ session: TEST_SESSION });
 
-    expect(
-      writes.some(
-        (w) => w.includes(ENTER_ALT_SCREEN) || w.includes(LEAVE_ALT_SCREEN),
-      ),
-    ).toBe(false);
+    const joined = writes.join("");
+    expect(joined).toContain(ENTER_ALT_SCREEN);
+    expect(joined).toContain(LEAVE_ALT_SCREEN);
+    // Entered before it was left.
+    expect(joined.indexOf(ENTER_ALT_SCREEN)).toBeLessThan(joined.indexOf(LEAVE_ALT_SCREEN));
     expect(renderSpy).toHaveBeenCalledTimes(1);
   });
 

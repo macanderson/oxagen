@@ -19,7 +19,7 @@
  * Presentational pieces live in ./components; this file is the container.
  */
 import { Box, Static, Text, useApp, useInput } from "ink";
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef, useEffect, useReducer } from "react";
 import type { ModelMessage } from "ai";
 import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -98,6 +98,18 @@ import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
 import { isDebugEnabled } from "../lib/debug-log.js";
 import { Banner } from "../tui/banner.js";
 import { useTerminalSize } from "./use-terminal-size.js";
+import {
+  scrollReducer,
+  totalEstimatedRows,
+  INITIAL_SCROLL_STATE,
+  type ScrollState,
+  type ScrollAction,
+  type ScrollCtx,
+} from "./scroll.js";
+import { telemetryReducer, INITIAL_TELEMETRY_STATE } from "./telemetry.js";
+import { HeaderBar, TranscriptViewport, TelemetryDock, formatElapsed } from "./fullscreen-chrome.js";
+import { useMouseWheel } from "./use-mouse-wheel.js";
+import { enterFullscreen } from "./alt-screen.js";
 import {
   makeTurnController,
   makeStallDetector,
@@ -422,11 +434,57 @@ export function ReplApp({
   // into the transcript as a collapsed, expandable accordion (see
   // foldTerminalInline). This timer drives that time-based hand-off.
   const foldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Live terminal geometry. `fullscreen` is true only on a real TTY; it gates
-  // capping the live (non-Static) frame's height so Ink's redraw never exceeds
-  // the viewport — see "Transcript rendering" below. History scrolling itself is
-  // native terminal scrollback now, so there is no in-app scroll offset to track.
-  const { rows, fullscreen } = useTerminalSize();
+  // Live terminal geometry. `fullscreen` is true only on a real TTY: it gates
+  // BOTH the classic inline mode's live-frame height cap (see "Transcript
+  // rendering" below) AND the full-screen TUI layout (header/viewport/dock) —
+  // see the render branch at the bottom of this component. Off a TTY (tests,
+  // pipes) the REPL always takes the classic inline path, unchanged.
+  const { rows, cols, fullscreen } = useTerminalSize();
+
+  // ── Full-screen TUI state (used only when `fullscreen` is true) ────────────
+  // In-app scroll position over the transcript viewport — the alternate
+  // screen buffer has no scrollback of its own, so this replaces it. `ctx`
+  // (total content rows + viewport height) is mirrored into a ref rather than
+  // stored in state — same "latest value" pattern as modelRef/effortRef below
+  // — so the bound reducer always clamps against the CURRENT content size
+  // without needing an extra dispatch to "catch up" after new content streams
+  // in (see scroll.ts's effectiveOffset).
+  const scrollCtxRef = useRef<ScrollCtx>({ totalLines: 0, viewportHeight: 1 });
+  const boundScrollReducer = useCallback(
+    (state: ScrollState, action: ScrollAction) => scrollReducer(state, action, scrollCtxRef.current),
+    [],
+  );
+  const [scrollState, dispatchScroll] = useReducer(boundScrollReducer, INITIAL_SCROLL_STATE);
+  // Live per-turn/session telemetry for the MODELS/TURN/TOOLS dock panels,
+  // fed from the SAME onStage/onToolCall callbacks the transcript already
+  // renders from (see the runTurn call in handleSubmit below). Token/cost
+  // numbers come straight from `metrics`/`usage` above — this reducer only
+  // tracks what those don't already have (model slugs, phase/step/round, tool
+  // tallies).
+  const [telemetry, dispatchTelemetry] = useReducer(telemetryReducer, INITIAL_TELEMETRY_STATE);
+  // Whether the prompt bar is empty — gates Up/Down/Home/End between
+  // transcript-scroll (bar empty) and their normal recall-queue / panel-entry
+  // / cursor meaning (bar has text). Mirrored from PromptInput's onEmptyChange.
+  const inputEmptyRef = useRef(true);
+  // Mouse-wheel transcript scroll, default from OXAGEN_CLI_MOUSE (mirrors the
+  // OXAGEN_CLI_FUN convention below), toggleable at runtime with /mouse.
+  // Keyboard scroll always works regardless — this only gates the SGR mouse
+  // listener, which can fight a terminal emulator's native text-selection
+  // (click-drag) in some setups — see use-mouse-wheel.ts.
+  const [mouseOn, setMouseOn] = useState(process.env.OXAGEN_CLI_MOUSE !== "0");
+  const handleWheel = useCallback((direction: "up" | "down") => {
+    dispatchScroll({ type: direction === "up" ? "line-up" : "line-down" });
+  }, []);
+  useMouseWheel(handleWheel, fullscreen && mouseOn);
+  // 1Hz clock for the header's live time-of-day and the dock's live elapsed
+  // counters. Only ticks in full-screen mode — the classic inline layout has
+  // no use for it.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!fullscreen) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [fullscreen]);
   // Timestamp of the most-recent Escape press (for the double-Esc detection
   // window). Null means no previous Esc has been recorded (or the window was
   // explicitly cleared after a 'prompt-reset' fires).
@@ -481,6 +539,12 @@ export function ReplApp({
   const menuOpenRef = useRef(false);
   const handleMenuOpenChange = useCallback((open: boolean): void => {
     menuOpenRef.current = open;
+  }, []);
+  // Mirrors PromptInput's buffer-empty state into inputEmptyRef (declared
+  // above with the other full-screen state) so the synchronous key handler
+  // can gate Up/Down/Home/End without re-rendering on every keystroke.
+  const handleEmptyChange = useCallback((empty: boolean): void => {
+    inputEmptyRef.current = empty;
   }, []);
 
   // Double-press tracker for Ctrl-X delete: the first press on a row arms; a
@@ -896,6 +960,33 @@ export function ReplApp({
       return;
     }
 
+    // ── Full-screen transcript scroll (fullscreen only) ──
+    // PageUp/PageDown and Ctrl-U/Ctrl-D are never ambiguous with anything else
+    // this REPL binds, so they scroll regardless of focus zone or buffer
+    // content — bound here, before the focus-zone gate, for the same reason
+    // Ctrl-O is above. Up/Down/Home/End are handled further below, gated on
+    // the prompt bar being both focused AND empty (see inputEmptyRef) so they
+    // never steal a keystroke from queue-recall, panel-entry, or cursor
+    // movement while the bar has text.
+    if (fullscreen) {
+      if (key.pageUp) {
+        dispatchScroll({ type: "page-up" });
+        return;
+      }
+      if (key.pageDown) {
+        dispatchScroll({ type: "page-down" });
+        return;
+      }
+      if (key.ctrl && input === "u") {
+        dispatchScroll({ type: "half-up" });
+        return;
+      }
+      if (key.ctrl && input === "d") {
+        dispatchScroll({ type: "half-down" });
+        return;
+      }
+    }
+
     // ── Side-panel navigation (focus is on a panel row) ──
     // While focus is in the dock, PromptInput's `focused` is false so it ignores
     // every key — this handler is the sole owner of arrows / Ctrl-E / Ctrl-X,
@@ -926,17 +1017,41 @@ export function ReplApp({
       return;
     }
 
-    // Scrolling back through history is native terminal scrollback now: finished
-    // messages are committed via <Static> into the real screen buffer, so
-    // PageUp/PageDown (and mouse-wheel/trackpad scroll) are never intercepted
-    // here — they reach the terminal exactly like they would for `less` or any
-    // other normal-buffer program. The REPL does not bind them.
+    // History scrolling is native terminal scrollback in the classic INLINE
+    // mode (off a TTY, or the fallback for tests/pipes): finished messages
+    // commit via <Static> into the real screen buffer, so PageUp/PageDown/
+    // mouse-wheel reach the terminal exactly like they would for `less` or
+    // any other normal-buffer program — the REPL does not bind them there. In
+    // FULL-SCREEN mode the alternate screen buffer has no scrollback of its
+    // own, so the transcript viewport owns scrolling instead (Page/Ctrl-U/
+    // Ctrl-D above; Up/Down/Home/End below, while the bar is empty).
 
     // ── Prompt-bar arrows (focus is on the input) ──
     // Only when the slash menu is CLOSED — while it's open the arrows navigate
     // suggestions inside PromptInput. Up recalls the queued prompts for editing;
-    // Down moves focus into the Agent Team / Task Progress dock.
+    // Down moves focus into the Agent Team / Task Progress dock. In full-screen
+    // mode, when the bar is EMPTY, Up/Down/Home/End scroll the transcript
+    // instead — the instant there's text in the bar they fall back to the
+    // behavior below, unchanged.
     if (!menuOpenRef.current) {
+      if (fullscreen && inputEmptyRef.current) {
+        if (key.upArrow) {
+          dispatchScroll({ type: "line-up" });
+          return;
+        }
+        if (key.downArrow) {
+          dispatchScroll({ type: "line-down" });
+          return;
+        }
+        if (key.home) {
+          dispatchScroll({ type: "home" });
+          return;
+        }
+        if (key.end) {
+          dispatchScroll({ type: "end" });
+          return;
+        }
+      }
       if (key.upArrow) {
         recallQueue();
         return;
@@ -1085,6 +1200,16 @@ export function ReplApp({
           next === "on"
             ? "Agent panel pinned open (Agent Team · Task Progress). /panel to hide."
             : "Agent panel hidden. /panel to show it again.",
+        );
+        return;
+      }
+      if (text === "/mouse") {
+        const next = !mouseOn;
+        setMouseOn(next);
+        pushAssistant(
+          next
+            ? "Mouse-wheel scroll ON — the transcript viewport (full-screen mode) now responds to wheel/trackpad scroll. /mouse to turn it off if it interferes with your terminal's text selection."
+            : "Mouse-wheel scroll OFF. Keyboard scroll (PageUp/PageDown, Ctrl-U/Ctrl-D, Up/Down/Home/End on an empty bar) always works regardless. /mouse to turn it back on.",
         );
         return;
       }
@@ -1457,6 +1582,7 @@ export function ReplApp({
       streamCharsRef.current = 0;
       // Reset the per-turn metrics totals; seed the progress clock.
       metricsBusRef.current.startTurn();
+      dispatchTelemetry({ type: "turn-start", at: Date.now() });
       lastProgressRef.current = Date.now();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -1638,6 +1764,9 @@ export function ReplApp({
             hudHandle?.update({ detail: stage.detail ?? stage.label });
             // Advance the Task Progress checklist to this stage.
             recordStageTask(stage.kind, stage.detail ?? undefined);
+            // Full-screen TURN/MODELS dock — phase, revise round, and any
+            // model slug this stage reveals (see telemetry.ts).
+            dispatchTelemetry({ type: "stage", stage });
             closeStreamingBlocks();
             turn.push({
               role: "stage",
@@ -1651,6 +1780,9 @@ export function ReplApp({
             if (turnController.signal.aborted) return;
             noteProgress();
             void debugLog("turn", "turn.tool-call", { name, input });
+            // Full-screen TURN/TOOLS dock — step count (a live proxy for the
+            // engine's own step counter) and per-tool call tallies.
+            dispatchTelemetry({ type: "tool-call", name });
             // A subagent dispatch joins the Agent Team panel for the rest of the
             // turn (marked done in the finally, since dispatch returns no result).
             if (isSubagentDispatch(name)) {
@@ -1866,6 +1998,7 @@ export function ReplApp({
           // Final flush so the status line settles on the correct final totals
           // and stays visible (Bug 2), even if the last few events were throttled.
           metricsBusRef.current.flush();
+          dispatchTelemetry({ type: "turn-end" });
           lastProgressRef.current = null;
           abortRef.current = null;
           streamingRef.current = false;
@@ -1998,6 +2131,143 @@ export function ReplApp({
   const liveMessage = lastMessage?.streaming ? lastMessage : undefined;
   const committedMessages = liveMessage ? messages.slice(0, -1) : messages;
 
+  // ── Full-screen TUI render (real TTY only) ──────────────────────────────
+  // A fundamentally different rendering model from inline mode below: the
+  // alternate screen buffer has no scrollback, so `<Static>` (print once,
+  // never touch again) would silently lose any message that scrolls off the
+  // top — there'd be nowhere to scroll BACK to. Every message instead stays
+  // in normal React state and TranscriptViewport re-slices it each render
+  // according to the live scroll offset, which is also what makes in-app
+  // scroll possible at all. See scroll.ts / fullscreen-chrome.tsx.
+  if (fullscreen) {
+    // Reserve room for the sidebar only when it COULD be showing (mirrors
+    // AgentSidebar's own MIN_TERMINAL_COLS gate) — an estimate (its exact
+    // PANEL_WIDTH isn't exported), generous enough that the transcript never
+    // visually collides with a docked sidebar.
+    const viewportWidth = Math.max(20, cols - (cols >= SIDEBAR_MIN_COLS ? 36 : 0));
+    // Fixed chrome: header(1) + status row(1) + input(3) + dock(6) + a single
+    // trailing margin row(1) so the dock is never flush to the bottom edge.
+    // Rare conditional banners (queued prompts, the reset-confirm prompt, the
+    // HUD, a drilled-in agent log) aren't budgeted for individually — Yoga
+    // shrinks the transcript row to make room, and TranscriptViewport's own
+    // `overflow: hidden` is the safety net, so an occasional banner can
+    // clip a row or two off the bottom of the transcript rather than corrupt
+    // the frame.
+    const CHROME_ROWS = 12;
+    const transcriptOuterHeight = Math.max(4, rows - CHROME_ROWS);
+    const transcriptContentHeight = Math.max(1, transcriptOuterHeight - 1);
+    const allMessages = liveMessage ? [...committedMessages, liveMessage] : committedMessages;
+    // Written during render (same "latest value" convention as modelRef.current
+    // = model elsewhere in this file) so the NEXT dispatch — from the very next
+    // keystroke or wheel tick — clamps against this frame's content size.
+    scrollCtxRef.current = {
+      totalLines: totalEstimatedRows(allMessages, viewportWidth),
+      viewportHeight: transcriptContentHeight,
+    };
+
+    return (
+      <Box flexDirection="column" height={rows} width={cols} overflow="hidden">
+        <HeaderBar
+          model={model}
+          branch={branchRef.current}
+          sessionLabel={cwd.split("/").pop() || "session"}
+          sessionCostUsd={metrics.sessionCostUsd}
+          now={now}
+        />
+
+        <Box flexDirection="row" flexGrow={1} overflow="hidden">
+          <Box flexDirection="column" flexGrow={1} minWidth={0}>
+            {terminalRun && <TerminalPanel run={terminalRun} />}
+            <TranscriptViewport
+              committedMessages={committedMessages}
+              liveMessage={liveMessage}
+              diffTheme={diffThemeRef.current}
+              width={viewportWidth}
+              height={transcriptOuterHeight}
+              scroll={scrollState}
+            />
+          </Box>
+          <AgentSidebar
+            mode={panelMode}
+            focus={focus.zone === "input" ? null : focus}
+            active={focus.zone !== "input"}
+            maxRows={Math.max(6, transcriptOuterHeight)}
+          />
+        </Box>
+
+        {queued.length > 0 && (
+          <Box flexDirection="column" paddingX={1}>
+            {queued.map((q, i) => (
+              <Box key={i}>
+                <Text color="#FBBF24">{"⧗ queued: "}</Text>
+                <Text dimColor wrap="truncate">
+                  {q.text}
+                </Text>
+              </Box>
+            ))}
+          </Box>
+        )}
+
+        {resetPending && (
+          <Box paddingX={1} flexDirection="column">
+            <Text color={theme.cyan}>Are you sure you want to reset the conversation?</Text>
+            <Text dimColor>
+              Type <Text bold>y</Text> or <Text bold>yes</Text> to confirm, or anything else
+              (or Esc) to cancel.
+            </Text>
+          </Box>
+        )}
+
+        {hudVisible && <HudPanel />}
+        {focusedAgentId && <AgentFocusView agentId={focusedAgentId} />}
+        {editingTaskId && (
+          <Box paddingX={1}>
+            <Text color={theme.violet}>✎ Editing task — Enter saves the title, Esc cancels.</Text>
+          </Box>
+        )}
+
+        {/* Status row (1 row): the invaders duel doubles as the signature
+            animation, plus a compact elapsed readout while a turn streams. */}
+        <Box paddingX={1}>
+          {process.env.OXAGEN_CLI_FUN !== "0" ? <SpaceInvaders active={isStreaming} /> : null}
+          {isStreaming && turnStartedAt !== null ? (
+            <Text color="#FBBF24">
+              {"  thinking… "}
+              {formatElapsed(now - turnStartedAt)}
+            </Text>
+          ) : null}
+        </Box>
+
+        <Box flexShrink={0} flexDirection="column">
+          {approval ? (
+            <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
+          ) : (
+            <PromptInput
+              onSubmit={handleUserSubmit}
+              busy={isStreaming}
+              catalog={catalogRef.current ?? []}
+              focused={focus.zone === "input"}
+              inject={inject}
+              onMenuOpenChange={handleMenuOpenChange}
+              onEmptyChange={handleEmptyChange}
+            />
+          )}
+        </Box>
+
+        <Box marginBottom={1} flexShrink={0}>
+          <TelemetryDock
+            telemetry={telemetry}
+            metrics={metrics}
+            cacheHit={usage.cacheHit}
+            isStreaming={isStreaming}
+            now={now}
+            cols={cols}
+          />
+        </Box>
+      </Box>
+    );
+  }
+
   return (
     <>
       {/* Finished transcript — printed once each, permanently, into the
@@ -2009,21 +2279,14 @@ export function ReplApp({
 
       {/* Live frame — everything that still changes from tick to tick: the
           in-progress message, terminal panel, side panels, prompt bar, and
-          status line. Kept to its NATURAL (small) height rather than forced
-          full-screen, so a normal turn never pushes a full-terminal-tall frame
-          through Ink's redraw. `maxHeight` + `overflow="hidden"` is only a
-          safety cap for the pathological case (a single streamed block taller
-          than the terminal) — without it an oversized frame is what garbles
-          Ink's cursor-based redraw; `justifyContent="flex-end"` keeps the
-          prompt bar/status visible (not the overflow) if that cap ever bites.
-          Applied only on a real TTY — off one (tests / piped output) the frame
-          stays unbounded so the component renders trivially under
-          ink-testing-library. */}
-      <Box
-        flexDirection="column"
-        justifyContent="flex-end"
-        {...(fullscreen ? { maxHeight: rows, overflow: "hidden" } : {})}
-      >
+          status line. This is the CLASSIC INLINE render — reached only when
+          `fullscreen` is false (the full-screen branch above returns before
+          ever getting here) — so it's kept to its NATURAL (small) height with
+          no hard cap: the terminal's own scrollback absorbs anything tall,
+          exactly as it would for `less` or any other normal-buffer program.
+          `justifyContent="flex-end"` keeps the prompt bar/status pinned to the
+          bottom of this live region as it grows. */}
+      <Box flexDirection="column" justifyContent="flex-end">
         {messages.length === 0 && (
           <Box paddingX={1} flexDirection="column">
             <Banner version={pkg.version} />
@@ -2180,12 +2443,30 @@ export function ReplApp({
 
 export async function launchRepl(options: ReplOptions): Promise<void> {
   const { render: renderInk } = await import("ink");
-  // Deliberately no alternate-screen takeover here: the REPL renders into the
-  // terminal's NORMAL screen buffer so finished output commits to the user's
-  // real scrollback (via <Static> in ReplApp) and native trackpad/mouse/
-  // Shift-PageUp scroll-up works. The alternate buffer has no scrollback of its
-  // own, which is exactly the bug this avoids re-introducing — see
-  // interactive.launch.test.tsx for the regression guard.
-  const { waitUntilExit } = renderInk(<ReplApp options={options} />);
-  await waitUntilExit();
+  // On a real TTY, take over the alternate screen buffer: ReplApp renders a
+  // full-screen dashboard (header/viewport/dock — see the `fullscreen` branch
+  // of its render) with its OWN in-app scroll (scroll.ts), so it no longer
+  // needs the terminal's native scrollback the way the classic inline mode
+  // does. Off a TTY (tests, pipes) `useTerminalSize` reports `fullscreen:
+  // false` and ReplApp falls back to the original inline render (finished
+  // output committed via `<Static>`) — this branch is skipped entirely there,
+  // so piped/test output is completely unaffected. `leave()` is called on
+  // every exit path, including an uncaught error, so a crash never strands
+  // the user's terminal in the alternate buffer — see interactive.launch.test.tsx
+  // for the regression guard (now locking the OPPOSITE contract from before:
+  // full-screen mode enters/leaves the alternate screen on a TTY, and still
+  // never does off one).
+  const isTTY = Boolean(process.stdout.isTTY);
+  const fullscreenHandle = isTTY ? enterFullscreen(process.stdout) : null;
+  if (fullscreenHandle) {
+    // Best-effort net for abnormal termination (SIGINT/SIGTERM, an uncaught
+    // exception) — the normal path's `finally` below already covers a clean exit.
+    process.once("exit", fullscreenHandle.leave);
+  }
+  try {
+    const { waitUntilExit } = renderInk(<ReplApp options={options} />);
+    await waitUntilExit();
+  } finally {
+    fullscreenHandle?.leave();
+  }
 }
