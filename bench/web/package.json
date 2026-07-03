@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:next": "next dev --port 3200",
-    "build": "next build",
+    "build": "NODE_ENV=production next build",
     "start": "next start --port 3200",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
