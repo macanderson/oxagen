@@ -14,6 +14,7 @@ import {
   formatInitSummary,
   runInit,
   type InitResult,
+  type InitProgressEvent,
 } from "../init.js";
 
 // No AI credential in this hermetic unit test — domain inference must skip
@@ -286,5 +287,127 @@ describe("runInit", () => {
     expect(result.graph.indexed).toBe(0);
     expect(result.graph.skipped).toBe(0);
     expect(result.domainsSkipped).toBe(true); // no AI credential mocked in
+  });
+
+  it("reports indexed as a FILE count in the in-memory fallback, not a node count", async () => {
+    // Regression test: the fallback branch used to set `indexed =
+    // graph.nodes.size`, which counts files AND symbols together. With an
+    // empty tmpDir (the test above) files === symbols === 0, so that bug was
+    // invisible — write real files so `indexed` (files) and node count
+    // (files + symbols) actually diverge, and formatInitSummary's "Files
+    // read: N (parsed M)" can never show M > N again.
+    writeFileSync(
+      join(tmpDir, "a.ts"),
+      "export function foo() { return 1; }\nexport function bar() { return 2; }\n",
+      "utf8",
+    );
+    writeFileSync(join(tmpDir, "b.ts"), 'import { foo } from "./a";\n', "utf8");
+    const userPath = join(tmpDir, "user-settings.json");
+
+    const result = await runInit({ cwd: tmpDir, userSettingsPath: userPath, noLink: true });
+
+    expect(result.graph.files).toBe(2);
+    expect(result.graph.totalSymbols).toBe(2); // foo, bar
+    expect(result.graph.indexed).toBe(2); // files parsed — NOT 4 (files + symbols)
+    expect(result.graph.skipped).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runInit — onProgress (see tui/init-animation.tsx, the real consumer)
+// ---------------------------------------------------------------------------
+
+describe("runInit onProgress", () => {
+  it("emits real phase-boundary events in order, with no AI credential and no link", async () => {
+    const userPath = join(tmpDir, "user-settings.json");
+    const events: InitProgressEvent[] = [];
+
+    await runInit({
+      cwd: tmpDir,
+      userSettingsPath: userPath,
+      noLink: true,
+      onProgress: (e) => {
+        events.push(e);
+      },
+    });
+
+    // tmpDir is empty, so no per-file "graph"/"progress" ticks fire (the
+    // build loop never executes) — this hermetic run's phase sequence is
+    // exactly settings -> graph -> domains, with no link boundary at all.
+    expect(events.map((e) => `${e.phase}:${e.status}`)).toEqual([
+      "settings:start",
+      "settings:done",
+      "graph:start",
+      "graph:done",
+      "domains:skipped",
+    ]);
+  });
+
+  it("carries real stats on the graph:done event", async () => {
+    const userPath = join(tmpDir, "user-settings.json");
+    const events: InitProgressEvent[] = [];
+
+    await runInit({
+      cwd: tmpDir,
+      userSettingsPath: userPath,
+      noLink: true,
+      onProgress: (e) => {
+        events.push(e);
+      },
+    });
+
+    const graphDone = events.find(
+      (e): e is Extract<InitProgressEvent, { phase: "graph"; status: "done" }> =>
+        e.phase === "graph" && e.status === "done",
+    );
+    expect(graphDone?.stats.files).toBe(0); // empty tmpDir
+    expect(graphDone?.stats.indexed).toBe(0);
+  });
+
+  it("never emits a link event when noLink is set", async () => {
+    const userPath = join(tmpDir, "user-settings.json");
+    const events: InitProgressEvent[] = [];
+
+    await runInit({
+      cwd: tmpDir,
+      userSettingsPath: userPath,
+      noLink: true,
+      onProgress: (e) => {
+        events.push(e);
+      },
+    });
+
+    expect(events.some((e) => e.phase === "link")).toBe(false);
+  });
+
+  it("awaits an async onProgress callback between phases", async () => {
+    const userPath = join(tmpDir, "user-settings.json");
+    const seen: string[] = [];
+
+    await runInit({
+      cwd: tmpDir,
+      userSettingsPath: userPath,
+      noLink: true,
+      onProgress: async (e) => {
+        // A real await gap — if runInit forgot to await onProgress, phases
+        // could interleave with this resolving late instead of in order.
+        await new Promise((r) => setTimeout(r, 1));
+        seen.push(`${e.phase}:${e.status}`);
+      },
+    });
+
+    expect(seen).toEqual([
+      "settings:start",
+      "settings:done",
+      "graph:start",
+      "graph:done",
+      "domains:skipped",
+    ]);
+  });
+
+  it("behaves identically when onProgress is omitted", async () => {
+    const userPath = join(tmpDir, "user-settings.json");
+    const result = await runInit({ cwd: tmpDir, userSettingsPath: userPath, noLink: true });
+    expect(result.domainsSkipped).toBe(true);
   });
 });

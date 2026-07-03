@@ -1280,11 +1280,25 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_BEST_OF_N_PIPELINE: {
+    group: "CLI",
+    description:
+      "Default for `oxagen solve`'s --pipeline flag: when '1', every best-of-N candidate runs " +
+      "the full evaluate/enhance/route/execute/judge/revise pipeline instead of the bare engine " +
+      "loop, unless the flag itself is passed explicitly (which always wins). Lets a caller " +
+      "(e.g. the bench adapter) opt every invocation in without passing --pipeline each time.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_CLI_FUN: {
     group: "CLI",
     description:
-      "When '0', disables the whimsical cat-and-mouse chase animation on the REPL status rail. " +
-      "Any other value (or unset) keeps the animation on while a turn is running.",
+      "When '0', disables whimsical CLI animations: the REPL status rail's cat-and-mouse " +
+      "chase, and `oxagen init`'s space-invaders/OXAGEN-reveal loading animation (which " +
+      "falls back to plain progress lines instead). Any other value (or unset) keeps them on.",
     secret: false,
     clientExposed: false,
     services: [],
