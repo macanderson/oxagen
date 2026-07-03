@@ -1291,6 +1291,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_CLI_MOUSE: {
+    group: "CLI",
+    description:
+      "When '0', the full-screen REPL starts with mouse-wheel transcript scrolling disabled " +
+      "(terminal-native text selection stays available). Any other value (or unset) enables " +
+      "mouse capture on launch; the /mouse command toggles it at runtime either way.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_DISABLE_MEMORY: {
     group: "CLI",
     description:
