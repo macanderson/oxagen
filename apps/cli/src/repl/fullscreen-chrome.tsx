@@ -26,6 +26,7 @@ import {
   maxOffsetFor,
   type ScrollState,
 } from "./scroll.js";
+import { DOCK_PANEL_HEIGHT } from "./mouse-select.js";
 
 // Extra accent tones not already named in tui/theme.ts's palette, kept local
 // since they're used only by this dashboard chrome.
@@ -167,7 +168,14 @@ function DockPanel({
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <Box flexDirection="column" width={width} height={6} borderStyle="round" borderColor={theme.dim} paddingX={1}>
+    <Box
+      flexDirection="column"
+      width={width}
+      height={DOCK_PANEL_HEIGHT}
+      borderStyle="round"
+      borderColor={theme.dim}
+      paddingX={1}
+    >
       <Text color={accent} bold>
         {title}
       </Text>

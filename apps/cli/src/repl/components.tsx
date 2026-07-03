@@ -41,6 +41,19 @@ import {
   type PasteSubmission,
   type PastedImageAttachment,
 } from "./paste.js";
+import { useMouseSelect } from "./use-mouse-select.js";
+import { isStrayMouseReportRemnant } from "./alt-screen.js";
+import {
+  selectionRange,
+  hasSelection,
+  pressAt,
+  dragTo,
+  deleteSelectionFrom,
+  replaceSelectionWith,
+  textStartColumn,
+  charOffsetForColumn,
+  type Selection,
+} from "./mouse-select.js";
 
 export interface Message {
   role: "user" | "assistant" | "reasoning" | "tool" | "stage" | "diff" | "terminal";
@@ -151,6 +164,8 @@ export function PromptInput({
   onSubmit,
   busy,
   borderColor,
+  mouseRow,
+  mouseEnabled = false,
   catalog = [],
   focused = true,
   inject,
@@ -180,6 +195,21 @@ export function PromptInput({
    * still take precedence over this when set.
    */
   borderColor?: string;
+  /**
+   * 1-based terminal row the input's content line currently renders at (see
+   * mouse-select.ts's `inputContentRow`) — lets a click/drag be mapped to a
+   * character offset. `undefined` disables mouse text-selection entirely
+   * (classic/non-fullscreen mode, or off a real TTY) while keyboard editing
+   * stays fully unaffected either way.
+   */
+  mouseRow?: number;
+  /**
+   * Whether SGR mouse tracking is currently armed (mirrors the same
+   * `fullscreen && mouseOn` condition interactive.tsx already gates
+   * useMouseWheel with). Click/drag is a no-op while false — the existing
+   * `/mouse` toggle disables this the same way it disables wheel scroll.
+   */
+  mouseEnabled?: boolean;
   /** Slash-command catalog powering the live typeahead menu (empty = no menu). */
   catalog?: ReadonlyArray<SlashCatalogEntry>;
   /**
@@ -221,6 +251,12 @@ export function PromptInput({
   // always at the end — so a prompt can be edited in the middle, not just
   // appended to.
   const [cursorPos, setCursorPos] = useState(0);
+  // Mouse-drag text selection (Claude-Code-style): null = no selection (a
+  // plain cursor, the common case). `cursorPos` above doubles as the
+  // selection's visible caret while one is active — see mouse-select.ts's
+  // anchor/head model. Backspace/Delete/typing consume it; Left/Right/Home/
+  // End collapse it back to a plain cursor, same as any text editor.
+  const [selection, setSelection] = useState<Selection | null>(null);
   // Highlighted suggestion + whether the user dismissed the menu (Esc). Both
   // reset to their defaults whenever the buffer changes via typing.
   const [selected, setSelected] = useState(0);
@@ -277,6 +313,7 @@ export function PromptInput({
   const resetInput = (): void => {
     setValue("");
     setCursorPos(0);
+    setSelection(null);
     setSelected(0);
     setDismissed(false);
     // Fresh counters for the next prompt — token numbering restarts at 1.
@@ -285,8 +322,21 @@ export function PromptInput({
 
   /** Splice `text` in at the cursor and advance the cursor past it — the one
    *  path every insert (typed chars, a paste, an explicit newline) goes
-   *  through, so the cursor never drifts out of sync with the buffer. */
+   *  through, so the cursor never drifts out of sync with the buffer. An
+   *  active selection is replaced wholesale instead (typing/pasting over a
+   *  selection replaces it — the same rule every text editor follows), which
+   *  covers typed characters, a text paste, and an image-paste token alike
+   *  since they all funnel through here. */
   const insertAtCursor = (text: string): void => {
+    if (hasSelection(selection)) {
+      const { text: nextValue, cursorPos: nextCursor } = replaceSelectionWith(value, selection, text);
+      setValue(nextValue);
+      setCursorPos(nextCursor);
+      setSelection(null);
+      setSelected(0);
+      setDismissed(false);
+      return;
+    }
     setValue((v) => v.slice(0, cursorPos) + text + v.slice(cursorPos));
     setCursorPos((p) => p + text.length);
     setSelected(0);
@@ -298,6 +348,14 @@ export function PromptInput({
     // parent's panel handler drives arrows / Ctrl-E / Ctrl-X. Ignoring here
     // (rather than in the parent) keeps a single, race-free owner per keystroke.
     if (!focused) return;
+    // Ink has no built-in concept of SGR mouse reports (wheel or the click/
+    // drag/release reports useMouseSelect above also listens for) — it falls
+    // through EVERY one of them to a bare `input` string with every `key.*`
+    // flag false, which would otherwise hit the generic insert-text branch
+    // at the bottom of this handler and type garbage into the buffer on
+    // every mouse wheel tick / click / drag. See alt-screen.ts's
+    // isStrayMouseReportRemnant for why this can't be fixed upstream.
+    if (isStrayMouseReportRemnant(input)) return;
 
     // ── Typeahead navigation (only while the menu is open) ──
     if (menuOpen) {
@@ -380,19 +438,37 @@ export function PromptInput({
     }
     // Cursor movement — active whenever the menu isn't consuming the key
     // (i.e. always, since the menuOpen block above never claims arrows).
+    // Left/Right on an active selection COLLAPSE to that edge (standard
+    // editor convention: the first arrow press after a selection lands the
+    // cursor at its start/end, it doesn't ALSO step one further) rather than
+    // moving relative to wherever the drag happened to leave `cursorPos`.
+    // Home/End are absolute moves regardless of a selection, so no such
+    // edge-collapse applies to them — just clear it same as any other move.
     if (key.leftArrow) {
-      setCursorPos((p) => Math.max(0, p - 1));
+      if (hasSelection(selection)) {
+        setCursorPos(selectionRange(selection).start);
+        setSelection(null);
+      } else {
+        setCursorPos((p) => Math.max(0, p - 1));
+      }
       return;
     }
     if (key.rightArrow) {
-      setCursorPos((p) => Math.min(value.length, p + 1));
+      if (hasSelection(selection)) {
+        setCursorPos(selectionRange(selection).end);
+        setSelection(null);
+      } else {
+        setCursorPos((p) => Math.min(value.length, p + 1));
+      }
       return;
     }
     if (key.home) {
+      setSelection(null);
       setCursorPos(0);
       return;
     }
     if (key.end) {
+      setSelection(null);
       setCursorPos(value.length);
       return;
     }
@@ -406,6 +482,18 @@ export function PromptInput({
       return;
     }
     if (key.backspace) {
+      // An active selection is a bulk delete target — Backspace removes the
+      // WHOLE selected range in one keystroke, same as Delete below, rather
+      // than falling through to the single-char/token logic.
+      if (hasSelection(selection)) {
+        const { text: nextValue, cursorPos: nextCursor } = deleteSelectionFrom(value, selection);
+        setValue(nextValue);
+        setCursorPos(nextCursor);
+        setSelection(null);
+        setSelected(0);
+        setDismissed(false);
+        return;
+      }
       if (cursorPos > 0) {
         // A paste placeholder is an atomic unit: backspacing right after one
         // deletes the WHOLE token (and its registry entry) in one keystroke,
@@ -421,6 +509,16 @@ export function PromptInput({
       return;
     }
     if (key.delete) {
+      // Same bulk-delete-the-selection rule as Backspace above.
+      if (hasSelection(selection)) {
+        const { text: nextValue, cursorPos: nextCursor } = deleteSelectionFrom(value, selection);
+        setValue(nextValue);
+        setCursorPos(nextCursor);
+        setSelection(null);
+        setSelected(0);
+        setDismissed(false);
+        return;
+      }
       // Symmetric with backspace: forward-delete removes a whole token when
       // the cursor sits at its start.
       const span = tokenStartingAt(value, cursorPos);
@@ -470,14 +568,60 @@ export function PromptInput({
   const shown = terminalMode ? value.replace(/^!/, "") : value;
   // cursorPos is an offset into `value`; shift it left by one in terminal mode
   // to stay valid against `shown`, which is one character shorter (the
-  // stripped leading "!").
+  // stripped leading "!"). The mouse handlers below apply the SAME shift in
+  // the opposite direction when mapping a click back into `value`.
   const shownCursor = Math.max(0, cursorPos - (terminalMode ? 1 : 0));
+  const terminalShift = terminalMode ? 1 : 0;
+
+  // Screen column the buffer's first character renders at — see
+  // mouse-select.ts's textStartColumn. Single-line mapping only (see that
+  // module's doc comment for the wrapped/multi-line degrade).
+  const textStartCol = textStartColumn(glyph.length);
+  /** A clicked/dragged screen column -> a clamped offset into `value`. */
+  const offsetForColumn = (col: number): number => {
+    const shownOffset = charOffsetForColumn(col, textStartCol, shown.length);
+    return Math.max(0, Math.min(value.length, shownOffset + terminalShift));
+  };
+  useMouseSelect(
+    {
+      onPress: (col) => {
+        const offset = offsetForColumn(col);
+        setCursorPos(offset);
+        setSelection(pressAt(offset));
+      },
+      onDrag: (col) => {
+        const offset = offsetForColumn(col);
+        setCursorPos(offset);
+        setSelection((sel) => (sel ? dragTo(sel, offset) : pressAt(offset)));
+      },
+      onRelease: () => {
+        // A press with no drag collapses to a zero-width selection — clear it
+        // outright so it renders/acts as a plain cursor, not a degenerate
+        // "selection" of nothing.
+        setSelection((sel) => (sel && hasSelection(sel) ? sel : null));
+      },
+    },
+    mouseRow,
+    mouseEnabled,
+  );
+
   const beforeCursor = shown.slice(0, shownCursor);
   // The character the cursor sits on (highlighted in place); empty when the
   // cursor is at the end of the buffer — the common case, and the only one
   // the pre-cursor-tracking bar ever had, so it keeps the same solid block.
   const atCursor = shown.slice(shownCursor, shownCursor + 1);
   const afterCursor = shown.slice(shownCursor + 1);
+  // Selection highlight range, in `shown`-relative offsets (same terminal-
+  // mode shift as shownCursor above) — computed only when a real (non-
+  // zero-width) selection exists; the cursor-block rendering above stays the
+  // fallback otherwise, unchanged from before mouse selection existed.
+  const activeSelection = hasSelection(selection) ? selection : null;
+  const selRange = activeSelection ? selectionRange(activeSelection) : null;
+  const beforeSelection = selRange ? shown.slice(0, Math.max(0, selRange.start - terminalShift)) : "";
+  const selectedText = selRange
+    ? shown.slice(Math.max(0, selRange.start - terminalShift), Math.max(0, selRange.end - terminalShift))
+    : "";
+  const afterSelection = selRange ? shown.slice(Math.max(0, selRange.end - terminalShift)) : "";
 
   return (
     <Box flexDirection="column">
@@ -497,24 +641,38 @@ export function PromptInput({
           {glyph}
         </Text>
         <Text dimColor={!focused}>
-          {beforeCursor}
-          {/* The cursor shows only while the input holds focus; when the panel
-              has focus the bar dims and drops it so the highlight clearly
-              lives in the side panel instead. Mid-string it inverts the
-              character it sits on; at the end of the buffer (the common case)
-              there's no character to invert, so it falls back to the same
-              solid block the bar always drew. In terminal mode it takes the
-              shell-red accent so the whole bar reads as a live terminal. */}
-          {focused ? (
-            atCursor ? (
-              <Text inverse>{atCursor}</Text>
-            ) : (
-              <Text color={accent}>█</Text>
-            )
+          {activeSelection ? (
+            // A drag-made selection (Claude-Code-style): render the dragged
+            // range inverse, same visual language as the single-char cursor
+            // block below — no separate caret glyph inside it, matching how
+            // a highlighted range reads in any text editor.
+            <>
+              {beforeSelection}
+              <Text inverse>{selectedText}</Text>
+              {afterSelection}
+            </>
           ) : (
-            atCursor
+            <>
+              {beforeCursor}
+              {/* The cursor shows only while the input holds focus; when the panel
+                  has focus the bar dims and drops it so the highlight clearly
+                  lives in the side panel instead. Mid-string it inverts the
+                  character it sits on; at the end of the buffer (the common case)
+                  there's no character to invert, so it falls back to the same
+                  solid block the bar always drew. In terminal mode it takes the
+                  shell-red accent so the whole bar reads as a live terminal. */}
+              {focused ? (
+                atCursor ? (
+                  <Text inverse>{atCursor}</Text>
+                ) : (
+                  <Text color={accent}>█</Text>
+                )
+              ) : (
+                atCursor
+              )}
+              {afterCursor}
+            </>
           )}
-          {afterCursor}
         </Text>
       </Box>
       {terminalMode && (

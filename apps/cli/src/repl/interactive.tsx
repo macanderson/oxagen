@@ -106,6 +106,7 @@ import {
 } from "./scroll.js";
 import { telemetryReducer, INITIAL_TELEMETRY_STATE } from "./telemetry.js";
 import { borderPhaseFor, borderColorFor, RAINBOW_FLASH_INTERVAL_MS } from "./border-phase.js";
+import { inputContentRow } from "./mouse-select.js";
 import { HeaderBar, TranscriptViewport, TelemetryDock, formatElapsed } from "./fullscreen-chrome.js";
 import { useMouseWheel } from "./use-mouse-wheel.js";
 import { enterFullscreen } from "./alt-screen.js";
@@ -470,6 +471,14 @@ export function ReplApp({
     dispatchScroll({ type: direction === "up" ? "line-up" : "line-down" });
   }, []);
   useMouseWheel(handleWheel, fullscreen && mouseOn);
+  // Mouse click/drag text selection in the prompt input (see
+  // components.tsx's PromptInput + use-mouse-select.ts): the SAME
+  // `fullscreen && mouseOn` gate as the wheel above, since SGR tracking is
+  // only ever armed in fullscreen mode (see enterFullscreen/useMouseWheel) —
+  // `mouseRow` is the input's on-screen content row, undefined (disabling
+  // click/drag mapping) in classic mode where that geometry doesn't apply.
+  const promptMouseRow = fullscreen ? inputContentRow(rows) : undefined;
+  const promptMouseEnabled = fullscreen && mouseOn;
   // 1Hz clock for the header's live time-of-day and the dock's live elapsed
   // counters. Only ticks in full-screen mode — the classic inline layout has
   // no use for it.
@@ -2246,6 +2255,8 @@ export function ReplApp({
               onSubmit={handleUserSubmit}
               busy={isStreaming}
               borderColor={promptBorderColor}
+              mouseRow={promptMouseRow}
+              mouseEnabled={promptMouseEnabled}
               catalog={catalogRef.current ?? []}
               focused={focus.zone === "input"}
               inject={inject}
@@ -2401,6 +2412,8 @@ export function ReplApp({
             onSubmit={handleUserSubmit}
             busy={isStreaming}
             borderColor={promptBorderColor}
+            mouseRow={promptMouseRow}
+            mouseEnabled={promptMouseEnabled}
             catalog={catalogRef.current ?? []}
             focused={focus.zone === "input"}
             inject={inject}
