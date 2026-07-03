@@ -150,6 +150,7 @@ export function humanizeTokens(n: number): string {
 export function PromptInput({
   onSubmit,
   busy,
+  borderColor,
   catalog = [],
   focused = true,
   inject,
@@ -169,6 +170,16 @@ export function PromptInput({
   /** A turn is in flight. The input stays live — submissions queue (Claude
    *  Code-style) instead of being blocked — but the glyph shows the busy state. */
   busy: boolean;
+  /**
+   * Turn-lifecycle border color, animated by the caller (see
+   * repl/border-phase.ts + interactive.tsx's flash-tick effect): cyan while
+   * idle, a rapid rainbow flash while the coordinator evaluates the prompt,
+   * solid amber once the turn is actively working. Optional so standalone/
+   * test usage keeps today's plain `busy ? amber : cyan` behavior — `focused`
+   * (dim) and terminal/shell mode (red) are the input's OWN local state and
+   * still take precedence over this when set.
+   */
+  borderColor?: string;
   /** Slash-command catalog powering the live typeahead menu (empty = no menu). */
   catalog?: ReadonlyArray<SlashCatalogEntry>;
   /**
@@ -443,13 +454,16 @@ export function PromptInput({
   // runs the rest as a live command (immediately, even mid-turn) rather than
   // sending it to the agent. See the `!command` handler in interactive.tsx.
   const terminalMode = focused && value.startsWith("!");
+  // `focused`/`terminalMode` are the input's OWN local state — they win over
+  // the caller's turn-lifecycle animation (dim, and shell-red, both need to
+  // read unambiguously regardless of what the turn is doing). Falls back to
+  // the pre-animation `busy ? amber : cyan` when the caller doesn't drive
+  // `borderColor` at all (standalone/test usage).
   const accent = !focused
     ? theme.dim
     : terminalMode
       ? TERMINAL_RED
-      : busy
-        ? "#FBBF24"
-        : theme.cyan;
+      : (borderColor ?? (busy ? theme.amber : theme.cyan));
   const glyph = terminalMode ? "$ " : busy ? "⧗ " : "❯ ";
   // In terminal mode the visible command drops the leading "!" — the `$` prompt
   // already conveys "this is a shell", so echoing the bang too is redundant.

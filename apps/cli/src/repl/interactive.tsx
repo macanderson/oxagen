@@ -105,6 +105,7 @@ import {
   type ScrollCtx,
 } from "./scroll.js";
 import { telemetryReducer, INITIAL_TELEMETRY_STATE } from "./telemetry.js";
+import { borderPhaseFor, borderColorFor, RAINBOW_FLASH_INTERVAL_MS } from "./border-phase.js";
 import { HeaderBar, TranscriptViewport, TelemetryDock, formatElapsed } from "./fullscreen-chrome.js";
 import { useMouseWheel } from "./use-mouse-wheel.js";
 import { enterFullscreen } from "./alt-screen.js";
@@ -434,10 +435,27 @@ export function ReplApp({
   // Live per-turn/session telemetry for the MODELS/TURN/TOOLS dock panels,
   // fed from the SAME onStage/onToolCall callbacks the transcript already
   // renders from (see the runTurn call in handleSubmit below). Token/cost
-  // numbers come straight from `metrics`/`usage` above — this reducer only
-  // tracks what those don't already have (model slugs, phase/step/round, tool
+  // numbers come straight from `metrics` above — this reducer only tracks
+  // what that doesn't already have (model slugs, phase/step/round, tool
   // tallies).
   const [telemetry, dispatchTelemetry] = useReducer(telemetryReducer, INITIAL_TELEMETRY_STATE);
+  // Prompt-input border color, animated through the turn lifecycle (see
+  // border-phase.ts): derived from the SAME telemetry.turn.phase the TURN
+  // dock panel reads above, rather than a second dispatched phase, so the
+  // two displays can never drift apart — turn-start already sets phase to
+  // "evaluate", onStage advances it to whatever stage runs next, and turn-end
+  // sets it to "complete", which is exactly submit -> evaluate -> active ->
+  // idle. `flashTick` only ticks while evaluating (the rainbow flash); the
+  // interval is torn down the instant the phase moves on so a flash from a
+  // finished turn can never bleed into the next one.
+  const borderPhase = borderPhaseFor(telemetry.turn.phase);
+  const [flashTick, setFlashTick] = useState(0);
+  useEffect(() => {
+    if (borderPhase !== "evaluating") return;
+    const timer = setInterval(() => setFlashTick((t) => t + 1), RAINBOW_FLASH_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [borderPhase]);
+  const promptBorderColor = borderColorFor(borderPhase, flashTick);
   // Whether the prompt bar is empty — gates Up/Down/Home/End between
   // transcript-scroll (bar empty) and their normal recall-queue / panel-entry
   // / cursor meaning (bar has text). Mirrored from PromptInput's onEmptyChange.
@@ -2227,6 +2245,7 @@ export function ReplApp({
             <PromptInput
               onSubmit={handleUserSubmit}
               busy={isStreaming}
+              borderColor={promptBorderColor}
               catalog={catalogRef.current ?? []}
               focused={focus.zone === "input"}
               inject={inject}
@@ -2381,6 +2400,7 @@ export function ReplApp({
           <PromptInput
             onSubmit={handleUserSubmit}
             busy={isStreaming}
+            borderColor={promptBorderColor}
             catalog={catalogRef.current ?? []}
             focused={focus.zone === "input"}
             inject={inject}
