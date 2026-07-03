@@ -154,6 +154,7 @@ export function PromptInput({
   focused = true,
   inject,
   onMenuOpenChange,
+  onEmptyChange,
   readClipboardImage = readClipboardImageDefault,
 }: {
   /**
@@ -188,6 +189,14 @@ export function PromptInput({
   /** Notifies the parent when the typeahead menu opens/closes so it knows
    *  whether the arrow keys belong to menu navigation or panel navigation. */
   onMenuOpenChange?: (open: boolean) => void;
+  /**
+   * Notifies the parent whenever the buffer transitions empty↔non-empty.
+   * The full-screen transcript viewport uses this to gate Up/Down/Home/End
+   * between "scroll the transcript" (buffer empty) and their normal meaning
+   * — recall the queue, enter the side panel, move the cursor (buffer has
+   * text) — see interactive.tsx's `inputEmptyRef`.
+   */
+  onEmptyChange?: (empty: boolean) => void;
   /**
    * Reads a system-clipboard image to a temp PNG (Ctrl-V). Injectable for
    * tests; defaults to the real macOS pngpaste/osascript implementation.
@@ -245,6 +254,10 @@ export function PromptInput({
   useEffect(() => {
     onMenuOpenChange?.(menuOpen);
   }, [menuOpen, onMenuOpenChange]);
+  const isEmpty = value.length === 0;
+  useEffect(() => {
+    onEmptyChange?.(isEmpty);
+  }, [isEmpty, onEmptyChange]);
   // `selected` may lag the (shrinking) suggestion list; clamp for rendering/use.
   const sel = suggestions.length === 0 ? 0 : Math.min(selected, suggestions.length - 1);
   const cols = stdout?.columns ?? 80;
