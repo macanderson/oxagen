@@ -100,15 +100,24 @@ async function main(): Promise<void> {
 // throws ERR_INVALID_ARG_TYPE *at module load* — taking down EVERY API route with
 // FUNCTION_INVOCATION_FAILED (postmortem 2026-06-12). A CJS bundle is never a direct
 // CLI entry, so guard the check and treat the throw as "not main".
-function isDirectCliEntry(): boolean {
+// A second bundle hazard (found 2026-07-02): in a single-file ESM bundle
+// (the CLI's dist-standalone/oxagen.mjs) EVERY module shares the bundle's
+// import.meta.url, so plain path equality is true for ANY bundle entry — the
+// golden suite (and its report banner) ran at every CLI startup. The entry
+// must additionally BE this source file by name.
+export function isDirectCliEntry(
+  argv1: string | undefined = process.argv[1],
+): boolean {
   try {
-    const entry = process.argv[1];
-    return entry !== undefined && fileURLToPath(import.meta.url) === resolve(entry);
+    if (argv1 === undefined) return false;
+    const self = fileURLToPath(import.meta.url);
+    return self === resolve(argv1) && /run-golden\.(ts|js|mjs|cjs)$/.test(self);
   } catch {
     return false;
   }
 }
 
+/* v8 ignore next 3 — module-load side effect, exercised via the CLI scripts */
 if (isDirectCliEntry()) {
   void main();
 }

@@ -120,11 +120,36 @@ describe("createGatewayAgentAi", () => {
     expect(streamTextMock).toHaveBeenCalledTimes(1);
     const call = streamTextMock.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(call["model"]).toBe("anthropic/claude-opus-4-8");
-    expect(call["system"]).toBe("sys");
+    // System is folded into the message list as a cached system message so a
+    // cache_control marker can ride on it (see withPromptCaching).
+    expect("system" in call).toBe(false);
+    const messages = call["messages"] as Array<Record<string, unknown>>;
+    expect(messages[0]).toMatchObject({ role: "system", content: "sys" });
     expect(call["tools"]).toEqual({ bash: {} });
     expect(call["providerOptions"]).toEqual({
       anthropic: { thinking: { type: "adaptive" }, outputConfig: { effort: "high" } },
     });
+  });
+
+  it("stream marks the system message and transcript tail as cache breakpoints", () => {
+    const ai = createGatewayAgentAi();
+    ai.stream({
+      model: "anthropic/claude-sonnet-4.5",
+      system: "sys",
+      messages: [
+        { role: "user", content: "one" },
+        { role: "assistant", content: "two" },
+        { role: "user", content: "three" },
+      ],
+    } as never);
+    const call = streamTextMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    const messages = call["messages"] as Array<Record<string, unknown>>;
+    const cache = { anthropic: { cacheControl: { type: "ephemeral" } } };
+    expect(messages).toHaveLength(4);
+    expect(messages[0]?.["providerOptions"]).toEqual(cache); // system
+    expect(messages[1]?.["providerOptions"]).toBeUndefined(); // old history untouched
+    expect(messages[2]?.["providerOptions"]).toEqual(cache); // tail -2
+    expect(messages[3]?.["providerOptions"]).toEqual(cache); // tail -1
   });
 
   it("stream omits providerOptions entirely when no effort is set", () => {

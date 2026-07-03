@@ -168,6 +168,14 @@ export interface RunTurnOptions {
   /** Max judge→revise rounds (default 1; 0 disables auto-revision). */
   maxReviseRounds?: number;
   /**
+   * Wall-clock budget (ms) for the ENHANCE stage's code-graph pass. On a cold
+   * store the first graph query triggers a full tree-sitter build — minutes on
+   * a large repo — so headless callers bound it; whatever resolved in budget
+   * is injected and the build keeps warming in the background for the agent's
+   * own `code_graph` tool calls. Undefined ⇒ unbounded.
+   */
+  enhanceTimeoutMs?: number;
+  /**
    * Judge with a PANEL of these (distinct, cross-vendor) advisor models instead
    * of a single judge — majority rules, findings unioned. Empty/undefined ⇒
    * single judge, unless `OXAGEN_JUDGE_PANEL` is set. Higher cost, higher recall
@@ -316,6 +324,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     codeGraph: opts.codeGraph,
     memory: opts.memory,
     extraQueries: evaluation.contextQueries,
+    timeoutMs: opts.enhanceTimeoutMs,
   });
   phases.push(phaseStat("enhance", 0, enhanceStart, undefined, emptyUsage()));
   const enhancement: EnhancementTrace = {

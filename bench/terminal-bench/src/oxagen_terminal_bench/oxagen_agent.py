@@ -71,10 +71,14 @@ silently with stale state).
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import shlex
 import sys
+import tarfile
+import tempfile
+import urllib.request
 from pathlib import Path
 
 from harbor.agents.installed.base import BaseInstalledAgent, with_prompt_template
@@ -98,6 +102,53 @@ _WARM_CONFIG_IN_CONTAINER = f"{_WARM_HOME_IN_CONTAINER}/.config/oxagen"
 # Minimum Node major the bundle needs; skip reinstall if the image already has it.
 _MIN_NODE_MAJOR = 20
 _NODE_SETUP_MAJOR = 22
+
+# Static ripgrep for the task container (x86_64 musl — SWE-bench images are
+# x86_64, and a musl static binary runs on any distro). Without rg on PATH the
+# CLI's `grep` tool falls back to an in-process JS walk that reads every file
+# in the repo — pathologically slow on Django-sized trees under emulation.
+# Pinned version + sha256 (computed from the official GitHub release asset);
+# extracted once to a host cache and uploaded per container.
+_RG_VERSION = "14.1.0"
+_RG_URL = (
+    "https://github.com/BurntSushi/ripgrep/releases/download/"
+    f"{_RG_VERSION}/ripgrep-{_RG_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+)
+_RG_SHA256 = "f84757b07f425fe5cf11d87df6644691c644a5cd2348a2c670894272999d3ba7"
+
+
+def _cached_rg_binary() -> Path | None:
+    """Download (once), verify, and extract the static `rg` binary on the host.
+
+    Returns the path to the extracted binary, or None on any failure — rg is an
+    optimization, never a trial blocker.
+    """
+    cache = Path.home() / ".cache" / "oxagen-bench"
+    cache.mkdir(parents=True, exist_ok=True)
+    binary = cache / f"rg-{_RG_VERSION}-x86_64-musl"
+    if binary.is_file():
+        return binary
+    tarball = cache / f"ripgrep-{_RG_VERSION}-x86_64-musl.tar.gz"
+    try:
+        if not tarball.is_file():
+            urllib.request.urlretrieve(_RG_URL, tarball)  # noqa: S310 — pinned https URL
+        digest = hashlib.sha256(tarball.read_bytes()).hexdigest()
+        if digest != _RG_SHA256:
+            print(
+                f"oxagen-adapter: ripgrep tarball sha256 mismatch ({digest}); skipping",
+                file=sys.stderr,
+            )
+            tarball.unlink(missing_ok=True)
+            return None
+        member = f"ripgrep-{_RG_VERSION}-x86_64-unknown-linux-musl/rg"
+        with tarfile.open(tarball) as tf, tempfile.TemporaryDirectory() as td:
+            tf.extract(member, td, filter="data")
+            (Path(td) / member).rename(binary)
+        binary.chmod(0o755)
+        return binary
+    except Exception as exc:
+        print(f"oxagen-adapter: ripgrep provisioning failed ({exc}); skipping", file=sys.stderr)
+        return None
 
 
 def _is_truthy(value: str | None) -> bool:
@@ -212,7 +263,21 @@ class OxagenAgent(BaseInstalledAgent):
             ),
         )
 
-        # 3) Optional: live context engine (persistent memory/trace via DuckDB).
+        # 3) Static ripgrep so the CLI's grep tool never falls back to the
+        #    in-process JS walk (see _RG_* above). Best-effort: skipped when the
+        #    image already has rg or provisioning failed.
+        rg = _cached_rg_binary()
+        if rg is not None:
+            await environment.upload_file(rg, "/tmp/oxa-rg")
+            await self.exec_as_root(
+                environment,
+                command=(
+                    "command -v rg >/dev/null 2>&1 || "
+                    "{ cp /tmp/oxa-rg /usr/local/bin/rg && chmod +x /usr/local/bin/rg; }"
+                ),
+            )
+
+        # 4) Optional: live context engine (persistent memory/trace via DuckDB).
         if _is_truthy(os.environ.get("OXAGEN_INSTALL_DUCKDB")):
             await self.exec_as_root(
                 environment,
@@ -224,7 +289,7 @@ class OxagenAgent(BaseInstalledAgent):
                 timeout_sec=600,
             )
 
-        # 4) Warm mode: upload prior-trial memory into the container so this
+        # 5) Warm mode: upload prior-trial memory into the container so this
         #    trial starts with accumulated state from all preceding trials.
         #
         #    The in-container HOME is pinned to _WARM_HOME_IN_CONTAINER in
