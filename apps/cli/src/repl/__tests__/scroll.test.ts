@@ -1,0 +1,218 @@
+/**
+ * Unit tests for the full-screen transcript viewport's pure scroll math:
+ * offset clamping, sticky-bottom auto-follow, line/page/half-page stepping,
+ * row estimation, and message-window computation. No Ink, no terminal, no
+ * timers — see scroll.ts's own doc comment for why this is pure.
+ */
+import { describe, it, expect } from "vitest";
+import {
+  scrollReducer,
+  effectiveOffset,
+  maxOffsetFor,
+  estimateMessageRows,
+  totalEstimatedRows,
+  computeVisibleWindow,
+  INITIAL_SCROLL_STATE,
+  type ScrollState,
+  type ScrollCtx,
+} from "../scroll.js";
+import type { Message } from "../components.js";
+
+function msg(overrides: Partial<Message>): Message {
+  return { role: "assistant", content: "", timestamp: 0, ...overrides };
+}
+
+describe("estimateMessageRows", () => {
+  it("gives compact chips/badges a single row", () => {
+    expect(estimateMessageRows(msg({ role: "tool", content: "read(a.ts)" }), 80)).toBe(1);
+    expect(estimateMessageRows(msg({ role: "stage", content: "evaluated" }), 80)).toBe(1);
+  });
+
+  it("wraps long text content across multiple rows at the given width", () => {
+    const content = "x".repeat(200);
+    expect(estimateMessageRows(msg({ content }), 100)).toBe(2);
+    expect(estimateMessageRows(msg({ content }), 50)).toBe(4);
+  });
+
+  it("counts explicit newlines separately from wrapping", () => {
+    const content = "line one\nline two\nline three";
+    expect(estimateMessageRows(msg({ content }), 100)).toBe(3);
+  });
+
+  it("gives a collapsed terminal accordion one row, an expanded one its output size", () => {
+    const collapsed = msg({
+      role: "terminal",
+      terminalExpanded: false,
+      terminalRun: { id: 1, command: "ls", output: "a\nb\nc", status: "exited", startedAt: 0 },
+    });
+    expect(estimateMessageRows(collapsed, 80)).toBe(1);
+
+    const expanded = msg({
+      role: "terminal",
+      terminalExpanded: true,
+      terminalRun: { id: 1, command: "ls", output: "a\nb\nc", status: "exited", startedAt: 0 },
+    });
+    expect(estimateMessageRows(expanded, 80)).toBeGreaterThan(1);
+  });
+
+  it("sizes a diff by its line count, capped", () => {
+    const shortDiff = msg({ role: "diff", diff: "line1\nline2\nline3" });
+    expect(estimateMessageRows(shortDiff, 80)).toBe(5); // 3 lines + 2
+
+    const hugeDiff = msg({ role: "diff", diff: Array.from({ length: 500 }, () => "x").join("\n") });
+    expect(estimateMessageRows(hugeDiff, 80)).toBeLessThanOrEqual(60);
+  });
+
+  it("gives a summary card a fixed small height and a replay trace a fixed tall one", () => {
+    expect(
+      estimateMessageRows(
+        msg({ summary: { complete: true, filesTouched: [], costUsd: 0, judged: false } }),
+        80,
+      ),
+    ).toBe(6);
+  });
+
+  it("never returns zero even for empty content", () => {
+    expect(estimateMessageRows(msg({ content: "" }), 80)).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("totalEstimatedRows", () => {
+  it("sums row estimates across the transcript", () => {
+    const messages = [msg({ role: "tool" }), msg({ role: "stage" }), msg({ content: "hi" })];
+    expect(totalEstimatedRows(messages, 80)).toBe(3);
+  });
+
+  it("returns 0 for an empty transcript", () => {
+    expect(totalEstimatedRows([], 80)).toBe(0);
+  });
+});
+
+describe("maxOffsetFor / effectiveOffset", () => {
+  it("max offset is 0 when content fits entirely in the viewport", () => {
+    expect(maxOffsetFor({ totalLines: 10, viewportHeight: 20 })).toBe(0);
+  });
+
+  it("max offset is content minus viewport when content overflows", () => {
+    expect(maxOffsetFor({ totalLines: 100, viewportHeight: 20 })).toBe(80);
+  });
+
+  it("sticky-bottom always resolves to the current max, tracking growing content", () => {
+    const state: ScrollState = { rawOffset: 0, stickyBottom: true };
+    expect(effectiveOffset(state, { totalLines: 100, viewportHeight: 20 })).toBe(80);
+    // Content grew (more streamed in) — sticky-bottom follows without a dispatch.
+    expect(effectiveOffset(state, { totalLines: 140, viewportHeight: 20 })).toBe(120);
+  });
+
+  it("a non-sticky raw offset clamps into [0, max]", () => {
+    const tooHigh: ScrollState = { rawOffset: 999, stickyBottom: false };
+    expect(effectiveOffset(tooHigh, { totalLines: 100, viewportHeight: 20 })).toBe(80);
+    const negative: ScrollState = { rawOffset: -5, stickyBottom: false };
+    expect(effectiveOffset(negative, { totalLines: 100, viewportHeight: 20 })).toBe(0);
+  });
+});
+
+describe("scrollReducer", () => {
+  const ctx: ScrollCtx = { totalLines: 100, viewportHeight: 20 }; // max offset 80
+
+  it("line-up/line-down move by exactly one row and clear/re-engage sticky-bottom", () => {
+    const oneUp = scrollReducer(INITIAL_SCROLL_STATE, { type: "line-up" }, ctx);
+    expect(oneUp).toEqual({ rawOffset: 79, stickyBottom: false });
+
+    const backAtBottom = scrollReducer(oneUp, { type: "line-down" }, ctx);
+    expect(backAtBottom).toEqual({ rawOffset: 80, stickyBottom: true });
+  });
+
+  it("page-up/page-down move by a full viewport height", () => {
+    const up = scrollReducer(INITIAL_SCROLL_STATE, { type: "page-up" }, ctx);
+    expect(up).toEqual({ rawOffset: 60, stickyBottom: false });
+    const down = scrollReducer(up, { type: "page-down" }, ctx);
+    expect(down).toEqual({ rawOffset: 80, stickyBottom: true });
+  });
+
+  it("half-up/half-down move by half a viewport height, rounded up", () => {
+    const ctxOdd: ScrollCtx = { totalLines: 100, viewportHeight: 21 }; // half = 11 (ceil)
+    const state: ScrollState = { rawOffset: 50, stickyBottom: false };
+    const up = scrollReducer(state, { type: "half-up" }, ctxOdd);
+    expect(up.rawOffset).toBe(39);
+    const down = scrollReducer(up, { type: "half-down" }, ctxOdd);
+    expect(down.rawOffset).toBe(50);
+  });
+
+  it("clamps at the top — page-up from near the top never goes negative", () => {
+    const near: ScrollState = { rawOffset: 5, stickyBottom: false };
+    const result = scrollReducer(near, { type: "page-up" }, ctx);
+    expect(result).toEqual({ rawOffset: 0, stickyBottom: false });
+  });
+
+  it("clamps at the bottom — page-down past the max lands exactly on it and re-engages sticky-bottom", () => {
+    const near: ScrollState = { rawOffset: 75, stickyBottom: false };
+    const result = scrollReducer(near, { type: "page-down" }, ctx);
+    expect(result).toEqual({ rawOffset: 80, stickyBottom: true });
+  });
+
+  it("home jumps to the top and clears sticky-bottom", () => {
+    const result = scrollReducer(INITIAL_SCROLL_STATE, { type: "home" }, ctx);
+    expect(result).toEqual({ rawOffset: 0, stickyBottom: false });
+  });
+
+  it("end jumps to the bottom and engages sticky-bottom", () => {
+    const atTop: ScrollState = { rawOffset: 0, stickyBottom: false };
+    const result = scrollReducer(atTop, { type: "end" }, ctx);
+    expect(result).toEqual({ rawOffset: 80, stickyBottom: true });
+  });
+
+  it("when content fits entirely in the viewport, every action lands at offset 0 and stays sticky", () => {
+    const smallCtx: ScrollCtx = { totalLines: 5, viewportHeight: 20 };
+    const result = scrollReducer(INITIAL_SCROLL_STATE, { type: "line-up" }, smallCtx);
+    expect(result).toEqual({ rawOffset: 0, stickyBottom: true });
+  });
+
+  it("is a pure function — never mutates the input state object", () => {
+    const state: ScrollState = { rawOffset: 10, stickyBottom: false };
+    const snapshot = { ...state };
+    scrollReducer(state, { type: "line-down" }, ctx);
+    expect(state).toEqual(snapshot);
+  });
+});
+
+describe("computeVisibleWindow", () => {
+  it("returns an empty window for an empty transcript", () => {
+    expect(computeVisibleWindow([], 0, 20)).toEqual({ startIndex: 0, endIndex: 0, hiddenAbove: 0 });
+  });
+
+  it("at offset 0, starts at the first message with nothing hidden above", () => {
+    const heights = [1, 3, 2, 5];
+    const win = computeVisibleWindow(heights, 0, 4);
+    expect(win.startIndex).toBe(0);
+    expect(win.hiddenAbove).toBe(0);
+  });
+
+  it("finds the message containing the offset and reports the rows above it as hidden", () => {
+    const heights = [2, 3, 4, 1]; // cumulative starts: 0, 2, 5, 9
+    // offset 6 falls inside message index 2 (rows 5..9)
+    const win = computeVisibleWindow(heights, 6, 3);
+    expect(win.startIndex).toBe(2);
+    expect(win.hiddenAbove).toBe(5);
+  });
+
+  it("grows the window until it covers at least the viewport height", () => {
+    const heights = [1, 1, 1, 1, 1, 1, 1, 1];
+    const win = computeVisibleWindow(heights, 0, 3);
+    // Needs at least 3 messages' worth of rows (1 each) to cover height 3.
+    expect(win.endIndex - win.startIndex).toBeGreaterThanOrEqual(3);
+  });
+
+  it("always includes at least one message even if a single message exceeds the viewport", () => {
+    const heights = [50];
+    const win = computeVisibleWindow(heights, 0, 3);
+    expect(win.startIndex).toBe(0);
+    expect(win.endIndex).toBe(1);
+  });
+
+  it("clamps a beyond-range offset to the last message rather than throwing", () => {
+    const heights = [1, 1, 1];
+    const win = computeVisibleWindow(heights, 999, 3);
+    expect(win.startIndex).toBe(2);
+  });
+});

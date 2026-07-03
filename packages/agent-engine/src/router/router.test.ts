@@ -177,7 +177,7 @@ describe("tierLabel", () => {
   it("maps tiers to human labels", () => {
     expect(tierLabel("fast")).toBe("Haiku");
     expect(tierLabel("balanced")).toBe("Sonnet");
-    expect(tierLabel("precise")).toBe("Opus");
+    expect(tierLabel("precise")).toBe("Fable");
   });
 });
 

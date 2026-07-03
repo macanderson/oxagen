@@ -55,6 +55,9 @@ HARBOR_EXTRA="--include-task-name *hello-world" N_CONCURRENT=1 ./run.sh
 
 # Full Terminal-Bench, pinned model, 4 in parallel:
 OXAGEN_MODEL_SLUG=anthropic/claude-opus-4.8 ./run.sh
+
+# Best-of-N differentiator (3 candidates/task, judge picks the winner) — see "Best-of-N mode":
+OXAGEN_BEST_OF_N=1 OXAGEN_BEST_OF_N_CANDIDATES=3 ./run.sh
 ```
 
 `run.sh` builds the bundle, creates a venv, installs Harbor + this adapter
@@ -106,8 +109,10 @@ per task) and compare cost at similar pass rate.
 |---|---|---|
 | `AI_GATEWAY_API_KEY` | — (required) | Forwarded into the container for all LLM calls. |
 | `OXAGEN_MODEL_SLUG` | `anthropic/claude-sonnet-4.5` | Model passed to Harbor `-m` (an AI-Gateway slug). |
-| `OXAGEN_ROUTE` | unset | `1` → drop `--model`; Oxagen's cost-aware router chooses per task. |
-| `OXAGEN_NO_PIPELINE` | unset | `1` → skip prompt-eval / context-injection / completeness-judge (leaner, cheaper). Default keeps the full Oxagen scaffold on. |
+| `OXAGEN_ROUTE` | unset | `1` → drop `--model`; Oxagen's cost-aware router chooses per task (or per candidate, under best-of-N). |
+| `OXAGEN_BEST_OF_N` | unset | `1` → run `oxagen solve --candidates <N> [--model X] "<task>"` instead of a single one-shot turn: N independent candidates, a comparative judge picks the winner, its diff is applied to the container's working directory. See "Best-of-N mode" below. |
+| `OXAGEN_BEST_OF_N_CANDIDATES` | `3` | Candidates per task under `OXAGEN_BEST_OF_N=1`. |
+| `OXAGEN_NO_PIPELINE` | unset | `1` → skip prompt-eval / context-injection / completeness-judge (leaner, cheaper). Default keeps the full Oxagen scaffold on. No effect under `OXAGEN_BEST_OF_N=1` (`solve` candidates already run bare). |
 | `OXAGEN_INSTALL_DUCKDB` | unset | `1` → also `npm i` DuckDB so the context engine's persistent memory/trace stores are live. |
 | `OXAGEN_CLI_BUNDLE` | repo build path | Override the path to `oxagen.mjs`. |
 | `DATASET` | `terminal-bench@2.0` | Any Harbor dataset slug. |
@@ -135,9 +140,51 @@ it live in-container if you want to measure the full context engine.
    `node`-wrapper, and verifies `oxagen --version`.
 2. **run()** — forwards `AI_GATEWAY_API_KEY` (+ any `OXAGEN_*`), then runs
    `oxagen <flags> "<instruction>"` in the task's working directory with
-   `--mode bypass --verbose`, teeing output to `/logs/agent/oxagen.txt`.
+   `--mode bypass --verbose` (or, under `OXAGEN_BEST_OF_N=1`,
+   `oxagen solve --candidates <N> [--model X] --json "<instruction>"` — see
+   "Best-of-N mode" below), teeing output to `/logs/agent/oxagen.txt`.
 3. Harbor runs the task's verifier against the resulting container state and
    records the reward.
+
+## Best-of-N mode
+
+`OXAGEN_BEST_OF_N=1` benchmarks Oxagen's best-of-N differentiator (`oxagen
+solve`) instead of a single one-shot turn: N independent candidates each run
+the full coding-agent loop in their own isolated git worktree, a comparative
+judge scores them on their diff + test output, and the winner's diff is
+applied to the container's real working directory — so the container's
+resulting `git diff` (what Harbor's verifier grades) is exactly the winning
+candidate's patch. Selection is entirely the comparative judge's call; the
+adapter never passes a `--verify` command (Harbor's own verifier is external
+and hidden from the agent — see `OXAGEN_FORBID_TEST_EDITS` above).
+
+```bash
+OXAGEN_BEST_OF_N=1 OXAGEN_BEST_OF_N_CANDIDATES=3 ./run.sh
+# ...combine with routing to benchmark best-of-N + the cost-aware router together:
+OXAGEN_BEST_OF_N=1 OXAGEN_ROUTE=1 ./run.sh
+```
+
+Notes:
+- **Runs headless automatically.** `oxagen solve` renders a live multi-lane
+  view on a real TTY, but this adapter's command always pipes `oxagen`'s
+  stdout into `tee` (`... | stdbuf -oL tee /logs/agent/oxagen.txt`), so
+  `process.stdout.isTTY` is `false` regardless of how Harbor itself execs the
+  command — `solve` detects this and streams JSONL events instead of trying to
+  mount an Ink UI. The adapter also passes `--json` explicitly, so this never
+  silently depends on that auto-detection alone.
+- **Cost is not yet tracked.** The single-turn path's `--verbose` flag prints a
+  final efficiency roll-up (`815.53s total · 83086 tok · $0.2714`) that
+  `populate_context_post_run()` parses into `context.cost_usd`. `solve` has no
+  `--verbose` equivalent, and `best-of-n.ts` doesn't thread per-candidate token
+  usage onto its `Candidate` type yet — so best-of-N trials leave
+  `context.cost_usd` unset rather than reporting a fabricated number. The
+  adapter still recovers `oxagen_bestofn_candidates`, `oxagen_bestofn_winner_id`,
+  `oxagen_bestofn_winner_files`, `oxagen_bestofn_winner_steps`, and
+  `oxagen_bestofn_failed_candidates` into `context.metadata` from the JSONL
+  stream's trailing `type: "result"` line.
+- **Model pinning applies to every candidate.** Harbor's `-m` becomes `solve
+  --model <slug>` — all N candidates use the same benchmarked model (true
+  best-of-N sampling), not a diversity mix across different models.
 
 ## Warm / self-improvement mode
 

@@ -29,9 +29,9 @@ function tierSlug(tier: ModelTier): string {
     case "fast":
       return process.env["OXAGEN_LLM_FAST"] ?? "anthropic/claude-haiku-4.5";
     case "balanced":
-      return process.env["OXAGEN_LLM_BALANCED"] ?? "anthropic/claude-sonnet-4.6";
+      return process.env["OXAGEN_LLM_BALANCED"] ?? "anthropic/claude-sonnet-5";
     case "precise":
-      return process.env["OXAGEN_LLM_PRECISE"] ?? "anthropic/claude-opus-4.8";
+      return process.env["OXAGEN_LLM_PRECISE"] ?? "anthropic/claude-fable-5";
   }
 }
 
@@ -39,7 +39,7 @@ export const TIERS: ModelTier[] = ["fast", "balanced", "precise"];
 
 /** Human label for a tier, for the agents screen and `--explain` output. */
 export function tierLabel(tier: ModelTier): string {
-  return tier === "fast" ? "Haiku" : tier === "balanced" ? "Sonnet" : "Opus";
+  return tier === "fast" ? "Haiku" : tier === "balanced" ? "Sonnet" : "Fable";
 }
 
 // ── Usage accumulation ───────────────────────────────────────────────────────

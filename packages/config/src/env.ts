@@ -114,8 +114,8 @@ export const baseEnvSchema = z.object({
   // without extra configuration.
   AI_GATEWAY_API_KEY: z.string().optional(),
   OXAGEN_LLM_FAST: z.string().default("anthropic/claude-haiku-4.5"),
-  OXAGEN_LLM_BALANCED: z.string().default("anthropic/claude-sonnet-4.6"),
-  OXAGEN_LLM_PRECISE: z.string().default("anthropic/claude-opus-4.8"),
+  OXAGEN_LLM_BALANCED: z.string().default("anthropic/claude-sonnet-5"),
+  OXAGEN_LLM_PRECISE: z.string().default("anthropic/claude-fable-5"),
   // CLI turn-pipeline overrides. Optional: the CLI resolves the fast tier for the
   // evaluator and the precise tier for the advisor when these are unset.
   OXAGEN_LLM_EVALUATOR: z.string().optional(),
