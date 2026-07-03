@@ -240,6 +240,19 @@ export async function runOneShot(
     void queryCodeGraph(cwd, "search", "__graph_warmup__", 1).catch(() => {});
   }
 
+  // Mid-session completeness check: in headless/bench mode, default to judging
+  // after the first 20 steps so missing acceptance criteria are caught before the
+  // agent burns the remaining budget on redundant verification loops.
+  // OXAGEN_MID_JUDGE_STEPS overrides (0 disables). Controlled by the pipeline
+  // option OR the env var (pipeline reads OXAGEN_MID_JUDGE_STEPS directly).
+  const midJudgeStepsRaw = Number(process.env["OXAGEN_MID_JUDGE_STEPS"]);
+  const midJudgeSteps =
+    Number.isFinite(midJudgeStepsRaw) && midJudgeStepsRaw > 0
+      ? midJudgeStepsRaw
+      : promptProfile === "headless" && !options.bare
+        ? 20
+        : 0;
+
   try {
     let streamed = false;
     const result = await runTurn({
@@ -256,6 +269,7 @@ export async function runOneShot(
       verbose,
       maxSteps: options.maxSteps,
       enhanceTimeoutMs,
+      midJudgeSteps: midJudgeSteps > 0 ? midJudgeSteps : undefined,
       memory: createCombinedMemory(memory, fleetMemory, {
         server: serverMemory,
         recallQuery: prompt,

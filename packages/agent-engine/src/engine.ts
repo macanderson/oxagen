@@ -10,7 +10,9 @@ import {
   isContextOverflowError,
   isRetryableModelError,
   LOOP_NUDGE_THRESHOLD,
+  SUCCESSFUL_REPEAT_THRESHOLD,
   loopNudgeMessage,
+  successfulRepeatNudgeMessage,
   toolCallSignature,
 } from "./loop-driver";
 
@@ -151,6 +153,13 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
   // the step budget on SWE-bench).
   const failingCounts = new Map<string, number>();
   const nudged = new Set<string>();
+  // Successful-repeat detection: count consecutive SUCCESSFUL runs of the SAME
+  // tool call. The smoke-run analysis showed the agent running identical test
+  // commands 8+ times post-fix — each repeat costs ~60k tokens for zero gain.
+  // After SUCCESSFUL_REPEAT_THRESHOLD identical successes, inject a nudge so the
+  // model stops re-running the same command and either declares done or acts.
+  const successCounts = new Map<string, number>();
+  const successNudged = new Set<string>();
 
   while (steps < maxSteps) {
     if (opts.signal?.aborted) break;
@@ -198,8 +207,20 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
             const ok = !isErrorResult(part.output);
             const sig = toolCallSignature(part.toolName, part.input);
             if (ok) {
-              failingCounts.delete(sig); // progress — reset the loop counter
+              failingCounts.delete(sig); // progress — reset the failing loop counter
+              // Successful-repeat detection: count identical successful calls.
+              // Only applies to bash (the expensive repeated-test-run pattern);
+              // read_file/code_graph repeats are cheap and sometimes intentional.
+              if (part.toolName === "bash") {
+                const succCount = (successCounts.get(sig) ?? 0) + 1;
+                successCounts.set(sig, succCount);
+                if (succCount >= SUCCESSFUL_REPEAT_THRESHOLD && !successNudged.has(sig)) {
+                  pendingNudge = successfulRepeatNudgeMessage(part.toolName, succCount);
+                  successNudged.add(sig);
+                }
+              }
             } else {
+              successCounts.delete(sig); // a failure resets the success counter
               const count = (failingCounts.get(sig) ?? 0) + 1;
               failingCounts.set(sig, count);
               if (count >= LOOP_NUDGE_THRESHOLD && !nudged.has(sig)) {
@@ -220,6 +241,7 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
           const started = toolStartedAt.get(part.toolCallId);
           toolStartedAt.delete(part.toolCallId);
           const sig = toolCallSignature(part.toolName, part.input);
+          successCounts.delete(sig); // a tool-error resets the success counter
           const count = (failingCounts.get(sig) ?? 0) + 1;
           failingCounts.set(sig, count);
           if (count >= LOOP_NUDGE_THRESHOLD && !nudged.has(sig)) {

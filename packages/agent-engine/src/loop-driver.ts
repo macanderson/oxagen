@@ -34,6 +34,15 @@ export function toolCallSignature(name: string, input: unknown): string {
 export const LOOP_NUDGE_THRESHOLD = 3;
 
 /**
+ * Repeats of the SAME SUCCESSFUL bash/tool call before we nudge the model to
+ * stop re-running it. The smoke-run analysis showed the agent running identical
+ * test commands 8+ times after the fix was already confirmed — each redundant
+ * run costs ~60k tokens. Three successful repeats is enough signal that the
+ * result won't change; a fourth is waste.
+ */
+export const SUCCESSFUL_REPEAT_THRESHOLD = 3;
+
+/**
  * The corrective message injected when the model repeats an identical failing
  * call `LOOP_NUDGE_THRESHOLD` times. Exported for tests.
  */
@@ -43,6 +52,20 @@ export function loopNudgeMessage(name: string, count: number, lastError: string)
     `keeps failing: ${lastError.slice(0, 400)}. Stop repeating this exact call — ` +
     `it will not start working. Inspect the current state (re-read the file or run ` +
     `a diagnostic), then take a DIFFERENT approach.`
+  );
+}
+
+/**
+ * The corrective message injected when the model repeats an identical SUCCESSFUL
+ * bash/tool call `SUCCESSFUL_REPEAT_THRESHOLD` times. The result will not change;
+ * re-running it only burns tokens. Exported for tests.
+ */
+export function successfulRepeatNudgeMessage(name: string, count: number): string {
+  return (
+    `You have successfully run \`${name}\` with the same arguments ${count} times ` +
+    `and received the same result each time. The result will not change — do not ` +
+    `run this command again. If the task is complete, say so and stop. If work ` +
+    `remains, take a DIFFERENT action.`
   );
 }
 
