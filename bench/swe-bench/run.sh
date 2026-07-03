@@ -69,9 +69,15 @@ export OXAGEN_ALLOW_NO_SESSION=1
 # 3) Build the oxagen bundle only when actually benchmarking oxagen —
 #    competitors don't need it.
 if [ "$AGENT" = "oxagen" ]; then
-  echo "==> Building Oxagen standalone bundle…"
-  ( cd "$REPO_ROOT" && pnpm --filter @oxagen/cli bundle )
-  export OXAGEN_CLI_BUNDLE="$REPO_ROOT/apps/cli/dist-standalone/oxagen.mjs"
+  if [ -n "${OXAGEN_CLI_BUNDLE:-}" ]; then
+    # A pre-built bundle was supplied (e.g. built in an isolated worktree so a
+    # parallel session switching branches in the main tree can't poison it).
+    echo "==> Using pre-built Oxagen bundle: $OXAGEN_CLI_BUNDLE"
+  else
+    echo "==> Building Oxagen standalone bundle…"
+    ( cd "$REPO_ROOT" && pnpm --filter @oxagen/cli bundle )
+    export OXAGEN_CLI_BUNDLE="$REPO_ROOT/apps/cli/dist-standalone/oxagen.mjs"
+  fi
   [ -f "$OXAGEN_CLI_BUNDLE" ] || { echo "Bundle not found at $OXAGEN_CLI_BUNDLE" >&2; exit 1; }
 fi
 
