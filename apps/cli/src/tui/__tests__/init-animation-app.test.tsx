@@ -6,7 +6,7 @@
  *
  * Ink's own re-render (turning a dispatched state update into a new
  * lastFrame()) lands a tick after the emitter callback runs, so every
- * emit-then-assert here awaits a short flush first — the subscription itself
+ * emit-then-assert here polls via until() first — the subscription itself
  * (the useEffect that calls emitter.on) is attached synchronously within
  * render(), as the "stops listening after unmount" test below confirms.
  */
@@ -21,8 +21,17 @@ import type { InitProgressEvent } from "../../commands/init.js";
 // why this codebase's Ink tests use tiny real-timer overrides over fake timers.
 const FAST = { gameTickMs: 1000, spinnerTickMs: 1000, revealTickMs: 1, revealHoldMs: 5 };
 
-function flush(ms = 20): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+/**
+ * Poll until `cond` holds (or the deadline passes — the caller's assertion
+ * then reports the real failure). Positive assertions poll instead of using
+ * fixed flush() sleeps: a loaded CI runner can take far longer than a
+ * "generous" sleep to land Ink's re-render, and fixed sleeps were flaking.
+ */
+async function until(cond: () => boolean, timeoutMs = 4000, stepMs = 10): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!cond() && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, stepMs));
+  }
 }
 
 describe("InitAnimationApp", () => {
@@ -34,7 +43,7 @@ describe("InitAnimationApp", () => {
     );
 
     emitter.emit("progress", { phase: "graph", status: "start" } satisfies InitProgressEvent);
-    await flush();
+    await until(() => (lastFrame() ?? "").includes("Building code graph…"));
     expect(lastFrame() ?? "").toContain("Building code graph…");
 
     emitter.emit("progress", {
@@ -43,7 +52,7 @@ describe("InitAnimationApp", () => {
       filesDone: 5,
       filesTotal: 10,
     } satisfies InitProgressEvent);
-    await flush();
+    await until(() => (lastFrame() ?? "").includes("5/10 files"));
     const frame = lastFrame() ?? "";
     expect(frame).toContain("5/10 files");
     expect(frame).toContain("█");
@@ -70,7 +79,7 @@ describe("InitAnimationApp", () => {
         filesTotal: total,
       } satisfies InitProgressEvent);
     }
-    await flush();
+    await until(() => (lastFrame() ?? "").includes(`${total}/${total} files`));
 
     expect(lastFrame() ?? "").toContain(`${total}/${total} files`);
     unmount();
@@ -97,11 +106,11 @@ describe("InitAnimationApp", () => {
       status: "done",
       domains: [{ name: "billing", files: 3 }],
     } satisfies InitProgressEvent);
-    await flush();
+    await until(() => !/[▲◆●]/.test(lastFrame() ?? ""));
 
     expect(lastFrame() ?? "").not.toMatch(/[▲◆●]/); // game is gone, reveal is up
 
-    await flush(400);
+    await until(() => onReady.mock.calls.length >= 1);
     expect(onReady).toHaveBeenCalledTimes(1);
     unmount();
   });
@@ -113,7 +122,7 @@ describe("InitAnimationApp", () => {
     );
 
     emitter.emit("progress", { phase: "domains", status: "skipped" } satisfies InitProgressEvent);
-    await flush();
+    await until(() => !/[▲◆●]/.test(lastFrame() ?? ""));
     expect(lastFrame() ?? "").not.toMatch(/[▲◆●]/);
     unmount();
   });
@@ -129,7 +138,7 @@ describe("InitAnimationApp", () => {
       status: "start",
       totalFiles: 20,
     } satisfies InitProgressEvent);
-    await flush();
+    await until(() => (lastFrame() ?? "").includes("Inferring domains…"));
 
     expect(lastFrame() ?? "").toContain("Inferring domains…");
     expect(/[▲◆●]/.test(lastFrame() ?? "")).toBe(true); // still the game, not the reveal

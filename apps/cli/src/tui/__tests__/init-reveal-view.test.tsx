@@ -7,12 +7,24 @@
  * (see repl/__tests__/components.test.tsx); commands/init.ts's own
  * `_duckdbPath` test seam is the same "override the constant for tests"
  * convention applied here.
+ *
+ * Positive assertions poll with a deadline rather than sleeping a fixed
+ * interval — a loaded CI runner can take far longer than a "generous" sleep
+ * to run all the reveal ticks, and fixed sleeps were flaking there.
  */
 import { describe, it, expect, vi } from "vitest";
 import { render } from "ink-testing-library";
 import React from "react";
 import { InitRevealView } from "../init-reveal-view.js";
 import { WORDMARK } from "../banner.js";
+
+/** Poll until `cond` holds (or the deadline passes — the caller's assertion then reports the real failure). */
+async function until(cond: () => boolean, timeoutMs = 4000, stepMs = 10): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!cond() && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, stepMs));
+  }
+}
 
 describe("InitRevealView", () => {
   it("starts blank and draws the wordmark over time", async () => {
@@ -21,7 +33,7 @@ describe("InitRevealView", () => {
     );
     expect(lastFrame() ?? "").not.toContain("█");
 
-    await new Promise((r) => setTimeout(r, 200));
+    await until(() => (lastFrame() ?? "").includes("█"));
     expect(lastFrame() ?? "").toContain("█");
     unmount();
   });
@@ -30,7 +42,7 @@ describe("InitRevealView", () => {
     const onDone = vi.fn();
     const { unmount } = render(<InitRevealView onDone={onDone} tickMs={1} holdMs={5} />);
 
-    await new Promise((r) => setTimeout(r, 500));
+    await until(() => onDone.mock.calls.length >= 1);
     expect(onDone).toHaveBeenCalledTimes(1);
     unmount();
   });
@@ -47,7 +59,10 @@ describe("InitRevealView", () => {
     const { lastFrame, unmount } = render(
       <InitRevealView onDone={() => {}} tickMs={1} holdMs={1000} />,
     );
-    await new Promise((r) => setTimeout(r, 200));
+    await until(() => {
+      const f = lastFrame() ?? "";
+      return WORDMARK.every((line) => f.includes(line)) && f.includes("ready");
+    });
     const frame = lastFrame() ?? "";
     for (const line of WORDMARK) {
       expect(frame).toContain(line);
