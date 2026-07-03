@@ -26,6 +26,7 @@ import type {
   ObjectRunResult,
 } from "@oxagen/agent-engine";
 import { streamText, generateObject } from "ai";
+import type { ModelMessage } from "ai";
 import type { JSONObject } from "@ai-sdk/provider";
 import { debugLog } from "../../lib/debug-log.js";
 import { ensureGatewayKey, MissingGatewayKeyError } from "../env.js";
@@ -101,6 +102,42 @@ export interface GatewayAgentAiOptions {
   cwd?: string;
 }
 
+const ANTHROPIC_CACHE = {
+  anthropic: { cacheControl: { type: "ephemeral" } },
+} as const;
+
+/**
+ * Anthropic prompt caching for the agent loop. Mirrors the canonical
+ * system-message breakpoint in `packages/ai/src/stream.ts` (the `anthropic`
+ * providerOptions namespace is ignored by every other vendor, so this is a
+ * no-op for OpenAI/Google/xAI models), and additionally marks the last two
+ * transcript messages so each successive step of a long tool loop re-reads the
+ * ever-growing conversation prefix from cache (~1/10th input price, faster
+ * prefill) instead of re-billing the whole transcript on every step. Two tail
+ * breakpoints (not one) let the provider's longest-prefix lookup hit the
+ * previous step's cache entry even after a new message lands.
+ * Exported for tests.
+ */
+export function withPromptCaching(
+  system: string | undefined,
+  messages: ModelMessage[],
+): ModelMessage[] {
+  const out = messages.map((m, i) =>
+    i >= messages.length - 2
+      ? ({
+          ...m,
+          providerOptions: { ...m.providerOptions, ...ANTHROPIC_CACHE },
+        } as ModelMessage)
+      : m,
+  );
+  return system
+    ? [
+        { role: "system", content: system, providerOptions: { ...ANTHROPIC_CACHE } },
+        ...out,
+      ]
+    : out;
+}
+
 /**
  * Build a gateway-direct {@link AgentAi}. Throws {@link MissingGatewayKeyError}
  * immediately when no gateway credential can be resolved — callers get one
@@ -124,8 +161,9 @@ export function createGatewayAgentAi(opts: GatewayAgentAiOptions = {}): AgentAi 
         // A plain string model id resolves through the Vercel AI Gateway using
         // AI_GATEWAY_API_KEY (same mechanism as the legacy local loop).
         model: args.model,
-        system: args.system,
-        messages: args.messages,
+        // System is folded into the message list as a cached system message —
+        // only message-level providerOptions can carry a cache_control marker.
+        messages: withPromptCaching(args.system, args.messages),
         tools: args.tools,
         stopWhen: args.stopWhen,
         abortSignal: args.abortSignal,
