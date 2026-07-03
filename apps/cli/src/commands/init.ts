@@ -728,7 +728,12 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
     // This still gives accurate stats for THIS run; they just won't persist,
     // so a later process (e.g. the agent's own code_graph tool) starts cold.
     graph = await buildCodeGraph(cwd, onFileProgress);
-    indexed = graph.nodes.size;
+    // `indexed` means "files freshly parsed this run" (see the primary path
+    // above, where it excludes `skipped` unchanged-hash files) — the in-memory
+    // fallback has no cache to skip against, so every file counts, but it must
+    // still be a FILE count, not graph.nodes.size (files + symbols combined),
+    // or formatInitSummary's "Files read: N (parsed M)" prints M > N.
+    indexed = [...graph.nodes.values()].filter((n) => n.kind === "file").length;
     skipped = 0;
   } finally {
     if (store) {

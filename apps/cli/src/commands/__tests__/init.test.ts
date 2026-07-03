@@ -288,6 +288,29 @@ describe("runInit", () => {
     expect(result.graph.skipped).toBe(0);
     expect(result.domainsSkipped).toBe(true); // no AI credential mocked in
   });
+
+  it("reports indexed as a FILE count in the in-memory fallback, not a node count", async () => {
+    // Regression test: the fallback branch used to set `indexed =
+    // graph.nodes.size`, which counts files AND symbols together. With an
+    // empty tmpDir (the test above) files === symbols === 0, so that bug was
+    // invisible — write real files so `indexed` (files) and node count
+    // (files + symbols) actually diverge, and formatInitSummary's "Files
+    // read: N (parsed M)" can never show M > N again.
+    writeFileSync(
+      join(tmpDir, "a.ts"),
+      "export function foo() { return 1; }\nexport function bar() { return 2; }\n",
+      "utf8",
+    );
+    writeFileSync(join(tmpDir, "b.ts"), 'import { foo } from "./a";\n', "utf8");
+    const userPath = join(tmpDir, "user-settings.json");
+
+    const result = await runInit({ cwd: tmpDir, userSettingsPath: userPath, noLink: true });
+
+    expect(result.graph.files).toBe(2);
+    expect(result.graph.totalSymbols).toBe(2); // foo, bar
+    expect(result.graph.indexed).toBe(2); // files parsed — NOT 4 (files + symbols)
+    expect(result.graph.skipped).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
