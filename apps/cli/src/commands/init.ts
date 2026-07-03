@@ -35,6 +35,7 @@ import {
   createCodeGraphStore,
   defaultCodeGraphDbPath,
 } from "../daemon/code-graph/store.js";
+import type { CodeGraphStore } from "../daemon/code-graph/store.js";
 import { credentialSupportsModel, resolveAiCredential } from "../agent/env.js";
 import { inferDomains } from "@oxagen/code-graph";
 import type { DomainAI, DomainMap } from "@oxagen/code-graph";
@@ -666,24 +667,37 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
   let indexed = 0;
   let skipped = 0;
 
-  const store = createCodeGraphStore({ duckdbPath });
+  // createCodeGraphStore() itself can throw synchronously — its constructor
+  // does a bare `require("duckdb")` (see daemon/code-graph/store.ts), which
+  // throws if the native module isn't installed (e.g. a bench/CI container
+  // that didn't opt into OXAGEN_INSTALL_DUCKDB). Construct it INSIDE the try,
+  // mirroring the agent's own loadOrBuildCodeGraph() in agent/code-graph.ts —
+  // previously the store was constructed before the try block, so a missing/
+  // failed duckdb binding crashed `runInit()` uncaught instead of degrading to
+  // the in-memory fallback below.
+  let store: CodeGraphStore | null = null;
   try {
+    store = createCodeGraphStore({ duckdbPath });
     await store.whenReady();
     const buildResult = await buildAndPersistCodeGraph(cwd, store);
     indexed = buildResult.indexed;
     skipped = buildResult.skipped;
     graph = await store.loadGraph(cwd);
   } catch {
-    // Store locked (daemon holds write lock) — fall back to in-memory build.
-    // This still gives accurate stats; they just won't be persisted.
+    // Store unavailable — missing/failed duckdb binding, a locked file (daemon
+    // holds the write lock), or a bad path. Fall back to an in-memory build.
+    // This still gives accurate stats for THIS run; they just won't persist,
+    // so a later process (e.g. the agent's own code_graph tool) starts cold.
     graph = await buildCodeGraph(cwd);
     indexed = graph.nodes.size;
     skipped = 0;
   } finally {
-    try {
-      await store.close();
-    } catch {
-      /* ignore close errors */
+    if (store) {
+      try {
+        await store.close();
+      } catch {
+        /* ignore close errors */
+      }
     }
   }
 

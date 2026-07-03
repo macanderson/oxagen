@@ -26,11 +26,15 @@ vi.mock("@oxagen/agent-engine", () => ({
   selectBestCandidate: (a: unknown) => selectMock(a),
   looksPassing: (o: string | undefined) => Boolean(o && !/fail/i.test(o)),
 }));
+// Capture the closure runCandidate hands to createCodeGraphProvider so tests
+// can invoke it directly and see which cwd it forwards to queryCodeGraph.
+const createCodeGraphProviderMock = vi.fn((fn: unknown) => ({ __fn: fn }));
 vi.mock("../adapters/index.js", () => ({
   createCwdWorkspace: vi.fn(() => ({ root: "/wt" })),
-  createCodeGraphProvider: vi.fn(() => ({})),
+  createCodeGraphProvider: (fn: unknown) => createCodeGraphProviderMock(fn),
 }));
-vi.mock("../code-graph.js", () => ({ queryCodeGraph: vi.fn() }));
+const queryCodeGraphMock = vi.fn(async (..._args: unknown[]) => "");
+vi.mock("../code-graph.js", () => ({ queryCodeGraph: (...a: unknown[]) => queryCodeGraphMock(...a) }));
 const verifyMock = vi.fn();
 vi.mock("../../lib/shell-runner.js", () => ({
   runShellCommandBuffered: (a: unknown) => verifyMock(a),
@@ -49,6 +53,8 @@ beforeEach(() => {
   runTurnMock.mockReset();
   selectMock.mockReset();
   verifyMock.mockReset().mockResolvedValue({ exitCode: 0, stdout: "2 passed", stderr: "", timedOut: false });
+  createCodeGraphProviderMock.mockClear();
+  queryCodeGraphMock.mockClear();
 });
 
 const ai = { stream: vi.fn(), generateObject: vi.fn() } as unknown as AgentAi;
@@ -174,5 +180,85 @@ describe("runBestOfN", () => {
     expect(runTurnMock).toHaveBeenCalledTimes(2);
     expect(runTurnMock.mock.calls[0]![0]).toMatchObject({ model: "openai/gpt-4o" });
     expect(runTurnMock.mock.calls[1]![0]).toMatchObject({ model: "openai/gpt-4o" });
+  });
+
+  it("queries the code graph against the shared repo cwd, never the candidate's isolated worktree", async () => {
+    // Regression test: candidates used to query queryCodeGraph(wt, ...) — the
+    // candidate's own temp worktree path. The persistent DuckDB store keys rows
+    // by exact root path, so that path has never been indexed even when the
+    // caller pre-built the graph at `cwd` (e.g. via `oxagen init`) — every
+    // candidate silently paid a full from-scratch rebuild. Fixed to query
+    // opts.cwd instead, reusing whatever was pre-built there.
+    runTurnMock.mockImplementation(async (o: { onFileChange?: (d: string, f: string[]) => void }) => {
+      o.onFileChange?.("--- a/x\n+++ b/x\n+z", ["x"]);
+      return { text: "ok", steps: 1, messages: [], usage: {}, trace: {} };
+    });
+    selectMock.mockResolvedValue({ winnerId: "candidate-1", reasoning: "", ranking: [], model: "m", fallback: false, usage: {} });
+
+    await runBestOfN({ prompt: "explain", cwd: "/repo", candidates: 1, ai });
+
+    expect(createCodeGraphProviderMock).toHaveBeenCalledTimes(1);
+    const queryFn = createCodeGraphProviderMock.mock.calls[0]![0] as (
+      op: string,
+      q: string,
+      l: number,
+    ) => Promise<string>;
+    await queryFn("search", "someSymbol", 10);
+
+    expect(queryCodeGraphMock).toHaveBeenCalledWith("/repo", "search", "someSymbol", 10);
+    // Never the worktree path (the mocked mkdtemp/join land under /tmp/bestof-xyz/candidate-1).
+    expect(queryCodeGraphMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("bestof-xyz"),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("defaults to bare — no evaluate/enhance/judge, no graph warmup", async () => {
+    runTurnMock.mockImplementation(async (o: { onFileChange?: (d: string, f: string[]) => void }) => {
+      o.onFileChange?.("--- a/x\n+++ b/x\n+z", ["x"]);
+      return { text: "ok", steps: 1, messages: [], usage: {}, trace: {} };
+    });
+    selectMock.mockResolvedValue({ winnerId: "candidate-1", reasoning: "", ranking: [], model: "m", fallback: false, usage: {} });
+
+    await runBestOfN({ prompt: "explain", cwd: "/repo", candidates: 1, ai });
+
+    expect(runTurnMock.mock.calls[0]![0]).toMatchObject({
+      bare: true,
+      enhanceTimeoutMs: undefined,
+      midJudgeSteps: undefined,
+    });
+    // No warmup query fired — nothing will read the code graph in bare mode's
+    // ENHANCE-less path until (if ever) the agent's own tool loop asks for it.
+    expect(queryCodeGraphMock).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), "__graph_warmup__", expect.anything());
+  });
+
+  it("fullPipeline: true runs each candidate through evaluate/enhance/judge and warms the shared code graph", async () => {
+    // The user explicitly wants pipeline-on + graph-first/semantic engaged
+    // for best-of-N, not just the bare engine loop — this opts every
+    // candidate into runTurn's full (non-bare) path, mirroring one-shot.ts's
+    // headless-mode pipeline defaults (enhanceTimeoutMs, midJudgeSteps).
+    runTurnMock.mockImplementation(async (o: { onFileChange?: (d: string, f: string[]) => void }) => {
+      o.onFileChange?.("--- a/x\n+++ b/x\n+z", ["x"]);
+      return { text: "ok", steps: 1, messages: [], usage: {}, trace: {} };
+    });
+    selectMock.mockResolvedValue({ winnerId: "candidate-1", reasoning: "", ranking: [], model: "m", fallback: false, usage: {} });
+
+    await runBestOfN({ prompt: "explain", cwd: "/repo", candidates: 2, ai, fullPipeline: true });
+
+    expect(runTurnMock).toHaveBeenCalledTimes(2);
+    for (const call of runTurnMock.mock.calls) {
+      expect(call[0]).toMatchObject({
+        bare: false,
+        profile: "headless",
+        enhanceTimeoutMs: 15_000,
+        midJudgeSteps: 20,
+      });
+    }
+    // One shared warmup for opts.cwd — not one per candidate (see comment in
+    // runBestOfN: the code-graph cache is keyed by cwd, so a single
+    // fire-and-forget call covers the whole race).
+    expect(queryCodeGraphMock).toHaveBeenCalledWith("/repo", "search", "__graph_warmup__", 1);
   });
 });
