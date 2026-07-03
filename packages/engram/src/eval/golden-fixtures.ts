@@ -68,7 +68,7 @@ function semantic(seed: string, fact: string, domain: string, salience = 0.7): M
 export const GOLDEN_CORPUS: MemoryRecord[] = [
   semantic(
     "cli-default-model",
-    "The DEFAULT_MODEL constant in apps/cli/src/agent/model.ts is set to anthropic/claude-sonnet-4.5.",
+    "The DEFAULT_MODEL constant in apps/cli/src/agent/model.ts is set to anthropic/claude-sonnet-5.",
     "cli-config",
     0.8,
   ),
@@ -121,7 +121,7 @@ function frame(taskDescription: string, workingSet: string[] = []): TaskFrame {
     taskDescription,
     workingSet,
     recentEventIds: [],
-    modelId: "claude-sonnet-4.5",
+    modelId: "claude-sonnet-5",
   };
 }
 
@@ -214,7 +214,7 @@ export const GOLDEN_TRACES: GoldenTrace[] = [
 
 /** Ground-truth short answers per turn id (used to export the RAGAS/DeepEval dataset). */
 export const GOLDEN_GROUND_TRUTH: Record<string, string> = {
-  [hex64("cli-default-model")]: "anthropic/claude-sonnet-4.5",
+  [hex64("cli-default-model")]: "anthropic/claude-sonnet-5",
   [hex64("cli-oneshot-runturn")]: "runTurn",
   [hex64("cli-mutating-tools")]: "write_file, edit_file, bash",
   [hex64("cli-codegraph-builder")]: "daemon/code-graph/builder",

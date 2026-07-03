@@ -24,7 +24,7 @@ mocks.generateObject.mockResolvedValue({
 mocks.insertTokenUsage.mockResolvedValue(undefined);
 mocks.hashPrompt.mockResolvedValue("cafebabe");
 mocks.providerFromModelId.mockReturnValue("anthropic");
-mocks.defaultModel.mockReturnValue({ modelId: "claude-sonnet-4-6" });
+mocks.defaultModel.mockReturnValue({ modelId: "claude-sonnet-5" });
 // 12 input @ $3/1M + 8 output @ $15/1M = 156 micro-USD.
 mocks.providerCostUsdMicros.mockReturnValue(156);
 mocks.chargeUsageCredits.mockResolvedValue({
@@ -231,7 +231,7 @@ describe("generateObjectFor (@oxagen/ai)", () => {
     expect(mocks.chargeUsageCredits).toHaveBeenCalledWith({
       orgId: "00000000-0000-4000-8000-000000000001",
       referenceId: "msg_xyz",
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       inputTokens: 12,
       outputTokens: 8,
       cachedTokens: 0,

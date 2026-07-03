@@ -51,7 +51,7 @@ describe("hashPrompt", () => {
 
 describe("providerFromModelId", () => {
   it("maps a bare claude model id to 'anthropic'", () => {
-    expect(providerFromModelId("claude-sonnet-4-6")).toBe("anthropic");
+    expect(providerFromModelId("claude-sonnet-5")).toBe("anthropic");
     expect(providerFromModelId("claude-3-haiku-20240307")).toBe("anthropic");
     expect(providerFromModelId("claude-opus-4")).toBe("anthropic");
   });
@@ -74,7 +74,7 @@ describe("providerFromModelId", () => {
 
   it("maps the prefixed form 'anthropic:claude-3' to 'anthropic'", () => {
     expect(providerFromModelId("anthropic:claude-3-haiku-20240307")).toBe("anthropic");
-    expect(providerFromModelId("anthropic:claude-sonnet-4-6")).toBe("anthropic");
+    expect(providerFromModelId("anthropic:claude-sonnet-5")).toBe("anthropic");
   });
 
   it("maps the prefixed form 'openai:gpt-4o' to 'openai'", () => {
@@ -292,7 +292,7 @@ describe("insert helpers — insertRows delegation", () => {
       execution_step_id: "11111111-1111-1111-1111-111111111111",
       org_id: "o1",
       workspace_id: "w1",
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       provider: "anthropic",
       input_tokens: 100,
       output_tokens: 50,
@@ -448,7 +448,7 @@ describe("insert helpers — insertRows delegation", () => {
       run_id: "run-1",
       agent_name: "oxagen",
       agent_version: "0.6.2",
-      model: "claude-sonnet-4.5",
+      model: "claude-sonnet-5",
       harness: "terminal-bench",
       suite: "terminal-bench-2.0",
       graph_code: 1,

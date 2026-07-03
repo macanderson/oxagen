@@ -4,7 +4,7 @@ import { oxagenSettingsSchema, permissionsSchema, hooksSchema } from "../schema.
 describe("oxagenSettingsSchema", () => {
   it("parses a full settings document", () => {
     const parsed = oxagenSettingsSchema.parse({
-      model: "anthropic/claude-sonnet-4.6",
+      model: "anthropic/claude-sonnet-5",
       apiUrl: "https://api.oxagen.sh",
       env: { FOO: "bar" },
       permissions: { defaultMode: "default", deny: ["Bash(rm -rf*)"], allow: ["Bash(git*)"] },
@@ -14,7 +14,7 @@ describe("oxagenSettingsSchema", () => {
       },
       toolVisibility: { github: { include: ["create_*"] } },
     });
-    expect(parsed.model).toBe("anthropic/claude-sonnet-4.6");
+    expect(parsed.model).toBe("anthropic/claude-sonnet-5");
     expect(parsed.permissions?.deny).toContain("Bash(rm -rf*)");
     expect(parsed.mcpServers?.github?.transport).toBe("stdio");
   });
