@@ -25,10 +25,12 @@ import { logger } from "../logger";
  * so Inngest records the failure and the event appears in the dashboard.
  *
  * Timeout note:
- *   Veo renders are slow (2–5+ minutes). `generateVideoFor` internally sets a
- *   15-minute AbortController on the underlying fetch. This Inngest function is
- *   configured with `timeouts.functionRun: "16m"` — 1 minute headroom above the
- *   fetch timeout — so Inngest doesn't cancel the step before the abort fires.
+ *   Veo renders are slow (2–5+ minutes). Three timeout layers must nest, tightest
+ *   first: `generateVideoFor` sets a 750s AbortController on the fetch; the API
+ *   function's Vercel `maxDuration` is 800s (apps/api/build.mjs — the platform
+ *   cap that actually kills the invocation; it was 60s once, which 504'd every
+ *   render); this Inngest function allows "16m" total so Inngest never cancels
+ *   the run before the inner layers resolve.
  *   `retries: 0` because video generation is expensive; callers re-dispatch if
  *   needed.
  */
@@ -38,8 +40,8 @@ export const [agentVideoRender, agentVideoRenderOnFailure] = createFunction(
     retries: 0,
     concurrency: { limit: 4, key: "event.data.orgId" },
     // Allow 16 minutes total wall-clock time for the run to finish. Veo renders
-    // can take 2-5+ minutes; `generateVideoFor` enforces a 15-minute
-    // AbortController timeout, giving 1 minute of Inngest headroom.
+    // can take 2-5+ minutes; `generateVideoFor` enforces a 750s AbortController
+    // and the Vercel function caps at 800s — Inngest must outlast both.
     timeouts: { finish: "16m" },
     onFailure: async ({ event, step }) => {
       const failureData = event.data as {

@@ -215,10 +215,12 @@ function videoModelIdOf(model: VideoModel): string {
  *
  * Timeout note: Veo renders can take several minutes. The gateway client
  * (`@ai-sdk/gateway`) uses Node's undici under the hood. We pass an `abortSignal`
- * from a 15-minute AbortController so the call surfaces a clean timeout error
- * rather than hanging indefinitely. The Inngest function's step should be
- * configured to allow at least 16 minutes of wall-clock time (handled in
- * agent.video-render.ts via the `timeouts` option on the function config).
+ * from a 750-second AbortController so the call surfaces a clean timeout error
+ * rather than hanging indefinitely. 750s sits under the API function's 800s
+ * Vercel `maxDuration` (apps/api/build.mjs) with headroom for the blob upload —
+ * the abort must fire BEFORE the platform kills the invocation, or the render
+ * dies as an opaque 504 and the failure path never runs. The Inngest function
+ * allows more wall-clock time on top (agent.video-render.ts `timeouts`).
  *
  * After generation the function records:
  * - A `token_usage` row to ClickHouse via @oxagen/telemetry (best-effort).
@@ -243,9 +245,11 @@ function videoModelIdOf(model: VideoModel): string {
 export async function generateVideoFor(
   args: GenerateVideoForArgs,
 ): Promise<GenerateVideoForResult> {
-  // 15-minute wall-clock timeout — Veo renders are slow; this surfaces a clean
-  // AbortError rather than an indefinite hang.
-  const timeoutMs = 15 * 60 * 1000;
+  // 750s wall-clock timeout — Veo renders are slow; this surfaces a clean
+  // AbortError rather than an indefinite hang. Must stay under the serving
+  // function's Vercel maxDuration (800s, apps/api/build.mjs) so the abort wins
+  // the race against the platform killing the invocation.
+  const timeoutMs = 750 * 1000;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
