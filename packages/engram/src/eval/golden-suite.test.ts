@@ -8,7 +8,7 @@
  * point of a context-quality gate.
  */
 import { describe, it, expect } from "vitest";
-import { runGoldenSuite, buildRagDataset } from "./run-golden";
+import { runGoldenSuite, buildRagDataset, isDirectCliEntry } from "./run-golden";
 import {
   GOLDEN_CORPUS,
   GOLDEN_TRACES,
@@ -58,6 +58,16 @@ describe("engram golden eval suite", () => {
         expect(packed.filter((id) => excluded.has(id))).toEqual([]);
       }
     }
+  });
+
+  it("isDirectCliEntry is false for a bundle entry that merely shares import.meta.url", () => {
+    // In a single-file bundle every module resolves import.meta.url to the
+    // bundle path (e.g. oxagen.mjs). Passing that path as argv[1] simulates the
+    // CLI startup that used to run the whole golden suite as a side effect.
+    expect(isDirectCliEntry("/usr/local/lib/oxagen/oxagen.mjs")).toBe(false);
+    // Under vitest, argv[1] is the vitest binary — also not this file.
+    expect(isDirectCliEntry()).toBe(false);
+    expect(isDirectCliEntry(undefined)).toBe(false);
   });
 
   it("exports a RAGAS/DeepEval dataset in the bench/rag-eval schema", async () => {
