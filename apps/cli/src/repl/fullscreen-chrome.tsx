@@ -18,7 +18,7 @@ import type { SessionMetrics } from "../agent/metrics.js";
 import type { TelemetryState } from "./telemetry.js";
 import { ENGINE_DEFAULT_MAX_STEPS, TRACKED_TOOLS } from "./telemetry.js";
 import type { RepoInfo } from "./use-repo-info.js";
-import { truncatePathStart } from "./git-info.js";
+import { abbreviatePath } from "./git-info.js";
 import {
   estimateMessageRows,
   computeVisibleWindow,
@@ -296,7 +296,7 @@ export function TelemetryDock({
 
       <DockPanel title="REPO" accent="#F472B6" width={panelWidth}>
         <Text wrap="truncate-end" dimColor>
-          {truncatePathStart(repo.root, Math.max(6, panelWidth - 4))}
+          {abbreviatePath(repo.root, Math.max(6, panelWidth - 4))}
         </Text>
         <Text wrap="truncate-end">
           <Text color={theme.cyan}>{repo.branch ?? "—"}</Text>

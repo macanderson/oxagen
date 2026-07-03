@@ -17,6 +17,7 @@
  * silent gap was worth fixing outright, not just working around.
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 
 export interface GitInfo {
@@ -87,4 +88,37 @@ export function resolveGitInfo(cwd: string): GitInfo | undefined {
 export function truncatePathStart(path: string, maxLen: number): string {
   if (path.length <= maxLen || maxLen <= 1) return path;
   return "…" + path.slice(path.length - (maxLen - 1));
+}
+
+/** Replaces a leading `$HOME` with `~`, the same convention every shell prompt uses. */
+export function abbreviateHome(path: string): string {
+  const home = homedir();
+  if (home && (path === home || path.startsWith(home + "/"))) {
+    return "~" + path.slice(home.length);
+  }
+  return path;
+}
+
+/**
+ * Compact display form of a filesystem path — the REPO panel's "which
+ * worktree am I in" signal, so it favors keeping recognizable DIRECTORY
+ * NAMES over raw trailing characters: `$HOME` abbreviates to `~`, and if
+ * still too long, the middle elides down to the last 1-2 path segments
+ * (e.g. `~/…/oxagen-repl2`) rather than an arbitrary character cut. Falls
+ * back to {@link truncatePathStart}'s plain character truncation only if
+ * even a single trailing segment doesn't fit.
+ */
+export function abbreviatePath(path: string, maxLen: number): string {
+  const abbreviated = abbreviateHome(path);
+  if (abbreviated.length <= maxLen) return abbreviated;
+
+  const home = abbreviated.startsWith("~");
+  const segments = abbreviated.replace(/^~\/?/, "").split("/").filter(Boolean);
+  const prefix = home ? "~" : "";
+  for (const keep of [2, 1]) {
+    if (segments.length <= keep) continue; // nothing to elide — wouldn't actually shorten it
+    const candidate = `${prefix}/…/${segments.slice(-keep).join("/")}`;
+    if (candidate.length <= maxLen) return candidate;
+  }
+  return truncatePathStart(abbreviated, maxLen);
 }
