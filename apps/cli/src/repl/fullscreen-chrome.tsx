@@ -17,6 +17,8 @@ import type { DiffTheme } from "../tui/terminal-theme.js";
 import type { SessionMetrics } from "../agent/metrics.js";
 import type { TelemetryState } from "./telemetry.js";
 import { ENGINE_DEFAULT_MAX_STEPS, TRACKED_TOOLS } from "./telemetry.js";
+import type { RepoInfo } from "./use-repo-info.js";
+import { truncatePathStart } from "./git-info.js";
 import {
   estimateMessageRows,
   computeVisibleWindow,
@@ -179,6 +181,13 @@ function label(text: string, width: number): string {
   return text.padEnd(width);
 }
 
+/** REPO panel's PR row: "…" while the async gh lookup is still in flight, "no PR" once it resolves to none. */
+function prLabel(prNumber: number | null | undefined): string {
+  if (prNumber === undefined) return "…";
+  if (prNumber === null) return "no PR";
+  return `#${prNumber}`;
+}
+
 const PHASE_TITLE: Record<string, string> = {
   idle: "idle",
   evaluate: "evaluate",
@@ -190,6 +199,9 @@ const PHASE_TITLE: Record<string, string> = {
   complete: "complete",
 };
 
+/** How many panels wide the dock is — kept as one constant so the width math and the JSX below can't drift apart. */
+const DOCK_PANEL_COUNT = 5;
+
 export function TelemetryDock({
   telemetry,
   metrics,
@@ -197,6 +209,7 @@ export function TelemetryDock({
   isStreaming,
   now,
   cols,
+  repo,
 }: {
   telemetry: TelemetryState;
   metrics: SessionMetrics;
@@ -205,9 +218,10 @@ export function TelemetryDock({
   isStreaming: boolean;
   now: number;
   cols: number;
+  repo: RepoInfo;
 }): React.ReactElement {
   const gap = 1;
-  const panelWidth = Math.max(18, Math.floor((cols - gap * 3) / 4));
+  const panelWidth = Math.max(16, Math.floor((cols - gap * (DOCK_PANEL_COUNT - 1)) / DOCK_PANEL_COUNT));
 
   const { models, turn, tools } = telemetry;
   const elapsedMs = turn.turnStartedAt != null ? now - turn.turnStartedAt : 0;
@@ -277,6 +291,18 @@ export function TelemetryDock({
         </Text>
         <Text wrap="truncate-end" dimColor>
           {toolCell(TRACKED_TOOLS[4])}  {toolCell(TRACKED_TOOLS[5])}
+        </Text>
+      </DockPanel>
+
+      <DockPanel title="REPO" accent="#F472B6" width={panelWidth}>
+        <Text wrap="truncate-end" dimColor>
+          {truncatePathStart(repo.root, Math.max(6, panelWidth - 4))}
+        </Text>
+        <Text wrap="truncate-end">
+          <Text color={theme.cyan}>{repo.branch ?? "—"}</Text>
+        </Text>
+        <Text wrap="truncate-end" dimColor>
+          {prLabel(repo.prNumber)}
         </Text>
       </DockPanel>
     </Box>
