@@ -163,7 +163,10 @@ export function createGatewayAgentAi(opts: GatewayAgentAiOptions = {}): AgentAi 
         model: args.model,
         // System is folded into the message list as a cached system message —
         // only message-level providerOptions can carry a cache_control marker.
+        // The system content is our own prompt, not user input, so the SDK's
+        // system-in-messages injection warning does not apply here.
         messages: withPromptCaching(args.system, args.messages),
+        allowSystemInMessages: true,
         tools: args.tools,
         stopWhen: args.stopWhen,
         abortSignal: args.abortSignal,
