@@ -219,6 +219,22 @@ function statusOf(err: unknown): number | undefined {
 }
 
 /**
+ * Is this a fatal auth/billing error (no credits, bad key, unauthorized)? These
+ * NEVER succeed on retry, and every other model call in the turn is doomed to
+ * fail identically — so callers that would otherwise swallow an LLM error into
+ * a "keep going" heuristic fallback (the evaluator, the completeness judge, the
+ * best-of-N selector) must re-throw instead, failing the turn fast with the
+ * real message rather than burning time on doomed calls before it resurfaces.
+ * Exported for tests and for those fallback sites.
+ */
+export function isFatalAuthOrBillingError(err: unknown): boolean {
+  const msg = errorText(err);
+  return /insufficient_funds|positive credit balance|invalid.*api.?key|unauthorized|\b401\b|\b403\b/.test(
+    msg,
+  );
+}
+
+/**
  * Is this a retryable transient model/transport error? 429, 5xx, and the
  * network/overload/stream family — but NOT user aborts, 4xx-other (bad
  * request/auth), insufficient funds, or context-overflow (handled separately).
@@ -227,14 +243,12 @@ function statusOf(err: unknown): number | undefined {
 export function isRetryableModelError(err: unknown): boolean {
   if (err instanceof Error && err.name === "AbortError") return false;
   if (isContextOverflowError(err)) return false;
-  const msg = errorText(err);
-  if (/insufficient_funds|positive credit balance|invalid.*api.?key|unauthorized|\b401\b|\b403\b/.test(msg)) {
-    return false;
-  }
+  if (isFatalAuthOrBillingError(err)) return false;
   const status = statusOf(err);
   if (status === 429) return true;
   if (status !== undefined && status >= 500 && status < 600) return true;
   if (status !== undefined && status >= 400 && status < 500) return false; // other 4xx: not retryable
+  const msg = errorText(err);
   return /\b429\b|rate.?limit|overloaded|\b5\d\d\b|service unavailable|bad gateway|gateway timeout|timeout|timed out|econnreset|etimedout|enotfound|eai_again|econnrefused|enetunreach|fetch failed|network|socket hang up|stream (error|closed|interrupted)|premature close/.test(
     msg,
   );

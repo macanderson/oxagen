@@ -14,6 +14,7 @@
 import { z } from "zod";
 import { accumulateUsage } from "../router/model-router";
 import { emptyUsage, type UsageTotals } from "../types";
+import { isFatalAuthOrBillingError } from "../loop-driver";
 import type { AgentAi } from "../ports";
 
 /** One best-of-N candidate: the isolated turn's result, ready to compare. */
@@ -197,7 +198,10 @@ export async function selectBestCandidate(opts: {
       fallback: false,
       usage: accumulateUsage(emptyUsage(), model, usage),
     };
-  } catch {
+  } catch (err) {
+    // A FATAL auth/billing error re-throws rather than falling back — every
+    // other call this run would fail identically (see isFatalAuthOrBillingError).
+    if (isFatalAuthOrBillingError(err)) throw err;
     return heuristicSelect(viable);
   }
 }

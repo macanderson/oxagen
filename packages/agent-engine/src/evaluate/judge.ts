@@ -21,6 +21,7 @@
 import { z } from "zod";
 import { modelForTier, accumulateUsage } from "../router/model-router";
 import { emptyUsage } from "../types";
+import { isFatalAuthOrBillingError } from "../loop-driver";
 import type { AgentAi } from "../ports";
 import type { JudgeVerdict } from "../trace/types";
 
@@ -222,8 +223,12 @@ function heuristicVerdict(opts: JudgeOptions, model: string): JudgeVerdict {
 }
 
 /**
- * Judge whether the agent's work is complete. Always returns a verdict — on model
- * failure it falls back to a conservative heuristic rather than throwing.
+ * Judge whether the agent's work is complete. Returns a verdict — on a
+ * transient model failure it falls back to a conservative heuristic rather
+ * than throwing. A FATAL auth/billing error is the exception: it re-throws so
+ * the turn fails fast with the real message instead of a heuristic verdict
+ * quietly declaring the work "complete" while masking that the account is out
+ * of credits (every further call would fail identically).
  *
  * @param opts  - Judge options (request, response, evidence).
  * @param ai    - Injected AI port. The platform wires in a metered implementation;
@@ -249,7 +254,8 @@ export async function judgeCompleteness(opts: JudgeOptions, ai: AgentAi): Promis
       fallback: false,
       usage: accumulateUsage(emptyUsage(), model, usage),
     };
-  } catch {
+  } catch (err) {
+    if (isFatalAuthOrBillingError(err)) throw err;
     return heuristicVerdict(opts, model);
   }
 }

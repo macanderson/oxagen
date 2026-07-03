@@ -118,6 +118,26 @@ describe("selectBestCandidate", () => {
     expect(res.fallback).toBe(true);
     expect(res.winnerId).toBe("c2"); // the passing one
   });
+
+  it("re-throws instead of falling back when the selector hits a fatal auth/billing error", async () => {
+    // Every other candidate's selector call would fail identically, so a
+    // heuristic fallback here would just mask the real (unrecoverable) error.
+    const ai = makeAi({
+      generateObject: vi.fn().mockRejectedValue(
+        new Error("A positive credit balance is required for all requests, please add credits."),
+      ),
+    });
+    await expect(
+      selectBestCandidate({
+        request: "fix",
+        candidates: [
+          cand("c1", { testOutput: "FAILED", changedFiles: ["a.py"] }),
+          cand("c2", { testOutput: "3 passed", changedFiles: ["a.py"] }),
+        ],
+        ai,
+      }),
+    ).rejects.toThrow(/positive credit balance/);
+  });
 });
 
 function emptyUsageLike() {
