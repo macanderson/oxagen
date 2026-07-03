@@ -154,7 +154,7 @@ Run all 8 cells (+ external arms) on the **same instances, same seeds**. Use `be
 
 A superiority claim dies on confounds. Lock all of these or the result is unpublishable.
 
-1. **Same underlying model on every arm.** Run Oxagen *and* Claude Code on the *same* model id (e.g. both on `claude-sonnet-4-6` via the gateway — `modelIdOf()`, per the AI-Gateway memory note). If you let Oxagen use Opus and Claude Code use Sonnet, you measured the model, not the harness. Report a second pairing too (both on a frontier model) to show the effect isn't model-specific.
+1. **Same underlying model on every arm.** Run Oxagen *and* Claude Code on the *same* model id (e.g. both on `claude-sonnet-5` via the gateway — `modelIdOf()`, per the AI-Gateway memory note). If you let Oxagen use Opus and Claude Code use Sonnet, you measured the model, not the harness. Report a second pairing too (both on a frontier model) to show the effect isn't model-specific.
 2. **Pin everything.** Model id, gateway revision, temperature (set deterministic where supported; otherwise hold equal), `top_p`, max-turns, token/cost budget per task, system-prompt length budget. Record them in the pre-registration ([§13](#13-pre-registration--reporting-template)).
 3. **Identical task substrate & verifier.** Same instances, same held-out tests, same container image, same timeout. Terminal-Bench/Harbor and SWE-bench harnesses give you this for free — use their official containers; never hand-grade.
 4. **Network & tool parity.** Either both agents get web/tool access or neither does. An agent that can `curl` a fix has an unfair edge. Pin egress.

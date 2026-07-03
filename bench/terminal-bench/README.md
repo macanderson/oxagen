@@ -70,7 +70,7 @@ OXAGEN_DIFFERENTIATED=1 ./run.sh
 uv run harbor run \
   -d terminal-bench@2.0 \
   --agent oxagen_terminal_bench:OxagenAgent \
-  -m anthropic/claude-sonnet-4.5 \
+  -m anthropic/claude-sonnet-5 \
   --n-concurrent 4 --n-attempts 1 \
   --jobs-dir ./oxagen-tbench-results
 ```
@@ -87,7 +87,7 @@ export AI_GATEWAY_API_KEY=...
 export OXAGEN_CLI_BUNDLE="$(cd ../.. && pwd)/apps/cli/dist-standalone/oxagen.mjs"
 uv run harbor run -d terminal-bench@2.0 \
   --agent oxagen_terminal_bench:OxagenAgent \
-  -m anthropic/claude-sonnet-4.5 -n 4
+  -m anthropic/claude-sonnet-5 -n 4
 ```
 
 ## Apples-to-apples vs Claude Code
@@ -111,7 +111,7 @@ per task) and compare cost at similar pass rate.
 | Var | Default | Effect |
 |---|---|---|
 | `AI_GATEWAY_API_KEY` | — (required) | Forwarded into the container for all LLM calls. |
-| `OXAGEN_MODEL_SLUG` | `anthropic/claude-sonnet-4.5` | Model passed to Harbor `-m` (an AI-Gateway slug). |
+| `OXAGEN_MODEL_SLUG` | `anthropic/claude-sonnet-5` | Model passed to Harbor `-m` (an AI-Gateway slug). |
 | `OXAGEN_ROUTE` | unset | `1` → drop `--model`; Oxagen's cost-aware router chooses per task (or per candidate, under best-of-N). |
 | `OXAGEN_BEST_OF_N` | unset | `1` → run `oxagen solve --candidates <N> [--model X] [--pipeline] "<task>"` instead of a single one-shot turn: N independent candidates, a comparative judge picks the winner, its diff is applied to the container's working directory. See "Best-of-N mode" below. |
 | `OXAGEN_BEST_OF_N_CANDIDATES` | `3` | Candidates per task under `OXAGEN_BEST_OF_N=1`. |

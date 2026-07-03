@@ -2379,7 +2379,7 @@ The catch block at /home/macanderson/Workspaces/oxagen-platform/apps/api/src/rou
 
 However, the claimed severity of "medium" is an overstatement. Here is why:
 
-1. The fallback is explicitly intentional and well-documented. The comment "Fall through to system default inside selectModel()" matches `selectModel`'s actual behavior exactly: when called with no model or tier it applies `DEFAULT_TIER = "balanced"`, which resolves to the `OXAGEN_LLM_BALANCED` env var (defaulting to `anthropic/claude-sonnet-4.6`). This is the platform's configured default, not a random or degraded model.
+1. The fallback is explicitly intentional and well-documented. The comment "Fall through to system default inside selectModel()" matches `selectModel`'s actual behavior exactly: when called with no model or tier it applies `DEFAULT_TIER = "balanced"`, which resolves to the `OXAGEN_LLM_BALANCED` env var (defaulting to `anthropic/claude-sonnet-5`). This is the platform's configured default, not a random or degraded model.
 
 2. The guard condition `!resolvedModel && !resolvedTier && ctx.userId` means this branch is only entered when the client has not sent an explicit model or tier. Explicit client-sent preferences bypass this block entirely and are unaffected by the DB error.
 
