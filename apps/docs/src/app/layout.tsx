@@ -2,6 +2,7 @@ import "./global.css";
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { RootProvider } from "fumadocs-ui/provider/next";
+import { InstallCliButton } from "@/components/install/install-cli-button";
 
 export const metadata: Metadata = {
   title: "Oxagen Docs",
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <body className="flex min-h-screen flex-col">
         <RootProvider>{children}</RootProvider>
+        <InstallCliButton />
       </body>
     </html>
   );
