@@ -14,7 +14,12 @@
 import React from "react";
 import { EventEmitter } from "node:events";
 import { render } from "ink";
-import { runInit, type InitOptions, type InitResult, type InitProgressEvent } from "../commands/init.js";
+import {
+  runInit,
+  type InitOptions,
+  type InitResult,
+  type InitProgressEvent,
+} from "../commands/init.js";
 import { InitAnimationApp } from "./init-animation-app.js";
 
 function plainLine(e: InitProgressEvent): string | null {
@@ -22,7 +27,9 @@ function plainLine(e: InitProgressEvent): string | null {
     case "settings":
       return e.status === "start" ? "Scaffolding settings…" : null;
     case "graph":
-      return e.status === "start" ? "Building code graph…" : e.status === "done" ? `Code graph: ${e.stats.files} files, ${e.stats.totalSymbols} symbols` : null;
+      if (e.status === "start") return "Building code graph…";
+      if (e.status === "done") return `Code graph: ${e.stats.files} files, ${e.stats.totalSymbols} symbols`;
+      return null;
     case "domains":
       if (e.status === "start") return "Inferring domains…";
       if (e.status === "done") return `Domains: ${e.domains.length} found`;
@@ -62,7 +69,11 @@ export async function runInitWithAnimation(opts: InitOptions): Promise<InitResul
   });
 
   const { unmount, waitUntilExit } = render(
-    <InitAnimationApp emitter={emitter} onReady={() => readyResolve()} width={process.stdout.columns ?? 80} />,
+    <InitAnimationApp
+      emitter={emitter}
+      onReady={() => readyResolve()}
+      width={process.stdout.columns ?? 80}
+    />,
   );
 
   const teardown = async (): Promise<void> => {
