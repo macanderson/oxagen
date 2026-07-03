@@ -274,7 +274,7 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
       usage.inputTokens += stepUsage.inputTokens ?? 0;
       usage.outputTokens += stepUsage.outputTokens ?? 0;
       usage.totalTokens += stepUsage.totalTokens ?? 0;
-      usage.cachedInputTokens += (stepUsage as { cachedInputTokens?: number }).cachedInputTokens ?? 0;
+      usage.inputTokenDetails.cacheReadTokens += (stepUsage as { cachedInputTokens?: number }).inputTokenDetails.cacheReadTokens ?? 0;
       conversation = [...conversation, ...response.messages];
       steps += (await result.steps).length || 1;
 
@@ -355,7 +355,7 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       totalTokens: usage.totalTokens,
-      cachedInputTokens: usage.cachedInputTokens,
+      cachedInputTokens: usage.inputTokenDetails.cacheReadTokens,
     },
     // The final transcript is `conversation` — it started as `messages` and grew
     // (and may have been compacted) across steps, so it already includes every

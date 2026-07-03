@@ -60,7 +60,7 @@ type StreamResult = ReturnType<typeof streamAgentReply> & {
       inputTokens: number;
       outputTokens: number;
       totalTokens: number;
-      cachedInputTokens?: number;
+      inputTokenDetails?: { cacheReadTokens?: number };
     };
     finishReason: string;
   }) => Promise<void>;
@@ -198,11 +198,16 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     });
   });
 
-  it("forwards prompt-cache reads (cachedInputTokens) to telemetry and the meter", async () => {
+  it("forwards prompt-cache reads (inputTokenDetails.cacheReadTokens) to telemetry and the meter", async () => {
     const result = streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY }) as StreamResult;
     await result._onFinish({
       text: "hi there",
-      totalUsage: { inputTokens: 100, outputTokens: 20, totalTokens: 120, cachedInputTokens: 80 },
+      totalUsage: {
+        inputTokens: 100,
+        outputTokens: 20,
+        totalTokens: 120,
+        inputTokenDetails: { cacheReadTokens: 80 },
+      },
       finishReason: "stop",
     });
     // Telemetry row records the real cached count (not hardcoded 0).

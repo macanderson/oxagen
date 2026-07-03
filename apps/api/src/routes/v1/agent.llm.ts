@@ -167,8 +167,8 @@ function toOpenAiUsage(u: {
     prompt_tokens,
     completion_tokens,
     total_tokens: u.totalTokens ?? prompt_tokens + completion_tokens,
-    ...(u.cachedInputTokens
-      ? { prompt_tokens_details: { cached_tokens: u.cachedInputTokens } }
+    ...(u.inputTokenDetails.cacheReadTokens
+      ? { prompt_tokens_details: { cached_tokens: u.inputTokenDetails.cacheReadTokens } }
       : {}),
   };
 }

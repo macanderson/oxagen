@@ -38,7 +38,7 @@
     "@oxagen/ontology": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "@oxagen/web": "workspace:*",
-    "ai": "6.0.197",
+    "ai": "7.0.14",
     "docx": "9.7.1",
     "drizzle-orm": "0.45.2",
     "exceljs": "4.4.0",
