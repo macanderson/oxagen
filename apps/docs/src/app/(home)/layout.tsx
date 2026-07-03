@@ -13,6 +13,7 @@ const APP_URL = "https://app.oxagen.sh";
 
 const NAV = [
   { label: "Docs", href: "/docs" },
+  { label: "Install", href: "/install" },
   { label: "CLI", href: "/docs/cli" },
   { label: "API", href: "/docs/api/overview" },
   { label: "MCP", href: "/docs/mcp/overview" },

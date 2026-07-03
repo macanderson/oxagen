@@ -37,7 +37,6 @@
     "@oxagen/compliance": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
-    "@oxagen/engram": "workspace:*",
     "@oxagen/functions": "workspace:*",
     "@oxagen/handlers": "workspace:*",
     "@oxagen/iam": "workspace:*",

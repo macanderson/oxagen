@@ -1,9 +1,56 @@
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
 
+import { IllustrationAgent } from "@/components/illustrations/illustration-agent";
+import { IllustrationApi } from "@/components/illustrations/illustration-api";
+import { IllustrationByokSpot } from "@/components/illustrations/illustration-byok-spot";
+import { IllustrationCli } from "@/components/illustrations/illustration-cli";
+import { IllustrationCliInstallSpot } from "@/components/illustrations/illustration-cli-install-spot";
+import { IllustrationConfiguration } from "@/components/illustrations/illustration-configuration";
+import { IllustrationConnectionSpot } from "@/components/illustrations/illustration-connection-spot";
+import { IllustrationEnterprise } from "@/components/illustrations/illustration-enterprise";
+import { IllustrationGettingStarted } from "@/components/illustrations/illustration-getting-started";
+import { IllustrationGovernance } from "@/components/illustrations/illustration-governance";
+import { IllustrationMcp } from "@/components/illustrations/illustration-mcp";
+import { IllustrationOverview } from "@/components/illustrations/illustration-overview";
+import { IllustrationPlugins } from "@/components/illustrations/illustration-plugins";
+import { IllustrationPrivacySpot } from "@/components/illustrations/illustration-privacy-spot";
+import { IllustrationRbacSpot } from "@/components/illustrations/illustration-rbac-spot";
+import { IllustrationSecurity } from "@/components/illustrations/illustration-security";
+import { IllustrationSkillSpot } from "@/components/illustrations/illustration-skill-spot";
+import { TuiGraphSearch } from "@/components/tui/tui-graph-search";
+import { TuiInteractiveAnswer } from "@/components/tui/tui-interactive-answer";
+import { TuiLogin } from "@/components/tui/tui-login";
+import { TuiReplBanner } from "@/components/tui/tui-repl-banner";
+import { TuiSettingsShow } from "@/components/tui/tui-settings-show";
+import { TuiSlashMenu } from "@/components/tui/tui-slash-menu";
+
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
     ...defaultMdxComponents,
+    IllustrationAgent,
+    IllustrationApi,
+    IllustrationByokSpot,
+    IllustrationCli,
+    IllustrationCliInstallSpot,
+    IllustrationConfiguration,
+    IllustrationConnectionSpot,
+    IllustrationEnterprise,
+    IllustrationGettingStarted,
+    IllustrationGovernance,
+    IllustrationMcp,
+    IllustrationOverview,
+    IllustrationPlugins,
+    IllustrationPrivacySpot,
+    IllustrationRbacSpot,
+    IllustrationSecurity,
+    IllustrationSkillSpot,
+    TuiGraphSearch,
+    TuiInteractiveAnswer,
+    TuiLogin,
+    TuiReplBanner,
+    TuiSettingsShow,
+    TuiSlashMenu,
     ...components,
   };
 }
