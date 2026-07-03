@@ -261,10 +261,24 @@ export function buildProgram(): Command {
     .option("-m, --model <slug>", "Pin every candidate to one model")
     .option("--readonly", "Read-only candidates: do not apply a winner", false)
     .option("--json", "Headless: stream JSONL events instead of the live view", false)
+    .option(
+      "--pipeline",
+      "Run each candidate through the full evaluate/enhance/judge pipeline, not just bare (default: bare — the selector already judges across all N)",
+      false,
+    )
     .action(
       async (
         promptWords: string[],
-        opts: { candidates?: number; verify?: string; models?: string; selector?: string; model?: string; readonly?: boolean; json?: boolean },
+        opts: {
+          candidates?: number;
+          verify?: string;
+          models?: string;
+          selector?: string;
+          model?: string;
+          readonly?: boolean;
+          json?: boolean;
+          pipeline?: boolean;
+        },
       ) => {
         const prompt = promptWords.join(" ").trim();
         if (!prompt) {

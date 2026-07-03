@@ -2,13 +2,18 @@
  * Best-of-N orchestration — run the same task N times independently and keep the
  * best patch.
  *
- * Each candidate runs the ONE engine loop (`runTurn`, bare + headless
- * verification profile) in its OWN git worktree cut from HEAD, so the N attempts
- * physically cannot clobber each other. An optional `verifyCommand` is run in
- * each candidate's worktree afterwards and its output feeds the comparative
- * {@link selectBestCandidate} judge, which picks the winner (tests-pass →
- * smallest correct change). The winner's diff is applied to the real working
- * tree; every worktree is cleaned up.
+ * Each candidate runs the ONE engine loop (`runTurn`, headless verification
+ * profile) in its OWN git worktree cut from HEAD, so the N attempts physically
+ * cannot clobber each other. By default candidates run `bare` — no evaluate/
+ * enhance/judge — since the comparative {@link selectBestCandidate} SELECTOR
+ * already judges all N side by side; set `fullPipeline` to opt every candidate
+ * into the full evaluate→enhance→route→execute→judge→revise pipeline too (the
+ * ENHANCE stage's semantic-embedding + code-graph pre-context, and a per-
+ * candidate completeness judge/revise round, at roughly N extra judge-class
+ * model calls). An optional `verifyCommand` is run in each candidate's
+ * worktree afterwards and its output feeds the SELECTOR, which picks the
+ * winner (tests-pass → smallest correct change). The winner's diff is applied
+ * to the real working tree; every worktree is cleaned up.
  *
  * Every step emits a {@link BestOfNEvent} so the CLI can render the whole race
  * live — the point is that the user SEES the orchestration working, not a
@@ -64,6 +69,18 @@ export interface BestOfNOptions {
   verifyCommand?: string;
   /** Apply the winner's diff to `cwd` (default true; forced off for readOnly). */
   apply?: boolean;
+  /**
+   * Run each candidate through the FULL evaluate→enhance→route→execute→judge→
+   * revise pipeline instead of the bare engine loop (default false: bare).
+   * Bare is deliberately the default — best-of-N already has a comparative
+   * SELECTOR judging all N candidates side by side, so a per-candidate judge
+   * too is redundant cost most of the time. Set this when the semantic-enhance
+   * fallback (embed the prompt, pull related files from the code graph before
+   * the agent starts) and a per-candidate completeness judge/revise round are
+   * worth the extra cost — roughly N extra judge-class model calls (one per
+   * candidate) on top of the one the selector always makes.
+   */
+  fullPipeline?: boolean;
   signal?: AbortSignal;
   onEvent?: (e: BestOfNEvent) => void;
 }
@@ -117,8 +134,19 @@ async function runCandidate(
       workspace: createCwdWorkspace(wt),
       ai: opts.ai,
       model,
-      bare: true, // the SELECTOR is the judge; skip the per-candidate judge/revise
+      // Default bare (SELECTOR is the sole judge). fullPipeline opts each
+      // candidate into evaluate→enhance→route→execute→judge→revise too — see
+      // BestOfNOptions.fullPipeline for the cost tradeoff.
+      bare: !opts.fullPipeline,
       profile: "headless", // candidates run their own verification
+      // Mirror one-shot.ts's headless-mode pipeline defaults (repl/one-shot.ts)
+      // so "pipeline on" means the same thing here as it does for a one-shot
+      // turn: bound the ENHANCE stage's code-graph pass instead of leaving it
+      // unbounded, and judge at the midpoint of a long tool loop so a missing
+      // acceptance criterion is caught before the step budget is burned on
+      // redundant verification. No-ops when bare (bare skips both stages).
+      enhanceTimeoutMs: opts.fullPipeline ? 15_000 : undefined,
+      midJudgeSteps: opts.fullPipeline ? 20 : undefined,
       readOnly: opts.readOnly,
       projectContext: opts.projectContext,
       // Query the code_graph against opts.cwd (the real repo root a caller may
@@ -201,6 +229,17 @@ export async function runBestOfN(opts: BestOfNOptions): Promise<BestOfNResult> {
   // undefined ⇒ every candidate lets the engine apply its own default model.
   const models: Array<string | undefined> = opts.models && opts.models.length > 0 ? opts.models : [undefined];
   emit({ type: "start", candidates: n, prompt: opts.prompt });
+
+  // fullPipeline mode: warm the shared code-graph cache for opts.cwd NOW, in
+  // the background, mirroring one-shot.ts's headless warmup. Every candidate
+  // queries the SAME opts.cwd (see runCandidate's codeGraph provider), and
+  // getCodeGraph()'s module-level cache is keyed by that path, so this one
+  // fire-and-forget call — not one per candidate — is enough: whichever
+  // candidate's ENHANCE stage asks first either finds it already warm or
+  // shares the same in-flight load as every other candidate.
+  if (opts.fullPipeline) {
+    void queryCodeGraph(opts.cwd, "search", "__graph_warmup__", 1).catch(() => {});
+  }
 
   const worktreeBase = await mkdtemp(join(tmpdir(), "oxagen-bestof-"));
   let candidates: Candidate[];

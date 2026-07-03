@@ -214,4 +214,51 @@ describe("runBestOfN", () => {
       expect.anything(),
     );
   });
+
+  it("defaults to bare — no evaluate/enhance/judge, no graph warmup", async () => {
+    runTurnMock.mockImplementation(async (o: { onFileChange?: (d: string, f: string[]) => void }) => {
+      o.onFileChange?.("--- a/x\n+++ b/x\n+z", ["x"]);
+      return { text: "ok", steps: 1, messages: [], usage: {}, trace: {} };
+    });
+    selectMock.mockResolvedValue({ winnerId: "candidate-1", reasoning: "", ranking: [], model: "m", fallback: false, usage: {} });
+
+    await runBestOfN({ prompt: "explain", cwd: "/repo", candidates: 1, ai });
+
+    expect(runTurnMock.mock.calls[0]![0]).toMatchObject({
+      bare: true,
+      enhanceTimeoutMs: undefined,
+      midJudgeSteps: undefined,
+    });
+    // No warmup query fired — nothing will read the code graph in bare mode's
+    // ENHANCE-less path until (if ever) the agent's own tool loop asks for it.
+    expect(queryCodeGraphMock).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), "__graph_warmup__", expect.anything());
+  });
+
+  it("fullPipeline: true runs each candidate through evaluate/enhance/judge and warms the shared code graph", async () => {
+    // The user explicitly wants pipeline-on + graph-first/semantic engaged
+    // for best-of-N, not just the bare engine loop — this opts every
+    // candidate into runTurn's full (non-bare) path, mirroring one-shot.ts's
+    // headless-mode pipeline defaults (enhanceTimeoutMs, midJudgeSteps).
+    runTurnMock.mockImplementation(async (o: { onFileChange?: (d: string, f: string[]) => void }) => {
+      o.onFileChange?.("--- a/x\n+++ b/x\n+z", ["x"]);
+      return { text: "ok", steps: 1, messages: [], usage: {}, trace: {} };
+    });
+    selectMock.mockResolvedValue({ winnerId: "candidate-1", reasoning: "", ranking: [], model: "m", fallback: false, usage: {} });
+
+    await runBestOfN({ prompt: "explain", cwd: "/repo", candidates: 2, ai, fullPipeline: true });
+
+    expect(runTurnMock).toHaveBeenCalledTimes(2);
+    for (const call of runTurnMock.mock.calls) {
+      expect(call[0]).toMatchObject({
+        bare: false,
+        profile: "headless",
+        enhanceTimeoutMs: 15_000,
+        midJudgeSteps: 20,
+      });
+    }
+    // One shared warmup for opts.cwd — not one per candidate (see comment in
+    // runBestOfN: the code-graph cache is keyed by cwd, so a single
+    // fire-and-forget call covers the whole race).
+    expect(queryCodeGraphMock).toHaveBeenCalledWith("/repo", "search", "__graph_warmup__", 1);
+  });
 });

@@ -9,6 +9,7 @@
  *   oxagen solve "fix the failing auth test" -n 5 --verify "pnpm test:unit -- auth"
  *   oxagen solve "…" --models anthropic/claude-fable-5,openai/gpt-5   # diverse candidates
  *   oxagen solve "…" --json                                          # headless JSONL stream
+ *   oxagen solve "…" --pipeline                                      # each candidate runs evaluate/enhance/judge too
  */
 import { requireSession } from "../lib/session.js";
 import { createGatewayAgentAi, createPlatformAgentAi } from "../agent/adapters/index.js";
@@ -26,6 +27,17 @@ export interface SolveOptions {
   model?: string;
   readonly?: boolean;
   json?: boolean;
+  /**
+   * Run every candidate through the full evaluate→enhance→route→execute→
+   * judge→revise pipeline instead of the bare engine loop (default: bare —
+   * the comparative selector across all N candidates already judges, so a
+   * per-candidate judge too is normally redundant cost). Turns on the
+   * semantic-enhance fallback (embeds the prompt, pulls related files from
+   * the code graph before the candidate starts) and a per-candidate
+   * completeness judge/revise round, at roughly N extra judge-class model
+   * calls. See BestOfNOptions.fullPipeline.
+   */
+  pipeline?: boolean;
 }
 
 export async function handleSolve(prompt: string, opts: SolveOptions): Promise<void> {
@@ -50,7 +62,7 @@ export async function handleSolve(prompt: string, opts: SolveOptions): Promise<v
 
   const candidates = Math.max(1, Math.min(opts.candidates ?? 3, 10));
 
-  void debugLog("turn", "solve.start", { prompt, candidates, verify: opts.verify, models });
+  void debugLog("turn", "solve.start", { prompt, candidates, verify: opts.verify, models, pipeline: Boolean(opts.pipeline) });
 
   const result = await launchBestOfN({
     prompt,
@@ -63,6 +75,7 @@ export async function handleSolve(prompt: string, opts: SolveOptions): Promise<v
     readOnly: opts.readonly,
     projectContext: loadProjectContext(cwd),
     headless: opts.json,
+    fullPipeline: opts.pipeline,
   });
 
   // Exit non-zero when nothing viable was produced, so scripts can branch on it.

@@ -70,14 +70,17 @@ fi
 #   OXAGEN_DIFFERENTIATED=1 OXAGEN_BEST_OF_N_CANDIDATES=5 ./run.sh   # override just N
 #
 # init (local code graph) and the evaluate→enhance→route→execute→judge→revise
-# pipeline are ALREADY on by default (see OXAGEN_SKIP_INIT / OXAGEN_NO_PIPELINE
-# — this recipe deliberately leaves both unset) — the one piece that's off by
-# default and actually required for "local code graph" to mean anything is
-# OXAGEN_INSTALL_DUCKDB: without it, install()'s `oxagen init` pre-build still
-# runs, but builds an IN-MEMORY graph that's discarded the moment that process
-# exits — the later `run()` invocation (a separate process) starts cold either
-# way. OXAGEN_INSTALL_DUCKDB=1 is what makes the pre-build persist to disk so
-# run() actually reuses it.
+# pipeline are ALREADY on by default — see OXAGEN_SKIP_INIT / OXAGEN_NO_PIPELINE
+# (this recipe deliberately leaves both unset). OXAGEN_NO_PIPELINE also gates
+# whether `solve` candidates get `--pipeline` (each candidate runs the full
+# pipeline too, not just the bare engine loop — see "Best-of-N mode" in the
+# README for the cost tradeoff: roughly N extra judge-class calls). The one
+# piece that's off by default and actually required for "local code graph" to
+# mean anything is OXAGEN_INSTALL_DUCKDB: without it, install()'s `oxagen init`
+# pre-build still runs, but builds an IN-MEMORY graph that's discarded the
+# moment that process exits — the later `run()` invocation (a separate
+# process) starts cold either way. OXAGEN_INSTALL_DUCKDB=1 is what makes the
+# pre-build persist to disk so run() actually reuses it.
 #
 # NOT part of this recipe: the on-device local coordinator
 # (`runtime.coordinator: "on-device"` / `/coordinator local`). It's wired only
@@ -89,11 +92,20 @@ fi
 # (OXAGEN_LLM_FAST) is the container-viable equivalent and is what "fast
 # coordinator" means below.
 if [ "${OXAGEN_DIFFERENTIATED:-}" = "1" ]; then
+  # Warn (don't silently unset) if OXAGEN_LLM_FAST/_BALANCED/_PRECISE are
+  # already exported from an earlier session — a stale tier override in the
+  # ambient shell would silently win over this recipe's Haiku pin via the
+  # ${VAR:-default} defaulting below, making the run non-reproducible.
+  for _tier_var in OXAGEN_LLM_FAST OXAGEN_LLM_BALANCED OXAGEN_LLM_PRECISE; do
+    if [ -n "${!_tier_var:-}" ]; then
+      echo "==> WARNING: ${_tier_var}=${!_tier_var} is already set in your shell — OXAGEN_DIFFERENTIATED=1 will use it as-is rather than its own default. Run 'env -u ${_tier_var} ...' first if that's stale, not intentional." >&2
+    fi
+  done
   export OXAGEN_INSTALL_DUCKDB="${OXAGEN_INSTALL_DUCKDB:-1}"
   export OXAGEN_BEST_OF_N="${OXAGEN_BEST_OF_N:-1}"
   export OXAGEN_BEST_OF_N_CANDIDATES="${OXAGEN_BEST_OF_N_CANDIDATES:-3}"
   export OXAGEN_LLM_FAST="${OXAGEN_LLM_FAST:-anthropic/claude-haiku-4-5}"
-  echo "==> OXAGEN_DIFFERENTIATED=1 — persisted code graph + embeddings, fast coordinator (${OXAGEN_LLM_FAST}), pipeline-on, best-of-N."
+  echo "==> OXAGEN_DIFFERENTIATED=1 — persisted code graph + embeddings, fast coordinator (${OXAGEN_LLM_FAST}), full pipeline per candidate, best-of-N."
 fi
 
 # 4b) Best-of-N: run Oxagen's `solve` differentiator (N independent candidates,

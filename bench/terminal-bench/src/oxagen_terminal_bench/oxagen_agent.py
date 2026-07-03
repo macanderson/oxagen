@@ -29,16 +29,21 @@ Environment
 - ``OXAGEN_ROUTE=1`` — let Oxagen's router pick the model (ignore ``-m``).
 - ``OXAGEN_NO_PIPELINE=1`` — skip prompt-eval / context-injection / completeness
   judging (leaner + cheaper; the default keeps the full Oxagen scaffold on).
-  Ignored when ``OXAGEN_BEST_OF_N=1`` — ``solve`` candidates already run bare
-  (no pipeline to skip).
+  Under ``OXAGEN_BEST_OF_N=1`` this ALSO controls whether ``solve`` candidates
+  run the full evaluate/enhance/judge pipeline (``--pipeline``, the default) or
+  the bare engine loop — see ``OXAGEN_BEST_OF_N`` below.
 - ``OXAGEN_BEST_OF_N=1`` — run Oxagen's best-of-N differentiator instead of a
-  single one-shot turn: ``oxagen solve --candidates <N> [--model X] "<task>"``
-  runs N independent candidates (each its own isolated worktree + engine loop),
-  a comparative judge picks the winner, and the winner's diff is applied to the
-  container's working directory — so the container's resulting ``git diff`` is
-  still exactly what Harbor's verifier grades. ``--mode bypass`` has no ``solve``
-  equivalent and none is needed: candidates run the bare engine loop directly,
-  with no confirmation gate to bypass.
+  single one-shot turn: ``oxagen solve --candidates <N> [--model X] --pipeline
+  "<task>"`` runs N independent candidates (each its own isolated worktree +
+  engine loop), a comparative judge picks the winner, and the winner's diff is
+  applied to the container's working directory — so the container's resulting
+  ``git diff`` is still exactly what Harbor's verifier grades. ``--mode
+  bypass`` has no ``solve`` equivalent and none is needed: candidates run
+  headlessly with no confirmation gate to bypass. Every candidate ALSO runs
+  the full evaluate→enhance→route→execute→judge→revise pipeline by default
+  (``--pipeline``; disable with ``OXAGEN_NO_PIPELINE=1`` to fall back to the
+  cheaper bare engine loop — no per-candidate judge, just the comparative
+  selector across all N at the end).
 - ``OXAGEN_BEST_OF_N_CANDIDATES`` — how many candidates per task under
   ``OXAGEN_BEST_OF_N=1`` (default 3; mirrors ``solve --candidates``).
 - ``OXAGEN_INSTALL_DUCKDB=1`` — also ``npm i`` DuckDB in the container so the
@@ -480,10 +485,19 @@ class OxagenAgent(BaseInstalledAgent):
 
         Mirrors `_build_flags()`'s model forwarding (pin `-m`, or omit it under
         OXAGEN_ROUTE=1 so each candidate falls through to the engine's own
-        default model) but targets the `solve` subcommand. No `--mode` /
-        `--no-pipeline` equivalent: every `solve` candidate already runs the
-        bare engine loop headlessly (bare: true in best-of-n.ts) with no
-        confirmation gate and no pipeline to skip.
+        default model) but targets the `solve` subcommand. No `--mode`
+        equivalent: every `solve` candidate already runs headlessly with no
+        confirmation gate to bypass.
+
+        `--pipeline` reuses the SAME `OXAGEN_NO_PIPELINE` gate as the one-shot
+        path (`_build_flags()`) instead of introducing a second, redundant env
+        var: unless the user explicitly disabled the pipeline, every candidate
+        runs the full evaluate→enhance→route→execute→judge→revise pipeline
+        (semantic-enhance + a per-candidate completeness judge), not just the
+        bare engine loop — otherwise "pipeline on" would silently mean nothing
+        under best-of-N even though the flag says it's on. See
+        BestOfNOptions.fullPipeline in best-of-n.ts for the cost tradeoff
+        (roughly N extra judge-class model calls).
 
         `--json` is explicit even though `solve` already auto-detects headless
         via `!process.stdout.isTTY` (true here regardless: this command's
@@ -495,6 +509,8 @@ class OxagenAgent(BaseInstalledAgent):
         route = _is_truthy(os.environ.get("OXAGEN_ROUTE"))
         if self.model_name and not route:
             flags.append(f"--model {shlex.quote(self.model_name)}")
+        if not _is_truthy(os.environ.get("OXAGEN_NO_PIPELINE")):
+            flags.append("--pipeline")
         return " ".join(flags)
 
     @with_prompt_template
