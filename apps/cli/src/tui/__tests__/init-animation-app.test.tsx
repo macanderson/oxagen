@@ -51,6 +51,31 @@ describe("InitAnimationApp", () => {
     unmount();
   });
 
+  it("throttles rapid progress ticks but always renders the final (100%) one", async () => {
+    // A big repo emits one progress event per file — hundreds of dispatches.
+    // The reducer throttles intermediate redraws (~24 max) but must never
+    // drop the LAST tick, or the bar would visibly stick below 100% even
+    // though the real build finished.
+    const emitter = new EventEmitter();
+    const total = 200;
+    const { lastFrame, unmount } = render(
+      <InitAnimationApp emitter={emitter} onReady={() => {}} width={30} {...FAST} />,
+    );
+
+    for (let done = 1; done <= total; done++) {
+      emitter.emit("progress", {
+        phase: "graph",
+        status: "progress",
+        filesDone: done,
+        filesTotal: total,
+      } satisfies InitProgressEvent);
+    }
+    await flush();
+
+    expect(lastFrame() ?? "").toContain(`${total}/${total} files`);
+    unmount();
+  });
+
   it("still shows the game while working", () => {
     const emitter = new EventEmitter();
     const { lastFrame, unmount } = render(
