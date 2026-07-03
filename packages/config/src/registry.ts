@@ -1440,6 +1440,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_LLM_SELECTOR: {
+    group: "CLI",
+    description:
+      "Gateway model slug `oxagen solve` (best-of-N) uses as the comparative selector that " +
+      "picks the winning candidate. Defaults to the flagship Anthropic model (Fable 5); set a " +
+      "cross-vendor slug for vendor-independent selection when a gateway key is available.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_NO_TUI: {
     group: "CLI",
     description:
@@ -1620,6 +1632,19 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "20",
+  },
+  OXAGEN_MAX_REVISE_ROUNDS: {
+    group: "CLI",
+    description:
+      "Max judge→revise rounds the turn pipeline runs before giving up on an incomplete " +
+      "verdict. 0 disables auto-revision entirely. Unset ⇒ 1. Only affects the full " +
+      "(non-bare) pipeline — bare execution (best-of-N's default) has no judge/revise loop.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "2",
   },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",

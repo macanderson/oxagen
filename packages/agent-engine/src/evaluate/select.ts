@@ -28,6 +28,15 @@ export interface Candidate {
   summary: string;
   /** Tail of the last test/command output the candidate ran, if any. */
   testOutput?: string;
+  /**
+   * Whether executed tests are known to have passed — set when a caller ran
+   * REAL verification (a `verifyCommand` and/or best-of-N's `verifyAuto`
+   * cross-candidate test-command union) and captured the exit code, rather
+   * than inferred from `testOutput` text. `null`/undefined ⇒ unknown; the
+   * selector falls back to sniffing `testOutput` (`looksPassing`) in that
+   * case. This is the DECISIVE signal per SELECT_SYSTEM's rule 1 when present.
+   */
+  testsPassed?: boolean | null;
   /** Files the candidate changed. */
   changedFiles: string[];
   /** Tool-loop steps the candidate took. */
@@ -50,8 +59,15 @@ export interface SelectionResult {
   usage: UsageTotals;
 }
 
-/** The default best-of-N selector model. A capable cross-vendor judge. */
-export const DEFAULT_SELECTOR_MODEL = "openai/gpt-4o";
+/**
+ * The default best-of-N selector model. Same-vendor default (Fable 5) so it
+ * works on an Anthropic-only key (the CLI's ANTHROPIC_API_KEY BYOK fallback
+ * resolves no other vendor) — mirrors judge.ts's `DEFAULT_ADVISOR_MODEL` for
+ * the same reason. Override per-call (`selectorModel`) or globally via
+ * `OXAGEN_LLM_SELECTOR` (e.g. a cross-vendor slug, when a gateway key is
+ * available and vendor-independent selection is preferred).
+ */
+export const DEFAULT_SELECTOR_MODEL = "anthropic/claude-fable-5";
 
 /** Heuristic: does this command output look like tests PASSED (no failures)? */
 export function looksPassing(output: string | undefined): boolean {
@@ -75,16 +91,29 @@ function headTail(s: string, max: number): string {
 /** Score a candidate without a model: tests-pass, then small, then few steps. */
 function heuristicScore(c: Candidate): number {
   let score = 40;
-  if (c.testOutput) score += looksPassing(c.testOutput) ? 40 : -20;
+  // A verified testsPassed is a stronger signal than sniffing testOutput text
+  // (looksPassing), so it takes priority when both are present.
+  if (c.testsPassed != null) {
+    score += c.testsPassed ? 40 : -20;
+  } else if (c.testOutput) {
+    score += looksPassing(c.testOutput) ? 40 : -20;
+  }
   // Prefer a focused change over a sprawling one.
   score += Math.max(0, 15 - c.changedFiles.length * 3);
   if (c.diff.trim().length === 0) score = 5;
   return Math.max(0, Math.min(100, score));
 }
 
+/** One-phrase note explaining a candidate's test evidence, for the ranking. */
+function testNote(c: Candidate): string {
+  if (c.testsPassed != null) return c.testsPassed ? "tests verified passing" : "tests verified failing";
+  if (c.testOutput) return looksPassing(c.testOutput) ? "tests appear to pass" : "tests appear to fail";
+  return "no tests run";
+}
+
 function heuristicSelect(candidates: Candidate[]): SelectionResult {
   const ranking = candidates
-    .map((c) => ({ id: c.id, score: heuristicScore(c), note: c.testOutput ? (looksPassing(c.testOutput) ? "tests appear to pass" : "tests appear to fail") : "no tests run" }))
+    .map((c) => ({ id: c.id, score: heuristicScore(c), note: testNote(c) }))
     .sort((a, b) => b.score - a.score);
   const winner = ranking.find((r) => r.score > 5) ?? null;
   return {
@@ -127,10 +156,19 @@ const SELECT_SYSTEM = [
 function candidateBlock(c: Candidate): string {
   const diff = c.diff.trim() ? "```diff\n" + headTail(c.diff, 6000) + "\n```" : "(empty diff)";
   const tests = c.testOutput ? headTail(c.testOutput, 2000) : "(no tests run)";
+  // Spell out the verified verdict explicitly rather than leaving the model to
+  // infer pass/fail from the raw text — makes rule 1 (test output is decisive)
+  // unambiguous when a caller ran real verification (verifyCommand/verifyAuto).
+  const testsLabel =
+    c.testsPassed === true
+      ? "test output (VERIFIED PASSING)"
+      : c.testsPassed === false
+        ? "test output (VERIFIED FAILING)"
+        : "test output";
   return [
     `### ${c.id}  (model: ${c.model.split("/").pop()}, ${c.changedFiles.length} file(s), ${c.steps} step(s))`,
     `summary: ${c.summary || "(none)"}`,
-    `test output:\n${tests}`,
+    `${testsLabel}:\n${tests}`,
     `diff:\n${diff}`,
   ].join("\n");
 }
@@ -169,7 +207,7 @@ export async function selectBestCandidate(opts: {
     };
   }
 
-  const model = opts.selectorModel ?? DEFAULT_SELECTOR_MODEL;
+  const model = opts.selectorModel ?? process.env["OXAGEN_LLM_SELECTOR"] ?? DEFAULT_SELECTOR_MODEL;
   try {
     const { object, usage } = await opts.ai.generateObject({
       model,
