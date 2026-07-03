@@ -107,6 +107,7 @@ interface ModelRates {
 const MODEL_RATES: Record<string, ModelRates> = {
   "claude-fable-5":            { inputPerMtok: 15.00, outputPerMtok: 75.00, cacheWritePerMtok: 18.75, cacheReadPerMtok: 1.50 },
   "claude-opus-4-8":           { inputPerMtok: 15.00, outputPerMtok: 75.00, cacheWritePerMtok: 18.75, cacheReadPerMtok: 1.50 },
+  "claude-sonnet-5":           { inputPerMtok:  3.00, outputPerMtok: 15.00, cacheWritePerMtok:  3.75, cacheReadPerMtok: 0.30 },
   "claude-sonnet-4-6":         { inputPerMtok:  3.00, outputPerMtok: 15.00, cacheWritePerMtok:  3.75, cacheReadPerMtok: 0.30 },
   "claude-haiku-4-5-20251001": { inputPerMtok:  0.80, outputPerMtok:  4.00, cacheWritePerMtok:  1.00, cacheReadPerMtok: 0.08 },
 };

@@ -87,14 +87,14 @@ describe("resolveModelDefaults", () => {
       user: null,
       workspace: {
         defaultTextTier: "balanced",
-        defaultTextModel: "anthropic/claude-sonnet-4.6",
+        defaultTextModel: "anthropic/claude-sonnet-5",
         defaultImageModel: "bfl/flux-2-max",
         defaultVideoModel: "google/veo-3.0-generate-001",
       },
     };
     const result = resolveModelDefaults(input);
     expect(result.text.tier).toBe("balanced");
-    expect(result.text.model).toBe("anthropic/claude-sonnet-4.6");
+    expect(result.text.model).toBe("anthropic/claude-sonnet-5");
     expect(result.image.model).toBe("bfl/flux-2-max");
     expect(result.video.model).toBe("google/veo-3.0-generate-001");
     expect(result.overriddenByWorkspace.text).toBe(true);

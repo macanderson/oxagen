@@ -37,7 +37,7 @@ async function captureSessionSummary(): Promise<SessionSummary> {
   const user = process.env.USER || "unknown";
 
   // Get Claude model from environment (falls back to ANTHROPIC_MODEL from .env)
-  const claudeModel = process.env.ANTHROPIC_MODEL || process.env.CLAUDE_CODE_MODEL || 'claude-sonnet-4-6';
+  const claudeModel = process.env.ANTHROPIC_MODEL || process.env.CLAUDE_CODE_MODEL || 'claude-sonnet-5';
 
   // Get repository info
   const repoName = safeExec("git rev-parse --show-toplevel", process.cwd()).split("/").pop() || "unknown";

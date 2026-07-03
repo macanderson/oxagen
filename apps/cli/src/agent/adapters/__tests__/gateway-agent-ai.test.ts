@@ -145,7 +145,7 @@ describe("createGatewayAgentAi", () => {
   it("stream marks the system message and transcript tail as cache breakpoints", () => {
     const ai = createGatewayAgentAi();
     ai.stream({
-      model: "anthropic/claude-sonnet-4.5",
+      model: "anthropic/claude-sonnet-5",
       system: "sys",
       messages: [
         { role: "user", content: "one" },

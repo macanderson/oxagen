@@ -23,7 +23,7 @@ function task(id: string, over: Partial<Task> = {}): Task {
     dependsOn: [],
     files: [],
     tier: "balanced",
-    model: "anthropic/claude-sonnet-4.6",
+    model: "anthropic/claude-sonnet-5",
     createdAt: 1,
     usage: emptyUsage(),
     ...over,

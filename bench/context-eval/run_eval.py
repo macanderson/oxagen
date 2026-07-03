@@ -8,7 +8,7 @@ This is the eval Terminal-Bench structurally can't run: cold-start, unknown-repo
 benchmarks turn oxagen's context engine OFF. Here every arm works on THIS repo,
 where knowing the codebase is the whole point.
 
-Four arms, all read-only, same model (Sonnet 4.5), same repo:
+Four arms, all read-only, same model (Sonnet 5), same repo:
   - oxagen-full : oxagen --readonly  (cold: fresh HOME each question; full pipeline)
   - oxagen-lean : oxagen --readonly --no-pipeline  (cold: fresh HOME; code_graph only)
   - oxagen-warm : oxagen --readonly  (warm: HOME persists across questions AND rounds)
@@ -48,7 +48,7 @@ from pathlib import Path
 
 REPO = Path(os.environ.get("OXAGEN_REPO", Path(__file__).resolve().parents[2]))
 BUNDLE = os.environ.get("OXAGEN_CLI_BUNDLE", str(REPO / "apps/cli/dist-standalone/oxagen.mjs"))
-OX_MODEL = os.environ.get("OXAGEN_MODEL_SLUG", "anthropic/claude-sonnet-4.5")
+OX_MODEL = os.environ.get("OXAGEN_MODEL_SLUG", "anthropic/claude-sonnet-5")
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "sonnet")
 TIMEOUT = int(os.environ.get("EVAL_TIMEOUT", "300"))
 OUT = Path(__file__).resolve().parent / "results.json"
@@ -72,7 +72,7 @@ def gw_key() -> str:
 TASKS = [
     {"id": "cli-default-model",
      "q": "What is the exact string value assigned to the DEFAULT_MODEL constant in the file apps/cli/src/agent/model.ts? Answer with just the value.",
-     "require": ["anthropic/claude-sonnet-4.5"]},
+     "require": ["anthropic/claude-sonnet-5"]},
     {"id": "oneshot-import",
      "q": "In apps/cli/src/repl/one-shot.ts, which function imported from \"../agent/pipeline.js\" is used to run a single turn? Answer with the function name.",
      "require": ["runturn"]},

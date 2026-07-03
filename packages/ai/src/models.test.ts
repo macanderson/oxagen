@@ -5,7 +5,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // vi.mock factory below. We mock the single AI seam: @ai-sdk/gateway. Every
 // model is built through the gateway provider; there is no direct-provider path.
 const mocks = vi.hoisted(() => ({
-  languageInstance: { modelId: "anthropic/claude-sonnet-4.6" },
+  languageInstance: { modelId: "anthropic/claude-sonnet-5" },
   imageInstance: { modelId: "openai/gpt-image-1" },
   videoInstance: { modelId: "google/veo-3.0-fast-generate-001" },
   languageModel: vi.fn(),
@@ -59,7 +59,7 @@ const resetMocks = () => {
 
 const TIER_ENV = {
   OXAGEN_LLM_FAST: "anthropic/claude-haiku-4.5",
-  OXAGEN_LLM_BALANCED: "anthropic/claude-sonnet-4.6",
+  OXAGEN_LLM_BALANCED: "anthropic/claude-sonnet-5",
   OXAGEN_LLM_PRECISE: "anthropic/claude-opus-4.8",
 };
 
@@ -70,7 +70,7 @@ describe("selectModel (@oxagen/ai) — gateway only", () => {
     envValues = { ...TIER_ENV };
     const model = selectModel();
     expect(mocks.languageModel).toHaveBeenCalledTimes(1);
-    expect(mocks.languageModel).toHaveBeenCalledWith("anthropic/claude-sonnet-4.6");
+    expect(mocks.languageModel).toHaveBeenCalledWith("anthropic/claude-sonnet-5");
     expect(model).toBe(mocks.languageInstance);
   });
 
@@ -137,7 +137,7 @@ describe("media tier resolution (@oxagen/ai)", () => {
     expect(resolvedTierCatalog()).toEqual({
       text: {
         fast: "anthropic/claude-haiku-4.5",
-        balanced: "anthropic/claude-sonnet-4.6",
+        balanced: "anthropic/claude-sonnet-5",
         precise: "anthropic/claude-opus-4.8",
       },
       image: { basic: "openai/gpt-image-1", advanced: "bfl/flux-2-max" },

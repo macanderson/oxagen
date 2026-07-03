@@ -25,7 +25,7 @@ function trace(over: Partial<TurnTrace> = {}): TurnTrace {
       source: "code-graph", durationMs: 42,
       retrieval: { symbolsQueried: ["Login", "Ghost"], pathsQueried: [], resolved: ["Login"], unresolved: ["Ghost"] },
     },
-    selectedModel: "anthropic/claude-sonnet-4.6",
+    selectedModel: "anthropic/claude-sonnet-5",
     selectedTier: "balanced",
     selectionRationale: "evaluator recommended",
     response: "done",
@@ -40,7 +40,7 @@ function trace(over: Partial<TurnTrace> = {}): TurnTrace {
     phases: [
       { phase: "evaluate", round: 0, startedAt: 0, finishedAt: 30, durationMs: 30, model: "anthropic/claude-haiku-4.5", usage: { inputTokens: 5, outputTokens: 1, costUsd: 0.001 } },
       { phase: "enhance", round: 0, startedAt: 30, finishedAt: 72, durationMs: 42, usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 } },
-      { phase: "execute", round: 0, startedAt: 72, finishedAt: 2500, durationMs: 2428, model: "anthropic/claude-sonnet-4.6", usage: { inputTokens: 100, outputTokens: 50, costUsd: 0.049 } },
+      { phase: "execute", round: 0, startedAt: 72, finishedAt: 2500, durationMs: 2428, model: "anthropic/claude-sonnet-5", usage: { inputTokens: 100, outputTokens: 50, costUsd: 0.049 } },
       { phase: "judge", round: 0, startedAt: 2500, finishedAt: 3000, durationMs: 500, model: "anthropic/claude-opus-4.8", usage: { inputTokens: 3, outputTokens: 1, costUsd: 0.002 } },
     ],
     toolEvents: [
@@ -55,7 +55,7 @@ describe("formatVerboseSection", () => {
     const text = formatVerboseSection(trace()).join("\n");
     // Per-model rollup names each model with its role.
     expect(text).toContain("models used");
-    expect(text).toContain("claude-sonnet-4.6");
+    expect(text).toContain("claude-sonnet-5");
     expect(text).toContain("WORK (code)");
     expect(text).toContain("claude-opus-4.8");
     expect(text).toContain("REVIEW (judge)");

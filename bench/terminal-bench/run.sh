@@ -18,7 +18,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 REPO_ROOT="$(cd ../.. && pwd)"
 
-MODEL_SLUG="${OXAGEN_MODEL_SLUG:-anthropic/claude-sonnet-4.5}"
+MODEL_SLUG="${OXAGEN_MODEL_SLUG:-anthropic/claude-sonnet-5}"
 DATASET="${DATASET:-terminal-bench@2.0}"
 N_CONCURRENT="${N_CONCURRENT:-4}"
 N_ATTEMPTS="${N_ATTEMPTS:-1}"

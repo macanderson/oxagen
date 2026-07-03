@@ -52,7 +52,7 @@ const BASE_ARGS = {
   toolNameMap: {},
   orgSlug: "my-org",
   workspaceSlug: "my-ws",
-  modelId: "anthropic/claude-sonnet-4-5",
+  modelId: "anthropic/claude-sonnet-5",
 };
 
 // ---------------------------------------------------------------------------

@@ -53,7 +53,7 @@ export function TuiReplBanner({ className }: { className?: string }) {
       {/* Status line */}
       <text x={20} y={196} fontSize={11.5}>
         <tspan fill={tuiColors.violet} fontWeight={700}>
-          claude-sonnet-4.5
+          claude-sonnet-5
         </tspan>
         <tspan fill={tuiColors.dim}>{"  │  "}</tspan>
         <tspan fill={tuiColors.cyan}>main</tspan>

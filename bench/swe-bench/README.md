@@ -133,7 +133,7 @@ that didn't happen.
 |---|---|---|
 | `AGENT` | `oxagen` | `oxagen` uses the external adapter; any other value (`claude-code`, `codex`, `aider`, `openhands`, `gemini-cli`, `swe-agent`, `oracle`, `nop`, ...) is passed to Harbor's `--agent` as a built-in. |
 | `AI_GATEWAY_API_KEY` | — (required when `AGENT=oxagen`) | Forwarded into the container for all Oxagen LLM calls. |
-| `OXAGEN_MODEL_SLUG` | `anthropic/claude-sonnet-4.5` | Model passed to Harbor `-m` (an AI-Gateway slug for oxagen; a provider-native model id for most competitors). |
+| `OXAGEN_MODEL_SLUG` | `anthropic/claude-sonnet-5` | Model passed to Harbor `-m` (an AI-Gateway slug for oxagen; a provider-native model id for most competitors). |
 | `OXAGEN_ROUTE` | unset | `1` → (oxagen only) drop `--model`; Oxagen's cost-aware router chooses per task. |
 | `OXAGEN_NO_PIPELINE` | unset | `1` → (oxagen only) skip prompt-eval / context-injection / completeness-judge. |
 | `OXAGEN_INSTALL_DUCKDB` | unset | `1` → (oxagen only) also install DuckDB so the context engine's persistent stores are live. |

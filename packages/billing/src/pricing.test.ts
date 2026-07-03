@@ -31,7 +31,7 @@ describe("resolveRate", () => {
   });
 
   it("falls back to the configured fallback model for an unknown id", () => {
-    expect(resolveRate("mistral-large-2")).toBe(PROVIDER_RATE_CARD["claude-sonnet-4-6"]);
+    expect(resolveRate("mistral-large-2")).toBe(PROVIDER_RATE_CARD["claude-sonnet-5"]);
   });
 
   it("prices Claude Fable 5 at the Opus tier, not the Sonnet fallback", () => {
@@ -48,12 +48,27 @@ describe("resolveRate", () => {
     expect(resolveRate("anthropic/claude-sonnet-5")).toBe(PROVIDER_RATE_CARD["anthropic/claude-sonnet-5"]);
     expect(resolveRate("claude-sonnet-5").outputPer1M).toBe(15.0);
   });
+
+  it("matches the longest prefix for a versioned/date-stamped Sonnet 5 id", () => {
+    // A dated Sonnet 5 id must resolve to claude-sonnet-5, not fall through to
+    // the shorter claude-sonnet-4 / claude-sonnet-4-6 rows.
+    expect(resolveRate("claude-sonnet-5-20260101")).toBe(PROVIDER_RATE_CARD["claude-sonnet-5"]);
+  });
 });
 
 describe("providerCostUsd", () => {
   it("prices input + output at the Sonnet rate", () => {
     // 10k input @ $3/1M + 2k output @ $15/1M = 0.03 + 0.03 = $0.06
     expect(providerCostUsd({ model: "claude-sonnet-4-6", inputTokens: 10_000, outputTokens: 2_000 })).toBeCloseTo(
+      0.06,
+      10,
+    );
+  });
+
+  it("prices input + output at the Sonnet rate for claude-sonnet-5", () => {
+    // Same $3/$15 Sonnet-tier rate as claude-sonnet-4-6:
+    // 10k input @ $3/1M + 2k output @ $15/1M = 0.03 + 0.03 = $0.06
+    expect(providerCostUsd({ model: "claude-sonnet-5", inputTokens: 10_000, outputTokens: 2_000 })).toBeCloseTo(
       0.06,
       10,
     );

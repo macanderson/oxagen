@@ -20,7 +20,7 @@ cd "$(dirname "$0")"
 REPO_ROOT="$(cd ../.. && pwd)"
 
 AGENT="${AGENT:-oxagen}"
-MODEL_SLUG="${OXAGEN_MODEL_SLUG:-anthropic/claude-sonnet-4.5}"
+MODEL_SLUG="${OXAGEN_MODEL_SLUG:-anthropic/claude-sonnet-5}"
 # Default to SWE-bench Verified (the OpenAI-curated, 500-task human-filtered
 # subset of the original SWE-bench — see README "Fairness & methodology"). This
 # is the exact namespaced slug published on the Harbor Hub
