@@ -8,11 +8,12 @@
  *      context to pull and a noise-removed rewrite.
  *   2. ENHANCE  — the code graph + recalled memory are injected, grounding the
  *      agent in the real files/symbols involved.
- *   3. ROUTE    — the Haiku evaluator's chosen tier selects the worker model
- *      (cheapest tier for the job); a one-way deterministic safety floor only
- *      prevents under-spending on high-stakes domains.
+ *   3. ROUTE    — the evaluator's chosen tier selects the worker model
+ *      (cheapest tier for the job; the default evaluator is the local
+ *      heuristic — see evaluate/evaluator.ts); a one-way deterministic safety
+ *      floor only prevents under-spending on high-stakes domains.
  *   4. EXECUTE  — the coding agent runs the local tool loop.
- *   5. JUDGE    — a DIFFERENT model (default: the most powerful OpenAI model)
+ *   5. JUDGE    — a DIFFERENT model (default: the flagship Anthropic model)
  *      checks whether the work is actually complete.
  *   6. REVISE   — if it isn't, the agent is sent back with the judge's findings,
  *      then re-judged, up to a bounded number of rounds.

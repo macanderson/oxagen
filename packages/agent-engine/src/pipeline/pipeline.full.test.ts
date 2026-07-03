@@ -9,7 +9,18 @@
  * a pinned model, verbose telemetry, the judge panel, graph sync, and every
  * streamed callback.
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+
+// This suite exercises the LLM-evaluation path (the mock `generateObject`
+// serves the eval schema first, then judge verdicts, in call order). The
+// shipped default evaluator is the local heuristic, which makes no model call —
+// pin an LLM evaluator so the mock sequence and trace assertions hold.
+beforeAll(() => {
+  process.env["OXAGEN_LLM_EVALUATOR"] = "anthropic/claude-haiku-4.5";
+});
+afterAll(() => {
+  delete process.env["OXAGEN_LLM_EVALUATOR"];
+});
 import { MemoryWorkspace } from "../workspaces/memory";
 import { runTurn } from "./index";
 import { modelForTier } from "../router/model-router";
