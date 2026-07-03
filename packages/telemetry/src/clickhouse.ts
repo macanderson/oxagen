@@ -357,7 +357,7 @@ export async function hashPrompt(text: string): Promise<string> {
  * Map an AI SDK model id to its provider. Handles three shapes:
  *   - prefixed       `anthropic:claude-…`          (legacy colon form)
  *   - gateway        `bfl/flux-2-max`, `google/veo-3.0-…`  (creator/model)
- *   - bare           `claude-sonnet-4-6`, `gpt-4o`, `gpt-image-1`
+ *   - bare           `claude-sonnet-5`, `gpt-4o`, `gpt-image-1`
  * The leading `creator` segment (split on `:` or `/`) is authoritative when it
  * names a known vendor; otherwise we fall back to recognising the model family
  * by id prefix. Covers every vendor @oxagen/ai routes to (text + image + video)
