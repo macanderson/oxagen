@@ -134,3 +134,4 @@ tools/eval-out/
 
 # Personal CLI settings scope (may contain MCP credentials) — never commit
 .oxagen/settings.local.json
+.ai-gateway-api-key
