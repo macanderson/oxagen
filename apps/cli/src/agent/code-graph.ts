@@ -181,7 +181,7 @@ export async function queryCodeGraph(
       return `${file.path} imports (${imps.length}):\n${paths.join("\n")}`;
     }
     case "semantic_search": {
-      const client = deps.client !== undefined ? deps.client : resolveEmbeddingClient(cwd);
+      const client = deps.client !== undefined ? deps.client : await resolveEmbeddingClient(cwd);
       if (!client) {
         return `No file matching semantic query "${query}" (embeddings unavailable — no gateway key).`;
       }

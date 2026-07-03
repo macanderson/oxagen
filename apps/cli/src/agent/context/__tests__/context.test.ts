@@ -15,6 +15,7 @@ import type { CodeGraphStore } from "../../../daemon/code-graph/store.js";
 
 afterEach(() => {
   delete process.env["OXAGEN_GRAPH_DISABLED"];
+  delete process.env["OXAGEN_EMBED_PROVIDER"];
 });
 
 // ── config ────────────────────────────────────────────────────────────────
@@ -26,6 +27,7 @@ describe("graph config", () => {
       endpoint: "http://localhost:0/graphrag",
       maxNodes: 200,
       fallbackToGrep: true,
+      embedProvider: "auto",
     });
   });
 
@@ -40,6 +42,26 @@ describe("graph config", () => {
   it("OXAGEN_GRAPH_DISABLED forces enabled=false", () => {
     process.env["OXAGEN_GRAPH_DISABLED"] = "1";
     expect(mergeGraphConfig({ enabled: true }).enabled).toBe(false);
+  });
+
+  it("embedProvider defaults to auto and honours a patch", () => {
+    expect(mergeGraphConfig().embedProvider).toBe("auto");
+    expect(mergeGraphConfig({ embedProvider: "ollama" }).embedProvider).toBe("ollama");
+  });
+
+  it("OXAGEN_EMBED_PROVIDER overrides both the default and a patch", () => {
+    process.env["OXAGEN_EMBED_PROVIDER"] = "off";
+    expect(mergeGraphConfig({ embedProvider: "ollama" }).embedProvider).toBe("off");
+  });
+
+  it("OXAGEN_EMBED_PROVIDER accepts 'local' as an alias for 'onnx'", () => {
+    process.env["OXAGEN_EMBED_PROVIDER"] = "local";
+    expect(mergeGraphConfig().embedProvider).toBe("onnx");
+  });
+
+  it("an invalid OXAGEN_EMBED_PROVIDER value falls back to the patch/default instead of throwing", () => {
+    process.env["OXAGEN_EMBED_PROVIDER"] = "not-a-real-provider";
+    expect(mergeGraphConfig().embedProvider).toBe("auto");
   });
 });
 
@@ -227,7 +249,7 @@ describe("GraphContextResolver", () => {
       cwd: "/repo",
       config: DEFAULT_GRAPH_CONFIG,
       loadGraph: async () => makeGraph(),
-      resolveClient: () => null,
+      resolveClient: async () => null,
       grep,
       log: (e) => logs.push(e),
       ...over,
@@ -312,18 +334,115 @@ describe("formatters", () => {
 
 // ── embedding client resolution ─────────────────────────────────────────────
 describe("resolveEmbeddingClient", () => {
-  it("returns null when no gateway key is available", () => {
-    expect(resolveEmbeddingClient("/repo", { hasKey: () => false })).toBeNull();
-  });
-
-  it("returns an injected client verbatim", () => {
+  it("returns an injected client verbatim regardless of mode", async () => {
     const fake = new FakeEmbeddingClient();
-    expect(resolveEmbeddingClient("/repo", { client: fake })).toBe(fake);
+    await expect(resolveEmbeddingClient("/repo", { client: fake })).resolves.toBe(fake);
+    await expect(resolveEmbeddingClient("/repo", { client: fake, mode: "off" })).resolves.toBe(fake);
   });
 
-  it("builds a gateway client when a key is present", () => {
-    const client = resolveEmbeddingClient("/repo", { hasKey: () => true });
-    expect(client?.providerId).toBe("openai/text-embedding-3-small");
-    expect(client?.dimensions).toBe(1536);
+  it("mode: off always returns null, even with a gateway key present", async () => {
+    await expect(
+      resolveEmbeddingClient("/repo", { mode: "off", hasKey: () => true }),
+    ).resolves.toBeNull();
+  });
+
+  describe("mode: gateway", () => {
+    it("returns null when no gateway key is available", async () => {
+      await expect(
+        resolveEmbeddingClient("/repo", { mode: "gateway", hasKey: () => false }),
+      ).resolves.toBeNull();
+    });
+
+    it("builds a gateway client when a key is present", async () => {
+      const client = await resolveEmbeddingClient("/repo", { mode: "gateway", hasKey: () => true });
+      expect(client?.providerId).toBe("openai/text-embedding-3-small");
+      expect(client?.dimensions).toBe(1536);
+    });
+  });
+
+  describe("mode: ollama", () => {
+    it("returns the Ollama tier's client when it resolves one", async () => {
+      const fake = new FakeEmbeddingClient();
+      const client = await resolveEmbeddingClient("/repo", {
+        mode: "ollama",
+        createOllamaClient: async () => fake,
+      });
+      expect(client).toBe(fake);
+    });
+
+    it("returns null (no fallback to gateway) when Ollama is unavailable", async () => {
+      const client = await resolveEmbeddingClient("/repo", {
+        mode: "ollama",
+        createOllamaClient: async () => null,
+        hasKey: () => true, // a gateway key existing must NOT matter in explicit mode
+      });
+      expect(client).toBeNull();
+    });
+  });
+
+  describe("mode: onnx", () => {
+    it("returns the ONNX tier's client when it resolves one", async () => {
+      const fake = new FakeEmbeddingClient();
+      const client = await resolveEmbeddingClient("/repo", {
+        mode: "onnx",
+        createOnnxClient: async () => fake,
+      });
+      expect(client).toBe(fake);
+    });
+
+    it("returns null (no fallback to gateway) when ONNX is unavailable", async () => {
+      const client = await resolveEmbeddingClient("/repo", {
+        mode: "onnx",
+        createOnnxClient: async () => null,
+        hasKey: () => true,
+      });
+      expect(client).toBeNull();
+    });
+  });
+
+  describe("mode: auto", () => {
+    it("tries Ollama first and short-circuits before ONNX or the gateway", async () => {
+      const ollama = new FakeEmbeddingClient();
+      const createOnnxClient = vi.fn(async () => new FakeEmbeddingClient());
+      const client = await resolveEmbeddingClient("/repo", {
+        mode: "auto",
+        createOllamaClient: async () => ollama,
+        createOnnxClient,
+        hasKey: () => true,
+      });
+      expect(client).toBe(ollama);
+      expect(createOnnxClient).not.toHaveBeenCalled();
+    });
+
+    it("falls through to ONNX when Ollama is unavailable", async () => {
+      const onnx = new FakeEmbeddingClient();
+      const client = await resolveEmbeddingClient("/repo", {
+        mode: "auto",
+        createOllamaClient: async () => null,
+        createOnnxClient: async () => onnx,
+        hasKey: () => true,
+      });
+      expect(client).toBe(onnx);
+    });
+
+    it("falls through to the gateway when neither Ollama nor ONNX is available", async () => {
+      const client = await resolveEmbeddingClient("/repo", {
+        mode: "auto",
+        createOllamaClient: async () => null,
+        createOnnxClient: async () => null,
+        hasKey: () => true,
+      });
+      expect(client?.providerId).toBe("openai/text-embedding-3-small");
+    });
+
+    it("returns null when nothing is available anywhere in the chain", async () => {
+      const client = await resolveEmbeddingClient("/repo", {
+        mode: "auto",
+        createOllamaClient: async () => null,
+        createOnnxClient: async () => null,
+        hasKey: () => false,
+      });
+      expect(client).toBeNull();
+    });
   });
 });

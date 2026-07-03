@@ -184,8 +184,14 @@ function allTrackedFiles(root: string): string[] {
  * Return the code node's local embedding IFF it was produced by the shared
  * code-graph gateway model (`openai/text-embedding-3-small`) and is a valid
  * 1536-d vector — otherwise undefined so the field is omitted from the push.
- * Only locally-embedded nodes (built with a gateway key) ship a vector; the
- * rest sync without one and stay searchable via server-side ingestion.
+ * Only gateway-embedded nodes ship a vector; nodes embedded by a LOCAL
+ * provider (Ollama, ONNX — see agent/context/embedding.ts) have an
+ * `embeddingProvider` other than the gateway model id, so they fall through
+ * this check the same as an unembedded node and sync without a vector. Their
+ * vectors live in a different, smaller vector space (384/768-d) than the
+ * server's 1536-d index and would corrupt it if attached; the server
+ * re-embeds those files on ingest instead — the accepted, opt-in cost of
+ * running local embeddings.
  */
 function localEmbeddingFor(n: CodeNode): number[] | undefined {
   if (
