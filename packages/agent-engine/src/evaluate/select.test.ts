@@ -137,6 +137,8 @@ describe("selectBestCandidate", () => {
         ai,
       }),
     ).rejects.toThrow(/positive credit balance/);
+  });
+
   it("uses DEFAULT_SELECTOR_MODEL (Fable 5) when no selectorModel or env override is set", async () => {
     const gen = vi.fn().mockResolvedValue({
       object: { winnerId: "c1", reasoning: "x", ranking: [{ id: "c1", score: 90, note: "ok" }, { id: "c2", score: 10, note: "meh" }] },
