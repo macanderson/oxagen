@@ -29,6 +29,18 @@ Environment
 - ``OXAGEN_ROUTE=1`` — let Oxagen's router pick the model (ignore ``-m``).
 - ``OXAGEN_NO_PIPELINE=1`` — skip prompt-eval / context-injection / completeness
   judging (leaner + cheaper; the default keeps the full Oxagen scaffold on).
+  Ignored when ``OXAGEN_BEST_OF_N=1`` — ``solve`` candidates already run bare
+  (no pipeline to skip).
+- ``OXAGEN_BEST_OF_N=1`` — run Oxagen's best-of-N differentiator instead of a
+  single one-shot turn: ``oxagen solve --candidates <N> [--model X] "<task>"``
+  runs N independent candidates (each its own isolated worktree + engine loop),
+  a comparative judge picks the winner, and the winner's diff is applied to the
+  container's working directory — so the container's resulting ``git diff`` is
+  still exactly what Harbor's verifier grades. ``--mode bypass`` has no ``solve``
+  equivalent and none is needed: candidates run the bare engine loop directly,
+  with no confirmation gate to bypass.
+- ``OXAGEN_BEST_OF_N_CANDIDATES`` — how many candidates per task under
+  ``OXAGEN_BEST_OF_N=1`` (default 3; mirrors ``solve --candidates``).
 - ``OXAGEN_INSTALL_DUCKDB=1`` — also ``npm i`` DuckDB in the container so the
   context engine's persistent memory/trace stores are live. Off by default:
   DuckDB is not load-bearing for a cold single-trial run (no pre-pulled graph,
@@ -72,6 +84,7 @@ silently with stale state).
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import shlex
@@ -102,6 +115,10 @@ _WARM_CONFIG_IN_CONTAINER = f"{_WARM_HOME_IN_CONTAINER}/.config/oxagen"
 # Minimum Node major the bundle needs; skip reinstall if the image already has it.
 _MIN_NODE_MAJOR = 20
 _NODE_SETUP_MAJOR = 22
+
+# Default candidate count for `oxagen solve` under OXAGEN_BEST_OF_N=1, mirroring
+# the CLI's own default (`solve --candidates` defaults to 3, see solve.ts).
+_DEFAULT_BEST_OF_N_CANDIDATES = 3
 
 # Static ripgrep for the task container (x86_64 musl — SWE-bench images are
 # x86_64, and a musl static binary runs on any distro). Without rg on PATH the
@@ -153,6 +170,28 @@ def _cached_rg_binary() -> Path | None:
 
 def _is_truthy(value: str | None) -> bool:
     return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _best_of_n_enabled() -> bool:
+    return _is_truthy(os.environ.get("OXAGEN_BEST_OF_N"))
+
+
+def _best_of_n_candidate_count() -> int:
+    """Parse OXAGEN_BEST_OF_N_CANDIDATES; falls back to the default on anything
+    non-numeric rather than letting a typo'd env var crash the whole run."""
+    raw = os.environ.get("OXAGEN_BEST_OF_N_CANDIDATES")
+    if not raw:
+        return _DEFAULT_BEST_OF_N_CANDIDATES
+    try:
+        n = int(raw.strip())
+    except ValueError:
+        print(
+            f"oxagen-adapter: OXAGEN_BEST_OF_N_CANDIDATES={raw!r} is not an int; "
+            f"using default {_DEFAULT_BEST_OF_N_CANDIDATES}",
+            file=sys.stderr,
+        )
+        return _DEFAULT_BEST_OF_N_CANDIDATES
+    return max(1, n)
 
 
 def _locate_bundle() -> Path:
@@ -412,12 +451,35 @@ class OxagenAgent(BaseInstalledAgent):
         return env
 
     def _build_flags(self) -> str:
+        """Flags for the default one-shot invocation: `oxagen <flags> "<task>"`."""
         flags = ["--mode bypass", "--verbose"]
         route = _is_truthy(os.environ.get("OXAGEN_ROUTE"))
         if self.model_name and not route:
             flags.append(f"--model {shlex.quote(self.model_name)}")
         if _is_truthy(os.environ.get("OXAGEN_NO_PIPELINE")):
             flags.append("--no-pipeline")
+        return " ".join(flags)
+
+    def _build_best_of_n_flags(self) -> str:
+        """Flags for the best-of-N invocation: `oxagen solve <flags> "<task>"`.
+
+        Mirrors `_build_flags()`'s model forwarding (pin `-m`, or omit it under
+        OXAGEN_ROUTE=1 so each candidate falls through to the engine's own
+        default model) but targets the `solve` subcommand. No `--mode` /
+        `--no-pipeline` equivalent: every `solve` candidate already runs the
+        bare engine loop headlessly (bare: true in best-of-n.ts) with no
+        confirmation gate and no pipeline to skip.
+
+        `--json` is explicit even though `solve` already auto-detects headless
+        via `!process.stdout.isTTY` (true here regardless: this command's
+        stdout is always piped into `tee`, never a real tty) — belt-and-braces
+        so the JSONL contract this adapter parses (see
+        `_populate_best_of_n_metadata`) never silently depends on TTY detection.
+        """
+        flags = ["solve", f"--candidates {_best_of_n_candidate_count()}", "--json"]
+        route = _is_truthy(os.environ.get("OXAGEN_ROUTE"))
+        if self.model_name and not route:
+            flags.append(f"--model {shlex.quote(self.model_name)}")
         return " ".join(flags)
 
     @with_prompt_template
@@ -428,9 +490,10 @@ class OxagenAgent(BaseInstalledAgent):
         context: AgentContext,
     ) -> None:
         log_path = f"{EnvironmentPaths.agent_dir}/oxagen.txt"
+        subcommand = self._build_best_of_n_flags() if _best_of_n_enabled() else self._build_flags()
         command = (
             f"mkdir -p {EnvironmentPaths.agent_dir}; "
-            f"oxagen {self._build_flags()} {shlex.quote(instruction)} "
+            f"oxagen {subcommand} {shlex.quote(instruction)} "
             f"2>&1 | stdbuf -oL tee {log_path}"
         )
         # Runs in the container's default working directory — the task repo.
@@ -473,11 +536,18 @@ class OxagenAgent(BaseInstalledAgent):
         #         102 tok/s · 37 steps · 5 file(s) changed · $0.0543/file
         # Parse it so Oxagen's cost shows up in Harbor results (Oxagen reports a
         # single undifferentiated token total, so set cost_usd + metadata rather
-        # than faking an input/output split).
+        # than faking an input/output split). `solve` (OXAGEN_BEST_OF_N=1) has no
+        # `--verbose` roll-up — it streams headless JSONL events instead — so
+        # that mode is parsed separately below.
         log = self._find_agent_log()
         if log is None:
             return
         text = log.read_text(errors="replace")
+
+        if _best_of_n_enabled():
+            self._populate_best_of_n_metadata(context, text)
+            return
+
         m = re.search(r"([\d.]+)s total\D+([\d,]+)\s*tok\D+\$([\d.]+)", text)
         if not m:
             return
@@ -490,6 +560,43 @@ class OxagenAgent(BaseInstalledAgent):
             "oxagen_total_tokens": total_tokens,
             "oxagen_wall_sec": wall_sec,
             "oxagen_steps": int(steps_m.group(1)) if steps_m else None,
+        }
+
+    def _populate_best_of_n_metadata(self, context: AgentContext, text: str) -> None:
+        """Pull the race outcome from `solve`'s headless JSONL stream — the
+        final `type: "result"` line (see `resultEnvelope()` in
+        `apps/cli/src/tui/best-of-n-view/index.tsx`).
+
+        Deliberately does NOT set `context.cost_usd`: `best-of-n.ts` doesn't
+        thread per-candidate token usage onto `Candidate` yet (a known CLI-side
+        gap — the `--verbose` roll-up this adapter parses for the one-shot path
+        has no best-of-N equivalent), and this adapter does not fabricate a
+        number to fill the gap.
+        """
+        result: dict | None = None
+        for line in reversed(text.splitlines()):
+            line = line.strip()
+            if not line.startswith("{"):
+                continue
+            try:
+                obj = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(obj, dict) and obj.get("type") == "result":
+                result = obj
+                break
+        if result is None:
+            return
+        candidates = result.get("candidates") or []
+        winner_id = result.get("winnerId")
+        winner = next((c for c in candidates if c.get("id") == winner_id), None)
+        context.metadata = {
+            **(context.metadata or {}),
+            "oxagen_bestofn_candidates": len(candidates),
+            "oxagen_bestofn_winner_id": winner_id,
+            "oxagen_bestofn_winner_files": len(result.get("winnerFiles") or []),
+            "oxagen_bestofn_winner_steps": winner.get("steps") if winner else None,
+            "oxagen_bestofn_failed_candidates": sum(1 for c in candidates if c.get("failed")),
         }
 
     def _find_agent_log(self) -> Path | None:

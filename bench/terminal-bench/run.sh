@@ -6,6 +6,7 @@
 #   ./run.sh                                  # default model, 4 parallel, full TB
 #   OXAGEN_MODEL_SLUG=anthropic/claude-opus-4.8 ./run.sh
 #   OXAGEN_ROUTE=1 ./run.sh                   # let Oxagen's cost-aware router pick
+#   OXAGEN_BEST_OF_N=1 OXAGEN_BEST_OF_N_CANDIDATES=3 ./run.sh   # best-of-N (`oxagen solve`) per task
 #   N_CONCURRENT=8 N_ATTEMPTS=3 ./run.sh
 #   DATASET="terminal-bench@2.0" ./run.sh
 #   HARBOR_EXTRA="--include-task-name *hello-world" ./run.sh   # smoke-test a single task
@@ -55,6 +56,14 @@ MODEL_ARGS=(-m "$MODEL_SLUG")
 if [ "${OXAGEN_ROUTE:-}" = "1" ]; then
   echo "==> OXAGEN_ROUTE=1 — Oxagen's cost-aware router will choose the model per task."
   MODEL_ARGS=()
+fi
+
+# 4a) Best-of-N: run Oxagen's `solve` differentiator (N independent candidates,
+# comparative judge, winner's diff applied) instead of a single one-shot turn.
+# Read directly by the adapter (oxagen_agent.py); nothing to compute here —
+# just surface it in the console output like the other mode flags below.
+if [ "${OXAGEN_BEST_OF_N:-}" = "1" ]; then
+  echo "==> OXAGEN_BEST_OF_N=1 — running oxagen solve --candidates ${OXAGEN_BEST_OF_N_CANDIDATES:-3} per task."
 fi
 
 # 4b) Warm / self-improvement mode.

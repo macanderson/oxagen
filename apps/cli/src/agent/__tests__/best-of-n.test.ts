@@ -136,4 +136,43 @@ describe("runBestOfN", () => {
     expect(result.candidates.find((c) => c.id === "candidate-1")?.failed).toBe(true);
     expect(result.winner?.id).toBe("candidate-2"); // the surviving candidate won
   });
+
+  it("passes runTurn no model (not a placeholder string) when none is pinned, so the engine's own default applies", async () => {
+    // Regression test: `models` used to fall back to the literal string
+    // "default" and pass it straight to runTurn, which forwards it to the
+    // gateway as-is — "default" is not a real gateway slug, so every
+    // unpinned candidate failed to resolve a model. The fix: pass `undefined`
+    // to the engine (its own fallback applies) and keep "default" only as a
+    // separate, display-only label.
+    runTurnMock.mockImplementation(async (o: { onFileChange?: (d: string, f: string[]) => void }) => {
+      o.onFileChange?.("--- a/x\n+++ b/x\n+z", ["x"]);
+      return { text: "ok", steps: 1, messages: [], usage: {}, trace: {} };
+    });
+    selectMock.mockResolvedValue({ winnerId: "candidate-1", reasoning: "", ranking: [], model: "m", fallback: false, usage: {} });
+
+    const events: BestOfNEvent[] = [];
+    const result = await runBestOfN({ prompt: "explain", cwd: "/repo", candidates: 1, ai, onEvent: (e) => events.push(e) });
+
+    expect(runTurnMock).toHaveBeenCalledTimes(1);
+    expect(runTurnMock.mock.calls[0]![0]).toMatchObject({ model: undefined });
+
+    // Display-only label stays human-readable ("default", not undefined).
+    const startEvent = events.find((e) => e.type === "candidate-start");
+    expect(startEvent).toMatchObject({ model: "default" });
+    expect(result.candidates[0]?.model).toBe("default");
+  });
+
+  it("pins every candidate to an explicitly given model", async () => {
+    runTurnMock.mockImplementation(async (o: { onFileChange?: (d: string, f: string[]) => void }) => {
+      o.onFileChange?.("--- a/x\n+++ b/x\n+z", ["x"]);
+      return { text: "ok", steps: 1, messages: [], usage: {}, trace: {} };
+    });
+    selectMock.mockResolvedValue({ winnerId: "candidate-1", reasoning: "", ranking: [], model: "m", fallback: false, usage: {} });
+
+    await runBestOfN({ prompt: "explain", cwd: "/repo", candidates: 2, ai, models: ["openai/gpt-4o"] });
+
+    expect(runTurnMock).toHaveBeenCalledTimes(2);
+    expect(runTurnMock.mock.calls[0]![0]).toMatchObject({ model: "openai/gpt-4o" });
+    expect(runTurnMock.mock.calls[1]![0]).toMatchObject({ model: "openai/gpt-4o" });
+  });
 });

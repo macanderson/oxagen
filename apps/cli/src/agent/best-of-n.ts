@@ -89,12 +89,18 @@ async function git(args: string[], cwd: string): Promise<string> {
 /** Run one candidate in its own worktree; returns its Candidate summary. */
 async function runCandidate(
   id: string,
-  model: string,
+  // Pinned model slug, or undefined to let the engine apply its own default
+  // (`runCodingAgent`'s `opts.model ?? "anthropic/claude-fable-5"`). Must NOT
+  // be coerced to a placeholder string here — that string would be sent to
+  // the gateway verbatim as the model id and fail to resolve.
+  model: string | undefined,
   opts: BestOfNOptions,
   worktreeBase: string,
 ): Promise<Candidate> {
   const emit = opts.onEvent ?? (() => undefined);
-  emit({ type: "candidate-start", id, model });
+  // Display/report label only — never fed back into the engine call.
+  const label = model || "default";
+  emit({ type: "candidate-start", id, model: label });
   const wt = join(worktreeBase, id);
 
   // Fresh worktree at HEAD — a clean, isolated checkout the candidate can edit.
@@ -139,7 +145,7 @@ async function runCandidate(
     emit({ type: "candidate-done", id, changedFiles: candidateFiles, steps, testsPassed });
     return {
       id,
-      model,
+      model: label,
       diff: candidateDiff,
       summary: result.text,
       testOutput,
@@ -149,7 +155,7 @@ async function runCandidate(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     emit({ type: "candidate-failed", id, error: msg });
-    return { id, model, diff: "", summary: msg, changedFiles: [], steps: 0, failed: true };
+    return { id, model: label, diff: "", summary: msg, changedFiles: [], steps: 0, failed: true };
   } finally {
     // Discard the worktree (best-effort).
     await git(["worktree", "remove", "--force", wt], opts.cwd);
@@ -178,7 +184,8 @@ async function pool<T>(thunks: Array<() => Promise<T>>, limit: number): Promise<
 export async function runBestOfN(opts: BestOfNOptions): Promise<BestOfNResult> {
   const emit = opts.onEvent ?? (() => undefined);
   const n = Math.max(1, opts.candidates);
-  const models = opts.models && opts.models.length > 0 ? opts.models : [undefined as unknown as string];
+  // undefined ⇒ every candidate lets the engine apply its own default model.
+  const models: Array<string | undefined> = opts.models && opts.models.length > 0 ? opts.models : [undefined];
   emit({ type: "start", candidates: n, prompt: opts.prompt });
 
   const worktreeBase = await mkdtemp(join(tmpdir(), "oxagen-bestof-"));
@@ -186,8 +193,8 @@ export async function runBestOfN(opts: BestOfNOptions): Promise<BestOfNResult> {
   try {
     const thunks = Array.from({ length: n }, (_, i) => {
       const id = `candidate-${i + 1}`;
-      const model = models[i % models.length] ?? "";
-      return () => runCandidate(id, model || "default", { ...opts, models: undefined }, worktreeBase);
+      const model = models[i % models.length];
+      return () => runCandidate(id, model, { ...opts, models: undefined }, worktreeBase);
     });
     candidates = await pool(thunks, opts.concurrency ?? Math.min(n, 4));
   } finally {
