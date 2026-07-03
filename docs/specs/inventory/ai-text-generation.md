@@ -201,7 +201,7 @@ When selectModel is called with an optional tier or explicit model id, the funct
 #### Scenario: Default to balanced tier
 <!-- test: models.test.ts.selectModel defaults to balanced tier -->
 - **WHEN** selectModel() is called with no arguments
-- **THEN** the balanced tier (OXAGEN_LLM_BALANCED env var, default anthropic/claude-sonnet-4.6) is resolved and the gateway language model is returned
+- **THEN** the balanced tier (OXAGEN_LLM_BALANCED env var, default anthropic/claude-sonnet-5) is resolved and the gateway language model is returned
 
 #### Scenario: Explicit tier selection
 <!-- test: models.test.ts.selectModel handles tier param -->
@@ -241,7 +241,7 @@ When tierModelId is called with an OxagenTier ("fast", "balanced", "precise"), t
 #### Scenario: Precise tier with default fallback
 <!-- test: models.test.ts -->
 - **WHEN** tierModelId("precise") is called and OXAGEN_LLM_PRECISE is unset
-- **THEN** the default fallback "anthropic/claude-sonnet-4.6" is returned (defensive coalesce in tierFromEnv)
+- **THEN** the default fallback "anthropic/claude-sonnet-5" is returned (defensive coalesce in tierFromEnv)
 
 ---
 

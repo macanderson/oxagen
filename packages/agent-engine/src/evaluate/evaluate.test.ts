@@ -18,6 +18,13 @@ import { extractCandidates, enhancePrompt } from "./prompt-enhancer";
 import type { AgentAi } from "../ports";
 import { emptyUsage } from "../types";
 
+// A fatal auth/billing error — see isFatalAuthOrBillingError in ../loop-driver.
+// Every fallback site below must re-throw this instead of swallowing it into a
+// "keep going" heuristic, since every later model call would fail identically.
+const FATAL_ERROR = new Error(
+  "A positive credit balance is required for all requests, please add credits.",
+);
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function makeAi(overrides: Partial<AgentAi> = {}): AgentAi {
@@ -95,6 +102,19 @@ describe("evaluatePrompt", () => {
     expect(result.refinedPrompt).toBe("fix the auth bug");
   });
 
+  it("re-throws instead of falling back when the error is a fatal auth/billing error", async () => {
+    const ai = makeAi({
+      generateObject: vi.fn().mockRejectedValue(FATAL_ERROR),
+    });
+
+    // Every later call (route/execute/judge) would fail identically, so a
+    // heuristic fallback here would just delay the real error — it must
+    // propagate instead.
+    await expect(
+      evaluatePrompt({ prompt: "fix the auth bug", model: LLM_EVALUATOR }, ai),
+    ).rejects.toThrow(/positive credit balance/);
+  });
+
   it("falls back to original prompt when refined prompt is empty", async () => {
     const ai = makeAi({
       generateObject: vi.fn().mockResolvedValue({
@@ -163,7 +183,7 @@ describe("judgeCompleteness", () => {
         filesTouched: ["src/components/Header.tsx"],
         commandsRun: [],
         steps: 3,
-        executorModel: "anthropic/claude-sonnet-4.6",
+        executorModel: "anthropic/claude-sonnet-5",
       },
       ai,
     );
@@ -223,6 +243,28 @@ describe("judgeCompleteness", () => {
     expect(result.fallback).toBe(true);
     // Claims change but touched nothing → heuristic marks incomplete
     expect(result.complete).toBe(false);
+  });
+
+  it("re-throws instead of falling back when the error is a fatal auth/billing error", async () => {
+    const ai = makeAi({
+      generateObject: vi.fn().mockRejectedValue(FATAL_ERROR),
+    });
+
+    // A heuristic "looks complete" verdict here would mask that the account is
+    // out of credits — the turn must fail fast with the real message instead.
+    await expect(
+      judgeCompleteness(
+        {
+          request: "Create a new file",
+          response: "I created the file",
+          filesTouched: [],
+          commandsRun: [],
+          steps: 0,
+          executorModel: "anthropic/claude-opus-4.8",
+        },
+        ai,
+      ),
+    ).rejects.toThrow(/positive credit balance/);
   });
 
   it("heuristic marks complete when no obvious incompleteness", async () => {
@@ -291,7 +333,7 @@ describe("judgeCompleteness", () => {
         diff: "--- a/math_utils.py\n+++ b/math_utils.py\n-    return a - b\n+    return a + b",
         commandOutputs: [{ command: "pytest -q", output: "2 passed in 0.01s", ok: true }],
         steps: 4,
-        executorModel: "anthropic/claude-sonnet-4.6",
+        executorModel: "anthropic/claude-sonnet-5",
       },
       ai,
     );
@@ -320,7 +362,7 @@ describe("judgeCompleteness", () => {
         commandsRun: ["pytest"],
         commandOutputs: [{ command: "pytest", output: longOutput, ok: false }],
         steps: 3,
-        executorModel: "anthropic/claude-sonnet-4.6",
+        executorModel: "anthropic/claude-sonnet-5",
       },
       ai,
     );
@@ -388,6 +430,31 @@ describe("judgePanel", () => {
     const verdict = await judgePanel(base, ai, ["openai/gpt-5", "google/gemini-2.5-pro", "x/y"]);
     expect(verdict.complete).toBe(true);
     expect(verdict.findings).toEqual([]);
+  });
+
+  it("propagates a fatal auth/billing error from any panel member instead of masking it in the vote", async () => {
+    // One panel member hits a fatal error; the other two would say "complete".
+    // A majority-vote aggregation must NOT silently treat the failure as a
+    // dissenting "incomplete" vote and declare the panel complete anyway — that
+    // would hide an out-of-credits account behind a falsely reassuring verdict.
+    const ai = makeAi({
+      generateObject: vi.fn().mockImplementation((args: { model: string }) => {
+        if (args.model === "google/gemini-2.5-pro") return Promise.reject(FATAL_ERROR);
+        return Promise.resolve({
+          object: {
+            complete: true,
+            confidence: 90,
+            findings: [],
+            remainingWork: [],
+            reasoning: "looks done",
+          },
+          usage: emptyUsage(),
+        });
+      }),
+    });
+    await expect(
+      judgePanel(base, ai, ["openai/gpt-5", "google/gemini-2.5-pro", "x/y"]),
+    ).rejects.toThrow(/positive credit balance/);
   });
 
   it("delegates to a single judge when the panel has one model", async () => {

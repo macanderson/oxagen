@@ -103,7 +103,7 @@ describe("formatUsd", () => {
 
 describe("projectCost", () => {
   it("breaks cost into input/output/total with vendor metadata", () => {
-    const p = projectCost("anthropic/claude-sonnet-4.6", { inputTokens: 1_000_000, outputTokens: 100_000 });
+    const p = projectCost("anthropic/claude-sonnet-5", { inputTokens: 1_000_000, outputTokens: 100_000 });
     expect(p.vendor).toBe("anthropic");
     expect(p.label).toBe("Claude Sonnet");
     expect(p.inputCostUsd).toBeCloseTo(3);

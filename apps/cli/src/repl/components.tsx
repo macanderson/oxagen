@@ -357,6 +357,17 @@ export function PromptInput({
     // isStrayMouseReportRemnant for why this can't be fixed upstream.
     if (isStrayMouseReportRemnant(input)) return;
 
+    // Mouse tracking (SGR modes 1000 + 1006, armed for wheel scroll in the
+    // full-screen TUI) makes the terminal report every click/drag/scroll to
+    // stdin as an SGR escape sequence: `(ESC)[<Cb;Cx;Cy(M|m)`. Ink hands those to
+    // useInput as raw `input`; they are NOT typed text, so without this guard a
+    // click, drag, or scroll sprays escape codes straight into the prompt (the
+    // "input fills with garbage on mouse" bug). Drop them here; the wheel itself
+    // is consumed by the raw-stdin listener in use-mouse-wheel.ts. (Mode 1006 is
+    // always on, so the legacy X10 form never occurs — SGR is sufficient.)
+    const mouseSeq = input.charCodeAt(0) === 0x1b ? input.slice(1) : input;
+    if (/^\[?<[0-9;]+[Mm]$/.test(mouseSeq)) return;
+
     // ── Typeahead navigation (only while the menu is open) ──
     if (menuOpen) {
       if (key.downArrow) {

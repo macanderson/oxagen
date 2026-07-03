@@ -51,6 +51,6 @@ Org administrators can set enforced policies on model access at **Organization â
 
 ## Model handle stability
 
-Oxagen uses model handles (e.g., `claude-sonnet-4-6`) rather than hard-coded model slugs. Handles are resolved to the current gateway slug at request time via `modelIdOf()`. This insulates your agents from model naming changes in the underlying provider APIs.
+Oxagen uses model handles (e.g., `claude-sonnet-5`) rather than hard-coded model slugs. Handles are resolved to the current gateway slug at request time via `modelIdOf()`. This insulates your agents from model naming changes in the underlying provider APIs.
 
 If a gateway model slug is updated or renamed, handle resolution is updated centrally â€” your agents and playbooks continue to work without changes.

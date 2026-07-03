@@ -18,7 +18,7 @@ cd "$(dirname "$0")"
 # Keep this list STABLE across iterations so runs stay comparable.
 TASKS="${TASKS_OVERRIDE:-django__django-11099 astropy__astropy-14995 sympy__sympy-11618 scikit-learn__scikit-learn-10297 pytest-dev__pytest-5631 sphinx-doc__sphinx-10323 matplotlib__matplotlib-13989 pylint-dev__pylint-6386 psf__requests-2317 pydata__xarray-3095}"
 
-MODEL="${OXAGEN_MODEL_SLUG:-anthropic/claude-sonnet-4.5}"
+MODEL="${OXAGEN_MODEL_SLUG:-anthropic/claude-sonnet-5}"
 AGENTS="${AGENTS:-oxagen claude-code}"
 N_CONCURRENT="${N_CONCURRENT:-2}"
 STAMP="$(date +%Y%m%d-%H%M%S)"

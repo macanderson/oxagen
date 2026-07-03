@@ -46,7 +46,7 @@ function applyDevtools(model: LanguageModelV4): LanguageModelV4 {
  * names ("Oxagen Mini/Plus/Max") stay decoupled from the underlying vendor
  * model. The env defaults (see packages/config/src/env.ts) are:
  *   fast     → OXAGEN_LLM_FAST     (anthropic/claude-haiku-4.5)
- *   balanced → OXAGEN_LLM_BALANCED (anthropic/claude-sonnet-4.6)
+ *   balanced → OXAGEN_LLM_BALANCED (anthropic/claude-sonnet-5)
  *   precise  → OXAGEN_LLM_PRECISE  (anthropic/claude-opus-4.8)
  */
 export type OxagenTier = "fast" | "balanced" | "precise";
@@ -91,7 +91,7 @@ type TierEnv = Record<(typeof TIER_ENV_KEY)[OxagenTier], string | undefined>;
 function tierFromEnv(env: TierEnv, tier: OxagenTier): string {
   // env values carry schema defaults (env.ts), so this is always a string in
   // a validated environment; coalesce defensively for mocked test envs.
-  return env[TIER_ENV_KEY[tier]] ?? "anthropic/claude-sonnet-4.6";
+  return env[TIER_ENV_KEY[tier]] ?? "anthropic/claude-sonnet-5";
 }
 
 /**

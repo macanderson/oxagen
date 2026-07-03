@@ -56,7 +56,7 @@ export type RateCard = Record<string, ProviderModelRate>;
 /**
  * Public list prices as of 2026-05. Update to match your provider invoices —
  * the gate reads these directly. Keys match the AI SDK model ids used by
- * @oxagen/ai; a versioned/date-stamped id (e.g. `claude-sonnet-4-6-2026…`)
+ * @oxagen/ai; a versioned/date-stamped id (e.g. `claude-sonnet-5-2026…`)
  * resolves to the longest matching prefix via {@link resolveRate}.
  */
 export const PROVIDER_RATE_CARD: RateCard = {
@@ -105,7 +105,7 @@ export const PROVIDER_RATE_CARD: RateCard = {
  * bias to the platform default (Sonnet) so an unknown model never silently
  * under-charges — over-charging a missing model is safer than zero-charging it.
  */
-export const FALLBACK_RATE_MODEL = "claude-sonnet-4-6";
+export const FALLBACK_RATE_MODEL = "claude-sonnet-5";
 
 /** Resolve a model id to its rate, matching the longest rate-card key prefix. */
 export function resolveRate(modelId: string, rateCard: RateCard = PROVIDER_RATE_CARD): ProviderModelRate {

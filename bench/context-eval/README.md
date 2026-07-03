@@ -18,7 +18,7 @@ export AI_GATEWAY_API_KEY=...            # or rely on repo .env.local
 python bench/context-eval/run_eval.py    # needs `claude` CLI on PATH for the baseline
 ```
 
-Arms (all read-only, same Sonnet 4.5, same repo):
+Arms (all read-only, same Sonnet 5, same repo):
 - `oxagen-full` — `oxagen --readonly` cold (fresh HOME per question; full pipeline: context injection + completeness judge)
 - `oxagen-lean` — `oxagen --readonly --no-pipeline` cold (fresh HOME per question; code_graph tool only, no judge tax)
 - `oxagen-warm` — `oxagen --readonly` **warm** (persistent HOME across all questions and rounds; see below)
@@ -114,7 +114,7 @@ OXAGEN_ARMS=oxagen-full,oxagen-warm python bench/context-eval/run_eval.py --roun
 | `EVAL_ROUNDS` | `1` | Number of warm rounds (equivalent to `--rounds`). |
 | `OXAGEN_KEEP_WARM_HOME` | unset | Set to `1` to keep the warm tmpdir after the run so you can inspect accumulated memory. |
 | `OXAGEN_CLI_BUNDLE` | repo build path | Override the path to `oxagen.mjs`. |
-| `OXAGEN_MODEL_SLUG` | `anthropic/claude-sonnet-4.5` | Model slug for oxagen arms. |
+| `OXAGEN_MODEL_SLUG` | `anthropic/claude-sonnet-5` | Model slug for oxagen arms. |
 | `CLAUDE_MODEL` | `sonnet` | Model flag for the `claude` arm. |
 | `EVAL_TIMEOUT` | `300` | Per-question timeout in seconds. |
 

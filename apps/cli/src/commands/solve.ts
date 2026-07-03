@@ -41,6 +41,16 @@ export interface SolveOptions {
    * cheaper default. See BestOfNOptions.fullPipeline.
    */
   pipeline?: boolean;
+  /**
+   * Auto-detect verification: union the test/lint/build commands every
+   * candidate actually ran during its own turn, then re-run that whole union
+   * in EVERY surviving candidate's worktree before selection — so the
+   * comparative selector gets a real, executed-test signal across the whole
+   * pool instead of whatever subset of tests each candidate happened to run
+   * on its own. Undefined here defers to `OXAGEN_BEST_OF_N_VERIFY` (env "1"
+   * means on); neither set means off. See BestOfNOptions.verifyAuto.
+   */
+  verifyAuto?: boolean;
 }
 
 /**
@@ -56,6 +66,21 @@ export interface SolveOptions {
  */
 export function resolveFullPipeline(opts: Pick<SolveOptions, "pipeline">): boolean {
   return opts.pipeline ?? process.env["OXAGEN_BEST_OF_N_PIPELINE"] === "1";
+}
+
+/**
+ * Whether every candidate should auto-verify (union + re-run the test/lint/
+ * build commands any candidate ran, across every surviving candidate's
+ * worktree, before selection). Mirrors `resolveFullPipeline`'s precedence:
+ * `opts.verifyAuto` (an explicit `--verify-auto`) always wins when set;
+ * otherwise `OXAGEN_BEST_OF_N_VERIFY` sets the default, so the bench
+ * adapter's differentiated config can turn it on without passing the flag on
+ * every call. Neither set ⇒ off. Exported as a pure function so this branch
+ * is unit-testable without standing up `handleSolve`'s full session/AI-port
+ * machinery.
+ */
+export function resolveVerifyAuto(opts: Pick<SolveOptions, "verifyAuto">): boolean {
+  return opts.verifyAuto ?? process.env["OXAGEN_BEST_OF_N_VERIFY"] === "1";
 }
 
 export async function handleSolve(prompt: string, opts: SolveOptions): Promise<void> {
@@ -80,8 +105,9 @@ export async function handleSolve(prompt: string, opts: SolveOptions): Promise<v
 
   const candidates = Math.max(1, Math.min(opts.candidates ?? 3, 10));
   const fullPipeline = resolveFullPipeline(opts);
+  const verifyAuto = resolveVerifyAuto(opts);
 
-  void debugLog("turn", "solve.start", { prompt, candidates, verify: opts.verify, models, fullPipeline });
+  void debugLog("turn", "solve.start", { prompt, candidates, verify: opts.verify, models, fullPipeline, verifyAuto });
 
   const result = await launchBestOfN({
     prompt,
@@ -95,6 +121,7 @@ export async function handleSolve(prompt: string, opts: SolveOptions): Promise<v
     projectContext: loadProjectContext(cwd),
     headless: opts.json,
     fullPipeline,
+    verifyAuto,
   });
 
   // Exit non-zero when nothing viable was produced, so scripts can branch on it.

@@ -41,6 +41,16 @@ Environment
   candidates run headlessly with no confirmation gate to bypass.
 - ``OXAGEN_BEST_OF_N_CANDIDATES`` — how many candidates per task under
   ``OXAGEN_BEST_OF_N=1`` (default 3; mirrors ``solve --candidates``).
+  ``run.sh``'s ``OXAGEN_DIFFERENTIATED=1`` recipe defaults this to 5.
+- ``OXAGEN_BEST_OF_N_MODELS`` — comma-separated gateway slugs forwarded
+  verbatim to ``solve --models`` (candidate model mix, cycled for diversity).
+  Takes precedence over ``-m``/``--model`` when set, mirroring solve.ts's own
+  ``--models`` > ``--model`` precedence. Unset ⇒ falls back to pinning a
+  single model (or omitting it under ``OXAGEN_ROUTE=1``), exactly as before
+  this existed. ``run.sh``'s ``OXAGEN_DIFFERENTIATED=1`` recipe defaults this
+  to a cross-family mix (3x ``anthropic/claude-fable-5`` + 2x
+  ``openai/gpt-5.5-pro``) — a wider, cross-vendor candidate pool finds a
+  correct fix more often than a narrower same-family one.
 - ``OXAGEN_BEST_OF_N_PIPELINE=1`` — under ``OXAGEN_BEST_OF_N=1``, run every
   candidate through the full evaluate→enhance→route→execute→judge→revise
   pipeline (``--pipeline``) instead of the bare engine loop: each candidate
@@ -53,6 +63,14 @@ Environment
   enhance). Costs roughly N extra judge-class calls plus N evaluate/enhance
   calls on top of what bare already costs. ``run.sh``'s
   ``OXAGEN_DIFFERENTIATED=1`` recipe turns this on by default.
+- ``OXAGEN_BEST_OF_N_VERIFY=1`` — under ``OXAGEN_BEST_OF_N=1``, append
+  ``--verify-auto``: union the test/lint/build commands every candidate
+  actually ran during its own turn and re-run that whole union in EVERY
+  surviving candidate's worktree before selection, so the comparative
+  selector's "tests pass" signal is real, executed evidence across the whole
+  pool instead of whatever subset of tests each candidate happened to run on
+  its own. Off by default. ``run.sh``'s ``OXAGEN_DIFFERENTIATED=1`` recipe
+  turns this on by default.
 - ``OXAGEN_INSTALL_DUCKDB=1`` — also ``npm i`` DuckDB in the container so the
   context engine's persistent memory/trace stores are live, AND so the code
   graph ``oxagen init`` pre-builds in ``install()`` (see ``_INIT_SCRIPT``
@@ -69,7 +87,11 @@ Environment
   by this adapter directly) that turns on the full differentiated config in
   one shot: persisted code graph + embeddings (``OXAGEN_INSTALL_DUCKDB=1``), a
   fast gateway-tier coordinator for the pipeline's evaluate/route stage
-  (``OXAGEN_LLM_FAST``), and best-of-N. See "Best-of-N mode" and
+  (``OXAGEN_LLM_FAST``), best-of-5 cross-family (``OXAGEN_BEST_OF_N_MODELS``),
+  auto-verify (``OXAGEN_BEST_OF_N_VERIFY=1``), a real evaluator/advisor
+  (``OXAGEN_LLM_EVALUATOR``/``OXAGEN_LLM_ADVISOR``), max reasoning effort
+  (``OXAGEN_EFFORT=xhigh``), and two judge→revise rounds per candidate
+  (``OXAGEN_MAX_REVISE_ROUNDS=2``). See "Best-of-N mode" and
   "Full differentiated config" in the README — including why the on-device
   local coordinator is NOT part of this recipe (local-dev-only, not
   container-viable).
@@ -218,6 +240,34 @@ def _best_of_n_pipeline_enabled() -> bool:
     logs instead of depending on a silent env-var default inside the CLI.
     """
     return _is_truthy(os.environ.get("OXAGEN_BEST_OF_N_PIPELINE"))
+
+
+def _best_of_n_models() -> str | None:
+    """Comma-separated cross-family model mix for `solve --models`, read
+    straight from OXAGEN_BEST_OF_N_MODELS (solve.ts splits/trims it exactly
+    like `--models` does — no re-parsing needed here). None when unset —
+    `_build_best_of_n_flags()` then falls back to pinning `-m`/`--model` to a
+    single model (or omitting it under OXAGEN_ROUTE=1), exactly as before this
+    existed. `run.sh`'s OXAGEN_DIFFERENTIATED=1 recipe sets a default
+    5-candidate cross-vendor mix (3x anthropic/claude-fable-5 + 2x
+    openai/gpt-5.5-pro) — see "Full differentiated config" in the README.
+    """
+    raw = os.environ.get("OXAGEN_BEST_OF_N_MODELS")
+    return raw.strip() if raw and raw.strip() else None
+
+
+def _verify_auto_enabled() -> bool:
+    """Whether `solve` candidates auto-verify: union the test/lint/build
+    commands every candidate actually ran and re-run that union in every
+    OTHER candidate's worktree too before selection, feeding the comparative
+    selector a real, executed-test signal across the whole pool instead of
+    whatever subset of tests each candidate happened to run on its own. Read
+    directly here (like `_best_of_n_pipeline_enabled()`) so the constructed
+    command is self-documenting in the trial logs rather than depending on a
+    silent env-var default inside the CLI. `run.sh`'s OXAGEN_DIFFERENTIATED=1
+    recipe turns this on by default.
+    """
+    return _is_truthy(os.environ.get("OXAGEN_BEST_OF_N_VERIFY"))
 
 
 def _best_of_n_candidate_count() -> int:
@@ -507,11 +557,14 @@ class OxagenAgent(BaseInstalledAgent):
     def _build_best_of_n_flags(self) -> str:
         """Flags for the best-of-N invocation: `oxagen solve <flags> "<task>"`.
 
-        Mirrors `_build_flags()`'s model forwarding (pin `-m`, or omit it under
-        OXAGEN_ROUTE=1 so each candidate falls through to the engine's own
-        default model) but targets the `solve` subcommand. No `--mode`
-        equivalent: every `solve` candidate already runs headlessly with no
-        confirmation gate to bypass.
+        Mirrors `_build_flags()`'s model forwarding — a cross-family mix
+        (`--models`, when OXAGEN_BEST_OF_N_MODELS is set; see
+        `_best_of_n_models()`) takes precedence, else pin a single model
+        (`-m`), else omit it under OXAGEN_ROUTE=1 so each candidate falls
+        through to the engine's own default model — mirroring solve.ts's own
+        `--models` > `--model` precedence, but targeting the `solve`
+        subcommand. No `--mode` equivalent: every `solve` candidate already
+        runs headlessly with no confirmation gate to bypass.
 
         `--pipeline` is appended under `OXAGEN_BEST_OF_N_PIPELINE=1` — see
         `_best_of_n_pipeline_enabled()`. Unlike `_build_flags()`'s
@@ -527,6 +580,10 @@ class OxagenAgent(BaseInstalledAgent):
         comparison judge only); `run.sh`'s `OXAGEN_DIFFERENTIATED=1` recipe
         turns it on.
 
+        `--verify-auto` is appended under `OXAGEN_BEST_OF_N_VERIFY=1` — see
+        `_verify_auto_enabled()`. Same self-documenting-trial-logs rationale
+        as `--pipeline` above.
+
         `--json` is explicit even though `solve` already auto-detects headless
         via `!process.stdout.isTTY` (true here regardless: this command's
         stdout is always piped into `tee`, never a real tty) — belt-and-braces
@@ -534,12 +591,16 @@ class OxagenAgent(BaseInstalledAgent):
         `_populate_best_of_n_metadata`) never silently depends on TTY detection.
         """
         flags = ["solve", f"--candidates {_best_of_n_candidate_count()}", "--json"]
+        models = _best_of_n_models()
         route = _is_truthy(os.environ.get("OXAGEN_ROUTE"))
-        if self.model_name and not route:
+        if models:
+            flags.append(f"--models {shlex.quote(models)}")
+        elif self.model_name and not route:
             flags.append(f"--model {shlex.quote(self.model_name)}")
         if _best_of_n_pipeline_enabled():
-        if not _is_truthy(os.environ.get("OXAGEN_NO_PIPELINE")):
             flags.append("--pipeline")
+        if _verify_auto_enabled():
+            flags.append("--verify-auto")
         return " ".join(flags)
 
     @with_prompt_template

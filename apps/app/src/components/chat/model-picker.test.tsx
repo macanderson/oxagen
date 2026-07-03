@@ -81,7 +81,7 @@ vi.mock("lucide-react", async (importOriginal) => {
 const DEFAULT_MODEL_CONFIG = {
   text: {
     fast: "claude-haiku-4-5",
-    balanced: "claude-sonnet-4-5",
+    balanced: "claude-sonnet-5",
     precise: "claude-opus-4-5",
   },
   image: {

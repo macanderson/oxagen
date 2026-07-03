@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
 
 const WS_ROW = {
   defaultTextTier: "balanced" as const,
-  defaultTextModel: "anthropic/claude-sonnet-4.6",
+  defaultTextModel: "anthropic/claude-sonnet-5",
   defaultImageModel: null,
   defaultVideoModel: null,
 };
@@ -71,7 +71,7 @@ describe("workspaceModelSettingsReadHandler (@oxagen/handlers)", () => {
   it("returns all four model settings columns", async () => {
     const result = await workspaceModelSettingsReadHandler({}, CTX);
     expect(result.defaultTextTier).toBe("balanced");
-    expect(result.defaultTextModel).toBe("anthropic/claude-sonnet-4.6");
+    expect(result.defaultTextModel).toBe("anthropic/claude-sonnet-5");
     expect(result.defaultImageModel).toBeNull();
     expect(result.defaultVideoModel).toBeNull();
   });

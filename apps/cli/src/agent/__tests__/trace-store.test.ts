@@ -45,7 +45,7 @@ function trace(id: string, prompt = "do a thing"): TurnTrace {
       usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
     },
     enhancement: { prompt, context: "", resolved: [], lessonCount: 0, source: "none" },
-    selectedModel: "anthropic/claude-sonnet-4.6",
+    selectedModel: "anthropic/claude-sonnet-5",
     selectedTier: "balanced",
     selectionRationale: "test",
     response: "ok",

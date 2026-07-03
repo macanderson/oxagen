@@ -327,13 +327,13 @@ describe("agent.llm: streaming happy path", () => {
   it("passes converted messages, model, and agent surface to streamAgentReply", async () => {
     await app.fetch(
       post({
-        model: "anthropic/claude-sonnet-4.6",
+        model: "anthropic/claude-sonnet-5",
         messages: [{ role: "user", content: "Hi agent" }],
         stream: true,
       }),
     );
     expect(mocks.selectModel).toHaveBeenCalledWith({
-      model: "anthropic/claude-sonnet-4.6",
+      model: "anthropic/claude-sonnet-5",
     });
     const args = mocks.streamAgentReply.mock.calls[0]?.[0] as Record<
       string,

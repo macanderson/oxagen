@@ -71,14 +71,27 @@ function symbolKindToNodeKind(kind: SymbolKind): CodeNodeKind | null {
 
 /**
  * Build an in-memory code graph from a workspace root directory.
+ *
+ * `onProgress`, when given, is called after every file with (files parsed so
+ * far, total files) — a real, cheap signal (just a counter) that callers like
+ * `oxagen init`'s animation use to show live "N/M files" progress. Optional
+ * and additive: existing callers are unaffected.
  */
-export async function buildCodeGraph(workspaceRoot: string): Promise<CodeGraph> {
+export async function buildCodeGraph(
+  workspaceRoot: string,
+  onProgress?: (done: number, total: number) => void,
+): Promise<CodeGraph> {
   const graph: CodeGraph = { nodes: new Map(), edges: [] };
-  for (const rel of await listSourceFiles(workspaceRoot)) {
+  const files = await listSourceFiles(workspaceRoot);
+  let done = 0;
+  for (const rel of files) {
     const fg = await extractFileGraph(path.join(workspaceRoot, rel), workspaceRoot);
-    if (!fg) continue;
-    for (const node of fg.nodes) graph.nodes.set(node.id, node);
-    graph.edges.push(...fg.edges);
+    if (fg) {
+      for (const node of fg.nodes) graph.nodes.set(node.id, node);
+      graph.edges.push(...fg.edges);
+    }
+    done++;
+    onProgress?.(done, files.length);
   }
   return graph;
 }
@@ -232,15 +245,20 @@ export async function extractFileGraph(filePath: string, root: string): Promise<
  * files whose content hash changed are re-parsed and persisted; files that
  * vanished from disk are dropped. This is the persistent counterpart to
  * buildCodeGraph and the basis for warm cold-starts (ADR-016 P0).
+ *
+ * `onProgress`, when given, is called after every file with (files done so
+ * far, total files on disk) — see buildCodeGraph's onProgress for why.
  */
 export async function buildAndPersistCodeGraph(
   root: string,
   store: CodeGraphStore,
+  onProgress?: (done: number, total: number) => void,
 ): Promise<{ indexed: number; skipped: number; removed: number }> {
   const onDisk = await listSourceFiles(root);
   const onDiskSet = new Set(onDisk);
   let indexed = 0;
   let skipped = 0;
+  let done = 0;
 
   for (const rel of onDisk) {
     let content: string;
@@ -248,6 +266,9 @@ export async function buildAndPersistCodeGraph(
       content = await fs.promises.readFile(path.join(root, rel), "utf-8");
     } catch {
       continue; // disappeared mid-walk
+    } finally {
+      done++;
+      onProgress?.(done, onDisk.length);
     }
     if ((await store.fileHash(root, rel)) === hashContent(content)) {
       skipped++;

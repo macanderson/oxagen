@@ -19,7 +19,7 @@ mocks.streamText.mockImplementation((args: { onFinish: (...a: unknown[]) => unkn
 mocks.insertTokenUsage.mockResolvedValue(undefined);
 mocks.hashPrompt.mockResolvedValue("aabbccdd");
 mocks.providerFromModelId.mockReturnValue("anthropic");
-mocks.defaultModel.mockReturnValue({ modelId: "claude-sonnet-4-6" });
+mocks.defaultModel.mockReturnValue({ modelId: "claude-sonnet-5" });
 // 10 input @ $3/1M + 20 output @ $15/1M = 330 micro-USD for USAGE_EVENT.
 mocks.providerCostUsdMicros.mockReturnValue(330);
 mocks.chargeUsageCredits.mockResolvedValue({
@@ -140,7 +140,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
   });
 
   it("falls back to the openai namespace for a model id without a vendor prefix", () => {
-    // defaultModel() returns { modelId: "claude-sonnet-4-6" } (no "/" prefix)
+    // defaultModel() returns { modelId: "claude-sonnet-5" } (no "/" prefix)
     // which lands in the default/back-compat branch.
     streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY, effort: "high" });
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
@@ -195,7 +195,7 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     expect(mocks.chargeUsageCredits).toHaveBeenCalledWith({
       orgId: "00000000-0000-4000-8000-000000000001",
       referenceId: "msg_abc",
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5",
       inputTokens: 10,
       outputTokens: 20,
       cachedTokens: 0,
@@ -359,7 +359,7 @@ describe("reasoningRequestConfig (@oxagen/ai)", () => {
 
   describe("anthropic vendor", () => {
     it("sets adaptive thinking + output_config.effort and locks temperature", () => {
-      const result = reasoningRequestConfig("anthropic/claude-sonnet-4.6", "medium");
+      const result = reasoningRequestConfig("anthropic/claude-sonnet-5", "medium");
       expect(result.temperatureLocked).toBe(true);
       expect(result.providerOptions).toEqual({
         anthropic: { thinking: { type: "adaptive" }, outputConfig: { effort: "medium" } },

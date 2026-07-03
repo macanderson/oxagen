@@ -22,7 +22,7 @@ function ev(overrides: Partial<MetricsEvent> = {}): MetricsEvent {
   return {
     callId: "call-1",
     kind: "model_call",
-    model: "anthropic/claude-sonnet-4.6",
+    model: "anthropic/claude-sonnet-5",
     tokensIn: 10,
     tokensOut: 5,
     cachedTokens: 0,
@@ -37,9 +37,9 @@ function ev(overrides: Partial<MetricsEvent> = {}): MetricsEvent {
 describe("record", () => {
   it("accumulates turn + session + byModel totals across multiple models", () => {
     const bus = createMetricsBus();
-    bus.record(ev({ model: "anthropic/claude-sonnet-4.6", tokensIn: 100, tokensOut: 50, costUsd: 0.1 }));
+    bus.record(ev({ model: "anthropic/claude-sonnet-5", tokensIn: 100, tokensOut: 50, costUsd: 0.1 }));
     bus.record(ev({ model: "openai/gpt-4o", tokensIn: 20, tokensOut: 10, costUsd: 0.02 }));
-    bus.record(ev({ model: "anthropic/claude-sonnet-4.6", tokensIn: 30, tokensOut: 15, costUsd: 0.03 }));
+    bus.record(ev({ model: "anthropic/claude-sonnet-5", tokensIn: 30, tokensOut: 15, costUsd: 0.03 }));
 
     const snap = bus.snapshot();
     expect(snap.turnTokensIn).toBe(150);
@@ -84,7 +84,7 @@ describe("record", () => {
 describe("startTurn", () => {
   it("resets turn totals but preserves session totals and byModel", () => {
     const bus = createMetricsBus();
-    bus.record(ev({ model: "anthropic/claude-sonnet-4.6", tokensIn: 100, tokensOut: 50, costUsd: 0.1 }));
+    bus.record(ev({ model: "anthropic/claude-sonnet-5", tokensIn: 100, tokensOut: 50, costUsd: 0.1 }));
 
     bus.startTurn();
 
@@ -117,7 +117,7 @@ describe("startTurn", () => {
 describe("snapshot", () => {
   it("returns a deep copy that cannot mutate internal bus state", () => {
     const bus = createMetricsBus();
-    bus.record(ev({ model: "anthropic/claude-sonnet-4.6", tokensIn: 10, tokensOut: 5, costUsd: 0.01 }));
+    bus.record(ev({ model: "anthropic/claude-sonnet-5", tokensIn: 10, tokensOut: 5, costUsd: 0.01 }));
 
     const snap = bus.snapshot();
     snap.turnTokensIn = 999_999;
@@ -126,7 +126,7 @@ describe("snapshot", () => {
 
     const snap2 = bus.snapshot();
     expect(snap2.turnTokensIn).toBe(10);
-    expect(snap2.byModel["anthropic/claude-sonnet-4.6"]!.tokensIn).toBe(10);
+    expect(snap2.byModel["anthropic/claude-sonnet-5"]!.tokensIn).toBe(10);
     expect(snap2.byModel["new-model"]).toBeUndefined();
   });
 });
@@ -242,14 +242,14 @@ describe("metricsEventFor", () => {
     const event = metricsEventFor(
       "call-42",
       "model_call",
-      "anthropic/claude-sonnet-4",
+      "anthropic/claude-sonnet-5",
       { inputTokens: 1_000_000, outputTokens: 1_000_000 },
       12_345,
     );
 
     expect(event.callId).toBe("call-42");
     expect(event.kind).toBe("model_call");
-    expect(event.model).toBe("anthropic/claude-sonnet-4");
+    expect(event.model).toBe("anthropic/claude-sonnet-5");
     expect(event.tokensIn).toBe(1_000_000);
     expect(event.tokensOut).toBe(1_000_000);
     expect(event.at).toBe(12_345);
@@ -257,7 +257,7 @@ describe("metricsEventFor", () => {
   });
 
   it("defaults missing token directions to zero and prices to zero cost", () => {
-    const event = metricsEventFor("call-43", "tool_call", "anthropic/claude-sonnet-4", {}, 1);
+    const event = metricsEventFor("call-43", "tool_call", "anthropic/claude-sonnet-5", {}, 1);
     expect(event.tokensIn).toBe(0);
     expect(event.tokensOut).toBe(0);
     expect(event.costUsd).toBe(0);

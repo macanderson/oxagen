@@ -66,7 +66,32 @@ export interface InitOptions {
   json?: boolean;
   /** Skip the workspace linker step entirely. */
   noLink?: boolean;
+  /**
+   * Fired at each phase boundary of the REAL work below (settings, code
+   * graph, domain inference, workspace link) — awaited between phases, so a
+   * caller can use it to gate on a phase actually finishing (see
+   * tui/init-animation.tsx, which blocks the domain-inference boundary until
+   * its OXAGEN reveal has played and its Ink app has unmounted, before the
+   * workspace linker's interactive prompts get a chance to write to stdout).
+   */
+  onProgress?: (event: InitProgressEvent) => void | Promise<void>;
 }
+
+/**
+ * Real phase-boundary events emitted by runInit. "graph"/"progress" and
+ * "domains"/"start" carry actual counts (files parsed, files in scope) — not
+ * simulated timing. See tui/init-animation-app.tsx for the consumer that
+ * turns this stream into a live readout.
+ */
+export type InitProgressEvent =
+  | { phase: "settings"; status: "start" | "done" }
+  | { phase: "graph"; status: "start" }
+  | { phase: "graph"; status: "progress"; filesDone: number; filesTotal: number }
+  | { phase: "graph"; status: "done"; stats: InitGraphStats }
+  | { phase: "domains"; status: "start"; totalFiles: number }
+  | { phase: "domains"; status: "skipped" }
+  | { phase: "domains"; status: "done"; domains: Array<{ name: string; files: number }> }
+  | { phase: "link"; status: "start" };
 
 export interface InitGraphStats {
   files: number;
@@ -650,12 +675,21 @@ export function formatInitSummary(result: InitResult): string {
  */
 export async function runInit(opts: InitOptions): Promise<InitResult> {
   const cwd = opts.cwd ?? process.cwd();
+  // Phase-boundary events are awaited (a caller may need a phase to be truly
+  // finished before this continues — see tui/init-animation.tsx's hand-off at
+  // the domains boundary). Per-file progress ticks are fire-and-forget (never
+  // worth blocking the build over a UI redraw).
+  const emit = async (event: InitProgressEvent): Promise<void> => {
+    await opts.onProgress?.(event);
+  };
 
   // 1. Scaffold settings files (idempotent — never clobbers)
+  await emit({ phase: "settings", status: "start" });
   const settings = ensureSettingsFiles({
     cwd,
     userSettingsPath: opts.userSettingsPath,
   });
+  await emit({ phase: "settings", status: "done" });
 
   // 2. Build code graph incrementally via DuckDB store
   const duckdbPath = opts._duckdbPath ?? defaultCodeGraphDbPath();
@@ -666,6 +700,11 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
   let graph: CodeGraph;
   let indexed = 0;
   let skipped = 0;
+  const onFileProgress = (done: number, total: number): void => {
+    void emit({ phase: "graph", status: "progress", filesDone: done, filesTotal: total });
+  };
+
+  await emit({ phase: "graph", status: "start" });
 
   // createCodeGraphStore() itself can throw synchronously — its constructor
   // does a bare `require("duckdb")` (see daemon/code-graph/store.ts), which
@@ -679,7 +718,7 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
   try {
     store = createCodeGraphStore({ duckdbPath });
     await store.whenReady();
-    const buildResult = await buildAndPersistCodeGraph(cwd, store);
+    const buildResult = await buildAndPersistCodeGraph(cwd, store, onFileProgress);
     indexed = buildResult.indexed;
     skipped = buildResult.skipped;
     graph = await store.loadGraph(cwd);
@@ -688,8 +727,13 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
     // holds the write lock), or a bad path. Fall back to an in-memory build.
     // This still gives accurate stats for THIS run; they just won't persist,
     // so a later process (e.g. the agent's own code_graph tool) starts cold.
-    graph = await buildCodeGraph(cwd);
-    indexed = graph.nodes.size;
+    graph = await buildCodeGraph(cwd, onFileProgress);
+    // `indexed` means "files freshly parsed this run" (see the primary path
+    // above, where it excludes `skipped` unchanged-hash files) — the in-memory
+    // fallback has no cache to skip against, so every file counts, but it must
+    // still be a FILE count, not graph.nodes.size (files + symbols combined),
+    // or formatInitSummary's "Files read: N (parsed M)" prints M > N.
+    indexed = [...graph.nodes.values()].filter((n) => n.kind === "file").length;
     skipped = 0;
   } finally {
     if (store) {
@@ -702,6 +746,7 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
   }
 
   const graphStats = computeGraphStats(graph, indexed, skipped);
+  await emit({ phase: "graph", status: "done", stats: graphStats });
 
   // 3. Domain inference — best-effort; gracefully skipped when no AI key can
   // run the classification model (no credential at all, or an Anthropic-only
@@ -712,9 +757,11 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
   const credential = resolveAiCredential(cwd);
   if (!credential || !credentialSupportsModel(credential, modelForTier("fast"))) {
     domainsSkipped = true;
+    await emit({ phase: "domains", status: "skipped" });
   } else {
     try {
       const allFiles = await listSourceFiles(cwd);
+      await emit({ phase: "domains", status: "start", totalFiles: allFiles.length });
       const domainModel = modelForTier("fast"); // Haiku-class — cheap classification
       const domainAI: DomainAI = {
         generateObject: (args) => generateObject({ model: domainModel, ...args }),
@@ -747,15 +794,18 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
           await domainStore.close().catch(() => {});
         }
       }
+      await emit({ phase: "domains", status: "done", domains });
     } catch {
       // AI errors never block init
       domainsSkipped = true;
+      await emit({ phase: "domains", status: "skipped" });
     }
   }
 
   // 4. Workspace linker — skipped with --no-link or if no platform session
   let workspaceLink: InitWorkspaceLinkResult | null = null;
   if (!opts.noLink) {
+    await emit({ phase: "link", status: "start" });
     workspaceLink = await runWorkspaceLinker(cwd);
   }
 
@@ -778,7 +828,13 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
 export async function handleInit(opts: InitOptions): Promise<void> {
   process.stderr.write("Initializing…\n");
 
-  const result = await runInit(opts);
+  // Dynamically imported (mirrors how program.tsx lazy-loads every command
+  // module) so a plain `runInit()` caller — the REPL's `/init`, and this
+  // file's own unit tests — never pulls in Ink/React at all, and so this
+  // module and tui/init-animation.tsx, which imports runInit back, don't form
+  // a static import cycle.
+  const { runInitWithAnimation } = await import("../tui/init-animation.js");
+  const result = await runInitWithAnimation(opts);
 
   if (opts.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");

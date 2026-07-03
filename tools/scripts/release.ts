@@ -221,7 +221,7 @@ function notesPrompt(h: NotesInput): string {
 async function notesViaGateway(prompt: string): Promise<string | null> {
   const key = deQuote(env.AI_GATEWAY_API_KEY);
   if (!key) return null;
-  const model = deQuote(env.OXAGEN_LLM_BALANCED) || "anthropic/claude-sonnet-4.6";
+  const model = deQuote(env.OXAGEN_LLM_BALANCED) || "anthropic/claude-sonnet-5";
   const res = await fetch("https://ai-gateway.vercel.sh/v1/chat/completions", {
     method: "POST",
     headers: { "content-type": "application/json", Authorization: `Bearer ${key}` },

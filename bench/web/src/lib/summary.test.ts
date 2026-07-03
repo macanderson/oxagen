@@ -8,7 +8,7 @@ function runMeta(overrides: Partial<EvalRunMeta> = {}): EvalRunMeta {
     run_group: "",
     agent_name: "oxagen",
     agent_version: "",
-    model: "anthropic/claude-sonnet-4.5",
+    model: "anthropic/claude-sonnet-5",
     harness: "swe-bench",
     suite: "swebench-verified",
     suite_version: "",
@@ -59,7 +59,7 @@ describe("deriveProvenance", () => {
       kind: "measured",
       harness: "swe-bench",
       dataset: "swebench-verified",
-      model: "anthropic/claude-sonnet-4.5",
+      model: "anthropic/claude-sonnet-5",
       gitSha: "abc123",
     });
     if (provenance.kind === "measured") {

@@ -266,6 +266,12 @@ export function buildProgram(): Command {
       "Run each candidate through the full evaluate/enhance/judge/revise pipeline, not just bare " +
         "(default: OXAGEN_BEST_OF_N_PIPELINE env var if set, else bare — the selector still judges across all N either way)",
     )
+    .option(
+      "--verify-auto",
+      "Union the test/lint/build commands every candidate actually ran and re-run them in every " +
+        "surviving candidate's worktree before selection, so the selector's tests-pass signal is real, " +
+        "executed evidence across the whole pool (default: OXAGEN_BEST_OF_N_VERIFY env var if set, else off)",
+    )
     .action(
       async (
         promptWords: string[],
@@ -278,6 +284,7 @@ export function buildProgram(): Command {
           readonly?: boolean;
           json?: boolean;
           pipeline?: boolean;
+          verifyAuto?: boolean;
         },
       ) => {
         const prompt = promptWords.join(" ").trim();

@@ -46,12 +46,12 @@ describe("defaultModelState", () => {
 describe("buildSeededModelState", () => {
   it("uses textModel when provided — clears tier", () => {
     const state = buildSeededModelState({
-      textModel: "claude-sonnet-4",
+      textModel: "claude-sonnet-5",
       textTier: null,
       imageModel: null,
       videoModel: null,
     });
-    expect(state.model).toBe("claude-sonnet-4");
+    expect(state.model).toBe("claude-sonnet-5");
     expect(state.tier).toBeNull();
   });
 

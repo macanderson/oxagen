@@ -1,6 +1,6 @@
 {
   "$schema": "https://schemas.oxagen.sh/oxagen-cli-settings-schema.json",
-  "model": "anthropic/claude-sonnet-4.6",
+  "model": "anthropic/claude-sonnet-5",
   "env": {},
   "permissions": {
     "defaultMode": "default",

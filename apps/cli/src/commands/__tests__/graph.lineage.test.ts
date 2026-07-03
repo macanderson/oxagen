@@ -110,7 +110,7 @@ function makeTrace(overrides: Partial<TurnTrace> = {}): TurnTrace {
       lessonCount: 0,
       source: "none",
     },
-    selectedModel: "claude-sonnet-4-5",
+    selectedModel: "claude-sonnet-5",
     selectedTier: "balanced",
     selectionRationale: "default",
     response: "Done.",

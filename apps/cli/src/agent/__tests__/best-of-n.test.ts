@@ -7,6 +7,9 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // Capture git invocations and hand back canned stdout per subcommand.
 const gitCalls: string[][] = [];
+// How many of the NEXT `git apply` calls should report failure — lets a test
+// simulate the winner's diff rejecting so the apply-fallback loop kicks in.
+let applyFailuresRemaining = 0;
 vi.mock("node:child_process", () => ({
   execFile: (
     _cmd: string,
@@ -15,6 +18,11 @@ vi.mock("node:child_process", () => ({
     cb: (err: unknown, res: { stdout: string; stderr: string }) => void,
   ) => {
     gitCalls.push(args);
+    if (args[0] === "apply" && applyFailuresRemaining > 0) {
+      applyFailuresRemaining--;
+      cb(null, { stdout: "error: patch does not apply", stderr: "" });
+      return;
+    }
     cb(null, { stdout: "", stderr: "" });
   },
 }));
@@ -50,6 +58,7 @@ import type { AgentAi } from "@oxagen/agent-engine";
 
 beforeEach(() => {
   gitCalls.length = 0;
+  applyFailuresRemaining = 0;
   runTurnMock.mockReset();
   selectMock.mockReset();
   verifyMock.mockReset().mockResolvedValue({ exitCode: 0, stdout: "2 passed", stderr: "", timedOut: false });
@@ -182,6 +191,34 @@ describe("runBestOfN", () => {
     expect(runTurnMock.mock.calls[1]![0]).toMatchObject({ model: "openai/gpt-4o" });
   });
 
+  it("resolves reasoning effort via resolveEffort — an explicit option wins", async () => {
+    runTurnMock.mockImplementation(async (o: { onFileChange?: (d: string, f: string[]) => void }) => {
+      o.onFileChange?.("--- a/x\n+++ b/x\n+z", ["x"]);
+      return { text: "ok", steps: 1, messages: [], usage: {}, trace: {} };
+    });
+    selectMock.mockResolvedValue({ winnerId: "candidate-1", reasoning: "", ranking: [], model: "m", fallback: false, usage: {} });
+
+    await runBestOfN({ prompt: "explain", cwd: "/repo", candidates: 1, ai, effort: "xhigh" });
+
+    expect(runTurnMock.mock.calls[0]![0]).toMatchObject({ effort: "xhigh" });
+  });
+
+  it("falls through to OXAGEN_EFFORT when no explicit effort option is given (the env recipe's wiring)", async () => {
+    runTurnMock.mockImplementation(async (o: { onFileChange?: (d: string, f: string[]) => void }) => {
+      o.onFileChange?.("--- a/x\n+++ b/x\n+z", ["x"]);
+      return { text: "ok", steps: 1, messages: [], usage: {}, trace: {} };
+    });
+    selectMock.mockResolvedValue({ winnerId: "candidate-1", reasoning: "", ranking: [], model: "m", fallback: false, usage: {} });
+
+    process.env["OXAGEN_EFFORT"] = "xhigh";
+    try {
+      await runBestOfN({ prompt: "explain", cwd: "/repo", candidates: 1, ai });
+      expect(runTurnMock.mock.calls[0]![0]).toMatchObject({ effort: "xhigh" });
+    } finally {
+      delete process.env["OXAGEN_EFFORT"];
+    }
+  });
+
   it("queries the code graph against the shared repo cwd, never the candidate's isolated worktree", async () => {
     // Regression test: candidates used to query queryCodeGraph(wt, ...) — the
     // candidate's own temp worktree path. The persistent DuckDB store keys rows
@@ -260,5 +297,173 @@ describe("runBestOfN", () => {
     // runBestOfN: the code-graph cache is keyed by cwd, so a single
     // fire-and-forget call covers the whole race).
     expect(queryCodeGraphMock).toHaveBeenCalledWith("/repo", "search", "__graph_warmup__", 1);
+  });
+
+  it("keeps every candidate's worktree alive through selection, removing them only after", async () => {
+    // P1: worktree cleanup used to happen in runCandidate's own `finally`,
+    // before selection ever ran. Assert the inverse now holds: AT THE MOMENT
+    // the selector is invoked, nothing has been removed yet; only once the
+    // whole race (selection + apply) is done are all 3 worktrees cleaned up.
+    runTurnMock.mockImplementation(async (o: { onFileChange?: (d: string, f: string[]) => void }) => {
+      o.onFileChange?.("--- a/x\n+++ b/x\n+z", ["x"]);
+      return { text: "ok", steps: 1, messages: [], usage: {}, trace: {} };
+    });
+    let removedCountDuringSelect = -1;
+    selectMock.mockImplementation(async () => {
+      removedCountDuringSelect = gitCalls.filter((a) => a[0] === "worktree" && a[1] === "remove").length;
+      return {
+        winnerId: "candidate-1",
+        reasoning: "",
+        ranking: [{ id: "candidate-1", score: 90, note: "ok" }],
+        model: "m",
+        fallback: false,
+        usage: {},
+      };
+    });
+
+    await runBestOfN({ prompt: "explain", cwd: "/repo", candidates: 3, ai });
+
+    expect(removedCountDuringSelect).toBe(0);
+    expect(gitCalls.filter((a) => a[0] === "worktree" && a[1] === "add")).toHaveLength(3);
+    expect(gitCalls.filter((a) => a[0] === "worktree" && a[1] === "remove")).toHaveLength(3);
+  });
+
+  it("verifyAuto unions the test commands every candidate ran and re-runs the union in EVERY surviving worktree", async () => {
+    // candidate-1 runs `pytest -q` on its own turn; candidate-2 runs
+    // `vitest run`; neither runs both — verifyAuto should still exercise
+    // BOTH commands in BOTH worktrees before selection.
+    let call = 0;
+    runTurnMock.mockImplementation(
+      async (o: {
+        onFileChange?: (d: string, f: string[]) => void;
+        onToolCall?: (name: string, input: unknown) => void;
+      }) => {
+        call++;
+        const cmd = call === 1 ? "pytest -q" : "vitest run";
+        o.onToolCall?.("bash", { command: cmd });
+        o.onFileChange?.(`--- a/x\n+++ b/x\n+c${call}`, ["x"]);
+        return { text: `candidate ${call}`, steps: 2, messages: [], usage: {}, trace: {} };
+      },
+    );
+    selectMock.mockResolvedValue({
+      winnerId: "candidate-1",
+      reasoning: "",
+      ranking: [
+        { id: "candidate-1", score: 90, note: "ok" },
+        { id: "candidate-2", score: 80, note: "ok" },
+      ],
+      model: "m",
+      fallback: false,
+      usage: {},
+    });
+    verifyMock.mockResolvedValue({ exitCode: 0, stdout: "1 passed", stderr: "", timedOut: false });
+
+    const result = await runBestOfN({ prompt: "fix", cwd: "/repo", candidates: 2, ai, verifyAuto: true });
+
+    // 2 candidates x 2 unioned commands = 4 verification runs, not 2.
+    expect(verifyMock).toHaveBeenCalledTimes(4);
+    const calls = verifyMock.mock.calls as Array<[{ command: string; cwd: string }]>;
+    const commands = calls.map(([c]) => c.command).sort();
+    expect(commands).toEqual(["pytest -q", "pytest -q", "vitest run", "vitest run"]);
+    // Every command ran against BOTH candidates' worktrees (2 distinct cwds).
+    const cwdsPerCommand = new Map<string, Set<string>>();
+    for (const [c] of calls) {
+      if (!cwdsPerCommand.has(c.command)) cwdsPerCommand.set(c.command, new Set());
+      cwdsPerCommand.get(c.command)!.add(c.cwd);
+    }
+    expect(cwdsPerCommand.get("pytest -q")?.size).toBe(2);
+    expect(cwdsPerCommand.get("vitest run")?.size).toBe(2);
+
+    // The decisive testsPassed signal reached both candidates.
+    expect(result.candidates).toHaveLength(2);
+    expect(result.candidates.every((c) => c.testsPassed === true)).toBe(true);
+    expect(result.candidates.every((c) => c.testOutput?.includes("PASS"))).toBe(true);
+  });
+
+  it("verifyAuto ignores non-test commands (e.g. an install or an rm) — never replays them across worktrees", async () => {
+    runTurnMock.mockImplementation(
+      async (o: {
+        onFileChange?: (d: string, f: string[]) => void;
+        onToolCall?: (name: string, input: unknown) => void;
+      }) => {
+        o.onToolCall?.("bash", { command: "rm -rf node_modules && npm install" });
+        o.onFileChange?.("--- a/x\n+++ b/x\n+z", ["x"]);
+        return { text: "ok", steps: 1, messages: [], usage: {}, trace: {} };
+      },
+    );
+    selectMock.mockResolvedValue({
+      winnerId: "candidate-1",
+      reasoning: "",
+      ranking: [{ id: "candidate-1", score: 90, note: "ok" }],
+      model: "m",
+      fallback: false,
+      usage: {},
+    });
+
+    await runBestOfN({ prompt: "fix", cwd: "/repo", candidates: 1, ai, verifyAuto: true });
+
+    expect(verifyMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the next-ranked candidate's diff when the winner's patch fails to apply", async () => {
+    let call = 0;
+    runTurnMock.mockImplementation(async (o: { onFileChange?: (d: string, f: string[]) => void }) => {
+      call++;
+      o.onFileChange?.(`--- a/x\n+++ b/x\n+c${call}`, ["x"]);
+      return { text: `candidate ${call}`, steps: 1, messages: [], usage: {}, trace: {} };
+    });
+    selectMock.mockResolvedValue({
+      winnerId: "candidate-1",
+      reasoning: "candidate-1 looked best",
+      ranking: [
+        { id: "candidate-1", score: 90, note: "best" },
+        { id: "candidate-2", score: 70, note: "second" },
+      ],
+      model: "m",
+      fallback: false,
+      usage: {},
+    });
+    // The winner's (candidate-1's) `git apply` rejects; the fallback attempt
+    // (candidate-2's diff) must succeed.
+    applyFailuresRemaining = 1;
+
+    const events: BestOfNEvent[] = [];
+    const result = await runBestOfN({ prompt: "fix", cwd: "/repo", candidates: 2, ai, onEvent: (e) => events.push(e) });
+
+    // Exactly 2 apply attempts (winner rejected, fallback accepted).
+    expect(gitCalls.filter((a) => a[0] === "apply")).toHaveLength(2);
+    // No apply-failed event — the fallback recovered the race.
+    expect(events.some((e) => e.type === "apply-failed")).toBe(false);
+    const applied = events.find((e) => e.type === "applied");
+    expect(applied).toMatchObject({ winnerId: "candidate-2" });
+    // The result's winner reflects who ACTUALLY got applied, not the
+    // selector's original (superseded) pick.
+    expect(result.winner?.id).toBe("candidate-2");
+    // selection.winnerId still records the selector's original verdict.
+    expect(result.selection.winnerId).toBe("candidate-1");
+  });
+
+  it("emits apply-failed only when EVERY ranked candidate's diff fails to apply", async () => {
+    runTurnMock.mockImplementation(async (o: { onFileChange?: (d: string, f: string[]) => void }) => {
+      o.onFileChange?.("--- a/x\n+++ b/x\n+z", ["x"]);
+      return { text: "ok", steps: 1, messages: [], usage: {}, trace: {} };
+    });
+    selectMock.mockResolvedValue({
+      winnerId: "candidate-1",
+      reasoning: "",
+      ranking: [{ id: "candidate-1", score: 90, note: "ok" }],
+      model: "m",
+      fallback: false,
+      usage: {},
+    });
+    applyFailuresRemaining = 99; // every apply attempt fails
+
+    const events: BestOfNEvent[] = [];
+    const result = await runBestOfN({ prompt: "fix", cwd: "/repo", candidates: 1, ai, onEvent: (e) => events.push(e) });
+
+    expect(events.some((e) => e.type === "apply-failed")).toBe(true);
+    expect(events.some((e) => e.type === "applied")).toBe(false);
+    // Falls back to the selector's original pick when nothing actually applied.
+    expect(result.winner?.id).toBe("candidate-1");
   });
 });

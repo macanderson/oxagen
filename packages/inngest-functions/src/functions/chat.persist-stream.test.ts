@@ -122,7 +122,7 @@ describe("chatPersistStream Inngest handler", () => {
       data: {
         ...BASE_EVENT.data,
         tokenUsage: {
-          model: "claude-sonnet-4-6",
+          model: "claude-sonnet-5",
           inputTokens: 100,
           outputTokens: 200,
           cachedTokens: 10,
@@ -144,7 +144,7 @@ describe("chatPersistStream Inngest handler", () => {
     expect(row.execution_step_id).toBe("msg_1");
     expect(row.org_id).toBe("org_1");
     expect(row.workspace_id).toBe("ws_1");
-    expect(row.model).toBe("claude-sonnet-4-6");
+    expect(row.model).toBe("claude-sonnet-5");
     expect(row.input_tokens).toBe(100);
     expect(row.output_tokens).toBe(200);
     expect(row.cached_tokens).toBe(10);

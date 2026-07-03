@@ -22,6 +22,16 @@ const DEFAULT_SYSTEM =
   "Make the smallest correct change that satisfies the request, run the repo's " +
   "tests or build when relevant, and stop when the task is complete.";
 
+/**
+ * The coding loop's own default model, applied when a caller passes no
+ * `model` at all (as opposed to routing through a tier — see
+ * `router/model-router.ts`'s `modelForTier`, a separate concept). Exported so
+ * a caller that needs to know/label what this default resolves to (e.g. the
+ * pipeline's bare-mode accounting in `pipeline/index.ts`) uses this SAME
+ * constant instead of a second hardcoded literal that can drift out of sync.
+ */
+export const DEFAULT_AGENT_MODEL = "anthropic/claude-fable-5";
+
 /** Parse `git diff` output for the set of changed file paths (`+++ b/<path>` headers). */
 export function changedFilesFromDiff(diff: string): string[] {
   const files = new Set<string>();
@@ -121,7 +131,7 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
     instructionMessage,
   ];
 
-  const model = opts.model ?? "anthropic/claude-fable-5";
+  const model = opts.model ?? DEFAULT_AGENT_MODEL;
   const maxSteps = opts.maxSteps ?? 256;
   const contextWindow = opts.contextWindow ?? contextWindowFor(model);
   const compactionThreshold = opts.compactionThreshold ?? 0.8;

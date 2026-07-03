@@ -62,13 +62,13 @@ real provider invoices — everything downstream derives from it.
 | Model | $/1M in | $/1M out | $/1M cached-in | Provider |
 |---|---|---|---|---|
 | claude-opus-4-8 | 15.00 | 75.00 | 1.50 | anthropic |
-| claude-sonnet-4-6 (default) | 3.00 | 15.00 | 0.30 | anthropic |
+| claude-sonnet-5 (default) | 3.00 | 15.00 | 0.30 | anthropic |
 | claude-haiku-4-5 | 1.00 | 5.00 | 0.10 | anthropic |
 | gpt-4o | 2.50 | 10.00 | 1.25 | openai |
 | gpt-4o-mini | 0.15 | 0.60 | 0.075 | openai |
 | text-embedding-3-small | 0.02 | — | 0.02 | openai |
 
-A versioned/date-stamped model id (e.g. `claude-sonnet-4-6-20260101`) resolves
+A versioned/date-stamped model id (e.g. `claude-sonnet-5-20260101`) resolves
 to the **longest matching prefix**; an unknown id falls back to Sonnet so a
 missing model never silently zero-charges (`resolveRate`).
 
@@ -206,7 +206,7 @@ code); pinning it decouples runtime from a config edit until the next sync.
 - `token_usage.cost_usd_micros` was hard-coded to `0` in the gate and embeddings
   → now priced via the rate card.
 - `providerFromModelId` returned `""` for the bare model ids the gate actually
-  uses (`claude-sonnet-4-6`) → now infers the provider from the family.
+  uses (`claude-sonnet-5`) → now infers the provider from the family.
 - Credits were **never** charged on LLM calls and **never** granted on
   purchase/renewal → both halves of the loop are now wired.
 - `billing.plans` seed carried placeholder Stripe ids and unrealistic

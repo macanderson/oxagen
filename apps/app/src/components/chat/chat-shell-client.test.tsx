@@ -119,7 +119,7 @@ vi.mock("@/components/ui/toast", () => ({
 
 // ── Minimal modelConfig stub ─────────────────────────────────────────────────
 const modelConfig = {
-  text: { fast: "claude-haiku-4-5", smart: "claude-sonnet-4-6" },
+  text: { fast: "claude-haiku-4-5", smart: "claude-sonnet-5" },
   image: { basic: "gpt-image-1" },
   video: { basic: "veo-3.0" },
 } as unknown as import("@oxagen/ai/catalog").ResolvedTierCatalog;

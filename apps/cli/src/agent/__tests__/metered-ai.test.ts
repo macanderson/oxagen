@@ -48,7 +48,7 @@ describe("createMeteredAi", () => {
       now: () => 1000,
     });
     const res = await ai.generateObject({
-      model: "anthropic/claude-sonnet-4",
+      model: "anthropic/claude-sonnet-5",
       schema: {} as never,
       prompt: "x",
     });
@@ -56,7 +56,7 @@ describe("createMeteredAi", () => {
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       kind: "model_call",
-      model: "anthropic/claude-sonnet-4",
+      model: "anthropic/claude-sonnet-5",
       tokensIn: 100,
       tokensOut: 50,
       cachedTokens: 0,

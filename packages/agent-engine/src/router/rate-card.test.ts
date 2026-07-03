@@ -75,8 +75,8 @@ describe("estimateCostUsd", () => {
   });
 
   it("treats a missing direction as zero tokens", () => {
-    expect(estimateCostUsd("anthropic/claude-sonnet-4.6", { inputTokens: 1_000_000 })).toBe(3);
-    expect(estimateCostUsd("anthropic/claude-sonnet-4.6", {})).toBe(0);
+    expect(estimateCostUsd("anthropic/claude-sonnet-5", { inputTokens: 1_000_000 })).toBe(3);
+    expect(estimateCostUsd("anthropic/claude-sonnet-5", {})).toBe(0);
   });
 
   it("prices cached-read tokens at the discounted rate, not the fresh-input rate", () => {
