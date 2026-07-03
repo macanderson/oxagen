@@ -363,6 +363,39 @@ describe("handleGraphPush — envelope structure", () => {
     expect(fileNode!.embedding).toBeUndefined();
   });
 
+  it.each([
+    ["ollama:nomic-embed-text", 768],
+    ["local-onnx:bge-small-en-v1.5", 384],
+  ])(
+    "omits a local-provider embedding (%s, %i-d — a different vector space than the gateway's)",
+    async (provider, dim) => {
+      const vec = Array.from({ length: dim }, () => 0.02);
+      setupGit({ lsFiles: "src/foo.ts" });
+      const nodes = new Map();
+      nodes.set("id-1", {
+        id: "id-1",
+        kind: "file",
+        name: "foo.ts",
+        path: "src/foo.ts",
+        range: { start: 0, end: 0 },
+        language: "typescript",
+        embedding: vec,
+        embeddingProvider: provider,
+      });
+      mockBuildCodeGraph.mockResolvedValue({ nodes, edges: [] });
+      mockApiPost.mockResolvedValueOnce(PUSH_RESULT);
+
+      await handleGraphPush({ _duckdbPath: ":memory:", _gitRoot: GIT_ROOT, full: true });
+
+      const body = mockApiPost.mock.calls[0]![1] as {
+        nodes: Array<{ key: string; embedding?: number[] }>;
+      };
+      const fileNode = body.nodes.find((n) => n.key.endsWith("src/foo.ts"));
+      expect(fileNode).toBeDefined();
+      expect(fileNode!.embedding).toBeUndefined();
+    },
+  );
+
   it("omits the embedding when the vector has the wrong dimension", async () => {
     setupGit({ lsFiles: "src/foo.ts" });
     const nodes = new Map();

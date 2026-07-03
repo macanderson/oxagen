@@ -538,6 +538,7 @@ class OxagenAgent(BaseInstalledAgent):
         if self.model_name and not route:
             flags.append(f"--model {shlex.quote(self.model_name)}")
         if _best_of_n_pipeline_enabled():
+        if not _is_truthy(os.environ.get("OXAGEN_NO_PIPELINE")):
             flags.append("--pipeline")
         return " ".join(flags)
 
