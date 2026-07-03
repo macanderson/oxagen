@@ -59,7 +59,12 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
   };
 });
 
-import { generateVideoFor } from "./generate-video";
+import {
+  generateVideoFor,
+  supportedVideoDurations,
+  resolveVideoDurationSeconds,
+  videoDurationAlternatives,
+} from "./generate-video";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -117,7 +122,7 @@ describe("generateVideoFor (@oxagen/ai)", () => {
     await generateVideoFor({
       model: FAKE_MODEL,
       prompt: "Waves crashing on a beach",
-      durationSeconds: 5,
+      durationSeconds: 6,
       aspectRatio: "16:9",
       telemetry: TELEMETRY,
     });
@@ -125,9 +130,53 @@ describe("generateVideoFor (@oxagen/ai)", () => {
     expect(mocks.experimentalGenerateVideo).toHaveBeenCalledTimes(1);
     const arg = mocks.experimentalGenerateVideo.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(arg.prompt).toBe("Waves crashing on a beach");
-    expect(arg.duration).toBe(5);
+    expect(arg.duration).toBe(6);
     expect(arg.aspectRatio).toBe("16:9");
     expect(arg.maxRetries).toBe(0);
+  });
+
+  it("snaps an unsupported duration to the nearest the model supports (30 → 8 for Veo)", async () => {
+    const result = await generateVideoFor({
+      model: FAKE_MODEL,
+      prompt: "A 30-second epic",
+      durationSeconds: 30,
+      telemetry: TELEMETRY,
+    });
+
+    const arg = mocks.experimentalGenerateVideo.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.duration).toBe(8);
+    expect(result.effectiveDurationSeconds).toBe(8);
+    // Billing must charge the effective duration, never the requested one.
+    expect(mocks.videoProviderCostUsdMicros).toHaveBeenCalledWith(
+      "google/veo-3.0-fast-generate-001",
+      8,
+    );
+    const chargeArg = mocks.chargeVideoCredits.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(chargeArg.durationSeconds).toBe(8);
+  });
+
+  it("defaults an absent duration to the model's shortest supported (Veo → 4)", async () => {
+    const result = await generateVideoFor({
+      model: FAKE_MODEL,
+      prompt: "Default duration",
+      telemetry: TELEMETRY,
+    });
+
+    const arg = mocks.experimentalGenerateVideo.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.duration).toBe(4);
+    expect(result.effectiveDurationSeconds).toBe(4);
+  });
+
+  it("passes durations through untouched for models with no known constraint", async () => {
+    await generateVideoFor({
+      model: "acme/video-x",
+      prompt: "Unknown model",
+      durationSeconds: 30,
+      telemetry: TELEMETRY,
+    });
+
+    const arg = mocks.experimentalGenerateVideo.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.duration).toBe(30);
   });
 
   it("writes a token_usage row with the correct telemetry fields", async () => {
@@ -152,7 +201,7 @@ describe("generateVideoFor (@oxagen/ai)", () => {
     await generateVideoFor({
       model: FAKE_MODEL,
       prompt: "test",
-      durationSeconds: 5,
+      durationSeconds: 6,
       telemetry: TELEMETRY,
     });
 
@@ -161,7 +210,7 @@ describe("generateVideoFor (@oxagen/ai)", () => {
     expect(chargeArg.orgId).toBe("org_1");
     expect(chargeArg.referenceId).toBe("asset_abc");
     expect(chargeArg.model).toBe("google/veo-3.0-fast-generate-001");
-    expect(chargeArg.durationSeconds).toBe(5);
+    expect(chargeArg.durationSeconds).toBe(6);
   });
 
   it("swallows an insertTokenUsage error and still returns bytes", async () => {
