@@ -269,6 +269,7 @@ export function AgentSidebar({
   widthFn,
   focus = null,
   active = false,
+  maxRows,
 }: {
   mode?: PanelMode;
   nowFn?: () => number;
@@ -278,6 +279,8 @@ export function AgentSidebar({
   /** Force the dock visible (the user has navigated into it) even when `auto`
    *  would otherwise hide it while idle. */
   active?: boolean;
+  /** Cap the sidebar height to this many rows so it never dominates the live frame. */
+  maxRows?: number;
 }): React.ReactElement | null {
   const now = nowFn ?? (() => Date.now());
   const width = widthFn ?? (() => process.stdout.columns ?? 80);
@@ -314,7 +317,13 @@ export function AgentSidebar({
   const doneTasks = tasks.filter((t) => t.status === "done").length;
 
   return (
-    <Box flexDirection="column" marginLeft={1} flexShrink={0} gap={1}>
+    <Box
+      flexDirection="column"
+      marginLeft={1}
+      flexShrink={1}
+      gap={1}
+      {...(maxRows != null ? { height: maxRows, overflow: "hidden" } : {})}
+    >
       <Panel title="Agent Team" accent={theme.cyan}>
         <Box marginBottom={1}>
           <Text dimColor>

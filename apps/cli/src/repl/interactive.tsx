@@ -2040,7 +2040,7 @@ export function ReplApp({
           </Box>
         )}
 
-        <Box flexDirection="row">
+        <Box flexDirection="row" flexShrink={1} overflow="hidden">
           <Box flexDirection="column" flexGrow={1} minWidth={0}>
             {/* Terminal panel — a `!command`'s live stdout/stderr, red-outlined and
                 pinned just ABOVE the in-progress message so shell output stays
@@ -2063,6 +2063,7 @@ export function ReplApp({
             mode={panelMode}
             focus={focus.zone === "input" ? null : focus}
             active={focus.zone !== "input"}
+            maxRows={fullscreen ? Math.max(6, rows - 8) : undefined}
           />
         </Box>
 
