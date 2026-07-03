@@ -132,7 +132,7 @@ Results are written to `bench/rag-eval/results.json` (git-ignored).
 | `RAG_EMBED_MODEL` | `openai/text-embedding-3-small` | Embeddings model slug (RAGAS only) |
 | `RAG_DATASET` | `bench/rag-eval/dataset.jsonl` | Path to the dataset to score |
 | `EVAL_TIMEOUT` | `300` | Per-question timeout in seconds (--gen-context mode) |
-| `OXAGEN_MODEL_SLUG` | `anthropic/claude-sonnet-4.5` | Model slug used in --gen-context bundle calls |
+| `OXAGEN_MODEL_SLUG` | `anthropic/claude-sonnet-5` | Model slug used in --gen-context bundle calls |
 
 ---
 

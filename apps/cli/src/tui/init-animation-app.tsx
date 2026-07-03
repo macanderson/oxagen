@@ -28,6 +28,13 @@ const PHASE_LABEL: Record<InitProgressEvent["phase"], string> = {
   link: "Linking workspace…",
 };
 
+/** A PROGRESS_STEPS-wide block bar for `done/total`; all-empty when total is unknown (0). */
+function progressBar(done: number, total: number): string {
+  if (total <= 0) return "░".repeat(PROGRESS_STEPS);
+  const filled = Math.round((done / total) * PROGRESS_STEPS);
+  return "█".repeat(filled) + "░".repeat(PROGRESS_STEPS - filled);
+}
+
 interface State {
   label: string;
   filesDone: number;
@@ -130,14 +137,7 @@ export function InitAnimationApp({
     return <InitRevealView onDone={onReady} tickMs={revealTickMs} holdMs={revealHoldMs} />;
   }
 
-  const bar =
-    state.filesTotal > 0
-      ? (() => {
-          const filled = Math.round((state.filesDone / state.filesTotal) * PROGRESS_STEPS);
-          return "█".repeat(filled) + "░".repeat(PROGRESS_STEPS - filled);
-        })()
-      : "░".repeat(PROGRESS_STEPS);
-
+  const bar = progressBar(state.filesDone, state.filesTotal);
   const blink = state.frame % BLINK_PERIOD < BLINK_PERIOD / 2;
 
   return (

@@ -121,14 +121,6 @@ export const gatewayModels: GatewayModel[] = [
     context: "200K",
   },
   {
-    id: "anthropic/claude-sonnet-4.6",
-    name: "Claude Sonnet 4.6",
-    vendor: "anthropic",
-    released: "2026-02-24",
-    capabilities: ["reasoning", "vision", "tools"],
-    context: "200K",
-  },
-  {
     id: "anthropic/claude-haiku-4.5",
     name: "Claude Haiku 4.5",
     vendor: "anthropic",

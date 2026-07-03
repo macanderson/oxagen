@@ -10,10 +10,22 @@
  * into the full evaluate→enhance→route→execute→judge→revise pipeline too (the
  * ENHANCE stage's semantic-embedding + code-graph pre-context, and a per-
  * candidate completeness judge/revise round, at roughly N extra judge-class
- * model calls). An optional `verifyCommand` is run in each candidate's
- * worktree afterwards and its output feeds the SELECTOR, which picks the
- * winner (tests-pass → smallest correct change). The winner's diff is applied
- * to the real working tree; every worktree is cleaned up.
+ * model calls).
+ *
+ * Every candidate's worktree survives past its own turn — cleanup is deferred
+ * until AFTER selection (the `finally` in {@link runBestOfN}), specifically so
+ * `verifyAuto` can still exercise it. An optional `verifyCommand` is run in
+ * each candidate's OWN worktree right after its turn (a single fixed command,
+ * the existing per-candidate signal). `verifyAuto` goes further: it unions the
+ * distinct test/lint/build commands EVERY candidate ran on its own during the
+ * turn, then re-runs that whole union in EVERY surviving candidate's worktree
+ * — so all N are compared on the SAME executed evidence instead of whatever
+ * subset each one happened to run — and feeds the result to the SELECTOR as a
+ * decisive `testsPassed` signal (SELECT_SYSTEM already treats executed-test
+ * output as decisive; see `packages/agent-engine/src/evaluate/select.ts`). The
+ * winner's diff is then applied to the real working tree — falling through to
+ * the next-ranked candidate's diff if `git apply` rejects the top pick, rather
+ * than giving up — and every worktree is cleaned up.
  *
  * Every step emits a {@link BestOfNEvent} so the CLI can render the whole race
  * live — the point is that the user SEES the orchestration working, not a
@@ -29,6 +41,7 @@ import { createCwdWorkspace, createCodeGraphProvider } from "./adapters/index.js
 import { queryCodeGraph } from "./code-graph.js";
 import { runShellCommandBuffered } from "../lib/shell-runner.js";
 import { looksPassing } from "@oxagen/agent-engine";
+import { resolveEffort } from "./model.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -55,6 +68,14 @@ export interface BestOfNOptions {
   ai: AgentAi;
   /** Model slugs cycled across candidates for diversity; defaults to one model. */
   models?: string[];
+  /**
+   * Reasoning effort forwarded to every candidate's turn. Order: this option →
+   * `OXAGEN_EFFORT` env → config → the model's own default (see
+   * `resolveEffort` in `agent/model.ts`). Undefined here still resolves via
+   * env/config, so e.g. `OXAGEN_EFFORT=xhigh` takes effect with no explicit
+   * plumbing from the caller.
+   */
+  effort?: string;
   /** Selector model override. */
   selectorModel?: string;
   /** Max candidates running at once (default min(N, 4)). */
@@ -67,6 +88,17 @@ export interface BestOfNOptions {
    * decisive selection signal (test results). Omit to select on diff + summary.
    */
   verifyCommand?: string;
+  /**
+   * Auto-detect verification: union the distinct test/lint/build commands
+   * every candidate ran via the `bash` tool during its own turn, then re-run
+   * that whole union in EVERY surviving candidate's worktree (not just the
+   * ones that happened to run it themselves) before selection, feeding a
+   * decisive `testsPassed` signal to the comparative selector. Complements
+   * `verifyCommand` (a single fixed command) rather than replacing it — both
+   * can be set. Default false; the CLI defaults this on when
+   * `OXAGEN_DIFFERENTIATED=1` (see `resolveVerifyAuto` in `commands/solve.ts`).
+   */
+  verifyAuto?: boolean;
   /** Apply the winner's diff to `cwd` (default true; forced off for readOnly). */
   apply?: boolean;
   /**
@@ -86,6 +118,13 @@ export interface BestOfNOptions {
 }
 
 export interface BestOfNResult {
+  /**
+   * The candidate whose diff actually landed in the real working tree. Almost
+   * always `selection`'s pick, EXCEPT when that candidate's diff failed
+   * `git apply` and a lower-ranked candidate's diff was used instead (see the
+   * apply-fallback loop in `runBestOfN`) — check `selection.winnerId` for the
+   * selector's original (possibly superseded) verdict.
+   */
   winner: Candidate | null;
   candidates: Candidate[];
   selection: SelectionResult;
@@ -103,7 +142,61 @@ async function git(args: string[], cwd: string): Promise<string> {
   }
 }
 
-/** Run one candidate in its own worktree; returns its Candidate summary. */
+/** One candidate's turn plus the bookkeeping `runBestOfN` needs AFTER the
+ * race: its (not-yet-removed) worktree path and the distinct bash commands it
+ * ran, for `verifyAuto`'s cross-candidate test union. */
+interface CandidateRun {
+  candidate: Candidate;
+  /**
+   * NOT yet removed — the caller (`runBestOfN`) cleans up every candidate's
+   * worktree AFTER selection (and, when `verifyAuto` is on, after re-running
+   * tests in it), not here. See the top-of-file comment.
+   */
+  worktree: string;
+  /**
+   * Distinct `bash` commands this candidate ran, in the FULL untruncated form
+   * captured off the `tool-call` event's parsed input — unlike
+   * `result.trace.commandsRun`, which is capped to 120 chars for storage and
+   * would silently mis-execute (truncated mid-argument) if replayed verbatim.
+   */
+  testCommands: string[];
+}
+
+/** Pull the shell command out of a `bash` tool call's (parsed) input. */
+function extractBashCommand(input: unknown): string | undefined {
+  if (input && typeof input === "object") {
+    const obj = input as { command?: unknown; cmd?: unknown };
+    const cmd = obj.command ?? obj.cmd;
+    if (typeof cmd === "string" && cmd.trim()) return cmd;
+  }
+  return undefined;
+}
+
+// Commands that look like a test/lint/typecheck/build invocation — the only
+// ones `verifyAuto` will replay across every OTHER candidate's worktree.
+// Candidates run arbitrary shell commands during their turn (installs, greps,
+// `git log`, …); blindly re-executing everything any candidate happened to
+// run, in every candidate's worktree, would be wasteful at best and
+// destructive at worst (a stray `rm -rf`, `git push`, `curl | sh`, …). Only
+// commands that match a known test/verification runner qualify.
+const TEST_COMMAND_RE =
+  /\b(pytest|py\.test|unittest|nose2?|tox|go test|cargo test|mvn(?:\s+-\S+)*\s+test|gradlew?\s+test|rspec|phpunit|dotnet test|jest|vitest|mocha|ava\b|karma|\btap\b|ctest|rake test|npm (?:run )?test|pnpm (?:run |--filter \S+ )?test\S*|yarn test|make (?:test|check)|tsc\b|eslint|ruff|flake8|pylint)\b/i;
+
+/** Heuristic: does `cmd` look like a test/lint/typecheck/build command? */
+function isLikelyTestCommand(cmd: string): boolean {
+  return TEST_COMMAND_RE.test(cmd.trim());
+}
+
+/** Dedup a list of strings, preserving first-seen order. */
+function dedupe(items: string[]): string[] {
+  const seen = new Set<string>();
+  return items.filter((s) => !seen.has(s) && seen.add(s));
+}
+
+/** Run one candidate in its own worktree; returns its Candidate summary plus
+ * the worktree/commands `runBestOfN` needs for `verifyAuto` + deferred
+ * cleanup (this function itself does NOT remove the worktree — see
+ * {@link CandidateRun}). */
 async function runCandidate(
   id: string,
   // Pinned model slug, or undefined to let the engine apply its own default
@@ -113,12 +206,13 @@ async function runCandidate(
   model: string | undefined,
   opts: BestOfNOptions,
   worktreeBase: string,
-): Promise<Candidate> {
+): Promise<CandidateRun> {
   const emit = opts.onEvent ?? (() => undefined);
   // Display/report label only — never fed back into the engine call.
   const label = model || "default";
   emit({ type: "candidate-start", id, model: label });
   const wt = join(worktreeBase, id);
+  const testCommands: string[] = [];
 
   // Fresh worktree at HEAD — a clean, isolated checkout the candidate can edit.
   // If this fails, the candidate's fs ops throw below and it becomes non-viable.
@@ -134,6 +228,7 @@ async function runCandidate(
       workspace: createCwdWorkspace(wt),
       ai: opts.ai,
       model,
+      effort: resolveEffort(opts.effort),
       // Default bare (SELECTOR is the sole judge). fullPipeline opts each
       // candidate into evaluate→enhance→route→execute→judge→revise too — see
       // BestOfNOptions.fullPipeline for the cost tradeoff.
@@ -166,7 +261,13 @@ async function runCandidate(
       codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(opts.cwd, op, q, l)),
       signal: opts.signal,
       onStage: (s) => emit({ type: "candidate-progress", id, label: s.label }),
-      onToolCall: (name) => emit({ type: "candidate-progress", id, label: name }),
+      onToolCall: (name, input) => {
+        emit({ type: "candidate-progress", id, label: name });
+        if (name === "bash") {
+          const cmd = extractBashCommand(input);
+          if (cmd) testCommands.push(cmd);
+        }
+      },
       onFileChange: (diff, changedFiles) => {
         candidateDiff = diff;
         candidateFiles = changedFiles;
@@ -186,22 +287,31 @@ async function runCandidate(
 
     emit({ type: "candidate-done", id, changedFiles: candidateFiles, steps, testsPassed });
     return {
-      id,
-      model: label,
-      diff: candidateDiff,
-      summary: result.text,
-      testOutput,
-      changedFiles: candidateFiles,
-      steps,
+      candidate: {
+        id,
+        model: label,
+        diff: candidateDiff,
+        summary: result.text,
+        testOutput,
+        testsPassed,
+        changedFiles: candidateFiles,
+        steps,
+      },
+      worktree: wt,
+      testCommands: dedupe(testCommands),
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     emit({ type: "candidate-failed", id, error: msg });
-    return { id, model: label, diff: "", summary: msg, changedFiles: [], steps: 0, failed: true };
-  } finally {
-    // Discard the worktree (best-effort).
-    await git(["worktree", "remove", "--force", wt], opts.cwd);
+    return {
+      candidate: { id, model: label, diff: "", summary: msg, changedFiles: [], steps: 0, failed: true },
+      worktree: wt,
+      testCommands: dedupe(testCommands),
+    };
   }
+  // No `finally` worktree cleanup here — the worktree must survive past this
+  // candidate's own turn so `verifyAuto` can still exercise it. The caller
+  // (runBestOfN) removes every candidate's worktree AFTER selection.
 }
 
 /** Run `thunks` with a bounded concurrency, preserving order. */
@@ -242,49 +352,121 @@ export async function runBestOfN(opts: BestOfNOptions): Promise<BestOfNResult> {
   }
 
   const worktreeBase = await mkdtemp(join(tmpdir(), "oxagen-bestof-"));
-  let candidates: Candidate[];
+  const thunks = Array.from({ length: n }, (_, i) => {
+    const id = `candidate-${i + 1}`;
+    const model = models[i % models.length];
+    return () => runCandidate(id, model, { ...opts, models: undefined }, worktreeBase);
+  });
+  // Every candidate's worktree is kept alive past this point. Cleanup is
+  // deferred to the `finally` below — after selection, and after verifyAuto
+  // (if on) has re-run tests in each one — instead of per-candidate, so this
+  // whole race's worktrees are still there for verifyAuto and the
+  // apply-fallback loop to use.
+  const runs = await pool(thunks, opts.concurrency ?? Math.min(n, 4));
+  const candidates: Candidate[] = runs.map((r) => r.candidate);
+
   try {
-    const thunks = Array.from({ length: n }, (_, i) => {
-      const id = `candidate-${i + 1}`;
-      const model = models[i % models.length];
-      return () => runCandidate(id, model, { ...opts, models: undefined }, worktreeBase);
+    // AUTO-VERIFY: union the distinct test/lint/build commands every
+    // candidate ran on its own, then re-run that whole union in EVERY
+    // surviving (non-failed) candidate's worktree — so the selector compares
+    // all N on the SAME executed evidence instead of whatever subset of
+    // tests each one happened to run by itself.
+    if (opts.verifyAuto && !opts.signal?.aborted) {
+      const union = dedupe(runs.flatMap((r) => r.testCommands.filter(isLikelyTestCommand)));
+      if (union.length > 0) {
+        await Promise.all(
+          runs.map(async (r) => {
+            if (r.candidate.failed || opts.signal?.aborted) return;
+            const outputs: string[] = [];
+            let allPassed = true;
+            for (const cmd of union) {
+              if (opts.signal?.aborted) break;
+              emit({ type: "candidate-verify", id: r.candidate.id, command: cmd });
+              const v = await runShellCommandBuffered({
+                command: cmd,
+                cwd: r.worktree,
+                timeoutMs: 300_000,
+                signal: opts.signal,
+              });
+              const out = [v.stdout, v.stderr].filter(Boolean).join("\n").trim();
+              const passed = v.exitCode === 0 && looksPassing(out);
+              allPassed = allPassed && passed;
+              outputs.push(`$ ${cmd}\n→ ${passed ? "PASS" : "FAIL"} (exit ${v.exitCode})\n${out}`);
+            }
+            if (outputs.length === 0) return;
+            // Append to (don't replace) any verifyCommand output already
+            // captured, and let the union's combined pass/fail be decisive —
+            // it's the broader, cross-candidate signal.
+            r.candidate.testOutput = [r.candidate.testOutput, ...outputs].filter(Boolean).join("\n\n");
+            r.candidate.testsPassed = allPassed;
+          }),
+        );
+      }
+    }
+
+    // Comparative selection.
+    const viable = candidates.filter((c) => !c.failed && (c.diff.trim() || c.testOutput));
+    emit({ type: "select-start", viable: viable.length });
+    const selection = await selectBestCandidate({
+      request: opts.prompt,
+      candidates,
+      ai: opts.ai,
+      selectorModel: opts.selectorModel,
+      signal: opts.signal,
     });
-    candidates = await pool(thunks, opts.concurrency ?? Math.min(n, 4));
+    emit({
+      type: "select-done",
+      winnerId: selection.winnerId,
+      reasoning: selection.reasoning,
+      ranking: selection.ranking,
+    });
+
+    const winner = candidates.find((c) => c.id === selection.winnerId) ?? null;
+    let appliedCandidate: Candidate | null = null;
+
+    // Apply the winner's diff to the real working tree (via a temp patch file
+    // — `git apply` reads a file more reliably than piped stdin across
+    // platforms). If it doesn't apply cleanly, fall through the ranking
+    // (best-first) to the next candidate's diff instead of giving up — a
+    // next-best diff that DOES apply beats emitting apply-failed on an
+    // otherwise-successful race.
+    const shouldApply = (opts.apply ?? true) && !opts.readOnly;
+    if (winner && shouldApply) {
+      const rankedIds = dedupe([winner.id, ...selection.ranking.map((r) => r.id)]);
+      let lastError = "";
+      let attempted = false;
+      for (const id of rankedIds) {
+        const candidate = candidates.find((c) => c.id === id);
+        if (!candidate || !candidate.diff.trim()) continue;
+        attempted = true;
+        const patchDir = await mkdtemp(join(tmpdir(), "oxagen-bestof-patch-"));
+        try {
+          const patchFile = join(patchDir, "winner.patch");
+          await writeFile(patchFile, candidate.diff.endsWith("\n") ? candidate.diff : candidate.diff + "\n", "utf8");
+          const out = await git(["apply", "--3way", patchFile], opts.cwd);
+          if (/error|cannot apply|does not apply/i.test(out)) {
+            lastError = out || "git apply failed";
+            continue;
+          }
+          appliedCandidate = candidate;
+          break;
+        } finally {
+          await rm(patchDir, { recursive: true, force: true }).catch(() => {});
+        }
+      }
+      if (appliedCandidate) {
+        emit({ type: "applied", winnerId: appliedCandidate.id, changedFiles: appliedCandidate.changedFiles });
+      } else if (attempted) {
+        emit({ type: "apply-failed", winnerId: winner.id, error: lastError || "git apply failed" });
+      }
+    }
+
+    return { winner: appliedCandidate ?? winner, candidates, selection };
   } finally {
+    // Every candidate's worktree is cleaned up here — after selection and any
+    // verifyAuto runs against them — regardless of which candidate's diff
+    // ultimately got applied.
+    await Promise.all(runs.map((r) => git(["worktree", "remove", "--force", r.worktree], opts.cwd)));
     await rm(worktreeBase, { recursive: true, force: true }).catch(() => {});
   }
-
-  // Comparative selection.
-  const viable = candidates.filter((c) => !c.failed && (c.diff.trim() || c.testOutput));
-  emit({ type: "select-start", viable: viable.length });
-  const selection = await selectBestCandidate({
-    request: opts.prompt,
-    candidates,
-    ai: opts.ai,
-    selectorModel: opts.selectorModel,
-    signal: opts.signal,
-  });
-  emit({ type: "select-done", winnerId: selection.winnerId, reasoning: selection.reasoning, ranking: selection.ranking });
-
-  const winner = candidates.find((c) => c.id === selection.winnerId) ?? null;
-
-  // Apply the winner's diff to the real working tree (via a temp patch file —
-  // `git apply` reads a file more reliably than piped stdin across platforms).
-  const shouldApply = (opts.apply ?? true) && !opts.readOnly;
-  if (winner && winner.diff.trim() && shouldApply) {
-    const patchFile = join(await mkdtemp(join(tmpdir(), "oxagen-bestof-patch-")), "winner.patch");
-    try {
-      await writeFile(patchFile, winner.diff.endsWith("\n") ? winner.diff : winner.diff + "\n", "utf8");
-      const out = await git(["apply", "--3way", patchFile], opts.cwd);
-      if (/error|cannot apply|does not apply/i.test(out)) {
-        emit({ type: "apply-failed", winnerId: winner.id, error: out || "git apply failed" });
-      } else {
-        emit({ type: "applied", winnerId: winner.id, changedFiles: winner.changedFiles });
-      }
-    } finally {
-      await rm(join(patchFile, ".."), { recursive: true, force: true }).catch(() => {});
-    }
-  }
-
-  return { winner, candidates, selection };
 }

@@ -52,7 +52,7 @@ function makeTurnTrace(overrides: Partial<TurnTrace> = {}): TurnTrace {
       lessonCount: 0,
       source: "none",
     },
-    selectedModel: "claude-sonnet-4-5",
+    selectedModel: "claude-sonnet-5",
     selectedTier: "balanced",
     selectionRationale: "complexity=40",
     response: "I fixed the bug.",
@@ -89,7 +89,7 @@ describe("key builders", () => {
   });
 
   it("modelNodeKey has correct prefix", () => {
-    expect(modelNodeKey("claude-sonnet-4-5")).toBe("lineage:model:claude-sonnet-4-5");
+    expect(modelNodeKey("claude-sonnet-5")).toBe("lineage:model:claude-sonnet-5");
   });
 
   it("fileNodeKey matches code-push scheme", () => {
@@ -119,7 +119,7 @@ describe("projectTrace — standard (non-verbose) trace", () => {
     expect(n).toBeDefined();
     expect(n!.labels).toContain("AgentTurn");
     expect(n!.properties["turnId"]).toBe("turn-abc123");
-    expect(n!.properties["selectedModel"]).toBe("claude-sonnet-4-5");
+    expect(n!.properties["selectedModel"]).toBe("claude-sonnet-5");
     expect(n!.properties["inputTokens"]).toBe(1200);
     expect(n!.properties["outputTokens"]).toBe(800);
     expect(n!.properties["durationMs"]).toBe(5000);
@@ -128,10 +128,10 @@ describe("projectTrace — standard (non-verbose) trace", () => {
   });
 
   it("emits a model node", () => {
-    const n = envelope.nodes.find((n) => n.key === modelNodeKey("claude-sonnet-4-5"));
+    const n = envelope.nodes.find((n) => n.key === modelNodeKey("claude-sonnet-5"));
     expect(n).toBeDefined();
     expect(n!.labels).toContain("AIModel");
-    expect(n!.properties["slug"]).toBe("claude-sonnet-4-5");
+    expect(n!.properties["slug"]).toBe("claude-sonnet-5");
     expect(n!.isSystem).toBe(true);
   });
 
@@ -162,7 +162,7 @@ describe("projectTrace — standard (non-verbose) trace", () => {
   it("emits USED_MODEL edge from turn to model", () => {
     const e = envelope.edges.find(
       (e) => e.sourceKey === turnNodeKey("turn-abc123") &&
-              e.targetKey === modelNodeKey("claude-sonnet-4-5") &&
+              e.targetKey === modelNodeKey("claude-sonnet-5") &&
               e.type === "USED_MODEL",
     );
     expect(e).toBeDefined();

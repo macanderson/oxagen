@@ -65,8 +65,8 @@ The agent uses a current Claude Sonnet model by default. Override it per run, pe
 ```bash
 oxagen -m anthropic/claude-opus-4.1 "design a migration plan for the events table"
 
-export OXAGEN_MODEL="anthropic/claude-sonnet-4.5"   # this shell
-oxagen config model anthropic/claude-sonnet-4.5      # persisted
+export OXAGEN_MODEL="anthropic/claude-sonnet-5"   # this shell
+oxagen config model anthropic/claude-sonnet-5      # persisted
 ```
 
 If the gateway reports a slug as unknown, it has likely drifted — set a current one with `oxagen config model <slug>`.

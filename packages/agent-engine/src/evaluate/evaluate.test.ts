@@ -183,7 +183,7 @@ describe("judgeCompleteness", () => {
         filesTouched: ["src/components/Header.tsx"],
         commandsRun: [],
         steps: 3,
-        executorModel: "anthropic/claude-sonnet-4.6",
+        executorModel: "anthropic/claude-sonnet-5",
       },
       ai,
     );
@@ -333,7 +333,7 @@ describe("judgeCompleteness", () => {
         diff: "--- a/math_utils.py\n+++ b/math_utils.py\n-    return a - b\n+    return a + b",
         commandOutputs: [{ command: "pytest -q", output: "2 passed in 0.01s", ok: true }],
         steps: 4,
-        executorModel: "anthropic/claude-sonnet-4.6",
+        executorModel: "anthropic/claude-sonnet-5",
       },
       ai,
     );
@@ -362,7 +362,7 @@ describe("judgeCompleteness", () => {
         commandsRun: ["pytest"],
         commandOutputs: [{ command: "pytest", output: longOutput, ok: false }],
         steps: 3,
-        executorModel: "anthropic/claude-sonnet-4.6",
+        executorModel: "anthropic/claude-sonnet-5",
       },
       ai,
     );

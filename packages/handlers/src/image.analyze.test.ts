@@ -44,7 +44,7 @@ import { imageAnalyzeHandler } from "./image.analyze";
 
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
-const FAKE_MODEL = { modelId: "anthropic/claude-sonnet-4.6" };
+const FAKE_MODEL = { modelId: "anthropic/claude-sonnet-5" };
 
 const FAKE_ASSET = {
   storageUrl: "https://blob.store/gen_abc.png",

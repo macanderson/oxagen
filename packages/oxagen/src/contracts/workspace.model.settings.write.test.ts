@@ -17,12 +17,12 @@ describe("workspace.model.settings.write capability", () => {
   it("parses a full input with all four model fields", () => {
     const parsed = workspaceModelSettingsWrite.input.parse({
       defaultTextTier: "balanced",
-      defaultTextModel: "anthropic/claude-sonnet-4.6",
+      defaultTextModel: "anthropic/claude-sonnet-5",
       defaultImageModel: "openai/gpt-image-1",
       defaultVideoModel: "google/veo-3.0-generate-001",
     });
     expect(parsed.defaultTextTier).toBe("balanced");
-    expect(parsed.defaultTextModel).toBe("anthropic/claude-sonnet-4.6");
+    expect(parsed.defaultTextModel).toBe("anthropic/claude-sonnet-5");
   });
 
   it("parses null values for all fields (clear all overrides)", () => {

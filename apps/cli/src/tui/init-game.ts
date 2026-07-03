@@ -134,7 +134,8 @@ function aliveInvaders(s: GameState): readonly Invader[] {
   return s.invaders.filter((i) => i.alive);
 }
 
-function absolute(originCol: number, originRow: number, inv: Invader): Bolt {
+/** An invader's absolute (col, row) given the formation's current origin. */
+export function absolute(originCol: number, originRow: number, inv: Invader): Bolt {
   return { col: originCol + inv.col, row: originRow + inv.row };
 }
 
@@ -154,9 +155,12 @@ function resetWave(s: GameState, tick: number): GameState {
   };
 }
 
-function moveInterval(aliveCount: number, total: number): number {
-  // Speeds up as the wave thins out (classic space-invaders tension) — still
-  // a pure function of the alive count, never of wall-clock time or chance.
+/**
+ * Ticks between formation moves — speeds up as the wave thins out (classic
+ * space-invaders tension). Still a pure function of the alive count, never of
+ * wall-clock time or chance.
+ */
+export function moveInterval(aliveCount: number, total: number): number {
   const destroyed = total - aliveCount;
   return Math.max(2, 6 - Math.floor(destroyed / 6));
 }

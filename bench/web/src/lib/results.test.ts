@@ -9,7 +9,7 @@ const VALID_DOC = {
     run_group: "",
     agent_name: "oxagen",
     agent_version: "",
-    model: "anthropic/claude-sonnet-4.5",
+    model: "anthropic/claude-sonnet-5",
     harness: "swe-bench",
     suite: "swebench-verified",
     suite_version: "",

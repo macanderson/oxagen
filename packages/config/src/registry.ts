@@ -1280,11 +1280,25 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_BEST_OF_N_PIPELINE: {
+    group: "CLI",
+    description:
+      "Default for `oxagen solve`'s --pipeline flag: when '1', every best-of-N candidate runs " +
+      "the full evaluate/enhance/route/execute/judge/revise pipeline instead of the bare engine " +
+      "loop, unless the flag itself is passed explicitly (which always wins). Lets a caller " +
+      "(e.g. the bench adapter) opt every invocation in without passing --pipeline each time.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_CLI_FUN: {
     group: "CLI",
     description:
-      "When '0', disables the whimsical cat-and-mouse chase animation on the REPL status rail. " +
-      "Any other value (or unset) keeps the animation on while a turn is running.",
+      "When '0', disables whimsical CLI animations: the REPL status rail's cat-and-mouse " +
+      "chase, and `oxagen init`'s space-invaders/OXAGEN-reveal loading animation (which " +
+      "falls back to plain progress lines instead). Any other value (or unset) keeps them on.",
     secret: false,
     clientExposed: false,
     services: [],
@@ -1440,6 +1454,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_LLM_SELECTOR: {
+    group: "CLI",
+    description:
+      "Gateway model slug `oxagen solve` (best-of-N) uses as the comparative selector that " +
+      "picks the winning candidate. Defaults to the flagship Anthropic model (Fable 5); set a " +
+      "cross-vendor slug for vendor-independent selection when a gateway key is available.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_NO_TUI: {
     group: "CLI",
     description:
@@ -1534,6 +1560,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_BEST_OF_N_PIPELINE: {
+    group: "CLI",
+    description:
+      "Set to '1' to default `oxagen solve` (best-of-N) candidates to the full " +
+      "evaluate→enhance→route→execute→judge→revise pipeline instead of the bare engine " +
+      "loop, when the `--pipeline` flag isn't passed explicitly. Lets a caller (e.g. the " +
+      "bench adapter's differentiated config) opt every `solve` invocation into the " +
+      "pricier, more thorough pipeline mode without passing the flag on every call. " +
+      "Neither the flag nor this var set ⇒ bare mode, the cheaper default.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_LOCAL: {
     group: "CLI",
     description:
@@ -1620,6 +1661,19 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "20",
+  },
+  OXAGEN_MAX_REVISE_ROUNDS: {
+    group: "CLI",
+    description:
+      "Max judge→revise rounds the turn pipeline runs before giving up on an incomplete " +
+      "verdict. 0 disables auto-revision entirely. Unset ⇒ 1. Only affects the full " +
+      "(non-bare) pipeline — bare execution (best-of-N's default) has no judge/revise loop.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "2",
   },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",

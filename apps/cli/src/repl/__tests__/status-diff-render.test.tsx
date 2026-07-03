@@ -25,7 +25,7 @@ describe("StatusLine — live turn burn (Bug 2)", () => {
   it("shows a turn chip with the current turn's output tokens + cost", () => {
     const { lastFrame, unmount } = render(
       <StatusLine
-        model="anthropic/claude-sonnet-4"
+        model="anthropic/claude-sonnet-5"
         inputTokens={12_000}
         outputTokens={3_400}
         cacheHit={5_000}

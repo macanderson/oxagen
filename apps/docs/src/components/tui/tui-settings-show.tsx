@@ -17,7 +17,7 @@ const SCOPE_COLOR: Record<SettingRow["scope"], string> = {
 /** Mirrors the merged-view shape `oxagen settings show` prints — see the
  *  scopes table in the Configuration doc page. */
 const ROWS: readonly SettingRow[] = [
-  { key: "model", value: "anthropic/claude-sonnet-4.5", scope: "project" },
+  { key: "model", value: "anthropic/claude-sonnet-5", scope: "project" },
   { key: "apiUrl", value: "https://api.oxagen.sh", scope: "default" },
   { key: "permissions.defaultMode", value: "default", scope: "project" },
   { key: "env.AI_GATEWAY_API_KEY", value: "vck_••••••••", scope: "user" },

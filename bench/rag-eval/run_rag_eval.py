@@ -460,7 +460,7 @@ def gen_context_from_bundle(records: list[dict], api_key: str) -> list[dict]:
         print(f"  [gen-context] Running bundle for: {rec['id']} ...", flush=True)
         cmd = [
             "node", BUNDLE, rec["question"],
-            "--readonly", "--model", os.environ.get("OXAGEN_MODEL_SLUG", "anthropic/claude-sonnet-4.5"),
+            "--readonly", "--model", os.environ.get("OXAGEN_MODEL_SLUG", "anthropic/claude-sonnet-5"),
             "--verbose",
         ]
         t0 = time.time()

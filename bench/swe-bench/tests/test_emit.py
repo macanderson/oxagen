@@ -37,7 +37,7 @@ def _make_run_dir(tmp_path: Path) -> Path:
             "agents": [
                 {
                     "name": "oxagen_swe_bench:OxagenAgent",
-                    "model_name": "anthropic/claude-sonnet-4.5",
+                    "model_name": "anthropic/claude-sonnet-5",
                 }
             ],
             "datasets": [{"name": "swe-bench/swe-bench-verified", "version": ""}],
@@ -56,7 +56,7 @@ def _make_run_dir(tmp_path: Path) -> Path:
             "agent_info": {
                 "name": "oxagen",
                 "version": "0.1.0",
-                "model_info": {"provider": "anthropic", "name": "claude-sonnet-4.5"},
+                "model_info": {"provider": "anthropic", "name": "claude-sonnet-5"},
             },
             "verifier_result": {"rewards": {"reward": 1.0}},
             "agent_result": {
@@ -76,7 +76,7 @@ def _make_run_dir(tmp_path: Path) -> Path:
             "agent_info": {
                 "name": "oxagen",
                 "version": "0.1.0",
-                "model_info": {"provider": "anthropic", "name": "claude-sonnet-4.5"},
+                "model_info": {"provider": "anthropic", "name": "claude-sonnet-5"},
             },
             "verifier_result": {"rewards": {"reward": 0.0}},
             "agent_result": {
@@ -100,7 +100,7 @@ def test_build_eval_json_schema_and_resolved_rate(tmp_path: Path) -> None:
     assert run["harness"] == "swe-bench"
     assert run["suite"] == "swe-bench/swe-bench-verified"
     assert run["agent_name"] == "oxagen"
-    assert run["model"] == "anthropic/claude-sonnet-4.5"
+    assert run["model"] == "anthropic/claude-sonnet-5"
     assert run["n_tasks"] == 2
     assert run["n_passed"] == 1
     assert run["resolved_rate"] == 0.5

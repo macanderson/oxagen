@@ -20,7 +20,7 @@ function BottomStack(): React.ReactElement {
       </Box>
       <Box marginBottom={1} flexShrink={0}>
         <StatusLine
-          model="anthropic/claude-sonnet-4.6"
+          model="anthropic/claude-sonnet-5"
           branch="main"
           inputTokens={6100} outputTokens={472}
           cacheHit={0} cacheMiss={6100} costUsd={0.03}

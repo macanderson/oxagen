@@ -120,6 +120,10 @@ export const baseEnvSchema = z.object({
   // evaluator and the precise tier for the advisor when these are unset.
   OXAGEN_LLM_EVALUATOR: z.string().optional(),
   OXAGEN_LLM_ADVISOR: z.string().optional(),
+  // Best-of-N comparative selector override. Optional: defaults to the
+  // flagship Anthropic model (Fable 5) when unset — see select.ts's
+  // DEFAULT_SELECTOR_MODEL.
+  OXAGEN_LLM_SELECTOR: z.string().optional(),
 
   // Media-generation tiers. Image and video each expose a "basic" (default,
   // cheaper) and "advanced" tier that resolve to concrete gateway model ids,

@@ -70,8 +70,10 @@ export const SCHEMA_EXEMPT = new Set<string>([
   "OXAGEN_MODELS_CACHE_DIR",
   "OXAGEN_LLM_EVALUATOR",
   "OXAGEN_LLM_ADVISOR",
+  "OXAGEN_LLM_SELECTOR",
   "OXAGEN_DEBUG",
   "OXAGEN_MID_JUDGE_STEPS",
+  "OXAGEN_MAX_REVISE_ROUNDS",
   "OXAGEN_CLI_MOUSE",
   // CLI-only BYOK fallback key (see ENV_REGISTRY) — never validated by services
   "ANTHROPIC_API_KEY",

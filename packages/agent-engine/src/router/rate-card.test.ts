@@ -35,7 +35,7 @@ describe("rateFor", () => {
   });
 
   it("prices Sonnet distinctly from Opus", () => {
-    expect(rateFor("anthropic/claude-sonnet-4.6")).toEqual({ inputPer1M: 3.0, outputPer1M: 15.0 });
+    expect(rateFor("anthropic/claude-sonnet-5")).toEqual({ inputPer1M: 3.0, outputPer1M: 15.0 });
   });
 
   it("matches the most-specific family first (gpt-4o-mini before gpt-4o)", () => {
@@ -68,8 +68,8 @@ describe("estimateCostUsd", () => {
   });
 
   it("treats a missing direction as zero tokens", () => {
-    expect(estimateCostUsd("anthropic/claude-sonnet-4.6", { inputTokens: 1_000_000 })).toBe(3);
-    expect(estimateCostUsd("anthropic/claude-sonnet-4.6", {})).toBe(0);
+    expect(estimateCostUsd("anthropic/claude-sonnet-5", { inputTokens: 1_000_000 })).toBe(3);
+    expect(estimateCostUsd("anthropic/claude-sonnet-5", {})).toBe(0);
   });
 });
 

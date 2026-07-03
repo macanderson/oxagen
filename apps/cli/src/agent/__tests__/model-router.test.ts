@@ -81,7 +81,7 @@ describe("classifyTier", () => {
 describe("rate card + cost", () => {
   it("matches the model family by prefix", () => {
     expect(rateFor("anthropic/claude-opus-4.8").inputPer1M).toBe(15);
-    expect(rateFor("anthropic/claude-sonnet-4.6").inputPer1M).toBe(3);
+    expect(rateFor("anthropic/claude-sonnet-5").inputPer1M).toBe(3);
     expect(rateFor("anthropic/claude-haiku-4.5").outputPer1M).toBe(5);
     expect(rateFor("openai/gpt-5.2").inputPer1M).toBe(1.25);
   });
@@ -146,7 +146,7 @@ describe("routeModel + tier helpers", () => {
     expect(tierForSlug("anthropic/claude-opus-4.8")).toBe("precise");
     expect(tierForSlug("anthropic/claude-haiku-4.5")).toBe("fast");
     expect(tierForSlug("openai/gpt-4o-mini")).toBe("fast");
-    expect(tierForSlug("anthropic/claude-sonnet-4.6")).toBe("balanced");
+    expect(tierForSlug("anthropic/claude-sonnet-5")).toBe("balanced");
     // Cross-vendor frontier coding models → precise.
     expect(tierForSlug("openai/gpt-5.3-codex")).toBe("precise");
     expect(tierForSlug("openai/gpt-5.5-pro")).toBe("precise");

@@ -153,7 +153,7 @@ describe("tierForSlug", () => {
   });
 
   it("sonnet → balanced", () => {
-    expect(tierForSlug("anthropic/claude-sonnet-4.6")).toBe("balanced");
+    expect(tierForSlug("anthropic/claude-sonnet-5")).toBe("balanced");
   });
 
   it("gpt-5 → precise", () => {

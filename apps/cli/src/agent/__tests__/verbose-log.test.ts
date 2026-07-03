@@ -39,7 +39,7 @@ function trace(id: string): TurnTrace {
       usage: { inputTokens: 1, outputTokens: 1, costUsd: 0.001 },
     },
     enhancement: { prompt: "p", context: "", resolved: [], lessonCount: 0, source: "none" },
-    selectedModel: "anthropic/claude-sonnet-4.6",
+    selectedModel: "anthropic/claude-sonnet-5",
     selectedTier: "balanced",
     selectionRationale: "r",
     response: "ok",
