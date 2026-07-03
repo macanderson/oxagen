@@ -143,7 +143,7 @@ export async function generateObjectFor<T>(
   // Prompt-cache reads (AI SDK v6 normalizes the provider's count). Forward so
   // the rate card prices cached tokens at the cheaper rate; 0 when caching
   // didn't engage. See stream.ts for the rationale.
-  const cachedTokens = result.usage.cachedInputTokens ?? 0;
+  const cachedTokens = result.usage.inputTokenDetails?.cacheReadTokens ?? 0;
   const usage = { model: modelId, inputTokens, outputTokens, cachedTokens };
   const costUsdMicros = providerCostUsdMicros(usage);
 

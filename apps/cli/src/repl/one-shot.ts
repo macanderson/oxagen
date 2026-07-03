@@ -112,7 +112,8 @@ export async function runOneShot(
   // the platform (metered, session-authenticated) for real sessions, or
   // gateway-direct for the synthetic benchmark session — a synthetic token
   // cannot authenticate against /v1/agent/llm, and bench containers supply
-  // AI_GATEWAY_API_KEY instead. Both are wrapped in the metered port so every
+  // AI_GATEWAY_API_KEY (or ANTHROPIC_API_KEY for Anthropic-only BYOK) instead.
+  // Both are wrapped in the metered port so every
   // engine model call gets the per-call timeout + retry (Bug 1) that the REPL
   // path already has.
   const workspace = createCwdWorkspace(cwd);

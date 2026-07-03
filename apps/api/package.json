@@ -31,7 +31,7 @@
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
-    "ai": "6.0.197",
+    "ai": "7.0.14",
     "drizzle-orm": "0.45.2",
     "hono": "4.12.23",
     "inngest": "3.54.2",

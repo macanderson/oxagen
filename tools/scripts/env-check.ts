@@ -72,6 +72,8 @@ export const SCHEMA_EXEMPT = new Set<string>([
   "OXAGEN_LLM_ADVISOR",
   "OXAGEN_DEBUG",
   "OXAGEN_MID_JUDGE_STEPS",
+  // CLI-only BYOK fallback key (see ENV_REGISTRY) — never validated by services
+  "ANTHROPIC_API_KEY",
   // Dev-tooling signal — set by tools/scripts/dev.ts; services: []
   "OXAGEN_LOCAL_DEV",
 ]);

@@ -363,6 +363,7 @@ describe("video.generate handler", () => {
       durationSeconds: 5 as number | undefined,
       aspectRatio: undefined,
       style: undefined,
+      model: undefined,
     };
     await handler_videoGenerate(args);
 

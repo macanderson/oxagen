@@ -1,6 +1,6 @@
 import pino from "pino";
 import { experimental_generateVideo } from "ai";
-import type { Experimental_VideoModelV3 } from "@ai-sdk/provider";
+import type { Experimental_VideoModelV4 } from "@ai-sdk/provider";
 import {
   insertTokenUsage,
   providerFromModelId,
@@ -13,10 +13,10 @@ const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.v
 
 /**
  * VideoModel mirrors the `VideoModel` type from the `ai` package (which is not
- * publicly exported). It is `string | Experimental_VideoModelV3` — a bare
+ * publicly exported). It is `string | Experimental_VideoModelV4` — a bare
  * gateway model-id string OR a typed video model object from `@ai-sdk/gateway`.
  */
-export type VideoModel = string | Experimental_VideoModelV3;
+export type VideoModel = string | Experimental_VideoModelV4;
 
 // Video models bill PER ASSET (priced per second of output), not per token. The
 // real per-second cost by model lives in VIDEO_RATE_CARD in @oxagen/billing;
@@ -150,8 +150,8 @@ export function videoDurationAlternatives(
 export interface GenerateVideoForArgs {
   /**
    * The video model to pass to `experimental_generateVideo`. In AI SDK v6
-   * `VideoModel` is `string | Experimental_VideoModelV3`. `selectVideoModel()`
-   * returns an `Experimental_VideoModelV3` built via `gateway.video(modelId)`;
+   * `VideoModel` is `string | Experimental_VideoModelV4`. `selectVideoModel()`
+   * returns an `Experimental_VideoModelV4` built via `gateway.video(modelId)`;
    * you may also pass a bare model-id string and the gateway resolves it.
    */
   model: VideoModel;
@@ -198,14 +198,14 @@ export interface GenerateVideoForResult {
 
 /**
  * Resolve the model id string from a VideoModel value. In AI SDK v6
- * VideoModel is `string | Experimental_VideoModelV3`; the VideoModelV3 object
+ * VideoModel is `string | Experimental_VideoModelV4`; the VideoModelV4 object
  * exposes `modelId` on its spec, but the public interface only guarantees the
  * provider duck-type. We read `modelId` defensively for telemetry only — the
  * billing/telemetry model column is a string label, not a routing key.
  */
 function videoModelIdOf(model: VideoModel): string {
   if (typeof model === "string") return model;
-  // Experimental_VideoModelV3 exposes modelId via the provider spec.
+  // Experimental_VideoModelV4 exposes modelId via the provider spec.
   const candidate = (model as unknown as { modelId?: string }).modelId;
   return candidate ?? "unknown-video-model";
 }

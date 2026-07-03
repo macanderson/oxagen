@@ -204,7 +204,9 @@ export interface StreamAgentReplyArgs {
   }) => Promise<void> | void;
 }
 
-export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<ToolSet, never> {
+// RUNTIME_CONTEXT (v7 middle generic) is the SDK's `Context` alias for
+// `Record<string, unknown>` — spelled inline because `ai` does not re-export it.
+export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<ToolSet, Record<string, unknown>, never> {
   const model = args.model ?? defaultModel();
   const modelId = modelIdOf(model);
   const provider = providerFromModelId(modelId);
@@ -302,7 +304,7 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
       // Forward it so the rate card prices those tokens at the cheaper cached
       // rate — otherwise the customer is over-charged on the cached portion.
       // Zero when caching didn't engage (small prefix / non-Anthropic / cold).
-      const cachedTokens = event.totalUsage.cachedInputTokens ?? 0;
+      const cachedTokens = event.totalUsage.inputTokenDetails?.cacheReadTokens ?? 0;
       // The cost meter (provider rate card) turns tokens-in/out-by-model into
       // the USD a provider invoices us. This is the input to both the telemetry
       // cost column and the credit charge below.

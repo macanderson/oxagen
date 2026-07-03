@@ -274,7 +274,10 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
       usage.inputTokens += stepUsage.inputTokens ?? 0;
       usage.outputTokens += stepUsage.outputTokens ?? 0;
       usage.totalTokens += stepUsage.totalTokens ?? 0;
-      usage.cachedInputTokens += (stepUsage as { cachedInputTokens?: number }).cachedInputTokens ?? 0;
+      // AI SDK v7 nests cache reads under `inputTokenDetails`; our aggregate keeps
+      // the flat `cachedInputTokens` field. Optional-chained: BYOK/mock streams may
+      // omit the details object.
+      usage.cachedInputTokens += stepUsage.inputTokenDetails?.cacheReadTokens ?? 0;
       conversation = [...conversation, ...response.messages];
       steps += (await result.steps).length || 1;
 

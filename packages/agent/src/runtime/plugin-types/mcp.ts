@@ -132,7 +132,10 @@ async function contributeMcpTools(ctx: CapabilityContext, options?: PluginContri
         if (typeof execute !== "function") continue;
         out.push({
           realName: rawKey,
-          description: rawTool.description,
+          // AI SDK v7 allows function-valued tool descriptions (resolved with
+          // call options we don't have here) — only static strings carry over.
+          description:
+            typeof rawTool.description === "string" ? rawTool.description : undefined,
           execute: execute as ContributedRawTool["execute"],
           externalServerId: server.id,
         });

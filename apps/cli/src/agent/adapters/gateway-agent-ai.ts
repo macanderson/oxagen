@@ -10,7 +10,9 @@
  *   1. Headless benchmark containers (`OXAGEN_ALLOW_NO_SESSION=1` — see
  *      `lib/session.ts`): there is no account to meter against, and the bench
  *      harness supplies `AI_GATEWAY_API_KEY` itself.
- *   2. Any future explicit `--local` BYOK path.
+ *   2. The `--local` / not-logged-in BYOK path — `AI_GATEWAY_API_KEY` (any
+ *      vendor), or `ANTHROPIC_API_KEY` alone (Anthropic models direct; see
+ *      `agent/anthropic-direct.ts`).
  *
  * Reasoning effort is applied client-side here (the platform normally does this
  * server-side). The per-vendor mapping below is a faithful copy of
@@ -29,7 +31,7 @@ import { streamText, generateObject } from "ai";
 import type { ModelMessage } from "ai";
 import type { JSONObject } from "@ai-sdk/provider";
 import { debugLog } from "../../lib/debug-log.js";
-import { ensureGatewayKey, MissingGatewayKeyError } from "../env.js";
+import { resolveAiCredential, MissingAiKeyError } from "../env.js";
 
 /** Reasoning token budget per effort level (tokens allocated to thinking). */
 const REASONING_BUDGET: Record<string, number> = {
@@ -98,7 +100,10 @@ export function gatewayReasoningOptions(
 }
 
 export interface GatewayAgentAiOptions {
-  /** Working directory used to resolve `AI_GATEWAY_API_KEY` from .env.local. */
+  /**
+   * Working directory used to resolve `AI_GATEWAY_API_KEY` /
+   * `ANTHROPIC_API_KEY` from .env.local.
+   */
   cwd?: string;
 }
 
@@ -139,13 +144,18 @@ export function withPromptCaching(
 }
 
 /**
- * Build a gateway-direct {@link AgentAi}. Throws {@link MissingGatewayKeyError}
- * immediately when no gateway credential can be resolved — callers get one
+ * Build a gateway-direct {@link AgentAi}. Throws {@link MissingAiKeyError}
+ * immediately when no AI credential can be resolved — callers get one
  * clear, actionable failure instead of a per-call auth error mid-turn.
+ *
+ * With a gateway key, plain slugs resolve through the Vercel AI Gateway (any
+ * vendor). With only an `ANTHROPIC_API_KEY`, `resolveAiCredential` installs the
+ * direct-Anthropic global provider, so the same string slugs resolve straight
+ * against the Anthropic API (Anthropic models only).
  */
 export function createGatewayAgentAi(opts: GatewayAgentAiOptions = {}): AgentAi {
-  if (!ensureGatewayKey(opts.cwd ?? process.cwd())) {
-    throw new MissingGatewayKeyError();
+  if (!resolveAiCredential(opts.cwd ?? process.cwd())) {
+    throw new MissingAiKeyError();
   }
 
   return {

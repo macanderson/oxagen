@@ -15,7 +15,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { enhancePrompt } from "./prompt-enhancer.js";
 import { classifyTier, modelForTier } from "./model-router.js";
-import { ensureGatewayKey, MissingGatewayKeyError } from "./env.js";
+import { resolveAiCredential, MissingAiKeyError } from "./env.js";
 import {
   AgentTimeoutError,
   DEFAULT_TIMEOUTS,
@@ -113,11 +113,12 @@ const PLANNER_SYSTEM = [
 
 /**
  * Produce an executable {@link Plan} from a goal. Throws
- * {@link MissingGatewayKeyError} if no gateway key is configured.
+ * {@link MissingAiKeyError} if no AI credential (gateway or Anthropic) is
+ * configured.
  */
 export async function planTasks(opts: PlanOptions): Promise<Plan> {
   const cwd = opts.cwd;
-  if (!ensureGatewayKey(cwd)) throw new MissingGatewayKeyError();
+  if (!resolveAiCredential(cwd)) throw new MissingAiKeyError();
 
   // Wire the caller's abort signal (Esc/Ctrl-C) into a controller. There is NO
   // planning-phase wall-clock cap: timeouts live on the individual calls below

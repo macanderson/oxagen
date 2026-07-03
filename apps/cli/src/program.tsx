@@ -73,7 +73,7 @@ export function buildProgram(): Command {
     )
     .option(
       "--local",
-      "Run locally with your own AI_GATEWAY_API_KEY (BYOK) — coordinator + workers gateway-direct, no Oxagen account",
+      "Run locally with your own key (BYOK) — AI_GATEWAY_API_KEY (any vendor, preferred) or ANTHROPIC_API_KEY (Anthropic models only), no Oxagen account",
       false,
     )
     .option(
@@ -143,13 +143,14 @@ export function buildProgram(): Command {
             return;
           }
         }
-        // --local forces BYOK: run against the shell's AI_GATEWAY_API_KEY, not
-        // the platform account (requireSession reads OXAGEN_LOCAL).
+        // --local forces BYOK: run against the shell's AI_GATEWAY_API_KEY (or
+        // ANTHROPIC_API_KEY fallback), not the platform account (requireSession
+        // reads OXAGEN_LOCAL).
         if (opts.local) process.env["OXAGEN_LOCAL"] = "1";
         // ADR-019 §4: require an Oxagen account before any agent-path command —
         // UNLESS BYOK applies: `--local`/OXAGEN_LOCAL, or (when not logged in) an
-        // AI_GATEWAY_API_KEY is present, in which case the CLI runs locally
-        // gateway-direct instead of exiting. Non-agent utility commands (config,
+        // AI_GATEWAY_API_KEY or ANTHROPIC_API_KEY is present, in which case the
+        // CLI runs locally instead of exiting. Non-agent utility commands (config,
         // settings, login, logout, etc.) bypass this gate automatically.
         const { requireSession } = await import("./lib/session.js");
         const session = requireSession();

@@ -20,7 +20,8 @@ import type { MemoryRecord } from "../fleet/types.js";
 
 vi.mock("../env.js", () => ({
   ensureGatewayKey: () => null,
-  MissingGatewayKeyError: class MissingGatewayKeyError extends Error {},
+  resolveAiCredential: () => null,
+  MissingAiKeyError: class MissingAiKeyError extends Error {},
 }));
 
 let root = "";

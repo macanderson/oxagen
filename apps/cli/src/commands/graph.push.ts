@@ -35,7 +35,7 @@ import {
   isValidCodeEmbedding,
 } from "@oxagen/code-graph/embed";
 import type { CodeNode } from "../daemon/code-graph/types.js";
-import { ensureGatewayKey } from "../agent/env.js";
+import { credentialSupportsModel, resolveAiCredential } from "../agent/env.js";
 import { modelForTier } from "../agent/model-router.js";
 
 // ---------------------------------------------------------------------------
@@ -400,10 +400,10 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
     // ── Domain inference ───────────────────────────────────────────────────────
     // Run once per push over ALL tracked files (not just the delta) so the
     // model sees the full repo structure for accurate domain classification.
-    // Gracefully no-ops when the AI Gateway key is unavailable.
+    // Gracefully no-ops when no AI key can run the classification model.
     let domainMap: DomainMap = new Map();
-    const gatewayKey = ensureGatewayKey();
-    if (gatewayKey) {
+    const credential = resolveAiCredential();
+    if (credential && credentialSupportsModel(credential, modelForTier("fast"))) {
       try {
         const allFiles = !lastSha ? addedFiles : allTrackedFiles(root);
         const domainModel = modelForTier("fast"); // Haiku-class — cheap classification

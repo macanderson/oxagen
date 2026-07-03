@@ -41,6 +41,19 @@ oxagen "summarize what this repository does"
 If you run `oxagen` from inside a repo that already has `AI_GATEWAY_API_KEY` in a `.env.local` (for example, the Oxagen monorepo itself), the CLI picks it up automatically — no extra setup needed.
 </Callout>
 
+### Anthropic-only fallback: `ANTHROPIC_API_KEY`
+
+No gateway key? If you only have an [Anthropic API key](https://console.anthropic.com/), the CLI runs Claude models directly against the Anthropic API:
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-…"
+oxagen "summarize what this repository does"
+```
+
+It resolves through the same chain (shell env → `anthropicKey` in `~/.config/oxagen/config.json` → nearest `.env.local`) and is used **only when no gateway key is found anywhere** — `AI_GATEWAY_API_KEY` always wins when both are set.
+
+Two limitations to know about: only `anthropic/*` models work (picking a model from another vendor fails with a clear error), and semantic code search runs without vector ranking (embeddings require the gateway).
+
 ## 2. Create your Oxagen account
 
 You need an Oxagen account only for the **platform** commands (`graph`, `env`, `secret`). Creating one takes a minute:

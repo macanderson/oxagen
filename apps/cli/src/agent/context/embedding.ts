@@ -95,6 +95,10 @@ export class GatewayEmbeddingClient implements EmbeddingClient {
  * signal for the semantic index to skip vector ranking and log the degradation
  * — it is not an error.
  *
+ * Deliberately gated on the GATEWAY key only (not `resolveAiCredential`):
+ * Anthropic has no embeddings API, so ANTHROPIC_API_KEY-only BYOK runs with
+ * vector ranking disabled rather than failing mid-index.
+ *
  * `deps` lets a caller (or a test) inject a client directly, bypassing key
  * resolution entirely.
  */

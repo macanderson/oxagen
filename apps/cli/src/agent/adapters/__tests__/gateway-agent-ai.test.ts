@@ -3,7 +3,7 @@
  *
  * Proves (1) the per-vendor reasoning providerOptions mapping matches the
  * canonical `reasoningRequestConfig` semantics from packages/ai/src/stream.ts,
- * (2) construction fails fast with MissingGatewayKeyError when no credential
+ * (2) construction fails fast with MissingAiKeyError when no credential
  * resolves, and (3) stream/generateObject pass gateway slugs and options
  * through to the AI SDK verbatim. The AI SDK itself is mocked — no network.
  */
@@ -24,21 +24,24 @@ vi.mock("ai", () => ({
 
 vi.mock("../../env.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../env.js")>();
-  return { ...actual, ensureGatewayKey: vi.fn() };
+  return { ...actual, resolveAiCredential: vi.fn() };
 });
 
-import { ensureGatewayKey, MissingGatewayKeyError } from "../../env.js";
+import { resolveAiCredential, MissingAiKeyError } from "../../env.js";
 import {
   createGatewayAgentAi,
   gatewayReasoningOptions,
 } from "../gateway-agent-ai.js";
 
-const mockEnsureKey = ensureGatewayKey as ReturnType<typeof vi.fn>;
+const mockResolveCredential = resolveAiCredential as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   streamTextMock.mockClear();
   generateObjectMock.mockClear();
-  mockEnsureKey.mockReturnValue("test-gateway-key");
+  mockResolveCredential.mockReturnValue({
+    source: "gateway",
+    key: "test-gateway-key",
+  });
 });
 
 afterEach(() => {
@@ -101,9 +104,17 @@ describe("gatewayReasoningOptions", () => {
 // ── createGatewayAgentAi ─────────────────────────────────────────────────────
 
 describe("createGatewayAgentAi", () => {
-  it("throws MissingGatewayKeyError when no credential resolves", () => {
-    mockEnsureKey.mockReturnValue(null);
-    expect(() => createGatewayAgentAi()).toThrow(MissingGatewayKeyError);
+  it("throws MissingAiKeyError when no credential resolves", () => {
+    mockResolveCredential.mockReturnValue(null);
+    expect(() => createGatewayAgentAi()).toThrow(MissingAiKeyError);
+  });
+
+  it("constructs when only an Anthropic credential resolves", () => {
+    mockResolveCredential.mockReturnValue({
+      source: "anthropic",
+      key: "sk-ant-test",
+    });
+    expect(() => createGatewayAgentAi()).not.toThrow();
   });
 
   it("stream passes the gateway slug, tools, and reasoning providerOptions to streamText", () => {

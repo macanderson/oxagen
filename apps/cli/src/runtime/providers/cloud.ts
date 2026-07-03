@@ -2,8 +2,10 @@
  * Cloud model providers (anthropic, openai) over the Vercel AI Gateway.
  *
  * Both talk to the same gateway the rest of the CLI uses — models are plain
- * gateway slugs (`vendor/model`) resolved with `AI_GATEWAY_API_KEY` (see
- * `agent/env.ts`). The two vendor classes are thin: they exist so the registry
+ * gateway slugs (`vendor/model`) resolved with `AI_GATEWAY_API_KEY`, or, when
+ * only `ANTHROPIC_API_KEY` is present, anthropic/* slugs resolve directly
+ * against the Anthropic API (see `agent/env.ts` + `agent/anthropic-direct.ts`).
+ * The two vendor classes are thin: they exist so the registry
  * exposes concrete `anthropic` and `openai` providers (deliverable 2) that
  * differ in vendor labelling and cost grouping, while sharing one code path.
  *
@@ -12,7 +14,7 @@
  * errors into {@link OfflineError}; the on-device coordinator keeps running.
  */
 import { generateText } from "ai";
-import { ensureGatewayKey } from "../../agent/env.js";
+import { credentialSupportsModel, resolveAiCredential } from "../../agent/env.js";
 import { estimateCostUsd } from "../../agent/rate-card.js";
 import { estimateInputTokens, estimateTokens } from "../tokens.js";
 import type {
@@ -35,12 +37,13 @@ export class OfflineError extends Error {
   }
 }
 
-/** Thrown when no gateway credential can be resolved for a cloud call. */
+/** Thrown when no usable credential can be resolved for a cloud call. */
 export class MissingCredentialError extends Error {
   constructor(model: string) {
     super(
-      `No AI gateway credential for "${model}". Set AI_GATEWAY_API_KEY, run ` +
-        `\`oxagen config\`, or add it to a nearby .env.local.`,
+      `No AI credential for "${model}". Set AI_GATEWAY_API_KEY (any vendor) or ` +
+        `ANTHROPIC_API_KEY (Anthropic models only), run \`oxagen config\`, or add ` +
+        `one to a nearby .env.local.`,
     );
     this.name = "MissingCredentialError";
   }
@@ -69,7 +72,11 @@ const defaultGenerate: GenerateFn = (args) =>
 
 export interface CloudProviderDeps {
   generate?: GenerateFn;
-  /** Resolve/ensure the gateway key. Returns null when none is available. */
+  /**
+   * Resolve/ensure a credential usable for this provider's model. Returns null
+   * when none is available (missing keys, or the model's vendor is unreachable
+   * with the resolved credential).
+   */
   resolveKey?: () => string | null;
 }
 
@@ -100,7 +107,18 @@ export class GatewayCloudProvider implements ModelProvider {
     deps: CloudProviderDeps = {},
   ) {
     this.generate = deps.generate ?? defaultGenerate;
-    this.resolveKey = deps.resolveKey ?? (() => ensureGatewayKey());
+    // Default credential check is model-aware: a gateway key runs any vendor,
+    // an ANTHROPIC_API_KEY-only setup runs only anthropic/* slugs — so e.g.
+    // the OpenAI judge reports unavailable instead of failing mid-call.
+    this.resolveKey =
+      deps.resolveKey ??
+      (() => {
+        const credential = resolveAiCredential();
+        if (!credential) return null;
+        return credentialSupportsModel(credential, this.entry.slug)
+          ? credential.key
+          : null;
+      });
   }
 
   id(): string {

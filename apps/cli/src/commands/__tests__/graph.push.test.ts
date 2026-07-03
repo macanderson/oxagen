@@ -6,10 +6,10 @@
  *   - Mock `../../lib/config.js` for org/workspace config.
  *   - Mock `node:child_process` so `execFileSync` returns canned git output.
  *   - Mock `../daemon/code-graph/builder.js` to return a minimal code graph.
- *   - Mock `../../agent/env.js` so `ensureGatewayKey` returns null — these tests
- *     aren't about domain inference, and without this mock a shell with a real
- *     AI_GATEWAY_API_KEY exported makes every test fire a real network call to
- *     the AI Gateway (slow, flaky, and an unwanted external side effect).
+ *   - Mock `../../agent/env.js` so `resolveAiCredential` returns null — these
+ *     tests aren't about domain inference, and without this mock a shell with a
+ *     real AI_GATEWAY_API_KEY / ANTHROPIC_API_KEY exported makes every test fire
+ *     a real network call (slow, flaky, and an unwanted external side effect).
  *   - Pass `_duckdbPath: ":memory:"` and `_gitRoot: "/fake/repo"` as test seams.
  *
  * Verified:
@@ -52,11 +52,12 @@ vi.mock("../../daemon/code-graph/builder.js", () => ({
   buildCodeGraph: vi.fn(),
 }));
 
-// No gateway key — domain inference is a no-op, keeping these tests hermetic
+// No AI credential — domain inference is a no-op, keeping these tests hermetic
 // (real key exported in the environment must never leak into a real network
 // call here; see the module doc comment).
 vi.mock("../../agent/env.js", () => ({
-  ensureGatewayKey: () => null,
+  resolveAiCredential: () => null,
+  credentialSupportsModel: () => false,
 }));
 
 import { handleGraphPush } from "../graph.push.js";

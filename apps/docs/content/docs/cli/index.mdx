@@ -28,7 +28,7 @@ The CLI uses **two independent credentials**. Knowing which is which saves a lot
 
 | Credential | What it powers | How the CLI finds it |
 |---|---|---|
-| **`AI_GATEWAY_API_KEY`** | The agentic coding loop — every model call the agent makes. This is **your own** [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) key (bring your own key). | Shell env → `~/.oxagen/settings.json` (`env.AI_GATEWAY_API_KEY`) → `gatewayKey` in `~/.config/oxagen/config.json` → nearest `.env.local`. |
+| **`AI_GATEWAY_API_KEY`** | The agentic coding loop — every model call the agent makes. This is **your own** [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) key (bring your own key). Fallback: with only an `ANTHROPIC_API_KEY`, Claude models run directly against the Anthropic API ([details](/docs/cli/account-setup#anthropic-only-fallback-anthropic_api_key)). | Shell env → `~/.oxagen/settings.json` (`env.AI_GATEWAY_API_KEY`) → `gatewayKey` in `~/.config/oxagen/config.json` → nearest `.env.local`. |
 | **Oxagen platform token** (+ org + workspace) | Platform commands that call `api.oxagen.sh`: `graph`, `env`, `secret`. This is an Oxagen **API key** (`oxk_live_…`) minted in the web app. | `oxagen config token` / `OXAGEN_API_TOKEN`, plus `org` and `workspace`. |
 
 You can use the coding agent with **just** a gateway key — no Oxagen account required for the local loop. The platform token only matters once you want to pull your knowledge graph or touch workspace environments and secrets. And with an [on-device coordinator](/docs/cli/models) you can go further still — running the agent with **no gateway key at all**, though cloud workers (for heavier code generation) will still need one.
