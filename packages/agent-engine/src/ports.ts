@@ -48,6 +48,15 @@ export interface UsageTokens {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+  /**
+   * Prompt tokens served from the provider's cache — a SUBSET of
+   * `inputTokens`, not additional to it. The AI SDK reports this nested as
+   * `usage.inputTokenDetails.cacheReadTokens` on the raw `generateObject`
+   * result; adapters flatten it to this field here (mirrors
+   * `StreamRunResult`'s usage, which the engine step loop flattens the same
+   * way — see engine.ts).
+   */
+  cachedInputTokens?: number;
 }
 
 export interface ObjectRunResult<T> {

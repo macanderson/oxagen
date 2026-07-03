@@ -8,6 +8,13 @@ const PINK = "#F472B6";
 const BLUE = "#60A5FA";
 const TEAL = "#2DD4BF";
 const INDIGO = "#818CF8";
+// Rainbow-flash-only tones (repl/border-phase.ts): the prompt input's border
+// cycles through these while a turn's EVALUATE stage is in flight. Deliberately
+// punchier/more saturated than `red`/`amber` above (which carry their own
+// steady-state meaning — failed/destructive, queued/caution) so a rapid flash
+// never reads as an error state or gets confused with the post-evaluate amber.
+const FUCHSIA = "#D946EF";
+const ORANGE = "#FB923C";
 
 // The Oxagen brand palette. Single source of truth shared by every TUI surface
 // (banner, menu, forms) and the `oxagen dev` status view.
@@ -23,6 +30,8 @@ export const theme = {
   green: GREEN, // done / success
   amber: AMBER, // queued / caution
   red: "#F87171", // failed / destructive
+  fuchsia: FUCHSIA, // rainbow-flash tone (repl/border-phase.ts) — not a status color
+  orange: ORANGE, // rainbow-flash tone (repl/border-phase.ts) — not a status color
   // Curated palette for productized builtin slash commands (see
   // slash/catalog.ts's BUILTIN_SLASH_COMMANDS + repl/slash-menu.tsx). Each
   // builtin command is assigned one tone below, grouped by feature area, so

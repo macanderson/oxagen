@@ -105,6 +105,8 @@ import {
   type ScrollCtx,
 } from "./scroll.js";
 import { telemetryReducer, INITIAL_TELEMETRY_STATE } from "./telemetry.js";
+import { borderPhaseFor, borderColorFor, RAINBOW_FLASH_INTERVAL_MS } from "./border-phase.js";
+import { inputContentRow } from "./mouse-select.js";
 import { HeaderBar, TranscriptViewport, TelemetryDock, formatElapsed } from "./fullscreen-chrome.js";
 import { useMouseWheel } from "./use-mouse-wheel.js";
 import { enterFullscreen } from "./alt-screen.js";
@@ -200,18 +202,15 @@ export function ReplApp({
     resolveEffort(options.effort),
   );
   const [turns, setTurns] = useState(0);
-  // Cumulative session usage (exact, from the model's reported usage): input /
-  // output tokens, cache-read tokens (a "hit"), and estimated cost.
-  const [usage, setUsage] = useState<{
-    input: number;
-    output: number;
-    cacheHit: number;
-    costUsd: number;
-  }>({ input: 0, output: 0, cacheHit: 0, costUsd: 0 });
-  // Live token/cost metrics (Bug 2). Every model call the engine makes flows
-  // through the metered AI port, which records into this bus; the status line
-  // subscribes and re-renders (throttled) as each call completes, then settles
-  // on the final totals via flush() at turn end.
+  // Live token/cost/cache metrics (Bug 2). Every model call the engine makes
+  // — evaluator, worker (every step), judge — flows through the metered AI
+  // port, which records into this bus; the dock/status line subscribe and
+  // re-render (throttled) as each call completes, then settle on the final
+  // totals via flush() at turn end. This is the SOLE source for session
+  // token/cache/cost figures — a separate one-shot "settle at turn end" state
+  // used to live here too and fed the same displays, which meant the cache
+  // "hit" figure alone went stale mid-turn while tokens/cost next to it kept
+  // updating live; removed in favor of this single, always-live source.
   const metricsBusRef = useRef(createMetricsBus());
   const [metrics, setMetrics] = useState<SessionMetrics>(() =>
     metricsBusRef.current.snapshot(),
@@ -437,10 +436,27 @@ export function ReplApp({
   // Live per-turn/session telemetry for the MODELS/TURN/TOOLS dock panels,
   // fed from the SAME onStage/onToolCall callbacks the transcript already
   // renders from (see the runTurn call in handleSubmit below). Token/cost
-  // numbers come straight from `metrics`/`usage` above — this reducer only
-  // tracks what those don't already have (model slugs, phase/step/round, tool
+  // numbers come straight from `metrics` above — this reducer only tracks
+  // what that doesn't already have (model slugs, phase/step/round, tool
   // tallies).
   const [telemetry, dispatchTelemetry] = useReducer(telemetryReducer, INITIAL_TELEMETRY_STATE);
+  // Prompt-input border color, animated through the turn lifecycle (see
+  // border-phase.ts): derived from the SAME telemetry.turn.phase the TURN
+  // dock panel reads above, rather than a second dispatched phase, so the
+  // two displays can never drift apart — turn-start already sets phase to
+  // "evaluate", onStage advances it to whatever stage runs next, and turn-end
+  // sets it to "complete", which is exactly submit -> evaluate -> active ->
+  // idle. `flashTick` only ticks while evaluating (the rainbow flash); the
+  // interval is torn down the instant the phase moves on so a flash from a
+  // finished turn can never bleed into the next one.
+  const borderPhase = borderPhaseFor(telemetry.turn.phase);
+  const [flashTick, setFlashTick] = useState(0);
+  useEffect(() => {
+    if (borderPhase !== "evaluating") return;
+    const timer = setInterval(() => setFlashTick((t) => t + 1), RAINBOW_FLASH_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [borderPhase]);
+  const promptBorderColor = borderColorFor(borderPhase, flashTick);
   // Whether the prompt bar is empty — gates Up/Down/Home/End between
   // transcript-scroll (bar empty) and their normal recall-queue / panel-entry
   // / cursor meaning (bar has text). Mirrored from PromptInput's onEmptyChange.
@@ -462,6 +478,14 @@ export function ReplApp({
     dispatchScroll({ type: direction === "up" ? "line-up" : "line-down" });
   }, []);
   useMouseWheel(handleWheel, fullscreen && mouseOn);
+  // Mouse click/drag text selection in the prompt input (see
+  // components.tsx's PromptInput + use-mouse-select.ts): the SAME
+  // `fullscreen && mouseOn` gate as the wheel above, since SGR tracking is
+  // only ever armed in fullscreen mode (see enterFullscreen/useMouseWheel) —
+  // `mouseRow` is the input's on-screen content row, undefined (disabling
+  // click/drag mapping) in classic mode where that geometry doesn't apply.
+  const promptMouseRow = fullscreen ? inputContentRow(rows) : undefined;
+  const promptMouseEnabled = fullscreen && mouseOn;
   // 1Hz clock for the header's live time-of-day and the dock's live elapsed
   // counters. Only ticks in full-screen mode — the classic inline layout has
   // no use for it.
@@ -1955,15 +1979,6 @@ export function ReplApp({
           outputTokens: result.usage.outputTokens,
         });
         setTurns((n) => n + 1);
-        setUsage((u) => ({
-          input: u.input + (result.usage.inputTokens ?? 0),
-          output: u.output + (result.usage.outputTokens ?? 0),
-          // `result.usage` is the engine's own aggregate (AgentUsage), which
-          // keeps the `cachedInputTokens` field — not an AI SDK v7 usage object.
-          cacheHit: u.cacheHit + (result.usage.cachedInputTokens ?? 0),
-          // The pipeline already priced the turn (rate card) onto the trace.
-          costUsd: u.costUsd + (result.trace?.usage?.costUsd ?? 0),
-        }));
       } catch (err) {
         closeStreamingBlocks();
         // Distinguish the three exit paths: an explicit user cancel (Esc/Ctrl-C),
@@ -2262,6 +2277,9 @@ export function ReplApp({
             <PromptInput
               onSubmit={handleUserSubmit}
               busy={isStreaming}
+              borderColor={promptBorderColor}
+              mouseRow={promptMouseRow}
+              mouseEnabled={promptMouseEnabled}
               catalog={catalogRef.current ?? []}
               focused={focus.zone === "input"}
               inject={inject}
@@ -2275,7 +2293,7 @@ export function ReplApp({
           <TelemetryDock
             telemetry={telemetry}
             metrics={metrics}
-            cacheHit={usage.cacheHit}
+            cacheHit={metrics.sessionCachedTokens}
             isStreaming={isStreaming}
             now={now}
             cols={cols}
@@ -2416,6 +2434,9 @@ export function ReplApp({
           <PromptInput
             onSubmit={handleUserSubmit}
             busy={isStreaming}
+            borderColor={promptBorderColor}
+            mouseRow={promptMouseRow}
+            mouseEnabled={promptMouseEnabled}
             catalog={catalogRef.current ?? []}
             focused={focus.zone === "input"}
             inject={inject}
@@ -2434,13 +2455,15 @@ export function ReplApp({
         <StatusLine
           model={model}
           branch={branchRef.current}
-          // Tokens + cost come from the live metrics bus (every model call —
-          // evaluator, worker, judge — contributes), so they update as calls
-          // complete during a turn and settle correctly at the end (Bug 2).
+          // Tokens + cost + cache all come from the live metrics bus (every
+          // model call — evaluator, worker per-step, judge — contributes), so
+          // they update together as calls complete during a turn and settle
+          // correctly at the end (Bug 2) — cache used to lag behind on a
+          // separate one-shot-per-turn total while tokens/cost updated live.
           inputTokens={metrics.sessionTokensIn}
           outputTokens={metrics.sessionTokensOut}
-          cacheHit={usage.cacheHit}
-          cacheMiss={Math.max(0, metrics.sessionTokensIn - usage.cacheHit)}
+          cacheHit={metrics.sessionCachedTokens}
+          cacheMiss={Math.max(0, metrics.sessionTokensIn - metrics.sessionCachedTokens)}
           costUsd={metrics.sessionCostUsd}
           turnOutputTokens={metrics.turnTokensOut}
           turnCostUsd={metrics.turnCostUsd}

@@ -117,6 +117,10 @@ export async function prepareOnDeviceCoordinator(
           inputTokens: result.usage.inputTokens,
           outputTokens: result.usage.outputTokens,
           totalTokens: result.usage.totalTokens,
+          // AI SDK v7 nests cache reads under `inputTokenDetails`; flatten to
+          // match StreamRunResult's usage (see engine.ts) so evaluator/judge
+          // calls price their cache reads the same way worker steps do.
+          cachedInputTokens: result.usage.inputTokenDetails?.cacheReadTokens ?? 0,
         },
       };
     },

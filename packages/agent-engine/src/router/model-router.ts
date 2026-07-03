@@ -50,12 +50,16 @@ export function tierLabel(tier: ModelTier): string {
 export function accumulateUsage(
   total: UsageTotals,
   model: string,
-  usage: { inputTokens?: number; outputTokens?: number },
+  usage: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number },
 ): UsageTotals {
   return {
     inputTokens: total.inputTokens + (usage.inputTokens ?? 0),
     outputTokens: total.outputTokens + (usage.outputTokens ?? 0),
-    costUsd: total.costUsd + estimateCostUsd(model, usage),
+    // rate-card's TokenUsage names this `cachedTokens`; callers here (engine
+    // step-loop / evaluator / judge results) name it `cachedInputTokens` —
+    // map field names at this one seam so the cache discount actually
+    // applies instead of silently being dropped by a key mismatch.
+    costUsd: total.costUsd + estimateCostUsd(model, { ...usage, cachedTokens: usage.cachedInputTokens }),
   };
 }
 

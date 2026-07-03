@@ -21,10 +21,15 @@ const LEAVE_ALT_SCREEN = "\x1b[?1049l";
 // DECTCEM — hide/show the terminal's own cursor (Ink draws its own where it belongs).
 const HIDE_CURSOR = "\x1b[?25l";
 const SHOW_CURSOR = "\x1b[?25h";
-// Mode 1000 (button-event mouse tracking) + 1006 (SGR extended coordinates,
-// which never overflow into control bytes the way the legacy X10 encoding does).
-const ENABLE_MOUSE = "\x1b[?1000h\x1b[?1006h";
-const DISABLE_MOUSE = "\x1b[?1000l\x1b[?1006l";
+// Mode 1000 (press/release mouse tracking) + 1002 (ALSO reports motion while
+// a button is held — the "drag" events prompt-input click-and-drag selection
+// needs) + 1006 (SGR extended coordinates, which never overflow into control
+// bytes the way the legacy X10 encoding does). 1002 is a superset of 1000 for
+// click tracking in most terminals, but both are armed together to match how
+// the common terminal apps that pioneered this (vim, tmux) do it — some
+// emulators are stricter about wanting the "base" mode enabled too.
+const ENABLE_MOUSE = "\x1b[?1000h\x1b[?1002h\x1b[?1006h";
+const DISABLE_MOUSE = "\x1b[?1000l\x1b[?1002l\x1b[?1006l";
 
 export interface FullscreenHandle {
   /** Restore the terminal to its normal state. Idempotent — safe to call more than once. */
@@ -73,8 +78,11 @@ export interface MouseWheelEvent {
   direction: "up" | "down";
 }
 
-// SGR mouse report: ESC [ < Cb ; Cx ; Cy (M|m)
-const SGR_MOUSE_RE = /\x1b\[<(\d+);(\d+);(\d+)[Mm]/g;
+// SGR mouse report: ESC [ < Cb ; Cx ; Cy (M|m) — shared format for wheel,
+// press/drag, and release reports; parseMouseWheelEvents and
+// parseMouseButtonEvents below each pick out the subset of reports they care
+// about from the same byte stream (both are safe to run over every chunk).
+const SGR_MOUSE_RE = /\x1b\[<(\d+);(\d+);(\d+)([Mm])/g;
 
 /**
  * Extracts wheel events from a raw stdin chunk. Bit 6 (64) marks a wheel
@@ -91,4 +99,74 @@ export function parseMouseWheelEvents(chunk: string): MouseWheelEvent[] {
     events.push({ direction: (cb & 1) === 1 ? "down" : "up" });
   }
   return events;
+}
+
+export interface MouseButtonEvent {
+  type: "press" | "drag" | "release";
+  /** 1-based terminal column (SGR Cx) — matches cursor/editor column conventions. */
+  col: number;
+  /** 1-based terminal row (SGR Cy). */
+  row: number;
+}
+
+/**
+ * Extracts LEFT-BUTTON press/drag/release events from a raw stdin chunk —
+ * what the prompt input's click-to-position-cursor / drag-to-select needs
+ * (see use-mouse-select.ts). Requires mode 1002 to be armed (see
+ * `ENABLE_MOUSE` above) for drag reports to arrive at all; press/release
+ * alone would already flow under mode 1000.
+ *
+ * Ignores wheel reports (bit 6/64 — parseMouseWheelEvents's territory) and
+ * any button other than the left one (bits 0-1 == 0) for press/drag — middle/
+ * right clicks fall through to the terminal's own native handling rather than
+ * becoming app-owned selection. Release reports are accepted regardless of
+ * their button bits: some terminals preserve the released button's bits,
+ * others always report 3 ("no button") on release, so gating on button 0
+ * there would risk a drag that never finalizes on some emulators.
+ */
+export function parseMouseButtonEvents(chunk: string): MouseButtonEvent[] {
+  const events: MouseButtonEvent[] = [];
+  for (const match of chunk.matchAll(SGR_MOUSE_RE)) {
+    const cb = Number(match[1]);
+    const col = Number(match[2]);
+    const row = Number(match[3]);
+    if (Number.isNaN(cb) || Number.isNaN(col) || Number.isNaN(row)) continue;
+    if ((cb & 64) !== 0) continue; // wheel report, not a button report
+
+    if (match[4] === "m") {
+      events.push({ type: "release", col, row });
+      continue;
+    }
+    if ((cb & 3) !== 0) continue; // middle/right press or drag — not app-owned
+    const isMotion = (cb & 32) !== 0;
+    events.push({ type: isMotion ? "drag" : "press", col, row });
+  }
+  return events;
+}
+
+// ── Ink `useInput` quirk workaround ─────────────────────────────────────────
+// Ink's own keypress parser has no concept of SGR mouse reports (see its
+// parse-keypress.js): a report it doesn't recognize as a NAMED key (arrow,
+// function key, …) falls through with an empty `key.name`, and its
+// use-input.js then sets `input = keypress.sequence` and strips just the
+// leading ESC byte — so EVERY wheel/press/drag/release report, having
+// nowhere else to go, arrives at a `useInput` consumer's generic "insert
+// whatever's left" catch-all as literal garbage text. This is a real,
+// pre-existing gap (the wheel-scroll feature has always been exposed to it,
+// just never noticed since scrolling rarely coincides with a focused text
+// field) that Task 3's click/drag reports make impossible to ignore, since
+// clicking the input is the whole point. Ink provides no hook to suppress
+// this upstream, so PromptInput filters the remnant out at its own
+// `useInput` catch-all instead — see components.tsx.
+const SGR_MOUSE_REPORT_REMNANT_RE = /^\[<\d+;\d+;\d+[Mm]$/;
+
+/**
+ * True when `input` is what's left of an SGR mouse report (`\x1b[<Cb;Cx;Cy(M|m)`)
+ * after Ink's `useInput` strips its leading ESC byte — see the comment above.
+ * Deliberately matches ANY Cb value (wheel bit set or not): the goal is
+ * "never let this become literal text in an input", not "only recognize the
+ * reports this app currently acts on".
+ */
+export function isStrayMouseReportRemnant(input: string): boolean {
+  return SGR_MOUSE_REPORT_REMNANT_RE.test(input);
 }

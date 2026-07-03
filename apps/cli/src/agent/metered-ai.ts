@@ -64,7 +64,12 @@ export function createMeteredAi(base: AgentAi, opts: MeteredAiOptions = {}): Age
       // turn's own error handling reports it; metrics just skip the dead call.
       void Promise.resolve(result.usage)
         .then((u) => {
-          opts.onMetrics?.(metricsEventFor(callId, "model_call", args.model, u, now()));
+          // AI SDK v7 nests cache reads under `inputTokenDetails` (see
+          // engine.ts's identical read) — flatten to the rate card's
+          // `cachedTokens` so this step's cache hit is priced at the
+          // discounted rate instead of as fresh input.
+          const usage = { ...u, cachedTokens: u.inputTokenDetails?.cacheReadTokens ?? 0 };
+          opts.onMetrics?.(metricsEventFor(callId, "model_call", args.model, usage, now()));
         })
         .catch(() => {});
       return result;
@@ -81,7 +86,11 @@ export function createMeteredAi(base: AgentAi, opts: MeteredAiOptions = {}): Age
         { callId, model: args.model, onLog: opts.onLog },
         args.abortSignal,
       );
-      opts.onMetrics?.(metricsEventFor(callId, "model_call", args.model, res.usage, now()));
+      // The port names this `cachedInputTokens` (ObjectRunResult.usage); the
+      // rate card names the same concept `cachedTokens` — map at this seam
+      // so the evaluator/judge's cache reads are priced, not dropped.
+      const usage = { ...res.usage, cachedTokens: res.usage.cachedInputTokens ?? 0 };
+      opts.onMetrics?.(metricsEventFor(callId, "model_call", args.model, usage, now()));
       return res;
     },
   };
