@@ -40,6 +40,42 @@ export interface EnhanceOptions {
    * to is injected.
    */
   extraQueries?: string[];
+  /**
+   * Wall-clock budget for the whole code-graph enrichment pass. On a cold
+   * store the FIRST query triggers a full tree-sitter build of the repo, which
+   * on a large repo can take minutes — far more than the context is worth.
+   * When the budget expires, whatever resolved so far is injected and the rest
+   * is skipped; the underlying build continues in the provider's cache, so the
+   * agent's own later `code_graph` tool calls still benefit. Undefined ⇒
+   * unbounded (the historical behavior).
+   */
+  timeoutMs?: number;
+}
+
+/**
+ * Race a code-graph query against the remaining budget. A timeout resolves to
+ * "" (a miss) rather than rejecting — enhancement is best-effort by design.
+ * The abandoned query keeps running in the provider (warming its cache); only
+ * this stage stops waiting for it.
+ */
+async function queryWithin(
+  q: Promise<string>,
+  remainingMs: number,
+): Promise<string> {
+  if (remainingMs <= 0) return "";
+  // Unbounded (or absurdly large) budget: no timer — setTimeout overflows
+  // past 2^31-1 ms and would fire immediately.
+  if (remainingMs > 2_147_483_647) return q.catch(() => "");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<string>((resolve) => {
+    timer = setTimeout(() => resolve(""), remainingMs);
+    timer.unref?.();
+  });
+  try {
+    return await Promise.race([q.catch(() => ""), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export interface EnhanceResult {
@@ -73,6 +109,25 @@ const CODEY_EXT =
   /\.(ts|tsx|js|jsx|mjs|cjs|json|md|mdx|css|scss|sql|py|go|rs|sh|yml|yaml|toml)$/;
 
 /**
+ * Capitalized prose words that pattern-match the CamelCase symbol heuristic but
+ * are almost never the symbol the user means. Mining them injects noise — e.g.
+ * "Fix the validator" once resolved `Fix` to jquery's `fixInput` and burned
+ * context tokens on irrelevant definitions. Lowercase comparison so `FIX`/`Fix`
+ * both drop; real symbols like `FixDecimalInputMixin` are unaffected (full-token
+ * match only).
+ */
+const PROSE_STOPWORDS = new Set([
+  "add", "added", "allow", "allows", "also", "and", "any", "are", "because",
+  "before", "but", "can", "change", "changed", "confirm", "could", "create",
+  "description", "does", "example", "expected", "fix", "fixed", "for", "from",
+  "have", "here", "how", "however", "instead", "into", "issue", "make", "may",
+  "must", "new", "not", "note", "now", "only", "please", "problem", "remove",
+  "replace", "should", "since", "some", "support", "that", "the", "then",
+  "there", "therefore", "this", "update", "use", "used", "using", "when",
+  "where", "which", "while", "will", "with", "would", "you",
+]);
+
+/**
  * Literal candidates resolved at or below this count → the prompt is probably
  * conceptual (names no exact symbol/path), so fall back to one embedding
  * search over the raw prompt. "Few", not only "zero": a prompt that names one
@@ -98,12 +153,18 @@ export function extractCandidates(prompt: string): { symbols: string[]; paths: s
     else if (/^[\w.$]+$/.test(inner)) symbols.add(inner);
   }
 
-  // Bare file paths and identifiers in the surrounding prose.
+  // Bare file paths and identifiers in the surrounding prose. Trailing
+  // sentence punctuation is not part of the identifier — "ASCIIUsernameValidator."
+  // at the end of a sentence must still mine the symbol.
   for (const m of prompt.matchAll(/[A-Za-z0-9_./-]+/g)) {
-    const tok = m[0];
+    const tok = m[0].replace(/[.]+$/, "");
+    if (!tok) continue;
     if (CODEY_EXT.test(tok) || (tok.includes("/") && tok.length > 3)) {
       paths.add(tok.replace(/^\.\//, ""));
-    } else if (/^[A-Z][A-Za-z0-9]{2,}$/.test(tok) || /^[a-z]+_[a-z0-9_]+$/.test(tok)) {
+    } else if (
+      (/^[A-Z][A-Za-z0-9]{2,}$/.test(tok) || /^[a-z]+_[a-z0-9_]+$/.test(tok)) &&
+      !PROSE_STOPWORDS.has(tok.toLowerCase())
+    ) {
       // CamelCase (Foo, GraphNode) or snake_case (build_tools) — likely symbols.
       symbols.add(tok);
     }
@@ -141,6 +202,12 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
   const pathsQueried: string[] = [];
   let usedSemanticFallback = false;
 
+  // Deadline for the code-graph pass (Infinity when unbounded).
+  const deadline =
+    opts.timeoutMs && opts.timeoutMs > 0 ? startedAt + opts.timeoutMs : Infinity;
+  const remaining = (): number =>
+    deadline === Infinity ? Number.MAX_SAFE_INTEGER : deadline - Date.now();
+
   if (codeGraph) {
     try {
       const { symbols, paths } = extractCandidates(prompt);
@@ -159,8 +226,9 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
 
       // Symbol definitions — "where is X defined".
       for (const sym of [...symSet].slice(0, max)) {
+        if (remaining() <= 0) break;
         symbolsQueried.push(sym);
-        const res = await codeGraph.query("search", sym, 4);
+        const res = await queryWithin(codeGraph.query("search", sym, 4), remaining());
         if (isHit(res)) {
           sections.push(`Definitions of \`${sym}\`:\n${res}`);
           resolved.push(sym);
@@ -171,12 +239,13 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
       // (what a change to it could break). This is the impact-analysis the agent
       // would otherwise have to discover by hand.
       for (const p of [...pathSet].slice(0, max)) {
+        if (remaining() <= 0) break;
         pathsQueried.push(p);
-        const syms = await codeGraph.query("file_symbols", p, 12);
+        const syms = await queryWithin(codeGraph.query("file_symbols", p, 12), remaining());
         if (isHit(syms)) {
           sections.push(`Symbols in ${p}:\n${syms}`);
           resolved.push(p);
-          const deps = await codeGraph.query("dependents", p, 8);
+          const deps = await queryWithin(codeGraph.query("dependents", p, 8), remaining());
           if (isHit(deps)) sections.push(deps);
         }
       }
@@ -186,11 +255,10 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
       // configurations for the cli app") that names no symbol or path
       // directly. Embed the raw prompt once and cosine-rank file nodes so the
       // agent gets real context instead of falling through to blind grep.
-      if (resolved.length <= SEMANTIC_FALLBACK_MAX_RESOLVED) {
-        const semanticHits = await codeGraph.query(
-          "semantic_search",
-          prompt,
-          SEMANTIC_FALLBACK_LIMIT,
+      if (resolved.length <= SEMANTIC_FALLBACK_MAX_RESOLVED && remaining() > 0) {
+        const semanticHits = await queryWithin(
+          codeGraph.query("semantic_search", prompt, SEMANTIC_FALLBACK_LIMIT),
+          remaining(),
         );
         if (isHit(semanticHits)) {
           sections.push(

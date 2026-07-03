@@ -445,11 +445,64 @@ describe("extractCandidates", () => {
     expect(symbols).toHaveLength(0);
     expect(paths).toHaveLength(0);
   });
+
+  it("drops capitalized prose stopwords but keeps real symbols", () => {
+    const { symbols } = extractCandidates(
+      "Fix the ASCIIUsernameValidator. Replace the regex and Confirm the change. However the FixDecimalInputMixin stays.",
+    );
+    expect(symbols).toContain("ASCIIUsernameValidator");
+    expect(symbols).toContain("FixDecimalInputMixin");
+    expect(symbols).not.toContain("Fix");
+    expect(symbols).not.toContain("Replace");
+    expect(symbols).not.toContain("Confirm");
+    expect(symbols).not.toContain("However");
+  });
+
+  it("still extracts stopword-shaped tokens when backticked (explicit code quote)", () => {
+    const { symbols } = extractCandidates("call `fix` here");
+    expect(symbols).toContain("fix");
+  });
 });
 
 // ── enhancePrompt ─────────────────────────────────────────────────────────────
 
 describe("enhancePrompt", () => {
+  it("bounds the code-graph pass with timeoutMs and degrades to no context", async () => {
+    // A provider stuck on a cold build: the query never resolves.
+    const codeGraph = { query: vi.fn(() => new Promise<string>(() => {})) };
+    const started = Date.now();
+    const result = await enhancePrompt({
+      prompt: "fix the `loginUser` function in `src/auth/session.ts`",
+      codeGraph,
+      timeoutMs: 50,
+    });
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(result.context).toBe("");
+    expect(result.resolved).toHaveLength(0);
+    // The stuck query was abandoned, not rejected — enhancement is best-effort.
+    expect(result.prompt).toContain("loginUser");
+  });
+
+  it("keeps whatever resolved before the deadline expired", async () => {
+    let calls = 0;
+    const codeGraph = {
+      query: vi.fn((): Promise<string> => {
+        calls += 1;
+        // First query resolves instantly; later ones hang (budget exhausts).
+        return calls === 1
+          ? Promise.resolve("src/auth/session.ts:5: loginUser function")
+          : new Promise<string>(() => {});
+      }),
+    };
+    const result = await enhancePrompt({
+      prompt: "fix `loginUser` and `parseToken` and `refreshSession`",
+      codeGraph,
+      timeoutMs: 100,
+    });
+    expect(result.resolved).toContain("loginUser");
+    expect(result.context).toContain("loginUser");
+  });
+
   it("returns original prompt when no codeGraph or memory", async () => {
     const result = await enhancePrompt({ prompt: "fix the bug" });
     expect(result.prompt).toBe("fix the bug");

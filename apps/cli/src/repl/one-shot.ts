@@ -222,6 +222,24 @@ export async function runOneShot(
       }
     : projectContext;
 
+  // Headless enhance budget: on a cold store the first code-graph query
+  // triggers a full tree-sitter build (135s+ on a Django-sized repo — measured
+  // on SWE-bench), so the ENHANCE stage must not block on it. Warm the graph in
+  // the background NOW so the build overlaps the evaluate stage and the coding
+  // loop; the agent's own `code_graph` tool calls hit the warmed cache.
+  // OXAGEN_ENHANCE_TIMEOUT_MS overrides (0 disables the bound).
+  const enhanceTimeoutRaw = Number(process.env["OXAGEN_ENHANCE_TIMEOUT_MS"]);
+  const enhanceTimeoutMs = Number.isFinite(enhanceTimeoutRaw)
+    ? enhanceTimeoutRaw > 0
+      ? enhanceTimeoutRaw
+      : undefined
+    : promptProfile === "headless"
+      ? 15_000
+      : undefined;
+  if (promptProfile === "headless" && !options.bare) {
+    void queryCodeGraph(cwd, "search", "__graph_warmup__", 1).catch(() => {});
+  }
+
   try {
     let streamed = false;
     const result = await runTurn({
@@ -237,6 +255,7 @@ export async function runOneShot(
       bare: options.bare,
       verbose,
       maxSteps: options.maxSteps,
+      enhanceTimeoutMs,
       memory: createCombinedMemory(memory, fleetMemory, {
         server: serverMemory,
         recallQuery: prompt,
