@@ -18,44 +18,83 @@ function strArray(v: unknown): string[] | undefined {
   return Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "string") ? (v as string[]) : undefined;
 }
 
+// "AI_GATEWAY_API_KEY", "N_CONCURRENT", "OXAGEN_EFFORT" — an env var NAME.
+const ENV_VAR_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/;
+
+/** A scalar env-assignable value coerced to its shell string form, or undefined if it isn't one. */
+function coerceEnvValue(v: unknown): string | undefined {
+  if (typeof v === "string" && v.length > 0) return v;
+  if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  if (typeof v === "boolean") return v ? "1" : undefined;
+  return undefined;
+}
+
 /**
- * Map a stored replay config back to the env vars `bench/*\/run.sh` reads
- * (see that script's usage header). Conventional keys only (see
- * `BenchReplayConfig`'s doc comment) — an unrecognised key is silently
- * ignored rather than guessed at, since forwarding an arbitrary key as an
- * env var could change run.sh's behavior in an unintended way.
+ * Map a stored replay config back to the env vars `bench/*\/run.sh` (and the
+ * container it launches) read.
+ *
+ * Two input shapes, both supported:
+ *
+ * 1. **Raw env-var-named keys** — how `bench-config.json` is actually
+ *    written (see that file's writer in `bench/*\/run.sh`): Oxagen forwards
+ *    every host `OXAGEN_*` var verbatim into the trial container rather than
+ *    mapping it through a friendlier schema (see `_forwarded_env()` in
+ *    `bench/terminal-bench/src/oxagen_terminal_bench/oxagen_agent.py`), so
+ *    the snapshot captures exactly that: raw names like
+ *    `OXAGEN_BEST_OF_N_MODELS`, `DATASET`, `N_CONCURRENT`, `TASK_IDS`. These
+ *    pass straight through unchanged — no translation needed, since they're
+ *    already valid shell assignments.
+ * 2. **Conventional lower-camelCase keys** (`models`, `candidates`,
+ *    `effort`, ... — see `BenchReplayConfig`'s doc comment) for a config
+ *    assembled by hand rather than captured from a live shell. Only fills
+ *    gaps the raw pass above didn't already set — an explicit raw key always
+ *    wins, since it's unambiguous.
+ *
+ * An unrecognised key (in either shape) is silently ignored rather than
+ * guessed at, since forwarding an arbitrary key as an env var could change
+ * run.sh's behavior in an unintended way.
  */
 export function buildReplayEnv(config: BenchReplayConfig): Record<string, string> {
   const env: Record<string, string> = {};
 
+  for (const [key, value] of Object.entries(config)) {
+    if (!ENV_VAR_NAME_PATTERN.test(key)) continue;
+    const coerced = coerceEnvValue(value);
+    if (coerced !== undefined) env[key] = coerced;
+  }
+
   const models = strArray(config.models);
   const candidates = num(config.candidates);
-  if (models || candidates !== undefined) env.OXAGEN_BEST_OF_N = "1";
-  if (models) env.OXAGEN_BEST_OF_N_MODELS = models.join(",");
-  if (candidates !== undefined) env.OXAGEN_BEST_OF_N_CANDIDATES = String(candidates);
-  if (bool(config.pipeline)) env.OXAGEN_BEST_OF_N_PIPELINE = "1";
-  if (bool(config.verifyAuto)) env.OXAGEN_BEST_OF_N_VERIFY = "1";
-  if (bool(config.warm)) env.OXAGEN_WARM = "1";
+  if ((models || candidates !== undefined) && !("OXAGEN_BEST_OF_N" in env)) env.OXAGEN_BEST_OF_N = "1";
+  if (models && !("OXAGEN_BEST_OF_N_MODELS" in env)) env.OXAGEN_BEST_OF_N_MODELS = models.join(",");
+  if (candidates !== undefined && !("OXAGEN_BEST_OF_N_CANDIDATES" in env)) {
+    env.OXAGEN_BEST_OF_N_CANDIDATES = String(candidates);
+  }
+  if (bool(config.pipeline) && !("OXAGEN_BEST_OF_N_PIPELINE" in env)) env.OXAGEN_BEST_OF_N_PIPELINE = "1";
+  if (bool(config.verifyAuto) && !("OXAGEN_BEST_OF_N_VERIFY" in env)) env.OXAGEN_BEST_OF_N_VERIFY = "1";
+  if (bool(config.warm) && !("OXAGEN_WARM" in env)) env.OXAGEN_WARM = "1";
 
   const effort = str(config.effort);
-  if (effort) env.OXAGEN_EFFORT = effort;
+  if (effort && !("OXAGEN_EFFORT" in env)) env.OXAGEN_EFFORT = effort;
   const evaluator = str(config.evaluator);
-  if (evaluator) env.OXAGEN_LLM_EVALUATOR = evaluator;
+  if (evaluator && !("OXAGEN_LLM_EVALUATOR" in env)) env.OXAGEN_LLM_EVALUATOR = evaluator;
   const advisor = str(config.advisor);
-  if (advisor) env.OXAGEN_LLM_ADVISOR = advisor;
+  if (advisor && !("OXAGEN_LLM_ADVISOR" in env)) env.OXAGEN_LLM_ADVISOR = advisor;
   const reviseRounds = num(config.reviseRounds);
-  if (reviseRounds !== undefined) env.OXAGEN_MAX_REVISE_ROUNDS = String(reviseRounds);
+  if (reviseRounds !== undefined && !("OXAGEN_MAX_REVISE_ROUNDS" in env)) {
+    env.OXAGEN_MAX_REVISE_ROUNDS = String(reviseRounds);
+  }
 
   const nConcurrent = num(config.nConcurrent);
-  if (nConcurrent !== undefined) env.N_CONCURRENT = String(nConcurrent);
+  if (nConcurrent !== undefined && !("N_CONCURRENT" in env)) env.N_CONCURRENT = String(nConcurrent);
   const dataset = str(config.dataset);
-  if (dataset) env.DATASET = dataset;
+  if (dataset && !("DATASET" in env)) env.DATASET = dataset;
 
   const taskIds = strArray(config.taskIds) ?? (str(config.taskId) ? [config.taskId as string] : undefined);
-  if (taskIds) env.TASK_IDS = taskIds.join(" ");
+  if (taskIds && !("TASK_IDS" in env)) env.TASK_IDS = taskIds.join(" ");
 
   const model = str(config.model);
-  if (model) env.OXAGEN_MODEL_SLUG = model;
+  if (model && !("OXAGEN_MODEL_SLUG" in env)) env.OXAGEN_MODEL_SLUG = model;
 
   return env;
 }

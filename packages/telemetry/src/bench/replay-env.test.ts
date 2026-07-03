@@ -68,6 +68,46 @@ describe("buildReplayEnv", () => {
   it("returns an empty object for an empty config", () => {
     expect(buildReplayEnv({})).toEqual({});
   });
+
+  it("passes raw env-var-named keys straight through (the shape bench-config.json actually writes)", () => {
+    const env = buildReplayEnv({
+      OXAGEN_BEST_OF_N: "1",
+      OXAGEN_BEST_OF_N_MODELS: "anthropic/claude-fable-5,openai/gpt-5.5-pro",
+      OXAGEN_EFFORT: "xhigh",
+      DATASET: "swe-bench/swe-bench-verified",
+      N_CONCURRENT: 4,
+      TASK_IDS: "django__django-11099 django__django-11095",
+      OXAGEN_WARM: true,
+    });
+    expect(env).toEqual({
+      OXAGEN_BEST_OF_N: "1",
+      OXAGEN_BEST_OF_N_MODELS: "anthropic/claude-fable-5,openai/gpt-5.5-pro",
+      OXAGEN_EFFORT: "xhigh",
+      DATASET: "swe-bench/swe-bench-verified",
+      N_CONCURRENT: "4",
+      TASK_IDS: "django__django-11099 django__django-11095",
+      OXAGEN_WARM: "1",
+    });
+  });
+
+  it("drops a raw-keyed boolean false rather than emitting an empty/invalid assignment", () => {
+    expect(buildReplayEnv({ OXAGEN_WARM: false })).toEqual({});
+  });
+
+  it("lets an explicit raw env-var key win over the conventional mapping for the same setting", () => {
+    const env = buildReplayEnv({ effort: "low", OXAGEN_EFFORT: "xhigh" });
+    expect(env.OXAGEN_EFFORT).toBe("xhigh");
+  });
+
+  it("still fills in the conventional mapping for any setting the raw pass didn't cover", () => {
+    const env = buildReplayEnv({ OXAGEN_EFFORT: "xhigh", evaluator: "anthropic/claude-sonnet-5" });
+    expect(env).toEqual({ OXAGEN_EFFORT: "xhigh", OXAGEN_LLM_EVALUATOR: "anthropic/claude-sonnet-5" });
+  });
+
+  it("ignores a raw-keyed value of the wrong type (object/array) rather than throwing", () => {
+    expect(() => buildReplayEnv({ TASK_IDS: ["a", "b"] as unknown as string })).not.toThrow();
+    expect(buildReplayEnv({ TASK_IDS: ["a", "b"] as unknown as string })).toEqual({});
+  });
 });
 
 describe("runScriptFor", () => {

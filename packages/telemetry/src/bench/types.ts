@@ -18,14 +18,25 @@ export type BenchStatus =
 /**
  * Secret-free replay payload for a bench run or task. Deliberately open —
  * new harnesses and new oxagen CLI flags should never require a migration.
- * Conventional keys (all optional, all harness-dependent): `models`,
- * `candidates`, `pipeline`, `verifyAuto`, `effort`, `evaluator`, `advisor`,
- * `reviseRounds`, `taskIds`, `nConcurrent`, `bundleGitSha`, `dataset`, `warm`.
+ * Two key shapes, both understood by `buildReplayEnv` (see `replay-env.ts`):
+ *
+ * - **Raw env-var names** — how `bench/*\/run.sh` actually writes
+ *   `bench-config.json`: every host `OXAGEN_*` var Oxagen forwards into the
+ *   trial container verbatim (see `_forwarded_env()` in
+ *   `oxagen_terminal_bench/oxagen_agent.py`), plus `DATASET`, `N_CONCURRENT`,
+ *   `TASK_IDS`. These need no translation to replay — they're already valid
+ *   shell assignments.
+ * - **Conventional lower-camelCase keys** (all optional, all
+ *   harness-dependent) for a config assembled by hand: `models`,
+ *   `candidates`, `pipeline`, `verifyAuto`, `effort`, `evaluator`, `advisor`,
+ *   `reviseRounds`, `taskIds`, `nConcurrent`, `bundleGitSha`, `dataset`, `warm`.
  *
  * NEVER put a secret VALUE here — env keys are referenced by name only
  * (e.g. `{"apiKeyEnv": "AI_GATEWAY_API_KEY"}`, never the key's value).
  * `ingestBenchResultsDir` runs `assertNoSecretValues` on this before every
- * insert (see `secrets.ts`).
+ * insert (see `secrets.ts`) — note that means the raw-env-var shape must
+ * never include `AI_GATEWAY_API_KEY`/`ANTHROPIC_API_KEY`/etc. themselves,
+ * only the `OXAGEN_*` tuning vars.
  */
 export type BenchReplayConfig = Record<string, unknown>;
 
