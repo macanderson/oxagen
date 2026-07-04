@@ -341,6 +341,55 @@ export const insertToolInvocation = (row: ToolInvocationRow) => {
   ]);
 };
 
+// ── Runtime error stream (0020_error_events.sql) ──────────────────────────────
+//
+// One row per high-severity/unhandled server error captured by captureError()
+// (see error-reporting.ts). ClickHouse is the correct store for append-only
+// runtime events. Distinct from the Postgres security_events audit trail.
+export interface ErrorEventRow {
+  error_id: string;
+  /** Nil UUID when the error occurred before a tenant scope was resolved. */
+  org_id: string | null;
+  /** Nil UUID when org-level or pre-scope. */
+  workspace_id: string | null;
+  severity: "fatal" | "error" | "warn";
+  /** Which runtime captured it. */
+  source: "api" | "app" | "mcp" | "inngest" | "runner";
+  /** Error constructor name, e.g. "TypeError". */
+  error_class: string;
+  /** Truncated error message (bounded by the caller). */
+  message: string;
+  /** Truncated stack trace (bounded by the caller). */
+  stack: string;
+  /** Capability name for kernel-invocation errors, else "". */
+  capability: string;
+  /** Request/correlation id, else "". */
+  request_id: string;
+  /** SHA-256(class + normalized message) prefix — stable grouping key. */
+  fingerprint: string;
+  created_at: string;
+  /** OTEL trace id; stamped automatically from the active span when omitted. */
+  trace_id?: string;
+  /** OTEL span id; stamped automatically from the active span when omitted. */
+  span_id?: string;
+}
+
+export const insertErrorEvents = (rows: readonly ErrorEventRow[]) => {
+  const { trace_id, span_id } = currentTraceIds();
+  return insertRows(
+    "error_events",
+    // Coalesce "no tenant scope" (null/undefined) to the nil UUID so the
+    // UUID columns always receive a parseable value, and stamp trace context.
+    rows.map((r) => ({
+      ...r,
+      org_id: r.org_id ?? NIL_UUID,
+      workspace_id: r.workspace_id ?? NIL_UUID,
+      trace_id: r.trace_id ?? trace_id,
+      span_id: r.span_id ?? span_id,
+    })),
+  );
+};
+
 /**
  * Deterministic, PII-free cohort key for prompts. SHA-256, first 16 bytes
  * hex. Stable across runs so analytics can group "same prompt asked N

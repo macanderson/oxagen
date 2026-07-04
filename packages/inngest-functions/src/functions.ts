@@ -46,6 +46,7 @@ import { engramSyncMemoryToGraph } from "./functions/engram.sync-memory-to-graph
 import { engramEmbedMemory } from "./functions/engram.embed-memory";
 import { engramConsolidationRun } from "./functions/engram.consolidation.run";
 import { memoryDecayPass } from "./functions/memory.decay-pass";
+import { observabilityCaptureFailure } from "./functions/observability.capture-failure";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -95,4 +96,5 @@ export const functions: any[] = [
   engramEmbedMemory,
   engramConsolidationRun,
   memoryDecayPass,
+  observabilityCaptureFailure,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);

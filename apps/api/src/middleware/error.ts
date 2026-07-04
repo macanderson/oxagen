@@ -2,6 +2,7 @@ import type { ErrorHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
+import { captureError } from "@oxagen/telemetry";
 import { logger } from "./logger";
 import type { AppEnv } from "../app";
 
@@ -86,6 +87,17 @@ export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
   }
 
   logger.error({ requestId, err }, "unhandled error");
+  // Fire-and-forget: record the unhandled 500 to the ClickHouse error stream and
+  // (when ALERT_WEBHOOK_URL is set) fan a Slack-compatible alert. Only the true
+  // catch-all reaches here — handled 4xx above return before this point.
+  captureError({
+    error: err,
+    source: "api",
+    severity: "error",
+    orgId: c.get("orgId") ?? null,
+    workspaceId: c.get("workspaceId") ?? null,
+    requestId: requestId === "unknown" ? null : requestId,
+  });
   return c.json(
     { error: { code: "internal_error", message: "Unexpected server error" }, requestId },
     500,
