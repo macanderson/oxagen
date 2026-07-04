@@ -15,6 +15,7 @@ import { buildSeededModelState } from "@/components/chat/model-state";
 import type { McpServerSummary } from "@/components/chat/mcp-types";
 import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
 import { conversationListHandler } from "@oxagen/handlers/conversation.list";
+import { logger } from "@oxagen/handlers/logger";
 import { ConversationNav } from "@/components/conversations/conversation-nav";
 import type { ConversationNavActions } from "@/components/conversations/types";
 import {
@@ -26,6 +27,17 @@ import {
 } from "./conversation-actions";
 import { walkActiveBranch } from "./walk-active-branch";
 export { walkActiveBranch } from "./walk-active-branch";
+
+/**
+ * Logs a server-render degrade and returns the fallback unchanged. Keeps the
+ * non-blocking control flow (the chat page still renders) while making each
+ * failure observable — an RLS/DB error should never silently revert the page to
+ * empty/default state with no trace.
+ */
+function logAndFallback<T>(err: unknown, what: string, fallback: T): T {
+  logger.warn({ err }, `conversation-page: ${what} failed — degraded`);
+  return fallback;
+}
 
 // The unbound action factories — one set per route module because each
 // module hard-codes its own revalidatePath segment (/chat vs /ask).
@@ -193,14 +205,16 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
             riskLevel: c.agent?.riskLevel ?? "low",
           })),
       ),
-      userPreferencesReadHandler({}, userCtx).catch(() => ({
-        enterToSubmit: false as const,
-        pendingPromptBehavior: "queue" as const,
-      })),
+      userPreferencesReadHandler({}, userCtx).catch((err: unknown) =>
+        logAndFallback(err, "user-preferences read", {
+          enterToSubmit: false as const,
+          pendingPromptBehavior: "queue" as const,
+        }),
+      ),
       loadEffectiveModelDefaults({
         userId: session.user.id,
         workspaceId: workspace.id,
-      }).catch(() => null),
+      }).catch((err: unknown) => logAndFallback(err, "effective-model-defaults load", null)),
       // First page of active conversations for the history nav. Failure is
       // non-fatal — the nav renders empty rather than crashing the chat page.
       // runInTenantScope is required: conversationListHandler calls withTenantDb
@@ -209,7 +223,9 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
       runInTenantScope(
         { orgId: tenant.id, workspaceId: workspace.id },
         () => conversationListHandler({ filter: "active", limit: 50, cursor: null }, userCtx),
-      ).catch(() => ({ conversations: [], nextCursor: null })),
+      ).catch((err: unknown) =>
+        logAndFallback(err, "conversation-list read", { conversations: [], nextCursor: null }),
+      ),
       // Enabled + healthy workspace MCP servers for the per-turn activation picker.
       runInTenantScope(
         { orgId: tenant.id, workspaceId: workspace.id },
@@ -247,7 +263,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
             toolCount: Array.isArray(r.discoveredTools) ? (r.discoveredTools as unknown[]).length : 0,
           })),
         )
-        .catch(() => [] as McpServerSummary[]),
+        .catch((err: unknown) => logAndFallback(err, "mcp-servers read", [] as McpServerSummary[])),
     ]);
 
   // Bind the workspace scope into the nav's server actions so the client only

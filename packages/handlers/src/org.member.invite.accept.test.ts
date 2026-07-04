@@ -26,6 +26,17 @@ vi.mock("./iam-provision", () => ({
   provisionMemberPrincipal: mockProvisionMemberPrincipal,
 }));
 
+// ── logger mock ──────────────────────────────────────────────────────────────
+// Spy on the package logger so we can assert the mark-expired failure path logs.
+const loggerMock = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
+}));
+
+vi.mock("./logger", () => ({ logger: loggerMock }));
+
 // ── drizzle-orm mock ─────────────────────────────────────────────────────────
 
 // ── @oxagen/database mock ────────────────────────────────────────────────────
@@ -153,6 +164,29 @@ describe("orgMemberInviteAcceptHandler", () => {
     await expect(
       orgMemberInviteAcceptHandler({ invitationPublicId: "inv_EXPIRED" }, ctx),
     ).rejects.toThrow("expired");
+  });
+
+  it("expired invitation with failing mark-expired update → logs warning, still throws expired", async () => {
+    const pastDate = new Date(Date.now() - 1000);
+    mockDb.query.invitations.findFirst.mockResolvedValue(
+      makeInvitation({ expiresAt: pastDate }),
+    );
+    // The best-effort "mark expired" update rejects (e.g. transient DB error).
+    // This must not swallow silently — it should log and still throw expired.
+    mockUpdate.mockReturnValue({
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockRejectedValue(new Error("db write failed")),
+    });
+
+    const ctx = makeCtx();
+    await expect(
+      orgMemberInviteAcceptHandler({ invitationPublicId: "inv_EXPIRED" }, ctx),
+    ).rejects.toThrow("expired");
+
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ invitationPublicId: "inv_EXPIRED" }),
+      expect.stringContaining("failed to mark expired invitation"),
+    );
   });
 
   it("email mismatch → throws", async () => {

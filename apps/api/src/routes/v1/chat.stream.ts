@@ -9,7 +9,7 @@ import {
   loadEffectiveModelDefaults,
   resolvePrompt,
   chatSystemPrompt,
-  loadWorkspacePromptConfig,
+  loadWorkspacePromptConfigSafe,
 } from "@oxagen/ai";
 import { materializeTools } from "@oxagen/agent";
 import { withTenantDb, schema } from "@oxagen/database";
@@ -515,7 +515,7 @@ chatStreamRoute.post("/", async (c) => {
                     },
                   },
                 ),
-                loadWorkspacePromptConfig(ctx.workspaceId).catch(() => ({})),
+                loadWorkspacePromptConfigSafe(ctx.workspaceId),
               ]),
           );
 

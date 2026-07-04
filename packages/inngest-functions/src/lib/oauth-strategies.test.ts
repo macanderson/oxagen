@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ requireEnv: vi.fn(), fetchMock: vi.fn() }));
 vi.mock("@oxagen/config", () => ({ requireEnv: mocks.requireEnv }));
 
-const { refreshOAuthToken, isRefreshError, PERMANENT_ERRORS } = await import("./oauth-strategies");
+const { refreshOAuthToken, refreshProviderKeyFor, isRefreshError, PERMANENT_ERRORS } =
+  await import("./oauth-strategies");
 
 function jsonResponse(body: unknown) {
   return { json: () => Promise.resolve(body) } as unknown as Response;
@@ -24,7 +25,43 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
+describe("refreshProviderKeyFor", () => {
+  it("normalizes google-* connector slugs onto the shared google strategy", () => {
+    for (const slug of [
+      "google-drive",
+      "google-gmail",
+      "google-calendar",
+      "google-contacts",
+      "google-meet",
+      "google-tasks",
+      "google-bigquery",
+    ]) {
+      expect(refreshProviderKeyFor(slug)).toBe("google");
+    }
+  });
+
+  it("passes non-google providers through unchanged", () => {
+    for (const p of ["github", "google", "slack", "zoom", "linear", "salesforce", "microsoft", "nope"]) {
+      expect(refreshProviderKeyFor(p)).toBe(p);
+    }
+  });
+});
+
 describe("refreshOAuthToken", () => {
+  it("refreshes a google-drive slug via the shared google strategy", async () => {
+    mocks.requireEnv.mockReturnValue({
+      GOOGLE_DATA_CLIENT_ID: "gid",
+      GOOGLE_DATA_CLIENT_SECRET: "gsecret",
+    });
+    mocks.fetchMock.mockResolvedValue(jsonResponse({ access_token: "new", expires_in: 3599 }));
+    const r = await refreshOAuthToken("google-drive", "tok");
+    expect(isRefreshError(r)).toBe(false);
+    expect(mocks.fetchMock).toHaveBeenCalledWith(
+      "https://oauth2.googleapis.com/token",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
   it("returns unsupported_provider for an unknown provider", async () => {
     const r = await refreshOAuthToken("nope", "tok");
     expect(r).toEqual({ error: "unsupported_provider" });

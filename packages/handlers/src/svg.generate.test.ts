@@ -11,6 +11,7 @@ vi.mock("@oxagen/ai", () => ({
   // Prompt-registry wiring (svg.generate now resolves its system prompt through
   // the registry so workspace overrides/append apply). Passthrough in tests.
   loadWorkspacePromptConfig: vi.fn(async () => ({})),
+  loadWorkspacePromptConfigSafe: vi.fn(async () => ({})),
   resolvePrompt: (a: { baseline: string }) => a.baseline,
   svgGeneratePrompt: (w: number, h: number) => `svg baseline ${w}x${h}`,
   enhancePromptIfInsufficient: vi.fn(async (a: { prompt: string }) => ({

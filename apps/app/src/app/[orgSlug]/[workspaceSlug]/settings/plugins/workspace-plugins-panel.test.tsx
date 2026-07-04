@@ -98,6 +98,16 @@ vi.mock("./registry-manager", () => ({
   RegistryManager: () => <div data-testid="registry-manager" />,
 }));
 
+vi.mock("@/components/ui/alert", () => ({
+  Alert: ({ children }: { children: React.ReactNode }) => (
+    <div role="alert">{children}</div>
+  ),
+  AlertTitle: ({ children }: { children: React.ReactNode }) => <h5>{children}</h5>,
+  AlertDescription: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+}));
+
 vi.mock("@/lib/plugin-icon", () => ({
   isRenderableImageUrl: (url: unknown) =>
     typeof url === "string" && url.startsWith("https://"),
@@ -214,6 +224,7 @@ function makeActions(overrides: {
 function renderPanel(
   plugins: InstalledPlugin[],
   actions: ReturnType<typeof makeActions>,
+  loadError = false,
 ) {
   return render(
     <WorkspacePluginsPanel
@@ -223,6 +234,7 @@ function renderPanel(
       workspaceId="ws-id-1"
       initialPlugins={plugins}
       initialRegistries={EMPTY_REGISTRIES}
+      loadError={loadError}
       docsBaseUrl="https://docs.example.com"
       {...actions}
     />,
@@ -246,6 +258,19 @@ describe("WorkspacePluginsPanel — empty state", () => {
     expect(
       screen.getByTestId("ws-browse-marketplace-empty-btn"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("WorkspacePluginsPanel — load-error notice", () => {
+  it("renders a load-error notice when loadError is true", () => {
+    renderPanel([], makeActions(), true);
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByText(/couldn't load installed plugins/i)).toBeInTheDocument();
+  });
+
+  it("does not render the load-error notice when loadError is false", () => {
+    renderPanel([PLUGIN], makeActions(), false);
+    expect(screen.queryByText(/couldn't load installed plugins/i)).not.toBeInTheDocument();
   });
 });
 

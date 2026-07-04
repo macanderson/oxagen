@@ -3,9 +3,8 @@ import {
   generateObjectFor,
   resolvePrompt,
   svgGeneratePrompt,
-  loadWorkspacePromptConfig,
+  loadWorkspacePromptConfigSafe,
   enhancePromptIfInsufficient,
-  type PromptConfig,
 } from "@oxagen/ai";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { svgGenerate } from "@oxagen/oxagen/contracts/svg.generate";
@@ -60,9 +59,7 @@ export const svgGenerateHandler: CapabilityHandler<typeof svgGenerate> = async (
   // can override the svg.generate baseline (it's a curated-overridable key) and
   // any workspace's "additional instructions" are appended. Best-effort load —
   // a missing config simply yields the untouched baseline.
-  const promptConfig = await loadWorkspacePromptConfig(ctx.workspaceId).catch(
-    (): PromptConfig => ({}),
-  );
+  const promptConfig = await loadWorkspacePromptConfigSafe(ctx.workspaceId);
 
   // Auto-improve (Beta): when the workspace toggle is on (default), let the LLM
   // judge enhance an insufficient description before generation.

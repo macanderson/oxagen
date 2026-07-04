@@ -15,6 +15,13 @@ vi.mock("@oxagen/telemetry", () => ({
   insertEvents,
 }));
 
+// Capture the module's pino logger so we can assert the drop path is logged.
+const { pinoLogger } = vi.hoisted(() => ({
+  pinoLogger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+vi.mock("pino", () => ({ default: () => pinoLogger }));
+
 import { createClickHouseTraceStore } from "../trace-store";
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -24,6 +31,7 @@ const ARGS = { orgId: "org-1", workspaceId: "ws-1", surface: "agent" };
 beforeEach(() => {
   insertEvents.mockReset();
   insertEvents.mockResolvedValue(undefined);
+  pinoLogger.warn.mockReset();
 });
 
 describe("createClickHouseTraceStore — record", () => {
@@ -76,6 +84,24 @@ describe("createClickHouseTraceStore — record", () => {
 
     // Wait for the rejected promise to be swallowed
     await Promise.resolve();
+  });
+
+  it("logs a warning (turn event dropped) when insertEvents rejects — failure is observable, not silent", async () => {
+    insertEvents.mockRejectedValueOnce(new Error("ClickHouse down"));
+
+    const store = createClickHouseTraceStore(ARGS);
+    expect(() =>
+      store.record({ instruction: "x", changedFiles: [], steps: 1 }),
+    ).not.toThrow();
+
+    // Let the rejected void promise settle so the .catch handler runs.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(pinoLogger.warn).toHaveBeenCalledTimes(1);
+    const [ctx, msg] = pinoLogger.warn.mock.calls[0] as [Record<string, unknown>, string];
+    expect(ctx.orgId).toBe("org-1");
+    expect(msg).toContain("insertEvents failed");
   });
 
   it("handles undefined / partial trace gracefully", async () => {

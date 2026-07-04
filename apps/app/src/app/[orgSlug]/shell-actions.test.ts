@@ -39,6 +39,10 @@ const {
     tenantSelectIdx: number;
     // Tracks tenant-DB INSERT order: 1st insert is the conversation, 2nd the message.
     tenantInsertIdx: number;
+    // When set, the workspace-membership SELECT (1st tenant select) rejects with
+    // this error — simulates an RLS / tenancy failure so we can assert the
+    // membership check logs and fails closed.
+    membershipError: unknown;
   }
   const dbState: DbState = {
     orgRows: [{ id: "org-1" }],
@@ -49,6 +53,7 @@ const {
     systemCallIdx: 0,
     tenantSelectIdx: 0,
     tenantInsertIdx: 0,
+    membershipError: null,
   };
 
   const mockRunInTenantScope = vi.fn(
@@ -74,6 +79,15 @@ vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mockRunInTenantScope }));
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/agent/register", () => ({}));
+
+// Logger mock — assert the membership-check failure path logs before failing closed.
+const loggerMock = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
+}));
+vi.mock("@oxagen/handlers/logger", () => ({ logger: loggerMock }));
 
 // withSystemDb routes — first call resolves org, second resolves workspace.
 // Uses dbState.systemCallIdx (reset in beforeEach) to track global call order.
@@ -102,7 +116,10 @@ vi.mock("@oxagen/database", () => {
         //   3 — message history walk (msgRows; loadAgentConversationAction only)
         const limit = (_n: number) => {
           dbState.tenantSelectIdx++;
-          if (dbState.tenantSelectIdx === 1) return Promise.resolve(dbState.wsUserRows);
+          if (dbState.tenantSelectIdx === 1) {
+            if (dbState.membershipError) return Promise.reject(dbState.membershipError);
+            return Promise.resolve(dbState.wsUserRows);
+          }
           if (dbState.tenantSelectIdx === 3) return Promise.resolve(dbState.msgRows);
           return Promise.resolve(dbState.convRows);
         };
@@ -250,7 +267,21 @@ describe("wandSendAction — workspace membership gate", () => {
     dbState.systemCallIdx = 0;
     dbState.tenantSelectIdx = 0;
     dbState.tenantInsertIdx = 0;
+    dbState.membershipError = null;
     mockGetSession.mockResolvedValue(SESSION);
+  });
+
+  it("logs and treats the caller as a non-member when the membership check errors (RLS / tenancy failure)", async () => {
+    dbState.membershipError = new Error("RLS denied");
+    const res = await wandSendAction(sendFormData());
+    // Fail closed — the error must not grant access.
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("access");
+    // …but the failure is observable, not silent.
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "ws-1", userId: "user-1" }),
+      expect.stringContaining("workspace membership check errored"),
+    );
   });
 
   it("denies a non-member (zero membership rows) — no cross-workspace write", async () => {
@@ -368,6 +399,7 @@ describe("loadAgentConversationAction", () => {
     dbState.systemCallIdx = 0;
     dbState.tenantSelectIdx = 0;
     dbState.tenantInsertIdx = 0;
+    dbState.membershipError = null;
     mockGetSession.mockResolvedValue(SESSION);
   });
 

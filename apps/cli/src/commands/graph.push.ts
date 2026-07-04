@@ -23,7 +23,7 @@ import { createHash } from "node:crypto";
 import { generateObject } from "ai";
 import { buildCodeGraph } from "../daemon/code-graph/builder.js";
 import { createCodeGraphStore, defaultCodeGraphDbPath } from "../daemon/code-graph/store.js";
-import { apiPost } from "../lib/api.js";
+import { apiPost, apiPostOrThrow } from "../lib/api.js";
 import { getOrgId, getWorkspaceId } from "../lib/config.js";
 import { createGraphStore } from "@oxagen/engram";
 import { graphStorePath } from "./graph.pull.js";
@@ -46,6 +46,14 @@ export interface GraphPushOptions {
   full?: boolean;
   repo?: string;
   json?: boolean;
+  /**
+   * Throw on any failure (missing scope, not-a-git-repo, API error) instead of
+   * writing to stderr + setting `process.exitCode`. Used by non-command callers
+   * like `oxagen init` that must degrade GRACEFULLY (catch + continue) rather
+   * than poison the process exit code or hard-exit via `apiPost`. Defaults to
+   * false so the `oxagen graph push` command keeps its exit-1-on-error contract.
+   */
+  throwOnError?: boolean;
   /** @internal test seam: override the DuckDB path. */
   _duckdbPath?: string;
   /** @internal test seam: override the git root (workspace root). */
@@ -345,10 +353,11 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
   const workspace = getWorkspaceId();
 
   if (!org || !workspace) {
-    process.stderr.write(
+    const msg =
       "Missing org or workspace. Run `oxagen config` or set " +
-        "OXAGEN_ORG_ID / OXAGEN_WORKSPACE_ID.\n",
-    );
+      "OXAGEN_ORG_ID / OXAGEN_WORKSPACE_ID.";
+    if (opts.throwOnError) throw new Error(msg);
+    process.stderr.write(`${msg}\n`);
     process.exitCode = 1;
     return;
   }
@@ -358,9 +367,10 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
   try {
     root = opts._gitRoot ?? gitRoot(process.cwd());
   } catch {
-    process.stderr.write(
-      "Not inside a git repository. `oxagen graph push` requires a git repo.\n",
-    );
+    const msg =
+      "Not inside a git repository. `oxagen graph push` requires a git repo.";
+    if (opts.throwOnError) throw new Error(msg);
+    process.stderr.write(`${msg}\n`);
     process.exitCode = 1;
     return;
   }
@@ -484,7 +494,11 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
         `${tombstones.length} tombstone(s)...\n`,
     );
 
-    const result = await apiPost<PushResult>("graph/sync/push", envelope);
+    // `apiPost` hard-exits the process on API error (correct for the one-shot
+    // command), but a graceful caller (`throwOnError`) needs a catchable throw.
+    const result = opts.throwOnError
+      ? await apiPostOrThrow<PushResult>("graph/sync/push", envelope)
+      : await apiPost<PushResult>("graph/sync/push", envelope);
 
     // Persist the cursor on success.
     await store.setCodeCursor(org, workspace, repo, currentSha);

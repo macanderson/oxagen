@@ -4,10 +4,12 @@ import { videoGenerate } from "@oxagen/oxagen/contracts/video.generate";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
-// Stub video generation tool. Dispatches through kernel.invoke() so IAM
-// enforcement, ClickHouse audit, and tool_invocations metering apply uniformly.
-// The handler is a typed no-throw stub that logs intent and returns a queued
-// job reference — no actual video rendering runs until the pipeline is wired.
+// Video generation tool. Dispatches through kernel.invoke() so IAM enforcement,
+// ClickHouse audit, and tool_invocations metering apply uniformly. The handler
+// creates a `pending` generated_assets row and enqueues `agent/video.render` on
+// Inngest — the async worker renders the video, uploads to blob, and flips the
+// row to `ready`. Returns a queued job reference (status, jobId, serving URL,
+// render directive) immediately without awaiting the render.
 
 export const schema = {
   ...videoGenerate.input.shape,

@@ -107,7 +107,13 @@ export function createPlatformMemoryProvider(args: MemoryAdapterArgs): MemoryPro
           embedding: emb,
           limit: 4,
           recallThreshold: 0.7,
-        }).catch(() => []);
+        }).catch((err) => {
+          logger.warn(
+            { err },
+            "agent.memory-adapter: peer recall failed — continuing without peer lines",
+          );
+          return [];
+        });
 
         if (rows.length === 0 && peers.length === 0) return "";
 

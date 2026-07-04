@@ -18,6 +18,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { GITHUB_MCP_SERVER } from "@oxagen/plugins";
+import { logger } from "@oxagen/handlers/logger";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 
@@ -189,7 +190,13 @@ export async function getGithubMcpInstallStatus(
           )
           .limit(1),
       ),
-  ).catch(() => [] as { id: string }[]);
+  ).catch((err) => {
+    logger.error(
+      { err, orgSlug, workspaceSlug },
+      "github-mcp: installed-plugin listing read failed — reporting as not-installed",
+    );
+    return [] as { id: string }[];
+  });
 
   if (!listing) {
     return { installed: false, orgListingId: null, connected: false, healthStatus: null };
@@ -214,7 +221,13 @@ export async function getGithubMcpInstallStatus(
           )
           .limit(1),
       ),
-  ).catch(() => [] as { healthStatus: string }[]);
+  ).catch((err) => {
+    logger.error(
+      { err, orgSlug, workspaceSlug },
+      "github-mcp: mcp_servers health read failed — reporting as not-installed",
+    );
+    return [] as { healthStatus: string }[];
+  });
 
   const healthStatus = mcpRow?.healthStatus ?? null;
   const connected = healthStatus === "healthy";

@@ -27,9 +27,18 @@ import {
   getManagedServers,
   checkToolDenied,
 } from "@oxagen/mcp-config/managed";
-import type { McpServerConfig } from "@oxagen/mcp-config/schema";
+import type {
+  McpServerConfig,
+  ManagedPolicy,
+  Settings,
+} from "@oxagen/mcp-config/schema";
+import type { Tool } from "@oxagen/ai";
 import type { CapabilityContext } from "../../types";
-import { connectMcp, materializeMcpTools } from "../../dispatch/mcp-client";
+import {
+  connectMcp,
+  connectMcpStdio,
+  materializeMcpTools,
+} from "../../dispatch/mcp-client";
 import {
   registerPluginType,
   type ContributedRawTool,
@@ -40,6 +49,103 @@ const logger = pino({
   level: process.env.LOG_LEVEL ?? "info",
   base: { app: "agent.plugin-types.file-mcp" },
 });
+
+/**
+ * SECURITY GATE for stdio-transport MCP servers.
+ *
+ * An stdio server declaration causes the runtime to SPAWN AN ARBITRARY LOCAL
+ * PROCESS (its `command`). This contributor is registered into the shared
+ * `materializeTools()` pipeline that runs SERVER-SIDE inside apps/api's chat
+ * stream (see materialize-tools.ts) — so enabling stdio spawning by default
+ * would let a workspace-scoped config execute arbitrary commands on the API
+ * host. It is therefore OFF by default and gated behind an explicit opt-in env
+ * flag intended for a trusted local/CLI runtime only. HTTP transports carry no
+ * such risk and are always processed.
+ */
+function stdioSpawnEnabled(): boolean {
+  const v = process.env.OXAGEN_ALLOW_STDIO_MCP;
+  return v === "1" || v === "true";
+}
+
+// Minimal glob → RegExp: `*` matches any run of chars, `?` a single char;
+// everything else is literal. Used only for the org-managed command allowlist.
+function globToRegExp(glob: string): RegExp {
+  const escaped = glob
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, ".*")
+    .replace(/\?/g, ".");
+  return new RegExp(`^${escaped}$`);
+}
+
+/**
+ * Defense-in-depth on top of the env gate: when the org managed policy declares
+ * an `allowedCommands` allowlist, a stdio server's `command` must match one of
+ * its globs. An empty/absent allowlist means "no additional restriction" (the
+ * env gate remains the deciding factor).
+ */
+function commandAllowedByPolicy(
+  command: string,
+  policy: ManagedPolicy | undefined,
+): boolean {
+  const patterns = policy?.allowedCommands;
+  if (!patterns || patterns.length === 0) return true;
+  return patterns.some((p) => globToRegExp(p).test(command));
+}
+
+/**
+ * Apply the uniform visibility → permission → managed-denylist filtering to a
+ * server's materialized tools and return the contributable raw tools. Shared by
+ * the HTTP and stdio branches so both transports enforce the exact same gates.
+ */
+function collectAllowedTools(
+  serverName: string,
+  mcpTools: Record<string, Tool>,
+  settings: Settings,
+  managedPolicy: ManagedPolicy | undefined,
+): ContributedRawTool[] {
+  const prefix = `file-mcp.${serverName}.`;
+  const stripPrefix = (key: string) =>
+    key.startsWith(prefix) ? key.slice(prefix.length) : key;
+
+  const allToolNames = Object.keys(mcpTools).map(stripPrefix);
+
+  // Apply tool visibility filtering
+  const visibilityConfig = settings.toolVisibility?.[serverName];
+  const visibleTools = filterToolVisibility(allToolNames, visibilityConfig);
+
+  // Apply permission filtering (remove denied tools before they reach the model)
+  const nonDeniedTools = getNonDeniedTools(
+    serverName,
+    visibleTools,
+    settings.permissions,
+  );
+
+  // Apply managed policy tool denylist
+  const allowedTools = nonDeniedTools.filter(
+    (tool) => checkToolDenied(serverName, tool, managedPolicy) === null,
+  );
+  const allowedSet = new Set(allowedTools);
+
+  const out: ContributedRawTool[] = [];
+  for (const [rawKey, rawTool] of Object.entries(mcpTools)) {
+    const toolName = stripPrefix(rawKey);
+    if (!allowedSet.has(toolName)) continue;
+
+    const execute = rawTool.execute;
+    if (typeof execute !== "function") continue;
+
+    out.push({
+      realName: rawKey,
+      // AI SDK v7 allows function-valued tool descriptions (resolved with
+      // call options we don't have here) — only static strings carry over.
+      description:
+        typeof rawTool.description === "string" ? rawTool.description : undefined,
+      execute: execute as ContributedRawTool["execute"],
+      externalServerId: `file:${serverName}`,
+    });
+  }
+  return out;
+}
 
 async function contributeFileBasedMcpTools(
   _ctx: CapabilityContext,
@@ -63,14 +169,53 @@ async function contributeFileBasedMcpTools(
     // Skip disabled servers
     if ("disabled" in config && config.disabled) continue;
 
-    // Only handle HTTP-based transports (stdio requires process spawning
-    // which is a separate transport — future enhancement)
+    // stdio-transport servers spawn a local process — handled by a dedicated,
+    // security-gated branch (see stdioSpawnEnabled + connectMcpStdio below).
     if (config.transport === "stdio") {
-      // TODO: stdio transport support via StdioClientTransport
-      logger.debug(
-        { serverName },
-        "skipping stdio server (not yet supported in runtime)",
-      );
+      if (!stdioSpawnEnabled()) {
+        // Default server-side posture: never spawn arbitrary local processes.
+        logger.warn(
+          { serverName, command: config.command },
+          "skipping stdio MCP server: local process spawning is disabled — set OXAGEN_ALLOW_STDIO_MCP=1 in a trusted local/CLI runtime to enable",
+        );
+        continue;
+      }
+      if (!commandAllowedByPolicy(config.command, managed?.managedPolicy)) {
+        logger.warn(
+          { serverName, command: config.command },
+          "skipping stdio MCP server: command not permitted by managed policy allowedCommands",
+        );
+        continue;
+      }
+      try {
+        // Spawn the child, list its tools, and contribute them exactly like an
+        // HTTP server. The connection stays open so the tools remain callable;
+        // the child is reaped on process exit / closeStdioMcpTransports().
+        const client = await connectMcpStdio({
+          command: config.command,
+          args: config.args,
+          env: config.env,
+          cwd: config.cwd ?? projectRoot,
+        });
+        const mcpTools = await materializeMcpTools(
+          client,
+          `file-mcp.${serverName}`,
+        );
+        out.push(
+          ...collectAllowedTools(
+            serverName,
+            mcpTools,
+            settings,
+            managed?.managedPolicy,
+          ),
+        );
+      } catch (err) {
+        // Per-server failure is isolated — log and continue.
+        logger.error(
+          { serverName, err },
+          "failed to load tools from stdio MCP server",
+        );
+      }
       continue;
     }
 
@@ -122,58 +267,14 @@ async function contributeFileBasedMcpTools(
         `file-mcp.${serverName}`,
       );
 
-      // Get tool names for filtering
-      const allToolNames = Object.keys(mcpTools).map((key) => {
-        // key is `file-mcp.<serverName>.<toolName>` — extract toolName
-        const prefix = `file-mcp.${serverName}.`;
-        return key.startsWith(prefix) ? key.slice(prefix.length) : key;
-      });
-
-      // Apply tool visibility filtering
-      const visibilityConfig = settings.toolVisibility?.[serverName];
-      const visibleTools = filterToolVisibility(allToolNames, visibilityConfig);
-
-      // Apply permission filtering (remove denied tools before they reach the model)
-      const nonDeniedTools = getNonDeniedTools(
-        serverName,
-        visibleTools,
-        settings.permissions,
-      );
-
-      // Apply managed policy tool denylist
-      const allowedTools = nonDeniedTools.filter((tool) => {
-        const violation = checkToolDenied(
+      out.push(
+        ...collectAllowedTools(
           serverName,
-          tool,
+          mcpTools,
+          settings,
           managed?.managedPolicy,
-        );
-        return violation === null;
-      });
-
-      // Build the allowed tool set
-      const allowedSet = new Set(allowedTools);
-
-      for (const [rawKey, rawTool] of Object.entries(mcpTools)) {
-        const prefix = `file-mcp.${serverName}.`;
-        const toolName = rawKey.startsWith(prefix)
-          ? rawKey.slice(prefix.length)
-          : rawKey;
-
-        if (!allowedSet.has(toolName)) continue;
-
-        const execute = rawTool.execute;
-        if (typeof execute !== "function") continue;
-
-        out.push({
-          realName: rawKey,
-          // AI SDK v7 allows function-valued tool descriptions (resolved with
-          // call options we don't have here) — only static strings carry over.
-          description:
-            typeof rawTool.description === "string" ? rawTool.description : undefined,
-          execute: execute as ContributedRawTool["execute"],
-          externalServerId: `file:${serverName}`,
-        });
-      }
+        ),
+      );
     } catch (err) {
       // Per-server failure is isolated — log and continue
       logger.error(

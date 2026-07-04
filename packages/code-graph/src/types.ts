@@ -77,14 +77,14 @@ export interface ParseResult {
   title?: string;
   error?: string;
   /**
-   * Call sites extracted from the source (TypeScript/JavaScript only).
-   * Omitted (undefined) for Python, Markdown, and unknown files.
+   * Call sites extracted from the source (TypeScript/JavaScript and Python).
+   * Omitted (undefined) for Markdown and unknown files.
    */
   calls?: CallSite[];
   /**
-   * Import specifiers extracted from the source (TypeScript/JavaScript only).
-   * Includes both relative and bare specifiers; callers resolve them.
-   * Omitted (undefined) for Python, Markdown, and unknown files.
+   * Import specifiers extracted from the source (TypeScript/JavaScript and
+   * Python). Includes both relative and bare specifiers; callers resolve them.
+   * Omitted (undefined) for Markdown and unknown files.
    */
   imports?: ImportSite[];
 }
