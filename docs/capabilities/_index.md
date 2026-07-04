@@ -47,6 +47,10 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.tool.list](agent.tool.list.md) — List the capabilities surfaced as agent tools for the active workspace, filtered by role, entitlements, and denylist
 - [agent.ui.render](agent.ui.render.md) — Render a structured UI component from an agent response; the client maps the component type to a React renderer
 
+## A2A (1)
+
+- [a2a.card.get](a2a.card.get.md) — Read the workspace's A2A (Agent2Agent) protocol Agent Card advertising its exposed agents as skills, its JSON-RPC transport endpoint, and its authentication scheme
+
 ## Api (3)
 
 - [api.key.create](api.key.create.md) — Create a new API key scoped to the requesting org; the raw key is shown once and never retrievable
