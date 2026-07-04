@@ -1714,3 +1714,257 @@ describe("MessageComposer — queue management", () => {
     expect(screen.queryByText(/messages? queued/)).not.toBeInTheDocument();
   });
 });
+
+describe("MessageComposer — attachments", () => {
+  // Deterministic stand-in for the browser XMLHttpRequest the composer uses to
+  // upload attachments with real progress events. Each `new XMLHttpRequest()`
+  // is captured in `instances` so a test can drive its lifecycle manually
+  // (progress → load/error) instead of hitting the network.
+  class FakeXHR {
+    static instances: FakeXHR[] = [];
+    upload: { onprogress: ((e: { lengthComputable: boolean; loaded: number; total: number }) => void) | null } = {
+      onprogress: null,
+    };
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    onabort: (() => void) | null = null;
+    status = 0;
+    responseText = "";
+    aborted = false;
+    method = "";
+    url = "";
+    sentBody: FormData | null = null;
+
+    constructor() {
+      FakeXHR.instances.push(this);
+    }
+    open(method: string, url: string): void {
+      this.method = method;
+      this.url = url;
+    }
+    send(body: FormData): void {
+      this.sentBody = body;
+    }
+    abort(): void {
+      this.aborted = true;
+      this.onabort?.();
+    }
+    respond(status: number, body: unknown): void {
+      this.status = status;
+      this.responseText = JSON.stringify(body);
+      this.onload?.();
+    }
+  }
+
+  beforeEach(() => {
+    FakeXHR.instances = [];
+    vi.stubGlobal("XMLHttpRequest", FakeXHR as unknown as typeof XMLHttpRequest);
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn(() => "blob:mock-preview"),
+      revokeObjectURL: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function pngFile(name = "cat.png"): File {
+    return new File([new Uint8Array(8)], name, { type: "image/png" });
+  }
+
+  it("does not render the attach button when workspaceId is omitted", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Attach file" })).not.toBeInTheDocument();
+  });
+
+  it("renders the attach button when workspaceId is provided", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        workspaceId="ws-1"
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Attach file" })).toBeInTheDocument();
+  });
+
+  it("uploads a selected file immediately and shows a chip while uploading", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId="cnv-1"
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        workspaceId="ws-1"
+      />,
+    );
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = pngFile();
+    await act(async () => {
+      Object.defineProperty(input, "files", { value: [file], configurable: true });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(screen.getByText("cat.png")).toBeInTheDocument();
+    expect(FakeXHR.instances).toHaveLength(1);
+    const xhr = FakeXHR.instances[0]!;
+    expect(xhr.method).toBe("POST");
+    expect(xhr.url).toBe("/api/v1/upload/attachment");
+    expect(xhr.sentBody?.get("kind")).toBe("image");
+    expect(xhr.sentBody?.get("workspaceId")).toBe("ws-1");
+    expect(xhr.sentBody?.get("conversationId")).toBe("cnv-1");
+  });
+
+  it("disables the send button while an attachment is uploading", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        workspaceId="ws-1"
+      />,
+    );
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      Object.defineProperty(input, "files", { value: [pngFile()], configurable: true });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(screen.getByRole("button", { name: "Waiting for attachments to finish uploading" })).toBeDisabled();
+  });
+
+  it("marks the chip done and includes the attachment in the submitted FormData once upload resolves", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        workspaceId="ws-1"
+      />,
+    );
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      Object.defineProperty(input, "files", { value: [pngFile()], configurable: true });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await act(async () => {
+      FakeXHR.instances[0]!.respond(201, {
+        publicId: "gen_abc",
+        kind: "image",
+        name: "cat.png",
+        mimeType: "image/png",
+        url: "/api/v1/assets/gen_abc",
+        sizeBytes: 8,
+      });
+    });
+
+    // Upload done — send button is enabled again.
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Send message" })).not.toBeDisabled();
+    });
+
+    const ta = screen.getByRole("textbox");
+    await userEvent.type(ta, "look at this");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    const attachments = JSON.parse(fd.get("attachments") as string);
+    expect(attachments).toEqual([
+      {
+        publicId: "gen_abc",
+        kind: "image",
+        name: "cat.png",
+        mimeType: "image/png",
+        url: "/api/v1/assets/gen_abc",
+        sizeBytes: 8,
+      },
+    ]);
+
+    // Attachment strip clears after a successful submit.
+    expect(screen.queryByText("cat.png")).not.toBeInTheDocument();
+  });
+
+  it("shows an error chip and does not block send when upload fails", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        workspaceId="ws-1"
+      />,
+    );
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      Object.defineProperty(input, "files", { value: [pngFile()], configurable: true });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      FakeXHR.instances[0]!.respond(413, { error: "File exceeds the 5 MB limit for image attachments" });
+    });
+    expect(screen.getByLabelText("Failed to upload cat.png")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send message" })).not.toBeDisabled();
+  });
+
+  it("removing an in-flight attachment aborts its upload", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        workspaceId="ws-1"
+      />,
+    );
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      Object.defineProperty(input, "files", { value: [pngFile()], configurable: true });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Remove cat.png" }));
+    expect(FakeXHR.instances[0]!.aborted).toBe(true);
+    expect(screen.queryByText("cat.png")).not.toBeInTheDocument();
+  });
+
+  it("rejects an unsupported file type with an error chip", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        workspaceId="ws-1"
+      />,
+    );
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const badFile = new File([new Uint8Array(4)], "app.exe", { type: "application/x-msdownload" });
+    await act(async () => {
+      Object.defineProperty(input, "files", { value: [badFile], configurable: true });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(screen.getByLabelText("Failed to upload app.exe")).toBeInTheDocument();
+    expect(FakeXHR.instances).toHaveLength(0);
+  });
+});

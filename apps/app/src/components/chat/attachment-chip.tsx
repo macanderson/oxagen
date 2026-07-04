@@ -33,6 +33,38 @@ export interface PendingAttachment {
 }
 
 /**
+ * The durable, wire-shape reference to a successfully uploaded attachment —
+ * what the composer sends on submit (`sendMessageAction`'s `attachments` field,
+ * persisted onto `messages.metadata.attachments`) and what the client renders
+ * optimistically / message-bubble.tsx renders from persisted history. A subset
+ * of `conversationAssetItem` (packages/oxagen/src/contracts/conversation.files.list.ts)
+ * — only the fields the composer/bubble actually need, always derived from a
+ * `PendingAttachment` whose upload has reached `status: "done"`.
+ */
+export interface ConversationAttachmentRef {
+  publicId: string;
+  kind: "image" | "video" | "document";
+  name: string;
+  mimeType: string;
+  /** Access-controlled serving URL (e.g. /api/v1/assets/gen_…). */
+  url: string;
+  sizeBytes?: number;
+}
+
+/** Narrow a completed `PendingAttachment` to the wire-shape ref, or null if not yet done. */
+export function toAttachmentRef(a: PendingAttachment): ConversationAttachmentRef | null {
+  if (a.status !== "done" || !a.publicId || !a.url) return null;
+  return {
+    publicId: a.publicId,
+    kind: a.kind,
+    name: a.name,
+    mimeType: a.mimeType,
+    url: a.url,
+    sizeBytes: a.sizeBytes,
+  };
+}
+
+/**
  * A single pending or sent attachment chip in the composer's attachment strip.
  * Shows an image thumbnail (once one is available) or a kind icon, the file
  * name, an upload progress bar while uploading, and a remove control.

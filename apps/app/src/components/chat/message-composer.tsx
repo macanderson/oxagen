@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Brain, ImageIcon, Send, Video } from "lucide-react";
+import { Brain, ImageIcon, Paperclip, Send, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -24,6 +24,13 @@ import {
 import type { McpServerSummary } from "./mcp-types";
 import { McpServerPicker } from "./mcp-server-picker";
 import { MessageQueue } from "./message-queue";
+import {
+  AttachmentChip,
+  toAttachmentRef,
+  type ConversationAttachmentRef,
+  type PendingAttachment,
+} from "./attachment-chip";
+import { extractVideoFrames } from "./extract-video-frames";
 
 export interface ComposerAction {
   (formData: FormData): Promise<{
@@ -48,6 +55,8 @@ interface QueuedMessage {
   content: string;
   /** The model state at the time the user hit submit. */
   modelState: ComposerModelState;
+  /** Attachments already uploaded (status: "done") at the time of queuing. */
+  attachments: ConversationAttachmentRef[];
 }
 
 /** Monotonic counter for queued-message ids (stable, collision-free per mount). */
@@ -55,6 +64,28 @@ let queueIdCounter = 0;
 function nextQueueId(): string {
   queueIdCounter += 1;
   return `q-${queueIdCounter}`;
+}
+
+/** Monotonic counter for locally-generated attachment ids (stable per mount). */
+let attachmentIdCounter = 0;
+function nextAttachmentId(): string {
+  attachmentIdCounter += 1;
+  return `att-${attachmentIdCounter}`;
+}
+
+/** Map a browser MIME type to an attachment kind, or null when unsupported. */
+function attachmentKindFor(mimeType: string): "image" | "video" | "document" | null {
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("video/")) return "video";
+  if (mimeType === "application/pdf") return "document";
+  return null;
+}
+
+/** Serialize completed attachments onto a FormData field the server actions parse. */
+function setAttachmentsField(fd: FormData, attachments: ConversationAttachmentRef[]): void {
+  if (attachments.length > 0) {
+    fd.set("attachments", JSON.stringify(attachments));
+  }
 }
 
 export function MessageComposer({
@@ -71,6 +102,7 @@ export function MessageComposer({
   initialModelState,
   availableMcpServers,
   onInputHasContentChange,
+  workspaceId,
 }: {
   conversationId: string | null;
   parentMessageId: string | null;
@@ -90,6 +122,12 @@ export function MessageComposer({
   initialModelState?: ComposerModelState;
   /** Available MCP servers for the per-turn activation picker. */
   availableMcpServers?: McpServerSummary[];
+  /**
+   * Workspace id used to authorize `/api/v1/upload/attachment`. Omit to hide
+   * the attach affordance entirely (e.g. a host surface that only has slugs,
+   * not a resolved workspace id, wired yet).
+   */
+  workspaceId?: string;
   /**
    * Called whenever the textarea transitions between empty and non-empty.
    * `true`  → user has typed content (hide suggested prompts).
@@ -143,6 +181,236 @@ export function MessageComposer({
   // FIFO queue for messages submitted while a stream is in flight (queue mode).
   const [queue, setQueue] = React.useState<QueuedMessage[]>([]);
 
+  // ── Attachments ──────────────────────────────────────────────────────────
+  // Pending/uploaded attachments for the NEXT message to be sent. Uploaded
+  // immediately on attach (see uploadAttachment) so the composer only ever
+  // submits already-durable publicId refs — never inline bytes (the chat
+  // stream body's 32 KiB content cap must never carry binary payloads).
+  const [attachments, setAttachments] = React.useState<PendingAttachment[]>([]);
+  const attachmentsRef = React.useRef(attachments);
+  React.useEffect(() => {
+    attachmentsRef.current = attachments;
+  }, [attachments]);
+  const inFlightUploadsRef = React.useRef<Map<string, XMLHttpRequest>>(new Map());
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const anyUploading = attachments.some((a) => a.status === "uploading");
+
+  // Revoke any un-revoked local preview URLs on unmount (a still-uploading or
+  // errored attachment's blob: URL would otherwise leak for the tab's life).
+  React.useEffect(
+    () => () => {
+      for (const a of attachmentsRef.current) {
+        if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+      }
+    },
+    [],
+  );
+
+  const uploadAttachment = React.useCallback(
+    (localId: string, file: File, kind: "image" | "video" | "document") => {
+      if (!workspaceId) return;
+      const fd = new FormData();
+      fd.set("file", file);
+      fd.set("kind", kind);
+      fd.set("workspaceId", workspaceId);
+      if (conversationIdRef.current) fd.set("conversationId", conversationIdRef.current);
+
+      const xhr = new XMLHttpRequest();
+      inFlightUploadsRef.current.set(localId, xhr);
+      xhr.open("POST", "/api/v1/upload/attachment");
+      xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable) return;
+        const progress = Math.round((e.loaded / e.total) * 100);
+        setAttachments((prev) =>
+          prev.map((a) => (a.id === localId ? { ...a, progress } : a)),
+        );
+      };
+      xhr.onload = () => {
+        inFlightUploadsRef.current.delete(localId);
+        const ok = xhr.status >= 200 && xhr.status < 300;
+        let body: {
+          publicId?: string;
+          kind?: string;
+          name?: string;
+          mimeType?: string;
+          url?: string;
+          sizeBytes?: number;
+          error?: string;
+        } = {};
+        try {
+          body = JSON.parse(xhr.responseText) as typeof body;
+        } catch {
+          // Non-JSON body (e.g. an upstream 502 HTML page) — treat as failure below.
+        }
+        setAttachments((prev) =>
+          prev.map((a) => {
+            if (a.id !== localId) return a;
+            if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+            if (!ok || !body.publicId || !body.url) {
+              return {
+                ...a,
+                status: "error",
+                error: body.error ?? `Upload failed (HTTP ${xhr.status})`,
+                previewUrl: undefined,
+              };
+            }
+            return {
+              ...a,
+              status: "done",
+              progress: 100,
+              publicId: body.publicId,
+              url: body.url,
+              mimeType: body.mimeType ?? a.mimeType,
+              sizeBytes: body.sizeBytes,
+              previewUrl: undefined,
+            };
+          }),
+        );
+      };
+      xhr.onerror = () => {
+        inFlightUploadsRef.current.delete(localId);
+        setAttachments((prev) =>
+          prev.map((a) => (a.id === localId ? { ...a, status: "error", error: "Network error" } : a)),
+        );
+      };
+      xhr.onabort = () => {
+        inFlightUploadsRef.current.delete(localId);
+      };
+      xhr.send(fd);
+    },
+    [workspaceId],
+  );
+
+  /**
+   * Best-effort: for a video attachment, extract a handful of keyframes
+   * in-browser and upload each as an ordinary "image" attachment, so a
+   * non-Gemini model can still "see" a rough visual summary of the video (the
+   * stream route only forwards raw video bytes when the resolved model
+   * supports video input — see supportsVideoInput). Never blocks or fails the
+   * video's own upload; extraction failures are silently skipped.
+   */
+  const extractAndUploadVideoFrames = React.useCallback(
+    (file: File) => {
+      if (!workspaceId) return;
+      void extractVideoFrames(file).then((frames) => {
+        for (const frame of frames) {
+          const frameFile = new File(
+            [frame.blob],
+            `${file.name.replace(/\.[^.]+$/, "")}-frame-${Math.round(frame.atSeconds)}s.webp`,
+            { type: frame.blob.type || "image/webp" },
+          );
+          const localId = nextAttachmentId();
+          setAttachments((prev) => [
+            ...prev,
+            {
+              id: localId,
+              kind: "image",
+              name: frameFile.name,
+              mimeType: frameFile.type,
+              status: "uploading",
+              progress: 0,
+            },
+          ]);
+          uploadAttachment(localId, frameFile, "image");
+        }
+      });
+    },
+    [workspaceId, uploadAttachment],
+  );
+
+  /** Attach one or more files: validate type, enqueue as "uploading", upload immediately. */
+  const addFiles = React.useCallback(
+    (files: FileList | File[]) => {
+      if (!workspaceId) return;
+      for (const file of Array.from(files)) {
+        const kind = attachmentKindFor(file.type);
+        const localId = nextAttachmentId();
+        if (!kind) {
+          setAttachments((prev) => [
+            ...prev,
+            {
+              id: localId,
+              kind: "document",
+              name: file.name,
+              mimeType: file.type,
+              status: "error",
+              error: "Unsupported file type",
+            },
+          ]);
+          continue;
+        }
+        const previewUrl = kind === "image" ? URL.createObjectURL(file) : undefined;
+        setAttachments((prev) => [
+          ...prev,
+          {
+            id: localId,
+            kind,
+            name: file.name,
+            mimeType: file.type,
+            status: "uploading",
+            progress: 0,
+            previewUrl,
+          },
+        ]);
+        uploadAttachment(localId, file, kind);
+        if (kind === "video") extractAndUploadVideoFrames(file);
+      }
+    },
+    [workspaceId, uploadAttachment, extractAndUploadVideoFrames],
+  );
+
+  const removeAttachment = React.useCallback((id: string) => {
+    const xhr = inFlightUploadsRef.current.get(id);
+    if (xhr) {
+      xhr.abort();
+      inFlightUploadsRef.current.delete(id);
+    }
+    setAttachments((prev) => {
+      const target = prev.find((a) => a.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((a) => a.id !== id);
+    });
+  }, []);
+
+  const onPaste = React.useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      if (!workspaceId) return;
+      const items = e.clipboardData?.items;
+      if (!items || items.length === 0) return;
+      const imageFiles: File[] = [];
+      for (const item of Array.from(items)) {
+        if (item.kind === "file" && item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) imageFiles.push(file);
+        }
+      }
+      if (imageFiles.length > 0) addFiles(imageFiles);
+    },
+    [workspaceId, addFiles],
+  );
+
+  const [isDraggingOver, setIsDraggingOver] = React.useState(false);
+  const onDragOver = React.useCallback(
+    (e: React.DragEvent<HTMLFormElement>) => {
+      if (!workspaceId) return;
+      if (!e.dataTransfer?.types.includes("Files")) return;
+      e.preventDefault();
+      setIsDraggingOver(true);
+    },
+    [workspaceId],
+  );
+  const onDragLeave = React.useCallback(() => setIsDraggingOver(false), []);
+  const onDrop = React.useCallback(
+    (e: React.DragEvent<HTMLFormElement>) => {
+      if (!workspaceId) return;
+      if (!e.dataTransfer?.files?.length) return;
+      e.preventDefault();
+      setIsDraggingOver(false);
+      addFiles(e.dataTransfer.files);
+    },
+    [workspaceId, addFiles],
+  );
+
   // Resolve which text model is active (for reasoning capability check).
   const resolvedTextModelId =
     model.generate === null
@@ -189,6 +457,7 @@ export function MessageComposer({
   function buildFormData(
     form: HTMLFormElement,
     modelSnapshot: ComposerModelState,
+    attachmentRefs: ConversationAttachmentRef[],
   ): FormData {
     const fd = new FormData(form);
     if (conversationId) fd.set("conversationId", conversationId);
@@ -217,6 +486,7 @@ export function MessageComposer({
     if (activeServerIds.size > 0) {
       fd.set("activeServerIds", JSON.stringify([...activeServerIds]));
     }
+    setAttachmentsField(fd, attachmentRefs);
     return fd;
   }
 
@@ -233,24 +503,31 @@ export function MessageComposer({
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (disabled) return;
+    if (disabled || anyUploading) return;
 
     const contentRaw = (formRef.current?.elements.namedItem("content") as HTMLTextAreaElement | null)?.value ?? "";
     if (contentRaw.trim().length === 0) return;
+
+    const readyAttachments = attachments.map(toAttachmentRef).filter((a): a is ConversationAttachmentRef => a !== null);
 
     // If a stream is in flight, honour the pending-prompt behavior.
     if (isStreaming && !pending) {
       if (pendingPromptBehavior === "interrupt") {
         // Abort the current stream, then submit immediately.
         onInterrupt?.();
-        const fd = buildFormData(e.currentTarget, model);
+        const fd = buildFormData(e.currentTarget, model, readyAttachments);
         formRef.current?.reset();
+        setAttachments([]);
         dispatch(fd);
       } else {
         // queue mode: capture the message and model state; clear the textarea.
         const snapshot = model;
         const content = contentRaw;
-        setQueue((prev) => [...prev, { id: nextQueueId(), content, modelState: snapshot }]);
+        setQueue((prev) => [
+          ...prev,
+          { id: nextQueueId(), content, modelState: snapshot, attachments: readyAttachments },
+        ]);
+        setAttachments([]);
         (formRef.current?.elements.namedItem("content") as HTMLTextAreaElement | null)?.dispatchEvent(new Event("input"));
         // Reset the native textarea value directly so the placeholder reappears.
         const ta = formRef.current?.elements.namedItem("content") as HTMLTextAreaElement | null;
@@ -264,8 +541,9 @@ export function MessageComposer({
       return;
     }
 
-    const fd = buildFormData(e.currentTarget, model);
+    const fd = buildFormData(e.currentTarget, model, readyAttachments);
     formRef.current?.reset();
+    setAttachments([]);
     // Notify parent that input is now empty after reset (chips should reappear).
     if (inputHasContentRef.current) {
       inputHasContentRef.current = false;
@@ -314,6 +592,7 @@ export function MessageComposer({
       if (currentActiveServerIds.size > 0) {
         fd.set("activeServerIds", JSON.stringify([...currentActiveServerIds]));
       }
+      setAttachmentsField(fd, next.attachments);
       // Defer the dispatch out of the caller (effect / event handler) so the
       // queue-drain doesn't cascade synchronously within a React effect
       // (satisfies react-hooks/set-state-in-effect) and so send-now doesn't
@@ -413,7 +692,7 @@ export function MessageComposer({
       return;
     }
 
-    if (pending || disabled) return;
+    if (pending || disabled || anyUploading) return;
 
     if (enterToSubmit) {
       if (!e.shiftKey) {
@@ -436,8 +715,31 @@ export function MessageComposer({
     <form
       ref={formRef}
       onSubmit={onSubmit}
-      className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-3 text-card-foreground shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring"
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      className={cn(
+        "flex flex-col gap-2 rounded-2xl border border-border bg-card p-3 text-card-foreground shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring",
+        isDraggingOver && "ring-2 ring-primary",
+      )}
     >
+      {/* Hidden file input driving the attach button; accepts the same kinds
+          the composer's generate toggles produce (image/video) plus PDF
+          documents. Cleared after each change so re-selecting the same file
+          still fires onChange. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/*,video/*,application/pdf"
+        aria-hidden="true"
+        tabIndex={-1}
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) addFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
       <Textarea
         name="content"
         required
@@ -446,8 +748,17 @@ export function MessageComposer({
         disabled={pending || disabled}
         onKeyDown={onKeyDown}
         onChange={handleTextareaChange}
+        onPaste={onPaste}
         className="border-none bg-transparent shadow-none focus-visible:ring-0"
       />
+      {/* Pending/uploaded attachment chips for the next message. */}
+      {attachments.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5" aria-label="Attachments">
+          {attachments.map((a) => (
+            <AttachmentChip key={a.id} attachment={a} onRemove={removeAttachment} />
+          ))}
+        </div>
+      ) : null}
       {/* Queued messages (queue mode): ordered list with reorder / edit /
           remove / send-now controls. */}
       <MessageQueue
@@ -489,6 +800,23 @@ export function MessageComposer({
             </SelectPopup>
           </Select>
         )}
+
+        {/* Attach file — hidden unless a workspaceId is available to authorize
+            /api/v1/upload/attachment (e.g. the embedded floating panel, which
+            only carries slugs today, has no attach affordance yet). */}
+        {workspaceId ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label="Attach file"
+            disabled={pending || disabled}
+            onClick={() => fileInputRef.current?.click()}
+            className="h-8 w-8 p-0"
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
+        ) : null}
 
         {/* Image generation toggle */}
         <Button
@@ -539,17 +867,19 @@ export function MessageComposer({
           ) : null}
           <Button
             type="submit"
-            disabled={pending || disabled}
+            disabled={pending || disabled || anyUploading}
             size="sm"
             aria-label={
-              isStreaming && pendingPromptBehavior === "interrupt"
-                ? "Interrupt and send"
-                : isStreaming
-                  ? "Queue message"
-                  : "Send message"
+              anyUploading
+                ? "Waiting for attachments to finish uploading"
+                : isStreaming && pendingPromptBehavior === "interrupt"
+                  ? "Interrupt and send"
+                  : isStreaming
+                    ? "Queue message"
+                    : "Send message"
             }
             style={
-              !pending && !disabled
+              !pending && !disabled && !anyUploading
                 ? {
                     background: "var(--primary)",
                     border: "none",
@@ -561,9 +891,11 @@ export function MessageComposer({
             <Send className="h-3.5 w-3.5" />
             {pending
               ? "Sending…"
-              : isStreaming && pendingPromptBehavior === "interrupt"
-                ? "Interrupt"
-                : "Send"}
+              : anyUploading
+                ? "Uploading…"
+                : isStreaming && pendingPromptBehavior === "interrupt"
+                  ? "Interrupt"
+                  : "Send"}
           </Button>
         </div>
       </div>
