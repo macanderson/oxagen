@@ -12,7 +12,15 @@ import type { NextRequest } from "next/server";
 //      don't exist yet) can't be reached unauthenticated.
 
 // Reachable without a session. Everything else is behind auth.
-const PUBLIC_PATHS = [/^\/login(?:\/|$)/, /^\/signup(?:\/|$)/, /^\/verify(?:\/|$)/];
+// /two-factor is the sign-in second-factor step: after password auth the user
+// holds only a short-lived 2FA cookie (NOT a full session cookie), so the
+// hasSession() guard below would bounce them to /login and wedge the flow.
+const PUBLIC_PATHS = [
+  /^\/login(?:\/|$)/,
+  /^\/signup(?:\/|$)/,
+  /^\/verify(?:\/|$)/,
+  /^\/two-factor(?:\/|$)/,
+];
 
 // Better Auth names the session cookie `<cookiePrefix>.session_token` and adds
 // a `__Secure-` prefix over HTTPS. Match any *session_token cookie so the

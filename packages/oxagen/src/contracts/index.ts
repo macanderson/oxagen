@@ -82,6 +82,7 @@ import { agentToolList } from "./agent.tool.list";
 import { billingCreditsPurchase } from "./billing.credits.purchase";
 import { billingSubscriptionRead } from "./billing.subscription.read";
 import { billingSubscriptionUpgradeStart } from "./billing.subscription.upgrade.start";
+import { billingUsageBreakdown } from "./billing.usage.breakdown";
 import { chatMessageExecution } from "./chat.message.execution";
 import { chatMessageSend } from "./chat.message.send";
 import { conversationArchive } from "./conversation.archive";
@@ -407,6 +408,7 @@ export {
   billingCreditsPurchase,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
+  billingUsageBreakdown,
   chatMessageExecution,
   chatMessageSend,
   conversationArchive,
@@ -680,6 +682,7 @@ export const contracts = [
   billingCreditsPurchase,
   billingSubscriptionRead,
   billingSubscriptionUpgradeStart,
+  billingUsageBreakdown,
   chatMessageExecution,
   chatMessageSend,
   conversationArchive,
