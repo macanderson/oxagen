@@ -41,7 +41,7 @@ export interface PolicyEntry {
 // Tables WITHOUT org_id/workspace_id are intentionally absent — their
 // isolation is transitive through an FK to a policied parent (e.g.
 // agent.agent_versions → agent.agents, workflow.playbook_steps →
-// workflow.playbook_versions → workflow.playbooks, ingestion.auth_credentials →
+// workflow.playbook_versions → workflow.playbooks, ingestion.oauth_tokens →
 // ingestion.source_connections) or they are shared/system catalogs
 // (billing.plans, billing.stripe_events, mcp.catalog_servers,
 // ingestion.connector_schemas, Better Auth).
@@ -109,7 +109,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "iam.access_requests", policyClass: "org_only" },
 
   // ── ingestion.* — connector epic. Child tables (auth_credentials,
-  //   webhook_subscriptions) have no org cols; isolation is
+  //   oauth_tokens, webhook_subscriptions) have no org cols; isolation is
   //   transitive through source_connections. oauth_accounts is org-level
   //   (encrypted OAuth tokens + PII, shared across workspaces).
   { table: "ingestion.source_connections", policyClass: "standard" },

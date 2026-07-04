@@ -82,6 +82,7 @@ stripeEventProcessing id, eventId, status, attempts
 ```
 sourceConnections   id, orgId, workspaceId, connectorId, config (JSON), status
 authCredentials     connectionId, type, encryptedData
+oauthTokens         connectionId, accessToken (encrypted), refreshToken, expiresAt
 webhookSubscriptions connectionId, webhookId, secret, events
 oauthAccounts       connectionId, accountId, accountName
 entityTypeMappings  entityTypeId, targetSchema

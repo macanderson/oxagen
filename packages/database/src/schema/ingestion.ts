@@ -75,6 +75,29 @@ export const authCredentials = ingestionSchema.table("auth_credentials", {
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 });
 
+// ── ingestion.oauth_tokens ────────────────────────────────────────────────────
+
+export const oauthTokens = ingestionSchema.table(
+  "oauth_tokens",
+  {
+    connectionId: uuid("connection_id").primaryKey(),
+    accessTokenEnc: jsonb("access_token_enc").notNull(),
+    refreshTokenEnc: jsonb("refresh_token_enc"),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
+    tokenType: text("token_type").notNull().default("Bearer"),
+    scopes: text("scopes").array().notNull().default(sql`'{}'`),
+    providerUserId: text("provider_user_id"),
+    providerAccountId: text("provider_account_id"),
+    lastRefreshedAt: timestamp("last_refreshed_at", { withTimezone: true, mode: "date" }),
+    refreshFailureCount: integer("refresh_failure_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    expiresAtIdx: index("oauth_tokens_expires_at_idx").on(t.expiresAt),
+  }),
+);
+
 // ── ingestion.webhook_subscriptions ──────────────────────────────────────────
 
 export const webhookSubscriptions = ingestionSchema.table(
