@@ -56,6 +56,7 @@ import type {
   ProjectContext,
   CodingEvent,
   ImageAttachment,
+  EngineNonFatalError,
 } from "../types";
 import type { AgentAi, MemoryProvider, TraceStore, GraphSyncProvider } from "../ports";
 import type {
@@ -219,6 +220,12 @@ export interface RunTurnOptions {
   /** Abort the turn (e.g. user hit Ctrl-C / Esc). */
   signal?: AbortSignal;
   /** Live stage events for the UI. */
+  /**
+   * Injected sink for non-fatal internal engine failures (e.g. memory-recall
+   * failure). Forwarded to the underlying coding-agent turns so a consumer can
+   * log/telemeter them; never throws. See RunCodingAgentOptions.onError.
+   */
+  onError?: (err: EngineNonFatalError) => void;
   onStage?: (e: StageEvent) => void;
   /** Streamed assistant text deltas. */
   onText?: (delta: string) => void;
@@ -454,6 +461,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       readOnly: opts.readOnly,
       codeGraph: opts.codeGraph ?? undefined,
       memory: opts.memory ?? undefined,
+      onError: opts.onError,
       signal: opts.signal,
       onEvent: (e) => {
         if (e.type === "text") opts.onText?.(e.delta);
@@ -615,6 +623,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         readOnly: opts.readOnly,
         codeGraph: opts.codeGraph ?? undefined,
         memory: opts.memory ?? undefined,
+        onError: opts.onError,
         signal: opts.signal,
         onEvent: (e) => {
           if (e.type === "text") opts.onText?.(e.delta);
@@ -969,6 +978,7 @@ async function runBare(
     readOnly: opts.readOnly,
     codeGraph: opts.codeGraph ?? undefined,
     memory: opts.memory ?? undefined,
+    onError: opts.onError,
     signal: opts.signal,
     onEvent: (e) => {
       if (e.type === "text") opts.onText?.(e.delta);

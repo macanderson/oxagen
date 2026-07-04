@@ -36,6 +36,17 @@ export const baseEnvSchema = z.object({
   NEO4J_PASSWORD: z.string().min(1),
   NEO4J_DATABASE: z.string().default("neo4j"),
 
+  // Circuit breakers for external dependencies (Neo4j / Stripe / ClickHouse).
+  // Global, conservative defaults shared by every per-dependency breaker so a
+  // degraded dependency fails fast instead of being hammered by every request.
+  // See packages/telemetry/src/circuit-breaker.ts and breaker-clients.ts.
+  //  - FAILURE_THRESHOLD: consecutive failures that trip a breaker open.
+  //  - RESET_TIMEOUT_MS:  how long a tripped breaker stays open before a probe.
+  //  - SUCCESS_THRESHOLD: consecutive probe successes that close it again.
+  CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.coerce.number().int().positive().default(5),
+  CIRCUIT_BREAKER_RESET_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
+  CIRCUIT_BREAKER_SUCCESS_THRESHOLD: z.coerce.number().int().positive().default(1),
+
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
 
@@ -186,6 +197,10 @@ export const baseEnvSchema = z.object({
   // Server-side app origin for plugin OAuth authorize/callback URLs
   // (falls back to NEXT_PUBLIC_APP_URL at the call site).
   APP_URL: z.string().url().optional(),
+  // Public origin advertised in the A2A Agent Card / well-known URL. Optional —
+  // A2A routes derive the origin from the live request; overrides only apply to
+  // out-of-band card reads. Falls back to the API origin.
+  A2A_PUBLIC_URL: z.string().url().optional(),
   // Browser-exposed docs-site origin override (apps/app docs links). Optional —
   // getDocsBaseUrl() resolves a correct dev/prod default when unset.
   NEXT_PUBLIC_DOCS_URL: z.string().url().optional(),
@@ -201,6 +216,27 @@ export const baseEnvSchema = z.object({
     .optional(),
   KNOWLEDGE_GRAPH_ENABLED: z.enum(["true", "false"]).optional(),
   MCP_PORT: z.string().optional(),
+
+  // ── OpenTelemetry (vendor-neutral OTLP export) ──
+  // The distributed tracer (packages/telemetry/src/tracer.ts) reads these raw
+  // at process start; declared here so `pnpm env:check` validates their shape.
+  // When OTEL_EXPORTER_OTLP_ENDPOINT is unset the SDK never starts and every
+  // span is a no-op — safe for all envs, rollback = leave unset. BYO collector
+  // (any OTLP/HTTP endpoint — Grafana, Honeycomb, Jaeger, an OTel Collector);
+  // no vendor SDK is bundled. OTEL_EXPORTER_OTLP_HEADERS is the standard
+  // W3C-style comma-separated `key=value` list (e.g. auth headers for the
+  // collector), matching the OTEL spec env var; parsed by the tracer.
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
+  OTEL_EXPORTER_OTLP_HEADERS: z.string().optional(),
+  OTEL_SERVICE_NAME: z.string().min(1).optional(),
+
+  // ── Error alerting (vendor-neutral outbound webhook) ──
+  // When set, high-severity/unhandled server errors captured by
+  // @oxagen/telemetry's captureError() are POSTed as a Slack-compatible JSON
+  // payload to this URL (Slack/Mattermost/Discord-compatible incoming webhook,
+  // or any endpoint that accepts `{ text, blocks }`). BYO webhook — no vendor
+  // SDK. Optional: unset = ClickHouse error_events recording only, no webhook.
+  ALERT_WEBHOOK_URL: z.string().url().optional(),
 
   // OXA-1348: when true (default off in prod), agent.code.execute is
   // materialized as an agent tool. Set true on Vercel once the Modal

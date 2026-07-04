@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { logger } from "@oxagen/handlers/logger";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 import { EnvironmentsPanel } from "./environments-panel";
@@ -49,14 +50,32 @@ export default async function EnvironmentsSettingsPage({
   const canManage = wsRole === "owner" || wsRole === "admin";
 
   // Masked reads — values never cross to the client (the grid shows ••••).
+  // A read failure must not render as an empty grid with no trace: it looks to
+  // the user like their environments/secrets were deleted. Log each failure and
+  // surface a load-error flag so the panel can show a notice instead.
+  let loadError = false;
   const environments: EnvironmentSummary[] = await readEnvironmentsAction({
     orgSlug,
     workspaceSlug,
-  }).catch(() => []);
+  }).catch((err) => {
+    loadError = true;
+    logger.error(
+      { err, orgSlug, workspaceSlug },
+      "environments: readEnvironmentsAction failed — rendering empty grid with load-error notice",
+    );
+    return [];
+  });
   const secretKeys: SecretKeySummary[] = await readSecretKeysAction({
     orgSlug,
     workspaceSlug,
-  }).catch(() => []);
+  }).catch((err) => {
+    loadError = true;
+    logger.error(
+      { err, orgSlug, workspaceSlug },
+      "environments: readSecretKeysAction failed — rendering empty grid with load-error notice",
+    );
+    return [];
+  });
 
   return (
     <EnvironmentsPanel
@@ -65,6 +84,7 @@ export default async function EnvironmentsSettingsPage({
       canManage={canManage}
       environments={environments}
       secretKeys={secretKeys}
+      loadError={loadError}
       importEnvAction={importEnvAction}
       upsertKeyAction={upsertKeyAction}
       setValueAction={setValueAction}

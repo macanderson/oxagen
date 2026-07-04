@@ -6,10 +6,14 @@ import type { AppEnv } from "../../app";
 
 export const videoGenerateRoute = new Hono<AppEnv>();
 
-// Stub video generation: parses the prompt + optional parameters, logs intent,
-// and returns a typed queued result with a render directive. Dispatches through
-// kernel.invoke() so IAM enforcement, audit, and metering are applied uniformly.
-// Route is org + workspace scoped (see app.ts).
+// Video generation: parses the prompt + optional parameters and dispatches an
+// asynchronous render. The handler creates a `pending` generated_assets row
+// (stable serving URL) and enqueues `agent/video.render` on Inngest, which
+// generates the video, uploads to blob, and flips the row to `ready`. Returns a
+// typed queued result (status, jobId, serveUrl, render directive) immediately —
+// it does not await the render. Dispatches through kernel.invoke() so IAM
+// enforcement, audit, and metering are applied uniformly. Route is org +
+// workspace scoped (see app.ts).
 videoGenerateRoute.post("/", async (c) => {
   const body = videoGenerate.input.parse(await c.req.json());
   const ctx = capabilityContext(c);

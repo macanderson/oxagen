@@ -35,12 +35,15 @@ import { agentDefinitionUpdate } from "./agent.definition.update";
 import { agentDefinitionPublish } from "./agent.definition.publish";
 import { agentDefinitionGet } from "./agent.definition.get";
 import { agentDefinitionList } from "./agent.definition.list";
+import { a2aCardGet } from "./a2a.card.get";
 import { agentDeploy } from "./agent.deploy";
 import { agentTriggerCreate } from "./agent.trigger.create";
 import { agentTriggerUpdate } from "./agent.trigger.update";
 import { agentTriggerDelete } from "./agent.trigger.delete";
 import { agentTriggerList } from "./agent.trigger.list";
+import { agentExecutionList } from "./agent.execution.list";
 import { agentExecutionRecord } from "./agent.execution.record";
+import { agentTraceGet } from "./agent.trace.get";
 import { agentUiRender } from "./agent.ui.render";
 import { documentsGenerate } from "./documents.generate";
 import { documentsPdfCreate } from "./documents.pdf.create";
@@ -391,6 +394,7 @@ export {
   agentTriggerUpdate,
   agentTriggerDelete,
   agentTriggerList,
+  agentExecutionList,
   agentExecutionRecord,
   agentUiRender,
   documentsGenerate,
@@ -424,6 +428,7 @@ export {
   agentSubagentFanoutList,
   agentSubagentResultGet,
   agentSubagentSiblings,
+  agentTraceGet,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
@@ -706,6 +711,7 @@ export const contracts = [
   agentSubagentFanoutList,
   agentSubagentResultGet,
   agentSubagentSiblings,
+  agentTraceGet,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
@@ -787,6 +793,7 @@ export const contracts = [
   skillMetricsRead,
   skillCreate,
   skillEnable,
+  agentExecutionList,
   agentExecutionRecord,
   agentSubagentAggregate,
   agentSubagentDispatch,
@@ -906,6 +913,7 @@ export const contracts = [
   secretExport,
   agentMemoryPolicyRead,
   agentMemoryPolicyWrite,
+  a2aCardGet,
   evalDatasetCreate,
   evalDatasetList,
   evalDatasetGet,

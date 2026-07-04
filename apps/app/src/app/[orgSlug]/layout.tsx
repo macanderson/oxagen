@@ -17,6 +17,7 @@ import { evaluateMfaGate } from "@/lib/mfa-enforcement";
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 import { planLabelFrom } from "@/lib/plan-label";
 import { isLowBalance } from "@oxagen/billing";
+import { logger } from "@oxagen/handlers/logger";
 import { AppShell } from "@/components/shell/app-shell";
 import type { ShellNavData } from "@/components/shell/shell-nav-slots";
 import { PageContextProvider } from "@/lib/page-context";
@@ -201,7 +202,10 @@ export default async function OrgLayout({
       // billing read never blocks the whole app shell from rendering. — OXA-1515
       runInTenantScope({ orgId: org.id, workspaceId: ORG_ONLY_WS }, () =>
         isLowBalance(org.id),
-      ).catch(() => null),
+      ).catch((err) => {
+        logger.warn({ err, orgId: org.id }, "shell: isLowBalance failed — hiding credit pill");
+        return null;
+      }),
     ]);
 
     return {

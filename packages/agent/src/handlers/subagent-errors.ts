@@ -45,6 +45,31 @@ export class SubagentRunNotFoundError extends Error {
   }
 }
 
+/**
+ * Thrown when an agent execution cannot be resolved for the given public_id or
+ * UUID in the current tenant scope — unknown, purged, or cross-tenant. Surfaces
+ * (api/mcp) should map this to a 404, NOT a 500. Used by agent.trace.get.
+ */
+export class ExecutionNotFoundError extends Error {
+  readonly code = "execution_not_found";
+  readonly executionId: string;
+  constructor(executionId: string) {
+    super(`Execution ${executionId} not found`);
+    this.name = "ExecutionNotFoundError";
+    this.executionId = executionId;
+  }
+}
+
+/** Structural type guard — matches across a package boundary via `code`. */
+export function isExecutionNotFoundError(err: unknown): err is ExecutionNotFoundError {
+  return (
+    err instanceof ExecutionNotFoundError ||
+    (err instanceof Error &&
+      "code" in err &&
+      (err as { code?: unknown }).code === "execution_not_found")
+  );
+}
+
 /** Structural type guard — see isFanoutNotFoundError for the rationale. */
 export function isSubagentRunNotFoundError(err: unknown): err is SubagentRunNotFoundError {
   return (

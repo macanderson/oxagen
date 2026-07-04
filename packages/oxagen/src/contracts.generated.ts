@@ -3,6 +3,7 @@
 // is the single import that pulls them all in. Run `pnpm check:manifest`
 // (or the gate) to regenerate after adding or removing a contract.
 
+import "./contracts/a2a.card.get";
 import "./contracts/agent.approval.resolve";
 import "./contracts/agent.code.execute";
 import "./contracts/agent.compose";
@@ -12,6 +13,7 @@ import "./contracts/agent.definition.list";
 import "./contracts/agent.definition.publish";
 import "./contracts/agent.definition.update";
 import "./contracts/agent.deploy";
+import "./contracts/agent.execution.list";
 import "./contracts/agent.execution.record";
 import "./contracts/agent.feature.verify";
 import "./contracts/agent.mcp.consent.list";
@@ -58,6 +60,7 @@ import "./contracts/agent.task.background.cancel";
 import "./contracts/agent.task.background.read";
 import "./contracts/agent.task.background.start";
 import "./contracts/agent.tool.list";
+import "./contracts/agent.trace.get";
 import "./contracts/agent.trigger.create";
 import "./contracts/agent.trigger.delete";
 import "./contracts/agent.trigger.list";

@@ -29,6 +29,12 @@ import { render, cleanup } from "@testing-library/react";
 
 afterEach(cleanup);
 
+// Observe the degrade log emitted by conversation-page's logAndFallback helper.
+const mockLoggerWarn = vi.hoisted(() => vi.fn());
+vi.mock("@oxagen/handlers/logger", () => ({
+  logger: { warn: mockLoggerWarn, error: vi.fn(), info: vi.fn() },
+}));
+
 // ── Heavy server-only dependency stubs ──────────────────────────────────────
 // ConversationPage is an async RSC; we mock its DB / tenancy / handler / AI
 // imports so we can await it and render its returned tree in jsdom, then assert
@@ -136,6 +142,7 @@ vi.mock("./walk-active-branch", () => ({
 
 // ── Import after mocks ───────────────────────────────────────────────────────
 import { ConversationPage } from "./conversation-page";
+import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
 
 const actions = {
   sendMessageAction: vi.fn(),
@@ -183,5 +190,33 @@ describe("ConversationPage — mobile composer clearance layout contract", () =>
     expect(root!.className).toContain("h-full");
     expect(root!.className).toContain("flex-col");
     expect(root!.className).toContain("md:flex-row");
+  });
+});
+
+describe("ConversationPage — non-fatal degrade logging", () => {
+  afterEach(() => {
+    mockLoggerWarn.mockClear();
+  });
+
+  it("logs a degrade warning and still renders the page when a parallel read rejects", async () => {
+    // user-preferences read fails — the page must degrade to defaults, log the
+    // failure, and still render the chat shell (never crash).
+    vi.mocked(userPreferencesReadHandler).mockRejectedValueOnce(
+      new Error("RLS: permission denied"),
+    );
+
+    const { container } = await renderPage();
+
+    // Page still rendered.
+    expect(container.querySelector('[data-testid="chat-shell"]')).not.toBeNull();
+
+    // Failure was logged with the degrade context.
+    expect(mockLoggerWarn).toHaveBeenCalled();
+    const call = mockLoggerWarn.mock.calls.find(
+      ([, msg]) => typeof msg === "string" && /user-preferences read/.test(msg),
+    ) as [Record<string, unknown>, string] | undefined;
+    expect(call).toBeDefined();
+    expect(call![0].err).toBeInstanceOf(Error);
+    expect(call![1]).toMatch(/degraded/i);
   });
 });

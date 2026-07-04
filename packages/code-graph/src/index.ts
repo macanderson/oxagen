@@ -137,6 +137,39 @@ const PY_QUERIES = [
   },
 ];
 
+/**
+ * Python call-site query: matches every `call` node and captures the callee.
+ * The callee is either a bare identifier (`foo()`) or the final attribute of a
+ * member/attribute access (`obj.bar()`, `self.do_work()`, `a.b.transform()`),
+ * mirroring the TypeScript call query which captures the member property.
+ *
+ * Examples matched:
+ *   foo()              → callee "foo"
+ *   obj.bar()          → callee "bar"
+ *   self.do_work()     → callee "do_work"
+ *   a.b.transform()    → callee "transform"
+ */
+const PY_CALL_QUERY =
+  "(call function: [(identifier) @callee (attribute attribute: (identifier) @callee)]) @node";
+
+/**
+ * Python import query: captures the module specifier of a plain `import`
+ * statement, both bare (`import os`) and aliased (`import numpy as np`). The
+ * captured specifier is the dotted module path (`os`, `a.b.c`, `numpy`),
+ * mirroring the TS import query which captures the module specifier string.
+ */
+const PY_IMPORT_QUERY =
+  "(import_statement name: [(dotted_name) @specifier (aliased_import name: (dotted_name) @specifier)]) @node";
+
+/**
+ * Python from-import query: captures the module specifier of a
+ * `from a.b import c` statement — the `module_name` dotted path (`a.b`). The
+ * imported names themselves are not captured; consumers build IMPORTS edges to
+ * the module, matching how TS resolves the `from "…"` specifier.
+ */
+const PY_IMPORT_FROM_QUERY =
+  "(import_from_statement module_name: (dotted_name) @specifier) @node";
+
 // ---------------------------------------------------------------------------
 // Core parser
 // ---------------------------------------------------------------------------
@@ -221,22 +254,26 @@ function runArrowQuery(
 }
 
 /**
- * Extract call sites from a TypeScript/JavaScript parse tree.
+ * Extract call sites from a parse tree.
  *
- * For each call_expression the query matches, we resolve the `enclosingSymbol`
+ * For each call node the query matches, we resolve the `enclosingSymbol`
  * by finding the narrowest already-extracted symbol whose [startLine, endLine]
  * range contains the call's line.  Module-level calls (not inside any symbol)
  * have enclosingSymbol = null.
+ *
+ * `callQuery` is the language-specific call-site query (TS uses
+ * `call_expression`, Python uses `call`); both capture `@callee` and `@node`.
  */
 function runCallQuery(
   tree: Parser.Tree,
   language: Parser.Language,
   symbols: ParsedSymbol[],
+  callQuery: string,
 ): CallSite[] {
   const calls: CallSite[] = [];
   let q: Parser.Query;
   try {
-    q = language.query(TS_CALL_QUERY);
+    q = language.query(callQuery);
   } catch {
     return calls;
   }
@@ -277,21 +314,23 @@ function runCallQuery(
 }
 
 /**
- * Extract import specifiers from a TypeScript/JavaScript parse tree.
+ * Extract import specifiers from a parse tree.
  *
- * Returns both import_statement and export_statement sources (re-exports) so
- * all inbound/outbound module dependencies are captured.  Both relative
- * ('./utils') and bare ('@oxagen/ai', 'react') specifiers are returned —
- * callers decide which to resolve.
+ * `queryStrings` is the language-specific set of import-like queries — TS passes
+ * import_statement + export_statement (re-exports); Python passes
+ * import_statement + import_from_statement.  Each query captures `@specifier`
+ * and `@node`.  Both relative ('./utils') and bare ('@oxagen/ai', 'react', 'os',
+ * 'a.b') specifiers are returned — callers decide which to resolve.
  */
 function runImportQuery(
   tree: Parser.Tree,
   language: Parser.Language,
+  queryStrings: string[],
 ): ImportSite[] {
   const imports: ImportSite[] = [];
   const seen = new Set<string>(); // deduplicate specifier:line pairs
 
-  for (const queryStr of [TS_IMPORT_QUERY, TS_REEXPORT_QUERY]) {
+  for (const queryStr of queryStrings) {
     let q: Parser.Query;
     try {
       q = language.query(queryStr);
@@ -450,13 +489,13 @@ export async function parseSourceFile(
 
       // Extract call sites and import specifiers using the deduped symbols so
       // enclosingSymbol resolution uses the same set that will be returned.
-      const calls = runCallQuery(tree, tsLang, deduped);
-      const imports = runImportQuery(tree, tsLang);
+      const calls = runCallQuery(tree, tsLang, deduped, TS_CALL_QUERY);
+      const imports = runImportQuery(tree, tsLang, [TS_IMPORT_QUERY, TS_REEXPORT_QUERY]);
 
       return { language, symbols: enrichSymbols(deduped, content), calls, imports };
     }
 
-    // Python: symbol extraction only; call/import queries not yet implemented.
+    // Python: symbols + call and import edges.
     const pyLang = parser.getLanguage();
     const pySymbols = runQueries(tree, pyLang, PY_QUERIES);
 
@@ -469,7 +508,17 @@ export async function parseSourceFile(
       return true;
     });
 
-    return { language, symbols: enrichSymbols(dedupedPy, content) };
+    // Extract call sites and import specifiers against the deduped Python
+    // symbols so enclosingSymbol resolution uses the returned symbol set.
+    const pyCalls = runCallQuery(tree, pyLang, dedupedPy, PY_CALL_QUERY);
+    const pyImports = runImportQuery(tree, pyLang, [PY_IMPORT_QUERY, PY_IMPORT_FROM_QUERY]);
+
+    return {
+      language,
+      symbols: enrichSymbols(dedupedPy, content),
+      calls: pyCalls,
+      imports: pyImports,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     // Log at error level so WASM init failures and tree-sitter errors are

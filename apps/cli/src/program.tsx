@@ -449,6 +449,16 @@ export function buildProgram(): Command {
       await handleCost(merged);
     });
 
+  program
+    .command("trace")
+    .argument("<executionId>", "Public ID (aex_…) or UUID of the execution")
+    .description("Show an agent run as a span tree: steps, tool calls, and child executions")
+    .option("--json", "Output the raw trace as JSON", false)
+    .action(async (executionId: string, opts: { json?: boolean }) => {
+      const { handleTrace } = await import("./commands/trace.js");
+      await handleTrace(executionId, opts);
+    });
+
   // ── models: on-device runtime + coordinator selection ───────────────────────
 
   const models = program
@@ -586,6 +596,21 @@ export function buildProgram(): Command {
     .action(async (opts: { repo?: string; json?: boolean }) => {
       const { handleGraphLineage } = await import("./commands/graph.lineage.js");
       await handleGraphLineage({ repo: opts.repo, json: opts.json });
+    });
+
+  // ── a2a: Agent2Agent protocol surface ───────────────────────────────────────
+  const a2a = program
+    .command("a2a")
+    .description("Inspect the workspace's Agent2Agent (A2A) protocol surface");
+  a2a
+    .command("card")
+    .description(
+      "Print the workspace's A2A Agent Card (exposed skills, transport endpoint, auth scheme)",
+    )
+    .option("--json", "Output the raw Agent Card JSON")
+    .action(async (opts: { json?: boolean }) => {
+      const { handleA2ACard } = await import("./commands/a2a.js");
+      await handleA2ACard({ json: opts.json });
     });
 
   // ── memory: manage the workspace's agent memories ───────────────────────────

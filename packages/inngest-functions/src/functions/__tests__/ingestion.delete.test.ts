@@ -6,10 +6,12 @@ const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
   runInTenantScope: vi.fn(),
   loggerInfo: vi.fn(),
+  loggerError: vi.fn(),
   // scopedSession: returns records for alias promotion + deletion pass
   scopedSessionRun: vi.fn(),
   scopedSessionClose: vi.fn().mockResolvedValue(undefined),
   scopedSession: vi.fn(),
+  insertEvents: vi.fn().mockResolvedValue(undefined),
 }));
 
 type HandlerCtx = {
@@ -54,7 +56,11 @@ vi.mock("@oxagen/ontology", async (importOriginal) => {
 });
 
 vi.mock("../../logger", () => ({
-  logger: { info: mocks.loggerInfo, debug: vi.fn(), error: vi.fn() },
+  logger: { info: mocks.loggerInfo, debug: vi.fn(), error: mocks.loggerError },
+}));
+
+vi.mock("@oxagen/telemetry", () => ({
+  insertEvents: mocks.insertEvents,
 }));
 
 await import("../ingestion.delete");
@@ -210,6 +216,62 @@ describe("ingestion.delete-connection Inngest function", () => {
 
       // At least 5 SQL statements: mark-deleting + 4 deletes + 1 update in delete-postgres-records
       expect(mockExecute.mock.calls.length).toBeGreaterThanOrEqual(5);
+    });
+  });
+
+  describe("audit-log step — ClickHouse telemetry", () => {
+    it("emits an ingestion.connection.deleted event with org/workspace/connection ids, mode, and requestedBy", async () => {
+      const step = makeStep();
+      await capturedHandler!({
+        event: { data: { ...BASE_EVENT, mode: "full" } },
+        step,
+      });
+
+      expect(mocks.insertEvents).toHaveBeenCalledTimes(1);
+      const [rows] = mocks.insertEvents.mock.calls[0] as [
+        Array<Record<string, unknown>>,
+      ];
+      expect(rows).toHaveLength(1);
+      const row = rows[0];
+      if (!row) throw new Error("expected one telemetry event row");
+      expect(row).toMatchObject({
+        org_id: "org-del",
+        workspace_id: "ws-del",
+        event_type: "ingestion.connection.deleted",
+        source_system: "inngest:ingestion.delete-connection",
+        stream_offset: null,
+      });
+      expect(typeof row.event_id).toBe("string");
+      expect(typeof row.emitted_at).toBe("string");
+      // Deletion detail travels in the JSON payload.
+      const payload = JSON.parse(row.payload as string) as Record<string, unknown>;
+      expect(payload).toEqual({
+        connectionId: "conn-delete-1",
+        mode: "full",
+        requestedBy: "user-123",
+        requestedAt: "2026-06-09T00:00:00Z",
+      });
+    });
+
+    it("logs (does NOT throw) when the ClickHouse write fails, so deletion still succeeds", async () => {
+      mocks.insertEvents.mockRejectedValueOnce(new Error("clickhouse unreachable"));
+      const step = makeStep();
+
+      const result = await capturedHandler!({
+        event: { data: { ...BASE_EVENT, mode: "connection_only" } },
+        step,
+      });
+
+      // Job completes normally despite the telemetry failure.
+      expect(result).toMatchObject({
+        connectionId: "conn-delete-1",
+        mode: "connection_only",
+        deletedAt: expect.any(String),
+      });
+      expect(mocks.loggerError).toHaveBeenCalledWith(
+        expect.objectContaining({ connectionId: "conn-delete-1", mode: "connection_only" }),
+        expect.stringContaining("ClickHouse audit event write failed"),
+      );
     });
   });
 

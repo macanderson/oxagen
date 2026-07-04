@@ -1,6 +1,24 @@
 {
   "capabilities": [
     {
+      "name": "a2a.card.get",
+      "file": "a2a.card.get.ts",
+      "domain": "a2a",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "agent.approval.resolve",
       "file": "agent.approval.resolve.ts",
       "domain": "agent",
@@ -166,6 +184,25 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "agent.execution.list",
+      "file": "agent.execution.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": true,
         "docs": true
       }
     },
@@ -989,6 +1026,25 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "agent.trace.get",
+      "file": "agent.trace.get.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": true,
         "docs": true
       }
     },

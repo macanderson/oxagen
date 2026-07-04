@@ -12,6 +12,7 @@ import {
   REFRESH_PROVIDERS,
   PERMANENT_ERRORS,
   refreshOAuthToken,
+  refreshProviderKeyFor,
   isRefreshError,
 } from "../lib/oauth-strategies";
 
@@ -119,7 +120,10 @@ export const [ingestionOauthRefresh] = createFunction(
       await step.run(`refresh-token-${account.id}`, async () => {
         if (!account.refresh_token_enc) return;
 
-        const strategy = REFRESH_PROVIDERS[account.provider];
+        // Normalize connector-surface slugs (e.g. google-drive/google-gmail) onto
+        // their shared OAuth strategy key so Google Workspace connections refresh
+        // instead of silently lapsing at token expiry.
+        const strategy = REFRESH_PROVIDERS[refreshProviderKeyFor(account.provider)];
 
         // ── No-refresh provider (e.g. Linear) ───────────────────────────────
         if (strategy && strategy.supportsRefresh === false) {
@@ -131,10 +135,12 @@ export const [ingestionOauthRefresh] = createFunction(
         }
 
         // ── Unknown provider ─────────────────────────────────────────────────
+        // WARN (not INFO): a provider with expiring tokens and no refresh strategy
+        // is a silent break — the token lapses and the connection dies unnoticed.
         if (!strategy) {
-          logger.info(
+          logger.warn(
             { tokenId: account.id, provider: account.provider },
-            "ingestion-oauth-refresh: provider refresh not yet implemented — skipping",
+            "ingestion-oauth-refresh: no refresh strategy for provider — skipping (tokens will lapse at expiry)",
           );
           return;
         }

@@ -37,6 +37,7 @@ import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.re
 import { agentMcpConsentResolve } from "@oxagen/oxagen/contracts/agent.mcp.consent.resolve";
 import { agentPlanApprove } from "@oxagen/oxagen/contracts/agent.plan.approve";
 import { invoke } from "@oxagen/oxagen";
+import { logger } from "@oxagen/handlers/logger";
 
 // ---------------------------------------------------------------------------
 // Validation schemas
@@ -79,7 +80,17 @@ async function assertWorkspaceMember(
     // Membership is proven by the row count — a zero-row result means the user
     // is NOT a workspace member. The previous `.then(() => true)` discarded the
     // rows and granted access to any caller whenever the DB query succeeded.
-  ).then((rows) => rows.length > 0).catch(() => false); // catch RLS / tenancy errors
+  )
+    .then((rows) => rows.length > 0)
+    .catch((err) => {
+      // Fail closed on RLS / tenancy errors — but log first so a systemic
+      // membership-check outage is observable instead of silently denying.
+      logger.warn(
+        { err, workspaceId, userId },
+        "shell: workspace membership check errored — treating as non-member",
+      );
+      return false;
+    });
 }
 
 /** Resolve org + workspace from slugs, returning null on any lookup failure. */

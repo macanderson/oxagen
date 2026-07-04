@@ -99,7 +99,7 @@ import type { PasteSubmission } from "./paste.js";
 import { resolveEscapeAction } from "./escape-action.js";
 import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
 import { isDebugEnabled } from "../lib/debug-log.js";
-import { Banner } from "../tui/banner.js";
+import { Banner, bannerRowCount } from "../tui/banner.js";
 import { useTerminalSize } from "./use-terminal-size.js";
 import {
   scrollReducer,
@@ -2457,15 +2457,22 @@ export function ReplApp({
     // PANEL_WIDTH isn't exported), generous enough that the transcript never
     // visually collides with a docked sidebar.
     const viewportWidth = Math.max(20, cols - (cols >= SIDEBAR_MIN_COLS ? 36 : 0));
-    // Fixed chrome: header(1) + status row(1) + input(3) + dock(6) + a single
-    // trailing margin row(1) so the dock is never flush to the bottom edge.
+    // The persistent sunset banner (wordmark + version + org/workspace) is
+    // pinned at the top of the frame — the alt screen has no scrollback, so
+    // "persists like Claude Code" means keeping it rendered every frame. On
+    // short terminals it's dropped entirely so the transcript keeps usable
+    // height.
+    const showBanner = rows >= 24;
+    // Fixed chrome: banner (when shown) + header(1) + status row(1) +
+    // input(3) + dock(6) + a single trailing margin row(1) so the dock is
+    // never flush to the bottom edge.
     // Rare conditional banners (queued prompts, the reset-confirm prompt, the
     // HUD, a drilled-in agent log) aren't budgeted for individually — Yoga
     // shrinks the transcript row to make room, and TranscriptViewport's own
     // `overflow: hidden` is the safety net, so an occasional banner can
     // clip a row or two off the bottom of the transcript rather than corrupt
     // the frame.
-    const CHROME_ROWS = 12;
+    const CHROME_ROWS = 12 + (showBanner ? bannerRowCount(true) : 0);
     const transcriptOuterHeight = Math.max(4, rows - CHROME_ROWS);
     const transcriptContentHeight = Math.max(1, transcriptOuterHeight - 1);
     const allMessages = liveMessage ? [...committedMessages, liveMessage] : committedMessages;
@@ -2479,6 +2486,14 @@ export function ReplApp({
 
     return (
       <Box flexDirection="column" height={rows} width={cols} overflow="hidden">
+        {showBanner && (
+          <Banner
+            version={pkg.version}
+            org={options.session.orgSlug}
+            workspace={options.session.workspaceSlug}
+            cols={cols}
+          />
+        )}
         <HeaderBar
           model={model}
           branch={repoInfo.branch}
@@ -2596,9 +2611,24 @@ export function ReplApp({
     <>
       {/* Finished transcript — printed once each, permanently, into the
           terminal's real scrollback. Never re-rendered once flushed (see the
-          comment above), which is what makes native scroll-up work. */}
-      <Static items={committedMessages}>
-        {(msg, i) => <MessageView key={i} msg={msg} diffTheme={diffThemeRef.current} />}
+          comment above), which is what makes native scroll-up work. The
+          banner rides as the permanent first item so it commits to real
+          scrollback the moment the app opens and stays there for the whole
+          session — the same persistence model as Claude Code's header. */}
+      <Static items={["banner" as const, ...committedMessages]}>
+        {(item, i) =>
+          item === "banner" ? (
+            <Banner
+              key="banner"
+              version={pkg.version}
+              org={options.session.orgSlug}
+              workspace={options.session.workspaceSlug}
+              cols={cols}
+            />
+          ) : (
+            <MessageView key={i} msg={item} diffTheme={diffThemeRef.current} />
+          )
+        }
       </Static>
 
       {/* Live frame — everything that still changes from tick to tick: the
@@ -2613,7 +2643,6 @@ export function ReplApp({
       <Box flexDirection="column" justifyContent="flex-end">
         {messages.length === 0 && (
           <Box paddingX={1} flexDirection="column">
-            <Banner version={pkg.version} />
             <Text dimColor>Ready. Type a prompt to start coding.</Text>
             <Text dimColor>
               Backed by Oxagen's knowledge-graph context engine. Type /help

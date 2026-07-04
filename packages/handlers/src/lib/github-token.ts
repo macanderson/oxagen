@@ -111,7 +111,25 @@ export async function resolveGitHubToken(ctx: CapabilityContext): Promise<string
 
   // ── Path 3: local-only dev/demo env-var fallback ──────────────────────
   const envToken = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
-  if (envToken) return envToken;
+  if (envToken) {
+    // The per-workspace credential chain above (Path 1: GitHub App installation
+    // token; Path 2: KMS-decrypted per-workspace OAuth token) is live, so a
+    // process-wide PAT must NOT be set in production — it would let ANY
+    // workspace act with one shared identity, bypassing per-workspace scoping.
+    // Loud WARN on resolve (registry doc says "MUST NOT be set in production").
+    // Not a hard throw: no prod-forbidden env var in packages/config/src/registry.ts
+    // is enforced by refusal, and refusing here could newly break a running
+    // deployment — the warning makes the misconfiguration visible instead.
+    if (process.env.NODE_ENV === "production") {
+      console.warn(
+        "[github-token] GITHUB_PERSONAL_ACCESS_TOKEN is set in production and is being used as a fallback. " +
+          "This shared PAT bypasses per-workspace credential resolution (GitHub App installation token + " +
+          "KMS-encrypted per-workspace OAuth), which is live. UNSET GITHUB_PERSONAL_ACCESS_TOKEN in production " +
+          "and connect GitHub per workspace instead.",
+      );
+    }
+    return envToken;
+  }
 
   // ── Path 4: no credentials available ─────────────────────────────────
   throw new Error(

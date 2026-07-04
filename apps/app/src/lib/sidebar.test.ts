@@ -76,19 +76,20 @@ describe("resolveSidebarMode", () => {
 // 2. getSidebarConfig — item counts per mode
 //
 // Spec (IA spec §4):
-//   workspace: 4 items (Ask, Knowledge, Marketplace, Settings)
-//     — the Automation and Activity feature areas were removed entirely;
-//       "Workflows" is gone too (banned term, §19). Studio removed.
+//   workspace: 5 items (Ask, Knowledge, Activity, Marketplace, Settings)
+//     — Activity is the agent run-trace surface (recent runs + per-run span
+//       tree). The old catch-all Automation area stays removed; "Workflows" is
+//       gone too (banned term, §19). Studio removed.
 //       Marketplace + Settings are pinned to the footer group.
 //   org:       7 items (Workspaces, Members, Access, Security, Billing, Developer, Settings)
 //   account:   5 items (Back to app, Profile, Preferences, Security, Privacy)
 // ---------------------------------------------------------------------------
 
 describe("getSidebarConfig item counts", () => {
-  it("workspace config has exactly 4 items", () => {
+  it("workspace config has exactly 5 items", () => {
     const config = getSidebarConfig("workspace");
     expect(config.mode).toBe("workspace");
-    expect(config.items).toHaveLength(4);
+    expect(config.items).toHaveLength(5);
   });
 
   it("org config has 6 items by default (access filtered for non-enterprise)", () => {
@@ -122,18 +123,18 @@ describe("getSidebarConfig item counts", () => {
     expect(toolsItems).toHaveLength(0);
   });
 
-  it("does NOT surface standalone Agents / Subagent Runs / Workflows / Studio / Automation / Activity items (IA spec §4/§19)", () => {
+  it("does NOT surface standalone Agents / Subagent Runs / Workflows / Studio / Automation items (IA spec §4/§19)", () => {
     const ids = getSidebarConfig("workspace").items.map((i) => i.id);
     expect(ids).not.toContain("agents");
     expect(ids).not.toContain("agent-runs");
     expect(ids).not.toContain("workflows");
     expect(ids).not.toContain("studio");
     expect(ids).not.toContain("automation");
-    expect(ids).not.toContain("activity");
-    // The clean spec tree, in order.
+    // The clean spec tree, in order. Activity is the run-trace surface.
     expect(ids).toEqual([
       "ask",
       "knowledge",
+      "activity",
       "marketplace",
       "settings",
     ]);
@@ -177,6 +178,10 @@ describe("href builders produce correct paths", () => {
 
     it("knowledge -> /{org}/{ws}/knowledge", () => {
       expect(findItem("knowledge").href(wsCtx)).toBe("/acme/production/knowledge");
+    });
+
+    it("activity -> /{org}/{ws}/activity", () => {
+      expect(findItem("activity").href(wsCtx)).toBe("/acme/production/activity");
     });
 
     it("marketplace -> /{org}/{ws}/settings/plugins (workspace-scoped, from ws ctx)", () => {

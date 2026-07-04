@@ -27,11 +27,6 @@ export class ActiveSubscriptionError extends Error {
   }
 }
 
-/** Type guard. */
-export function isActiveSubscriptionError(err: unknown): err is ActiveSubscriptionError {
-  return err instanceof ActiveSubscriptionError;
-}
-
 // ── CreateCheckoutSessionInput ────────────────────────────────────────────────
 
 export interface CreateCheckoutSessionInput {

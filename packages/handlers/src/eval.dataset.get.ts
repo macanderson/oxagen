@@ -6,7 +6,7 @@ import { HTTPException } from "hono/http-exception";
 
 export const evalDatasetGetHandler: CapabilityHandler<
   typeof evalDatasetGet
-> = async (input, ctx) => {
+> = async (input, _ctx) => {
   return withTenantDb(async (tx) => {
     const [dataset] = await tx
       .select({

@@ -29,8 +29,9 @@ vi.mock("./clickhouse", async (importOriginal) => {
   };
 });
 
-import { readSkillMetrics, recordSkillLoad } from "./skill-telemetry";
+import { readSkillMetrics, readSkillTokenCosts, recordSkillLoad } from "./skill-telemetry";
 import type { SkillLoadRow } from "./skill-telemetry";
+import { NIL_UUID } from "./clickhouse";
 
 beforeEach(() => {
   insertMock.mockClear();
@@ -212,5 +213,71 @@ describe("readSkillMetrics", () => {
     // latest is correctly the newer of the two
     expect(result.lastUsed).toBe("2026-06-18T15:00:00.000Z");
     expect(result.totalLoads).toBe(12);
+  });
+});
+
+describe("readSkillTokenCosts", () => {
+  it("aggregates cost_usd_micros per skill from the join result", async () => {
+    queryMock.mockResolvedValueOnce({
+      json: async () => [
+        { skill_id: "a", cost_usd_micros: "1250000" },
+        { skill_id: "b", cost_usd_micros: "30000" },
+      ],
+    });
+
+    const result = await readSkillTokenCosts({ orgId: "org-1", workspaceId: "ws-1" });
+
+    expect(result).toEqual([
+      { skill_id: "a", cost_usd_micros: 1_250_000 },
+      { skill_id: "b", cost_usd_micros: 30_000 },
+    ]);
+  });
+
+  it("returns an empty array when no steps have attributable cost", async () => {
+    queryMock.mockResolvedValueOnce({ json: async () => [] });
+    const result = await readSkillTokenCosts({ orgId: "org-1", workspaceId: "ws-1" });
+    expect(result).toEqual([]);
+  });
+
+  it("joins skill_loads to token_usage on execution_step_id and excludes NIL/empty steps", async () => {
+    queryMock.mockResolvedValueOnce({ json: async () => [] });
+    await readSkillTokenCosts({ orgId: "org-1", workspaceId: "ws-1" });
+
+    const arg = queryMock.mock.calls[0]?.[0];
+    if (!arg) throw new Error("query not called");
+    // Join key + both tables present.
+    expect(arg.query).toContain("FROM skill_loads");
+    expect(arg.query).toContain("FROM token_usage");
+    expect(arg.query).toContain("tu.step_id = sl.execution_step_id");
+    // NIL/empty/null steps excluded on both sides.
+    expect(arg.query).toContain("execution_step_id IS NOT NULL");
+    expect(arg.query).toContain("execution_step_id != ''");
+    expect(arg.query).toContain("execution_step_id != {nilUuid:String}");
+    expect(arg.query).toContain("execution_step_id != toUUID({nilUuid:String})");
+    // Org/workspace filtered with the correct per-table types.
+    expect(arg.query).toContain("org_id = {orgId:String}");
+    expect(arg.query).toContain("org_id = {orgId:UUID}");
+    expect(arg.query).toContain("workspace_id = {workspaceId:UUID}");
+    expect(arg.query_params.nilUuid).toBe(NIL_UUID);
+    // No skill filter bound when skillId is absent.
+    expect(arg.query_params).not.toHaveProperty("skillId");
+    expect(arg.query).not.toContain("skill_id = {skillId:String}");
+  });
+
+  it("binds skillId and applies the filter when a single skill is requested", async () => {
+    queryMock.mockResolvedValueOnce({
+      json: async () => [{ skill_id: "x", cost_usd_micros: "500000" }],
+    });
+    const result = await readSkillTokenCosts({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      skillId: "x",
+    });
+
+    const arg = queryMock.mock.calls[0]?.[0];
+    if (!arg) throw new Error("query not called");
+    expect(arg.query_params.skillId).toBe("x");
+    expect(arg.query).toContain("skill_id = {skillId:String}");
+    expect(result).toEqual([{ skill_id: "x", cost_usd_micros: 500_000 }]);
   });
 });

@@ -155,33 +155,6 @@ export const oauthAccounts = ingestionSchema.table(
   }),
 );
 
-// ── ingestion.entity_types ────────────────────────────────────────────────────
-
-export const entityTypes = ingestionSchema.table(
-  "entity_types",
-  {
-    id: uuid("id").primaryKey().default(uuidv7Default),
-    publicId: citext("public_id").notNull().unique(),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-    workspaceId: uuid("workspace_id").notNull(),
-    orgId: uuid("org_id").notNull(),
-    name: text("name").notNull(),
-    displayName: text("display_name").notNull(),
-    description: text("description"),
-    commonPropertyKeys: text("common_property_keys").array().notNull().default(sql`'{}'`),
-    expectedEdges: jsonb("expected_edges").notNull().default(sql`'[]'::jsonb`),
-    rowCount: integer("row_count").notNull().default(0),
-    lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" }),
-    isCustom: boolean("is_custom").notNull().default(false),
-  },
-  (t) => ({
-    workspaceOrgIdx: index("entity_types_workspace_org_idx").on(t.workspaceId, t.orgId),
-    lastSeenIdx: index("entity_types_last_seen_idx").on(t.lastSeenAt),
-    workspaceNameUniq: unique("entity_types_workspace_name_uniq").on(t.workspaceId, t.name),
-  }),
-);
-
 // ── ingestion.entity_type_mappings ────────────────────────────────────────────
 
 export const entityTypeMappings = ingestionSchema.table(

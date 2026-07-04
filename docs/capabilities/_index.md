@@ -58,12 +58,18 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.task.background.cancel](agent.task.background.cancel.md) — Cancel a running background task; downstream Inngest steps stop on cancellation
 - [agent.task.background.read](agent.task.background.read.md) — Read the current status, progress markers, and final result of a background task
 - [agent.task.background.start](agent.task.background.start.md) — Dispatch a long-running task as a durable Inngest job; the chat stream polls for status
+- [agent.execution.list](agent.execution.list.md) — List recent top-level agent runs for the workspace, newest first, with keyset pagination — each row's status, origin, duration, and token/cost figures
 - [agent.tool.list](agent.tool.list.md) — List the capabilities surfaced as agent tools for the active workspace, filtered by role, entitlements, and denylist
+- [agent.trace.get](agent.trace.get.md) — Fetch one agent execution as a collapsible span tree: the run, its ordered steps, each step's tool calls with durations/tokens/cost/status, and child executions (subagent/A2A lineage)
 - [agent.trigger.create](agent.trigger.create.md) — Create a manual, scheduled (cron), or event trigger for an agent, validated against the trigger schema
 - [agent.trigger.delete](agent.trigger.delete.md) — Soft-delete an agent trigger so the binding stops firing while preserving the audit record
 - [agent.trigger.list](agent.trigger.list.md) — List the non-deleted triggers configured for an agent in the current workspace
 - [agent.trigger.update](agent.trigger.update.md) — Update an agent trigger in place, replacing its type-specific binding and enabled flag
 - [agent.ui.render](agent.ui.render.md) — Render a structured UI component from an agent response; the client maps the component type to a React renderer
+
+## A2A (1)
+
+- [a2a.card.get](a2a.card.get.md) — Read the workspace's A2A (Agent2Agent) protocol Agent Card advertising its exposed agents as skills, its JSON-RPC transport endpoint, and its authentication scheme
 
 ## Api (3)
 

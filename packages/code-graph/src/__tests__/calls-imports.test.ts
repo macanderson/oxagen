@@ -14,7 +14,8 @@
  *  - imports: import_statement specifiers (relative + bare + @oxagen/*)
  *  - imports: export_statement re-exports
  *  - imports: deduplication
- *  - Python: calls/imports are omitted (undefined)
+ *  - Python: call extraction (identifier + attribute callee), enclosing symbol resolution
+ *  - Python: import_statement + import_from_statement specifier extraction
  *  - Markdown: calls/imports are omitted (undefined)
  */
 
@@ -293,7 +294,7 @@ describe("parseSourceFile — CALLS extraction", () => {
     expect(computeCalls).toHaveLength(1);
   });
 
-  it("omits calls for Python files", async () => {
+  it("produces a calls array (empty) for a Python file with no calls", async () => {
     const fnNameNode = buildNode({ type: "identifier", text: "run", startRow: 0 });
     const fnNode = buildNode({ type: "function_definition", startRow: 0, endRow: 2 });
 
@@ -311,7 +312,7 @@ describe("parseSourceFile — CALLS extraction", () => {
     const result = await parseSourceFile("script.py", "def run(): pass");
 
     expect(result.language).toBe("python");
-    expect(result.calls).toBeUndefined();
+    expect(result.calls).toEqual([]);
   });
 
   it("omits calls for Markdown files (no tree-sitter invoked)", async () => {
@@ -432,7 +433,7 @@ describe("parseSourceFile — IMPORTS extraction", () => {
     expect(aiImport!.line).toBe(5);
   });
 
-  it("omits imports for Python files", async () => {
+  it("produces an imports array (empty) for a Python file with no imports", async () => {
     const fnNameNode = buildNode({ type: "identifier", text: "fn", startRow: 0 });
     const fnNode = buildNode({ type: "function_definition", startRow: 0, endRow: 1 });
     const fakeLang = makeFakeLanguage({
@@ -446,6 +447,173 @@ describe("parseSourceFile — IMPORTS extraction", () => {
 
     const result = await parseSourceFile("script.py", "def fn(): pass");
 
-    expect(result.imports).toBeUndefined();
+    expect(result.imports).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Python call + import extraction
+// ---------------------------------------------------------------------------
+
+// Normalised Python query strings — must match the constants in index.ts after
+// whitespace normalisation.
+const PY_CALL_QUERY =
+  "(call function: [(identifier) @callee (attribute attribute: (identifier) @callee)]) @node";
+const PY_IMPORT_QUERY =
+  "(import_statement name: [(dotted_name) @specifier (aliased_import name: (dotted_name) @specifier)]) @node";
+const PY_IMPORT_FROM_QUERY =
+  "(import_from_statement module_name: (dotted_name) @specifier) @node";
+
+// Blank matches for the Python symbol queries; individual tests override the ones they need.
+function blankPySymbolMatches(): Record<string, Match[]> {
+  return {
+    "(function_definition name: (identifier) @name) @node": [],
+    "(class_definition name: (identifier) @name) @node": [],
+  };
+}
+
+describe("parseSourceFile — Python CALLS + IMPORTS extraction", () => {
+  beforeEach(() => {
+    _resetForTest();
+    mocks.parserInstances.length = 0;
+    vi.clearAllMocks();
+    mocks.parserInit.mockResolvedValue(undefined);
+  });
+
+  // Fixture (0-indexed lines):
+  //   0: import os
+  //   1: from a.b import c
+  //   2:
+  //   3: def helper():
+  //   4:     return os.getpid()
+  //   5:
+  //   6: def do_work():
+  //   7:     helper()
+  //
+  // Expected symbols: helper (3-4), do_work (6-7)
+  // Expected calls:
+  //   getpid @ line 4, enclosingSymbol "helper" (attribute callee os.getpid())
+  //   helper @ line 7, enclosingSymbol "do_work" (identifier callee helper())
+  // Expected imports:
+  //   os  @ line 0 (import_statement)
+  //   a.b @ line 1 (import_from_statement module_name)
+  function buildPythonModule(): {
+    content: string;
+    queryMatches: Record<string, Match[]>;
+  } {
+    const content = [
+      "import os",
+      "from a.b import c",
+      "",
+      "def helper():",
+      "    return os.getpid()",
+      "",
+      "def do_work():",
+      "    helper()",
+    ].join("\n");
+
+    // Symbols
+    const helperName = buildNode({ type: "identifier", text: "helper", startRow: 3 });
+    const helperDef = buildNode({ type: "function_definition", startRow: 3, endRow: 4 });
+    const doWorkName = buildNode({ type: "identifier", text: "do_work", startRow: 6 });
+    const doWorkDef = buildNode({ type: "function_definition", startRow: 6, endRow: 7 });
+
+    // Calls
+    const getpidCallee = buildNode({ type: "identifier", text: "getpid", startRow: 4 });
+    const getpidCall = buildNode({ type: "call", startRow: 4, endRow: 4 });
+    const helperCallee = buildNode({ type: "identifier", text: "helper", startRow: 7 });
+    const helperCall = buildNode({ type: "call", startRow: 7, endRow: 7 });
+
+    // Imports
+    const osSpecifier = buildNode({ type: "dotted_name", text: "os", startRow: 0 });
+    const osStmt = buildNode({ type: "import_statement", startRow: 0, endRow: 0 });
+    const abSpecifier = buildNode({ type: "dotted_name", text: "a.b", startRow: 1 });
+    const abStmt = buildNode({ type: "import_from_statement", startRow: 1, endRow: 1 });
+
+    const queryMatches: Record<string, Match[]> = {
+      ...blankPySymbolMatches(),
+      "(function_definition name: (identifier) @name) @node": [
+        { captures: [{ name: "name", node: helperName }, { name: "node", node: helperDef }] },
+        { captures: [{ name: "name", node: doWorkName }, { name: "node", node: doWorkDef }] },
+      ],
+      [PY_CALL_QUERY]: [
+        { captures: [{ name: "callee", node: getpidCallee }, { name: "node", node: getpidCall }] },
+        { captures: [{ name: "callee", node: helperCallee }, { name: "node", node: helperCall }] },
+      ],
+      [PY_IMPORT_QUERY]: [
+        { captures: [{ name: "specifier", node: osSpecifier }, { name: "node", node: osStmt }] },
+      ],
+      [PY_IMPORT_FROM_QUERY]: [
+        { captures: [{ name: "specifier", node: abSpecifier }, { name: "node", node: abStmt }] },
+      ],
+    };
+
+    return { content, queryMatches };
+  }
+
+  function runPythonFixture(fixture: {
+    content: string;
+    queryMatches: Record<string, Match[]>;
+  }) {
+    const fakeLang = makeFakeLanguage(fixture.queryMatches);
+    // Python is the SECOND grammar loaded (ts first, then py) in the loader.
+    mocks.languageLoad.mockResolvedValueOnce({}).mockResolvedValueOnce(fakeLang);
+    makeParserInstance({ rootNode: buildNode({ type: "module" }) }, fakeLang);
+    return parseSourceFile("pipeline/data.py", fixture.content);
+  }
+
+  it("extracts an identifier call with its enclosing Python function", async () => {
+    const result = await runPythonFixture(buildPythonModule());
+
+    expect(result.language).toBe("python");
+    expect(result.calls).toBeDefined();
+
+    const helperCall = result.calls!.find((c) => c.callee === "helper");
+    expect(helperCall).toBeDefined();
+    expect(helperCall!.line).toBe(7);
+    expect(helperCall!.enclosingSymbol).toBe("do_work");
+  });
+
+  it("extracts an attribute call (os.getpid()) capturing the final attribute as callee", async () => {
+    const result = await runPythonFixture(buildPythonModule());
+
+    const getpidCall = result.calls!.find((c) => c.callee === "getpid");
+    expect(getpidCall).toBeDefined();
+    expect(getpidCall!.line).toBe(4);
+    expect(getpidCall!.enclosingSymbol).toBe("helper");
+  });
+
+  it("extracts import_statement and import_from_statement specifiers", async () => {
+    const result = await runPythonFixture(buildPythonModule());
+
+    expect(result.imports).toBeDefined();
+    const specifiers = result.imports!.map((i) => i.specifier);
+    expect(specifiers).toContain("os");
+    expect(specifiers).toContain("a.b");
+
+    const osImport = result.imports!.find((i) => i.specifier === "os");
+    expect(osImport!.line).toBe(0);
+    const abImport = result.imports!.find((i) => i.specifier === "a.b");
+    expect(abImport!.line).toBe(1);
+  });
+
+  it("sets enclosingSymbol = null for a module-level Python call", async () => {
+    const calleeNode = buildNode({ type: "identifier", text: "configure", startRow: 0 });
+    const callNode = buildNode({ type: "call", startRow: 0, endRow: 0 });
+
+    const queryMatches: Record<string, Match[]> = {
+      ...blankPySymbolMatches(),
+      [PY_CALL_QUERY]: [
+        { captures: [{ name: "callee", node: calleeNode }, { name: "node", node: callNode }] },
+      ],
+      [PY_IMPORT_QUERY]: [],
+      [PY_IMPORT_FROM_QUERY]: [],
+    };
+
+    const result = await runPythonFixture({ content: "configure()", queryMatches });
+
+    const call = result.calls!.find((c) => c.callee === "configure");
+    expect(call).toBeDefined();
+    expect(call!.enclosingSymbol).toBeNull();
   });
 });
