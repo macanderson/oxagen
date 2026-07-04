@@ -30,6 +30,31 @@ export class FanoutNotFoundError extends Error {
   }
 }
 
+/**
+ * Thrown when a subagent child run cannot be resolved for the given public_id
+ * in the current tenant scope — unknown, purged, or cross-tenant. Surfaces
+ * (api/mcp) should map this to a 404, NOT a 500.
+ */
+export class SubagentRunNotFoundError extends Error {
+  readonly code = "subagent_run_not_found";
+  readonly runId: string;
+  constructor(runId: string) {
+    super(`Subagent run ${runId} not found`);
+    this.name = "SubagentRunNotFoundError";
+    this.runId = runId;
+  }
+}
+
+/** Structural type guard — see isFanoutNotFoundError for the rationale. */
+export function isSubagentRunNotFoundError(err: unknown): err is SubagentRunNotFoundError {
+  return (
+    err instanceof SubagentRunNotFoundError ||
+    (err instanceof Error &&
+      "code" in err &&
+      (err as { code?: unknown }).code === "subagent_run_not_found")
+  );
+}
+
 /** Structural type guard — matches across a package boundary via the `code`
  * discriminant even when `instanceof` would fail on a duplicated class identity. */
 export function isFanoutNotFoundError(err: unknown): err is FanoutNotFoundError {

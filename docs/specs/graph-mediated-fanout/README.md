@@ -134,19 +134,17 @@ child finishes, with zero LLM calls:
 that want better summaries add a `summary` field to their output schema — an
 incremental, per-capability improvement path that needs no coordination.
 
-### 4. Graph projection of child results (async, existing rails)
+### 4. Graph projection of child results (moved to Phase 2)
 
-Each completed child is projected to Neo4j as an `:Execution` node via the
-existing `recordExecutionInGraph`
-(`packages/ontology/src/mutations/record-execution.ts:48`) / the
-`agent.sync-execution-to-graph` Inngest function — fire-and-forget, off the hot
-path:
-
-- Set `properties.fanoutId` and `properties.runId` on the `:Execution` node, and
-  `summary` to the structural summary from §3.
-- This makes fanout results discoverable through the graph (memory recall,
-  lineage queries) and is the substrate Phase 2 peer reads will use. It adds no
-  tokens and no latency to the parent loop.
+**Implementation note (2026-07-03):** deferred out of Phase 1. The existing
+rails (`recordExecutionInGraph`, `agent.sync-execution-to-graph`) key off an
+`agent_executions` Postgres row and require an `originType`/`originId` pair
+mapped through `originLabelFor` — a subagent run has neither today, and
+inventing an origin shape ad hoc would bake wrong ontology semantics into the
+graph. Projection of child results as `:Execution` nodes (with
+`properties.fanoutId`/`runId` and the §3 summary) moves to the Phase 2 spec,
+where the peer-read model that consumes it is designed. It contributes nothing
+to the Phase 1 token/latency win — nothing on the hot path references it.
 
 ### 5. Fewer aggregate polls
 
@@ -172,7 +170,7 @@ aggregate tool while the fanout is still running:
 | Contract | `packages/oxagen/src/contracts/agent.subagent.result.get.ts` | new |
 | Handler | `packages/agent/src/handlers/agent.subagent.aggregate.ts` | compact mapping, caps, pending short-circuit |
 | Handler | `packages/agent/src/handlers/agent.subagent.result.get.ts` | new, `withTenantDb` |
-| Runtime dispatcher | `packages/agent/src/dispatch/subagent.ts` | `readFanout()` mirrors compact shape |
+| Runtime dispatcher | `packages/agent/src/dispatch/subagent.ts` | unchanged — `readFanout()` has no production consumers (tests only); reshaping it is churn without benefit |
 | Executor | `packages/inngest-functions/src/functions/agent.execute-subagent.ts` | write `summary` on completion; enrich graph-sync properties |
 | Migration | `packages/database/migrations/NNNN_subagent_runs_summary.sql` | add `summary text` |
 | MCP | `apps/mcp/src/tools/agent.subagent.aggregate.ts` | schema + description update |

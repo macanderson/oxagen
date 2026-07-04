@@ -39,6 +39,7 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.subagent.cancel](agent.subagent.cancel.md) — Cancel an in-progress subagent fan-out; transitions the fanout and all non-terminal child runs to a terminal status
 - [agent.subagent.dispatch](agent.subagent.dispatch.md) — Fan out a set of tasks to multiple subagents running in parallel; returns a dispatchId to poll via agent.subagent.aggregate
 - [agent.subagent.logs](agent.subagent.logs.md) — Generate a downloadable markdown logfile for a fan-out, traceable down to each subagent's query and individual results
+- [agent.subagent.result.get](agent.subagent.result.get.md) — Fetch one subagent child run's full input + output by runId; the on-demand counterpart to compact agent.subagent.aggregate
 - [agent.task.background.cancel](agent.task.background.cancel.md) — Cancel a running background task; downstream Inngest steps stop on cancellation
 - [agent.task.background.read](agent.task.background.read.md) — Read the current status, progress markers, and final result of a background task
 - [agent.task.background.start](agent.task.background.start.md) — Dispatch a long-running task as a durable Inngest job; the chat stream polls for status

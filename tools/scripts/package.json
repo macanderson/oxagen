@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@oxagen/bench": "workspace:*",
     "@oxagen/billing": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",

@@ -5,6 +5,8 @@
 
 This spec builds on the "Scalpel" work (`docs/specs/swe-rank1-scalpel.md`): the report is how we *see* whether each Scalpel feature moved the needle, run over run.
 
+> **Corrected 2026-07-04 (see PR that added this note):** the bench ClickHouse schema + ingestion + CLI shipped as a **private, never-published `packages/bench` package**, not inside `packages/telemetry`/`apps/cli` as first written below. The distributed `oxagen` CLI must never carry bench tooling — that was the whole point of the restructure. Paths and CLI invocations in this section (and in R1/R-B below) are updated to match; the *design intent* of R1/R2 is untouched, only *where the code lives* changed. If you're implementing against this spec, use the corrected paths, not the originals.
+
 ---
 
 ## 0. What already exists (build on it, don't rebuild)
@@ -37,7 +39,7 @@ A generator that, given one benchmark run (by `#public_id` from ClickHouse, or b
 
 `tools/scripts/bench-report.ts` (TypeScript via `tsx`, `.env.local`-aware, ClickHouse-queryable), exposed as:
 - `pnpm bench:report <run-public-id> [--out <path>]` (new root `package.json` script), and
-- `oxagen bench report #N [--out <path>] [--open]` — a thin new subcommand in `apps/cli/src/commands/bench.ts` wrapping the same core function (`generateBenchReport`), so it's reachable from the CLI users already know.
+- `pnpm --filter @oxagen/bench report -- #N [--out <path>] [--open]` — a thin new subcommand added to `packages/bench/src/cli.ts`/`commands.ts` wrapping the same core function (`generateBenchReport`). **Not `apps/cli`** — bench tooling must never ship in the product CLI (see the private-package restructure).
 
 Auto-hook: `run.sh` calls `pnpm bench:report` (best-effort, non-fatal) after a run finishes and its results are ingested, writing `results-$AGENT/<job>/bench-report-<job-name>.html` next to `bench-config.json`. The `<timestamp>` in the filename is the job name (already a UTC timestamp, `run.sh:157`).
 
