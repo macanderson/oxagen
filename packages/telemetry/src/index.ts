@@ -1,5 +1,6 @@
 export * from "./clickhouse";
 export * from "./client";
+export * from "./idempotency";
 export { migrate as migrateClickhouse } from "./migrate";
 export * from "./security";
 export * from "./skill-telemetry";

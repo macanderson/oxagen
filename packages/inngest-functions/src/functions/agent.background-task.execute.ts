@@ -2,7 +2,7 @@ import { createFunction } from "../create-function";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { invoke } from "@oxagen/oxagen/kernel";
-import { insertToolInvocation } from "@oxagen/telemetry";
+import { insertToolInvocation, deterministicEventId } from "@oxagen/telemetry";
 import { runInTenantScope } from "@oxagen/tenancy";
 import "@oxagen/oxagen";
 import { logger } from "../logger";
@@ -60,7 +60,13 @@ export const [agentBackgroundTaskExecute] = createFunction(
       ),
     );
 
-    const invocationId = crypto.randomUUID();
+    // Deterministic — not crypto.randomUUID() — so a replayed/retried
+    // invocation of this function derives the same tool_invocations row id
+    // rather than minting a fresh random one each time the function body
+    // re-executes. The actual double-insert guard is the step.run wrapper
+    // around each insertToolInvocation call below (see OXA reliability
+    // fix: retried Inngest steps double-counting ClickHouse telemetry).
+    const invocationId = deterministicEventId("agent.background-task.execute", taskId);
     const startedAt = Date.now();
     const capabilityName = p.capability;
 
@@ -99,32 +105,37 @@ export const [agentBackgroundTaskExecute] = createFunction(
           ),
         ),
       );
-      // Write tool_invocations row for metering (OXA-1498).
-      try {
-        await insertToolInvocation({
-          invocation_id: invocationId,
-          org_id: orgId,
-          workspace_id: workspaceId,
-          capability_name: capabilityName ?? "unknown",
-          message_id: taskId,
-          parent_message_id: null,
-          execution_step_id: null,
-          status: "completed",
-          input_size_bytes: 0,
-          output_size_bytes: 0,
-          latency_ms: Date.now() - startedAt,
-          error_class: null,
-          external_provider: "",
-          external_server_id: null,
-          risk_level: "low",
-          required_approval: 0,
-          surface: "runner",
-          provider: "",
-          created_at: new Date().toISOString(),
-        });
-      } catch (telErr) {
-        logger.warn({ err: telErr }, 'insertToolInvocation failed — telemetry loss');
-      }
+      // Write tool_invocations row for metering (OXA-1498). Wrapped in its
+      // own memoized step so a retry/replay of this function after this
+      // point never re-inserts the row (tool_invocations is a plain
+      // append-only MergeTree — no dedup on re-insert).
+      await step.run("emit-tool-invocation-completed", async () => {
+        try {
+          await insertToolInvocation({
+            invocation_id: invocationId,
+            org_id: orgId,
+            workspace_id: workspaceId,
+            capability_name: capabilityName ?? "unknown",
+            message_id: taskId,
+            parent_message_id: null,
+            execution_step_id: null,
+            status: "completed",
+            input_size_bytes: 0,
+            output_size_bytes: 0,
+            latency_ms: Date.now() - startedAt,
+            error_class: null,
+            external_provider: "",
+            external_server_id: null,
+            risk_level: "low",
+            required_approval: 0,
+            surface: "runner",
+            provider: "",
+            created_at: new Date().toISOString(),
+          });
+        } catch (telErr) {
+          logger.warn({ err: telErr }, 'insertToolInvocation failed — telemetry loss');
+        }
+      });
       logger.info({ taskId, orgId, workspaceId }, "agent.background-task.execute completed");
       return { taskId, status: "completed" };
     } catch (err) {
@@ -147,32 +158,35 @@ export const [agentBackgroundTaskExecute] = createFunction(
           ),
         ),
       );
-      // Write failed metering row.
-      try {
-        await insertToolInvocation({
-          invocation_id: invocationId,
-          org_id: orgId,
-          workspace_id: workspaceId,
-          capability_name: capabilityName ?? "unknown",
-          message_id: taskId,
-          parent_message_id: null,
-          execution_step_id: null,
-          status: "failed",
-          input_size_bytes: 0,
-          output_size_bytes: 0,
-          latency_ms: Date.now() - startedAt,
-          error_class: err instanceof Error ? err.name : "UnknownError",
-          external_provider: "",
-          external_server_id: null,
-          risk_level: "low",
-          required_approval: 0,
-          surface: "runner",
-          provider: "",
-          created_at: new Date().toISOString(),
-        });
-      } catch (telErr) {
-        logger.warn({ err: telErr }, 'insertToolInvocation failed — telemetry loss');
-      }
+      // Write failed metering row. Wrapped in its own memoized step — see
+      // the completed-path comment above for why.
+      await step.run("emit-tool-invocation-failed", async () => {
+        try {
+          await insertToolInvocation({
+            invocation_id: invocationId,
+            org_id: orgId,
+            workspace_id: workspaceId,
+            capability_name: capabilityName ?? "unknown",
+            message_id: taskId,
+            parent_message_id: null,
+            execution_step_id: null,
+            status: "failed",
+            input_size_bytes: 0,
+            output_size_bytes: 0,
+            latency_ms: Date.now() - startedAt,
+            error_class: err instanceof Error ? err.name : "UnknownError",
+            external_provider: "",
+            external_server_id: null,
+            risk_level: "low",
+            required_approval: 0,
+            surface: "runner",
+            provider: "",
+            created_at: new Date().toISOString(),
+          });
+        } catch (telErr) {
+          logger.warn({ err: telErr }, 'insertToolInvocation failed — telemetry loss');
+        }
+      });
       logger.error({ taskId, orgId, err }, "agent.background-task.execute failed");
       throw err;
     }

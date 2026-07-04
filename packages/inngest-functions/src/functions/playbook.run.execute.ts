@@ -4,7 +4,12 @@ import { and, eq } from "drizzle-orm";
 import { generateObjectFor } from "@oxagen/ai";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { NonRetriableError } from "@oxagen/functions";
-import { insertEvents, insertToolInvocation, type EventRow } from "@oxagen/telemetry";
+import {
+  insertEvents,
+  insertToolInvocation,
+  deterministicEventId,
+  type EventRow,
+} from "@oxagen/telemetry";
 import { invoke } from "@oxagen/oxagen/kernel";
 import "@oxagen/oxagen";
 import { z } from "zod";
@@ -1084,56 +1089,71 @@ export const [playbookRunExecute] = createFunction(
       currentSequence++;
 
       // ── ClickHouse telemetry per step ───────────────────────────────────────
-      const telRow: EventRow = {
-        event_id: crypto.randomUUID(),
-        org_id: orgId,
-        workspace_id: workspaceId,
-        event_type: "playbook_step.executed",
-        source_system: "runner",
-        stream_offset: null,
-        payload: JSON.stringify({
-          runId,
-          stepId: stepDef.id,
-          stepKey: stepDef.stepKey,
-          stepType: stepDef.stepType,
-          status: stepStatus,
-          latencyMs: Date.now() - stepStartedAt,
-          error: stepError,
-        }),
-        emitted_at: new Date().toISOString(),
-      };
-
-      try {
-        await insertEvents([telRow]);
-      } catch (telErr) {
-        logger.warn({ telErr, stepId: stepDef.id }, "playbook-run-execute: insertEvents failed");
-      }
-
-      try {
-        await insertToolInvocation({
-          invocation_id: stepInvocationId,
+      // Wrapped in its own memoized step keyed by (runId, stepDef.id) — the
+      // per-step loop body above this point runs many step.run calls per
+      // iteration, and Inngest replays the whole function from the top to
+      // reach each one. Un-stepped code between those replays re-executes on
+      // every replay that passes through it, not just on genuine failures —
+      // an unwrapped insertEvents()/insertToolInvocation() here duplicated a
+      // `playbook_step.executed` event (and a tool_invocations row) on every
+      // subsequent step checkpoint in the same iteration. Both `events` and
+      // `tool_invocations` are plain append-only MergeTree tables — no
+      // background dedup — so those duplicates were permanent. event_id /
+      // invocation_id are now derived deterministically from (runId,
+      // stepDef.id) instead of crypto.randomUUID() so the row identity is
+      // reproducible rather than re-randomized per replay.
+      await step.run(`emit-step-telemetry-${stepDef.id}`, async () => {
+        const telRow: EventRow = {
+          event_id: deterministicEventId(runId, stepDef.id, "playbook_step.executed"),
           org_id: orgId,
           workspace_id: workspaceId,
-          capability_name: `playbook.step.${stepDef.stepType}`,
-          message_id: stepRunId,
-          parent_message_id: runId,
-          execution_step_id: null,
-          status: stepStatus === "completed" ? "completed" : "failed",
-          input_size_bytes: 0,
-          output_size_bytes: 0,
-          latency_ms: Date.now() - stepStartedAt,
-          error_class: stepError !== null ? "StepError" : null,
-          external_provider: "",
-          external_server_id: null,
-          risk_level: "low",
-          required_approval: stepStatus === "waiting_approval" ? 1 : 0,
-          surface: "runner",
-          provider: "",
-          created_at: new Date().toISOString(),
-        });
-      } catch (telErr) {
-        logger.warn({ telErr }, "playbook-run-execute: insertToolInvocation failed");
-      }
+          event_type: "playbook_step.executed",
+          source_system: "runner",
+          stream_offset: null,
+          payload: JSON.stringify({
+            runId,
+            stepId: stepDef.id,
+            stepKey: stepDef.stepKey,
+            stepType: stepDef.stepType,
+            status: stepStatus,
+            latencyMs: Date.now() - stepStartedAt,
+            error: stepError,
+          }),
+          emitted_at: new Date().toISOString(),
+        };
+
+        try {
+          await insertEvents([telRow]);
+        } catch (telErr) {
+          logger.warn({ telErr, stepId: stepDef.id }, "playbook-run-execute: insertEvents failed");
+        }
+
+        try {
+          await insertToolInvocation({
+            invocation_id: deterministicEventId(runId, stepDef.id, "tool_invocation"),
+            org_id: orgId,
+            workspace_id: workspaceId,
+            capability_name: `playbook.step.${stepDef.stepType}`,
+            message_id: stepRunId,
+            parent_message_id: runId,
+            execution_step_id: null,
+            status: stepStatus === "completed" ? "completed" : "failed",
+            input_size_bytes: 0,
+            output_size_bytes: 0,
+            latency_ms: Date.now() - stepStartedAt,
+            error_class: stepError !== null ? "StepError" : null,
+            external_provider: "",
+            external_server_id: null,
+            risk_level: "low",
+            required_approval: stepStatus === "waiting_approval" ? 1 : 0,
+            surface: "runner",
+            provider: "",
+            created_at: new Date().toISOString(),
+          });
+        } catch (telErr) {
+          logger.warn({ telErr }, "playbook-run-execute: insertToolInvocation failed");
+        }
+      });
 
       stepsExecuted++;
 
@@ -1287,22 +1307,34 @@ export const [playbookRunExecute] = createFunction(
     );
 
     // ── ClickHouse run-level telemetry ──────────────────────────────────────
-    try {
-      await insertEvents([
-        {
-          event_id: crypto.randomUUID(),
-          org_id: orgId,
-          workspace_id: workspaceId,
-          event_type: "playbook_run.completed",
-          source_system: "runner",
-          stream_offset: null,
-          payload: JSON.stringify({ runId, stepsExecuted }),
-          emitted_at: new Date().toISOString(),
-        },
-      ]);
-    } catch (telErr) {
-      logger.warn({ telErr }, "playbook-run-execute: final insertEvents failed");
-    }
+    // Wrapped in its own memoized step: this was the last statement before
+    // `return`, but "last statement" does not mean "runs exactly once" in
+    // Inngest's execution model — if the worker process is interrupted after
+    // this insert succeeds but before the function's return value is
+    // acknowledged, Inngest replays the whole function from the top. Every
+    // earlier step.run is memoized and skipped, but this raw insertEvents()
+    // call was not, so the replay re-inserted a duplicate
+    // `playbook_run.completed` row into the append-only (non-Replacing)
+    // `events` MergeTree table. event_id is now derived deterministically
+    // from (runId, "run.completed") instead of crypto.randomUUID().
+    await step.run("emit-run-completed-telemetry", async () => {
+      try {
+        await insertEvents([
+          {
+            event_id: deterministicEventId(runId, "playbook_run.completed"),
+            org_id: orgId,
+            workspace_id: workspaceId,
+            event_type: "playbook_run.completed",
+            source_system: "runner",
+            stream_offset: null,
+            payload: JSON.stringify({ runId, stepsExecuted }),
+            emitted_at: new Date().toISOString(),
+          },
+        ]);
+      } catch (telErr) {
+        logger.warn({ telErr }, "playbook-run-execute: final insertEvents failed");
+      }
+    });
 
     logger.info({ runId, orgId, workspaceId, stepsExecuted }, "playbook-run-execute: completed");
 
