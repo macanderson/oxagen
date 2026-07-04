@@ -1,5 +1,53 @@
 # Changelog
 
+## Oxagen v1.0.0
+
+Oxagen's first 1.0 release. Since v0.8.0 the platform has gained a from-scratch **CLI coding agent** (full-screen TUI REPL, `oxagen solve` best-of-N, `oxagen pr fix`, a local code-graph context layer, workspace config, BYOK/local modes, and anonymous opt-out telemetry), a new shared **`@oxagen/agent-engine`** package implementing SWE-bench-grade agent techniques (localization, priors, consensus, adaptive compute ladder), a rebuilt **benchmark stack** (ClickHouse-backed bench telemetry, `oxagen bench` CLI, terminal-bench/SWE-bench harness hardening), and a round of tenant-scoping and billing fixes that closed a real revenue leak. ~8,400 lines of pre-migration CLI dead code were removed as part of an engine-unification effort, and the model catalog was consolidated onto Sonnet 5 / Fable 5 as the single source of truth.
+
+### Features
+
+**CLI / REPL**
+- Full-screen TUI REPL rewrite: pinned prompt bar, Agent Team + Task Progress side panel with arrow-key navigation, a live `!command` terminal panel, `/hud` running-agents view, and a `/motion full|reduced|off` animation toggle (#396, #400, #452, #532, #535, `c20e8a87`).
+- `oxagen solve` — best-of-N task solving with a live multi-lane view, plus pipeline-per-candidate mode, differentiated config, auto-verify test union, N=5 cross-family runs, and a cache-forked (trunk-snapshot + consensus-select) mode (#446, #455, #498, #502, #505, #534).
+- `oxagen pr fix` — an active fix-to-green loop for PR CI (#452).
+- Real per-turn planning + fleet subagent fan-out in the interactive TUI, with fleet cancel-drain, isolate-by-default, and headless `--json` mode (#453, #535).
+- Local, free, AI-SDK-free embedding providers (Ollama/ONNX) for the code graph, plus `semantic_search` over the local graph and a `graph push` command to ship pre-computed vectors (#451, #496, `b5567626`).
+- Workspace config foundation: `oxagen config` commands, a 4-scope governed resolver, and a multi-scope indexer (#449, #464).
+- Mine recurring lessons into promotable workspace rules (#450).
+- Anonymous, opt-out-by-default CLI usage telemetry (`oxagen telemetry on|off|status`, `DO_NOT_TRACK`/`OXAGEN_TELEMETRY`) — see new `TELEMETRY.md` (#519).
+- BYOK improvements: `ANTHROPIC_API_KEY` direct-API fallback, `AI_GATEWAY_API_KEY` local mode without an Oxagen login, and an AI SDK v7 / provider-v4 migration (#462, #487, #492).
+- Space-invaders + OXAGEN reveal animation on `oxagen init`, rocket-vs-UFO thinking animation, and slash-menu v2 (#471, #472, #504).
+- REPO panel (worktree path/branch/PR#), `/coordinator remote|local` on-device toggle, and paste-as-placeholder for images/large text (#408, #466, #497).
+
+**Agent engine & bench**
+- New `@oxagen/agent-engine` modules implementing the SWE-bench rank-1 "scalpel" spec: deterministic localization, per-repo procedural priors, memory-recall applicability filtering, an adaptive verification-gated compute ladder, consensus/diagnosis/select for best-of-N, and a spec-first oracle gate (#514, #520, #521, #522).
+- Compact-by-default fan-out aggregate + new `agent.subagent.result.get` capability (#527, #530).
+- Bench: ClickHouse schema + typed ingestion, `oxagen bench list/replay`, and best-of-N wired into the terminal-bench adapter (#488, #517, #524).
+- AI Gateway key rotation script (`pnpm vercel:rotate-ai-key`) (#515).
+
+**Docs & site**
+- CLI install landing page with a site-wide install button, TUI screenshot-style SVG illustrations, and `install.sh` (#482, #483, #484).
+- New spec docs: Rust CLI standalone OSS/BYOK plan, graph-mediated fan-out (blackboard-lite), and workspace-config design.
+
+### Fixes
+
+- **Billing**: post-call credit charges (video/object/image/embed) threw and were silently swallowed inside Inngest due to missing tenant scope, resulting in free/unbilled generations — fixed by wrapping charges in `runInTenantScope` (#480). The dunning-sweep low-balance check also lacked tenant scope and misfired for every org (#392).
+- **Judge heuristic** was hardcoded to a 30/100 confidence score with the wrong advisor model (#391).
+- **Video generation**: durations now snap to the model-supported set with provider alternatives surfaced, and Vercel `maxDuration` raised to 800s so Inngest video renders no longer 504 (#477, #478, `e7c404dd`, `c8f00a87`).
+- **AI SDK v7**: system-in-messages was disallowed and broke every platform CLI turn — restored (#493).
+- CLI stability: repaired REPL crash on launch, duplicated output, Esc-interrupt wedging the prompt queue, stale `/mouse` toggle, SGR mouse-report garbage in the prompt input, agent bash hanging forever past timeout, and the bundled code graph breaking under `__dirname` in ESM (a bench-blocking P0) (#385, #405, #457, #465, #475, #503, #508).
+- Structurally block test-file edits during benchmark runs via `OXAGEN_FORBID_TEST_EDITS` (#474).
+- Repeated `.env.example`/`ENV_REGISTRY` registration/dedup fixes for `OXAGEN_CLI_MOTION`, `OXAGEN_PLAN_TIMEOUT_MS`, `OXAGEN_CLI_MOUSE`, `OXAGEN_MID_JUDGE_STEPS`, `OXAGEN_BEST_OF_N_VERIFY`, `OXAGEN_PROMPT_PROFILE`, and `DO_NOT_TRACK`/`OXAGEN_TELEMETRY` (#427, #486, #499, #512, #537, #539).
+- Repaired the SWE-bench harness for current harbor and pinned its version; uploaded tree-sitter wasm assets into the bench container (#461, #470).
+
+### Internal
+
+- Removed ~8,400 LOC of dead pre-migration CLI code (the old `pipeline/`, `orchestrator/`, `monitors/`, `contracts/`, and welcome-screen modules) as part of an engine-unification effort with shared tool seams and one-shot parity (#440, #442, #443, #444).
+- Model catalog consolidated: retired Sonnet 4.6 → Sonnet 5 sweep across the codebase, balanced tier defaults to Sonnet 5, precise tier promoted to Fable 5, with a single source-of-truth `model-catalog.ts` and an anti-drift test (#425, #489, #506, #511).
+- CI: bumped the whole-repo-affected test job timeout from 30m to 60m (#513); numerous "get main green" merge-artifact and lint/typecheck repairs throughout the log.
+- Extensive new test coverage across the CLI (config, context/graph, telemetry, REPL panels, best-of-N, on-device runtime) and `@oxagen/agent-engine` (consensus, diagnosis, localize, oracle, priors, shrink, ladder, model-cache, fork).
+- `packages/bench` restructured as a private package with its own ClickHouse migrations and typed ingestion/query/replay modules (#526, #528).
+
 ## Oxagen v0.10.0
 
 This release significantly overhauls the CLI's interactive REPL experience — introducing a full-screen TUI with live agent and task progress panels, a `!command` terminal panel for running shell commands inline, arrow-key panel navigation, a pinned prompt bar, and a new `/coordinator remote|local` command for switching to on-device GGUF inference. It also promotes the "precise" model tier from Opus to Fable, fixes several long-standing REPL stability bugs, and hardens the billing dunning sweep and judge heuristic.
