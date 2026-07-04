@@ -5,6 +5,8 @@ import {
   supportsReasoning,
   supportsImage,
   supportsVideo,
+  supportsVision,
+  supportsVideoInput,
   supportsText,
   supportsMedia,
   capabilityLabel,
@@ -43,6 +45,29 @@ describe("model catalog (@oxagen/ai/catalog)", () => {
     // Unknown ids are conservatively false — the caller can't describe them.
     expect(supportsReasoning("unknown/model")).toBe(false);
     expect(supportsReasoning(undefined)).toBe(false);
+  });
+
+  it("distinguishes vision (image input) from image generation", () => {
+    // Claude/GPT chat models take image INPUT (vision) but do not GENERATE images.
+    expect(supportsVision("anthropic/claude-opus-4.8")).toBe(true);
+    expect(supportsImage("anthropic/claude-opus-4.8")).toBe(false);
+    // A pure image-generation model is not a vision (input) model.
+    expect(supportsVision("openai/gpt-image-1")).toBe(false);
+    // Unknown / undefined are conservatively false.
+    expect(supportsVision("unknown/model")).toBe(false);
+    expect(supportsVision(undefined)).toBe(false);
+  });
+
+  it("distinguishes video INPUT (Gemini) from video generation (Veo)", () => {
+    // Gemini accepts video file parts as input; it does not generate video.
+    expect(supportsVideoInput("google/gemini-3-pro")).toBe(true);
+    expect(supportsVideoInput("google/gemini-3-flash")).toBe(true);
+    expect(supportsVideo("google/gemini-3-pro")).toBe(false);
+    // Veo generates video but does not accept video input in chat.
+    expect(supportsVideoInput("google/veo-3.0-generate-001")).toBe(false);
+    // Non-Gemini vision models take images but not video input.
+    expect(supportsVideoInput("anthropic/claude-opus-4.8")).toBe(false);
+    expect(supportsVideoInput(undefined)).toBe(false);
   });
 
   it("classifies image vs video vs text capability", () => {

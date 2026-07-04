@@ -27,6 +27,8 @@ export {
   supportsReasoning,
   supportsImage,
   supportsVideo,
+  supportsVision,
+  supportsVideoInput,
   supportsText,
   supportsMedia,
   capabilityLabel,
