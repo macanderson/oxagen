@@ -13,7 +13,7 @@ describe("tenant policy manifest", () => {
     ];
     for (const entry of POLICY_MANIFEST) {
       expect(classes).toContain(entry.policyClass);
-      expect(entry.table).toMatch(/^[a-z_]+\.[a-z_]+$/); // schema.table
+      expect(entry.table).toMatch(/^[a-z_]+\.[a-z][a-z0-9_]*$/); // schema.table (digits ok after first char, e.g. a2a_tasks)
     }
   });
 
@@ -153,7 +153,9 @@ describe("tenant policy manifest", () => {
     // 81 = 76 + ai.response_cache + ai.batch_jobs (semantic cache + batch jobs,
     //      20260704200000) + eval.eval_datasets + eval.eval_dataset_items +
     //      eval.eval_runs (Evals v1, 20260704220000) — all orgScopeMixin → standard.
-    expect(POLICY_MANIFEST.length).toBe(81);
+    // 82 = 81 + agent.a2a_tasks (A2A durable task store, orgScopeMixin →
+    //      standard, 20260704230000, PR #572).
+    expect(POLICY_MANIFEST.length).toBe(82);
   });
 
   it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {
