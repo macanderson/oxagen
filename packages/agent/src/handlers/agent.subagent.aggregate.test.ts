@@ -242,6 +242,30 @@ describe("agent.subagent.aggregate handler", () => {
     expect(result.aggregatedData).not.toHaveProperty("shared");
   });
 
+  it("computes conflicts even in compact mode when includeMerged is false", async () => {
+    // The contract promises conflicts[] is "always computed and returned
+    // regardless" of includeMerged — conflict detection is gated on the
+    // mergeable status, NOT on includeMerged. Guards against a regression that
+    // accidentally hides conflicts behind the opt-in merge flag.
+    setupMocks(fanout(), [
+      run("sar_1", { shared: "valueA" }),
+      run("sar_2", { shared: "valueB" }),
+    ]);
+
+    const result = await agentSubagentAggregateHandler(aggInput(), CTX); // includeMerged defaults false
+
+    expect(result.conflicts).toHaveLength(1);
+    expect(result.conflicts[0]?.key).toBe("shared");
+    expect(result.conflicts[0]?.values).toEqual(expect.arrayContaining(["valueA", "valueB"]));
+    // Still compact: the merged record itself is withheld without includeMerged.
+    expect(result.aggregatedData).toBeNull();
+    expect(result.aggregatedDataTruncated).toBe(false);
+    // …and children stay payload-free.
+    for (const child of result.children) {
+      expect(child).not.toHaveProperty("output");
+    }
+  });
+
   it("no conflict when two runs produce the same value for the same key", async () => {
     setupMocks(fanout(), [
       run("sar_1", { color: "blue" }),
@@ -308,6 +332,30 @@ describe("agent.subagent.aggregate handler", () => {
     expect(result.recheckAfterMs).toBe(60_000);
     // Timeline still carries live per-child status for viewers (payload-free).
     expect(result.timeline).toHaveLength(2);
+  });
+
+  it("clamps recheckAfterMs UP to the 5s floor for very fast children", async () => {
+    // The 60s-max clamp is covered above; this guards the RECHECK_MIN_MS floor.
+    // A completed child that took only 1s yields a 1000ms median, which must be
+    // clamped up to the 5s minimum so callers never tight-poll sub-second.
+    setupMocks(
+      fanout({ status: "running", completedChildren: 1, createdAt: new Date() }),
+      [
+        run("sar_1", { a: 1 }, {
+          startedAt: new Date("2024-01-01T00:00:00.000Z"),
+          completedAt: new Date("2024-01-01T00:00:01.000Z"), // 1s
+        }),
+        run("sar_2", null, { status: "running", outputPayload: null, completedAt: null }),
+      ],
+    );
+
+    const result = await agentSubagentAggregateHandler(
+      aggInput({ timeoutMs: 30 * 60 * 1000 }),
+      CTX,
+    );
+
+    expect(result.status).toBe("running");
+    expect(result.recheckAfterMs).toBe(5_000);
   });
 
   it("returns 'running' with default recheck hint when no child has completed yet", async () => {
