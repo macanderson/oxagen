@@ -1,4 +1,4 @@
-import { stepCountIs, type ModelMessage } from "ai";
+import { stepCountIs, type ModelMessage, type ToolSet } from "ai";
 import { buildWorkspaceTools } from "./tools";
 import type { RunCodingAgentOptions, RunCodingAgentResult } from "./types";
 import {
@@ -73,14 +73,19 @@ export function stringifyCapped(v: unknown, max: number): string {
  */
 export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCodingAgentResult> {
   const onEvent = opts.onEvent ?? (() => undefined);
-  let tools = buildWorkspaceTools(opts.workspace, {
-    readOnly: opts.readOnly,
-    codeGraph: opts.codeGraph,
-    codeMap: opts.codeMap,
-    onEvent,
-    // Forward the turn signal so an aborted turn kills any in-flight bash subtree.
-    signal: opts.signal,
-  });
+  // Filesystem tools exist ONLY when a workspace is injected. A surface with no
+  // repository (the in-app chat agent) starts with an empty tool set and relies
+  // entirely on `extraTools` — it must never advertise `read_file`…`bash`.
+  let tools: ToolSet = opts.workspace
+    ? buildWorkspaceTools(opts.workspace, {
+        readOnly: opts.readOnly,
+        codeGraph: opts.codeGraph,
+        codeMap: opts.codeMap,
+        onEvent,
+        // Forward the turn signal so an aborted turn kills any in-flight bash subtree.
+        signal: opts.signal,
+      })
+    : ({} as ToolSet);
   // Merge caller-supplied extra tools (e.g. MCP), then apply the caller's final
   // wrapper (e.g. the CLI's permission-gate + hooks + per-tool-timeout). This is
   // what lets a SINGLE loop replace the old duplicate legacy loop: every entry
@@ -136,6 +141,7 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
   const contextWindow = opts.contextWindow ?? contextWindowFor(model);
   const compactionThreshold = opts.compactionThreshold ?? 0.8;
   const maxRetries = opts.maxRetries ?? 4;
+  const maxOverflowRetries = opts.maxOverflowRetries ?? 2;
 
   // The EXPLICIT STEP LOOP. Instead of one `streamText(stopWhen: stepCountIs(256))`
   // call — which loses the whole turn to a transient error and can only grow the
@@ -200,6 +206,10 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
       });
 
       for await (const part of result.fullStream) {
+        // Raw part tap: forward EVERY part verbatim before the engine's own
+        // subset translation below. The in-app SSE translator consumes this to
+        // reproduce the client wire protocol byte-for-byte. Must not throw.
+        opts.onStreamPart?.(part);
         if (part.type === "text-delta") {
           stepText += part.text;
           onEvent({ type: "text", delta: part.text });
@@ -307,7 +317,7 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
 
       // Context overflow despite pre-call compaction: compact harder and retry
       // the step (bounded), rather than losing the turn.
-      if (isContextOverflowError(err) && overflowRetries < 2) {
+      if (isContextOverflowError(err) && overflowRetries < maxOverflowRetries) {
         overflowRetries++;
         const before = estimateMessageTokens(conversation);
         conversation = compactMessages(conversation, { keepLastN: 4, contentCap: 800 }).messages;
@@ -346,9 +356,11 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
       : new DOMException("The agent turn was aborted.", "AbortError");
   }
 
-  const diff = await opts.workspace.diff();
-  const changedFiles = changedFilesFromDiff(diff);
-  onEvent({ type: "final-diff", diff, changedFiles });
+  // No workspace ⇒ no repository to diff. The chat surface takes this path: it
+  // returns an empty diff / no changed files and emits no `final-diff` event.
+  const diff = opts.workspace ? await opts.workspace.diff() : "";
+  const changedFiles = opts.workspace ? changedFilesFromDiff(diff) : [];
+  if (opts.workspace) onEvent({ type: "final-diff", diff, changedFiles });
 
   if (opts.memory)
     void Promise.resolve(
