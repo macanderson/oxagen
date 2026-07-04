@@ -216,6 +216,18 @@ vi.mock("@oxagen/oxagen/contracts/agent.approval.resolve", () => ({
     },
   },
 }));
+vi.mock("@oxagen/oxagen/contracts/agent.mcp.consent.resolve", () => ({
+  agentMcpConsentResolve: {
+    input: {
+      safeParse: (raw: unknown) => {
+        const r = raw as { approvalId?: unknown; decision?: unknown; grantAllTools?: unknown };
+        if (!r?.approvalId || !r?.decision)
+          return { success: false, error: { issues: [{ message: "Invalid" }] } };
+        return { success: true, data: r };
+      },
+    },
+  },
+}));
 vi.mock("@oxagen/oxagen/contracts/agent.plan.approve", () => ({
   agentPlanApprove: {
     input: {
@@ -232,6 +244,7 @@ vi.mock("@oxagen/oxagen/contracts/agent.plan.approve", () => ({
 import {
   wandSendAction,
   wandResolveApprovalAction,
+  wandResolveConsentAction,
   wandResolvePlanAction,
   loadAgentConversationAction,
 } from "./shell-actions";
@@ -318,7 +331,10 @@ describe("wandResolveApprovalAction", () => {
     vi.clearAllMocks();
     dbState.orgRows = [{ id: "org-1" }];
     dbState.wsRows = [{ id: "ws-1" }];
+    dbState.wsUserRows = [{ id: "wu-1" }];
     dbState.systemCallIdx = 0;
+    dbState.tenantSelectIdx = 0;
+    dbState.membershipError = null;
     mockGetSession.mockResolvedValue(SESSION);
     mockInvoke.mockResolvedValue(undefined);
   });
@@ -333,6 +349,26 @@ describe("wandResolveApprovalAction", () => {
     );
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toContain("workspace");
+  });
+
+  // Regression (OXA-2049 co-located instance): wandResolveApprovalAction
+  // resolved orgSlug/workspaceSlug to real ids but never asserted the caller
+  // was actually a member of that workspace before invoking
+  // agent.approval.resolve — invoke() from apps/app skips the kernel IAM
+  // check, so any authenticated user who knew/guessed an orgSlug +
+  // workspaceSlug + approvalId could resolve (approve/deny) an approval in a
+  // workspace they don't belong to. This proves the gate now denies them.
+  it("denies a non-member — no cross-workspace approval resolution", async () => {
+    dbState.wsUserRows = [];
+    const res = await wandResolveApprovalAction(
+      "acme",
+      "main",
+      "appr-1",
+      "approved",
+    );
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("access");
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   it("returns ok:true and calls invoke for a valid approval", async () => {
@@ -361,6 +397,57 @@ describe("wandResolveApprovalAction", () => {
     );
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toBe("approval expired");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — wandResolveConsentAction
+// ---------------------------------------------------------------------------
+
+describe("wandResolveConsentAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    dbState.orgRows = [{ id: "org-1" }];
+    dbState.wsRows = [{ id: "ws-1" }];
+    dbState.wsUserRows = [{ id: "wu-1" }];
+    dbState.systemCallIdx = 0;
+    dbState.tenantSelectIdx = 0;
+    dbState.membershipError = null;
+    mockGetSession.mockResolvedValue(SESSION);
+    mockInvoke.mockResolvedValue(undefined);
+  });
+
+  // Regression (OXA-2049 co-located instance): same missing-membership-gate
+  // bug as wandResolveApprovalAction, for the MCP first-use consent resolver.
+  it("denies a non-member — no cross-workspace consent resolution", async () => {
+    dbState.wsUserRows = [];
+    const res = await wandResolveConsentAction(
+      "acme",
+      "main",
+      "appr-1",
+      "granted",
+      false,
+    );
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("access");
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("returns ok:true and calls invoke for a valid member", async () => {
+    const res = await wandResolveConsentAction(
+      "acme",
+      "main",
+      "appr-1",
+      "granted",
+      true,
+    );
+    expect(res.ok).toBe(true);
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "agent.mcp.consent.resolve",
+      expect.objectContaining({ approvalId: "appr-1", decision: "granted", grantAllTools: true }),
+      expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
+      { surface: "agent" },
+    );
   });
 });
 
@@ -442,7 +529,10 @@ describe("wandResolvePlanAction", () => {
     vi.clearAllMocks();
     dbState.orgRows = [{ id: "org-1" }];
     dbState.wsRows = [{ id: "ws-1" }];
+    dbState.wsUserRows = [{ id: "wu-1" }];
     dbState.systemCallIdx = 0;
+    dbState.tenantSelectIdx = 0;
+    dbState.membershipError = null;
     mockGetSession.mockResolvedValue(SESSION);
     mockInvoke.mockResolvedValue(undefined);
   });
@@ -452,6 +542,16 @@ describe("wandResolvePlanAction", () => {
     const res = await wandResolvePlanAction("acme", "main", "plan-1", "approved");
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toContain("workspace");
+  });
+
+  // Regression (OXA-2049 co-located instance): same missing-membership-gate
+  // bug as wandResolveApprovalAction, for plan approval/denial/amendment.
+  it("denies a non-member — no cross-workspace plan resolution", async () => {
+    dbState.wsUserRows = [];
+    const res = await wandResolvePlanAction("acme", "main", "plan-1", "approved");
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("access");
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   it("returns ok:true for an approved decision", async () => {
