@@ -5,6 +5,7 @@ import {
   edgeCloseParams,
   edgeOpenPredicate,
   edgeValidityOnCreateSet,
+  edgeValidityOnMatchSet,
   edgeValidityParams,
   edgeValidityReturn,
   readEdgeValidity,
@@ -29,6 +30,16 @@ describe("edgeValidityOnCreateSet", () => {
 
   it("rejects an unsafe variable name", () => {
     expect(() => edgeValidityOnCreateSet("r; DROP")).toThrow(/unsafe Cypher variable/);
+  });
+});
+
+describe("edgeValidityOnMatchSet", () => {
+  it("preserves lower bounds and reopens upper bounds on re-assertion", () => {
+    const frag = edgeValidityOnMatchSet("r");
+    expect(frag).toContain("r.validFrom = coalesce(r.validFrom, datetime($validFrom), datetime())");
+    expect(frag).toContain("r.recordedAt = coalesce(r.recordedAt, datetime())");
+    expect(frag).toContain("r.validTo = null");
+    expect(frag).toContain("r.invalidatedAt = null");
   });
 });
 

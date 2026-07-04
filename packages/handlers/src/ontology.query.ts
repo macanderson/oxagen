@@ -2,6 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { ontologyQuery } from "@oxagen/oxagen/contracts/ontology.query";
 import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
 import { scopedSession } from "@oxagen/ontology/tenant";
+import { buildValidityFilter, type EdgeValidity } from "@oxagen/ontology/temporal";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { getPinnedSchema } from "./schema.pinned";
 import { logger } from "./logger";
@@ -14,7 +15,7 @@ interface TraversedNode {
   depth: number;
 }
 
-interface TraversedEdge {
+interface TraversedEdge extends EdgeValidity {
   fromNodeId: string;
   toNodeId: string;
   edgeType: string;
@@ -142,12 +143,19 @@ export const ontologyQueryHandler: CapabilityHandler<typeof ontologyQuery> = asy
       //    row beyond `limit` to detect truncation.
       // BigInt forces the Bolt driver to send INTEGER — plain JS numbers become
       // Float and Neo4j rejects them for LIMIT.
+      // Bi-temporal read filter applied to EVERY relationship on the path, so a
+      // traversal only crosses edges that are valid + known at the requested
+      // instants. Defaults to now/now; null lower bounds keep unstamped legacy
+      // edges traversable (behaviour-preserving).
+      const validity = buildValidityFilter("rel", { asOf: input.asOf, asKnownAt: input.asKnownAt });
+
       const fetchLimit = BigInt(input.limit + 1);
       const traverseResult = await session.run(
         `MATCH (start:GraphNode {publicId: $startNodeId, orgId: $orgId, workspaceId: $workspaceId})
          MATCH path = ${matchPattern}
          WHERE reached.orgId = $orgId AND reached.workspaceId = $workspaceId
            AND ALL(n IN nodes(path) WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId)
+           AND ALL(rel IN relationships(path) WHERE ${validity.clause})
          WITH reached, length(path) AS depth, relationships(path) AS rels, nodes(path) AS pathNodes
          ORDER BY depth ASC
          LIMIT $fetchLimit
@@ -158,12 +166,17 @@ export const ontologyQueryHandler: CapabilityHandler<typeof ontologyQuery> = asy
            reached.description AS description,
            depth,
            [rel IN rels | type(rel)] AS relTypes,
+           [rel IN rels | toString(rel.validFrom)]     AS relValidFrom,
+           [rel IN rels | toString(rel.validTo)]       AS relValidTo,
+           [rel IN rels | toString(rel.recordedAt)]    AS relRecordedAt,
+           [rel IN rels | toString(rel.invalidatedAt)] AS relInvalidatedAt,
            [n IN pathNodes | n.publicId] AS pathNodeIds`,
         {
           startNodeId: input.startNodeId,
           orgId,
           workspaceId,
           fetchLimit,
+          ...validity.params,
         },
       );
 
@@ -189,9 +202,14 @@ export const ontologyQueryHandler: CapabilityHandler<typeof ontologyQuery> = asy
 
         // Reconstruct the edges along this path. relTypes[i] connects
         // pathNodeIds[i] and pathNodeIds[i+1]; orientation follows the
-        // traversal direction.
+        // traversal direction. The four relValidity arrays are index-aligned
+        // with relTypes so each edge carries its own bi-temporal validity.
         const relTypesAlong = record.get("relTypes") as string[];
         const pathNodeIds = record.get("pathNodeIds") as string[];
+        const relValidFrom = record.get("relValidFrom") as (string | null)[];
+        const relValidTo = record.get("relValidTo") as (string | null)[];
+        const relRecordedAt = record.get("relRecordedAt") as (string | null)[];
+        const relInvalidatedAt = record.get("relInvalidatedAt") as (string | null)[];
         for (let i = 0; i < relTypesAlong.length; i += 1) {
           const a = pathNodeIds[i];
           const b = pathNodeIds[i + 1];
@@ -199,7 +217,15 @@ export const ontologyQueryHandler: CapabilityHandler<typeof ontologyQuery> = asy
           if (a == null || b == null) continue;
           const [from, to] = input.direction === "in" ? [b, a] : [a, b];
           if (!edges.some((e) => e.fromNodeId === from && e.toNodeId === to && e.edgeType === edgeType)) {
-            edges.push({ fromNodeId: from, toNodeId: to, edgeType });
+            edges.push({
+              fromNodeId: from,
+              toNodeId: to,
+              edgeType,
+              validFrom: relValidFrom[i] ?? null,
+              validTo: relValidTo[i] ?? null,
+              recordedAt: relRecordedAt[i] ?? null,
+              invalidatedAt: relInvalidatedAt[i] ?? null,
+            });
           }
         }
       }

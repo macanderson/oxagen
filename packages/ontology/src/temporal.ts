@@ -57,6 +57,23 @@ export function edgeValidityOnCreateSet(relVar = "r"): string {
 }
 
 /**
+ * Cypher assignment list (no leading/trailing comma) for the `ON MATCH SET` of an
+ * upsert. An upsert re-asserts that the edge holds *now*, so it preserves the
+ * original lower bounds (`coalesce`, falling back to observed/now only when never
+ * stamped) and reopens the upper bounds — reviving an edge that a prior
+ * supersession had closed. Requires `$validFrom` from {@link edgeValidityParams}.
+ */
+export function edgeValidityOnMatchSet(relVar = "r"): string {
+  assertVar(relVar);
+  return (
+    `${relVar}.validFrom = coalesce(${relVar}.validFrom, datetime($validFrom), datetime()), ` +
+    `${relVar}.recordedAt = coalesce(${relVar}.recordedAt, datetime()), ` +
+    `${relVar}.validTo = null, ` +
+    `${relVar}.invalidatedAt = null`
+  );
+}
+
+/**
  * Cypher assignment list (no leading/trailing comma) that *closes* an edge on
  * supersession — stamping both the valid-time and transaction-time upper bounds
  * without touching the lower bounds or any other property. Idempotent: an

@@ -17,6 +17,7 @@
 
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { sanitizeLabel } from "@oxagen/ontology/labels";
+import { edgeValidityOnCreateSet, edgeValidityParams } from "@oxagen/ontology/temporal";
 import { chInsert } from "@oxagen/telemetry";
 import { randomUUID } from "node:crypto";
 import type { EntityMutation } from "../types";
@@ -292,7 +293,8 @@ export async function createAliasEdge(
          r.matchReason = $matchReason,
          r.tentative   = $tentative,
          r.is_system   = true,
-         r.createdAt   = datetime()
+         r.createdAt   = datetime(),
+         ${edgeValidityOnCreateSet("r")}
        ON MATCH SET
          r.confidence  = $confidence,
          r.updatedAt   = datetime()`,
@@ -302,6 +304,7 @@ export async function createAliasEdge(
         confidence: props.confidence,
         matchReason: props.matchReason,
         tentative: props.tentative,
+        ...edgeValidityParams(),
       },
     );
   } finally {
@@ -385,28 +388,23 @@ export interface InferredEdge {
 }
 
 // Allowed dynamic edge types mapped to their Cypher MERGE templates.
-// The edge type selector pattern avoids APOC and keeps zero dynamic Cypher strings.
+// The edge type selector pattern avoids APOC and keeps zero dynamic Cypher strings:
+// the relationship type comes ONLY from this fixed allow-list, never from input.
+// Every create is bi-temporal (validFrom→now, recordedAt=now, open upper bounds).
+function inferredEdgeQuery(edgeType: string): string {
+  return `MATCH (from:EntityNode {publicId: $fromNodeId, orgId: $orgId})
+          MATCH (to:EntityNode {publicId: $toNodeId, orgId: $orgId})
+          MERGE (from)-[r:${edgeType}]->(to)
+          ON CREATE SET r.confidence = $confidence, r.inferred = true, r.is_system = true, r.createdAt = datetime(),
+                        ${edgeValidityOnCreateSet("r")}
+          ON MATCH SET  r.confidence = $confidence, r.updatedAt = datetime()`;
+}
+
 const EDGE_TYPE_QUERIES: Record<string, string> = {
-  INFERRED_FROM: `MATCH (from:EntityNode {publicId: $fromNodeId, orgId: $orgId})
-                  MATCH (to:EntityNode {publicId: $toNodeId, orgId: $orgId})
-                  MERGE (from)-[r:INFERRED_FROM]->(to)
-                  ON CREATE SET r.confidence = $confidence, r.inferred = true, r.is_system = true, r.createdAt = datetime()
-                  ON MATCH SET  r.confidence = $confidence, r.updatedAt = datetime()`,
-  REFERENCES:    `MATCH (from:EntityNode {publicId: $fromNodeId, orgId: $orgId})
-                  MATCH (to:EntityNode {publicId: $toNodeId, orgId: $orgId})
-                  MERGE (from)-[r:REFERENCES]->(to)
-                  ON CREATE SET r.confidence = $confidence, r.inferred = true, r.is_system = true, r.createdAt = datetime()
-                  ON MATCH SET  r.confidence = $confidence, r.updatedAt = datetime()`,
-  SIMILAR_TO:    `MATCH (from:EntityNode {publicId: $fromNodeId, orgId: $orgId})
-                  MATCH (to:EntityNode {publicId: $toNodeId, orgId: $orgId})
-                  MERGE (from)-[r:SIMILAR_TO]->(to)
-                  ON CREATE SET r.confidence = $confidence, r.inferred = true, r.is_system = true, r.createdAt = datetime()
-                  ON MATCH SET  r.confidence = $confidence, r.updatedAt = datetime()`,
-  PART_OF:       `MATCH (from:EntityNode {publicId: $fromNodeId, orgId: $orgId})
-                  MATCH (to:EntityNode {publicId: $toNodeId, orgId: $orgId})
-                  MERGE (from)-[r:PART_OF]->(to)
-                  ON CREATE SET r.confidence = $confidence, r.inferred = true, r.is_system = true, r.createdAt = datetime()
-                  ON MATCH SET  r.confidence = $confidence, r.updatedAt = datetime()`,
+  INFERRED_FROM: inferredEdgeQuery("INFERRED_FROM"),
+  REFERENCES: inferredEdgeQuery("REFERENCES"),
+  SIMILAR_TO: inferredEdgeQuery("SIMILAR_TO"),
+  PART_OF: inferredEdgeQuery("PART_OF"),
 };
 
 export async function upsertInferredEdges(edges: InferredEdge[], _orgId: string): Promise<void> {
@@ -422,6 +420,7 @@ export async function upsertInferredEdges(edges: InferredEdge[], _orgId: string)
         fromNodeId: edge.fromNodeId,
         toNodeId: edge.toNodeId,
         confidence: edge.confidence,
+        ...edgeValidityParams(),
       });
     }
   } finally {

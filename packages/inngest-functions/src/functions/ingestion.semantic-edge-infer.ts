@@ -4,6 +4,7 @@ import { createFunction } from "../create-function";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { sanitizeRelationshipType, sanitizeLabel } from "@oxagen/ontology/labels";
+import { edgeValidityOnCreateSet, edgeValidityParams } from "@oxagen/ontology/temporal";
 import { generateObjectFor } from "@oxagen/ai";
 import { logger } from "../logger";
 
@@ -221,7 +222,8 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
                    r.confidence  = $confidence,
                    r.approvedBy  = $approvedBy,
                    r.approvedAt  = datetime($approvedAt),
-                   r.createdAt   = datetime()`,
+                   r.createdAt   = datetime(),
+                   ${edgeValidityOnCreateSet("r")}`,
                 {
                   orgId,
                   workspaceId,
@@ -234,6 +236,7 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
                   confidence: edge.confidence,
                   approvedBy: "system:auto-accept",
                   approvedAt: now,
+                  ...edgeValidityParams(),
                 },
               );
               autoAcceptedCount++;
