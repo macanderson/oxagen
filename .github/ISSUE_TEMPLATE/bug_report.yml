@@ -1,0 +1,46 @@
+name: Bug report
+description: Something is broken in the platform, API, MCP server, or CLI
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Security vulnerabilities must NOT be reported here** — use [private vulnerability reporting](https://github.com/oxageninc/oxagen-platform/security/advisories/new) or `security@oxagen.sh` (see SECURITY.md).
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      description: Where does the bug occur?
+      options:
+        - Web app (app.oxagen.sh / apps/app)
+        - API (api.oxagen.sh / apps/api)
+        - MCP server (mcp.oxagen.sh / apps/mcp)
+        - CLI (oxagen)
+        - Docs (docs.oxagen.sh / apps/docs)
+        - Ingestion / connectors
+        - Billing / metering
+        - Knowledge graph / ontology
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+      placeholder: Steps to reproduce, expected behavior, actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node version, `oxagen --version` (for CLI), browser (for web app).
+      placeholder: |
+        macOS 15.5 · Node 24.1 · oxagen 2.4.10
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / output
+      description: For CLI issues, `OXAGEN_CLI_DEBUG=1` + `oxagen logs` excerpts help. Redact anything sensitive.
+      render: shell
