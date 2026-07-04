@@ -134,7 +134,16 @@ describe("ontologyQueryHandler", () => {
     expect(result.nodes).toHaveLength(2);
     expect(result.nodes.map((n) => n.nodeId)).toEqual(["start-1", "n-2"]);
     expect(result.edges).toEqual([
-      { fromNodeId: "start-1", toNodeId: "n-2", edgeType: "RELATED_TO" },
+      {
+        fromNodeId: "start-1",
+        toNodeId: "n-2",
+        edgeType: "RELATED_TO",
+        // Unstamped edge (mock omits validity columns) → all-null validity.
+        validFrom: null,
+        validTo: null,
+        recordedAt: null,
+        invalidatedAt: null,
+      },
     ]);
   });
 
@@ -250,5 +259,81 @@ describe("ontologyQueryHandler — §3.2 Cypher-injection + active-vocabulary gu
     const traversalCypher = mocks.run.mock.calls[1]?.[0] as string;
     // No relationship-type selector — the pattern is `[r*1..2]`.
     expect(traversalCypher).toContain("[r*1..2]");
+  });
+});
+
+// ── bi-temporal time-aware traversal ──────────────────────────────────────────
+
+describe("ontologyQueryHandler — asOf / asKnownAt validity filter", () => {
+  it("filters every relationship on the path by validity and projects per-edge validity", async () => {
+    mocks.run.mockResolvedValueOnce(makeRows([START_ROW])).mockResolvedValueOnce(makeRows([]));
+    await ontologyQueryHandler(
+      { startNodeId: "start-1", direction: "out", maxDepth: 2, limit: 100 },
+      CTX,
+    );
+    const cypher = mocks.run.mock.calls[1]?.[0] as string;
+    // Applied per-relationship across the whole path.
+    expect(cypher).toContain("ALL(rel IN relationships(path) WHERE");
+    expect(cypher).toContain("rel.validFrom IS NULL OR rel.validFrom <= datetime($asOf)");
+    expect(cypher).toContain("rel.invalidatedAt IS NULL OR rel.invalidatedAt > datetime($asKnownAt)");
+    // Per-edge validity arrays projected for citation.
+    expect(cypher).toContain("[rel IN rels | toString(rel.validFrom)]");
+  });
+
+  it("defaults asOf / asKnownAt to ~now when omitted (behaviour-preserving)", async () => {
+    const before = Date.now();
+    mocks.run.mockResolvedValueOnce(makeRows([START_ROW])).mockResolvedValueOnce(makeRows([]));
+    await ontologyQueryHandler(
+      { startNodeId: "start-1", direction: "out", maxDepth: 2, limit: 100 },
+      CTX,
+    );
+    const params = mocks.run.mock.calls[1]?.[1] as Record<string, string>;
+    expect(new Date(params.asOf).getTime()).toBeGreaterThanOrEqual(before - 1000);
+    expect(new Date(params.asKnownAt).getTime()).toBeGreaterThanOrEqual(before - 1000);
+  });
+
+  it("threads explicit asOf / asKnownAt through as params and carries per-edge validity to output", async () => {
+    mocks.run.mockResolvedValueOnce(makeRows([START_ROW])).mockResolvedValueOnce(
+      makeRows([
+        {
+          nodeId: "n-2",
+          label: "Topic",
+          displayName: "Auth",
+          description: null,
+          depth: 1,
+          relTypes: ["RELATED_TO"],
+          relValidFrom: ["2020-01-01T00:00:00.000Z"],
+          relValidTo: [null],
+          relRecordedAt: ["2020-01-02T00:00:00.000Z"],
+          relInvalidatedAt: [null],
+          pathNodeIds: ["start-1", "n-2"],
+        },
+      ]),
+    );
+    const result = await ontologyQueryHandler(
+      {
+        startNodeId: "start-1",
+        direction: "out",
+        maxDepth: 2,
+        limit: 100,
+        asOf: "2020-06-01T00:00:00.000Z",
+        asKnownAt: "2020-06-01T00:00:00.000Z",
+      },
+      CTX,
+    );
+    const params = mocks.run.mock.calls[1]?.[1] as Record<string, string>;
+    expect(params.asOf).toBe("2020-06-01T00:00:00.000Z");
+    expect(params.asKnownAt).toBe("2020-06-01T00:00:00.000Z");
+    expect(result.edges).toEqual([
+      {
+        fromNodeId: "start-1",
+        toNodeId: "n-2",
+        edgeType: "RELATED_TO",
+        validFrom: "2020-01-01T00:00:00.000Z",
+        validTo: null,
+        recordedAt: "2020-01-02T00:00:00.000Z",
+        invalidatedAt: null,
+      },
+    ]);
   });
 });

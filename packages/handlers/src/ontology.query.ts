@@ -206,10 +206,10 @@ export const ontologyQueryHandler: CapabilityHandler<typeof ontologyQuery> = asy
         // with relTypes so each edge carries its own bi-temporal validity.
         const relTypesAlong = record.get("relTypes") as string[];
         const pathNodeIds = record.get("pathNodeIds") as string[];
-        const relValidFrom = record.get("relValidFrom") as (string | null)[];
-        const relValidTo = record.get("relValidTo") as (string | null)[];
-        const relRecordedAt = record.get("relRecordedAt") as (string | null)[];
-        const relInvalidatedAt = record.get("relInvalidatedAt") as (string | null)[];
+        const relValidFrom = (record.get("relValidFrom") as (string | null)[] | null) ?? [];
+        const relValidTo = (record.get("relValidTo") as (string | null)[] | null) ?? [];
+        const relRecordedAt = (record.get("relRecordedAt") as (string | null)[] | null) ?? [];
+        const relInvalidatedAt = (record.get("relInvalidatedAt") as (string | null)[] | null) ?? [];
         for (let i = 0; i < relTypesAlong.length; i += 1) {
           const a = pathNodeIds[i];
           const b = pathNodeIds[i + 1];
