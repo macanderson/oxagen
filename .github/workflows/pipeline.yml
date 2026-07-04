@@ -326,6 +326,9 @@ jobs:
       # Chromium + OS deps are baked into oxagen-ci-e2e at apps/app's pinned
       # @playwright/test version; this is a no-op unless the pin drifted ahead
       # of the last image rebuild, in which case it downloads just the browser.
+      # The image locates browsers via PLAYWRIGHT_BROWSERS_PATH=/ms-playwright,
+      # which must stay in test:e2e's passThroughEnv in turbo.json or turbo's
+      # strict env mode strips it and Playwright looks in the empty HOME cache.
       - name: Install Playwright browser (fast-path)
         run: pnpm --filter @oxagen/app exec playwright install chromium
 

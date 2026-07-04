@@ -250,3 +250,43 @@ describe("semanticEdgeListHandler", () => {
     expect(params.confidenceMax).toBe(0.99);
   });
 });
+
+// ── bi-temporal validity surfacing ────────────────────────────────────────────
+
+describe("semanticEdgeListHandler — materialised-edge validity", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.scopedSession.mockReturnValue(sessionObj);
+    mocks.runInTenantScope.mockImplementation(
+      (_scope: unknown, fn: () => unknown) => Promise.resolve(fn()),
+    );
+    mocks.closeFn.mockResolvedValue(undefined);
+  });
+
+  it("OPTIONAL MATCHes the materialised edge and surfaces its validity", async () => {
+    setupNeo4j([
+      makeEdgeRow({
+        edgevalidFrom: "2020-01-01T00:00:00.000Z",
+        edgevalidTo: null,
+        edgerecordedAt: "2020-01-02T00:00:00.000Z",
+        edgeinvalidatedAt: null,
+      }),
+    ]);
+    const result = await semanticEdgeListHandler({ limit: 50, offset: 0 }, CTX);
+    const cypher = (mocks.runFn.mock.calls[0] as [string])[0];
+    expect(cypher).toContain("OPTIONAL MATCH (src)-[matEdge {inferredEdgeId: ie.id}]->(:GraphNode)");
+    expect(result.edges[0]?.validity).toEqual({
+      validFrom: "2020-01-01T00:00:00.000Z",
+      validTo: null,
+      recordedAt: "2020-01-02T00:00:00.000Z",
+      invalidatedAt: null,
+    });
+    expect(result.edges[0]?.relationshipProperties?.validFrom).toBe("2020-01-01T00:00:00.000Z");
+  });
+
+  it("returns validity=null for a pending candidate with no materialised edge", async () => {
+    setupNeo4j([makeEdgeRow({ approvalStatus: "pending" })]);
+    const result = await semanticEdgeListHandler({ limit: 50, offset: 0 }, CTX);
+    expect(result.edges[0]?.validity).toBeNull();
+  });
+});

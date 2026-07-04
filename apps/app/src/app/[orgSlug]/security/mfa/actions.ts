@@ -111,18 +111,25 @@ export async function saveMfaPolicyAction(
   }
 }
 
+/** The org MFA policy, plus the timestamp the enforcement grace window anchors on. */
+export interface MfaPolicy {
+  mfaRequired: boolean;
+  mfaGraceHours: number;
+  /** When the policy row was last written — the grace-window anchor. */
+  updatedAt: Date;
+}
+
 /**
  * loadMfaPolicy — read the org's security policy row.
  * Returns null when no policy has been saved yet (defaults apply: mfaRequired=false).
  */
-export async function loadMfaPolicy(
-  orgId: string,
-): Promise<{ mfaRequired: boolean; mfaGraceHours: number } | null> {
+export async function loadMfaPolicy(orgId: string): Promise<MfaPolicy | null> {
   const rows = await withSystemDb((tx) =>
     tx
       .select({
         mfaRequired: schema.orgSecurityPolicy.mfaRequired,
         mfaGraceHours: schema.orgSecurityPolicy.mfaGraceHours,
+        updatedAt: schema.orgSecurityPolicy.updatedAt,
       })
       .from(schema.orgSecurityPolicy)
       .where(eq(schema.orgSecurityPolicy.orgId, orgId))
@@ -130,6 +137,10 @@ export async function loadMfaPolicy(
   );
   const row = rows[0];
   return row
-    ? { mfaRequired: row.mfaRequired, mfaGraceHours: row.mfaGraceHours }
+    ? {
+        mfaRequired: row.mfaRequired,
+        mfaGraceHours: row.mfaGraceHours,
+        updatedAt: row.updatedAt,
+      }
     : null;
 }

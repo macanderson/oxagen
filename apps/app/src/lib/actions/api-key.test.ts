@@ -13,6 +13,7 @@ vi.mock("@/lib/session", () => ({
 vi.mock("@/lib/resolve-org", () => ({
   resolveOrg: vi.fn(),
   getOrgRole: vi.fn().mockResolvedValue("owner"),
+  assertOrgAdmin: vi.fn(),
 }));
 
 vi.mock("@oxagen/oxagen", () => ({
@@ -39,7 +40,7 @@ vi.mock("@oxagen/oxagen/contracts/api.key.create", () => ({
 
 import { createApiKeyAction } from "./api-key";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg } from "@/lib/resolve-org";
+import { resolveOrg, assertOrgAdmin } from "@/lib/resolve-org";
 import { invoke } from "@oxagen/oxagen";
 
 // ---------------------------------------------------------------------------
@@ -57,6 +58,7 @@ describe("createApiKeyAction", () => {
     vi.clearAllMocks();
     vi.mocked(getSessionOrRedirect).mockResolvedValue(mockSession as never);
     vi.mocked(resolveOrg).mockResolvedValue(mockOrg as never);
+    vi.mocked(assertOrgAdmin).mockResolvedValue(undefined);
     vi.mocked(invoke).mockResolvedValue(mockApiKey);
   });
 
@@ -121,5 +123,19 @@ describe("createApiKeyAction", () => {
     await expect(createApiKeyAction({ orgSlug: "acme", name: "Key" })).rejects.toThrow(
       "handler error",
     );
+  });
+
+  it("gates on org admin: asserts before touching the capability", async () => {
+    await createApiKeyAction({ orgSlug: "acme", name: "Key" });
+    expect(assertOrgAdmin).toHaveBeenCalledWith("org-abc", "user-1");
+  });
+
+  it("denies a non-admin caller and never reaches invoke (IDOR guard)", async () => {
+    // assertOrgAdmin calls notFound() for a non-admin/non-member, which throws.
+    vi.mocked(assertOrgAdmin).mockRejectedValue(new Error("NEXT_NOT_FOUND"));
+    await expect(createApiKeyAction({ orgSlug: "acme", name: "Key" })).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
+    expect(invoke).not.toHaveBeenCalled();
   });
 });

@@ -47,6 +47,13 @@ export function buildRelationshipProperties(fields: {
   connector?: string | null;
   inferredAt?: string | null;
   approvalStatus?: string | null;
+  /** Bi-temporal validity of the materialised edge (null for pending candidates). */
+  validity?: {
+    validFrom: string | null;
+    validTo: string | null;
+    recordedAt: string | null;
+    invalidatedAt: string | null;
+  } | null;
 }): Record<string, unknown> {
   const props: Record<string, unknown> = {
     relationshipType: fields.relationshipType,
@@ -56,5 +63,12 @@ export function buildRelationshipProperties(fields: {
   if (fields.connector) props.connector = fields.connector;
   if (fields.inferredAt) props.inferredAt = fields.inferredAt;
   if (fields.approvalStatus) props.approvalStatus = fields.approvalStatus;
+  // Surface validity so the citation card can show "true as of X, recorded Y".
+  if (fields.validity) {
+    if (fields.validity.validFrom) props.validFrom = fields.validity.validFrom;
+    if (fields.validity.validTo) props.validTo = fields.validity.validTo;
+    if (fields.validity.recordedAt) props.recordedAt = fields.validity.recordedAt;
+    if (fields.validity.invalidatedAt) props.invalidatedAt = fields.validity.invalidatedAt;
+  }
   return props;
 }

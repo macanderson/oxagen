@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample } from "../types";
+import {
+  registerConnector,
+  type AuthCredential,
+  type ConnectorDefinition,
+  type NormalizedRecord,
+  type RawRecord,
+  type RecordTypeSample,
+} from "../types";
 
 const connectionConfigSchema = z.object({
   instanceUrl: z.string().url(),
@@ -8,6 +15,21 @@ const connectionConfigSchema = z.object({
 });
 
 type Config = typeof connectionConfigSchema;
+
+// Salesforce REST API version for the query endpoint.
+const SF_API_VERSION = "v59.0";
+
+function salesforceToken(auth: AuthCredential): string | null {
+  if (auth.scheme === "bearer_token") return auth.token;
+  if (auth.scheme === "api_key") return auth.apiKey;
+  return null;
+}
+
+/** Convert a stored SystemModstamp cursor to a SOQL-safe datetime literal. */
+function soqlDateLiteral(cursor: string): string | null {
+  const d = new Date(cursor);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
 
 function asRecord(raw: unknown): Record<string, unknown> {
   return raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
@@ -140,8 +162,43 @@ const salesforce: ConnectorDefinition<Config> = {
     }
   },
 
-  async *poll(_auth, _config, _recordType, _cursor) {
-    throw new Error("salesforce.poll: not yet implemented");
+  // Incremental SOQL poll. Pulls all standard fields of the object type updated
+  // since the cursor (max SystemModstamp from the previous poll), ordered
+  // ascending so the batch is deterministic and the cursor advances monotonically.
+  async *poll(auth, config, recordType, cursor): AsyncIterable<RawRecord> {
+    const token = salesforceToken(auth);
+    if (!token) return;
+
+    const object = recordType.replace(/[^A-Za-z0-9_]/g, ""); // SOQL identifier guard
+    if (!object) return;
+
+    const where = (() => {
+      if (!cursor) return "";
+      const literal = soqlDateLiteral(cursor);
+      return literal ? `WHERE SystemModstamp > ${literal} ` : "";
+    })();
+    const soql = `SELECT FIELDS(STANDARD) FROM ${object} ${where}ORDER BY SystemModstamp ASC LIMIT 200`;
+    const url = `${config.instanceUrl}/services/data/${SF_API_VERSION}/query/?q=${encodeURIComponent(soql)}`;
+
+    const resp = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+    if (!resp.ok) {
+      throw new Error(`salesforce.poll: query API ${resp.status} for ${object}`);
+    }
+    const json = (await resp.json()) as { records?: Array<Record<string, unknown>> };
+    const now = new Date().toISOString();
+    for (const raw of json.records ?? []) {
+      const id = asString(raw["Id"]) ?? "";
+      if (!id) continue;
+      yield { sourceRecordType: recordType, externalId: id, raw, receivedAt: now };
+    }
+  },
+
+  // Cursor watermark: Salesforce SystemModstamp (falls back to LastModifiedDate).
+  cursorOf(_recordType, raw): string | null {
+    const r = asRecord(raw);
+    return asString(r["SystemModstamp"]) ?? asString(r["LastModifiedDate"]) ?? null;
   },
 };
 
