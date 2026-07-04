@@ -25,6 +25,24 @@ export interface CliConfig {
   runtime?: RuntimeConfig;
   /** Graph tool settings */
   graph?: import("../agent/context/config.js").GraphConfigPatch;
+  /** Anonymous usage-telemetry preferences (apps/cli/src/telemetry/usage.ts). */
+  telemetry?: TelemetryConfig;
+}
+
+/**
+ * Anonymous CLI usage-telemetry preferences, persisted alongside the rest of
+ * `CliConfig`. See TELEMETRY.md at the repo root for the full disclosure —
+ * telemetry is ON by default (opt-out), so this section is absent until the
+ * first run (which sets `disclosed` + `installId`) or the user runs
+ * `oxagen telemetry off/on`.
+ */
+export interface TelemetryConfig {
+  /** false = fully disabled (no id generation, no network). Absent/true = enabled. */
+  enabled?: boolean;
+  /** True once the one-time first-run disclosure has been printed. */
+  disclosed?: boolean;
+  /** Random per-install id (crypto.randomUUID()), generated on first enabled run. */
+  installId?: string;
 }
 
 /**

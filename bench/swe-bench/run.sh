@@ -71,6 +71,13 @@ fi
 #    session instead of exit(1). Harmless for competitor agents (unused).
 export OXAGEN_ALLOW_NO_SESSION=1
 
+# 2b) Reasoning effort — prior runs sent NO effort config, so Anthropic models
+#     ran at their own defaults (Sonnet 5: adaptive thinking at effort=high;
+#     Opus 4.7/4.8: no thinking at all) and never at xhigh, the recommended
+#     depth for hard agentic coding (and Claude Code's default). Lingxi V2.0's
+#     81.2% used "High Reasoning". Default to xhigh; override per run.
+export OXAGEN_EFFORT="${OXAGEN_EFFORT:-xhigh}"
+
 # 3) Build the oxagen bundle only when actually benchmarking oxagen —
 #    competitors don't need it.
 if [ "$AGENT" = "oxagen" ]; then

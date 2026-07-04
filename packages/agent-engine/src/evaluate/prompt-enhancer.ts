@@ -18,6 +18,9 @@
 import type { CodeGraphProvider } from "../types";
 import type { MemoryProvider } from "../ports";
 import type { ContextRetrieval } from "../trace/types";
+import { localize } from "../localize";
+import { loadPrior, renderPrior } from "../priors";
+import { filterRecall, tagRecall, type RecallItem } from "../memory/applicability";
 
 export interface EnhanceOptions {
   prompt: string;
@@ -50,6 +53,10 @@ export interface EnhanceOptions {
    * unbounded (the historical behavior).
    */
   timeoutMs?: number;
+  /** Repository identifier for F8 repo-prior lookup (e.g., "django/django"). */
+  repo?: string;
+  /** Base directory for F8 repo-prior files (e.g., ~/.oxagen/repo-priors). */
+  priorsDir?: string;
 }
 
 /**
@@ -95,6 +102,12 @@ export interface EnhanceResult {
   usedSemanticFallback: boolean;
   /** Whether any memory context was injected. */
   hasMemory: boolean;
+  /** Whether F1 localization was run and produced candidates. */
+  hasLocalization: boolean;
+  /** Whether F8 repo prior was injected. */
+  hasRepoPrior: boolean;
+  /** Whether F9 memory recall filtering was applied. */
+  filteredRecall: boolean;
   /** Epoch ms context-gathering started. */
   startedAt: number;
   /** Epoch ms context-gathering finished. */
@@ -183,26 +196,96 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
   const max = opts.maxSymbols ?? 6;
   const startedAt = Date.now();
 
-  // Memory context — recalled from the provider as a pre-formatted string.
-  // This is retrieved first: it needs no code graph and must surface even if it fails.
-  let memoryContext = "";
-  let hasMemory = false;
-  if (memory) {
-    try {
-      memoryContext = await memory.recallContext();
-      hasMemory = memoryContext.trim().length > 0;
-    } catch {
-      /* memory recall is optional — enhancement degrades gracefully */
-    }
-  }
-
   const sections: string[] = [];
   const resolved: string[] = [];
   const symbolsQueried: string[] = [];
   const pathsQueried: string[] = [];
   let usedSemanticFallback = false;
+  let hasLocalization = false;
+  let hasRepoPrior = false;
+  let filteredRecall = false;
 
-  // Deadline for the code-graph pass (Infinity when unbounded).
+  // ── F1: Deterministic localization ─────────────────────────────────────────
+
+  // Flag semantics: localization runs UNLESS process.env.OXAGEN_LOCALIZE === "0".
+  // Default on, explicit opt-out.
+  const localizeFlagOff = process.env.OXAGEN_LOCALIZE === "0";
+
+  let localizedFiles: string[] = [];
+  if (!localizeFlagOff && codeGraph) {
+    try {
+      const locMap = await localize(prompt, codeGraph);
+      if (locMap.renderedBlock.length > 0) {
+        sections.push(locMap.renderedBlock);
+        hasLocalization = true;
+        localizedFiles = locMap.files.map((f) => f.path);
+      }
+    } catch {
+      // localize() never throws by contract, but guard defensively.
+    }
+  }
+
+  // ── F8: Repo prior injection (immediately after localization) ─────────────
+
+  if (opts.repo && opts.priorsDir && process.env.OXAGEN_REPO_PRIORS === "1") {
+    try {
+      const prior = loadPrior(opts.priorsDir, opts.repo);
+      if (prior) {
+        const rendered = renderPrior(prior);
+        if (rendered.length > 0) {
+          sections.push(rendered);
+          hasRepoPrior = true;
+        }
+      }
+    } catch {
+      /* prior loading is optional; graceful degradation */
+    }
+  }
+
+  // ── Memory context recall ──────────────────────────────────────────────────
+
+  let rawMemoryContext = "";
+  let hasMemory = false;
+  if (memory) {
+    try {
+      rawMemoryContext = await memory.recallContext();
+      hasMemory = rawMemoryContext.trim().length > 0;
+    } catch {
+      /* memory recall is optional — enhancement degrades gracefully */
+    }
+  }
+
+  // ── F9: Memory-recall applicability filter ─────────────────────────────────
+
+  let memoryContext = rawMemoryContext;
+  if (hasMemory && process.env.OXAGEN_RECALL_FILTER === "1") {
+    try {
+      // Parse raw memory into RecallItems (lines starting with "- " are new items).
+      const items: RecallItem[] = [];
+      let currentItem: RecallItem | null = null;
+      for (const line of rawMemoryContext.split("\n")) {
+        if (line.startsWith("- ")) {
+          const id = `r${items.length + 1}`;
+          currentItem = { id, text: line.slice(2).trim() };
+          items.push(currentItem);
+        } else if (line.trim() && currentItem) {
+          currentItem.text += " " + line.trim();
+        }
+      }
+
+      // Filter recall items: stage 1 (lexical), stage 2 (scorer=null for now).
+      // Candidate files come from the localization pass above — never re-localize.
+      const filtered = await filterRecall(items, { issue: prompt, candidateFiles: localizedFiles }, null);
+      const taggedRecall = tagRecall(filtered);
+      memoryContext = taggedRecall;
+      filteredRecall = true;
+    } catch {
+      /* filtering is optional; fall back to raw memory */
+    }
+  }
+
+  // ── Deadline for the code-graph pass (Infinity when unbounded) ────────────
+
   const deadline =
     opts.timeoutMs && opts.timeoutMs > 0 ? startedAt + opts.timeoutMs : Infinity;
   const remaining = (): number =>
@@ -282,7 +365,9 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
   }
   if (hasMemory && memoryContext) {
     parts.push(
-      "## Recalled context (from prior sessions)\n" + memoryContext,
+      (filteredRecall
+        ? memoryContext
+        : "## Recalled context (from prior sessions)\n" + memoryContext),
     );
   }
 
@@ -304,6 +389,9 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
     resolved,
     usedSemanticFallback,
     hasMemory,
+    hasLocalization,
+    hasRepoPrior,
+    filteredRecall,
     startedAt,
     finishedAt,
     durationMs: finishedAt - startedAt,

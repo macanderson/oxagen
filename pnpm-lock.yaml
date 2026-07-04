@@ -436,6 +436,9 @@ importers:
       '@oxagen/mcp-config':
         specifier: workspace:*
         version: link:../../packages/mcp-config
+      '@oxagen/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
       ai:
         specifier: 7.0.14
         version: 7.0.14(zod@3.25.76)
@@ -455,6 +458,9 @@ importers:
         specifier: 3.25.76
         version: 3.25.76
     devDependencies:
+      '@oxagen/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
       '@types/node':
         specifier: 25.9.1
         version: 25.9.1
@@ -1722,6 +1728,9 @@ importers:
       '@oxagen/tenancy':
         specifier: workspace:*
         version: link:../tenancy
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
     devDependencies:
       '@opentelemetry/context-async-hooks':
         specifier: 2.7.1

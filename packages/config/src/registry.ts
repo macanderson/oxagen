@@ -1268,12 +1268,38 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  DO_NOT_TRACK: {
+    group: "CLI",
+    description:
+      "Cross-tool opt-out convention (https://consoledonottrack.com): set to '1' to disable CLI " +
+      "usage telemetry. Checked before OXAGEN_TELEMETRY and the persisted telemetry.enabled config.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  OXAGEN_TELEMETRY: {
+    group: "CLI",
+    description:
+      "Set to '0' to disable CLI usage telemetry for this invocation (equivalent to `oxagen " +
+      "telemetry off`). DO_NOT_TRACK=1 also disables it and takes precedence.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "0",
+  },
   OXAGEN_EFFORT: {
     group: "CLI",
     description:
-      "Default reasoning effort for models that support a thinking mode: low | medium | high. " +
-      "Forwarded as reasoning_effort; models without a reasoning mode ignore it. Falls back to " +
-      "`effort` in ~/.config/oxagen/config.json / .oxagen/settings.json, then the model default.",
+      "Default reasoning effort for models that support a thinking mode: low | medium | high | xhigh | max " +
+      "(xhigh/max are Anthropic-only depth tiers; other vendors clamp to high). Forwarded as reasoning " +
+      "config per vendor; models without a reasoning mode ignore it. Unset = model default (Anthropic " +
+      "adaptive thinking decides depth itself). Falls back to `effort` in ~/.config/oxagen/config.json / " +
+      ".oxagen/settings.json, then the model default.",
     secret: false,
     clientExposed: false,
     services: [],
@@ -1676,6 +1702,100 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "2",
+  },
+  OXAGEN_SPEC_GATE: {
+    group: "CLI",
+    description:
+      "Enable the spec-first oracle gate (F2): at mid-session judge point, if no failing " +
+      "test repro has been executed, inject a corrective instruction instead of generic " +
+      "completeness judgment. Enforces test-before-patch discipline. 0 or unset disables. " +
+      "Only for headless/benchmark runs.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  OXAGEN_LADDER: {
+    group: "CLI",
+    description:
+      "Enable the verification-gated adaptive compute ladder (F3): gate escalation on " +
+      "measured signals (oracle state, test outcomes, diff size) instead of a fixed " +
+      "schedule. When on, fast-path (rung 0) skips the judge if oracle flipped and " +
+      "diff budget allows. 0 or unset disables; existing judge/revise pipeline used instead. " +
+      "Only for headless/benchmark runs.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  OXAGEN_DIFF_BUDGET: {
+    group: "CLI",
+    description:
+      "Line-count threshold (default 120) for the fast-path terminal condition in the " +
+      "adaptive ladder (F3). When oracle is 'flipped' and touched-file tests pass, " +
+      "if diff lines ≤ budget, skip judge and submit. Ignored if OXAGEN_LADDER is unset.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "120",
+  },
+  OXAGEN_LADDER_MAX_RUNG: {
+    group: "CLI",
+    description:
+      "Hard cap on ladder rung (0–3) in the adaptive compute controller (F3). " +
+      "Prevents escalation beyond the specified rung even when signals suggest higher. " +
+      "Default 3 (no cap). 0–3 only; invalid values silently use default. " +
+      "Ignored if OXAGEN_LADDER is unset.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "3",
+  },
+  OXAGEN_LOCALIZE: {
+    group: "CLI",
+    description:
+      "Enable F1 deterministic zero-token localization: parse tracebacks and " +
+      "extract symbols from the issue to rank candidate files before the first LLM call. " +
+      "Default on (runs unless explicitly set to '0'). Unset or '1' enables, '0' disables.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_REPO_PRIORS: {
+    group: "CLI",
+    description:
+      "Enable F8 per-repo procedural priors: inject cached layout, conventions, and accrued pitfalls " +
+      "learned from prior instances. Requires both repo and priorsDir options to be set in the caller. " +
+      "Default off. Unset or '0' disables, '1' enables.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  OXAGEN_RECALL_FILTER: {
+    group: "CLI",
+    description:
+      "Enable F9 memory-recall applicability filter: drop recalled items with zero lexical overlap " +
+      "with the issue and candidate files, then optionally score survivors for semantic relevance. " +
+      "Reduces noise in injected memory. Default off. Unset or '0' disables, '1' enables.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
   },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",

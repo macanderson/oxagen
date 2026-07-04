@@ -369,6 +369,28 @@ oxagen login
 
 ---
 
+## Telemetry
+
+The CLI collects anonymous usage telemetry (command names, durations, coarse
+success/error categories, OS/arch) to improve the product. It **never**
+collects code, prompts, file contents, file paths, model slugs, API keys, or
+any other personal or identifying data — see [TELEMETRY.md](../../TELEMETRY.md)
+for the exact field list.
+
+Telemetry is **on by default**. Opt out any time:
+
+```bash
+oxagen telemetry off       # persists the choice to ~/.config/oxagen/config.json
+oxagen telemetry status    # show enabled/disabled, install id, ingest endpoint
+oxagen telemetry on        # re-enable
+
+# or, without touching config:
+export OXAGEN_TELEMETRY=0
+export DO_NOT_TRACK=1      # https://consoledonottrack.com/
+```
+
+---
+
 ## Troubleshooting
 
 **`command not found: oxagen`** — ensure global install succeeded:

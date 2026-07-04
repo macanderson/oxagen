@@ -171,3 +171,77 @@ describe("skill_loads migration inputs", () => {
     expect(stmt.startsWith("CREATE TABLE")).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// usage_events (anonymous CLI usage telemetry) — assert the table is created
+// by the migrate inputs. Like 0013-0017, this is a migrations-only addition
+// (no schema.sql edit — see those files for the same, more recent, pattern).
+// ---------------------------------------------------------------------------
+
+describe("usage_events migration inputs", () => {
+  const migrationSql = readFileSync(
+    join(here, "migrations", "0019_usage_events.sql"),
+    "utf8",
+  );
+
+  function usageEventsCreate(sql: string): string | undefined {
+    return splitStatements(sql).find(
+      (s) => /CREATE TABLE IF NOT EXISTS usage_events\b/i.test(s),
+    );
+  }
+
+  it("the migrations directory contains the 0019 usage_events file", () => {
+    const files = readdirSync(join(here, "migrations")).filter((f) => f.endsWith(".sql"));
+    expect(files).toContain("0019_usage_events.sql");
+  });
+
+  it("0019 defines usage_events as a CREATE TABLE statement", () => {
+    const stmt = usageEventsCreate(migrationSql);
+    expect(stmt).toBeDefined();
+    expect(stmt).toMatch(/CREATE TABLE IF NOT EXISTS usage_events/i);
+  });
+
+  it("carries every column in the allowlist, and only those columns", () => {
+    const stmt = usageEventsCreate(migrationSql) ?? "";
+    for (const col of [
+      "timestamp DateTime",
+      "install_id UUID",
+      "session_id UUID",
+      "oxagen_version String",
+      "os LowCardinality(String)",
+      "arch LowCardinality(String)",
+      "command LowCardinality(String)",
+      "model_tier LowCardinality(String)",
+      "best_of_n UInt8",
+      "graph_used UInt8",
+      "pipeline_used UInt8",
+      "tui UInt8",
+      "headless UInt8",
+      "byok UInt8",
+      "tool_calls_json String",
+      "step_count UInt16",
+      "duration_ms UInt32",
+      "error_type LowCardinality(String)",
+      "exit_status LowCardinality(String)",
+    ]) {
+      expect(stmt).toContain(col);
+    }
+    // No org/workspace/user column of any kind — this table is anonymous by
+    // construction, not by omission of a column that would otherwise be there.
+    expect(stmt).not.toMatch(/\borg_id\b|\bworkspace_id\b|\buser_id\b|\bemail\b/i);
+  });
+
+  it("is a pure append-only MergeTree, partitioned by month with a 1-year TTL", () => {
+    const stmt = usageEventsCreate(migrationSql) ?? "";
+    expect(stmt).toMatch(/ENGINE = MergeTree\(\)/);
+    expect(stmt).toMatch(/PARTITION BY toYYYYMM\(timestamp\)/);
+    expect(stmt).toMatch(/ORDER BY \(command, timestamp\)/);
+    expect(stmt).toMatch(/TTL toDateTime\(timestamp\) \+ INTERVAL 1 YEAR/);
+  });
+
+  it("comment-only lines are stripped, leaving an executable statement", () => {
+    const stmt = usageEventsCreate(migrationSql) ?? "";
+    expect(stmt).not.toMatch(/^\s*--/m);
+    expect(stmt.startsWith("CREATE TABLE")).toBe(true);
+  });
+});
