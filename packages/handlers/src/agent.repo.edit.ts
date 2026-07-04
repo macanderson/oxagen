@@ -7,9 +7,9 @@ import {
   createPlatformMemoryProvider,
   createClickHouseTraceStore,
   createGraphSyncAdapter,
+  createPlatformAgentAi,
 } from "@oxagen/agent/adapters";
 import { resolveGitHubToken } from "./lib/github-token";
-import { createPlatformAgentAi } from "./lib/platform-agent-ai";
 
 export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = async (
   input,

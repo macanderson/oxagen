@@ -157,7 +157,14 @@ export interface CodeMapProvider {
 }
 
 export interface RunCodingAgentOptions {
-  workspace: Workspace;
+  /**
+   * The checked-out filesystem the coding loop reads and edits. OPTIONAL: a
+   * surface with no repository — the in-app chat agent — omits it, and the loop
+   * then advertises NO filesystem tools (`read_file`…`bash`), computes no diff,
+   * and emits no `final-diff`. Every filesystem-bound behaviour in the engine is
+   * gated on this being present.
+   */
+  workspace?: Workspace;
   /** Injected AI port — BYOK/unmetered in the CLI, streamAgentReply (metered) on the platform. */
   ai: AgentAi;
   instruction: string;
@@ -171,6 +178,17 @@ export interface RunCodingAgentOptions {
   maxSteps?: number;
   /** Per-turn budget of retries for transient model/transport errors (default 4). */
   maxRetries?: number;
+  /**
+   * Per-turn budget of context-overflow retries (compact-harder-and-retry the
+   * SAME step). Default 2. A caller that forwards every raw stream part to a
+   * client as it arrives (the in-app SSE translator via `onStreamPart`) passes
+   * `0`: an overflow re-runs the step, which would re-forward that step's parts
+   * (duplicate `start-step`, possibly duplicate text) to a client that cannot
+   * un-render them. With `0` an overflow throws to the caller's catch instead —
+   * matching a non-buffered transport where an oversized request surfaces as a
+   * single error rather than a silent re-stream.
+   */
+  maxOverflowRetries?: number;
   /** Model context window in tokens; auto-detected from the model slug when omitted. */
   contextWindow?: number;
   /** Compact the transcript once its estimated tokens exceed this fraction of the window (default 0.8). */
@@ -183,6 +201,21 @@ export interface RunCodingAgentOptions {
   trace?: TraceStore;
   signal?: AbortSignal;
   onEvent?: (e: CodingEvent) => void;
+  /**
+   * Raw AI-SDK `fullStream` part tap. Invoked for EVERY part of every step,
+   * synchronously, as the first thing the loop does per part — BEFORE the
+   * engine's own `CodingEvent` translation (which only consumes a subset:
+   * text/reasoning/tool-call/-result/-error). A consumer that needs higher
+   * fidelity than `CodingEvent` — the in-app SSE translator, which forwards
+   * `tool-input-start/-delta`, `reasoning-start/-end`, `start-step`,
+   * `finish-step`, `finish`, `error` verbatim to the browser — uses this.
+   *
+   * MUST NOT throw: it runs inside the engine's per-step try/catch, so a throw
+   * (e.g. enqueue on a closed SSE controller) would be misclassified as a
+   * model/stream error and trigger the retry path. Consumers swallow their own
+   * emit failures and rely on `signal` to stop the loop.
+   */
+  onStreamPart?: (part: unknown) => void;
   /**
    * Extra tools merged with the built-in workspace tools — e.g. external MCP
    * server tools the CLI materialises. Merged AFTER the workspace tools, so a
