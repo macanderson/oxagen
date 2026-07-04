@@ -24,7 +24,11 @@ vi.mock("@oxagen/oxagen/capability-meta", () => ({
   resolveRenderDirective: vi.fn(() => null),
 }));
 
-import { translateAgentStream } from "./translate-stream";
+import {
+  translateAgentStream,
+  createTurnTranslator,
+  emitUsageEvent,
+} from "./translate-stream";
 import type { StreamEvent } from "@/components/chat/stream-event-types";
 import { meterCreditsForUsage } from "@oxagen/billing";
 
@@ -272,5 +276,217 @@ describe("translateAgentStream — background-task lifecycle (OXA-1469)", () => 
 
     expect(collectEvents(events, "background-task-progress")).toHaveLength(0);
     expect(persistedBlocks.find((b) => b.type === "background-task")).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createTurnTranslator — stateful engine path (agent-engine unification)
+// ---------------------------------------------------------------------------
+
+const TRANSLATOR_ARGS = {
+  requestId: "req-1",
+  toolNameMap: {} as Record<string, string>,
+  orgSlug: "my-org",
+  workspaceSlug: "my-ws",
+};
+
+/** Drive a raw part sequence through a fresh stateful translator. */
+function runTranslator(parts: unknown[]): {
+  events: StreamEvent[];
+  turn: ReturnType<ReturnType<typeof createTurnTranslator>["finish"]>;
+} {
+  const events: StreamEvent[] = [];
+  const translator = createTurnTranslator({ ...TRANSLATOR_ARGS, emit: (e) => events.push(e) });
+  for (const p of parts) translator.onPart(p);
+  return { events, turn: translator.finish() };
+}
+
+describe("createTurnTranslator — reasoning-id namespacing across steps (C2)", () => {
+  beforeEach(() => {
+    vi.mocked(meterCreditsForUsage).mockReset();
+  });
+
+  it("namespaces per-step colliding reasoning ids so cards never clobber each other", () => {
+    // The engine drives one streamText per step, so reasoning `id` can REPEAT
+    // across steps ("r" here). Two steps, both using id "r".
+    const parts: unknown[] = [
+      { type: "start-step" },
+      { type: "reasoning-start", id: "r" },
+      { type: "reasoning-delta", id: "r", text: "first-thought" },
+      { type: "reasoning-end", id: "r" },
+      { type: "text-delta", text: "one" },
+      { type: "finish-step" },
+      { type: "start-step" },
+      { type: "reasoning-start", id: "r" },
+      { type: "reasoning-delta", id: "r", text: "second-thought" },
+      { type: "reasoning-end", id: "r" },
+      { type: "text-delta", text: "two" },
+      { type: "finish-step" },
+    ];
+
+    const { events, turn } = runTranslator(parts);
+
+    // Two distinct, step-namespaced reasoning ids reach the client.
+    const starts = events.filter((e) => e.type === "reasoning-start") as Extract<
+      StreamEvent,
+      { type: "reasoning-start" }
+    >[];
+    expect(starts.map((e) => e.reasoningId)).toEqual(["s0:r", "s1:r"]);
+
+    // Deltas route to the right namespaced card.
+    const deltas = events.filter((e) => e.type === "reasoning-delta") as Extract<
+      StreamEvent,
+      { type: "reasoning-delta" }
+    >[];
+    expect(deltas).toEqual([
+      { type: "reasoning-delta", reasoningId: "s0:r", text: "first-thought" },
+      { type: "reasoning-delta", reasoningId: "s1:r", text: "second-thought" },
+    ]);
+
+    // Both reasoning cards survive with their OWN text — the second did not
+    // overwrite the first (the bug namespacing prevents).
+    const reasoningBlocks = turn.persistedBlocks.filter((b) => b.type === "reasoning") as Array<{
+      type: "reasoning";
+      reasoningId: string;
+      text: string;
+    }>;
+    expect(reasoningBlocks).toHaveLength(2);
+    expect(reasoningBlocks[0]).toMatchObject({ reasoningId: "s0:r", text: "first-thought" });
+    expect(reasoningBlocks[1]).toMatchObject({ reasoningId: "s1:r", text: "second-thought" });
+
+    // Text from both steps accumulates in order.
+    expect(turn.assistantText).toBe("onetwo");
+  });
+
+  it("does NOT namespace tool call ids (provider ids are already unique)", () => {
+    const parts: unknown[] = [
+      { type: "start-step" },
+      { type: "tool-call", toolCallId: "toolu_abc", toolName: "graph.stats", input: {} },
+      { type: "tool-result", toolCallId: "toolu_abc", output: { ok: true } },
+      { type: "finish-step" },
+    ];
+    const { events } = runTranslator(parts);
+    const start = events.find((e) => e.type === "tool-call-start") as Extract<
+      StreamEvent,
+      { type: "tool-call-start" }
+    >;
+    const end = events.find((e) => e.type === "tool-call-end") as Extract<
+      StreamEvent,
+      { type: "tool-call-end" }
+    >;
+    // Raw provider id passes through verbatim — no s{n}: prefix.
+    expect(start.toolCallId).toBe("toolu_abc");
+    expect(end.toolCallId).toBe("toolu_abc");
+  });
+
+  it("skips preliminary tool-result parts (no premature tool-call-end)", () => {
+    const parts: unknown[] = [
+      { type: "start-step" },
+      { type: "tool-call", toolCallId: "tc-1", toolName: "graph.stats", input: {} },
+      // Streamed partial output — must be ignored.
+      { type: "tool-result", toolCallId: "tc-1", output: { partial: true }, preliminary: true },
+      { type: "tool-result", toolCallId: "tc-1", output: { ok: true } },
+      { type: "finish-step" },
+    ];
+    const { events } = runTranslator(parts);
+    const ends = events.filter((e) => e.type === "tool-call-end");
+    // Exactly one terminal event — the preliminary result did not produce one.
+    expect(ends).toHaveLength(1);
+  });
+
+  it("onPart suppresses finish and error — the caller owns usage + error", () => {
+    const parts: unknown[] = [
+      { type: "text-delta", text: "hi" },
+      { type: "finish", totalUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+      { type: "error", error: "boom" },
+    ];
+    const { events } = runTranslator(parts);
+    expect(collectEvents(events, "usage")).toHaveLength(0);
+    expect(collectEvents(events, "error")).toHaveLength(0);
+    // Text still flowed.
+    expect(collectEvents(events, "text")).toHaveLength(1);
+  });
+});
+
+describe("createTurnTranslator — parity with the single-pass wrapper", () => {
+  beforeEach(() => {
+    vi.mocked(meterCreditsForUsage).mockReturnValue(7n);
+  });
+
+  it("stateful step-by-step drive == single-pass translateAgentStream (minus usage/error position)", async () => {
+    // A non-colliding sequence: the two paths must emit identical events for
+    // everything except finish/error (which the engine caller emits itself).
+    const parts: unknown[] = [
+      { type: "start-step" },
+      { type: "reasoning-start", id: "a" },
+      { type: "reasoning-delta", id: "a", text: "think" },
+      { type: "reasoning-end", id: "a" },
+      { type: "text-delta", text: "answer " },
+      { type: "tool-call", toolCallId: "toolu_1", toolName: "graph.stats", input: { q: 1 } },
+      { type: "tool-result", toolCallId: "toolu_1", output: { count: 3 } },
+      { type: "text-delta", text: "done" },
+      { type: "finish-step" },
+    ];
+
+    // Single-pass wrapper.
+    const wrapperEvents: StreamEvent[] = [];
+    const wrapperTurn = await translateAgentStream({
+      ...TRANSLATOR_ARGS,
+      modelId: "anthropic/claude-sonnet-5",
+      fullStream: (async function* () {
+        for (const p of parts) yield p;
+      })(),
+      emit: (e) => wrapperEvents.push(e),
+    });
+
+    // Stateful engine path.
+    const { events: statefulEvents, turn: statefulTurn } = runTranslator(parts);
+
+    // The wrapper adds NO usage/error here (no finish/error parts present), so
+    // the two event streams must be byte-identical.
+    expect(statefulEvents).toEqual(wrapperEvents);
+    expect(statefulTurn.assistantText).toBe(wrapperTurn.assistantText);
+    expect(statefulTurn.persistedBlocks).toEqual(wrapperTurn.persistedBlocks);
+    expect(statefulTurn.assistantText).toBe("answer done");
+  });
+});
+
+describe("emitUsageEvent", () => {
+  beforeEach(() => {
+    vi.mocked(meterCreditsForUsage).mockReset();
+  });
+
+  it("emits one usage event with creditsCharged from the aggregated turn usage", () => {
+    vi.mocked(meterCreditsForUsage).mockReturnValue(99n);
+    const events: StreamEvent[] = [];
+    emitUsageEvent(
+      (e) => events.push(e),
+      { inputTokens: 200, outputTokens: 80, totalTokens: 280 },
+      "anthropic/claude-sonnet-5",
+    );
+    expect(events).toHaveLength(1);
+    const usage = events[0] as Extract<StreamEvent, { type: "usage" }>;
+    expect(usage.usage).toEqual({
+      promptTokens: 200,
+      completionTokens: 80,
+      totalTokens: 280,
+      creditsCharged: 99,
+    });
+    expect(vi.mocked(meterCreditsForUsage)).toHaveBeenCalledWith({
+      model: "anthropic/claude-sonnet-5",
+      inputTokens: 200,
+      outputTokens: 80,
+    });
+  });
+
+  it("omits creditsCharged when the meter throws (unknown model)", () => {
+    vi.mocked(meterCreditsForUsage).mockImplementation(() => {
+      throw new Error("unknown model");
+    });
+    const events: StreamEvent[] = [];
+    emitUsageEvent((e) => events.push(e), { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, "x/y");
+    const usage = events[0] as Extract<StreamEvent, { type: "usage" }>;
+    expect(usage.usage.creditsCharged).toBeUndefined();
+    expect(usage.usage.totalTokens).toBe(2);
   });
 });

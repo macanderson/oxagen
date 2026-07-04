@@ -1,5 +1,14 @@
 -- TOTP two-factor authentication (security-hardening).
 --
+-- NOTE: originally shipped as 20260704120000 (PR #561). That prefix (a) collided
+-- with 20260704120000_ai_cache_and_batch_jobs.sql (PR #560) — same numeric
+-- version, so a fresh apply silently skipped one — and (b) sorted BEFORE
+-- connector_poll_health (20260704180000, PR #558), which merged first, so on the
+-- persistent preview DB atlas rejected it as "added out of order". Renamed to
+-- 20260704190000 (after connector, before ai_cache at 200000). The DDL is
+-- already idempotent (IF NOT EXISTS), so it re-applies safely anywhere the old
+-- 120000 revision was recorded.
+--
 -- Backs Better Auth's twoFactor plugin, newly registered in packages/auth.
 --
 -- 1. auth.users.two_factor_enabled — flipped to true only after a user

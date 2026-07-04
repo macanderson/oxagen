@@ -19,6 +19,7 @@ export * from "./skill-telemetry";
 export * from "./usage-analytics";
 export * from "./usage-events";
 export { chInsert, chSelect } from "./tenant";
+export * from "./eval-item-results";
 export {
   initTracer,
   shutdownTracer,
