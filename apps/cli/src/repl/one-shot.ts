@@ -53,7 +53,7 @@ export interface OneShotOptions {
   session: Session;
   readOnly?: boolean;
   model?: string;
-  /** Reasoning effort for models that support it (low|medium|high). */
+  /** Reasoning effort for models that support it (low|medium|high|xhigh|max). */
   effort?: string;
   /**
    * Permission posture. One-shot is non-interactive, so there is no approver:

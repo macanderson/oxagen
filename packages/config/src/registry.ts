@@ -1271,9 +1271,11 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_EFFORT: {
     group: "CLI",
     description:
-      "Default reasoning effort for models that support a thinking mode: low | medium | high. " +
-      "Forwarded as reasoning_effort; models without a reasoning mode ignore it. Falls back to " +
-      "`effort` in ~/.config/oxagen/config.json / .oxagen/settings.json, then the model default.",
+      "Default reasoning effort for models that support a thinking mode: low | medium | high | xhigh | max " +
+      "(xhigh/max are Anthropic-only depth tiers; other vendors clamp to high). Forwarded as reasoning " +
+      "config per vendor; models without a reasoning mode ignore it. Unset = model default (Anthropic " +
+      "adaptive thinking decides depth itself). Falls back to `effort` in ~/.config/oxagen/config.json / " +
+      ".oxagen/settings.json, then the model default.",
     secret: false,
     clientExposed: false,
     services: [],
