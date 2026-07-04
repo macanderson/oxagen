@@ -35,6 +35,10 @@ export const connectionList = registerCapability({
         status: z.string(),
         entityCount: z.number(),
         lastSyncAt: z.string().nullable(),
+        // Poll/sync health rolled up by the connector poll loop.
+        healthStatus: z.enum(["healthy", "degraded", "errored"]),
+        lastPollAt: z.string().nullable(),
+        nextPollAt: z.string().nullable(),
         createdAt: z.string(),
       }),
     ),

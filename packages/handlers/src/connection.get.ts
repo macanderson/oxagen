@@ -20,6 +20,11 @@ export const connectionGetHandler: CapabilityHandler<typeof connectionGet> = asy
         entityCount: schema.sourceConnections.entityCount,
         lastSyncAt: schema.sourceConnections.lastSyncAt,
         errorMessage: schema.sourceConnections.errorMessage,
+        healthStatus: schema.sourceConnections.healthStatus,
+        consecutiveFailureCount: schema.sourceConnections.consecutiveFailureCount,
+        lastPollAt: schema.sourceConnections.lastPollAt,
+        nextPollAt: schema.sourceConnections.nextPollAt,
+        lastErrorAt: schema.sourceConnections.lastErrorAt,
         createdAt: schema.sourceConnections.createdAt,
         updatedAt: schema.sourceConnections.updatedAt,
       })
@@ -45,6 +50,10 @@ export const connectionGetHandler: CapabilityHandler<typeof connectionGet> = asy
     ...row,
     deliveryConfig: (row.deliveryConfig as Record<string, unknown> | null) ?? null,
     lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
+    healthStatus: (row.healthStatus as "healthy" | "degraded" | "errored") ?? "healthy",
+    lastPollAt: row.lastPollAt?.toISOString() ?? null,
+    nextPollAt: row.nextPollAt?.toISOString() ?? null,
+    lastErrorAt: row.lastErrorAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
