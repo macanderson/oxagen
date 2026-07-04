@@ -181,7 +181,9 @@ describe("buildEnvRefIndex — unrecognised rg error (no stdout, no ENOENT)", ()
 describe("buildEnvRefIndex — walkRefIndex unreadable file handling", () => {
   it("silently skips files that cannot be read", () => {
     // Only meaningful on non-root Unix where chmod 000 actually blocks reads
+    // (root — e.g. the CI toolchain containers — reads mode-000 files anyway)
     if (process.platform === "win32") return;
+    if (typeof process.getuid === "function" && process.getuid() === 0) return;
 
     const tmpRoot = mkdtempSync(join(tmpdir(), "env-mgr-unreadable-"));
     mkdirSync(join(tmpRoot, "apps", "myapp", "src"), { recursive: true });
