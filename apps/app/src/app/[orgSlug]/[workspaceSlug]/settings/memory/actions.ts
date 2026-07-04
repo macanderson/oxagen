@@ -151,14 +151,20 @@ export async function readMemoryPolicyAction(args: {
   complianceThreshold: number;
   defaultDecayFloor: number;
 }> {
+  // invoke() from apps/app skips kernel IAM and the org/workspace come from
+  // client-supplied slugs — authenticate and assert org membership (mirrors
+  // saveMemoryPolicyAction) so a session scoped to org A can't read org B's
+  // memory policy by passing its slugs. notFound() on non-member.
+  const session = await getSessionOrRedirect();
   const org = await resolveOrg(args.orgSlug);
   const ws = await resolveWorkspace(org.id, args.workspaceSlug);
+  await assertOrgMember(org.id, session.user.id);
 
   return await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, async () => {
     const ctx = {
       orgId: org.id,
       workspaceId: ws.id,
-      userId: "",
+      userId: session.user.id,
       apiKeyId: null as string | null,
       requestId: crypto.randomUUID(),
       surface: "app" as const,
