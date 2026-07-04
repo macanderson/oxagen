@@ -153,6 +153,11 @@ _BUNDLE_REMOTE_TMP = "/tmp/oxagen.mjs"
 _BUNDLE_INSTALL_DIR = "/usr/local/lib/oxagen"
 _BUNDLE_INSTALL_PATH = f"{_BUNDLE_INSTALL_DIR}/oxagen.mjs"
 _WRAPPER_PATH = "/usr/local/bin/oxagen"
+# Marker written by the prewarm overlay image (bench/swe-bench/prewarm/
+# Dockerfile) next to the baked-in bundle: the bundle's sha256 hex digest.
+# install() compares it against the local bundle and skips the bundle/wasm
+# upload + wrapper write on a match.
+_BUNDLE_SHA_MARKER_PATH = f"{_BUNDLE_INSTALL_DIR}/.bundle.sha256"
 
 # In-container HOME used in warm mode.  All of Oxagen's path helpers call
 # node:os.homedir() which reads HOME, so pinning HOME to this path makes
@@ -318,14 +323,20 @@ def _locate_bundle() -> Path:
 # absent. Covers Debian/Ubuntu (NodeSource), Alpine (apk), RHEL (NodeSource).
 #
 # Fast path: if the image already ships Node >= _MIN_NODE_MAJOR (e.g. a
-# pre-baked Harbor base image with Node 22) this entire script exits in < 1s
+# pre-baked task image with Node 22) this entire script exits in < 1s
 # after the version check — no package-manager round-trip at all.  That turns
-# the 110s "agent setup" overhead (measured in the smoke run) into < 5s.
-# To pre-bake a base image, add the following to your Dockerfile:
-#   FROM harbor-base:latest
-#   RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-#    && apt-get install -y nodejs
-# and set HARBOR_BASE_IMAGE=<your-image> in harbor's config.
+# the ~109s "agent setup" overhead (measured in the smoke run) into < 5s.
+#
+# To pre-bake task images for SWE-bench, use the prewarm tooling in
+# bench/swe-bench/ (see PREWARM.md there):
+#   1. `prewarm.py` builds oxagen-prewarmed/<name>:<envhash>-<bundlesha>
+#      images (Node 22 + bundle + wasm + rg + wrapper baked in) on top of
+#      each task's own environment image;
+#   2. run.sh with OXAGEN_PREWARMED=1 passes Harbor
+#      `--env oxagen_swe_bench.prewarm_env:PrewarmedDockerEnvironment`,
+#      which points the trial at that image when it exists locally;
+#   3. this adapter's `.bundle.sha256` probe (see install()) then skips the
+#      bundle/wasm re-upload as well.
 _NODE_INSTALL_SCRIPT = f"""
 set -eu
 have_node=0
@@ -391,6 +402,31 @@ class OxagenAgent(BaseInstalledAgent):
     def parse_version(self, stdout: str) -> str:
         return stdout.strip().splitlines()[0].strip() if stdout.strip() else stdout
 
+    async def _bundle_prebaked(
+        self, environment: BaseEnvironment, bundle_path: Path
+    ) -> bool:
+        """True when the container already carries this exact bundle pre-baked.
+
+        A prewarmed image (bench/swe-bench/prewarm/Dockerfile) writes the
+        baked bundle's sha256 to _BUNDLE_SHA_MARKER_PATH. Compare it against
+        the local bundle; any mismatch, absence, or probe error means "not
+        prebaked" — this must never block a trial.
+        """
+        try:
+            local_sha = hashlib.sha256(bundle_path.read_bytes()).hexdigest()
+            probe = await environment.exec(
+                command=f"cat {_BUNDLE_SHA_MARKER_PATH} 2>/dev/null",
+                timeout_sec=30,
+            )
+            return probe.return_code == 0 and probe.stdout.strip() == local_sha
+        except Exception as exc:
+            print(
+                f"oxagen-adapter: prebaked-bundle probe failed ({exc}); "
+                "uploading the bundle normally",
+                file=sys.stderr,
+            )
+            return False
+
     async def install(self, environment: BaseEnvironment) -> None:
         bundle_path = _locate_bundle()
 
@@ -408,38 +444,61 @@ class OxagenAgent(BaseInstalledAgent):
         #    binary wasm, so bundle.mjs copies them next to oxagen.mjs. If we upload
         #    only oxagen.mjs, Parser.init() hits ENOENT on tree-sitter.wasm and
         #    Emscripten ABORTS the whole process (exit 1) — so upload them too.
-        await environment.upload_file(bundle_path, _BUNDLE_REMOTE_TMP)
-        wasm_copies = ""
-        for wasm in sorted(bundle_path.parent.glob("*.wasm")):
-            remote_tmp = f"/tmp/{wasm.name}"
-            await environment.upload_file(wasm, remote_tmp)
-            wasm_copies += f"cp {remote_tmp} {_BUNDLE_INSTALL_DIR}/{wasm.name} && "
-        wrapper = "#!/bin/sh\\nexec node " + _BUNDLE_INSTALL_PATH + ' "$@"\\n'
-        await self.exec_as_root(
-            environment,
-            command=(
-                f"mkdir -p {_BUNDLE_INSTALL_DIR} && "
-                f"cp {_BUNDLE_REMOTE_TMP} {_BUNDLE_INSTALL_PATH} && "
-                f"{wasm_copies}"
-                f"printf '{wrapper}' > {_WRAPPER_PATH} && "
-                f"chmod +x {_WRAPPER_PATH} && "
-                f"oxagen --version"
-            ),
-        )
-
-        # 3) Static ripgrep so the CLI's grep tool never falls back to the
-        #    in-process JS walk (see _RG_* above). Best-effort: skipped when the
-        #    image already has rg or provisioning failed.
-        rg = _cached_rg_binary()
-        if rg is not None:
-            await environment.upload_file(rg, "/tmp/oxa-rg")
+        #
+        #    Fast path (best-effort): a pre-baked image (bench/swe-bench/
+        #    prewarm/Dockerfile) carries the bundle + wasm + wrapper already
+        #    and records the bundle's sha256 at _BUNDLE_SHA_MARKER_PATH. When
+        #    that marker matches the local bundle, the whole upload block is
+        #    skipped; any probe failure just falls through to the upload path.
+        if await self._bundle_prebaked(environment, bundle_path):
+            self.logger.info("oxagen-adapter: bundle: prebaked, skipping upload")
+        else:
+            await environment.upload_file(bundle_path, _BUNDLE_REMOTE_TMP)
+            wasm_copies = ""
+            for wasm in sorted(bundle_path.parent.glob("*.wasm")):
+                remote_tmp = f"/tmp/{wasm.name}"
+                await environment.upload_file(wasm, remote_tmp)
+                wasm_copies += f"cp {remote_tmp} {_BUNDLE_INSTALL_DIR}/{wasm.name} && "
+            wrapper = "#!/bin/sh\\nexec node " + _BUNDLE_INSTALL_PATH + ' "$@"\\n'
             await self.exec_as_root(
                 environment,
                 command=(
-                    "command -v rg >/dev/null 2>&1 || "
-                    "{ cp /tmp/oxa-rg /usr/local/bin/rg && chmod +x /usr/local/bin/rg; }"
+                    f"mkdir -p {_BUNDLE_INSTALL_DIR} && "
+                    f"cp {_BUNDLE_REMOTE_TMP} {_BUNDLE_INSTALL_PATH} && "
+                    f"{wasm_copies}"
+                    f"printf '{wrapper}' > {_WRAPPER_PATH} && "
+                    f"chmod +x {_WRAPPER_PATH} && "
+                    f"oxagen --version"
                 ),
             )
+
+        # 3) Static ripgrep so the CLI's grep tool never falls back to the
+        #    in-process JS walk (see _RG_* above). Best-effort: skipped when the
+        #    image already has rg (probed first so pre-baked images pay zero
+        #    upload cost) or provisioning failed.
+        rg = _cached_rg_binary()
+        if rg is not None:
+            have_rg = False
+            try:
+                probe = await environment.exec(
+                    command="command -v rg", timeout_sec=30
+                )
+                have_rg = probe.return_code == 0
+            except Exception:
+                have_rg = False  # probe is best-effort; fall back to upload
+            if have_rg:
+                self.logger.info(
+                    "oxagen-adapter: rg already present in image, skipping upload"
+                )
+            else:
+                await environment.upload_file(rg, "/tmp/oxa-rg")
+                await self.exec_as_root(
+                    environment,
+                    command=(
+                        "command -v rg >/dev/null 2>&1 || "
+                        "{ cp /tmp/oxa-rg /usr/local/bin/rg && chmod +x /usr/local/bin/rg; }"
+                    ),
+                )
 
         # 4) Optional: live context engine (persistent memory/trace via DuckDB).
         if _is_truthy(os.environ.get("OXAGEN_INSTALL_DUCKDB")):
