@@ -1,5 +1,15 @@
 # CLAUDE.md
 
+## Mission — the Stripe for agents
+
+**Oxagen is the metered, governed, graph-grounded control plane for teams that build and resell AI agents — the neutral Stripe-for-agents.** The full positioning, market gaps, and drift tests live in `docs/VISION.md`. It is the north star for every feature decision.
+
+- **The wedge (own this intersection):** (a) capability-parity typed contracts that make every MCP tool inherently governed and un-poisonable; (b) the Neo4j graph + ontology that grounds agent answers in cited, time-aware context; (c) the ClickHouse→Stripe loop that turns observed usage directly into customer billing.
+- **Moats:** knowledge graph = accuracy moat; vendor-neutral BYOK = trust moat.
+- **Do not fight on the front line of:** connector breadth (Glean), standalone evals (Braintrust), framework mindshare (LangGraph). Those are fast-follows after the wedge is won, never the lead.
+- **Agent duty:** when recommending, designing, or prioritizing features, steer toward this future. Prefer work that deepens metering→billing, contract governance, graph grounding, vendor neutrality, or fleet lineage. If a request drifts from the wedge, say so explicitly and propose the vision-aligned alternative alongside doing what was asked.
+- **CI enforcement:** the Vision Gate (`.github/workflows/vision-gate.yml` → `tools/scripts/vision-gate.mjs`, `pnpm check:vision`) LLM-judges every PR diff against `docs/VISION.md` and posts an advisory verdict (advances / neutral / drifts). A `drifts` verdict is a signal to justify the exception in the PR description or redirect the work — routine maintenance, fixes, tests, and tooling are neutral by definition.
+
 ## Prime directive — fix every issue you encounter
 
 When you encounter a bug, broken path, dead value, mispriced meter, stale config, or any defect — **fix it now, in place, completely.** Investigate to root cause, fix every co-located instance, and verify with tests/typecheck before declaring done. The only acceptable deferral is a true external action you cannot perform (e.g. flipping a prod env var) — and even then, fix everything in code first.

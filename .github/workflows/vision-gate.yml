@@ -1,0 +1,42 @@
+# Vision Gate — LLM drift check against docs/VISION.md.
+#
+# Judges every PR diff against the Stripe-for-agents north star and posts an
+# advisory verdict (advances / neutral / drifts) as a sticky PR comment + step
+# summary. Never blocks merge (the script exits 0 unless VISION_GATE_STRICT=1);
+# fork PRs no-op safely because secrets are unavailable there.
+name: Vision Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: vision-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  vision-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.base_ref }} --no-tags
+
+      - name: Judge diff against docs/VISION.md
+        env:
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VISION_GATE_BASE: origin/${{ github.base_ref }}
+        run: node tools/scripts/vision-gate.mjs
