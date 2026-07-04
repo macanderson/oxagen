@@ -86,6 +86,9 @@ OXAGEN_MODEL_SLUG=anthropic/claude-opus-4.8 ./run.sh
 
 # Multi-vendor comparison (oxagen + claude-code + codex + aider, same model):
 ./compare.sh
+
+# Pre-baked task images — skip the ~109s/task agent setup (see PREWARM.md):
+OXAGEN_PREWARMED=1 TASK_IDS="django__django-11099" N_CONCURRENT=1 ./run.sh
 ```
 
 ## Multi-vendor comparison
@@ -139,6 +142,7 @@ that didn't happen.
 | `OXAGEN_INSTALL_DUCKDB` | unset | `1` → (oxagen only) also install DuckDB so the context engine's persistent stores are live. |
 | `OXAGEN_WARM` / `OXAGEN_WARM_MEMORY_DIR` | unset | Cross-trial memory persistence (oxagen only) — see the terminal-bench README's "Warm / self-improvement mode". |
 | `OXAGEN_CLI_BUNDLE` | repo build path | Override the path to `oxagen.mjs` (oxagen only). |
+| `OXAGEN_PREWARMED` | unset | `1` → (oxagen only) run pre-baked task images (Node + bundle + rg baked in), collapsing the ~109s/task agent setup — see [PREWARM.md](PREWARM.md). |
 | `DATASET` | `swe-bench/swe-bench-verified` | Any Harbor dataset slug from [the Hub](https://hub.harborframework.com/datasets) (e.g. `swe-bench/swe-smith`, `scale-ai/swe-bench-pro`). |
 | `TASK_IDS` | — | Space-separated task ids, expanded to repeated `--include-task-name` flags (smoke-testing a subset). |
 | `N_CONCURRENT` / `N_ATTEMPTS` | `4` / `1` | Parallelism and attempts per task. |
