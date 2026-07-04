@@ -289,9 +289,16 @@ async function main() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((err) => {
-    // Advisory gate: an infra failure (gateway down, API hiccup) must not block
-    // merges — log loudly and exit 0 unless strict mode demands otherwise.
+    // Advisory gate: an infra failure (gateway down, no credit, API hiccup)
+    // must not block merges — but a drift gate that skips silently hides its
+    // own outage, so surface the skip in the step summary and as a warning
+    // annotation before exiting 0 (unless strict mode demands otherwise).
     console.error("[vision-gate] error:", err);
+    const notice = `### Vision Gate — ⚠️ **Skipped** (infrastructure error)\n\nThe drift check did not run: \`${String(err?.message ?? err).slice(0, 300)}\`\n`;
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      appendFileSync(process.env.GITHUB_STEP_SUMMARY, notice);
+    }
+    console.log(`::warning title=Vision Gate skipped::${String(err?.message ?? err).slice(0, 300)}`);
     if (process.env.VISION_GATE_STRICT === "1") process.exitCode = 1;
   });
 }
