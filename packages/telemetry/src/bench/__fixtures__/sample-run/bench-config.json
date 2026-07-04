@@ -1,5 +1,0 @@
-{
-  "gitSha": "snapshot-sha-000",
-  "config": { "candidates": 2, "effort": "high" },
-  "conditions": { "os": "darwin", "docker_vm": "VZ" }
-}

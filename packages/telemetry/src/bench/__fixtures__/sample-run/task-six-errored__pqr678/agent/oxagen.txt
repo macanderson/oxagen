@@ -1,4 +1,0 @@
-{"type":"start","candidates":1,"prompt":"Investigate the timeout."}
-{"type":"candidate-start","id":"candidate-1","model":"anthropic/claude-fable-5"}
-{"type":"candidate-progress","id":"candidate-1","label":"bash"}
-{"type":"result","winnerId":"candidate-1","winnerFiles":["a.py"],"candidates":[{"id":"candidate-1","model":"anthropic/claude-fable-5","changedFiles":["a.py"],"steps":2,"failed":false}]}

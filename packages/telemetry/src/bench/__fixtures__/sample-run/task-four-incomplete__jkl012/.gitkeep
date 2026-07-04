@@ -1,5 +1,0 @@
-Intentionally empty (no result.json) — simulates a Harbor trial that never
-finished (e.g. a credit-wall / timeout kill mid-run, matching
-django__django-11133 in the 2026-07-03 backfill). Keeps this directory
-present in git so ingestBenchResultsDir's "skipped, not fatal" path has a
-task directory to enumerate; see ingest.test.ts.
