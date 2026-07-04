@@ -28,7 +28,7 @@
   <img alt="Maintained" src="https://img.shields.io/badge/Maintained%3F-yes-brightgreen.svg" />
 </p>
 
-> [CONTRIBUTING.md](CONTRIBUTING.md) · [AGENTS.md](AGENTS.md) · [Docs](.agents/summary/index.md)
+> [CONTRIBUTING.md](CONTRIBUTING.md) · [AGENTS.md](AGENTS.md) · [Docs](.agents/summary/index.md) · [Telemetry](TELEMETRY.md)
 
 ---
 

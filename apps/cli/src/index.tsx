@@ -68,7 +68,37 @@ async function main(): Promise<void> {
     argv: process.argv.slice(2),
     cwd: process.cwd(),
   });
-  await buildProgram().parseAsync(process.argv);
+
+  // Anonymous usage telemetry (TELEMETRY.md) — one event per invocation,
+  // emitted after the command finishes whether it succeeded or failed.
+  // `recordUsageEvent` can never throw or add meaningful latency (opt-out
+  // check is synchronous; the network send has its own bounded timeout and
+  // swallows every failure), so wrapping the whole program in try/finally
+  // here is safe and keeps every command instrumented from one place.
+  const program = buildProgram();
+  const knownCommands = program.commands.map((cmd) => cmd.name());
+  const { classifyCommand, classifyErrorType, recordUsageEvent } = await import(
+    "./telemetry/usage.js"
+  );
+  const command = classifyCommand(process.argv, knownCommands);
+  const startedAt = Date.now();
+  let errorType = "";
+  let exitStatus = "success";
+  try {
+    await program.parseAsync(process.argv);
+    if (process.exitCode) exitStatus = "error";
+  } catch (err) {
+    exitStatus = "error";
+    errorType = classifyErrorType(err);
+    throw err;
+  } finally {
+    await recordUsageEvent({
+      command,
+      durationMs: Date.now() - startedAt,
+      exitStatus,
+      errorType,
+    });
+  }
 }
 
 main().catch((err) => {
