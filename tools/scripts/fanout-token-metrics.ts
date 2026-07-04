@@ -53,7 +53,7 @@ async function windowMetrics(from: string, to: string) {
       countIf(capability_name = 'agent.subagent.dispatch')   AS dispatches,
       countIf(capability_name = 'agent.subagent.aggregate')  AS aggregates,
       countIf(capability_name = 'agent.subagent.result.get') AS result_gets,
-      countIf(surface = 'runner' AND parent_message_id != '') AS child_runs
+      countIf(surface = 'runner' AND parent_message_id IS NOT NULL) AS child_runs
     FROM tool_invocations
     WHERE ${range}
   `);
