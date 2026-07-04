@@ -6,254 +6,167 @@
         ██║   ██║ ██╔██╗ ██╔══██║██║   ██║██╔══╝  ██║╚██╗██║
         ╚██████╔╝██╔╝ ██╗██║  ██║╚██████╔╝███████╗██║ ╚████║
         ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝
-                          by Mac Anderson
 ═══════════════════════════════════════════════════════════════════════
 ```
 
 # Oxagen Platform
 
-> **The best context IS THE DIFFERENCE**
+> **The metered, governed, graph-grounded control plane for teams that build and resell AI agents — the neutral Stripe for agents.**
 
 <p align="center">
-  <a href="https://github.com/oxagenai/oxagen-monorepo/actions/workflows/pipeline.yml">
-    <img alt="CI Status" src="https://github.com/oxagenai/oxagen-monorepo/actions/workflows/pipeline.yml/badge.svg?branch=main" />
+  <a href="https://github.com/oxageninc/oxagen-platform/actions/workflows/pipeline.yml">
+    <img alt="CI Status" src="https://github.com/oxageninc/oxagen-platform/actions/workflows/pipeline.yml/badge.svg?branch=main" />
   </a>
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6.0.3-3178C6?logo=typescript" />
+  <a href="https://github.com/oxageninc/oxagen-platform/actions/workflows/vision-gate.yml">
+    <img alt="Vision Gate" src="https://github.com/oxageninc/oxagen-platform/actions/workflows/vision-gate.yml/badge.svg?branch=main" />
+  </a>
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6.x-3178C6?logo=typescript" />
   <img alt="Node.js" src="https://img.shields.io/badge/Node.js-24%20LTS-339933?logo=node.js" />
-  <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16.2.7-000000?logo=next.js" />
-  <img alt="Python" src="https://img.shields.io/badge/Python-3.13%2B-3776ab?logo=python" />
-  <img alt="Neo4j" src="https://img.shields.io/badge/Neo4j-5.x-008CC1?logo=neo4j" />
+  <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-000000?logo=next.js" />
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-16+-336791?logo=postgresql" />
+  <img alt="Neo4j" src="https://img.shields.io/badge/Neo4j-5.x-008CC1?logo=neo4j" />
+  <img alt="ClickHouse" src="https://img.shields.io/badge/ClickHouse-append--only-FFCC01?logo=clickhouse" />
   <img alt="License" src="https://img.shields.io/badge/License-Proprietary-red.svg" />
-  <img alt="Maintained" src="https://img.shields.io/badge/Maintained%3F-yes-brightgreen.svg" />
 </p>
 
-> [CONTRIBUTING.md](CONTRIBUTING.md) · [AGENTS.md](AGENTS.md) · [Docs](.agents/summary/index.md) · [Telemetry](TELEMETRY.md)
+> [Vision](docs/VISION.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Support](SUPPORT.md) · [Agents Guide](AGENTS.md) · [Telemetry](TELEMETRY.md)
 
 ---
 
 ## What Is Oxagen?
 
-Oxagen transforms your business's fragmented data—from SQL databases, document stores, SaaS apps, and event streams—into a **live, queryable knowledge graph**. Then it unleashes a swarm of intelligent AI agents who don't just query the graph; they **enrich it**, infer the entities your business actually cares about, and bind every decision back to the evidence that justified it.
+Companies that build and resell AI agents have no infrastructure layer of their own. Observability tools show them their spend; nothing lets them **meter what their agents actually did and bill their customers for it**. Agent frameworks give them orchestration; nothing makes every tool call **governed, typed, and un-poisonable by construction**. RAG stacks give them retrieval; nothing grounds agent answers in a **cited, time-aware knowledge graph** they can defend to an enterprise buyer.
 
-**Every action is auditable. Every decision is traceable. Every insight compounds.**
+Oxagen is that layer. It owns the intersection no incumbent bundles:
 
-### The Oxagen Advantage
+1. **Governance** — every capability on the platform is a typed contract with IAM and entitlement enforcement, exposed with parity across API, MCP, CLI, and UI. There is no ungoverned tool surface; MCP tools are inherently schema-enforced and metered, which is a structurally stronger answer to tool poisoning than gateway inspection.
+2. **Grounding** — a Neo4j knowledge graph plus ontology grounds agent answers in cited, time-aware context. Accuracy is the product; citations are the proof.
+3. **Monetization** — a ClickHouse→Stripe loop turns observed agent usage directly into customer billing. Not a spend dashboard: revenue infrastructure for teams reselling AI.
+
+The knowledge graph is the **accuracy moat**. Vendor-neutral BYOK — your model keys, your Neo4j endpoint, no cloud gravity — is the **trust moat**.
+
+The full positioning, market analysis, and drift tests live in [`docs/VISION.md`](docs/VISION.md). It is the north star for every feature decision, and CI enforces it: the **Vision Gate** ([`vision-gate.yml`](.github/workflows/vision-gate.yml), `pnpm check:vision`) LLM-judges every PR diff against the vision and posts an advisory verdict.
 
 ```mermaid
-graph TB
-    A["📊 Fragmented Data Sources"] 
-    B["🔄 Universal Pipeline"]
-    C["🧠 Live Knowledge Graph"]
-    D["🤖 Intelligent Agents"]
-    E["✅ Auditable Actions"]
-    
-    A --> B --> C --> D --> E
-    
-    F["SQL<br/>Postgres<br/>"]
-    G["Events<br/>Webhooks<br/>"]
-    H["Documents<br/>Gmail<br/>"]
-    I["SaaS<br/>Linear, GitHub<br/>"]
-    
-    F --> A
-    G --> A
-    H --> A
-    I --> A
-    
-    D --> J["Inferred<br/>Entities"]
-    D --> K["Worker<br/>Enrichment"]
-    D --> L["Autonomous<br/>Workflows"]
-    
-    E --> M["Full Audit<br/>Trail"]
-    E --> N["Evidence<br/>Binding"]
-    E --> O["Decision<br/>Trees"]
-    
-    style A fill:#1a1a2e
-    style B fill:#0f3460
-    style C fill:#16213e
-    style D fill:#e94560
-    style E fill:#00d4ff
-    style F fill:#6c757d
-    style G fill:#6c757d
-    style H fill:#6c757d
-    style I fill:#6c757d
+graph LR
+    A["🤖 Agent / customer action"] --> B["invoke()<br/>capability kernel"]
+    B --> C["Typed contract<br/>Zod schema"]
+    C --> D["IAM gate"]
+    D --> E["Entitlement gate"]
+    E --> F["Billing admission"]
+    F --> G["Handler"]
+    G --> H["📈 ClickHouse<br/>usage events"]
+    H --> I["💳 Stripe<br/>meters → invoices"]
+    G --> J["📊 Neo4j<br/>lineage + citations"]
+
+    style B fill:#00d4ff,color:#000
+    style H fill:#16213e,color:#fff
+    style I fill:#635bff,color:#fff
+    style J fill:#16213e,color:#fff
 ```
 
----
-
-## Vision: Autonomous, Auditable Intelligence
-
-An Oxagen workspace should be able to:
-- **Communicate with customers** autonomously
-- **Approve refunds** without human review
-- **Prospect new accounts** intelligently
-- **Monitor and tune ad spend** in real-time
-- **Explain every decision** all the way back to the source
+**Every action is governed. Every token is metered. Every answer is cited. Every step is billable.**
 
 ---
 
 ## How It Works
 
-### Universal Ingestion Pipeline
+### The capability kernel
 
-Every connector flows through the same deterministic, auditable pipeline:
+Every feature on the platform is a **capability**: a dot-notation name (`chat.message.send`, `workflow.run`, `semantic.edge.suggest`) declared once as a typed contract in `packages/oxagen/src/contracts/` and dispatched through a single `invoke()` path. The kernel injects three gates on every call — IAM policy resolution, plugin entitlement, and billing admission — and emits metering and lineage as a side effect of execution, not as optional instrumentation.
 
-```mermaid
-graph LR
-    A["SOURCE<br/>Linear, Gmail<br/>GitHub, Postgres<br/>Webhooks"] --> B["INGEST<br/>Raw pull<br/>stream/webhook"]
-    B --> C["PREPROCESS<br/>Parse<br/>normalize"]
-    C --> D["NODE UPSERT<br/>Entities<br/>created/updated"]
-    D --> E["INITIAL EDGES<br/>Same-source<br/>relationships"]
-    E --> F["ENRICH<br/>Cross-source<br/>reasoning"]
-    F --> G["QUALITY GATE<br/>Confidence<br/>validation"]
-    G --> H["📊 GRAPH<br/>Neo4j<br/>Live & queryable"]
-    
-    I["AGENT RUN<br/>Every mutation<br/>traces back to source"]
-    
-    H -.->|"auditable"| I
-    I -.->|"enriches"| H
-    
-    style A fill:#e94560
-    style B fill:#f77f88
-    style C fill:#ff9ba5
-    style D fill:#00d4ff
-    style E fill:#00b4ff
-    style F fill:#0099ff
-    style G fill:#0077dd
-    style H fill:#16213e,color:#fff
-    style I fill:#e94560
-```
-
-**Every step is declarative, observable, and reproducible.**
-
-### Inferred Entities: Core Intelligence
-
-Declare your business context:
-> *"We're B2B SaaS. We care about Product Capabilities, Customers, Renewals, Champions."*
-
-Workers infer **exactly the entities your business needs** across all sources:
+Capabilities are exposed with **parity across four surfaces**: the REST API (`apps/api`), the MCP server (`apps/mcp`), the CLI (`apps/cli`), and the web app (`apps/app`). `pnpm check:manifest` verifies the parity; nothing ships as a one-off endpoint or an ungoverned tool.
 
 ```mermaid
 graph TB
-    A["📝 Ontology Hint<br/>Natural Language<br/>Business Context"] --> B["🤖 Worker Fleet<br/>Role-specialized<br/>Cross-source"]
-    B --> C["💡 Inferred Entities<br/>confidence score<br/>source: worker:name"]
-    C --> D["🔗 Evidence Chains<br/>DERIVED_FROM<br/>traceable"]
-    
-    E["Same Worker Fleet"]
-    F["SaaS Workspace<br/>↓<br/>Product Capabilities<br/>Customers<br/>Renewals"]
-    G["Healthcare Workspace<br/>↓<br/>Patient Cohorts<br/>Treatment Plans<br/>Risk Scores"]
-    
-    E ---|"adapts to context"| F
-    E ---|"adapts to context"| G
-    
-    style A fill:#00d4ff,color:#000
-    style B fill:#e94560
-    style C fill:#f77f88
-    style D fill:#0099ff
-    style F fill:#16213e,color:#fff
-    style G fill:#16213e,color:#fff
-```
+    A["📦 packages/oxagen<br/>Typed capability contracts<br/>Single source of truth"]
 
-**Same worker fleet. Infinite verticals.**
+    B["🌐 REST API<br/>apps/api · Hono"]
+    C["🔧 MCP Server<br/>apps/mcp · streamable HTTP"]
+    D["💻 Web App<br/>apps/app · Next.js RSC"]
+    E["⌨️ CLI<br/>apps/cli · Commander + Ink"]
 
----
-
-## Enterprise by Design
-
-### Security & Compliance Built In
-
-| Feature | How |
-|---------|-----|
-| **Per-org isolation** | Postgres RLS, ClickHouse predicates, per-workspace Neo4j graphs |
-| **Bring your own infra** | Neo4j endpoint, LLM provider keys—your contracts, your data |
-| **Least-privilege access** | Per-capability policies; deny by default |
-| **Full audit trail** | Every invocation: org, workspace, user, run, model, timestamp, source |
-| **Governed memory** | Agent memories carry weights and decay policies you control |
-| **Marketplace ready** | Manifest-driven architecture; partners extend without forking |
-
----
-
-## Architecture
-
-### Single Source of Truth
-
-Every feature is declared **once** in `packages/oxagen` and exposed identically across three surfaces:
-
-```mermaid
-graph TB
-    A["📦 packages/oxagen<br/>Capability Contracts<br/>Single Source of Truth"]
-    
-    B["🌐 HTTP API<br/>apps/api<br/>RESTful + Inngest"]
-    C["🔧 MCP Server<br/>apps/mcp<br/>Tool Protocol"]
-    D["💻 Web App<br/>apps/app<br/>Next.js + AI SDK"]
-    
-    E["🗄️ PostgreSQL<br/>Transactional State<br/>Users, Orgs, Config"]
-    F["📊 Neo4j<br/>Knowledge Graph<br/>Entities & Relationships"]
-    G["📈 ClickHouse<br/>Telemetry<br/>Events & Metrics"]
-    
     A --> B
     A --> C
     A --> D
-    
-    B --> E
-    B --> F
-    B --> G
-    
-    C --> E
-    C --> F
-    C --> G
-    
-    D --> E
-    D --> F
-    D --> G
-    
-    H["✅ Verification Gate<br/>Detects drift<br/>Before ship"]
-    
-    E -.-> H
-    F -.-> H
-    G -.-> H
-    
+    A --> E
+
+    F["✅ pnpm check:manifest<br/>parity enforced in CI"]
+    B -.-> F
+    C -.-> F
+    D -.-> F
+    E -.-> F
+
     style A fill:#00d4ff,color:#000,stroke:#00d4ff,stroke-width:3px
-    style B fill:#e94560,color:#fff
-    style C fill:#e94560,color:#fff
-    style D fill:#e94560,color:#fff
-    style E fill:#16213e,color:#fff
-    style F fill:#16213e,color:#fff
-    style G fill:#16213e,color:#fff
-    style H fill:#f77f88,color:#fff
+    style F fill:#e94560,color:#fff
 ```
 
-**No drift. Ever.**
+### The metering→billing loop
 
-### Workspace Structure
+Every `invoke()` call, agent step, and LLM call (all LLM traffic goes through `@oxagen/ai`, never raw SDK imports) emits usage events into ClickHouse: org, workspace, user, run, model, tokens, duration, surface. Those events price against Stripe meters (`pnpm billing:stripe-sync`), so a team reselling agents can meter observed usage and bill *their* customers through it. Fan-out primitives (`agent.subagent.dispatch` / `agent.subagent.aggregate`) carry the same discipline into fleets: every subagent step emits typed lineage plus cost.
+
+### The knowledge graph
+
+Connectors ingest fragmented sources (SaaS apps, databases, documents, events) through a universal pipeline into a per-workspace Neo4j graph governed by an ontology. Agents query it through governed capabilities (`ontology.query`, `ontology.neighbors`) and answer with **citations to nodes and edges carrying time-aware validity** — inspectable in the UI down to the property bag. Ingestion dual-writes: Postgres holds the operational record (sync cursors, connection health), Neo4j holds the graph index, ClickHouse observes the telemetry.
+
+### Vendor neutrality
+
+Model resolution goes through `modelIdOf()` and an AI gateway — no hard-coded vendor slugs. Customers bring their own model keys and their own Neo4j endpoint. No feature may couple the platform to a single cloud or model vendor where a neutral abstraction exists; the Vision Gate flags it as drift.
+
+---
+
+## Monorepo Layout
 
 ```
-oxagen-monorepo/
-├── 🎯 apps/
-│   ├── api              REST API + Inngest handler (Hono)
-│   ├── app              Next.js interactive UI (App Router, RSC)
-│   ├── mcp              MCP server (tool protocol)
-│   ├── cli              Developer CLI (Ink + Commander)
-│   ├── website          Marketing site (static)
-│   └── docs             Capability specs & architecture
+oxagen-platform/
+├── apps/
+│   ├── api          REST API + Inngest handler (Hono) — api.oxagen.sh
+│   ├── app          Next.js web app (App Router, RSC) — app.oxagen.sh
+│   ├── mcp          MCP server (streamable HTTP at /mcp) — mcp.oxagen.sh
+│   ├── cli          Developer CLI + coding agent (Commander + Ink)
+│   ├── docs         Documentation site (Fumadocs) — docs.oxagen.sh
+│   ├── schemas      JSON Schema hosting, generated from Zod — schemas.oxagen.sh
+│   └── web          Public website — oxagen.sh
 │
-├── 📦 packages/
-│   ├── oxagen           Capability registry (source of truth)
-│   ├── handlers         Foundation implementations
-│   ├── agent            Agent runtime & tool dispatch
-│   ├── inngest-functions Async job definitions
-│   ├── database         Drizzle + 13 Postgres domains
-│   ├── config           Zod environment loader
-│   ├── auth             Better Auth integration
-│   ├── ai               Vercel AI SDK helpers
-│   ├── billing          Stripe ledger logic
-│   ├── ontology         Neo4j schema & indexes
-│   ├── telemetry        ClickHouse client
-│   └── ui               Component system
+├── packages/
+│   ├── oxagen       Capability kernel, contracts, IAM resolution (source of truth)
+│   ├── handlers     Built-in capability handler implementations
+│   ├── agent        Agent runtime & tool dispatch
+│   ├── agent-engine Agent execution engine (planning, steps, fleet coordination)
+│   ├── ai           LLM access layer — all model calls go through here (metered)
+│   ├── billing      Credit gate, usage metering, Stripe meter/ledger sync
+│   ├── database     Drizzle schemas + Atlas migrations (Postgres)
+│   ├── ontology     Neo4j schema, indexes, graph query layer
+│   ├── telemetry    ClickHouse client + event schemas
+│   ├── tenancy      Tenant scoping (RLS seam) — withTenantDb / runInTenantScope
+│   ├── iam          Roles, permissions, policy seeds
+│   ├── auth         Better Auth integration
+│   ├── plugins      Plugin registry + entitlement gating
+│   ├── ingestion    Universal connector pipeline
+│   ├── inngest-functions  Durable background jobs
+│   ├── ui           Component system (@oxagen/ui)
+│   └── …            code-graph, compliance, config, crypto, engram, functions,
+│                    github, mcp-config, notifications, prompt-templates,
+│                    sandbox, skills, storage, and more
 │
-├── 🛠️  tools/scripts     Dev orchestration
-└── 📚 docs/             Specs, ADRs, architecture
+├── tools/scripts    Dev orchestration, CI checks (manifest, vision gate)
+└── docs/            VISION.md, capability registry, ADRs, architecture
 ```
+
+---
+
+## Four-Store Architecture
+
+Storage boundaries are hard architectural law (see [`AGENTS.md`](AGENTS.md) and `docs/adr/`):
+
+| Store | Holds | Never holds |
+|---|---|---|
+| **PostgreSQL** | Transactional state: users, orgs, IAM, billing, configs, job metadata | Analytics, graph relationships |
+| **Neo4j** | Graph data: ontology entities, relationships, workflow lineage, agent memory | Transactional state, counters |
+| **ClickHouse** | Append-only runtime events: usage, logs, metrics, traces, token analytics | Mutable state, graph data |
+| **Blob storage** | Binary assets (reference row lives in Postgres) | — |
+
+Tenant isolation is enforced at every layer: Postgres RLS (raw `db()` is banned — `withTenantDb` / `withSystemDb` / `scopedSession` only), ClickHouse predicates, per-workspace Neo4j scoping.
 
 ---
 
@@ -262,286 +175,134 @@ oxagen-monorepo/
 ### Prerequisites
 
 - **Node.js** 24+ LTS (`node -v`)
-- **pnpm** 9+ (`npm i -g pnpm`)
-- **Docker** (for local Postgres, Neo4j, ClickHouse)
+- **pnpm** 11+ (`npm i -g pnpm`) — the repo pins `pnpm@11.7.0` via `packageManager`
+- **Docker** (local Postgres :5433, Neo4j :7687, ClickHouse :8123)
 
 ### 5-Minute Setup
 
 ```bash
-# Clone and enter
-git clone <repo> oxagen
-cd oxagen
+git clone https://github.com/oxageninc/oxagen-platform.git
+cd oxagen-platform
 
-# Configure environment
 cp .env.example .env.local    # fill in required values
 pnpm install
+pnpm env:check                # validate .env.local against the env registry
 
-# Start everything (migrations + all apps)
-pnpm dev
+pnpm dev                      # Docker + migrations + all apps
 ```
 
-That's it. Open `http://localhost:3000` in your browser.
-
-### When You're Done
-
-```bash
-pnpm kill                     # stop apps + Docker
-pnpm kill -- --volumes       # full reset (delete volumes)
-```
+Open `http://localhost:3000`. When you're done: `pnpm kill` (add `-- --volumes` for a full reset).
 
 ### Access Points
 
-| App | URL | Purpose |
-|-----|-----|---------|
-| **Web App** | `http://localhost:3000` | Interactive UI |
-| **API** | `http://localhost:4000` | REST endpoints |
-| **MCP** | `http://localhost:4100` | Tool protocol |
-| **Docs** | `http://localhost:3300` | Documentation |
+| Surface | Local | Production |
+|---|---|---|
+| **Web App** | `http://localhost:3000` | `https://app.oxagen.sh` |
+| **API** | `http://localhost:4000` | `https://api.oxagen.sh` |
+| **MCP** | `http://localhost:4100/mcp` | `https://mcp.oxagen.sh/mcp` |
+| **Docs** | `http://localhost:3300` | `https://docs.oxagen.sh` |
+
+MCP connects over streamable HTTP; org + workspace scope is carried by the API key.
 
 ---
 
-## Verification & Quality
+## The `oxagen` CLI
 
-### The Gate
-
-Everything must pass the local gate before pushing:
+Running `oxagen` with no args opens an interactive TUI (`OXAGEN_NO_TUI=1` or any subcommand/pipe keeps classic behavior). Install from the working tree with live rebuilds:
 
 ```bash
-pnpm gate
+pnpm cli:dev          # build → install `oxagen` to PATH → watch + auto-rebuild
+pnpm cli:install      # one-shot install, no watcher
 ```
 
-This runs:
-```
-✅ ESLint          (zero warnings allowed)
-✅ TypeScript      (strict mode, no `any`)
-✅ Manifest Check  (API ↔ MCP parity)
-✅ Unit Tests      (coverage thresholds enforced)
-✅ E2E Tests       (full user flows with screenshots)
-✅ Build           (all packages compile)
-✅ Migrations      (dry-run executed)
+```bash
+oxagen --help
+oxagen auth whoami
+oxagen dev            # dev-stack launcher
 ```
 
-**Every commit to `main` must pass the gate locally first.**
-
-### Test-Driven Development
-
-- **New code = new tests.** Routes, handlers, utilities—all require tests.
-- **User flows = E2E tests.** Capture screenshots of success states.
-- **Thresholds only go up.** Coverage is a ratchet; never lower.
-- **Run `pnpm gate` before push.** CI enforces the same gates.
-
----
-
-## Tech Stack
-
-| Layer | Technology | Why |
-|-------|-----------|-----|
-| **Frontend** | Next.js 16 + React 19 | App Router, streaming RSC, Turbopack |
-| **API** | Hono | Type-safe routes, zero-overhead middleware |
-| **AI** | Vercel AI SDK Core | Streaming, structured output, multi-model |
-| **DB** | PostgreSQL 16 | ACID, RLS, JSON, CDC |
-| **Graph** | Neo4j 5+ | APOC, vectors, traversal |
-| **Analytics** | ClickHouse | Append-only events, fast queries |
-| **Jobs** | Inngest | Durable workflows, retries, scheduling |
-| **Auth** | Better Auth | Passkeys, OAuth, role-based access |
-| **Storage** | Vercel Blob | Signed URLs, private/public |
-| **Language** | TypeScript 6 | Strict mode, no `any` |
-| **Testing** | Vitest + Playwright | Fast unit, real browser e2e |
+The CLI supports a local BYOK mode (no platform login) via `AI_GATEWAY_API_KEY` or `ANTHROPIC_API_KEY`. It collects anonymous, allowlist-validated usage telemetry — see [`TELEMETRY.md`](TELEMETRY.md) for the exact disclosure and one-command opt-out. Full command reference: [`apps/cli/README.md`](apps/cli/README.md).
 
 ---
 
 ## Development Workflow
 
-### One-Time Setup
+`main` is a shared, contested branch worked in parallel by multiple humans and agents. **Never commit or push directly to `main`.**
 
 ```bash
-pnpm env:check              # validate .env.local
-pnpm db:migrate             # apply pending migrations
-pnpm db:seed-iam            # seed roles + permissions
-pnpm db:seed-skills         # seed agent skill definitions
+git fetch origin                                # sync first
+git switch main && git rebase origin/main       # if origin/main is ahead
+git switch -c feat/<slug>                       # cut your branch
+git push -u origin feat/<slug>                  # push it immediately
+# … commit small, push often, open a PR (draft early is fine) …
+pnpm gate                                       # full local gate before marking ready
+gh run watch                                    # confirm CI green
 ```
 
-### Daily Development
+### The gate
 
-```bash
-pnpm dev                    # watch all apps + Docker
-pnpm test                   # unit + integration tests
-pnpm test:e2e               # e2e tests in real browser
-pnpm check:manifest         # verify API ↔ MCP sync
-pnpm typecheck              # full monorepo type check
-```
+`pnpm gate` runs the same checks as CI: ESLint (zero warnings) → TypeScript (strict, no `any`) → unit tests (coverage ratchets, capped at 90) → build → `check:manifest` (API↔MCP parity) → `check:contracts` → env check → migration lint. CI additionally runs the **Vision Gate**, which judges the PR diff against [`docs/VISION.md`](docs/VISION.md).
 
-### Before Pushing to Main
+### Quality rules
 
-```bash
-git fetch origin && git rebase origin/main    # sync
-pnpm gate                                      # full verification
-gh run watch                                   # verify CI is green
-```
-
-### CLI (`oxagen`) — local development binary
-
-Running `oxagen` with no args in a terminal opens an interactive TUI (banner +
-menu + argument forms); `OXAGEN_NO_TUI=1` or any subcommand/pipe keeps the
-classic non-interactive behavior.
-
-Install the `oxagen` CLI onto your PATH from the working tree, with live rebuilds.
-Run once from the repo root and leave it running:
-
-```bash
-pnpm cli:dev          # build → install `oxagen` to PATH → watch + auto-rebuild on change
-pnpm cli:install      # one-shot: build + install once, no watcher
-```
-
-`cli:dev` symlinks an `oxagen` binary from a PATH directory (`~/.local/bin/oxagen`
-when it's on your PATH) into `apps/cli/dist/index.js` and keeps `tsc --watch` running,
-so every edit under `apps/cli/src/**` is immediately live under `oxagen` — no reinstall:
-
-```bash
-oxagen --help
-oxagen --version
-oxagen auth whoami
-```
-
-If the script warns that the target directory isn't on your PATH, add the printed
-line to your shell profile (e.g. `export PATH="$HOME/.local/bin:$PATH"`). To uninstall:
-`rm "$(command -v oxagen)"`. See [`apps/cli/README.md`](apps/cli/README.md) for the full
-command reference and [`apps/cli/GAPS.md`](apps/cli/GAPS.md) for tracked gaps.
+- **New code requires new tests.** Coverage thresholds are ratchets — they only go up.
+- **New user-facing flows require E2E tests** in `apps/app/e2e/` with screenshots of success states.
+- **New capabilities require the full parity stack**: contract → API route → MCP tool → CLI command → docs. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the step-by-step.
+- **Nothing merges unverified.** Test output, CI status, or a rendered result — always proof, never "should work."
 
 ---
 
 ## Documentation
 
 | Resource | Path |
-|----------|------|
-| **Foundations Spec** | [`docs/epics/foundations/spec.md`](docs/epics/foundations/spec.md) |
-| **Capability Docs** | [`docs/capabilities/`](docs/capabilities/) |
+|---|---|
+| **Vision & positioning** | [`docs/VISION.md`](docs/VISION.md) |
+| **Capability registry** | [`docs/capabilities/`](docs/capabilities/) |
 | **Architecture & ADRs** | [`docs/adr/`](docs/adr/) |
-| **Database Schema** | [`packages/database/`](packages/database/) |
-| **API Routes** | [`apps/api/src/routes/v1/`](apps/api/src/routes/v1/) |
-| **MCP Tools** | [`apps/mcp/src/tools/`](apps/mcp/src/tools/) |
+| **Agent/contributor architecture guide** | [`AGENTS.md`](AGENTS.md) |
+| **Database schemas** | [`packages/database/`](packages/database/) |
+| **API routes** | [`apps/api/src/routes/v1/`](apps/api/src/routes/v1/) |
+| **MCP tools** | [`apps/mcp/src/tools/`](apps/mcp/src/tools/) |
+| **CLI telemetry disclosure** | [`TELEMETRY.md`](TELEMETRY.md) |
 
 ---
 
-## Production Infrastructure
+## Tech Stack
 
-### Hosted Services
-
-| Service | Domain | Purpose |
-|---------|--------|---------|
-| **Web App** | `app.oxagen.sh` | Interactive UI |
-| **API** | `api.oxagen.sh` | REST endpoints |
-| **MCP** | `mcp.oxagen.sh` | Tool protocol |
-| **Docs** | `docs.oxagen.sh` | Documentation |
-
-### Data Architecture
-
-```mermaid
-graph TB
-    A["User Action<br/>Request"]
-    
-    B["PostgreSQL<br/>Transactional<br/>ACID, RLS"]
-    C["Neo4j<br/>Knowledge Graph<br/>Entities, Edges"]
-    D["ClickHouse<br/>Telemetry<br/>Events, Metrics"]
-    E["Vercel Blob<br/>Assets<br/>Images, Files"]
-    
-    A --> B
-    A --> C
-    A --> D
-    A --> E
-    
-    F["Per-tenant<br/>isolation<br/>guaranteed"]
-    
-    B --> F
-    C --> F
-    D --> F
-    E --> F
-    
-    style B fill:#16213e,color:#fff
-    style C fill:#16213e,color:#fff
-    style D fill:#16213e,color:#fff
-    style E fill:#16213e,color:#fff
-    style F fill:#e94560,color:#fff
-```
-
-**Data sovereignty:** Your infrastructure, your encryption, your compliance.
+| Layer | Technology | Why |
+|---|---|---|
+| **Frontend** | Next.js 16 + React 19 | App Router, streaming RSC, Turbopack |
+| **API** | Hono | Type-safe routes, zero-overhead middleware |
+| **AI** | Vercel AI SDK via `@oxagen/ai` | Streaming, structured output, metered + vendor-neutral |
+| **Transactional DB** | PostgreSQL 16 | ACID, RLS, Drizzle + Atlas migrations |
+| **Graph** | Neo4j 5+ | Ontology, lineage, vectors, time-aware facts |
+| **Analytics** | ClickHouse | Append-only usage events → Stripe meters |
+| **Billing** | Stripe | Meters, ledgers, customer invoicing |
+| **Jobs** | Inngest | Durable workflows, retries, scheduling |
+| **Auth** | Better Auth | Passkeys, OAuth, org/workspace RBAC |
+| **Storage** | Vercel Blob via `@oxagen/storage` | Signed URLs, Postgres reference rows |
+| **Language** | TypeScript 6 | Strict mode, no `any` |
+| **Testing** | Vitest + Playwright | Fast unit, real-browser E2E |
 
 ---
 
-## Philosophy
+## Security
 
-### Build Fast, Ship Complete
-
-- **No pre-launch customers** → dangerous edits are allowed
-- **Branch, commit, never push** → `main` is contested; run `pnpm gate`, commit on a branch, and leave it for a maintainer to push (the pre-push hook gates on the test suite)
-- **Fix every bug you find** → investigate root cause, fix instances, verify
-- **Everything shipped must be complete** → fully wired, every layer, tests passing
-
-### Verification First
-
-- **Never claim done without proof** → test output, CI green, or rendered result
-- **UI changes need screenshots** → e2e tests capture success states
-- **Forms tested end-to-end** → submit data, verify via DB or API
-- **Deployments verified** → health check or query after ship
-
----
-
-## Contributing
-
-We believe in:
-- **Direct main commits** after local verification
-- **Comprehensive testing** for every change
-- **Auditable decisions** via git history and Linear tickets
-- **Complete implementations** with no half-finished work
-
----
-
-## Common Commands
-
-```bash
-# Development
-pnpm dev                         # start all apps + Docker
-pnpm cli:dev                     # install `oxagen` to PATH + watch/auto-rebuild
-pnpm cli:install                 # install `oxagen` to PATH once (no watcher)
-pnpm kill                        # stop everything
-pnpm gate                        # full CI locally
-
-# Testing & Verification
-pnpm test                        # unit + integration tests
-pnpm test:e2e                    # e2e tests (real browser)
-pnpm typecheck                   # TypeScript strict
-pnpm check:manifest              # API ↔ MCP parity
-
-# Database
-pnpm db:migrate                  # apply pending migrations
-pnpm db:lint-migrations          # verify migration integrity
-pnpm db:seed-iam                 # seed roles + permissions
-
-# Releases
-pnpm release:patch               # bump patch version
-pnpm release:minor               # bump minor version
-pnpm release:major               # bump major version
-
-# Utilities
-pnpm env:check                   # validate .env.local
-lsof -ti:3000                    # check app server status
-lsof -ti:4000                    # check API server status
-lsof -ti:4100                    # check MCP server status
-```
+Security posture in brief: typed contracts with deny-by-default IAM on every capability, tenant isolation across all four stores, BYOK secrets that never leave your control, and full audit lineage on every invocation. To report a vulnerability, see [`SECURITY.md`](SECURITY.md) — please do not open public issues for security reports.
 
 ---
 
 ## License
 
-**Proprietary.** Copyright © 2024–present Oxagen Inc. All rights reserved.
+**Proprietary.** Copyright © 2024–present Oxagen Inc. All rights reserved. See [`LICENSE`](LICENSE).
 
 ---
 
 <div align="center">
 
-### We're building the future, so we'll be ready to meet you when you get there.
+### Meter it. Govern it. Ground it. Bill it.
 
-[**Web App**](https://app.oxagen.sh) · [**API**](https://api.oxagen.sh) · [**Docs**](https://docs.oxagen.sh) · [**GitHub**](https://github.com/oxagenai/oxagen-monorepo)
+[**Web App**](https://app.oxagen.sh) · [**API**](https://api.oxagen.sh) · [**Docs**](https://docs.oxagen.sh) · [**GitHub**](https://github.com/oxageninc/oxagen-platform)
 
 Made with ❤️ by the Oxagen team.
 

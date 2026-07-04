@@ -1,6 +1,8 @@
 # AGENTS.md
 
-Enterprise AI platform. Monorepo. Built around one primitive: a **capability kernel** that every surface (API, MCP, web app, CLI) calls through a single `invoke()` function.
+**Mission: Oxagen is the metered, governed, graph-grounded control plane for teams that build and resell AI agents — the neutral Stripe-for-agents.** [`docs/VISION.md`](docs/VISION.md) is the north star for every feature decision; CI's Vision Gate (`pnpm check:vision`) judges every PR diff against it.
+
+Enterprise AI platform. Monorepo. Built around one primitive: a **capability kernel** that every surface (API, MCP, web app, CLI) calls through a single `invoke()` function — which is where governance (IAM + entitlement), metering (ClickHouse→Stripe), and lineage are enforced.
 
 ## Layout
 
@@ -18,8 +20,10 @@ docs/       capability specs, ADRs, architecture docs
 | `api` | `apps/api/src/app.ts` | Hono HTTP API + Inngest webhook handler |
 | `app` | `apps/app/src/app/` | Next.js 16 enterprise web app (App Router) |
 | `mcp` | `apps/mcp/src/` | MCP server exposing all platform capabilities as tools |
-| `cli` | `apps/cli/src/index.tsx` | Commander + Ink CLI, 124 command files |
+| `cli` | `apps/cli/src/index.tsx` | Commander + Ink CLI; command modules in `src/commands/` (count drifts — don't hard-code it) |
 | `docs` | `apps/docs/src/` | Fumadocs documentation site |
+| `schemas` | `apps/schemas/` | Static JSON Schema hosting (schemas.oxagen.sh), generated from canonical Zod schemas |
+| `web` | `apps/web/` | oxagen.sh public website |
 
 ### Core Packages
 
@@ -88,7 +92,11 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 
 ## CI Config
 
-`.github/workflows/pipeline.yml` runs: lint → typecheck → unit tests → build → `check:manifest` → `check:contracts` → `db:lint-migrations`. Gate mirrors this exactly.
+`.github/workflows/pipeline.yml` runs: lint → typecheck → unit tests → build → `check:manifest` → `check:contracts` → `db:lint-migrations`. Gate mirrors this exactly. `vision-gate.yml` additionally LLM-judges the PR diff against `docs/VISION.md` (advisory).
+
+## Git Workflow
+
+`main` is shared and contested — never commit or push to it directly. Cut a branch from a fresh, synced `main`, push it immediately, commit and push frequently, and open a PR against `main`. Tests run in CI on every push/PR, not in git hooks. Full workflow: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Documentation
 
