@@ -51,10 +51,10 @@ const FormSchema = z.object({
  * whole message send; exported standalone so the parsing/degradation
  * behavior is unit-testable without a DB.
  */
-export function parseAttachmentsField(raw: FormDataEntryValue | undefined): unknown {
+export async function parseAttachmentsField(raw: FormDataEntryValue | undefined): Promise<unknown> {
   if (typeof raw !== "string" || raw.length === 0) return [];
   try {
-    return JSON.parse(raw);
+    return await JSON.parse(raw);
   } catch {
     return [];
   }
