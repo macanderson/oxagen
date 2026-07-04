@@ -34,6 +34,7 @@ import { ingestionGithubInitialSync } from "./functions/ingestion.github-initial
 import { ingestionGithubCommitFiles } from "./functions/ingestion.github-commit-files";
 import { ingestionGithubParseFile } from "./functions/ingestion.github-parse-file";
 import { ingestionGithubInferFeatures } from "./functions/ingestion.github-infer-features";
+import { ingestionGithubInferFeaturesBatch } from "./functions/ingestion.github-infer-features-batch";
 import { ingestionGithubInferDomains } from "./functions/ingestion.github-infer-domains";
 import { ingestionSemanticEdgeInfer } from "./functions/ingestion.semantic-edge-infer";
 import { ingestionSyncRequested } from "./functions/ingestion.sync-requested";
@@ -83,6 +84,7 @@ export const functions: any[] = [
   ingestionGithubCommitFiles,
   ingestionGithubParseFile,
   ingestionGithubInferFeatures,
+  ingestionGithubInferFeaturesBatch,
   ingestionGithubInferDomains,
   ingestionSemanticEdgeInfer,
   ingestionSyncRequested,
