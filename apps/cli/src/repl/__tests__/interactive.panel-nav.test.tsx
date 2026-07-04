@@ -8,7 +8,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render } from "ink-testing-library";
 
-vi.mock("@oxagen/agent-engine", () => ({
+vi.mock("@oxagen/agent-engine", async (importOriginal) => ({
+  // Real module first: ReplApp reaches beyond runTurn (e.g. model-roles.ts
+  // resolves the judge via pickAdvisorModel at mount) — a bare factory
+  // mock crashes the very first render with undefined exports.
+  ...(await importOriginal<typeof import("@oxagen/agent-engine")>()),
   runTurn: () => new Promise<never>(() => {}), // never resolves; no turn needed here
 }));
 vi.mock("../../agent/trace-store.js", () => ({

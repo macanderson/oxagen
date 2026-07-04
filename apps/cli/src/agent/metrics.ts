@@ -57,6 +57,14 @@ export interface SessionMetrics {
   sessionTokensOut: number;
   sessionCachedTokens: number;
   sessionCostUsd: number;
+  /**
+   * Estimated output tokens (~chars/4) of the model call streaming RIGHT NOW.
+   * The AI SDK only reports real usage when a stream finishes, so without this
+   * the burn readout sits flat for the whole call and then jumps. Displays add
+   * it to `turnTokensOut`/`sessionTokensOut`; it zeroes the moment the call's
+   * settled usage is recorded, so totals always converge on the real figures.
+   */
+  streamTokensOut: number;
   byModel: Record<string, ModelUsage>;
 }
 
@@ -64,6 +72,12 @@ export interface SessionMetrics {
 export interface MetricsBus {
   /** Fold an event into turn/session/byModel totals and notify (throttled). */
   record(ev: MetricsEvent): void;
+  /**
+   * Report streamed output characters from the in-flight model call (text +
+   * reasoning deltas). Accumulates into the live `streamTokensOut` estimate
+   * so the burn readout ticks WHILE tokens stream, not only at call settle.
+   */
+  noteStreamChars(chars: number): void;
   /** Subscribe to snapshot updates. Returns an unsubscribe function. */
   subscribe(handler: (m: SessionMetrics) => void): () => void;
   /** Current totals, deep-copied so callers can't mutate internal state. */
@@ -108,6 +122,7 @@ function emptyMetrics(): SessionMetrics {
     sessionTokensOut: 0,
     sessionCachedTokens: 0,
     sessionCostUsd: 0,
+    streamTokensOut: 0,
     byModel: {},
   };
 }
@@ -141,6 +156,8 @@ export function createMetricsBus(opts?: MetricsBusOptions): MetricsBus {
 
   const metrics = emptyMetrics();
   const subscribers = new Set<(m: SessionMetrics) => void>();
+  /** Raw streamed chars of the in-flight call, behind `streamTokensOut` (~chars/4). */
+  let streamChars = 0;
 
   let pendingTimer: ReturnType<typeof setTimeout> | undefined;
   // Seeded to creation time (not 0) so the very first record() after startup
@@ -205,6 +222,14 @@ export function createMetricsBus(opts?: MetricsBusOptions): MetricsBus {
     const tokensOut = ev.tokensOut;
     const cachedTokens = ev.cachedTokens;
 
+    // The call's real usage has settled — drop the live estimate so displays
+    // (which render `total + streamTokensOut`) converge on the exact figures
+    // instead of double-counting the just-recorded output.
+    if (ev.kind === "model_call") {
+      streamChars = 0;
+      metrics.streamTokensOut = 0;
+    }
+
     metrics.turnTokensIn += tokensIn;
     metrics.turnTokensOut += tokensOut;
     metrics.turnCachedTokens += cachedTokens;
@@ -236,22 +261,40 @@ export function createMetricsBus(opts?: MetricsBusOptions): MetricsBus {
     return cloneMetrics(metrics);
   }
 
+  function noteStreamChars(chars: number): void {
+    if (chars <= 0) return;
+    streamChars += chars;
+    // ~4 chars per token — the same coarse estimate the thinking indicator
+    // uses; close enough for a live burn readout that reconciles at settle.
+    const estimate = Math.round(streamChars / 4);
+    const delta = estimate - metrics.streamTokensOut;
+    if (delta <= 0) return;
+    metrics.streamTokensOut = estimate;
+    tokensSinceNotify += delta;
+    notifyThrottled();
+  }
+
   function startTurn(): void {
     metrics.turnTokensIn = 0;
     metrics.turnTokensOut = 0;
     metrics.turnCachedTokens = 0;
     metrics.turnCostUsd = 0;
+    streamChars = 0;
+    metrics.streamTokensOut = 0;
     // Session totals and byModel persist across turns.
     clearPending();
     notifyNow();
   }
 
   function flush(): void {
+    // A flush marks a settle point (turn end); any in-flight estimate is stale.
+    streamChars = 0;
+    metrics.streamTokensOut = 0;
     clearPending();
     notifyNow();
   }
 
-  return { record, subscribe, snapshot, startTurn, flush };
+  return { record, noteStreamChars, subscribe, snapshot, startTurn, flush };
 }
 
 // ── Event construction ────────────────────────────────────────────────────────

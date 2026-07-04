@@ -44,6 +44,11 @@ export const researchSwarmStatusHandler: CapabilityHandler<typeof researchSwarmS
     "agent.subagent.aggregate",
     {
       fanoutId,
+      // Server-side post-processing needs each child's full input (the query)
+      // and output (the hits) — the compact default is for LLM-facing callers
+      // (docs/specs/graph-mediated-fanout). This handler trims to 500-char
+      // snippets before anything reaches a model.
+      includeOutputs: true,
     },
     ctx,
   )) as AgentSubagentAggregateOutput;

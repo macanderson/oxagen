@@ -235,6 +235,64 @@ describe("throttle", () => {
   });
 });
 
+// ── noteStreamChars (live burn while a call streams) ─────────────────────────
+
+describe("noteStreamChars", () => {
+  it("accumulates a ~chars/4 streamTokensOut estimate while a call streams", () => {
+    const bus = createMetricsBus();
+    bus.noteStreamChars(200);
+    bus.noteStreamChars(200);
+    expect(bus.snapshot().streamTokensOut).toBe(100);
+  });
+
+  it("zeroes the estimate when the call's real usage settles (model_call record), so displays never double-count", () => {
+    const bus = createMetricsBus();
+    bus.noteStreamChars(400);
+    expect(bus.snapshot().streamTokensOut).toBe(100);
+
+    bus.record(ev({ tokensOut: 120 }));
+    const snap = bus.snapshot();
+    expect(snap.streamTokensOut).toBe(0);
+    expect(snap.turnTokensOut).toBe(120);
+  });
+
+  it("keeps the estimate across tool_call records — only a settled model call supersedes it", () => {
+    const bus = createMetricsBus();
+    bus.noteStreamChars(400);
+    bus.record(ev({ kind: "tool_call", tokensIn: 0, tokensOut: 0, costUsd: 0 }));
+    expect(bus.snapshot().streamTokensOut).toBe(100);
+  });
+
+  it("resets on startTurn and flush, and ignores non-positive char counts", () => {
+    const bus = createMetricsBus();
+    bus.noteStreamChars(0);
+    bus.noteStreamChars(-5);
+    expect(bus.snapshot().streamTokensOut).toBe(0);
+
+    bus.noteStreamChars(400);
+    bus.startTurn();
+    expect(bus.snapshot().streamTokensOut).toBe(0);
+
+    bus.noteStreamChars(400);
+    bus.flush();
+    expect(bus.snapshot().streamTokensOut).toBe(0);
+  });
+
+  it("notifies subscribers (throttled) as the estimate grows, so the burn readout ticks mid-stream", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+
+    const bus = createMetricsBus({ throttleMs: 10_000, throttleTokens: 50 });
+    const received: SessionMetrics[] = [];
+    bus.subscribe((m) => received.push(m));
+
+    // 240 chars → 60 estimated tokens ≥ throttleTokens(50) → immediate notify.
+    bus.noteStreamChars(240);
+    expect(received.length).toBe(1);
+    expect(received[0]!.streamTokensOut).toBe(60);
+  });
+});
+
 // ── metricsEventFor ───────────────────────────────────────────────────────────
 
 describe("metricsEventFor", () => {
