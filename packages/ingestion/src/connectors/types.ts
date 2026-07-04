@@ -31,7 +31,7 @@ export type DeliveryMethod =
   | "cdc";
 
 // Discriminated union of encrypted credential blobs stored in auth_credentials.
-// The oauth2 variant is a marker only — actual tokens live in oauth_tokens.
+// The oauth2 variant is a marker only — actual tokens live in oauth_accounts.
 export type AuthCredential =
   | { scheme: "public" }
   | { scheme: "api_key"; apiKey: string }

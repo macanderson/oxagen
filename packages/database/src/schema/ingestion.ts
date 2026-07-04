@@ -51,29 +51,6 @@ export const authCredentials = ingestionSchema.table("auth_credentials", {
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 });
 
-// ── ingestion.oauth_tokens ────────────────────────────────────────────────────
-
-export const oauthTokens = ingestionSchema.table(
-  "oauth_tokens",
-  {
-    connectionId: uuid("connection_id").primaryKey(),
-    accessTokenEnc: jsonb("access_token_enc").notNull(),
-    refreshTokenEnc: jsonb("refresh_token_enc"),
-    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
-    tokenType: text("token_type").notNull().default("Bearer"),
-    scopes: text("scopes").array().notNull().default(sql`'{}'`),
-    providerUserId: text("provider_user_id"),
-    providerAccountId: text("provider_account_id"),
-    lastRefreshedAt: timestamp("last_refreshed_at", { withTimezone: true, mode: "date" }),
-    refreshFailureCount: integer("refresh_failure_count").notNull().default(0),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-  },
-  (t) => ({
-    expiresAtIdx: index("oauth_tokens_expires_at_idx").on(t.expiresAt),
-  }),
-);
-
 // ── ingestion.webhook_subscriptions ──────────────────────────────────────────
 
 export const webhookSubscriptions = ingestionSchema.table(
@@ -128,33 +105,6 @@ export const oauthAccounts = ingestionSchema.table(
       t.provider,
       t.providerUserId,
     ),
-  }),
-);
-
-// ── ingestion.entity_types ────────────────────────────────────────────────────
-
-export const entityTypes = ingestionSchema.table(
-  "entity_types",
-  {
-    id: uuid("id").primaryKey().default(uuidv7Default),
-    publicId: citext("public_id").notNull().unique(),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-    workspaceId: uuid("workspace_id").notNull(),
-    orgId: uuid("org_id").notNull(),
-    name: text("name").notNull(),
-    displayName: text("display_name").notNull(),
-    description: text("description"),
-    commonPropertyKeys: text("common_property_keys").array().notNull().default(sql`'{}'`),
-    expectedEdges: jsonb("expected_edges").notNull().default(sql`'[]'::jsonb`),
-    rowCount: integer("row_count").notNull().default(0),
-    lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" }),
-    isCustom: boolean("is_custom").notNull().default(false),
-  },
-  (t) => ({
-    workspaceOrgIdx: index("entity_types_workspace_org_idx").on(t.workspaceId, t.orgId),
-    lastSeenIdx: index("entity_types_last_seen_idx").on(t.lastSeenAt),
-    workspaceNameUniq: unique("entity_types_workspace_name_uniq").on(t.workspaceId, t.name),
   }),
 );
 
