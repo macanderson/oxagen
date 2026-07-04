@@ -35,14 +35,6 @@ import { flattenCheckSql, sqlColumnNames, getChecks } from "./_test-helpers";
 // ---------------------------------------------------------------------------
 
 describe("IAM tables importable from schema/index", () => {
-  it("all 5 IAM tables are defined (not undefined)", () => {
-    expect(principals).toBeDefined();
-    expect(roles).toBeDefined();
-    expect(roleGrants).toBeDefined();
-    expect(principalRoleAssignments).toBeDefined();
-    expect(accessRequests).toBeDefined();
-  });
-
   const tables: Array<[string, Parameters<typeof getTableConfig>[0]]> = [
     ["principals", principals],
     ["roles", roles],
