@@ -64,6 +64,17 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // RLS in 20260628120000_agent_sandbox_sessions.sql).
   { table: "agent.sandbox_sessions", policyClass: "standard" },
 
+  // ── ai.* — response cache + batch jobs use orgScopeMixin (tenant_isolation
+  // RLS created in 20260704200000_ai_cache_and_batch_jobs.sql) ─────────────
+  { table: "ai.response_cache", policyClass: "standard" },
+  { table: "ai.batch_jobs", policyClass: "standard" },
+
+  // ── eval.* — datasets/items/runs use orgScopeMixin (tenant_isolation RLS
+  // created in 20260704220000_evals_v1.sql) ────────────────────────────────
+  { table: "eval.eval_datasets", policyClass: "standard" },
+  { table: "eval.eval_dataset_items", policyClass: "standard" },
+  { table: "eval.eval_runs", policyClass: "standard" },
+
   // ── auth.* — credentials + api_keys use orgScopeMixin ────────────────────
   // Better Auth tables (users/sessions/accounts/verifications/rate_limit/
   // user_preferences) are NOT row-scoped (no org_id; user-keyed lookups).
