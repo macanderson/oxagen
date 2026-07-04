@@ -12,6 +12,8 @@ let insertedRuns: Array<Record<string, unknown>> = [];
 // persisted inngest_event_id and the on-emit-failure run cleanup.
 let fanoutUpdates: Array<Record<string, unknown>> = [];
 let runUpdates: Array<Record<string, unknown>> = [];
+// Descendant count returned by the lineage CTE (Phase 2 descendant cap).
+let descendantCountResult = 0;
 // send() resolves to Inngest's real shape ({ ids: [...] }); tests can override.
 const inngestSendSpy = vi.fn(async () => ({ ids: ["evt_abc"] }));
 
@@ -41,6 +43,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
           };
         },
       }),
+      execute: () => Promise.resolve([{ descendant_count: descendantCountResult }]),
       update: (table: unknown) => ({
         set: (vals: Record<string, unknown>) => ({
           where: () => {
@@ -89,6 +92,7 @@ describe("agent.subagent.dispatch handler", () => {
     insertedRuns = [];
     fanoutUpdates = [];
     runUpdates = [];
+    descendantCountResult = 0;
     // Reset insert mock to return fanout row by default
     insertFanoutSpy.mockResolvedValue([{ id: "fanuuid_123", publicId: "fan_123" }]);
     // Reset send mock to the success shape by default.
@@ -245,5 +249,47 @@ describe("agent.subagent.dispatch handler", () => {
       },
     ]);
     expect(fanoutUpdates).toHaveLength(0);
+  });
+
+  it("rejects a dispatch that would exceed the total-descendant cap (Phase 2 §4)", async () => {
+    descendantCountResult = 249;
+
+    await expect(
+      agentSubagentDispatchHandler(
+        {
+          parentMessageId: "msg_nested",
+          tasks: [
+            { capabilityName: "agent.tool.list", input: {} },
+            { capabilityName: "agent.memory.recall", input: {} },
+          ],
+          maxParallel: 5,
+        },
+        CTX,
+      ),
+    ).rejects.toThrow(/total-descendant cap of 250/);
+
+    // Rejected BEFORE any row is created or event emitted.
+    expect(insertFanoutSpy).not.toHaveBeenCalled();
+    expect(insertedRuns).toHaveLength(0);
+    expect(inngestSendSpy).not.toHaveBeenCalled();
+  });
+
+  it("allows a dispatch that lands exactly at the descendant cap", async () => {
+    descendantCountResult = 248;
+
+    const result = await agentSubagentDispatchHandler(
+      {
+        parentMessageId: "msg_nested",
+        tasks: [
+          { capabilityName: "agent.tool.list", input: {} },
+          { capabilityName: "agent.memory.recall", input: {} },
+        ],
+        maxParallel: 5,
+      },
+      CTX,
+    );
+
+    expect(result.status).toBe("pending");
+    expect(inngestSendSpy).toHaveBeenCalledTimes(1);
   });
 });

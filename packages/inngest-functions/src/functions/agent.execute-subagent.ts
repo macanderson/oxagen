@@ -430,6 +430,37 @@ export const [agentExecuteSubagent] = createFunction(
     // Fire-and-forget; never fail the run on a telemetry write.
     await step.run("emit-completion-telemetry", async () => {
       try {
+        // descendantCount (Phase 2 §4): the whole subtree below this fanout —
+        // its own children plus any nested fanouts they dispatched — for the
+        // depth/descendant scaling metrics and descendant-cap alerting.
+        let descendantCount = total;
+        try {
+          const rows = await runInTenantScope({ orgId, workspaceId }, () =>
+            withTenantDb((tx) =>
+              tx.execute<{ descendant_count: number }>(sql`
+                WITH RECURSIVE down AS (
+                  SELECT r.id, r.child_message_id, 0 AS lvl
+                  FROM agent.subagent_runs r
+                  WHERE r.fanout_id = ${fanoutId}::uuid AND r.org_id = ${orgId}::uuid
+                  UNION ALL
+                  SELECT r2.id, r2.child_message_id, down.lvl + 1
+                  FROM down
+                  JOIN agent.subagent_fanouts f2
+                    ON f2.parent_message_id = down.child_message_id AND f2.org_id = ${orgId}::uuid
+                  JOIN agent.subagent_runs r2
+                    ON r2.fanout_id = f2.id AND r2.org_id = ${orgId}::uuid
+                  WHERE down.lvl < 10
+                )
+                SELECT count(*)::int AS descendant_count FROM down
+              `),
+            ),
+          );
+          descendantCount = Number(
+            (rows as unknown as { descendant_count: number }[])[0]?.descendant_count ?? total,
+          );
+        } catch (countErr) {
+          logger.warn({ err: countErr, fanoutId }, "descendant count failed — reporting direct children only");
+        }
         await insertEvents([
           {
             event_id: crypto.randomUUID(),
@@ -444,6 +475,7 @@ export const [agentExecuteSubagent] = createFunction(
               totalChildren: total,
               completedChildren: completed,
               depth,
+              descendantCount,
             }),
             emitted_at: new Date().toISOString(),
           },

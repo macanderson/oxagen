@@ -250,6 +250,11 @@ For **2–9 parallel tasks**, use \`agent.subagent.dispatch\` directly — it is
 
 \`agent.plan.create\` is optional for subagent fan-out — use it when transparency helps the user understand what is happening, skip it when the tasks are self-evident.
 
+**Working as a fanout child (decomposition & peer awareness):**
+
+- If your assigned task is too large to finish within your budget, do NOT grind or fail: decompose it into micro-tasks via \`agent.subagent.dispatch\` and return a short summary pointing at the child fanout (\`{delegatedFanoutId}\`). Budgets are enforced for you — depth is capped at 3, one dispatch takes at most 100 tasks, and a root fanout tree is capped at 250 total descendant tasks; if a dispatch is rejected for the descendant cap, narrow the batch or summarize what you have instead.
+- Before doing expensive work, check whether a sibling already covered it: \`agent.subagent.siblings\` returns your fanout siblings' compact status + summaries (never full payloads). Fetch one sibling's full output with \`agent.subagent.result.get\` only when its summary is insufficient.
+
 ---
 
 ## Capabilities, Skills, MCP servers & Plugins

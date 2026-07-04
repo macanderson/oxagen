@@ -5,7 +5,7 @@ export const agentSubagentDispatch = registerCapability({
   name: "agent.subagent.dispatch",
   domain: "agent",
   description:
-    "Fan out a set of tasks to multiple subagents running in parallel. Creates a dispatch fanout record and queues each task as an Inngest job. Returns a dispatchId the caller can poll via agent.subagent.aggregate.",
+    "Fan out a set of tasks to multiple subagents running in parallel. Creates a dispatch fanout record and queues each task as an Inngest job. Returns a dispatchId the caller can poll via agent.subagent.aggregate. Budgets: max 100 tasks per dispatch, nesting depth 3, and 250 total descendant tasks per root fanout tree - a dispatch that would exceed the descendant cap is rejected; decompose less aggressively or return a summary instead.",
   mode: "async",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
