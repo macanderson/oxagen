@@ -1349,6 +1349,163 @@ export function buildProgram(): Command {
       await handleEnvSetDefault(idOrSlug);
     });
 
+  // ── eval: datasets + runs (eval.* capabilities) ─────────────────────────────
+
+  const evalCmd = program
+    .command("eval")
+    .description("Evaluate datasets against models/agents with an LLM judge");
+
+  evalCmd
+    .command("datasets")
+    .description("List eval datasets in the active workspace")
+    .option("--json", "Output JSON")
+    .action(async (opts: { json?: boolean }) => {
+      const { evalDatasetList } = await import("./commands/eval.js");
+      await evalDatasetList(opts);
+    });
+  evalCmd
+    .command("dataset <id>")
+    .description("Show one eval dataset and a page of its items")
+    .option("--limit <n>", "Page size (1-200, default 50)")
+    .option("--cursor <cursor>", "Opaque cursor from a previous page's nextCursor")
+    .option("--json", "Output JSON")
+    .action(
+      async (id: string, opts: { limit?: string; cursor?: string; json?: boolean }) => {
+        const { evalDatasetGet } = await import("./commands/eval.js");
+        await evalDatasetGet(id, {
+          limit: opts.limit ? Number(opts.limit) : undefined,
+          cursor: opts.cursor,
+          json: opts.json,
+        });
+      },
+    );
+  evalCmd
+    .command("dataset-create <name>")
+    .description("Create an empty eval dataset")
+    .option("--slug <slug>", "Slug (defaults to a slugified name)")
+    .option("--description <text>", "Description")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        name: string,
+        opts: { slug?: string; description?: string; json?: boolean },
+      ) => {
+        const { evalDatasetCreate } = await import("./commands/eval.js");
+        await evalDatasetCreate(name, opts);
+      },
+    );
+  evalCmd
+    .command("dataset-item-add <id>")
+    .description("Bulk-add cases to an eval dataset")
+    .option("--input <text>", "Prompt/question for a single item")
+    .option("--expected <text>", "Known-good answer for the single item")
+    .option("--metadata <json>", "JSON object of metadata for the single item")
+    .option("--file <path>", "Path to a JSON file containing an array of items")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        id: string,
+        opts: {
+          input?: string;
+          expected?: string;
+          metadata?: string;
+          file?: string;
+          json?: boolean;
+        },
+      ) => {
+        const { evalDatasetItemAdd } = await import("./commands/eval.js");
+        await evalDatasetItemAdd(id, opts);
+      },
+    );
+  evalCmd
+    .command("from-traces <name>")
+    .description(
+      "Create an eval dataset from real, already-metered production traces — score what actually ran",
+    )
+    .option("--slug <slug>", "Slug (defaults to a slugified name)")
+    .option("--description <text>", "Description")
+    .option("--capability <name>", "Only sample runs whose metered capability matches (e.g. chat.message.send)")
+    .option("--since-hours <n>", "Lookback window over metered traces (default 168 = 7 days)")
+    .option("--limit <n>", "Cap on captured cases (default 50, max 500)")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        name: string,
+        opts: {
+          slug?: string;
+          description?: string;
+          capability?: string;
+          sinceHours?: string;
+          limit?: string;
+          json?: boolean;
+        },
+      ) => {
+        const { evalDatasetFromTraces } = await import("./commands/eval.js");
+        await evalDatasetFromTraces(name, {
+          slug: opts.slug,
+          description: opts.description,
+          capability: opts.capability,
+          sinceHours: opts.sinceHours ? Number(opts.sinceHours) : undefined,
+          limit: opts.limit ? Number(opts.limit) : undefined,
+          json: opts.json,
+        });
+      },
+    );
+  evalCmd
+    .command("run <datasetId>")
+    .description("Start an eval run against a dataset (async — poll run-status/run-get for results)")
+    .option("--model <slug>", "Gateway model slug for the target (omit for the default tier)")
+    .option("--system-prompt <text>", "System prompt prepended to each item's input")
+    .option("--agent <slug>", "Evaluate a workspace agent instead of a bare model")
+    .option("--judge-model <slug>", "Gateway model slug for the judge (omit for the precise tier)")
+    .option("--name <text>", "Optional label for the run")
+    .option("--pass-threshold <n>", "Overall judge score (0-1) at/above which an item passes (default 0.7)")
+    .option("--max-items <n>", "Cap items evaluated this run (cost control); omit for all items")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        datasetId: string,
+        opts: {
+          model?: string;
+          systemPrompt?: string;
+          agent?: string;
+          judgeModel?: string;
+          name?: string;
+          passThreshold?: string;
+          maxItems?: string;
+          json?: boolean;
+        },
+      ) => {
+        const { evalRunStart } = await import("./commands/eval.js");
+        await evalRunStart(datasetId, {
+          model: opts.model,
+          systemPrompt: opts.systemPrompt,
+          agent: opts.agent,
+          judgeModel: opts.judgeModel,
+          name: opts.name,
+          passThreshold: opts.passThreshold ? Number(opts.passThreshold) : undefined,
+          maxItems: opts.maxItems ? Number(opts.maxItems) : undefined,
+          json: opts.json,
+        });
+      },
+    );
+  evalCmd
+    .command("run-status <runId>")
+    .description("Poll an eval run's lifecycle: status, progress counts, and mean score")
+    .option("--json", "Output JSON")
+    .action(async (runId: string, opts: { json?: boolean }) => {
+      const { evalRunStatus } = await import("./commands/eval.js");
+      await evalRunStatus(runId, opts);
+    });
+  evalCmd
+    .command("run-get <runId>")
+    .description("Fetch an eval run's summary and full per-item results")
+    .option("--json", "Output JSON")
+    .action(async (runId: string, opts: { json?: boolean }) => {
+      const { evalRunGet } = await import("./commands/eval.js");
+      await evalRunGet(runId, opts);
+    });
+
   // ── secret: credential vault ────────────────────────────────────────────────
 
   const secret = program.command("secret").description("Manage the workspace credential vault");
