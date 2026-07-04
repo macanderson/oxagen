@@ -150,7 +150,10 @@ describe("tenant policy manifest", () => {
     //      org_id + workspace_id both NOT NULL → standard, OXA-1374).
     // 76 = 77 - ingestion.entity_types (dropped as verified-dead zombie table,
     //      20260704210000_drop_zombie_schema).
-    expect(POLICY_MANIFEST.length).toBe(76);
+    // 81 = 76 + ai.response_cache + ai.batch_jobs (semantic cache + batch jobs,
+    //      20260704200000) + eval.eval_datasets + eval.eval_dataset_items +
+    //      eval.eval_runs (Evals v1, 20260704220000) — all orgScopeMixin → standard.
+    expect(POLICY_MANIFEST.length).toBe(81);
   });
 
   it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {
