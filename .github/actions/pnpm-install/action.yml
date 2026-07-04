@@ -1,0 +1,27 @@
+name: pnpm install (cached store)
+description: >-
+  Restore the pnpm content-addressable store cache and install with a frozen
+  lockfile. Replaces the pnpm/action-setup + actions/setup-node(cache pnpm) +
+  pnpm install triplet now that CI jobs run inside the
+  ghcr.io/oxageninc/oxagen-ci-* toolchain images, which already ship Node and
+  corepack-managed pnpm.
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve pnpm store path
+      id: store
+      shell: bash
+      run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+    - name: Restore pnpm store
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.store.outputs.path }}
+        key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: |
+          pnpm-store-${{ runner.os }}-
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
