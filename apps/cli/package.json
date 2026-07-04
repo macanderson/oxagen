@@ -51,6 +51,8 @@
     "cli-highlight": "2.1.11",
     "commander": "12.1.0",
     "ink": "7.1.0",
+    "marked": "15.0.12",
+    "marked-terminal": "7.3.0",
     "react": "19.2.6",
     "zod": "3.25.76"
   },

@@ -425,6 +425,33 @@ describe("MessageView", () => {
     expect(frame).toContain("Found and fixed the spot.");
   });
 
+  it("renders committed assistant prose as markdown (markers consumed)", () => {
+    const { lastFrame } = render(
+      <MessageView
+        msg={msg({ role: "assistant", content: "use **exact** pins and `pnpm i`" })}
+      />,
+    );
+    const frame = (lastFrame() ?? "").replace(/\u001b\[[0-9;]*m/g, "");
+    expect(frame).toContain("◆");
+    expect(frame).toContain("exact");
+    expect(frame).toContain("pnpm i");
+    // Markdown is rendered, not echoed: emphasis/backtick markers are consumed.
+    expect(frame).not.toContain("**");
+    expect(frame).not.toContain("`");
+  });
+
+  it("keeps streaming assistant prose as raw text with the cursor", () => {
+    const { lastFrame } = render(
+      <MessageView
+        msg={msg({ role: "assistant", content: "half a **sentence", streaming: true })}
+      />,
+    );
+    const frame = lastFrame() ?? "";
+    // Raw while streaming — unclosed markdown must not be parsed mid-stream.
+    expect(frame).toContain("**sentence");
+    expect(frame).toContain("▊");
+  });
+
   it("labels reasoning as thinking", () => {
     const { lastFrame } = render(
       <MessageView msg={msg({ role: "reasoning", content: "weighing two approaches" })} />,

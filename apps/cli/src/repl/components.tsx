@@ -8,6 +8,7 @@
 import { Box, Text, useInput, usePaste, useStdout } from "ink";
 import React, { useState, useEffect, useRef } from "react";
 import { theme } from "../tui/theme.js";
+import { Markdown } from "../tui/markdown.js";
 import { formatUsd } from "../agent/model-router.js";
 import {
   getToolEmoji,
@@ -932,15 +933,31 @@ export function MessageView({
 
   // assistant — Oxagen speaking. A violet ◆ marker gutters the block so the
   // agent's prose is instantly separable from tool output and thinking asides.
-  return (
-    <Box paddingX={1} marginY={0} flexDirection="column">
-      <Text wrap="wrap">
-        <Text color={theme.violet} bold>
-          ◆{" "}
+  // While the message is still streaming it renders as plain text (parsing
+  // half-finished markdown every frame flickers on unclosed fences); the
+  // moment it commits, the prose re-renders through <Markdown> with full
+  // emphasis/code/list styling.
+  if (msg.streaming) {
+    return (
+      <Box paddingX={1} marginY={0} flexDirection="column">
+        <Text wrap="wrap">
+          <Text color={theme.violet} bold>
+            ◆{" "}
+          </Text>
+          {msg.content}
+          <Text color={theme.cyan}>▊</Text>
         </Text>
-        {msg.content}
-        {msg.streaming && <Text color={theme.cyan}>▊</Text>}
+      </Box>
+    );
+  }
+  return (
+    <Box paddingX={1} marginY={0}>
+      <Text color={theme.violet} bold>
+        ◆{" "}
       </Text>
+      <Box flexDirection="column" flexGrow={1}>
+        <Markdown>{msg.content}</Markdown>
+      </Box>
     </Box>
   );
 }
