@@ -13,17 +13,18 @@
  * and their tests never import a renderer or hit the gateway.
  */
 import type { ModelTier, UsageTotals } from "./fleet/types.js";
-
-/** A stage of the turn pipeline, in execution order. */
-export type StageKind =
-  | "evaluate" // the cheap model scored the prompt
-  | "plan" // the goal was decomposed into an executable task plan
-  | "enhance" // code-graph + memory context was injected
-  | "route" // the executor model was selected
-  | "execute" // the coding agent ran
-  | "judge" // the advisor checked the work for completeness
-  | "revise" // the agent was sent back to finish incomplete work
-  | "complete"; // the turn finished
+/**
+ * A stage of the turn pipeline, in execution order.
+ *
+ * Re-exported (not hand-copied) from `@oxagen/agent-engine` — that package is
+ * the canonical source of truth for the pipeline's stage machine, since it's
+ * the engine that actually emits {@link StageEvent}s. A local duplicate here
+ * previously drifted silently out of sync with the engine's union; every place
+ * in the CLI that imports `StageKind` from this module (`../agent/trace.js`)
+ * keeps working unchanged because this re-export has the same name.
+ */
+import type { StageKind } from "@oxagen/agent-engine";
+export type { StageKind };
 
 /**
  * A live progress event the pipeline emits at each stage so the REPL can show

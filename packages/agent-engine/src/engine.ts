@@ -93,7 +93,18 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
   if (opts.extraTools) tools = { ...tools, ...opts.extraTools };
   if (opts.wrapTools) tools = opts.wrapTools(tools);
 
-  const recalled = opts.memory ? await opts.memory.recallContext().catch(() => "") : "";
+  // A recall failure must NEVER kill the turn — but silently losing all recalled
+  // memory (platform-wide, if the memory store is down) must be visible. Surface
+  // it through the injected `onError` sink instead of swallowing it blind; the
+  // turn still degrades gracefully to empty recalled context.
+  let recalled = "";
+  if (opts.memory) {
+    try {
+      recalled = await opts.memory.recallContext();
+    } catch (error) {
+      opts.onError?.({ phase: "memory-recall", error });
+    }
+  }
 
   // Keep `system` STABLE across turns so Anthropic prompt caching keeps its
   // ephemeral breakpoint (set on the system block in @oxagen/ai's streamAgentReply)

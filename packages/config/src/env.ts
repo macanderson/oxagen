@@ -36,6 +36,17 @@ export const baseEnvSchema = z.object({
   NEO4J_PASSWORD: z.string().min(1),
   NEO4J_DATABASE: z.string().default("neo4j"),
 
+  // Circuit breakers for external dependencies (Neo4j / Stripe / ClickHouse).
+  // Global, conservative defaults shared by every per-dependency breaker so a
+  // degraded dependency fails fast instead of being hammered by every request.
+  // See packages/telemetry/src/circuit-breaker.ts and breaker-clients.ts.
+  //  - FAILURE_THRESHOLD: consecutive failures that trip a breaker open.
+  //  - RESET_TIMEOUT_MS:  how long a tripped breaker stays open before a probe.
+  //  - SUCCESS_THRESHOLD: consecutive probe successes that close it again.
+  CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.coerce.number().int().positive().default(5),
+  CIRCUIT_BREAKER_RESET_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
+  CIRCUIT_BREAKER_SUCCESS_THRESHOLD: z.coerce.number().int().positive().default(1),
+
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
 
