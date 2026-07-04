@@ -78,6 +78,9 @@ id_ed25519
 
 .claude/worktrees
 
+# Per-org Vercel access tokens for `pnpm vercel:rotate-ai-key` — live secrets
+vercel.tokens.json
+
 # Plaintext credential dump (full env contract; live secrets)
 creds.txt
 
