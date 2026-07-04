@@ -899,6 +899,24 @@
       }
     },
     {
+      "name": "agent.subagent.siblings",
+      "file": "agent.subagent.siblings.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "agent.task.background.cancel",
       "file": "agent.task.background.cancel.ts",
       "domain": "agent",
