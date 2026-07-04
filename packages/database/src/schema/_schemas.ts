@@ -23,3 +23,4 @@ export const graphSchema = pgSchema("graph");
 export const schemaRegistrySchema = pgSchema("schema_registry");
 export const environmentsSchema = pgSchema("environments");
 export const aiSchema = pgSchema("ai");
+export const evalSchema = pgSchema("eval");
