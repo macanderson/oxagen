@@ -90,6 +90,12 @@ export interface SpecTestTracker {
    * Returns distinct normalized test-like commands seen, in insertion order.
    */
   testCommands(): string[];
+
+  /**
+   * Returns a map of each normalized test command to its most recent exit code.
+   * Used to check if all touched-file tests are currently passing.
+   */
+  lastOutcomes(): Map<string, number>;
 }
 
 /**
@@ -153,6 +159,10 @@ export function createSpecTestTracker(): SpecTestTracker {
 
     testCommands(): string[] {
       return [...seenTestCommands];
+    },
+
+    lastOutcomes(): Map<string, number> {
+      return new Map(commandExitCodes);
     },
   };
 }

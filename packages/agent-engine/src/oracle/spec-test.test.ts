@@ -291,6 +291,53 @@ describe("SpecTestTracker", () => {
     });
   });
 
+  describe("lastOutcomes()", () => {
+    it("returns empty map when no commands observed", () => {
+      const tracker = createSpecTestTracker();
+      expect(tracker.lastOutcomes().size).toBe(0);
+    });
+
+    it("returns most recent exit codes for each distinct command", () => {
+      const tracker = createSpecTestTracker();
+      tracker.observe({ command: "pytest", exitCode: 1 });
+      tracker.observe({ command: "npm test", exitCode: 0 });
+      tracker.observe({ command: "pytest", exitCode: 0 });
+      const outcomes = tracker.lastOutcomes();
+      expect(outcomes.get("pytest")).toBe(0);
+      expect(outcomes.get("npm test")).toBe(0);
+    });
+
+    it("tracks multiple different outcomes independently", () => {
+      const tracker = createSpecTestTracker();
+      tracker.observe({ command: "pytest", exitCode: 1 });
+      tracker.observe({ command: "npm test", exitCode: 1 });
+      tracker.observe({ command: "vitest", exitCode: 0 });
+      const outcomes = tracker.lastOutcomes();
+      expect(outcomes.get("pytest")).toBe(1);
+      expect(outcomes.get("npm test")).toBe(1);
+      expect(outcomes.get("vitest")).toBe(0);
+    });
+
+    it("ignores non-test commands", () => {
+      const tracker = createSpecTestTracker();
+      tracker.observe({ command: "npm install", exitCode: 0 });
+      tracker.observe({ command: "pytest", exitCode: 1 });
+      tracker.observe({ command: "eslint src/", exitCode: 0 });
+      const outcomes = tracker.lastOutcomes();
+      expect(outcomes.size).toBe(1);
+      expect(outcomes.get("pytest")).toBe(1);
+    });
+
+    it("returns a copy, not the internal map", () => {
+      const tracker = createSpecTestTracker();
+      tracker.observe({ command: "pytest", exitCode: 1 });
+      const outcomes1 = tracker.lastOutcomes();
+      outcomes1.set("pytest", 999);
+      const outcomes2 = tracker.lastOutcomes();
+      expect(outcomes2.get("pytest")).toBe(1);
+    });
+  });
+
   describe("edge cases", () => {
     it("handles exitCode 0 as success, non-zero as failure", () => {
       const tracker = createSpecTestTracker();

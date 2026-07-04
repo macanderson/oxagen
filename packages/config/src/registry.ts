@@ -1677,6 +1677,62 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "2",
   },
+  OXAGEN_SPEC_GATE: {
+    group: "CLI",
+    description:
+      "Enable the spec-first oracle gate (F2): at mid-session judge point, if no failing " +
+      "test repro has been executed, inject a corrective instruction instead of generic " +
+      "completeness judgment. Enforces test-before-patch discipline. 0 or unset disables. " +
+      "Only for headless/benchmark runs.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  OXAGEN_LADDER: {
+    group: "CLI",
+    description:
+      "Enable the verification-gated adaptive compute ladder (F3): gate escalation on " +
+      "measured signals (oracle state, test outcomes, diff size) instead of a fixed " +
+      "schedule. When on, fast-path (rung 0) skips the judge if oracle flipped and " +
+      "diff budget allows. 0 or unset disables; existing judge/revise pipeline used instead. " +
+      "Only for headless/benchmark runs.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  OXAGEN_DIFF_BUDGET: {
+    group: "CLI",
+    description:
+      "Line-count threshold (default 120) for the fast-path terminal condition in the " +
+      "adaptive ladder (F3). When oracle is 'flipped' and touched-file tests pass, " +
+      "if diff lines ≤ budget, skip judge and submit. Ignored if OXAGEN_LADDER is unset.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "120",
+  },
+  OXAGEN_LADDER_MAX_RUNG: {
+    group: "CLI",
+    description:
+      "Hard cap on ladder rung (0–3) in the adaptive compute controller (F3). " +
+      "Prevents escalation beyond the specified rung even when signals suggest higher. " +
+      "Default 3 (no cap). 0–3 only; invalid values silently use default. " +
+      "Ignored if OXAGEN_LADDER is unset.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "3",
+  },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",
     description: "Credential encryption backend for ingestion: 'env' (AES-256-GCM via INGESTION_ENCRYPTION_KEY) or 'kms' (AWS KMS).",
