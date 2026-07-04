@@ -13,9 +13,11 @@
 
 import { test, expect } from "@playwright/test";
 import { mkdirSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { signUpFreshUser } from "./helpers/signup";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCREENSHOT_DIR = resolve(__dirname, "screenshots");
 
 test.beforeAll(() => {
