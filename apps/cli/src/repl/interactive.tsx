@@ -2457,8 +2457,9 @@ export function ReplApp({
     // PANEL_WIDTH isn't exported), generous enough that the transcript never
     // visually collides with a docked sidebar.
     const viewportWidth = Math.max(20, cols - (cols >= SIDEBAR_MIN_COLS ? 36 : 0));
-    // The persistent sunset banner (wordmark + version + org/workspace) is
-    // pinned at the top of the frame — the alt screen has no scrollback, so
+    // The persistent sunset banner (gradient wordmark only — version and
+    // org/workspace scope live in the HeaderBar below it) is pinned at the
+    // top of the frame — the alt screen has no scrollback, so
     // "persists like Claude Code" means keeping it rendered every frame. On
     // short terminals it's dropped entirely so the transcript keeps usable
     // height.
@@ -2472,7 +2473,7 @@ export function ReplApp({
     // `overflow: hidden` is the safety net, so an occasional banner can
     // clip a row or two off the bottom of the transcript rather than corrupt
     // the frame.
-    const CHROME_ROWS = 12 + (showBanner ? bannerRowCount(true) : 0);
+    const CHROME_ROWS = 12 + (showBanner ? bannerRowCount() : 0);
     const transcriptOuterHeight = Math.max(4, rows - CHROME_ROWS);
     const transcriptContentHeight = Math.max(1, transcriptOuterHeight - 1);
     const allMessages = liveMessage ? [...committedMessages, liveMessage] : committedMessages;
@@ -2486,16 +2487,11 @@ export function ReplApp({
 
     return (
       <Box flexDirection="column" height={rows} width={cols} overflow="hidden">
-        {showBanner && (
-          <Banner
-            version={pkg.version}
-            org={options.session.orgSlug}
-            workspace={options.session.workspaceSlug}
-            cols={cols}
-          />
-        )}
+        {showBanner && <Banner />}
         <HeaderBar
           model={model}
+          version={pkg.version}
+          scope={`${options.session.orgSlug}/${options.session.workspaceSlug}`}
           branch={repoInfo.branch}
           sessionLabel={repoInfo.root.split("/").pop() || "session"}
           sessionCostUsd={metrics.sessionCostUsd}
@@ -2618,13 +2614,7 @@ export function ReplApp({
       <Static items={["banner" as const, ...committedMessages]}>
         {(item, i) =>
           item === "banner" ? (
-            <Banner
-              key="banner"
-              version={pkg.version}
-              org={options.session.orgSlug}
-              workspace={options.session.workspaceSlug}
-              cols={cols}
-            />
+            <Banner key="banner" />
           ) : (
             <MessageView key={i} msg={item} diffTheme={diffThemeRef.current} />
           )
