@@ -33,23 +33,54 @@ export const assetUpload = registerCapability({
      * - "avatar": raster image (webp/png/jpeg), max 5 MiB.
      * - "image": raster image (webp/png/jpeg), max 5 MiB.
      * - "document": image or PDF, max 25 MiB.
+     * - "video": mp4/webm/quicktime, max 100 MiB.
      */
-    kind: z.enum(["avatar", "image", "document"]),
+    kind: z.enum(["avatar", "image", "document", "video"]),
     /**
      * Optional original filename. Used for display only — never influences
      * the storage path (which is always server-derived).
      */
     filename: z.string().min(1).max(200).optional(),
+    /**
+     * Attach-and-record semantics. Omit (default) for the legacy pure
+     * blob-ingest behavior — no `generated_assets` row, matching the original
+     * avatar/image/document callers exactly. Pass `"user_upload"` to
+     * additionally record a `generated_assets` row (`source: "user_upload"`,
+     * `prompt: ""`, `model: ""`, `accessPolicy: "org"`, private blob access)
+     * so the asset appears in `conversation.files.list` and is servable via
+     * the access-controlled `/api/v1/assets/:publicId` route.
+     *
+     * NOT supported for `kind: "avatar"` (avatars have no generated_assets
+     * analog — they stay the pure public-blob profile-picture path) and
+     * requires an authenticated user (not an API-key-only principal), since
+     * `generated_assets.userId` is required for ownership.
+     */
+    source: z.enum(["user_upload"]).optional(),
+    /**
+     * Conversation to link the uploaded asset to (sets
+     * `generated_assets.conversation_id`). Requires `source: "user_upload"`.
+     */
+    conversationId: z.string().min(1).optional(),
   }),
   output: z.object({
-    /** Public CDN URL of the stored asset. */
-    url: z.string().url(),
+    /**
+     * Access URL of the stored asset. For the legacy public path this is an
+     * absolute public CDN URL. For `source: "user_upload"` this is the
+     * relative, access-controlled serving path (`/api/v1/assets/:publicId`)
+     * — the underlying blob is private and must never be exposed directly.
+     */
+    url: z.string().min(1),
     /** Canonical storage key (e.g. `image/org-123/uuid.webp`). */
     key: z.string().min(1),
     /** MIME type of the stored object. */
     contentType: z.string().min(1),
     /** Byte size of the stored object. */
     bytes: z.number().int().nonnegative(),
+    /**
+     * Public id (`gen_…`) of the `generated_assets` row created for this
+     * upload. Null unless `source: "user_upload"` was requested.
+     */
+    publicId: z.string().nullable(),
   }),
 });
 
