@@ -22,8 +22,10 @@ function webSearchChild(query: string, hits: Array<{ title: string; url: string;
     runId: `run_${query}`,
     capabilityName: "web.search",
     status: "completed",
+    summary: `${hits.length} results`,
     input: { query, maxResults: 5 },
     output: { results: hits, totalResults: hits.length, searchId: "s" },
+    outputBytes: JSON.stringify(hits).length,
     errorReason: null,
   };
 }
@@ -55,8 +57,8 @@ describe("mapChildrenToResults", () => {
 
   it("skips malformed hits and empty children", () => {
     const results = mapChildrenToResults([
-      { runId: "r1", capabilityName: "web.search", status: "completed", input: { query: "q" }, output: { results: [{ nope: true }] }, errorReason: null },
-      { runId: "r2", capabilityName: "web.search", status: "failed", input: {}, output: null, errorReason: "boom" },
+      { runId: "r1", capabilityName: "web.search", status: "completed", summary: "1 result", input: { query: "q" }, output: { results: [{ nope: true }] }, outputBytes: 16, errorReason: null },
+      { runId: "r2", capabilityName: "web.search", status: "failed", summary: "failed", input: {}, output: null, outputBytes: 0, errorReason: "boom" },
     ]);
     // First child keeps the query but yields no hits; second is fully empty → dropped.
     expect(results).toHaveLength(1);

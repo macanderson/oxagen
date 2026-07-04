@@ -14,6 +14,7 @@ import { workspaceCreateRoute } from "./routes/v1/workspace.create";
 import { orgListRoute } from "./routes/v1/org.list";
 import { workspaceListRoute } from "./routes/v1/workspace.list";
 import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.read";
+import { billingUsageBreakdownRoute } from "./routes/v1/billing.usage.breakdown";
 import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription.upgrade.start";
 import { billingCreditsPurchaseRoute } from "./routes/v1/billing.credits.purchase";
 import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
@@ -300,6 +301,7 @@ orgScoped.route(
   billingSubscriptionUpgradeStartRoute,
 );
 orgScoped.route("/billing/credits/purchase", billingCreditsPurchaseRoute);
+orgScoped.route("/billing/usage/breakdown", billingUsageBreakdownRoute);
 orgScoped.route("/chat/messages", chatMessageSendRoute);
 orgScoped.route("/chat/messages/execution", chatMessageExecutionRoute);
 orgScoped.route("/chat/stream", chatStreamRoute);

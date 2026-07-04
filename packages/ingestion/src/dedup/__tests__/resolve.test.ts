@@ -157,6 +157,29 @@ describe("resolveEntity — Pass B: no natural key match → new principal", () 
     expect(secondParams["entityType"]).toBe(mutation.entityType);
   });
 
+  it("over-fetches the entity index (k=candidateLimit×3) but trims to candidateLimit after tenant/type filtering", async () => {
+    mocks.scopedSession.mockReturnValue({
+      run: mocks.sessionRun,
+      close: mocks.sessionClose,
+    });
+    mocks.sessionRun
+      .mockResolvedValueOnce({ records: [] }) // Pass A miss
+      .mockResolvedValueOnce({ records: [] }); // Pass B no candidates
+
+    await resolveEntity(makeMutation(), "org-1");
+
+    const secondCall = mocks.sessionRun.mock.calls[1];
+    expect(secondCall).toBeDefined();
+    const cypher = String(secondCall![0]);
+    // Index is queried with the over-sampled $k, then trimmed via LIMIT $limit
+    // after the org/entityType filter so the tenant filter can't starve dedup.
+    expect(cypher).toContain("db.index.vector.queryNodes('entity_node_embedding_index', $k");
+    expect(cypher).toContain("LIMIT $limit");
+    const params = secondCall![1] as Record<string, unknown>;
+    expect(params["k"]).toBe(BigInt(15)); // CANDIDATE_LIMIT(5) × 3
+    expect(params["limit"]).toBe(BigInt(5));
+  });
+
   it("passes correct telemetry to embedText", async () => {
     mocks.scopedSession.mockReturnValue({
       run: mocks.sessionRun,
