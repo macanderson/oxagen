@@ -616,3 +616,38 @@ export async function latestAuditChainHash(args: {
   const rows = (await result.json()) as Row[];
   return rows[0]?.chain_hash ?? "";
 }
+
+// ── Anonymous CLI usage telemetry (usage_events, migration 0019) ─────────────
+//
+// One row per `oxagen` CLI invocation, written by POST /v1/telemetry/usage
+// (apps/api/src/routes/v1/telemetry.usage.ts) AFTER the request body has
+// already passed UsageEventPayloadSchema.strict() (usage-events.ts) — this
+// row type mirrors that schema exactly, plus the server-stamped `timestamp`
+// (never client-supplied; see usage-events.ts for why). Anonymous/aggregate
+// only: no org/workspace scope, no user identity — see TELEMETRY.md.
+export interface UsageEventRow {
+  /** ISO-8601, stamped by the route handler at insert time. */
+  timestamp: string;
+  install_id: string;
+  session_id: string;
+  oxagen_version: string;
+  os: string;
+  arch: string;
+  command: string;
+  model_tier: "fast" | "balanced" | "precise" | "mixed" | "";
+  best_of_n: number;
+  graph_used: 0 | 1;
+  pipeline_used: 0 | 1;
+  tui: 0 | 1;
+  headless: 0 | 1;
+  byok: 0 | 1;
+  tool_calls_json: string;
+  step_count: number;
+  duration_ms: number;
+  error_type: string;
+  exit_status: string;
+}
+
+/** Insert anonymous CLI usage events. No-ops on an empty array. */
+export const insertUsageEvents = (rows: readonly UsageEventRow[]) =>
+  insertRows("usage_events", rows);

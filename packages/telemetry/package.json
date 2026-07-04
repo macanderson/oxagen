@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
     "./migrate": "./src/migrate.ts",
-    "./tenant": "./src/tenant.ts"
+    "./tenant": "./src/tenant.ts",
+    "./usage-events": "./src/usage-events.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -28,7 +29,8 @@
     "@opentelemetry/semantic-conventions": "1.41.1",
     "@oxagen/compliance": "workspace:*",
     "@oxagen/config": "workspace:*",
-    "@oxagen/tenancy": "workspace:*"
+    "@oxagen/tenancy": "workspace:*",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@opentelemetry/context-async-hooks": "2.7.1",

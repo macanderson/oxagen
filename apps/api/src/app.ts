@@ -223,6 +223,7 @@ import { ontologyNeighborsRoute } from "./routes/v1/ontology.neighbors";
 import { auditLogQueryRoute } from "./routes/v1/audit.log.query";
 import { agentLlmRoute } from "./routes/v1/agent.llm";
 import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
+import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
 
 export type AppEnv = {
   Variables: {
@@ -261,6 +262,13 @@ app.route("/api/inngest", inngestRoute);
 // the security boundary; RFC 8252 + RFC 7636 S256). Must be mounted BEFORE the
 // auth-gated /v1 groups so authMiddleware never sees this path.
 app.route("/v1/auth/cli", authCliTokenRoute);
+
+// Public, anonymous CLI usage telemetry (OSS trust surface — TELEMETRY.md).
+// No auth is possible (OSS/BYOK users may have no session) or wanted (the
+// payload is anonymous by design) — strict schema validation + a per-IP rate
+// limit inside the route are the security boundary. Mounted BEFORE the
+// auth-gated /v1 groups for the same reason as /v1/auth/cli above.
+app.route("/v1/telemetry", telemetryUsageRoute);
 
 // /v1 user-level routes (org + workspace CRUD) require auth but no
 // org scope: a freshly-authenticated user can create their first

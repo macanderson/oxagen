@@ -455,6 +455,9 @@ importers:
         specifier: 3.25.76
         version: 3.25.76
     devDependencies:
+      '@oxagen/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
       '@types/node':
         specifier: 25.9.1
         version: 25.9.1
@@ -1700,6 +1703,9 @@ importers:
       '@oxagen/tenancy':
         specifier: workspace:*
         version: link:../tenancy
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
     devDependencies:
       '@opentelemetry/context-async-hooks':
         specifier: 2.7.1

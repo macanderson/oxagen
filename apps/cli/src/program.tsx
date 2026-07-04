@@ -167,6 +167,16 @@ export function buildProgram(): Command {
           maxSteps,
         };
 
+        // Feed the anonymous usage-telemetry accumulator (index.tsx emits the
+        // event after this action resolves): pipeline_used and byok are known
+        // right here from data already destructured above, so record them
+        // directly rather than re-deriving them generically at the exit hook.
+        {
+          const { markPipelineUsed, setByok } = await import("./telemetry/usage.js");
+          markPipelineUsed(!runOpts.bare);
+          setByok(session.orgSlug === "local");
+        }
+
         // --agent: run the prompt as a named agent (its prompt, tools, model).
         if (opts.agent) {
           if (!prompt) {
@@ -953,6 +963,19 @@ export function buildProgram(): Command {
         await handleLogs(opts);
       },
     );
+
+  // ── telemetry: anonymous usage-telemetry controls (TELEMETRY.md) ────────────
+
+  program
+    .command("telemetry")
+    .description(
+      "Inspect or control anonymous CLI usage telemetry (on by default — see TELEMETRY.md)",
+    )
+    .argument("[subcommand]", "on | off | status (default: status)")
+    .action(async (subcommand?: string) => {
+      const { handleTelemetry } = await import("./commands/telemetry.js");
+      handleTelemetry(subcommand);
+    });
 
   // ── login / logout: platform authentication ─────────────────────────────────
 

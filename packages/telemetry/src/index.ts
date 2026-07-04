@@ -3,6 +3,7 @@ export * from "./client";
 export { migrate as migrateClickhouse } from "./migrate";
 export * from "./security";
 export * from "./skill-telemetry";
+export * from "./usage-events";
 export { chInsert, chSelect } from "./tenant";
 export {
   initTracer,
