@@ -61,7 +61,8 @@
     "db:seed-interactive-agent": "tsx --env-file-if-exists=.env.local tools/scripts/seed-interactive-agent.ts",
     "db:backfill-iam": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-org-iam.ts",
     "db:backfill-capabilities": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-workspace-capabilities.ts",
-    "db:backfill-workspace-seeds": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-workspace-seeds.ts"
+    "db:backfill-workspace-seeds": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-workspace-seeds.ts",
+    "metrics:fanout": "tsx --env-file-if-exists=.env.local tools/scripts/fanout-token-metrics.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.0",
