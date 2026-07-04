@@ -337,6 +337,90 @@ export interface ResolvedRenderDirective {
   props: Record<string, unknown>;
 }
 
+// ── Coding-agent artifact renderers ──────────────────────────────────────────
+// agent.repo.edit / repo.file.put / (large-output) agent.sandbox.exec map onto
+// bespoke prop shapes ({files}, {stdout,stderr,exitCode,durationMs}) that the
+// generic {capability,output,links} envelope can't express, so these three are
+// resolved with dedicated logic below rather than through CURATED_RENDER_HINTS
+// (whose CapabilityRenderHint shape only carries componentId/recordLinks/
+// hideFields/titleField, no output-transform slot).
+
+/** A GitHub blob URL is `https://github.com/{owner}/{repo}/blob/{ref}/{path...}`. */
+const GITHUB_BLOB_URL_RE = /^https:\/\/github\.com\/[^/]+\/[^/]+\/blob\/[^/]+\/(.+)$/;
+
+/**
+ * repo.file.put's output (commitSha, htmlUrl) doesn't echo the file path back
+ * — but the GitHub blob URL it returns embeds it, so we recover it rather than
+ * rendering a diff card with an unlabelled file.
+ */
+function extractPathFromGithubBlobUrl(htmlUrl: string): string | null {
+  const match = GITHUB_BLOB_URL_RE.exec(htmlUrl);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * Build the code-diff-card props for agent.repo.edit / repo.file.put. Neither
+ * capability's output currently carries patch/hunk text (agent.repo.edit only
+ * lists changed paths; repo.file.put only returns a commit sha + blob url), so
+ * every file renders with an empty patch — the card's own "No diff preview
+ * available for this file" empty state covers this gracefully. Wiring the real
+ * diff body through is a follow-up once the contracts carry it.
+ */
+function resolveCodeDiffDirective(capability: string, output: unknown): ResolvedRenderDirective {
+  const o = (output !== null && typeof output === "object" ? output : {}) as Record<
+    string,
+    unknown
+  >;
+  let files: Array<{ path: string; patch: string; additions: number; deletions: number }> = [];
+
+  if (capability === "agent.repo.edit") {
+    const changedFiles = Array.isArray(o.changedFiles) ? o.changedFiles : [];
+    files = changedFiles
+      .filter((p): p is string => typeof p === "string")
+      .map((path) => ({ path, patch: "", additions: 0, deletions: 0 }));
+  } else if (capability === "repo.file.put") {
+    const htmlUrl = typeof o.htmlUrl === "string" ? o.htmlUrl : "";
+    const path = extractPathFromGithubBlobUrl(htmlUrl);
+    if (path) files = [{ path, patch: "", additions: 0, deletions: 0 }];
+  }
+
+  return { componentId: "code-diff", props: { files } };
+}
+
+/** Matches the terminal-trace-card's own ~40-line auto-collapse threshold. */
+const SANDBOX_EXEC_LARGE_OUTPUT_CHARS = 2000;
+
+/**
+ * agent.sandbox.exec output is "large" once its combined stdout+stderr would
+ * overflow the compact generic capability-result card — at that size a
+ * scrollable, tab-separated terminal view reads far better than a key/value
+ * dump of two giant strings.
+ */
+function isLargeSandboxExecOutput(output: unknown): boolean {
+  if (output === null || typeof output !== "object") return false;
+  const o = output as Record<string, unknown>;
+  const stdout = typeof o.stdout === "string" ? o.stdout : "";
+  const stderr = typeof o.stderr === "string" ? o.stderr : "";
+  return stdout.length + stderr.length > SANDBOX_EXEC_LARGE_OUTPUT_CHARS;
+}
+
+/** Build the terminal-trace-card props directly from agent.sandbox.exec's output shape. */
+function resolveTerminalTraceDirective(output: unknown): ResolvedRenderDirective {
+  const o = (output !== null && typeof output === "object" ? output : {}) as Record<
+    string,
+    unknown
+  >;
+  return {
+    componentId: "terminal-trace",
+    props: {
+      stdout: typeof o.stdout === "string" ? o.stdout : undefined,
+      stderr: typeof o.stderr === "string" ? o.stderr : undefined,
+      exitCode: typeof o.exitCode === "number" ? o.exitCode : undefined,
+      durationMs: typeof o.executionMs === "number" ? o.executionMs : undefined,
+    },
+  };
+}
+
 /**
  * Decide whether an output is substantial enough to warrant the GENERIC
  * `capability-result` component. Trivial acks (a lone boolean, or empty) stay on
@@ -375,6 +459,16 @@ export function resolveRenderDirective(args: {
 }): ResolvedRenderDirective | null {
   const { capability, output } = args;
   const slugs = args.slugs ?? {};
+
+  // Coding-agent artifact renderers — see the block comment above their
+  // helpers for why these bypass the generic {capability,output,links} envelope.
+  if (capability === "agent.repo.edit" || capability === "repo.file.put") {
+    return resolveCodeDiffDirective(capability, output);
+  }
+  if (capability === "agent.sandbox.exec" && isLargeSandboxExecOutput(output)) {
+    return resolveTerminalTraceDirective(output);
+  }
+
   const hint = getRenderHint(capability);
   const links = resolveRecordLinks(output, hint?.recordLinks, slugs);
 

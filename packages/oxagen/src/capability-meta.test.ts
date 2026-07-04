@@ -313,6 +313,102 @@ describe("resolveRenderDirective", () => {
     const links = d?.props.links as Array<{ href: string | null }>;
     expect(links[0]?.href).toBeNull();
   });
+
+  // ── Coding-agent artifact renderers ─────────────────────────────────────────
+
+  describe("agent.repo.edit → code-diff", () => {
+    it("maps changedFiles to code-diff-card file entries with empty patches", () => {
+      const output = {
+        prNumber: 42,
+        prUrl: "https://github.com/acme/widgets/pull/42",
+        branch: "agent/fix-bug",
+        changedFiles: ["src/index.ts", "src/util.ts"],
+        summary: "Fixed the bug.",
+      };
+      const d = resolveRenderDirective({ capability: "agent.repo.edit", output, slugs: SLUGS });
+      expect(d?.componentId).toBe("code-diff");
+      expect(d?.props.files).toEqual([
+        { path: "src/index.ts", patch: "", additions: 0, deletions: 0 },
+        { path: "src/util.ts", patch: "", additions: 0, deletions: 0 },
+      ]);
+    });
+
+    it("returns an empty files array when changedFiles is missing", () => {
+      const d = resolveRenderDirective({
+        capability: "agent.repo.edit",
+        output: { prNumber: 1, prUrl: "x", branch: "b", summary: "s" },
+      });
+      expect(d?.componentId).toBe("code-diff");
+      expect(d?.props.files).toEqual([]);
+    });
+  });
+
+  describe("repo.file.put → code-diff", () => {
+    it("recovers the file path from the GitHub blob URL", () => {
+      const output = {
+        commitSha: "abc123",
+        htmlUrl: "https://github.com/acme/widgets/blob/main/src/index.ts",
+      };
+      const d = resolveRenderDirective({ capability: "repo.file.put", output });
+      expect(d?.componentId).toBe("code-diff");
+      expect(d?.props.files).toEqual([
+        { path: "src/index.ts", patch: "", additions: 0, deletions: 0 },
+      ]);
+    });
+
+    it("yields an empty files array when the htmlUrl doesn't match the expected shape", () => {
+      const output = { commitSha: "abc123", htmlUrl: "https://example.com/not-github" };
+      const d = resolveRenderDirective({ capability: "repo.file.put", output });
+      expect(d?.props.files).toEqual([]);
+    });
+  });
+
+  describe("agent.sandbox.exec → terminal-trace (large output only)", () => {
+    it("stays on the generic capability-result card for small output", () => {
+      const output = {
+        exitCode: 0,
+        stdout: "ok",
+        stderr: "",
+        executionMs: 120,
+        timedOut: false,
+        restored: false,
+      };
+      const d = resolveRenderDirective({ capability: "agent.sandbox.exec", output });
+      expect(d?.componentId).toBe("capability-result");
+    });
+
+    it("routes to terminal-trace once stdout+stderr exceeds the large-output threshold", () => {
+      const output = {
+        exitCode: 0,
+        stdout: "x".repeat(3000),
+        stderr: "",
+        executionMs: 4200,
+        timedOut: false,
+        restored: false,
+      };
+      const d = resolveRenderDirective({ capability: "agent.sandbox.exec", output });
+      expect(d?.componentId).toBe("terminal-trace");
+      expect(d?.props).toEqual({
+        stdout: "x".repeat(3000),
+        stderr: "",
+        exitCode: 0,
+        durationMs: 4200,
+      });
+    });
+
+    it("counts combined stdout+stderr length toward the large-output threshold", () => {
+      const output = {
+        exitCode: 1,
+        stdout: "x".repeat(1200),
+        stderr: "y".repeat(1200),
+        executionMs: 500,
+        timedOut: false,
+        restored: false,
+      };
+      const d = resolveRenderDirective({ capability: "agent.sandbox.exec", output });
+      expect(d?.componentId).toBe("terminal-trace");
+    });
+  });
 });
 
 describe("route + vocabulary integrity", () => {
