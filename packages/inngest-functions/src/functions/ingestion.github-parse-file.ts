@@ -609,9 +609,18 @@ export const [ingestionGithubParseFile] = createFunction(
     );
 
     // ── Step 7: Fire feature inference event (if applicable) ──────────────────
+    // Default: one per-file event → synchronous inference. With
+    // INGESTION_FEATURE_BATCH=1, emit the batched event instead → the events are
+    // collected via Inngest batchEvents and submitted as one Anthropic Message
+    // Batch (half price). Payload is identical; only the routing differs.
     if (parseResult.language !== "unknown" && parseResult.symbols.length > 0) {
+      const batchMode = process.env.INGESTION_FEATURE_BATCH === "1";
       await step.sendEvent("infer-features", {
-        name: "ingestion/github.infer-features" as const,
+        name: (batchMode
+          ? "ingestion/github.infer-features-batch"
+          : "ingestion/github.infer-features") as
+          | "ingestion/github.infer-features-batch"
+          | "ingestion/github.infer-features",
         data: {
           fileNaturalKey: naturalKey,
           symbols: parseResult.symbols,

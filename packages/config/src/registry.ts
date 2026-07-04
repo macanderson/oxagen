@@ -1894,6 +1894,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  INGESTION_FEATURE_BATCH: {
+    group: "Ingestion",
+    description:
+      "When '1', route GitHub feature inference through the Anthropic Message Batches API (async, half price) instead of per-file synchronous calls. Unset/absent = synchronous per-file (default).",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "", preview: "", production: "" },
+  },
   PRIVACY_ERASURE_GRACE_DAYS: {
     group: "Privacy",
     description: "Grace period in days before a hard-delete erasure job runs (GDPR Art.17). Set to 0 for immediate erasure in test envs.",

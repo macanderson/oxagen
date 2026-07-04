@@ -109,6 +109,15 @@ export interface DurableFunctionConfig {
   timeouts?: { finish?: string };
   /** Optional failure handler invoked when the function exhausts retries. */
   onFailure?: DurableFunctionHandler;
+  /**
+   * Batch many trigger events into a single function run. When set, the
+   * provider collects up to `maxSize` matching events (or waits `timeout`,
+   * e.g. "30s") and invokes the handler once with all of them exposed on
+   * `ctx.events`. `key` (a CEL expression like "event.data.orgId") batches
+   * per-key so a run never mixes tenants. Used for cost-efficient bulk
+   * inference (e.g. one Anthropic Message Batch per collected event set).
+   */
+  batchEvents?: { maxSize: number; timeout: string; key?: string };
 }
 
 // ─── Function Trigger ────────────────────────────────────────────────────────
@@ -128,6 +137,13 @@ export type DurableFunctionTrigger =
 export interface DurableFunctionHandlerContext {
   /** The triggering event (present for event-triggered functions). */
   event: EventPayload<Record<string, unknown>>;
+  /**
+   * All events in this run when the function uses `batchEvents`. For a
+   * non-batched run this is a single-element array holding the same event as
+   * `event`; for a batched run it holds every collected event. Handlers that
+   * opt into batching read this instead of `event`.
+   */
+  events?: EventPayload<Record<string, unknown>>[];
   /** The step context for durable operations. */
   step: StepContext;
   /**

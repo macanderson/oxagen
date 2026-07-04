@@ -65,6 +65,12 @@ export const [ingestionGithubInferDomains] = createFunction(
               // token_usage and causes code-27 parse errors.
               messageId: null,
             },
+            // Domain classification is deterministic in the repo's file layout:
+            // the same file set yields the same domains. Cache it so a re-sync
+            // (or a retry) of an unchanged tree skips the model call. Semantic
+            // layer on so a near-identical layout (a few files added/removed)
+            // reuses a recent result above the similarity threshold. 7-day TTL.
+            cache: { ttlSeconds: 604_800, semantic: true },
           });
         },
       };

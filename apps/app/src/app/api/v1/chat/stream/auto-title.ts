@@ -48,6 +48,11 @@ export async function autoTitleConversation(opts: {
         surface: "app",
         messageId: opts.requestId,
       },
+      // Title generation is deterministic infrastructure: the same opening
+      // message yields the same title. Cache it (exact-match, 24h TTL) so a
+      // repeated first turn costs a cheap cache hit instead of a model call.
+      // Never semantic here — an exact opener is the only safe reuse.
+      cache: { ttlSeconds: 86_400 },
     });
 
     const title = object.title?.trim();
