@@ -1306,6 +1306,31 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_CLI_MOTION: {
+    group: "CLI",
+    description:
+      "Motion mode for the CLI TUI animations: full | reduced | off. Overrides the persisted " +
+      "`motion` config; unset falls back to config, then 'full'. (OXAGEN_CLI_FUN=0 is a legacy " +
+      "alias that maps to 'reduced'.)",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "full",
+  },
+  OXAGEN_PLAN_TIMEOUT_MS: {
+    group: "CLI",
+    description:
+      "Wall-clock timeout in milliseconds for a single interactive plan turn before it aborts. " +
+      "Unset uses the built-in default; a non-finite value is ignored.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "60000",
+  },
   OXAGEN_CLI_FUN: {
     group: "CLI",
     description:
