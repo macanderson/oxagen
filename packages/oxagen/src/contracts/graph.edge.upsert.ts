@@ -10,6 +10,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
+import { observedAtField, supersedeField } from "../lib/temporal-query";
 
 export const graphEdgeUpsert = registerCapability({
   name: "graph.edge.upsert",
@@ -39,12 +40,18 @@ export const graphEdgeUpsert = registerCapability({
       .record(z.string(), z.string())
       .optional()
       .describe("Optional string key-value metadata to store on the relationship"),
+    observedAt: observedAtField,
+    supersede: supersedeField,
   }),
   output: z.object({
     edgeId: z
       .string()
       .describe("Composite identifier: fromNodeId:relationshipType:toNodeId"),
     created: z.boolean().describe("True if the relationship was newly created, false if it existed"),
+    superseded: z
+      .number()
+      .default(0)
+      .describe("Count of prior open edges closed by supersession (0 when supersede=false)"),
   }),
 });
 

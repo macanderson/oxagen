@@ -4,6 +4,7 @@ export * from "./error-reporting";
 export { migrate as migrateClickhouse } from "./migrate";
 export * from "./security";
 export * from "./skill-telemetry";
+export * from "./usage-analytics";
 export * from "./usage-events";
 export { chInsert, chSelect } from "./tenant";
 export {

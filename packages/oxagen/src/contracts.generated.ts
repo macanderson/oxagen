@@ -80,6 +80,7 @@ import "./contracts/automation.update";
 import "./contracts/billing.credits.purchase";
 import "./contracts/billing.subscription.read";
 import "./contracts/billing.subscription.upgrade.start";
+import "./contracts/billing.usage.breakdown";
 import "./contracts/browser.click";
 import "./contracts/browser.fill";
 import "./contracts/browser.navigate";

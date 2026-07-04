@@ -31,6 +31,9 @@ export const connectionListHandler: CapabilityHandler<typeof connectionList> = a
         status: schema.sourceConnections.status,
         entityCount: schema.sourceConnections.entityCount,
         lastSyncAt: schema.sourceConnections.lastSyncAt,
+        healthStatus: schema.sourceConnections.healthStatus,
+        lastPollAt: schema.sourceConnections.lastPollAt,
+        nextPollAt: schema.sourceConnections.nextPollAt,
         createdAt: schema.sourceConnections.createdAt,
       })
       .from(schema.sourceConnections)
@@ -47,6 +50,9 @@ export const connectionListHandler: CapabilityHandler<typeof connectionList> = a
     connections: rows.map((r) => ({
       ...r,
       lastSyncAt: r.lastSyncAt?.toISOString() ?? null,
+      healthStatus: (r.healthStatus as "healthy" | "degraded" | "errored") ?? "healthy",
+      lastPollAt: r.lastPollAt?.toISOString() ?? null,
+      nextPollAt: r.nextPollAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
     })),
   };

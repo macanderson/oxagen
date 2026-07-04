@@ -18,6 +18,12 @@ export const schema = {
   maxDepth: ontologyQuery.input.shape.maxDepth.describe(
     "Maximum hop distance to traverse (1–5, default 2)",
   ),
+  asOf: ontologyQuery.input.shape.asOf.describe(
+    "Valid-time instant (ISO-8601): traverse only edges true in the world at this time; omit for now",
+  ),
+  asKnownAt: ontologyQuery.input.shape.asKnownAt.describe(
+    "Transaction-time instant (ISO-8601): traverse using only what was known/recorded by this time; omit for now",
+  ),
 };
 
 export const metadata: ToolMetadata = {

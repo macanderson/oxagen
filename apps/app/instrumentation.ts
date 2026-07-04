@@ -81,9 +81,10 @@ export async function register(): Promise<void> {
     const { makeSecurityEventInserter } = await import("@oxagen/database/security");
     const { assertRlsConnectionSafe } = await import("@oxagen/database");
 
-    // Refuse to boot if TENANT_RLS_ENFORCEMENT_ENABLED=true but the DB role
-    // silently bypasses RLS (superuser or BYPASSRLS), which would make all
-    // tenant isolation policies dead weight.
+    // Refuse to boot if a production runtime disabled RLS enforcement, or if
+    // TENANT_RLS_ENFORCEMENT_ENABLED=true but the DB role silently bypasses RLS
+    // (superuser or BYPASSRLS), which would make all tenant isolation policies
+    // dead weight.
     await assertRlsConnectionSafe();
 
     bootstrapIAMRuntime();

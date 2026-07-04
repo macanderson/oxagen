@@ -55,6 +55,7 @@ import { metadata as assetUploadMetadata } from "./asset.upload";
 import { metadata as billingCreditsPurchaseMetadata } from "./billing.credits.purchase";
 import { metadata as billingSubscriptionReadMetadata } from "./billing.subscription.read";
 import { metadata as billingSubscriptionUpgradeStartMetadata } from "./billing.subscription.upgrade.start";
+import { metadata as billingUsageBreakdownMetadata } from "./billing.usage.breakdown";
 import { metadata as chatMessageExecutionMetadata } from "./chat.message.execution";
 import { metadata as chatMessageSendMetadata } from "./chat.message.send";
 import { metadata as conversationArchiveMetadata } from "./conversation.archive";
@@ -325,6 +326,7 @@ const allToolMetadata = [
   billingCreditsPurchaseMetadata,
   billingSubscriptionReadMetadata,
   billingSubscriptionUpgradeStartMetadata,
+  billingUsageBreakdownMetadata,
   chatMessageExecutionMetadata,
   chatMessageSendMetadata,
   conversationArchiveMetadata,

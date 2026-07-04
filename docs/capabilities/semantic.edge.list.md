@@ -38,6 +38,7 @@ Paginated browse of inferred semantic edges for a workspace. Supports filtering 
 | `edges[].approved` | boolean \| undefined | Whether the edge has been approved |
 | `edges[].approvedAt` | string \| null \| undefined | ISO-8601 approval timestamp |
 | `edges[].approvedBy` | string \| null \| undefined | User ID who approved the edge |
+| `edges[].validity` | object \| null | Bi-temporal validity of the **materialised** relationship (`validFrom`/`validTo` + `recordedAt`/`invalidatedAt`); `null` for a pending candidate not yet materialised |
 | `total` | number | Total edges matching the filter (before pagination) |
 | `limit` | number | Page size used |
 | `offset` | number | Page offset used |

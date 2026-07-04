@@ -1,5 +1,6 @@
 import { cors } from "hono/cors";
 import type { MiddlewareHandler } from "hono";
+import { isProductionRuntime } from "@oxagen/config/env";
 import type { AppEnv } from "../app";
 
 /**
@@ -16,10 +17,20 @@ import type { AppEnv } from "../app";
  * The app authenticates with the Better Auth session cookie
  * (credentials: "include"), and the fetch spec forbids a wildcard origin
  * with credentials — so the allowlist echoes the exact origin or nothing.
+ *
+ * SECURITY: http://localhost:3000 is trusted ONLY in non-production runtimes.
+ * A production API that trusts localhost lets any page a victim runs locally
+ * (or any attacker-controlled dev server bound to that port) make
+ * credentialed cross-origin calls with the victim's session cookie. In prod
+ * the allowlist is exactly the configured APP_URL / NEXT_PUBLIC_APP_URL.
  */
 function allowedOrigins(): Set<string> {
+  const origins = [process.env.APP_URL, process.env.NEXT_PUBLIC_APP_URL];
+  if (!isProductionRuntime()) {
+    origins.push("http://localhost:3000");
+  }
   return new Set(
-    [process.env.APP_URL, process.env.NEXT_PUBLIC_APP_URL, "http://localhost:3000"]
+    origins
       .filter((url): url is string => Boolean(url))
       .map((url) => url.replace(/\/$/, "")),
   );
