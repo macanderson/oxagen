@@ -37,7 +37,6 @@
     "@oxagen/compliance": "workspace:*",
     "@oxagen/config": "workspace:*",
     "@oxagen/database": "workspace:*",
-    "@oxagen/functions": "workspace:*",
     "@oxagen/handlers": "workspace:*",
     "@oxagen/iam": "workspace:*",
     "@oxagen/inngest-functions": "workspace:*",
@@ -57,7 +56,6 @@
     "@vis.gl/react-google-maps": "1.8.3",
     "ai": "7.0.14",
     "better-auth": "1.6.11",
-    "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "drizzle-orm": "0.45.2",
     "lucide-react": "0.469.0",
@@ -69,7 +67,6 @@
     "react-dom": "19.2.6",
     "react-easy-crop": "5.5.7",
     "reagraph": "4.31.0",
-    "reaviz": "16.1.4",
     "server-only": "0.0.1",
     "shiki": "1.29.2",
     "streamdown": "2.5.0",
@@ -78,7 +75,6 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "3.3.5",
     "@eslint/js": "9.39.4",
     "@playwright/test": "1.60.0",
     "@storybook/react-vite": "^9.1.20",

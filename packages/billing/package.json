@@ -20,11 +20,9 @@
     "@oxagen/notifications": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
-    "@oxagen/tenancy": "workspace:*",
     "drizzle-orm": "0.45.2",
     "pino": "9.14.0",
-    "stripe": "17.7.0",
-    "zod": "3.25.76"
+    "stripe": "17.7.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "2.1.9",
