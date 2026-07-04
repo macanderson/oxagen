@@ -59,7 +59,7 @@ export function buildProgram(): Command {
     .option("-m, --model <slug>", "Gateway model slug (overrides config/default)")
     .option(
       "--effort <level>",
-      "Reasoning effort for models that support it: low | medium | high",
+      "Reasoning effort for models that support it: low | medium | high | xhigh | max (omit = model default / adaptive)",
     )
     .option("--agent <name>", "Run the one-shot prompt as a named agent definition")
     .option(

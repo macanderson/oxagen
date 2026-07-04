@@ -1268,12 +1268,38 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  DO_NOT_TRACK: {
+    group: "CLI",
+    description:
+      "Cross-tool opt-out convention (https://consoledonottrack.com): set to '1' to disable CLI " +
+      "usage telemetry. Checked before OXAGEN_TELEMETRY and the persisted telemetry.enabled config.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  OXAGEN_TELEMETRY: {
+    group: "CLI",
+    description:
+      "Set to '0' to disable CLI usage telemetry for this invocation (equivalent to `oxagen " +
+      "telemetry off`). DO_NOT_TRACK=1 also disables it and takes precedence.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "0",
+  },
   OXAGEN_EFFORT: {
     group: "CLI",
     description:
-      "Default reasoning effort for models that support a thinking mode: low | medium | high. " +
-      "Forwarded as reasoning_effort; models without a reasoning mode ignore it. Falls back to " +
-      "`effort` in ~/.config/oxagen/config.json / .oxagen/settings.json, then the model default.",
+      "Default reasoning effort for models that support a thinking mode: low | medium | high | xhigh | max " +
+      "(xhigh/max are Anthropic-only depth tiers; other vendors clamp to high). Forwarded as reasoning " +
+      "config per vendor; models without a reasoning mode ignore it. Unset = model default (Anthropic " +
+      "adaptive thinking decides depth itself). Falls back to `effort` in ~/.config/oxagen/config.json / " +
+      ".oxagen/settings.json, then the model default.",
     secret: false,
     clientExposed: false,
     services: [],
