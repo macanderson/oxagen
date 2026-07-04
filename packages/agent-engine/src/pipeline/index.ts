@@ -33,6 +33,13 @@ import { buildSystemPrompt } from "../prompt/system-prompt";
 import { evaluatePrompt } from "../evaluate/evaluator";
 import { judgeCompleteness, judgePanel, buildRevisionPrompt } from "../evaluate/judge";
 import { enhancePrompt } from "../evaluate/prompt-enhancer";
+import { createSpecTestTracker } from "../oracle/spec-test";
+import {
+  specGateInstruction,
+  shouldInjectSpecGate,
+  buildLadderSignals,
+  decideLadderPath,
+} from "./wiring";
 import {
   classifyTier,
   modelForTier,
@@ -407,6 +414,15 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     opts.midJudgeSteps ??
     (Number.isFinite(midJudgeStepsEnv) && midJudgeStepsEnv > 0 ? midJudgeStepsEnv : 0);
 
+  // F2: Spec-first oracle tracker. Watches for a repro signal: test-like bash command
+  // with failing exit → later same command passing exit. State: 'none' (no failing test
+  // seen), 'failing' (test failed), or 'flipped' (was failing, now passes).
+  const tracker = createSpecTestTracker();
+
+  // F2/F3 feature flags.
+  const specGateEnabled = Boolean(process.env["OXAGEN_SPEC_GATE"]);
+  const ladderEnabled = Boolean(process.env["OXAGEN_LADDER"]);
+
   /** Run one execution segment and accumulate its results into shared state. */
   async function runSegment(
     segPrompt: string,
@@ -451,6 +467,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
               /* input wasn't JSON — keep the stringified form */
             }
             segCommandOutputs.push({ command, output: e.result, ok: e.ok });
+            // F2: Feed the spec-test oracle. CodingEvent only exposes boolean ok,
+            // so exitCode is a 0/1 mapping.
+            tracker.observe({ command, exitCode: e.ok ? 0 : 1 });
           }
         }
         if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
@@ -493,7 +512,16 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       for (const f of phaseAResult.changedFiles) filesTouched.add(f);
 
       // ── Mid-session judge (non-fatal: failure continues to phase B without gap injection) ──
-      if (!opts.signal?.aborted) {
+      // F2: Spec-gate short-circuit — when no failing repro has been executed yet,
+      // the corrective instruction is already decided, so skip the mid-judge model
+      // call entirely (its verdict would be discarded) and go straight to phase B.
+      if (shouldInjectSpecGate(tracker, specGateEnabled)) {
+        opts.onStage?.({
+          kind: "judge",
+          label: "spec gate: no failing repro yet — skipping mid-judge, injecting repro instruction",
+        });
+        prompt = specGateInstruction();
+      } else if (!opts.signal?.aborted) {
         opts.onStage?.({ kind: "judge", label: "mid-session check · verifying completeness so far" });
         const midJudgeStart = Date.now();
         const midVerdict = await judgeCompleteness(
@@ -520,8 +548,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
               : `mid-session: ${midVerdict.findings.length} gap(s) found — injecting into phase B`,
             detail: `advisor: ${midVerdict.model.split("/").pop()}`,
           });
-          // Inject findings as the phase B instruction so the agent addresses
-          // missing acceptance criteria before burning the remaining step budget.
+          // Standard mid-judge: inject findings as the phase B instruction so the agent
+          // addresses missing acceptance criteria before burning the remaining step budget.
           if (!midVerdict.complete && midVerdict.findings.length > 0) {
             prompt =
               `[Mid-session review] The following gaps were identified after the first ` +
@@ -600,6 +628,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
                 /* input wasn't JSON — keep the stringified form */
               }
               roundCommandOutputs.push({ command, output: e.result, ok: e.ok });
+              // F2: Feed the spec-test oracle. CodingEvent only exposes boolean ok,
+              // so exitCode is a 0/1 mapping.
+              tracker.observe({ command, exitCode: e.ok ? 0 : 1 });
             }
           }
           if (e.type === "final-diff") opts.onFileChange?.(e.diff, e.changedFiles);
@@ -622,37 +653,79 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     // all execution environments — e.g. when onStepFinish is not called).
     for (const f of result.changedFiles) filesTouched.add(f);
 
-    // ── 5. JUDGE (single, or a cross-vendor panel) ──
+    // ── 5. JUDGE (or F3 ladder fast-path bypass) ──
     const judgeStart = Date.now();
-    const judgeInput = {
-      request: opts.prompt,
-      response: result.text,
-      filesTouched: [...filesTouched],
-      commandsRun,
-      // Ground-truth evidence: the real diff + the outputs of commands run
-      // this round (test results are decisive for completeness).
-      diff: result.diff,
-      commandOutputs: roundCommandOutputs,
-      steps: result.steps,
-      executorModel: routed.model,
-      signal: opts.signal,
-    };
-    const usePanel =
-      (opts.judgeModels && opts.judgeModels.length > 0) ||
-      !!process.env["OXAGEN_JUDGE_PANEL"];
-    const verdict = usePanel
-      ? await judgePanel(judgeInput, opts.ai, opts.judgeModels)
-      : await judgeCompleteness(judgeInput, opts.ai);
+
+    // F3: Ladder fast-path: check if we should skip the judge entirely
+    // based on measured signals (oracle state, test outcomes, diff size).
+    let verdict: typeof judgeRounds[0] | undefined;
+    if (ladderEnabled) {
+      const signals = buildLadderSignals({
+        tracker,
+        diff: result.diff,
+        filesTouchedCount: filesTouched.size,
+        stepsUsed: result.steps,
+      });
+      const decision = decideLadderPath({
+        signals,
+        currentRung: Math.min(round, 3) as 0 | 1 | 2 | 3,
+        ladderEnabled,
+      });
+
+      if (decision && decision.action === "submit-fast") {
+        // Fast-path: oracle flipped + tests green + diff within budget.
+        // Skip judge and treat as complete.
+        verdict = {
+          complete: true,
+          confidence: 95,
+          findings: [],
+          remainingWork: [],
+          model: "ladder/fast-path",
+          usage: emptyUsage(),
+          fallback: false,
+          reasoning: `Ladder fast-path: oracle ${signals.oracle}, tests ${signals.touchedTestsGreen ? "green" : "red"}, diff ${signals.diffLines}/${process.env["OXAGEN_DIFF_BUDGET"] ?? 120} lines`,
+        };
+        opts.onStage?.({
+          kind: "judge",
+          label: "ladder fast-path: skipped judge",
+          detail: `oracle ${signals.oracle}, diff ${signals.diffLines} lines`,
+        });
+      }
+    }
+
+    // Standard judge path (if not fast-path skipped).
+    if (!verdict) {
+      const judgeInput = {
+        request: opts.prompt,
+        response: result.text,
+        filesTouched: [...filesTouched],
+        commandsRun,
+        // Ground-truth evidence: the real diff + the outputs of commands run
+        // this round (test results are decisive for completeness).
+        diff: result.diff,
+        commandOutputs: roundCommandOutputs,
+        steps: result.steps,
+        executorModel: routed.model,
+        signal: opts.signal,
+      };
+      const usePanel =
+        (opts.judgeModels && opts.judgeModels.length > 0) ||
+        !!process.env["OXAGEN_JUDGE_PANEL"];
+      verdict = usePanel
+        ? await judgePanel(judgeInput, opts.ai, opts.judgeModels)
+        : await judgeCompleteness(judgeInput, opts.ai);
+      opts.onStage?.({
+        kind: "judge",
+        label: verdict.complete
+          ? `judged complete · ${verdict.confidence}% confident`
+          : `judged INCOMPLETE · ${verdict.findings.length} gap(s)`,
+        detail: `advisor: ${verdict.model.split("/").pop()}${verdict.fallback ? " (heuristic)" : ""}`,
+      });
+    }
+
     phases.push(phaseStat("judge", round, judgeStart, verdict.model, verdict.usage));
     usage = mergeUsage(usage, verdict.usage);
     judgeRounds.push(verdict);
-    opts.onStage?.({
-      kind: "judge",
-      label: verdict.complete
-        ? `judged complete · ${verdict.confidence}% confident`
-        : `judged INCOMPLETE · ${verdict.findings.length} gap(s)`,
-      detail: `advisor: ${verdict.model.split("/").pop()}${verdict.fallback ? " (heuristic)" : ""}`,
-    });
 
     const canRevise =
       !verdict.complete &&
