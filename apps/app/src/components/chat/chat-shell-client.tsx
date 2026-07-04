@@ -404,6 +404,25 @@ export function ChatShellClient({
                 if (!raw) return [];
                 try { return JSON.parse(raw) as string[]; } catch { return []; }
               })(),
+              // Forward attachment IDS ONLY — never the base64 bytes or the
+              // full conversationAssetItem the composer persisted — the stream
+              // route re-resolves each publicId server-side (ownership +
+              // status='ready' + kind allowlist) before building image parts.
+              // Keeps the 32 KiB BodySchema `content` cap meaningful (the
+              // four-store rule: refs-by-publicId through the wire, bytes stay
+              // in blob storage).
+              attachments: (() => {
+                const raw = formData.get("attachments") as string | null;
+                if (!raw) return [];
+                try {
+                  const parsed = JSON.parse(raw) as Array<{ publicId?: unknown }>;
+                  return parsed
+                    .filter((a) => typeof a.publicId === "string")
+                    .map((a) => ({ publicId: a.publicId as string }));
+                } catch {
+                  return [];
+                }
+              })(),
               // Forward page context so the route can inject the page_form_fill tool.
               pageContext: pageContextRef.current ?? null,
             }),
@@ -975,6 +994,8 @@ export function ChatShellClient({
         onInterrupt={handleInterrupt}
         initialModelState={initialModelState}
         availableMcpServers={availableMcpServers}
+        orgSlug={orgSlug}
+        workspaceSlug={workspaceSlug}
       />
     </div>
   );
