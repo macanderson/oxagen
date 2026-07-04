@@ -22,6 +22,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   "agent.sandbox.exec": () => import("./agent.sandbox.exec"),
   "agent.sandbox.snapshot": () => import("./agent.sandbox.snapshot"),
   "agent.sandbox.stop": () => import("./agent.sandbox.stop"),
+  "agent.sandbox.files.list": () => import("./agent.sandbox.files.list"),
   // Browser automation inside a durable session — all seven thin wrappers live
   // in one module (browser.ts) that drives `browserctl` via execInSession.
   "browser.navigate": () => import("./browser"),
