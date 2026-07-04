@@ -25,12 +25,14 @@ const webChild = {
   runId: "run_1",
   capabilityName: "web.search",
   status: "completed",
+  summary: "1 result",
   input: { query: "USS Nautilus crew" },
   output: {
     results: [
       { title: "Crew roster", url: "https://x/crew", content: "The first crew served under Wilkinson." },
     ],
   },
+  outputBytes: 94,
   errorReason: null,
 };
 
@@ -60,7 +62,7 @@ describe("buildLogMarkdown", () => {
       fanoutId: "f",
       status: "partial",
       children: [
-        { runId: "r2", capabilityName: "graph.node.upsert", status: "failed", input: { label: "X" }, output: null, errorReason: "neo4j down" },
+        { runId: "r2", capabilityName: "graph.node.upsert", status: "failed", summary: "failed", input: { label: "X" }, output: null, outputBytes: 0, errorReason: "neo4j down" },
       ],
       timeline: [],
     });
