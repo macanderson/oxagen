@@ -382,6 +382,20 @@ export async function configLint(ctx: WorkspaceConfigCtx = {}): Promise<void> {
   if (!ok) process.exitCode = 1;
 }
 
+/**
+ * `oxagen config doctor` — scan the four-tier chain (repo ▸ workspace ▸ user ▸
+ * org managed): confirm which tiers are active, flag invalid files, values
+ * silently overridden by a locked tier, env shadowing, and recommend
+ * customizations. Same engine as the REPL's `/config doctor`.
+ */
+export async function configDoctor(ctx: WorkspaceConfigCtx = {}): Promise<void> {
+  const cwd = ctx.cwd ?? process.cwd();
+  const { runConfigDoctor, formatDoctorReport } = await import("../config/doctor.js");
+  const report = runConfigDoctor(cwd, ctx);
+  console.log(formatDoctorReport(report));
+  if (report.findings.some((f) => f.severity === "error")) process.exitCode = 1;
+}
+
 interface ConfigPullResponse {
   userConfig?: WorkspaceConfig;
   managedConfig?: WorkspaceConfig;

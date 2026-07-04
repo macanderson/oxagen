@@ -128,6 +128,55 @@ export function setPath(
   return setValueAtPath(scope, dottedPath, parseCliValue(rawValue), ctx);
 }
 
+export interface UnsetPathResult {
+  path: string;
+  /** False when the dotted path wasn't set in that scope file to begin with. */
+  removed: boolean;
+}
+
+/**
+ * Delete the value at a dotted path from one scope file, pruning any parent
+ * objects the removal leaves empty (so an unset never strands `{"vcs":{}}`
+ * husks in the file). A value at a lower-authority tier that this one was
+ * shadowing simply resurfaces on the next resolve — that's the tiering
+ * working, not a bug.
+ */
+export function unsetPath(scope: ConfigScope, dottedPath: string, ctx: ConfigWriteCtx = {}): UnsetPathResult {
+  assertWritableScope(scope);
+  const path = scopePath(scope, ctx);
+  const doc = readScopeDoc(path);
+  const segments = dottedPath.split(".");
+  if (segments.length === 0 || segments.some((s) => s.length === 0)) {
+    throw new Error(`invalid dotted path: "${dottedPath}"`);
+  }
+  // Walk down to the leaf's parent, remembering the chain for the prune pass.
+  const chain: { parent: Record<string, unknown>; key: string }[] = [];
+  let cur: Record<string, unknown> = doc;
+  for (let i = 0; i < segments.length - 1; i++) {
+    const key = segments[i]!;
+    const next = cur[key];
+    if (next === undefined || next === null || typeof next !== "object" || Array.isArray(next)) {
+      return { path, removed: false };
+    }
+    chain.push({ parent: cur, key });
+    cur = next as Record<string, unknown>;
+  }
+  const leafKey = segments[segments.length - 1]!;
+  if (!(leafKey in cur)) return { path, removed: false };
+  delete cur[leafKey];
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const { parent, key } = chain[i]!;
+    const child = parent[key];
+    if (child && typeof child === "object" && !Array.isArray(child) && Object.keys(child).length === 0) {
+      delete parent[key];
+    } else {
+      break;
+    }
+  }
+  writeConfigScopeDoc(path, doc);
+  return { path, removed: true };
+}
+
 interface RawLanguageEntry {
   voice?: LanguageVoice;
   items?: LanguageItem[];

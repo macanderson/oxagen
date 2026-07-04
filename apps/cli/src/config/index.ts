@@ -89,6 +89,7 @@ export {
   writeConfigScopeDoc,
   setValueAtPath,
   setPath,
+  unsetPath,
   addLanguageItem,
   removeItem,
   setVision,
@@ -97,6 +98,27 @@ export {
   writeConsolidated,
   type ConfigWriteCtx,
   type RemoveItemResult,
+  type UnsetPathResult,
 } from "./write.js";
 
 export { buildConsolidatedIndex, type BuildIndexOptions } from "./indexer.js";
+
+export {
+  buildConfigRows,
+  getValueAtPath,
+  formatRowValue,
+  SUGGESTED_PATHS,
+  type ConfigPanelRow,
+  type ConfigRowKind,
+} from "./panel-model.js";
+
+export {
+  runConfigDoctor,
+  formatDoctorReport,
+  flattenScopePaths,
+  type DoctorReport,
+  type DoctorFinding,
+  type DoctorSeverity,
+  type DoctorTier,
+  type DoctorOptions,
+} from "./doctor.js";
