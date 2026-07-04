@@ -1370,9 +1370,9 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
-        "e2e": false,
-        "docs": false
+        "unit": true,
+        "e2e": true,
+        "docs": true
       }
     },
     {
