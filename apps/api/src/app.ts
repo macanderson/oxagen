@@ -237,6 +237,9 @@ import { auditLogQueryRoute } from "./routes/v1/audit.log.query";
 import { agentLlmRoute } from "./routes/v1/agent.llm";
 import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
 import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
+import { a2aWellKnownRoute } from "./routes/a2a/well-known";
+import { a2aRpcRoute } from "./routes/a2a/rpc";
+import { a2aCardGetRoute } from "./routes/v1/a2a.card.get";
 
 export type AppEnv = {
   Variables: {
@@ -270,6 +273,11 @@ app.route("/webhooks", webhookRoute);
 // Inngest cloud polls /api/inngest for the function manifest; signing-key
 // verification is enforced inside the inngest/hono serve handler.
 app.route("/api/inngest", inngestRoute);
+
+// A2A (Agent2Agent) protocol discovery document — public, optional auth. A
+// valid workspace API key yields the full workspace card; anonymous callers get
+// a base card. Mounted BEFORE the auth-gated groups so discovery never 401s.
+app.route("/.well-known", a2aWellKnownRoute);
 
 // Public CLI token exchange — no auth middleware (the code + PKCE verifier are
 // the security boundary; RFC 8252 + RFC 7636 S256). Must be mounted BEFORE the
@@ -554,6 +562,9 @@ orgScoped.route("/graph/stats", graphStatsRoute);
 orgScoped.route("/ontology/query", ontologyQueryRoute);
 orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);
 orgScoped.route("/audit/log/query", auditLogQueryRoute);
+// A2A Agent Card management read (metered, IAM-gated) — the governed parity
+// surface for the card; the transport itself lives at /a2a + /.well-known.
+orgScoped.route("/a2a/card", a2aCardGetRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);
 
 // OpenAI-compatible agent LLM proxy (ADR-019 B4): the CLI routes ALL model
@@ -566,6 +577,15 @@ const agentLlmScoped = new Hono<AppEnv>();
 agentLlmScoped.use("*", authMiddleware);
 agentLlmScoped.route("/", agentLlmRoute);
 app.route("/v1/agent/llm", agentLlmScoped);
+
+// A2A (Agent2Agent) protocol JSON-RPC transport. Like /mcp, it is a transport,
+// not a per-capability surface: the workspace API key (Bearer) carries org+
+// workspace scope, so it sits OUTSIDE the /:org/:workspace path group and is
+// gated by authMiddleware only. Full endpoint: POST /a2a.
+const a2aScoped = new Hono<AppEnv>();
+a2aScoped.use("*", authMiddleware);
+a2aScoped.route("/", a2aRpcRoute);
+app.route("/a2a", a2aScoped);
 
 // Public OAuth callback — HMAC-verified state param is the security boundary.
 // Must NOT be inside the workspace-scoped group (user has no session when GitHub redirects).

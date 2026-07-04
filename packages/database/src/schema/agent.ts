@@ -482,3 +482,43 @@ export const agentPlans = agentSchema.table(
     statusCheck: check("agent_plans_status_check", sql`${t.status} IN ('draft', 'awaiting_approval', 'approved', 'denied', 'amended', 'executing', 'completed')`),
   }),
 );
+
+// A2A (Agent2Agent) protocol tasks — durable state for the A2A transport
+// surface (POST /a2a JSON-RPC, alongside /mcp). One row per A2A task. The
+// external `public_id` (a2a_...) is the opaque `taskId` A2A clients see; the
+// caller-supplied A2A `contextId` groups tasks in one multi-turn conversation.
+// State uses the A2A lowercase wire strings (submitted/working/…); the CHECK
+// mirrors the A2A_TASK_STATES list. message_history and artifacts are stored as
+// the exact A2A wire JSON so tasks/get can round-trip them without translation.
+export const a2aTasks = agentSchema.table(
+  "a2a_tasks",
+  {
+    ...idMixin("a2a"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    ...softDeleteMixin(),
+    // A2A conversation-grouping id (opaque; caller-supplied or server-minted).
+    contextId: text("context_id").notNull(),
+    // A2A task lifecycle state (lowercase wire string). DEFAULT 'submitted'.
+    state: text("state").notNull().default("submitted"),
+    // The A2A Message[] history (user turn + agent reply) as wire JSON.
+    messageHistory: jsonb("message_history").notNull().default(sql`'[]'::jsonb`),
+    // The A2A Artifact[] produced by the agent as wire JSON.
+    artifacts: jsonb("artifacts").notNull().default(sql`'[]'::jsonb`),
+    // The current TaskStatus.message (agent-facing status text), if any.
+    statusMessage: jsonb("status_message"),
+    // Terminal error detail for failed/rejected tasks (null otherwise).
+    errorMessage: text("error_message"),
+    // Arbitrary caller/agent metadata carried on the task.
+    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+  },
+  (t) => ({
+    orgIdx: index("a2a_tasks_org_idx").on(t.orgId, t.workspaceId),
+    contextIdx: index("a2a_tasks_context_idx").on(t.workspaceId, t.contextId),
+    stateIdx: index("a2a_tasks_state_idx").on(t.orgId, t.workspaceId, t.state),
+    stateCheck: check(
+      "a2a_tasks_state_check",
+      sql`${t.state} IN ('submitted','working','input-required','auth-required','completed','canceled','failed','rejected','unknown')`,
+    ),
+  }),
+);

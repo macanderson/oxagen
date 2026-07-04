@@ -35,6 +35,7 @@ import { agentDefinitionUpdate } from "./agent.definition.update";
 import { agentDefinitionPublish } from "./agent.definition.publish";
 import { agentDefinitionGet } from "./agent.definition.get";
 import { agentDefinitionList } from "./agent.definition.list";
+import { a2aCardGet } from "./a2a.card.get";
 import { agentDeploy } from "./agent.deploy";
 import { agentTriggerCreate } from "./agent.trigger.create";
 import { agentTriggerUpdate } from "./agent.trigger.update";
@@ -912,6 +913,7 @@ export const contracts = [
   secretExport,
   agentMemoryPolicyRead,
   agentMemoryPolicyWrite,
+  a2aCardGet,
   evalDatasetCreate,
   evalDatasetList,
   evalDatasetGet,

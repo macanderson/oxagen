@@ -3,6 +3,7 @@
 // is the single import that pulls them all in. Run `pnpm check:manifest`
 // (or the gate) to regenerate after adding or removing a contract.
 
+import "./contracts/a2a.card.get";
 import "./contracts/agent.approval.resolve";
 import "./contracts/agent.code.execute";
 import "./contracts/agent.compose";

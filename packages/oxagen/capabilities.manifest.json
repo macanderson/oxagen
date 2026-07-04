@@ -1,6 +1,24 @@
 {
   "capabilities": [
     {
+      "name": "a2a.card.get",
+      "file": "a2a.card.get.ts",
+      "domain": "a2a",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "agent.approval.resolve",
       "file": "agent.approval.resolve.ts",
       "domain": "agent",

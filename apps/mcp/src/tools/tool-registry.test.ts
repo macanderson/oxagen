@@ -16,6 +16,7 @@ import { contracts } from "@oxagen/oxagen/contracts";
 
 // ── Import all tool metadata ──────────────────────────────────────────────────
 
+import { metadata as a2aCardGetMetadata } from "./a2a.card.get";
 import { metadata as apiKeyCreateMetadata } from "./api.key.create";
 import { metadata as apiKeyRevokeMetadata } from "./api.key.revoke";
 import { metadata as agentApprovalResolveMetadata } from "./agent.approval.resolve";
@@ -295,6 +296,7 @@ import { metadata as evalRunGetMetadata } from "./eval.run.get";
 // ── Build the registered tool name list ───────────────────────────────────────
 
 const allToolMetadata = [
+  a2aCardGetMetadata,
   apiKeyCreateMetadata,
   apiKeyRevokeMetadata,
   agentApprovalResolveMetadata,
