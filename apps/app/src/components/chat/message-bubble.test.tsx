@@ -88,6 +88,22 @@ vi.mock("./message-footer", () => ({
   MessageFooter: () => <div data-testid="message-footer" />,
 }));
 
+vi.mock("./registry-components/image-preview", () => ({
+  default: ({ url, alt }: { url?: string; alt: string }) => (
+    <div data-testid="image-preview" data-url={url}>
+      {alt}
+    </div>
+  ),
+}));
+
+vi.mock("./registry-components/file-attachment", () => ({
+  default: ({ url, name, kind }: { url: string; name: string; kind: string }) => (
+    <div data-testid="file-attachment" data-url={url} data-kind={kind}>
+      {name}
+    </div>
+  ),
+}));
+
 describe("MessageBubble", () => {
   const baseMessage = {
     publicId: "msg_1",
@@ -319,5 +335,75 @@ describe("MessageBubble", () => {
       </MessageBubble>,
     );
     expect(screen.getByTestId("child-slot")).toBeInTheDocument();
+  });
+
+  it("does not render the attachments strip when the message has none", async () => {
+    const { MessageBubble } = await import("./message-bubble");
+    render(<MessageBubble message={baseMessage} />);
+    expect(screen.queryByTestId("message-attachments")).not.toBeInTheDocument();
+  });
+
+  it("renders an image attachment via ImagePreview, served through /api/v1/assets", async () => {
+    const { MessageBubble } = await import("./message-bubble");
+    render(
+      <MessageBubble
+        message={{
+          ...baseMessage,
+          attachments: [
+            {
+              publicId: "gen_abc",
+              kind: "image",
+              name: "screenshot.png",
+              mimeType: "image/png",
+              url: "/api/v1/assets/gen_abc",
+            },
+          ],
+        }}
+      />,
+    );
+    const strip = screen.getByTestId("message-attachments");
+    expect(strip).toBeInTheDocument();
+    const preview = screen.getByTestId("image-preview");
+    expect(preview).toHaveAttribute("data-url", "/api/v1/assets/gen_abc");
+    expect(preview).toHaveTextContent("screenshot.png");
+  });
+
+  it("renders a non-image attachment via FileAttachment", async () => {
+    const { MessageBubble } = await import("./message-bubble");
+    render(
+      <MessageBubble
+        message={{
+          ...baseMessage,
+          attachments: [
+            {
+              publicId: "gen_doc",
+              kind: "document",
+              name: "spec.pdf",
+              mimeType: "application/pdf",
+              url: "/api/v1/assets/gen_doc",
+            },
+          ],
+        }}
+      />,
+    );
+    const fileCard = screen.getByTestId("file-attachment");
+    expect(fileCard).toHaveAttribute("data-kind", "document");
+    expect(fileCard).toHaveTextContent("spec.pdf");
+  });
+
+  it("renders multiple attachments in one strip", async () => {
+    const { MessageBubble } = await import("./message-bubble");
+    render(
+      <MessageBubble
+        message={{
+          ...baseMessage,
+          attachments: [
+            { publicId: "gen_1", kind: "image", name: "a.png", mimeType: "image/png", url: "/api/v1/assets/gen_1" },
+            { publicId: "gen_2", kind: "image", name: "b.png", mimeType: "image/png", url: "/api/v1/assets/gen_2" },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getAllByTestId("image-preview")).toHaveLength(2);
   });
 });

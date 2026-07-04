@@ -141,4 +141,58 @@ describe("walkActiveBranch", () => {
     const result = walkActiveBranch([m1], "m1");
     expect(result[0]?.contentBlocks).toBeUndefined();
   });
+
+  // 9. metadata.attachments — user-turn attachment refs
+  it("maps metadata.attachments to ChatMessage.attachments", () => {
+    const attachment = {
+      publicId: "gen_abc",
+      kind: "image",
+      name: "photo.png",
+      mimeType: "image/png",
+      url: "/api/v1/assets/gen_abc",
+    };
+    const m1 = makeRow({
+      id: "m1",
+      parentMessageId: null,
+      metadata: { attachments: [attachment] },
+    });
+
+    const result = walkActiveBranch([m1], "m1");
+    expect(result[0]?.attachments).toEqual([attachment]);
+  });
+
+  it("returns undefined attachments when metadata has no attachments key", () => {
+    const m1 = makeRow({ id: "m1", parentMessageId: null, metadata: {} });
+    const result = walkActiveBranch([m1], "m1");
+    expect(result[0]?.attachments).toBeUndefined();
+  });
+
+  it("returns undefined attachments when metadata.attachments is an empty array", () => {
+    const m1 = makeRow({ id: "m1", parentMessageId: null, metadata: { attachments: [] } });
+    const result = walkActiveBranch([m1], "m1");
+    expect(result[0]?.attachments).toBeUndefined();
+  });
+
+  it("filters out malformed attachment entries instead of throwing", () => {
+    const good = {
+      publicId: "gen_ok",
+      kind: "image",
+      name: "ok.png",
+      mimeType: "image/png",
+      url: "/api/v1/assets/gen_ok",
+    };
+    const m1 = makeRow({
+      id: "m1",
+      parentMessageId: null,
+      metadata: { attachments: [good, { publicId: "gen_bad" }, "not-an-object", null] },
+    });
+    const result = walkActiveBranch([m1], "m1");
+    expect(result[0]?.attachments).toEqual([good]);
+  });
+
+  it("returns undefined attachments when metadata is null", () => {
+    const m1 = makeRow({ id: "m1", parentMessageId: null, metadata: null as never });
+    const result = walkActiveBranch([m1], "m1");
+    expect(result[0]?.attachments).toBeUndefined();
+  });
 });
