@@ -48,14 +48,14 @@ function adaptStep(inngestStep: {
  *    Inngest's native NonRetriableError for runtime instanceof checks.
  */
 function wrapHandler(handler: DurableFunctionHandler) {
-  return async (ctx: { event: { data: unknown; name?: string }; step: Parameters<typeof adaptStep>[0] }) => {
+  return async (ctx: { event: { data: unknown; name?: string }; step: Parameters<typeof adaptStep>[0]; runId?: string }) => {
     const step = adaptStep(ctx.step);
     const event: EventPayload = {
       name: (ctx.event as { name?: string }).name ?? "",
       data: (ctx.event.data ?? {}) as Record<string, unknown>,
     };
     try {
-      return await handler({ event, step });
+      return await handler({ event, step, runId: ctx.runId });
     } catch (err: unknown) {
       if (
         err !== null &&

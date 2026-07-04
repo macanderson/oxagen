@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
   generateObjectFor: vi.fn(),
   insertToolInvocation: vi.fn(),
   inngestCreateFunction: vi.fn(),
+  claimExecutionStep: vi.fn(),
+  renewExecutionStepLease: vi.fn(),
+  startLeaseRenewal: vi.fn(),
 }));
 
 const MOCK_OUTPUT = { summary: "Tim Cook is the CEO of Apple", data: { ceo: "Tim Cook" } };
@@ -70,6 +73,12 @@ vi.mock("../inngest", () => ({
   },
 }));
 
+vi.mock("../lease", () => ({
+  claimExecutionStep: mocks.claimExecutionStep,
+  renewExecutionStepLease: mocks.renewExecutionStepLease,
+  startLeaseRenewal: mocks.startLeaseRenewal,
+}));
+
 vi.mock("../logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -117,9 +126,49 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
     mocks.dbUpdate.mockReturnValue({ set: mocks.dbUpdateSet });
     mocks.generateObjectFor.mockResolvedValue({ object: MOCK_OUTPUT });
     mocks.insertToolInvocation.mockResolvedValue(undefined);
+    mocks.claimExecutionStep.mockResolvedValue({ id: "step-uuid-1", attempts: 1 });
+    mocks.renewExecutionStepLease.mockResolvedValue(undefined);
+    mocks.startLeaseRenewal.mockReturnValue(() => {});
   });
 
-  it("marks step running, calls generateObjectFor, marks step completed", async () => {
+  it("skips without executing when the step is not claimable", async () => {
+    mocks.claimExecutionStep.mockResolvedValue(null);
+
+    const result = (await capturedHandler!({
+      event: BASE_EVENT,
+      step: makeStep(),
+    })) as Record<string, unknown>;
+
+    expect(result.status).toBe("skipped");
+    expect(mocks.generateObjectFor).not.toHaveBeenCalled();
+  });
+
+  it("claims the step (attempts + lease) instead of a blind mark-running", async () => {
+    await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
+    expect(mocks.claimExecutionStep).toHaveBeenCalledWith(
+      expect.objectContaining({ stepId: "step-uuid-1", orgId: "org-1" }),
+    );
+  });
+
+  it("renews the lease around the LLM call and stops the renewal after", async () => {
+    const stopRenewal = vi.fn();
+    mocks.startLeaseRenewal.mockReturnValue(stopRenewal);
+
+    await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
+
+    expect(mocks.startLeaseRenewal).toHaveBeenCalledTimes(1);
+    expect(stopRenewal).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the lease on the terminal completed write", async () => {
+    await capturedHandler!({ event: BASE_EVENT, step: makeStep() });
+    const setCalls = mocks.dbUpdateSet.mock.calls as Array<[Record<string, unknown>]>;
+    const completedCall = setCalls.find(([arg]) => arg.status === "completed" && "outputPayload" in arg);
+    expect(completedCall).toBeTruthy();
+    expect(completedCall![0]).toHaveProperty("leaseExpiresAt", null);
+  });
+
+  it("marks step running via claim, calls generateObjectFor, marks step completed", async () => {
     const result = (await capturedHandler!({
       event: BASE_EVENT,
       step: makeStep(),
