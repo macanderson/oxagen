@@ -1306,6 +1306,31 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_CLI_MOTION: {
+    group: "CLI",
+    description:
+      "Motion mode for the CLI TUI animations: full | reduced | off. Overrides the persisted " +
+      "`motion` config; unset falls back to config, then 'full'. (OXAGEN_CLI_FUN=0 is a legacy " +
+      "alias that maps to 'reduced'.)",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "full",
+  },
+  OXAGEN_PLAN_TIMEOUT_MS: {
+    group: "CLI",
+    description:
+      "Wall-clock timeout in milliseconds for a single interactive plan turn before it aborts. " +
+      "Unset uses the built-in default; a non-finite value is ignored.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "60000",
+  },
   OXAGEN_CLI_FUN: {
     group: "CLI",
     description:
@@ -1573,6 +1598,32 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_PLAN_TIMEOUT_MS: {
+    group: "CLI",
+    description:
+      "Wall-clock bound in ms on the REPL's per-turn planner call (default 60000). Past the " +
+      "bound the turn degrades to a router-derived single-task plan instead of hanging. " +
+      "Set to '0' to disable the bound.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "60000",
+  },
+  OXAGEN_CLI_MOTION: {
+    group: "CLI",
+    description:
+      "Persisted animation level for the CLI TUI (`/motion full|reduced|off`): full animates " +
+      "everything; reduced drops decorative animation (invaders duel, prompt border flash); " +
+      "off disables all animation including the thinking indicator.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "full",
+  },
   OXAGEN_BEST_OF_N_PIPELINE: {
     group: "CLI",
     description:
@@ -1602,6 +1653,20 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
+  },
+  OXAGEN_BEST_OF_N_MODE: {
+    group: "CLI",
+    description:
+      "Set to 'fork' or 'independent' to select best-of-N mode. Fork mode snapshots the " +
+      "trunk conversation at the diagnosis point and runs cache-forked tails per hypothesis, " +
+      "reusing the trunk's investigation at ~10× input discount via prompt caching. " +
+      "Independent mode runs N complete independent pipelines. Default is 'independent'.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "independent",
   },
   OXAGEN_LOCAL: {
     group: "CLI",

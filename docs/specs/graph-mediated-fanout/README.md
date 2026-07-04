@@ -142,8 +142,9 @@ rails (`recordExecutionInGraph`, `agent.sync-execution-to-graph`) key off an
 mapped through `originLabelFor` — a subagent run has neither today, and
 inventing an origin shape ad hoc would bake wrong ontology semantics into the
 graph. Projection of child results as `:Execution` nodes (with
-`properties.fanoutId`/`runId` and the §3 summary) moves to the Phase 2 spec,
-where the peer-read model that consumes it is designed. It contributes nothing
+`properties.fanoutId`/`runId` and the §3 summary) moves to the Phase 2 spec
+(`docs/specs/graph-mediated-fanout-phase2/`), where the peer-read model that
+consumes it is designed. It contributes nothing
 to the Phase 1 token/latency win — nothing on the hot path references it.
 
 ### 5. Fewer aggregate polls

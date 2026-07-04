@@ -199,6 +199,7 @@ function prLabel(prNumber: number | null | undefined): string {
 const PHASE_TITLE: Record<string, string> = {
   idle: "idle",
   evaluate: "evaluate",
+  plan: "plan",
   enhance: "enhance",
   route: "route",
   execute: "execute",
@@ -209,6 +210,25 @@ const PHASE_TITLE: Record<string, string> = {
 
 /** How many panels wide the dock is — kept as one constant so the width math and the JSX below can't drift apart. */
 const DOCK_PANEL_COUNT = 5;
+
+/** Column gap between dock panels. */
+const DOCK_PANEL_GAP = 1;
+
+/**
+ * Width of one dock panel such that all DOCK_PANEL_COUNT panels + gaps always
+ * fit inside `cols`. This must never round up past the terminal width: the
+ * dock row has no shrink slack, so an overflowing row is clipped at the screen
+ * edge and the right-most panel loses its right border (regression when the
+ * dock grew 4 → 5 panels with a 16-col floor: 5×16+4 = 84 > an 80-col
+ * terminal). The floor of 4 only keeps the Box border-capable on absurdly
+ * narrow screens; content readability is already gone well above that.
+ */
+export function dockPanelWidth(cols: number): number {
+  return Math.max(
+    4,
+    Math.floor((cols - DOCK_PANEL_GAP * (DOCK_PANEL_COUNT - 1)) / DOCK_PANEL_COUNT),
+  );
+}
 
 export function TelemetryDock({
   telemetry,
@@ -228,13 +248,16 @@ export function TelemetryDock({
   cols: number;
   repo: RepoInfo;
 }): React.ReactElement {
-  const gap = 1;
-  const panelWidth = Math.max(16, Math.floor((cols - gap * (DOCK_PANEL_COUNT - 1)) / DOCK_PANEL_COUNT));
+  const gap = DOCK_PANEL_GAP;
+  const panelWidth = dockPanelWidth(cols);
 
   const { models, turn, tools } = telemetry;
   const elapsedMs = turn.turnStartedAt != null ? now - turn.turnStartedAt : 0;
   const elapsedSec = Math.max(1, elapsedMs / 1000);
-  const tokPerSec = isStreaming ? Math.round(metrics.turnTokensOut / elapsedSec) : 0;
+  // Include the in-flight stream's live estimate so tok/s moves DURING a call
+  // instead of reading 0 until the first usage settles (see metrics.ts).
+  const liveTokensOut = metrics.turnTokensOut + metrics.streamTokensOut;
+  const tokPerSec = isStreaming ? Math.round(liveTokensOut / elapsedSec) : 0;
 
   const toolCell = (name: string): string => `${name} ${tools[name] ?? 0}`;
 
@@ -278,7 +301,7 @@ export function TelemetryDock({
         <Text wrap="truncate-end">
           <Text color={theme.cyan}>{"↑"}{humanizeTokens(metrics.sessionTokensIn)}</Text>
           {"  "}
-          <Text color={GREEN}>{"↓"}{humanizeTokens(metrics.sessionTokensOut)}</Text>
+          <Text color={GREEN}>{"↓"}{humanizeTokens(metrics.sessionTokensOut + metrics.streamTokensOut)}</Text>
         </Text>
         <Text wrap="truncate-end">
           <Text dimColor>cache </Text>

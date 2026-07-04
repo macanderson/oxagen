@@ -320,7 +320,11 @@ export function AgentSidebar({
     <Box
       flexDirection="column"
       marginLeft={1}
-      flexShrink={1}
+      // Never let flex negative space eat the sidebar: the panels are a fixed
+      // PANEL_WIDTH, so any shrink clips their shared right edge and the
+      // right-most border vanishes. Wide transcript content must shrink the
+      // transcript column (minWidth={0} there), not this dock.
+      flexShrink={0}
       gap={1}
       {...(maxRows != null ? { height: maxRows, overflow: "hidden" } : {})}
     >

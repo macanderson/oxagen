@@ -187,6 +187,37 @@ describe("telemetryReducer", () => {
     expect(next.tools).toEqual(seeded.tools);
   });
 
+  it("seed-models populates the MODELS readout before the first turn", () => {
+    const next = telemetryReducer(INITIAL_TELEMETRY_STATE, {
+      type: "seed-models",
+      models: { planner: "local", worker: "anthropic/claude-sonnet-5", judge: "anthropic/claude-fable-5" },
+    });
+    expect(next.models).toEqual({
+      planner: "local",
+      worker: "anthropic/claude-sonnet-5",
+      judge: "anthropic/claude-fable-5",
+    });
+    expect(next.turn).toEqual(INITIAL_TELEMETRY_STATE.turn);
+  });
+
+  it("seed-models overwrites prior slugs (a /model switch re-seeds worker + judge), and stage events still overwrite seeds with actuals", () => {
+    let state = telemetryReducer(INITIAL_TELEMETRY_STATE, {
+      type: "seed-models",
+      models: { worker: "anthropic/claude-sonnet-5", judge: "anthropic/claude-fable-5" },
+    });
+    state = telemetryReducer(state, {
+      type: "seed-models",
+      models: { worker: "openai/gpt-5.5-pro", judge: "anthropic/claude-fable-5" },
+    });
+    expect(state.models.worker).toBe("openai/gpt-5.5-pro");
+
+    // The engine reports the routed worker mid-turn — actuals win over seeds.
+    const stage: StageEvent = { kind: "route", label: "Sonnet · balanced (anthropic/claude-sonnet-5)" };
+    state = telemetryReducer(state, { type: "stage", stage });
+    expect(state.models.worker).toBe("anthropic/claude-sonnet-5");
+    expect(state.models.judge).toBe("anthropic/claude-fable-5"); // untouched
+  });
+
   it("is a pure function — never mutates the input state object", () => {
     const state: TelemetryState = {
       models: {},

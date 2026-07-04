@@ -13,7 +13,11 @@ import { render } from "ink-testing-library";
 
 // `runTurn` is never reached by `/mouse` (it returns before any turn starts),
 // but the module must still resolve for `ReplApp` to mount.
-vi.mock("@oxagen/agent-engine", () => ({
+vi.mock("@oxagen/agent-engine", async (importOriginal) => ({
+  // Real module first: ReplApp reaches beyond runTurn (e.g. model-roles.ts
+  // resolves the judge via pickAdvisorModel at mount) — a bare factory
+  // mock crashes the very first render with undefined exports.
+  ...(await importOriginal<typeof import("@oxagen/agent-engine")>()),
   runTurn: () =>
     new Promise(() => {
       /* never settles — no test here exercises a real turn */

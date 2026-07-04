@@ -23,7 +23,7 @@ import React, { useState, useCallback, useRef, useEffect, useReducer } from "rea
 import type { ModelMessage } from "ai";
 import { readFile } from "node:fs/promises";
 import { theme } from "../tui/theme.js";
-import { runTurn, type AgentAi } from "@oxagen/agent-engine";
+import { runTurn, type AgentAi, type StageEvent } from "@oxagen/agent-engine";
 import {
   createCwdWorkspace,
   createGatedWorkspace,
@@ -56,6 +56,10 @@ import { buildProgram, describeCliCommands } from "../program.js";
 import { isProjectInitialized, initializeProject } from "../project/init.js";
 import { openSessionMemory, type SessionMemory } from "../agent/memory.js";
 import { openFleetMemory } from "../agent/fleet/memory.js";
+import { openPlanStore } from "../agent/fleet/store.js";
+import { loadAgents } from "../agents/loader.js";
+import { planReplTurn, fallbackPlan } from "./plan-turn.js";
+import { runFleetTurn } from "./fleet-turn.js";
 import { agentRegistry, type AgentHandle } from "../agent/agent-registry.js";
 import { taskRegistry } from "../agent/task-registry.js";
 import { isSubagentDispatch, subagentInfo } from "../agent/tool-formatter.js";
@@ -75,7 +79,7 @@ import {
 import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
-import { readConfig } from "../lib/config.js";
+import { readConfig, getMotionMode, setMotionMode, type MotionMode } from "../lib/config.js";
 import { debugLog } from "../lib/debug-log.js";
 import { formatToolArgs } from "../agent/tool-formatter.js";
 import {
@@ -105,7 +109,8 @@ import {
   type ScrollCtx,
 } from "./scroll.js";
 import { telemetryReducer, INITIAL_TELEMETRY_STATE } from "./telemetry.js";
-import { borderPhaseFor, borderColorFor, RAINBOW_FLASH_INTERVAL_MS } from "./border-phase.js";
+import { resolveModelRoles } from "./model-roles.js";
+import { borderPhaseFor, promptBorderColorFor, RAINBOW_FLASH_INTERVAL_MS } from "./border-phase.js";
 import { inputContentRow } from "./mouse-select.js";
 import { HeaderBar, TranscriptViewport, TelemetryDock, formatElapsed } from "./fullscreen-chrome.js";
 import { useMouseWheel } from "./use-mouse-wheel.js";
@@ -351,6 +356,10 @@ export function ReplApp({
   );
   // Project rules (CLAUDE.md/AGENTS.md) loaded once for the session.
   const projectContextRef = useRef(loadProjectContext(cwd));
+  // Named agent roster (the per-turn planner assigns tasks to these) and the
+  // durable plan store fleet turns persist their plans/tasks into.
+  const agentsRef = useRef(loadAgents({ cwd }));
+  const planStoreRef = useRef(openPlanStore(cwd));
   // Unified slash-command catalog — built-in REPL commands + every `oxagen --help`
   // command + custom .md commands — built once. Powers the typeahead menu and the
   // CLI-command hints in handleSubmit. buildProgram() is pure introspection: no
@@ -439,7 +448,14 @@ export function ReplApp({
   // numbers come straight from `metrics` above — this reducer only tracks
   // what that doesn't already have (model slugs, phase/step/round, tool
   // tallies).
-  const [telemetry, dispatchTelemetry] = useReducer(telemetryReducer, INITIAL_TELEMETRY_STATE);
+  // Seed the MODELS readout eagerly: worker/judge/planner are all resolvable
+  // from defaults + overrides at mount, so the user sees which models will run
+  // BEFORE the first prompt — stage events overwrite with actuals mid-turn.
+  const [telemetry, dispatchTelemetry] = useReducer(
+    telemetryReducer,
+    INITIAL_TELEMETRY_STATE,
+    (initial) => ({ ...initial, models: resolveModelRoles(resolveModelId(options.model)) }),
+  );
   // Prompt-input border color, animated through the turn lifecycle (see
   // border-phase.ts): derived from the SAME telemetry.turn.phase the TURN
   // dock panel reads above, rather than a second dispatched phase, so the
@@ -450,13 +466,21 @@ export function ReplApp({
   // interval is torn down the instant the phase moves on so a flash from a
   // finished turn can never bleed into the next one.
   const borderPhase = borderPhaseFor(telemetry.turn.phase);
+  // Animation level (/motion): "full" = everything, "reduced" = no decorative
+  // animation (invaders duel, prompt border flash), "off" = reduced plus the
+  // thinking indicator. Persisted in ~/.config/oxagen/config.json; mirrored
+  // into a ref because handleSubmit is memoized without it as a dep (same
+  // pattern as mouseOnRef below).
+  const [motion, setMotion] = useState<MotionMode>(() => getMotionMode());
+  const motionRef = useRef(motion);
   const [flashTick, setFlashTick] = useState(0);
   useEffect(() => {
-    if (borderPhase !== "evaluating") return;
+    // The rainbow flash is decorative — only tick it at full motion.
+    if (borderPhase !== "evaluating" || motion !== "full") return;
     const timer = setInterval(() => setFlashTick((t) => t + 1), RAINBOW_FLASH_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [borderPhase]);
-  const promptBorderColor = borderColorFor(borderPhase, flashTick);
+  }, [borderPhase, motion]);
+  const promptBorderColor = promptBorderColorFor(borderPhase, flashTick, motion);
   // Whether the prompt bar is empty — gates Up/Down/Home/End between
   // transcript-scroll (bar empty) and their normal recall-queue / panel-entry
   // / cursor meaning (bar has text). Mirrored from PromptInput's onEmptyChange.
@@ -1237,6 +1261,35 @@ export function ReplApp({
         );
         return;
       }
+      if (text === "/motion" || text.startsWith("/motion ")) {
+        const raw = text.slice("/motion".length).trim().toLowerCase();
+        // "on" reads naturally as "turn animations on" — accept it as full.
+        const arg = raw === "on" ? "full" : raw;
+        if (!arg) {
+          pushAssistant(
+            `Motion: ${motionRef.current}.\n` +
+              "Use /motion full|reduced|off — full animates everything; reduced " +
+              "drops the space-invaders duel and the prompt bar's border flash; " +
+              "off disables all animation, including the thinking indicator.",
+          );
+          return;
+        }
+        if (arg !== "full" && arg !== "reduced" && arg !== "off") {
+          pushAssistant(`Unknown motion mode "${raw}" — use /motion full|reduced|off.`);
+          return;
+        }
+        motionRef.current = arg;
+        setMotion(arg);
+        setMotionMode(arg); // persist across sessions
+        pushAssistant(
+          arg === "full"
+            ? "Motion FULL — all animations on (saved)."
+            : arg === "reduced"
+              ? "Motion REDUCED — space-invaders duel and prompt border flash off; thinking indicator stays (saved)."
+              : "Motion OFF — all animations off, including the thinking indicator (saved).",
+        );
+        return;
+      }
       if (text.startsWith("/model")) {
         const slug = text.slice("/model".length).trim();
         if (slug) {
@@ -1244,6 +1297,9 @@ export function ReplApp({
           // — there is no allowlist. If the gateway rejects the slug the next
           // turn surfaces a clear 4xx; switch with /model <vendor/model>.
           setModel(slug);
+          // The judge is chosen to differ from the worker, so a worker switch
+          // can change it — refresh the MODELS readout to what will now run.
+          dispatchTelemetry({ type: "seed-models", models: resolveModelRoles(slug) });
           pushAssistant(
             `Model set to ${slug}. (Any valid text model slug is accepted; ` +
               `the gateway resolves it at request time.)`,
@@ -1659,35 +1715,23 @@ export function ReplApp({
       // result here), so we mark each one done when the turn ends.
       const subagentHandles: AgentHandle[] = [];
 
-      // Fresh Task Progress checklist for this turn: the pipeline's stages are the
-      // planning agent's plan, recorded live as they run.
+      // Fresh Task Progress checklist for this turn. The checklist is the REAL
+      // plan — the per-turn planner's tasks, seeded below once it runs. Pipeline
+      // stages are not tasks: they only advance the active task's live detail.
       taskRegistry.clear();
-      /** Friendly, stable titles for each pipeline stage (the plan's steps). */
-      const stageTitles: Record<string, string> = {
-        evaluate: "Evaluate the request",
-        enhance: "Enhance the prompt",
-        route: "Route to a model",
-        revise: "Revise incomplete work",
-        execute: "Execute the work",
-        judge: "Judge the result",
-        complete: "Complete",
-      };
+      /** The planned task the single-loop path is currently executing. */
+      let activePlanTaskId: string | null = null;
       const recordStageTask = (kind: string, detail?: string): void => {
         if (kind === "complete") {
           taskRegistry.finalizeOpen("done");
           return;
         }
-        // Stages run sequentially — close any other open step before opening this.
-        for (const t of taskRegistry.snapshot()) {
-          if (t.status === "in_progress" && t.id !== kind) {
-            taskRegistry.update(t.id, { status: "done" });
-          }
+        if (activePlanTaskId) {
+          taskRegistry.update(activePlanTaskId, {
+            status: "in_progress",
+            ...(detail !== undefined ? { detail } : {}),
+          });
         }
-        taskRegistry.upsert(kind, {
-          title: stageTitles[kind] ?? kind,
-          status: "in_progress",
-          ...(detail !== undefined ? { detail } : {}),
-        });
       };
 
       // Project initialization and runTurn both live inside this try so the
@@ -1767,6 +1811,166 @@ export function ReplApp({
             : undefined
           : 15_000;
 
+        // Combined memory for this turn — shared by the planner below and the
+        // executing loop, so both recall the same lessons.
+        const turnMemory = createCombinedMemory(memoryRef.current, fleetMemoryRef.current, {
+          server: serverMemoryRef.current,
+          recallQuery: submission,
+        });
+
+        // ── Plan the turn ────────────────────────────────────────────────────
+        // Every turn gets a REAL plan: one structured planner call decomposes
+        // the submission (with a digest of the recent conversation) into
+        // concrete tasks. Bare mode opted out of pipeline model calls, so it
+        // gets the router-derived single-task plan instead — still genuine,
+        // never an invented checklist.
+        const goalText = paste?.expandedText ?? submission;
+        const pushStage = (stage: StageEvent): void => {
+          closeStreamingBlocks();
+          turn.push({ role: "stage", stage, content: stage.label, timestamp: Date.now() });
+          dispatchTelemetry({ type: "stage", stage });
+          render();
+        };
+        let plan;
+        if (bareRef.current) {
+          plan = fallbackPlan(goalText);
+        } else {
+          pushStage({ kind: "plan", label: "Planning the work" });
+          plan = await planReplTurn({
+            goal: goalText,
+            history: historyRef.current,
+            ai: activeAiRef.current,
+            codeGraph: codeGraphRef.current,
+            memory: turnMemory,
+            agents: [...agentsRef.current.values()],
+            signal: turnController.signal,
+          });
+          noteProgress();
+        }
+        // Seed the Task Progress checklist with the plan's real tasks.
+        for (const t of plan.tasks) {
+          taskRegistry.upsert(t.id, {
+            title: t.title,
+            status: "pending",
+            ...(t.agent ? { detail: `agent: ${t.agent}` } : {}),
+          });
+        }
+
+        // ── Fan out ──────────────────────────────────────────────────────────
+        // A multi-task plan runs as a fleet of parallel subagents (each in its
+        // own worktree, merged back) — the same machinery as `oxagen agents`,
+        // driven from inside the TUI. A single-task plan stays in the
+        // history-aware main loop below.
+        if (plan.tasks.length > 1 && !bareRef.current) {
+          pushStage({
+            kind: "plan",
+            label: `Planned ${plan.tasks.length} tasks — dispatching subagents`,
+            detail: plan.tasks.map((t) => t.title).join(" · ").slice(0, 160),
+          });
+          hudHandle?.update({ detail: `fleet: ${plan.tasks.length} tasks` });
+          const fleetHandles = new Map<string, AgentHandle>();
+          try {
+            const fleetResult = await runFleetTurn({
+              plan,
+              cwd,
+              ai: activeAiRef.current,
+              memory: fleetMemoryRef.current,
+              serverMemory: serverMemoryRef.current,
+              store: planStoreRef.current,
+              projectContext: projectContextRef.current,
+              agents: agentsRef.current,
+              readOnly: modeRef.current === "readonly",
+              signal: turnController.signal,
+              onTask: (ev) => {
+                if (turnController.signal.aborted) return;
+                noteProgress();
+                // Task Progress checklist mirrors the fleet task lifecycle.
+                taskRegistry.update(ev.taskId, {
+                  status:
+                    ev.status === "running"
+                      ? "in_progress"
+                      : ev.status === "done"
+                        ? "done"
+                        : ev.status === "queued"
+                          ? "pending"
+                          : "failed",
+                  ...(ev.error
+                    ? { detail: ev.error.slice(0, 80) }
+                    : ev.summary
+                      ? { detail: ev.summary.slice(0, 80) }
+                      : {}),
+                });
+                // Agent Team panel: one live row per spawned subagent.
+                if (ev.status === "running" && !fleetHandles.has(ev.taskId)) {
+                  fleetHandles.set(
+                    ev.taskId,
+                    agentRegistry.register({
+                      kind: "subagent",
+                      title: ev.title,
+                      model: ev.model,
+                      ...(ev.agent ? { detail: `agent: ${ev.agent}` } : {}),
+                    }),
+                  );
+                } else if (ev.status !== "running" && ev.status !== "queued") {
+                  fleetHandles.get(ev.taskId)?.done(ev.status === "done" ? "done" : "failed");
+                  const note = ev.summary ?? ev.error;
+                  closeStreamingBlocks();
+                  turn.push({
+                    role: "tool",
+                    toolName: "subagent",
+                    content: `${ev.title} — ${ev.status}${note ? `: ${note.slice(0, 120)}` : ""}`,
+                    timestamp: Date.now(),
+                  });
+                  render();
+                }
+              },
+              onUpdate: (snap) => {
+                if (turnController.signal.aborted) return;
+                noteProgress();
+                for (const a of snap.agents) {
+                  if (a.status === "running") {
+                    fleetHandles.get(a.taskId)?.update({
+                      ...(a.lastTool ? { detail: `${a.lastTool} · ${a.steps} steps` } : {}),
+                      outputTokens: a.usage.outputTokens,
+                      costUsd: a.usage.costUsd,
+                    });
+                  }
+                }
+              },
+            });
+
+            closeStreamingBlocks();
+            turn.push({
+              role: "assistant",
+              content: fleetResult.summaryText,
+              timestamp: Date.now(),
+            });
+            render();
+            // Fleet turns bypass runTurn, so extend the conversation history
+            // manually — the next turn's planner and loop both see the outcome.
+            historyRef.current = [
+              ...historyRef.current,
+              { role: "user", content: submission },
+              { role: "assistant", content: fleetResult.summaryText },
+            ];
+            void debugLog("turn", "turn.end", {
+              mode: "repl-fleet",
+              tasks: plan.tasks.length,
+              failed: fleetResult.failedCount,
+            });
+            setTurns((n) => n + 1);
+            return;
+          } finally {
+            // Retire any still-open subagent rows (cancelled mid-flight, or a
+            // thrown error) so the Agent Team panel never leaks a spinner.
+            for (const h of fleetHandles.values()) h.done();
+          }
+        }
+
+        // Single-task plan: the main history-aware loop IS that task's agent.
+        activePlanTaskId = plan.tasks[0]?.id ?? null;
+        if (activePlanTaskId) taskRegistry.update(activePlanTaskId, { status: "in_progress" });
+
         const result = await runTurn({
           // Paste placeholders (`[Text #N]`) expand to their full stored
           // text here — the model sees the real content even though the
@@ -1786,11 +1990,7 @@ export function ReplApp({
           verbose: verboseRef.current,
           enhanceTimeoutMs,
           projectContext: projectContextRef.current,
-          memory: createCombinedMemory(
-            memoryRef.current,
-            fleetMemoryRef.current,
-            { server: serverMemoryRef.current, recallQuery: submission },
-          ),
+          memory: turnMemory,
           codeGraph: codeGraphRef.current,
           trace: traceStoreRef.current,
           graphSync: graphSyncRef.current,
@@ -1801,8 +2001,8 @@ export function ReplApp({
             void debugLog("turn", "turn.stage", { label: stage.label, detail: stage.detail });
             // Keep the HUD's live detail on the current stage.
             hudHandle?.update({ detail: stage.detail ?? stage.label });
-            // Advance the Task Progress checklist to this stage.
-            recordStageTask(stage.kind, stage.detail ?? undefined);
+            // Advance the active planned task's live detail to this stage.
+            recordStageTask(stage.kind, stage.detail ?? stage.label);
             // Full-screen TURN/MODELS dock — phase, revise round, and any
             // model slug this stage reveals (see telemetry.ts).
             dispatchTelemetry({ type: "stage", stage });
@@ -1846,6 +2046,9 @@ export function ReplApp({
           onReasoning: (delta) => {
             if (turnController.signal.aborted) return;
             noteProgress();
+            // Reasoning tokens are billed output — feed the live burn estimate
+            // (real usage supersedes it when the call settles).
+            metricsBusRef.current.noteStreamChars(delta.length);
             // Reasoning and answer text interleave across steps — close the
             // assistant block when thinking resumes so they never merge.
             if (assistantOpen) closeStreamingBlocks();
@@ -1866,6 +2069,9 @@ export function ReplApp({
             if (turnController.signal.aborted) return;
             noteProgress();
             streamCharsRef.current += delta.length;
+            // Live burn: tick the status line/dock while the worker streams,
+            // instead of only when the call's usage settles.
+            metricsBusRef.current.noteStreamChars(delta.length);
             if (reasoningOpen) closeStreamingBlocks();
             if (!assistantOpen) {
               turn.push({
@@ -2208,7 +2414,11 @@ export function ReplApp({
         />
 
         <Box flexDirection="row" flexGrow={1} overflow="hidden">
-          <Box flexDirection="column" flexGrow={1} minWidth={0}>
+          {/* overflow=hidden: wide unbreakable content (e.g. a terminal run's
+              long command line) must clip inside this column rather than
+              inflate its flex basis and squeeze the fixed-width sidebar —
+              which would amputate the sidebar panels' right border. */}
+          <Box flexDirection="column" flexGrow={1} minWidth={0} overflow="hidden">
             {terminalRun && <TerminalPanel run={terminalRun} />}
             <TranscriptViewport
               committedMessages={committedMessages}
@@ -2259,10 +2469,12 @@ export function ReplApp({
         )}
 
         {/* Status row (1 row): the invaders duel doubles as the signature
-            animation, plus a compact elapsed readout while a turn streams. */}
+            animation, plus a compact elapsed readout while a turn streams.
+            /motion gates both: the duel is decorative (full only); the
+            elapsed readout is the fullscreen thinking indicator (off hides it). */}
         <Box paddingX={1}>
-          {process.env.OXAGEN_CLI_FUN !== "0" ? <SpaceInvaders active={isStreaming} /> : null}
-          {isStreaming && turnStartedAt !== null ? (
+          {motion === "full" ? <SpaceInvaders active={isStreaming} /> : null}
+          {motion !== "off" && isStreaming && turnStartedAt !== null ? (
             <Text color="#FBBF24">
               {"  thinking… "}
               {formatElapsed(now - turnStartedAt)}
@@ -2340,7 +2552,10 @@ export function ReplApp({
         )}
 
         <Box flexDirection="row" flexShrink={1} overflow="hidden">
-          <Box flexDirection="column" flexGrow={1} minWidth={0}>
+          {/* overflow=hidden: wide unbreakable content must clip inside this
+              column rather than inflate its flex basis and squeeze the
+              fixed-width sidebar, which would clip the panels' right border. */}
+          <Box flexDirection="column" flexGrow={1} minWidth={0} overflow="hidden">
             {/* Terminal panel — a `!command`'s live stdout/stderr, red-outlined and
                 pinned just ABOVE the in-progress message so shell output stays
                 visually separate from the agent speaking. Null until a command
@@ -2382,8 +2597,9 @@ export function ReplApp({
           </Box>
         )}
 
-      {/* Thinking indicator — visible only while a turn is in flight. */}
-      {isStreaming && turnStartedAt !== null && (
+      {/* Thinking indicator — visible only while a turn is in flight (and
+          animation isn't fully disabled via /motion off). */}
+      {motion !== "off" && isStreaming && turnStartedAt !== null && (
         <ThinkingIndicator
           startedAt={turnStartedAt}
           getTokens={() => Math.round(streamCharsRef.current / 4)}
@@ -2447,9 +2663,9 @@ export function ReplApp({
       {/* Status line — below the input bar, with a blank row beneath it so it is
           never flush against the bottom edge of the window. A whimsical rocket
           duels a UFO on the rail above it while a turn is running (opt out
-          with OXAGEN_CLI_FUN=0). */}
+          with /motion reduced|off, or the legacy OXAGEN_CLI_FUN=0). */}
       <Box marginBottom={1} flexShrink={0} flexDirection="column">
-        {process.env.OXAGEN_CLI_FUN !== "0" ? (
+        {motion === "full" ? (
           <SpaceInvaders active={isStreaming} />
         ) : null}
         <StatusLine
@@ -2461,11 +2677,14 @@ export function ReplApp({
           // correctly at the end (Bug 2) — cache used to lag behind on a
           // separate one-shot-per-turn total while tokens/cost updated live.
           inputTokens={metrics.sessionTokensIn}
-          outputTokens={metrics.sessionTokensOut}
+          // `streamTokensOut` is the in-flight call's live ~chars/4 estimate;
+          // it zeroes when the call's real usage lands, so these sums tick
+          // during streaming and settle on exact totals (see metrics.ts).
+          outputTokens={metrics.sessionTokensOut + metrics.streamTokensOut}
           cacheHit={metrics.sessionCachedTokens}
           cacheMiss={Math.max(0, metrics.sessionTokensIn - metrics.sessionCachedTokens)}
           costUsd={metrics.sessionCostUsd}
-          turnOutputTokens={metrics.turnTokensOut}
+          turnOutputTokens={metrics.turnTokensOut + metrics.streamTokensOut}
           turnCostUsd={metrics.turnCostUsd}
           pipelineOn={pipelineOn}
           verboseOn={verboseOn}

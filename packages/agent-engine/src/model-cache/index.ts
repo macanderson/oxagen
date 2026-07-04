@@ -36,7 +36,7 @@ const FALLBACK_CAPABILITIES: Record<string, EffortLevel[]> = {
 export async function loadCachedModels(): Promise<ModelCache | null> {
   try {
     const data = await fs.readFile(CACHE_FILE, "utf-8");
-    const cache: ModelCache = JSON.parse(data);
+    const cache = JSON.parse(data) as ModelCache;
 
     // Validate structure
     if (!cache.cachedAt || !cache.models || typeof cache.ttlMs !== "number") {
