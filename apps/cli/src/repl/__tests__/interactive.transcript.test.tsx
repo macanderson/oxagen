@@ -218,31 +218,38 @@ describe("REPL transcript rendering (Static history + live frame)", () => {
     unmount();
   });
 
-  it("commits the persistent banner once, with the connected scope, into scrollback", async () => {
+  it("commits the persistent banner wordmark once into scrollback", async () => {
     // The sunset banner is the permanent FIRST <Static> item (see interactive.tsx),
     // so in inline mode it commits to real scrollback exactly once at open and
     // stays there for the session — never re-rendered into the live frame. This
     // is the same duplication class the "exactly once" message test guards: an
     // earlier model rendered the Banner in the live empty-state block, which — if
-    // reintroduced now that it also lives in <Static> — would print it twice. Lock
-    // that the version wordmark and the org/workspace scope from the session appear
-    // in the committed output, and the wordmark appears exactly once.
+    // reintroduced now that it also lives in <Static> — would print it twice.
+    // The banner is the gradient OXAGEN wordmark ONLY: version and org/workspace
+    // scope live in the full-screen HeaderBar, so their absence here is asserted
+    // too (reintroducing them under the wordmark is the duplicate-chrome bug the
+    // user reported).
     const { lastFrame, frames, unmount } = render(
       <ReplApp options={{ session: TEST_SESSION }} />,
     );
     await tick(100); // let the async session-memory mount settle
 
-    // Committed to scrollback: the version line and the org/workspace scope.
-    await waitFor(() => frames.join("").includes("oxagen.sh cli"));
-    const combined = frames.join("");
-    expect(combined).toContain("test-org");
-    expect(combined).toContain("test-ws");
+    // The gradient interleaves an ANSI color escape per run (nearly per
+    // column), so block rows are never contiguous in raw output — strip the
+    // escapes before matching.
+    const strip = (s: string): string => s.replace(/\u001b\[[0-9;]*m/g, "");
 
-    // Exactly once — the banner is a single Static item, not duplicated into the
-    // live frame.
-    const frame = lastFrame() ?? "";
-    const wordmarkCount = frame.split("oxagen.sh cli").length - 1;
-    expect(wordmarkCount).toBe(1);
+    // Committed to scrollback: the wordmark's first block row.
+    const markRow = " ██████  ██   ██  █████   ██████  ███████ ███    ██";
+    await waitFor(() => strip(frames.join("")).includes(markRow));
+
+    // Exactly once — the banner is a single Static item, not duplicated into
+    // the live frame.
+    const frame = strip(lastFrame() ?? "");
+    expect(frame.split(markRow).length - 1).toBe(1);
+
+    // No duplicate info lines under the wordmark.
+    expect(frame).not.toContain("oxagen.sh cli");
     unmount();
   });
 });

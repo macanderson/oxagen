@@ -1,55 +1,25 @@
 import { describe, it, expect } from "vitest";
 import { render } from "ink-testing-library";
 import React from "react";
-import {
-  Banner,
-  WORDMARK,
-  WORDMARK_FULL,
-  bannerRowCount,
-  sunsetColorAt,
-} from "../banner.js";
+import { Banner, WORDMARK, bannerRowCount, sunsetColorAt } from "../banner.js";
 
 describe("Banner", () => {
-  it("renders the wordmark, ring glyph, and version", () => {
-    const { lastFrame } = render(<Banner version="0.4.0" />);
+  it("renders the gradient OXAGEN wordmark and nothing else", () => {
+    const { lastFrame } = render(<Banner />);
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("◯");
-    expect(frame.toLowerCase()).toContain("oxagen.sh cli");
-    expect(frame).toContain("0.4.0");
     expect(frame).toContain("█");
+    // Wordmark only — no info lines duplicating what the HeaderBar and the
+    // REPO dock already show (version, scope, cwd).
+    expect(frame.toLowerCase()).not.toContain("oxagen.sh");
+    expect(frame).not.toContain("v0.");
+    expect(frame).not.toContain("◯");
   });
 
-  it("renders the connected org/workspace scope when provided", () => {
-    const { lastFrame } = render(
-      <Banner version="0.4.0" org="acme" workspace="prod" />,
-    );
+  it("keeps a fixed row count while animating (no layout jump)", () => {
+    const { lastFrame } = render(<Banner animate />);
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("acme");
-    expect(frame).toContain("prod");
-  });
-
-  it("omits the scope line when org/workspace are absent", () => {
-    const { lastFrame } = render(<Banner version="0.4.0" />);
-    expect(lastFrame() ?? "").not.toContain("/");
-  });
-
-  it("falls back to the compact OXAGEN mark on narrow terminals", () => {
-    const { lastFrame } = render(<Banner version="0.4.0" cols={80} />);
-    const frame = lastFrame() ?? "";
-    // The compact mark still draws block glyphs, but the frame must not be
-    // as wide as the full mark. Strip ANSI color codes before measuring —
-    // the gradient interleaves an escape per color run.
-    expect(frame).toContain("█");
-    const plain = frame.replace(/\u001b\[[0-9;]*m/g, "");
-    const widest = Math.max(...plain.split("\n").map((l) => l.length));
-    expect(widest).toBeLessThan(WORDMARK_FULL[0]!.length);
-  });
-
-  it("drops the wordmark entirely when even the compact mark cannot fit", () => {
-    const { lastFrame } = render(<Banner version="0.4.0" cols={40} />);
-    const frame = lastFrame() ?? "";
-    expect(frame).not.toContain("█");
-    expect(frame.toLowerCase()).toContain("oxagen.sh cli");
+    // All wordmark rows are reserved from the first frame even before reveal.
+    expect(frame.split("\n").length).toBeGreaterThanOrEqual(WORDMARK.length);
   });
 });
 
@@ -62,12 +32,6 @@ describe("WORDMARK", () => {
       "██    ██  ██ ██  ██   ██ ██    ██ ██      ██  ██ ██",
       " ██████  ██   ██ ██   ██  ██████  ███████ ██   ████",
     ]);
-  });
-
-  it("spells the full mark as constant-width rows", () => {
-    expect(WORDMARK_FULL).toHaveLength(5);
-    const widths = new Set(WORDMARK_FULL.map((l) => l.length));
-    expect(widths.size).toBe(1);
   });
 });
 
@@ -93,8 +57,7 @@ describe("sunsetColorAt", () => {
 });
 
 describe("bannerRowCount", () => {
-  it("budgets wordmark + info lines + margin", () => {
-    expect(bannerRowCount(true)).toBe(8);
-    expect(bannerRowCount(false)).toBe(7);
+  it("budgets wordmark rows + the bottom margin", () => {
+    expect(bannerRowCount()).toBe(WORDMARK.length + 1);
   });
 });

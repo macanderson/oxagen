@@ -61,10 +61,14 @@ describe("HeaderBar", () => {
         sessionLabel="oxagen-repl2"
         sessionCostUsd={1.23}
         now={new Date(2026, 0, 1, 10, 0, 0).getTime()}
+        version="0.10.0"
+        scope="test-org/test-ws"
       />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("OXAGEN");
+    expect(frame).toContain("v0.10.0");
+    expect(frame).toContain("test-org/test-ws");
     expect(frame).toContain("oxagen-repl2");
     expect(frame).toContain("main");
     expect(frame).toContain("claude-sonnet-5");

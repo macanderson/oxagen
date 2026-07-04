@@ -57,6 +57,8 @@ export function HeaderBar({
   sessionLabel,
   sessionCostUsd,
   now,
+  version,
+  scope,
 }: {
   model: string;
   branch?: string;
@@ -64,6 +66,10 @@ export function HeaderBar({
   sessionLabel: string;
   sessionCostUsd: number;
   now: number;
+  /** CLI build number, shown right after the brand mark (e.g. "0.10.0"). */
+  version?: string;
+  /** Connected org/workspace scope, e.g. "acme/prod". */
+  scope?: string;
 }): React.ReactElement {
   return (
     <Box justifyContent="space-between" paddingX={1}>
@@ -71,6 +77,13 @@ export function HeaderBar({
         <Text color={AMBER} bold>
           {"◇ OXAGEN"}
         </Text>
+        {version ? <Text dimColor>{`v${version}`}</Text> : null}
+        {scope ? (
+          <>
+            <Text dimColor>·</Text>
+            <Text color={theme.cyan}>{scope}</Text>
+          </>
+        ) : null}
         <Text dimColor>·</Text>
         <Text wrap="truncate-end">{sessionLabel}</Text>
         {branch ? (
