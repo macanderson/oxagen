@@ -4,6 +4,7 @@ import { withTenantDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology";
+import { insertEvents } from "@oxagen/telemetry";
 import { logger } from "../logger";
 
 /**
@@ -256,13 +257,44 @@ export const [ingestionDeleteConnection] = createFunction(
 
     // ── Step 4: Audit log ────────────────────────────────────────────────────
     await step.run("audit-log", async () => {
-      // TODO(ingestion): write ClickHouse event via telemetry package once
-      // the ingestion surface is wired into the telemetry schema.
-      // For now: log locally so the deletion is traceable in Pino output.
+      // Local Pino trace — always emitted so the deletion is visible in logs.
       logger.info(
         { connectionId, orgId, workspaceId, mode, requestedBy, requestedAt },
         "ingestion-delete-connection: completed",
       );
+
+      // Append-only runtime event to ClickHouse (four-store model: ClickHouse
+      // holds runtime events only). Emitted through @oxagen/telemetry's generic
+      // `events` table — no bespoke ingestion schema needed; source_system tags
+      // the emitter and the payload carries the deletion detail.
+      //
+      // Fire-and-forget-safe: the connection is already deleted by this point,
+      // so a ClickHouse write failure must NEVER fail (and thus retry) the
+      // deletion job. Any error is logged and swallowed, not thrown.
+      try {
+        await insertEvents([
+          {
+            event_id: globalThis.crypto.randomUUID(),
+            org_id: orgId,
+            workspace_id: workspaceId,
+            event_type: "ingestion.connection.deleted",
+            source_system: "inngest:ingestion.delete-connection",
+            stream_offset: null,
+            payload: JSON.stringify({
+              connectionId,
+              mode,
+              requestedBy,
+              requestedAt,
+            }),
+            emitted_at: new Date().toISOString(),
+          },
+        ]);
+      } catch (err) {
+        logger.error(
+          { err, connectionId, orgId, workspaceId, mode, requestedBy },
+          "ingestion-delete-connection: ClickHouse audit event write failed — deletion already applied, telemetry event dropped",
+        );
+      }
     });
 
     return { connectionId, mode, deletedAt: new Date().toISOString() };

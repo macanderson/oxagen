@@ -25,6 +25,12 @@ export default defineConfig({
         // Next.js route handlers are exercised by the Playwright e2e suite
         // against the real HTTP/DB stack, not unit-tested in isolation.
         "src/app/**/route.ts",
+        // Activity RSC data-fetch sections import @oxagen/handlers/register and
+        // drive the real kernel invoke() → Postgres path; they are exercised by
+        // apps/app/e2e/agent-trace-get.spec.ts against the real DB, not unit
+        // tests. Same rationale as route.ts. (The rendered components —
+        // span-tree, activity-list, format — ARE unit-tested.)
+        "src/app/**/activity/**/*-section.tsx",
         "src/proxy.ts",
         "src/test/**",
         // Knowledge section is out of scope this session (do not touch) — exclude

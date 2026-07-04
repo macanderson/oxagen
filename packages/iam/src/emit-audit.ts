@@ -49,7 +49,10 @@ export async function emitAudit(args: EmitAuditArgs): Promise<void> {
   const scopeId = scopeKind === "workspace" ? ctx.workspaceId : ctx.orgId;
 
   // Hash the input payload — we store a fingerprint, not the raw value.
-  const payloadHash = await sha256Hex(rawInputJson).catch(() => "");
+  const payloadHash = await sha256Hex(rawInputJson).catch((err) => {
+    logger.error({ err, capability }, "[iam:emit-audit] sha256 failed — audit chain integrity degraded");
+    return "";
+  });
 
   // Read the previous chain hash — read failure is non-fatal.
   let prevHash = "";
@@ -64,7 +67,10 @@ export async function emitAudit(args: EmitAuditArgs): Promise<void> {
 
   // Compute this event's chain hash over (prev_hash || event_id || capability).
   const chainInput = `${prevHash}|${eventId}|${capability}`;
-  const chainHash = await sha256Hex(chainInput).catch(() => "");
+  const chainHash = await sha256Hex(chainInput).catch((err) => {
+    logger.error({ err, capability }, "[iam:emit-audit] sha256 failed — audit chain integrity degraded");
+    return "";
+  });
 
   const outcome = result.outcome;
   const decisionReason = result.trace.decidedBy.rule;

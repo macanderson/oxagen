@@ -4,7 +4,16 @@
  * Clusters episodic events by topic similarity, then extracts durable
  * semantic facts from each cluster. This is the core "sleep" function
  * that turns a log of events into structured knowledge.
+ *
+ * Fact extraction has two paths:
+ *   1. An LLM-backed summarizer (`@oxagen/ai` `generateObjectFor`, small/cheap
+ *      "fast" tier) that reads the cluster and produces one general fact.
+ *   2. A deterministic payload-pattern heuristic used as the fallback whenever
+ *      no gateway/model is available (no `AI_GATEWAY_API_KEY`, or no LLM
+ *      context passed) or the model call throws.
  */
+import { z } from "zod";
+import { generateObjectFor, selectModel, type GenerateObjectArgs } from "@oxagen/ai";
 import type { MemoryRecord, SemanticBody } from "../types";
 
 export interface DistillationConfig {
@@ -22,13 +31,62 @@ export const DEFAULT_DISTILLATION_CONFIG: DistillationConfig = {
   initialConfidence: 0.6,
 };
 
-export interface DistillationResult {
-  /** Newly extracted semantic facts. */
-  newFacts: Array<{ fact: SemanticBody; confidence: number; derivedFrom: string[] }>;
-  /** Existing facts whose confidence should be boosted. */
-  boostedFacts: Array<{ recordId: string; newConfidence: number }>;
-  /** Events that were processed (to mark as consolidated). */
-  processedEventIds: string[];
+/**
+ * Structured shape the LLM must return — mirrors {@link SemanticBody}'s core
+ * fields (`fact` + `domain`). Kept minimal so the model can't emit off-schema
+ * bookkeeping fields (e.g. `supersedes`, which is decided by the caller).
+ */
+const DistilledFactSchema = z.object({
+  /** A durable, general fact distilled from the cluster. */
+  fact: z.string().min(1),
+  /** Category the fact belongs to (auth, db, api, infra, tooling, …). */
+  domain: z.string().min(1),
+});
+
+/**
+ * Telemetry/scope context required to run the LLM path. Reuses the exact
+ * telemetry shape `@oxagen/ai` requires so org/workspace/surface/messageId flow
+ * into `token_usage` and the credit ledger. When omitted, distillation uses the
+ * deterministic heuristic only.
+ */
+export interface DistillationLlmOptions {
+  telemetry: GenerateObjectArgs<z.infer<typeof DistilledFactSchema>>["telemetry"];
+}
+
+/** True when the Vercel AI Gateway key is configured (LLM path is viable). */
+function hasGatewayKey(): boolean {
+  return Boolean(process.env.AI_GATEWAY_API_KEY);
+}
+
+const DISTILL_SYSTEM_PROMPT =
+  "You compress a cluster of related agent-memory events into ONE durable, " +
+  "reusable semantic fact. Generalize across the observations rather than " +
+  "restating a single event. State the fact as a concise declarative sentence " +
+  "in the present tense. Also pick a short lowercase domain category (e.g. " +
+  "auth, db, api, infra, tooling, general). Do not invent details absent from " +
+  "the events.";
+
+/** Serialize a payload defensively — never throw on circular/odd values. */
+function safeJson(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? "null";
+  } catch {
+    return "<unserializable>";
+  }
+}
+
+/** Render a cluster as a compact, model-readable list of observations. */
+function buildClusterPrompt(cluster: MemoryRecord[]): string {
+  const lines = cluster.map((record, i) => {
+    const body = record.body as Record<string, unknown>;
+    const event = String(body.event ?? record.kind);
+    const outcome = String(body.outcome ?? "unknown");
+    return `${i + 1}. event=${event} outcome=${outcome} payload=${safeJson(body.payload)}`;
+  });
+  return (
+    `Summarize these ${cluster.length} related agent-memory events into one ` +
+    `durable semantic fact and its domain.\n\n${lines.join("\n")}`
+  );
 }
 
 /**
@@ -58,12 +116,11 @@ export function clusterEvents(
 }
 
 /**
- * Extract a semantic fact from a cluster of related episodic events.
- *
- * For now, uses a heuristic approach (extract common patterns from payloads).
- * In production, this would call a small LLM to summarize the cluster.
+ * Deterministic fact extraction from a cluster: derive a success-rate / count
+ * statement from the shared event type + outcomes. Used directly as the LLM
+ * fallback and as the baseline when no gateway is configured.
  */
-export function extractFactFromCluster(
+export function extractFactHeuristic(
   cluster: MemoryRecord[],
 ): SemanticBody | null {
   if (cluster.length === 0) return null;
@@ -97,19 +154,61 @@ export function extractFactFromCluster(
 }
 
 /**
- * Run distillation on a batch of unconsolidated episodic events.
+ * Extract a semantic fact from a cluster of related episodic events.
+ *
+ * Prefers an LLM summarization (`generateObjectFor`, fast tier) when an LLM
+ * context is provided and a gateway key is configured; otherwise, or on any
+ * model failure, returns the deterministic {@link extractFactHeuristic} result.
  */
-export function distill(
+export async function extractFactFromCluster(
+  cluster: MemoryRecord[],
+  options?: DistillationLlmOptions,
+): Promise<SemanticBody | null> {
+  if (cluster.length === 0) return null;
+
+  const heuristic = extractFactHeuristic(cluster);
+
+  // No LLM context or no gateway → deterministic path only.
+  if (!options || !hasGatewayKey()) return heuristic;
+
+  try {
+    const { object } = await generateObjectFor({
+      schema: DistilledFactSchema,
+      // Small/cheap "fast" tier — distillation is a high-volume background job.
+      model: selectModel({ tier: "fast" }),
+      system: DISTILL_SYSTEM_PROMPT,
+      prompt: buildClusterPrompt(cluster),
+      telemetry: options.telemetry,
+    });
+    const fact = object.fact.trim();
+    const domain = object.domain.trim();
+    // Guard against an empty/degenerate generation — prefer the heuristic.
+    if (!fact || !domain) return heuristic;
+    return { fact, domain };
+  } catch {
+    // Gateway/model failure must never fail consolidation — fall back.
+    return heuristic;
+  }
+}
+
+/**
+ * Run distillation on a batch of unconsolidated episodic events.
+ *
+ * When `options` is supplied (and a gateway key is configured), each cluster is
+ * summarized by the LLM; otherwise the deterministic heuristic is used.
+ */
+export async function distill(
   events: MemoryRecord[],
   existingFacts: MemoryRecord[],
   config: DistillationConfig = DEFAULT_DISTILLATION_CONFIG,
-): DistillationResult {
+  options?: DistillationLlmOptions,
+): Promise<DistillationResult> {
   const clusters = clusterEvents(events, config);
   const newFacts: DistillationResult["newFacts"] = [];
   const boostedFacts: DistillationResult["boostedFacts"] = [];
 
   for (const cluster of clusters) {
-    const fact = extractFactFromCluster(cluster);
+    const fact = await extractFactFromCluster(cluster, options);
     if (!fact) continue;
 
     // Check if this fact already exists
@@ -132,6 +231,15 @@ export function distill(
     boostedFacts,
     processedEventIds: events.map((e) => e.id),
   };
+}
+
+export interface DistillationResult {
+  /** Newly extracted semantic facts. */
+  newFacts: Array<{ fact: SemanticBody; confidence: number; derivedFrom: string[] }>;
+  /** Existing facts whose confidence should be boosted. */
+  boostedFacts: Array<{ recordId: string; newConfidence: number }>;
+  /** Events that were processed (to mark as consolidated). */
+  processedEventIds: string[];
 }
 
 /**

@@ -7,8 +7,31 @@
  * pulling in server-only dependencies.
  */
 import type { DbMessageRow } from "@oxagen/database";
-import type { ChatMessage } from "@/components/chat/chat-shell";
+import type { ChatMessage, MessageAttachment } from "@/components/chat/chat-shell";
 import type { AssistantContentBlock } from "@/components/chat/stream-event-types";
+
+/**
+ * Extract `metadata.attachments` (persisted by sendMessageAction/wandSendAction
+ * for a user turn — see chat/actions.ts) as a validated `MessageAttachment[]`.
+ * Defensive: an absent field, a malformed row, or a row from before this
+ * feature shipped all fall back to `undefined` rather than throwing.
+ */
+function attachmentsFromMetadata(metadata: unknown): MessageAttachment[] | undefined {
+  if (!metadata || typeof metadata !== "object" || !("attachments" in metadata)) return undefined;
+  const raw = (metadata as { attachments?: unknown }).attachments;
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const valid = raw.filter(
+    (a): a is MessageAttachment =>
+      !!a &&
+      typeof a === "object" &&
+      typeof (a as MessageAttachment).publicId === "string" &&
+      typeof (a as MessageAttachment).kind === "string" &&
+      typeof (a as MessageAttachment).name === "string" &&
+      typeof (a as MessageAttachment).mimeType === "string" &&
+      typeof (a as MessageAttachment).url === "string",
+  );
+  return valid.length > 0 ? valid : undefined;
+}
 
 // Walk parents from the active leaf to reconstruct the visible branch.
 // Falls back to the most-recent root path when no leaf is set.
@@ -34,5 +57,6 @@ export function walkActiveBranch(rows: DbMessageRow[], leafId: string | null): C
     branchReason: r.branchReason,
     siblingCount: r.parentMessageId ? (childCount.get(r.parentMessageId) ?? 1) : 1,
     contentBlocks: Array.isArray(r.contentBlocks) ? (r.contentBlocks as AssistantContentBlock[]) : undefined,
+    attachments: attachmentsFromMetadata(r.metadata),
   }));
 }

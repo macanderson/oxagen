@@ -11,7 +11,7 @@ import { resolvedTierCatalog } from "@oxagen/ai";
 import type { ComposerModelState } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 
-export { type ChatMessage } from "./message-bubble";
+export { type ChatMessage, type MessageAttachment } from "./message-bubble";
 
 export interface ChatShellProps {
   conversationId: string | null;

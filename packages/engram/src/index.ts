@@ -236,11 +236,13 @@ export {
   distill,
   clusterEvents,
   extractFactFromCluster,
+  extractFactHeuristic,
   DEFAULT_DISTILLATION_CONFIG,
 } from "./consolidation/distill";
 export type {
   DistillationConfig,
   DistillationResult,
+  DistillationLlmOptions,
 } from "./consolidation/distill";
 export { deduplicateSemanticRecords } from "./consolidation/dedup";
 export type { DedupResult } from "./consolidation/dedup";

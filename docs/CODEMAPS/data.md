@@ -85,7 +85,6 @@ authCredentials     connectionId, type, encryptedData
 oauthTokens         connectionId, accessToken (encrypted), refreshToken, expiresAt
 webhookSubscriptions connectionId, webhookId, secret, events
 oauthAccounts       connectionId, accountId, accountName
-entityTypes         id, connectionId, name, config (JSON)
 entityTypeMappings  entityTypeId, targetSchema
 setupSuggestions    connectionId, suggestions (JSON)
 deletionJobs        id, connectionId, status

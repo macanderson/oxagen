@@ -26,6 +26,7 @@ import {
   type TimeoutConfig,
 } from "./timeouts.js";
 import { metricsEventFor, type MetricsEvent } from "./metrics.js";
+import { debugLog } from "../lib/debug-log.js";
 
 export interface MeteredAiOptions {
   /** Timeout policy for model calls. Defaults to {@link DEFAULT_TIMEOUTS}. */
@@ -69,8 +70,21 @@ export function createMeteredAi(base: AgentAi, opts: MeteredAiOptions = {}): Age
           // `cachedTokens` so this step's cache hit is priced at the
           // discounted rate instead of as fresh input.
           const usage = { ...u, cachedTokens: u.inputTokenDetails?.cacheReadTokens ?? 0 };
-          opts.onMetrics?.(metricsEventFor(callId, "model_call", args.model, usage, now()));
+          // Isolate the metrics emit: an `onMetrics` throw is a real failure
+          // (IO/bug) that would otherwise leave this call silently unmetered.
+          // Log it instead of letting the shared `.catch` below — which exists
+          // only to swallow the *usage-promise* rejection of an aborted turn —
+          // absorb it too.
+          try {
+            opts.onMetrics?.(metricsEventFor(callId, "model_call", args.model, usage, now()));
+          } catch (err) {
+            void debugLog("error", "metrics.emit-failed", {
+              message: err instanceof Error ? err.message : String(err),
+            });
+          }
         })
+        // The usage promise rejects on an aborted/cancelled turn — expected;
+        // the turn's own error handling reports it. Stay silent here.
         .catch(() => {});
       return result;
     },

@@ -8,6 +8,11 @@ const { recallMemories, rememberMemory } = vi.hoisted(() => ({
 }));
 vi.mock("../../../lib/memory-client.js", () => ({ recallMemories, rememberMemory }));
 
+// Mock the CLI debug channel so the non-blocking failure paths can be asserted
+// (a dropped remember/recall must log, not silently swallow).
+const { debugLog } = vi.hoisted(() => ({ debugLog: vi.fn(async () => undefined) }));
+vi.mock("../../../lib/debug-log.js", () => ({ debugLog }));
+
 import {
   createCombinedMemory,
   createServerMemory,
@@ -113,6 +118,24 @@ describe("createCombinedMemory.recallContext", () => {
     });
     const out = await mem.recallContext();
     expect(out).toBe("local tail");
+  });
+
+  it("logs on the debug channel and degrades when the session recall rejects", async () => {
+    debugLog.mockClear();
+    const session = {
+      recallContext: vi.fn().mockRejectedValue(new Error("duckdb closed")),
+      remember: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+    } as unknown as SessionMemory;
+    const mem = createCombinedMemory(session, fakeFleet());
+    // No throw — degrades to an empty session tail.
+    const out = await mem.recallContext();
+    expect(out).toBe("");
+    expect(debugLog).toHaveBeenCalledWith(
+      "error",
+      "memory.recall-failed",
+      expect.objectContaining({ message: expect.stringContaining("duckdb closed") }),
+    );
   });
 
   it("falls back to local-only when the server recall exceeds the timeout", async () => {
@@ -233,5 +256,20 @@ describe("createServerMemory", () => {
     const server = createServerMemory({});
     server.remember("gotcha", { lesson: "   " });
     expect(rememberMemory).not.toHaveBeenCalled();
+  });
+
+  it("remember logs on the debug channel when the mirror rejects (fire-and-forget)", async () => {
+    debugLog.mockClear();
+    rememberMemory.mockRejectedValueOnce(new Error("api unreachable"));
+    const server = createServerMemory({ projectName: "oxagen-platform" });
+    server.remember("gotcha", { lesson: "a durable lesson" });
+    // Fire-and-forget — let the rejection settle.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(debugLog).toHaveBeenCalledWith(
+      "error",
+      "memory.remember-failed",
+      expect.objectContaining({ message: expect.stringContaining("api unreachable") }),
+    );
   });
 });

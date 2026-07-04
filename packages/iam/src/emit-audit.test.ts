@@ -24,6 +24,18 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
   };
 });
 
+// Spy on the package logger so we can assert the sha256-failure path logs an
+// error (audit-chain integrity is a SOC-2 concern — a silent empty hash must
+// never pass unobserved).
+const loggerMocks = vi.hoisted(() => ({
+  error: vi.fn(),
+  warn: vi.fn(),
+  info: vi.fn(),
+  debug: vi.fn(),
+}));
+
+vi.mock("./logger", () => ({ logger: loggerMocks }));
+
 import { emitAudit } from "./emit-audit";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
@@ -377,6 +389,41 @@ describe("emitAudit()", () => {
     // chain_hash is still a valid 64-char hex (computed with empty prevHash)
     expect(row.chain_hash).toHaveLength(64);
     expect(row.chain_hash).toMatch(/^[a-f0-9]+$/);
+  });
+
+  // ── sha256 (subtle.digest) failure is logged, non-fatal ──────────────────
+
+  it("logs an error and does NOT throw when sha256 (subtle.digest) rejects — audit still inserted with empty hashes", async () => {
+    const digestSpy = vi
+      .spyOn(globalThis.crypto.subtle, "digest")
+      .mockRejectedValue(new Error("subtle.digest boom"));
+
+    try {
+      // Fire-and-forget path must not throw even when hashing is broken.
+      await expect(
+        emitAudit({
+          capability: "chat.message.send",
+          ctx: CTX,
+          principal: null,
+          result: ALLOW_RESULT,
+          trace: ALLOW_TRACE,
+          rawInputJson: "{}",
+        }),
+      ).resolves.toBeUndefined();
+
+      // Both payloadHash and chainHash flow through sha256Hex → each logs an error.
+      expect(loggerMocks.error).toHaveBeenCalled();
+      expect(loggerMocks.error.mock.calls[0]?.[1]).toContain("sha256 failed");
+
+      // The event is still inserted — degraded (empty) hashes, but the chain
+      // is never blocked. This keeps the failure observable without becoming fatal.
+      expect(mocks.insertAuditEvent).toHaveBeenCalledTimes(1);
+      const row = mocks.insertAuditEvent.mock.calls[0]?.[0] as AuditEventRow;
+      expect(row.payload_hash).toBe("");
+      expect(row.chain_hash).toBe("");
+    } finally {
+      digestSpy.mockRestore();
+    }
   });
 
   // ── Concurrency: two parallel calls both insert exactly once ─────────────

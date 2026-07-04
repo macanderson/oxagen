@@ -95,6 +95,14 @@ export const workspace = {
   // Ask — the front door (full-page ask/chat surface).
   ask: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/ask`,
 
+  // Activity — recent agent runs + per-run span-tree trace viewer.
+  activity: {
+    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/activity`,
+    // Per-run span tree. executionId is the aex_* public id.
+    run: (ctx: Required<ScopeContext>, executionId: string): string =>
+      `${wsBase(ctx)}/activity/${encodeURIComponent(executionId)}`,
+  },
+
   // Knowledge
   knowledge: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/knowledge`,
@@ -136,6 +144,13 @@ export const workspace = {
       `${wsBase(ctx)}/settings/memory`,
     environments: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/environments`,
+  },
+
+  // Evals — score what actually ran and got billed (eval.* capability family).
+  evals: {
+    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/evals`,
+    run: (ctx: Required<ScopeContext>, runId: string): string =>
+      `${wsBase(ctx)}/evals/runs/${encodeURIComponent(runId)}`,
   },
 } as const;
 

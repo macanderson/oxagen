@@ -1136,4 +1136,53 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./code.map")).codeMapHandler as CapabilityHandlerFn,
   );
+  // ── Evals v1 ──────────────────────────────────────────────────────────────────
+  registerHandler(
+    "eval.dataset.create",
+    async () =>
+      (await import("./eval.dataset.create"))
+        .evalDatasetCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "eval.dataset.list",
+    async () =>
+      (await import("./eval.dataset.list"))
+        .evalDatasetListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "eval.dataset.get",
+    async () =>
+      (await import("./eval.dataset.get"))
+        .evalDatasetGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "eval.dataset.item.add",
+    async () =>
+      (await import("./eval.dataset.item.add"))
+        .evalDatasetItemAddHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "eval.dataset.from_traces",
+    async () =>
+      (await import("./eval.dataset.from_traces"))
+        .evalDatasetFromTracesHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "eval.run.start",
+    async () =>
+      (await import("./eval.run.start"))
+        .evalRunStartHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "eval.run.status",
+    async () =>
+      (await import("./eval.run.status"))
+        .evalRunStatusHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "eval.run.get",
+    async () =>
+      (await import("./eval.run.get"))
+        .evalRunGetHandler as CapabilityHandlerFn,
+  );
 });

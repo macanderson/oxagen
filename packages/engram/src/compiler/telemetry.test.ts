@@ -47,6 +47,7 @@ const contextWindow: ContextWindow = {
     candidatesPacked: 10,
     candidatesCompressed: 3,
     candidatesEvicted: 12,
+    retrievalFailures: 0,
   },
 };
 

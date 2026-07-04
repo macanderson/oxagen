@@ -1,6 +1,24 @@
 {
   "capabilities": [
     {
+      "name": "a2a.card.get",
+      "file": "a2a.card.get.ts",
+      "domain": "a2a",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "agent.approval.resolve",
       "file": "agent.approval.resolve.ts",
       "domain": "agent",
@@ -71,7 +89,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -90,7 +108,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -109,7 +127,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -128,7 +146,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -147,7 +165,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -166,7 +184,26 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
+      }
+    },
+    {
+      "name": "agent.execution.list",
+      "file": "agent.execution.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": true,
+        "docs": true
       }
     },
     {
@@ -362,7 +399,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -475,7 +512,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -493,7 +530,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -566,7 +603,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -584,7 +621,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -655,7 +692,7 @@
       "layers": {
         "api": false,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -859,7 +896,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -878,7 +915,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1012,6 +1049,25 @@
       }
     },
     {
+      "name": "agent.trace.get",
+      "file": "agent.trace.get.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": true,
+        "docs": true
+      }
+    },
+    {
       "name": "agent.trigger.create",
       "file": "agent.trigger.create.ts",
       "domain": "agent",
@@ -1027,7 +1083,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1046,7 +1102,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1065,7 +1121,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1084,7 +1140,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1634,7 +1690,8 @@
       "layers": {
         "schema": true,
         "api": true,
-        "unit": true
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -1649,7 +1706,8 @@
       "layers": {
         "schema": true,
         "api": true,
-        "unit": true
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -2162,6 +2220,161 @@
       }
     },
     {
+      "name": "eval-schema",
+      "file": "eval-schema.ts",
+      "domain": "unknown",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {}
+    },
+    {
+      "name": "eval.dataset.create",
+      "file": "eval.dataset.create.ts",
+      "domain": "eval",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "eval.dataset.from_traces",
+      "file": "eval.dataset.from_traces.ts",
+      "domain": "eval",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "eval.dataset.get",
+      "file": "eval.dataset.get.ts",
+      "domain": "eval",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "eval.dataset.item.add",
+      "file": "eval.dataset.item.add.ts",
+      "domain": "eval",
+      "mode": "batch",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "eval.dataset.list",
+      "file": "eval.dataset.list.ts",
+      "domain": "eval",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "eval.run.get",
+      "file": "eval.run.get.ts",
+      "domain": "eval",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "eval.run.start",
+      "file": "eval.run.start.ts",
+      "domain": "eval",
+      "mode": "async",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "eval.run.status",
+      "file": "eval.run.status.ts",
+      "domain": "eval",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "form.fill",
       "file": "form.fill.ts",
       "domain": "form",
@@ -2319,7 +2532,8 @@
       ],
       "layers": {
         "schema": true,
-        "unit": true
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -2332,7 +2546,8 @@
       ],
       "layers": {
         "schema": true,
-        "unit": true
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -2345,7 +2560,8 @@
       ],
       "layers": {
         "schema": true,
-        "unit": true
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -2799,7 +3015,7 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -2994,7 +3210,8 @@
       "layers": {
         "api": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -3557,7 +3774,8 @@
         "agent"
       ],
       "layers": {
-        "schema": true
+        "schema": true,
+        "docs": true
       }
     },
     {
@@ -4261,7 +4479,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -4279,7 +4497,7 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -4313,7 +4531,7 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -4676,7 +4894,7 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {

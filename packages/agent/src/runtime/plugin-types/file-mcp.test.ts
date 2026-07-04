@@ -5,16 +5,20 @@
  * All @oxagen/mcp-config subpath modules and ../../dispatch/mcp-client are
  * mocked so no filesystem reads or live connections are made.
  */
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 // ── Hoist mocks ─────────────────────────────────────────────────────────────
+// A single shared logger instance so tests can assert on warn/error calls
+// (e.g. the stdio security-gate skip warning).
+const loggerMock = vi.hoisted(() => ({
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}));
+
 vi.mock("pino", () => ({
-  default: vi.fn(() => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  })),
+  default: vi.fn(() => loggerMock),
 }));
 
 vi.mock("../plugin-type", () => ({
@@ -91,11 +95,20 @@ const mcpClientMocks = vi.hoisted(() => ({
       authConfig?: Record<string, string>;
     }) => Promise<Record<string, unknown>>
   >(async () => ({})),
+  connectMcpStdio: vi.fn<
+    (args: {
+      command: string;
+      args?: string[];
+      env?: Record<string, string>;
+      cwd?: string;
+    }) => Promise<Record<string, unknown>>
+  >(async () => ({})),
   materializeMcpTools: vi.fn(async () => ({})),
 }));
 
 vi.mock("../../dispatch/mcp-client", () => ({
   connectMcp: mcpClientMocks.connectMcp,
+  connectMcpStdio: mcpClientMocks.connectMcpStdio,
   materializeMcpTools: mcpClientMocks.materializeMcpTools,
 }));
 
@@ -167,12 +180,20 @@ describe("contributeFileBasedMcpTools — disabled server", () => {
   });
 });
 
-describe("contributeFileBasedMcpTools — stdio server", () => {
+describe("contributeFileBasedMcpTools — stdio server (security gate)", () => {
+  const ORIGINAL_FLAG = process.env.OXAGEN_ALLOW_STDIO_MCP;
+
   beforeEach(() => {
     resolveMocks.resolveSettings.mockReturnValue({
       settings: {
         mcpServers: {
-          stdioSrv: { transport: "stdio", command: "node", args: ["server.js"] },
+          stdioSrv: {
+            transport: "stdio",
+            command: "node",
+            args: ["server.js"],
+            env: { API_KEY: "sekret" },
+            cwd: "/work/dir",
+          },
         },
       },
       scopes: [],
@@ -180,13 +201,112 @@ describe("contributeFileBasedMcpTools — stdio server", () => {
     });
     managedMocks.loadManagedConfig.mockReturnValue(null);
     managedMocks.getManagedServers.mockReturnValue({});
+    permMocks.filterToolVisibility.mockImplementation((tools: string[]) => tools);
+    permMocks.getNonDeniedTools.mockImplementation((_s: string, tools: string[]) => tools);
+    managedMocks.checkToolDenied.mockReturnValue(null);
     mcpClientMocks.connectMcp.mockReset();
+    mcpClientMocks.connectMcpStdio.mockReset().mockResolvedValue({});
+    mcpClientMocks.materializeMcpTools.mockReset().mockResolvedValue({
+      "file-mcp.stdioSrv.run": {
+        description: "Run a task",
+        execute: vi.fn(async () => "ran"),
+      },
+    });
+    loggerMock.warn.mockClear();
+    loggerMock.error.mockClear();
   });
 
-  it("skips stdio transport servers (not yet supported)", async () => {
+  afterEach(() => {
+    if (ORIGINAL_FLAG === undefined) delete process.env.OXAGEN_ALLOW_STDIO_MCP;
+    else process.env.OXAGEN_ALLOW_STDIO_MCP = ORIGINAL_FLAG;
+  });
+
+  it("skips stdio server with a WARN (not silently) when the gate is off (server-side default)", async () => {
+    delete process.env.OXAGEN_ALLOW_STDIO_MCP;
     const tools = await contributeFileBasedMcpTools(CTX);
     expect(tools).toEqual([]);
-    expect(mcpClientMocks.connectMcp).not.toHaveBeenCalled();
+    expect(mcpClientMocks.connectMcpStdio).not.toHaveBeenCalled();
+    // Skipped loudly, not silently — a warn carries the reason + how to enable.
+    expect(loggerMock.warn).toHaveBeenCalledTimes(1);
+    const [ctx, msg] = loggerMock.warn.mock.calls[0] as unknown as [
+      { serverName: string },
+      string,
+    ];
+    expect(ctx.serverName).toBe("stdioSrv");
+    expect(msg).toContain("OXAGEN_ALLOW_STDIO_MCP");
+  });
+
+  it("connects the stdio server and contributes its tools when the gate is on", async () => {
+    process.env.OXAGEN_ALLOW_STDIO_MCP = "1";
+    const tools = await contributeFileBasedMcpTools(CTX);
+    expect(mcpClientMocks.connectMcpStdio).toHaveBeenCalledTimes(1);
+    const [args] = mcpClientMocks.connectMcpStdio.mock.calls[0] as unknown as [
+      { command: string; args?: string[]; env?: Record<string, string>; cwd?: string },
+    ];
+    expect(args.command).toBe("node");
+    expect(args.args).toEqual(["server.js"]);
+    expect(args.env).toEqual({ API_KEY: "sekret" });
+    expect(args.cwd).toBe("/work/dir");
+    expect(tools.map((t) => t.realName)).toContain("file-mcp.stdioSrv.run");
+    expect(tools[0]?.externalServerId).toBe("file:stdioSrv");
+  });
+
+  it("accepts 'true' as an enabling value for the gate", async () => {
+    process.env.OXAGEN_ALLOW_STDIO_MCP = "true";
+    await contributeFileBasedMcpTools(CTX);
+    expect(mcpClientMocks.connectMcpStdio).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to the project root as cwd when the config omits it", async () => {
+    process.env.OXAGEN_ALLOW_STDIO_MCP = "1";
+    resolveMocks.resolveSettings.mockReturnValue({
+      settings: {
+        mcpServers: {
+          stdioSrv: { transport: "stdio", command: "node", args: [] },
+        },
+      },
+      scopes: [],
+      serverSources: {},
+    });
+    await contributeFileBasedMcpTools(CTX);
+    const [args] = mcpClientMocks.connectMcpStdio.mock.calls[0] as unknown as [
+      { cwd?: string },
+    ];
+    // findProjectRoot() is mocked to return "/fake/project".
+    expect(args.cwd).toBe("/fake/project");
+  });
+
+  it("isolates a stdio spawn failure — logs error and returns no tools", async () => {
+    process.env.OXAGEN_ALLOW_STDIO_MCP = "1";
+    mcpClientMocks.connectMcpStdio.mockRejectedValue(new Error("ENOENT: node"));
+    const tools = await contributeFileBasedMcpTools(CTX);
+    expect(tools).toEqual([]);
+    expect(loggerMock.error).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips (with WARN) a stdio command not permitted by managed policy allowedCommands", async () => {
+    process.env.OXAGEN_ALLOW_STDIO_MCP = "1";
+    managedMocks.loadManagedConfig.mockReturnValue({
+      managedPolicy: { allowedCommands: ["python", "deno"] },
+      servers: {},
+    });
+    const tools = await contributeFileBasedMcpTools(CTX);
+    expect(tools).toEqual([]);
+    expect(mcpClientMocks.connectMcpStdio).not.toHaveBeenCalled();
+    expect(loggerMock.warn).toHaveBeenCalledTimes(1);
+    const [, msg] = loggerMock.warn.mock.calls[0] as unknown as [unknown, string];
+    expect(msg).toContain("allowedCommands");
+  });
+
+  it("permits a stdio command that matches a managed policy allowedCommands glob", async () => {
+    process.env.OXAGEN_ALLOW_STDIO_MCP = "1";
+    managedMocks.loadManagedConfig.mockReturnValue({
+      managedPolicy: { allowedCommands: ["no*", "*ode"] },
+      servers: {},
+    });
+    const tools = await contributeFileBasedMcpTools(CTX);
+    expect(mcpClientMocks.connectMcpStdio).toHaveBeenCalledTimes(1);
+    expect(tools.map((t) => t.realName)).toContain("file-mcp.stdioSrv.run");
   });
 });
 

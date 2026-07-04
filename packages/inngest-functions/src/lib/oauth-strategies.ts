@@ -308,6 +308,19 @@ export const REFRESH_PROVIDERS: Record<string, ProviderRefreshStrategy> = {
 };
 
 /**
+ * Resolve a connection's provider slug to its REFRESH_PROVIDERS key. The Google
+ * Workspace connectors register per-surface slugs (google-drive, google-gmail,
+ * google-calendar, google-contacts, google-meet, google-tasks, google-bigquery)
+ * that all authenticate against the single shared Google OAuth strategy. Without
+ * this normalization those slugs miss the exact-match lookup and their tokens
+ * silently never refresh (breaking the connection at access-token expiry). All
+ * other providers pass through unchanged.
+ */
+export function refreshProviderKeyFor(provider: string): string {
+  return provider.startsWith("google-") ? "google" : provider;
+}
+
+/**
  * Execute an OAuth refresh for one provider given a decrypted refresh token.
  * Loads the provider's client-credential env vars, POSTs to the token endpoint,
  * and returns the normalized TokenResponse or an { error } result. Never throws
@@ -322,7 +335,7 @@ export async function refreshOAuthToken(
   provider: string,
   refreshToken: string,
 ): Promise<RefreshResult> {
-  const strategy = REFRESH_PROVIDERS[provider];
+  const strategy = REFRESH_PROVIDERS[refreshProviderKeyFor(provider)];
   if (!strategy) return { error: "unsupported_provider" };
   if (strategy.supportsRefresh === false) return { error: "no_refresh_endpoint" };
 

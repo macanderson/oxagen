@@ -42,6 +42,12 @@ export interface CompileMetadata {
   candidatesPacked: number;
   candidatesCompressed: number;
   candidatesEvicted: number;
+  /**
+   * How many retrieval engines (or the pinned-record query) rejected during
+   * compile. 0 on a clean run. A non-zero value means context was degraded —
+   * dropped candidates or, worst case, dropped salience-1.0 procedural rules.
+   */
+  retrievalFailures: number;
 }
 
 export interface LayoutInput {

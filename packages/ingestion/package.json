@@ -28,16 +28,14 @@
   "dependencies": {
     "@oxagen/ai": "workspace:*",
     "@oxagen/code-graph": "workspace:*",
-    "@oxagen/config": "workspace:*",
-    "@oxagen/crypto": "workspace:*",
     "@oxagen/ontology": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "yaml": "2.9.0",
     "zod": "3.25.76"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "2.1.9",
     "typescript": "6.0.3",
-    "vitest": "2.1.9",
-    "@vitest/coverage-v8": "2.1.9"
+    "vitest": "2.1.9"
   }
 }

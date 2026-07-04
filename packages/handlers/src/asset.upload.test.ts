@@ -398,6 +398,10 @@ describe("assetUploadHandler — source: user_upload guards", () => {
   });
 
   it("rejects a workspace-less context with source: user_upload", async () => {
+    // CapabilityContext.workspaceId is typed as a non-nullable string; the
+    // handler's runtime guard (`if (!ctx.workspaceId)`) is what actually
+    // catches a missing scope, so exercise it via the falsy empty string
+    // rather than `null` (a type violation the compiler would reject).
     const noWsCtx: CapabilityContext = { ...validCtx, workspaceId: "" };
     await expect(
       assetUploadHandler(

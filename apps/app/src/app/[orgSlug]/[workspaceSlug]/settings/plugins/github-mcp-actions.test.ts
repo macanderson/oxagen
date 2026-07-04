@@ -17,6 +17,7 @@ const {
   mockAssertOrgMember,
   mockRunInTenantScope,
   mockWithTenantDb,
+  mockLoggerError,
 } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockResolveOrg: vi.fn(),
@@ -24,6 +25,7 @@ const {
   mockAssertOrgMember: vi.fn(),
   mockRunInTenantScope: vi.fn(),
   mockWithTenantDb: vi.fn(),
+  mockLoggerError: vi.fn(),
 }));
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
@@ -37,6 +39,9 @@ vi.mock("@/lib/resolve-org", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mockRunInTenantScope }));
+vi.mock("@oxagen/handlers/logger", () => ({
+  logger: { error: mockLoggerError, warn: vi.fn(), info: vi.fn() },
+}));
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   return { ...real, withTenantDb: mockWithTenantDb };
@@ -270,5 +275,44 @@ describe("getGithubMcpInstallStatus", () => {
     const status = await getGithubMcpInstallStatus({ orgSlug: "acme", workspaceSlug: "main" });
     expect(status.installed).toBe(false);
     expect(status.connected).toBe(false);
+  });
+
+  it("logs and returns not-installed when the listing read rejects (RLS/DB error)", async () => {
+    // First runInTenantScope (listing query) rejects → the .catch fallback fires.
+    mockRunInTenantScope.mockRejectedValueOnce(new Error("RLS: permission denied"));
+
+    const status = await getGithubMcpInstallStatus({ orgSlug: "acme", workspaceSlug: "main" });
+
+    expect(status).toEqual({
+      installed: false,
+      orgListingId: null,
+      connected: false,
+      healthStatus: null,
+    });
+    expect(mockLoggerError).toHaveBeenCalledTimes(1);
+    const [meta, msg] = mockLoggerError.mock.calls[0] as [Record<string, unknown>, string];
+    expect(meta).toMatchObject({ orgSlug: "acme", workspaceSlug: "main" });
+    expect(meta.err).toBeInstanceOf(Error);
+    expect(msg).toMatch(/listing read failed/i);
+  });
+
+  it("logs and reports disconnected when the mcp_servers health read rejects", async () => {
+    mockRunInTenantScope
+      // listing exists
+      .mockResolvedValueOnce([{ id: "listing-uuid-8" }])
+      // mcp_servers health read rejects → .catch fallback fires
+      .mockRejectedValueOnce(new Error("connection reset"));
+
+    const status = await getGithubMcpInstallStatus({ orgSlug: "acme", workspaceSlug: "main" });
+
+    // Listing was found, so installed:true — but health could not be read.
+    expect(status.installed).toBe(true);
+    expect(status.orgListingId).toBe("listing-uuid-8");
+    expect(status.connected).toBe(false);
+    expect(status.healthStatus).toBeNull();
+    expect(mockLoggerError).toHaveBeenCalledTimes(1);
+    const [meta, msg] = mockLoggerError.mock.calls[0] as [Record<string, unknown>, string];
+    expect(meta).toMatchObject({ orgSlug: "acme", workspaceSlug: "main" });
+    expect(msg).toMatch(/mcp_servers health read failed/i);
   });
 });

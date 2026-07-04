@@ -5,6 +5,7 @@
 // PromptConfig shape resolvePrompt() consumes. Best-effort: any shape mismatch
 // or missing row resolves to an empty config (untouched baselines).
 
+import pino from "pino";
 import { withTenantDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import {
@@ -12,6 +13,8 @@ import {
   type OverridablePromptKey,
   OVERRIDABLE_PROMPT_KEYS,
 } from "./registry";
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "ai.prompts" } });
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
@@ -58,4 +61,24 @@ export async function loadWorkspacePromptConfig(
   const settings = row?.settings;
   if (!isRecord(settings)) return {};
   return normalizePromptConfig(settings.promptConfig);
+}
+
+/**
+ * Best-effort wrapper around {@link loadWorkspacePromptConfig}. A prompt-settings
+ * read failure (RLS/DB error, connection loss) must not silently revert a
+ * workspace's configured prompt behavior to defaults with no trace — it logs the
+ * failure once and then degrades to an empty config (baselines pass through).
+ *
+ * Callers that previously used a bare `.catch(() => ({}))` should use this so the
+ * degrade is observable.
+ */
+export async function loadWorkspacePromptConfigSafe(
+  workspaceId: string | null,
+): Promise<PromptConfig> {
+  try {
+    return await loadWorkspacePromptConfig(workspaceId);
+  } catch (err) {
+    logger.warn({ err, workspaceId }, "prompt-config read failed — using defaults");
+    return {};
+  }
 }

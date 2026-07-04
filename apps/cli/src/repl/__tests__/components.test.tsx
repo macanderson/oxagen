@@ -10,12 +10,34 @@ import {
   SpaceInvaders,
   StatusLine,
   StageBadge,
+  STAGE_GLYPH,
+  STAGE_COLOR,
+  STAGE_LABEL,
   ThinkingIndicator,
   TurnSummaryView,
   type Message,
 } from "../components.js";
 import type { SlashCatalogEntry } from "../../slash/catalog.js";
 import type { ApprovalRequest, ApprovalResponse } from "../../agent/permissions.js";
+import type { StageKind } from "../../agent/trace.js";
+
+/**
+ * Every stage the pipeline is known to emit today, in execution order. Keep in
+ * sync with the canonical StageKind union (packages/agent-engine/src/trace/types.ts,
+ * re-exported via apps/cli/src/agent/trace.ts) — see
+ * agent/__tests__/stage-kind-exhaustive.test.ts for the companion PHASE_LABEL
+ * check and the source guard against a hand-copied StageKind reappearing.
+ */
+const KNOWN_STAGE_KINDS: readonly StageKind[] = [
+  "evaluate",
+  "plan",
+  "enhance",
+  "route",
+  "execute",
+  "judge",
+  "revise",
+  "complete",
+];
 
 const sampleReq: ApprovalRequest = {
   tool: "bash",
@@ -423,6 +445,31 @@ describe("StageBadge", () => {
     expect(frame).toContain("[Review]");
     expect(frame).toContain("reviewing completeness");
     expect(frame).toContain("advisor");
+  });
+});
+
+describe("StageKind render maps (exhaustiveness)", () => {
+  it("STAGE_GLYPH/STAGE_COLOR/STAGE_LABEL have an entry for every known stage", () => {
+    for (const kind of KNOWN_STAGE_KINDS) {
+      expect(STAGE_GLYPH[kind]).toBeTruthy();
+      expect(STAGE_COLOR[kind]).toBeTruthy();
+      expect(STAGE_LABEL[kind]).toBeTruthy();
+    }
+  });
+
+  it("expose exactly the known stage kinds — no stragglers, none missing", () => {
+    expect(Object.keys(STAGE_GLYPH).sort()).toEqual([...KNOWN_STAGE_KINDS].sort());
+    expect(Object.keys(STAGE_COLOR).sort()).toEqual([...KNOWN_STAGE_KINDS].sort());
+    expect(Object.keys(STAGE_LABEL).sort()).toEqual([...KNOWN_STAGE_KINDS].sort());
+  });
+
+  it("StageBadge renders every known stage without falling through to undefined", () => {
+    for (const kind of KNOWN_STAGE_KINDS) {
+      const { lastFrame } = render(<StageBadge stage={{ kind, label: `${kind} stage` }} />);
+      const frame = lastFrame() ?? "";
+      expect(frame).toContain(`[${STAGE_LABEL[kind]}]`);
+      expect(frame).not.toContain("undefined");
+    }
   });
 });
 

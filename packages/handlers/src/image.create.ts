@@ -1,9 +1,8 @@
 import {
   generateImageFor,
   selectImageModel,
-  loadWorkspacePromptConfig,
+  loadWorkspacePromptConfigSafe,
   enhancePromptIfInsufficient,
-  type PromptConfig,
 } from "@oxagen/ai";
 import { requireEnv } from "@oxagen/config/env";
 import type { CapabilityHandler } from "@oxagen/oxagen";
@@ -65,9 +64,7 @@ export const imageCreateHandler: CapabilityHandler<typeof imageCreate> = async (
 
   // Auto-improve (Beta): enhance an insufficient prompt before generation when
   // the workspace toggle is on (default). Best-effort; degrades to the original.
-  const promptConfig = await loadWorkspacePromptConfig(ctx.workspaceId).catch(
-    (): PromptConfig => ({}),
-  );
+  const promptConfig = await loadWorkspacePromptConfigSafe(ctx.workspaceId);
   const { prompt: effectivePrompt } = await enhancePromptIfInsufficient({
     prompt: input.prompt,
     kind: "image",

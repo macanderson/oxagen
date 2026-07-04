@@ -2,7 +2,7 @@
  * Tests for the context compiler: packer, fusion, temporal retrieval,
  * layout, and the full compile() orchestrator.
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { DuckDBEpisodicStore } from "../store/duckdb-adapter";
 import { createRecord } from "../record";
 import { TemporalRetrievalEngine } from "../retrieval/temporal";
@@ -13,7 +13,7 @@ import { compile, computeBudget } from "./compile";
 import { countTokens } from "./tokenizer";
 import { compressRecord } from "./compress";
 import type { Namespace, Provenance } from "../types";
-import type { RetrievalCandidate } from "../retrieval/types";
+import type { RetrievalCandidate, RetrievalEngine } from "../retrieval/types";
 
 const NS: Namespace = { org: "test-org", workspace: "test-ws" };
 const PROV: Provenance = {
@@ -347,6 +347,7 @@ describe("buildLayout", () => {
         candidatesPacked: 2,
         candidatesCompressed: 1,
         candidatesEvicted: 7,
+        retrievalFailures: 0,
       },
     });
 
@@ -384,6 +385,7 @@ describe("buildLayout", () => {
         candidatesPacked: 0,
         candidatesCompressed: 0,
         candidatesEvicted: 0,
+        retrievalFailures: 0,
       },
     });
     const systemSection = window.sections.find((s) => s.type === "system");
@@ -417,6 +419,7 @@ describe("buildLayout", () => {
         candidatesPacked: 0,
         candidatesCompressed: 0,
         candidatesEvicted: 0,
+        retrievalFailures: 0,
       },
     });
     expect(window.cachePrefix.hitRate).toBeGreaterThan(0);
@@ -518,6 +521,79 @@ describe("compile()", () => {
     if (proceduralSection) {
       expect(proceduralSection.content).toContain("Validate all inputs");
     }
+  });
+
+  it("records a rejecting engine in metadata.retrievalFailures and still returns", async () => {
+    const budget = computeBudget("gpt-4");
+    const failingEngine: RetrievalEngine = {
+      name: "vector",
+      retrieve: () => Promise.reject(new Error("vector store down")),
+    };
+    const window = await compile(
+      {
+        namespace: NS,
+        taskDescription: "test",
+        workingSet: [],
+        recentEventIds: [],
+        modelId: "gpt-4",
+      },
+      budget,
+      {
+        engines: [new TemporalRetrievalEngine(store), failingEngine],
+        store,
+      },
+    );
+    // No throw — degrades gracefully to the surviving engine's candidates.
+    expect(window.sections.length).toBeGreaterThan(0);
+    expect(window.metadata.retrievalFailures).toBe(1);
+  });
+
+  it("invokes onError with engine context when a retrieval engine rejects", async () => {
+    const budget = computeBudget("gpt-4");
+    const onError = vi.fn();
+    const failingEngine: RetrievalEngine = {
+      name: "vector",
+      retrieve: () => Promise.reject(new Error("vector store down")),
+    };
+    await compile(
+      {
+        namespace: NS,
+        taskDescription: "test",
+        workingSet: [],
+        recentEventIds: [],
+        modelId: "gpt-4",
+      },
+      budget,
+      { engines: [failingEngine], store, onError },
+    );
+    expect(onError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ phase: "engine-retrieve", engine: "vector" }),
+    );
+  });
+
+  it("records a rejecting pinned-record query in metadata.retrievalFailures and invokes onError", async () => {
+    const budget = computeBudget("gpt-4");
+    const onError = vi.fn();
+    // Wrap the store so the pinned-record query rejects but retrieval works.
+    const brokenStore = Object.create(store) as typeof store;
+    brokenStore.query = () => Promise.reject(new Error("pinned query down"));
+    const window = await compile(
+      {
+        namespace: NS,
+        taskDescription: "test",
+        workingSet: [],
+        recentEventIds: [],
+        modelId: "gpt-4",
+      },
+      budget,
+      { engines: [new TemporalRetrievalEngine(store)], store: brokenStore, onError },
+    );
+    expect(window.metadata.retrievalFailures).toBe(1);
+    expect(onError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ phase: "pinned-query" }),
+    );
   });
 
   it("populates metadata timing fields", async () => {

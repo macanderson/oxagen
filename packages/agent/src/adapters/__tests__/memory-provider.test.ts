@@ -8,12 +8,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── mocks ─────────────────────────────────────────────────────────────────────
 
-const { recallMemories, recallPeerResults, writeMemory, embedText } = vi.hoisted(
+const { recallMemories, recallPeerResults, writeMemory, embedText, insertEvents } = vi.hoisted(
   () => ({
     recallMemories: vi.fn(),
     recallPeerResults: vi.fn(),
     writeMemory: vi.fn(),
     embedText: vi.fn(),
+    insertEvents: vi.fn((..._args: unknown[]) => Promise.resolve()),
   }),
 );
 
@@ -23,6 +24,7 @@ vi.mock("../../memory/neo4j", () => ({
   writeMemory,
 }));
 vi.mock("../../memory/embed", () => ({ embedText }));
+vi.mock("@oxagen/telemetry", () => ({ insertEvents }));
 
 import { createPlatformMemoryProvider } from "../memory-provider";
 
@@ -42,6 +44,8 @@ beforeEach(() => {
   recallPeerResults.mockReset();
   writeMemory.mockReset();
   embedText.mockReset();
+  insertEvents.mockReset();
+  insertEvents.mockResolvedValue(undefined);
   embedText.mockResolvedValue(FAKE_EMBEDDING);
   // Default: no peer results, so existing memory-only assertions hold.
   recallPeerResults.mockResolvedValue([]);
@@ -66,6 +70,7 @@ describe("createPlatformMemoryProvider — recallContext", () => {
     expect(recallMemories).toHaveBeenCalledWith(
       expect.objectContaining({ embedding: FAKE_EMBEDDING, limit: 8, recallThreshold: 0.7 }),
     );
+    expect(insertEvents).not.toHaveBeenCalled(); // no failure → no failure event
     // No class/enforcement filter — coding-turn recall wants the broadest context.
     const arg = recallMemories.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(arg.memoryClass).toBeUndefined();
@@ -79,6 +84,37 @@ describe("createPlatformMemoryProvider — recallContext", () => {
     const result = await provider.recallContext();
 
     expect(result).toBe("");
+  });
+
+  it("when recall throws: degrades to empty AND records a failure telemetry event (loud, not silent)", async () => {
+    // The memory store is down — the embed/recall throws.
+    embedText.mockRejectedValueOnce(new Error("neo4j unreachable"));
+
+    const provider = createPlatformMemoryProvider({ recallQuery: "foo", telemetry: TELEMETRY });
+    const result = await provider.recallContext();
+
+    // Never kills the turn: degrades to no recalled context.
+    expect(result).toBe("");
+    // Platform-wide memory loss is now VISIBLE: an append-only failure event.
+    expect(insertEvents).toHaveBeenCalledTimes(1);
+    const rows = insertEvents.mock.calls[0]?.[0] as Array<Record<string, unknown>>;
+    expect(rows[0]).toMatchObject({
+      event_type: "agent.memory.recall_failed",
+      source_system: "agent.memory-adapter",
+      org_id: "org-uuid-1",
+      workspace_id: "ws-uuid-1",
+    });
+    const payload = JSON.parse(rows[0]!.payload as string);
+    expect(payload).toMatchObject({ surface: "agent", error: "neo4j unreachable" });
+  });
+
+  it("a telemetry-emit failure during a recall failure is itself swallowed (no second failure mode)", async () => {
+    embedText.mockRejectedValueOnce(new Error("neo4j unreachable"));
+    insertEvents.mockRejectedValueOnce(new Error("clickhouse also down"));
+
+    const provider = createPlatformMemoryProvider({ recallQuery: "foo", telemetry: TELEMETRY });
+    // Still resolves to "" — telemetry being down must not re-throw.
+    await expect(provider.recallContext()).resolves.toBe("");
   });
 
   it("appends peer-result lines after memory lines with the run id", async () => {

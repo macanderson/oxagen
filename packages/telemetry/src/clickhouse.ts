@@ -1,6 +1,30 @@
 import { createClient, type ClickHouseClient } from "@clickhouse/client";
 import { requireEnv } from "@oxagen/config/env";
 import { currentTraceIds } from "./tracer";
+import { getBreaker, type BreakerTransition, type CircuitBreaker } from "./circuit-breaker";
+import { breakerEnvConfig } from "./breaker-config";
+
+/**
+ * Circuit breaker for the shared ClickHouse client. A degraded ClickHouse must
+ * fail fast instead of every append/query piling onto a down store.
+ *
+ * Unlike the Neo4j/Stripe breakers (breaker-clients.ts), this one CANNOT record
+ * its own transitions in ClickHouse — that is the very dependency that is down —
+ * so it logs trips to stderr only. Writes here are overwhelmingly fire-and-forget
+ * telemetry, so a `CircuitOpenError` just means "drop this row while ClickHouse
+ * recovers", which callers already tolerate.
+ */
+function clickhouseBreaker(): CircuitBreaker {
+  return getBreaker("clickhouse", {
+    ...breakerEnvConfig(),
+    onTransition: (t: BreakerTransition) =>
+      process.stderr.write(
+        `[circuit-breaker] ${t.key} ${t.from}->${t.to} (failures=${t.failureCount})` +
+          (t.error ? ` err=${t.error}` : "") +
+          "\n",
+      ),
+  });
+}
 
 // Singleton client per process. ClickHouse Cloud handles concurrency
 // upstream; we just reuse a single keepalive connection pool.
@@ -60,8 +84,10 @@ export async function sumTokenUsage(args: {
 }): Promise<TokenUsageRollup[]> {
   const ch = clickhouse();
   // Aggregating in ClickHouse rather than pulling raw rows keeps the
-  // payload bounded regardless of usage volume.
-  const result = await ch.query({
+  // payload bounded regardless of usage volume. Breaker-guarded so a degraded
+  // store fails fast rather than stalling the billing rollup.
+  const result = await clickhouseBreaker().exec(() =>
+    ch.query({
     query: `
       SELECT
         sum(input_tokens)  AS input_tokens,
@@ -80,7 +106,8 @@ export async function sumTokenUsage(args: {
       periodEnd: args.periodEnd.toISOString().replace("Z", ""),
     },
     format: "JSONEachRow",
-  });
+    }),
+  );
   type Row = {
     input_tokens: string;
     output_tokens: string;
@@ -218,8 +245,11 @@ export interface TokenUsageRow {
 async function insertRows<T>(table: string, rows: readonly T[]): Promise<void> {
   if (rows.length === 0) return;
   // Batched JSONEachRow keeps a single round-trip per insert call;
-  // callers should accumulate rows before invoking.
-  await clickhouse().insert({ table, values: rows, format: "JSONEachRow" });
+  // callers should accumulate rows before invoking. Guarded by the ClickHouse
+  // breaker so a down store fails fast instead of being hammered.
+  await clickhouseBreaker().exec(() =>
+    clickhouse().insert({ table, values: rows, format: "JSONEachRow" }),
+  );
 }
 
 /**
@@ -339,6 +369,55 @@ export const insertToolInvocation = (row: ToolInvocationRow) => {
       span_id: row.span_id ?? span_id,
     },
   ]);
+};
+
+// ── Runtime error stream (0020_error_events.sql) ──────────────────────────────
+//
+// One row per high-severity/unhandled server error captured by captureError()
+// (see error-reporting.ts). ClickHouse is the correct store for append-only
+// runtime events. Distinct from the Postgres security_events audit trail.
+export interface ErrorEventRow {
+  error_id: string;
+  /** Nil UUID when the error occurred before a tenant scope was resolved. */
+  org_id: string | null;
+  /** Nil UUID when org-level or pre-scope. */
+  workspace_id: string | null;
+  severity: "fatal" | "error" | "warn";
+  /** Which runtime captured it. */
+  source: "api" | "app" | "mcp" | "inngest" | "runner";
+  /** Error constructor name, e.g. "TypeError". */
+  error_class: string;
+  /** Truncated error message (bounded by the caller). */
+  message: string;
+  /** Truncated stack trace (bounded by the caller). */
+  stack: string;
+  /** Capability name for kernel-invocation errors, else "". */
+  capability: string;
+  /** Request/correlation id, else "". */
+  request_id: string;
+  /** SHA-256(class + normalized message) prefix — stable grouping key. */
+  fingerprint: string;
+  created_at: string;
+  /** OTEL trace id; stamped automatically from the active span when omitted. */
+  trace_id?: string;
+  /** OTEL span id; stamped automatically from the active span when omitted. */
+  span_id?: string;
+}
+
+export const insertErrorEvents = (rows: readonly ErrorEventRow[]) => {
+  const { trace_id, span_id } = currentTraceIds();
+  return insertRows(
+    "error_events",
+    // Coalesce "no tenant scope" (null/undefined) to the nil UUID so the
+    // UUID columns always receive a parseable value, and stamp trace context.
+    rows.map((r) => ({
+      ...r,
+      org_id: r.org_id ?? NIL_UUID,
+      workspace_id: r.workspace_id ?? NIL_UUID,
+      trace_id: r.trace_id ?? trace_id,
+      span_id: r.span_id ?? span_id,
+    })),
+  );
 };
 
 /**
@@ -600,8 +679,9 @@ export async function latestAuditChainHash(args: {
   capability: string;
 }): Promise<string> {
   const ch = clickhouse();
-  const result = await ch.query({
-    query: `
+  const result = await clickhouseBreaker().exec(() =>
+    ch.query({
+      query: `
       SELECT chain_hash
       FROM audit_events FINAL
       WHERE org_id = {orgId:UUID}
@@ -609,9 +689,10 @@ export async function latestAuditChainHash(args: {
       ORDER BY occurred_at DESC
       LIMIT 1
     `,
-    query_params: { orgId: args.orgId, capability: args.capability },
-    format: "JSONEachRow",
-  });
+      query_params: { orgId: args.orgId, capability: args.capability },
+      format: "JSONEachRow",
+    }),
+  );
   type Row = { chain_hash: string };
   const rows = (await result.json()) as Row[];
   return rows[0]?.chain_hash ?? "";

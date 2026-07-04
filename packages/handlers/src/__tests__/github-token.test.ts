@@ -259,6 +259,42 @@ describe("resolveGitHubToken", () => {
     expect(mocks.withTenantDb).toHaveBeenCalledOnce();
   });
 
+  // ── Path 3 production guard: PAT must not be set in prod ─────────────────
+
+  it("warns loudly (but still returns the token) when the PAT is used in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("GITHUB_PERSONAL_ACCESS_TOKEN", "ghp_prod_leak");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    // No connection rows → resolution falls to the env-var fallback.
+    mockDbCalls([]);
+
+    const token = await resolveGitHubToken(makeCtx());
+
+    expect(token).toBe("ghp_prod_leak");
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("GITHUB_PERSONAL_ACCESS_TOKEN is set in production"),
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it("stays quiet in development when the PAT is used as a fallback", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("GITHUB_PERSONAL_ACCESS_TOKEN", "ghp_dev_ok");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    mockDbCalls([]);
+
+    const token = await resolveGitHubToken(makeCtx());
+
+    expect(token).toBe("ghp_dev_ok");
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+  });
+
   // ── Path 4: error ───────────────────────────────────────────────────────
 
   it("throws an actionable error when no credentials are available", async () => {

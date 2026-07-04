@@ -29,6 +29,7 @@ import {
   rememberMemory,
   type RecalledMemory,
 } from "../../lib/memory-client.js";
+import { debugLog } from "../../lib/debug-log.js";
 
 /** Kinds the engine records that we mirror into the fleet two-axis lesson store. */
 const FLEET_KINDS = new Set<MemoryRecord["memoryKind"]>([
@@ -132,7 +133,15 @@ export function createServerMemory(opts: ServerMemoryOptions = {}): ServerMemory
       const prefix = opts.projectName ? `[${opts.projectName}] ` : "";
       const filesSuffix = files.length ? ` (files: ${files.slice(0, 5).join(", ")})` : "";
       const text = `${prefix}${lesson}${filesSuffix}`;
-      void rememberMemory({ text, memoryKind: kind, source: "fix" }).catch(() => {});
+      void rememberMemory({ text, memoryKind: kind, source: "fix" }).catch(
+        (err: unknown) => {
+          // Fire-and-forget: a failed mirror must never break a run, but it is
+          // no longer silent — record it on the CLI debug channel.
+          void debugLog("error", "memory.remember-failed", {
+            message: err instanceof Error ? err.message : String(err),
+          });
+        },
+      );
     },
   };
 }
@@ -222,7 +231,14 @@ export function createCombinedMemory(
   return {
     async recallContext() {
       const local = session
-        ? await session.recallContext().catch(() => "")
+        ? await session.recallContext().catch((err: unknown) => {
+            // Best-effort: an episodic-store hiccup degrades to no session tail,
+            // never fatal — but record it on the CLI debug channel.
+            void debugLog("error", "memory.recall-failed", {
+              message: err instanceof Error ? err.message : String(err),
+            });
+            return "";
+          })
         : "";
       const remote = await recallServer();
       return [local, remote].filter((s) => s).join("\n\n");
