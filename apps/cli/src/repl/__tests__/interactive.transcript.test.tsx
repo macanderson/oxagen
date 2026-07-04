@@ -23,7 +23,11 @@ import { render } from "ink-testing-library";
 // the REPL takes the "closeStreamingBlocks → push final assistant" path and the
 // answer lands as a settled (non-streaming) message, eligible for <Static>.
 const runTurnSpy = vi.fn<(opts: { prompt: string }) => void>();
-vi.mock("@oxagen/agent-engine", () => ({
+vi.mock("@oxagen/agent-engine", async (importOriginal) => ({
+  // Real module first: ReplApp reaches beyond runTurn (e.g. model-roles.ts
+  // resolves the judge via pickAdvisorModel at mount) — a bare factory
+  // mock crashes the very first render with undefined exports.
+  ...(await importOriginal<typeof import("@oxagen/agent-engine")>()),
   runTurn: async (opts: { prompt: string }) => {
     runTurnSpy(opts);
     return {
@@ -71,6 +75,18 @@ vi.mock("../../agent/model.js", () => ({
 vi.mock("../../agent/code-graph.js", () => ({
   queryCodeGraph: async () => "",
 }));
+
+// Planning fires a REAL structured-output LLM call (and the memory recall
+// before it) on every turn — a unit test must never drive that. Degrade to
+// the same synchronous fallback plan a planner failure produces, which keeps
+// the single-task -> runTurn flow these tests assert on.
+vi.mock("../plan-turn.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../plan-turn.js")>();
+  return {
+    ...actual,
+    planReplTurn: async ({ goal }: { goal: string }) => actual.fallbackPlan(goal),
+  };
+});
 
 // Treat the project as already initialized so the first prompt goes straight to
 // the turn pipeline instead of triggering the interactive init/approval gate.

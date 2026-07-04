@@ -109,6 +109,7 @@ import {
   type ScrollCtx,
 } from "./scroll.js";
 import { telemetryReducer, INITIAL_TELEMETRY_STATE } from "./telemetry.js";
+import { resolveModelRoles } from "./model-roles.js";
 import { borderPhaseFor, promptBorderColorFor, RAINBOW_FLASH_INTERVAL_MS } from "./border-phase.js";
 import { inputContentRow } from "./mouse-select.js";
 import { HeaderBar, TranscriptViewport, TelemetryDock, formatElapsed } from "./fullscreen-chrome.js";
@@ -447,7 +448,14 @@ export function ReplApp({
   // numbers come straight from `metrics` above — this reducer only tracks
   // what that doesn't already have (model slugs, phase/step/round, tool
   // tallies).
-  const [telemetry, dispatchTelemetry] = useReducer(telemetryReducer, INITIAL_TELEMETRY_STATE);
+  // Seed the MODELS readout eagerly: worker/judge/planner are all resolvable
+  // from defaults + overrides at mount, so the user sees which models will run
+  // BEFORE the first prompt — stage events overwrite with actuals mid-turn.
+  const [telemetry, dispatchTelemetry] = useReducer(
+    telemetryReducer,
+    INITIAL_TELEMETRY_STATE,
+    (initial) => ({ ...initial, models: resolveModelRoles(resolveModelId(options.model)) }),
+  );
   // Prompt-input border color, animated through the turn lifecycle (see
   // border-phase.ts): derived from the SAME telemetry.turn.phase the TURN
   // dock panel reads above, rather than a second dispatched phase, so the
@@ -1289,6 +1297,9 @@ export function ReplApp({
           // — there is no allowlist. If the gateway rejects the slug the next
           // turn surfaces a clear 4xx; switch with /model <vendor/model>.
           setModel(slug);
+          // The judge is chosen to differ from the worker, so a worker switch
+          // can change it — refresh the MODELS readout to what will now run.
+          dispatchTelemetry({ type: "seed-models", models: resolveModelRoles(slug) });
           pushAssistant(
             `Model set to ${slug}. (Any valid text model slug is accepted; ` +
               `the gateway resolves it at request time.)`,
@@ -2035,6 +2046,9 @@ export function ReplApp({
           onReasoning: (delta) => {
             if (turnController.signal.aborted) return;
             noteProgress();
+            // Reasoning tokens are billed output — feed the live burn estimate
+            // (real usage supersedes it when the call settles).
+            metricsBusRef.current.noteStreamChars(delta.length);
             // Reasoning and answer text interleave across steps — close the
             // assistant block when thinking resumes so they never merge.
             if (assistantOpen) closeStreamingBlocks();
@@ -2055,6 +2069,9 @@ export function ReplApp({
             if (turnController.signal.aborted) return;
             noteProgress();
             streamCharsRef.current += delta.length;
+            // Live burn: tick the status line/dock while the worker streams,
+            // instead of only when the call's usage settles.
+            metricsBusRef.current.noteStreamChars(delta.length);
             if (reasoningOpen) closeStreamingBlocks();
             if (!assistantOpen) {
               turn.push({
@@ -2660,11 +2677,14 @@ export function ReplApp({
           // correctly at the end (Bug 2) — cache used to lag behind on a
           // separate one-shot-per-turn total while tokens/cost updated live.
           inputTokens={metrics.sessionTokensIn}
-          outputTokens={metrics.sessionTokensOut}
+          // `streamTokensOut` is the in-flight call's live ~chars/4 estimate;
+          // it zeroes when the call's real usage lands, so these sums tick
+          // during streaming and settle on exact totals (see metrics.ts).
+          outputTokens={metrics.sessionTokensOut + metrics.streamTokensOut}
           cacheHit={metrics.sessionCachedTokens}
           cacheMiss={Math.max(0, metrics.sessionTokensIn - metrics.sessionCachedTokens)}
           costUsd={metrics.sessionCostUsd}
-          turnOutputTokens={metrics.turnTokensOut}
+          turnOutputTokens={metrics.turnTokensOut + metrics.streamTokensOut}
           turnCostUsd={metrics.turnCostUsd}
           pipelineOn={pipelineOn}
           verboseOn={verboseOn}

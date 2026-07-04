@@ -63,7 +63,13 @@ export type TelemetryAction =
   | { type: "turn-start"; at: number }
   | { type: "stage"; stage: StageEvent }
   | { type: "tool-call"; name: string }
-  | { type: "turn-end" };
+  | { type: "turn-end" }
+  /**
+   * Overwrite the MODELS readout with eagerly-resolved slugs (at REPL mount and
+   * on `/model`), so the panel is populated before the first turn instead of
+   * showing dashes. Stage events later overwrite with engine-reported actuals.
+   */
+  | { type: "seed-models"; models: TelemetryModels };
 
 /**
  * Pulls the evaluator/planner model slug from an "evaluate" {@link StageEvent}'s
@@ -138,6 +144,8 @@ export function telemetryReducer(state: TelemetryState, action: TelemetryAction)
     }
     case "turn-end":
       return { ...state, turn: { ...state.turn, phase: "complete" } };
+    case "seed-models":
+      return { ...state, models: { ...state.models, ...action.models } };
     default:
       return state;
   }

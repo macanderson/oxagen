@@ -33,7 +33,9 @@ const BASE_AGG = {
   conflicts: [],
   timeline: [],
   children: [],
-  firstError: null,
+  aggregatedDataTruncated: false,
+      recheckAfterMs: null,
+      firstError: null,
 };
 
 // The inngest function handler is exposed as `.fn` on the created function.

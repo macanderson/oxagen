@@ -70,6 +70,8 @@ describe("agent.subagent.aggregate capability", () => {
       conflicts: [],
       timeline: [],
       children: [],
+      aggregatedDataTruncated: false,
+      recheckAfterMs: null,
       firstError: null,
     });
     expect(parsed.status).toBe("completed");
@@ -85,6 +87,8 @@ describe("agent.subagent.aggregate capability", () => {
       conflicts: [],
       timeline: [],
       children: [],
+      aggregatedDataTruncated: false,
+      recheckAfterMs: null,
       firstError: null,
     });
     expect(parsed.status).toBe("partial");
@@ -100,6 +104,8 @@ describe("agent.subagent.aggregate capability", () => {
       conflicts: [],
       timeline: [],
       children: [],
+      aggregatedDataTruncated: false,
+      recheckAfterMs: null,
       firstError: "Something broke",
     });
     expect(parsed.status).toBe("failed");
@@ -116,6 +122,8 @@ describe("agent.subagent.aggregate capability", () => {
       conflicts: [],
       timeline: [],
       children: [],
+      aggregatedDataTruncated: false,
+      recheckAfterMs: null,
       firstError: null,
     });
     expect(parsed.status).toBe("timed_out");
@@ -132,7 +140,9 @@ describe("agent.subagent.aggregate capability", () => {
         conflicts: [],
         timeline: [],
         children: [],
-        firstError: null,
+        aggregatedDataTruncated: false,
+      recheckAfterMs: null,
+      firstError: null,
       }),
     ).toThrow();
   });
@@ -149,6 +159,8 @@ describe("agent.subagent.aggregate capability", () => {
       conflicts: [],
       timeline: [],
       children: [],
+      aggregatedDataTruncated: false,
+      recheckAfterMs: null,
       firstError: null,
     });
     expect(parsed.aggregatedData).toBeNull();
@@ -164,6 +176,8 @@ describe("agent.subagent.aggregate capability", () => {
       conflicts: [],
       timeline: [],
       children: [],
+      aggregatedDataTruncated: false,
+      recheckAfterMs: null,
       firstError: null,
     });
     expect(parsed.aggregatedData).toEqual({ summary: "merged", count: 42 });
@@ -183,6 +197,8 @@ describe("agent.subagent.aggregate capability", () => {
       ],
       timeline: [],
       children: [],
+      aggregatedDataTruncated: false,
+      recheckAfterMs: null,
       firstError: null,
     });
     expect(parsed.conflicts).toHaveLength(1);
@@ -211,6 +227,8 @@ describe("agent.subagent.aggregate capability", () => {
         },
       ],
       children: [],
+      aggregatedDataTruncated: false,
+      recheckAfterMs: null,
       firstError: null,
     });
     expect(parsed.timeline).toHaveLength(1);
@@ -237,6 +255,8 @@ describe("agent.subagent.aggregate capability", () => {
         },
       ],
       children: [],
+      aggregatedDataTruncated: false,
+      recheckAfterMs: null,
       firstError: null,
     });
     expect(parsed.timeline[0]?.startedAt).toBeNull();
@@ -255,6 +275,8 @@ describe("agent.subagent.aggregate capability", () => {
       conflicts: [],
       timeline: [],
       children: [],
+      aggregatedDataTruncated: false,
+      recheckAfterMs: null,
       firstError: null,
     });
     expect(parsed.firstError).toBeNull();
@@ -272,7 +294,9 @@ describe("agent.subagent.aggregate capability", () => {
         conflicts: [],
         timeline: [],
         children: [],
-        firstError: null,
+        aggregatedDataTruncated: false,
+      recheckAfterMs: null,
+      firstError: null,
       }),
     ).toThrow();
   });
@@ -288,7 +312,9 @@ describe("agent.subagent.aggregate capability", () => {
         conflicts: [],
         timeline: [],
         children: [],
-        firstError: null,
+        aggregatedDataTruncated: false,
+      recheckAfterMs: null,
+      firstError: null,
       }),
     ).toThrow();
   });
