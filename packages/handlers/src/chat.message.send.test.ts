@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   txAsstMsgInsertReturning: vi.fn(),
   txUpdateSetWhere: vi.fn(),
   txFn: vi.fn(),
+  // Captures the `.values(...)` argument of the user-message insert (the
+  // 2nd insert call) so a test can assert on the persisted `metadata` field.
+  lastUserMessageValues: undefined as Record<string, unknown> | undefined,
 }));
 
 // ── default mock return values ────────────────────────────────────────────────
@@ -41,9 +44,10 @@ mocks.txFn.mockImplementation(async (cb: (tx: Record<string, unknown>) => Promis
       if (insertCount === 2) {
         // Second insert: user message
         return {
-          values: (_vals: unknown) => ({
-            returning: mocks.txUserMsgInsertReturning,
-          }),
+          values: (vals: Record<string, unknown>) => {
+            mocks.lastUserMessageValues = vals;
+            return { returning: mocks.txUserMsgInsertReturning };
+          },
         } as unknown;
       }
       // Third insert: assistant message
@@ -95,6 +99,14 @@ const BASE_INPUT = {
   content: "Hello, assistant",
   contentBlocks: [] as unknown[],
   branchReason: null as "edit" | "regenerate" | "tool_retry" | "manual_fork" | null,
+  attachments: [] as {
+    publicId: string;
+    kind: "image" | "video" | "document";
+    name: string;
+    mimeType: string;
+    url: string;
+    sizeBytes?: number;
+  }[],
 };
 
 describe("chatMessageSendHandler (@oxagen/handlers)", () => {
@@ -107,6 +119,8 @@ describe("chatMessageSendHandler (@oxagen/handlers)", () => {
     mocks.txUserMsgInsertReturning.mockResolvedValue([{ id: "umsg_1" }]);
     mocks.txAsstMsgInsertReturning.mockResolvedValue([{ id: "amsg_1" }]);
     mocks.txUpdateSetWhere.mockResolvedValue(undefined);
+
+    mocks.lastUserMessageValues = undefined;
 
     // Restore the transaction mock. The mock tracks insertCount locally, so
     // re-registering it here restores the per-test counter correctly.
@@ -125,9 +139,10 @@ describe("chatMessageSendHandler (@oxagen/handlers)", () => {
             }
             if (insertCount === 2) {
               return {
-                values: (_vals: unknown) => ({
-                  returning: mocks.txUserMsgInsertReturning,
-                }),
+                values: (vals: Record<string, unknown>) => {
+                  mocks.lastUserMessageValues = vals;
+                  return { returning: mocks.txUserMsgInsertReturning };
+                },
               } as unknown;
             }
             return {
@@ -202,6 +217,27 @@ describe("chatMessageSendHandler (@oxagen/handlers)", () => {
     expect(mocks.txConvInsertReturning).toHaveBeenCalledTimes(1);
     // Result uses the newly created conversation id
     expect(result.conversationId).toBe("conv_1");
+  });
+
+  it("persists an empty metadata object when no attachments are sent", async () => {
+    await chatMessageSendHandler({ ...BASE_INPUT, conversationId: null }, CTX);
+    expect(mocks.lastUserMessageValues?.metadata).toEqual({});
+  });
+
+  it("persists attachment refs onto the user message's metadata", async () => {
+    const attachment = {
+      publicId: "gen_abc",
+      kind: "image" as const,
+      name: "cat.png",
+      mimeType: "image/png",
+      url: "/api/v1/assets/gen_abc",
+      sizeBytes: 2048,
+    };
+    await chatMessageSendHandler(
+      { ...BASE_INPUT, conversationId: null, attachments: [attachment] },
+      CTX,
+    );
+    expect(mocks.lastUserMessageValues?.metadata).toEqual({ attachments: [attachment] });
   });
 
   it("returns all four ids on the new-conversation happy path", async () => {

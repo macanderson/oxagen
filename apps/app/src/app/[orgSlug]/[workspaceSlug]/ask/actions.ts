@@ -64,12 +64,26 @@ export async function sendMessageAction(
   });
   if (!parsed.success) return { ok: false, error: "Invalid message" };
 
+  // The composer serializes already-uploaded attachments (publicId refs only
+  // — never inline bytes) as a JSON `attachments` field. Absent/malformed
+  // input parses to [] via chatMessageSend's schema default below, EXCEPT a
+  // present-but-unparsable JSON string, which fails fast here.
+  let rawAttachments: unknown = [];
+  if (typeof raw.attachments === "string" && raw.attachments.length > 0) {
+    try {
+      rawAttachments = JSON.parse(raw.attachments);
+    } catch {
+      return { ok: false, error: "Invalid attachments" };
+    }
+  }
+
   const capabilityInput = chatMessageSend.input.safeParse({
     conversationId: parsed.data.conversationId,
     parentMessageId: parsed.data.parentMessageId,
     branchReason: parsed.data.branchReason,
     content: parsed.data.content,
     contentBlocks: [],
+    attachments: rawAttachments,
   });
   if (!capabilityInput.success) return { ok: false, error: capabilityInput.error.issues[0]?.message ?? "Invalid" };
 
@@ -146,7 +160,15 @@ export async function sendMessageAction(
             contentBlocks: capabilityInput.data.contentBlocks,
             branchReason: capabilityInput.data.branchReason ?? undefined,
             isActiveInBranch: true,
-            metadata: {},
+            // Attachment refs (publicId only) ride on metadata rather than
+            // contentBlocks — message-bubble.tsx renders them from
+            // messages.metadata.attachments (see attachment-chip.tsx's
+            // ConversationAttachmentRef), and the chat stream route/history.ts
+            // resolve them server-side to build multimodal model input.
+            metadata:
+              capabilityInput.data.attachments.length > 0
+                ? { attachments: capabilityInput.data.attachments }
+                : {},
             createdByUserId: session.user.id,
             updatedByUserId: session.user.id,
           })

@@ -26,6 +26,7 @@ export const conversationChatHandler: CapabilityHandler<typeof conversationChat>
       branchReason: null,
       content: input.message ?? "",
       contentBlocks: [],
+      attachments: [],
     },
     ctx,
   );

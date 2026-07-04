@@ -63,7 +63,10 @@ export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> =
       if (!exists) throw new Error("conversation not found in this tenant");
     }
 
-    // 2. Persist the user message.
+    // 2. Persist the user message. Attachment refs (publicId only — already
+    // uploaded via asset.upload/source:"user_upload") ride on metadata, same
+    // shape apps/app's sendMessageAction writes, so an attachment sent
+    // through the API/MCP surface renders identically in message-bubble.tsx.
     const [userMessage] = await tx
       .insert(schema.messages)
       .values({
@@ -76,7 +79,7 @@ export const chatMessageSendHandler: CapabilityHandler<typeof chatMessageSend> =
         contentBlocks: input.contentBlocks,
         branchReason: input.branchReason,
         isActiveInBranch: true,
-        metadata: {},
+        metadata: input.attachments.length > 0 ? { attachments: input.attachments } : {},
         createdByUserId: ctx.userId,
         updatedByUserId: ctx.userId,
       })
