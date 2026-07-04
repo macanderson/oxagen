@@ -1642,6 +1642,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_ALLOW_STDIO_MCP: {
+    group: "CLI",
+    description:
+      "Set to '1' or 'true' to allow stdio-transport MCP servers to be SPAWNED as child " +
+      "processes from workspace file-mcp plugin configs (packages/agent file-mcp.ts). " +
+      "Spawning is OFF by default because a workspace-scoped config could otherwise " +
+      "execute arbitrary commands on the API host — enable only for a trusted " +
+      "local/CLI runtime, never on shared server deployments. HTTP MCP transports are " +
+      "unaffected and always processed.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_BEST_OF_N_PIPELINE: {
     group: "CLI",
     description:

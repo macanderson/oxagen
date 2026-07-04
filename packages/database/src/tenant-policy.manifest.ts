@@ -63,6 +63,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Durable code-agent sandbox session registry (orgScopeMixin + tenant_isolation
   // RLS in 20260628120000_agent_sandbox_sessions.sql).
   { table: "agent.sandbox_sessions", policyClass: "standard" },
+  // Durable A2A task store (orgScopeMixin + tenant_isolation RLS in
+  // 20260704230000_a2a_tasks.sql).
+  { table: "agent.a2a_tasks", policyClass: "standard" },
 
   // ── ai.* — response cache + batch jobs use orgScopeMixin (tenant_isolation
   // RLS created in 20260704200000_ai_cache_and_batch_jobs.sql) ─────────────
