@@ -10,7 +10,6 @@ import {
   createPlatformAgentAi,
 } from "@oxagen/agent/adapters";
 import { resolveGitHubToken } from "./lib/github-token";
-import { createPlatformAgentAi } from "./lib/platform-agent-ai";
 import { logger } from "./logger";
 
 export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = async (
