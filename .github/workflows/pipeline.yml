@@ -13,13 +13,18 @@ concurrency:
 env:
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+  # ATLAS_VERSION is no longer installed per-job — it is baked into the
+  # ghcr.io/oxageninc/oxagen-ci-* images. This pin stays here as the single
+  # source ci-image.yml reads when building those images.
   ATLAS_VERSION: "v0.38.0"
-  DATABASE_URL: postgres://oxagen:oxagen@localhost:5432/oxagen?sslmode=disable
-  CLICKHOUSE_URL: http://localhost:8123
+  # Jobs run inside the toolchain container, so service containers are
+  # reached by their service name on the shared docker network, not localhost.
+  DATABASE_URL: postgres://oxagen:oxagen@postgres:5432/oxagen?sslmode=disable
+  CLICKHOUSE_URL: http://clickhouse:8123
   CLICKHOUSE_USERNAME: default
   CLICKHOUSE_PASSWORD: ""
   CLICKHOUSE_DATABASE: oxagen
-  NEO4J_URI: bolt://localhost:7687
+  NEO4J_URI: bolt://neo4j:7687
   NEO4J_USERNAME: neo4j
   NEO4J_PASSWORD: oxagen-dev
   BETTER_AUTH_SECRET: ci-secret-ci-secret-ci-secret-ci-x
@@ -47,11 +52,14 @@ jobs:
   atlas-validate:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/oxageninc/oxagen-ci-base:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
-      - name: Install Atlas CLI
-        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
       - name: Validate Atlas migration checksums
         working-directory: packages/database
         run: atlas migrate validate --dir "file://atlas/migrations"
@@ -59,6 +67,11 @@ jobs:
   checks:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/oxageninc/oxagen-ci-base:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     # 60m (was 20m): a PR that invalidates many turbo caches must run lint +
     # typecheck cold across the whole affected set, including apps/app's slow
     # `tsc --noEmit` + `eslint .`. Once a cold run completes and writes to the
@@ -89,13 +102,7 @@ jobs:
             echo "TURBO_BASE=$BEFORE" >> "$GITHUB_ENV"
           fi
 
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: "24"
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/pnpm-install
 
       - name: Lint and typecheck (affected)
         run: pnpm turbo run lint typecheck --filter="...[${TURBO_BASE}]"
@@ -114,6 +121,11 @@ jobs:
   test:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/oxageninc/oxagen-ci-base:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     # 60m (was 30m): a change to a root dependency (e.g. packages/config)
     # marks the entire monorepo affected, so build + unit tests + coverage all
     # run cold — run 28684991013 passed every unit test but hit the 30m
@@ -181,20 +193,9 @@ jobs:
           fi
 
       - name: Bootstrap Postgres extensions
-        run: |
-          sudo apt-get install -y postgresql-client
-          psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
+        run: psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: "24"
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Install Atlas CLI
-        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
+      - uses: ./.github/actions/pnpm-install
 
       - name: Detect migration changes
         id: migration_changes
@@ -227,6 +228,11 @@ jobs:
   e2e:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/oxageninc/oxagen-ci-e2e:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 45
     strategy:
       matrix:
@@ -292,20 +298,9 @@ jobs:
           fi
 
       - name: Bootstrap Postgres extensions
-        run: |
-          sudo apt-get install -y postgresql-client
-          psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
+        run: psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: "24"
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Install Atlas CLI
-        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
+      - uses: ./.github/actions/pnpm-install
 
       - name: Migrate Postgres (Atlas)
         working-directory: packages/database
@@ -320,8 +315,11 @@ jobs:
       - name: Build (affected)
         run: pnpm turbo run build --filter="...[${TURBO_BASE}]"
 
-      - name: Install Playwright browser
-        run: pnpm --filter @oxagen/app exec playwright install --with-deps chromium
+      # Chromium + OS deps are baked into oxagen-ci-e2e at apps/app's pinned
+      # @playwright/test version; this is a no-op unless the pin drifted ahead
+      # of the last image rebuild, in which case it downloads just the browser.
+      - name: Install Playwright browser (fast-path)
+        run: pnpm --filter @oxagen/app exec playwright install chromium
 
       - name: E2E tests (affected, shard)
         run: pnpm turbo run test:e2e --filter="...[${TURBO_BASE}]" -- --shard=${{ matrix.shard }}/4
@@ -338,6 +336,11 @@ jobs:
   rls-integration:
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/oxageninc/oxagen-ci-base:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 15
     services:
       postgres:
@@ -359,20 +362,9 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Bootstrap Postgres extensions
-        run: |
-          sudo apt-get install -y postgresql-client
-          psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
+        run: psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: "24"
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Install Atlas CLI
-        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
+      - uses: ./.github/actions/pnpm-install
 
       - name: Migrate Postgres (Atlas)
         working-directory: packages/database
@@ -386,6 +378,11 @@ jobs:
 
   migrate:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/oxageninc/oxagen-ci-base:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 15
     concurrency:
       group: db-migrate-${{ github.event_name != 'pull_request' && 'production' || 'preview' }}
@@ -452,26 +449,12 @@ jobs:
             echo "any=$ANY"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: pnpm/action-setup@v5
+      - uses: ./.github/actions/pnpm-install
         if: steps.changes.outputs.any == 'true'
-      - uses: actions/setup-node@v5
-        if: steps.changes.outputs.any == 'true'
-        with:
-          node-version: "24"
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-        if: steps.changes.outputs.any == 'true'
-
-      - name: Install Atlas CLI
-        if: steps.changes.outputs.pg == 'true'
-        run: curl -sSf https://atlasgo.sh | ATLAS_VERSION=$ATLAS_VERSION sh
 
       - name: Bootstrap Postgres extensions (idempotent)
         if: steps.changes.outputs.pg == 'true'
-        run: |
-          sudo apt-get install -y postgresql-client
-          psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
+        run: psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
       - name: Migrate Postgres (Atlas)
         if: steps.changes.outputs.pg == 'true'

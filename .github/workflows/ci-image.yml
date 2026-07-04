@@ -1,0 +1,100 @@
+name: ci-image
+
+# Builds and publishes the CI toolchain images (see .github/docker/ci/Dockerfile).
+# CI jobs run inside these images instead of re-installing Node, pnpm, Atlas,
+# postgresql-client, and Playwright Chromium on every job.
+#
+# Rebuild triggers:
+#   - Dockerfile / this workflow changes (push to main)
+#   - root package.json (packageManager pnpm pin) or apps/app/package.json
+#     (@playwright/test pin) changes
+#   - weekly cron, so OS/security patches and Node 24.x point releases land
+#   - manual dispatch (also used to bootstrap the image from a branch before
+#     the first main merge)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"
+  push:
+    branches: [main]
+    paths:
+      - ".github/docker/ci/**"
+      - ".github/workflows/ci-image.yml"
+      - "package.json"
+      - "apps/app/package.json"
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ci-image
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      # The image must be built with the exact toolchain versions the repo
+      # pins, so read them from the repo instead of hard-coding them here.
+      # ATLAS_VERSION intentionally mirrors the env pin in pipeline.yml.
+      - name: Resolve toolchain versions from repo pins
+        id: versions
+        run: |
+          PNPM="$(jq -r '.packageManager | split("@")[1]' package.json)"
+          PLAYWRIGHT="$(jq -r '.devDependencies["@playwright/test"] // .dependencies["@playwright/test"]' apps/app/package.json | sed 's/^[\^~]//')"
+          ATLAS="$(grep -m1 'ATLAS_VERSION:' .github/workflows/pipeline.yml | sed -E 's/.*"(v[0-9.]+)".*/\1/')"
+          echo "pnpm=$PNPM" >> "$GITHUB_OUTPUT"
+          echo "playwright=$PLAYWRIGHT" >> "$GITHUB_OUTPUT"
+          echo "atlas=$ATLAS" >> "$GITHUB_OUTPUT"
+          echo "Resolved pnpm=$PNPM playwright=$PLAYWRIGHT atlas=$ATLAS"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push base image
+        uses: docker/build-push-action@v6
+        with:
+          context: .github/docker/ci
+          target: base
+          push: true
+          tags: |
+            ghcr.io/oxageninc/oxagen-ci-base:latest
+            ghcr.io/oxageninc/oxagen-ci-base:sha-${{ github.sha }}
+          build-args: |
+            PNPM_VERSION=${{ steps.versions.outputs.pnpm }}
+            ATLAS_VERSION=${{ steps.versions.outputs.atlas }}
+          cache-from: type=gha,scope=ci-image
+          cache-to: type=gha,scope=ci-image,mode=max
+
+      - name: Build and push e2e image
+        uses: docker/build-push-action@v6
+        with:
+          context: .github/docker/ci
+          target: e2e
+          push: true
+          tags: |
+            ghcr.io/oxageninc/oxagen-ci-e2e:latest
+            ghcr.io/oxageninc/oxagen-ci-e2e:sha-${{ github.sha }}
+          build-args: |
+            PNPM_VERSION=${{ steps.versions.outputs.pnpm }}
+            ATLAS_VERSION=${{ steps.versions.outputs.atlas }}
+            PLAYWRIGHT_VERSION=${{ steps.versions.outputs.playwright }}
+          cache-from: type=gha,scope=ci-image
+          cache-to: type=gha,scope=ci-image,mode=max
+
+      - name: Smoke-test published images
+        run: |
+          docker run --rm ghcr.io/oxageninc/oxagen-ci-base:sha-${{ github.sha }} \
+            sh -c 'node --version && pnpm --version && atlas version && psql --version && git --version'
+          docker run --rm ghcr.io/oxageninc/oxagen-ci-e2e:sha-${{ github.sha }} \
+            sh -c 'ls "$PLAYWRIGHT_BROWSERS_PATH" | grep -q chromium'
