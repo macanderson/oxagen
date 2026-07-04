@@ -215,6 +215,38 @@ PARTITION BY toYYYYMM(created_at)
 ORDER BY (harness, suite, task_id, agent_version, created_at)
 TTL toDateTime(created_at) + INTERVAL 365 DAY;
 
+-- Per-item results for customer-facing Evals v1 (eval.run.start). DISTINCT from
+-- the private bench-harness eval_runs/eval_results above (those have no tenant
+-- columns): this is tenant-scoped (org_id/workspace_id), written via chInsert
+-- and read via chSelect so customer eval detail stays isolated per workspace.
+-- Run-level summary lives in Postgres eval.eval_runs; this is the drill-down.
+CREATE TABLE IF NOT EXISTS eval_item_results (
+  org_id UUID,
+  workspace_id UUID,
+  run_id String,
+  dataset_id String,
+  item_id String,
+  target_kind LowCardinality(String) DEFAULT '',
+  model LowCardinality(String) DEFAULT '',
+  judge_model LowCardinality(String) DEFAULT '',
+  score Float64 DEFAULT 0,
+  correctness Float64 DEFAULT 0,
+  faithfulness Float64 DEFAULT 0,
+  passed UInt8 DEFAULT 0,
+  latency_ms UInt32 DEFAULT 0,
+  input_tokens UInt32 DEFAULT 0,
+  output_tokens UInt32 DEFAULT 0,
+  cost_usd_micros Int64 DEFAULT 0,
+  status LowCardinality(String) DEFAULT 'completed',
+  error_class LowCardinality(String) DEFAULT '',
+  output String CODEC(ZSTD(3)),
+  rationale String CODEC(ZSTD(3)),
+  created_at DateTime DEFAULT now() CODEC(DoubleDelta, ZSTD(1))
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(created_at)
+ORDER BY (org_id, workspace_id, run_id, item_id, created_at)
+TTL toDateTime(created_at) + INTERVAL 365 DAY;
+
 -- Local dev console capture. `pnpm dev` tees turbo's combined output stream to
 -- the terminal AND batch-inserts every line here (see tools/scripts/dev.ts +
 -- lib/dev-log-shipper.ts), so the compile/runtime errors that used to scroll
