@@ -18,6 +18,7 @@ export type Capability =
   | "tools"
   | "image"
   | "video"
+  | "video-input"
   | "audio";
 
 export type Vendor =
@@ -166,7 +167,9 @@ export const gatewayModels: GatewayModel[] = [
     name: "Gemini 3 Pro",
     vendor: "google",
     released: "2026-01-21",
-    capabilities: ["reasoning", "vision", "tools", "audio"],
+    // Gemini natively accepts video file parts as model input (video-input),
+    // distinct from the video *generation* capability (Veo).
+    capabilities: ["reasoning", "vision", "tools", "audio", "video-input"],
     context: "1M",
   },
   {
@@ -174,7 +177,7 @@ export const gatewayModels: GatewayModel[] = [
     name: "Gemini 3 Flash",
     vendor: "google",
     released: "2026-01-21",
-    capabilities: ["vision", "tools"],
+    capabilities: ["vision", "tools", "video-input"],
     context: "1M",
   },
   {
@@ -266,6 +269,25 @@ export function supportsReasoning(model: string | GatewayModel | undefined): boo
   return !!resolve(model)?.capabilities.includes("reasoning");
 }
 
+/**
+ * A model accepts IMAGE input (multimodal chat attachments) when it carries the
+ * `vision` capability. Distinct from `supportsImage` (image *generation*). An
+ * unknown id returns false — never assume a model the catalog can't describe
+ * can take image parts.
+ */
+export function supportsVision(model: string | GatewayModel | undefined): boolean {
+  return !!resolve(model)?.capabilities.includes("vision");
+}
+
+/**
+ * A model accepts VIDEO input (video file parts, e.g. Gemini) when it carries
+ * the `video-input` capability. Distinct from `supportsVideo` (video
+ * *generation*, e.g. Veo). Models without it fall back to sampled keyframes.
+ */
+export function supportsVideoInput(model: string | GatewayModel | undefined): boolean {
+  return !!resolve(model)?.capabilities.includes("video-input");
+}
+
 export function supportsImage(model: string | GatewayModel | undefined): boolean {
   return !!resolve(model)?.capabilities.includes("image");
 }
@@ -304,6 +326,8 @@ export function capabilityLabel(c: Capability): string {
       return "Image gen";
     case "video":
       return "Video gen";
+    case "video-input":
+      return "Video input";
     case "audio":
       return "Audio";
   }

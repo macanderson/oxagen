@@ -315,6 +315,94 @@ describe("resolveRenderDirective", () => {
   });
 });
 
+describe("resolveRenderDirective — structural transforms (coding-agent cards)", () => {
+  it("maps agent.repo.edit's changedFiles to a code-diff card with no patch content", () => {
+    const output = {
+      prNumber: 42,
+      prUrl: "https://github.com/acme/repo/pull/42",
+      branch: "agent/fix-health",
+      changedFiles: ["src/index.ts", "src/routes/health.ts"],
+      summary: "Wired up the health-check route.",
+    };
+    const d = resolveRenderDirective({ capability: "agent.repo.edit", output });
+    expect(d?.componentId).toBe("code-diff");
+    expect(d?.props.files).toEqual([
+      { path: "src/index.ts", patch: null, additions: null, deletions: null },
+      { path: "src/routes/health.ts", patch: null, additions: null, deletions: null },
+    ]);
+    expect(d?.props.summary).toBe("Wired up the health-check route.");
+    expect(d?.props.externalUrl).toBe("https://github.com/acme/repo/pull/42");
+    expect(d?.props.externalLabel).toBe("PR #42");
+  });
+
+  it("returns null for agent.repo.edit when changedFiles is empty (falls through to standard path)", () => {
+    const d = resolveRenderDirective({
+      capability: "agent.repo.edit",
+      output: { prNumber: 1, prUrl: "x", branch: "b", changedFiles: [], summary: "s" },
+    });
+    // No changed files and no curated hint for agent.repo.edit — a substantial
+    // object still synthesizes the generic fallback, never "code-diff".
+    expect(d?.componentId).not.toBe("code-diff");
+  });
+
+  it("maps repo.file.put's commit output to a code-diff card, deriving the path from htmlUrl", () => {
+    const output = {
+      commitSha: "a1b2c3d4e5f6",
+      htmlUrl: "https://github.com/acme/repo/blob/main/src%2Fconfig.ts",
+    };
+    const d = resolveRenderDirective({ capability: "repo.file.put", output });
+    expect(d?.componentId).toBe("code-diff");
+    expect(d?.props.files).toEqual([
+      { path: "src/config.ts", patch: null, additions: null, deletions: null },
+    ]);
+    expect(d?.props.externalUrl).toBe(output.htmlUrl);
+    expect(d?.props.externalLabel).toBe("commit a1b2c3d");
+  });
+
+  it("falls back to a generic 'file' path for repo.file.put when htmlUrl has no /blob/ segment", () => {
+    const d = resolveRenderDirective({
+      capability: "repo.file.put",
+      output: { commitSha: "abc1234", htmlUrl: "https://example.com/opaque" },
+    });
+    expect((d?.props.files as Array<{ path: string }>)[0]?.path).toBe("opaque");
+  });
+
+  it("maps large agent.sandbox.exec output to terminal-trace", () => {
+    const stdout = Array.from({ length: 45 }, (_, i) => `line ${i}`).join("\n");
+    const d = resolveRenderDirective({
+      capability: "agent.sandbox.exec",
+      output: { exitCode: 0, stdout, stderr: "", executionMs: 500, timedOut: false, restored: false },
+    });
+    expect(d?.componentId).toBe("terminal-trace");
+    expect(d?.props).toMatchObject({ exitCode: 0, durationMs: 500, timedOut: false });
+  });
+
+  it("does NOT map small agent.sandbox.exec output to terminal-trace", () => {
+    const d = resolveRenderDirective({
+      capability: "agent.sandbox.exec",
+      output: {
+        exitCode: 0,
+        stdout: "ok",
+        stderr: "",
+        executionMs: 100,
+        timedOut: false,
+        restored: false,
+      },
+    });
+    expect(d?.componentId).not.toBe("terminal-trace");
+  });
+
+  it("combines stdout+stderr line counts against the threshold", () => {
+    const stdout = Array.from({ length: 20 }, (_, i) => `out ${i}`).join("\n");
+    const stderr = Array.from({ length: 25 }, (_, i) => `err ${i}`).join("\n");
+    const d = resolveRenderDirective({
+      capability: "agent.sandbox.exec",
+      output: { exitCode: 1, stdout, stderr, executionMs: 200, timedOut: false, restored: false },
+    });
+    expect(d?.componentId).toBe("terminal-trace");
+  });
+});
+
 describe("route + vocabulary integrity", () => {
   it("RECORD_LINK_ROUTES templates all contain an {id} placeholder", () => {
     for (const tmpl of Object.values(RECORD_LINK_ROUTES)) {

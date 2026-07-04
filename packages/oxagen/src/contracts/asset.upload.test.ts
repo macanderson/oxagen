@@ -44,11 +44,41 @@ describe("asset.upload capability", () => {
     ).toThrow();
   });
 
+  it("parses valid input — video kind", () => {
+    expect(() =>
+      assetUpload.input.parse({
+        sourceUrl: "https://example.com/clip.mp4",
+        kind: "video",
+      }),
+    ).not.toThrow();
+  });
+
+  it("parses valid input — user_upload source with conversationId", () => {
+    expect(() =>
+      assetUpload.input.parse({
+        sourceUrl: "https://example.com/photo.png",
+        kind: "image",
+        source: "user_upload",
+        conversationId: "conv_abc123",
+      }),
+    ).not.toThrow();
+  });
+
   it("rejects input with an unknown kind", () => {
     expect(() =>
       assetUpload.input.parse({
         sourceUrl: "https://example.com/file.png",
-        kind: "video",
+        kind: "spreadsheet",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects input with an unknown source", () => {
+    expect(() =>
+      assetUpload.input.parse({
+        sourceUrl: "https://example.com/file.png",
+        kind: "image",
+        source: "generated",
       }),
     ).toThrow();
   });
@@ -63,21 +93,34 @@ describe("asset.upload capability", () => {
     ).toThrow();
   });
 
-  it("parses a valid output", () => {
+  it("parses a valid output — legacy public path (publicId null)", () => {
     expect(() =>
       assetUpload.output.parse({
         url: "https://cdn.example.com/image/org-1/uuid.webp",
         key: "image/org-1/uuid.webp",
         contentType: "image/webp",
         bytes: 12345,
+        publicId: null,
       }),
     ).not.toThrow();
   });
 
-  it("rejects output with invalid url", () => {
+  it("parses a valid output — user_upload path (relative serve URL + publicId)", () => {
     expect(() =>
       assetUpload.output.parse({
-        url: "not-a-url",
+        url: "/api/v1/assets/gen_abc123",
+        key: "generated/images/org-1/uuid.png",
+        contentType: "image/png",
+        bytes: 12345,
+        publicId: "gen_abc123",
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects output missing publicId", () => {
+    expect(() =>
+      assetUpload.output.parse({
+        url: "https://cdn.example.com/image/org-1/uuid.webp",
         key: "image/org-1/uuid.webp",
         contentType: "image/webp",
         bytes: 12345,
@@ -92,6 +135,7 @@ describe("asset.upload capability", () => {
         key: "image/org-1/uuid.webp",
         contentType: "image/webp",
         bytes: -1,
+        publicId: null,
       }),
     ).toThrow();
   });
