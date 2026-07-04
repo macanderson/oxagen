@@ -930,6 +930,20 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: { development: "http://localhost:4000", production: API_PROD_URL },
   },
+  A2A_PUBLIC_URL: {
+    group: "Public URLs",
+    description:
+      "Public origin advertised in the A2A (Agent2Agent) protocol Agent Card's " +
+      "service endpoint and the /.well-known/agent-card.json URL. Optional — the " +
+      "A2A routes derive the origin from the live request; this only overrides the " +
+      "default for out-of-band card reads (MCP/CLI). Falls back to the API origin.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "http://localhost:4000", production: API_PROD_URL },
+  },
   APP_URL: {
     group: "Public URLs",
     description:

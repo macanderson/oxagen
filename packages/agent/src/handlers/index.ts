@@ -82,6 +82,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   "agent.definition.publish": () => import("./agent.definition.publish"),
   "agent.definition.get": () => import("./agent.definition.get"),
   "agent.definition.list": () => import("./agent.definition.list"),
+  "a2a.card.get": () => import("./a2a.card.get"),
   "agent.deploy": () => import("./agent.deploy"),
   "agent.trigger.create": () => import("./agent.trigger.create"),
   "agent.trigger.update": () => import("./agent.trigger.update"),

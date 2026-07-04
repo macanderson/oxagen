@@ -170,6 +170,10 @@ export const baseEnvSchema = z.object({
   // Server-side app origin for plugin OAuth authorize/callback URLs
   // (falls back to NEXT_PUBLIC_APP_URL at the call site).
   APP_URL: z.string().url().optional(),
+  // Public origin advertised in the A2A Agent Card / well-known URL. Optional —
+  // A2A routes derive the origin from the live request; overrides only apply to
+  // out-of-band card reads. Falls back to the API origin.
+  A2A_PUBLIC_URL: z.string().url().optional(),
   // Browser-exposed docs-site origin override (apps/app docs links). Optional —
   // getDocsBaseUrl() resolves a correct dev/prod default when unset.
   NEXT_PUBLIC_DOCS_URL: z.string().url().optional(),
