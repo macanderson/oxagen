@@ -13,7 +13,7 @@
  * The fleet has no interactive permission broker, so the tool gate owns
  * permissions here (`gatePermissions: true`).
  */
-import { runTurn } from "@oxagen/agent-engine";
+import { runTurn, type AgentAi } from "@oxagen/agent-engine";
 import { createCwdWorkspace, createCodeGraphProvider, createGatewayAgentAi } from "./adapters/index.js";
 import { createMeteredAi } from "./metered-ai.js";
 import { queryCodeGraph } from "./code-graph.js";
@@ -22,13 +22,26 @@ import { loadSettings } from "../settings/resolve.js";
 import { debugLog } from "../lib/debug-log.js";
 import type { AgentRunner } from "./fleet/orchestrator.js";
 
+export interface EngineRunnerOptions {
+  /**
+   * AI port every subagent's model calls go through. When the fleet is spawned
+   * from an authenticated REPL session this is the session's own (platform-
+   * metered) port, so subagents work without local BYOK keys and their usage
+   * lands in the session's metrics. Omitted → the historical BYOK
+   * gateway-direct port, built per task from the task's cwd.
+   */
+  ai?: AgentAi;
+}
+
 /** Build the engine-backed fleet runner. */
-export function createEngineRunner(): AgentRunner {
+export function createEngineRunner(runnerOpts: EngineRunnerOptions = {}): AgentRunner {
   return async (opts) => {
     const cwd = opts.cwd;
-    const ai = createMeteredAi(createGatewayAgentAi({ cwd }), {
-      onLog: (line) => void debugLog("timeout", line),
-    });
+    const ai =
+      runnerOpts.ai ??
+      createMeteredAi(createGatewayAgentAi({ cwd }), {
+        onLog: (line) => void debugLog("timeout", line),
+      });
     const settings = loadSettings({ cwd }).settings;
     const extras = await buildTurnExtras({
       cwd,

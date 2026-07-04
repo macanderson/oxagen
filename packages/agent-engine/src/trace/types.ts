@@ -20,6 +20,7 @@ export type { ModelTier, UsageTotals };
 /** A stage of the turn pipeline, in execution order. */
 export type StageKind =
   | "evaluate" // the cheap model scored the prompt
+  | "plan" // the goal was decomposed into an executable task plan
   | "enhance" // code-graph + memory context was injected
   | "route" // the executor model was selected
   | "execute" // the coding agent ran
