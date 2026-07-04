@@ -1,5 +1,14 @@
-export { distill, clusterEvents, extractFactFromCluster } from "./distill";
-export type { DistillationConfig, DistillationResult } from "./distill";
+export {
+  distill,
+  clusterEvents,
+  extractFactFromCluster,
+  extractFactHeuristic,
+} from "./distill";
+export type {
+  DistillationConfig,
+  DistillationResult,
+  DistillationLlmOptions,
+} from "./distill";
 export { DEFAULT_DISTILLATION_CONFIG } from "./distill";
 
 export { deduplicateSemanticRecords } from "./dedup";
