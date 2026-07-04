@@ -31,6 +31,7 @@ import {
   getTracer,
   ALLOWED_SPAN_ATTRIBUTES,
   initTracer,
+  parseOtlpHeaders,
   __resetTracerForTesting,
 } from "./tracer";
 
@@ -69,6 +70,35 @@ function teardownProvider(): void {
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe("parseOtlpHeaders", () => {
+  it("returns an empty object when unset", () => {
+    expect(parseOtlpHeaders(undefined)).toEqual({});
+    expect(parseOtlpHeaders("")).toEqual({});
+  });
+
+  it("parses a single key=value pair", () => {
+    expect(parseOtlpHeaders("authorization=Bearer abc")).toEqual({
+      authorization: "Bearer abc",
+    });
+  });
+
+  it("parses multiple comma-separated pairs and trims whitespace", () => {
+    expect(parseOtlpHeaders("a=1, b=2 , c=3")).toEqual({
+      a: "1",
+      b: "2",
+      c: "3",
+    });
+  });
+
+  it("keeps '=' inside a value (only the first '=' splits)", () => {
+    expect(parseOtlpHeaders("token=a=b=c")).toEqual({ token: "a=b=c" });
+  });
+
+  it("skips malformed pairs (no '=' or empty key)", () => {
+    expect(parseOtlpHeaders("novalue,=orphan,ok=1")).toEqual({ ok: "1" });
+  });
+});
 
 describe("initTracer", () => {
   beforeEach(() => {

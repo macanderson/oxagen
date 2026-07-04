@@ -200,6 +200,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "https://otel.example.com/v1/traces",
   },
+  OTEL_EXPORTER_OTLP_HEADERS: {
+    group: "OpenTelemetry",
+    description:
+      "Standard OTEL comma-separated `key=value` header list sent to the collector " +
+      '(e.g. "authorization=Bearer xxx,x-tenant=oxagen"). Optional — for collectors ' +
+      "that require auth headers. Parsed by packages/telemetry/src/tracer.ts.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OTEL_SERVICE_NAME: {
     group: "OpenTelemetry",
     description:
@@ -211,6 +223,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "oxagen",
+  },
+
+  // ── Error alerting (vendor-neutral outbound webhook) ────────────────────────
+  ALERT_WEBHOOK_URL: {
+    group: "Error alerting",
+    description:
+      "When set, high-severity/unhandled server errors are POSTed as a Slack-compatible " +
+      "`{ text, blocks }` JSON payload here (Slack/Mattermost/Discord incoming webhook, or " +
+      "any compatible endpoint). BYO webhook — no vendor SDK. When unset, errors are still " +
+      "recorded to the ClickHouse error_events table; only the webhook alert is skipped.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
   },
 
   // ── Better Auth ─────────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@
 
 import type { PlanTier } from "@oxagen/oxagen/types";
 import {
+  Activity,
   ArrowLeft,
   BookOpen,
   Building2,
@@ -94,6 +95,17 @@ const workspaceConfig: SidebarConfig = {
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.knowledge.root(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "primary",
+    },
+    {
+      id: "activity",
+      label: "Activity",
+      icon: Activity,
+      // Recent agent runs + per-run span-tree trace viewer.
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.activity.root(ctx as Required<ScopeContext>)
           : `/${ctx.orgSlug}`,
       group: "primary",
     },

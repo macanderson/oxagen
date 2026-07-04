@@ -1,5 +1,6 @@
 export * from "./clickhouse";
 export * from "./client";
+export * from "./error-reporting";
 export * from "./idempotency";
 export {
   CircuitBreaker,
@@ -23,6 +24,7 @@ export * from "./eval-item-results";
 export {
   initTracer,
   shutdownTracer,
+  parseOtlpHeaders,
   getTracer,
   setSpanAttrs,
   withSpan,

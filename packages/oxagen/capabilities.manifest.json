@@ -188,6 +188,25 @@
       }
     },
     {
+      "name": "agent.execution.list",
+      "file": "agent.execution.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": true,
+        "docs": true
+      }
+    },
+    {
       "name": "agent.execution.record",
       "file": "agent.execution.record.ts",
       "domain": "agent",
@@ -1007,6 +1026,25 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "agent.trace.get",
+      "file": "agent.trace.get.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": true,
         "docs": true
       }
     },

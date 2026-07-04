@@ -217,6 +217,27 @@ export const baseEnvSchema = z.object({
   KNOWLEDGE_GRAPH_ENABLED: z.enum(["true", "false"]).optional(),
   MCP_PORT: z.string().optional(),
 
+  // ── OpenTelemetry (vendor-neutral OTLP export) ──
+  // The distributed tracer (packages/telemetry/src/tracer.ts) reads these raw
+  // at process start; declared here so `pnpm env:check` validates their shape.
+  // When OTEL_EXPORTER_OTLP_ENDPOINT is unset the SDK never starts and every
+  // span is a no-op — safe for all envs, rollback = leave unset. BYO collector
+  // (any OTLP/HTTP endpoint — Grafana, Honeycomb, Jaeger, an OTel Collector);
+  // no vendor SDK is bundled. OTEL_EXPORTER_OTLP_HEADERS is the standard
+  // W3C-style comma-separated `key=value` list (e.g. auth headers for the
+  // collector), matching the OTEL spec env var; parsed by the tracer.
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
+  OTEL_EXPORTER_OTLP_HEADERS: z.string().optional(),
+  OTEL_SERVICE_NAME: z.string().min(1).optional(),
+
+  // ── Error alerting (vendor-neutral outbound webhook) ──
+  // When set, high-severity/unhandled server errors captured by
+  // @oxagen/telemetry's captureError() are POSTed as a Slack-compatible JSON
+  // payload to this URL (Slack/Mattermost/Discord-compatible incoming webhook,
+  // or any endpoint that accepts `{ text, blocks }`). BYO webhook — no vendor
+  // SDK. Optional: unset = ClickHouse error_events recording only, no webhook.
+  ALERT_WEBHOOK_URL: z.string().url().optional(),
+
   // OXA-1348: when true (default off in prod), agent.code.execute is
   // materialized as an agent tool. Set true on Vercel once the Modal
   // runner is deployed (see ops/modal/README.md).
