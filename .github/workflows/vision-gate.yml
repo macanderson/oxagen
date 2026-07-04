@@ -30,6 +30,10 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: "24"
+          # The gate is dependency-free (bare `node` run, no pnpm install);
+          # setup-node otherwise auto-detects pnpm from `packageManager` and
+          # fails because the pnpm binary is never installed in this job.
+          package-manager-cache: false
 
       - name: Fetch base branch
         run: git fetch origin ${{ github.base_ref }} --no-tags
