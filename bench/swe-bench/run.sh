@@ -10,6 +10,7 @@
 #   AGENT=claude-code ./run.sh                # Harbor built-in competitor
 #   DATASET=swe-bench/swe-smith ./run.sh      # a different Harbor dataset slug
 #   TASK_IDS="django__django-11099" ./run.sh  # smoke-test one instance
+#   OXAGEN_PREWARMED=1 ./run.sh               # run pre-baked task images (see PREWARM.md)
 #   HARBOR_EXTRA="--include-task-name *django__django-11099" N_CONCURRENT=1 ./run.sh
 #   JOB_NAME=my-run ./run.sh                  # pin the results subdirectory name
 #
@@ -93,6 +94,21 @@ if [ "$AGENT" = "oxagen" ]; then
   [ -f "$OXAGEN_CLI_BUNDLE" ] || { echo "Bundle not found at $OXAGEN_CLI_BUNDLE" >&2; exit 1; }
 fi
 
+# 3b) Pre-baked ("prewarmed") task images — see PREWARM.md. With
+#     OXAGEN_PREWARMED=1 the run uses PrewarmedDockerEnvironment, which swaps
+#     each trial onto its pre-baked image (Node 22 + oxagen bundle + rg baked
+#     in) whenever the content-addressed tag exists locally, collapsing the
+#     ~109s/task agent_setup to near-zero. Everything is best-effort: a
+#     missing image or failed bake transparently falls back to Harbor's
+#     normal build + the adapter's runtime install.
+ENV_ARGS=()
+if [ "${OXAGEN_PREWARMED:-}" = "1" ] && [ "$AGENT" = "oxagen" ]; then
+  OXAGEN_BUNDLE_SHA256="$(shasum -a 256 "$OXAGEN_CLI_BUNDLE" | awk '{print $1}')"
+  export OXAGEN_BUNDLE_SHA256
+  ENV_ARGS=(--env oxagen_swe_bench.prewarm_env:PrewarmedDockerEnvironment)
+  echo "==> OXAGEN_PREWARMED=1 — bundle sha256 $OXAGEN_BUNDLE_SHA256; trials use pre-baked images when present."
+fi
+
 # 4) Python env + adapter (editable so Harbor imports it by path; also pulls
 #    in the sibling oxagen-terminal-bench package for the shared OxagenAgent).
 if [ ! -d .venv ]; then
@@ -104,6 +120,25 @@ if [ ! -d .venv ]; then
 else
   # shellcheck disable=SC1091
   source .venv/bin/activate
+fi
+
+# 4b) Bake the prewarmed images for the resolved tasks (best-effort — a
+#     prewarm failure must never abort the run; affected trials just fall
+#     back to the normal build path). Needs the venv from step 4 (imports
+#     harbor's environment_content_hash). With no TASK_IDS (full dataset)
+#     the builder is skipped — pre-bake explicitly via
+#     `uv run python prewarm.py <task-ids>`; already-baked images are still
+#     picked up by PrewarmedDockerEnvironment either way.
+if [ "${OXAGEN_PREWARMED:-}" = "1" ] && [ "$AGENT" = "oxagen" ]; then
+  if [ -n "${TASK_IDS:-}" ]; then
+    echo "==> Prewarming task images for: $TASK_IDS"
+    # shellcheck disable=SC2086 — word-splitting TASK_IDS is intentional
+    uv run python prewarm.py $TASK_IDS || \
+      echo "==> Prewarm build failed (non-fatal); trials fall back to normal image builds." >&2
+  else
+    echo "==> OXAGEN_PREWARMED=1 with no TASK_IDS — skipping the prewarm builder;" \
+         "already-baked images are still used."
+  fi
 fi
 
 # 5) Model / agent selection.
@@ -200,4 +235,5 @@ exec uv run harbor run \
   --jobs-dir "$JOBS_DIR" \
   --job-name "$JOB_NAME" \
   "${TASK_ID_ARGS[@]}" \
+  "${ENV_ARGS[@]}" \
   ${HARBOR_EXTRA:-}
