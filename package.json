@@ -20,6 +20,7 @@
     "kill": "tsx tools/scripts/kill.ts",
     "clean:cache": "rm -rf apps/*/.next/dev/cache",
     "env:pull": "tsx tools/scripts/env-pull.ts",
+    "vercel:rotate-ai-key": "tsx tools/scripts/rotate-ai-gateway-key.ts",
     "env:manager": "pnpm --filter @oxagen/env-manager dev",
     "env:secrets:pull": "pnpm --filter @oxagen/env-manager pull",
     "build": "turbo run build",

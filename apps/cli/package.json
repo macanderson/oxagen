@@ -47,6 +47,7 @@
     "@oxagen/code-graph": "workspace:*",
     "@oxagen/engram": "workspace:*",
     "@oxagen/mcp-config": "workspace:*",
+    "@oxagen/telemetry": "workspace:*",
     "ai": "7.0.14",
     "cli-highlight": "2.1.11",
     "commander": "12.1.0",
@@ -59,6 +60,7 @@
     "node-llama-cpp": "3.19.0"
   },
   "devDependencies": {
+    "@oxagen/telemetry": "workspace:*",
     "@types/node": "25.9.1",
     "@types/react": "19.2.15",
     "@vitest/coverage-v8": "2.1.9",

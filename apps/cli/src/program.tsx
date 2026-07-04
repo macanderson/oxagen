@@ -167,6 +167,16 @@ export function buildProgram(): Command {
           maxSteps,
         };
 
+        // Feed the anonymous usage-telemetry accumulator (index.tsx emits the
+        // event after this action resolves): pipeline_used and byok are known
+        // right here from data already destructured above, so record them
+        // directly rather than re-deriving them generically at the exit hook.
+        {
+          const { markPipelineUsed, setByok } = await import("./telemetry/usage.js");
+          markPipelineUsed(!runOpts.bare);
+          setByok(session.orgSlug === "local");
+        }
+
         // --agent: run the prompt as a named agent (its prompt, tools, model).
         if (opts.agent) {
           if (!prompt) {
@@ -437,6 +447,31 @@ export function buildProgram(): Command {
       };
       const { handleCost } = await import("./commands/cost.js");
       await handleCost(merged);
+    });
+
+  // ── bench: inspect + replay ClickHouse-backed benchmark results ────────────
+
+  const bench = program
+    .command("bench")
+    .description("Inspect and replay Harbor benchmark results (bench.* ClickHouse tables)");
+  bench
+    .command("list")
+    .description("Show recent benchmark results, newest first")
+    .option("--type <bench_type>", "Filter to one harness, e.g. swe-bench, terminal-bench")
+    .option("-n, --limit <n>", "Maximum number of results (1–500)", "20")
+    .option("--json", "Output JSON", false)
+    .action(async (opts: { type?: string; limit?: string; json?: boolean }) => {
+      const { handleBenchList } = await import("./commands/bench.js");
+      await handleBenchList(opts);
+    });
+  bench
+    .command("replay <public_id>")
+    .description("Show a result's reproducing command, and optionally re-run it")
+    .option("--run", "Actually execute the reproducing command", false)
+    .option("--json", "Output JSON", false)
+    .action(async (publicId: string, opts: { run?: boolean; json?: boolean }) => {
+      const { handleBenchReplay } = await import("./commands/bench.js");
+      await handleBenchReplay(publicId, opts);
     });
 
   // ── models: on-device runtime + coordinator selection ───────────────────────
@@ -953,6 +988,19 @@ export function buildProgram(): Command {
         await handleLogs(opts);
       },
     );
+
+  // ── telemetry: anonymous usage-telemetry controls (TELEMETRY.md) ────────────
+
+  program
+    .command("telemetry")
+    .description(
+      "Inspect or control anonymous CLI usage telemetry (on by default — see TELEMETRY.md)",
+    )
+    .argument("[subcommand]", "on | off | status (default: status)")
+    .action(async (subcommand?: string) => {
+      const { handleTelemetry } = await import("./commands/telemetry.js");
+      handleTelemetry(subcommand);
+    });
 
   // ── login / logout: platform authentication ─────────────────────────────────
 

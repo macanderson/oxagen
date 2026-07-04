@@ -11,6 +11,11 @@
 #   DATASET=swe-bench/swe-smith ./run.sh      # a different Harbor dataset slug
 #   TASK_IDS="django__django-11099" ./run.sh  # smoke-test one instance
 #   HARBOR_EXTRA="--include-task-name *django__django-11099" N_CONCURRENT=1 ./run.sh
+#   JOB_NAME=my-run ./run.sh                  # pin the results subdirectory name
+#
+# Every run writes results-$AGENT/<job-name>/bench-config.json — a secret-free
+# snapshot of this run's config (see packages/telemetry/src/bench/ingest.ts),
+# so `oxagen bench replay` / a backfill script can reconstruct the exact env.
 #
 # Prereqs: docker running; AI_GATEWAY_API_KEY exported when AGENT=oxagen
 # (competitor agents may need their own provider keys — see their docs).
@@ -133,8 +138,52 @@ fi
 # passes straight through to the adapter via forwarded OXAGEN_* env — nothing
 # to do here.
 
-# 7) Go.
-echo "==> harbor run  dataset=$DATASET  agent=$AGENT  model=${MODEL_SLUG}  n=$N_CONCURRENT  attempts=$N_ATTEMPTS  jobs-dir=$JOBS_DIR"
+# 7) Snapshot the resolved run config into the results dir *before* harbor
+#    runs, so the run is self-describing for `oxagen bench replay` even if
+#    the job itself is later killed (credit wall, timeout). Harbor's own
+#    --job-name defaults to a timestamp it picks internally; we pick it here
+#    instead (same format) so we know the exact directory to write into.
+#    Pre-creating that directory is safe — Harbor's "resume" check
+#    (job.py _maybe_init_existing_job) only looks for its OWN config.json/
+#    lock.json, not for other files, so an extra bench-config.json alongside
+#    doesn't trip it.
+JOB_NAME="${JOB_NAME:-$(date -u +%Y-%m-%d__%H-%M-%S)}"
+RUN_DIR="$JOBS_DIR/$JOB_NAME"
+mkdir -p "$RUN_DIR"
+BENCH_GIT_SHA="$(cd "$REPO_ROOT" && git rev-parse HEAD 2>/dev/null || echo "")"
+python3 - "$RUN_DIR/bench-config.json" "$BENCH_GIT_SHA" "$DATASET" "$N_CONCURRENT" "${TASK_IDS:-}" <<'PYEOF'
+# Writes bench-config.json: {gitSha, config, conditions} — the shape
+# packages/telemetry/src/bench/ingest.ts's BenchConfigSnapshot expects.
+# `config` is every OXAGEN_* env var actually forwarded into the trial
+# container (see oxagen_agent.py _forwarded_env()) — never a secret, since
+# forwarding is scoped to that prefix and AI_GATEWAY_API_KEY/ANTHROPIC_API_KEY/
+# etc. never match it — plus the run.sh-level DATASET/N_CONCURRENT/TASK_IDS.
+import json
+import os
+import platform
+import sys
+
+out_path, git_sha, dataset, n_concurrent, task_ids = sys.argv[1:6]
+
+config = {k: v for k, v in os.environ.items() if k.startswith("OXAGEN_") and k != "OXAGEN_CLI_BUNDLE"}
+config["DATASET"] = dataset
+config["N_CONCURRENT"] = n_concurrent
+if task_ids:
+    config["TASK_IDS"] = task_ids
+
+snapshot = {
+    "gitSha": git_sha,
+    "config": config,
+    "conditions": {"host": platform.node(), "os": sys.platform, "cpu": platform.machine()},
+}
+with open(out_path, "w") as f:
+    json.dump(snapshot, f, indent=2, sort_keys=True)
+    f.write("\n")
+print(f"==> Wrote bench replay config snapshot: {out_path}")
+PYEOF
+
+# 8) Go.
+echo "==> harbor run  dataset=$DATASET  agent=$AGENT  model=${MODEL_SLUG}  n=$N_CONCURRENT  attempts=$N_ATTEMPTS  jobs-dir=$JOBS_DIR  job-name=$JOB_NAME"
 exec uv run harbor run \
   -d "$DATASET" \
   "${AGENT_ARGS[@]}" \
@@ -142,5 +191,6 @@ exec uv run harbor run \
   --n-concurrent "$N_CONCURRENT" \
   --n-attempts "$N_ATTEMPTS" \
   --jobs-dir "$JOBS_DIR" \
+  --job-name "$JOB_NAME" \
   "${TASK_ID_ARGS[@]}" \
   ${HARBOR_EXTRA:-}
