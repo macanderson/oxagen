@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   claimNextSubagentRun: vi.fn(),
   renewSubagentRunLease: vi.fn(),
   startLeaseRenewal: vi.fn(),
+  embedText: vi.fn(),
+  inngestSend: vi.fn(),
 }));
 
 vi.mock("../create-function", () => ({
@@ -61,6 +63,14 @@ vi.mock("../lease", () => ({
 
 vi.mock("../logger", () => ({
   logger: mocks.logger,
+}));
+
+vi.mock("@oxagen/ai", () => ({
+  embedText: mocks.embedText,
+}));
+
+vi.mock("../inngest", () => ({
+  inngest: { send: mocks.inngestSend },
 }));
 
 vi.mock("@oxagen/oxagen", () => ({}));
@@ -148,8 +158,65 @@ describe("agentExecuteSubagent Inngest handler (claim-loop)", () => {
     mocks.claimNextSubagentRun.mockImplementation(async () => mocks.claimQueue.shift() ?? null);
     mocks.renewSubagentRunLease.mockResolvedValue(undefined);
     mocks.startLeaseRenewal.mockReturnValue(() => {});
+    mocks.embedText.mockResolvedValue([0.1, 0.2, 0.3]);
+    mocks.inngestSend.mockResolvedValue(undefined);
     scenario.counts = { total: 0, completed: 0, failed: 0 };
     scenario.finalizeRows = [{ id: "fan-1" }];
+  });
+
+  it("projects a completed child to the graph via agent/execution.sync with fanout origin", async () => {
+    mocks.claimQueue.push(makeClaim("r-1", 1, "cap-ok"));
+    mocks.invoke.mockResolvedValue({ summary: "found 3 results" });
+    scenario.counts = { total: 1, completed: 1, failed: 0 };
+
+    await capturedHandler!({ event: { data: BASE_EVENT_DATA }, step: makeStep() });
+
+    expect(mocks.embedText).toHaveBeenCalledWith("found 3 results", expect.anything());
+    expect(mocks.inngestSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "agent/execution.sync",
+        data: expect.objectContaining({
+          executionId: "r-1",
+          originType: "fanout",
+          originId: "fan-1",
+          status: "completed",
+          summary: "found 3 results",
+          embedding: [0.1, 0.2, 0.3],
+          properties: expect.objectContaining({
+            fanoutId: "fan-1",
+            runId: "r-1",
+            capabilityName: "cap-ok",
+            attempts: 1,
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("projects a failed child with its failure summary", async () => {
+    mocks.claimQueue.push(makeClaim("r-1", 2, "cap-a"));
+    mocks.invoke.mockRejectedValue(new Error("upstream 500"));
+    scenario.counts = { total: 1, completed: 0, failed: 1 };
+
+    await capturedHandler!({ event: { data: BASE_EVENT_DATA }, step: makeStep() });
+
+    expect(mocks.inngestSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "failed", summary: "upstream 500" }),
+      }),
+    );
+  });
+
+  it("still completes the child when embedding and projection both fail", async () => {
+    mocks.claimQueue.push(makeClaim("r-1"));
+    mocks.embedText.mockRejectedValue(new Error("gateway down"));
+    mocks.inngestSend.mockRejectedValue(new Error("inngest down"));
+    scenario.counts = { total: 1, completed: 1, failed: 0 };
+
+    const result = await capturedHandler!({ event: { data: BASE_EVENT_DATA }, step: makeStep() });
+
+    expect(result).toEqual({ fanoutId: "fan-1", completed: 1, status: "completed" });
+    expect(mocks.logger.warn).toHaveBeenCalled();
   });
 
   it("returns depthExceeded:true immediately when depth > MAX_FANOUT_DEPTH without touching the DB", async () => {

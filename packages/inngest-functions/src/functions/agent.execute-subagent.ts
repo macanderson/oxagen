@@ -4,6 +4,8 @@ import { eq, and, count, inArray, sql } from "drizzle-orm";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { insertToolInvocation, insertEvents } from "@oxagen/telemetry";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { embedText } from "@oxagen/ai";
+import { inngest } from "../inngest";
 import {
   claimNextSubagentRun,
   renewSubagentRunLease,
@@ -62,6 +64,81 @@ export function deriveFanoutStatus(
  * to avoid schema coupling. Default 0 (root dispatch), max 3 levels deep.
  */
 const MAX_FANOUT_DEPTH = 3;
+
+/**
+ * Project a terminal fanout child into the knowledge graph as an :Execution
+ * node hanging off its :Fanout origin (spec Phase 2 §2). Fire-and-forget:
+ * emits the same `agent/execution.sync` event the execution recorder uses,
+ * so the write rides agent.sync-execution-to-graph's 17-retry/~24 h
+ * envelope and stays MERGE-idempotent. The embedding is computed here (one
+ * call per child completion, over the ≤280-char structural summary — bounded
+ * cost by construction) because @oxagen/ontology must not depend on
+ * @oxagen/ai. Any failure is logged and swallowed — Postgres remains the
+ * operational record; the graph is only the semantic index over results.
+ */
+async function projectChildToGraph(args: {
+  orgId: string;
+  workspaceId: string;
+  fanoutId: string;
+  run: ClaimedSubagentRun;
+  status: "completed" | "failed";
+  summary: string;
+  latencyMs: number;
+}): Promise<void> {
+  let embedding: number[] | null = null;
+  if (args.summary.length > 0) {
+    try {
+      embedding = await embedText(args.summary, {
+        telemetry: {
+          orgId: args.orgId,
+          workspaceId: args.workspaceId,
+          surface: "runner",
+          executionStepId: null,
+        },
+      });
+    } catch (err) {
+      logger.warn(
+        { err, runId: args.run.id, fanoutId: args.fanoutId },
+        "fanout child embedding failed — projecting without a vector",
+      );
+    }
+  }
+  try {
+    await inngest.send({
+      name: "agent/execution.sync",
+      data: {
+        executionId: args.run.id,
+        orgId: args.orgId,
+        workspaceId: args.workspaceId,
+        status: args.status,
+        originType: "fanout",
+        originId: args.fanoutId,
+        agentId: null,
+        startedAt: null,
+        completedAt: new Date().toISOString(),
+        latencyMs: args.latencyMs,
+        inputTokens: null,
+        outputTokens: null,
+        estimatedCostUsd: null,
+        toolCalls: [{ toolName: args.run.capabilityName, toolType: "capability" }],
+        summary: args.summary,
+        displayName: `fanout child: ${args.run.capabilityName}`,
+        embedding,
+        properties: {
+          fanoutId: args.fanoutId,
+          runId: args.run.id,
+          capabilityName: args.run.capabilityName,
+          attempts: args.run.attempts,
+        },
+      },
+    });
+  } catch (err) {
+    logger.warn(
+      { err, runId: args.run.id, fanoutId: args.fanoutId },
+      "fanout child graph projection enqueue failed — Postgres row remains the record",
+    );
+  }
+}
 
 /**
  * Subagent fanout executor. Triggered by agent.subagent.dispatch via the
@@ -163,6 +240,7 @@ export const [agentExecuteSubagent] = createFunction(
           // Transaction-span caution (spec §6.2): invoke may run a long LLM call;
           // keep withTenantDb blocks tight around DB-only work only.
           const output = await invoke(claimed.capabilityName, claimed.inputPayload, ctx);
+          const runSummary = deriveRunSummary(output);
           // Tight DB block: runs after the invoke completes, not wrapping it.
           // Terminal write releases the lease (null = unclaimed or terminal).
           await runInTenantScope({ orgId, workspaceId }, () =>
@@ -172,13 +250,23 @@ export const [agentExecuteSubagent] = createFunction(
                 .set({
                   status: "completed",
                   outputPayload: (output ?? null) as object,
-                  summary: deriveRunSummary(output),
+                  summary: runSummary,
                   completedAt: new Date(),
                   leaseExpiresAt: null,
                 })
                 .where(eq(schema.subagentRuns.id, claimed.id)),
             ),
           );
+          // Graph projection after the terminal write (spec §2) — never fails the child.
+          await projectChildToGraph({
+            orgId,
+            workspaceId,
+            fanoutId,
+            run: claimed,
+            status: "completed",
+            summary: runSummary,
+            latencyMs: Date.now() - startedAt,
+          });
           // Write tool_invocations row for metering (OXA-1498).
           try {
             await insertToolInvocation({
@@ -207,6 +295,7 @@ export const [agentExecuteSubagent] = createFunction(
           }
           return true;
         } catch (err) {
+          const failureSummary = (err instanceof Error ? err.message : String(err)).slice(0, RUN_SUMMARY_MAX_CHARS);
           // Tight DB block: runs after the invoke throws, not wrapping it.
           await runInTenantScope({ orgId, workspaceId }, () =>
             withTenantDb((tx) =>
@@ -215,13 +304,24 @@ export const [agentExecuteSubagent] = createFunction(
                 .set({
                   status: "failed",
                   errorReason: err instanceof Error ? err.message : String(err),
-                  summary: (err instanceof Error ? err.message : String(err)).slice(0, RUN_SUMMARY_MAX_CHARS),
+                  summary: failureSummary,
                   completedAt: new Date(),
                   leaseExpiresAt: null,
                 })
                 .where(eq(schema.subagentRuns.id, claimed.id)),
             ),
           );
+          // Failed children are projected too — a peer avoiding a dead end is
+          // as valuable as a peer reusing a result (spec §2).
+          await projectChildToGraph({
+            orgId,
+            workspaceId,
+            fanoutId,
+            run: claimed,
+            status: "failed",
+            summary: failureSummary,
+            latencyMs: Date.now() - startedAt,
+          });
           // Write failed tool_invocations row for metering.
           try {
             await insertToolInvocation({

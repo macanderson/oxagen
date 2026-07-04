@@ -15,6 +15,7 @@ CREATE CONSTRAINT tool_version_public_id IF NOT EXISTS FOR (n:ToolVersion) REQUI
 CREATE CONSTRAINT playbook_public_id IF NOT EXISTS FOR (n:Playbook) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT playbook_version_public_id IF NOT EXISTS FOR (n:PlaybookVersion) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT execution_public_id IF NOT EXISTS FOR (n:Execution) REQUIRE n.publicId IS UNIQUE;
+CREATE CONSTRAINT fanout_public_id IF NOT EXISTS FOR (n:Fanout) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT document_public_id IF NOT EXISTS FOR (n:Document) REQUIRE n.publicId IS UNIQUE;
 CREATE CONSTRAINT generated_file_public_id IF NOT EXISTS FOR (n:GeneratedFile) REQUIRE n.publicId IS UNIQUE;
 CREATE INDEX generated_file_org IF NOT EXISTS FOR (n:GeneratedFile) ON (n.orgId);
@@ -48,6 +49,7 @@ CREATE CONSTRAINT evidence_id IF NOT EXISTS FOR (n:Evidence) REQUIRE n.id IS UNI
 // `tenantId` indexes were dead (no node carries that property) and left orgId
 // lookups unindexed.
 CREATE INDEX execution_org IF NOT EXISTS FOR (n:Execution) ON (n.orgId);
+CREATE INDEX fanout_org IF NOT EXISTS FOR (n:Fanout) ON (n.orgId);
 CREATE INDEX document_org IF NOT EXISTS FOR (n:Document) ON (n.orgId);
 CREATE INDEX message_conversation IF NOT EXISTS FOR (n:Message) ON (n.conversationId);
 CREATE INDEX agent_memory_org IF NOT EXISTS FOR (n:AgentMemory) ON (n.orgId);

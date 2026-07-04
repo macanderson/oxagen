@@ -32,6 +32,10 @@ export const NodeLabels = {
   SkillVersion: "SkillVersion",
   BackgroundTask: "BackgroundTask",
   Plan: "Plan",
+  // Subagent fanout (docs/specs/graph-mediated-fanout-phase2 §2): the origin
+  // node terminal fanout children hang off via [:ORIGINATED_FROM], so "what
+  // did this fanout produce?" is one traversal.
+  Fanout: "Fanout",
   // Ingestion pipeline — fixed system nodes (not customer ontology types).
   // SourceConnection: one node per registered data source connection.
   SourceConnection: "SourceConnection",
