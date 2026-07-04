@@ -794,6 +794,56 @@ export function buildProgram(): Command {
       await handleCodePatch(diffFile, opts);
     });
 
+  // ── asset: ingest a binary asset from a URL into object storage ──────────────
+
+  const asset = program
+    .command("asset")
+    .description("Ingest and manage binary assets in object storage");
+
+  asset
+    .command("upload <url>")
+    .description(
+      "Ingest an asset from a public URL. With --conversation, records it as a " +
+        "private chat attachment linked to that conversation.",
+    )
+    .option("--kind <kind>", "Asset kind: avatar|image|document|video (default image)")
+    .option("--filename <name>", "Original filename (display only)")
+    .option("--conversation <id>", "Attach to a conversation (implies a user_upload)")
+    .option("--json", "Emit raw JSON output")
+    .action(
+      async (
+        url: string,
+        opts: { kind?: string; filename?: string; conversation?: string; json?: boolean },
+      ) => {
+        const { handleAssetUpload } = await import("./commands/asset.js");
+        await handleAssetUpload(url, opts);
+      },
+    );
+
+  // ── sandbox: durable code-agent sandbox utilities ───────────────────────────
+
+  const sandbox = program
+    .command("sandbox")
+    .description("Inspect durable code-agent sandbox sessions");
+
+  sandbox
+    .command("files <session-id>")
+    .description(
+      "List files/directories inside a durable sandbox session's workspace",
+    )
+    .option("--path <path>", "Workspace-relative directory to list (default root)")
+    .option("--depth <n>", "Max recursion depth 1-5 (default 2)")
+    .option("--json", "Emit raw JSON output")
+    .action(
+      async (
+        sessionId: string,
+        opts: { path?: string; depth?: string; json?: boolean },
+      ) => {
+        const { handleSandboxFiles } = await import("./commands/sandbox.js");
+        await handleSandboxFiles(sessionId, opts);
+      },
+    );
+
   // ── init: scaffold project + global settings, build code graph ──────────────
 
   program

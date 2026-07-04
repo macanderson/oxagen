@@ -398,7 +398,7 @@ describe("assetUploadHandler — source: user_upload guards", () => {
   });
 
   it("rejects a workspace-less context with source: user_upload", async () => {
-    const noWsCtx: CapabilityContext = { ...validCtx, workspaceId: null };
+    const noWsCtx: CapabilityContext = { ...validCtx, workspaceId: "" };
     await expect(
       assetUploadHandler(
         {

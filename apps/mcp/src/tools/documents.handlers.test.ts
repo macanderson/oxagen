@@ -120,6 +120,8 @@ describe("asset.upload handler", () => {
       sourceUrl: "https://example.com/image.png",
       kind: "image" as const,
       filename: undefined,
+      source: undefined,
+      conversationId: undefined,
     };
     await handler_assetUpload(args);
 

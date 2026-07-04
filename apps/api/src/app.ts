@@ -25,6 +25,7 @@ import { agentSandboxStartRoute } from "./routes/v1/agent.sandbox.start";
 import { agentSandboxExecRoute } from "./routes/v1/agent.sandbox.exec";
 import { agentSandboxSnapshotRoute } from "./routes/v1/agent.sandbox.snapshot";
 import { agentSandboxStopRoute } from "./routes/v1/agent.sandbox.stop";
+import { agentSandboxFilesListRoute } from "./routes/v1/agent.sandbox.files.list";
 import { agentFeatureVerifyRoute } from "./routes/v1/agent.feature.verify";
 import { browserNavigateRoute } from "./routes/v1/browser.navigate";
 import { browserScreenshotRoute } from "./routes/v1/browser.screenshot";
@@ -109,6 +110,7 @@ import { conversationArchiveRoute } from "./routes/v1/conversation.archive";
 import { conversationDeleteRoute } from "./routes/v1/conversation.delete";
 import { conversationPurgeRoute } from "./routes/v1/conversation.purge";
 import { conversationFilesListRoute } from "./routes/v1/conversation.files.list";
+import { conversationAttachmentAddRoute } from "./routes/v1/conversation.attachment.add";
 import { assetUploadRoute } from "./routes/v1/asset.upload";
 import { pluginRegistryListRoute } from "./routes/v1/plugin.registry.list";
 import { pluginRegistryAddRoute } from "./routes/v1/plugin.registry.add";
@@ -314,6 +316,8 @@ orgScoped.route("/conversations/rename", conversationRenameRoute);
 orgScoped.route("/conversations/archive", conversationArchiveRoute);
 orgScoped.route("/conversations/delete", conversationDeleteRoute);
 orgScoped.route("/conversations/purge", conversationPurgeRoute);
+// POST /conversations/attachments — link an already-uploaded asset to a conversation.
+orgScoped.route("/conversations/attachments", conversationAttachmentAddRoute);
 // Agent-runtime routes live under the org + workspace scope so the runner
 // inherits the same auth, isolation, and audit envelope as every other v1 call.
 orgScoped.route("/agent/code/execute", agentCodeExecuteRoute);
@@ -322,6 +326,7 @@ orgScoped.route("/agent/sandbox/start", agentSandboxStartRoute);
 orgScoped.route("/agent/sandbox/exec", agentSandboxExecRoute);
 orgScoped.route("/agent/sandbox/snapshot", agentSandboxSnapshotRoute);
 orgScoped.route("/agent/sandbox/stop", agentSandboxStopRoute);
+orgScoped.route("/agent/sandbox/files", agentSandboxFilesListRoute);
 // Browser automation inside a durable sandbox (proof-of-done), org+workspace scoped.
 orgScoped.route("/browser/navigate", browserNavigateRoute);
 orgScoped.route("/browser/screenshot", browserScreenshotRoute);
