@@ -1,4 +1,5 @@
 import { requireScope, TenantScopeError } from "@oxagen/tenancy";
+import { neo4jBreaker } from "@oxagen/telemetry";
 import { session } from "./client";
 
 // A scoped query must reference the tenant on a node (read) or in a MERGE key.
@@ -26,7 +27,12 @@ export function scopedSession(): {
           `Cypher over a scoped session must filter by $orgId: ${cypher.slice(0, 80)}`,
         );
       }
-      return s.run(cypher, { ...params, orgId, workspaceId });
+      // Guard the shared Neo4j driver with the circuit breaker: a degraded
+      // AuraDB fails fast (CircuitOpenError) instead of every scoped query in
+      // the platform piling handshake attempts onto a down cluster. The
+      // TenantScopeError guard above is deliberately OUTSIDE the breaker — a
+      // programming error must never count toward tripping it.
+      return neo4jBreaker().exec(() => s.run(cypher, { ...params, orgId, workspaceId }));
     },
     close: () => s.close(),
   };

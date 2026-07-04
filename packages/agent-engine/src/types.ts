@@ -2,6 +2,16 @@ import type { ModelMessage, ToolSet } from "ai";
 import type { AgentAi, MemoryProvider, TraceStore } from "./ports";
 
 /**
+ * A non-fatal internal failure the engine surfaces through `onError` instead of
+ * swallowing. `phase` names where it happened so a consumer can route/label it.
+ */
+export interface EngineNonFatalError {
+  /** "memory-recall" — recalling episodic memory failed; the turn degrades to no recalled context. */
+  phase: "memory-recall";
+  error: unknown;
+}
+
+/**
  * An image attached to a turn's instruction (REPL Ctrl-V paste support).
  * Becomes an `ImagePart` alongside the instruction text — see engine.ts.
  */
@@ -201,6 +211,14 @@ export interface RunCodingAgentOptions {
   trace?: TraceStore;
   signal?: AbortSignal;
   onEvent?: (e: CodingEvent) => void;
+  /**
+   * Injected sink for NON-FATAL internal failures the engine would otherwise
+   * swallow — e.g. a memory-recall error that degrades the turn to no recalled
+   * context. Lets each consumer decide HOW to surface it (the platform logs +
+   * emits a telemetry event; the CLI writes its debug log) without the
+   * dependency-light engine importing a logger or a renderer. MUST NOT throw.
+   */
+  onError?: (err: EngineNonFatalError) => void;
   /**
    * Raw AI-SDK `fullStream` part tap. Invoked for EVERY part of every step,
    * synchronously, as the first thing the loop does per part — BEFORE the

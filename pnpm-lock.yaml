@@ -1492,6 +1492,9 @@ importers:
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
+      '@oxagen/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
       '@oxagen/tenancy':
         specifier: workspace:*
         version: link:../tenancy
