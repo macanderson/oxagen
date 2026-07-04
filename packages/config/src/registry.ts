@@ -971,10 +971,12 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   TENANT_RLS_ENFORCEMENT_ENABLED: {
     group: "Security",
     description:
-      "When true, Postgres RLS policies filter by org/workspace. Production-safe " +
-      "default — leave true for all deployed environments. Local dev override: set " +
-      "false in .env.local only if seeding/migration scripts need to bypass RLS; " +
-      "revert to true before running app code against the DB.",
+      "When true, Postgres RLS policies filter by org/workspace. Fail-closed: " +
+      "when UNSET it defaults ON in production (NODE_ENV/VERCEL_ENV=production) " +
+      "and OFF in dev/test/preview. A production process refuses to boot if this " +
+      "is forced to false (assertRlsEnforcedInProduction). Local dev override: " +
+      "set false in .env.local only if seeding/migration scripts need to bypass " +
+      "RLS; revert before running app code against the DB.",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],

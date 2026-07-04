@@ -3,11 +3,12 @@
 // Tests cover quote-stripping, cache behaviour, sub-schema selection,
 // and failure modes. No network or file-system access required.
 
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import {
   normalizeEnv,
   loadEnv,
   requireEnv,
+  isProductionRuntime,
   __resetEnvCacheForTests,
 } from "./env";
 
@@ -103,16 +104,74 @@ describe("loadEnv", () => {
 // ── TENANT_RLS_ENFORCEMENT_ENABLED ───────────────────────────────────────────
 
 describe("TENANT_RLS_ENFORCEMENT_ENABLED", () => {
+  // The field transform reads the AMBIENT process.env (NODE_ENV/VERCEL_ENV) to
+  // decide the unset default, so production-default cases mutate and restore it.
+  const savedNodeEnv = process.env.NODE_ENV;
+  const savedVercelEnv = process.env.VERCEL_ENV;
+
   beforeEach(() => {
     __resetEnvCacheForTests();
   });
 
-  it("defaults TENANT_RLS_ENFORCEMENT_ENABLED to false (seeding-safe)", () => {
+  afterEach(() => {
+    process.env.NODE_ENV = savedNodeEnv;
+    if (savedVercelEnv === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = savedVercelEnv;
+    __resetEnvCacheForTests();
+  });
+
+  it("defaults to false in non-production (dev/test seeding window)", () => {
+    // Vitest runs with NODE_ENV=test and no VERCEL_ENV → not production.
     __resetEnvCacheForTests();
     const env = requireEnv(["TENANT_RLS_ENFORCEMENT_ENABLED"], {
       ...process.env,
       TENANT_RLS_ENFORCEMENT_ENABLED: undefined,
     });
+    expect(env.TENANT_RLS_ENFORCEMENT_ENABLED).toBe(false);
+  });
+
+  it("defaults to TRUE (fail-closed) when unset in a NODE_ENV=production runtime", () => {
+    delete process.env.VERCEL_ENV;
+    process.env.NODE_ENV = "production";
+    __resetEnvCacheForTests();
+    const env = requireEnv(["TENANT_RLS_ENFORCEMENT_ENABLED"], {
+      ...process.env,
+      TENANT_RLS_ENFORCEMENT_ENABLED: undefined,
+    });
+    expect(env.TENANT_RLS_ENFORCEMENT_ENABLED).toBe(true);
+  });
+
+  it("defaults to TRUE (fail-closed) when unset in a VERCEL_ENV=production runtime", () => {
+    process.env.VERCEL_ENV = "production";
+    __resetEnvCacheForTests();
+    const env = requireEnv(["TENANT_RLS_ENFORCEMENT_ENABLED"], {
+      ...process.env,
+      TENANT_RLS_ENFORCEMENT_ENABLED: undefined,
+    });
+    expect(env.TENANT_RLS_ENFORCEMENT_ENABLED).toBe(true);
+  });
+
+  it("defaults to false on a Vercel PREVIEW deploy (VERCEL_ENV=preview wins over NODE_ENV)", () => {
+    // Preview deploys keep NODE_ENV=production but must stay in the seeding window.
+    process.env.NODE_ENV = "production";
+    process.env.VERCEL_ENV = "preview";
+    __resetEnvCacheForTests();
+    const env = requireEnv(["TENANT_RLS_ENFORCEMENT_ENABLED"], {
+      ...process.env,
+      TENANT_RLS_ENFORCEMENT_ENABLED: undefined,
+    });
+    expect(env.TENANT_RLS_ENFORCEMENT_ENABLED).toBe(false);
+  });
+
+  it("honors an explicit 'false' override even in production", () => {
+    process.env.VERCEL_ENV = "production";
+    __resetEnvCacheForTests();
+    const env = requireEnv(["TENANT_RLS_ENFORCEMENT_ENABLED"], {
+      ...process.env,
+      TENANT_RLS_ENFORCEMENT_ENABLED: "false",
+    });
+    // The value resolves to false — the startup guard (not the schema) is what
+    // refuses to boot in this state; the env itself stays a truthful reflection.
     expect(env.TENANT_RLS_ENFORCEMENT_ENABLED).toBe(false);
   });
 
@@ -123,6 +182,26 @@ describe("TENANT_RLS_ENFORCEMENT_ENABLED", () => {
       TENANT_RLS_ENFORCEMENT_ENABLED: "true",
     });
     expect(env.TENANT_RLS_ENFORCEMENT_ENABLED).toBe(true);
+  });
+});
+
+describe("isProductionRuntime", () => {
+  it("is true when VERCEL_ENV=production", () => {
+    expect(isProductionRuntime({ VERCEL_ENV: "production" })).toBe(true);
+  });
+
+  it("is false when VERCEL_ENV=preview even if NODE_ENV=production", () => {
+    expect(
+      isProductionRuntime({ VERCEL_ENV: "preview", NODE_ENV: "production" }),
+    ).toBe(false);
+  });
+
+  it("falls back to NODE_ENV=production when VERCEL_ENV is unset", () => {
+    expect(isProductionRuntime({ NODE_ENV: "production" })).toBe(true);
+  });
+
+  it("is false for a bare development runtime", () => {
+    expect(isProductionRuntime({ NODE_ENV: "development" })).toBe(false);
   });
 });
 
