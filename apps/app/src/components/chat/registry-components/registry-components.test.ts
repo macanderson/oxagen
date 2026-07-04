@@ -391,3 +391,28 @@ describe("workflow-progress — polling stops on terminal status", () => {
     });
   }
 });
+
+// ── Tests: coding-agent artifact card ids resolve in the registry ───────────
+// Regression coverage for the Phase 3 additions — "code-diff", "terminal-trace",
+// and "file-tree" are stable ids persisted in content_blocks; a typo or
+// dropped entry here would silently fall back to UnknownComponentCard in chat.
+
+describe("CHAT_COMPONENTS registry — coding-agent artifact ids", () => {
+  it("registers code-diff, terminal-trace, and file-tree", async () => {
+    const { CHAT_COMPONENTS } = await import("../chat-component-registry");
+    expect(CHAT_COMPONENTS["code-diff"]).toBeDefined();
+    expect(CHAT_COMPONENTS["terminal-trace"]).toBeDefined();
+    expect(CHAT_COMPONENTS["file-tree"]).toBeDefined();
+  });
+
+  it("each new id's module resolves to a component with a default export", async () => {
+    const [diffModule, traceModule, treeModule] = await Promise.all([
+      import("./code-diff-card"),
+      import("./terminal-trace-card"),
+      import("./file-tree-card"),
+    ]);
+    expect(typeof diffModule.default).toBe("function");
+    expect(typeof traceModule.default).toBe("function");
+    expect(typeof treeModule.default).toBe("function");
+  });
+});
