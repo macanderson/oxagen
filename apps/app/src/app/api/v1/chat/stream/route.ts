@@ -190,9 +190,17 @@ export async function POST(request: NextRequest): Promise<Response> {
     tenant = await resolveOrg(orgSlug);
     // Membership gate: any authenticated user can submit a request to any org
     // slug — assert they are actually a member before we touch any org-scoped
-    // data (IDOR guard).
-    await assertOrgMember(tenant.id, session.user.id);
-    workspace = await resolveWorkspace(tenant.id, workspaceSlug);
+    // data (IDOR guard). The workspace lookup and the membership assertion both
+    // depend only on tenant.id and have no side effects, so run them
+    // concurrently. Semantics are unchanged: a non-member's Promise.all rejects
+    // (the speculative workspace row is discarded) and both failure modes return
+    // the same generic 404 — org-scoped DATA access still happens strictly after
+    // this block, gated on a resolved membership.
+    const [, resolvedWorkspace] = await Promise.all([
+      assertOrgMember(tenant.id, session.user.id),
+      resolveWorkspace(tenant.id, workspaceSlug),
+    ]);
+    workspace = resolvedWorkspace;
   } catch {
     return NextResponse.json(
       { error: "Org or workspace not found" },
