@@ -1,7 +1,9 @@
 #!/usr/bin/env tsx
 /**
  * One-off backfill: ingest the 2026-07-03 best-of-N swe-bench runs into the
- * bench.* ClickHouse tables (packages/telemetry/src/migrations/0018_bench_schema.sql).
+ * bench.* ClickHouse tables (packages/bench/migrations/0001_bench_schema.sql).
+ * @oxagen/bench is a private, never-published package — this backfill is
+ * exactly the kind of internal-only consumer it exists for.
  *
  * Both runs predate the bench-config.json snapshot that
  * bench/swe-bench/run.sh now writes automatically (see that script), so the
@@ -21,7 +23,8 @@
  *   tsx tools/scripts/bench-backfill.ts --force      # re-ingest even if already present
  */
 import { existsSync } from "node:fs";
-import { closeClickhouse, ingestBenchResultsDir, type IngestBenchOptions, type BenchReplayConfig } from "@oxagen/telemetry";
+import { closeClickhouse } from "@oxagen/telemetry";
+import { ingestBenchResultsDir, type IngestBenchOptions, type BenchReplayConfig } from "@oxagen/bench";
 
 const out = (s: string): void => void process.stdout.write(s + "\n");
 
