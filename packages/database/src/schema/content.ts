@@ -41,6 +41,12 @@ export const generatedAssets = contentSchema.table(
     // policy). Distinct from auditMixin.createdByUserId (nullable audit field).
     userId: uuid("user_id").notNull(),
     kind: text("kind").notNull(),
+    // Provenance discriminator. 'generated' (default) = produced by the in-app
+    // agent's image/video generation; 'user_upload' = a chat/agent attachment the
+    // user supplied via asset.upload. Lets conversation.files.list and the graph
+    // sync distinguish model output from user-provided media without relying on
+    // the (now optionally empty) prompt column.
+    source: text("source").notNull().default("generated"),
     accessPolicy: text("access_policy").notNull().default("user"),
     status: text("status").notNull().default("ready"),
     // Blob reference. storageUrl/sizeBytes are null until an async render lands.
@@ -77,6 +83,10 @@ export const generatedAssets = contentSchema.table(
     kindCheck: check(
       "generated_assets_kind_check",
       sql`${t.kind} IN ('image', 'video', 'document', 'spreadsheet', 'presentation', 'pdf', 'archive')`,
+    ),
+    sourceCheck: check(
+      "generated_assets_source_check",
+      sql`${t.source} IN ('generated', 'user_upload')`,
     ),
     accessPolicyCheck: check(
       "generated_assets_access_policy_check",

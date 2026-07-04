@@ -5,6 +5,8 @@ import {
   supportsReasoning,
   supportsImage,
   supportsVideo,
+  supportsVision,
+  supportsVideoInput,
   supportsText,
   supportsMedia,
   capabilityLabel,
@@ -54,6 +56,28 @@ describe("model catalog (@oxagen/ai/catalog)", () => {
     expect(supportsText("openai/gpt-image-1")).toBe(false);
     expect(supportsText("google/veo-3.0-generate-001")).toBe(false);
     expect(supportsText("anthropic/claude-opus-4.8")).toBe(true);
+  });
+
+  it("classifies vision (image input) distinctly from image generation", () => {
+    // vision = accepts image parts as INPUT; distinct from image generation.
+    expect(supportsVision("anthropic/claude-fable-5")).toBe(true);
+    expect(supportsVision("openai/gpt-5.2")).toBe(true);
+    // gpt-image-1 only generates images — no vision input.
+    expect(supportsVision("openai/gpt-image-1")).toBe(false);
+    // deepseek is text/tools only, no vision.
+    expect(supportsVision("deepseek/deepseek-v3.2")).toBe(false);
+    expect(supportsVision("unknown/model")).toBe(false);
+    expect(supportsVision(undefined)).toBe(false);
+  });
+
+  it("classifies video input (Gemini) distinctly from video generation (Veo)", () => {
+    expect(supportsVideoInput("google/gemini-3-pro")).toBe(true);
+    expect(supportsVideoInput("google/gemini-3-flash")).toBe(true);
+    // Veo generates video but does not accept it as input.
+    expect(supportsVideoInput("google/veo-3.0-generate-001")).toBe(false);
+    // Non-Gemini vision models don't accept video input.
+    expect(supportsVideoInput("anthropic/claude-fable-5")).toBe(false);
+    expect(supportsVideoInput("unknown/model")).toBe(false);
   });
 
   it("supportsMedia dispatches on kind", () => {

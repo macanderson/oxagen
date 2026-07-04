@@ -18,6 +18,7 @@ export type Capability =
   | "tools"
   | "image"
   | "video"
+  | "video-input"
   | "audio";
 
 export type Vendor =
@@ -166,7 +167,9 @@ export const gatewayModels: GatewayModel[] = [
     name: "Gemini 3 Pro",
     vendor: "google",
     released: "2026-01-21",
-    capabilities: ["reasoning", "vision", "tools", "audio"],
+    // Gemini natively accepts video file parts as model input (video-input),
+    // distinct from the "video" media-generation capability (Veo).
+    capabilities: ["reasoning", "vision", "tools", "audio", "video-input"],
     context: "1M",
   },
   {
@@ -174,7 +177,7 @@ export const gatewayModels: GatewayModel[] = [
     name: "Gemini 3 Flash",
     vendor: "google",
     released: "2026-01-21",
-    capabilities: ["vision", "tools"],
+    capabilities: ["vision", "tools", "video-input"],
     context: "1M",
   },
   {
@@ -275,6 +278,25 @@ export function supportsVideo(model: string | GatewayModel | undefined): boolean
 }
 
 /**
+ * True when the model accepts image parts as INPUT (multimodal vision), e.g. a
+ * user attaching a screenshot to a chat turn. Distinct from {@link supportsImage},
+ * which is image *generation*. An unknown id returns false so callers degrade
+ * gracefully rather than sending image parts a model will reject.
+ */
+export function supportsVision(model: string | GatewayModel | undefined): boolean {
+  return !!resolve(model)?.capabilities.includes("vision");
+}
+
+/**
+ * True when the model accepts video file parts as INPUT (currently the Gemini
+ * family). Distinct from {@link supportsVideo} (video generation, e.g. Veo).
+ * When false, callers substitute pre-extracted keyframes as image parts.
+ */
+export function supportsVideoInput(model: string | GatewayModel | undefined): boolean {
+  return !!resolve(model)?.capabilities.includes("video-input");
+}
+
+/**
  * A model is "text-capable" when it can take part in a chat turn — i.e. it has
  * at least one non-media capability. Pure image/video models (GPT Image, Veo,
  * FLUX) are not selectable in the text composer.
@@ -304,6 +326,8 @@ export function capabilityLabel(c: Capability): string {
       return "Image gen";
     case "video":
       return "Video gen";
+    case "video-input":
+      return "Video input";
     case "audio":
       return "Audio";
   }
