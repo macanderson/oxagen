@@ -74,6 +74,7 @@ import { agentSubagentResultGetRoute } from "./routes/v1/agent.subagent.result.g
 import { agentSubagentSiblingsRoute } from "./routes/v1/agent.subagent.siblings";
 import { agentSubagentFanoutListRoute } from "./routes/v1/agent.subagent.fanout.list";
 import { agentSubagentFanoutGetRoute } from "./routes/v1/agent.subagent.fanout.get";
+import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
 import { formFillRoute } from "./routes/v1/form.fill";
 import { commandMenuSearchRoute } from "./routes/v1/command.menu.search";
 import { commandMenuSuggestRoute } from "./routes/v1/command.menu.suggest";
@@ -381,6 +382,9 @@ orgScoped.route("/agent/subagent/dispatch", agentSubagentDispatchRoute);
 // Read side of the fan-out feature: list fan-outs, then get one with child runs.
 orgScoped.route("/agent/subagent/fanouts", agentSubagentFanoutListRoute);
 orgScoped.route("/agent/subagent/fanout", agentSubagentFanoutGetRoute);
+// Agent run-trace span tree: one execution + its steps, tool calls, and child
+// executions (subagent/A2A lineage).
+orgScoped.route("/agent/trace", agentTraceGetRoute);
 // Agent lifecycle: definitions, deployment, triggers. The /update and /publish
 // sub-paths are mounted before the get route so they are not swallowed by its
 // GET /:agentId param match.

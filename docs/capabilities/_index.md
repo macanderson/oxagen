@@ -45,6 +45,7 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.task.background.read](agent.task.background.read.md) — Read the current status, progress markers, and final result of a background task
 - [agent.task.background.start](agent.task.background.start.md) — Dispatch a long-running task as a durable Inngest job; the chat stream polls for status
 - [agent.tool.list](agent.tool.list.md) — List the capabilities surfaced as agent tools for the active workspace, filtered by role, entitlements, and denylist
+- [agent.trace.get](agent.trace.get.md) — Fetch one agent execution as a collapsible span tree: the run, its ordered steps, each step's tool calls with durations/tokens/cost/status, and child executions (subagent/A2A lineage)
 - [agent.ui.render](agent.ui.render.md) — Render a structured UI component from an agent response; the client maps the component type to a React renderer
 
 ## Api (3)
