@@ -146,6 +146,19 @@ describe("planReplTurn", () => {
     expect(plan.tasks[0]!.description).toBe("do a thing");
   });
 
+  it("degrades to the fallback when the planner exceeds the time bound", async () => {
+    const planFn: PlanFn = () => new Promise(() => {}) as never; // never settles
+    const plan = await planReplTurn({
+      goal: "slow thing",
+      history: [],
+      ai: AI_STUB,
+      planFn,
+      timeoutMs: 30,
+    });
+    expect(plan.tasks).toHaveLength(1);
+    expect(plan.tasks[0]!.description).toBe("slow thing");
+  });
+
   it("re-throws when the signal is aborted (user cancel is not a fallback)", async () => {
     const controller = new AbortController();
     const planFn: PlanFn = async () => {
