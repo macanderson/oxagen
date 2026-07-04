@@ -8,13 +8,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── mocks ─────────────────────────────────────────────────────────────────────
 
-const { recallMemories, writeMemory, embedText } = vi.hoisted(() => ({
-  recallMemories: vi.fn(),
-  writeMemory: vi.fn(),
-  embedText: vi.fn(),
-}));
+const { recallMemories, recallPeerResults, writeMemory, embedText } = vi.hoisted(
+  () => ({
+    recallMemories: vi.fn(),
+    recallPeerResults: vi.fn(),
+    writeMemory: vi.fn(),
+    embedText: vi.fn(),
+  }),
+);
 
-vi.mock("../../memory/neo4j", () => ({ recallMemories, writeMemory }));
+vi.mock("../../memory/neo4j", () => ({
+  recallMemories,
+  recallPeerResults,
+  writeMemory,
+}));
 vi.mock("../../memory/embed", () => ({ embedText }));
 
 import { createPlatformMemoryProvider } from "../memory-provider";
@@ -32,9 +39,12 @@ const FAKE_EMBEDDING = [0.1, 0.2, 0.3];
 
 beforeEach(() => {
   recallMemories.mockReset();
+  recallPeerResults.mockReset();
   writeMemory.mockReset();
   embedText.mockReset();
   embedText.mockResolvedValue(FAKE_EMBEDDING);
+  // Default: no peer results, so existing memory-only assertions hold.
+  recallPeerResults.mockResolvedValue([]);
 });
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -69,6 +79,54 @@ describe("createPlatformMemoryProvider — recallContext", () => {
     const result = await provider.recallContext();
 
     expect(result).toBe("");
+  });
+
+  it("appends peer-result lines after memory lines with the run id", async () => {
+    recallMemories.mockResolvedValueOnce([
+      { memoryKind: "constraint", lesson: "always use strict mode", score: 0.9 },
+    ]);
+    recallPeerResults.mockResolvedValueOnce([
+      { runId: "run-abc", summary: "migrated auth to passkeys", score: 0.85 },
+      { runId: "run-def", summary: "added rate limiting", score: 0.8 },
+    ]);
+
+    const provider = createPlatformMemoryProvider({ recallQuery: "foo", telemetry: TELEMETRY });
+    const result = await provider.recallContext();
+
+    expect(result).toBe(
+      "- [constraint] always use strict mode\n" +
+        "- [peer-result] migrated auth to passkeys (run run-abc)\n" +
+        "- [peer-result] added rate limiting (run run-def)",
+    );
+    // Peer recall uses the same embedding, limit 4, threshold 0.7.
+    expect(recallPeerResults).toHaveBeenCalledWith(
+      expect.objectContaining({ embedding: FAKE_EMBEDDING, limit: 4, recallThreshold: 0.7 }),
+    );
+  });
+
+  it("returns peer lines even when no memories match", async () => {
+    recallMemories.mockResolvedValueOnce([]);
+    recallPeerResults.mockResolvedValueOnce([
+      { runId: "run-xyz", summary: "fixed the flaky test", score: 0.9 },
+    ]);
+
+    const provider = createPlatformMemoryProvider({ recallQuery: "foo", telemetry: TELEMETRY });
+    const result = await provider.recallContext();
+
+    expect(result).toBe("- [peer-result] fixed the flaky test (run run-xyz)");
+  });
+
+  it("still returns memory lines when peer recall rejects (degrades to zero peers)", async () => {
+    recallMemories.mockResolvedValueOnce([
+      { memoryKind: "constraint", lesson: "always use strict mode", score: 0.9 },
+    ]);
+    recallPeerResults.mockRejectedValueOnce(new Error("Neo4j unavailable"));
+
+    const provider = createPlatformMemoryProvider({ recallQuery: "foo", telemetry: TELEMETRY });
+    // must not throw — peer failure degrades to zero peer lines
+    const result = await provider.recallContext();
+
+    expect(result).toBe("- [constraint] always use strict mode");
   });
 });
 

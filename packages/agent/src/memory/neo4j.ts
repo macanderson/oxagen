@@ -175,6 +175,61 @@ export async function recallMemories(args: {
   }
 }
 
+/** A cross-fanout peer result recalled from an :Execution node (Phase 2 §3 Tier B). */
+export interface PeerResultRow {
+  runId: string;
+  summary: string;
+  score: number;
+}
+
+/**
+ * Semantic peer recall over :Execution result summaries (docs/specs/
+ * graph-mediated-fanout-phase2 §3 Tier B). Vector-searches the
+ * `execution_embedding_index`, gated on the same tenant + a similarity
+ * threshold, and returns the top matches' publicId (runId) + summary. Mirrors
+ * `recallMemories`: orgId/workspaceId are injected by scopedSession(), the
+ * limit is passed as BigInt, and results are ordered by score. Only executions
+ * carrying a non-empty summary are eligible — a null/blank summary yields no
+ * useful peer line.
+ */
+export async function recallPeerResults(args: {
+  embedding: number[];
+  limit: number;
+  recallThreshold?: number;
+}): Promise<PeerResultRow[]> {
+  const s = scopedSession();
+  try {
+    const recallThreshold = args.recallThreshold ?? 0;
+    const result = await s.run(
+      /* cypher */ `
+        CALL db.index.vector.queryNodes('execution_embedding_index', $limit, $embedding)
+        YIELD node AS e, score
+        WHERE e.orgId = $orgId
+          AND e.workspaceId = $workspaceId
+          AND e.summary IS NOT NULL
+          AND e.summary <> ''
+          AND score >= $recallThreshold
+        WITH e, score
+        ORDER BY score DESC
+        LIMIT $limit
+        RETURN coalesce(e.publicId, e.id) AS runId, e.summary AS summary, score AS score
+      `,
+      {
+        embedding: args.embedding,
+        limit: BigInt(args.limit),
+        recallThreshold,
+      },
+    );
+    return result.records.map((r) => ({
+      runId: r.get("runId") as string,
+      summary: r.get("summary") as string,
+      score: Number(r.get("score")),
+    }));
+  } finally {
+    await s.close();
+  }
+}
+
 /**
  * Browse ACTIVE :AgentMemory nodes for the active tenant, newest first, with
  * optional class/kind/enforcement/node filters. Returns the page plus the

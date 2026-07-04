@@ -16,6 +16,7 @@ import { pluginOauthRefreshWatcher } from "./functions/plugin.oauth-refresh-watc
 import { agentWorkflowSupervisor } from "./functions/agent.workflow.supervisor";
 import { agentWorkflowTaskExecute } from "./functions/agent.workflow.task.execute";
 import { agentSyncExecutionToGraph } from "./functions/agent.sync-execution-to-graph";
+import { agentLeaseSweep } from "./functions/agent.lease-sweep";
 import { contentSyncGeneratedFileToGraph } from "./functions/content.sync-generated-file-to-graph";
 import {
   privacyExportProcess,
@@ -68,6 +69,7 @@ export const functions: any[] = [
   agentWorkflowSupervisor,
   agentWorkflowTaskExecute,
   agentSyncExecutionToGraph,
+  agentLeaseSweep,
   contentSyncGeneratedFileToGraph,
   privacyExportProcess,
   privacyExportProcessOnFailure,

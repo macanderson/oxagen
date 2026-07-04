@@ -130,6 +130,13 @@ export interface DurableFunctionHandlerContext {
   event: EventPayload<Record<string, unknown>>;
   /** The step context for durable operations. */
   step: StepContext;
+  /**
+   * Provider-assigned id of this function run, stable across step replays.
+   * Used as the worker identity for durable claim/lease ownership
+   * (docs/specs/graph-mediated-fanout-phase2 §1). Optional because tests and
+   * older providers may not supply it.
+   */
+  runId?: string;
 }
 
 /**

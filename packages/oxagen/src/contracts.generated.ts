@@ -53,6 +53,7 @@ import "./contracts/agent.subagent.fanout.get";
 import "./contracts/agent.subagent.fanout.list";
 import "./contracts/agent.subagent.logs";
 import "./contracts/agent.subagent.result.get";
+import "./contracts/agent.subagent.siblings";
 import "./contracts/agent.task.background.cancel";
 import "./contracts/agent.task.background.read";
 import "./contracts/agent.task.background.start";

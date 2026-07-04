@@ -10,6 +10,7 @@ vi.mock("@oxagen/ontology", () => ({
 
 import {
   recallMemories,
+  recallPeerResults,
   writeMemory,
   reinforceMemory,
   applyDecayToMemory,
@@ -135,6 +136,57 @@ describe("recallMemories — recallThreshold filtering", () => {
     );
     const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(params.recallThreshold).toBe(0);
+  });
+});
+
+describe("recallPeerResults", () => {
+  beforeEach(() => {
+    sessionRun.mockReset();
+    sessionClose.mockClear();
+  });
+
+  it("queries the execution vector index with tenant + summary + threshold gates", async () => {
+    sessionRun.mockResolvedValueOnce({
+      records: [
+        fakeRecord({ runId: "run-1", summary: "migrated auth", score: 0.91 }),
+        fakeRecord({ runId: "run-2", summary: "added caching", score: 0.82 }),
+      ],
+    });
+    const rows = await withTestScope(() =>
+      recallPeerResults({
+        embedding: new Array<number>(1536).fill(0.1),
+        limit: 4,
+        recallThreshold: 0.7,
+      }),
+    );
+    expect(sessionRun).toHaveBeenCalledTimes(1);
+    const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
+    expect(cypher).toContain("execution_embedding_index");
+    expect(cypher).toContain("e.orgId = $orgId");
+    expect(cypher).toContain("e.workspaceId = $workspaceId");
+    expect(cypher).toContain("e.summary IS NOT NULL");
+    expect(cypher).toContain("score >= $recallThreshold");
+    const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    // orgId/workspaceId are injected by scopedSession (real impl), not threaded.
+    expect(params.orgId).toBeUndefined();
+    expect(params.workspaceId).toBeUndefined();
+    expect(params.recallThreshold).toBe(0.7);
+    // limit is passed as BigInt (mirrors recallMemories).
+    expect(params.limit).toBe(BigInt(4));
+    expect(rows).toEqual([
+      { runId: "run-1", summary: "migrated auth", score: 0.91 },
+      { runId: "run-2", summary: "added caching", score: 0.82 },
+    ]);
+  });
+
+  it("defaults recallThreshold to 0 when not supplied", async () => {
+    sessionRun.mockResolvedValueOnce({ records: [] });
+    await withTestScope(() =>
+      recallPeerResults({ embedding: new Array<number>(1536).fill(0.1), limit: 4 }),
+    );
+    const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.recallThreshold).toBe(0);
+    expect(sessionClose).toHaveBeenCalledTimes(1);
   });
 });
 

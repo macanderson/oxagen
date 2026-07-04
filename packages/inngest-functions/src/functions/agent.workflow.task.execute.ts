@@ -4,6 +4,7 @@ import { and, count, eq, sql } from "drizzle-orm";
 import { generateObjectFor } from "@oxagen/ai";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { insertToolInvocation } from "@oxagen/telemetry";
+import { claimExecutionStep, renewExecutionStepLease, startLeaseRenewal } from "../lease";
 import { logger } from "../logger";
 import { z } from "zod";
 
@@ -26,7 +27,7 @@ export const [agentWorkflowTaskExecute] = createFunction(
     ],
   },
   { event: "agent/workflow.task.execute" },
-  async ({ event, step }) => {
+  async ({ event, step, runId }) => {
     const { orgId, workspaceId, executionId, stepId, taskIndex, goal, outputFormat } =
       event.data as {
         orgId: string;
@@ -40,40 +41,50 @@ export const [agentWorkflowTaskExecute] = createFunction(
 
     const invocationId = crypto.randomUUID();
     const startedAt = Date.now();
+    const workerId = typeof runId === "string" && runId.length > 0 ? runId : `worker:${stepId}`;
 
-    // Mark step running.
-    await step.run("mark-running", () =>
-      runInTenantScope({ orgId, workspaceId }, () =>
-        withTenantDb((tx) =>
-          tx
-            .update(schema.agentExecutionSteps)
-            .set({ status: "running", startedAt: new Date(), updatedAt: new Date() })
-            .where(
-              and(
-                eq(schema.agentExecutionSteps.id, stepId),
-                eq(schema.agentExecutionSteps.orgId, orgId),
-              ),
-            ),
-        ),
-      ),
+    // Claim the step (mark-running as a claim — spec §1): atomic UPDATE that
+    // takes ownership + a lease and bumps attempts. Null means the step is
+    // terminal, at the attempt cap, or owned by a live worker — skipping makes
+    // duplicate deliveries and sweeper re-dispatches safe instead of
+    // double-running the task.
+    const claimed = await step.run("claim-step", () =>
+      claimExecutionStep({ orgId, workspaceId, stepId, workerId }),
     );
+    if (!claimed) {
+      logger.info(
+        { stepId, executionId, orgId },
+        "agent.workflow.task.execute: step not claimable (terminal, capped, or live-owned) — skipping",
+      );
+      return { stepId, taskIndex, status: "skipped" };
+    }
 
     let output: z.output<typeof taskOutputSchema>;
     try {
-      const result = await step.run("execute", () =>
-        generateObjectFor({
-          schema: taskOutputSchema,
-          system: `You are a research agent. Given a specific research goal, produce a concise structured result.
+      const result = await step.run("execute", async () => {
+        // Keep the lease alive across the LLM call so a slow generation never
+        // triggers a false reclaim (spec §Risks).
+        const stopRenewal = startLeaseRenewal(
+          () => renewExecutionStepLease({ orgId, workspaceId, stepId, workerId }),
+          { onError: (err) => logger.warn({ err, stepId }, "lease renewal failed — sweeper may reclaim") },
+        );
+        try {
+          return await generateObjectFor({
+            schema: taskOutputSchema,
+            system: `You are a research agent. Given a specific research goal, produce a concise structured result.
 Provide a summary, any relevant structured data, and source references if applicable.`,
-          prompt: `Research goal: ${goal}\n\nProvide your findings as structured output. Output format: ${outputFormat}.`,
-          telemetry: {
-            orgId,
-            workspaceId,
-            surface: "runner" as const,
-            messageId: stepId,
-          },
-        }),
-      );
+            prompt: `Research goal: ${goal}\n\nProvide your findings as structured output. Output format: ${outputFormat}.`,
+            telemetry: {
+              orgId,
+              workspaceId,
+              surface: "runner" as const,
+              messageId: stepId,
+            },
+          });
+        } finally {
+          stopRenewal();
+        }
+      });
       output = result.object;
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -89,6 +100,7 @@ Provide a summary, any relevant structured data, and source references if applic
                 failureReason: errMsg,
                 completedAt: new Date(),
                 updatedAt: new Date(),
+                leaseExpiresAt: null,
               })
               .where(
                 and(
@@ -140,6 +152,7 @@ Provide a summary, any relevant structured data, and source references if applic
               outputPayload: output as object,
               completedAt: new Date(),
               updatedAt: new Date(),
+              leaseExpiresAt: null,
             })
             .where(
               and(

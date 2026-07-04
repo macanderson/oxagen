@@ -1,6 +1,6 @@
 # Spec: Graph-Mediated Fleet Coordination (Phase 2 — Blackboard)
 
-**Status:** Draft
+**Status:** Implemented (slices 2a/2b/2c) — PR feat/graph-fanout-phase2
 **Owner:** Mac Anderson
 **Related:** `docs/specs/graph-mediated-fanout/` (Phase 1, shipped in #527), ADR-010 (subagent fanout via Inngest), ADR-019 (unified agent engine)
 

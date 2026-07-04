@@ -382,6 +382,10 @@ describe("agent.execution.record capability", () => {
     expect(parsed.originType).toBe(originType);
   });
 
+  it("includes the fanout originType (Phase 2 graph projection ritual)", () => {
+    expect(AGENT_EXECUTION_ORIGIN_TYPES).toContain("fanout");
+  });
+
   it("rejects an unknown originType", () => {
     expect(() =>
       agentExecutionRecord.input.parse({

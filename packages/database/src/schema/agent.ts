@@ -269,11 +269,23 @@ export const subagentRuns = agentSchema.table(
     errorReason: text("error_reason"),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
     completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    // Durable claim/lease (docs/specs/graph-mediated-fanout-phase2 §1).
+    // claimedBy = Inngest run id of the owning worker; leaseExpiresAt null means
+    // unclaimed or terminal. The lease sweeper requeues expired-lease rows until
+    // the attempt cap, so a dead worker's task is reclaimed without a coordinator.
+    claimedBy: text("claimed_by"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true, mode: "date" }),
+    attempts: integer("attempts").notNull().default(0),
   },
   (t) => ({
     fanoutIdx: index("subagent_runs_fanout_idx").on(t.fanoutId),
     statusIdx: index("subagent_runs_status_idx").on(t.status),
     orgIdx: index("subagent_runs_org_idx").on(t.orgId, t.workspaceId),
+    // Partial index for the claim UPDATE and the lease sweeper — only
+    // non-terminal rows are ever scanned by either.
+    claimIdx: index("subagent_runs_claim_idx")
+      .on(t.orgId, t.status)
+      .where(sql`${t.status} IN ('pending', 'running')`),
     statusCheck: check("subagent_runs_status_check", sql`${t.status} IN ('pending', 'running', 'completed', 'failed')`),
   }),
 );
@@ -325,7 +337,7 @@ export const agentExecutions = agentSchema.table(
     // packages/oxagen/src/contracts/agent.execution.record.ts.
     originTypeCheck: check(
       "agent_executions_origin_type_check",
-      sql`${t.originType} IN ('chat', 'event_trigger', 'scheduled_job', 'mcp_request', 'workflow_run')`,
+      sql`${t.originType} IN ('chat', 'event_trigger', 'scheduled_job', 'mcp_request', 'workflow_run', 'fanout')`,
     ),
   }),
 );
@@ -350,10 +362,18 @@ export const agentExecutionSteps = agentSchema.table(
     outputTokens: integer("output_tokens"),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
     completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    // Durable claim/lease — same semantics as subagent_runs (spec §1): a lost
+    // worker's step becomes resweepable instead of stranding the execution.
+    claimedBy: text("claimed_by"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true, mode: "date" }),
+    attempts: integer("attempts").notNull().default(0),
   },
   (t) => ({
     executionIdx: index("agent_execution_steps_execution_idx").on(t.executionId),
     orgIdx: index("agent_execution_steps_org_idx").on(t.orgId, t.workspaceId),
+    claimIdx: index("agent_execution_steps_claim_idx")
+      .on(t.orgId, t.status)
+      .where(sql`${t.status} IN ('pending', 'running')`),
     statusCheck: check("agent_execution_steps_status_check", sql`${t.status} IN ('pending', 'running', 'completed', 'failed', 'cancelled')`),
   }),
 );

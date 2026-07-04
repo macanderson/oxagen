@@ -12,6 +12,7 @@
 import pino from "pino";
 import {
   recallMemories,
+  recallPeerResults,
   writeMemory,
   recordExecution,
   recordCitation,
@@ -55,7 +56,21 @@ export function createPlatformMemoryProvider(args: MemoryAdapterArgs): MemoryPro
         limit: 8,
         recallThreshold: 0.7,
       });
-      if (rows.length === 0) return "";
+
+      // Tier B semantic peer recall (docs/specs/graph-mediated-fanout-phase2
+      // §3): also embed-search sibling/prior :Execution result summaries and
+      // append them below the memory lines. Strictly additive and best-effort —
+      // any failure degrades to zero peer lines and never blocks or fails the
+      // memory recall above. Capped at 4 (spec) to stay within the recall
+      // budget, same 0.7 threshold as memories. Peer rows are NOT auto-cited:
+      // the citation/execution flow below is for memories only.
+      const peers = await recallPeerResults({
+        embedding: emb,
+        limit: 4,
+        recallThreshold: 0.7,
+      }).catch(() => []);
+
+      if (rows.length === 0 && peers.length === 0) return "";
 
       // Auto-record the turn as an :Execution and cite every memory it surfaced
       // (CONSIDERED). This builds the citation pressure that promotes recurring
@@ -63,7 +78,7 @@ export function createPlatformMemoryProvider(args: MemoryAdapterArgs): MemoryPro
       // must never terminate a coding run. Keyed on the turn's messageId so all
       // of a turn's citations group under one execution.
       const executionRef = args.telemetry.messageId;
-      if (executionRef) {
+      if (executionRef && rows.length > 0) {
         void (async () => {
           try {
             const { executionId } = await recordExecution({
@@ -92,7 +107,11 @@ export function createPlatformMemoryProvider(args: MemoryAdapterArgs): MemoryPro
         })();
       }
 
-      return rows.map((r) => `- [${r.memoryKind}] ${r.lesson}`).join("\n");
+      const memoryLines = rows.map((r) => `- [${r.memoryKind}] ${r.lesson}`);
+      const peerLines = peers.map(
+        (p) => `- [peer-result] ${p.summary} (run ${p.runId})`,
+      );
+      return [...memoryLines, ...peerLines].join("\n");
     },
 
     async remember(kind: string, content: unknown): Promise<void> {

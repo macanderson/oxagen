@@ -240,6 +240,37 @@ describe("recordExecutionInGraph", () => {
     expect(originCall![0]).toContain(":WorkflowRun");
   });
 
+  it("creates ORIGINATED_FROM edge to Fanout for fanout origin (Phase 2 §2)", async () => {
+    await recordExecutionInGraph({ ...BASE_INPUT, originType: "fanout", originId: "fan-001" });
+
+    const originCall = mockNeoRun.mock.calls.find(([cypher]) =>
+      (cypher as string).includes("ORIGINATED_FROM"),
+    );
+    expect(originCall).toBeDefined();
+    expect(originCall![0]).toContain(":Fanout");
+    expect(originCall![1]).toMatchObject({ originId: "fan-001" });
+  });
+
+  it("merges caller-supplied properties into the node's properties bag", async () => {
+    await recordExecutionInGraph({
+      ...BASE_INPUT,
+      originType: "fanout",
+      properties: { fanoutId: "fan-001", runId: "sar-001", capabilityName: "web.search", attempts: 2, dropped: null },
+    });
+
+    const mergeCall = mockNeoRun.mock.calls[0]!;
+    const params = mergeCall[1] as Record<string, unknown>;
+    const parsed = JSON.parse(params.properties as string) as Record<string, unknown>;
+    expect(parsed).toMatchObject({
+      fanoutId: "fan-001",
+      runId: "sar-001",
+      capabilityName: "web.search",
+      attempts: 2,
+      originType: "fanout",
+    });
+    expect(parsed).not.toHaveProperty("dropped");
+  });
+
   it("skips ORIGINATED_FROM edge for unknown originType", async () => {
     await recordExecutionInGraph({ ...BASE_INPUT, originType: "scheduled_job" });
 
