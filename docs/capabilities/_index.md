@@ -148,6 +148,17 @@ contract-first design, IAM enforcement, and instrumentation.
 - [environment.delete](environment.delete.md) — Soft-delete a workspace environment; the default cannot be deleted until another is promoted
 - [environment.set_default](environment.set_default.md) — Promote an environment to the workspace default via an atomic swap
 
+## Eval (8)
+
+- [eval.dataset.create](eval.dataset.create.md) — Create an eval dataset — a named, workspace-scoped collection of cases to score a target against
+- [eval.dataset.list](eval.dataset.list.md) — List the workspace's eval datasets with their item counts, source (manual or traces), and timestamps
+- [eval.dataset.get](eval.dataset.get.md) — Fetch one eval dataset by public id along with a page of its items (input, expected output, metadata)
+- [eval.dataset.item.add](eval.dataset.item.add.md) — Bulk-add cases to an eval dataset; batch by design — one call inserts many items as a set
+- [eval.dataset.from_traces](eval.dataset.from_traces.md) — Create an eval dataset from the workspace's real, already-metered production traces — score what actually ran, not synthetic prompts
+- [eval.run.start](eval.run.start.md) — Start an eval run: enqueue a background job that runs every dataset item through a target and scores it with an LLM judge; async, metered through @oxagen/ai
+- [eval.run.status](eval.run.status.md) — Poll an eval run's lifecycle: status, progress counts, and mean score once available
+- [eval.run.get](eval.run.get.md) — Fetch an eval run's summary and per-item results: output, judge scores, pass/fail, tokens, latency, and cost
+
 ## Form (1)
 
 - [form.fill](form.fill.md) — Generatively fill or suggest values for page-level form fields based on context
