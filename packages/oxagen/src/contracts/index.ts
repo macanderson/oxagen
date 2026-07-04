@@ -276,6 +276,29 @@ import { secretExport } from "./secret.export";
 // Memory decay policies (OXA-1374).
 import { agentMemoryPolicyRead } from "./agent.memory.policy.read";
 import { agentMemoryPolicyWrite } from "./agent.memory.policy.write";
+import { evalDatasetCreate } from "./eval.dataset.create";
+import { evalDatasetList } from "./eval.dataset.list";
+import { evalDatasetGet } from "./eval.dataset.get";
+import { evalDatasetItemAdd } from "./eval.dataset.item.add";
+import { evalDatasetFromTraces } from "./eval.dataset.from_traces";
+import { evalRunStart } from "./eval.run.start";
+import { evalRunStatus } from "./eval.run.status";
+import { evalRunGet } from "./eval.run.get";
+
+// Shared eval.* schemas (not capabilities themselves) — re-exported so the
+// contracts array guard sees eval-schema.ts referenced, mirroring agent-schema.
+export {
+  evalDatasetItemSchema,
+  evalTargetSchema,
+  evalJudgeScoreSchema,
+  evalRunStatusSchema,
+} from "./eval-schema";
+export type {
+  EvalDatasetItem,
+  EvalTarget,
+  EvalJudgeScore,
+  EvalRunStatus,
+} from "./eval-schema";
 // Re-export shared Zod helpers used across schema.* contracts.
 // These are not capability contracts themselves but must appear here to satisfy
 // the check-contracts file-coverage guard (tools/scripts/check-contracts.mjs).
@@ -600,6 +623,14 @@ export {
   secretExport,
   agentMemoryPolicyRead,
   agentMemoryPolicyWrite,
+  evalDatasetCreate,
+  evalDatasetList,
+  evalDatasetGet,
+  evalDatasetItemAdd,
+  evalDatasetFromTraces,
+  evalRunStart,
+  evalRunStatus,
+  evalRunGet,
 };
 
 /**
@@ -875,4 +906,12 @@ export const contracts = [
   secretExport,
   agentMemoryPolicyRead,
   agentMemoryPolicyWrite,
+  evalDatasetCreate,
+  evalDatasetList,
+  evalDatasetGet,
+  evalDatasetItemAdd,
+  evalDatasetFromTraces,
+  evalRunStart,
+  evalRunStatus,
+  evalRunGet,
 ] as const;

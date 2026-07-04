@@ -2147,10 +2147,10 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
-        "mcp": false,
-        "unit": false,
-        "docs": false
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -2165,10 +2165,10 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
-        "mcp": false,
-        "unit": false,
-        "docs": false
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -2183,10 +2183,10 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
-        "mcp": false,
-        "unit": false,
-        "docs": false
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -2201,10 +2201,10 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
-        "mcp": false,
-        "unit": false,
-        "docs": false
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -2219,10 +2219,10 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
-        "mcp": false,
-        "unit": false,
-        "docs": false
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -2237,10 +2237,10 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
-        "mcp": false,
-        "unit": false,
-        "docs": false
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -2255,10 +2255,10 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
-        "mcp": false,
-        "unit": false,
-        "docs": false
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -2273,10 +2273,10 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
-        "mcp": false,
-        "unit": false,
-        "docs": false
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
