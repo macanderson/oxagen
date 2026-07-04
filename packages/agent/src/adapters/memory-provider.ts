@@ -24,8 +24,6 @@ import type { MemoryProvider } from "@oxagen/agent-engine";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.memory-adapter" } });
 
-const NIL_UUID = "00000000-0000-0000-0000-000000000000";
-
 /**
  * Record a memory-recall failure as an append-only ClickHouse `events` row so
  * platform-wide memory loss (a down Neo4j / embedder) is VISIBLE in analytics,

@@ -35,15 +35,14 @@ function guardProviderWithBreaker(provider: BillingProvider): BillingProvider {
   const breaker = stripeBreaker();
   return new Proxy(provider, {
     get(target, prop, receiver) {
-      const value = Reflect.get(target, prop, receiver);
+      const value: unknown = Reflect.get(target, prop, receiver);
       if (typeof value !== "function") return value;
+      const fn = value as (...a: unknown[]) => unknown;
       if (UNGUARDED_PROVIDER_METHODS.has(prop as string)) {
-        return (value as (...a: unknown[]) => unknown).bind(target);
+        return fn.bind(target);
       }
       return (...args: unknown[]) =>
-        breaker.exec(
-          () => Reflect.apply(value as (...a: unknown[]) => unknown, target, args) as Promise<unknown>,
-        );
+        breaker.exec(() => Reflect.apply(fn, target, args) as Promise<unknown>);
     },
   });
 }
