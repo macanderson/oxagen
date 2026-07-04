@@ -275,6 +275,28 @@ export const baseEnvSchema = z.object({
   OXAGEN_USAGE_DISCOUNT_PERCENT: z.coerce.number().gte(0).lt(100).default(3),
   OXAGEN_USAGE_DISCOUNT_INCREMENT: z.coerce.number().gt(0).default(50),
   OXAGEN_USAGE_DISCOUNT_CEILING_USD: z.coerce.number().gt(0).default(250),
+
+  // ── SWE-bench optimization: spec-first oracle & adaptive ladder ──
+  // F2 spec-first oracle: at mid-judge, if no failing test reproduction exists,
+  // inject a corrective instruction instead of generic completeness feedback.
+  // Enforces test-before-patch discipline to prevent wrong-spec patches.
+  OXAGEN_SPEC_GATE: z
+    .union([z.literal("1"), z.literal("true"), z.literal("0"), z.literal("false")])
+    .optional()
+    .transform((v) => v === "1" || v === "true"),
+  // F3 adaptive compute ladder: gate escalation on measured signals
+  // (oracle flipped + tests green + diff size) instead of fixed schedule.
+  // Fast-path (rung 0) skips judge entirely when conditions are met.
+  OXAGEN_LADDER: z
+    .union([z.literal("1"), z.literal("true"), z.literal("0"), z.literal("false")])
+    .optional()
+    .transform((v) => v === "1" || v === "true"),
+  // Diff line count threshold for fast-path submission (default 120).
+  // When oracle flipped + tests green + diff ≤ budget, skip judge.
+  OXAGEN_DIFF_BUDGET: z.coerce.number().positive().default(120),
+  // Hard cap on ladder rung (0–3); prevents escalation beyond specified level.
+  // 0 = fast-path only, 3 = no cap (default).
+  OXAGEN_LADDER_MAX_RUNG: z.coerce.number().int().min(0).max(3).default(3),
 });
 
 // The exact set of keys this schema validates. `normalizeEnv` only ever
