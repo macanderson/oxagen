@@ -307,6 +307,10 @@ describe("createAliasEdge", () => {
     expect(params["confidence"]).toBe(0.95);
     expect(params["matchReason"]).toBe("email_match");
     expect(params["tentative"]).toBe(false);
+    // Bi-temporal validity stamped on create (validFrom falls back to now).
+    expect(cypher).toContain("r.validFrom = coalesce(datetime($validFrom), datetime())");
+    expect(cypher).toContain("r.recordedAt = datetime()");
+    expect(params["validFrom"]).toBeNull();
   });
 });
 
@@ -341,6 +345,9 @@ describe("upsertInferredEdges", () => {
     expect(params1["fromNodeId"]).toBe("from-1");
     expect(params1["toNodeId"]).toBe("to-1");
     expect(params1["confidence"]).toBe(0.8);
+    // Bi-temporal validity stamped on the inferred edge create.
+    expect(cypher1).toContain("r.recordedAt = datetime()");
+    expect(params1["validFrom"]).toBeNull();
 
     const [cypher2] = mocks.sessionRun.mock.calls[1] as [string, Record<string, unknown>];
     expect(cypher2).toContain("PART_OF");

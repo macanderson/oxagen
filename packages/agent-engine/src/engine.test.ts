@@ -122,4 +122,44 @@ describe("runCodingAgent", () => {
       expect.objectContaining({ instruction: "update x", changedFiles: ["x.ts"] }),
     );
   });
+
+  it("surfaces a memory-recall failure via onError and still completes the turn", async () => {
+    const ws = new MemoryWorkspace({ "a.ts": "foo" });
+    // The memory store is down: recallContext rejects.
+    const recallContext = vi.fn().mockRejectedValue(new Error("neo4j unreachable"));
+    const memory: MemoryProvider = { recallContext, remember: vi.fn() };
+    const onError = vi.fn();
+
+    const ai: AgentAi = {
+      stream() {
+        return {
+          fullStream: (async function* () {
+            yield { type: "text-delta", text: "done" };
+          })(),
+          steps: Promise.resolve([{}]),
+          usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+          response: Promise.resolve({ messages: [] }),
+        } as unknown as ReturnType<AgentAi["stream"]>;
+      },
+      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+    };
+
+    const result = await runCodingAgent({
+      workspace: ws,
+      ai,
+      instruction: "do the thing",
+      model: "anthropic/claude-opus-4-8",
+      memory,
+      onError,
+    });
+
+    // The recall was attempted, failed loudly through the sink, and the turn
+    // still completed (degraded to no recalled context — not killed).
+    expect(recallContext).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: "memory-recall", error: expect.any(Error) }),
+    );
+    expect(result.text).toBe("done");
+  });
 });

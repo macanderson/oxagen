@@ -14,6 +14,7 @@ import { workspaceCreateRoute } from "./routes/v1/workspace.create";
 import { orgListRoute } from "./routes/v1/org.list";
 import { workspaceListRoute } from "./routes/v1/workspace.list";
 import { billingSubscriptionReadRoute } from "./routes/v1/billing.subscription.read";
+import { billingUsageBreakdownRoute } from "./routes/v1/billing.usage.breakdown";
 import { billingSubscriptionUpgradeStartRoute } from "./routes/v1/billing.subscription.upgrade.start";
 import { billingCreditsPurchaseRoute } from "./routes/v1/billing.credits.purchase";
 import { chatMessageSendRoute } from "./routes/v1/chat.message.send";
@@ -179,6 +180,14 @@ import { agentDefinitionUpdateRoute } from "./routes/v1/agent.definition.update"
 import { agentDefinitionPublishRoute } from "./routes/v1/agent.definition.publish";
 import { agentDefinitionGetRoute } from "./routes/v1/agent.definition.get";
 import { agentDefinitionListRoute } from "./routes/v1/agent.definition.list";
+import { evalDatasetCreateRoute } from "./routes/v1/eval.dataset.create";
+import { evalDatasetListRoute } from "./routes/v1/eval.dataset.list";
+import { evalDatasetGetRoute } from "./routes/v1/eval.dataset.get";
+import { evalDatasetItemAddRoute } from "./routes/v1/eval.dataset.item.add";
+import { evalDatasetFromTracesRoute } from "./routes/v1/eval.dataset.from_traces";
+import { evalRunStartRoute } from "./routes/v1/eval.run.start";
+import { evalRunStatusRoute } from "./routes/v1/eval.run.status";
+import { evalRunGetRoute } from "./routes/v1/eval.run.get";
 import { agentDeployRoute } from "./routes/v1/agent.deploy";
 import { agentTriggerCreateRoute } from "./routes/v1/agent.trigger.create";
 import { agentTriggerUpdateRoute } from "./routes/v1/agent.trigger.update";
@@ -308,6 +317,7 @@ orgScoped.route(
   billingSubscriptionUpgradeStartRoute,
 );
 orgScoped.route("/billing/credits/purchase", billingCreditsPurchaseRoute);
+orgScoped.route("/billing/usage/breakdown", billingUsageBreakdownRoute);
 orgScoped.route("/chat/messages", chatMessageSendRoute);
 orgScoped.route("/chat/messages/execution", chatMessageExecutionRoute);
 orgScoped.route("/chat/stream", chatStreamRoute);
@@ -402,6 +412,16 @@ orgScoped.route("/agent/triggers/update", agentTriggerUpdateRoute);
 orgScoped.route("/agent/triggers/delete", agentTriggerDeleteRoute);
 orgScoped.route("/agent/triggers", agentTriggerCreateRoute);
 orgScoped.route("/agent/triggers", agentTriggerListRoute);
+// Eval datasets/runs: from-traces/get/items sub-paths mounted before the base
+// path so they aren't swallowed by the create/list routes' GET/POST on "/".
+orgScoped.route("/eval/datasets/from-traces", evalDatasetFromTracesRoute);
+orgScoped.route("/eval/datasets/get", evalDatasetGetRoute);
+orgScoped.route("/eval/datasets/items", evalDatasetItemAddRoute);
+orgScoped.route("/eval/datasets", evalDatasetCreateRoute);
+orgScoped.route("/eval/datasets", evalDatasetListRoute);
+orgScoped.route("/eval/runs/status", evalRunStatusRoute);
+orgScoped.route("/eval/runs/get", evalRunGetRoute);
+orgScoped.route("/eval/runs", evalRunStartRoute);
 orgScoped.route("/forms/fill", formFillRoute);
 orgScoped.route("/command/menu/search", commandMenuSearchRoute);
 orgScoped.route("/command/menu/suggest", commandMenuSuggestRoute);

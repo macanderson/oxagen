@@ -510,4 +510,78 @@ describe("createFunction adapter", () => {
       expect(result[1]!.config).not.toHaveProperty("onFailure");
     });
   });
+
+  describe("batchEvents", () => {
+    it("passes batchEvents through to the inngest function config", () => {
+      const config: DurableFunctionConfig = {
+        id: "batch-fn",
+        batchEvents: { maxSize: 50, timeout: "30s", key: "event.data.orgId" },
+      };
+      const trigger: DurableFunctionTrigger = { event: "test/batch" };
+      const handler: DurableFunctionHandler = async () => undefined;
+
+      createFunction(config, trigger, handler);
+
+      expect(capturedConfigs[0]).toMatchObject({
+        id: "batch-fn",
+        batchEvents: { maxSize: 50, timeout: "30s", key: "event.data.orgId" },
+      });
+    });
+
+    it("omits batchEvents when not configured", () => {
+      const config: DurableFunctionConfig = { id: "plain-fn" };
+      const trigger: DurableFunctionTrigger = { event: "test/plain" };
+      const handler: DurableFunctionHandler = async () => undefined;
+
+      createFunction(config, trigger, handler);
+
+      expect(capturedConfigs[0]).not.toHaveProperty("batchEvents");
+    });
+
+    it("exposes ctx.events (the full batch) to the handler", async () => {
+      const config: DurableFunctionConfig = {
+        id: "batch-fn",
+        batchEvents: { maxSize: 50, timeout: "30s" },
+      };
+      const trigger: DurableFunctionTrigger = { event: "test/batch" };
+      let seen: unknown;
+      const handler: DurableFunctionHandler = async ({ events }) => {
+        seen = events;
+      };
+      createFunction(config, trigger, handler);
+
+      const mockStep = { run: vi.fn(), sendEvent: vi.fn(), waitForEvent: vi.fn(), sleep: vi.fn() };
+      await capturedHandlers[0]!({
+        event: { name: "test/batch", data: { i: 0 } },
+        events: [
+          { name: "test/batch", data: { i: 0 } },
+          { name: "test/batch", data: { i: 1 } },
+        ],
+        step: mockStep,
+      });
+
+      expect(seen).toEqual([
+        { name: "test/batch", data: { i: 0 } },
+        { name: "test/batch", data: { i: 1 } },
+      ]);
+    });
+
+    it("falls back to a single-element ctx.events for non-batched runs", async () => {
+      const config: DurableFunctionConfig = { id: "plain-fn" };
+      const trigger: DurableFunctionTrigger = { event: "test/plain" };
+      let seen: unknown;
+      const handler: DurableFunctionHandler = async ({ events }) => {
+        seen = events;
+      };
+      createFunction(config, trigger, handler);
+
+      const mockStep = { run: vi.fn(), sendEvent: vi.fn(), waitForEvent: vi.fn(), sleep: vi.fn() };
+      await capturedHandlers[0]!({
+        event: { name: "test/plain", data: { only: true } },
+        step: mockStep,
+      });
+
+      expect(seen).toEqual([{ name: "test/plain", data: { only: true } }]);
+    });
+  });
 });

@@ -386,6 +386,32 @@ export const assertBillingManager = cache(
   },
 );
 
+/** Roles permitted to perform org-administrative actions (Owner/Admin). */
+const ORG_ADMIN_ROLES = new Set(["owner", "admin"]);
+
+/**
+ * Assert that the user is a member of the org AND holds an administrative role
+ * (owner/admin). Calls `notFound()` otherwise — a non-admin is treated like a
+ * non-member (404), consistent with {@link assertOrgMember}.
+ *
+ * Use for org-administrative actions whose contract declares Owner/Admin-only
+ * authorization but that are NOT specifically billing, plugin (MCP), or
+ * compliance-export scoped (each of which has its own domain-named gate). The
+ * canonical case is developer API-key management (`api.key.create/revoke/rotate`,
+ * `sensitivity: "high"`, `defaultRoles.org = { Owner, Admin }`): minting a key
+ * hands out programmatic org access, so membership alone is not sufficient.
+ * Mirrors the kernel IAM role gate that the API/MCP surfaces get for free but
+ * which invoke() from apps/app skips.
+ */
+export const assertOrgAdmin = cache(
+  async (orgId: string, userId: string): Promise<void> => {
+    const role = await getOrgRole(orgId, userId);
+    if (!role || !ORG_ADMIN_ROLES.has(role)) {
+      notFound();
+    }
+  },
+);
+
 /** Roles permitted to export signed compliance evidence (SOC 2 audit export). */
 export const SECURITY_MANAGER_ROLES = new Set(["owner", "admin"]);
 

@@ -84,3 +84,37 @@ describe("billing.credits.purchase schema", () => {
     expect(() => Schema.parse({ amountUsd: Infinity })).not.toThrow();
   });
 });
+
+// ── billing.usage.breakdown ──────────────────────────────────────────────────
+
+import { schema as billingUsageBreakdownSchema } from "./billing.usage.breakdown";
+
+describe("billing.usage.breakdown schema", () => {
+  const Schema = obj(billingUsageBreakdownSchema);
+  const valid = {
+    start: "2026-06-01T00:00:00.000Z",
+    end: "2026-07-01T00:00:00.000Z",
+  };
+
+  it("accepts a valid ISO window without a workspace filter", () => {
+    expect(() => Schema.parse(valid)).not.toThrow();
+  });
+
+  it("accepts an optional workspace UUID", () => {
+    expect(() =>
+      Schema.parse({ ...valid, workspaceId: "22222222-2222-2222-2222-222222222222" }),
+    ).not.toThrow();
+  });
+
+  it("rejects a non-ISO start", () => {
+    expect(() => Schema.parse({ ...valid, start: "2026-06-01" })).toThrow();
+  });
+
+  it("rejects a non-UUID workspaceId", () => {
+    expect(() => Schema.parse({ ...valid, workspaceId: "not-a-uuid" })).toThrow();
+  });
+
+  it("rejects a missing end bound", () => {
+    expect(() => Schema.parse({ start: valid.start })).toThrow();
+  });
+});

@@ -56,6 +56,7 @@ import { metadata as assetUploadMetadata } from "./asset.upload";
 import { metadata as billingCreditsPurchaseMetadata } from "./billing.credits.purchase";
 import { metadata as billingSubscriptionReadMetadata } from "./billing.subscription.read";
 import { metadata as billingSubscriptionUpgradeStartMetadata } from "./billing.subscription.upgrade.start";
+import { metadata as billingUsageBreakdownMetadata } from "./billing.usage.breakdown";
 import { metadata as chatMessageExecutionMetadata } from "./chat.message.execution";
 import { metadata as chatMessageSendMetadata } from "./chat.message.send";
 import { metadata as conversationArchiveMetadata } from "./conversation.archive";
@@ -283,6 +284,14 @@ import { metadata as agentMemoryPromotionCandidatesMetadata } from "./agent.memo
 import { metadata as agentMemoryCiteMetadata } from "./agent.memory.cite";
 import { metadata as agentMemoryEvidenceAttachMetadata } from "./agent.memory.evidence.attach";
 import { metadata as agentMemoryCitationsListMetadata } from "./agent.memory.citations.list";
+import { metadata as evalDatasetCreateMetadata } from "./eval.dataset.create";
+import { metadata as evalDatasetListMetadata } from "./eval.dataset.list";
+import { metadata as evalDatasetGetMetadata } from "./eval.dataset.get";
+import { metadata as evalDatasetItemAddMetadata } from "./eval.dataset.item.add";
+import { metadata as evalDatasetFromTracesMetadata } from "./eval.dataset.from_traces";
+import { metadata as evalRunStartMetadata } from "./eval.run.start";
+import { metadata as evalRunStatusMetadata } from "./eval.run.status";
+import { metadata as evalRunGetMetadata } from "./eval.run.get";
 
 // ── Build the registered tool name list ───────────────────────────────────────
 
@@ -327,6 +336,7 @@ const allToolMetadata = [
   billingCreditsPurchaseMetadata,
   billingSubscriptionReadMetadata,
   billingSubscriptionUpgradeStartMetadata,
+  billingUsageBreakdownMetadata,
   chatMessageExecutionMetadata,
   chatMessageSendMetadata,
   conversationArchiveMetadata,
@@ -547,6 +557,15 @@ const allToolMetadata = [
   codeMapMetadata,
   // Graph sync push
   graphSyncPushMetadata,
+  // Evals v1
+  evalDatasetCreateMetadata,
+  evalDatasetListMetadata,
+  evalDatasetGetMetadata,
+  evalDatasetItemAddMetadata,
+  evalDatasetFromTracesMetadata,
+  evalRunStartMetadata,
+  evalRunStatusMetadata,
+  evalRunGetMetadata,
 ];
 
 // ── Derive expected tool set from contracts ───────────────────────────────────

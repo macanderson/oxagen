@@ -221,3 +221,81 @@ describe("semanticEdgeApproveHandler", () => {
     expect(mocks.closeFn).toHaveBeenCalledOnce();
   });
 });
+
+// ── bi-temporal validity + supersession ───────────────────────────────────────
+
+describe("semanticEdgeApproveHandler — bi-temporal validity", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.scopedSession.mockReturnValue(sessionObj);
+    mocks.runInTenantScope.mockImplementation(
+      (_scope: unknown, fn: () => unknown) => Promise.resolve(fn()),
+    );
+    mocks.closeFn.mockResolvedValue(undefined);
+  });
+
+  function setupApprove(tgtId = "tgt-1", closed = 0) {
+    let call = 0;
+    mocks.runFn.mockImplementation(async () => {
+      call++;
+      if (call === 1) return { records: [PENDING_EDGE_ROW] };
+      if (call === 2) return { records: [] };
+      if (call === 3) return { records: [makeRecord({ relId: "rel-1", tgtId })] };
+      return { records: [makeRecord({ closed })] }; // supersede close
+    });
+  }
+
+  it("stamps validity on the materialised edge and threads observedAt", async () => {
+    setupApprove();
+    await semanticEdgeApproveHandler(
+      { edgeId: "edge-uuid-1", decision: "approve", observedAt: "2019-03-03T00:00:00.000Z" },
+      CTX,
+    );
+    const materializeCypher = (mocks.runFn.mock.calls[2] as [string])[0];
+    expect(materializeCypher).toContain("r.validFrom = coalesce(datetime($validFrom), datetime())");
+    expect(materializeCypher).toContain("r.recordedAt = datetime()");
+    const materializeParams = (mocks.runFn.mock.calls[2] as [string, Record<string, unknown>])[1];
+    expect(materializeParams.validFrom).toBe("2019-03-03T00:00:00.000Z");
+  });
+
+  it("does not supersede by default (superseded=0, no close query)", async () => {
+    setupApprove();
+    const result = await semanticEdgeApproveHandler(
+      { edgeId: "edge-uuid-1", decision: "approve" },
+      CTX,
+    );
+    expect(result.superseded).toBe(0);
+    // find + SET + materialise = 3 calls, no 4th close query.
+    expect(mocks.runFn).toHaveBeenCalledTimes(3);
+  });
+
+  it("closes other open edges of the same type from the source when supersede=true", async () => {
+    setupApprove("tgt-1", 3);
+    const result = await semanticEdgeApproveHandler(
+      { edgeId: "edge-uuid-1", decision: "approve", supersede: true },
+      CTX,
+    );
+    expect(mocks.runFn).toHaveBeenCalledTimes(4);
+    const closeCypher = (mocks.runFn.mock.calls[3] as [string])[0];
+    expect(closeCypher).toContain("other.publicId <> $materializedTargetId");
+    expect(closeCypher).toContain("old.validTo IS NULL AND old.invalidatedAt IS NULL");
+    expect(closeCypher).not.toMatch(/DELETE/i);
+    expect(result.superseded).toBe(3);
+  });
+
+  it("reject path reports superseded=0 and never materialises", async () => {
+    let call = 0;
+    mocks.runFn.mockImplementation(async () => {
+      call++;
+      if (call === 1) return { records: [PENDING_EDGE_ROW] };
+      return { records: [] };
+    });
+    const result = await semanticEdgeApproveHandler(
+      { edgeId: "edge-uuid-1", decision: "reject" },
+      CTX,
+    );
+    expect(result.decision).toBe("reject");
+    expect(result.superseded).toBe(0);
+    expect(result.permanentEdgeId).toBeUndefined();
+  });
+});

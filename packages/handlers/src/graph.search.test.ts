@@ -220,6 +220,33 @@ describe("graphSearchHandler", () => {
     expect(typeof params.k).toBe("bigint");
   });
 
+  it("over-fetches the index by 3x even without a kinds filter (tenant predicate always post-filters)", async () => {
+    await graphSearchHandler({ query: "x", limit: 7 }, CTX);
+    const params = mocks.run.mock.calls[0]![1] as Record<string, unknown>;
+    // The tenant filter (orgId/workspaceId) is applied AFTER the index call on
+    // every query, so k must over-sample regardless of the kinds filter.
+    expect(params.k).toBe(BigInt(21)); // 7 x 3
+  });
+
+  it("trims the over-fetched rows back to the requested limit", async () => {
+    // 5 tenant-matching rows returned for a limit of 2 → only 2 survive.
+    mocks.run.mockResolvedValueOnce(
+      makeRows(
+        Array.from({ length: 5 }, (_, i) => ({
+          nodeId: `n-${i}`,
+          label: "Entity",
+          displayName: `node ${i}`,
+          properties: null,
+          isSystem: false,
+          nodeLabels: ["Entity"],
+          score: 1 - i * 0.1,
+        })),
+      ),
+    );
+    const result = await graphSearchHandler({ query: "x", limit: 2 }, CTX);
+    expect(result.results).toHaveLength(2);
+  });
+
   it("closes the session even when run throws", async () => {
     mocks.run.mockRejectedValueOnce(new Error("Neo4j down"));
     await expect(graphSearchHandler({ query: "x", limit: 5 }, CTX)).rejects.toThrow("Neo4j down");

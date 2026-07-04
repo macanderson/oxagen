@@ -137,6 +137,13 @@ export const workspace = {
     environments: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/environments`,
   },
+
+  // Evals — score what actually ran and got billed (eval.* capability family).
+  evals: {
+    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/evals`,
+    run: (ctx: Required<ScopeContext>, runId: string): string =>
+      `${wsBase(ctx)}/evals/runs/${encodeURIComponent(runId)}`,
+  },
 } as const;
 
 // ---------------------------------------------------------------------------

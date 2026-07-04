@@ -3,6 +3,7 @@ import { graphSyncPush } from "@oxagen/oxagen/contracts/graph.sync.push";
 import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { sanitizeLabel } from "@oxagen/ontology/labels";
+import { edgeValidityOnCreateSet, edgeValidityParams } from "@oxagen/ontology/temporal";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { isValidCodeEmbedding } from "@oxagen/code-graph/embed";
 import { logger } from "./logger";
@@ -157,13 +158,14 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
                r.properties = e.props,
                r.is_system  = true,
                r.inferred   = e.inferred,
-               r.createdAt  = datetime()
+               r.createdAt  = datetime(),
+               ${edgeValidityOnCreateSet("r")}
              ON MATCH SET
                r.properties = e.props,
                r.inferred   = e.inferred,
                r.updatedAt  = datetime()
              RETURN count(r) AS total`,
-            { edges },
+            { edges, ...edgeValidityParams() },
           );
           edgesUpserted += toNumber(edgeResult.records[0]?.get("total"));
         }

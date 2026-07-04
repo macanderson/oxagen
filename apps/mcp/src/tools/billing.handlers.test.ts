@@ -207,3 +207,57 @@ describe("api.key.revoke handler", () => {
     );
   });
 });
+
+// ── billing.usage.breakdown ──────────────────────────────────────────────────
+
+import handler_billingUsageBreakdown, {
+  schema as billingUsageBreakdownSchema,
+  metadata as billingUsageBreakdownMetadata,
+} from "./billing.usage.breakdown";
+
+describe("billing.usage.breakdown handler", () => {
+  it("exports schema and metadata", () => {
+    expect(billingUsageBreakdownSchema).toBeDefined();
+    expect(billingUsageBreakdownMetadata.name).toBe("billing.usage.breakdown");
+    expect(billingUsageBreakdownMetadata.annotations?.readOnlyHint).toBe(true);
+  });
+
+  it("calls buildContext then invoke with the window args", async () => {
+    const fakeOutput = {
+      range: { start: "2026-06-01T00:00:00.000Z", end: "2026-07-01T00:00:00.000Z" },
+      totals: { inputTokens: 0, outputTokens: 0, cachedTokens: 0, costMicros: 0, executions: 0 },
+      series: [],
+      byModel: [],
+      bySurface: [],
+      byWorkspace: [],
+    };
+    mocks.invoke.mockResolvedValue(fakeOutput);
+
+    const args = {
+      start: "2026-06-01T00:00:00.000Z",
+      end: "2026-07-01T00:00:00.000Z",
+      workspaceId: undefined,
+    };
+    const result = await handler_billingUsageBreakdown(args);
+
+    expect(mocks.buildContext).toHaveBeenCalledOnce();
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "billing.usage.breakdown",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
+    expect(result).toMatchObject({ totals: { executions: 0 } });
+  });
+
+  it("propagates invoke errors", async () => {
+    mocks.invoke.mockRejectedValue(new Error("clickhouse down"));
+    await expect(
+      handler_billingUsageBreakdown({
+        start: "2026-06-01T00:00:00.000Z",
+        end: "2026-07-01T00:00:00.000Z",
+        workspaceId: undefined,
+      }),
+    ).rejects.toThrow("clickhouse down");
+  });
+});
