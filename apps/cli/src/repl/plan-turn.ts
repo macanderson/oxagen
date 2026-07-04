@@ -119,8 +119,10 @@ export async function planReplTurn(opts: PlanReplTurnOptions): Promise<Plan> {
   const goal = digest
     ? `Conversation so far (for reference resolution):\n${digest}\n\nCurrent request:\n${opts.goal}`
     : opts.goal;
-  const plan = opts.planFn ?? enginePlanTasks;
   try {
+    // Resolved inside the try: an engine build (or test mock) without a
+    // planner export degrades to the fallback plan, same as a failed call.
+    const plan = opts.planFn ?? enginePlanTasks;
     const planned = await plan({
       goal,
       ai: opts.ai,
