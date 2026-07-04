@@ -588,6 +588,21 @@ export function buildProgram(): Command {
       await handleGraphLineage({ repo: opts.repo, json: opts.json });
     });
 
+  // ── a2a: Agent2Agent protocol surface ───────────────────────────────────────
+  const a2a = program
+    .command("a2a")
+    .description("Inspect the workspace's Agent2Agent (A2A) protocol surface");
+  a2a
+    .command("card")
+    .description(
+      "Print the workspace's A2A Agent Card (exposed skills, transport endpoint, auth scheme)",
+    )
+    .option("--json", "Output the raw Agent Card JSON")
+    .action(async (opts: { json?: boolean }) => {
+      const { handleA2ACard } = await import("./commands/a2a.js");
+      await handleA2ACard({ json: opts.json });
+    });
+
   // ── memory: manage the workspace's agent memories ───────────────────────────
 
   const memory = program
