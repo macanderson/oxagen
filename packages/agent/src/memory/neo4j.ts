@@ -1,4 +1,4 @@
-import { scopedSession } from "@oxagen/ontology";
+import { oversampledLimit, scopedSession } from "@oxagen/ontology";
 
 /**
  * Two-axis memory repository (docs/specs/two-axis-memory). All Cypher that reads
@@ -142,8 +142,11 @@ export async function recallMemories(args: {
   try {
     const recallThreshold = args.recallThreshold ?? 0;
     const result = await s.run(
+      // Over-fetch from the index ($k) so the tenant + status + class/enforcement
+      // predicates below don't crowd this tenant's memories out of the global
+      // top-K, then trim back to $limit after filtering.
       /* cypher */ `
-        CALL db.index.vector.queryNodes('memory_embedding_index', $limit, $embedding)
+        CALL db.index.vector.queryNodes('memory_embedding_index', $k, $embedding)
         YIELD node AS m, score
         WHERE m.orgId = $orgId
           AND m.workspaceId = $workspaceId
@@ -162,6 +165,7 @@ export async function recallMemories(args: {
         nodeRef: args.nodeRef ?? null,
         memoryClass: args.memoryClass ?? null,
         minEnforcement: args.minEnforcement ?? null,
+        k: BigInt(oversampledLimit(args.limit)),
         limit: BigInt(args.limit),
         recallThreshold,
       },
@@ -201,8 +205,11 @@ export async function recallPeerResults(args: {
   try {
     const recallThreshold = args.recallThreshold ?? 0;
     const result = await s.run(
+      // Over-fetch from the index ($k) so the tenant + non-empty-summary
+      // predicates below don't crowd this tenant's executions out of the global
+      // top-K, then trim back to $limit after filtering.
       /* cypher */ `
-        CALL db.index.vector.queryNodes('execution_embedding_index', $limit, $embedding)
+        CALL db.index.vector.queryNodes('execution_embedding_index', $k, $embedding)
         YIELD node AS e, score
         WHERE e.orgId = $orgId
           AND e.workspaceId = $workspaceId
@@ -216,6 +223,7 @@ export async function recallPeerResults(args: {
       `,
       {
         embedding: args.embedding,
+        k: BigInt(oversampledLimit(args.limit)),
         limit: BigInt(args.limit),
         recallThreshold,
       },
