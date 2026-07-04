@@ -11,7 +11,8 @@
     "./migrate": "./src/migrate.ts",
     "./types": "./src/types.ts",
     "./labels": "./src/labels.ts",
-    "./tenant": "./src/tenant.ts"
+    "./tenant": "./src/tenant.ts",
+    "./ann": "./src/ann.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

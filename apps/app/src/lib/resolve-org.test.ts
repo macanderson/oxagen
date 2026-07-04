@@ -228,3 +228,48 @@ describe("assertBillingManager", () => {
     expect(notFoundMock).toHaveBeenCalledOnce();
   });
 });
+
+// ---------------------------------------------------------------------------
+// assertOrgAdmin
+// ---------------------------------------------------------------------------
+
+// Mirrors ORG_ADMIN_ROLES in resolve-org.ts — any drift causes a test failure.
+const ORG_ADMIN_ROLES = new Set(["owner", "admin"]);
+// billing is intentionally NOT an org admin (it can manage billing only).
+const NON_ADMIN_ROLES = ["billing", "member", "viewer", "guest", "unknown"];
+
+import { assertOrgAdmin } from "./resolve-org";
+
+describe("assertOrgAdmin", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  for (const role of ORG_ADMIN_ROLES) {
+    it(`role '${role}' passes without calling notFound()`, async () => {
+      setMockRows([{ role }]);
+      await expect(assertOrgAdmin("org-1", "user-1")).resolves.toBeUndefined();
+      expect(notFoundMock).not.toHaveBeenCalled();
+    });
+  }
+
+  for (const role of NON_ADMIN_ROLES) {
+    it(`role '${role}' → notFound()`, async () => {
+      setMockRows([{ role }]);
+      await expect(assertOrgAdmin("org-1", "user-1")).rejects.toThrow("NEXT_NOT_FOUND");
+      expect(notFoundMock).toHaveBeenCalledOnce();
+    });
+  }
+
+  it("no row (non-member) → notFound()", async () => {
+    setMockRows([]);
+    await expect(assertOrgAdmin("org-1", "user-x")).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(notFoundMock).toHaveBeenCalledOnce();
+  });
+
+  it("null role field → notFound()", async () => {
+    setMockRows([{ role: null }]);
+    await expect(assertOrgAdmin("org-1", "user-1")).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(notFoundMock).toHaveBeenCalledOnce();
+  });
+});

@@ -39,6 +39,8 @@ import { ingestionGithubInferDomains } from "./functions/ingestion.github-infer-
 import { ingestionSemanticEdgeInfer } from "./functions/ingestion.semantic-edge-infer";
 import { ingestionBatchReconcile } from "./functions/ai.batch-reconcile";
 import { ingestionSyncRequested } from "./functions/ingestion.sync-requested";
+import { ingestionPollScheduler } from "./functions/ingestion.poll-scheduler";
+import { ingestionConnectionPoll } from "./functions/ingestion.connection-poll";
 import { playbookTriggerMatch } from "./functions/playbook.trigger.match";
 import { playbookRunExecute } from "./functions/playbook.run.execute";
 import { mcpToolSnapshotRetention } from "./functions/mcp.tool-snapshot-retention";
@@ -90,6 +92,8 @@ export const functions: any[] = [
   ingestionSemanticEdgeInfer,
   ingestionBatchReconcile,
   ingestionSyncRequested,
+  ingestionPollScheduler,
+  ingestionConnectionPoll,
   playbookTriggerMatch,
   playbookRunExecute,
   mcpToolSnapshotRetention,

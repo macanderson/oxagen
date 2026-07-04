@@ -1357,6 +1357,25 @@
       }
     },
     {
+      "name": "billing.usage.breakdown",
+      "file": "billing.usage.breakdown.ts",
+      "domain": "billing",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "e2e": true,
+        "docs": true
+      }
+    },
+    {
       "name": "browser.click",
       "file": "browser.click.ts",
       "domain": "browser",

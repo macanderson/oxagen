@@ -32,3 +32,4 @@ h1:+jHzqXLoaIoygtJNfgBBcFjxmSCV2i2ryTNNk5qb7sM=
 20260703120000_subagent_runs_summary.sql h1:ajCvLA/gimwGrafQQvlIsGgcV7LQB/4IyvoYjvtzUno=
 20260703150000_phase2_claim_lease.sql h1:1Rc/wcECvMbz4PoorOEwTLYsX/IA/HYmNc+K1WJZhP4=
 20260704120000_ai_cache_and_batch_jobs.sql h1:A+zru2Vu3oam0ePpPUGHzzcsAqgV6elJ8PUX6otyQJI=
+20260704180000_connector_poll_health.sql h1:mjLB+BVwRMY4BtSKoFKuJqWUqve+D8RNQQl+e7YJ118=
