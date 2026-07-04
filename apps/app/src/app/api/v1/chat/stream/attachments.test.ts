@@ -15,7 +15,14 @@ const { mockWithTenantDb, mockRunInTenantScope, mockStorageGet, dbState } = vi.h
   mockWithTenantDb: vi.fn(),
   mockRunInTenantScope: vi.fn((_scope: unknown, fn: () => unknown) => fn()),
   mockStorageGet: vi.fn(),
-  dbState: { rows: [] as Array<{ publicId: string; storageKey: string; mimeType: string }> },
+  dbState: {
+    rows: [] as Array<{
+      publicId: string;
+      storageKey: string;
+      mimeType: string;
+      kind?: string;
+    }>,
+  },
 }));
 
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mockRunInTenantScope }));
@@ -36,7 +43,7 @@ vi.mock("@oxagen/database", () => ({
   },
 }));
 
-import { resolveAttachmentImages } from "./attachments";
+import { resolveAttachmentImages, resolveAttachmentMedia } from "./attachments";
 
 function fakeStream(bytes: number[]): ReadableStream<Uint8Array> {
   return new ReadableStream({
@@ -61,11 +68,13 @@ beforeEach(() => {
     };
     return fn(tx);
   });
-  mockStorageGet.mockResolvedValue({
+  // Fresh stream per call — a single shared ReadableStream would lock on the
+  // second read when a test resolves multiple attachments.
+  mockStorageGet.mockImplementation(async () => ({
     body: fakeStream([1, 2, 3, 4]),
     contentType: "image/png",
     sizeBytes: 4,
-  });
+  }));
 });
 
 const SCOPE = { orgId: "org-1", workspaceId: "ws-1" };
@@ -121,6 +130,53 @@ describe("resolveAttachmentImages", () => {
   it("scopes the query within the caller's tenant scope", async () => {
     dbState.rows = [];
     await resolveAttachmentImages(["gen_x"], SCOPE);
+    expect(mockRunInTenantScope).toHaveBeenCalledWith(SCOPE, expect.any(Function));
+  });
+
+  it("drops a video-kind row (image-only view over resolveAttachmentMedia)", async () => {
+    dbState.rows = [
+      { publicId: "gen_img", storageKey: "key_img", mimeType: "image/png", kind: "image" },
+      { publicId: "gen_vid", storageKey: "key_vid", mimeType: "video/mp4", kind: "video" },
+    ];
+    const result = await resolveAttachmentImages(["gen_img", "gen_vid"], SCOPE);
+    expect(result.has("gen_img")).toBe(true);
+    expect(result.has("gen_vid")).toBe(false);
+    expect(result.size).toBe(1);
+  });
+});
+
+describe("resolveAttachmentMedia", () => {
+  it("returns an empty map without touching the DB when publicIds is empty", async () => {
+    const result = await resolveAttachmentMedia([], SCOPE);
+    expect(result.size).toBe(0);
+    expect(mockWithTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("tags each resolved row with its stored kind and fetched bytes", async () => {
+    dbState.rows = [
+      { publicId: "gen_img", storageKey: "key_img", mimeType: "image/png", kind: "image" },
+      { publicId: "gen_vid", storageKey: "key_vid", mimeType: "video/mp4", kind: "video" },
+    ];
+    const result = await resolveAttachmentMedia(["gen_img", "gen_vid"], SCOPE);
+
+    expect(result.get("gen_img")).toMatchObject({ kind: "image", mediaType: "image/png" });
+    expect(result.get("gen_vid")).toMatchObject({ kind: "video", mediaType: "video/mp4" });
+    expect(result.get("gen_img")?.data).toBeInstanceOf(Buffer);
+    expect(result.get("gen_vid")?.data).toBeInstanceOf(Buffer);
+  });
+
+  it("omits an id the DB query didn't return", async () => {
+    dbState.rows = [
+      { publicId: "gen_known", storageKey: "key1", mimeType: "image/png", kind: "image" },
+    ];
+    const result = await resolveAttachmentMedia(["gen_known", "gen_unknown"], SCOPE);
+    expect(result.has("gen_known")).toBe(true);
+    expect(result.has("gen_unknown")).toBe(false);
+  });
+
+  it("scopes the query within the caller's tenant scope", async () => {
+    dbState.rows = [];
+    await resolveAttachmentMedia(["gen_x"], SCOPE);
     expect(mockRunInTenantScope).toHaveBeenCalledWith(SCOPE, expect.any(Function));
   });
 });
