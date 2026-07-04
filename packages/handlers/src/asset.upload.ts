@@ -7,6 +7,10 @@ import {
 } from "@oxagen/storage";
 import { storage } from "@oxagen/storage";
 import { logger } from "./logger";
+import {
+  persistGeneratedAsset,
+  type AssetKind as GeneratedAssetKind,
+} from "./generated-asset.persist";
 
 // ── SSRF protection ───────────────────────────────────────────────────────────
 
@@ -126,7 +130,33 @@ export const assetUploadHandler: CapabilityHandler<typeof assetUpload> = async (
     throw new Error("Forbidden: orgId is required to upload assets");
   }
 
-  const { sourceUrl, kind } = input;
+  const { sourceUrl, kind, source, conversationId } = input;
+
+  // "user_upload" additionally records a generated_assets row so the asset
+  // shows up in conversation.files.list and is servable via the
+  // access-controlled /api/v1/assets/:publicId route. Validate the
+  // preconditions up front so we fail before ever fetching the source URL.
+  if (source === "user_upload") {
+    if (kind === "avatar") {
+      throw new Error(
+        "asset.upload: source \"user_upload\" is not supported for kind \"avatar\"",
+      );
+    }
+    if (!ctx.userId) {
+      throw new Error(
+        "asset.upload: source \"user_upload\" requires an authenticated user (not an API-key-only principal)",
+      );
+    }
+    if (!ctx.workspaceId) {
+      throw new Error(
+        "asset.upload: source \"user_upload\" requires a workspace scope",
+      );
+    }
+  } else if (conversationId) {
+    throw new Error(
+      "asset.upload: conversationId requires source \"user_upload\"",
+    );
+  }
 
   // SSRF protection: only allow publicly routable http(s) URLs.
   assertPublicHttpUrl(sourceUrl);
@@ -164,6 +194,47 @@ export const assetUploadHandler: CapabilityHandler<typeof assetUpload> = async (
     );
   }
 
+  // "user_upload": store as a PRIVATE blob and record a generated_assets row
+  // via the single shared persistence chokepoint (no second insert path —
+  // reused by image.generate/video.generate/the chat composer too).
+  if (source === "user_upload") {
+    const persisted = await persistGeneratedAsset({
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId!,
+      userId: ctx.userId!,
+      kind: kind as GeneratedAssetKind,
+      accessPolicy: "org",
+      bytes: new Uint8Array(buffer),
+      mimeType: contentType,
+      prompt: "",
+      model: "",
+      conversationId: conversationId ?? null,
+      source: "user_upload",
+    });
+
+    logger.info(
+      {
+        orgId: ctx.orgId,
+        kind,
+        source,
+        publicId: persisted.publicId,
+        bytes: persisted.sizeBytes,
+        surface: ctx.surface,
+      },
+      "asset.upload: stored as a user-upload attachment",
+    );
+
+    return {
+      url: persisted.serveUrl,
+      key: persisted.key,
+      contentType,
+      bytes: persisted.sizeBytes,
+      publicId: persisted.publicId,
+    };
+  }
+
+  // Legacy pure blob-ingest path (avatar/image/document, no source given):
+  // unchanged from the original behavior — public blob, no DB row.
   // Derive a server-controlled storage key (user-input never touches the path).
   const key = deriveAssetKey(kind, ctx.orgId, ext);
 
@@ -180,5 +251,5 @@ export const assetUploadHandler: CapabilityHandler<typeof assetUpload> = async (
     "asset.upload: stored",
   );
 
-  return { url, key, contentType, bytes };
+  return { url, key, contentType, bytes, publicId: null };
 };

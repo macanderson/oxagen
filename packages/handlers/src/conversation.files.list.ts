@@ -17,8 +17,12 @@ const ALL_KINDS: ConversationAssetKind[] = [
   "archive",
 ];
 
-/** Pull a generator-supplied clean title out of the asset's metadata bag. */
-function metadataDisplayName(metadata: unknown): string | null {
+/**
+ * Pull a generator-supplied clean title out of the asset's metadata bag.
+ * Exported for reuse by conversation.attachment.add, which maps the same
+ * generated_assets row shape to the same conversationAssetItem output.
+ */
+export function metadataDisplayName(metadata: unknown): string | null {
   if (metadata && typeof metadata === "object" && "displayName" in metadata) {
     const value = (metadata as { displayName?: unknown }).displayName;
     if (typeof value === "string" && value.trim().length > 0) return value;
