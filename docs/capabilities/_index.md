@@ -42,6 +42,7 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.plan.create](agent.plan.create.md) — Create a structured hierarchical execution plan with tasks, dependencies, and approval gates; approval via agent.plan.approve is required before execution
 - [agent.repo.edit](agent.repo.edit.md) — Run the coding agent to edit files in a connected GitHub repo and open a pull request with the changes
 - [agent.sandbox.exec](agent.sandbox.exec.md) — Run a shell command inside a durable sandbox session; filesystem/process state persists across calls; returns stdout, stderr, exit code
+- [agent.sandbox.files.list](agent.sandbox.files.list.md) — List files and directories inside a durable sandbox session's workspace
 - [agent.sandbox.snapshot](agent.sandbox.snapshot.md) — Capture a filesystem snapshot of a durable sandbox session so it can be restored after an idle reap or the 24h lifetime ceiling
 - [agent.sandbox.start](agent.sandbox.start.md) — Provision or reconnect to a durable code-agent sandbox that persists across turns; pass a stable sessionKey to reuse one warm sandbox
 - [agent.sandbox.stop](agent.sandbox.stop.md) — Terminate a durable sandbox session and release its resources; call when the work is finished
@@ -151,6 +152,7 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [conversation.archive](conversation.archive.md) — Archive or restore one or more conversations in a single set-based update
 - [conversation.chat](conversation.chat.md) — Post a message to an existing conversation; appends to the conversation thread
+- [conversation.attachment.add](conversation.attachment.add.md) — Link an already-uploaded asset to a conversation as a chat attachment and return its conversation-file record
 - [conversation.delete](conversation.delete.md) — Permanently delete one or more conversations from the user's view via soft-delete
 - [conversation.files.list](conversation.files.list.md) — List the ready generated assets attached to a conversation, access-policy filtered, newest-first, keyset-paginated
 - [conversation.list](conversation.list.md) — List a user's conversations in a workspace, filtered by active or archived status

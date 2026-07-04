@@ -30,6 +30,9 @@ type AnyLazy = LazyExoticComponent<(props: Record<string, unknown>) => React.Rea
  *   "file-attachment"          — renders a generated document/spreadsheet/pdf/archive asset card
  *   "html-artifact"            — renders model-generated HTML in a sandboxed iframe
  *   "connection-create-inline" — renders an inline GitHub (or fallback) connection wizard card
+ *   "code-diff"                — renders a unified-diff patch set (agent.repo.edit, repo.file.put)
+ *   "terminal-trace"           — long-form shell scrollback for large agent.sandbox.exec output
+ *   "file-tree"                — collapsible workspace/repo file tree, changed files link to their diff
  */
 /**
  * Emit a structured warning when a componentId arrives with no registered
@@ -177,5 +180,22 @@ export const CHAT_COMPONENTS = {
   // Schema label approval — lets the user accept/dismiss an AI-proposed label in chat.
   "schema-label-approval": lazy(
     () => import("@/components/knowledge/schema-builder/registry-components/schema-label-approval"),
+  ),
+  // Unified-diff renderer backing agent.repo.edit / repo.file.put (via
+  // capability-meta's structural render transform) and direct agent.ui.render
+  // calls with componentId "code-diff".
+  "code-diff": lazy(
+    () => import("@/components/chat/registry-components/code-diff-card"),
+  ),
+  // Long-form shell scrollback — the companion to the inline code-execute-card
+  // for large agent.sandbox.exec output (chosen by output size, see
+  // capability-meta's resolveRenderDirective).
+  "terminal-trace": lazy(
+    () => import("@/components/chat/registry-components/terminal-trace-card"),
+  ),
+  // Collapsible workspace/repo file tree; changed entries deep-link to their
+  // section in a "code-diff" card via the shared diffAnchorId convention.
+  "file-tree": lazy(
+    () => import("@/components/chat/registry-components/file-tree-card"),
   ),
 } as unknown as Record<string, AnyLazy>;

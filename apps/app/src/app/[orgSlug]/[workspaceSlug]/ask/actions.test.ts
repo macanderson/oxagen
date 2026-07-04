@@ -52,7 +52,7 @@ vi.mock("@oxagen/oxagen/contracts/agent.task.background.read", () => ({
   },
 }));
 
-import { readBackgroundTaskAction } from "./actions";
+import { readBackgroundTaskAction, parseAttachmentsField } from "./actions";
 
 const CTX = { orgId: "org-1", workspaceId: "ws-1" };
 const SESSION = { user: { id: "user-1" } };
@@ -139,5 +139,31 @@ describe("readBackgroundTaskAction", () => {
     mockAssertWorkspaceMember.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
     await expect(readBackgroundTaskAction(CTX, "task-1")).rejects.toThrow("NEXT_NOT_FOUND");
     expect(mockInvoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("parseAttachmentsField", () => {
+  it("returns [] when the field is undefined", () => {
+    expect(parseAttachmentsField(undefined)).toEqual([]);
+  });
+
+  it("returns [] for an empty string", () => {
+    expect(parseAttachmentsField("")).toEqual([]);
+  });
+
+  it("returns [] for malformed JSON instead of throwing", () => {
+    expect(parseAttachmentsField("{ not json")).toEqual([]);
+  });
+
+  it("parses a valid JSON array of attachment refs", () => {
+    const attachments = [
+      { publicId: "gen_abc", kind: "image", name: "photo.png", mimeType: "image/png", url: "/api/v1/assets/gen_abc" },
+    ];
+    expect(parseAttachmentsField(JSON.stringify(attachments))).toEqual(attachments);
+  });
+
+  it("returns [] for a non-string FormDataEntryValue (e.g. a File)", () => {
+    const file = new File(["x"], "photo.png", { type: "image/png" });
+    expect(parseAttachmentsField(file)).toEqual([]);
   });
 });

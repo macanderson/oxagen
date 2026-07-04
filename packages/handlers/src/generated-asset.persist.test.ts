@@ -159,6 +159,39 @@ describe("persistGeneratedAsset", () => {
     expect(out.publicId).toBe("gen_ABC");
     expect(out.serveUrl).toBe("/api/v1/assets/gen_ABC");
     expect(out.sizeBytes).toBe(2048);
+    expect(out.key).toBe(
+      "generated/images/org-1/11111111-1111-1111-1111-111111111111.png",
+    );
+  });
+
+  it("defaults source to 'generated' when not supplied", async () => {
+    await persistGeneratedAsset({
+      ...BASE,
+      kind: "image",
+      bytes: new Uint8Array([1]),
+      mimeType: "image/png",
+    });
+    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(row.source).toBe("generated");
+  });
+
+  it("passes through source: 'user_upload' (the asset.upload attachment path)", async () => {
+    await persistGeneratedAsset({
+      ...BASE,
+      kind: "image",
+      accessPolicy: "org",
+      prompt: "",
+      model: "",
+      bytes: new Uint8Array([1]),
+      mimeType: "image/png",
+      source: "user_upload",
+      conversationId: "conv-1",
+    });
+    const row = mocks.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(row.source).toBe("user_upload");
+    expect(row.accessPolicy).toBe("org");
+    expect(row.prompt).toBe("");
+    expect(row.model).toBe("");
   });
 
   it("throws when the insert returns no row", async () => {

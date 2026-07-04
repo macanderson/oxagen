@@ -16,6 +16,22 @@ import { CHAT_COMPONENTS, logUnknownComponent, UnknownComponentCard } from "./ch
 import type { AssistantContentBlock } from "./stream-event-types";
 import { MarkdownMessage } from "./markdown-message";
 import { MessageFooter } from "./message-footer";
+import ImagePreview from "./registry-components/image-preview";
+import FileAttachment from "./registry-components/file-attachment";
+
+/**
+ * A user-turn attachment ref persisted in `messages.metadata.attachments`
+ * (see the chat stream route). Mirrors `conversationAssetItem`'s display
+ * fields — the `url` is always the access-controlled `/api/v1/assets/:publicId`
+ * serving path, never a raw blob URL.
+ */
+export interface MessageAttachment {
+  publicId: string;
+  kind: string;
+  name: string;
+  mimeType: string;
+  url: string;
+}
 
 export interface ChatMessage {
   publicId: string;
@@ -27,6 +43,8 @@ export interface ChatMessage {
   // the plain `content` for legacy / text-only rendering and let the
   // bubble dispatch each block to the matching card when blocks exist.
   contentBlocks?: AssistantContentBlock[];
+  /** User-turn attachments (Phase 1: images), from `messages.metadata.attachments`. */
+  attachments?: MessageAttachment[];
 }
 
 export interface MessageBubbleCallbacks {
@@ -98,6 +116,29 @@ export function MessageBubble({
           <span className="font-semibold capitalize">{message.role}</span>
           {message.branchReason ? <Badge variant="muted">{message.branchReason}</Badge> : null}
         </div>
+
+        {message.attachments && message.attachments.length > 0 ? (
+          <div
+            className="mb-2 flex flex-wrap gap-2"
+            data-testid="message-attachments"
+          >
+            {message.attachments.map((a) =>
+              a.kind === "image" ? (
+                <div key={a.publicId} className="w-full max-w-[240px]">
+                  <ImagePreview url={a.url} alt={a.name} />
+                </div>
+              ) : (
+                <FileAttachment
+                  key={a.publicId}
+                  url={a.url}
+                  name={a.name}
+                  kind={a.kind}
+                  mimeType={a.mimeType}
+                />
+              ),
+            )}
+          </div>
+        ) : null}
 
         {hasBlocks ? (
           useTimeline ? (

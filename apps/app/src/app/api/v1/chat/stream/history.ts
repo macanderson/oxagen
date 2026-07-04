@@ -17,6 +17,44 @@
 // not pending requests.
 
 import type { AssistantContentBlock } from "@/components/chat/stream-event-types";
+import type { ModelMessage } from "@oxagen/ai";
+
+// How many of the most-recent user turns get their attached images replayed
+// as real multimodal parts on every subsequent request. Older turns fall back
+// to a text placeholder — without this bound, a long conversation with several
+// image turns would re-send every image on every turn, growing vision-token
+// cost (and prompt-hash/latency) unboundedly. Mirrors the stream route's
+// per-turn attachment cap philosophy (BodySchema `.max(8)`), just applied
+// across turns instead of within one.
+const RECENT_IMAGE_TURN_LIMIT = 2;
+
+/** One attachment ref as persisted in a user message's `metadata.attachments`
+ * (see sendMessageAction / wandSendAction). */
+export interface HistoryAttachmentRef {
+  publicId: string;
+  kind: string;
+  name: string;
+}
+
+/**
+ * Extract `metadata.attachments` as validated `HistoryAttachmentRef[]`.
+ * Defensive: malformed/absent metadata (including rows from before this
+ * feature shipped) yields `null` rather than throwing.
+ */
+function attachmentsFromMetadata(metadata: unknown): HistoryAttachmentRef[] | null {
+  if (!metadata || typeof metadata !== "object" || !("attachments" in metadata)) return null;
+  const raw = (metadata as { attachments?: unknown }).attachments;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const valid = raw.filter(
+    (a): a is HistoryAttachmentRef =>
+      !!a &&
+      typeof a === "object" &&
+      typeof (a as HistoryAttachmentRef).publicId === "string" &&
+      typeof (a as HistoryAttachmentRef).kind === "string" &&
+      typeof (a as HistoryAttachmentRef).name === "string",
+  );
+  return valid.length > 0 ? valid : null;
+}
 
 /**
  * Find a human-readable artifact name produced by a tool call, by correlating
@@ -114,6 +152,8 @@ export interface HistoryRow {
   role: string;
   content: string;
   contentBlocks: AssistantContentBlock[] | null | undefined;
+  /** Raw `messages.metadata` jsonb — carries `attachments` for user turns. */
+  metadata?: unknown;
 }
 
 export interface HistoryMessage {
@@ -121,23 +161,115 @@ export interface HistoryMessage {
   content: string;
 }
 
+/** A fetched image ready to attach as a multimodal content part. */
+export interface ResolvedHistoryImage {
+  data: Buffer;
+  mediaType: string;
+}
+
 const VALID_ROLES = new Set(["user", "assistant", "system"]);
 
 /**
- * Convert raw DB message rows (newest-first) into chronological model messages.
- * Assistant turns carry a completed-action summary so the model never re-runs
- * finished tool calls; rows with no usable content are dropped.
+ * Scan rows (newest-first) and return the attachment publicIds belonging to
+ * the most recent `RECENT_IMAGE_TURN_LIMIT` user turns — i.e. exactly the set
+ * `buildHistoryMessages` needs real image bytes for. Pure/no I/O: the caller
+ * (the stream route) fetches bytes for these ids and passes the result back
+ * in as `resolvedImages`.
  */
-export function buildHistoryMessages(rowsNewestFirst: HistoryRow[]): HistoryMessage[] {
-  const out: HistoryMessage[] = [];
+export function collectRecentAttachmentPublicIds(rowsNewestFirst: HistoryRow[]): string[] {
+  const ids: string[] = [];
+  let recentUserTurns = 0;
+  for (const r of rowsNewestFirst) {
+    if (r.role !== "user") continue;
+    if (recentUserTurns >= RECENT_IMAGE_TURN_LIMIT) break;
+    recentUserTurns += 1;
+    const attachments = attachmentsFromMetadata(r.metadata);
+    if (!attachments) continue;
+    for (const a of attachments) {
+      if (a.kind === "image") ids.push(a.publicId);
+    }
+  }
+  return ids;
+}
+
+/** Build the placeholder text appended for attachments NOT replayed as real
+ * image parts — either because the turn fell outside the recent window, or
+ * because a particular attachment's bytes failed to resolve. */
+function attachmentPlaceholderText(attachments: HistoryAttachmentRef[]): string {
+  return attachments.map((a) => `[attached image: ${a.name}]`).join("\n");
+}
+
+/**
+ * Convert raw DB message rows (newest-first) into chronological model
+ * messages. Assistant turns carry a completed-action summary so the model
+ * never re-runs finished tool calls; rows with no usable content are dropped.
+ *
+ * User turns with `metadata.attachments`: the most recent
+ * `RECENT_IMAGE_TURN_LIMIT` such turns re-attach real image parts (using
+ * `resolvedImages`, keyed by attachment publicId — see
+ * `collectRecentAttachmentPublicIds`); every older turn (and any attachment
+ * missing from `resolvedImages`, e.g. a since-deleted asset) degrades to a
+ * `[attached image: <name>]` text placeholder. This bounds vision-token
+ * growth over a long conversation instead of re-sending every past image on
+ * every turn.
+ */
+export function buildHistoryMessages(
+  rowsNewestFirst: HistoryRow[],
+  resolvedImages: ReadonlyMap<string, ResolvedHistoryImage> = new Map(),
+): ModelMessage[] {
+  const out: ModelMessage[] = [];
+  let recentUserTurns = 0;
+
   for (const r of rowsNewestFirst) {
     if (!VALID_ROLES.has(r.role)) continue;
+
+    if (r.role === "user") {
+      const attachments = attachmentsFromMetadata(r.metadata);
+      const isRecentTurn = recentUserTurns < RECENT_IMAGE_TURN_LIMIT;
+      recentUserTurns += 1;
+
+      if (attachments) {
+        const imageAttachments = attachments.filter((a) => a.kind === "image");
+        const resolved = isRecentTurn
+          ? imageAttachments
+              .map((a) => resolvedImages.get(a.publicId))
+              .filter((img): img is ResolvedHistoryImage => img !== undefined)
+          : [];
+        const unresolved = isRecentTurn
+          ? imageAttachments.filter((a) => !resolvedImages.has(a.publicId))
+          : imageAttachments;
+
+        const text = [r.content.trim(), attachmentPlaceholderText(unresolved)]
+          .filter((s) => s.length > 0)
+          .join("\n");
+
+        if (resolved.length > 0) {
+          const parts: Array<
+            | { type: "text"; text: string }
+            | { type: "image"; image: Buffer; mediaType: string }
+          > = [];
+          if (text.length > 0) parts.push({ type: "text", text });
+          for (const img of resolved) {
+            parts.push({ type: "image", image: img.data, mediaType: img.mediaType });
+          }
+          out.push({ role: "user", content: parts });
+          continue;
+        }
+        if (text.length > 0) out.push({ role: "user", content: text });
+        continue;
+      }
+
+      const content = r.content.trim();
+      if (content.length > 0) out.push({ role: "user", content });
+      continue;
+    }
+
     const content =
       r.role === "assistant"
         ? buildAssistantHistoryText(r.content, r.contentBlocks)
         : r.content.trim();
     if (content.length === 0) continue;
-    out.push({ role: r.role as "user" | "assistant" | "system", content });
+    out.push({ role: r.role as "assistant" | "system", content });
   }
   return out.reverse(); // newest-first → chronological oldest→newest
 }

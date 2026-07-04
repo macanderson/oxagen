@@ -306,6 +306,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .conversationFilesListHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "conversation.attachment.add",
+    async () =>
+      (await import("./conversation.attachment.add"))
+        .conversationAttachmentAddHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "plugin.registry.list",
     async () =>
       (await import("./plugin.registry.list")).handler as CapabilityHandlerFn,

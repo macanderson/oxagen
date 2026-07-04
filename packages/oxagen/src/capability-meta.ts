@@ -199,6 +199,108 @@ export function resolveRecordLinks(
   return links;
 }
 
+// ── Structural render transforms (coding-agent artifact cards) ──────────────
+// Every OTHER curated hint below hands its component the uniform envelope
+// (`{ capability, output, links, title? }`) verbatim — the bespoke component
+// (e.g. graph-node-card) parses `output` itself. `code-diff` and
+// `terminal-trace` instead take FLAT, component-specific props (`{ files }` /
+// `{ stdout, stderr, exitCode, … }`) — the same "embedded render directive"
+// pattern archive.create/graph.stats/media use, except the reshaping happens
+// HERE instead of in the contract's output. That's necessary because neither
+// `agent.repo.edit` nor `repo.file.put`'s output schema carries a full
+// unified-diff patch body (repo.edit exposes only changed file PATHS;
+// repo.file.put exposes a commit URL) — see packages/oxagen/src/contracts/
+// agent.repo.edit.ts and repo.file.put.ts. A transform returns `null` when the
+// capability's output doesn't have enough shape to render (falls through to
+// the standard hint/generic path below); `agent.sandbox.exec` only maps to
+// "terminal-trace" when its combined stdout+stderr exceeds
+// TERMINAL_TRACE_LINE_THRESHOLD lines — smaller output stays on whatever the
+// standard path already resolves (today: the generic capability-result card).
+const TERMINAL_TRACE_LINE_THRESHOLD = 40;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function countLines(text: string): number {
+  return text.length === 0 ? 0 : text.split("\n").length;
+}
+
+/**
+ * Best-effort file path from a GitHub blob/commit htmlUrl — repo.file.put's
+ * output carries no `path` field (it's an INPUT-only field), so this is the
+ * only way to recover a human-readable label from the output alone.
+ */
+function derivePathFromHtmlUrl(htmlUrl: string | undefined): string {
+  if (!htmlUrl) return "file";
+  try {
+    const decoded = decodeURIComponent(htmlUrl);
+    const afterBlob = decoded.split(/\/blob\/[^/]+\//).pop();
+    if (afterBlob && afterBlob.length > 0 && afterBlob !== decoded) return afterBlob;
+    return decoded.split("/").pop() || "file";
+  } catch {
+    return "file";
+  }
+}
+
+const STRUCTURAL_RENDER_TRANSFORMS: Readonly<
+  Record<string, (output: unknown) => ResolvedRenderDirective | null>
+> = {
+  "agent.repo.edit": (output) => {
+    if (!isRecord(output)) return null;
+    const changedFiles = Array.isArray(output.changedFiles)
+      ? output.changedFiles.filter((f): f is string => typeof f === "string")
+      : [];
+    if (changedFiles.length === 0) return null;
+    const prUrl = typeof output.prUrl === "string" ? output.prUrl : undefined;
+    const prNumber = typeof output.prNumber === "number" ? output.prNumber : undefined;
+    return {
+      componentId: "code-diff",
+      props: {
+        files: changedFiles.map((path) => ({
+          path,
+          patch: null,
+          additions: null,
+          deletions: null,
+        })),
+        summary: typeof output.summary === "string" ? output.summary : undefined,
+        externalUrl: prUrl,
+        externalLabel: prUrl && prNumber !== undefined ? `PR #${prNumber}` : undefined,
+      },
+    };
+  },
+  "repo.file.put": (output) => {
+    if (!isRecord(output)) return null;
+    const htmlUrl = typeof output.htmlUrl === "string" ? output.htmlUrl : undefined;
+    const commitSha = typeof output.commitSha === "string" ? output.commitSha : undefined;
+    if (!htmlUrl && !commitSha) return null;
+    return {
+      componentId: "code-diff",
+      props: {
+        files: [{ path: derivePathFromHtmlUrl(htmlUrl), patch: null, additions: null, deletions: null }],
+        externalUrl: htmlUrl,
+        externalLabel: commitSha ? `commit ${commitSha.slice(0, 7)}` : undefined,
+      },
+    };
+  },
+  "agent.sandbox.exec": (output) => {
+    if (!isRecord(output)) return null;
+    const stdout = typeof output.stdout === "string" ? output.stdout : "";
+    const stderr = typeof output.stderr === "string" ? output.stderr : "";
+    if (countLines(stdout) + countLines(stderr) <= TERMINAL_TRACE_LINE_THRESHOLD) return null;
+    return {
+      componentId: "terminal-trace",
+      props: {
+        stdout,
+        stderr,
+        exitCode: typeof output.exitCode === "number" ? output.exitCode : null,
+        durationMs: typeof output.executionMs === "number" ? output.executionMs : undefined,
+        timedOut: typeof output.timedOut === "boolean" ? output.timedOut : false,
+      },
+    };
+  },
+};
+
 // ── Curated render hints (prioritized capabilities) ──────────────────────────
 // Each componentId is a bespoke chat component (apps/app) that reads the uniform
 // envelope. Capabilities that embed their own `render` directive in the output
@@ -374,6 +476,15 @@ export function resolveRenderDirective(args: {
   slugs?: SlugContext;
 }): ResolvedRenderDirective | null {
   const { capability, output } = args;
+
+  // Structural transforms (code-diff / terminal-trace) reshape the raw output
+  // into flat, component-specific props and return early — they bypass the
+  // uniform envelope entirely, so slugs/links/title don't apply. A `null`
+  // (output doesn't have enough shape, or sandbox output is small) falls
+  // through to the standard hint/generic path below.
+  const structural = STRUCTURAL_RENDER_TRANSFORMS[capability]?.(output) ?? null;
+  if (structural) return structural;
+
   const slugs = args.slugs ?? {};
   const hint = getRenderHint(capability);
   const links = resolveRecordLinks(output, hint?.recordLinks, slugs);

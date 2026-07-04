@@ -24,12 +24,41 @@ import { getSessionOrRedirect } from "@/lib/session";
 import { assertWorkspaceMember } from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
 
+// A composer-serialized attachment ref — mirrors MessageAttachment
+// (apps/app/src/components/chat/message-bubble.tsx). Bounded to 8 to match
+// the chat stream route's `attachments` cap; refs only, never bytes.
+const attachmentSchema = z.object({
+  publicId: z.string().min(1),
+  kind: z.string().min(1),
+  name: z.string().min(1),
+  mimeType: z.string().min(1),
+  url: z.string().min(1),
+});
+
 const FormSchema = z.object({
   content: z.string().min(1),
   conversationId: z.string().nullable().default(null),
   parentMessageId: z.string().nullable().default(null),
   branchReason: z.enum(["edit", "regenerate", "tool_retry", "manual_fork"]).nullable().default(null),
+  attachments: z.array(attachmentSchema).max(8).default([]),
 });
+
+/**
+ * Parse the composer's `attachments` FormData field — a JSON-serialized
+ * array (message-composer.tsx `fd.set("attachments", JSON.stringify(...))`)
+ * — into a plain `unknown` value ready for `FormSchema.safeParse`. Malformed
+ * or absent JSON degrades to `[]` (no attachments) rather than failing the
+ * whole message send; exported standalone so the parsing/degradation
+ * behavior is unit-testable without a DB.
+ */
+export async function parseAttachmentsField(raw: FormDataEntryValue | undefined): Promise<unknown> {
+  if (typeof raw !== "string" || raw.length === 0) return [];
+  try {
+    return await JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
 
 // Implements the spec §6.9 DAG: persist the user message under the active
 // leaf and shift the conversation's active_leaf forward. The LLM call and
@@ -61,6 +90,7 @@ export async function sendMessageAction(
     conversationId: raw.conversationId ? String(raw.conversationId) : null,
     parentMessageId: raw.parentMessageId ? String(raw.parentMessageId) : null,
     branchReason: raw.branchReason ? String(raw.branchReason) : null,
+    attachments: parseAttachmentsField(formData.get("attachments") ?? undefined),
   });
   if (!parsed.success) return { ok: false, error: "Invalid message" };
 
@@ -146,7 +176,15 @@ export async function sendMessageAction(
             contentBlocks: capabilityInput.data.contentBlocks,
             branchReason: capabilityInput.data.branchReason ?? undefined,
             isActiveInBranch: true,
-            metadata: {},
+            // Attachment refs (publicId + display fields) so message-bubble
+            // can render thumbnails on refresh without a second round-trip —
+            // the stream route separately re-resolves each publicId
+            // server-side (ownership + status='ready') before building image
+            // parts for the model; this metadata is display-only.
+            metadata:
+              parsed.data.attachments.length > 0
+                ? { attachments: parsed.data.attachments }
+                : {},
             createdByUserId: session.user.id,
             updatedByUserId: session.user.id,
           })

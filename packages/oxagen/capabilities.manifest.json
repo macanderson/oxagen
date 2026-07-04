@@ -714,6 +714,25 @@
       }
     },
     {
+      "name": "agent.sandbox.files.list",
+      "file": "agent.sandbox.files.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "agent.sandbox.snapshot",
       "file": "agent.sandbox.snapshot.ts",
       "domain": "agent",
@@ -1874,6 +1893,24 @@
     {
       "name": "conversation.archive",
       "file": "conversation.archive.ts",
+      "domain": "conversation",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "conversation.attachment.add",
+      "file": "conversation.attachment.add.ts",
       "domain": "conversation",
       "mode": "sync",
       "surfaces": [

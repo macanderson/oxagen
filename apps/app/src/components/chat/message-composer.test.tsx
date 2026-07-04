@@ -159,8 +159,18 @@ vi.mock("lucide-react", async (importOriginal) => {
     Send: () => <span data-testid="icon-send" />,
     Video: () => <span data-testid="icon-video" />,
     X: () => <span data-testid="icon-x" />,
+    Paperclip: () => <span data-testid="icon-paperclip" />,
   };
 });
+
+// AttachmentChip renders next/image for image previews — stub it the same way
+// the registry's own image-preview.test.tsx does (jsdom has no image loader).
+vi.mock("next/image", () => ({
+  default: ({ alt, src }: { alt: string; src: string }) => (
+    // eslint-disable-next-line @next/next/no-img-element -- jsdom test shim
+    <img alt={alt} src={src} data-testid="attachment-thumbnail" />
+  ),
+}));
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -1712,5 +1722,239 @@ describe("MessageComposer — queue management", () => {
     );
     expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
     expect(screen.queryByText(/messages? queued/)).not.toBeInTheDocument();
+  });
+});
+
+// ── attachments ──────────────────────────────────────────────────────────────
+
+/**
+ * Minimal fake XMLHttpRequest — message-composer.tsx uses XHR (not fetch) so
+ * it can report upload progress. Each `send()` call is captured in
+ * `FakeXHR.instances` so a test can manually resolve it with `respond()`.
+ */
+class FakeXHR {
+  static instances: FakeXHR[] = [];
+  upload: { onprogress: ((e: { lengthComputable: boolean; loaded: number; total: number }) => void) | null } = {
+    onprogress: null,
+  };
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  onabort: (() => void) | null = null;
+  status = 0;
+  responseText = "";
+  aborted = false;
+  method = "";
+  url = "";
+  body: FormData | null = null;
+
+  open(method: string, url: string): void {
+    this.method = method;
+    this.url = url;
+  }
+  send(body: FormData): void {
+    this.body = body;
+    FakeXHR.instances.push(this);
+  }
+  abort(): void {
+    this.aborted = true;
+    this.onabort?.();
+  }
+  /** Test helper: resolve this request as if the server responded. */
+  respond(status: number, json: unknown): void {
+    this.status = status;
+    this.responseText = JSON.stringify(json);
+    this.onload?.();
+  }
+}
+
+const UPLOADED_ITEM = {
+  publicId: "gen_abc123",
+  kind: "image",
+  name: "photo.png",
+  mimeType: "image/png",
+  url: "/api/v1/assets/gen_abc123",
+};
+
+describe("MessageComposer — attachments", () => {
+  beforeEach(() => {
+    FakeXHR.instances = [];
+    vi.stubGlobal("XMLHttpRequest", FakeXHR);
+    URL.createObjectURL = vi.fn(() => "blob:mock-preview");
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  it("hides the attach button when orgSlug/workspaceSlug are not provided", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Attach image" })).not.toBeInTheDocument();
+  });
+
+  it("shows the attach button when orgSlug/workspaceSlug are provided", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Attach image" })).toBeInTheDocument();
+  });
+
+  it("uploads a picked file, shows progress, then renders the sent chip", async () => {
+    const user = userEvent.setup();
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["bytes"], "photo.png", { type: "image/png" });
+    await user.upload(fileInput, file);
+
+    const chip = await screen.findByTestId("attachment-chip");
+    expect(chip).toHaveAttribute("data-status", "uploading");
+    expect(FakeXHR.instances).toHaveLength(1);
+    expect(FakeXHR.instances[0]!.url).toBe("/api/v1/upload/attachment");
+    expect(FakeXHR.instances[0]!.body?.get("kind")).toBe("image");
+    expect(FakeXHR.instances[0]!.body?.get("orgSlug")).toBe("acme");
+    expect(FakeXHR.instances[0]!.body?.get("workspaceSlug")).toBe("main");
+
+    // Server responds with the persisted asset.
+    act(() => {
+      FakeXHR.instances[0]!.respond(201, UPLOADED_ITEM);
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("attachment-chip")).toHaveAttribute("data-status", "uploaded"),
+    );
+  });
+
+  it("disables the send button while an upload is in flight", async () => {
+    const user = userEvent.setup();
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(fileInput, new File(["bytes"], "photo.png", { type: "image/png" }));
+
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+
+    act(() => {
+      FakeXHR.instances[0]!.respond(201, UPLOADED_ITEM);
+    });
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send message" })).not.toBeDisabled());
+  });
+
+  it("includes the uploaded attachment in the submitted FormData", async () => {
+    const user = userEvent.setup();
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(fileInput, new File(["bytes"], "photo.png", { type: "image/png" }));
+    act(() => {
+      FakeXHR.instances[0]!.respond(201, UPLOADED_ITEM);
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("attachment-chip")).toHaveAttribute("data-status", "uploaded"),
+    );
+
+    await user.type(screen.getByRole("textbox"), "check this out");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    const attachmentsRaw = fd.get("attachments") as string;
+    expect(JSON.parse(attachmentsRaw)).toEqual([UPLOADED_ITEM]);
+
+    // The pending strip clears after a successful send.
+    expect(screen.queryByTestId("attachment-chip")).not.toBeInTheDocument();
+  });
+
+  it("removing a chip mid-upload aborts the XHR and drops the attachment", async () => {
+    const user = userEvent.setup();
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(fileInput, new File(["bytes"], "photo.png", { type: "image/png" }));
+    await screen.findByTestId("attachment-chip");
+
+    await user.click(screen.getByRole("button", { name: /remove photo\.png/i }));
+
+    expect(FakeXHR.instances[0]!.aborted).toBe(true);
+    expect(screen.queryByTestId("attachment-chip")).not.toBeInTheDocument();
+  });
+
+  it("shows an error chip when the upload fails", async () => {
+    const user = userEvent.setup();
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(fileInput, new File(["bytes"], "photo.png", { type: "image/png" }));
+    act(() => {
+      FakeXHR.instances[0]!.respond(415, { error: "Unsupported image type" });
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("attachment-chip")).toHaveAttribute("data-status", "error"),
+    );
   });
 });
