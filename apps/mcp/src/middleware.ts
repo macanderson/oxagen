@@ -15,9 +15,10 @@ import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { assertRlsConnectionSafe } from "@oxagen/database";
 import { extractBearerToken } from "./context";
 
-// Refuse to boot if TENANT_RLS_ENFORCEMENT_ENABLED=true but the DB role
-// silently bypasses RLS (superuser or BYPASSRLS), which would make all
-// tenant isolation policies dead weight.
+// Refuse to boot if a production runtime disabled RLS enforcement, or if
+// TENANT_RLS_ENFORCEMENT_ENABLED=true but the DB role silently bypasses RLS
+// (superuser or BYPASSRLS), which would make all tenant isolation policies
+// dead weight.
 await assertRlsConnectionSafe();
 
 // Bootstrap OpenTelemetry SDK. No-op when OTEL_EXPORTER_OTLP_ENDPOINT is
