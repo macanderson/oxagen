@@ -22,6 +22,8 @@ import { metadata as apiKeyRevokeMetadata } from "./api.key.revoke";
 import { metadata as agentApprovalResolveMetadata } from "./agent.approval.resolve";
 import { metadata as agentCodeExecuteMetadata } from "./agent.code.execute";
 import { metadata as agentExecutionRecordMetadata } from "./agent.execution.record";
+import { metadata as agentExecutionListMetadata } from "./agent.execution.list";
+import { metadata as agentTraceGetMetadata } from "./agent.trace.get";
 import { metadata as archiveCreateMetadata } from "./archive.create";
 import { metadata as agentMcpListMetadata } from "./agent.mcp.list";
 import { metadata as agentMcpRegisterMetadata } from "./agent.mcp.register";
@@ -302,6 +304,8 @@ const allToolMetadata = [
   agentApprovalResolveMetadata,
   agentCodeExecuteMetadata,
   agentExecutionRecordMetadata,
+  agentExecutionListMetadata,
+  agentTraceGetMetadata,
   agentMcpListMetadata,
   agentMcpRegisterMetadata,
   agentMemoryRecallMetadata,
