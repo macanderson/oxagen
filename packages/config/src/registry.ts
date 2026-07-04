@@ -1598,6 +1598,32 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_PLAN_TIMEOUT_MS: {
+    group: "CLI",
+    description:
+      "Wall-clock bound in ms on the REPL's per-turn planner call (default 60000). Past the " +
+      "bound the turn degrades to a router-derived single-task plan instead of hanging. " +
+      "Set to '0' to disable the bound.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "60000",
+  },
+  OXAGEN_CLI_MOTION: {
+    group: "CLI",
+    description:
+      "Persisted animation level for the CLI TUI (`/motion full|reduced|off`): full animates " +
+      "everything; reduced drops decorative animation (invaders duel, prompt border flash); " +
+      "off disables all animation including the thinking indicator.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "full",
+  },
   OXAGEN_BEST_OF_N_PIPELINE: {
     group: "CLI",
     description:
