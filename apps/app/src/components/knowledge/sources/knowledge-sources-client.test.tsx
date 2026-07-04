@@ -81,8 +81,11 @@ const CONNECTION = {
   authScheme: "oauth2_authorization_code",
   deliveryMethod: "webhook",
   status: "connected",
+  healthStatus: "healthy" as const,
   entityCount: 42,
   lastSyncAt: null,
+  lastPollAt: null,
+  nextPollAt: null,
   createdAt: "2026-06-18T00:00:00.000Z",
 };
 
