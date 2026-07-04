@@ -11,6 +11,14 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
+  # Container jobs bind-mount the workspace with a uid that differs from the
+  # container user, so every git invocation (ours, lefthook's prepare hook,
+  # turbo's) trips "detected dubious ownership". actions/checkout only writes
+  # safe.directory for its own process tree; GIT_CONFIG_* env covers all steps.
+  # Runners are ephemeral, so the wildcard is safe.
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: safe.directory
+  GIT_CONFIG_VALUE_0: "*"
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
   # ATLAS_VERSION is no longer installed per-job — it is baked into the

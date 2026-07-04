@@ -9,6 +9,12 @@ on:
 
 # Atlas is baked into the ghcr.io/oxageninc/oxagen-ci-* images (pin lives in
 # pipeline.yml's ATLAS_VERSION, read by ci-image.yml at image build time).
+env:
+  # Container jobs: see the identical block in pipeline.yml — git in the
+  # bind-mounted workspace trips "dubious ownership" without this.
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: safe.directory
+  GIT_CONFIG_VALUE_0: "*"
 jobs:
   # Full (un-filtered) regression sweep. Unlike the PR `affected` matrix this
   # also runs `build`, which executes loadEnv() during `next build` — so the

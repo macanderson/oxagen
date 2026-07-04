@@ -5,6 +5,13 @@ on:
     tags:
       - "v*.*.*"
 
+env:
+  # Container jobs: see the identical block in pipeline.yml — git in the
+  # bind-mounted workspace trips "dubious ownership" without this.
+  GIT_CONFIG_COUNT: "1"
+  GIT_CONFIG_KEY_0: safe.directory
+  GIT_CONFIG_VALUE_0: "*"
+
 jobs:
   release:
     runs-on: ubuntu-latest
