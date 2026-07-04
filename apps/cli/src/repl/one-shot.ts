@@ -45,8 +45,9 @@ import {
   makeTurnController,
   makeStallDetector,
   AgentTimeoutError,
-  DEFAULT_TIMEOUTS,
+  resolveTurnInactivityMs,
 } from "../agent/timeouts.js";
+import { createCiWaitProbe } from "../lib/ci-wait.js";
 
 export interface OneShotOptions {
   /** Authenticated platform session (token, org, workspace). */
@@ -160,20 +161,27 @@ export async function runOneShot(
   // finishes: a real test suite legitimately runs longer than the guard window
   // (bash allows up to 600s; the window is 300s). Every engine tool carries its
   // own timeout backstop, so an in-flight tool ALWAYS returns — when the guard
-  // fires mid-tool it defers instead of killing a healthy run.
-  const inactivityMs = DEFAULT_TIMEOUTS.turnInactivityMs ?? 300_000;
+  // fires mid-tool it defers instead of killing a healthy run. Before aborting
+  // it also makes one CI call-out: a turn that was watching still-pending
+  // checks keeps waiting (capped at resolveCiWaitCapMs(), 2h default).
+  const inactivityMs = resolveTurnInactivityMs();
   const turnController = makeTurnController();
   let inFlightTools = 0;
-  const stall = makeStallDetector(inactivityMs, () => {
-    if (inFlightTools > 0) {
-      stall.reset(); // a tool is executing (bounded by its own timeout) — defer
-      return;
-    }
-    if (!turnController.signal.aborted) {
-      void debugLog("timeout", "[timeout] scope=turn reason=inactivity");
-      turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
-    }
-  });
+  const ciProbe = createCiWaitProbe(cwd);
+  const stall = makeStallDetector(
+    inactivityMs,
+    () => {
+      if (!turnController.signal.aborted) {
+        void debugLog("timeout", "[timeout] scope=turn reason=inactivity");
+        turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
+      }
+    },
+    {
+      shouldDefer: () => inFlightTools > 0,
+      probe: () => ciProbe.probe(),
+      onLog: (line) => void debugLog("timeout", line),
+    },
+  );
 
   void debugLog("turn", "turn.start", { mode: "one-shot", readOnly, model: options.model, prompt });
 
@@ -312,6 +320,7 @@ export async function runOneShot(
       // (pipeable). e.g. `oxagen "..." > out.md` captures only the answer.
       onToolCall: (name, input) => {
         inFlightTools++;
+        ciProbe.noteToolCall(name, input);
         stall.reset();
         void debugLog("turn", "turn.tool-call", { name, input });
         if (format === "stream-json") {
@@ -433,6 +442,26 @@ export async function runAgentOneShot(
       });
   const ai = createMeteredAi(baseAi, { onLog: (line) => void debugLog("timeout", line) });
   const turnController = makeTurnController();
+  // Same progress guard as runOneShot: headless has no Esc, so this is the only
+  // backstop against a hung turn. Defers while a tool executes; probes CI
+  // before aborting a turn that was watching still-pending checks.
+  const inactivityMs = resolveTurnInactivityMs();
+  let inFlightTools = 0;
+  const ciProbe = createCiWaitProbe(cwd);
+  const stall = makeStallDetector(
+    inactivityMs,
+    () => {
+      if (!turnController.signal.aborted) {
+        void debugLog("timeout", "[timeout] scope=turn reason=inactivity");
+        turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
+      }
+    },
+    {
+      shouldDefer: () => inFlightTools > 0,
+      probe: () => ciProbe.probe(),
+      onLog: (line) => void debugLog("timeout", line),
+    },
+  );
   const extras = await buildTurnExtras({
     cwd,
     settings,
@@ -472,13 +501,24 @@ export async function runAgentOneShot(
       trace: openTraceStore(cwd),
       signal: turnController.signal,
       onText: (delta) => {
+        stall.reset();
         streamed = true;
         process.stdout.write(delta);
       },
       // Reasoning to stderr (dim) so piped stdout stays the clean answer.
-      onReasoning: (delta) => process.stderr.write(`\x1b[2m${delta}\x1b[22m`),
+      onReasoning: (delta) => {
+        stall.reset();
+        process.stderr.write(`\x1b[2m${delta}\x1b[22m`);
+      },
       onToolCall: (name, input) => {
+        inFlightTools++;
+        ciProbe.noteToolCall(name, input);
+        stall.reset();
         process.stderr.write(`  · ${formatToolCall(name, input)}\n`);
+      },
+      onToolEvent: () => {
+        inFlightTools = Math.max(0, inFlightTools - 1);
+        stall.reset();
       },
     });
     if (streamed) process.stdout.write("\n");
@@ -486,6 +526,7 @@ export async function runAgentOneShot(
     process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`);
     process.exitCode = 1;
   } finally {
+    stall.stop();
     await extras.closeMcp();
     await memory?.close();
   }

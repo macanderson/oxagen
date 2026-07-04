@@ -121,8 +121,9 @@ import {
   makeTurnController,
   makeStallDetector,
   AgentTimeoutError,
-  DEFAULT_TIMEOUTS,
+  resolveTurnInactivityMs,
 } from "../agent/timeouts.js";
+import { createCiWaitProbe } from "../lib/ci-wait.js";
 import { createMetricsBus, type SessionMetrics } from "../agent/metrics.js";
 import { createMeteredAi } from "../agent/metered-ai.js";
 import {
@@ -1672,17 +1673,33 @@ export function ReplApp({
       // but healthy turn (hundreds of model calls, a worker→judge loop) runs to
       // completion. The inactivity guard aborts ONLY when no progress — a stream
       // delta, a stage, a tool call, a completed model call — lands within
-      // turnInactivityMs (300s, larger than the longest tool timeout). Any
-      // progress resets it. Per-model-call timeouts live in the metered AI port.
+      // turnInactivityMs. An EXECUTING tool or fleet is progress even though it
+      // emits nothing until it finishes (bash allows up to 600s; a fleet subagent
+      // can work silently for minutes) — the guard defers while one is in flight.
+      // And before aborting it makes one call-out: if this turn was watching CI
+      // and checks are still pending, the wait is legitimate — extend, capped
+      // cumulatively at resolveCiWaitCapMs() (2h default). Per-model-call
+      // timeouts live in the metered AI port.
       const turnController = makeTurnController(controller.signal);
-      const inactivityMs = DEFAULT_TIMEOUTS.turnInactivityMs ?? 300_000;
-      const stall = makeStallDetector(inactivityMs, () => {
-        if (!turnController.signal.aborted) {
-          const idleMs = Date.now() - (lastProgressRef.current ?? Date.now());
-          void debugLog("timeout", `[timeout] scope=turn reason=inactivity idle_ms=${idleMs}`);
-          turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
-        }
-      });
+      const inactivityMs = resolveTurnInactivityMs();
+      let inFlightTools = 0;
+      let fleetInFlight = false;
+      const ciProbe = createCiWaitProbe(cwd);
+      const stall = makeStallDetector(
+        inactivityMs,
+        () => {
+          if (!turnController.signal.aborted) {
+            const idleMs = Date.now() - (lastProgressRef.current ?? Date.now());
+            void debugLog("timeout", `[timeout] scope=turn reason=inactivity idle_ms=${idleMs}`);
+            turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
+          }
+        },
+        {
+          shouldDefer: () => inFlightTools > 0 || fleetInFlight,
+          probe: () => ciProbe.probe(),
+          onLog: (line) => void debugLog("timeout", line),
+        },
+      );
       // Record progress: reset the inactivity guard AND advance the idle clock.
       const noteProgress = (): void => {
         stall.reset();
@@ -1870,6 +1887,10 @@ export function ReplApp({
           hudHandle?.update({ detail: `fleet: ${plan.tasks.length} tasks` });
           const fleetHandles = new Map<string, AgentHandle>();
           try {
+            // Subagents work silently for minutes between onTask lifecycle
+            // events — defer the inactivity guard for the whole fleet run (each
+            // subagent turn carries its own guard).
+            fleetInFlight = true;
             const fleetResult = await runFleetTurn({
               plan,
               cwd,
@@ -1961,6 +1982,7 @@ export function ReplApp({
             setTurns((n) => n + 1);
             return;
           } finally {
+            fleetInFlight = false;
             // Retire any still-open subagent rows (cancelled mid-flight, or a
             // thrown error) so the Agent Team panel never leaks a spinner.
             for (const h of fleetHandles.values()) h.done();
@@ -2017,6 +2039,10 @@ export function ReplApp({
           },
           onToolCall: (name, input) => {
             if (turnController.signal.aborted) return;
+            // The tool is now EXECUTING — silence until it returns is expected,
+            // so the inactivity guard defers while the count is non-zero.
+            inFlightTools++;
+            ciProbe.noteToolCall(name, input);
             noteProgress();
             void debugLog("turn", "turn.tool-call", { name, input });
             // Full-screen TURN/TOOLS dock — step count (a live proxy for the
@@ -2042,6 +2068,17 @@ export function ReplApp({
               timestamp: Date.now(),
             });
             render();
+          },
+          onToolEvent: (e) => {
+            // Tool finished — real progress; the in-flight deferral ends here.
+            inFlightTools = Math.max(0, inFlightTools - 1);
+            if (turnController.signal.aborted) return;
+            noteProgress();
+            void debugLog("turn", "turn.tool-done", {
+              name: e.name,
+              ok: e.ok,
+              durationMs: e.durationMs,
+            });
           },
           onReasoning: (delta) => {
             if (turnController.signal.aborted) return;

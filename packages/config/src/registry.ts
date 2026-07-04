@@ -1701,6 +1701,35 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "15000",
   },
+  OXAGEN_TURN_INACTIVITY_MS: {
+    group: "CLI",
+    description:
+      "Turn inactivity guard window (ms, default 300000). NOT a turn time cap: aborts a turn " +
+      "only when no model/tool progress lands within the window; any completed call, stream " +
+      "delta, or executing tool resets/defers it. For long CI waits prefer the built-in " +
+      "pre-abort CI probe (OXAGEN_CI_WAIT_CAP_MS) over raising this — a large window blinds " +
+      "the hang backstop. Non-finite or <=0 values are ignored.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "300000",
+  },
+  OXAGEN_CI_WAIT_CAP_MS: {
+    group: "CLI",
+    description:
+      "Cap (ms, default 7200000 = 2h) on how long the turn inactivity guard may keep extending " +
+      "for a confirmed CI wait: before aborting, a turn that ran a CI-watch tool (gh run watch / " +
+      "gh pr checks…) makes one call-out, and still-pending checks extend the window until this " +
+      "cumulative cap. Green/failed/no-PR/probe-error never extends.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "7200000",
+  },
   OXAGEN_JUDGE_PANEL: {
     group: "CLI",
     description:

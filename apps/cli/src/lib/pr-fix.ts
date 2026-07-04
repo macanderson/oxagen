@@ -101,13 +101,16 @@ export interface RunFixToGreenOptions {
   maxRounds?: number;
   /** Poll interval while waiting for a terminal check state (ms). Default 30s. */
   pollIntervalMs?: number;
-  /** Give up waiting for a terminal state after this long (ms). Default 60 minutes. */
+  /** Give up waiting for a terminal state after this long (ms). Default 2 hours. */
   pollTimeoutMs?: number;
 }
 
 const DEFAULT_MAX_ROUNDS = 3;
 const DEFAULT_POLL_INTERVAL_MS = 30_000;
-const DEFAULT_POLL_TIMEOUT_MS = 60 * 60_000;
+// Customer CI legitimately runs for hours; polling is cheap (one gh call per
+// 30s), so waiting 2h beats giving up on a slow-but-healthy pipeline. Matches
+// the turn guard's CI-wait cap (agent/timeouts.ts resolveCiWaitCapMs).
+const DEFAULT_POLL_TIMEOUT_MS = 2 * 60 * 60_000;
 
 /** How many of the currently-failing checks to pull logs for — bounds prompt size on a wide matrix failure. */
 export const MAX_FAILING_CHECKS_TO_DIAGNOSE = 3;

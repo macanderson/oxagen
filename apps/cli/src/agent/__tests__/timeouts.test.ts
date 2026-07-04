@@ -419,6 +419,134 @@ describe("makeStallDetector", () => {
     // Still only one call.
     expect(onStall).toHaveBeenCalledOnce();
   });
+
+  // ── shouldDefer / probe escape hatches ──────────────────────────────────────
+
+  it("defers instead of firing while shouldDefer() is true (in-flight tool)", () => {
+    vi.useFakeTimers();
+    const onStall = vi.fn();
+    let inFlight = true;
+    makeStallDetector(1_000, onStall, { shouldDefer: () => inFlight });
+    // Two full windows elapse mid-tool: deferred both times.
+    vi.advanceTimersByTime(2_001);
+    expect(onStall).not.toHaveBeenCalled();
+    // Tool returns but nothing else lands: next expiry fires for real.
+    inFlight = false;
+    vi.advanceTimersByTime(1_001);
+    expect(onStall).toHaveBeenCalledOnce();
+  });
+
+  it("extends the window when the probe confirms a live CI wait", async () => {
+    vi.useFakeTimers();
+    const onStall = vi.fn();
+    const probe = vi.fn().mockResolvedValue(true);
+    makeStallDetector(1_000, onStall, { probe });
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(probe).toHaveBeenCalledOnce();
+    expect(onStall).not.toHaveBeenCalled();
+    // Extended: another full silent window triggers another probe, not a fire.
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(probe).toHaveBeenCalledTimes(2);
+    expect(onStall).not.toHaveBeenCalled();
+  });
+
+  it("fires when the probe says the wait is over (or fails)", async () => {
+    vi.useFakeTimers();
+    const onStall = vi.fn();
+    makeStallDetector(1_000, onStall, { probe: () => Promise.resolve(false) });
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(onStall).toHaveBeenCalledOnce();
+
+    const onStall2 = vi.fn();
+    makeStallDetector(1_000, onStall2, { probe: () => Promise.reject(new Error("gh down")) });
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(onStall2).toHaveBeenCalledOnce();
+  });
+
+  it("caps cumulative probe extensions at probeCapMs, then fires without probing", async () => {
+    vi.useFakeTimers();
+    const onStall = vi.fn();
+    const probe = vi.fn().mockResolvedValue(true);
+    // Cap allows exactly two 1s extensions.
+    makeStallDetector(1_000, onStall, { probe, probeCapMs: 2_000 });
+    await vi.advanceTimersByTimeAsync(1_001); // extend #1 (1s accumulated)
+    await vi.advanceTimersByTimeAsync(1_001); // extend #2 (2s accumulated = cap)
+    expect(onStall).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1_001); // cap reached: fire, no probe
+    expect(probe).toHaveBeenCalledTimes(2);
+    expect(onStall).toHaveBeenCalledOnce();
+  });
+
+  it("reset() zeroes the extension accumulator (cap is per silent stretch)", async () => {
+    vi.useFakeTimers();
+    const onStall = vi.fn();
+    const probe = vi.fn().mockResolvedValue(true);
+    const { reset } = makeStallDetector(1_000, onStall, { probe, probeCapMs: 1_500 });
+    await vi.advanceTimersByTimeAsync(1_001); // extend #1 (1s of 1.5s cap)
+    reset(); // real progress: accumulator back to 0
+    await vi.advanceTimersByTimeAsync(1_001); // extend again — budget is fresh
+    expect(onStall).not.toHaveBeenCalled();
+    expect(probe).toHaveBeenCalledTimes(2);
+  });
+
+  it("discards a stale probe verdict when reset() lands while probing", async () => {
+    vi.useFakeTimers();
+    const onStall = vi.fn();
+    let resolveProbe: ((v: boolean) => void) | null = null;
+    const probe = (): Promise<boolean> =>
+      new Promise<boolean>((res) => {
+        resolveProbe = res;
+      });
+    const { reset } = makeStallDetector(1_000, onStall, { probe });
+    await vi.advanceTimersByTimeAsync(1_001); // probe starts, hangs
+    reset(); // real progress lands mid-probe
+    resolveProbe!(false); // stale "abort" verdict must be ignored
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onStall).not.toHaveBeenCalled();
+  });
+
+  it("stop() while probing suppresses the verdict entirely", async () => {
+    vi.useFakeTimers();
+    const onStall = vi.fn();
+    let resolveProbe: ((v: boolean) => void) | null = null;
+    const probe = (): Promise<boolean> =>
+      new Promise<boolean>((res) => {
+        resolveProbe = res;
+      });
+    const { stop } = makeStallDetector(1_000, onStall, { probe });
+    await vi.advanceTimersByTimeAsync(1_001);
+    stop();
+    resolveProbe!(false);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onStall).not.toHaveBeenCalled();
+  });
+});
+
+// ── env-tunable resolvers ─────────────────────────────────────────────────────
+
+describe("resolveTurnInactivityMs / resolveCiWaitCapMs", () => {
+  afterEach(() => {
+    delete process.env["OXAGEN_TURN_INACTIVITY_MS"];
+    delete process.env["OXAGEN_CI_WAIT_CAP_MS"];
+  });
+
+  it("defaults to DEFAULT_TIMEOUTS.turnInactivityMs and TIMEOUTS.ciWaitCapMs", () => {
+    expect(timeoutsModule.resolveTurnInactivityMs()).toBe(DEFAULT_TIMEOUTS.turnInactivityMs);
+    expect(timeoutsModule.resolveCiWaitCapMs()).toBe(TIMEOUTS.ciWaitCapMs);
+    expect(TIMEOUTS.ciWaitCapMs).toBe(2 * 60 * 60 * 1_000);
+  });
+
+  it("honors positive env overrides and ignores junk", () => {
+    process.env["OXAGEN_TURN_INACTIVITY_MS"] = "600000";
+    process.env["OXAGEN_CI_WAIT_CAP_MS"] = "3600000";
+    expect(timeoutsModule.resolveTurnInactivityMs()).toBe(600_000);
+    expect(timeoutsModule.resolveCiWaitCapMs()).toBe(3_600_000);
+
+    process.env["OXAGEN_TURN_INACTIVITY_MS"] = "not-a-number";
+    process.env["OXAGEN_CI_WAIT_CAP_MS"] = "-5";
+    expect(timeoutsModule.resolveTurnInactivityMs()).toBe(DEFAULT_TIMEOUTS.turnInactivityMs);
+    expect(timeoutsModule.resolveCiWaitCapMs()).toBe(TIMEOUTS.ciWaitCapMs);
+  });
 });
 
 // ── toolTimeoutCategory ───────────────────────────────────────────────────────
