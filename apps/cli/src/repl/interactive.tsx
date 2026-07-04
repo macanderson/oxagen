@@ -94,6 +94,7 @@ import {
   type Message,
 } from "./components.js";
 import { HudPanel } from "./hud.js";
+import { ConfigPanel } from "./config-panel.js";
 import type { PasteSubmission } from "./paste.js";
 import { resolveEscapeAction } from "./escape-action.js";
 import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
@@ -401,6 +402,16 @@ export function ReplApp({
   // closure.
   const [hudVisible, setHudVisible] = useState(false);
   const hudVisibleRef = useRef(false);
+  // The /config panel — takes over the input row while open (same pattern as
+  // ApprovalPrompt) and owns the keyboard via its own useInput; the central
+  // handler below yields to it through this ref (read synchronously, so no
+  // stale closure). Closed with Esc inside the panel.
+  const [configOpen, setConfigOpen] = useState(false);
+  const configOpenRef = useRef(false);
+  const closeConfigPanel = useCallback((): void => {
+    configOpenRef.current = false;
+    setConfigOpen(false);
+  }, []);
   // Visibility of the right-hand Agent Team / Task Progress dock. "auto" shows it
   // only while a turn is monitoring work; /panel pins it "on" or hides it "off".
   const [panelMode, setPanelMode] = useState<PanelMode>("auto");
@@ -989,6 +1000,10 @@ export function ReplApp({
     }
     // While a permission prompt is up, ApprovalPrompt owns Esc and the answer keys.
     if (approvalRef.current) return;
+    // While the /config panel is open it owns the keyboard (its own useInput
+    // handles ↑/↓/e/x/Esc) — swallow everything here so those keys never
+    // double-fire into panel-nav, transcript scroll, or the prompt bar.
+    if (configOpenRef.current) return;
 
     // Ctrl-O expands/collapses the most recent folded `!command` accordion. Bound
     // before the focus-zone gate so it works whether focus is on the input or a
@@ -1235,6 +1250,28 @@ export function ReplApp({
         const next = !hudVisibleRef.current;
         hudVisibleRef.current = next;
         setHudVisible(next);
+        return;
+      }
+      if (text === "/config" || text.startsWith("/config ")) {
+        const arg = text.slice("/config".length).trim().toLowerCase();
+        if (arg === "doctor") {
+          try {
+            const { runConfigDoctor, formatDoctorReport } = await import("../config/doctor.js");
+            pushAssistant(formatDoctorReport(runConfigDoctor(cwd)));
+          } catch (err) {
+            pushAssistant(`Config doctor failed: ${err instanceof Error ? err.message : String(err)}`);
+          }
+          return;
+        }
+        if (arg) {
+          pushAssistant(
+            "Usage: /config — browse and edit the tiered config (repo ▸ workspace ▸ user ▸ org managed); " +
+              "/config doctor — scan the tiers for problems and customization recommendations.",
+          );
+          return;
+        }
+        configOpenRef.current = true;
+        setConfigOpen(true);
         return;
       }
       if (text === "/panel") {
@@ -2485,6 +2522,8 @@ export function ReplApp({
         <Box flexShrink={0} flexDirection="column">
           {approval ? (
             <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
+          ) : configOpen ? (
+            <ConfigPanel cwd={cwd} onClose={closeConfigPanel} width={Math.min(cols - 2, 100)} />
           ) : (
             <PromptInput
               onSubmit={handleUserSubmit}
@@ -2646,6 +2685,8 @@ export function ReplApp({
       <Box marginTop={1} flexShrink={0} flexDirection="column">
         {approval ? (
           <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
+        ) : configOpen ? (
+          <ConfigPanel cwd={cwd} onClose={closeConfigPanel} />
         ) : (
           <PromptInput
             onSubmit={handleUserSubmit}

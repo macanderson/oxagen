@@ -925,6 +925,13 @@ export function buildProgram(): Command {
       await configLint();
     });
   config
+    .command("doctor")
+    .description("Scan the config tiers (repo ▸ workspace ▸ user ▸ org managed) for problems and recommendations")
+    .action(async () => {
+      const { configDoctor } = await import("./commands/config.js");
+      await configDoctor();
+    });
+  config
     .command("pull")
     .description("Sync user.json (and org-provisioned managed.json) from the platform")
     .action(async () => {

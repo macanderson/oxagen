@@ -73,6 +73,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
   },
   { name: "mode", description: "Show or set the tool-permission mode", argumentHint: "[ask|auto-edit|bypass|readonly]" },
   { name: "pipeline", description: "Toggle prompt evaluation, context injection, and judging", argumentHint: "[on|off]" },
+  {
+    name: "config",
+    description: "Browse and edit tiered config (repo ▸ workspace ▸ user ▸ org) — `doctor` scans it",
+    argumentHint: "[doctor]",
+  },
   { name: "verbose", description: "Toggle per-phase timing, token/cost, and tool telemetry", argumentHint: "[on|off]" },
 
   // Memory
