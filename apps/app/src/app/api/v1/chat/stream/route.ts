@@ -9,7 +9,6 @@ import {
 } from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
 import {
-  streamAgentReply,
   selectModel,
   supportsReasoning,
   modelIdOf,
@@ -17,13 +16,14 @@ import {
   resolvePrompt,
   chatSystemPrompt,
   loadWorkspacePromptConfig,
-  stepCountIs,
   tool,
   type ToolSet,
   type ModelMessage,
   type SkillIndexEntry,
 } from "@oxagen/ai";
 import { materializeTools } from "@oxagen/agent";
+import { createPlatformAgentAi } from "@oxagen/agent/adapters";
+import { runCodingAgent } from "@oxagen/agent-engine";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
@@ -36,10 +36,11 @@ import type {
 } from "@/components/chat/stream-event-types";
 import { autoTitleConversation } from "./auto-title";
 import { streamMediaGeneration } from "./media-generation";
-import { translateAgentStream } from "./translate-stream";
+import { createTurnTranslator, emitUsageEvent } from "./translate-stream";
 import { formatStreamError } from "./stream-parts";
 import { buildHistoryMessages } from "./history";
-import { recallWorkspaceMemory, injectRecalledMemory } from "./recall-context";
+import { recallWorkspaceMemory } from "./recall-context";
+import { createChatMemoryProvider } from "./engine-memory";
 
 // Side-effect imports: bind every handler into the shared kernel BEFORE
 // materializeTools runs so invoke() can resolve both agent.* and all
@@ -321,20 +322,19 @@ export async function POST(request: NextRequest): Promise<Response> {
     );
   }
 
-  // Append the current user message unless sendMessageAction (running
-  // concurrently) already persisted it as the trailing row — otherwise the
-  // model would receive the current turn twice in the same request.
+  // The engine appends `instruction` (this turn's content) itself, so the
+  // history it receives must EXCLUDE the current user message. sendMessageAction
+  // (running concurrently) may already have persisted this turn as the trailing
+  // history row — drop it so the model never sees the current turn twice.
   const lastHistory = historyMessages[historyMessages.length - 1];
   const currentAlreadyInHistory =
     lastHistory !== undefined &&
     lastHistory.role === "user" &&
     lastHistory.content === content;
 
-  const messagesWithCurrent: ModelMessage[] = currentAlreadyInHistory
-    ? historyMessages
-    : [...historyMessages, { role: "user", content }];
-
-  const coreMessages: ModelMessage[] = messagesWithCurrent;
+  const historyForEngine: ModelMessage[] = currentAlreadyInHistory
+    ? historyMessages.slice(0, -1)
+    : historyMessages;
 
   const requestId = randomUUID();
 
@@ -352,10 +352,88 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   const responseStream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      // Enqueue-safe emit: the engine step loop calls translator.onPart → emit
+      // synchronously inside the stream loop. If the client disconnected the
+      // controller is closed and enqueue THROWS; that throw would propagate into
+      // the engine step's try/catch and be misclassified as a model/stream
+      // error (triggering a retry). Swallow it and latch `closed` — the
+      // request.signal abort is what actually stops the loop.
+      let closed = false;
       function emit(event: StreamEvent): void {
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
-        );
+        if (closed) return;
+        try {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
+          );
+        } catch {
+          closed = true;
+        }
+      }
+
+      // The stateful SSE translator. Declared here (not inside the try) so the
+      // catch can flush + persist a PARTIAL turn if the engine throws mid-stream
+      // — today an error PART did not throw, so partial output still persisted;
+      // the engine throws instead, so we reproduce that behaviour explicitly.
+      let translator: ReturnType<typeof createTurnTranslator> | null = null;
+
+      // Persist the assistant reply so it survives a refresh and is included in
+      // the next turn's history (OXA-1509). Best-effort: a DB failure here must
+      // NOT corrupt the SSE response the client already consumed, and must not
+      // escape into the outer catch (it wraps its own try/catch).
+      async function persistAssistantTurn(
+        assistantText: string,
+        persistedBlocks: AssistantContentBlock[],
+      ): Promise<void> {
+        if (
+          !conversationId ||
+          (assistantText.length === 0 && persistedBlocks.length === 0)
+        ) {
+          return;
+        }
+        try {
+          await runInTenantScope(
+            { orgId: tenant.id, workspaceId: workspace.id },
+            () =>
+              withTenantDb(async (tx) => {
+                const [assistantMsg] = await tx
+                  .insert(schema.messages)
+                  .values({
+                    orgId: tenant.id,
+                    workspaceId: workspace.id,
+                    conversationId,
+                    parentMessageId: parentMessageId ?? undefined,
+                    role: "assistant",
+                    content: assistantText,
+                    // Persist the full ordered chain (reasoning → tools → text)
+                    // so a refresh re-renders the timeline, not just the final
+                    // prose. The plain `content` column keeps the text for
+                    // history/model context.
+                    contentBlocks: persistedBlocks,
+                    isActiveInBranch: true,
+                    metadata: { status: "complete" },
+                    createdByUserId: session.user.id,
+                    updatedByUserId: session.user.id,
+                  })
+                  .returning({ id: schema.messages.id });
+                if (assistantMsg) {
+                  // Advance the conversation's active leaf to the assistant
+                  // reply so the next turn threads from here.
+                  await tx
+                    .update(schema.conversations)
+                    .set({
+                      activeLeafMessageId: assistantMsg.id,
+                      updatedAt: new Date(),
+                    })
+                    .where(eq(schema.conversations.id, conversationId));
+                }
+              }),
+          );
+        } catch (persistErr) {
+          logger.error(
+            { err: persistErr },
+            "[chat/stream] failed to persist assistant reply",
+          );
+        }
       }
 
       try {
@@ -592,25 +670,29 @@ export async function POST(request: NextRequest): Promise<Response> {
           ? { ...agentTools, ...pageFormFillTool }
           : agentTools;
 
-        // Inject the recalled-memory volatile message right before the latest
-        // user message (after the cached system block). No-op when recall
-        // returned nothing.
-        const messagesForModel = injectRecalledMemory(
-          coreMessages,
-          recalledMemoryMessage,
-        );
+        // Run the SAME coding engine the CLI uses (runCodingAgent) — one
+        // explicit step-driver with retry/compaction/loop-nudges — instead of a
+        // hand-rolled streamText loop. No `workspace` ⇒ no filesystem tools; the
+        // materialized capability ToolSet is injected via `extraTools`. The raw
+        // AI-SDK parts are forwarded to the stateful SSE translator via
+        // `onStreamPart` so the client wire protocol is byte-identical.
+        translator = createTurnTranslator({
+          requestId,
+          toolNameMap,
+          orgSlug,
+          workspaceSlug,
+          emit,
+        });
 
-        const result = streamAgentReply({
-          messages: messagesForModel,
-          model: turnModel,
-          tools: allTools,
-          // Bound the agentic tool loop. WITHOUT this, streamText inherits the
-          // AI SDK default `stopWhen: stepCountIs(1)` — the turn halts after the
-          // first step, so any tool the model calls executes but it never gets a
-          // second step to read the result and answer (the user sees a tool chip
-          // and no reply). The loop still ends naturally on the model's final
-          // answer; MAX_AGENT_STEPS is only the runaway backstop.
-          stopWhen: stepCountIs(MAX_AGENT_STEPS),
+        // Metered AI port (@oxagen/ai). Surface "app" so token usage/credits
+        // attribute to the app surface, matching the pre-unification telemetry.
+        const ai = createPlatformAgentAi(capCtx, capCtx.messageId, "app");
+
+        const modelId = modelIdOf(turnModel);
+        const result = await runCodingAgent({
+          ai,
+          instruction: content,
+          history: historyForEngine,
           system: resolvePrompt({
             key: "chat.system",
             baseline:
@@ -624,79 +706,43 @@ export async function POST(request: NextRequest): Promise<Response> {
               }) + pageContextSystemSuffix,
             config: promptConfig,
           }),
+          model: modelId,
           ...(turnEffort ? { effort: turnEffort } : {}),
-          telemetry: {
-            orgId: tenant.id,
-            workspaceId: workspace.id,
-            surface: "app",
-            messageId: parentMessageId ?? requestId,
-          },
+          // Runaway backstop for the agentic tool loop (matches the old
+          // stopWhen: stepCountIs(MAX_AGENT_STEPS)). Loop ends naturally on the
+          // model's final answer.
+          maxSteps: MAX_AGENT_STEPS,
+          // Phase 1 byte-identical client behaviour: no step retries (a retry
+          // would re-forward a step's already-streamed parts) and no
+          // context-overflow re-run (see maxOverflowRetries, C1) — an overflow
+          // surfaces via the catch as a single `error` event, as it did before.
+          maxRetries: 0,
+          maxOverflowRetries: 0,
+          extraTools: allTools,
+          // Recall ran CONCURRENTLY in the setup Promise.all above; the provider
+          // just reads its already-resolved value (no serial latency — C3). The
+          // engine prepends its own "## Recalled context" heading before the
+          // provider's body.
+          memory: createChatMemoryProvider({
+            recalledPromise: Promise.resolve(recalledMemoryMessage),
+          }),
+          // NO `trace`: createClickHouseTraceStore writes up to 200 chars of the
+          // raw instruction into ClickHouse, violating the chat surface's
+          // hash-only prompt policy (C5). Per-step usage/credits still flow
+          // through the metered AI port's streamAgentReply.
+          signal: request.signal,
+          onStreamPart: (part) => translator?.onPart(part),
         });
 
-        // Consume fullStream: emit SSE events + accumulate the ordered assistant
-        // content blocks for refresh re-render and history.
-        const { assistantText, persistedBlocks } = await translateAgentStream({
-          fullStream: result.fullStream as AsyncIterable<unknown>,
-          requestId,
-          toolNameMap,
-          orgSlug,
-          workspaceSlug,
-          modelId: modelIdOf(turnModel),
-          emit,
-        });
+        const { assistantText, persistedBlocks } = translator.finish();
+        // ONE aggregated usage event from the engine's summed per-step usage
+        // (each step's own `finish` is suppressed by the translator). Credits are
+        // charged per step inside streamAgentReply's onFinish — the ledger fans
+        // out to one row per step sharing this turn's messageId, summing to the
+        // same total the client sees here (C4).
+        emitUsageEvent(emit, result.usage, modelId);
 
-        // Persist the assistant reply so it survives a refresh and is included
-        // in the next turn's history (OXA-1509). Best-effort: a DB failure here
-        // must NOT corrupt the SSE response the client already consumed.
-        if (
-          conversationId &&
-          (assistantText.length > 0 || persistedBlocks.length > 0)
-        ) {
-          try {
-            await runInTenantScope(
-              { orgId: tenant.id, workspaceId: workspace.id },
-              () =>
-                withTenantDb(async (tx) => {
-                  const [assistantMsg] = await tx
-                    .insert(schema.messages)
-                    .values({
-                      orgId: tenant.id,
-                      workspaceId: workspace.id,
-                      conversationId,
-                      parentMessageId: parentMessageId ?? undefined,
-                      role: "assistant",
-                      content: assistantText,
-                      // Persist the full ordered chain (reasoning → tools →
-                      // text) so a refresh re-renders the timeline, not just the
-                      // final prose. The plain `content` column keeps the text
-                      // for history/model context.
-                      contentBlocks: persistedBlocks,
-                      isActiveInBranch: true,
-                      metadata: { status: "complete" },
-                      createdByUserId: session.user.id,
-                      updatedByUserId: session.user.id,
-                    })
-                    .returning({ id: schema.messages.id });
-                  if (assistantMsg) {
-                    // Advance the conversation's active leaf to the assistant
-                    // reply so the next turn threads from here.
-                    await tx
-                      .update(schema.conversations)
-                      .set({
-                        activeLeafMessageId: assistantMsg.id,
-                        updatedAt: new Date(),
-                      })
-                      .where(eq(schema.conversations.id, conversationId));
-                  }
-                }),
-            );
-          } catch (persistErr) {
-            logger.error(
-              { err: persistErr },
-              "[chat/stream] failed to persist assistant reply",
-            );
-          }
-        }
+        await persistAssistantTurn(assistantText, persistedBlocks);
 
         // Auto-title new conversations using the fast model (fire-and-forget).
         // Only fires on the first turn; the isNull predicate in
@@ -717,6 +763,14 @@ export async function POST(request: NextRequest): Promise<Response> {
         // in server logs and ClickHouse — an operator can't tell a transient
         // rate-limit from a recurring code defect.
         logger.error({ err, requestId }, "[chat/stream] turn error");
+        // The engine THROWS on a provider/stream error or a client-disconnect
+        // abort (where today an error PART did not throw). Flush + persist the
+        // partial turn BEFORE emitting the error so a refresh still shows what
+        // streamed, matching the old behaviour.
+        if (translator) {
+          const { assistantText, persistedBlocks } = translator.finish();
+          await persistAssistantTurn(assistantText, persistedBlocks);
+        }
         // Surface stream errors as a structured `error` event so the client can
         // show a readable toast. `formatStreamError` unwraps an API error
         // envelope (e.g. a 402 insufficient_credits body) into a clean

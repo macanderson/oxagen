@@ -7,20 +7,18 @@
  *       text (truncated), a bounded limit, and the turn's executionRef, and
  *       returns a volatile user message carrying the recalled lessons.
  *   (b) recall failure / empty result / timeout → null (turn proceeds untouched).
- *   (c) injectRecalledMemory places the message immediately before the latest
- *       user message, and is a no-op when there is nothing to inject.
+ *   (c) stripRecalledMemoryHeading drops our "##" heading (the engine adds its
+ *       own) while keeping the anti-injection preamble.
  *   (d) formatRecalledMemories renders RULE enforcement and returns null on empty.
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { ModelMessage } from "@oxagen/ai";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { agentMemoryRecall } from "@oxagen/oxagen/contracts/agent.memory.recall";
 import {
   formatRecalledMemories,
   buildRecalledMemoryMessage,
   recallWorkspaceMemory,
-  injectRecalledMemory,
   stripRecalledMemoryHeading,
 } from "./recall-context";
 
@@ -53,9 +51,6 @@ const CTX: CapabilityContext = {
   clientIp: null,
 } as CapabilityContext;
 
-function userMsg(content: string): ModelMessage {
-  return { role: "user", content };
-}
 
 describe("formatRecalledMemories", () => {
   it("returns null when there are no memories (no empty section)", () => {
@@ -204,37 +199,3 @@ describe("recallWorkspaceMemory", () => {
   });
 });
 
-describe("injectRecalledMemory", () => {
-  it("inserts the recalled message immediately before the latest user message", () => {
-    const messages: ModelMessage[] = [
-      userMsg("first"),
-      { role: "assistant", content: "reply" },
-      userMsg("current question"),
-    ];
-    const recalled = buildRecalledMemoryMessage([memory({ lesson: "Injected" })]);
-
-    const out = injectRecalledMemory(messages, recalled);
-
-    expect(out).toHaveLength(4);
-    // recalled sits at index 2, right before the latest user message (now index 3)
-    expect(String(out[2]?.content)).toContain("Injected");
-    expect(out[3]).toEqual(userMsg("current question"));
-    // The current user message is still the LAST message the model sees.
-    expect(out[out.length - 1]).toEqual(userMsg("current question"));
-  });
-
-  it("is a no-op when there is nothing to inject", () => {
-    const messages: ModelMessage[] = [userMsg("only")];
-    const out = injectRecalledMemory(messages, null);
-    expect(out).toEqual(messages);
-  });
-
-  it("prepends when the only message is the user turn", () => {
-    const messages: ModelMessage[] = [userMsg("solo")];
-    const recalled = buildRecalledMemoryMessage([memory()]);
-    const out = injectRecalledMemory(messages, recalled);
-    expect(out).toHaveLength(2);
-    expect(out[0]).toBe(recalled);
-    expect(out[1]).toEqual(userMsg("solo"));
-  });
-});

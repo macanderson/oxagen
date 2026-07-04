@@ -5,18 +5,20 @@ import {
   type AgentMemoryRecallOutput,
 } from "@oxagen/oxagen/contracts/agent.memory.recall";
 
-// Deterministic memory recall injected into the chat agent's context BEFORE the
-// turn runs (OXA agent self-improvement). The chat route does NOT rely on the
-// model choosing to call agent.memory.recall — it recalls here, unconditionally,
-// so an already-remembered lesson is never re-discovered.
+// Deterministic memory recall for the chat agent's context BEFORE the turn runs
+// (OXA agent self-improvement). The chat route does NOT rely on the model
+// choosing to call agent.memory.recall — it recalls here, unconditionally, so an
+// already-remembered lesson is never re-discovered.
 //
-// The recalled memory is placed as a VOLATILE USER MESSAGE right before the
-// latest user message, NOT folded into the system prompt. Mirrors
-// packages/agent-engine/src/engine.ts:71-96: the system block carries an
-// Anthropic prompt-cache breakpoint, and recalled memory changes every turn — so
-// folding it into `system` would bust the cached prefix on every turn. Riding as
-// a `user` message keeps it AFTER the cached system block while the model still
-// sees it.
+// INJECTION is owned by the agent-engine: the route runs `recallWorkspaceMemory`
+// concurrently in its setup Promise.all, hands the result to the chat
+// MemoryProvider (see engine-memory.ts), and the engine places the recalled
+// block as a VOLATILE USER MESSAGE between history and the instruction —
+// AFTER the cached system block, so recalled memory (which changes every turn)
+// never busts the Anthropic prompt-cache breakpoint on the stable system prefix
+// (packages/agent-engine/src/engine.ts). This module only produces the recalled
+// body; `stripRecalledMemoryHeading` removes our heading since the engine
+// prepends its own.
 
 // How many memories to pull. Small — enough to seed context without bloating the
 // prompt or slowing the recall query.
@@ -154,29 +156,4 @@ export async function recallWorkspaceMemory(args: {
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
-}
-
-/**
- * Insert the recalled-memory message immediately before the latest user message
- * so the model reads it as prior context to the current instruction (and after
- * the cached system block). No-op when there is nothing to inject.
- */
-export function injectRecalledMemory(
-  messages: readonly ModelMessage[],
-  recalled: ModelMessage | null,
-): ModelMessage[] {
-  if (recalled === null) return [...messages];
-
-  let insertAt = messages.length;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i]?.role === "user") {
-      insertAt = i;
-      break;
-    }
-  }
-  return [
-    ...messages.slice(0, insertAt),
-    recalled,
-    ...messages.slice(insertAt),
-  ];
 }
