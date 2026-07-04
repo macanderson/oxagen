@@ -92,6 +92,12 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
           // token_usage's UUID column and broke the uuid credit charge.
           messageId: null,
         },
+        // Edge inference is deterministic in an entity's property snapshot:
+        // two entities with the same properties imply the same edges. Cache it
+        // (semantic on) so a re-sync of unchanged entities, or two structurally
+        // identical entities, reuse a recent inference instead of re-spending.
+        // 7-day TTL — ontology inference is stable over that window.
+        cache: { ttlSeconds: 604_800, semantic: true },
       }),
     );
 
