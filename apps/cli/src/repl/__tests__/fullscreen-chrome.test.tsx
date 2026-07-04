@@ -27,6 +27,7 @@ function emptyMetrics(): SessionMetrics {
     sessionTokensOut: 0,
     sessionCachedTokens: 0,
     sessionCostUsd: 0,
+    streamTokensOut: 0,
     byModel: {},
   };
 }
@@ -168,6 +169,30 @@ describe("TelemetryDock", () => {
     expect(frame).toContain("main");
     expect(frame).toContain("#42");
     expect(frame).toContain("oxagen-repl2"); // tail of the worktree root path
+  });
+
+  it("ticks tok/s and ↓ from the in-flight stream estimate before any usage settles", () => {
+    const telemetry: TelemetryState = {
+      ...INITIAL_TELEMETRY_STATE,
+      turn: { ...INITIAL_TELEMETRY_STATE.turn, turnStartedAt: 0 },
+    };
+    // Mid-stream: no model call has settled yet (turnTokensOut 0), only the
+    // live estimate is non-zero — the burn readout must still move.
+    const metrics: SessionMetrics = { ...emptyMetrics(), streamTokensOut: 1000 };
+    const { lastFrame } = render(
+      <TelemetryDock
+        telemetry={telemetry}
+        metrics={metrics}
+        cacheHit={0}
+        isStreaming={true}
+        now={5000}
+        cols={120}
+        repo={fixtureRepo()}
+      />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("200tok/s"); // 1000 est. tokens / 5s
+    expect(frame).toContain("↓1.0k");
   });
 
   it("truncates a long model slug rather than overflowing a narrow panel", () => {

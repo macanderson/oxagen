@@ -234,7 +234,10 @@ export function TelemetryDock({
   const { models, turn, tools } = telemetry;
   const elapsedMs = turn.turnStartedAt != null ? now - turn.turnStartedAt : 0;
   const elapsedSec = Math.max(1, elapsedMs / 1000);
-  const tokPerSec = isStreaming ? Math.round(metrics.turnTokensOut / elapsedSec) : 0;
+  // Include the in-flight stream's live estimate so tok/s moves DURING a call
+  // instead of reading 0 until the first usage settles (see metrics.ts).
+  const liveTokensOut = metrics.turnTokensOut + metrics.streamTokensOut;
+  const tokPerSec = isStreaming ? Math.round(liveTokensOut / elapsedSec) : 0;
 
   const toolCell = (name: string): string => `${name} ${tools[name] ?? 0}`;
 
@@ -278,7 +281,7 @@ export function TelemetryDock({
         <Text wrap="truncate-end">
           <Text color={theme.cyan}>{"↑"}{humanizeTokens(metrics.sessionTokensIn)}</Text>
           {"  "}
-          <Text color={GREEN}>{"↓"}{humanizeTokens(metrics.sessionTokensOut)}</Text>
+          <Text color={GREEN}>{"↓"}{humanizeTokens(metrics.sessionTokensOut + metrics.streamTokensOut)}</Text>
         </Text>
         <Text wrap="truncate-end">
           <Text dimColor>cache </Text>
