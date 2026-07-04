@@ -3,7 +3,7 @@
 import { invoke } from "@oxagen/oxagen/kernel";
 import "@oxagen/handlers/register";
 import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
+import { resolveOrg, resolveWorkspace, assertWorkspaceMember } from "@/lib/resolve-org";
 
 /**
  * Server action: dispatch a schema reconciliation job for the given versionId.
@@ -27,6 +27,10 @@ export async function schemaReconcileDispatchAction(opts: {
   const session = await getSessionOrRedirect();
   const org = await resolveOrg(opts.orgSlug);
   const workspace = await resolveWorkspace(org.id, opts.workspaceSlug);
+  // invoke() from apps/app skips kernel IAM; the org/workspace come from
+  // client-supplied slugs. Assert workspace membership so a session scoped to
+  // one workspace can't dispatch a reconcile job against another. notFound() on miss.
+  await assertWorkspaceMember(workspace.id, session.user.id);
 
   const result = await invoke(
     "schema.reconcile.dispatch",
@@ -71,6 +75,7 @@ export async function schemaReconcileStatusAction(
   const session = await getSessionOrRedirect();
   const org = await resolveOrg(orgSlug);
   const workspace = await resolveWorkspace(org.id, workspaceSlug);
+  await assertWorkspaceMember(workspace.id, session.user.id);
 
   const result = await invoke(
     "schema.reconcile.status",
