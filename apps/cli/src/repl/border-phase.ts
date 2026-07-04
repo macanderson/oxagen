@@ -20,6 +20,7 @@
  * philosophy as scroll.ts / telemetry.ts.
  */
 import { theme } from "../tui/theme.js";
+import type { MotionMode } from "../lib/config.js";
 import type { TelemetryTurn } from "./telemetry.js";
 
 export type BorderPhase = "idle" | "evaluating" | "active";
@@ -72,4 +73,19 @@ export function borderColorFor(phase: BorderPhase, tick: number): string {
     case "evaluating":
       return rainbowColorAt(tick);
   }
+}
+
+/**
+ * Motion-aware border color: at "full" the border animates as designed; at
+ * "reduced"/"off" the rainbow flash is suppressed — an in-flight turn
+ * (evaluating included) renders the static active amber, so the border still
+ * communicates busy-vs-idle without ever animating.
+ */
+export function promptBorderColorFor(
+  phase: BorderPhase,
+  tick: number,
+  motion: MotionMode,
+): string {
+  if (motion === "full") return borderColorFor(phase, tick);
+  return phase === "idle" ? theme.cyan : theme.amber;
 }

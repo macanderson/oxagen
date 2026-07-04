@@ -763,6 +763,7 @@ export function ApprovalPrompt({
 
 const STAGE_GLYPH: Record<StageKind, string> = {
   evaluate: "◇",
+  plan: "☰",
   enhance: "◆",
   route: "⊚",
   execute: "▸",
@@ -773,6 +774,7 @@ const STAGE_GLYPH: Record<StageKind, string> = {
 
 const STAGE_COLOR: Record<StageKind, string> = {
   evaluate: "#A78BFA",
+  plan: "#A78BFA",
   enhance: "#A78BFA",
   route: theme.cyan,
   execute: "#FBBF24",
@@ -807,6 +809,7 @@ export function StageBadge({ stage }: { stage: StageEvent }): React.ReactElement
 /** Title-cased chip label for each pipeline stage. */
 const STAGE_LABEL: Record<StageKind, string> = {
   evaluate: "Evaluate",
+  plan: "Plan",
   enhance: "Enhance",
   route: "Route",
   execute: "Execute",
