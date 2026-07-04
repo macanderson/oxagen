@@ -12,6 +12,8 @@ export interface CliConfig {
   model?: string;
   /** Default reasoning effort for models that support it (low|medium|high|xhigh|max). */
   effort?: "low" | "medium" | "high" | "xhigh" | "max";
+  /** TUI animation level (see getMotionMode) — set via /motion in the REPL. */
+  motion?: MotionMode;
   /** Vercel AI Gateway key for the local agent loop (falls back to env / .env.local). */
   gatewayKey?: string;
   /**
@@ -66,6 +68,22 @@ export interface RuntimeConfig {
     /** Quantization preference, best quality first (e.g. ["q8","q6","q5","q4"]). */
     quantizationPreference?: ("q4" | "q5" | "q6" | "q8")[];
   };
+}
+
+/**
+ * TUI animation level:
+ *   - "full"    — everything animates (default).
+ *   - "reduced" — no decorative animation: the space-invaders duel / init
+ *     easter-egg game and the prompt bar's rainbow border flash are off; the
+ *     thinking indicator (useful progress feedback) stays.
+ *   - "off"     — all animation off, including the thinking indicator.
+ */
+export type MotionMode = "full" | "reduced" | "off";
+
+const MOTION_MODES: readonly string[] = ["full", "reduced", "off"];
+
+function asMotionMode(value: string | undefined): MotionMode | undefined {
+  return value !== undefined && MOTION_MODES.includes(value) ? (value as MotionMode) : undefined;
 }
 
 const CONFIG_DIR = join(homedir(), ".config", "oxagen");
@@ -130,4 +148,22 @@ export function getAppUrl(): string {
     readConfig().appUrl ??
     "https://app.oxagen.sh"
   );
+}
+
+/**
+ * Resolve the animation level: env override → persisted config → the legacy
+ * OXAGEN_CLI_FUN=0 opt-out (which predates /motion and disabled exactly the
+ * decorative animations, i.e. today's "reduced") → "full".
+ */
+export function getMotionMode(): MotionMode {
+  return (
+    asMotionMode(process.env["OXAGEN_CLI_MOTION"]) ??
+    asMotionMode(readConfig().motion) ??
+    (process.env["OXAGEN_CLI_FUN"] === "0" ? "reduced" : "full")
+  );
+}
+
+/** Persist the animation level chosen with /motion. */
+export function setMotionMode(motion: MotionMode): void {
+  writeConfig({ motion });
 }
