@@ -31,7 +31,21 @@
  * live — the point is that the user SEES the orchestration working, not a
  * frozen spinner.
  */
-import { runTurn, selectBestCandidate, type AgentAi, type Candidate, type SelectionResult, type ProjectContext } from "@oxagen/agent-engine";
+import {
+  runTurn,
+  runCodingAgent,
+  selectBestCandidate,
+  snapshotTrunk,
+  planForks,
+  decideSelection,
+  renderDiagnosisInstruction,
+  renderProbeInstruction,
+  type AgentAi,
+  type Candidate,
+  type SelectionResult,
+  type ProjectContext,
+  type CandidateEvidence,
+} from "@oxagen/agent-engine";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -44,6 +58,17 @@ import { looksPassing } from "@oxagen/agent-engine";
 import { resolveEffort } from "./model.js";
 
 const execFileAsync = promisify(execFile);
+
+/**
+ * Resolve the best-of-N mode from env (OXAGEN_BEST_OF_N_MODE) or explicit option.
+ * Default is 'independent'.
+ */
+export function resolveBestOfNMode(explicitMode?: "independent" | "fork"): "independent" | "fork" {
+  if (explicitMode) return explicitMode;
+  const envMode = process.env.OXAGEN_BEST_OF_N_MODE;
+  if (envMode === "fork" || envMode === "independent") return envMode;
+  return "independent";
+}
 
 /** Live events for the best-of-N run — drive the multi-lane view / stream-json. */
 export type BestOfNEvent =
@@ -113,6 +138,8 @@ export interface BestOfNOptions {
    * candidate) on top of the one the selector always makes.
    */
   fullPipeline?: boolean;
+  /** Best-of-N mode: 'fork' (cache-forked with snapshot) or 'independent' (N isolated runs). */
+  mode?: "independent" | "fork";
   signal?: AbortSignal;
   onEvent?: (e: BestOfNEvent) => void;
 }
@@ -128,6 +155,15 @@ export interface BestOfNResult {
   winner: Candidate | null;
   candidates: Candidate[];
   selection: SelectionResult;
+  /** Which mode was used: 'independent' or 'fork'. */
+  mode: "independent" | "fork";
+  /** Fork mode telemetry (only populated when mode === 'fork'). */
+  forkTelemetry?: {
+    trunkSteps: number;
+    hypothesesCount: number;
+    fallbackToIndependent: boolean;
+    selectionMethod: "consensus" | "single-passing" | "selector-needed" | "best-effort";
+  };
 }
 
 /** Run `git` in `cwd`, returning trimmed stdout ("" on failure). */
@@ -330,10 +366,302 @@ async function pool<T>(thunks: Array<() => Promise<T>>, limit: number): Promise<
 }
 
 /**
- * Run best-of-N and apply the winning patch. Always resolves — a failed
- * candidate becomes a non-viable entry, not a thrown error.
+ * Run fork mode: trunk + cache-forked tails per hypothesis.
+ *
+ * Flow:
+ * 1. TRUNK: Run agent with investigation preamble + diagnosis/probe instructions
+ * 2. SNAPSHOT: snapshotTrunk(result.messages), plan forks
+ * 3. If no hypotheses: fall back to independent mode
+ * 4. TAILS: For each fork, run agent with fork instruction in separate worktree
+ * 5. VERIFY: Run verifyAuto + verifyCommand across tails
+ * 6. SELECT: decideSelection → consensus/single-passing/selector-needed/best-effort
+ * 7. APPLY: Apply winner with fallback
  */
-export async function runBestOfN(opts: BestOfNOptions): Promise<BestOfNResult> {
+async function runForkMode(opts: BestOfNOptions): Promise<BestOfNResult> {
+  const emit = opts.onEvent ?? (() => undefined);
+  const n = Math.max(1, opts.candidates);
+
+  emit({ type: "start", candidates: n, prompt: opts.prompt });
+
+  const worktreeBase = await mkdtemp(join(tmpdir(), "oxagen-fork-"));
+
+  try {
+    // TRUNK: Run with investigation preamble, diagnosis, and probe instructions
+    const investigationPreamble =
+      "Investigation phase: do NOT modify source files. Reproduce the issue, localize the fault, " +
+      "run cheap probes to falsify root-cause hypotheses, then emit your diagnosis.";
+
+    const trunkPrompt = [opts.prompt, investigationPreamble, renderDiagnosisInstruction(), renderProbeInstruction()].join("\n\n");
+
+    emit({ type: "candidate-start", id: "trunk", model: "default" });
+    const trunkWt = join(worktreeBase, "trunk");
+    await git(["worktree", "add", "--detach", trunkWt, "HEAD"], opts.cwd);
+
+    const trunkResult = await runTurn({
+      prompt: trunkPrompt,
+      workspace: createCwdWorkspace(trunkWt),
+      ai: opts.ai,
+      model: opts.models?.[0],
+      effort: resolveEffort(opts.effort),
+      bare: !opts.fullPipeline,
+      profile: "headless",
+      enhanceTimeoutMs: opts.fullPipeline ? 15_000 : undefined,
+      midJudgeSteps: opts.fullPipeline ? 20 : undefined,
+      readOnly: opts.readOnly,
+      projectContext: opts.projectContext,
+      codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(opts.cwd, op, q, l)),
+      signal: opts.signal,
+      onStage: (s) => emit({ type: "candidate-progress", id: "trunk", label: s.label }),
+      onToolCall: (name) => emit({ type: "candidate-progress", id: "trunk", label: name }),
+    });
+
+    const trunkSteps = trunkResult.steps;
+    emit({ type: "candidate-done", id: "trunk", changedFiles: trunkResult.trace.filesTouched, steps: trunkSteps, testsPassed: null });
+
+    // SNAPSHOT and plan forks
+    const snapshot = snapshotTrunk(trunkResult.messages);
+    const tailCount = Math.min(n, Math.max(1, snapshot.hypotheses.length));
+    const forkPlans = planForks(snapshot, tailCount);
+
+    // Fallback to independent mode if no hypotheses
+    if (forkPlans.length === 0) {
+      emit({
+        type: "candidate-progress",
+        id: "fork-coordinator",
+        label: "No surviving hypotheses; falling back to independent mode",
+      });
+      // Clean up trunk worktree
+      await git(["worktree", "remove", "--force", trunkWt], opts.cwd);
+      return runIndependentMode({ ...opts, mode: undefined });
+    }
+
+    // TAILS: Run each fork in its own worktree
+    interface TailRun {
+      candidate: Candidate;
+      worktree: string;
+      testCommands: string[];
+    }
+
+    const tailThunks = forkPlans.map((forkPlan, idx) => {
+      const tailId = `tail-${idx + 1}`;
+      return async (): Promise<TailRun> => {
+        emit({ type: "candidate-start", id: tailId, model: "default" });
+        const tailWt = join(worktreeBase, tailId);
+        await git(["worktree", "add", "--detach", tailWt, "HEAD"], opts.cwd);
+
+        const testCommands: string[] = [];
+
+        try {
+          const tailResult = await runCodingAgent({
+            instruction: forkPlan.instruction,
+            workspace: createCwdWorkspace(tailWt),
+            ai: opts.ai,
+            model: opts.models?.[idx! % opts.models!.length],
+            effort: resolveEffort(opts.effort),
+            history: forkPlan.history,
+            maxSteps: 100, // Reasonable default for tails
+            readOnly: opts.readOnly,
+            codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(opts.cwd, op, q, l)),
+            signal: opts.signal,
+            onEvent: (e) => {
+              if (e.type === "tool-call") {
+                emit({ type: "candidate-progress", id: tailId, label: e.name });
+                if (e.name === "bash") {
+                  const cmd = extractBashCommand(e.input);
+                  if (cmd) testCommands.push(cmd);
+                }
+              }
+            },
+          });
+
+          emit({ type: "candidate-done", id: tailId, changedFiles: tailResult.changedFiles, steps: tailResult.steps, testsPassed: null });
+          return {
+            candidate: {
+              id: tailId,
+              model: "default",
+              diff: tailResult.diff,
+              summary: tailResult.text,
+              changedFiles: tailResult.changedFiles,
+              steps: tailResult.steps,
+            },
+            worktree: tailWt,
+            testCommands: dedupe(testCommands),
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          emit({ type: "candidate-failed", id: tailId, error: msg });
+          return {
+            candidate: { id: tailId, model: "default", diff: "", summary: msg, changedFiles: [], steps: 0, failed: true },
+            worktree: tailWt,
+            testCommands: dedupe(testCommands),
+          };
+        }
+      };
+    });
+
+    const tailRuns = await pool(tailThunks, opts.concurrency ?? Math.min(n, 4));
+    const candidates: Candidate[] = tailRuns.map((r) => r.candidate);
+
+    try {
+      // VERIFY: Auto-verify + verifyCommand across tails
+      if (opts.verifyAuto && !opts.signal?.aborted) {
+        const union = dedupe(tailRuns.flatMap((r) => r.testCommands.filter(isLikelyTestCommand)));
+        if (union.length > 0) {
+          await Promise.all(
+            tailRuns.map(async (r) => {
+              if (r.candidate.failed || opts.signal?.aborted) return;
+              const outputs: string[] = [];
+              let allPassed = true;
+              for (const cmd of union) {
+                if (opts.signal?.aborted) break;
+                emit({ type: "candidate-verify", id: r.candidate.id, command: cmd });
+                const v = await runShellCommandBuffered({
+                  command: cmd,
+                  cwd: r.worktree,
+                  timeoutMs: 300_000,
+                  signal: opts.signal,
+                });
+                const out = [v.stdout, v.stderr].filter(Boolean).join("\n").trim();
+                const passed = v.exitCode === 0 && looksPassing(out);
+                allPassed = allPassed && passed;
+                outputs.push(`$ ${cmd}\n→ ${passed ? "PASS" : "FAIL"} (exit ${v.exitCode})\n${out}`);
+              }
+              if (outputs.length === 0) return;
+              r.candidate.testOutput = [r.candidate.testOutput, ...outputs].filter(Boolean).join("\n\n");
+              r.candidate.testsPassed = allPassed;
+            }),
+          );
+        }
+      }
+
+      if (opts.verifyCommand && !opts.signal?.aborted) {
+        await Promise.all(
+          tailRuns.map(async (r) => {
+            if (r.candidate.failed || opts.signal?.aborted) return;
+            emit({ type: "candidate-verify", id: r.candidate.id, command: opts.verifyCommand! });
+            const v = await runShellCommandBuffered({ command: opts.verifyCommand!, cwd: r.worktree, timeoutMs: 300_000 });
+            const testOutput = [v.stdout, v.stderr].filter(Boolean).join("\n").trim();
+            const testsPassed = v.exitCode === 0 && looksPassing(testOutput);
+            r.candidate.testOutput = testOutput;
+            r.candidate.testsPassed = testsPassed;
+          }),
+        );
+      }
+
+      // SELECT: decideSelection with consensus/single-passing/selector-needed/best-effort
+      const viable = candidates.filter((c) => !c.failed && (c.diff.trim() || c.testOutput));
+      emit({ type: "select-start", viable: viable.length });
+
+      const evidence: CandidateEvidence[] = candidates.map((c) => ({
+        index: candidates.indexOf(c),
+        diff: c.diff,
+        testsPassed: c.testsPassed ?? null,
+        evidenceScore: c.testsPassed === true ? 100 : c.testOutput ? 40 : 0,
+      }));
+
+      const decision = decideSelection(evidence);
+      const selectionMethod = decision.method;
+
+      let selection: SelectionResult;
+
+      if (decision.method === "consensus" || decision.method === "single-passing" || decision.method === "best-effort") {
+        const winnerId = candidates[decision.winner]!.id;
+        const ranking = candidates.map((c, idx) => ({
+          id: c.id,
+          score: idx === decision.winner ? 100 : 0,
+          note: idx === decision.winner ? decision.method : "not selected",
+        }));
+        selection = {
+          winnerId: winnerId,
+          reasoning: `Fork mode heuristic: ${selectionMethod}`,
+          ranking: ranking,
+          model: "heuristic",
+          fallback: true,
+          usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+        };
+      } else if (decision.method === "selector-needed") {
+        // Call selector only with passing candidates
+        const passingCandidates = candidates.filter((c) => decision.candidates.includes(candidates.indexOf(c)));
+        selection = await selectBestCandidate({
+          request: opts.prompt,
+          candidates: passingCandidates,
+          ai: opts.ai,
+          selectorModel: opts.selectorModel,
+          signal: opts.signal,
+        });
+      } else {
+        const unreachable: never = decision;
+        throw new Error(`Unreachable decideSelection method: ${unreachable}`);
+      }
+
+      emit({
+        type: "select-done",
+        winnerId: selection.winnerId,
+        reasoning: selection.reasoning,
+        ranking: selection.ranking,
+      });
+
+      const winner = candidates.find((c) => c.id === selection.winnerId) ?? null;
+      let appliedCandidate: Candidate | null = null;
+
+      // APPLY: Winner apply-with-fallback
+      const shouldApply = (opts.apply ?? true) && !opts.readOnly;
+      if (winner && shouldApply) {
+        const rankedIds = dedupe([winner.id, ...selection.ranking.map((r) => r.id)]);
+        let lastError = "";
+        let attempted = false;
+        for (const id of rankedIds) {
+          const candidate = candidates.find((c) => c.id === id);
+          if (!candidate || !candidate.diff.trim()) continue;
+          attempted = true;
+          const patchDir = await mkdtemp(join(tmpdir(), "oxagen-fork-patch-"));
+          try {
+            const patchFile = join(patchDir, "winner.patch");
+            await writeFile(patchFile, candidate.diff.endsWith("\n") ? candidate.diff : candidate.diff + "\n", "utf8");
+            const out = await git(["apply", "--3way", patchFile], opts.cwd);
+            if (/error|cannot apply|does not apply/i.test(out)) {
+              lastError = out || "git apply failed";
+              continue;
+            }
+            appliedCandidate = candidate;
+            break;
+          } finally {
+            await rm(patchDir, { recursive: true, force: true }).catch(() => {});
+          }
+        }
+        if (appliedCandidate) {
+          emit({ type: "applied", winnerId: appliedCandidate.id, changedFiles: appliedCandidate.changedFiles });
+        } else if (attempted) {
+          emit({ type: "apply-failed", winnerId: winner.id, error: lastError || "git apply failed" });
+        }
+      }
+
+      return {
+        winner: appliedCandidate ?? winner,
+        candidates,
+        selection,
+        mode: "fork",
+        forkTelemetry: {
+          trunkSteps,
+          hypothesesCount: snapshot.hypotheses.length,
+          fallbackToIndependent: false,
+          selectionMethod: selectionMethod,
+        },
+      };
+    } finally {
+      // Cleanup tail worktrees
+      await Promise.all(tailRuns.map((r) => git(["worktree", "remove", "--force", r.worktree], opts.cwd)));
+    }
+  } finally {
+    // Cleanup worktree base
+    await rm(worktreeBase, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/**
+ * Run independent mode: N complete isolated runs (the original best-of-N implementation).
+ */
+async function runIndependentMode(opts: BestOfNOptions): Promise<BestOfNResult> {
   const emit = opts.onEvent ?? (() => undefined);
   const n = Math.max(1, opts.candidates);
   // undefined ⇒ every candidate lets the engine apply its own default model.
@@ -461,7 +789,7 @@ export async function runBestOfN(opts: BestOfNOptions): Promise<BestOfNResult> {
       }
     }
 
-    return { winner: appliedCandidate ?? winner, candidates, selection };
+    return { winner: appliedCandidate ?? winner, candidates, selection, mode: "independent" };
   } finally {
     // Every candidate's worktree is cleaned up here — after selection and any
     // verifyAuto runs against them — regardless of which candidate's diff
@@ -469,4 +797,13 @@ export async function runBestOfN(opts: BestOfNOptions): Promise<BestOfNResult> {
     await Promise.all(runs.map((r) => git(["worktree", "remove", "--force", r.worktree], opts.cwd)));
     await rm(worktreeBase, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+/**
+ * Run best-of-N with delegated mode: 'fork' (cache-forked with snapshot) or
+ * 'independent' (N isolated runs). Default mode resolved from opts or env.
+ */
+export async function runBestOfN(opts: BestOfNOptions): Promise<BestOfNResult> {
+  const mode = resolveBestOfNMode(opts.mode);
+  return mode === "fork" ? runForkMode(opts) : runIndependentMode(opts);
 }
