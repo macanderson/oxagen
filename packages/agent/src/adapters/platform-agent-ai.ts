@@ -1,6 +1,7 @@
 import { selectModel, streamAgentReply, generateObjectFor } from "@oxagen/ai";
 import type { AgentAi, ModelRunArgs, ObjectRunArgs, ObjectRunResult } from "@oxagen/agent-engine";
 import type { CapabilityContext } from "@oxagen/oxagen";
+import type { Surface } from "@oxagen/telemetry";
 
 /**
  * Platform AgentAi adapter — routes all coding-engine LLM calls through
@@ -14,23 +15,35 @@ import type { CapabilityContext } from "@oxagen/oxagen";
  *
  * `stopWhen` (the engine's step cap) and `onError` are forwarded to `streamText`
  * via `streamAgentReply`, so the multi-step coding loop is bounded (no runaway
- * cost) and stream errors are captured. `onStepFinish` (tool-call trace events)
- * is not forwarded — it is unused by this sync capability; the engine's
- * file-edit / command / final-diff events still fire from the workspace tools.
+ * cost) and stream errors are captured. `abortSignal` is forwarded so a client
+ * disconnect / user cancel aborts the in-flight model call. `onStepFinish`
+ * (tool-call trace events) is not forwarded — it is unused by these surfaces;
+ * the engine's file-edit / command / final-diff events fire from workspace tools.
+ *
+ * NOTE — name twin: `apps/cli/src/agent/adapters/platform-agent-ai.ts` exports a
+ * DIFFERENT `createPlatformAgentAi` (an OpenAI-compatible `/v1/agent/llm` client
+ * with token auth, for the standalone CLI). This one is the in-kernel adapter
+ * (handlers + in-app chat route). Same name, different package, different shape —
+ * import the right one for your surface.
  *
  * @param ctx       CapabilityContext for the current request.
  * @param messageId UUID of the user message that initiated the turn — used as
  *                  `execution_step_id` in ClickHouse and `reference_id` in the
  *                  credit ledger.  Pass `ctx.messageId ?? ctx.requestId`.
+ * @param surface   Telemetry surface tag. Defaults to `"agent"` (the
+ *                  `agent.repo.edit` sync capability); the in-app chat route
+ *                  passes `"app"` so its usage attributes to the app surface,
+ *                  matching the pre-unification `streamAgentReply` telemetry.
  */
 export function createPlatformAgentAi(
   ctx: CapabilityContext,
   messageId: string,
+  surface: Surface = "agent",
 ): AgentAi {
   const telemetry = {
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
-    surface: "agent" as const,
+    surface,
     messageId,
   };
 
@@ -44,6 +57,7 @@ export function createPlatformAgentAi(
         effort: args.effort,
         stopWhen: args.stopWhen,
         onError: args.onError,
+        ...(args.abortSignal !== undefined ? { abortSignal: args.abortSignal } : {}),
         telemetry,
       });
     },
