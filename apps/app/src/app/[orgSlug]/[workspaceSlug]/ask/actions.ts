@@ -21,6 +21,7 @@ import { invoke } from "@oxagen/oxagen";
 import type { PlanStep } from "@/components/chat/stream-event-types";
 import type { BackgroundTaskSnapshot } from "@/components/chat/background-task-tray";
 import { getSessionOrRedirect } from "@/lib/session";
+import { assertWorkspaceMember } from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
 
 const FormSchema = z.object({
@@ -49,6 +50,11 @@ export async function sendMessageAction(
   | { ok: false; error: string }
 > {
   const session = await getSessionOrRedirect();
+  // invoke() from apps/app skips kernel IAM, and ctx.orgId/workspaceId arrive
+  // from the (client-controlled) action arguments — assert the caller actually
+  // belongs to this workspace or a session scoped to workspace A could send
+  // messages into (and bill) workspace B by passing its ids. notFound() on miss.
+  await assertWorkspaceMember(ctx.workspaceId, session.user.id);
   const raw = Object.fromEntries(formData);
   const parsed = FormSchema.safeParse({
     content: raw.content,
@@ -198,6 +204,7 @@ export async function resolveApprovalAction(
   decision: "approved" | "denied",
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSessionOrRedirect();
+  await assertWorkspaceMember(ctx.workspaceId, session.user.id);
   const parsed = agentApprovalResolve.input.safeParse({ approvalId, decision });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
@@ -221,6 +228,7 @@ export async function resolveConsentAction(
   grantAllTools: boolean,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSessionOrRedirect();
+  await assertWorkspaceMember(ctx.workspaceId, session.user.id);
   const parsed = agentMcpConsentResolve.input.safeParse({ approvalId, decision, grantAllTools });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
@@ -244,6 +252,7 @@ export async function resolvePlanAction(
   amendedSteps?: PlanStep[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSessionOrRedirect();
+  await assertWorkspaceMember(ctx.workspaceId, session.user.id);
   // The capability speaks `approve | deny | amend` (verb), the UI speaks
   // `approved | denied | amended` (past tense). Map between them.
   const verbMap: Record<typeof decision, "approve" | "deny" | "amend"> = {
@@ -284,6 +293,7 @@ export async function cancelBackgroundTaskAction(
   reason?: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await getSessionOrRedirect();
+  await assertWorkspaceMember(ctx.workspaceId, session.user.id);
   const parsed = agentTaskBackgroundCancel.input.safeParse({ taskId, reason });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
@@ -305,6 +315,7 @@ export async function readBackgroundTaskAction(
   taskId: string,
 ): Promise<BackgroundTaskSnapshot> {
   const session = await getSessionOrRedirect();
+  await assertWorkspaceMember(ctx.workspaceId, session.user.id);
   try {
     const parsed = agentTaskBackgroundRead.input.safeParse({ taskId });
     if (!parsed.success) {

@@ -283,6 +283,25 @@ type Events = {
     };
   };
 
+  // Batched variant of infer-features: same per-file payload, but consumed via
+  // Inngest batchEvents and submitted as one Anthropic Message Batch. Emitted by
+  // parse-file instead of infer-features when INGESTION_FEATURE_BATCH=1.
+  "ingestion/github.infer-features-batch": {
+    data: {
+      fileNaturalKey: string;
+      symbols: Array<{
+        name: string;
+        kind: string;
+        startLine: number;
+        endLine: number;
+        docComment?: string;
+      }>;
+      orgId: string;
+      workspaceId: string;
+      connectionId: string;
+    };
+  };
+
   // Infer application domains from the full repo file-path list and stamp
   // `domain` on SourceFile + SourceSymbol nodes in Neo4j. Triggered once
   // per initial sync (and per incremental re-sync) by the initial-sync function.
