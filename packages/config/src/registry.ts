@@ -1311,7 +1311,35 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     description:
       "When '0', disables whimsical CLI animations: the REPL status rail's cat-and-mouse " +
       "chase, and `oxagen init`'s space-invaders/OXAGEN-reveal loading animation (which " +
-      "falls back to plain progress lines instead). Any other value (or unset) keeps them on.",
+      "falls back to plain progress lines instead). Any other value (or unset) keeps them on. " +
+      "Legacy opt-out — prefer OXAGEN_CLI_MOTION / the REPL's /motion command; when set to " +
+      "'0' it maps to motion level 'reduced'.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_CLI_MOTION: {
+    group: "CLI",
+    description:
+      "TUI animation level override: 'full' (everything animates), 'reduced' (no " +
+      "space-invaders duel or prompt-bar border flash; thinking indicator stays), or 'off' " +
+      "(all animation off, including the thinking indicator). Beats the /motion choice " +
+      "persisted in ~/.config/oxagen/config.json; unset defers to that config, then " +
+      "the legacy OXAGEN_CLI_FUN=0 opt-out, then 'full'.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_PLAN_TIMEOUT_MS: {
+    group: "CLI",
+    description:
+      "Per-turn planner call timeout in milliseconds for the REPL's task-planning stage " +
+      "(plan-turn.ts). On expiry the turn degrades to the router-derived single-task " +
+      "fallback plan instead of hanging. Default 60000; a non-numeric value is ignored.",
     secret: false,
     clientExposed: false,
     services: [],
