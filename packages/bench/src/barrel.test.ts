@@ -11,7 +11,9 @@ vi.mock("@oxagen/telemetry", () => ({
 }));
 
 describe("index.ts barrel exports", () => {
-  it("exports the expected public symbols", async () => {
+  // The barrel transitively imports the whole package graph; on a loaded CI
+  // runner that first import can exceed vitest's 5s default (observed flake).
+  it("exports the expected public symbols", { timeout: 30_000 }, async () => {
     const mod = await import("./index");
     // Ingestion
     expect(typeof mod.ingestBenchResultsDir).toBe("function");

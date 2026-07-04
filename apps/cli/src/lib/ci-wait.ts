@@ -42,13 +42,24 @@ const defaultRunner: CommandRunner = (cmd, args, opts) =>
     execFile(
       cmd,
       args,
-      { cwd: opts.cwd, timeout: opts.timeoutMs, maxBuffer: 4 * 1024 * 1024 },
+      {
+        cwd: opts.cwd,
+        timeout: opts.timeoutMs,
+        maxBuffer: 4 * 1024 * 1024,
+        // A user shell exporting GH_FORCE_TTY / color config makes gh emit
+        // ANSI-colored "JSON" even when piped, which breaks JSON.parse and
+        // silently downgrades every probe to "not pending". Neutralize it.
+        env: { ...process.env, GH_FORCE_TTY: "", NO_COLOR: "1", CLICOLOR: "0", CLICOLOR_FORCE: "0" },
+      },
       (err, stdout) => {
         if (err) reject(err);
         else resolve(stdout);
       },
     );
   });
+
+/** Strip ANSI escape sequences — belt-and-braces for colorized gh output. */
+const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
 
 /** How long one probe call-out may take. Well under the guard window. */
 const PROBE_CALL_TIMEOUT_MS = 15_000;
@@ -83,7 +94,9 @@ export function createCiWaitProbe(
       ["pr", "view", "--json", "statusCheckRollup"],
       { cwd, timeoutMs: PROBE_CALL_TIMEOUT_MS },
     );
-    const parsed = JSON.parse(stdout) as { statusCheckRollup?: CheckRollupItem[] | null };
+    const parsed = JSON.parse(stdout.replace(ANSI_PATTERN, "")) as {
+      statusCheckRollup?: CheckRollupItem[] | null;
+    };
     return summarizeChecks(parsed.statusCheckRollup ?? []).state === "pending";
   }
 

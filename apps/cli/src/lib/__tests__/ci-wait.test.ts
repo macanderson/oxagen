@@ -78,6 +78,21 @@ describe("createCiWaitProbe", () => {
     await expect(probe2.probe()).resolves.toBe(false);
   });
 
+  it("parses ANSI-colorized gh output (GH_FORCE_TTY shells)", async () => {
+    // gh under a color-forcing shell wraps JSON in escape sequences; the probe
+    // must strip them or every call-out silently downgrades to "not pending".
+    const colorized: CommandRunner = vi
+      .fn()
+      .mockResolvedValue(
+        `\x1b[1;38m{\x1b[m\x1b[1;34m"statusCheckRollup"\x1b[m\x1b[1;38m:\x1b[m ` +
+          `\x1b[1;38m[\x1b[m\x1b[1;38m{\x1b[m\x1b[1;34m"state"\x1b[m\x1b[1;38m:\x1b[m ` +
+          `\x1b[32m"PENDING"\x1b[m\x1b[1;38m}\x1b[m\x1b[1;38m]\x1b[m\x1b[1;38m}\x1b[m`,
+      );
+    const probe = createCiWaitProbe("/repo", { run: colorized });
+    probe.noteToolCall("bash", { command: "gh run watch" });
+    await expect(probe.probe()).resolves.toBe(true);
+  });
+
   it("passes cwd and a bounded timeout to the runner", async () => {
     const run = vi.fn().mockResolvedValue(rollup([{ state: "PENDING" }]));
     const probe = createCiWaitProbe("/some/repo", { run });
