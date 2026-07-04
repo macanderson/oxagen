@@ -26,7 +26,7 @@ export const graphNodeLabelAdd = registerCapability({
   // Agent + ingestion primitive. Not on api/mcp/cli surfaces yet — keep the
   // surface set truthful so the route/tool parity guards hold.
   surfaces: ["agent"] as const,
-  layers: ["schema", "unit"],
+  layers: ["schema", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "low", category: "graph" },
   sensitivity: "medium",

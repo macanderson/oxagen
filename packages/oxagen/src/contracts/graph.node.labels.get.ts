@@ -12,7 +12,7 @@ export const graphNodeLabelsGet = registerCapability({
   description: "Read a node's full label set.",
   mode: "sync",
   surfaces: ["agent"] as const,
-  layers: ["schema", "unit"],
+  layers: ["schema", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "graph" },
   sensitivity: "low",

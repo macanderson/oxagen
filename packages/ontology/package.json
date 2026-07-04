@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
+    "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "neo4j-driver": "5.28.3"
   },

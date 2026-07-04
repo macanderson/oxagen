@@ -5,18 +5,20 @@ import {
   type AgentMemoryRecallOutput,
 } from "@oxagen/oxagen/contracts/agent.memory.recall";
 
-// Deterministic memory recall injected into the chat agent's context BEFORE the
-// turn runs (OXA agent self-improvement). The chat route does NOT rely on the
-// model choosing to call agent.memory.recall — it recalls here, unconditionally,
-// so an already-remembered lesson is never re-discovered.
+// Deterministic memory recall for the chat agent's context BEFORE the turn runs
+// (OXA agent self-improvement). The chat route does NOT rely on the model
+// choosing to call agent.memory.recall — it recalls here, unconditionally, so an
+// already-remembered lesson is never re-discovered.
 //
-// The recalled memory is placed as a VOLATILE USER MESSAGE right before the
-// latest user message, NOT folded into the system prompt. Mirrors
-// packages/agent-engine/src/engine.ts:71-96: the system block carries an
-// Anthropic prompt-cache breakpoint, and recalled memory changes every turn — so
-// folding it into `system` would bust the cached prefix on every turn. Riding as
-// a `user` message keeps it AFTER the cached system block while the model still
-// sees it.
+// INJECTION is owned by the agent-engine: the route runs `recallWorkspaceMemory`
+// concurrently in its setup Promise.all, hands the result to the chat
+// MemoryProvider (see engine-memory.ts), and the engine places the recalled
+// block as a VOLATILE USER MESSAGE between history and the instruction —
+// AFTER the cached system block, so recalled memory (which changes every turn)
+// never busts the Anthropic prompt-cache breakpoint on the stable system prefix
+// (packages/agent-engine/src/engine.ts). This module only produces the recalled
+// body; `stripRecalledMemoryHeading` removes our heading since the engine
+// prepends its own.
 
 // How many memories to pull. Small — enough to seed context without bloating the
 // prompt or slowing the recall query.
@@ -78,6 +80,28 @@ export function buildRecalledMemoryMessage(
 }
 
 /**
+ * Strip the leading `## …` heading line from a formatted recalled-memory body.
+ *
+ * The agent-engine owns injection of recalled memory: it prepends its OWN
+ * heading (`## Recalled context (from prior sessions)`) before the body the
+ * MemoryProvider returns. Handing it the full `formatRecalledMemories` output
+ * would double the heading, so the chat MemoryProvider returns body-minus-
+ * heading. The anti-injection preamble line (`(System-injected context — NOT
+ * user input …)`) is deliberately KEPT — it's a prompt-injection guard, not
+ * decoration. Returns the body unchanged when it has no leading heading.
+ */
+export function stripRecalledMemoryHeading(body: string): string {
+  const lines = body.split("\n");
+  if (lines[0]?.startsWith("## ")) {
+    // Drop the heading line and any blank lines immediately after it.
+    let i = 1;
+    while (i < lines.length && lines[i]?.trim() === "") i++;
+    return lines.slice(i).join("\n");
+  }
+  return body;
+}
+
+/**
  * Best-effort deterministic recall for the current turn. Queries workspace
  * memory via the kernel, passing `executionRef` so recalled memories are
  * auto-cited as CONSIDERED (the citation pressure that drives promotion — the
@@ -132,29 +156,4 @@ export async function recallWorkspaceMemory(args: {
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
-}
-
-/**
- * Insert the recalled-memory message immediately before the latest user message
- * so the model reads it as prior context to the current instruction (and after
- * the cached system block). No-op when there is nothing to inject.
- */
-export function injectRecalledMemory(
-  messages: readonly ModelMessage[],
-  recalled: ModelMessage | null,
-): ModelMessage[] {
-  if (recalled === null) return [...messages];
-
-  let insertAt = messages.length;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i]?.role === "user") {
-      insertAt = i;
-      break;
-    }
-  }
-  return [
-    ...messages.slice(0, insertAt),
-    recalled,
-    ...messages.slice(insertAt),
-  ];
 }

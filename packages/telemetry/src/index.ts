@@ -1,11 +1,25 @@
 export * from "./clickhouse";
 export * from "./client";
+export * from "./idempotency";
+export {
+  CircuitBreaker,
+  CircuitOpenError,
+  isCircuitOpenError,
+  getBreaker,
+  __resetBreakerRegistry,
+  type BreakerState,
+  type BreakerTransition,
+  type CircuitBreakerOptions,
+} from "./circuit-breaker";
+export { breakerEnvConfig, type BreakerThresholds } from "./breaker-config";
+export { neo4jBreaker, stripeBreaker } from "./breaker-clients";
 export { migrate as migrateClickhouse } from "./migrate";
 export * from "./security";
 export * from "./skill-telemetry";
 export * from "./usage-analytics";
 export * from "./usage-events";
 export { chInsert, chSelect } from "./tenant";
+export * from "./eval-item-results";
 export {
   initTracer,
   shutdownTracer,

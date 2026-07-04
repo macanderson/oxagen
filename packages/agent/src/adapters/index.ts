@@ -5,3 +5,4 @@ export { createClickHouseTraceStore } from "./trace-store";
 export type { TraceStoreArgs } from "./trace-store";
 export { createGraphSyncAdapter } from "./graph-sync";
 export type { GraphSyncAdapterArgs } from "./graph-sync";
+export { createPlatformAgentAi } from "./platform-agent-ai";

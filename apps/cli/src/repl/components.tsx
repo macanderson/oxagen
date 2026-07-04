@@ -761,7 +761,10 @@ export function ApprovalPrompt({
 
 // ── Pipeline stage badge ────────────────────────────────────────────────────
 
-const STAGE_GLYPH: Record<StageKind, string> = {
+// Exported (not module-private) so a test can assert these Record<StageKind, ...>
+// maps stay exhaustive as the canonical StageKind union (from @oxagen/agent-engine,
+// re-exported via ../agent/trace.js) evolves — see stage-kind-exhaustive.test.tsx.
+export const STAGE_GLYPH: Record<StageKind, string> = {
   evaluate: "◇",
   plan: "☰",
   enhance: "◆",
@@ -772,7 +775,7 @@ const STAGE_GLYPH: Record<StageKind, string> = {
   complete: "✓",
 };
 
-const STAGE_COLOR: Record<StageKind, string> = {
+export const STAGE_COLOR: Record<StageKind, string> = {
   evaluate: "#A78BFA",
   plan: "#A78BFA",
   enhance: "#A78BFA",
@@ -807,7 +810,7 @@ export function StageBadge({ stage }: { stage: StageEvent }): React.ReactElement
 }
 
 /** Title-cased chip label for each pipeline stage. */
-const STAGE_LABEL: Record<StageKind, string> = {
+export const STAGE_LABEL: Record<StageKind, string> = {
   evaluate: "Evaluate",
   plan: "Plan",
   enhance: "Enhance",

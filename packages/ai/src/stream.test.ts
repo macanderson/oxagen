@@ -113,6 +113,19 @@ describe("streamAgentReply telemetry (@oxagen/ai)", () => {
     expect(arg.temperature).toBe(0.7);
   });
 
+  it("forwards abortSignal verbatim to streamText when supplied", () => {
+    const controller = new AbortController();
+    streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY, abortSignal: controller.signal });
+    const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg.abortSignal).toBe(controller.signal);
+  });
+
+  it("omits abortSignal when not supplied (SDK default: no cancellation)", () => {
+    streamAgentReply({ messages: MESSAGES, telemetry: TELEMETRY });
+    const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect("abortSignal" in arg).toBe(false);
+  });
+
   it("prepends the system prompt as an Anthropic-cacheable system message", () => {
     streamAgentReply({ messages: MESSAGES, system: "You are Oxagen.", telemetry: TELEMETRY });
     const arg = mocks.streamText.mock.calls[0]?.[0] as Record<string, unknown>;

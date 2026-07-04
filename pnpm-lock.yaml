@@ -186,6 +186,9 @@ importers:
       '@oxagen/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@oxagen/agent-engine':
+        specifier: workspace:*
+        version: link:../../packages/agent-engine
       '@oxagen/ai':
         specifier: workspace:*
         version: link:../../packages/ai
@@ -1411,6 +1414,9 @@ importers:
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
+      '@oxagen/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
       '@oxagen/tenancy':
         specifier: workspace:*
         version: link:../tenancy
