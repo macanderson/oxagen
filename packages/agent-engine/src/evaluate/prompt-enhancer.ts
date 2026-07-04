@@ -214,7 +214,11 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
   let localizedFiles: string[] = [];
   if (!localizeFlagOff && codeGraph) {
     try {
-      const locMap = await localize(prompt, codeGraph);
+      // Suppress the localizer's own semantic fallback: the code-graph
+      // retrieval below owns the "resolved enough / go semantic" decision with
+      // its own gate. Running a second, differently-thresholded semantic query
+      // here would surface files the enhancer deliberately withheld.
+      const locMap = await localize(prompt, codeGraph, { semanticFallback: false });
       if (locMap.renderedBlock.length > 0) {
         sections.push(locMap.renderedBlock);
         hasLocalization = true;
