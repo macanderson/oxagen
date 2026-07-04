@@ -61,7 +61,6 @@ beforeAll(async () => {
     dbUp = true;
     await cleanup();
   } catch (err) {
-    // eslint-disable-next-line no-console -- surfaced only when the local DB probe fails
     console.error("lease.integration: local Postgres unreachable — skipping:", err instanceof Error ? err.message : err);
     dbUp = false;
   }
