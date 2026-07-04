@@ -104,7 +104,12 @@ export function sha256Hex(input: string): string {
  * call shape yields a different key, so a hit is only ever a byte-identical
  * request within one tenant.
  */
-export function buildCacheKey(ctx: Pick<CacheContext, "promptHash" | "model" | "surface" | "shapeHash">): string {
+export function buildCacheKey(ctx: {
+  promptHash: string;
+  model: string;
+  surface: string;
+  shapeHash: string;
+}): string {
   return sha256Hex([ctx.promptHash, ctx.model, ctx.surface, ctx.shapeHash].join("|"));
 }
 
