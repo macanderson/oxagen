@@ -1,7 +1,7 @@
 // Reconstructs the shell environment for `bench/{swe-bench,terminal-bench}/run.sh`
 // from a stored BenchReplayConfig JSON blob (bench.benchmark_run(_result).config).
 // Pure mapping — no process/env/child_process access here; the caller (the
-// `oxagen bench replay` CLI command) decides whether to print or execute it.
+// internal bench replay command, commands.ts) decides whether to print or execute it.
 
 import type { BenchReplayConfig, BenchType } from "./types";
 

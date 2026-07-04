@@ -1,4 +1,4 @@
--- 0018_bench_schema.sql
+-- 0001_bench_schema.sql
 --
 -- High-resolution benchmark storage: a dedicated `bench` database, separate
 -- from the default CLICKHOUSE_DATABASE, so a bench-heavy retention/backup
@@ -10,7 +10,7 @@
 -- denormalized metrics/labels map, on purpose light on detail. `bench` keeps
 -- full per-task and per-candidate fidelity — a secret-free config snapshot,
 -- tool-call breakdowns, best-of-N candidate patches — so any one run can be
--- inspected or replayed exactly (`oxagen bench replay <public_id>`), which
+-- inspected or replayed exactly (the internal bench replay command by public_id), which
 -- the denormalized eval shape cannot support. The two are complementary, not
 -- duplicative: ingest into both when you want the trend AND the detail.
 --
@@ -19,7 +19,7 @@
 --                                invocation across N tasks).
 --   bench.benchmark_run_result  one row per task/instance within a run. This
 --                                is what `public_id` ("#2984") addresses for
---                                `oxagen bench replay`.
+--                                the internal bench replay command.
 --   bench.benchmark_candidate   one row per best-of-N candidate within a
 --                                result. Addressed via its parent's
 --                                (run_public_id, result_public_id) plus its
@@ -32,7 +32,7 @@
 -- monotonic counter assigned at ingest time as max(public_id)+1 — ClickHouse
 -- has no native autoincrement. It is a GLOBAL counter per table (not scoped
 -- per bench_type), so "replay #2984" is never ambiguous. See
--- packages/telemetry/src/bench/ingest.ts (nextPublicId). Best-effort unique
+-- packages/bench/src/ingest.ts (nextPublicId). Best-effort unique
 -- under concurrent ingestion, same documented tradeoff as
 -- audit_events.chain_hash in clickhouse.ts — ingestion is expected to run
 -- serially (backfill script / CI job), so this is acceptable.
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS bench.benchmark_run (
   -- pipeline/verify flags, effort, evaluator/advisor slugs, revise rounds,
   -- task_ids, N_CONCURRENT, bundle git_sha. Env var keys are referenced BY
   -- NAME only — a value is never written here — so this column is always
-  -- safe to read, log, or display. `oxagen bench replay` reconstructs the
+  -- safe to read, log, or display. the internal bench replay command reconstructs the
   -- run env directly from this JSON.
   config String CODEC(ZSTD(3)),
 
@@ -114,7 +114,7 @@ ORDER BY (bench_type, public_id);
 CREATE TABLE IF NOT EXISTS bench.benchmark_run_result (
   id UUID DEFAULT generateUUIDv4(),
 
-  -- Human-friendly monotonic "#id" — the identifier `oxagen bench replay`
+  -- Human-friendly monotonic "#id" — the identifier the internal bench replay command
   -- takes. Global counter across the whole table, independent of
   -- run_public_id/bench_type, so "replay #2984" never needs disambiguation.
   public_id UInt64,
