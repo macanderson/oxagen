@@ -18,6 +18,8 @@ The one-hop neighborhood of a node — a focused, cheap traversal primitive (dep
 | `edgeTypes` | string[] | no | Relationship type(s) to include; omit to include all types |
 | `direction` | `"out" \| "in" \| "both"` | no | Which neighbors to return relative to the node (default `both`) |
 | `limit` | integer | no | Maximum neighbors to return, 1–500 (default 100) |
+| `asOf` | string (ISO-8601) | no | **Valid time** — include only edges true in the world at this instant. Omit for now. |
+| `asKnownAt` | string (ISO-8601) | no | **Transaction time** — include only edges recorded/known by this instant. Omit for now. |
 
 ## Output
 | Field | Type | Description |
@@ -27,6 +29,8 @@ The one-hop neighborhood of a node — a focused, cheap traversal primitive (dep
 | `neighbors` | object[] | Directly connected nodes |
 | `neighbors[].edgeType` | string | Relationship type connecting the node to this neighbor |
 | `neighbors[].direction` | `"out" \| "in"` | `out` if the edge points from the node to the neighbor; `in` otherwise |
+| `neighbors[].validFrom` / `.validTo` | string \| null | **Valid time** of the connecting edge (`validTo` null ⇒ still true) |
+| `neighbors[].recordedAt` / `.invalidatedAt` | string \| null | **Transaction time** of the connecting edge (`invalidatedAt` null ⇒ still known) |
 | `truncated` | boolean | True when the result was capped by `limit` and more neighbors exist |
 
 ## Example

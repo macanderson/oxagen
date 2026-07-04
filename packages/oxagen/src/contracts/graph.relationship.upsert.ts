@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
+import { observedAtField, supersedeField } from "../lib/temporal-query";
 
 // Re-export so handlers (which import from `@oxagen/oxagen/contracts/*`, the only
 // oxagen subpath exposed to them) can share the single lexical Cypher guard.
@@ -32,12 +33,18 @@ export const graphRelationshipUpsert = registerCapability({
       .record(z.string(), z.string())
       .optional()
       .describe("Optional string key-value metadata"),
+    observedAt: observedAtField,
+    supersede: supersedeField,
   }),
   output: z.object({
     relationshipId: z
       .string()
       .describe("Composite identifier: fromNodeId:relationshipType:toNodeId"),
     created: z.boolean(),
+    superseded: z
+      .number()
+      .default(0)
+      .describe("Count of prior open edges closed by supersession (0 when supersede=false)"),
   }),
 });
 

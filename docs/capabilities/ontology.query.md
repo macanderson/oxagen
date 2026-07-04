@@ -19,6 +19,8 @@ Typed multi-hop traversal over the knowledge graph. Unlike `graph.cypher`, the c
 | `direction` | `"out" \| "in" \| "both"` | no | Direction to traverse (default `out`) |
 | `maxDepth` | integer | no | Maximum hop distance, 1–5 (default 2) |
 | `limit` | integer | no | Maximum reachable nodes to return, 1–500 (default 100) |
+| `asOf` | string (ISO-8601) | no | **Valid time** — traverse only edges true in the world at this instant. Omit for now (currently-valid facts). |
+| `asKnownAt` | string (ISO-8601) | no | **Transaction time** — traverse using only what was recorded/known by this instant. Omit for now (currently-known facts). |
 
 ## Output
 | Field | Type | Description |
@@ -27,6 +29,8 @@ Typed multi-hop traversal over the knowledge graph. Unlike `graph.cypher`, the c
 | `nodes` | object[] | Reachable nodes including the start node (depth 0), deduplicated by `nodeId` |
 | `nodes[].depth` | integer | Hop distance from the start node (0 = start node) |
 | `edges` | object[] | Edges traversed between the returned nodes (`fromNodeId`, `toNodeId`, `edgeType`) |
+| `edges[].validFrom` / `.validTo` | string \| null | **Valid time** of the edge — when the fact became / stopped being true in the world (`validTo` null ⇒ still true) |
+| `edges[].recordedAt` / `.invalidatedAt` | string \| null | **Transaction time** — when the edge was recorded / retracted (`invalidatedAt` null ⇒ still known) |
 | `truncated` | boolean | True when the result was capped by `limit` and more nodes were reachable |
 
 ## Example

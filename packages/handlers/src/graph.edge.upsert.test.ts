@@ -177,3 +177,90 @@ describe("graphEdgeUpsertHandler — error paths", () => {
     expect(mocks.close).toHaveBeenCalled();
   });
 });
+
+// ── bi-temporal validity + supersession ───────────────────────────────────────
+
+function makeUpsertRecord(wasCreated: boolean) {
+  return makeRecord(wasCreated);
+}
+function makeCloseRecord(closed: number) {
+  return { records: [{ get: (k: string) => (k === "closed" ? closed : null) }] };
+}
+
+describe("graphEdgeUpsertHandler — bi-temporal validity stamping", () => {
+  it("ON CREATE stamps validFrom/recordedAt with open bounds; ON MATCH reopens", async () => {
+    await graphEdgeUpsertHandler(
+      { fromNodeId: FROM, toNodeId: TO, relationshipType: "EMPLOYS" },
+      CTX,
+    );
+    const cypher = mocks.run.mock.calls[0]?.[0] as string;
+    // ON CREATE: valid-time + transaction-time start, open upper bounds.
+    expect(cypher).toContain("r.validFrom = coalesce(datetime($validFrom), datetime())");
+    expect(cypher).toContain("r.recordedAt = datetime()");
+    expect(cypher).toMatch(/ON CREATE SET[\s\S]*r.validTo = null/);
+    expect(cypher).toMatch(/ON CREATE SET[\s\S]*r.invalidatedAt = null/);
+    // ON MATCH: re-assert (reopen) while preserving original lower bounds.
+    expect(cypher).toContain("r.validFrom = coalesce(r.validFrom, datetime($validFrom), datetime())");
+    expect(cypher).toMatch(/ON MATCH SET[\s\S]*r.invalidatedAt = null/);
+  });
+
+  it("threads observedAt through as the $validFrom param", async () => {
+    await graphEdgeUpsertHandler(
+      { fromNodeId: FROM, toNodeId: TO, relationshipType: "EMPLOYS", observedAt: "2020-05-01T00:00:00.000Z" },
+      CTX,
+    );
+    const params = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.validFrom).toBe("2020-05-01T00:00:00.000Z");
+  });
+
+  it("passes validFrom=null when observedAt omitted (Cypher falls back to now)", async () => {
+    await graphEdgeUpsertHandler(
+      { fromNodeId: FROM, toNodeId: TO, relationshipType: "EMPLOYS" },
+      CTX,
+    );
+    const params = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.validFrom).toBeNull();
+  });
+
+  it("does not supersede by default — one query, superseded=0", async () => {
+    const result = await graphEdgeUpsertHandler(
+      { fromNodeId: FROM, toNodeId: TO, relationshipType: "EMPLOYS" },
+      CTX,
+    );
+    expect(mocks.run).toHaveBeenCalledTimes(1);
+    expect(result.superseded).toBe(0);
+  });
+});
+
+describe("graphEdgeUpsertHandler — supersession (opt-in)", () => {
+  it("closes other open edges of the same type from the source before upserting", async () => {
+    // call[0] = supersede-close (returns closed count); call[1] = upsert (created).
+    mocks.run.mockResolvedValueOnce(makeCloseRecord(2));
+    mocks.run.mockResolvedValueOnce(makeUpsertRecord(true));
+
+    const result = await graphEdgeUpsertHandler(
+      { fromNodeId: FROM, toNodeId: TO, relationshipType: "EMPLOYS", supersede: true },
+      CTX,
+    );
+
+    expect(mocks.run).toHaveBeenCalledTimes(2);
+    const closeCypher = mocks.run.mock.calls[0]?.[0] as string;
+    // Closes only OTHER open targets — never deletes, never touches the new target.
+    expect(closeCypher).toContain("other.publicId <> $toNodeId");
+    expect(closeCypher).toContain("old.validTo IS NULL AND old.invalidatedAt IS NULL");
+    expect(closeCypher).toContain("old.validTo = coalesce(old.validTo, datetime($closedAt))");
+    expect(closeCypher).not.toMatch(/DELETE/i);
+    expect(result.superseded).toBe(2);
+    expect(result.created).toBe(true);
+  });
+
+  it("reports superseded=0 when no conflicting edges exist", async () => {
+    mocks.run.mockResolvedValueOnce(makeCloseRecord(0));
+    mocks.run.mockResolvedValueOnce(makeUpsertRecord(true));
+    const result = await graphEdgeUpsertHandler(
+      { fromNodeId: FROM, toNodeId: TO, relationshipType: "EMPLOYS", supersede: true },
+      CTX,
+    );
+    expect(result.superseded).toBe(0);
+  });
+});
