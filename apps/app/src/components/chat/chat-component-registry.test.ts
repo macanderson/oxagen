@@ -74,6 +74,33 @@ describe("CHAT_COMPONENTS — config-derived completeness", () => {
     expect(CHAT_COMPONENTS).toHaveProperty("connection-create-inline");
   });
 
+  it("contains 'code-diff' as a registered componentId", () => {
+    expect(CHAT_COMPONENTS).toHaveProperty("code-diff");
+  });
+
+  it("'code-diff' renderer is defined (not null/undefined)", () => {
+    expect(CHAT_COMPONENTS["code-diff"]).toBeDefined();
+    expect(CHAT_COMPONENTS["code-diff"]).not.toBeNull();
+  });
+
+  it("contains 'terminal-trace' as a registered componentId", () => {
+    expect(CHAT_COMPONENTS).toHaveProperty("terminal-trace");
+  });
+
+  it("'terminal-trace' renderer is defined (not null/undefined)", () => {
+    expect(CHAT_COMPONENTS["terminal-trace"]).toBeDefined();
+    expect(CHAT_COMPONENTS["terminal-trace"]).not.toBeNull();
+  });
+
+  it("contains 'file-tree' as a registered componentId", () => {
+    expect(CHAT_COMPONENTS).toHaveProperty("file-tree");
+  });
+
+  it("'file-tree' renderer is defined (not null/undefined)", () => {
+    expect(CHAT_COMPONENTS["file-tree"]).toBeDefined();
+    expect(CHAT_COMPONENTS["file-tree"]).not.toBeNull();
+  });
+
   it("does NOT contain an unregistered componentId 'unknown-widget'", () => {
     expect(CHAT_COMPONENTS).not.toHaveProperty("unknown-widget");
   });

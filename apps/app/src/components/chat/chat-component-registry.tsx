@@ -30,6 +30,9 @@ type AnyLazy = LazyExoticComponent<(props: Record<string, unknown>) => React.Rea
  *   "file-attachment"          — renders a generated document/spreadsheet/pdf/archive asset card
  *   "html-artifact"            — renders model-generated HTML in a sandboxed iframe
  *   "connection-create-inline" — renders an inline GitHub (or fallback) connection wizard card
+ *   "code-diff"                — renders unified-diff file patches from a coding-agent action (agent.repo.edit, repo.file.put)
+ *   "terminal-trace"           — renders long agent.sandbox.exec / agent.code.execute shell output as an ANSI-aware scrollback
+ *   "file-tree"                — renders a flat workspace path list (agent.sandbox.files.list) as a collapsible directory tree
  */
 /**
  * Emit a structured warning when a componentId arrives with no registered
@@ -177,5 +180,16 @@ export const CHAT_COMPONENTS = {
   // Schema label approval — lets the user accept/dismiss an AI-proposed label in chat.
   "schema-label-approval": lazy(
     () => import("@/components/knowledge/schema-builder/registry-components/schema-label-approval"),
+  ),
+  // Coding-agent artifact renderers — multimodal coding-agent UX (agent.repo.edit,
+  // repo.file.put, agent.sandbox.exec, agent.sandbox.files.list).
+  "code-diff": lazy(
+    () => import("@/components/chat/registry-components/code-diff-card"),
+  ),
+  "terminal-trace": lazy(
+    () => import("@/components/chat/registry-components/terminal-trace-card"),
+  ),
+  "file-tree": lazy(
+    () => import("@/components/chat/registry-components/file-tree-card"),
   ),
 } as unknown as Record<string, AnyLazy>;
