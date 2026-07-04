@@ -113,7 +113,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   //   transitive through source_connections. oauth_accounts is org-level
   //   (encrypted OAuth tokens + PII, shared across workspaces).
   { table: "ingestion.source_connections", policyClass: "standard" },
-  { table: "ingestion.entity_types", policyClass: "standard" },
   { table: "ingestion.entity_type_mappings", policyClass: "standard" },
   { table: "ingestion.setup_suggestions", policyClass: "standard" },
   { table: "ingestion.deletion_jobs", policyClass: "standard" },

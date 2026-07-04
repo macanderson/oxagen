@@ -18,13 +18,11 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "better-auth": "1.6.11",
+    "@oxagen/config": "workspace:*",
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",
-    "@oxagen/config": "workspace:*",
     "@oxagen/notifications": "workspace:*",
-    "@oxagen/telemetry": "workspace:*",
-    "@oxagen/tenancy": "workspace:*",
+    "better-auth": "1.6.11",
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
