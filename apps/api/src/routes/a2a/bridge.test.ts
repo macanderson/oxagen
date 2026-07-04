@@ -48,6 +48,10 @@ function setStreamParts(parts: unknown[]): void {
 
 import { runA2ATask, messageText } from "./bridge";
 import type { A2ATaskRow } from "./task-store";
+import type {
+  A2AStatusUpdateEvent,
+  A2AArtifactUpdateEvent,
+} from "./protocol";
 
 const CTX: CapabilityContext = {
   orgId: "org_1",
@@ -167,11 +171,13 @@ describe("runA2ATask", () => {
       { type: "text-delta", text: "done" },
       { type: "finish", totalUsage: { inputTokens: 1, outputTokens: 1 } },
     ]);
-    const events: Array<{ kind: string; status?: { message?: { parts: { text: string }[] } } }> = [];
+    const events: Array<A2AStatusUpdateEvent | A2AArtifactUpdateEvent> = [];
     await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, onEvent: (e) => events.push(e) });
-    const heartbeat = events.find(
-      (e) => e.kind === "status-update" && e.status?.message?.parts?.[0]?.text?.includes("tool.cap"),
-    );
+    const heartbeat = events.find((e) => {
+      if (e.kind !== "status-update") return false;
+      const part = e.status.message?.parts[0];
+      return part?.kind === "text" && part.text.includes("tool.cap");
+    });
     expect(heartbeat).toBeDefined();
   });
 
