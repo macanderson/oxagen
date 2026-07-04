@@ -37,7 +37,10 @@ export async function insertEvalItemResults(
   rows: readonly EvalItemResultRow[],
 ): Promise<void> {
   if (rows.length === 0) return;
-  await chInsert("eval_item_results", rows as ReadonlyArray<Record<string, unknown>>);
+  await chInsert(
+    "eval_item_results",
+    rows as ReadonlyArray<unknown> as ReadonlyArray<Record<string, unknown>>,
+  );
 }
 
 /**

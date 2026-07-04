@@ -2106,6 +2106,161 @@
       }
     },
     {
+      "name": "eval-schema",
+      "file": "eval-schema.ts",
+      "domain": "unknown",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {}
+    },
+    {
+      "name": "eval.dataset.create",
+      "file": "eval.dataset.create.ts",
+      "domain": "eval",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "eval.dataset.from_traces",
+      "file": "eval.dataset.from_traces.ts",
+      "domain": "eval",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "eval.dataset.get",
+      "file": "eval.dataset.get.ts",
+      "domain": "eval",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "eval.dataset.item.add",
+      "file": "eval.dataset.item.add.ts",
+      "domain": "eval",
+      "mode": "batch",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "eval.dataset.list",
+      "file": "eval.dataset.list.ts",
+      "domain": "eval",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "eval.run.get",
+      "file": "eval.run.get.ts",
+      "domain": "eval",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "eval.run.start",
+      "file": "eval.run.start.ts",
+      "domain": "eval",
+      "mode": "async",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
+      "name": "eval.run.status",
+      "file": "eval.run.status.ts",
+      "domain": "eval",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "form.fill",
       "file": "form.fill.ts",
       "domain": "form",
