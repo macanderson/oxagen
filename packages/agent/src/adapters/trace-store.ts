@@ -2,8 +2,11 @@
  * ClickHouse TraceStore — records one "agent.coding.turn" event row per
  * completed coding run. Fire-and-forget; never throws.
  */
+import pino from "pino";
 import { insertEvents, type EventRow } from "@oxagen/telemetry";
 import type { TraceStore } from "@oxagen/agent-engine";
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.trace-store" } });
 
 export interface TraceStoreArgs {
   orgId: string;
@@ -44,7 +47,9 @@ export function createClickHouseTraceStore(args: TraceStoreArgs): TraceStore {
         }),
         emitted_at: new Date().toISOString(),
       };
-      void insertEvents([row]).catch(() => {});
+      void insertEvents([row]).catch((err) =>
+        logger.warn({ err, orgId: args.orgId }, "trace-store: insertEvents failed — turn event dropped"),
+      );
     },
   };
 }

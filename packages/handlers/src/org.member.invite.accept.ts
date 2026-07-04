@@ -65,7 +65,12 @@ export const orgMemberInviteAcceptHandler: CapabilityHandler<typeof orgMemberInv
         .update(schema.invitations)
         .set({ status: "expired", updatedAt: new Date(), updatedByUserId: ctx.userId })
         .where(eq(schema.invitations.id, invitation.id)),
-    ).catch(() => undefined);
+    ).catch((err) =>
+      logger.warn(
+        { err, invitationPublicId: input.invitationPublicId },
+        "invite.accept: failed to mark expired invitation — row remains pending",
+      ),
+    );
     throw new Error(`Invitation '${input.invitationPublicId}' has expired`);
   }
 

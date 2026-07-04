@@ -8,6 +8,12 @@
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { AgentAi, ObjectRunArgs, ObjectRunResult } from "@oxagen/agent-engine";
+
+// Mock the CLI debug channel so we can assert an onMetrics failure is surfaced
+// (not swallowed) while an aborted-turn usage rejection stays silent.
+const debugLogMock = vi.hoisted(() => vi.fn());
+vi.mock("../lib/debug-log.js", () => ({ debugLog: debugLogMock }));
+
 import { createMeteredAi } from "../metered-ai.js";
 import type { MetricsEvent } from "../metrics.js";
 import { AgentTimeoutError } from "../timeouts.js";
@@ -154,6 +160,58 @@ describe("createMeteredAi", () => {
     expect(models).toEqual(["eval/model", "judge/model", "worker/model"]);
     // Dropping any one path would leave < 3 events → this assertion fails.
     expect(events).toHaveLength(3);
+  });
+
+  it("logs when a stream's onMetrics throws — a real emit failure is NOT swallowed by the usage-rejection catch", async () => {
+    debugLogMock.mockClear();
+    const ai = createMeteredAi(makeFakeAi(), {
+      onMetrics: () => {
+        throw new Error("emit boom");
+      },
+    });
+
+    const result = ai.stream({
+      model: "anthropic/claude-opus-4",
+      system: "s",
+      messages: [],
+      tools: {},
+      stopWhen: (() => false) as never,
+    });
+    await result.usage;
+    await Promise.resolve();
+
+    const call = debugLogMock.mock.calls.find((c) => c[1] === "metrics.emit-failed");
+    expect(call).toBeDefined();
+    expect(call?.[0]).toBe("error");
+    expect((call?.[2] as { message: string }).message).toContain("emit boom");
+  });
+
+  it("stays silent (no debug log, no onMetrics) when a stream's usage promise rejects — aborted turn", async () => {
+    debugLogMock.mockClear();
+    const onMetrics = vi.fn();
+    const ai = createMeteredAi(
+      makeFakeAi({
+        stream: ((_args) =>
+          ({ usage: Promise.reject(new Error("aborted")) }) as unknown) as AgentAi["stream"],
+      }),
+      { onMetrics },
+    );
+
+    const result = ai.stream({
+      model: "anthropic/claude-opus-4",
+      system: "s",
+      messages: [],
+      tools: {},
+      stopWhen: (() => false) as never,
+    });
+    // Attach our own handler so the rejection is observed by the test without
+    // surfacing as unhandled; the wrapper attaches its own swallowing catch.
+    // `usage` is a PromiseLike, so adopt it via Promise.resolve before catching.
+    await Promise.resolve(result.usage).catch(() => {});
+    await Promise.resolve();
+
+    expect(onMetrics).not.toHaveBeenCalled();
+    expect(debugLogMock.mock.calls.find((c) => c[1] === "metrics.emit-failed")).toBeUndefined();
   });
 
   it("bounds a generateObject call per-call and retries on timeout", async () => {

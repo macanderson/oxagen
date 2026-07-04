@@ -668,8 +668,15 @@ export async function previewPlanChange(
     try {
       const customerId = await resolveCustomerId(orgId);
       card = await resolveDefaultCard(customerId);
-    } catch {
-      // No customer yet — no card on file.
+    } catch (err) {
+      // resolveCustomerId either returns a customer id or throws (there is no
+      // distinguishable "not found" signal — ensureStripeCustomer creates the
+      // customer or fails on a real Stripe error). So we can't cleanly separate
+      // the expected "no customer yet" case from an auth/outage/rate-limit
+      // incident. Log every caught error rather than silently claiming "no card
+      // on file" during an outage, but preserve the no-card fallback so the
+      // preview still renders.
+      logger.warn({ orgId, err }, "billing: plan-change preview card lookup failed — proceeding as no card");
     }
 
     const prorationDate = Math.floor(Date.now() / 1000);
