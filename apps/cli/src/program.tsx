@@ -449,6 +449,16 @@ export function buildProgram(): Command {
       await handleCost(merged);
     });
 
+  program
+    .command("trace")
+    .argument("<executionId>", "Public ID (aex_…) or UUID of the execution")
+    .description("Show an agent run as a span tree: steps, tool calls, and child executions")
+    .option("--json", "Output the raw trace as JSON", false)
+    .action(async (executionId: string, opts: { json?: boolean }) => {
+      const { handleTrace } = await import("./commands/trace.js");
+      await handleTrace(executionId, opts);
+    });
+
   // ── models: on-device runtime + coordinator selection ───────────────────────
 
   const models = program

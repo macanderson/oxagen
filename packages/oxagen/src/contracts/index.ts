@@ -40,7 +40,9 @@ import { agentTriggerCreate } from "./agent.trigger.create";
 import { agentTriggerUpdate } from "./agent.trigger.update";
 import { agentTriggerDelete } from "./agent.trigger.delete";
 import { agentTriggerList } from "./agent.trigger.list";
+import { agentExecutionList } from "./agent.execution.list";
 import { agentExecutionRecord } from "./agent.execution.record";
+import { agentTraceGet } from "./agent.trace.get";
 import { agentUiRender } from "./agent.ui.render";
 import { documentsGenerate } from "./documents.generate";
 import { documentsPdfCreate } from "./documents.pdf.create";
@@ -391,6 +393,7 @@ export {
   agentTriggerUpdate,
   agentTriggerDelete,
   agentTriggerList,
+  agentExecutionList,
   agentExecutionRecord,
   agentUiRender,
   documentsGenerate,
@@ -424,6 +427,7 @@ export {
   agentSubagentFanoutList,
   agentSubagentResultGet,
   agentSubagentSiblings,
+  agentTraceGet,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
@@ -706,6 +710,7 @@ export const contracts = [
   agentSubagentFanoutList,
   agentSubagentResultGet,
   agentSubagentSiblings,
+  agentTraceGet,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
@@ -787,6 +792,7 @@ export const contracts = [
   skillMetricsRead,
   skillCreate,
   skillEnable,
+  agentExecutionList,
   agentExecutionRecord,
   agentSubagentAggregate,
   agentSubagentDispatch,
