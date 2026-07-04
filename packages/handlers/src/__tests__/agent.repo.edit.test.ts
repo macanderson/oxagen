@@ -7,7 +7,9 @@
  *    predetermined data.
  *  - Mock @oxagen/agent-engine so runTurn (the full 6-stage pipeline) returns
  *    a fixed RunTurnResult without touching any LLM endpoint.
- *  - Mock ../lib/platform-agent-ai to avoid selectModel/AI Gateway env deps.
+ *  - Partial-mock @oxagen/agent/adapters to override createPlatformAgentAi
+ *    (avoids selectModel/AI Gateway env deps) while keeping the real
+ *    code-graph/memory/trace/graph-sync adapters.
  *  - Mock ../lib/github-token to inject a test token.
  *  - Assert the handler orchestrates these collaborators correctly and that it
  *    invokes the full pipeline (runTurn) rather than the bare loop
@@ -123,9 +125,14 @@ vi.mock("@oxagen/agent-engine", () => ({
   runTurn: mocks.runTurnFn,
 }));
 
-vi.mock("../lib/platform-agent-ai", () => ({
-  createPlatformAgentAi: mocks.createPlatformAgentAiFn,
-}));
+// createPlatformAgentAi moved into @oxagen/agent/adapters (shared with the
+// in-app chat route). Partial-mock the module so the other adapters resolve to
+// their real (construction-only, no-network) implementations while the AI port
+// stays a fake to avoid selectModel/AI Gateway env deps.
+vi.mock("@oxagen/agent/adapters", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@oxagen/agent/adapters")>();
+  return { ...actual, createPlatformAgentAi: mocks.createPlatformAgentAiFn };
+});
 
 vi.mock("../lib/github-token", () => ({
   resolveGitHubToken: vi.fn().mockResolvedValue("ghp_test_token"),

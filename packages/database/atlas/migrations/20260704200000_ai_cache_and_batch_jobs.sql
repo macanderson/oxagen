@@ -1,5 +1,13 @@
 -- ai.response_cache + ai.batch_jobs — AI-efficiency control plane.
 --
+-- NOTE: originally shipped as 20260704120000 (PR #560). That prefix collided
+-- with 20260704120000_two_factor.sql (PR #561) — atlas keys revisions by the
+-- numeric prefix, so a fresh apply recorded the version once and SILENTLY
+-- SKIPPED the second migration. Renamed to 20260704200000 (after
+-- connector_poll_health at 180000) to give it a distinct version, and made the
+-- DDL idempotent (CREATE ... IF NOT EXISTS) so it re-applies safely anywhere
+-- the old 120000 revision was recorded.
+--
 -- Purpose:
 --   response_cache — layered (exact + semantic) response cache for OPT-IN
 --     deterministic background LLM calls (title generation, classification,
@@ -21,7 +29,7 @@
 CREATE SCHEMA IF NOT EXISTS "ai";
 
 -- ── ai.response_cache ─────────────────────────────────────────────────────────
-CREATE TABLE "ai"."response_cache" (
+CREATE TABLE IF NOT EXISTS "ai"."response_cache" (
   "id" uuid NOT NULL DEFAULT COALESCE(
     CASE
       WHEN (to_regprocedure('public.uuid_generate_v7()'::text) IS NOT NULL) THEN public.uuid_generate_v7()
@@ -66,20 +74,20 @@ CREATE TABLE "ai"."response_cache" (
 );
 
 -- At most one live entry per (workspace, cache_key).
-CREATE UNIQUE INDEX "ai_response_cache_key_uniq"
+CREATE UNIQUE INDEX IF NOT EXISTS "ai_response_cache_key_uniq"
   ON "ai"."response_cache" ("org_id", "workspace_id", "cache_key")
   WHERE (deleted_at IS NULL);
 
 -- Semantic candidate scan.
-CREATE INDEX "ai_response_cache_candidate_idx"
+CREATE INDEX IF NOT EXISTS "ai_response_cache_candidate_idx"
   ON "ai"."response_cache" ("org_id", "workspace_id", "model", "surface");
 
 -- Expiry sweeper.
-CREATE INDEX "ai_response_cache_expires_idx"
+CREATE INDEX IF NOT EXISTS "ai_response_cache_expires_idx"
   ON "ai"."response_cache" ("expires_at");
 
 -- ── ai.batch_jobs ─────────────────────────────────────────────────────────────
-CREATE TABLE "ai"."batch_jobs" (
+CREATE TABLE IF NOT EXISTS "ai"."batch_jobs" (
   "id" uuid NOT NULL DEFAULT COALESCE(
     CASE
       WHEN (to_regprocedure('public.uuid_generate_v7()'::text) IS NOT NULL) THEN public.uuid_generate_v7()
@@ -117,13 +125,13 @@ CREATE TABLE "ai"."batch_jobs" (
     CHECK (status IN ('submitted', 'in_progress', 'ended', 'canceled', 'expired', 'failed'))
 );
 
-CREATE INDEX "ai_batch_jobs_org_idx"
+CREATE INDEX IF NOT EXISTS "ai_batch_jobs_org_idx"
   ON "ai"."batch_jobs" ("org_id", "workspace_id");
 
-CREATE INDEX "ai_batch_jobs_status_idx"
+CREATE INDEX IF NOT EXISTS "ai_batch_jobs_status_idx"
   ON "ai"."batch_jobs" ("org_id", "workspace_id", "status");
 
-CREATE UNIQUE INDEX "ai_batch_jobs_provider_batch_uniq"
+CREATE UNIQUE INDEX IF NOT EXISTS "ai_batch_jobs_provider_batch_uniq"
   ON "ai"."batch_jobs" ("provider_batch_id")
   WHERE (provider_batch_id IS NOT NULL AND deleted_at IS NULL);
 
