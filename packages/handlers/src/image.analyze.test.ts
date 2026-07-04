@@ -14,6 +14,7 @@ vi.mock("@oxagen/ai", () => ({
   // Prompt-registry wiring (the analysis instruction now resolves through the
   // registry so workspace overrides/append apply). Passthrough in tests.
   loadWorkspacePromptConfig: vi.fn(async () => ({})),
+  loadWorkspacePromptConfigSafe: vi.fn(async () => ({})),
   resolvePrompt: (a: { baseline: string }) => a.baseline,
   imageAnalyzePrompt: () => "analyze baseline",
 }));
