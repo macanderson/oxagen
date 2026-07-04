@@ -436,6 +436,9 @@ importers:
       '@oxagen/mcp-config':
         specifier: workspace:*
         version: link:../../packages/mcp-config
+      '@oxagen/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
       ai:
         specifier: 7.0.14
         version: 7.0.14(zod@3.25.76)

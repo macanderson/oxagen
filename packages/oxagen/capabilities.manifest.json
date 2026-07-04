@@ -323,10 +323,10 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
-        "mcp": false,
+        "api": true,
+        "mcp": true,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -341,10 +341,10 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
-        "mcp": false,
+        "api": true,
+        "mcp": true,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -377,10 +377,10 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
-        "mcp": false,
+        "api": true,
+        "mcp": true,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -508,10 +508,10 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
-        "mcp": false,
+        "api": true,
+        "mcp": true,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -526,10 +526,10 @@
       ],
       "layers": {
         "schema": true,
-        "api": false,
-        "mcp": false,
+        "api": true,
+        "mcp": true,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
