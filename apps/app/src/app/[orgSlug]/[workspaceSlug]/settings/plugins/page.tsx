@@ -3,6 +3,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
+import { logger } from "@oxagen/handlers/logger";
 import "@oxagen/handlers/register";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
@@ -45,6 +46,7 @@ export default async function WorkspacePluginsPage({ params }: PageProps) {
   );
 
   // Fetch workspace-scoped installed plugins.
+  let pluginsLoadError = false;
   const installedPlugins = await runInTenantScope(
     { orgId: org.id, workspaceId: ws.id },
     () =>
@@ -61,7 +63,16 @@ export default async function WorkspacePluginsPage({ params }: PageProps) {
           )
           .orderBy(schema.pluginInstalledPlugins.name),
       ),
-  ).catch(() => [] as (typeof schema.pluginInstalledPlugins.$inferSelect)[]);
+  ).catch((err) => {
+    // Non-fatal: render an empty list but surface a load-error notice so an
+    // RLS/DB failure doesn't look like "no plugins installed" to the user.
+    pluginsLoadError = true;
+    logger.error(
+      { err, orgSlug, workspaceSlug },
+      "plugins: installed-plugins read failed — rendering empty list with load-error notice",
+    );
+    return [] as (typeof schema.pluginInstalledPlugins.$inferSelect)[];
+  });
 
   // Fetch workspace-scoped registries via contract.
   const ctx = {
@@ -119,6 +130,7 @@ export default async function WorkspacePluginsPage({ params }: PageProps) {
       workspaceId={ws.id}
       initialPlugins={initialPlugins}
       initialRegistries={initialRegistries}
+      loadError={pluginsLoadError}
       docsBaseUrl={docsUrl()}
       installAction={installPlugin}
       installBulkAction={installBulkPlugin}

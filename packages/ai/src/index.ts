@@ -95,6 +95,7 @@ export {
   svgGeneratePrompt,
   imageAnalyzePrompt,
   loadWorkspacePromptConfig,
+  loadWorkspacePromptConfigSafe,
   normalizePromptConfig,
   enhancePromptIfInsufficient,
 } from "./prompts";

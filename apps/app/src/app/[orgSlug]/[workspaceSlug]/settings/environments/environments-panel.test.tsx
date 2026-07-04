@@ -145,6 +145,16 @@ vi.mock("@/components/ui/switch", () => ({
   ),
 }));
 
+vi.mock("@/components/ui/alert", () => ({
+  Alert: ({ children }: { children: React.ReactNode }) => (
+    <div role="alert">{children}</div>
+  ),
+  AlertTitle: ({ children }: { children: React.ReactNode }) => <h5>{children}</h5>,
+  AlertDescription: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+}));
+
 // Dialog mock: renders children only when open=true, wires onOpenChange to a
 // Close button so Cancel/close flows can be tested without relying on Escape.
 vi.mock("@/components/ui/dialog", () => ({
@@ -437,6 +447,18 @@ describe("EnvironmentsPanel", () => {
   it("renders 'No secrets yet' placeholder when secretKeys is empty", () => {
     render(<EnvironmentsPanel {...makeDefaultProps({ secretKeys: [] })} />);
     expect(screen.getByText(/No secrets yet/i)).toBeInTheDocument();
+  });
+
+  // Load-error notice: surfaced when the server-side read failed
+  it("renders a load-error notice when loadError is true", () => {
+    render(<EnvironmentsPanel {...makeDefaultProps({ loadError: true })} />);
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByText(/couldn't load environments/i)).toBeInTheDocument();
+  });
+
+  it("does not render a load-error notice when loadError is false/absent", () => {
+    render(<EnvironmentsPanel {...makeDefaultProps()} />);
+    expect(screen.queryByText(/couldn't load environments/i)).not.toBeInTheDocument();
   });
 
   // Edge: environments bar shows "No environments yet." when empty
