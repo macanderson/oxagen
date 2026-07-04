@@ -1,5 +1,5 @@
 // Row shapes + shared types for the `bench` ClickHouse database
-// (packages/telemetry/src/migrations/0018_bench_schema.sql). See that
+// (packages/bench/migrations/0001_bench_schema.sql). See that
 // migration's header comment for how this relates to eval_runs/eval_results.
 
 /** Which Harbor harness produced a run. Open string — a new harness never needs a migration. */

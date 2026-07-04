@@ -1,18 +1,20 @@
 /**
- * `oxagen bench` — proves list/replay render correctly, --json is
- * machine-readable, and --run shells out to the right script with the right
- * env and reports its exit code. @oxagen/telemetry's bench.* queries and
- * node:child_process/node:fs are mocked so nothing touches a real database,
- * filesystem, or process.
+ * The internal bench list/replay commands — proves list/replay render
+ * correctly, --json is machine-readable, and --run shells out to the right
+ * script with the right env and reports its exit code. ./query and
+ * ./replay-env are mocked, plus node:child_process/node:fs, so nothing
+ * touches a real database, filesystem, or process.
  */
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
-import type { BenchmarkRunResultRow, BenchmarkRunRow } from "@oxagen/telemetry";
+import type { BenchmarkRunResultRow, BenchmarkRunRow } from "./types";
 
-vi.mock("@oxagen/telemetry", () => ({
+vi.mock("./query", () => ({
   listBenchResults: vi.fn(),
   getBenchResultByPublicId: vi.fn(),
   getBenchRunByPublicId: vi.fn(),
+}));
+vi.mock("./replay-env", () => ({
   buildReplayEnv: vi.fn(),
   formatEnvPrefix: vi.fn(),
   runScriptFor: vi.fn(),
@@ -20,15 +22,9 @@ vi.mock("@oxagen/telemetry", () => ({
 vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 vi.mock("node:fs", () => ({ existsSync: vi.fn() }));
 
-import { handleBenchList, handleBenchReplay } from "../bench.js";
-import {
-  buildReplayEnv,
-  formatEnvPrefix,
-  getBenchResultByPublicId,
-  getBenchRunByPublicId,
-  listBenchResults,
-  runScriptFor,
-} from "@oxagen/telemetry";
+import { handleBenchList, handleBenchReplay } from "./commands";
+import { getBenchResultByPublicId, getBenchRunByPublicId, listBenchResults } from "./query";
+import { buildReplayEnv, formatEnvPrefix, runScriptFor } from "./replay-env";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 
@@ -179,14 +175,14 @@ describe("handleBenchList", () => {
 describe("handleBenchReplay — validation and lookup", () => {
   it("errors on a missing public_id argument", async () => {
     await handleBenchReplay(undefined, {});
-    expect(stderr).toContain("Usage: oxagen bench replay");
+    expect(stderr).toContain("Usage:");
     expect(process.exitCode).toBe(1);
     expect(mockGetBenchResultByPublicId).not.toHaveBeenCalled();
   });
 
   it("errors on a non-numeric public_id argument", async () => {
     await handleBenchReplay("not-a-number", {});
-    expect(stderr).toContain("Usage: oxagen bench replay");
+    expect(stderr).toContain("Usage:");
     expect(process.exitCode).toBe(1);
   });
 

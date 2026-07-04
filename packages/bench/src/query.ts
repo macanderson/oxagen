@@ -1,10 +1,15 @@
-// Read-side queries for `oxagen bench list` / `oxagen bench replay`.
+// Read-side queries for the bench list/replay CLI.
 // ClickHouse serializes 64-bit integer columns (UInt64) as JSON strings to
 // avoid JS float-precision loss, so every row mapper below normalizes those
 // fields back to `number` — safe here since public_ids/token counts never
 // approach Number.MAX_SAFE_INTEGER (2^53-1).
+//
+// Goes through chBenchQuery (packages/telemetry/src/bench-client.ts), the
+// thin unscoped wrapper telemetry exposes for bench's non-tenant data — never
+// the raw `clickhouse()` client (OXA-1515's no-restricted-imports rule
+// forbids that outside the seam-owning packages).
 
-import { clickhouse } from "../clickhouse";
+import { chBenchQuery } from "@oxagen/telemetry/bench-client";
 import type { BenchmarkCandidateRow, BenchmarkRunResultRow, BenchmarkRunRow, BenchType } from "./types";
 
 type RawRow = Record<string, unknown>;
@@ -118,61 +123,53 @@ export interface ListBenchResultsOptions {
   limit?: number;
 }
 
-/** Most recent task results, newest `public_id` first — the source for `oxagen bench list`. */
+/** Most recent task results, newest `public_id` first — the source for the internal bench list command. */
 export async function listBenchResults(
   opts: ListBenchResultsOptions = {},
 ): Promise<BenchmarkRunResultRow[]> {
   const limit = Math.min(Math.max(opts.limit ?? 20, 1), 500);
   const whereClause = opts.benchType ? "WHERE bench_type = {benchType:String}" : "";
-  const result = await clickhouse().query({
-    query: `
+  const rows = await chBenchQuery<RawRow>(
+    `
       SELECT *
       FROM bench.benchmark_run_result FINAL
       ${whereClause}
       ORDER BY public_id DESC
       LIMIT {limit:UInt32}
     `,
-    query_params: { benchType: opts.benchType ?? "", limit },
-    format: "JSONEachRow",
-  });
-  const rows = (await result.json()) as RawRow[];
+    { benchType: opts.benchType ?? "", limit },
+  );
   return rows.map(mapRunResultRow);
 }
 
-/** The task result `oxagen bench replay <public_id>` reconstructs an env from. */
+/** The task result the internal bench replay command reconstructs an env from. */
 export async function getBenchResultByPublicId(publicId: number): Promise<BenchmarkRunResultRow | null> {
-  const result = await clickhouse().query({
-    query: `SELECT * FROM bench.benchmark_run_result FINAL WHERE public_id = {publicId:UInt64} LIMIT 1`,
-    query_params: { publicId },
-    format: "JSONEachRow",
-  });
-  const rows = (await result.json()) as RawRow[];
+  const rows = await chBenchQuery<RawRow>(
+    `SELECT * FROM bench.benchmark_run_result FINAL WHERE public_id = {publicId:UInt64} LIMIT 1`,
+    { publicId },
+  );
   return rows[0] ? mapRunResultRow(rows[0]) : null;
 }
 
 /** The parent run of a result — used to show run-level context (agent, dataset, conditions) alongside a replay. */
 export async function getBenchRunByPublicId(publicId: number): Promise<BenchmarkRunRow | null> {
-  const result = await clickhouse().query({
-    query: `SELECT * FROM bench.benchmark_run FINAL WHERE public_id = {publicId:UInt64} LIMIT 1`,
-    query_params: { publicId },
-    format: "JSONEachRow",
-  });
-  const rows = (await result.json()) as RawRow[];
+  const rows = await chBenchQuery<RawRow>(
+    `SELECT * FROM bench.benchmark_run FINAL WHERE public_id = {publicId:UInt64} LIMIT 1`,
+    { publicId },
+  );
   return rows[0] ? mapRunRow(rows[0]) : null;
 }
 
-/** Every best-of-N candidate for one task result, e.g. for `oxagen bench replay --candidates`. */
+/** Every best-of-N candidate for one task result, e.g. for a future --candidates flag on the internal replay command. */
 export async function getBenchCandidatesForResult(resultPublicId: number): Promise<BenchmarkCandidateRow[]> {
-  const result = await clickhouse().query({
-    query: `
+  const rows = await chBenchQuery<RawRow>(
+    `
       SELECT *
       FROM bench.benchmark_candidate FINAL
       WHERE result_public_id = {resultPublicId:UInt64}
       ORDER BY candidate_id
     `,
-    query_params: { resultPublicId },
-    format: "JSONEachRow",
-  });
-  const rows = (await result.json()) as RawRow[];
+    { resultPublicId },
+  );
   return rows.map(mapCandidateRow);
 }

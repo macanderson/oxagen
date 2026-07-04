@@ -449,31 +449,6 @@ export function buildProgram(): Command {
       await handleCost(merged);
     });
 
-  // ── bench: inspect + replay ClickHouse-backed benchmark results ────────────
-
-  const bench = program
-    .command("bench")
-    .description("Inspect and replay Harbor benchmark results (bench.* ClickHouse tables)");
-  bench
-    .command("list")
-    .description("Show recent benchmark results, newest first")
-    .option("--type <bench_type>", "Filter to one harness, e.g. swe-bench, terminal-bench")
-    .option("-n, --limit <n>", "Maximum number of results (1–500)", "20")
-    .option("--json", "Output JSON", false)
-    .action(async (opts: { type?: string; limit?: string; json?: boolean }) => {
-      const { handleBenchList } = await import("./commands/bench.js");
-      await handleBenchList(opts);
-    });
-  bench
-    .command("replay <public_id>")
-    .description("Show a result's reproducing command, and optionally re-run it")
-    .option("--run", "Actually execute the reproducing command", false)
-    .option("--json", "Output JSON", false)
-    .action(async (publicId: string, opts: { run?: boolean; json?: boolean }) => {
-      const { handleBenchReplay } = await import("./commands/bench.js");
-      await handleBenchReplay(publicId, opts);
-    });
-
   // ── models: on-device runtime + coordinator selection ───────────────────────
 
   const models = program

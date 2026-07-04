@@ -1,30 +1,22 @@
 /**
- * `oxagen bench` — inspect and replay ClickHouse-backed benchmark results.
+ * Internal bench list/replay commands — NOT part of the distributed `oxagen`
+ * CLI (apps/cli). @oxagen/bench is a private package never shipped in the
+ * product; these are invoked via `pnpm --filter @oxagen/bench list|replay`
+ * (see cli.ts and this package's package.json scripts).
  *
- * Thin shell over `@oxagen/telemetry`'s bench.* query/replay helpers (see
- * packages/telemetry/src/bench/ and packages/telemetry/src/migrations/
- * 0018_bench_schema.sql) — no business logic lives here.
- *
- *   oxagen bench list                         recent results, newest first
- *   oxagen bench list --type swe-bench -n 10
- *   oxagen bench replay 2984                  show the task + reproducing command
- *   oxagen bench replay 2984 --run            actually re-run it
+ *   pnpm --filter @oxagen/bench list
+ *   pnpm --filter @oxagen/bench list -- --type swe-bench -n 10
+ *   pnpm --filter @oxagen/bench replay -- 2984       show the task + reproducing command
+ *   pnpm --filter @oxagen/bench replay -- 2984 --run actually re-run it
  *
  * Add --json to either subcommand for machine-readable output.
  */
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { spawn } from "node:child_process";
-import {
-  buildReplayEnv,
-  formatEnvPrefix,
-  getBenchResultByPublicId,
-  getBenchRunByPublicId,
-  listBenchResults,
-  runScriptFor,
-  type BenchmarkRunResultRow,
-  type BenchType,
-} from "@oxagen/telemetry";
+import { buildReplayEnv, formatEnvPrefix, runScriptFor } from "./replay-env";
+import { getBenchResultByPublicId, getBenchRunByPublicId, listBenchResults } from "./query";
+import type { BenchmarkRunResultRow, BenchType } from "./types";
 
 export interface BenchListOptions {
   type?: string;
@@ -46,7 +38,7 @@ function parsePublicId(arg: string | undefined): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-/** oxagen bench list [--type <bench_type>] [-n <limit>] [--json] */
+/** `list [--type <bench_type>] [-n <limit>] [--json]` */
 export async function handleBenchList(opts: BenchListOptions): Promise<void> {
   const limit = opts.limit ? parseInt(opts.limit, 10) : undefined;
   const rows = await listBenchResults({
@@ -94,11 +86,11 @@ function findRunScript(benchType: BenchType, startDir: string = process.cwd()): 
   }
 }
 
-/** oxagen bench replay <public_id> [--run] [--json] */
+/** `replay <public_id> [--run] [--json]` */
 export async function handleBenchReplay(idArg: string | undefined, opts: BenchReplayOptions): Promise<void> {
   const publicId = parsePublicId(idArg);
   if (publicId === null) {
-    errOut("Usage: oxagen bench replay <public_id> [--run]");
+    errOut("Usage: pnpm --filter @oxagen/bench replay -- <public_id> [--run]");
     process.exitCode = 1;
     return;
   }
@@ -144,8 +136,8 @@ export async function handleBenchReplay(idArg: string | undefined, opts: BenchRe
   if (!scriptPath) {
     errOut("");
     errOut(
-      `Could not find ${script} above ${process.cwd()} — run \`oxagen bench replay\` from ` +
-        "inside an oxagen-platform checkout to use --run.",
+      `Could not find ${script} above ${process.cwd()} — run this from inside an ` +
+        "oxagen-platform checkout to use --run.",
     );
     process.exitCode = 1;
     return;
@@ -159,11 +151,9 @@ export async function handleBenchReplay(idArg: string | undefined, opts: BenchRe
 
 /**
  * Run the reproducing script with inherited stdio so Docker/harbor progress
- * streams live to the user's own terminal. Deliberately not
- * `runShellCommandBuffered`/`runShellCommand` (lib/shell-runner.ts) — those
- * cap at 2/10 minutes and capture rather than inherit output, both wrong for
- * a benchmark run that can legitimately take hours and that the operator
- * wants to watch directly, the same as if they'd typed `./run.sh` themselves.
+ * streams live to the operator's own terminal. A benchmark run can
+ * legitimately take hours and the operator wants to watch it directly, the
+ * same as if they'd typed `./run.sh` themselves.
  */
 function runReplay(scriptPath: string, env: Record<string, string>): Promise<number> {
   return new Promise((resolve) => {

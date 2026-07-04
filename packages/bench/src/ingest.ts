@@ -2,13 +2,19 @@
 // results directory (as produced by bench/{swe-bench,terminal-bench}/run.sh)
 // and inserts one benchmark_run row, one benchmark_run_result row per task,
 // and one benchmark_candidate row per best-of-N candidate. See
-// packages/telemetry/src/migrations/0018_bench_schema.sql for the schema and
+// packages/bench/migrations/0001_bench_schema.sql for the schema and
 // docs/cli/eval-results-schema.md for how this relates to eval_runs/eval_results.
+//
+// This package never imports @oxagen/telemetry's raw `clickhouse()` client
+// directly (OXA-1515's no-restricted-imports rule forbids that outside the
+// seam-owning packages) — it goes through chBenchInsert/chBenchQuery, the
+// thin unscoped wrappers telemetry exposes specifically for bench's
+// non-tenant data (see packages/telemetry/src/bench-client.ts).
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { clickhouse } from "../clickhouse";
+import { chBenchInsert, chBenchQuery } from "@oxagen/telemetry/bench-client";
 import { assertNoSecretValues } from "./secrets";
 import {
   agentNameFromHarborConfig,
@@ -114,11 +120,7 @@ function parseChUInt(value: string | number | undefined): number {
  * the end of `ingestBenchResultsDir`, not streamed per row).
  */
 async function nextPublicId(table: "benchmark_run" | "benchmark_run_result"): Promise<number> {
-  const result = await clickhouse().query({
-    query: `SELECT max(public_id) AS m FROM bench.${table}`,
-    format: "JSONEachRow",
-  });
-  const rows = (await result.json()) as Array<{ m: string | number }>;
+  const rows = await chBenchQuery<{ m: string | number }>(`SELECT max(public_id) AS m FROM bench.${table}`);
   return parseChUInt(rows[0]?.m) + 1;
 }
 
@@ -131,8 +133,8 @@ interface ExistingRunCriteria {
 
 /** public_id of an already-ingested run matching (bench_type, dataset, git_sha, started_at), or null. */
 async function findExistingRunPublicId(criteria: ExistingRunCriteria): Promise<number | null> {
-  const result = await clickhouse().query({
-    query: `
+  const rows = await chBenchQuery<{ public_id: string | number }>(
+    `
       SELECT public_id
       FROM bench.benchmark_run FINAL
       WHERE bench_type = {benchType:String}
@@ -141,15 +143,13 @@ async function findExistingRunPublicId(criteria: ExistingRunCriteria): Promise<n
         AND started_at = {startedAt:DateTime}
       LIMIT 1
     `,
-    query_params: {
+    {
       benchType: criteria.benchType,
       dataset: criteria.dataset,
       gitSha: criteria.gitSha,
       startedAt: toClickHouseDateTime(criteria.startedAt),
     },
-    format: "JSONEachRow",
-  });
-  const rows = (await result.json()) as Array<{ public_id: string | number }>;
+  );
   const row = rows[0];
   return row ? parseChUInt(row.public_id) : null;
 }
@@ -161,17 +161,15 @@ async function findExistingRunPublicId(criteria: ExistingRunCriteria): Promise<n
 // ---------------------------------------------------------------------------
 
 export async function insertBenchmarkRun(row: BenchmarkRunRow): Promise<void> {
-  await clickhouse().insert({ table: "bench.benchmark_run", values: [row], format: "JSONEachRow" });
+  await chBenchInsert("bench.benchmark_run", [row]);
 }
 
 export async function insertBenchmarkRunResults(rows: readonly BenchmarkRunResultRow[]): Promise<void> {
-  if (rows.length === 0) return;
-  await clickhouse().insert({ table: "bench.benchmark_run_result", values: rows, format: "JSONEachRow" });
+  await chBenchInsert("bench.benchmark_run_result", rows);
 }
 
 export async function insertBenchmarkCandidates(rows: readonly BenchmarkCandidateRow[]): Promise<void> {
-  if (rows.length === 0) return;
-  await clickhouse().insert({ table: "bench.benchmark_candidate", values: rows, format: "JSONEachRow" });
+  await chBenchInsert("bench.benchmark_candidate", rows);
 }
 
 // ---------------------------------------------------------------------------

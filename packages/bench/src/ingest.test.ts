@@ -2,8 +2,11 @@
 //
 // Exercises ingestBenchResultsDir against the real fixture directory
 // (__fixtures__/sample-run/ — a small, hand-built stand-in for a Harbor
-// results dir) with the ClickHouse client mocked the same way
-// clickhouse.test.ts mocks it: createClient() returns fake insert/query/close.
+// results dir) with @oxagen/telemetry/bench-client mocked directly:
+// chBenchInsert/chBenchQuery are @oxagen/bench's only ClickHouse-touching
+// dependency (see ingest.ts's header comment for why — OXA-1515 forbids
+// touching @oxagen/telemetry's raw clickhouse() from outside the
+// seam-owning packages).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { join } from "node:path";
@@ -11,44 +14,28 @@ import type { BenchmarkCandidateRow, BenchmarkRunResultRow, BenchmarkRunRow } fr
 
 const insertMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const queryMock = vi.hoisted(() => vi.fn());
-const createClientMock = vi.hoisted(() =>
-  vi.fn(() => ({
-    close: vi.fn().mockResolvedValue(undefined),
-    insert: insertMock,
-    query: queryMock,
-  })),
-);
 
-vi.mock("@clickhouse/client", () => ({ createClient: createClientMock }));
-vi.mock("@oxagen/config/env", () => ({
-  requireEnv: () => ({
-    CLICKHOUSE_URL: "https://ch.example",
-    CLICKHOUSE_USERNAME: "u",
-    CLICKHOUSE_PASSWORD: "p",
-    CLICKHOUSE_DATABASE: "oxagen",
-  }),
+vi.mock("@oxagen/telemetry/bench-client", () => ({
+  chBenchInsert: insertMock,
+  chBenchQuery: queryMock,
 }));
 
 const FIXTURE_DIR = join(__dirname, "__fixtures__", "sample-run");
 
-function jsonResult(rows: unknown[]): { json: () => Promise<unknown[]> } {
-  return { json: () => Promise.resolve(rows) };
-}
-
 /** Default query mock: no existing run found, public_id counters start at 0 (so the next id is 1). */
 function mockEmptyDatabase(): void {
   queryMock.mockReset();
-  queryMock.mockImplementation(async (args: { query: string }) => {
-    if (args.query.includes("WHERE bench_type")) return jsonResult([]);
-    if (args.query.includes("max(public_id)")) return jsonResult([{ m: "0" }]);
-    return jsonResult([]);
+  queryMock.mockImplementation(async (query: string) => {
+    if (query.includes("WHERE bench_type")) return [];
+    if (query.includes("max(public_id)")) return [{ m: "0" }];
+    return [];
   });
 }
 
 function insertedTable(table: string): { table: string; values: unknown[] } {
-  const call = insertMock.mock.calls.find((c) => (c[0] as { table: string }).table === table);
+  const call = insertMock.mock.calls.find((c) => c[0] === table);
   if (!call) throw new Error(`no insert call for table ${table}`);
-  return call[0] as { table: string; values: unknown[] };
+  return { table: call[0] as string, values: call[1] as unknown[] };
 }
 
 describe("ingestBenchResultsDir", () => {
@@ -62,9 +49,7 @@ describe("ingestBenchResultsDir", () => {
     mod = await import("./ingest");
   });
 
-  afterEach(async () => {
-    const { closeClickhouse } = await import("../clickhouse");
-    await closeClickhouse();
+  afterEach(() => {
     vi.resetModules();
   });
 
@@ -286,9 +271,9 @@ describe("ingestBenchResultsDir", () => {
 
   it("skips ingestion and reports the existing public_id when a matching run already exists", async () => {
     queryMock.mockReset();
-    queryMock.mockImplementation(async (args: { query: string }) => {
-      if (args.query.includes("WHERE bench_type")) return jsonResult([{ public_id: "7" }]);
-      return jsonResult([{ m: "0" }]);
+    queryMock.mockImplementation(async (query: string) => {
+      if (query.includes("WHERE bench_type")) return [{ public_id: "7" }];
+      return [{ m: "0" }];
     });
 
     const summary = await mod.ingestBenchResultsDir(FIXTURE_DIR, { benchType: "swe-bench", gitSha: "abc123" });
@@ -299,10 +284,10 @@ describe("ingestBenchResultsDir", () => {
 
   it("re-ingests despite a matching existing run when force: true is passed", async () => {
     queryMock.mockReset();
-    queryMock.mockImplementation(async (args: { query: string }) => {
-      if (args.query.includes("WHERE bench_type")) return jsonResult([{ public_id: "7" }]);
-      if (args.query.includes("max(public_id)")) return jsonResult([{ m: "7" }]);
-      return jsonResult([]);
+    queryMock.mockImplementation(async (query: string) => {
+      if (query.includes("WHERE bench_type")) return [{ public_id: "7" }];
+      if (query.includes("max(public_id)")) return [{ m: "7" }];
+      return [];
     });
 
     const summary = await mod.ingestBenchResultsDir(FIXTURE_DIR, {
@@ -317,10 +302,10 @@ describe("ingestBenchResultsDir", () => {
 
   it("treats a native-number max(public_id) the same as ClickHouse's usual quoted-string form", async () => {
     queryMock.mockReset();
-    queryMock.mockImplementation(async (args: { query: string }) => {
-      if (args.query.includes("WHERE bench_type")) return jsonResult([]);
-      if (args.query.includes("max(public_id)")) return jsonResult([{ m: 9 }]); // number, not "9"
-      return jsonResult([]);
+    queryMock.mockImplementation(async (query: string) => {
+      if (query.includes("WHERE bench_type")) return [];
+      if (query.includes("max(public_id)")) return [{ m: 9 }]; // number, not "9"
+      return [];
     });
     const summary = await mod.ingestBenchResultsDir(FIXTURE_DIR, { benchType: "swe-bench", gitSha: "abc123" });
     expect(summary.runPublicId).toBe(10);
@@ -328,10 +313,10 @@ describe("ingestBenchResultsDir", () => {
 
   it("starts numbering at 1 when max(public_id) returns no rows at all (a genuinely empty table)", async () => {
     queryMock.mockReset();
-    queryMock.mockImplementation(async (args: { query: string }) => {
-      if (args.query.includes("WHERE bench_type")) return jsonResult([]);
-      if (args.query.includes("max(public_id)")) return jsonResult([]); // zero rows, not even {m: 0}
-      return jsonResult([]);
+    queryMock.mockImplementation(async (query: string) => {
+      if (query.includes("WHERE bench_type")) return [];
+      if (query.includes("max(public_id)")) return []; // zero rows, not even {m: 0}
+      return [];
     });
     const summary = await mod.ingestBenchResultsDir(FIXTURE_DIR, { benchType: "swe-bench", gitSha: "abc123" });
     expect(summary.runPublicId).toBe(1);
@@ -368,17 +353,19 @@ describe("insertBenchmarkRun / insertBenchmarkRunResults / insertBenchmarkCandid
     vi.resetModules();
   });
 
-  afterEach(async () => {
-    const { closeClickhouse } = await import("../clickhouse");
-    await closeClickhouse();
+  afterEach(() => {
     vi.resetModules();
   });
 
-  it("no-ops insertBenchmarkRunResults / insertBenchmarkCandidates on an empty array", async () => {
+  // The empty-array no-op itself lives in chBenchInsert now (see
+  // bench-client.test.ts "no-ops on an empty rows array") — these wrappers
+  // just forward whatever they're given.
+  it("insertBenchmarkRunResults / insertBenchmarkCandidates forward straight through to chBenchInsert", async () => {
     const mod = await import("./ingest");
     await mod.insertBenchmarkRunResults([]);
     await mod.insertBenchmarkCandidates([]);
-    expect(insertMock).not.toHaveBeenCalled();
+    expect(insertMock).toHaveBeenCalledWith("bench.benchmark_run_result", []);
+    expect(insertMock).toHaveBeenCalledWith("bench.benchmark_candidate", []);
   });
 
   it("insertBenchmarkRun always inserts a single row against bench.benchmark_run", async () => {
@@ -405,10 +392,6 @@ describe("insertBenchmarkRun / insertBenchmarkRunResults / insertBenchmarkCandid
       finished_at: "2026-07-03 00:00:00",
     };
     await mod.insertBenchmarkRun(row);
-    expect(insertMock).toHaveBeenCalledWith({
-      table: "bench.benchmark_run",
-      values: [row],
-      format: "JSONEachRow",
-    });
+    expect(insertMock).toHaveBeenCalledWith("bench.benchmark_run", [row]);
   });
 });
