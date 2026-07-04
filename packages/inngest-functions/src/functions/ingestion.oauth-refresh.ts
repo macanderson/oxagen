@@ -337,6 +337,27 @@ const REFRESH_PROVIDERS: Record<string, ProviderRefreshStrategy> = {
   },
 };
 
+/**
+ * Resolve the REFRESH_PROVIDERS key for a stored `oauth_accounts.provider` value.
+ *
+ * The strategy table is keyed by the base OAuth *identity* that issues and
+ * refreshes the token (e.g. "google"), but a stored account's `provider` may be
+ * a connector slug WITHIN that identity's family. Every Google Workspace
+ * connector — google-drive, google-gmail, google-calendar, google-contacts,
+ * google-meet, google-tasks, google-bigquery (see packages/ingestion connectors)
+ * — is backed by a single Google OAuth grant whose token refreshes at the same
+ * Google endpoint. Without this normalization those slugs miss the exact-match
+ * lookup and the cron silently skips them, so the token expires and the
+ * connection breaks mid-sync. Collapse any `google-*` slug onto the shared
+ * `google` strategy; every other provider is already stored as its base key
+ * (github, slack, zoom, salesforce, microsoft, linear), so it passes through.
+ */
+function refreshProviderKeyFor(provider: string): string {
+  if (provider in REFRESH_PROVIDERS) return provider;
+  if (provider === "google" || provider.startsWith("google-")) return "google";
+  return provider;
+}
+
 // ── Shared DB helpers ─────────────────────────────────────────────────────────
 
 /**
@@ -432,7 +453,10 @@ export const [ingestionOauthRefresh] = createFunction(
       await step.run(`refresh-token-${account.id}`, async () => {
         if (!account.refresh_token_enc) return;
 
-        const strategy = REFRESH_PROVIDERS[account.provider];
+        // Normalize provider-family slugs (e.g. google-drive → google) onto the
+        // base OAuth identity before looking up the refresh strategy.
+        const providerKey = refreshProviderKeyFor(account.provider);
+        const strategy = REFRESH_PROVIDERS[providerKey];
 
         // ── No-refresh provider (e.g. Linear) ───────────────────────────────
         if (strategy && strategy.supportsRefresh === false) {
@@ -444,10 +468,13 @@ export const [ingestionOauthRefresh] = createFunction(
         }
 
         // ── Unknown provider ─────────────────────────────────────────────────
+        // WARN (not INFO): a provider with expiring tokens and no refresh
+        // strategy silently breaks when the token lapses. Surfacing it at WARN
+        // makes the coverage gap visible in logs so a strategy can be added.
         if (!strategy) {
-          logger.info(
+          logger.warn(
             { tokenId: account.id, provider: account.provider },
-            "ingestion-oauth-refresh: provider refresh not yet implemented — skipping",
+            "ingestion-oauth-refresh: no refresh strategy for provider — token will expire unrefreshed and the connection will break; add a REFRESH_PROVIDERS entry",
           );
           return;
         }

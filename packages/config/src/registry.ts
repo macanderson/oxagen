@@ -443,7 +443,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   GITHUB_PERSONAL_ACCESS_TOKEN: {
     group: "github",
     description:
-      "Personal access token (PAT) used by GitHub write capabilities (repo.create, repo.file.put, repo.fork, repo.branch.create, repo.pr.open) as a local/demo fallback when per-workspace credential resolution is not yet available. MUST NOT be set in production once per-workspace KMS-encrypted credential lookup is implemented (see packages/handlers/src/lib/github-token.ts).",
+      "Personal access token (PAT) used by GitHub write capabilities (repo.create, repo.file.put, repo.fork, repo.branch.create, repo.pr.open) as a LOCAL/DEMO-ONLY fallback. Per-workspace credential resolution is now live (GitHub App installation token + KMS-encrypted per-workspace OAuth — see resolveGitHubToken in packages/handlers/src/lib/github-token.ts), so this MUST NOT be set in production: a shared PAT bypasses per-workspace scoping. resolveGitHubToken logs a loud warning when it is used while NODE_ENV=production.",
     secret: true,
     clientExposed: false,
     services: ["api"],
