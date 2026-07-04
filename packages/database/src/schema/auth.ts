@@ -80,6 +80,11 @@ export const users = authSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // Better Auth twoFactor plugin flag. Flipped to true only after the user
+    // completes first TOTP verification (see twoFactorTable below). Enforcement
+    // for privileged (owner/admin) roles reads this column. input:false on the
+    // BA side — never set directly by the client.
+    twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
   },
   (t) => ({
     emailIdx: uniqueIndex("users_email_idx").on(t.email),
@@ -257,6 +262,34 @@ export const rateLimitTable = authSchema.table(
   },
   (t) => ({
     keyIdx: uniqueIndex("rate_limit_key_idx").on(t.key),
+  }),
+);
+
+// ── Better Auth two-factor (TOTP) store ──────────────────────────────────────
+// Written by the Better Auth twoFactor plugin. Because the Drizzle adapter is
+// configured with usePlural:true, the plugin's model name "twoFactor" is
+// pluralized to "twoFactors" for schema-key lookup — the schema map in auth.ts
+// therefore wires the key "twoFactors" → this export. The PHYSICAL table name
+// (two_factor) is independent of that key, exactly like rate_limit above.
+//
+// Columns match what the Better Auth twoFactor plugin creates/reads. The JS
+// property names MUST equal the plugin's field names (id, userId, secret,
+// backupCodes, verified) — the Drizzle adapter resolves columns by JS-property
+// lookup and translates camelCase → snake_case when emitting SQL. Like the
+// other Better-Auth-managed tables (sessions/accounts), id is text (BA
+// generates it) while userId is uuid to match users.id. secret and backupCodes
+// are encrypted at rest by Better Auth before they reach the DB.
+export const twoFactorTable = authSchema.table(
+  "two_factor",
+  {
+    id: text("id").primaryKey(),
+    userId: uuid("user_id").notNull(),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    verified: boolean("verified").notNull().default(true),
+  },
+  (t) => ({
+    userIdIdx: index("two_factor_user_id_idx").on(t.userId),
   }),
 );
 

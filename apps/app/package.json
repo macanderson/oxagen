@@ -66,6 +66,7 @@
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "react-easy-crop": "5.5.7",
+    "react-qr-code": "2.0.15",
     "reagraph": "4.31.0",
     "server-only": "0.0.1",
     "shiki": "1.29.2",

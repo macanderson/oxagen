@@ -4,6 +4,7 @@ import { createFunction } from "../create-function";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { sanitizeRelationshipType, sanitizeLabel } from "@oxagen/ontology/labels";
+import { edgeValidityOnCreateSet, edgeValidityParams } from "@oxagen/ontology/temporal";
 import { generateObjectFor } from "@oxagen/ai";
 import { logger } from "../logger";
 
@@ -92,6 +93,12 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
           // token_usage's UUID column and broke the uuid credit charge.
           messageId: null,
         },
+        // Edge inference is deterministic in an entity's property snapshot:
+        // two entities with the same properties imply the same edges. Cache it
+        // (semantic on) so a re-sync of unchanged entities, or two structurally
+        // identical entities, reuse a recent inference instead of re-spending.
+        // 7-day TTL — ontology inference is stable over that window.
+        cache: { ttlSeconds: 604_800, semantic: true },
       }),
     );
 
@@ -221,7 +228,8 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
                    r.confidence  = $confidence,
                    r.approvedBy  = $approvedBy,
                    r.approvedAt  = datetime($approvedAt),
-                   r.createdAt   = datetime()`,
+                   r.createdAt   = datetime(),
+                   ${edgeValidityOnCreateSet("r")}`,
                 {
                   orgId,
                   workspaceId,
@@ -234,6 +242,7 @@ export const [ingestionSemanticEdgeInfer] = createFunction(
                   confidence: edge.confidence,
                   approvedBy: "system:auto-accept",
                   approvedAt: now,
+                  ...edgeValidityParams(),
                 },
               );
               autoAcceptedCount++;

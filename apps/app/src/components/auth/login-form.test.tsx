@@ -29,15 +29,16 @@ vi.mock("next/link", () => ({
   }) => <a href={href} {...rest}>{children}</a>,
 }));
 
-// Mock next/navigation
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
-}));
-
 // Use vi.hoisted so the mocks are available before vi.mock hoisting
-const { signInEmailMock, signUpEmailMock } = vi.hoisted(() => ({
+const { signInEmailMock, signUpEmailMock, pushMock } = vi.hoisted(() => ({
   signInEmailMock: vi.fn(),
   signUpEmailMock: vi.fn(),
+  pushMock: vi.fn(),
+}));
+
+// Mock next/navigation
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: pushMock, refresh: vi.fn() }),
 }));
 
 vi.mock("@oxagen/auth/client", () => ({
@@ -87,6 +88,32 @@ describe("LoginForm — signin mode (default)", () => {
         password: "password123",
       });
     });
+  });
+
+  it("routes to /two-factor when sign-in requires a second factor", async () => {
+    signInEmailMock.mockResolvedValueOnce({
+      data: { twoFactorRedirect: true },
+      error: null,
+    });
+    render(<LoginForm mode="signin" />);
+    await userEvent.type(screen.getByLabelText(/email/i), "user@example.com");
+    await userEvent.type(screen.getByLabelText(/password/i), "password123");
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/two-factor"));
+    // Must NOT fall through to the app root before the second factor is verified.
+    expect(pushMock).not.toHaveBeenCalledWith("/");
+  });
+
+  it("routes to the app root on a normal sign-in (no second factor)", async () => {
+    signInEmailMock.mockResolvedValueOnce({ data: {}, error: null });
+    render(<LoginForm mode="signin" />);
+    await userEvent.type(screen.getByLabelText(/email/i), "user@example.com");
+    await userEvent.type(screen.getByLabelText(/password/i), "password123");
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/"));
+    expect(pushMock).not.toHaveBeenCalledWith("/two-factor");
   });
 
   it("shows error message on auth failure", async () => {

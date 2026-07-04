@@ -31,4 +31,7 @@ h1:1ah/Df3dGuzzwdNI9ty3T48NreFm8B18Cz4nNodvuTw=
 20260630120000_workspace_memory_policy_two_axis.sql h1:rogZpZMkGIlNhWP31TkC6/S59pktECBuN6p8eRCaUYM=
 20260703120000_subagent_runs_summary.sql h1:ajCvLA/gimwGrafQQvlIsGgcV7LQB/4IyvoYjvtzUno=
 20260703150000_phase2_claim_lease.sql h1:1Rc/wcECvMbz4PoorOEwTLYsX/IA/HYmNc+K1WJZhP4=
+20260704120000_two_factor.sql h1:YB25xxAjzrShfJkX2OsPp1l6cGhkrpSwqxyP/Uvbc2k=
+20260704130000_ai_cache_and_batch_jobs.sql h1:A+zru2Vu3oam0ePpPUGHzzcsAqgV6elJ8PUX6otyQJI=
+20260704180000_connector_poll_health.sql h1:mjLB+BVwRMY4BtSKoFKuJqWUqve+D8RNQQl+e7YJ118=
 20260704210000_drop_zombie_schema.sql h1:CLNbZgDYgqvKfBWuu9IMcsedB58pe2dy9seGY6fjGvE=

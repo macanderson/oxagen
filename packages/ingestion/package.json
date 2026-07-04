@@ -15,6 +15,7 @@
     "./embed": "./src/embed/index.ts",
     "./mutations": "./src/mutations/upsert-entity.ts",
     "./dedup": "./src/dedup/resolve.ts",
+    "./sync": "./src/sync/index.ts",
     "./parsers": "./src/parsers/index.ts",
     "./validate": "./src/validate/schema.ts"
   },

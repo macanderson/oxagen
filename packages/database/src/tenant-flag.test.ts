@@ -92,11 +92,25 @@ describe("TENANT_RLS_ENFORCEMENT_ENABLED Zod transform parity", () => {
     expect(result).toBe(false);
   });
 
-  it("schema transforms undefined to false (optional field absent = enforcement off)", async () => {
+  it("schema transforms undefined to false in a non-production runtime (seeding window)", async () => {
+    // Vitest runs with NODE_ENV=test and no VERCEL_ENV → not production → off.
     const { baseEnvSchema } = await import("@oxagen/config/env");
     const field = baseEnvSchema.shape.TENANT_RLS_ENFORCEMENT_ENABLED;
     const result = field.parse(undefined);
     expect(result).toBe(false);
+  });
+
+  it("schema transforms undefined to TRUE in a production runtime (fail-closed)", async () => {
+    const savedVercel = process.env.VERCEL_ENV;
+    process.env.VERCEL_ENV = "production";
+    try {
+      const { baseEnvSchema } = await import("@oxagen/config/env");
+      const field = baseEnvSchema.shape.TENANT_RLS_ENFORCEMENT_ENABLED;
+      expect(field.parse(undefined)).toBe(true);
+    } finally {
+      if (savedVercel === undefined) delete process.env.VERCEL_ENV;
+      else process.env.VERCEL_ENV = savedVercel;
+    }
   });
 
   it("schema rejects non-'true'/'false' strings", async () => {

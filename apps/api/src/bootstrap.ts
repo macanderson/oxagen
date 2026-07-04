@@ -48,8 +48,9 @@ export function bootstrap(): Promise<void> {
  * The actual bootstrap work. Order matters:
  *  1. env validates first — any missing required key throws before a request is
  *     served (fail-closed per spec §11).
- *  2. assertRlsConnectionSafe — refuse to boot if TENANT_RLS_ENFORCEMENT_ENABLED=true
- *     but the DB role silently bypasses RLS (superuser or BYPASSRLS).
+ *  2. assertRlsConnectionSafe — refuse to boot if a production runtime has RLS
+ *     enforcement disabled, or if enforcement is on but the DB role silently
+ *     bypasses RLS (superuser or BYPASSRLS).
  *  3. wire the IAM enforcement runtime into defineContract().invoke() before any
  *     route handler can call contract.invoke().
  *  4. register the Postgres security-event emitter (SOC2 CC6/CC7 audit trail);
@@ -81,7 +82,8 @@ async function runBootstrap(): Promise<void> {
     );
   }
 
-  // Refuse to boot if the DB role silently bypasses RLS while enforcement is on.
+  // Refuse to boot if a production runtime disabled RLS enforcement, or if the
+  // DB role silently bypasses RLS while enforcement is on.
   await assertRlsConnectionSafe();
 
   bootstrapIAMRuntime();

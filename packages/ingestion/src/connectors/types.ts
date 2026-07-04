@@ -116,13 +116,28 @@ export interface ConnectorDefinition<TConfig extends z.ZodTypeAny = z.ZodTypeAny
     webhookUrl: string,
   ): Promise<{ subscriptionId: string; secret?: string }>;
 
-  // Optional: poll-based ingestor for sources without webhooks.
+  // Optional: poll-based ingestor for incremental sync. The generic sync loop
+  // (packages/inngest-functions ingestion.connection-poll) calls this once per
+  // mapped record type on the connection's schedule, passing the durable cursor
+  // from the previous poll. The connector uses `cursor` to fetch only records
+  // changed since then (e.g. a `since`/`updatedAt` filter) and yields one
+  // RawRecord per change. Yielding is lazy so large result sets stream without
+  // buffering. Connections whose connector implements `poll` become "real"
+  // ongoing syncs rather than one-shot/webhook-only sources.
   poll?(
     auth: AuthCredential,
     config: z.infer<TConfig>,
     recordType: string,
     cursor: string | null,
   ): AsyncIterable<RawRecord>;
+
+  // Optional: extract the durable cursor value a raw record represents — by
+  // convention the source's last-modified ISO-8601 timestamp (which sorts
+  // correctly as a string). The sync loop keeps the MAX across a poll batch and
+  // persists it as this record type's cursor, so the next poll only fetches
+  // newer records. Omit it to re-poll the full window each cycle (dedup keeps
+  // that correct, just less efficient). Pure — no I/O.
+  cursorOf?(recordType: string, raw: unknown): string | null;
 
   // Optional: verify inbound webhook signature before normalizing.
   verifyWebhook?(

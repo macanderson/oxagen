@@ -1,12 +1,64 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample, type WebhookExtraction } from "../types";
+import {
+  registerConnector,
+  type AuthCredential,
+  type ConnectorDefinition,
+  type NormalizedRecord,
+  type RawRecord,
+  type RecordTypeSample,
+  type WebhookExtraction,
+} from "../types";
 
+// Accepts BOTH the wizard/resync shape actually stored in delivery_config
+// ({ owner, repo, defaultBranch }) and the legacy org/repo-list shape. The poll
+// loop derives its target repos from whichever is present.
 const connectionConfigSchema = z.object({
-  organizations: z.array(z.string()).min(1),
+  owner: z.string().optional(),
+  repo: z.string().optional(),
+  defaultBranch: z.string().optional(),
   repositories: z.array(z.string()).optional(),
+  organizations: z.array(z.string()).optional(),
   syncDepthDays: z.number().int().positive().default(90),
 });
+
+type Config = z.infer<typeof connectionConfigSchema>;
+
+/** Resolve a usable GitHub token from the resolved connection credential. */
+function githubToken(auth: AuthCredential): string | null {
+  if (auth.scheme === "bearer_token") return auth.token;
+  if (auth.scheme === "api_key") return auth.apiKey;
+  return null;
+}
+
+/** Derive the { owner, repo } targets to poll from the stored config. */
+function pollTargets(config: Config): Array<{ owner: string; repo: string }> {
+  if (config.owner && config.repo) return [{ owner: config.owner, repo: config.repo }];
+  const out: Array<{ owner: string; repo: string }> = [];
+  for (const full of config.repositories ?? []) {
+    const [owner, repo] = full.split("/");
+    if (owner && repo) out.push({ owner, repo });
+  }
+  return out;
+}
+
+function ghHeaders(token: string): Record<string, string> {
+  return {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github.v3+json",
+    "User-Agent": "oxagen-ingestion/1.0",
+  };
+}
+
+async function ghListPage(url: string, token: string): Promise<unknown[]> {
+  const resp = await fetch(url, { headers: ghHeaders(token) });
+  if (resp.status === 404) return [];
+  if (!resp.ok) {
+    throw new Error(`github.poll: GitHub API ${resp.status} for ${url}`);
+  }
+  const data = (await resp.json()) as unknown;
+  return Array.isArray(data) ? (data as unknown[]) : [];
+}
 
 // Utility functions to safely extract values
 function asRecord(raw: unknown): Record<string, unknown> {
@@ -426,6 +478,103 @@ const github: ConnectorDefinition<typeof connectionConfigSchema> = {
       return timingSafeEqual(sigBuf, expBuf);
     } catch {
       return false;
+    }
+  },
+
+  // Incremental poll. GitHub webhooks give realtime deltas, but a poll fills
+  // the gaps (missed deliveries, backfill after connect) and makes the source a
+  // "real" ongoing sync. For each configured repo, fetch the most-recently-
+  // updated records of the requested type and yield those changed since the
+  // cursor (the max updated_at from the previous poll). Commits use GitHub's
+  // native `since` filter; the rest sort by `updated` desc and stop at cursor.
+  async *poll(auth, config, recordType, cursor): AsyncIterable<RawRecord> {
+    const token = githubToken(auth);
+    if (!token) return;
+    const targets = pollTargets(config);
+    const now = new Date().toISOString();
+
+    for (const { owner, repo } of targets) {
+      const base = `https://api.github.com/repos/${owner}/${repo}`;
+
+      if (recordType === "commit") {
+        const sinceQuery = cursor ? `&since=${encodeURIComponent(cursor)}` : "";
+        const rows = await ghListPage(`${base}/commits?per_page=100${sinceQuery}`, token);
+        for (const raw of rows) {
+          const id = (raw as { sha?: string }).sha ?? "";
+          if (!id) continue;
+          yield { sourceRecordType: "commit", externalId: id, raw, receivedAt: now };
+        }
+        continue;
+      }
+
+      if (recordType === "pull_request" || recordType === "issue") {
+        const path = recordType === "pull_request" ? "pulls" : "issues";
+        const rows = await ghListPage(
+          `${base}/${path}?state=all&sort=updated&direction=desc&per_page=100`,
+          token,
+        );
+        for (const raw of rows) {
+          const r = raw as { updated_at?: string; pull_request?: unknown; number?: number };
+          // The issues endpoint also returns PRs — drop them here.
+          if (recordType === "issue" && r.pull_request !== undefined) continue;
+          if (cursor && r.updated_at && r.updated_at <= cursor) break; // sorted desc
+          yield {
+            sourceRecordType: recordType,
+            externalId: r.number !== undefined ? String(r.number) : "",
+            raw,
+            receivedAt: now,
+          };
+        }
+        continue;
+      }
+
+      if (recordType === "release") {
+        const rows = await ghListPage(`${base}/releases?per_page=100`, token);
+        for (const raw of rows) {
+          const r = raw as { id?: number; published_at?: string; created_at?: string };
+          const stamp = r.published_at ?? r.created_at;
+          if (cursor && stamp && stamp <= cursor) continue;
+          yield {
+            sourceRecordType: "release",
+            externalId: r.id !== undefined ? String(r.id) : "",
+            raw,
+            receivedAt: now,
+          };
+        }
+        continue;
+      }
+
+      if (recordType === "repository") {
+        const resp = await fetch(base, { headers: ghHeaders(token) });
+        if (!resp.ok) continue;
+        const raw = (await resp.json()) as { id?: number; updated_at?: string };
+        if (cursor && raw.updated_at && raw.updated_at <= cursor) continue;
+        yield {
+          sourceRecordType: "repository",
+          externalId: raw.id !== undefined ? String(raw.id) : "",
+          raw,
+          receivedAt: now,
+        };
+        continue;
+      }
+      // code_review / comment / source are webhook/initial-sync only — no poll.
+    }
+  },
+
+  // Cursor watermark: the source's last-modified timestamp for the record type.
+  cursorOf(recordType, raw): string | null {
+    const r = asRecord(raw);
+    switch (recordType) {
+      case "commit": {
+        const commit = asRecord(r["commit"]);
+        const author = asRecord(commit["author"]);
+        const committer = asRecord(commit["committer"]);
+        return asString(committer["date"]) ?? asString(author["date"]) ?? null;
+      }
+      case "release":
+        return asString(r["published_at"]) ?? asString(r["created_at"]) ?? null;
+      default:
+        return asString(r["updated_at"]) ?? null;
     }
   },
 };

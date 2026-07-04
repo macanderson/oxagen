@@ -6,6 +6,13 @@ const sessionClose = vi.fn(async () => undefined);
 
 vi.mock("@oxagen/ontology", () => ({
   scopedSession: () => ({ run: sessionRun, close: sessionClose }),
+  // Real over-sampling math so the emitted $k reflects production behaviour.
+  oversampledLimit: (limit: number, factor = 3, cap = 500) => {
+    const base = Math.trunc(limit);
+    if (!Number.isFinite(base) || base <= 0) return 0;
+    const f = Number.isFinite(factor) && factor >= 1 ? Math.trunc(factor) : 1;
+    return Math.min(base * f, Math.max(base, Math.trunc(cap)));
+  },
 }));
 
 import {
@@ -187,6 +194,41 @@ describe("recallPeerResults", () => {
     const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(params.recallThreshold).toBe(0);
     expect(sessionClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ANN tenant-filter over-sampling", () => {
+  beforeEach(() => {
+    sessionRun.mockReset();
+    sessionClose.mockClear();
+  });
+
+  it("recallMemories over-fetches the index by 3x but trims to the requested limit", async () => {
+    sessionRun.mockResolvedValueOnce({ records: [] });
+    await withTestScope(() =>
+      recallMemories({ embedding: new Array<number>(1536).fill(0.1), limit: 10 }),
+    );
+    const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
+    // The index is queried with the over-sampled $k, not the raw limit.
+    expect(cypher).toContain("db.index.vector.queryNodes('memory_embedding_index', $k");
+    // The final result set is trimmed back to the requested limit after filtering.
+    expect(cypher).toContain("LIMIT $limit");
+    const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.k).toBe(BigInt(30)); // 10 x 3
+    expect(params.limit).toBe(BigInt(10));
+  });
+
+  it("recallPeerResults over-fetches the index by 3x but trims to the requested limit", async () => {
+    sessionRun.mockResolvedValueOnce({ records: [] });
+    await withTestScope(() =>
+      recallPeerResults({ embedding: new Array<number>(1536).fill(0.1), limit: 4 }),
+    );
+    const cypher = String(sessionRun.mock.calls[0]?.[0] ?? "");
+    expect(cypher).toContain("db.index.vector.queryNodes('execution_embedding_index', $k");
+    expect(cypher).toContain("LIMIT $limit");
+    const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.k).toBe(BigInt(12)); // 4 x 3
+    expect(params.limit).toBe(BigInt(4));
   });
 });
 

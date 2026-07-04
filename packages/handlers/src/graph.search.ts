@@ -1,6 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { graphSearch } from "@oxagen/oxagen/contracts/graph.search";
 import { scopedSession } from "@oxagen/ontology/tenant";
+import { oversampledLimit } from "@oxagen/ontology/ann";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { embedText } from "@oxagen/ai";
 import { logger } from "./logger";
@@ -61,10 +62,12 @@ export const graphSearchHandler: CapabilityHandler<typeof graphSearch> = async (
 
   const rows: ResultRow[] = [];
 
-  // k: how many to pull from the index before kind-filtering.
-  // When `kinds` filter is provided we over-fetch to compensate for post-filter
-  // attrition; otherwise request exactly limit.
-  const k = input.kinds && input.kinds.length > 0 ? input.limit * 3 : input.limit;
+  // k: how many to pull from the index before filtering. The tenant predicate
+  // (orgId/workspaceId) is ALWAYS applied after the index call, so we must
+  // over-fetch on every query — otherwise the active tenant's matches can be
+  // crowded out of the global top-K by other tenants' higher-scoring nodes.
+  // The optional kinds/isSystem/labels predicates only add to that attrition.
+  const k = oversampledLimit(input.limit);
 
   // Build optional WHERE clause additions.
   const isSystemClause =

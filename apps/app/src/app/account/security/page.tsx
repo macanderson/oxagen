@@ -2,13 +2,12 @@
  * Account → Security: the user's own security posture.
  *
  * Shows:
- *   1. Active sessions — all sessions tied to this user, with revoke-other.
- *   2. MFA enrollment state — honest current state from Better Auth.
- *      (TOTP plugin is not yet enabled in this deployment; shows honest status.)
- *   3. Sign-in methods summary (delegates to profile/security-action for count).
+ *   1. TOTP MFA — live enrollment / management via Better Auth's twoFactor
+ *      plugin (enable, verify, disable, regenerate backup codes).
+ *   2. Active sessions — all sessions tied to this user, with revoke-other.
  *
  * This is user-scoped (not org-scoped). No RBAC gate — users can always see
- * and manage their own sessions.
+ * and manage their own sessions and 2FA.
  */
 
 import {
@@ -19,13 +18,12 @@ import {
 } from "lucide-react";
 import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
-import { headers } from "next/headers";
 import { gt } from "drizzle-orm";
 import { withSystemDb, schema } from "@oxagen/database";
 import { eq, and } from "drizzle-orm";
 import { getSessionOrRedirect } from "@/lib/session";
-import { fetchConnectedAccountsState } from "@/app/account/profile/security-action";
 import { RevokeOwnSessionButton } from "./_components/revoke-own-session-button";
+import TotpEnrollmentCard from "./_components/totp-enrollment-card";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -114,6 +112,18 @@ async function loadUserSessions(userId: string): Promise<UserSession[]> {
   }));
 }
 
+/** Read the user's TOTP enrollment flag (auth.users.two_factor_enabled). */
+async function loadTwoFactorEnabled(userId: string): Promise<boolean> {
+  const rows = await withSystemDb((tx) =>
+    tx
+      .select({ enabled: schema.users.twoFactorEnabled })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .limit(1),
+  );
+  return rows[0]?.enabled ?? false;
+}
+
 function DeviceIcon({ kind }: { kind: DeviceKind }) {
   if (kind === "mobile")
     return (
@@ -143,48 +153,18 @@ function DeviceIcon({ kind }: { kind: DeviceKind }) {
 
 export default async function AccountSecurityPage() {
   const session = await getSessionOrRedirect();
-  const reqHeaders = await headers();
 
-  const [sessions, connectedAccountsState] = await Promise.all([
+  const [sessions, twoFactorEnabled] = await Promise.all([
     loadUserSessions(session.user.id),
-    fetchConnectedAccountsState(session.user.id, reqHeaders),
+    loadTwoFactorEnabled(session.user.id),
   ]);
 
   const currentSessionId = session.session?.id ?? null;
 
   return (
     <div className="flex flex-col gap-6">
-      {/* MFA status — honest current state */}
-      <Panel
-        title="Multi-factor authentication"
-        actions={
-          <Badge variant="muted" className="shrink-0 text-xs">
-            Not enrolled
-          </Badge>
-        }
-      >
-        <p className="mb-4 text-sm text-muted-foreground">
-          MFA adds a second verification step when you sign in.
-        </p>
-        <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/30 px-4 py-4">
-          <p className="text-sm text-muted-foreground">
-            TOTP (authenticator app) enrollment is not yet available in this version of the
-            platform. MFA enforcement at the org level can be configured by an org owner or admin
-            from the <strong>Security → MFA</strong> section.
-          </p>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="font-medium">Sign-in methods active:</span>
-            {connectedAccountsState.accounts.map((a) => (
-              <Badge key={a.id} variant="outline" className="text-xs capitalize">
-                {a.providerId === "credential" ? "Password" : a.providerId}
-              </Badge>
-            ))}
-            {connectedAccountsState.accounts.length === 0 && (
-              <span className="text-muted-foreground/60">None on record</span>
-            )}
-          </div>
-        </div>
-      </Panel>
+      {/* MFA — live TOTP enrollment / management. */}
+      <TotpEnrollmentCard enabled={twoFactorEnabled} />
 
       {/* Active sessions */}
       <Panel

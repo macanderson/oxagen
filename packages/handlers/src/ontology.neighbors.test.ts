@@ -124,6 +124,11 @@ describe("ontologyNeighborsHandler", () => {
         description: "area",
         edgeType: "RELATED_TO",
         direction: "out",
+        // Bi-temporal validity — all-null for an unstamped edge (mock returns null).
+        validFrom: null,
+        validTo: null,
+        recordedAt: null,
+        invalidatedAt: null,
       },
     ]);
   });
@@ -229,5 +234,48 @@ describe("ontologyNeighborsHandler — §3.2 Cypher-injection + active-vocabular
     await ontologyNeighborsHandler({ nodeId: "n-1", direction: "both", limit: 100 }, CTX);
     const neighborCypher = mocks.run.mock.calls[1]?.[0] as string;
     expect(neighborCypher).not.toContain("type(r) IN $edgeTypes");
+  });
+});
+
+// ── bi-temporal time-aware reads ──────────────────────────────────────────────
+
+describe("ontologyNeighborsHandler — asOf / asKnownAt validity filter", () => {
+  it("applies the validity filter and projects validity columns by default", async () => {
+    mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(makeRows([]));
+    await ontologyNeighborsHandler({ nodeId: "n-1", direction: "both", limit: 100 }, CTX);
+    const cypher = mocks.run.mock.calls[1]?.[0] as string;
+    // Filter present (both time axes), null-safe for unstamped legacy edges.
+    expect(cypher).toContain("r.validFrom IS NULL OR r.validFrom <= datetime($asOf)");
+    expect(cypher).toContain("r.validTo IS NULL OR r.validTo > datetime($asOf)");
+    expect(cypher).toContain("r.recordedAt IS NULL OR r.recordedAt <= datetime($asKnownAt)");
+    expect(cypher).toContain("r.invalidatedAt IS NULL OR r.invalidatedAt > datetime($asKnownAt)");
+    // Validity projected back for citation.
+    expect(cypher).toContain("toString(r.validFrom) AS validFrom");
+  });
+
+  it("defaults asOf / asKnownAt params to ~now when omitted", async () => {
+    const before = Date.now();
+    mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(makeRows([]));
+    await ontologyNeighborsHandler({ nodeId: "n-1", direction: "both", limit: 100 }, CTX);
+    const params = mocks.run.mock.calls[1]?.[1] as Record<string, string>;
+    expect(new Date(params.asOf).getTime()).toBeGreaterThanOrEqual(before - 1000);
+    expect(new Date(params.asKnownAt).getTime()).toBeGreaterThanOrEqual(before - 1000);
+  });
+
+  it("threads explicit asOf / asKnownAt through as params", async () => {
+    mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(makeRows([]));
+    await ontologyNeighborsHandler(
+      {
+        nodeId: "n-1",
+        direction: "both",
+        limit: 100,
+        asOf: "2020-01-01T00:00:00.000Z",
+        asKnownAt: "2021-01-01T00:00:00.000Z",
+      },
+      CTX,
+    );
+    const params = mocks.run.mock.calls[1]?.[1] as Record<string, string>;
+    expect(params.asOf).toBe("2020-01-01T00:00:00.000Z");
+    expect(params.asKnownAt).toBe("2021-01-01T00:00:00.000Z");
   });
 });

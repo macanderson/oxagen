@@ -329,7 +329,7 @@
         "GITHUB_APP_INSTALL_STATE_SECRET",
         "GITHUB_APP_SLUG"
       ],
-      "passThroughEnv": ["CI"]
+      "passThroughEnv": ["CI", "PLAYWRIGHT_BROWSERS_PATH"]
     },
 
     "dev": {

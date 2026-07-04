@@ -54,6 +54,7 @@ vi.mock("better-auth/adapters/drizzle", () => ({
 // (production-like env). Mock it so re-import tests in non-local env succeed.
 vi.mock("better-auth/plugins", () => ({
   oAuthProxy: (opts: unknown) => ({ id: "oauth-proxy", options: opts }),
+  twoFactor: (opts: unknown) => ({ id: "two-factor", options: opts }),
 }));
 
 vi.mock("@oxagen/database/client", () => ({

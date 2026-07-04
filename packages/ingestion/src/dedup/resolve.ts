@@ -29,6 +29,7 @@
  */
 
 import { scopedSession } from "@oxagen/ontology/tenant";
+import { oversampledLimit } from "@oxagen/ontology/ann";
 import { embedText } from "@oxagen/ai";
 import type { EntityMutation, DeduplicationResult } from "../types";
 import { ALIAS_THRESHOLD, CONFIRM_THRESHOLD } from "../types";
@@ -37,6 +38,11 @@ import {
   createAliasEdge,
   type UpsertEntityOptions,
 } from "../mutations/upsert-entity";
+
+// How many tenant-matching similarity candidates to weigh when picking the
+// best dedup match. The index is over-sampled above this so the tenant/type
+// filter doesn't starve the candidate set.
+const CANDIDATE_LIMIT = 5;
 
 /**
  * A strict-mode non-conformant rejection result (§8). The node is NOT written.
@@ -122,15 +128,28 @@ export async function resolveEntity(
   const searchSession = scopedSession();
   let bestCandidate: { nodeId: string; displayName?: string; email?: string; url?: string; score: number } | null = null;
   try {
+    // The index returns the GLOBAL top-K by similarity, but we only keep nodes
+    // matching this org + entityType. Over-fetch (K = limit x factor) so the
+    // tenant/type filter doesn't crowd out valid dedup candidates as global
+    // graph volume grows, then trim back to CANDIDATE_LIMIT after filtering.
     const result = await searchSession.run(
-      `CALL db.index.vector.queryNodes('entity_node_embedding_index', 5, $vector)
+      `CALL db.index.vector.queryNodes('entity_node_embedding_index', $k, $vector)
        YIELD node AS n, score
        WHERE n.orgId = $orgId AND n.entityType = $entityType
+       WITH n, score
+       ORDER BY score DESC
+       LIMIT $limit
        RETURN n.publicId AS nodeId,
               n.displayName AS displayName,
               n.properties AS properties,
               score`,
-      { vector, orgId, entityType: mutation.entityType },
+      {
+        vector,
+        orgId,
+        entityType: mutation.entityType,
+        k: BigInt(oversampledLimit(CANDIDATE_LIMIT)),
+        limit: BigInt(CANDIDATE_LIMIT),
+      },
     );
 
     for (const record of result.records) {
