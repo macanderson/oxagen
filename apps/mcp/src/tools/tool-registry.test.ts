@@ -38,6 +38,7 @@ import { metadata as agentSubagentAggregateMetadata } from "./agent.subagent.agg
 import { metadata as agentSubagentDispatchMetadata } from "./agent.subagent.dispatch";
 import { metadata as agentSubagentFanoutGetMetadata } from "./agent.subagent.fanout.get";
 import { metadata as agentSubagentResultGetMetadata } from "./agent.subagent.result.get";
+import { metadata as agentSubagentSiblingsMetadata } from "./agent.subagent.siblings";
 import { metadata as agentSubagentFanoutListMetadata } from "./agent.subagent.fanout.list";
 import { metadata as agentToolListMetadata } from "./agent.tool.list";
 import { metadata as agentDefinitionCreateMetadata } from "./agent.definition.create";
@@ -306,6 +307,7 @@ const allToolMetadata = [
   agentSubagentDispatchMetadata,
   agentSubagentFanoutGetMetadata,
   agentSubagentResultGetMetadata,
+  agentSubagentSiblingsMetadata,
   agentSubagentFanoutListMetadata,
   agentToolListMetadata,
   agentDefinitionCreateMetadata,

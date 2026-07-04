@@ -71,6 +71,7 @@ import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve";
 import { agentExecutionRecordRoute } from "./routes/v1/agent.execution.record";
 import { agentSubagentAggregateRoute } from "./routes/v1/agent.subagent.aggregate";
 import { agentSubagentResultGetRoute } from "./routes/v1/agent.subagent.result.get";
+import { agentSubagentSiblingsRoute } from "./routes/v1/agent.subagent.siblings";
 import { agentSubagentFanoutListRoute } from "./routes/v1/agent.subagent.fanout.list";
 import { agentSubagentFanoutGetRoute } from "./routes/v1/agent.subagent.fanout.get";
 import { formFillRoute } from "./routes/v1/form.fill";
@@ -374,6 +375,7 @@ orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
 orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);
 orgScoped.route("/agent/subagent/aggregate", agentSubagentAggregateRoute);
 orgScoped.route("/agent/subagent/result", agentSubagentResultGetRoute);
+orgScoped.route("/agent/subagent/siblings", agentSubagentSiblingsRoute);
 orgScoped.route("/agent/subagent/cancel", agentSubagentCancelRoute);
 orgScoped.route("/agent/subagent/dispatch", agentSubagentDispatchRoute);
 // Read side of the fan-out feature: list fan-outs, then get one with child runs.

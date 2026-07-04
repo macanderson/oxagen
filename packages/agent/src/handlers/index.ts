@@ -74,6 +74,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   "agent.subagent.dispatch": () => import("./agent.subagent.dispatch"),
   "agent.subagent.fanout.get": () => import("./agent.subagent.fanout.get"),
   "agent.subagent.result.get": () => import("./agent.subagent.result.get"),
+  "agent.subagent.siblings": () => import("./agent.subagent.siblings"),
   "agent.subagent.fanout.list": () => import("./agent.subagent.fanout.list"),
   "agent.ui.render": () => import("./agent.ui.render"),
   "agent.definition.create": () => import("./agent.definition.create"),
