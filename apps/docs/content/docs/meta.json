@@ -12,6 +12,7 @@
     "api",
     "mcp",
     "agent",
-    "plugins"
+    "plugins",
+    "specs-and-plans"
   ]
 }
