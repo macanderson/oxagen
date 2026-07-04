@@ -85,6 +85,14 @@ CREATE VECTOR INDEX message_embedding_index IF NOT EXISTS
 FOR (n:Message) ON (n.embedding)
 OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
 
+// Semantic peer recall (Phase 2 §3 Tier B): cross-fanout recall of :Execution
+// result summaries. Anchored on the :Execution label so recallPeerResults can
+// vector-search sibling/prior run summaries directly, without the broader
+// graph_node_embedding_index label-filter round-trip.
+CREATE VECTOR INDEX execution_embedding_index IF NOT EXISTS
+FOR (n:Execution) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
 // Universal vector index for all ingested entity nodes.
 // All customer ontology nodes carry the :EntityNode label regardless of entityType.
 // Workspace-scoped queries pre-filter by workspaceId before vector search.
