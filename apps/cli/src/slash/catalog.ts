@@ -88,6 +88,12 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
   { name: "hud", description: "Toggle the running-agents heads-up display" },
   { name: "panel", description: "Toggle the Agent Team + Task side panel" },
   { name: "mouse", description: "Toggle mouse-wheel transcript scroll (full-screen mode)" },
+  {
+    name: "motion",
+    description:
+      "Set animation level — full, reduced (no invaders/border flash), off (none, incl. thinking indicator)",
+    argumentHint: "[full|reduced|off]",
+  },
   { name: "clear", description: "Clear the conversation history" },
 
   // Lifecycle

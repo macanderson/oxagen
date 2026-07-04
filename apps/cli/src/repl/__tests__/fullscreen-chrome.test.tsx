@@ -10,7 +10,7 @@
 import { describe, it, expect } from "vitest";
 import React from "react";
 import { render } from "ink-testing-library";
-import { HeaderBar, TranscriptViewport, TelemetryDock, formatClock, formatElapsed } from "../fullscreen-chrome.js";
+import { HeaderBar, TranscriptViewport, TelemetryDock, formatClock, formatElapsed, dockPanelWidth } from "../fullscreen-chrome.js";
 import { INITIAL_SCROLL_STATE, type ScrollState } from "../scroll.js";
 import { INITIAL_TELEMETRY_STATE, type TelemetryState } from "../telemetry.js";
 import type { Message } from "../components.js";
@@ -275,5 +275,28 @@ describe("TelemetryDock", () => {
     expect(frame).not.toContain("/Users/mac/Workspaces/some/deeply/nested/path/oxagen-repl2");
     expect(frame).toContain("…");
     expect(frame).toContain("oxagen-repl2"); // the informative tail survives truncation
+  });
+});
+
+describe("dockPanelWidth", () => {
+  const PANELS = 5;
+  const GAPS = PANELS - 1; // 1-col gap between panels
+
+  it("never lets the dock overflow the terminal (regression: 16-col floor clipped the REPO panel's right border at 80 cols)", () => {
+    // 24 = the narrowest terminal where the 4-col floor itself still fits;
+    // below that the floor necessarily overflows and Ink clips — irrelevant,
+    // fullscreen at <24 cols is unusable anyway.
+    for (let cols = 24; cols <= 240; cols++) {
+      const width = dockPanelWidth(cols);
+      expect(width * PANELS + GAPS).toBeLessThanOrEqual(cols);
+    }
+  });
+
+  it("uses the available width at a default 80-col terminal (15-col panels, 79 total)", () => {
+    expect(dockPanelWidth(80)).toBe(15);
+  });
+
+  it("keeps a border-capable floor on absurdly narrow screens", () => {
+    expect(dockPanelWidth(10)).toBe(4);
   });
 });

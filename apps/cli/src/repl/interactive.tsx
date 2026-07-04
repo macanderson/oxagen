@@ -79,7 +79,7 @@ import {
 import { openTraceStore } from "../agent/trace-store.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
-import { readConfig } from "../lib/config.js";
+import { readConfig, getMotionMode, setMotionMode, type MotionMode } from "../lib/config.js";
 import { debugLog } from "../lib/debug-log.js";
 import { formatToolArgs } from "../agent/tool-formatter.js";
 import {
@@ -110,7 +110,7 @@ import {
 } from "./scroll.js";
 import { telemetryReducer, INITIAL_TELEMETRY_STATE } from "./telemetry.js";
 import { resolveModelRoles } from "./model-roles.js";
-import { borderPhaseFor, borderColorFor, RAINBOW_FLASH_INTERVAL_MS } from "./border-phase.js";
+import { borderPhaseFor, promptBorderColorFor, RAINBOW_FLASH_INTERVAL_MS } from "./border-phase.js";
 import { inputContentRow } from "./mouse-select.js";
 import { HeaderBar, TranscriptViewport, TelemetryDock, formatElapsed } from "./fullscreen-chrome.js";
 import { useMouseWheel } from "./use-mouse-wheel.js";
@@ -466,13 +466,21 @@ export function ReplApp({
   // interval is torn down the instant the phase moves on so a flash from a
   // finished turn can never bleed into the next one.
   const borderPhase = borderPhaseFor(telemetry.turn.phase);
+  // Animation level (/motion): "full" = everything, "reduced" = no decorative
+  // animation (invaders duel, prompt border flash), "off" = reduced plus the
+  // thinking indicator. Persisted in ~/.config/oxagen/config.json; mirrored
+  // into a ref because handleSubmit is memoized without it as a dep (same
+  // pattern as mouseOnRef below).
+  const [motion, setMotion] = useState<MotionMode>(() => getMotionMode());
+  const motionRef = useRef(motion);
   const [flashTick, setFlashTick] = useState(0);
   useEffect(() => {
-    if (borderPhase !== "evaluating") return;
+    // The rainbow flash is decorative — only tick it at full motion.
+    if (borderPhase !== "evaluating" || motion !== "full") return;
     const timer = setInterval(() => setFlashTick((t) => t + 1), RAINBOW_FLASH_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [borderPhase]);
-  const promptBorderColor = borderColorFor(borderPhase, flashTick);
+  }, [borderPhase, motion]);
+  const promptBorderColor = promptBorderColorFor(borderPhase, flashTick, motion);
   // Whether the prompt bar is empty — gates Up/Down/Home/End between
   // transcript-scroll (bar empty) and their normal recall-queue / panel-entry
   // / cursor meaning (bar has text). Mirrored from PromptInput's onEmptyChange.
@@ -1250,6 +1258,35 @@ export function ReplApp({
           next
             ? "Mouse-wheel scroll ON — the transcript viewport (full-screen mode) now responds to wheel/trackpad scroll. /mouse to turn it off if it interferes with your terminal's text selection."
             : "Mouse-wheel scroll OFF. Keyboard scroll (PageUp/PageDown, Ctrl-U/Ctrl-D, Up/Down/Home/End on an empty bar) always works regardless. /mouse to turn it back on.",
+        );
+        return;
+      }
+      if (text === "/motion" || text.startsWith("/motion ")) {
+        const raw = text.slice("/motion".length).trim().toLowerCase();
+        // "on" reads naturally as "turn animations on" — accept it as full.
+        const arg = raw === "on" ? "full" : raw;
+        if (!arg) {
+          pushAssistant(
+            `Motion: ${motionRef.current}.\n` +
+              "Use /motion full|reduced|off — full animates everything; reduced " +
+              "drops the space-invaders duel and the prompt bar's border flash; " +
+              "off disables all animation, including the thinking indicator.",
+          );
+          return;
+        }
+        if (arg !== "full" && arg !== "reduced" && arg !== "off") {
+          pushAssistant(`Unknown motion mode "${raw}" — use /motion full|reduced|off.`);
+          return;
+        }
+        motionRef.current = arg;
+        setMotion(arg);
+        setMotionMode(arg); // persist across sessions
+        pushAssistant(
+          arg === "full"
+            ? "Motion FULL — all animations on (saved)."
+            : arg === "reduced"
+              ? "Motion REDUCED — space-invaders duel and prompt border flash off; thinking indicator stays (saved)."
+              : "Motion OFF — all animations off, including the thinking indicator (saved).",
         );
         return;
       }
@@ -2377,7 +2414,11 @@ export function ReplApp({
         />
 
         <Box flexDirection="row" flexGrow={1} overflow="hidden">
-          <Box flexDirection="column" flexGrow={1} minWidth={0}>
+          {/* overflow=hidden: wide unbreakable content (e.g. a terminal run's
+              long command line) must clip inside this column rather than
+              inflate its flex basis and squeeze the fixed-width sidebar —
+              which would amputate the sidebar panels' right border. */}
+          <Box flexDirection="column" flexGrow={1} minWidth={0} overflow="hidden">
             {terminalRun && <TerminalPanel run={terminalRun} />}
             <TranscriptViewport
               committedMessages={committedMessages}
@@ -2428,10 +2469,12 @@ export function ReplApp({
         )}
 
         {/* Status row (1 row): the invaders duel doubles as the signature
-            animation, plus a compact elapsed readout while a turn streams. */}
+            animation, plus a compact elapsed readout while a turn streams.
+            /motion gates both: the duel is decorative (full only); the
+            elapsed readout is the fullscreen thinking indicator (off hides it). */}
         <Box paddingX={1}>
-          {process.env.OXAGEN_CLI_FUN !== "0" ? <SpaceInvaders active={isStreaming} /> : null}
-          {isStreaming && turnStartedAt !== null ? (
+          {motion === "full" ? <SpaceInvaders active={isStreaming} /> : null}
+          {motion !== "off" && isStreaming && turnStartedAt !== null ? (
             <Text color="#FBBF24">
               {"  thinking… "}
               {formatElapsed(now - turnStartedAt)}
@@ -2509,7 +2552,10 @@ export function ReplApp({
         )}
 
         <Box flexDirection="row" flexShrink={1} overflow="hidden">
-          <Box flexDirection="column" flexGrow={1} minWidth={0}>
+          {/* overflow=hidden: wide unbreakable content must clip inside this
+              column rather than inflate its flex basis and squeeze the
+              fixed-width sidebar, which would clip the panels' right border. */}
+          <Box flexDirection="column" flexGrow={1} minWidth={0} overflow="hidden">
             {/* Terminal panel — a `!command`'s live stdout/stderr, red-outlined and
                 pinned just ABOVE the in-progress message so shell output stays
                 visually separate from the agent speaking. Null until a command
@@ -2551,8 +2597,9 @@ export function ReplApp({
           </Box>
         )}
 
-      {/* Thinking indicator — visible only while a turn is in flight. */}
-      {isStreaming && turnStartedAt !== null && (
+      {/* Thinking indicator — visible only while a turn is in flight (and
+          animation isn't fully disabled via /motion off). */}
+      {motion !== "off" && isStreaming && turnStartedAt !== null && (
         <ThinkingIndicator
           startedAt={turnStartedAt}
           getTokens={() => Math.round(streamCharsRef.current / 4)}
@@ -2616,9 +2663,9 @@ export function ReplApp({
       {/* Status line — below the input bar, with a blank row beneath it so it is
           never flush against the bottom edge of the window. A whimsical rocket
           duels a UFO on the rail above it while a turn is running (opt out
-          with OXAGEN_CLI_FUN=0). */}
+          with /motion reduced|off, or the legacy OXAGEN_CLI_FUN=0). */}
       <Box marginBottom={1} flexShrink={0} flexDirection="column">
-        {process.env.OXAGEN_CLI_FUN !== "0" ? (
+        {motion === "full" ? (
           <SpaceInvaders active={isStreaming} />
         ) : null}
         <StatusLine

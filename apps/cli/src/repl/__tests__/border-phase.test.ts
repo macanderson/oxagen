@@ -8,6 +8,7 @@ import { describe, it, expect } from "vitest";
 import {
   borderPhaseFor,
   borderColorFor,
+  promptBorderColorFor,
   rainbowColorAt,
   RAINBOW_FLASH_COLORS,
   RAINBOW_FLASH_INTERVAL_MS,
@@ -103,5 +104,29 @@ describe("borderColorFor", () => {
     const idlePhase: BorderPhase = "idle";
     const activePhase: BorderPhase = "active";
     expect(borderColorFor(idlePhase, 0)).not.toBe(borderColorFor(activePhase, 0));
+  });
+});
+
+describe("promptBorderColorFor (motion-aware)", () => {
+  it("at full motion it delegates to borderColorFor, rainbow flash included", () => {
+    for (const phase of ["idle", "active", "evaluating"] as const) {
+      for (const tick of [0, 1, 2, 7]) {
+        expect(promptBorderColorFor(phase, tick, "full")).toBe(borderColorFor(phase, tick));
+      }
+    }
+  });
+
+  it("at reduced motion the evaluating flash is suppressed to the static active amber", () => {
+    // Same color for every tick — the border must never animate.
+    const colors = new Set([0, 1, 2, 3, 9].map((t) => promptBorderColorFor("evaluating", t, "reduced")));
+    expect(colors).toEqual(new Set([theme.amber]));
+  });
+
+  it("at reduced/off motion, idle stays cyan and any in-flight phase reads amber", () => {
+    for (const motion of ["reduced", "off"] as const) {
+      expect(promptBorderColorFor("idle", 5, motion)).toBe(theme.cyan);
+      expect(promptBorderColorFor("evaluating", 5, motion)).toBe(theme.amber);
+      expect(promptBorderColorFor("active", 5, motion)).toBe(theme.amber);
+    }
   });
 });

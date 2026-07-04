@@ -21,6 +21,7 @@ import {
   type InitProgressEvent,
 } from "../commands/init.js";
 import { InitAnimationApp } from "./init-animation-app.js";
+import { getMotionMode } from "../lib/config.js";
 
 function plainLine(e: InitProgressEvent): string | null {
   switch (e.phase) {
@@ -45,7 +46,9 @@ function plainLine(e: InitProgressEvent): string | null {
 function shouldAnimate(opts: InitOptions): boolean {
   if (opts.json) return false;
   if (!process.stdout.isTTY) return false;
-  if (process.env["OXAGEN_CLI_FUN"] === "0") return false;
+  // /motion reduced|off kills the easter-egg game; getMotionMode also maps the
+  // legacy OXAGEN_CLI_FUN=0 opt-out to "reduced", preserving that contract.
+  if (getMotionMode() !== "full") return false;
   return true;
 }
 
