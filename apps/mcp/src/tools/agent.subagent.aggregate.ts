@@ -9,7 +9,13 @@ export const schema = {
     "Public ID of the subagent fanout to aggregate",
   ),
   timeoutMs: agentSubagentAggregate.input.shape.timeoutMs.describe(
-    "Max milliseconds to wait for all children (default 5 min, max 30 min)",
+    "Snapshot staleness window in ms (default 5 min, max 30 min) — non-blocking, never sleeps",
+  ),
+  includeOutputs: agentSubagentAggregate.input.shape.includeOutputs.describe(
+    "DEPRECATED: relay full child payloads (capped). Prefer the default compact summaries + agent.subagent.result.get for the one child you need",
+  ),
+  includeMerged: agentSubagentAggregate.input.shape.includeMerged.describe(
+    "Include deep-merged aggregatedData (capped; conflicts are always returned)",
   ),
 };
 
