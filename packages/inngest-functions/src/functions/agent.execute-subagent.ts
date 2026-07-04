@@ -7,6 +7,38 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { logger } from "../logger";
 import "@oxagen/oxagen";
 
+/**
+ * Structural ≤280-char digest of a child run's output, stored on
+ * subagent_runs.summary so agent.subagent.aggregate can return summaries +
+ * runId refs instead of relaying full payloads into the parent LLM context
+ * (docs/specs/graph-mediated-fanout). Zero LLM cost by design:
+ *   1. a top-level string `summary` / `message` / `text` field wins,
+ *   2. else the JSON-serialized output truncated,
+ *   3. else empty (failed runs store their errorReason instead).
+ * 280 chars matches the CLI fleet's proven per-worker digest budget.
+ * Pure helper — exported for unit testing.
+ */
+export const RUN_SUMMARY_MAX_CHARS = 280;
+
+export function deriveRunSummary(output: unknown): string {
+  if (output !== null && output !== undefined && typeof output === "object" && !Array.isArray(output)) {
+    const record = output as Record<string, unknown>;
+    for (const key of ["summary", "message", "text"] as const) {
+      const value = record[key];
+      if (typeof value === "string" && value.trim().length > 0) {
+        return value.trim().slice(0, RUN_SUMMARY_MAX_CHARS);
+      }
+    }
+  }
+  if (output === null || output === undefined) return "";
+  try {
+    const serialized = JSON.stringify(output);
+    return typeof serialized === "string" ? serialized.slice(0, RUN_SUMMARY_MAX_CHARS) : "";
+  } catch {
+    return "";
+  }
+}
+
 /** Pure helper — exported for unit testing. */
 export function deriveFanoutStatus(
   completed: number,
@@ -96,6 +128,18 @@ export const [agentExecuteSubagent] = createFunction(
           messageId: r.childMessageId,
         };
         try {
+          // Stamp the run as started BEFORE the invoke so timeline/durationMs
+          // (and aggregate's recheckAfterMs estimate) reflect real per-child
+          // timing — previously startedAt was never written and every child sat
+          // at 'pending' until it finished.
+          await runInTenantScope({ orgId, workspaceId }, () =>
+            withTenantDb((tx) =>
+              tx
+                .update(schema.subagentRuns)
+                .set({ status: "running", startedAt: new Date() })
+                .where(eq(schema.subagentRuns.id, r.id)),
+            ),
+          );
           // Route through kernel.invoke() for IAM enforcement, audit, and
           // uniform metering (OXA-1498 — previously bypassed via invokeCapability).
           // kernel.invoke() enters its own runInTenantScope internally (OXA-1515).
@@ -107,7 +151,12 @@ export const [agentExecuteSubagent] = createFunction(
             withTenantDb((tx) =>
               tx
                 .update(schema.subagentRuns)
-                .set({ status: "completed", outputPayload: (output ?? null) as object, completedAt: new Date() })
+                .set({
+                  status: "completed",
+                  outputPayload: (output ?? null) as object,
+                  summary: deriveRunSummary(output),
+                  completedAt: new Date(),
+                })
                 .where(eq(schema.subagentRuns.id, r.id)),
             ),
           );
@@ -147,6 +196,7 @@ export const [agentExecuteSubagent] = createFunction(
                 .set({
                   status: "failed",
                   errorReason: err instanceof Error ? err.message : String(err),
+                  summary: (err instanceof Error ? err.message : String(err)).slice(0, RUN_SUMMARY_MAX_CHARS),
                   completedAt: new Date(),
                 })
                 .where(eq(schema.subagentRuns.id, r.id)),

@@ -260,6 +260,11 @@ export const subagentRuns = agentSchema.table(
     capabilityName: text("capability_name").notNull(),
     inputPayload: jsonb("input_payload").notNull(),
     outputPayload: jsonb("output_payload"),
+    // Structural ≤280-char digest of the output, written by the executor at
+    // completion so agent.subagent.aggregate can return summaries instead of
+    // relaying full payloads into the parent LLM context
+    // (docs/specs/graph-mediated-fanout).
+    summary: text("summary"),
     status: text("status").notNull(),
     errorReason: text("error_reason"),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),

@@ -1,11 +1,14 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
-import type {
-  AgentSubagentAggregateInput,
-  AgentSubagentAggregateOutput,
+import {
+  AGGREGATE_CHILD_OUTPUT_CAP_BYTES,
+  AGGREGATE_MERGED_CAP_BYTES,
+  type AgentSubagentAggregateInput,
+  type AgentSubagentAggregateOutput,
 } from "@oxagen/oxagen/contracts/agent.subagent.aggregate";
 import { FanoutNotFoundError } from "./subagent-errors";
+import { capPayload, fallbackRunSummary, payloadByteSize } from "./subagent-payload";
 
 export type { AgentSubagentAggregateInput, AgentSubagentAggregateOutput };
 
@@ -15,6 +18,7 @@ type RunRow = {
   status: string;
   inputPayload: unknown;
   outputPayload: unknown;
+  summary: string | null;
   errorReason: string | null;
   startedAt: Date | null;
   completedAt: Date | null;
@@ -85,6 +89,7 @@ async function loadRuns(fanoutUuid: string, ctx: CapabilityContext): Promise<Run
         status: schema.subagentRuns.status,
         inputPayload: schema.subagentRuns.inputPayload,
         outputPayload: schema.subagentRuns.outputPayload,
+        summary: schema.subagentRuns.summary,
         errorReason: schema.subagentRuns.errorReason,
         startedAt: schema.subagentRuns.startedAt,
         completedAt: schema.subagentRuns.completedAt,
@@ -201,17 +206,6 @@ export async function agentSubagentAggregateHandler(
     errorReason: r.errorReason,
   }));
 
-  // Per-child raw results — full input + output, NOT merged. This is what lets
-  // research.swarm.status surface each query's hits instead of a collapsed blob.
-  const children = runs.map((r) => ({
-    runId: r.publicId,
-    capabilityName: r.capabilityName,
-    status: r.status,
-    input: r.inputPayload,
-    output: r.outputPayload,
-    errorReason: r.errorReason,
-  }));
-
   const completedCount = runs.filter((r) => r.status === "completed").length;
   const failedRuns = runs.filter((r) => r.status === "failed");
   const firstError = failedRuns[0]?.errorReason ?? null;
@@ -224,14 +218,57 @@ export async function agentSubagentAggregateHandler(
     Date.now(),
   );
 
+  // Per-child results. Compact by default: runId + summary + size — the full
+  // payloads stay in Postgres and are fetched per-run via
+  // agent.subagent.result.get when a summary is insufficient. This is the
+  // token seam the spec kills: the old shape relayed every child's full
+  // input+output into the parent LLM's context on every aggregate call
+  // (docs/specs/graph-mediated-fanout).
+  //
+  // Legacy mode (includeOutputs, deprecated): attach full input + capped
+  // output to each entry — preserved for callers that post-process payloads
+  // server-side (research.swarm.status, agent.subagent.logs), including while
+  // the fanout is still running (progressive results).
+  //
+  // Compact mode while still running returns NO children at all — counts +
+  // recheckAfterMs are all a caller can act on mid-flight; timeline still
+  // carries live per-child status for viewers.
+  const compactChildren =
+    status === "running" && !input.includeOutputs
+      ? []
+      : runs.map((r) => {
+          const base = {
+            runId: r.publicId,
+            capabilityName: r.capabilityName,
+            status: r.status,
+            summary: r.summary ?? fallbackRunSummary(r.outputPayload, r.errorReason),
+            outputBytes: payloadByteSize(r.outputPayload),
+            errorReason: r.errorReason,
+          };
+          if (!input.includeOutputs) return base;
+          const capped = capPayload(r.outputPayload, AGGREGATE_CHILD_OUTPUT_CAP_BYTES);
+          return {
+            ...base,
+            input: r.inputPayload,
+            output: capped.value,
+            ...(capped.truncated ? { outputTruncated: true } : {}),
+          };
+        });
+
   // Merge only completed children's output. For an all-failed or still-running
   // fanout we never surface partial data as if usable — aggregatedData is null.
   // A "partial" fanout DOES return the merged output of the children that
   // succeeded, honestly labelled partial so callers never mistake it for done.
+  // conflicts[] is always computed for mergeable states (cheap, server-side);
+  // aggregatedData itself ships only when includeMerged asks for it AND the
+  // merge fits the size cap — an oversized merge is flagged, not relayed.
   const canMerge = status === "completed" || status === "partial";
-  const { aggregatedData, conflicts } = canMerge
+  const { aggregatedData: mergedData, conflicts } = canMerge
     ? mergeOutputs(runs)
     : { aggregatedData: null, conflicts: [] as AgentSubagentAggregateOutput["conflicts"] };
+  const mergedOverCap =
+    input.includeMerged && mergedData !== null && payloadByteSize(mergedData) > AGGREGATE_MERGED_CAP_BYTES;
+  const aggregatedData = input.includeMerged && !mergedOverCap ? mergedData : null;
 
   return {
     fanoutId: input.fanoutId,
@@ -245,9 +282,29 @@ export async function agentSubagentAggregateHandler(
     // each child the moment its run row flips to "completed".
     completedChildren: completedCount,
     aggregatedData,
+    aggregatedDataTruncated: mergedOverCap,
     conflicts,
     timeline,
-    children,
+    children: compactChildren,
+    recheckAfterMs: status === "running" ? estimateRecheckMs(runs) : null,
     firstError,
   };
+}
+
+// Suggested wait before the next aggregate call while children are still
+// executing: the median observed child duration, clamped to [5s, 60s]. With
+// no completed child yet there is nothing to estimate — default 15s.
+const RECHECK_DEFAULT_MS = 15_000;
+const RECHECK_MIN_MS = 5_000;
+const RECHECK_MAX_MS = 60_000;
+
+function estimateRecheckMs(runs: RunRow[]): number {
+  const durations = runs
+    .filter((r) => r.status === "completed" && r.startedAt && r.completedAt)
+    .map((r) => (r.completedAt as Date).getTime() - (r.startedAt as Date).getTime())
+    .filter((ms) => ms > 0)
+    .sort((a, b) => a - b);
+  if (durations.length === 0) return RECHECK_DEFAULT_MS;
+  const median = durations[Math.floor(durations.length / 2)]!;
+  return Math.min(RECHECK_MAX_MS, Math.max(RECHECK_MIN_MS, Math.round(median)));
 }

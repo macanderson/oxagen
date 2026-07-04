@@ -24,6 +24,7 @@ echo "→ Installing extensions in atlas_dev..."
 PGPASSWORD="$PG_PASS" $PSQL -d atlas_dev <<'SQL'
 CREATE EXTENSION IF NOT EXISTS citext;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 DO $$
 BEGIN
   BEGIN
