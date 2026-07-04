@@ -32,6 +32,28 @@ vi.mock("@oxagen/agent-engine", async (importOriginal) => ({
   // resolves the judge via pickAdvisorModel at mount) — a bare factory
   // mock crashes the very first render with undefined exports.
   ...(await importOriginal<typeof import("@oxagen/agent-engine")>()),
+  // Instant single-task plan so turns reach the mocked runTurn without a live
+  // planner model call (the real planTasks would hit the network here).
+  planTasks: async () => ({
+    id: "plan_test",
+    goal: "",
+    createdAt: 0,
+    status: "draft",
+    tasks: [
+      {
+        id: "t1",
+        title: "t1",
+        description: "t1",
+        status: "queued",
+        dependsOn: [],
+        files: [],
+        tier: "fast",
+        model: "test/model",
+        createdAt: 0,
+        usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      },
+    ],
+  }),
   runTurn: (opts: { prompt: string }) =>
     new Promise<RunTurnResultLike>((resolve) => {
       runTurnSpy(opts);

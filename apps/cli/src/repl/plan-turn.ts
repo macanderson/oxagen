@@ -32,6 +32,13 @@ const HISTORY_DIGEST_MAX_CHARS = 2_000;
 /** How many trailing messages are considered for the digest. */
 const HISTORY_DIGEST_MAX_MESSAGES = 6;
 
+/**
+ * Wall-clock bound on the planner call. Planning must never hang the turn —
+ * past this it degrades to the fallback plan. OXAGEN_PLAN_TIMEOUT_MS overrides
+ * (0 disables the bound), mirroring the enhance-stage convention.
+ */
+const DEFAULT_PLAN_TIMEOUT_MS = 60_000;
+
 /** The planner function signature, injectable for tests. */
 export type PlanFn = typeof enginePlanTasks;
 
@@ -49,6 +56,8 @@ export interface PlanReplTurnOptions {
   signal?: AbortSignal;
   /** Test seam; defaults to the engine planner. */
   planFn?: PlanFn;
+  /** Planner wall-clock bound in ms; 0 disables. Default 60s (env-overridable). */
+  timeoutMs?: number;
 }
 
 /** Extract the readable text of one ModelMessage (string or parts array). */
@@ -119,9 +128,15 @@ export async function planReplTurn(opts: PlanReplTurnOptions): Promise<Plan> {
   const goal = digest
     ? `Conversation so far (for reference resolution):\n${digest}\n\nCurrent request:\n${opts.goal}`
     : opts.goal;
-  const plan = opts.planFn ?? enginePlanTasks;
+  const envTimeout = Number(process.env["OXAGEN_PLAN_TIMEOUT_MS"]);
+  const timeoutMs =
+    opts.timeoutMs ?? (Number.isFinite(envTimeout) ? envTimeout : DEFAULT_PLAN_TIMEOUT_MS);
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const planned = await plan({
+    // Resolved inside the try: an engine build (or test mock) without a
+    // planner export degrades to the fallback plan, same as a failed call.
+    const plan = opts.planFn ?? enginePlanTasks;
+    const planCall = plan({
       goal,
       ai: opts.ai,
       codeGraph: opts.codeGraph ?? null,
@@ -135,11 +150,26 @@ export async function planReplTurn(opts: PlanReplTurnOptions): Promise<Plan> {
       })),
       signal: opts.signal,
     });
+    // Bound by wall clock: planning must never hang the turn. The abandoned
+    // call's eventual rejection is pre-handled so it can't surface as an
+    // unhandled rejection after the race is lost.
+    planCall.catch(() => {});
+    const planned =
+      timeoutMs > 0
+        ? await Promise.race([
+            planCall,
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(() => reject(new Error("planning timed out")), timeoutMs);
+            }),
+          ])
+        : await planCall;
     // Rehome the goal onto the raw submission (the digest prefix is planner
     // input, not something to persist or replay).
     return { ...planned, goal: opts.goal, tasks: planned.tasks as Task[] };
   } catch (err) {
     if (opts.signal?.aborted) throw err;
     return fallbackPlan(opts.goal);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }

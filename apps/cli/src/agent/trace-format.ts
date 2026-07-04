@@ -30,7 +30,7 @@ function shortModel(model: string | undefined): string {
 /** Human label for a phase in the verbose breakdown. */
 const PHASE_LABEL: Record<PhaseStat["phase"], string> = {
   evaluate: "prompt eval",
-  plan: "plan",
+  plan: "task plan",
   enhance: "context gather",
   route: "route",
   execute: "WORK (code)",
