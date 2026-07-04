@@ -32,7 +32,11 @@ vi.mock("../../agent/memory.js", () => ({
 }));
 
 // Keep the rest of the REPL inert so the test exercises only the memory lifecycle.
-vi.mock("@oxagen/agent-engine", () => ({
+vi.mock("@oxagen/agent-engine", async (importOriginal) => ({
+  // Real module first: ReplApp reaches beyond runTurn (e.g. model-roles.ts
+  // resolves the judge via pickAdvisorModel at mount) — a bare factory
+  // mock crashes the very first render with undefined exports.
+  ...(await importOriginal<typeof import("@oxagen/agent-engine")>()),
   runTurn: () => new Promise<never>(() => {}),
 }));
 // Stub the engine code-graph port source so the test doesn't load the

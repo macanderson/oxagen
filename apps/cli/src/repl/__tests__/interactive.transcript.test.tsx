@@ -23,7 +23,11 @@ import { render } from "ink-testing-library";
 // the REPL takes the "closeStreamingBlocks → push final assistant" path and the
 // answer lands as a settled (non-streaming) message, eligible for <Static>.
 const runTurnSpy = vi.fn<(opts: { prompt: string }) => void>();
-vi.mock("@oxagen/agent-engine", () => ({
+vi.mock("@oxagen/agent-engine", async (importOriginal) => ({
+  // Real module first: ReplApp reaches beyond runTurn (e.g. model-roles.ts
+  // resolves the judge via pickAdvisorModel at mount) — a bare factory
+  // mock crashes the very first render with undefined exports.
+  ...(await importOriginal<typeof import("@oxagen/agent-engine")>()),
   runTurn: async (opts: { prompt: string }) => {
     runTurnSpy(opts);
     return {
