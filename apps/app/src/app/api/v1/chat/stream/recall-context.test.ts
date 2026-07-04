@@ -7,20 +7,19 @@
  *       text (truncated), a bounded limit, and the turn's executionRef, and
  *       returns a volatile user message carrying the recalled lessons.
  *   (b) recall failure / empty result / timeout → null (turn proceeds untouched).
- *   (c) injectRecalledMemory places the message immediately before the latest
- *       user message, and is a no-op when there is nothing to inject.
+ *   (c) stripRecalledMemoryHeading drops our "##" heading (the engine adds its
+ *       own) while keeping the anti-injection preamble.
  *   (d) formatRecalledMemories renders RULE enforcement and returns null on empty.
  */
 
 import { describe, it, expect, vi } from "vitest";
-import type { ModelMessage } from "@oxagen/ai";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { agentMemoryRecall } from "@oxagen/oxagen/contracts/agent.memory.recall";
 import {
   formatRecalledMemories,
   buildRecalledMemoryMessage,
   recallWorkspaceMemory,
-  injectRecalledMemory,
+  stripRecalledMemoryHeading,
 } from "./recall-context";
 
 type RecalledMemory = Parameters<typeof formatRecalledMemories>[0][number];
@@ -52,9 +51,6 @@ const CTX: CapabilityContext = {
   clientIp: null,
 } as CapabilityContext;
 
-function userMsg(content: string): ModelMessage {
-  return { role: "user", content };
-}
 
 describe("formatRecalledMemories", () => {
   it("returns null when there are no memories (no empty section)", () => {
@@ -83,6 +79,24 @@ describe("formatRecalledMemories", () => {
     ]);
     expect(body).toContain("line one line two");
     expect(body).not.toContain("line one\n");
+  });
+});
+
+describe("stripRecalledMemoryHeading", () => {
+  it("drops the leading ## heading and following blank lines, keeps the preamble", () => {
+    const body = formatRecalledMemories([memory({ lesson: "use strict types" })]);
+    expect(body).not.toBeNull();
+    const stripped = stripRecalledMemoryHeading(body as string);
+    // The engine adds its own heading, so ours must be gone…
+    expect(stripped.startsWith("## ")).toBe(false);
+    expect(stripped).not.toContain("Recalled workspace memory");
+    // …but the anti-injection preamble and bullets stay.
+    expect(stripped.startsWith("(System-injected context")).toBe(true);
+    expect(stripped).toContain("use strict types");
+  });
+
+  it("returns the body unchanged when there is no leading heading", () => {
+    expect(stripRecalledMemoryHeading("- just a bullet")).toBe("- just a bullet");
   });
 });
 
@@ -185,37 +199,3 @@ describe("recallWorkspaceMemory", () => {
   });
 });
 
-describe("injectRecalledMemory", () => {
-  it("inserts the recalled message immediately before the latest user message", () => {
-    const messages: ModelMessage[] = [
-      userMsg("first"),
-      { role: "assistant", content: "reply" },
-      userMsg("current question"),
-    ];
-    const recalled = buildRecalledMemoryMessage([memory({ lesson: "Injected" })]);
-
-    const out = injectRecalledMemory(messages, recalled);
-
-    expect(out).toHaveLength(4);
-    // recalled sits at index 2, right before the latest user message (now index 3)
-    expect(String(out[2]?.content)).toContain("Injected");
-    expect(out[3]).toEqual(userMsg("current question"));
-    // The current user message is still the LAST message the model sees.
-    expect(out[out.length - 1]).toEqual(userMsg("current question"));
-  });
-
-  it("is a no-op when there is nothing to inject", () => {
-    const messages: ModelMessage[] = [userMsg("only")];
-    const out = injectRecalledMemory(messages, null);
-    expect(out).toEqual(messages);
-  });
-
-  it("prepends when the only message is the user turn", () => {
-    const messages: ModelMessage[] = [userMsg("solo")];
-    const recalled = buildRecalledMemoryMessage([memory()]);
-    const out = injectRecalledMemory(messages, recalled);
-    expect(out).toHaveLength(2);
-    expect(out[0]).toBe(recalled);
-    expect(out[1]).toEqual(userMsg("solo"));
-  });
-});

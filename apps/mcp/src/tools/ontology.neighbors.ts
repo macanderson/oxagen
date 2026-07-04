@@ -15,6 +15,12 @@ export const schema = {
   direction: ontologyNeighbors.input.shape.direction.describe(
     "Which neighbors to return relative to the node: 'out', 'in', or 'both'",
   ),
+  asOf: ontologyNeighbors.input.shape.asOf.describe(
+    "Valid-time instant (ISO-8601): return neighbors connected by edges true at this time; omit for now",
+  ),
+  asKnownAt: ontologyNeighbors.input.shape.asKnownAt.describe(
+    "Transaction-time instant (ISO-8601): return neighbors as known/recorded at this time; omit for now",
+  ),
 };
 
 export const metadata: ToolMetadata = {

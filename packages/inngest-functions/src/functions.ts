@@ -34,9 +34,13 @@ import { ingestionGithubInitialSync } from "./functions/ingestion.github-initial
 import { ingestionGithubCommitFiles } from "./functions/ingestion.github-commit-files";
 import { ingestionGithubParseFile } from "./functions/ingestion.github-parse-file";
 import { ingestionGithubInferFeatures } from "./functions/ingestion.github-infer-features";
+import { ingestionGithubInferFeaturesBatch } from "./functions/ingestion.github-infer-features-batch";
 import { ingestionGithubInferDomains } from "./functions/ingestion.github-infer-domains";
 import { ingestionSemanticEdgeInfer } from "./functions/ingestion.semantic-edge-infer";
+import { ingestionBatchReconcile } from "./functions/ai.batch-reconcile";
 import { ingestionSyncRequested } from "./functions/ingestion.sync-requested";
+import { ingestionPollScheduler } from "./functions/ingestion.poll-scheduler";
+import { ingestionConnectionPoll } from "./functions/ingestion.connection-poll";
 import { playbookTriggerMatch } from "./functions/playbook.trigger.match";
 import { playbookRunExecute } from "./functions/playbook.run.execute";
 import { mcpToolSnapshotRetention } from "./functions/mcp.tool-snapshot-retention";
@@ -46,6 +50,7 @@ import { engramSyncMemoryToGraph } from "./functions/engram.sync-memory-to-graph
 import { engramEmbedMemory } from "./functions/engram.embed-memory";
 import { engramConsolidationRun } from "./functions/engram.consolidation.run";
 import { memoryDecayPass } from "./functions/memory.decay-pass";
+import { evalRunExecute } from "./functions/eval.run.execute";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -83,9 +88,13 @@ export const functions: any[] = [
   ingestionGithubCommitFiles,
   ingestionGithubParseFile,
   ingestionGithubInferFeatures,
+  ingestionGithubInferFeaturesBatch,
   ingestionGithubInferDomains,
   ingestionSemanticEdgeInfer,
+  ingestionBatchReconcile,
   ingestionSyncRequested,
+  ingestionPollScheduler,
+  ingestionConnectionPoll,
   playbookTriggerMatch,
   playbookRunExecute,
   mcpToolSnapshotRetention,
@@ -95,4 +104,5 @@ export const functions: any[] = [
   engramEmbedMemory,
   engramConsolidationRun,
   memoryDecayPass,
+  evalRunExecute,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);

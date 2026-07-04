@@ -117,6 +117,19 @@ describe("@oxagen/functions type contracts", () => {
       expect(full.cancelOn?.[0]?.event).toBe("agent/workflow.cancel");
     });
 
+    it("supports optional batchEvents config", () => {
+      const config: DurableFunctionConfig = {
+        id: "ingestion.github-infer-features-batch",
+        batchEvents: { maxSize: 50, timeout: "30s", key: "event.data.orgId" },
+      };
+      expectTypeOf(config.batchEvents).toEqualTypeOf<
+        { maxSize: number; timeout: string; key?: string } | undefined
+      >();
+      expect(config.batchEvents?.maxSize).toBe(50);
+      expect(config.batchEvents?.timeout).toBe("30s");
+      expect(config.batchEvents?.key).toBe("event.data.orgId");
+    });
+
     it("supports optional timeouts with finish duration", () => {
       const config: DurableFunctionConfig = {
         id: "agent.video-render",

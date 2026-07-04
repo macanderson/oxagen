@@ -185,6 +185,13 @@ export interface StreamAgentReplyArgs {
    */
   toolChoice?: Parameters<typeof streamText>[0]["toolChoice"];
   /**
+   * Forwarded verbatim to `streamText`. The agent-engine step loop passes the
+   * turn's `AbortSignal` so a client disconnect (a closed SSE connection) or a
+   * user cancel aborts the in-flight model call instead of streaming to nobody.
+   * Omit when the caller has no cancellation source.
+   */
+  abortSignal?: AbortSignal;
+  /**
    * Required for OXA-1351 instrumentation. The caller's CapabilityContext
    * carries `orgId`, `workspaceId`, and `surface`; pass them through so
    * every LLM call lands in `token_usage` with provider, duration_ms,
@@ -297,6 +304,7 @@ export function streamAgentReply(args: StreamAgentReplyArgs): StreamTextResult<T
       ? { maxOutputTokens: args.maxOutputTokens }
       : {}),
     ...(args.toolChoice !== undefined ? { toolChoice: args.toolChoice } : {}),
+    ...(args.abortSignal !== undefined ? { abortSignal: args.abortSignal } : {}),
     onFinish: async (event) => {
       const durationMs = Date.now() - startedAt;
       // AI SDK v6: usage fields are inputTokens/outputTokens (was

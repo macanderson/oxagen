@@ -133,6 +133,32 @@ describe("CORS preflight (OPTIONS)", () => {
   });
 });
 
+describe("CORS in production (localhost must NOT be trusted)", () => {
+  it("refuses localhost:3000 when VERCEL_ENV=production", async () => {
+    // A realistic production env: APP_URL is the deployed domain, not localhost.
+    // The only place localhost:3000 used to come from was the hard-coded entry.
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("APP_URL", "https://app.oxagen.sh");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://app.oxagen.sh");
+    const res = await app.fetch(
+      preflight("/v1/acme/main/connections", LOCAL_APP_ORIGIN),
+    );
+    // No ACAO granted → the browser blocks the credentialed cross-origin call.
+    expect(res.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
+  it("still trusts the configured APP_URL origin in production", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("APP_URL", "https://app.oxagen.sh");
+    const res = await app.fetch(
+      preflight("/v1/acme/main/connections", "https://app.oxagen.sh"),
+    );
+    expect(res.headers.get("access-control-allow-origin")).toBe(
+      "https://app.oxagen.sh",
+    );
+  });
+});
+
 describe("CORS on actual requests", () => {
   it("adds allow-origin + allow-credentials to a cross-origin GET", async () => {
     const res = await app.fetch(
