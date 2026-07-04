@@ -15,12 +15,10 @@
  */
 import type { ModelTier, UsageTotals } from "../types";
 import { estimateCostUsd, rateFor, formatUsd } from "./rate-card";
-import {
-  validateEffort,
-  getModelCache,
-  type EffortLevel,
-  type EffortValidation,
-  type ModelCache,
+import type {
+  EffortLevel,
+  EffortValidation,
+  ModelCache,
 } from "../model-cache";
 
 // Re-exported so call sites that import pricing from the router keep working.
@@ -200,39 +198,6 @@ export function tierForSlug(model: string): ModelTier {
 /** Concrete slug for a tier (exported for the planner and orchestrator). */
 export function modelForTier(tier: ModelTier): string {
   return tierSlug(tier);
-}
-
-// ── Effort validation (reasoning knob) ────────────────────────────────────────
-
-/**
- * Validate and clamp an effort level against a model's supported efforts.
- * Uses the cached model capabilities; falls back to conservative defaults
- * if cache is unavailable.
- *
- * @param modelSlug Model ID (e.g., "claude-fable-5", "claude-haiku-4-5-20251001")
- * @param requestedEffort Requested effort level ("low" | "medium" | "high" | "max" | undefined)
- * @param cache Optional pre-loaded cache (will fetch if not provided)
- * @returns Validation result with supported flag, clamped effort, and reason
- */
-export async function validateModelEffort(
-  modelSlug: string,
-  requestedEffort: EffortLevel | undefined,
-  cache?: ModelCache,
-): Promise<EffortValidation> {
-  const modelCache = cache ?? (await getModelCache());
-  return validateEffort(modelSlug, requestedEffort, modelCache);
-}
-
-/**
- * Synchronously validate effort if cache is already loaded.
- * Use when model cache has been preloaded in the session init.
- */
-export function validateModelEffortSync(
-  modelSlug: string,
-  requestedEffort: EffortLevel | undefined,
-  cache: ModelCache,
-): EffortValidation {
-  return validateEffort(modelSlug, requestedEffort, cache);
 }
 
 // Re-export effort types so consumers import once from this module
