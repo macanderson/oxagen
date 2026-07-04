@@ -96,6 +96,33 @@ export async function createTask(
   );
 }
 
+/**
+ * Load the full A2A message history for a conversation (contextId), oldest →
+ * newest, flattened across every task that shares the contextId. Used to give
+ * the agent multi-turn continuity within an A2A conversation.
+ */
+export async function loadContextHistory(
+  ctx: CapabilityContext,
+  contextId: string,
+): Promise<A2AMessage[]> {
+  return runInTenantScope(scopeOf(ctx), () =>
+    withTenantDb(async (tx) => {
+      const rows = await tx
+        .select({ messageHistory: schema.a2aTasks.messageHistory })
+        .from(schema.a2aTasks)
+        .where(
+          and(
+            eq(schema.a2aTasks.contextId, contextId),
+            eq(schema.a2aTasks.workspaceId, ctx.workspaceId),
+            isNull(schema.a2aTasks.deletedAt),
+          ),
+        )
+        .orderBy(schema.a2aTasks.createdAt);
+      return rows.flatMap((r) => (r.messageHistory as A2AMessage[]) ?? []);
+    }),
+  );
+}
+
 /** Load a task by its A2A taskId (public_id), scoped to the workspace. */
 export async function loadTask(
   ctx: CapabilityContext,
