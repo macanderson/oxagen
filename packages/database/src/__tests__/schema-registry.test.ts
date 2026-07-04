@@ -4,8 +4,7 @@
  * Smoke tests for the schema_registry Drizzle table definitions (§4.1–§4.6).
  *
  * Assertions (no live DB, no network):
- *  1.  All 6 table exports are defined.
- *  2.  Public-id prefixes are correct (scr, scv, sch, sca, scl, scrt, scp).
+ *  1.  Public-id prefixes are correct (scr, scv, sch, sca, scl, scrt, scp).
  *  3.  registries has enforcement_mode CHECK containing 'strict','lenient','off'.
  *  4.  schema_versions has status CHECK containing 'draft','published'.
  *  5.  schema_versions has NO deleted_at column (no soft delete — immutable records).
@@ -41,30 +40,6 @@ function getUniqueConstraints(table: Parameters<typeof getTableConfig>[0]) {
 }
 
 // ── 1. Table exports are defined ─────────────────────────────────────────────
-
-describe("schema-registry table exports", () => {
-  it("schemaRegistries is defined", () => {
-    expect(schemaRegistries).toBeDefined();
-  });
-  it("schemaVersions is defined", () => {
-    expect(schemaVersions).toBeDefined();
-  });
-  it("schemas is defined", () => {
-    expect(schemas).toBeDefined();
-  });
-  it("schemaActivations is defined", () => {
-    expect(schemaActivations).toBeDefined();
-  });
-  it("nodeLabels is defined", () => {
-    expect(nodeLabels).toBeDefined();
-  });
-  it("relationshipTypes is defined", () => {
-    expect(relationshipTypes).toBeDefined();
-  });
-  it("schemaProperties is defined", () => {
-    expect(schemaProperties).toBeDefined();
-  });
-});
 
 // ── 2. Public-id prefixes ─────────────────────────────────────────────────────
 

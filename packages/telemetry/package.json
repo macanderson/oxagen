@@ -35,10 +35,9 @@
   },
   "devDependencies": {
     "@opentelemetry/context-async-hooks": "2.7.1",
-    "@opentelemetry/sdk-trace-node": "2.7.1",
+    "@vitest/coverage-v8": "2.1.9",
     "tsx": "4.22.3",
     "typescript": "6.0.3",
-    "vitest": "2.1.9",
-    "@vitest/coverage-v8": "2.1.9"
+    "vitest": "2.1.9"
   }
 }

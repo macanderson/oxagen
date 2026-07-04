@@ -64,8 +64,6 @@ export const playbookVersions = workflowSchema.table(
     changeSummary: text("change_summary"),
     isPublished: boolean("is_published").notNull().default(false),
     publishedAt: timestamp("published_at", { withTimezone: true, mode: "date" }),
-    // SHA-256 over canonicalized steps+edges; computed at publish time.
-    graphHash: text("graph_hash"),
     createdByUserId: uuid("created_by_user_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
@@ -99,9 +97,6 @@ export const playbookSteps = workflowSchema.table(
     isAsync: boolean("is_async").notNull().default(false),
     exitOnError: boolean("exit_on_error").notNull().default(true),
     timeoutSeconds: integer("timeout_seconds"),
-    retryPolicy: jsonb("retry_policy"),
-    positionX: integer("position_x"),
-    positionY: integer("position_y"),
     config: jsonb("config").notNull().default(sql`'{}'::jsonb`),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
@@ -206,13 +201,11 @@ export const playbookRuns = workflowSchema.table(
     triggerId: uuid("trigger_id"),
     // Self-referential FK for sub-playbook fan-out; enforced by DB.
     parentRunId: uuid("parent_run_id"),
-    parentStepRunId: uuid("parent_step_run_id"),
     source: text("source").notNull(),
     status: text("status").notNull().default("pending"),
     input: jsonb("input"),
     output: jsonb("output"),
     error: jsonb("error"),
-    contextId: uuid("context_id"),
     inngestRunId: text("inngest_run_id"),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
     completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
@@ -334,8 +327,6 @@ export const playbookApprovals = workflowSchema.table(
     workspaceId: uuid("workspace_id").notNull(),
     playbookRunId: uuid("playbook_run_id").notNull(),
     stepRunId: uuid("step_run_id").notNull(),
-    requestedFromUserId: uuid("requested_from_user_id"),
-    requestedFromRoleId: uuid("requested_from_role_id"),
     status: text("status").notNull().default("pending"),
     comments: text("comments"),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
