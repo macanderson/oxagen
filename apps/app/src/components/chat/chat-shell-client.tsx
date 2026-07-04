@@ -415,10 +415,21 @@ export function ChatShellClient({
                 const raw = formData.get("attachments") as string | null;
                 if (!raw) return [];
                 try {
-                  const parsed = JSON.parse(raw) as Array<{ publicId?: unknown }>;
+                  const parsed = JSON.parse(raw) as Array<{
+                    publicId?: unknown;
+                    keyframeForVideo?: unknown;
+                  }>;
                   return parsed
                     .filter((a) => typeof a.publicId === "string")
-                    .map((a) => ({ publicId: a.publicId as string }));
+                    .map((a) => ({
+                      publicId: a.publicId as string,
+                      // Preserve the video↔keyframe link (Phase 2) so the route
+                      // can drop a video's sampled keyframes when it sends the
+                      // real video file part instead.
+                      ...(typeof a.keyframeForVideo === "string"
+                        ? { keyframeForVideo: a.keyframeForVideo }
+                        : {}),
+                    }));
                 } catch {
                   return [];
                 }
