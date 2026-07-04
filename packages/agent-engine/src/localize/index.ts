@@ -364,14 +364,27 @@ const EMPTY_MAP: LocalizationMap = {
  * graph to rank the top-5 most likely source files.  Never throws; returns
  * an empty map on any failure or when the graph is absent.
  */
+export interface LocalizeOptions {
+  /**
+   * Run the embedding semantic-search fallback when literal (traceback +
+   * symbol) resolution yields too few files. Default true. ENHANCE passes
+   * false: the prompt-enhancer owns the semantic-fallback decision with its
+   * own "resolved enough" gate, so the localizer must not run a second,
+   * differently-thresholded semantic query that would surface files the
+   * enhancer deliberately withheld.
+   */
+  semanticFallback?: boolean;
+}
+
 export async function localize(
   issue: string,
   graph: CodeGraphProvider | null | undefined,
+  opts: LocalizeOptions = {},
 ): Promise<LocalizationMap> {
   if (!graph) return EMPTY_MAP;
 
   try {
-    return await _localize(issue, graph);
+    return await _localize(issue, graph, opts.semanticFallback ?? true);
   } catch {
     return EMPTY_MAP;
   }
@@ -380,6 +393,7 @@ export async function localize(
 async function _localize(
   issue: string,
   graph: CodeGraphProvider,
+  semanticFallback: boolean,
 ): Promise<LocalizationMap> {
   const scoreMap = new Map<string, FileScore>();
 
@@ -488,7 +502,7 @@ async function _localize(
   // ── Step C: Semantic fallback ──────────────────────────────────────────────
 
   const distinctFiles = scoreMap.size;
-  if (distinctFiles < SEMANTIC_FALLBACK_THRESHOLD) {
+  if (semanticFallback && distinctFiles < SEMANTIC_FALLBACK_THRESHOLD) {
     const semResult = await safeQuery(graph, "semantic_search", issue, 5);
     if (isHit(semResult)) {
       for (const p of parseGraphPaths(semResult)) {
