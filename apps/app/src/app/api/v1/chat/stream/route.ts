@@ -11,6 +11,7 @@ import { logger } from "@oxagen/handlers/logger";
 import {
   selectModel,
   supportsReasoning,
+  supportsVision,
   modelIdOf,
   loadEffectiveModelDefaults,
   resolvePrompt,
@@ -24,6 +25,7 @@ import {
 import { materializeTools } from "@oxagen/agent";
 import { createPlatformAgentAi } from "@oxagen/agent/adapters";
 import { runCodingAgent } from "@oxagen/agent-engine";
+import { storage } from "@oxagen/storage";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
@@ -38,7 +40,8 @@ import { autoTitleConversation } from "./auto-title";
 import { streamMediaGeneration } from "./media-generation";
 import { createTurnTranslator, emitUsageEvent } from "./translate-stream";
 import { formatStreamError } from "./stream-parts";
-import { buildHistoryMessages } from "./history";
+import { buildHistoryMessages, collectRecentAttachmentPublicIds } from "./history";
+import { resolveAttachmentImages } from "./attachments";
 import { recallWorkspaceMemory } from "./recall-context";
 import { createChatMemoryProvider } from "./engine-memory";
 
@@ -85,6 +88,12 @@ const BodySchema = z.object({
   // Pinned skills are injected directly (no tool call needed), so the model
   // applies them from the first turn. Capped at 5 to bound prompt bloat.
   skills: z.array(z.string().min(1).max(64)).max(5).optional().default([]),
+  // Image attachments for this turn — IDS ONLY (never base64/bytes through
+  // this 32 KiB body). Each publicId is re-resolved server-side below
+  // (ownership + status='ready' + kind='image' allowlist) before its bytes
+  // are fetched from private blob storage and attached as multimodal image
+  // parts. Capped at 8 to bound both request size and per-turn vision cost.
+  attachments: z.array(z.object({ publicId: z.string().min(1) })).max(8).default([]),
   // Optional page context forwarded from the client at send-time. Carries the
   // current route and, when a fillable form is registered, its field list so
   // the agent can propose fill values via the `page_form_fill` tool.
@@ -118,6 +127,13 @@ const BodySchema = z.object({
 // conversations. The newest HISTORY_LIMIT messages are taken (DESC + LIMIT,
 // then reversed so the model sees them chronologically oldest→newest).
 const HISTORY_LIMIT = 50;
+
+// Text-tier fallback order tried by the attachment vision guard when the
+// picker's selected model can't take image input. Balanced first (the
+// platform default), then fast, then precise — every default OXAGEN_LLM_*
+// tier is normally vision-capable, so this only matters for an
+// unusually-configured workspace.
+const ATTACHMENT_VISION_TIER_FALLBACK = ["balanced", "fast", "precise"] as const;
 
 // Runaway backstop for the agentic tool loop, NOT a functional limit. A turn
 // ends naturally the moment the model returns a step with no tool call (its
@@ -182,6 +198,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     activeServerIds,
     skills: pinnedSkillSlugs,
     pageContext,
+    attachments,
   } = parsed.data;
 
   let tenant: Awaited<ReturnType<typeof resolveOrg>>;
@@ -229,7 +246,10 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
   }
 
-  const turnModel = selectModel({
+  // `let` — the attachment vision guard below may swap this for a
+  // vision-capable tier model when the picker's selection can't take image
+  // input.
+  let turnModel = selectModel({
     ...(resolvedModel
       ? { model: resolvedModel }
       : resolvedTier
@@ -279,6 +299,63 @@ export async function POST(request: NextRequest): Promise<Response> {
     });
   }
 
+  // ── Attachments (Phase 1: images) ─────────────────────────────────────────
+  // Resolve the current turn's attachment publicIds org-scoped (ownership +
+  // status='ready' + kind='image' allowlist enforced inside
+  // resolveAttachmentImages) and fetch their bytes server-side. An id that
+  // doesn't resolve is a hard 422 — the user explicitly attached it, so
+  // silently dropping it would mean the model answers about an image it never
+  // saw. Never a base64 round-trip through the client: refs-by-publicId in,
+  // raw bytes fetched straight from private blob storage.
+  let imageAttachments: Array<{ data: Buffer; mediaType: string }> = [];
+  if (attachments.length > 0) {
+    const publicIds = attachments.map((a) => a.publicId);
+    const resolved = await resolveAttachmentImages(publicIds, {
+      orgId: tenant.id,
+      workspaceId: workspace.id,
+    });
+    if (resolved.size !== publicIds.length) {
+      return NextResponse.json(
+        {
+          error:
+            "One or more attachments could not be found, belong to another workspace, or are not ready yet. Please remove and re-attach the image, then try again.",
+        },
+        { status: 422 },
+      );
+    }
+    imageAttachments = publicIds.map((id) => resolved.get(id)!);
+
+    // Vision guard: the picker's selected model must accept image input. Try
+    // the white-labeled text tiers (balanced first — the platform default) for
+    // one that does; every tier is normally vision-capable (Claude/Gemini/GPT
+    // families all carry the capability), so this upgrade path is a rare
+    // safety net, not the common case.
+    if (!supportsVision(modelIdOf(turnModel))) {
+      const upgraded = ATTACHMENT_VISION_TIER_FALLBACK.map((fallbackTier) =>
+        selectModel({ tier: fallbackTier }),
+      ).find((candidate) => supportsVision(modelIdOf(candidate)));
+      if (!upgraded) {
+        return NextResponse.json(
+          {
+            error:
+              "This workspace has no vision-capable model configured, so it can't read the attached image. Remove the attachment, or ask an admin to enable a vision-capable model.",
+          },
+          { status: 422 },
+        );
+      }
+      logger.info(
+        {
+          orgId: tenant.id,
+          workspaceId: workspace.id,
+          requestedModel: modelIdOf(turnModel),
+          upgradedModel: modelIdOf(upgraded),
+        },
+        "[chat/stream] auto-upgraded to a vision-capable model for image attachments",
+      );
+      turnModel = upgraded;
+    }
+  }
+
   // Load conversation history from Postgres so the model has context for every
   // prior turn (without this the model has SSE amnesia, OXA-1509).
   let historyMessages: ModelMessage[] = [];
@@ -303,6 +380,9 @@ export async function POST(request: NextRequest): Promise<Response> {
               // (empty text) were dropped from history and the model re-ran every
               // prior tool call on each new turn — see buildHistoryMessages.
               contentBlocks: schema.messages.contentBlocks,
+              // metadata.attachments carries user-turn attachment refs — bounded
+              // replay (last 2 user turns) is resolved to real image parts below.
+              metadata: schema.messages.metadata,
             })
             .from(schema.messages)
             .where(
@@ -317,28 +397,60 @@ export async function POST(request: NextRequest): Promise<Response> {
         ),
     );
 
+    const historyRows = rows.map((r) => ({
+      role: r.role,
+      content: r.content,
+      contentBlocks: r.contentBlocks as AssistantContentBlock[] | null,
+      metadata: r.metadata,
+    }));
+
+    // Bounded image replay: only the most recent RECENT_IMAGE_TURN_LIMIT user
+    // turns' attachments are re-fetched as real image parts; older turns fall
+    // back to a `[attached image: <name>]` text placeholder inside
+    // buildHistoryMessages. Bounds vision-token growth over a long
+    // conversation instead of re-sending every past image every turn.
+    const recentImagePublicIds = collectRecentAttachmentPublicIds(historyRows);
+    const resolvedHistoryImages =
+      recentImagePublicIds.length > 0
+        ? await resolveAttachmentImages(recentImagePublicIds, {
+            orgId: tenant.id,
+            workspaceId: workspace.id,
+          })
+        : new Map<string, { data: Buffer; mediaType: string }>();
+
     // Reconstruct history so assistant turns carry a summary of the actions they
     // ALREADY completed (marked DONE), so the model never re-fires finished tool
     // calls. Rows arrive newest-first; buildHistoryMessages reverses to
     // chronological order.
-    historyMessages = buildHistoryMessages(
-      rows.map((r) => ({
-        role: r.role,
-        content: r.content,
-        contentBlocks: r.contentBlocks as AssistantContentBlock[] | null,
-      })),
-    );
+    historyMessages = buildHistoryMessages(historyRows, resolvedHistoryImages);
   }
 
   // The engine appends `instruction` (this turn's content) itself, so the
   // history it receives must EXCLUDE the current user message. sendMessageAction
   // (running concurrently) may already have persisted this turn as the trailing
   // history row — drop it so the model never sees the current turn twice.
+  //
+  // A row with attachments is a multimodal `content` array (text part +
+  // image parts), not a plain string — extract just the text part before
+  // comparing, so a turn WITH attachments is still correctly deduped instead
+  // of slipping through as a "different" message and doubling the image.
   const lastHistory = historyMessages[historyMessages.length - 1];
+  const lastHistoryText =
+    typeof lastHistory?.content === "string"
+      ? lastHistory.content
+      : Array.isArray(lastHistory?.content)
+        ? lastHistory.content
+            .filter(
+              (p): p is { type: "text"; text: string } =>
+                (p as { type?: string }).type === "text",
+            )
+            .map((p) => p.text)
+            .join("\n")
+        : undefined;
   const currentAlreadyInHistory =
     lastHistory !== undefined &&
     lastHistory.role === "user" &&
-    lastHistory.content === content;
+    lastHistoryText === content;
 
   const historyForEngine: ModelMessage[] = currentAlreadyInHistory
     ? historyMessages.slice(0, -1)
@@ -700,6 +812,11 @@ export async function POST(request: NextRequest): Promise<Response> {
         const result = await runCodingAgent({
           ai,
           instruction: content,
+          // Current-turn image attachments (Phase 1) — resolved + fetched
+          // above, org-scoped. Omitted entirely for a no-attachment turn so
+          // the engine's plain-string content shape is unchanged (byte-
+          // identical to before this feature for every existing caller).
+          ...(imageAttachments.length > 0 ? { images: imageAttachments } : {}),
           history: historyForEngine,
           system: resolvePrompt({
             key: "chat.system",
