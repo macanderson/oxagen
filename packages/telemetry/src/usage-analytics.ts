@@ -126,6 +126,9 @@ export async function readUsageBreakdown(args: {
       ${wsFilter}`;
 
   type GroupedRaw = RawAgg & { group_key: string; provider?: string };
+  // `extraSelect` is an aggregate projection (e.g. `any(provider)`) that must NOT
+  // appear in GROUP BY — the grouping is on `group_key` alone. A model maps 1:1 to
+  // a provider, so `any(provider)` is exact per group.
   async function runGrouped(keyExpr: string, extraSelect = ""): Promise<GroupedRaw[]> {
     const result = await ch.query({
       query: `
@@ -133,7 +136,7 @@ export async function readUsageBreakdown(args: {
           ${AGG_SELECT}
         FROM token_usage
         ${where}
-        GROUP BY group_key${extraSelect ? ", provider" : ""}
+        GROUP BY group_key
         ORDER BY cost_micros DESC, executions DESC
       `,
       query_params: params,

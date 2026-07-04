@@ -120,12 +120,26 @@ describe("readUsageBreakdown", () => {
     ]);
   });
 
+  it("groups the model breakdown by key only (provider is an aggregate, not a GROUP BY column)", async () => {
+    // Regression: `any(provider) AS provider` must NOT appear in GROUP BY, or
+    // ClickHouse rejects the query with ILLEGAL_AGGREGATION (code 184).
+    mockRows({});
+    await readUsageBreakdown(WINDOW);
+    const modelQuery = queryMock.mock.calls
+      .map((c) => c[0]?.query ?? "")
+      .find((q) => q.includes("any(provider)"));
+    expect(modelQuery).toBeDefined();
+    expect(modelQuery).toContain("GROUP BY group_key");
+    expect(modelQuery).not.toMatch(/GROUP BY group_key\s*,\s*provider/);
+  });
+
   it("always filters org_id and groups/orders every dimension", async () => {
     mockRows({});
     await readUsageBreakdown(WINDOW);
     for (const call of queryMock.mock.calls) {
       const { query, query_params } = call[0];
       expect(query).toContain("org_id = {orgId:UUID}");
+      expect(query).toMatch(/GROUP BY group_key(?!\s*,\s*provider)|GROUP BY day/);
       expect(query).toContain("created_at >= {start:DateTime64(3)}");
       expect(query).toContain("created_at <  {end:DateTime64(3)}");
       expect(query).toContain("GROUP BY");

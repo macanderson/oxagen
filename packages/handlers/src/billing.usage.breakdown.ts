@@ -1,4 +1,3 @@
-// audit-exempt: read-only usage aggregation (ClickHouse token_usage GROUP BY) — no state mutation; the kernel capability.invoke_* audit covers access.
 /**
  * billing.usage.breakdown handler — OXA-1585
  *
