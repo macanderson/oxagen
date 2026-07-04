@@ -71,6 +71,13 @@ describe("proxy — auth boundary", () => {
     expect(location("/signup", { authed: false })).toBeNull();
   });
 
+  it("allows /two-factor without a full session (sign-in second factor)", () => {
+    // After password auth the user holds only the short-lived 2FA cookie, not a
+    // session_token — the gate must NOT bounce them to /login or the flow wedges.
+    expect(location("/two-factor", { authed: false })).toBeNull();
+    expect(location("/two-factor/verify", { authed: false })).toBeNull();
+  });
+
   it("308s the pre-rename onboarding entrypoint", () => {
     expect(status("/new-tenant")).toBe(308);
     expect(location("/new-tenant")).toBe(`${ORIGIN}/new-organization`);

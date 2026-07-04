@@ -4,6 +4,7 @@ import Image from "next/image";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { MarketplaceModal } from "@/components/plugins/marketplace-modal";
 import { CapabilityIcon } from "@/components/plugins/capability-icon";
 import { isRenderableImageUrl } from "@/lib/plugin-icon";
@@ -31,6 +32,12 @@ interface WorkspacePluginsPanelProps {
   workspaceId: string;
   initialPlugins: InstalledPlugin[];
   initialRegistries: RegistryRow[];
+  /**
+   * True when the server-side installed-plugins read failed and the list was
+   * degraded to empty. Drives an inline notice so an RLS/DB failure doesn't
+   * masquerade as "no plugins installed".
+   */
+  loadError?: boolean;
   docsBaseUrl: string;
   installAction: (input: {
     orgSlug: string;
@@ -143,6 +150,7 @@ export function WorkspacePluginsPanel({
   workspaceId,
   initialPlugins,
   initialRegistries,
+  loadError = false,
   docsBaseUrl,
   installAction,
   installBulkAction,
@@ -273,6 +281,16 @@ export function WorkspacePluginsPanel({
 
   return (
     <div className="flex flex-col gap-6">
+      {loadError && (
+        <Alert variant="error">
+          <AlertTitle>Couldn&apos;t load installed plugins</AlertTitle>
+          <AlertDescription>
+            We hit an error reading this workspace&apos;s plugins, so the list below may be
+            incomplete. Reload the page to try again — your plugins have not been removed.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Registry manager */}
       <RegistryManager
         orgSlug={orgSlug}

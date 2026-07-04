@@ -4,7 +4,7 @@ import {
   selectModel,
   resolvePrompt,
   imageAnalyzePrompt,
-  loadWorkspacePromptConfig,
+  loadWorkspacePromptConfigSafe,
 } from "@oxagen/ai";
 import { schema, withSystemDb } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
@@ -64,7 +64,7 @@ export const imageAnalyzeHandler: CapabilityHandler<typeof imageAnalyze> = async
   // The analysis instruction is the overridable "image.analyze" content prompt;
   // resolve it through the registry so an enterprise workspace can tailor the
   // analysis voice/focus and append workspace instructions.
-  const promptConfig = await loadWorkspacePromptConfig(ctx.workspaceId).catch(() => ({}));
+  const promptConfig = await loadWorkspacePromptConfigSafe(ctx.workspaceId);
   const instruction = resolvePrompt({
     key: "image.analyze",
     baseline: imageAnalyzePrompt(),

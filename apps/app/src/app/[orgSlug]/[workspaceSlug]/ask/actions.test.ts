@@ -10,16 +10,19 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockGetSession, mockInvoke, parseState, mockLoggerError } = vi.hoisted(() => ({
-  mockGetSession: vi.fn(),
-  mockInvoke: vi.fn(),
-  parseState: { ok: true as boolean, message: "Invalid task id" },
-  mockLoggerError: vi.fn(),
-}));
+const { mockGetSession, mockInvoke, parseState, mockLoggerError, mockAssertWorkspaceMember } =
+  vi.hoisted(() => ({
+    mockGetSession: vi.fn(),
+    mockInvoke: vi.fn(),
+    parseState: { ok: true as boolean, message: "Invalid task id" },
+    mockLoggerError: vi.fn(),
+    mockAssertWorkspaceMember: vi.fn(),
+  }));
 
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/agent/register", () => ({}));
 vi.mock("@/lib/session", () => ({ getSessionOrRedirect: mockGetSession }));
+vi.mock("@/lib/resolve-org", () => ({ assertWorkspaceMember: mockAssertWorkspaceMember }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: (_s: unknown, fn: () => unknown) => fn() }));
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
@@ -59,6 +62,7 @@ describe("readBackgroundTaskAction", () => {
     vi.clearAllMocks();
     parseState.ok = true;
     mockGetSession.mockResolvedValue(SESSION);
+    mockAssertWorkspaceMember.mockResolvedValue(undefined);
   });
 
   it("returns the live snapshot on success", async () => {
@@ -110,6 +114,30 @@ describe("readBackgroundTaskAction", () => {
 
     expect(snap.status).toBe("failed");
     expect(snap.failureReason).toBe("taskId is required");
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("asserts workspace membership before doing anything", async () => {
+    mockInvoke.mockResolvedValue({
+      taskId: "task-1",
+      kind: "research",
+      label: null,
+      status: "running",
+      createdAt: "2026-06-20T00:00:00.000Z",
+      startedAt: null,
+      completedAt: null,
+      failureReason: null,
+    });
+    await readBackgroundTaskAction(CTX, "task-1");
+    expect(mockAssertWorkspaceMember).toHaveBeenCalledWith("ws-1", "user-1");
+  });
+
+  it("denies a non-member: propagates the gate rejection and never reaches invoke (IDOR guard)", async () => {
+    // assertWorkspaceMember calls notFound() for a non-member, which throws.
+    // The gate runs before the try/catch, so it propagates (a non-member must
+    // get 404, not a fabricated 'failed' snapshot).
+    mockAssertWorkspaceMember.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
+    await expect(readBackgroundTaskAction(CTX, "task-1")).rejects.toThrow("NEXT_NOT_FOUND");
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 });

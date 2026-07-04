@@ -200,6 +200,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "https://otel.example.com/v1/traces",
   },
+  OTEL_EXPORTER_OTLP_HEADERS: {
+    group: "OpenTelemetry",
+    description:
+      "Standard OTEL comma-separated `key=value` header list sent to the collector " +
+      '(e.g. "authorization=Bearer xxx,x-tenant=oxagen"). Optional — for collectors ' +
+      "that require auth headers. Parsed by packages/telemetry/src/tracer.ts.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OTEL_SERVICE_NAME: {
     group: "OpenTelemetry",
     description:
@@ -211,6 +223,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "oxagen",
+  },
+
+  // ── Error alerting (vendor-neutral outbound webhook) ────────────────────────
+  ALERT_WEBHOOK_URL: {
+    group: "Error alerting",
+    description:
+      "When set, high-severity/unhandled server errors are POSTed as a Slack-compatible " +
+      "`{ text, blocks }` JSON payload here (Slack/Mattermost/Discord incoming webhook, or " +
+      "any compatible endpoint). BYO webhook — no vendor SDK. When unset, errors are still " +
+      "recorded to the ClickHouse error_events table; only the webhook alert is skipped.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
   },
 
   // ── Better Auth ─────────────────────────────────────────────────────────────
@@ -443,7 +470,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   GITHUB_PERSONAL_ACCESS_TOKEN: {
     group: "github",
     description:
-      "Personal access token (PAT) used by GitHub write capabilities (repo.create, repo.file.put, repo.fork, repo.branch.create, repo.pr.open) as a local/demo fallback when per-workspace credential resolution is not yet available. MUST NOT be set in production once per-workspace KMS-encrypted credential lookup is implemented (see packages/handlers/src/lib/github-token.ts).",
+      "Personal access token (PAT) used by GitHub write capabilities (repo.create, repo.file.put, repo.fork, repo.branch.create, repo.pr.open) as a LOCAL/DEMO-ONLY fallback. Per-workspace credential resolution is now live (GitHub App installation token + KMS-encrypted per-workspace OAuth — see resolveGitHubToken in packages/handlers/src/lib/github-token.ts), so this MUST NOT be set in production: a shared PAT bypasses per-workspace scoping. resolveGitHubToken logs a loud warning when it is used while NODE_ENV=production.",
     secret: true,
     clientExposed: false,
     services: ["api"],
@@ -930,6 +957,20 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: { development: "http://localhost:4000", production: API_PROD_URL },
   },
+  A2A_PUBLIC_URL: {
+    group: "Public URLs",
+    description:
+      "Public origin advertised in the A2A (Agent2Agent) protocol Agent Card's " +
+      "service endpoint and the /.well-known/agent-card.json URL. Optional — the " +
+      "A2A routes derive the origin from the live request; this only overrides the " +
+      "default for out-of-band card reads (MCP/CLI). Falls back to the API origin.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "http://localhost:4000", production: API_PROD_URL },
+  },
   APP_URL: {
     group: "Public URLs",
     description:
@@ -971,10 +1012,12 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   TENANT_RLS_ENFORCEMENT_ENABLED: {
     group: "Security",
     description:
-      "When true, Postgres RLS policies filter by org/workspace. Production-safe " +
-      "default — leave true for all deployed environments. Local dev override: set " +
-      "false in .env.local only if seeding/migration scripts need to bypass RLS; " +
-      "revert to true before running app code against the DB.",
+      "When true, Postgres RLS policies filter by org/workspace. Fail-closed: " +
+      "when UNSET it defaults ON in production (NODE_ENV/VERCEL_ENV=production) " +
+      "and OFF in dev/test/preview. A production process refuses to boot if this " +
+      "is forced to false (assertRlsEnforcedInProduction). Local dev override: " +
+      "set false in .env.local only if seeding/migration scripts need to bypass " +
+      "RLS; revert before running app code against the DB.",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -1599,6 +1642,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_ALLOW_STDIO_MCP: {
+    group: "CLI",
+    description:
+      "Set to '1' or 'true' to allow stdio-transport MCP servers to be SPAWNED as child " +
+      "processes from workspace file-mcp plugin configs (packages/agent file-mcp.ts). " +
+      "Spawning is OFF by default because a workspace-scoped config could otherwise " +
+      "execute arbitrary commands on the API host — enable only for a trusted " +
+      "local/CLI runtime, never on shared server deployments. HTTP MCP transports are " +
+      "unaffected and always processed.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_BEST_OF_N_PIPELINE: {
     group: "CLI",
     description:
@@ -1893,6 +1951,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
+  },
+  INGESTION_FEATURE_BATCH: {
+    group: "Ingestion",
+    description:
+      "When '1', route GitHub feature inference through the Anthropic Message Batches API (async, half price) instead of per-file synchronous calls. Unset/absent = synchronous per-file (default).",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "", preview: "", production: "" },
   },
   PRIVACY_ERASURE_GRACE_DAYS: {
     group: "Privacy",

@@ -12,7 +12,7 @@
 // org_id/workspace_id/skill_id are denormalized onto every row so metrics query
 // in isolation without a Postgres join.
 
-import { clickhouse } from "./clickhouse";
+import { clickhouse, NIL_UUID } from "./clickhouse";
 import type { Surface } from "./clickhouse";
 
 /**
@@ -165,4 +165,86 @@ export async function readSkillMetrics(args: {
   }, null);
 
   return { bySkill, byVersion, totalLoads, lastUsed };
+}
+
+/** Approximate token cost (USD micros) attributed to a single skill. */
+export interface SkillTokenCost {
+  skill_id: string;
+  /**
+   * Sum of `token_usage.cost_usd_micros` (USD × 1e6) over every execution step
+   * that loaded this skill. Multi-skill runs attribute a step's full cost to
+   * ALL skills loaded in that step, so cross-skill sums may exceed actual spend.
+   */
+  cost_usd_micros: number;
+}
+
+/**
+ * Best-effort token-cost attribution for `skill.metrics.read`.
+ *
+ * Joins `skill_loads` → `token_usage` on `execution_step_id` and sums the cost
+ * of every step that loaded each skill. Two guards keep the number honest:
+ *
+ *   1. The (skill_id, execution_step_id) pairs are de-duplicated BEFORE the
+ *      join, so a skill loaded twice in one step counts that step's cost once.
+ *   2. `token_usage` cost is pre-aggregated per step, so multiple LLM calls in
+ *      the same step sum into a single per-step figure.
+ *
+ * `skill_loads.execution_step_id` is a nullable `String`; `token_usage`'s is a
+ * non-nullable `UUID` with `NIL_UUID` sentinel for "no step". We exclude
+ * NULL/empty/NIL steps on both sides (a standalone load carries no run cost) and
+ * cast the UUID to `String` for the join. Filters by org + workspace on both
+ * tables (types differ: `skill_loads` stores IDs as String, `token_usage` as
+ * UUID). Returns one row per skill that has attributable cost; skills with no
+ * matching token rows are simply absent (the handler maps that to `null`).
+ */
+export async function readSkillTokenCosts(args: {
+  orgId: string;
+  workspaceId: string;
+  skillId?: string;
+}): Promise<SkillTokenCost[]> {
+  const ch = clickhouse();
+  const skillFilter = args.skillId ? "AND skill_id = {skillId:String}" : "";
+  const params: Record<string, unknown> = {
+    orgId: args.orgId,
+    workspaceId: args.workspaceId,
+    nilUuid: NIL_UUID,
+  };
+  if (args.skillId) params.skillId = args.skillId;
+
+  const result = await ch.query({
+    query: `
+      SELECT
+        sl.skill_id AS skill_id,
+        sum(tu.cost_micros) AS cost_usd_micros
+      FROM (
+        SELECT DISTINCT skill_id, execution_step_id
+        FROM skill_loads
+        WHERE org_id = {orgId:String}
+          AND workspace_id = {workspaceId:String}
+          AND execution_step_id IS NOT NULL
+          AND execution_step_id != ''
+          AND execution_step_id != {nilUuid:String}
+          ${skillFilter}
+      ) AS sl
+      INNER JOIN (
+        SELECT
+          toString(execution_step_id) AS step_id,
+          sum(cost_usd_micros) AS cost_micros
+        FROM token_usage
+        WHERE org_id = {orgId:UUID}
+          AND workspace_id = {workspaceId:UUID}
+          AND execution_step_id != toUUID({nilUuid:String})
+        GROUP BY execution_step_id
+      ) AS tu ON tu.step_id = sl.execution_step_id
+      GROUP BY sl.skill_id
+    `,
+    query_params: params,
+    format: "JSONEachRow",
+  });
+  type Raw = { skill_id: string; cost_usd_micros: string };
+  const rows = (await result.json()) as Raw[];
+  return rows.map((r) => ({
+    skill_id: r.skill_id,
+    cost_usd_micros: Number(r.cost_usd_micros),
+  }));
 }

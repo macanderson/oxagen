@@ -217,4 +217,32 @@ describe("REPL transcript rendering (Static history + live frame)", () => {
     expect(after).toBe(before);
     unmount();
   });
+
+  it("commits the persistent banner once, with the connected scope, into scrollback", async () => {
+    // The sunset banner is the permanent FIRST <Static> item (see interactive.tsx),
+    // so in inline mode it commits to real scrollback exactly once at open and
+    // stays there for the session — never re-rendered into the live frame. This
+    // is the same duplication class the "exactly once" message test guards: an
+    // earlier model rendered the Banner in the live empty-state block, which — if
+    // reintroduced now that it also lives in <Static> — would print it twice. Lock
+    // that the version wordmark and the org/workspace scope from the session appear
+    // in the committed output, and the wordmark appears exactly once.
+    const { lastFrame, frames, unmount } = render(
+      <ReplApp options={{ session: TEST_SESSION }} />,
+    );
+    await tick(100); // let the async session-memory mount settle
+
+    // Committed to scrollback: the version line and the org/workspace scope.
+    await waitFor(() => frames.join("").includes("oxagen.sh cli"));
+    const combined = frames.join("");
+    expect(combined).toContain("test-org");
+    expect(combined).toContain("test-ws");
+
+    // Exactly once — the banner is a single Static item, not duplicated into the
+    // live frame.
+    const frame = lastFrame() ?? "";
+    const wordmarkCount = frame.split("oxagen.sh cli").length - 1;
+    expect(wordmarkCount).toBe(1);
+    unmount();
+  });
 });

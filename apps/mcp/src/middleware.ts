@@ -10,14 +10,15 @@ import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";
 import { bootstrapEntitlementRuntime } from "@oxagen/plugins";
 import { setSecurityEventEmitter } from "@oxagen/oxagen/kernel";
-import { initTracer, recordSecurityEvent } from "@oxagen/telemetry";
+import { initTracer, recordSecurityEvent, captureError } from "@oxagen/telemetry";
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { assertRlsConnectionSafe } from "@oxagen/database";
 import { extractBearerToken } from "./context";
 
-// Refuse to boot if TENANT_RLS_ENFORCEMENT_ENABLED=true but the DB role
-// silently bypasses RLS (superuser or BYPASSRLS), which would make all
-// tenant isolation policies dead weight.
+// Refuse to boot if a production runtime disabled RLS enforcement, or if
+// TENANT_RLS_ENFORCEMENT_ENABLED=true but the DB role silently bypasses RLS
+// (superuser or BYPASSRLS), which would make all tenant isolation policies
+// dead weight.
 await assertRlsConnectionSafe();
 
 // Bootstrap OpenTelemetry SDK. No-op when OTEL_EXPORTER_OTLP_ENDPOINT is
@@ -63,6 +64,27 @@ setSecurityEventEmitter((kernelEvent) => {
     userAgent: null,
     requestId: kernelEvent.requestId,
   });
+
+  // xmcp exposes no request-level error hook (its only middleware is the
+  // pre-request auth gate), so the kernel's error outcome is the MCP surface's
+  // capture point for the runtime error stream. Only "error" outcomes are
+  // captured here (deny is an authz decision, not a fault); the kernel event
+  // carries no raw error object, so we synthesize a message from the failing
+  // capability + error code. Full-detail capture for API/app/inngest happens at
+  // their own boundaries (Hono onError, Next onRequestError, inngest failure fn).
+  if (kernelEvent.outcome === "error") {
+    captureError({
+      error: new Error(
+        `mcp capability error: ${kernelEvent.capability} (${kernelEvent.errorCode ?? "unknown"})`,
+      ),
+      source: "mcp",
+      severity: "error",
+      orgId: kernelEvent.orgId || null,
+      workspaceId: kernelEvent.workspaceId || null,
+      capability: kernelEvent.capability,
+      requestId: kernelEvent.requestId || null,
+    });
+  }
 });
 
 /**

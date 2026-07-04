@@ -7,9 +7,10 @@ import {
   createPlatformMemoryProvider,
   createClickHouseTraceStore,
   createGraphSyncAdapter,
+  createPlatformAgentAi,
 } from "@oxagen/agent/adapters";
 import { resolveGitHubToken } from "./lib/github-token";
-import { createPlatformAgentAi } from "./lib/platform-agent-ai";
+import { logger } from "./logger";
 
 export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = async (
   input,
@@ -72,6 +73,12 @@ export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = asy
     // record (:Execution)-[:TOUCHED_FILE]->(:SourceFile) lineage edges in Neo4j.
     // Both writes are async + fire-and-forget — never block or fail the turn.
     graphSync: createGraphSyncAdapter({ owner: input.owner, repo: input.repo }),
+    // Surface non-fatal engine failures the engine would otherwise swallow (e.g.
+    // memory-recall failure). The platform memory adapter already logs + emits a
+    // telemetry event for its own recall failures; this is the belt for any
+    // engine-level failure that reaches the injected sink.
+    onError: ({ phase, error }) =>
+      logger.error({ err: error, phase, orgId: ctx.orgId }, "agent-engine non-fatal error"),
   });
 
   // 6. Reject runs where the agent produced no file changes.

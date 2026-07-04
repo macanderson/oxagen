@@ -1,5 +1,6 @@
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthPlugin } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { twoFactor } from "better-auth/plugins";
 import { buildOAuthProxyPlugins } from "./oauth-proxy-config";
 import { eq } from "drizzle-orm";
 import { db } from "@oxagen/database/client";
@@ -254,6 +255,11 @@ export const auth = betterAuth({
       accounts: schema.accounts,
       verifications: schema.verifications,
       rateLimits: schema.rateLimitTable,
+      // usePlural pluralizes the twoFactor model → "twoFactors". The physical
+      // table is auth.two_factor; this key MUST be the plural form or the
+      // adapter throws `model "twoFactors" was not found` on every 2FA call
+      // (same class of bug as rateLimit→rateLimits).
+      twoFactors: schema.twoFactorTable,
     },
     usePlural: true,
   }),
@@ -266,7 +272,21 @@ export const auth = betterAuth({
   // OXA-1789: OAuth Proxy — passthrough in production, relays preview social
   // logins through the production callback. Empty in local dev. See the
   // oauthProxyPlugins note above.
-  plugins: oauthProxyPlugins,
+  //
+  // twoFactor: TOTP-based 2FA. Backed by auth.two_factor (mapped as the plural
+  // model key "twoFactors" above). Secrets + backup codes are encrypted at rest
+  // with BETTER_AUTH_SECRET. The enrollment/verify/disable endpoints are
+  // auto-mounted under /api/auth/two-factor/*; enforcement for privileged
+  // (owner/admin) roles lives in the app's org layout gate, not here. The
+  // issuer labels the entry in the user's authenticator app.
+  // twoFactor() is widened to BetterAuthPlugin so its internal zod schema types
+  // don't leak into the inferred `auth` type — that leak drags zod's `$strip`
+  // symbol in and trips TS2883 ("inferred type cannot be named"). The cast is
+  // type-only; the plugin's endpoints still mount at runtime.
+  plugins: [
+    ...oauthProxyPlugins,
+    twoFactor({ issuer: "Oxagen" }) as BetterAuthPlugin,
+  ],
   user: {
     fields: {
       name: "displayName",

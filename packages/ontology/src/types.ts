@@ -4,8 +4,8 @@
 // IMPORTANT: NodeLabels contains only FIXED SYSTEM nodes — nodes whose
 // existence is guaranteed by the platform regardless of customer configuration.
 // Customer ontology entity types are free-form strings (e.g. "task", "contact")
-// stored in the ingestion.entity_types registry and carried as the `entityType`
-// property on :EntityNode nodes. They must NOT be added here.
+// carried as the `entityType` property on :EntityNode nodes and observed durably
+// in ClickHouse (internal.graph_observed_labels). They must NOT be added here.
 
 export const NodeLabels = {
   Tenant: "Tenant",

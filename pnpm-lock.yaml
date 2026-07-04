@@ -83,9 +83,6 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../../packages/database
-      '@oxagen/functions':
-        specifier: workspace:*
-        version: link:../../packages/functions
       '@oxagen/handlers':
         specifier: workspace:*
         version: link:../../packages/handlers
@@ -189,6 +186,9 @@ importers:
       '@oxagen/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@oxagen/agent-engine':
+        specifier: workspace:*
+        version: link:../../packages/agent-engine
       '@oxagen/ai':
         specifier: workspace:*
         version: link:../../packages/ai
@@ -207,9 +207,6 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../../packages/database
-      '@oxagen/functions':
-        specifier: workspace:*
-        version: link:../../packages/functions
       '@oxagen/handlers':
         specifier: workspace:*
         version: link:../../packages/handlers
@@ -267,9 +264,6 @@ importers:
       better-auth:
         specifier: 1.6.11
         version: 1.6.11(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9))(next@16.2.7(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0))
-      class-variance-authority:
-        specifier: 0.7.1
-        version: 0.7.1
       clsx:
         specifier: 2.1.1
         version: 2.1.1
@@ -300,6 +294,9 @@ importers:
       react-easy-crop:
         specifier: 5.5.7
         version: 5.5.7(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      react-qr-code:
+        specifier: 2.0.15
+        version: 2.0.15(react@19.2.6)
       reagraph:
         specifier: 4.31.0
         version: 4.31.0(@types/react@19.2.15)(@types/three@0.184.1)(graphology-types@0.24.8)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6))
@@ -325,9 +322,6 @@ importers:
         specifier: 3.25.76
         version: 3.25.76
     devDependencies:
-      '@eslint/eslintrc':
-        specifier: 3.3.5
-        version: 3.3.5
       '@eslint/js':
         specifier: 9.39.4
         version: 9.39.4
@@ -382,6 +376,9 @@ importers:
       neo4j-driver:
         specifier: 5.28.3
         version: 5.28.3
+      otplib:
+        specifier: 12.0.1
+        version: 12.0.1
       postcss:
         specifier: 8.5.15
         version: 8.5.15
@@ -514,9 +511,6 @@ importers:
         specifier: 19.2.6
         version: 19.2.6(react@19.2.6)
     devDependencies:
-      '@eslint/eslintrc':
-        specifier: 3.3.5
-        version: 3.3.5
       '@eslint/js':
         specifier: 9.39.4
         version: 9.39.4
@@ -565,9 +559,6 @@ importers:
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../../packages/billing
-      '@oxagen/config':
-        specifier: workspace:*
-        version: link:../../packages/config
       '@oxagen/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -586,12 +577,9 @@ importers:
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
-      '@oxagen/tenancy':
-        specifier: workspace:*
-        version: link:../../packages/tenancy
       xmcp:
         specifier: 0.6.10
-        version: 0.6.10(postcss@8.5.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(tslib@2.8.1)(webpack@5.107.2(@swc/core@1.15.41)(lightningcss@1.32.0)(postcss@8.5.15))(zod@3.25.76)
+        version: 0.6.10(@swc/helpers@0.5.15)(postcss@8.5.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(tslib@2.8.1)(webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15))(zod@3.25.76)
       zod:
         specifier: 3.25.76
         version: 3.25.76
@@ -602,9 +590,6 @@ importers:
       '@vitest/coverage-v8':
         specifier: 2.1.9
         version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0))
-      swc-loader:
-        specifier: 0.2.6
-        version: 0.2.6(@swc/core@1.15.41)(webpack@5.107.2(@swc/core@1.15.41)(lightningcss@1.32.0)(postcss@8.5.15))
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -614,9 +599,6 @@ importers:
 
   apps/schemas:
     dependencies:
-      '@oxagen/mcp-config':
-        specifier: workspace:*
-        version: link:../../packages/mcp-config
       zod:
         specifier: 3.25.76
         version: 3.25.76
@@ -765,9 +747,6 @@ importers:
       inngest:
         specifier: 3.54.2
         version: 3.54.2(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(encoding@0.1.13)(express@5.2.1)(h3@1.15.11)(hono@4.12.23)(next@16.2.7(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(typescript@6.0.3)(zod@3.25.76)
-      neo4j-driver:
-        specifier: 5.28.3
-        version: 5.28.3
       pino:
         specifier: 9.14.0
         version: 9.14.0
@@ -821,6 +800,9 @@ importers:
       '@ai-sdk/provider':
         specifier: 4.0.2
         version: 4.0.2
+      '@anthropic-ai/sdk':
+        specifier: 0.70.0
+        version: 0.70.0(zod@3.25.76)
       '@opentelemetry/api':
         specifier: 1.9.1
         version: 1.9.1
@@ -879,12 +861,6 @@ importers:
       '@oxagen/notifications':
         specifier: workspace:*
         version: link:../notifications
-      '@oxagen/telemetry':
-        specifier: workspace:*
-        version: link:../telemetry
-      '@oxagen/tenancy':
-        specifier: workspace:*
-        version: link:../tenancy
       better-auth:
         specifier: 1.6.11
         version: 1.6.11(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9))(next@16.2.7(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0))
@@ -941,9 +917,6 @@ importers:
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry
-      '@oxagen/tenancy':
-        specifier: workspace:*
-        version: link:../tenancy
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9)
@@ -953,9 +926,6 @@ importers:
       stripe:
         specifier: 17.7.0
         version: 17.7.0
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
     devDependencies:
       '@vitest/coverage-v8':
         specifier: 2.1.9
@@ -1031,15 +1001,9 @@ importers:
       '@aws-sdk/client-kms':
         specifier: ^3.0.0
         version: 3.1071.0
-      '@oxagen/config':
-        specifier: workspace:*
-        version: link:../config
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9)
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: 25.9.1
@@ -1077,9 +1041,6 @@ importers:
       postgres:
         specifier: 3.4.9
         version: 3.4.9
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
     devDependencies:
       '@types/pg':
         specifier: 8.20.0
@@ -1099,15 +1060,24 @@ importers:
 
   packages/engram:
     dependencies:
+      '@anthropic-ai/tokenizer':
+        specifier: 0.0.4
+        version: 0.0.4
       '@clickhouse/client':
         specifier: 1.19.0
         version: 1.19.0
+      '@oxagen/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
       '@oxagen/tenancy':
         specifier: workspace:*
         version: link:../tenancy
+      tiktoken:
+        specifier: 1.0.22
+        version: 1.0.22
       zod:
         specifier: 3.25.76
         version: 3.25.76
@@ -1159,9 +1129,6 @@ importers:
 
   packages/handlers:
     dependencies:
-      '@modelcontextprotocol/sdk':
-        specifier: 1.29.0
-        version: 1.29.0(zod@3.25.76)
       '@oxagen/agent':
         specifier: workspace:*
         version: link:../agent
@@ -1186,9 +1153,6 @@ importers:
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
-      '@oxagen/functions':
-        specifier: workspace:*
-        version: link:../functions
       '@oxagen/github':
         specifier: workspace:*
         version: link:../github
@@ -1274,9 +1238,6 @@ importers:
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../billing
-      '@oxagen/config':
-        specifier: workspace:*
-        version: link:../config
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
@@ -1286,18 +1247,12 @@ importers:
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../telemetry
-      '@oxagen/tenancy':
-        specifier: workspace:*
-        version: link:../tenancy
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9)
       pino:
         specifier: 9.14.0
         version: 9.14.0
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
     devDependencies:
       '@vitest/coverage-v8':
         specifier: 2.1.9
@@ -1317,12 +1272,6 @@ importers:
       '@oxagen/code-graph':
         specifier: workspace:*
         version: link:../code-graph
-      '@oxagen/config':
-        specifier: workspace:*
-        version: link:../config
-      '@oxagen/crypto':
-        specifier: workspace:*
-        version: link:../crypto
       '@oxagen/ontology':
         specifier: workspace:*
         version: link:../ontology
@@ -1402,6 +1351,9 @@ importers:
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(kysely@0.28.17)(postgres@3.4.9)
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
       inngest:
         specifier: 3.54.2
         version: 3.54.2(@opentelemetry/core@2.7.1(@opentelemetry/api@1.9.1))(encoding@0.1.13)(express@5.2.1)(h3@1.15.11)(hono@4.12.23)(next@16.2.7(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(typescript@6.0.3)(zod@3.25.76)
@@ -1483,6 +1435,9 @@ importers:
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
+      '@oxagen/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
       '@oxagen/tenancy':
         specifier: workspace:*
         version: link:../tenancy
@@ -1616,9 +1571,6 @@ importers:
 
   packages/sandbox:
     dependencies:
-      '@oxagen/config':
-        specifier: workspace:*
-        version: link:../config
       '@vercel/sandbox':
         specifier: 2.0.2
         version: 2.0.2
@@ -1681,9 +1633,6 @@ importers:
       pino:
         specifier: 9.14.0
         version: 9.14.0
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
     devDependencies:
       '@vitest/coverage-v8':
         specifier: 2.1.9
@@ -1732,9 +1681,6 @@ importers:
         version: 3.25.76
     devDependencies:
       '@opentelemetry/context-async-hooks':
-        specifier: 2.7.1
-        version: 2.7.1(@opentelemetry/api@1.9.1)
-      '@opentelemetry/sdk-trace-node':
         specifier: 2.7.1
         version: 2.7.1(@opentelemetry/api@1.9.1)
       '@vitest/coverage-v8':
@@ -1840,9 +1786,6 @@ importers:
       '@tavily/core':
         specifier: 0.6.0
         version: 0.6.0
-      zod:
-        specifier: 3.25.76
-        version: 3.25.76
     devDependencies:
       '@vitest/coverage-v8':
         specifier: 2.1.9
@@ -1992,6 +1935,18 @@ packages:
 
   '@antfu/install-pkg@1.1.0':
     resolution: {integrity: sha512-MGQsmw10ZyI+EJo45CdSER4zEb+p31LpDAFp2Z3gkSd1yqVZGi0Ebx++YTEMonJy4oChEMLsxZ64j8FH6sSqtQ==}
+
+  '@anthropic-ai/sdk@0.70.0':
+    resolution: {integrity: sha512-FYIuhF/lSCa+pgtaMGgsTF14aOIiWtBnu3azXITDOELv6yxsDNJwcjjt+Zr7vwyuTUjZJE/YL7s9m5r1jXkoeQ==}
+    hasBin: true
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
+    peerDependenciesMeta:
+      zod:
+        optional: true
+
+  '@anthropic-ai/tokenizer@0.0.4':
+    resolution: {integrity: sha512-EHRKbxlxlc8W4KCBEseByJ7YwyYCmgu9OyN59H9+IYIGPoKv8tXyQXinkeGDI+cI8Tiuz9wk2jZb/kK7AyvL7g==}
 
   '@anush008/tokenizers-darwin-universal@0.0.0':
     resolution: {integrity: sha512-SACpWEooTjFX89dFKRVUhivMxxcZRtA3nJGVepdLyrwTkQ1TZQ8581B5JoXp0TcTMHfgnDaagifvVoBiFEdNCQ==}
@@ -4511,6 +4466,24 @@ packages:
     resolution: {integrity: sha512-a61ljmRVVyG5MC/698C8/FfFDw5a8LOIvyOLW5fztgUXqUpc1jOfQzOitSCbge657OgXXThmY3Tk8fpiDb4UcA==}
     engines: {node: '>= 20.0.0'}
 
+  '@otplib/core@12.0.1':
+    resolution: {integrity: sha512-4sGntwbA/AC+SbPhbsziRiD+jNDdIzsZ3JUyfZwjtKyc/wufl1pnSIaG4Uqx8ymPagujub0o92kgBnB89cuAMA==}
+
+  '@otplib/plugin-crypto@12.0.1':
+    resolution: {integrity: sha512-qPuhN3QrT7ZZLcLCyKOSNhuijUi9G5guMRVrxq63r9YNOxxQjPm59gVxLM+7xGnHnM6cimY57tuKsjK7y9LM1g==}
+    deprecated: Please upgrade to v13 of otplib. Refer to otplib docs for migration paths
+
+  '@otplib/plugin-thirty-two@12.0.1':
+    resolution: {integrity: sha512-MtT+uqRso909UkbrrYpJ6XFjj9D+x2Py7KjTO9JDPhL0bJUYVu5kFP4TFZW4NFAywrAtFRxOVY261u0qwb93gA==}
+    deprecated: Please upgrade to v13 of otplib. Refer to otplib docs for migration paths
+
+  '@otplib/preset-default@12.0.1':
+    resolution: {integrity: sha512-xf1v9oOJRyXfluBhMdpOkr+bsE+Irt+0D5uHtvg6x1eosfmHCsCC6ej/m7FXiWqdo0+ZUI6xSKDhJwc8yfiOPQ==}
+    deprecated: Please upgrade to v13 of otplib. Refer to otplib docs for migration paths
+
+  '@otplib/preset-v11@12.0.1':
+    resolution: {integrity: sha512-9hSetMI7ECqbFiKICrNa4w70deTUfArtwXykPUvSHWOdzOlfa9ajglu7mNCntlvxycTiOAXkQGwjQCzzDEMRMg==}
+
   '@pdf-lib/standard-fonts@1.0.0':
     resolution: {integrity: sha512-hU30BK9IUN/su0Mn9VdlVKsWBS6GyhVfqjwl1FjZN4TxP6cCw0jP2w7V3Hf5uX7M0AZJ16vey9yE0ny7Sa59ZA==}
 
@@ -5441,101 +5414,8 @@ packages:
     resolution: {integrity: sha512-r1ElolvWXM4aYnZZVHvKW3EDL8JcwEuIgTuWxlB5lvC+YsvjkQ0gX35x9d8dTDubX395fViLVqkaolVs1PmIQQ==}
     engines: {node: '>=12.16'}
 
-  '@swc/core-darwin-arm64@1.15.41':
-    resolution: {integrity: sha512-kREh6J5paQFvP3i7f/4FbqRNOJREutVFVOkder4GVyCBQ39YmER55cW/y1NNjwrchzFqgYswFn0mMDCqbqKzrw==}
-    engines: {node: '>=10'}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@swc/core-darwin-x64@1.15.41':
-    resolution: {integrity: sha512-N8B56ESFazZAWZyIkecADSPCwlLEinW7QLMEeotCpv4J7VXwfH+OLkmRL8o96UZ+1355fwHxDTS6/wK7yucvkA==}
-    engines: {node: '>=10'}
-    cpu: [x64]
-    os: [darwin]
-
-  '@swc/core-linux-arm-gnueabihf@1.15.41':
-    resolution: {integrity: sha512-6XrId2fyle0mS5xxON8rU84mPd2Cq1kDJRj+4BnQKTd7u+2kSA6Ww+JkOP0iTNqOqt9OXhPOEAjBHAuonWcdCg==}
-    engines: {node: '>=10'}
-    cpu: [arm]
-    os: [linux]
-
-  '@swc/core-linux-arm64-gnu@1.15.41':
-    resolution: {integrity: sha512-ynLIarxlkVnqHn1D0fKOVht6mNU5ks6lrH+MY3kkS+XFaGGgDxFZVjWKJlkYTKm3RCvBTfA8Ng5fLufXheMRKQ==}
-    engines: {node: '>=10'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@swc/core-linux-arm64-musl@1.15.41':
-    resolution: {integrity: sha512-dXu/5vd4gh8symyhRF+4G7gOPkjmb4pONhh7sl+6GSiW0LOKZlfu5kXmyFbTz9smOT7jgr002qY9b1nujjXt2A==}
-    engines: {node: '>=10'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [musl]
-
-  '@swc/core-linux-ppc64-gnu@1.15.41':
-    resolution: {integrity: sha512-XGO6zVPXoPE0gf/XnI4jBbafNT13AYgoh6ns0JCSdOetI/kqVf0vhpz7NuNgAzZrMVCsmieqjPoTwViDgh4mOQ==}
-    engines: {node: '>=10'}
-    cpu: [ppc64]
-    os: [linux]
-    libc: [glibc]
-
-  '@swc/core-linux-s390x-gnu@1.15.41':
-    resolution: {integrity: sha512-0WUglRwyZtW+iMi7J3iFdrCxreZZIKf4egTwEQfIYRsqFax69A0OrFj+NIoFSE03xBT/IFRrg+S8K6f9Ky+4hA==}
-    engines: {node: '>=10'}
-    cpu: [s390x]
-    os: [linux]
-    libc: [glibc]
-
-  '@swc/core-linux-x64-gnu@1.15.41':
-    resolution: {integrity: sha512-VxkuQK59c0tHm6uJZCUrS3cyA2JhGGfdU6e41SZz0x/JS+4Sm7C1mIc97In14vkZJopEt7yXA2TouCqZDSygEA==}
-    engines: {node: '>=10'}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@swc/core-linux-x64-musl@1.15.41':
-    resolution: {integrity: sha512-/0qXIu1ZxggLuovLb22vFfKHq2AA4n6Whw5UwmVCHk4pkw7KWnPIQpMCEqUMPsNkFJig7PPp/TSYFu8ZEb2rtQ==}
-    engines: {node: '>=10'}
-    cpu: [x64]
-    os: [linux]
-    libc: [musl]
-
-  '@swc/core-win32-arm64-msvc@1.15.41':
-    resolution: {integrity: sha512-Y481sMNZM6rECh9VO4+y26N1lWEDAyxnBZskUf37fl90uHE946VHfmiVQWT0uMFOhyJJFovGTRuF4W82dwewUg==}
-    engines: {node: '>=10'}
-    cpu: [arm64]
-    os: [win32]
-
-  '@swc/core-win32-ia32-msvc@1.15.41':
-    resolution: {integrity: sha512-BAchBD5qeUzy3hiPSLJtaaoSm4blCLyYffOF1bGE4ETcV+OisqjUAwDQMJj++4bTpvMCDzwC+Bj3PmQyBCtscw==}
-    engines: {node: '>=10'}
-    cpu: [ia32]
-    os: [win32]
-
-  '@swc/core-win32-x64-msvc@1.15.41':
-    resolution: {integrity: sha512-WOkA+fJ/ViVBQDsSV9JC52NACTe5PhlurA6viASDZGb7HR3KS01ZG7RZ+Bg6SVQFIoq3gSbTsskQVe6EbHFAYw==}
-    engines: {node: '>=10'}
-    cpu: [x64]
-    os: [win32]
-
-  '@swc/core@1.15.41':
-    resolution: {integrity: sha512-03nQq/082QRJJiOvp3FGbgxTGyyxMxohPTjhk/W9bD2J0tk4ukITI7goOhOO2WbaHn/lsPmo/zf8+DIXhwpgYQ==}
-    engines: {node: '>=10'}
-    peerDependencies:
-      '@swc/helpers': '>=0.5.17'
-    peerDependenciesMeta:
-      '@swc/helpers':
-        optional: true
-
-  '@swc/counter@0.1.3':
-    resolution: {integrity: sha512-e2BR4lsJkkRlKZ/qCHPw9ZaSxc0MVUd7gtbtaB7aMvHeJVYe8sOB8DBZkP2DtISHGSku9sCK6T6cnY0CtXrOCQ==}
-
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
-
-  '@swc/types@0.1.26':
-    resolution: {integrity: sha512-lyMwd7WGgG79RS7EERZV3T8wMdmPq3xwyg+1nmAM64kIhx5yl+juO2PYIHb7vTiPgPCj8LYjsNV2T5wiQHUEaw==}
 
   '@tailwindcss/node@4.3.0':
     resolution: {integrity: sha512-aFb4gUhFOgdh9AXo4IzBEOzBkkAxm9VigwDJnMIYv3lcfXCJVesNfbEaBl4BNgVRyid92AmdviqwBUBRKSeY3g==}
@@ -8109,16 +7989,16 @@ packages:
   flatted@3.4.2:
     resolution: {integrity: sha512-PjDse7RzhcPkIJwy5t7KPWQSZ9cAbzQXcafsetQoD7sOJRQlGikNbx7yZp2OotDnJyrDcbyRq3Ttb18iYOqkxA==}
 
-  focus-trap-react@12.0.2:
-    resolution: {integrity: sha512-74OXbMiEOEDfynxLwhntTEbBbL+nSvGyBaLQ8tfnDuLPBLR+bgdE4oMaK8DOt/u9YH+9JFKJ+MuIYInSX7Rk5g==}
+  focus-trap-react@12.0.3:
+    resolution: {integrity: sha512-4eXtzhRTtFrxle9Tkl0Wkj8SFJnWz3i3yb5e53Mdn4E8XZQ/Lzqom9U4uUAJ8wd7yDmyGVP96dxwQZXLXd4sbg==}
     peerDependencies:
       '@types/react': ^18.0.0 || ^19.0.0
       '@types/react-dom': ^18.0.0 || ^19.0.0
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
 
-  focus-trap@8.2.1:
-    resolution: {integrity: sha512-6CxwrrFRquH7pDXb1mWxudkU9LSfYBMRZutpgddb2o6iwCk7cIRrBhyY3c8SGKcmIKdeMTrGSNg4Bedh2RSF/w==}
+  focus-trap@8.2.2:
+    resolution: {integrity: sha512-qV0g8hRYBqgACcFOH3f9wXc4zPKhr/0z9RI2a6ZijZ72EeBi4g8oBy8zAWuUR1TsMpOzwpUMFvjdasrC41Joug==}
 
   follow-redirects@1.16.0:
     resolution: {integrity: sha512-y5rN/uOsadFT/JfYwhxRS5R7Qce+g3zG97+JrtFZlC9klX/W5hD7iiLzScI4nZqUS7DNUdhPgw4xI8W2LuXlUw==}
@@ -9101,6 +8981,10 @@ packages:
   json-parse-even-better-errors@2.3.1:
     resolution: {integrity: sha512-xyFwyhro/JEof6Ghe2iz2NcXoj2sloNsWr/XsERDK/oiPCfaNhl5ONfp+jQdAZRQQ0IJWNzH9zIZF7li91kh2w==}
 
+  json-schema-to-ts@3.1.1:
+    resolution: {integrity: sha512-+DWg8jCJG2TEnpy7kOm/7/AxaYoaRbjVB4LFZLySZlWn8exGs3A4OLJR966cVvU26N7X9TWxl+Jsw7dzAqKT6g==}
+    engines: {node: '>=16'}
+
   json-schema-traverse@0.4.1:
     resolution: {integrity: sha512-xbbCH5dCYU5T8LcEhhuh7HJ88HXuW3qsI3Y0zOZFKfZEHcpWiHU/Jxzk629Brsab/mMiHQti9wMP+845RPe3Vg==}
 
@@ -10074,6 +9958,9 @@ packages:
     resolution: {integrity: sha512-wrAwOeXp1RRMFfQY8Sy7VaGVmPocaLwSFOYCGKSyo8qmJ+/yaafCl5BCA1IQZWqFSRBrKDYFeR9d/VyQzfH/jg==}
     engines: {node: '>= 6.0'}
 
+  otplib@12.0.1:
+    resolution: {integrity: sha512-xDGvUOQjop7RDgxTQ+o4pOol0/3xSZzawTiPKRrHnQWAy0WjhNs/5HdIDJCrqC4MBynmjXgULc6YfioaxZeFgg==}
+
   outdent@0.5.0:
     resolution: {integrity: sha512-/jHxFIzoMXdqPzTaCpFzAAWhpkSjZPF4Vsn6jAfNpmbH/ymsmd7Qc6VE9BGn0L6YMj6uwpQLxCECpus4ukKS9Q==}
 
@@ -10436,6 +10323,9 @@ packages:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
 
+  qr.js@0.0.0:
+    resolution: {integrity: sha512-c4iYnWb+k2E+vYpRimHqSu575b1/wKl4XFeJGpFmrJQz5I88v9aY2czh7s0w36srfCM1sXgC/xpoJz5dJfq+OQ==}
+
   qs@6.15.2:
     resolution: {integrity: sha512-Rzq0KEyX/w/tEybncDgdkZrJgVUsUMk3xjh3t5bv3S1HTAtg+uOYt72+ZfwiQwKdysThkTBdL/rTi6HDmX9Ddw==}
     engines: {node: '>=0.6'}
@@ -10467,8 +10357,8 @@ packages:
     resolution: {integrity: sha512-y3bGgqKj3QBdxLbLkomlohkvsA8gdAiUQlSBJnBhfn+BPxg4bc62d8TcBW15wavDfgexCgccckhcZvywyQYPOw==}
     hasBin: true
 
-  reablocks@10.3.0:
-    resolution: {integrity: sha512-Y1FF/5ye9LAEeJ61hycs4AHenfwUXbYdxM+qLWotRjYSBZNRaUrhoWTvd6oZHJjAAV1NDaHRqcQjYjCc2Fmlbw==}
+  reablocks@10.3.1:
+    resolution: {integrity: sha512-5s+mrpGVymqycoFsgZ8o4rUsOidiIMeueodSTRBAHGsu5Gog2cY24uReKJAapYiJJ+AanT4WTn/6iNatKtHJJg==}
     engines: {node: '>=22.13.0', npm: '>=10.8.2'}
     peerDependencies:
       react: '>=18'
@@ -10502,6 +10392,11 @@ packages:
 
   react-is@17.0.2:
     resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
+
+  react-qr-code@2.0.15:
+    resolution: {integrity: sha512-MkZcjEXqVKqXEIMVE0mbcGgDpkfSdd8zhuzXEl9QzYeNcw8Hq2oVIzDLWuZN2PQBwM5PWjc2S31K8Q1UbcFMfw==}
+    peerDependencies:
+      react: '*'
 
   react-reconciler@0.33.0:
     resolution: {integrity: sha512-KetWRytFv1epdpJc3J4G75I4WrplZE5jOL7Yq0p34+OVOKF4Se7WrdIdVC45XsSSmUTlht2FM/fM1FZb1mfQeA==}
@@ -11224,17 +11119,11 @@ packages:
     peerDependencies:
       react: '>=17.0'
 
-  swc-loader@0.2.6:
-    resolution: {integrity: sha512-9Zi9UP2YmDpgmQVbyOPJClY0dwf58JDyDMQ7uRc4krmc72twNI2fvlBWHLqVekBpPc7h5NJkGVT1zNDxFrqhvg==}
-    peerDependencies:
-      '@swc/core': ^1.2.147
-      webpack: '>=2'
-
   symbol-tree@3.2.4:
     resolution: {integrity: sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw==}
 
-  tabbable@6.4.0:
-    resolution: {integrity: sha512-05PUHKSNE8ou2dwIxTngl4EzcnsCDZGJ/iCLtDflR/SHB/ny14rXc+qU5P4mG9JkusiV7EivzY9Mhm55AzAvCg==}
+  tabbable@6.5.0:
+    resolution: {integrity: sha512-wieBHXygIm7OyQOu5hQlkk62/WyCFYGlWg7L6/ZCUZwx0o398Zkn4pVmMyfYhfMG8kGrj/Krt8eIk6UKC6VzwA==}
 
   tagged-tag@1.0.0:
     resolution: {integrity: sha512-yEFYrVhod+hdNyx7g5Bnkkb0G6si8HJurOoOEgC8B/O0uXLHlaey/65KRv6cuWBNhBgHKAROVpc7QyYqE5gFng==}
@@ -11360,6 +11249,10 @@ packages:
     peerDependencies:
       tslib: ^2
 
+  thirty-two@1.0.2:
+    resolution: {integrity: sha512-OEI0IWCe+Dw46019YLl6V10Us5bi574EvlJEOcAkB29IzQ/mYD1A6RyNHLjZPiHCmuodxvgF6U+vZO1L15lxVA==}
+    engines: {node: '>=0.2.6'}
+
   thread-stream@3.2.0:
     resolution: {integrity: sha512-zLBvqpwr4Esa0kRjcrzGU6zL25lePWaCLMx0RQFrmteozIfeNdaMLpG5U7PeHzvlFkAWaRKA9/KVW4F60iB+qw==}
 
@@ -11379,6 +11272,9 @@ packages:
   throttleit@2.1.0:
     resolution: {integrity: sha512-nt6AMGKW1p/70DF/hGBdJB57B8Tspmbp5gfJ8ilhLnt7kkr2ye7hzD6NVG8GGErk2HWF34igrL2CXmNIkzKqKw==}
     engines: {node: '>=18'}
+
+  tiktoken@1.0.22:
+    resolution: {integrity: sha512-PKvy1rVF1RibfF3JlXBSP0Jrcw2uq3yXdgcEXtKTYn3QJ/cBRBHDnrJ5jHky+MENZ6DIPwNUGWpkVx+7joCpNA==}
 
   tiny-invariant@1.3.3:
     resolution: {integrity: sha512-+FbBPE1o9QAYvviau/qC5SE3caw21q3xkvWKBtja5vgqOWIHHJ3ioaq1VPfn/Szqctz2bU/oYeKd9/z5BL+PVg==}
@@ -11516,6 +11412,9 @@ packages:
 
   trough@2.2.0:
     resolution: {integrity: sha512-tmMpK00BjZiUyVyvrBK7knerNgmgvcV/KLVyuma/SC+TQN167GrMRciANTz09+k3zW8L8t60jWO1GpfkZdjTaw==}
+
+  ts-algebra@2.0.0:
+    resolution: {integrity: sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw==}
 
   ts-api-utils@2.5.0:
     resolution: {integrity: sha512-OJ/ibxhPlqrMM0UiNHJ/0CKQkoKF243/AEmplt3qpRgkW8VG7IfOS41h7V8TjITqdByHzrjcS/2si+y4lIh8NA==}
@@ -12270,6 +12169,17 @@ snapshots:
     dependencies:
       package-manager-detector: 1.6.0
       tinyexec: 1.2.4
+
+  '@anthropic-ai/sdk@0.70.0(zod@3.25.76)':
+    dependencies:
+      json-schema-to-ts: 3.1.1
+    optionalDependencies:
+      zod: 3.25.76
+
+  '@anthropic-ai/tokenizer@0.0.4':
+    dependencies:
+      '@types/node': 18.19.130
+      tiktoken: 1.0.22
 
   '@anush008/tokenizers-darwin-universal@0.0.0':
     optional: true
@@ -13653,7 +13563,7 @@ snapshots:
       '@floating-ui/utils': 0.2.11
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
-      tabbable: 6.4.0
+      tabbable: 6.5.0
 
   '@floating-ui/utils@0.2.11': {}
 
@@ -13894,6 +13804,7 @@ snapshots:
     dependencies:
       '@jridgewell/gen-mapping': 0.3.13
       '@jridgewell/trace-mapping': 0.3.31
+    optional: true
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
@@ -15063,6 +14974,29 @@ snapshots:
 
   '@orama/orama@3.1.18': {}
 
+  '@otplib/core@12.0.1': {}
+
+  '@otplib/plugin-crypto@12.0.1':
+    dependencies:
+      '@otplib/core': 12.0.1
+
+  '@otplib/plugin-thirty-two@12.0.1':
+    dependencies:
+      '@otplib/core': 12.0.1
+      thirty-two: 1.0.2
+
+  '@otplib/preset-default@12.0.1':
+    dependencies:
+      '@otplib/core': 12.0.1
+      '@otplib/plugin-crypto': 12.0.1
+      '@otplib/plugin-thirty-two': 12.0.1
+
+  '@otplib/preset-v11@12.0.1':
+    dependencies:
+      '@otplib/core': 12.0.1
+      '@otplib/plugin-crypto': 12.0.1
+      '@otplib/plugin-thirty-two': 12.0.1
+
   '@pdf-lib/standard-fonts@1.0.0':
     dependencies:
       pako: 1.0.11
@@ -15702,11 +15636,13 @@ snapshots:
       '@rspack/binding-win32-ia32-msvc': 1.7.11
       '@rspack/binding-win32-x64-msvc': 1.7.11
 
-  '@rspack/core@1.7.11':
+  '@rspack/core@1.7.11(@swc/helpers@0.5.15)':
     dependencies:
       '@module-federation/runtime-tools': 0.22.0
       '@rspack/binding': 1.7.11
       '@rspack/lite-tapable': 1.1.0
+    optionalDependencies:
+      '@swc/helpers': 0.5.15
 
   '@rspack/lite-tapable@1.1.0': {}
 
@@ -15949,69 +15885,9 @@ snapshots:
 
   '@stripe/stripe-js@9.7.0': {}
 
-  '@swc/core-darwin-arm64@1.15.41':
-    optional: true
-
-  '@swc/core-darwin-x64@1.15.41':
-    optional: true
-
-  '@swc/core-linux-arm-gnueabihf@1.15.41':
-    optional: true
-
-  '@swc/core-linux-arm64-gnu@1.15.41':
-    optional: true
-
-  '@swc/core-linux-arm64-musl@1.15.41':
-    optional: true
-
-  '@swc/core-linux-ppc64-gnu@1.15.41':
-    optional: true
-
-  '@swc/core-linux-s390x-gnu@1.15.41':
-    optional: true
-
-  '@swc/core-linux-x64-gnu@1.15.41':
-    optional: true
-
-  '@swc/core-linux-x64-musl@1.15.41':
-    optional: true
-
-  '@swc/core-win32-arm64-msvc@1.15.41':
-    optional: true
-
-  '@swc/core-win32-ia32-msvc@1.15.41':
-    optional: true
-
-  '@swc/core-win32-x64-msvc@1.15.41':
-    optional: true
-
-  '@swc/core@1.15.41':
-    dependencies:
-      '@swc/counter': 0.1.3
-      '@swc/types': 0.1.26
-    optionalDependencies:
-      '@swc/core-darwin-arm64': 1.15.41
-      '@swc/core-darwin-x64': 1.15.41
-      '@swc/core-linux-arm-gnueabihf': 1.15.41
-      '@swc/core-linux-arm64-gnu': 1.15.41
-      '@swc/core-linux-arm64-musl': 1.15.41
-      '@swc/core-linux-ppc64-gnu': 1.15.41
-      '@swc/core-linux-s390x-gnu': 1.15.41
-      '@swc/core-linux-x64-gnu': 1.15.41
-      '@swc/core-linux-x64-musl': 1.15.41
-      '@swc/core-win32-arm64-msvc': 1.15.41
-      '@swc/core-win32-ia32-msvc': 1.15.41
-      '@swc/core-win32-x64-msvc': 1.15.41
-
-  '@swc/counter@0.1.3': {}
-
   '@swc/helpers@0.5.15':
     dependencies:
       tslib: 2.8.1
-
-  '@swc/types@0.1.26':
-    dependencies:
-      '@swc/counter': 0.1.3
 
   '@tailwindcss/node@4.3.0':
     dependencies:
@@ -16854,20 +16730,26 @@ snapshots:
     dependencies:
       '@webassemblyjs/helper-numbers': 1.13.2
       '@webassemblyjs/helper-wasm-bytecode': 1.13.2
+    optional: true
 
-  '@webassemblyjs/floating-point-hex-parser@1.13.2': {}
+  '@webassemblyjs/floating-point-hex-parser@1.13.2':
+    optional: true
 
-  '@webassemblyjs/helper-api-error@1.13.2': {}
+  '@webassemblyjs/helper-api-error@1.13.2':
+    optional: true
 
-  '@webassemblyjs/helper-buffer@1.14.1': {}
+  '@webassemblyjs/helper-buffer@1.14.1':
+    optional: true
 
   '@webassemblyjs/helper-numbers@1.13.2':
     dependencies:
       '@webassemblyjs/floating-point-hex-parser': 1.13.2
       '@webassemblyjs/helper-api-error': 1.13.2
       '@xtuc/long': 4.2.2
+    optional: true
 
-  '@webassemblyjs/helper-wasm-bytecode@1.13.2': {}
+  '@webassemblyjs/helper-wasm-bytecode@1.13.2':
+    optional: true
 
   '@webassemblyjs/helper-wasm-section@1.14.1':
     dependencies:
@@ -16875,16 +16757,20 @@ snapshots:
       '@webassemblyjs/helper-buffer': 1.14.1
       '@webassemblyjs/helper-wasm-bytecode': 1.13.2
       '@webassemblyjs/wasm-gen': 1.14.1
+    optional: true
 
   '@webassemblyjs/ieee754@1.13.2':
     dependencies:
       '@xtuc/ieee754': 1.2.0
+    optional: true
 
   '@webassemblyjs/leb128@1.13.2':
     dependencies:
       '@xtuc/long': 4.2.2
+    optional: true
 
-  '@webassemblyjs/utf8@1.13.2': {}
+  '@webassemblyjs/utf8@1.13.2':
+    optional: true
 
   '@webassemblyjs/wasm-edit@1.14.1':
     dependencies:
@@ -16896,6 +16782,7 @@ snapshots:
       '@webassemblyjs/wasm-opt': 1.14.1
       '@webassemblyjs/wasm-parser': 1.14.1
       '@webassemblyjs/wast-printer': 1.14.1
+    optional: true
 
   '@webassemblyjs/wasm-gen@1.14.1':
     dependencies:
@@ -16904,6 +16791,7 @@ snapshots:
       '@webassemblyjs/ieee754': 1.13.2
       '@webassemblyjs/leb128': 1.13.2
       '@webassemblyjs/utf8': 1.13.2
+    optional: true
 
   '@webassemblyjs/wasm-opt@1.14.1':
     dependencies:
@@ -16911,6 +16799,7 @@ snapshots:
       '@webassemblyjs/helper-buffer': 1.14.1
       '@webassemblyjs/wasm-gen': 1.14.1
       '@webassemblyjs/wasm-parser': 1.14.1
+    optional: true
 
   '@webassemblyjs/wasm-parser@1.14.1':
     dependencies:
@@ -16920,19 +16809,23 @@ snapshots:
       '@webassemblyjs/ieee754': 1.13.2
       '@webassemblyjs/leb128': 1.13.2
       '@webassemblyjs/utf8': 1.13.2
+    optional: true
 
   '@webassemblyjs/wast-printer@1.14.1':
     dependencies:
       '@webassemblyjs/ast': 1.14.1
       '@xtuc/long': 4.2.2
+    optional: true
 
   '@workflow/serde@4.1.0': {}
 
   '@workflow/serde@4.1.0-beta.2': {}
 
-  '@xtuc/ieee754@1.2.0': {}
+  '@xtuc/ieee754@1.2.0':
+    optional: true
 
-  '@xtuc/long@4.2.2': {}
+  '@xtuc/long@4.2.2':
+    optional: true
 
   '@yomguithereal/helpers@1.1.1': {}
 
@@ -16954,6 +16847,7 @@ snapshots:
   acorn-import-phases@1.0.4(acorn@8.16.0):
     dependencies:
       acorn: 8.16.0
+    optional: true
 
   acorn-jsx@5.3.2(acorn@8.16.0):
     dependencies:
@@ -16992,6 +16886,7 @@ snapshots:
   ajv-formats@2.1.1(ajv@8.20.0):
     optionalDependencies:
       ajv: 8.20.0
+    optional: true
 
   ajv-formats@3.0.1(ajv@8.20.0):
     optionalDependencies:
@@ -17001,6 +16896,7 @@ snapshots:
     dependencies:
       ajv: 8.20.0
       fast-deep-equal: 3.1.3
+    optional: true
 
   ajv@6.15.0:
     dependencies:
@@ -17542,7 +17438,8 @@ snapshots:
 
   chroma-js@3.2.0: {}
 
-  chrome-trace-event@1.0.4: {}
+  chrome-trace-event@1.0.4:
+    optional: true
 
   ci-info@4.4.0:
     optional: true
@@ -17663,7 +17560,8 @@ snapshots:
 
   commander@12.1.0: {}
 
-  commander@2.20.3: {}
+  commander@2.20.3:
+    optional: true
 
   commander@7.2.0: {}
 
@@ -18314,7 +18212,8 @@ snapshots:
 
   es-module-lexer@1.7.0: {}
 
-  es-module-lexer@2.1.0: {}
+  es-module-lexer@2.1.0:
+    optional: true
 
   es-object-atoms@1.1.2:
     dependencies:
@@ -18621,6 +18520,7 @@ snapshots:
     dependencies:
       esrecurse: 4.3.0
       estraverse: 4.3.0
+    optional: true
 
   eslint-scope@8.4.0:
     dependencies:
@@ -18690,7 +18590,8 @@ snapshots:
     dependencies:
       estraverse: 5.3.0
 
-  estraverse@4.3.0: {}
+  estraverse@4.3.0:
+    optional: true
 
   estraverse@5.3.0: {}
 
@@ -18951,18 +18852,18 @@ snapshots:
 
   flatted@3.4.2: {}
 
-  focus-trap-react@12.0.2(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
+  focus-trap-react@12.0.3(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
     dependencies:
       '@types/react': 19.2.15
       '@types/react-dom': 19.2.3(@types/react@19.2.15)
-      focus-trap: 8.2.1
+      focus-trap: 8.2.2
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
-      tabbable: 6.4.0
+      tabbable: 6.5.0
 
-  focus-trap@8.2.1:
+  focus-trap@8.2.2:
     dependencies:
-      tabbable: 6.4.0
+      tabbable: 6.5.0
 
   follow-redirects@1.16.0: {}
 
@@ -19245,7 +19146,8 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  glob-to-regexp@0.4.1: {}
+  glob-to-regexp@0.4.1:
+    optional: true
 
   glob@10.5.0:
     dependencies:
@@ -20030,6 +19932,7 @@ snapshots:
       '@types/node': 25.9.1
       merge-stream: 2.0.0
       supports-color: 8.1.1
+    optional: true
 
   jiti@2.7.0: {}
 
@@ -20113,6 +20016,11 @@ snapshots:
   json-buffer@3.0.1: {}
 
   json-parse-even-better-errors@2.3.1: {}
+
+  json-schema-to-ts@3.1.1:
+    dependencies:
+      '@babel/runtime': 7.29.7
+      ts-algebra: 2.0.0
 
   json-schema-traverse@0.4.1: {}
 
@@ -20298,7 +20206,8 @@ snapshots:
 
   listenercount@1.0.1: {}
 
-  loader-runner@4.3.2: {}
+  loader-runner@4.3.2:
+    optional: true
 
   locate-path@5.0.0:
     dependencies:
@@ -20636,7 +20545,8 @@ snapshots:
 
   merge-descriptors@2.0.0: {}
 
-  merge-stream@2.0.0: {}
+  merge-stream@2.0.0:
+    optional: true
 
   merge2@1.4.1: {}
 
@@ -21086,7 +20996,8 @@ snapshots:
 
   negotiator@1.0.0: {}
 
-  neo-async@2.6.2: {}
+  neo-async@2.6.2:
+    optional: true
 
   neo4j-driver-bolt-connection@5.28.3:
     dependencies:
@@ -21384,6 +21295,12 @@ snapshots:
 
   os-paths@4.4.0: {}
 
+  otplib@12.0.1:
+    dependencies:
+      '@otplib/core': 12.0.1
+      '@otplib/preset-default': 12.0.1
+      '@otplib/preset-v11': 12.0.1
+
   outdent@0.5.0: {}
 
   own-keys@1.0.1:
@@ -21594,15 +21511,15 @@ snapshots:
 
   possible-typed-array-names@1.1.0: {}
 
-  postcss-loader@8.2.1(@rspack/core@1.7.11)(postcss@8.5.15)(typescript@6.0.3)(webpack@5.107.2(@swc/core@1.15.41)(lightningcss@1.32.0)(postcss@8.5.15)):
+  postcss-loader@8.2.1(@rspack/core@1.7.11(@swc/helpers@0.5.15))(postcss@8.5.15)(typescript@6.0.3)(webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15)):
     dependencies:
       cosmiconfig: 9.0.2(typescript@6.0.3)
       jiti: 2.7.0
       postcss: 8.5.15
       semver: 7.8.4
     optionalDependencies:
-      '@rspack/core': 1.7.11
-      webpack: 5.107.2(@swc/core@1.15.41)(lightningcss@1.32.0)(postcss@8.5.15)
+      '@rspack/core': 1.7.11(@swc/helpers@0.5.15)
+      webpack: 5.107.2(lightningcss@1.32.0)(postcss@8.5.15)
     transitivePeerDependencies:
       - typescript
 
@@ -21731,6 +21648,8 @@ snapshots:
 
   punycode@2.3.1: {}
 
+  qr.js@0.0.0: {}
+
   qs@6.15.2:
     dependencies:
       side-channel: 1.1.1
@@ -21765,7 +21684,7 @@ snapshots:
       strip-json-comments: 2.0.1
     optional: true
 
-  reablocks@10.3.0(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
+  reablocks@10.3.1(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
     dependencies:
       '@floating-ui/react': 0.27.19(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       body-scroll-lock-upgrade: 1.1.0
@@ -21775,7 +21694,7 @@ snapshots:
       ctrl-keys: 1.0.6
       date-fns: 4.4.0
       ellipsize: 0.7.0
-      focus-trap-react: 12.0.2(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      focus-trap-react: 12.0.3(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       human-format: 1.2.1
       motion: 12.40.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       name-initials: 0.1.3
@@ -21826,6 +21745,12 @@ snapshots:
   react-is@16.13.1: {}
 
   react-is@17.0.2: {}
+
+  react-qr-code@2.0.15(react@19.2.6):
+    dependencies:
+      prop-types: 15.8.1
+      qr.js: 0.0.0
+      react: 19.2.6
 
   react-reconciler@0.33.0(react@19.2.6):
     dependencies:
@@ -21981,7 +21906,7 @@ snapshots:
       human-format: 1.2.1
       invert-color: 2.0.0
       motion: 12.40.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      reablocks: 10.3.0(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      reablocks: 10.3.1(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
       react-fast-compare: 3.2.2
@@ -22352,6 +22277,7 @@ snapshots:
       ajv: 8.20.0
       ajv-formats: 2.1.1(ajv@8.20.0)
       ajv-keywords: 5.1.0(ajv@8.20.0)
+    optional: true
 
   scroll-into-view-if-needed@3.1.0:
     dependencies:
@@ -22873,6 +22799,7 @@ snapshots:
   supports-color@8.1.1:
     dependencies:
       has-flag: 4.0.0
+    optional: true
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
@@ -22880,15 +22807,9 @@ snapshots:
     dependencies:
       react: 19.2.6
 
-  swc-loader@0.2.6(@swc/core@1.15.41)(webpack@5.107.2(@swc/core@1.15.41)(lightningcss@1.32.0)(postcss@8.5.15)):
-    dependencies:
-      '@swc/core': 1.15.41
-      '@swc/counter': 0.1.3
-      webpack: 5.107.2(@swc/core@1.15.41)(lightningcss@1.32.0)(postcss@8.5.15)
-
   symbol-tree@3.2.4: {}
 
-  tabbable@6.4.0: {}
+  tabbable@6.5.0: {}
 
   tagged-tag@1.0.0: {}
 
@@ -22970,17 +22891,17 @@ snapshots:
 
   terminal-size@4.0.1: {}
 
-  terser-webpack-plugin@5.6.1(@swc/core@1.15.41)(lightningcss@1.32.0)(postcss@8.5.15)(webpack@5.107.2(@swc/core@1.15.41)(lightningcss@1.32.0)(postcss@8.5.15)):
+  terser-webpack-plugin@5.6.1(lightningcss@1.32.0)(postcss@8.5.15)(webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15)):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       jest-worker: 27.5.1
       schema-utils: 4.3.3
       terser: 5.48.0
-      webpack: 5.107.2(@swc/core@1.15.41)(lightningcss@1.32.0)(postcss@8.5.15)
+      webpack: 5.107.2(lightningcss@1.32.0)(postcss@8.5.15)
     optionalDependencies:
-      '@swc/core': 1.15.41
       lightningcss: 1.32.0
       postcss: 8.5.15
+    optional: true
 
   terser@5.48.0:
     dependencies:
@@ -22988,6 +22909,7 @@ snapshots:
       acorn: 8.16.0
       commander: 2.20.3
       source-map-support: 0.5.21
+    optional: true
 
   test-exclude@7.0.2:
     dependencies:
@@ -23013,6 +22935,8 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
+  thirty-two@1.0.2: {}
+
   thread-stream@3.2.0:
     dependencies:
       real-require: 0.2.0
@@ -23034,6 +22958,8 @@ snapshots:
   three@0.184.0: {}
 
   throttleit@2.1.0: {}
+
+  tiktoken@1.0.22: {}
 
   tiny-invariant@1.3.3: {}
 
@@ -23138,11 +23064,13 @@ snapshots:
 
   trough@2.2.0: {}
 
+  ts-algebra@2.0.0: {}
+
   ts-api-utils@2.5.0(typescript@6.0.3):
     dependencies:
       typescript: 6.0.3
 
-  ts-checker-rspack-plugin@1.4.0(@rspack/core@1.7.11)(tslib@2.8.1)(typescript@6.0.3):
+  ts-checker-rspack-plugin@1.4.0(@rspack/core@1.7.11(@swc/helpers@0.5.15))(tslib@2.8.1)(typescript@6.0.3):
     dependencies:
       '@rspack/lite-tapable': 1.1.2
       chokidar: 3.6.0
@@ -23150,7 +23078,7 @@ snapshots:
       picocolors: 1.1.1
       typescript: 6.0.3
     optionalDependencies:
-      '@rspack/core': 1.7.11
+      '@rspack/core': 1.7.11(@swc/helpers@0.5.15)
     transitivePeerDependencies:
       - tslib
 
@@ -23603,6 +23531,7 @@ snapshots:
     dependencies:
       glob-to-regexp: 0.4.1
       graceful-fs: 4.2.11
+    optional: true
 
   web-namespaces@2.0.1: {}
 
@@ -23620,11 +23549,12 @@ snapshots:
 
   webidl-conversions@8.0.1: {}
 
-  webpack-sources@3.5.0: {}
+  webpack-sources@3.5.0:
+    optional: true
 
   webpack-virtual-modules@0.6.2: {}
 
-  webpack@5.107.2(@swc/core@1.15.41)(lightningcss@1.32.0)(postcss@8.5.15):
+  webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15):
     dependencies:
       '@types/estree': 1.0.9
       '@types/json-schema': 7.0.15
@@ -23646,7 +23576,7 @@ snapshots:
       neo-async: 2.6.2
       schema-utils: 4.3.3
       tapable: 2.3.3
-      terser-webpack-plugin: 5.6.1(@swc/core@1.15.41)(lightningcss@1.32.0)(postcss@8.5.15)(webpack@5.107.2(@swc/core@1.15.41)(lightningcss@1.32.0)(postcss@8.5.15))
+      terser-webpack-plugin: 5.6.1(lightningcss@1.32.0)(postcss@8.5.15)(webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15))
       watchpack: 2.5.1
       webpack-sources: 3.5.0
     transitivePeerDependencies:
@@ -23662,6 +23592,7 @@ snapshots:
       - lightningcss
       - postcss
       - uglify-js
+    optional: true
 
   whatwg-encoding@3.1.1:
     dependencies:
@@ -23785,13 +23716,13 @@ snapshots:
     dependencies:
       os-paths: 4.4.0
 
-  xmcp@0.6.10(postcss@8.5.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(tslib@2.8.1)(webpack@5.107.2(@swc/core@1.15.41)(lightningcss@1.32.0)(postcss@8.5.15))(zod@3.25.76):
+  xmcp@0.6.10(@swc/helpers@0.5.15)(postcss@8.5.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(tslib@2.8.1)(webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15))(zod@3.25.76):
     dependencies:
       '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
-      '@rspack/core': 1.7.11
+      '@rspack/core': 1.7.11(@swc/helpers@0.5.15)
       jose: 6.2.3
-      postcss-loader: 8.2.1(@rspack/core@1.7.11)(postcss@8.5.15)(typescript@6.0.3)(webpack@5.107.2(@swc/core@1.15.41)(lightningcss@1.32.0)(postcss@8.5.15))
-      ts-checker-rspack-plugin: 1.4.0(@rspack/core@1.7.11)(tslib@2.8.1)(typescript@6.0.3)
+      postcss-loader: 8.2.1(@rspack/core@1.7.11(@swc/helpers@0.5.15))(postcss@8.5.15)(typescript@6.0.3)(webpack@5.107.2(lightningcss@1.32.0)(postcss@8.5.15))
+      ts-checker-rspack-plugin: 1.4.0(@rspack/core@1.7.11(@swc/helpers@0.5.15))(tslib@2.8.1)(typescript@6.0.3)
       typescript: 6.0.3
       zod: 3.25.76
     optionalDependencies:

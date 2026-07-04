@@ -34,6 +34,20 @@ export interface CompileOptions {
   candidatesPerEngine?: number;
   /** Diversity constraint for packer. Default: 3. */
   diversityConstraint?: number;
+  /**
+   * Optional error sink. Invoked (best-effort) whenever a retrieval engine or
+   * the pinned-record query rejects, so a caller can wire a logger without this
+   * pure compiler taking a hard logging dependency. Never throws control flow:
+   * a rejected retrieval still degrades to an empty result, but is no longer
+   * silent — the failure count is also surfaced in `metadata.retrievalFailures`.
+   */
+  onError?: (err: unknown, context: { phase: string; engine?: string }) => void;
+}
+
+/** One recorded retrieval failure, collected during compile for observability. */
+interface RetrievalFailure {
+  engine?: string;
+  error: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -104,11 +118,21 @@ export async function compile(
     limit: candidatesPerEngine,
   };
 
+  // Collect retrieval failures so a dropped engine / dropped pinned-record
+  // query is observable (count surfaced in metadata) rather than silent. The
+  // pinned-record loss is especially costly — those are MUST-include
+  // salience-1.0 procedural rules.
+  const retrievalFailures: RetrievalFailure[] = [];
+
   // 2. Run all retrieval engines in parallel
   const retrievalStart = Date.now();
   const engineResults = await Promise.all(
     options.engines.map((engine) =>
-      engine.retrieve(query).catch(() => [] as Awaited<ReturnType<RetrievalEngine["retrieve"]>>),
+      engine.retrieve(query).catch((err: unknown) => {
+        retrievalFailures.push({ engine: engine.name, error: String(err) });
+        options.onError?.(err, { phase: "engine-retrieve", engine: engine.name });
+        return [] as Awaited<ReturnType<RetrievalEngine["retrieve"]>>;
+      }),
     ),
   );
   const retrievalMs = Date.now() - retrievalStart;
@@ -126,7 +150,13 @@ export async function compile(
       minSalience: 1.0,
       limit: 50,
     })
-    .catch(() => []);
+    .catch((err: unknown) => {
+      // Losing pinned procedural records silently drops MUST-include
+      // salience-1.0 rules — record and surface it, then degrade to none.
+      retrievalFailures.push({ error: String(err) });
+      options.onError?.(err, { phase: "pinned-query" });
+      return [];
+    });
 
   // 5. Pack under budget
   const packStart = Date.now();
@@ -158,6 +188,7 @@ export async function compile(
       candidatesPacked: packResult.included.length,
       candidatesCompressed: packResult.compressed.length,
       candidatesEvicted: packResult.evicted.length,
+      retrievalFailures: retrievalFailures.length,
     },
   });
   const layoutMs = Date.now() - layoutStart;

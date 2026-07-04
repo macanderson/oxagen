@@ -104,6 +104,26 @@ function makeStep() {
   };
 }
 
+/**
+ * A step.run mock that reproduces Inngest's real memoization: once a step id
+ * has completed, later calls with that id return the cached result WITHOUT
+ * re-invoking the callback. Reusing one instance across two handler
+ * invocations simulates Inngest replaying the whole function body — the
+ * scenario that used to double-insert the tool_invocations telemetry row
+ * because it was emitted as plain code, not inside a memoized step.run.
+ */
+function makeMemoizingStep() {
+  const memo = new Map<string, unknown>();
+  return {
+    run: async (name: string, fn: () => Promise<unknown>) => {
+      if (memo.has(name)) return memo.get(name);
+      const result = await fn();
+      memo.set(name, result);
+      return result;
+    },
+  };
+}
+
 const BASE_EVENT = {
   data: {
     orgId: "org-1",
@@ -225,6 +245,35 @@ describe("agentWorkflowTaskExecute Inngest handler", () => {
     ).rejects.toThrow();
     const telArgs = mocks.insertToolInvocation.mock.calls[0]![0] as Record<string, unknown>;
     expect(telArgs.status).toBe("failed");
+  });
+
+  it("does not double-insert the tool_invocations telemetry row when the run is replayed with memoized steps (Inngest retry simulation)", async () => {
+    const step = makeMemoizingStep();
+
+    const first = (await capturedHandler!({
+      event: BASE_EVENT,
+      step,
+    })) as Record<string, unknown>;
+    expect(first.status).toBe("completed");
+
+    // Simulate Inngest replaying the whole function body (e.g. after a
+    // retry, or a worker restart before the function's return value was
+    // acknowledged) by invoking the handler again with the SAME memoized
+    // step state — every step id already completed on the first pass short-
+    // circuits to its cached result instead of re-running.
+    const second = (await capturedHandler!({
+      event: BASE_EVENT,
+      step,
+    })) as Record<string, unknown>;
+    expect(second.status).toBe("completed");
+
+    // Exactly one completed tool_invocations row for the single logical
+    // task execution — not doubled by the replay.
+    expect(mocks.insertToolInvocation).toHaveBeenCalledTimes(1);
+    const telArgs = mocks.insertToolInvocation.mock.calls[0]![0] as Record<string, unknown>;
+    expect(telArgs.status).toBe("completed");
+    // Deterministic invocation_id — not a fresh crypto.randomUUID() per replay.
+    expect(telArgs.invocation_id).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/));
   });
 
   it("finalizes execution when all steps are terminal (completed + failed >= total)", async () => {

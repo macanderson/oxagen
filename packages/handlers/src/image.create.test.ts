@@ -14,6 +14,7 @@ vi.mock("@oxagen/ai", () => ({
   selectImageModel: mocks.selectImageModel,
   // Auto-improve wiring (passthrough in tests).
   loadWorkspacePromptConfig: vi.fn(async () => ({})),
+  loadWorkspacePromptConfigSafe: vi.fn(async () => ({})),
   enhancePromptIfInsufficient: vi.fn(async (a: { prompt: string }) => ({
     prompt: a.prompt,
     enhanced: false,

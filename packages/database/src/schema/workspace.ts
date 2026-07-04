@@ -12,7 +12,6 @@ export const workspaces = workspaceSchema.table(
     orgId: uuid("org_id").notNull(),
     name: text("name").notNull(),
     slug: citext("slug").notNull(),
-    defaultGraphId: uuid("default_graph_id"),
     settings: jsonb("settings").notNull().default(sql`'{}'::jsonb`),
     // Workspace-level model defaults. NULL means the workspace sets no default
     // for that dimension and the user's own preference (or the system default)

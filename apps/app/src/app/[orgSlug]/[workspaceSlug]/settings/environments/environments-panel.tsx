@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
   DialogPopup,
@@ -36,6 +37,12 @@ interface Props {
   canManage: boolean;
   environments: EnvironmentSummary[];
   secretKeys: SecretKeySummary[];
+  /**
+   * True when the server-side environments/secrets read failed and the grid was
+   * degraded to empty. Drives an inline notice so a read failure doesn't look
+   * like the workspace's secrets were deleted.
+   */
+  loadError?: boolean;
   importEnvAction: ImportEnvAction;
   upsertKeyAction: (args: {
     orgSlug: string;
@@ -77,12 +84,22 @@ interface Props {
 }
 
 export function EnvironmentsPanel(props: Props) {
-  const { orgSlug, workspaceSlug, canManage, environments, secretKeys } = props;
+  const { orgSlug, workspaceSlug, canManage, environments, secretKeys, loadError } = props;
   const scope = { orgSlug, workspaceSlug };
   const [pending, startTransition] = useTransition();
 
   return (
     <div className="flex flex-col gap-6">
+      {loadError && (
+        <Alert variant="error">
+          <AlertTitle>Couldn&apos;t load environments &amp; secrets</AlertTitle>
+          <AlertDescription>
+            We hit an error reading this workspace&apos;s environments and secrets, so the grid
+            below may be incomplete. Reload the page to try again — nothing has been deleted.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div>
         <h2 className="text-base font-medium">Environments &amp; Secrets</h2>
         <p className="text-sm text-muted-foreground">

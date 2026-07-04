@@ -19,6 +19,35 @@
 // pg 42P01 "relation does not exist" error and returns empty AuthzData,
 // so all capabilities fall through to their defaultEffect.
 
+/**
+ * Next.js `onRequestError` hook — invoked for every uncaught server-side error
+ * (route handlers, RSC, server actions). This is the official capture point for
+ * apps/app's server runtime. Fire-and-forget via captureError(): records the
+ * error to the ClickHouse error stream and (when ALERT_WEBHOOK_URL is set) fans
+ * a Slack-compatible alert. Node runtime only — captureError pulls in the
+ * ClickHouse client which is Node-only. See OXA observability audit item.
+ */
+export async function onRequestError(
+  error: unknown,
+  request: { path?: string },
+  context: { routerKind?: string; routePath?: string; renderSource?: string },
+): Promise<void> {
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  try {
+    const { captureError } = await import("@oxagen/telemetry");
+    const where =
+      context.routePath ?? request.path ?? context.renderSource ?? "app";
+    captureError({
+      error,
+      source: "app",
+      severity: "error",
+      context: `app request error (${where})`,
+    });
+  } catch {
+    // Never let error capture become a new failure source at the boundary.
+  }
+}
+
 export async function register(): Promise<void> {
   // Guard: only run in the Node.js runtime (not in the Edge runtime or
   // during client-side builds). bootstrapIAMRuntime depends on @oxagen/database
@@ -52,9 +81,10 @@ export async function register(): Promise<void> {
     const { makeSecurityEventInserter } = await import("@oxagen/database/security");
     const { assertRlsConnectionSafe } = await import("@oxagen/database");
 
-    // Refuse to boot if TENANT_RLS_ENFORCEMENT_ENABLED=true but the DB role
-    // silently bypasses RLS (superuser or BYPASSRLS), which would make all
-    // tenant isolation policies dead weight.
+    // Refuse to boot if a production runtime disabled RLS enforcement, or if
+    // TENANT_RLS_ENFORCEMENT_ENABLED=true but the DB role silently bypasses RLS
+    // (superuser or BYPASSRLS), which would make all tenant isolation policies
+    // dead weight.
     await assertRlsConnectionSafe();
 
     bootstrapIAMRuntime();

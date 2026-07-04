@@ -75,6 +75,8 @@ import { agentSubagentResultGetRoute } from "./routes/v1/agent.subagent.result.g
 import { agentSubagentSiblingsRoute } from "./routes/v1/agent.subagent.siblings";
 import { agentSubagentFanoutListRoute } from "./routes/v1/agent.subagent.fanout.list";
 import { agentSubagentFanoutGetRoute } from "./routes/v1/agent.subagent.fanout.get";
+import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
+import { agentExecutionListRoute } from "./routes/v1/agent.execution.list";
 import { formFillRoute } from "./routes/v1/form.fill";
 import { commandMenuSearchRoute } from "./routes/v1/command.menu.search";
 import { commandMenuSuggestRoute } from "./routes/v1/command.menu.suggest";
@@ -180,6 +182,14 @@ import { agentDefinitionUpdateRoute } from "./routes/v1/agent.definition.update"
 import { agentDefinitionPublishRoute } from "./routes/v1/agent.definition.publish";
 import { agentDefinitionGetRoute } from "./routes/v1/agent.definition.get";
 import { agentDefinitionListRoute } from "./routes/v1/agent.definition.list";
+import { evalDatasetCreateRoute } from "./routes/v1/eval.dataset.create";
+import { evalDatasetListRoute } from "./routes/v1/eval.dataset.list";
+import { evalDatasetGetRoute } from "./routes/v1/eval.dataset.get";
+import { evalDatasetItemAddRoute } from "./routes/v1/eval.dataset.item.add";
+import { evalDatasetFromTracesRoute } from "./routes/v1/eval.dataset.from_traces";
+import { evalRunStartRoute } from "./routes/v1/eval.run.start";
+import { evalRunStatusRoute } from "./routes/v1/eval.run.status";
+import { evalRunGetRoute } from "./routes/v1/eval.run.get";
 import { agentDeployRoute } from "./routes/v1/agent.deploy";
 import { agentTriggerCreateRoute } from "./routes/v1/agent.trigger.create";
 import { agentTriggerUpdateRoute } from "./routes/v1/agent.trigger.update";
@@ -227,6 +237,9 @@ import { auditLogQueryRoute } from "./routes/v1/audit.log.query";
 import { agentLlmRoute } from "./routes/v1/agent.llm";
 import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
 import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
+import { a2aWellKnownRoute } from "./routes/a2a/well-known";
+import { a2aRpcRoute } from "./routes/a2a/rpc";
+import { a2aCardGetRoute } from "./routes/v1/a2a.card.get";
 
 export type AppEnv = {
   Variables: {
@@ -260,6 +273,11 @@ app.route("/webhooks", webhookRoute);
 // Inngest cloud polls /api/inngest for the function manifest; signing-key
 // verification is enforced inside the inngest/hono serve handler.
 app.route("/api/inngest", inngestRoute);
+
+// A2A (Agent2Agent) protocol discovery document — public, optional auth. A
+// valid workspace API key yields the full workspace card; anonymous callers get
+// a base card. Mounted BEFORE the auth-gated groups so discovery never 401s.
+app.route("/.well-known", a2aWellKnownRoute);
 
 // Public CLI token exchange — no auth middleware (the code + PKCE verifier are
 // the security boundary; RFC 8252 + RFC 7636 S256). Must be mounted BEFORE the
@@ -383,6 +401,10 @@ orgScoped.route("/agent/subagent/dispatch", agentSubagentDispatchRoute);
 // Read side of the fan-out feature: list fan-outs, then get one with child runs.
 orgScoped.route("/agent/subagent/fanouts", agentSubagentFanoutListRoute);
 orgScoped.route("/agent/subagent/fanout", agentSubagentFanoutGetRoute);
+// Agent run-trace span tree: one execution + its steps, tool calls, and child
+// executions (subagent/A2A lineage). The list route backs the Activity index.
+orgScoped.route("/agent/executions", agentExecutionListRoute);
+orgScoped.route("/agent/trace", agentTraceGetRoute);
 // Agent lifecycle: definitions, deployment, triggers. The /update and /publish
 // sub-paths are mounted before the get route so they are not swallowed by its
 // GET /:agentId param match.
@@ -396,6 +418,16 @@ orgScoped.route("/agent/triggers/update", agentTriggerUpdateRoute);
 orgScoped.route("/agent/triggers/delete", agentTriggerDeleteRoute);
 orgScoped.route("/agent/triggers", agentTriggerCreateRoute);
 orgScoped.route("/agent/triggers", agentTriggerListRoute);
+// Eval datasets/runs: from-traces/get/items sub-paths mounted before the base
+// path so they aren't swallowed by the create/list routes' GET/POST on "/".
+orgScoped.route("/eval/datasets/from-traces", evalDatasetFromTracesRoute);
+orgScoped.route("/eval/datasets/get", evalDatasetGetRoute);
+orgScoped.route("/eval/datasets/items", evalDatasetItemAddRoute);
+orgScoped.route("/eval/datasets", evalDatasetCreateRoute);
+orgScoped.route("/eval/datasets", evalDatasetListRoute);
+orgScoped.route("/eval/runs/status", evalRunStatusRoute);
+orgScoped.route("/eval/runs/get", evalRunGetRoute);
+orgScoped.route("/eval/runs", evalRunStartRoute);
 orgScoped.route("/forms/fill", formFillRoute);
 orgScoped.route("/command/menu/search", commandMenuSearchRoute);
 orgScoped.route("/command/menu/suggest", commandMenuSuggestRoute);
@@ -530,6 +562,9 @@ orgScoped.route("/graph/stats", graphStatsRoute);
 orgScoped.route("/ontology/query", ontologyQueryRoute);
 orgScoped.route("/ontology/neighbors", ontologyNeighborsRoute);
 orgScoped.route("/audit/log/query", auditLogQueryRoute);
+// A2A Agent Card management read (metered, IAM-gated) — the governed parity
+// surface for the card; the transport itself lives at /a2a + /.well-known.
+orgScoped.route("/a2a/card", a2aCardGetRoute);
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);
 
 // OpenAI-compatible agent LLM proxy (ADR-019 B4): the CLI routes ALL model
@@ -542,6 +577,15 @@ const agentLlmScoped = new Hono<AppEnv>();
 agentLlmScoped.use("*", authMiddleware);
 agentLlmScoped.route("/", agentLlmRoute);
 app.route("/v1/agent/llm", agentLlmScoped);
+
+// A2A (Agent2Agent) protocol JSON-RPC transport. Like /mcp, it is a transport,
+// not a per-capability surface: the workspace API key (Bearer) carries org+
+// workspace scope, so it sits OUTSIDE the /:org/:workspace path group and is
+// gated by authMiddleware only. Full endpoint: POST /a2a.
+const a2aScoped = new Hono<AppEnv>();
+a2aScoped.use("*", authMiddleware);
+a2aScoped.route("/", a2aRpcRoute);
+app.route("/a2a", a2aScoped);
 
 // Public OAuth callback — HMAC-verified state param is the security boundary.
 // Must NOT be inside the workspace-scoped group (user has no session when GitHub redirects).

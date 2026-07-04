@@ -79,6 +79,16 @@ vi.mock("../runtime/mcp-snapshots", () => ({
   recordServerChange: depMocks.recordServerChange,
 }));
 
+// Capture the module-level pino logger so the snapshot-failure path can be
+// asserted (the enable must proceed with a 0 baseline AND log a warning).
+const loggerMock = vi.hoisted(() => ({
+  warn: vi.fn(),
+  info: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
+}));
+vi.mock("pino", () => ({ default: () => loggerMock }));
+
 import { agentMcpSetEnabledHandler } from "./agent.mcp.set_enabled";
 import { agentMcpDeleteHandler } from "./agent.mcp.delete";
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
@@ -98,7 +108,9 @@ describe("agent.mcp.set_enabled handler", () => {
     updateMock.mockClear();
     depMocks.healthcheck.mockClear();
     depMocks.captureToolSnapshots.mockClear();
+    depMocks.captureToolSnapshots.mockResolvedValue(1);
     depMocks.recordServerChange.mockClear();
+    loggerMock.warn.mockClear();
   });
 
   it("re-enabling re-probes, re-captures snapshots, and audits an 'enable'", async () => {
@@ -125,6 +137,24 @@ describe("agent.mcp.set_enabled handler", () => {
     expect(depMocks.captureToolSnapshots).not.toHaveBeenCalled();
     expect(depMocks.recordServerChange).toHaveBeenCalledWith(
       expect.objectContaining({ serverId: "mcs_uuid_1", changeType: "disable" }),
+    );
+  });
+
+  it("logs a warning and enables with a 0 baseline when snapshot capture fails", async () => {
+    depMocks.captureToolSnapshots.mockRejectedValueOnce(new Error("neo4j down"));
+    const out = await agentMcpSetEnabledHandler(
+      { mcpServerId: "mcs_pub_1", enabled: true },
+      CTX,
+    );
+    // Enable still proceeds — best-effort fallback keeps the count at 0.
+    expect(out).toEqual({ mcpServerId: "mcs_pub_1", enabled: true, snapshotCount: 0 });
+    expect(depMocks.recordServerChange).toHaveBeenCalledWith(
+      expect.objectContaining({ serverId: "mcs_uuid_1", changeType: "enable" }),
+    );
+    // The dropped baseline is surfaced with server context, not swallowed.
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ mcpServerId: "mcs_uuid_1" }),
+      expect.stringContaining("tool snapshot failed"),
     );
   });
 
