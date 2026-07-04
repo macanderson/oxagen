@@ -1603,6 +1603,20 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_BEST_OF_N_MODE: {
+    group: "CLI",
+    description:
+      "Set to 'fork' or 'independent' to select best-of-N mode. Fork mode snapshots the " +
+      "trunk conversation at the diagnosis point and runs cache-forked tails per hypothesis, " +
+      "reusing the trunk's investigation at ~10× input discount via prompt caching. " +
+      "Independent mode runs N complete independent pipelines. Default is 'independent'.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "independent",
+  },
   OXAGEN_LOCAL: {
     group: "CLI",
     description:

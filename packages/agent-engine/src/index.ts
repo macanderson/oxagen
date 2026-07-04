@@ -21,3 +21,9 @@ export * from "./fleet/index";
 // Stage A7 — pipeline + planner.
 export * from "./pipeline/index";
 export * from "./planner/index";
+
+// Scalpel F4/F7 — cache-fork trunk snapshot + hypothesis probes (public API
+// for the CLI best-of-N fork mode; other scalpel modules are consumed
+// internally via relative imports and don't need barrel exports).
+export * from "./fork";
+export * from "./oracle/hypotheses";
