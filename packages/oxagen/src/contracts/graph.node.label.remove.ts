@@ -17,7 +17,7 @@ export const graphNodeLabelRemove = registerCapability({
   description: "Remove one or more labels from a node (multi-label, idempotent, leaves other labels intact).",
   mode: "sync",
   surfaces: ["agent"] as const,
-  layers: ["schema", "unit"],
+  layers: ["schema", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "low", category: "graph" },
   sensitivity: "medium",

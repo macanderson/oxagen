@@ -4,11 +4,17 @@ Reference for all declared capabilities across the Oxagen platform.
 Each capability is implemented across API, MCP, and agent surfaces with
 contract-first design, IAM enforcement, and instrumentation.
 
-## Agent (26)
+## Agent (58)
 
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
 - [agent.code.execute](agent.code.execute.md) — Execute a code snippet in an isolated sandbox and return the exit code, stdout, stderr, and execution time
 - [agent.compose](agent.compose.md) — Plan and execute a chain of capabilities to accomplish a goal, threading each step's output into dependent inputs, then synthesize a summary
+- [agent.definition.create](agent.definition.create.md) — Create a new agent definition — inserts the agent identity row (draft, inactive) and an immutable v1 version snapshot with the supplied, schema-validated config
+- [agent.definition.get](agent.definition.get.md) — Fetch an agent definition with its active (or latest) version config, parsed and validated
+- [agent.definition.list](agent.definition.list.md) — List the agent definitions in the current workspace with identity, lifecycle status, deployment posture, and latest version number
+- [agent.definition.publish](agent.definition.publish.md) — Publish an agent version — marks it published, checksums its canonical config, and sets it as the active version (immutable thereafter)
+- [agent.definition.update](agent.definition.update.md) — Update an agent definition by snapshotting a new unpublished version with the updated config; the version number is bumped
+- [agent.deploy](agent.deploy.md) — Set an agent's deployment posture; activating requires a published active version, deactivating makes its triggers dormant
 - [agent.execution.record](agent.execution.record.md) — Persist a complete agent execution record including steps, tool calls, and result summary for observability and audit
 - [agent.feature.verify](agent.feature.verify.md) — Independent cross-LLM judge: a DIFFERENT vision model than the builder reads screenshots of a feature and returns a pass/fail verdict against the stated requirement. The proof-of-done gate.
 - [agent.mcp.consent.list](agent.mcp.consent.list.md) — List external MCP tool consent grants in the active workspace (which tools the agent may invoke without re-prompting)
@@ -19,16 +25,22 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.mcp.set_enabled](agent.mcp.set_enabled.md) — Enable or disable a registered external MCP server; disabling stops its tools from registering but keeps tool-descriptor snapshots for replay
 - [agent.memory.cite](agent.memory.cite.md) — Record memory citations within an execution (influence + rule compliance); maintains citation/influence/violation counters
 - [agent.memory.citations.list](agent.memory.citations.list.md) — List an execution's memory citations, filterable by compliance (violations) or influence (what shaped output)
+- [agent.memory.delete](agent.memory.delete.md) — Permanently delete an AgentMemory node and its edges by id (destructive; prefer update to lower salience)
 - [agent.memory.evidence.attach](agent.memory.evidence.attach.md) — Attach supporting/refuting evidence to a memory, adjusting confidence and refreshing the decay clock
 - [agent.memory.import.commit](agent.memory.import.commit.md) — Write confirmed two-axis draft memories into the workspace AgentMemory Neo4j graph; per-item error capture enables partial success on batch writes
 - [agent.memory.import.parse](agent.memory.import.parse.md) — Extract and classify atomic memories (class + kind) from markdown documents using the AI gateway; returns editable drafts without persisting
 - [agent.memory.list](agent.memory.list.md) — List a workspace's ACTIVE AgentMemory nodes (newest first) with optional class/kind/enforcement/node filters; non-semantic browse counterpart to agent.memory.recall
+- [agent.memory.policy.read](agent.memory.policy.read.md) — Read the workspace memory decay policy: confidence half-lives by weight and the recall threshold
+- [agent.memory.policy.write](agent.memory.policy.write.md) — Update the workspace memory decay policy (partial update of half-lives, thresholds, and decay floor)
 - [agent.memory.promote](agent.memory.promote.md) — Promote a memory up the confidence ladder (OBSERVATION→RULE→FACT) with an auditable promotion event; FACT requires human confirmation
 - [agent.memory.promotion.candidates](agent.memory.promotion.candidates.md) — Top OBSERVATION memories by citation pressure that are candidates for promotion to RULE/FACT
 - [agent.memory.recall](agent.memory.recall.md) — Query ACTIVE AgentMemory nodes by semantic similarity with optional class/enforcement filters; recovers confidence on recall
+- [agent.memory.remember](agent.memory.remember.md) — Capture a free-text memory, inferring its kind and class unless pinned, then embed and write it to the workspace AgentMemory graph
+- [agent.memory.update](agent.memory.update.md) — Edit an AgentMemory in place (lesson, kind, source, confidence/enforcement, status), re-embedding when the lesson changes
 - [agent.memory.write](agent.memory.write.md) — Persist a two-axis memory (class + kind, confidence + enforcement) tied to a graph node
 - [agent.plan.approve](agent.plan.approve.md) — Approve, deny, or amend a previously-proposed plan; approval releases the agent stream to execute the plan's side-effectful steps
 - [agent.plan.create](agent.plan.create.md) — Create a structured hierarchical execution plan with tasks, dependencies, and approval gates; approval via agent.plan.approve is required before execution
+- [agent.repo.edit](agent.repo.edit.md) — Run the coding agent to edit files in a connected GitHub repo and open a pull request with the changes
 - [agent.sandbox.exec](agent.sandbox.exec.md) — Run a shell command inside a durable sandbox session; filesystem/process state persists across calls; returns stdout, stderr, exit code
 - [agent.sandbox.snapshot](agent.sandbox.snapshot.md) — Capture a filesystem snapshot of a durable sandbox session so it can be restored after an idle reap or the 24h lifetime ceiling
 - [agent.sandbox.start](agent.sandbox.start.md) — Provision or reconnect to a durable code-agent sandbox that persists across turns; pass a stable sessionKey to reuse one warm sandbox
@@ -38,6 +50,8 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.subagent.aggregate](agent.subagent.aggregate.md) — Wait for all child runs in a subagent fanout to complete and return merged results, conflict list, and execution timeline
 - [agent.subagent.cancel](agent.subagent.cancel.md) — Cancel an in-progress subagent fan-out; transitions the fanout and all non-terminal child runs to a terminal status
 - [agent.subagent.dispatch](agent.subagent.dispatch.md) — Fan out a set of tasks to multiple subagents running in parallel; returns a dispatchId to poll via agent.subagent.aggregate
+- [agent.subagent.fanout.get](agent.subagent.fanout.get.md) — Get one subagent fan-out with its child runs — each child's capability, status, timings, error reason, and I/O preview
+- [agent.subagent.fanout.list](agent.subagent.fanout.list.md) — List subagent fan-outs for the active workspace with status and child-run counts, optionally filtered by parent message
 - [agent.subagent.logs](agent.subagent.logs.md) — Generate a downloadable markdown logfile for a fan-out, traceable down to each subagent's query and individual results
 - [agent.subagent.result.get](agent.subagent.result.get.md) — Fetch one subagent child run's full input + output by runId; the on-demand counterpart to compact agent.subagent.aggregate
 - [agent.subagent.siblings](agent.subagent.siblings.md) — Given a running fanout child's runId, return its siblings as compact rows (capability, status, summary, attempts) so it can see what siblings already covered before burning tokens
@@ -45,6 +59,10 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.task.background.read](agent.task.background.read.md) — Read the current status, progress markers, and final result of a background task
 - [agent.task.background.start](agent.task.background.start.md) — Dispatch a long-running task as a durable Inngest job; the chat stream polls for status
 - [agent.tool.list](agent.tool.list.md) — List the capabilities surfaced as agent tools for the active workspace, filtered by role, entitlements, and denylist
+- [agent.trigger.create](agent.trigger.create.md) — Create a manual, scheduled (cron), or event trigger for an agent, validated against the trigger schema
+- [agent.trigger.delete](agent.trigger.delete.md) — Soft-delete an agent trigger so the binding stops firing while preserving the audit record
+- [agent.trigger.list](agent.trigger.list.md) — List the non-deleted triggers configured for an agent in the current workspace
+- [agent.trigger.update](agent.trigger.update.md) — Update an agent trigger in place, replacing its type-specific binding and enabled flag
 - [agent.ui.render](agent.ui.render.md) — Render a structured UI component from an agent response; the client maps the component type to a React renderer
 
 ## Api (3)
@@ -105,6 +123,11 @@ contract-first design, IAM enforcement, and instrumentation.
 - [code.map](code.map.md) — Return a structured code-map bundle for a natural-language concept query: semantically matched files, symbols, call edges, and recent commits
 - [code.patch](code.patch.md) — Apply a unified diff to a path-confined workspace and return only the changed files
 
+## Command (2)
+
+- [command.menu.search](command.menu.search.md) — Full-text entity search for the Command Menu, returning up to 8 typed, ready-to-navigate rows filtered to the caller's grants
+- [command.menu.suggest](command.menu.suggest.md) — Generate 3–5 context-aware "Suggested for this page" prompts via a fast LLM tier, sending only the page entity summary
+
 ## Connection (10)
 
 - [connection.create](connection.create.md) — Create a new data source connection for a workspace; credentials are encrypted before storage
@@ -164,7 +187,7 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [form.fill](form.fill.md) — Generatively fill or suggest values for page-level form fields based on context
 
-## Graph (13)
+## Graph (16)
 
 | Capability                  | Notes                                                                                                                                                     |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -173,6 +196,9 @@ contract-first design, IAM enforcement, and instrumentation.
 | `graph.node.get`            | Retrieve a graph node by externalId.                                                                                                                      |
 | `graph.node.delete`         | Delete a graph node and its relationships.                                                                                                                |
 | `graph.node.search`         | Vector + full-text search over graph nodes.                                                                                                               |
+| `graph.node.label.add`      | Add one or more labels to a node (multi-label, idempotent, never removes existing labels).                                                                |
+| `graph.node.label.remove`   | Remove one or more labels from a node (multi-label, idempotent, leaves other labels intact).                                                              |
+| `graph.node.labels.get`     | Read a node's full label set (read-only companion to the label add/remove primitives).                                                                    |
 | `graph.search`              | Unified natural-language semantic (vector) search across the entire knowledge graph by embedding similarity.                                               |
 | `graph.relationship.upsert` | Create or update a directed typed relationship between two KnowledgeNodes (open-vocabulary type, replaces graph.edge.upsert).                             |
 | `graph.edge.upsert`         | **Deprecated** — one-release alias for `graph.relationship.upsert`; removed in v2.                                                                        |
@@ -211,8 +237,9 @@ contract-first design, IAM enforcement, and instrumentation.
 - [notifications.list](notifications.list.md) — List in-app notifications for the calling user with unread filtering and pagination
 - [notifications.mark](notifications.mark.md) — Mark a notification as read and/or archived for the calling user
 
-## Org (7)
+## Org (8)
 
+- [org.list](org.list.md) — List the organizations the authenticated user belongs to, with the caller's role in each; backs the CLI tenant picker
 - [org.member.add](org.member.add.md) — Invite a user to join the org by email; enforces seat limits
 - [org.member.invite.accept](org.member.invite.accept.md) — Accept a pending org invitation; creates membership and provisions IAM
 - [org.member.invite.decline](org.member.invite.decline.md) — Decline a pending org invitation; frees the reserved license seat
@@ -225,10 +252,11 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [organization.create](organization.create.md) — Create a new organization with a globally-unique slug
 
-## Plugin (20)
+## Plugin (21)
 
 - [plugin.catalog.browse](plugin.catalog.browse.md) — Search and filter the MCP server catalog by text, category, transport, and auth kind
 - [plugin.catalog.get](plugin.catalog.get.md) — Get full detail for one catalog server entry including README, packages, and transport types
+- [plugin.catalog.sync](plugin.catalog.sync.md) — Trigger an immediate sync of the MCP registry catalog for the workspace, refreshing cached server listings from the upstream registry
 - [plugin.credential.reauth](plugin.credential.reauth.md) — Initiate or complete an OAuth re-authentication flow for an expired plugin token
 - [plugin.credential.set_secret](plugin.credential.set_secret.md) — Store or update an encrypted credential (API key or bearer token) for a plugin server
 - [plugin.denylist.add](plugin.denylist.add.md) — Add a plugin server to the org denylist; immediately disables matching installs
@@ -276,8 +304,9 @@ contract-first design, IAM enforcement, and instrumentation.
 - [research.swarm.start](research.swarm.start.md) — Fan out parallel web searches for a topic with diverse query variations; returns a swarmId to poll
 - [research.swarm.status](research.swarm.status.md) — Poll the status of a running research swarm; returns task progress and partial results
 
-## Schema (22)
+## Schema (23)
 
+- [schema.delete](schema.delete.md) — Drop an entire named schema from the draft, removing its labels, relationship types, and properties
 - [schema.registry.get](schema.registry.get.md) — Resolve the workspace registry: pinned version, enforcement mode, and the full label/relationship/property tree
 - [schema.registry.config](schema.registry.config.md) — Set enforcement mode and conformance floor for the workspace schema registry
 - [schema.list](schema.list.md) — List workspace schemas with per-schema enabled state (lightweight listing without full tree)
@@ -323,8 +352,11 @@ contract-first design, IAM enforcement, and instrumentation.
 - [semantic.edge.list](semantic.edge.list.md) — **Deprecated alias** for `semantic.relationship.list`; removed in v2
 - [semantic.edge.suggest](semantic.edge.suggest.md) — **Deprecated alias** for `semantic.relationship.suggest`; removed in v2
 
-## Skill (9)
+## Skill (12)
 
+- [skill.author](skill.author.md) — Author a new skill from a natural-language prompt: the model synthesises a validated .skill.md and installs it into the workspace
+- [skill.create](skill.create.md) — Create a tenant-authored skill with an initial v1 version from supplied .skill.md content (idempotent on slug)
+- [skill.enable](skill.enable.md) — Enable or disable a workspace skill, hiding disabled skills from the agent while preserving their versions and data
 - [skill.workspace.list](skill.workspace.list.md) — List skills available in the workspace
 - [skill.workspace.install](skill.workspace.install.md) — Install a skill into a workspace from a builtin template or custom upload, idempotent on slug
 - [skill.version.list](skill.version.list.md) — List the time-ordered version history for a workspace skill
@@ -363,10 +395,11 @@ contract-first design, IAM enforcement, and instrumentation.
 - [workflow.run](workflow.run.md) — Decompose a goal into N sub-tasks and dispatch them concurrently via Inngest
 - [workflow.status](workflow.status.md) — Read the current status and task-level progress of a workflow run
 
-## Workspace (7)
+## Workspace (8)
 
 - [workspace.create](workspace.create.md) — Create a workspace inside the caller's active tenant
 - [workspace.invite.send](workspace.invite.send.md) — Send a workspace invitation to an email address with 7-day expiry
+- [workspace.list](workspace.list.md) — List the workspaces inside an organization the caller belongs to; backs the CLI workspace picker in oxagen init
 - [workspace.member.list](workspace.member.list.md) — List members of a workspace
 - [workspace.model.settings.read](workspace.model.settings.read.md) — Read the workspace-level model defaults
 - [workspace.model.settings.write](workspace.model.settings.write.md) — Update the workspace-level model defaults (partial update)

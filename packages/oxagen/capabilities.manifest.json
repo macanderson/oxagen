@@ -71,7 +71,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -90,7 +90,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -109,7 +109,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -128,7 +128,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -147,7 +147,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -166,7 +166,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -362,7 +362,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -475,7 +475,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -493,7 +493,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -566,7 +566,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -584,7 +584,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -655,7 +655,7 @@
       "layers": {
         "api": false,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -840,7 +840,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -859,7 +859,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1008,7 +1008,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1027,7 +1027,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1046,7 +1046,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1065,7 +1065,7 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -1615,7 +1615,8 @@
       "layers": {
         "schema": true,
         "api": true,
-        "unit": true
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -1630,7 +1631,8 @@
       "layers": {
         "schema": true,
         "api": true,
-        "unit": true
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -2437,7 +2439,8 @@
       ],
       "layers": {
         "schema": true,
-        "unit": true
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -2450,7 +2453,8 @@
       ],
       "layers": {
         "schema": true,
-        "unit": true
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -2463,7 +2467,8 @@
       ],
       "layers": {
         "schema": true,
-        "unit": true
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -2917,7 +2922,7 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -3112,7 +3117,8 @@
       "layers": {
         "api": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -3675,7 +3681,8 @@
         "agent"
       ],
       "layers": {
-        "schema": true
+        "schema": true,
+        "docs": true
       }
     },
     {
@@ -4379,7 +4386,7 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -4397,7 +4404,7 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -4431,7 +4438,7 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {
@@ -4794,7 +4801,7 @@
         "api": true,
         "mcp": true,
         "unit": false,
-        "docs": false
+        "docs": true
       }
     },
     {

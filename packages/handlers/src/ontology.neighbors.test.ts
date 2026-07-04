@@ -258,8 +258,8 @@ describe("ontologyNeighborsHandler — asOf / asKnownAt validity filter", () => 
     mocks.run.mockResolvedValueOnce(EXISTS).mockResolvedValueOnce(makeRows([]));
     await ontologyNeighborsHandler({ nodeId: "n-1", direction: "both", limit: 100 }, CTX);
     const params = mocks.run.mock.calls[1]?.[1] as Record<string, string>;
-    expect(new Date(params.asOf).getTime()).toBeGreaterThanOrEqual(before - 1000);
-    expect(new Date(params.asKnownAt).getTime()).toBeGreaterThanOrEqual(before - 1000);
+    expect(new Date(String(params.asOf)).getTime()).toBeGreaterThanOrEqual(before - 1000);
+    expect(new Date(String(params.asKnownAt)).getTime()).toBeGreaterThanOrEqual(before - 1000);
   });
 
   it("threads explicit asOf / asKnownAt through as params", async () => {
