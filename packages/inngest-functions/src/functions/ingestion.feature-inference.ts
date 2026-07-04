@@ -47,6 +47,17 @@ export interface FeatureSymbol {
   endLine: number;
 }
 
+/**
+ * Extract the connection id from a GitHub file natural key. The key format is
+ * `github:${connectionId}:${owner}/${repo}:${filePath}` (see
+ * ingestion.github-parse-file), so the connection id is the second colon
+ * segment. Returns "" for a key that doesn't match — the reconcile path uses
+ * this to write Feature nodes without a stored connectionId. */
+export function connectionIdFromKey(fileNaturalKey: string): string {
+  const parts = fileNaturalKey.split(":");
+  return parts[0] === "github" && parts.length >= 2 ? (parts[1] ?? "") : "";
+}
+
 /** Derive the language label from a file natural key's extension. */
 export function languageFromKey(fileNaturalKey: string): string {
   const pathPart = fileNaturalKey.split(":").at(-1) ?? fileNaturalKey;

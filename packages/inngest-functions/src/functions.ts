@@ -37,6 +37,7 @@ import { ingestionGithubInferFeatures } from "./functions/ingestion.github-infer
 import { ingestionGithubInferFeaturesBatch } from "./functions/ingestion.github-infer-features-batch";
 import { ingestionGithubInferDomains } from "./functions/ingestion.github-infer-domains";
 import { ingestionSemanticEdgeInfer } from "./functions/ingestion.semantic-edge-infer";
+import { ingestionBatchReconcile } from "./functions/ai.batch-reconcile";
 import { ingestionSyncRequested } from "./functions/ingestion.sync-requested";
 import { playbookTriggerMatch } from "./functions/playbook.trigger.match";
 import { playbookRunExecute } from "./functions/playbook.run.execute";
@@ -87,6 +88,7 @@ export const functions: any[] = [
   ingestionGithubInferFeaturesBatch,
   ingestionGithubInferDomains,
   ingestionSemanticEdgeInfer,
+  ingestionBatchReconcile,
   ingestionSyncRequested,
   playbookTriggerMatch,
   playbookRunExecute,
