@@ -23,6 +23,13 @@
  *     model or tool call has completed within that window. Any completed call
  *     resets it, so a turn with hundreds of calls is fine as long as calls keep
  *     landing ({@link createTurnRunner}).
+ *   - **Legitimate silence gets escape hatches** — {@link makeStallDetector}
+ *     `shouldDefer` keeps the guard from firing while a tool/fleet is executing
+ *     (bounded by its own timeout), and `probe` makes one CI call-out before an
+ *     abort: a turn watching still-pending checks extends instead of dying,
+ *     cumulatively capped at {@link resolveCiWaitCapMs} (2h default) so slow
+ *     customer CI is survivable without blinding the hang backstop
+ *     (lib/ci-wait.ts).
  *   - **Optional hard ceiling, off by default** — {@link TimeoutConfig.turnHardCeilingMs}
  *     is a last-resort safety net, `undefined` (disabled) by default. If set it
  *     must be large; it is never a few hundred seconds.
@@ -92,6 +99,33 @@ export const DEFAULT_TIMEOUTS: TimeoutConfig = {
   retry: { maxRetries: 2, backoffMs: 1_000 },
 };
 
+/** Parse an env var as a positive finite ms count, or undefined. */
+function envPositiveMs(name: string): number | undefined {
+  const raw = Number(process.env[name]);
+  return Number.isFinite(raw) && raw > 0 ? raw : undefined;
+}
+
+/**
+ * The effective turn-inactivity window. `OXAGEN_TURN_INACTIVITY_MS` overrides
+ * the default; it stays a PROGRESS guard either way — do not set it to hours to
+ * "survive CI", that's what the CI-wait probe is for (see {@link makeStallDetector}
+ * `probe` and lib/ci-wait.ts).
+ */
+export function resolveTurnInactivityMs(): number {
+  return envPositiveMs("OXAGEN_TURN_INACTIVITY_MS") ?? DEFAULT_TIMEOUTS.turnInactivityMs ?? 300_000;
+}
+
+/**
+ * Cap on cumulative probe extensions per silent stretch (see
+ * {@link makeStallDetector}). Customer CI legitimately runs for hours, so a
+ * turn that a live call-out confirms is waiting on still-pending checks may
+ * extend up to this long — but no further, so a wedged poll can't wait forever.
+ * `OXAGEN_CI_WAIT_CAP_MS` overrides.
+ */
+export function resolveCiWaitCapMs(): number {
+  return envPositiveMs("OXAGEN_CI_WAIT_CAP_MS") ?? TIMEOUTS.ciWaitCapMs;
+}
+
 /**
  * Fixed per-operation defaults that are not part of the tunable policy above.
  *
@@ -121,6 +155,14 @@ export const TIMEOUTS = {
    * against a wedged tool implementation.
    */
   toolGraceMs: 30_000,
+  /**
+   * ms — cap on cumulative CI-wait extensions of the inactivity guard (2h).
+   * Customer CI is often slow through no fault of ours; when the pre-abort
+   * probe confirms checks are still pending the guard extends instead of
+   * killing the turn, up to this total per silent stretch. See
+   * {@link resolveCiWaitCapMs} and {@link makeStallDetector}.
+   */
+  ciWaitCapMs: 2 * 60 * 60 * 1_000,
 } as const;
 
 // ── Core race helper ──────────────────────────────────────────────────────────
@@ -315,6 +357,30 @@ export function makeTurnController(
 
 // ── Inactivity / stall detector ───────────────────────────────────────────────
 
+/** Optional escape hatches consulted when the stall window expires. */
+export interface StallDetectorOptions {
+  /**
+   * Consulted first when the window expires. Return true to defer — reschedule
+   * the window instead of firing. Use for "a tool is executing right now":
+   * an in-flight tool is bounded by its own timeout and produces no events
+   * until it returns, so silence during it is expected, not a stall.
+   */
+  shouldDefer?: () => boolean;
+  /**
+   * Last-chance async check-in before firing (the CI-wait call-out). Runs only
+   * when `shouldDefer` did not defer. Resolving true extends the window by one
+   * more `idleMs`; false — or a throw — lets `onIdle` fire. Cumulative
+   * extensions within one silent stretch are capped by `probeCapMs`; any real
+   * progress (`reset()`) zeroes the accumulator. While the probe is in flight
+   * a `reset()` or `stop()` wins — its verdict is then discarded.
+   */
+  probe?: () => Promise<boolean> | boolean;
+  /** Cap on cumulative probe extensions (ms). Default {@link resolveCiWaitCapMs}. */
+  probeCapMs?: number;
+  /** Structured-log sink for defer/extend/abort decisions. */
+  onLog?: (line: string) => void;
+}
+
 /**
  * A progress guard. Fires `onIdle` if `reset()` is not called within `idleMs`.
  * Call `reset()` on every unit of progress (a completed model/tool call, a
@@ -322,25 +388,67 @@ export function makeTurnController(
  *
  * This is the primitive behind both the per-stream stall bound and the
  * turn-level inactivity guard — the difference is only the window and what
- * counts as "progress".
+ * counts as "progress". `opts` adds two escape hatches for legitimate silence:
+ * defer while a tool is executing, and probe (e.g. "is CI still pending?")
+ * before aborting — see {@link StallDetectorOptions}.
  */
 export function makeStallDetector(
   idleMs: number,
   onIdle: () => void,
+  opts?: StallDetectorOptions,
 ): { reset: () => void; stop: () => void } {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
+  // Bumped on every reset(); a probe that resolves after real progress landed
+  // (or after another expiry) must not act on a stale verdict.
+  let generation = 0;
+  // Cumulative probe extensions in the CURRENT silent stretch; reset() zeroes it.
+  let extendedMs = 0;
+  const probeCapMs = opts?.probeCapMs ?? resolveCiWaitCapMs();
 
   function schedule(): void {
     if (timer !== null) clearTimeout(timer);
-    timer = setTimeout(() => {
-      if (!stopped) onIdle();
-    }, idleMs);
+    timer = setTimeout(onExpired, idleMs);
     unref(timer as ReturnType<typeof setTimeout>);
+  }
+
+  function onExpired(): void {
+    if (stopped) return;
+    if (opts?.shouldDefer?.()) {
+      opts.onLog?.(`[timeout] scope=stall action=defer idle_ms=${idleMs}`);
+      schedule();
+      return;
+    }
+    if (opts?.probe && extendedMs < probeCapMs) {
+      const gen = ++generation;
+      Promise.resolve()
+        .then(opts.probe)
+        .then(
+          (stillWaiting) => {
+            if (stopped || generation !== gen) return; // progress won the race
+            if (stillWaiting) {
+              extendedMs += idleMs;
+              opts.onLog?.(
+                `[timeout] scope=stall action=extend extended_ms=${extendedMs} cap_ms=${probeCapMs}`,
+              );
+              schedule();
+            } else {
+              onIdle();
+            }
+          },
+          () => {
+            if (!stopped && generation === gen) onIdle();
+          },
+        );
+      return;
+    }
+    onIdle();
   }
 
   function reset(): void {
     if (stopped) return;
+    generation++;
+    extendedMs = 0;
     schedule();
   }
 

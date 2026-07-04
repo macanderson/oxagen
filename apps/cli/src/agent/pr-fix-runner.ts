@@ -37,7 +37,12 @@ import { resolveApiContext } from "../lib/api.js";
 import { debugLog } from "../lib/debug-log.js";
 import { loadSettings } from "../settings/resolve.js";
 import { formatToolCallWithSpacing } from "./tool-formatter.js";
-import { makeTurnController, makeStallDetector, AgentTimeoutError, DEFAULT_TIMEOUTS } from "./timeouts.js";
+import {
+  makeTurnController,
+  makeStallDetector,
+  AgentTimeoutError,
+  resolveTurnInactivityMs,
+} from "./timeouts.js";
 import type { FixRunner, FixTurnResult } from "../lib/pr-fix.js";
 import type { Session } from "../lib/session.js";
 
@@ -94,17 +99,20 @@ export function createPrFixRunner(opts: CreatePrFixRunnerOptions): PrFixRunnerHa
 
   const runFixer: FixRunner = async (prompt: string): Promise<FixTurnResult> => {
     const turnController = makeTurnController();
-    const inactivityMs = DEFAULT_TIMEOUTS.turnInactivityMs ?? 300_000;
+    const inactivityMs = resolveTurnInactivityMs();
     let inFlightTools = 0;
-    const stall = makeStallDetector(inactivityMs, () => {
-      if (inFlightTools > 0) {
-        stall.reset(); // a tool is executing (bounded by its own timeout) — defer
-        return;
-      }
-      if (!turnController.signal.aborted) {
-        turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
-      }
-    });
+    // No CI probe here: the fix loop's own poller (lib/pr-fix.ts waitForTerminal)
+    // does the CI waiting OUTSIDE these turns; a fixer turn itself should never
+    // sit silent — an executing tool defers via shouldDefer.
+    const stall = makeStallDetector(
+      inactivityMs,
+      () => {
+        if (!turnController.signal.aborted) {
+          turnController.abort(new AgentTimeoutError("turn inactivity", inactivityMs));
+        }
+      },
+      { shouldDefer: () => inFlightTools > 0 },
+    );
 
     try {
       const result = await runTurn({
