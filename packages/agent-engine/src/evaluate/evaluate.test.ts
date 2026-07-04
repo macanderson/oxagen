@@ -4,7 +4,7 @@
  * Tests evaluatePrompt, judgeCompleteness, buildRevisionPrompt, and
  * extractCandidates via mocked AgentAi ports — never hits the gateway.
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { evaluatePrompt, LOCAL_EVALUATOR } from "./evaluator";
 import {
   judgeCompleteness,
@@ -553,6 +553,23 @@ describe("extractCandidates", () => {
 // ── enhancePrompt ─────────────────────────────────────────────────────────────
 
 describe("enhancePrompt", () => {
+  // Disable localization (F1) for these tests — they predate the feature
+  // and expect specific semantic fallback behavior.
+  let originalLocalize: string | undefined;
+
+  beforeEach(() => {
+    originalLocalize = process.env.OXAGEN_LOCALIZE;
+    process.env.OXAGEN_LOCALIZE = "0";
+  });
+
+  afterEach(() => {
+    if (originalLocalize === undefined) {
+      delete process.env.OXAGEN_LOCALIZE;
+    } else {
+      process.env.OXAGEN_LOCALIZE = originalLocalize;
+    }
+  });
+
   it("bounds the code-graph pass with timeoutMs and degrades to no context", async () => {
     // A provider stuck on a cold build: the query never resolves.
     const codeGraph = { query: vi.fn(() => new Promise<string>(() => {})) };

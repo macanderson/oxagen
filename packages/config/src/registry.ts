@@ -1733,6 +1733,44 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "3",
   },
+  OXAGEN_LOCALIZE: {
+    group: "CLI",
+    description:
+      "Enable F1 deterministic zero-token localization: parse tracebacks and " +
+      "extract symbols from the issue to rank candidate files before the first LLM call. " +
+      "Default on (runs unless explicitly set to '0'). Unset or '1' enables, '0' disables.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_REPO_PRIORS: {
+    group: "CLI",
+    description:
+      "Enable F8 per-repo procedural priors: inject cached layout, conventions, and accrued pitfalls " +
+      "learned from prior instances. Requires both repo and priorsDir options to be set in the caller. " +
+      "Default off. Unset or '0' disables, '1' enables.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+  OXAGEN_RECALL_FILTER: {
+    group: "CLI",
+    description:
+      "Enable F9 memory-recall applicability filter: drop recalled items with zero lexical overlap " +
+      "with the issue and candidate files, then optionally score survivors for semantic relevance. " +
+      "Reduces noise in injected memory. Default off. Unset or '0' disables, '1' enables.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",
     description: "Credential encryption backend for ingestion: 'env' (AES-256-GCM via INGESTION_ENCRYPTION_KEY) or 'kms' (AWS KMS).",

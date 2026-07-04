@@ -198,6 +198,10 @@ export interface RunTurnOptions {
    * own `code_graph` tool calls. Undefined ⇒ unbounded.
    */
   enhanceTimeoutMs?: number;
+  /** Repository identifier for F8 repo-prior lookup (e.g., "django/django"). */
+  repo?: string;
+  /** Base directory for F8 repo-prior files (e.g., ~/.oxagen/repo-priors). */
+  priorsDir?: string;
   /**
    * Judge with a PANEL of these (distinct, cross-vendor) advisor models instead
    * of a single judge — majority rules, findings unioned. Empty/undefined ⇒
@@ -348,6 +352,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     memory: opts.memory,
     extraQueries: evaluation.contextQueries,
     timeoutMs: opts.enhanceTimeoutMs,
+    repo: opts.repo,
+    priorsDir: opts.priorsDir,
   });
   phases.push(phaseStat("enhance", 0, enhanceStart, undefined, emptyUsage()));
   const enhancement: EnhancementTrace = {
