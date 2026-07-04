@@ -2535,7 +2535,10 @@ export function ReplApp({
         )}
 
         <Box flexDirection="row" flexShrink={1} overflow="hidden">
-          <Box flexDirection="column" flexGrow={1} minWidth={0}>
+          {/* overflow=hidden: wide unbreakable content must clip inside this
+              column rather than inflate its flex basis and squeeze the
+              fixed-width sidebar, which would clip the panels' right border. */}
+          <Box flexDirection="column" flexGrow={1} minWidth={0} overflow="hidden">
             {/* Terminal panel — a `!command`'s live stdout/stderr, red-outlined and
                 pinned just ABOVE the in-progress message so shell output stays
                 visually separate from the agent speaking. Null until a command

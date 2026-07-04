@@ -151,15 +151,17 @@ export function getAppUrl(): string {
 }
 
 /**
- * Resolve the animation level: env override → persisted config → the legacy
- * OXAGEN_CLI_FUN=0 opt-out (which predates /motion and disabled exactly the
- * decorative animations, i.e. today's "reduced") → "full".
+ * Resolve the animation level. Env beats persisted config (the convention for
+ * every getter here): OXAGEN_CLI_MOTION → the legacy OXAGEN_CLI_FUN=0 opt-out
+ * (which predates /motion and disabled exactly the decorative animations,
+ * i.e. today's "reduced") → the /motion choice in config → "full".
  */
 export function getMotionMode(): MotionMode {
   return (
     asMotionMode(process.env["OXAGEN_CLI_MOTION"]) ??
+    (process.env["OXAGEN_CLI_FUN"] === "0" ? "reduced" : undefined) ??
     asMotionMode(readConfig().motion) ??
-    (process.env["OXAGEN_CLI_FUN"] === "0" ? "reduced" : "full")
+    "full"
   );
 }
 
