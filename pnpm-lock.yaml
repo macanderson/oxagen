@@ -640,6 +640,8 @@ importers:
         specifier: 3.24.1
         version: 3.24.1(zod@3.25.76)
 
+  apps/web: {}
+
   bench/web:
     dependencies:
       clsx:
