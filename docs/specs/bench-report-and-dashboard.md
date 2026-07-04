@@ -5,6 +5,8 @@
 
 This spec builds on the "Scalpel" work (`docs/specs/swe-rank1-scalpel.md`): the report is how we *see* whether each Scalpel feature moved the needle, run over run.
 
+> **Corrected 2026-07-04 (see PR that added this note):** the bench ClickHouse schema + ingestion + CLI shipped as a **private, never-published `packages/bench` package**, not inside `packages/telemetry`/`apps/cli` as first written below. The distributed `oxagen` CLI must never carry bench tooling — that was the whole point of the restructure. Paths and CLI invocations in this section (and in R1/R-B below) are updated to match; the *design intent* of R1/R2 is untouched, only *where the code lives* changed. If you're implementing against this spec, use the corrected paths, not the originals.
+
 ---
 
 ## 0. What already exists (build on it, don't rebuild)
@@ -13,14 +15,14 @@ Ground truth from the current tree — reuse these, do not reinvent:
 
 - **Results on disk:** `bench/swe-bench/run.sh` writes `results-$AGENT/<job>/bench-config.json` (secret-free replay snapshot: `gitSha`, `OXAGEN_*` config incl. the new `OXAGEN_EFFORT`, `conditions`) plus per-task `<task>__<hash>/{result.json, agent/oxagen.txt, verifier/report.json, verifier/test-stdout.txt}`.
 - **Normalization:** `bench/swe-bench/emit_eval_json.py` → `*.eval.json` (shared `oxagen_terminal_bench.eval_normalize.build_eval_json`), copied into `bench/swe-bench/results/`.
-- **ClickHouse store** (`packages/telemetry/src/migrations/0018_bench_schema.sql`), all `ReplacingMergeTree(updated_at)` (read with `FINAL`):
+- **ClickHouse store** (`packages/bench/migrations/0001_bench_schema.sql`, applied via a private internal migrate entry — `pnpm --filter @oxagen/bench migrate` — never the product's `packages/telemetry/src/migrate.ts`/`db:migrate`), all `ReplacingMergeTree(updated_at)` (read with `FINAL`):
   - `bench.benchmark_run` — per job: `public_id` (`#N`), `bench_type`, `dataset`, `agent`, `git_sha`, `config` (JSON), `n_tasks`, `n_resolved`, `resolved_rate`, `total_cost_usd`, `tokens_in/out/cache`, `status`, `started_at`, `finished_at`.
   - `bench.benchmark_run_result` — per task: `public_id`, `task_id`, `reward`, `resolved`, `cost_usd`, `tokens_in/out/cache`, `duration_s`, `tool_calls_json`, `status`, `verifier_stdout`.
   - `bench.benchmark_candidate` — per best-of-N candidate: `is_winner`, `steps`, `files_changed`, `tokens_in/out`, `model`, `tool_calls_json`.
-- **Query layer:** `packages/telemetry/src/bench/query.ts` — `listBenchResults`, `getBenchResultByPublicId`, `getBenchRunByPublicId`, `getBenchCandidatesForResult`.
-- **Ingest:** `tools/scripts/eval-ingest.ts` → `packages/telemetry/src/bench/ingest.ts` (`ingestBenchResultsDir`, `insertBenchmarkRun/RunResults/Candidates`). `pnpm eval:ingest`.
-- **CLI:** `apps/cli/src/commands/bench.ts` — `oxagen bench list`, `oxagen bench replay #N`.
-- **Web app:** `bench/web/` (`@oxagen/bench-web`, `pnpm eval:app`, port 3200). Loads static `.eval.json` from `src/results-data/`, aggregates via `src/lib/summary.ts` (`summarizeRuns`), MEASURED/REFERENCE/SAMPLE provenance policy.
+- **Query layer:** `packages/bench/src/query.ts` (exported from `@oxagen/bench`, a private never-published package) — `listBenchResults`, `getBenchResultByPublicId`, `getBenchRunByPublicId`, `getBenchCandidatesForResult`.
+- **Ingest:** `packages/bench/src/ingest.ts` (`ingestBenchResultsDir`, `insertBenchmarkRun/RunResults/Candidates`), driven today by the one-off `tools/scripts/bench-backfill.ts`. **This is a different pipeline from `tools/scripts/eval-ingest.ts`/`pnpm eval:ingest`** — that one populates the older, coarser cross-harness `eval_runs`/`eval_results` trend tables from committed `.eval.json` files, not `bench.*`. Don't conflate the two when wiring `run.sh`'s auto-ingest hook.
+- **CLI:** `packages/bench/src/commands.ts` + `packages/bench/src/cli.ts` — **internal-only, not part of the distributed `oxagen` CLI** (excluded from the product on purpose; `apps/cli` must never import `@oxagen/bench`). Invoke via `pnpm --filter @oxagen/bench list` / `pnpm --filter @oxagen/bench replay -- #N [--run]`.
+- **Web app:** `bench/web/` (`@oxagen/bench-web`, `pnpm eval:app`, port 3200) — an internal dashboard app, not the distributed product, so it may depend on `@oxagen/bench` directly. Loads static `.eval.json` from `src/results-data/`, aggregates via `src/lib/summary.ts` (`summarizeRuns`), MEASURED/REFERENCE/SAMPLE provenance policy.
 - **HTML design precedent:** `bench/web/benchmark-findings.html` — dark theme (`--bg:#0d0d0f`, `--text:#e8e8f0`, ember accent `--ember:#f97316`), embedded CSS, `.hero`/`.section-title`/`.tag-*` provenance badges, max-width 1080px. **Mirror this exactly** so report and dashboard read as one system.
 
 **Data-model gap to fix on the way:** per-task `cost_usd` is hardcoded to 0 in `ingest.ts` (cost lives only at run level). The report must therefore source per-task cost as `run.total_cost_usd × (task tokens / run tokens)` as an *estimated* split, clearly labelled, until real per-task cost attribution lands. Filing that as a follow-up, not a blocker.
@@ -37,7 +39,7 @@ A generator that, given one benchmark run (by `#public_id` from ClickHouse, or b
 
 `tools/scripts/bench-report.ts` (TypeScript via `tsx`, `.env.local`-aware, ClickHouse-queryable), exposed as:
 - `pnpm bench:report <run-public-id> [--out <path>]` (new root `package.json` script), and
-- `oxagen bench report #N [--out <path>] [--open]` — a thin new subcommand in `apps/cli/src/commands/bench.ts` wrapping the same core function (`generateBenchReport`), so it's reachable from the CLI users already know.
+- `pnpm --filter @oxagen/bench report -- #N [--out <path>] [--open]` — a thin new subcommand added to `packages/bench/src/cli.ts`/`commands.ts` wrapping the same core function (`generateBenchReport`). **Not `apps/cli`** — bench tooling must never ship in the product CLI (see the private-package restructure).
 
 Auto-hook: `run.sh` calls `pnpm bench:report` (best-effort, non-fatal) after a run finishes and its results are ingested, writing `results-$AGENT/<job>/bench-report-<job-name>.html` next to `bench-config.json`. The `<timestamp>` in the filename is the job name (already a UTC timestamp, `run.sh:157`).
 
@@ -56,7 +58,7 @@ Pull: the `benchmark_run` row, all its `benchmark_run_result` rows, and (when pr
 5. **Best-of-N breakdown** (only if candidates exist) — per resolved-via-fork task: candidates, which won (`is_winner`), steps/files-changed/model each, and — once F4/F5 land — selection method (consensus vs selector). This is where cache-forked best-of-N's behavior becomes visible.
 6. **Failure gallery** — the unresolved/errored tasks with a one-line LLM-classified failure reason each (wrong-spec / wrong-diagnosis / collateral-test-break / timeout / infra), so patterns jump out. Reasons come from the LLM pass in §1.1.
 7. **LLM recommendations** (see §1.1) — a ranked list of concrete next-run changes (e.g. "raise diff budget on sympy tasks", "enable OXAGEN_SPEC_GATE — 4 of 7 failures never wrote a repro"), each tied to evidence in this run's data.
-8. **Reproduce footer** — the exact `bench-config.json` env and the one-line command to replay (`oxagen bench replay #N --run`), MEASURED provenance, git sha.
+8. **Reproduce footer** — the exact `bench-config.json` env and the one-line command to replay (`pnpm --filter @oxagen/bench replay -- #N --run`), MEASURED provenance, git sha.
 
 ### Charts
 
@@ -91,7 +93,7 @@ A view in the bench web app (`bench/web/`) showing **progress over time**: resol
 - New route `bench/web/src/app/history/page.tsx` (the app already has `page.tsx`/`layout.tsx`). Link it from the existing landing page.
 - **Data source, two modes** matching the app's current dual nature:
   - *Static mode (default, committed):* the existing `.eval.json` loader (`src/results-data/index.ts`) already feeds `summarizeRuns` (`src/lib/summary.ts`) — extend `summary.ts` with a `timelineByPair(runs)` that groups by (dataset, agent, model) and orders by `finished_at`, producing the series the chart needs. This keeps the app buildable with committed sample data and honors the MEASURED/SAMPLE/REFERENCE provenance policy.
-  - *Live mode (opt-in):* a route handler (`src/app/api/history/route.ts`) that calls `listBenchResults`/`getBenchRunByPublicId` from `@oxagen/telemetry` when `BENCH_WEB_LIVE=1` and ClickHouse env is present, returning the same series shape. The page prefers live when available, falls back to static.
+  - *Live mode (opt-in):* a route handler (`src/app/api/history/route.ts`) that calls `listBenchResults`/`getBenchRunByPublicId` from **`@oxagen/bench`** (not `@oxagen/telemetry` — the bench query layer lives in the private bench package now; add `@oxagen/bench` as a `bench/web` workspace dependency) when `BENCH_WEB_LIVE=1` and ClickHouse env is present, returning the same series shape. The page prefers live when available, falls back to static.
 - **Charts:** use the repo's charting convention. The web app is React — use **reaviz** (per the `reaviz` skill: LineChart/AreaChart for the resolved-rate-over-time and cost-over-time series, a scatter for tokens-vs-resolved across runs). Theme to the shared dark palette. Consult the `reaviz` and `dataviz` skills before writing chart code.
 - **Provenance-honest:** REFERENCE lines (Lingxi 81.2%, etc.) render as dated horizontal rules on the resolved-rate chart so "how close are we to SOTA" is answerable at a glance, clearly badged as external references, never mixed into our own measured series.
 - **Drill-in:** clicking a point routes to a run detail (reuse or link to the R1 HTML report for that run, or a React mirror of it — simplest is to serve the generated report).
@@ -111,7 +113,7 @@ Extend `bench/web/src/lib/summary.test.ts`: `timelineByPair` groups and orders c
 | Phase | Work | Gate |
 |---|---|---|
 | **R-A** | `generateBenchReport` core (data sourcing from ClickHouse + offline dir, all non-LLM sections, inline SVG charts) + `pnpm bench:report` + tests. No LLM yet. | Report opens offline, correct numbers, zero external refs |
-| **R-B** | LLM passes via `@oxagen/ai` (recap, failure classification, recommendations, structured output, no-LLM fallback) + `oxagen bench report` subcommand + `run.sh` auto-hook | Report with a key shows grounded recap + a recommendation tied to a real failure |
+| **R-B** | LLM passes via `@oxagen/ai` (recap, failure classification, recommendations, structured output, no-LLM fallback) + `pnpm --filter @oxagen/bench report` subcommand + `run.sh` auto-hook | Report with a key shows grounded recap + a recommendation tied to a real failure |
 | **R-C** | `timelineByPair` in `summary.ts` + `/history` static-mode page + reaviz charts + tests | `/history` trend line over sample data with SOTA rule |
 | **R-D** | Live-mode route handler (ClickHouse-backed) + drill-in to run detail | `/history` reflects ingested runs under `BENCH_WEB_LIVE=1` |
 | **R-E** (follow-up) | Real per-task cost attribution in `ingest.ts` (replace the hardcoded 0), so cost tiles stop being estimates | Per-task `cost_usd` non-zero end-to-end |
