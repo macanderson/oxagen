@@ -1,5 +1,5 @@
 /**
- * usage-dashboard.spec.ts — e2e for the billing.usage.breakdown dashboard.
+ * billing-usage-breakdown.spec.ts — e2e for the billing.usage.breakdown dashboard.
  *
  * Drives /{orgSlug}/billing/usage for a fresh org. A brand-new org has no
  * ClickHouse usage yet, so the dashboard renders its zero/empty states — this
@@ -35,13 +35,14 @@ test("usage dashboard: renders KPIs, breakdown panels, and range picker for a fr
 
   await page.goto(`/${orgSlug}/billing/usage`);
   await expect(page).not.toHaveURL(/\/login/);
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("domcontentloaded");
 
   // KPI cards — the four headline measures always render (zeros for a fresh org).
-  await expect(page.getByText("Total cost")).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText("Total tokens")).toBeVisible();
-  await expect(page.getByText("Cached tokens")).toBeVisible();
-  await expect(page.getByText("LLM calls")).toBeVisible();
+  // Exact match: "Cached tokens" would otherwise also match descriptive copy.
+  await expect(page.getByText("Total cost", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Total tokens", { exact: true })).toBeVisible();
+  await expect(page.getByText("Cached tokens", { exact: true })).toBeVisible();
+  await expect(page.getByText("LLM calls", { exact: true })).toBeVisible();
 
   // Range picker present with all four presets.
   const rangePicker = page.getByRole("group", { name: /usage date range/i });
@@ -68,7 +69,7 @@ test("usage dashboard: renders KPIs, breakdown panels, and range picker for a fr
   // Switch to the 7-day preset — the server re-renders with ?range=7d.
   await rangePicker.getByRole("link", { name: "7 days" }).click();
   await expect(page).toHaveURL(/[?&]range=7d/);
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("domcontentloaded");
   await expect(page.getByText("Total cost")).toBeVisible();
 
   await page.screenshot({
@@ -84,7 +85,7 @@ test("usage dashboard: switching the chart metric to Tokens keeps the page live"
 
   const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "usage-toggle" });
   await page.goto(`/${orgSlug}/billing/usage`);
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("domcontentloaded");
 
   const tokensToggle = page.getByRole("button", { name: /^Tokens$/ }).first();
   await expect(tokensToggle).toBeVisible({ timeout: 15_000 });
