@@ -1547,6 +1547,30 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  DO_NOT_TRACK: {
+    group: "CLI",
+    description:
+      "Community-standard telemetry opt-out (consoledonottrack.com). Set to '1' to disable " +
+      "all anonymous CLI usage telemetry — checked before OXAGEN_TELEMETRY and the persisted " +
+      "`oxagen telemetry off` config flag.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_TELEMETRY: {
+    group: "CLI",
+    description:
+      "Set to '0' to disable anonymous CLI usage telemetry (product-specific twin of " +
+      "DO_NOT_TRACK). Any other value (or unset) leaves telemetry governed by the persisted " +
+      "`oxagen telemetry on/off` config flag.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_BEST_OF_N_PIPELINE: {
     group: "CLI",
     description:
