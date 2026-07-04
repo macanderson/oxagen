@@ -7,7 +7,7 @@ export const pluginCatalogSync = registerCapability({
   description: "Trigger an immediate sync of the MCP registry catalog for the workspace. Refreshes the locally-cached server listings from the upstream registry.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["api", "mcp", "unit"],
+  layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   sensitivity: "low",
   noBillingGate: true,

@@ -3,6 +3,13 @@ import { semanticEdgeApprove } from "@oxagen/oxagen/contracts/semantic.edge.appr
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { sanitizeRelationshipType, sanitizeLabel } from "@oxagen/ontology/labels";
+import {
+  edgeCloseOnSupersedeSet,
+  edgeCloseParams,
+  edgeOpenPredicate,
+  edgeValidityOnCreateSet,
+  edgeValidityParams,
+} from "@oxagen/ontology/temporal";
 import { HTTPException } from "hono/http-exception";
 import { logger } from "./logger";
 
@@ -35,6 +42,7 @@ export const semanticEdgeApproveHandler: CapabilityHandler<typeof semanticEdgeAp
   const { edgeId, decision, comment } = input;
   const approvedAt = new Date().toISOString();
   const approvedBy = ctx.userId;
+  const validity = edgeValidityParams(input.observedAt);
 
   const result = await runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, async () => {
     const sess = scopedSession();
@@ -94,7 +102,7 @@ export const semanticEdgeApproveHandler: CapabilityHandler<typeof semanticEdgeAp
 
       if (decision === "reject") {
         logger.info({ edgeId, orgId: ctx.orgId, decision: "reject" }, "semantic.edge.approve: rejected");
-        return { edgeId, decision: "reject" as const, permanentEdgeId: undefined };
+        return { edgeId, decision: "reject" as const, permanentEdgeId: undefined, superseded: 0 };
       }
 
       // 3. Approval path: materialise a permanent relationship typed by the
@@ -141,8 +149,9 @@ export const semanticEdgeApproveHandler: CapabilityHandler<typeof semanticEdgeAp
            r.approvedBy  = $approvedBy,
            r.approvedAt  = datetime($approvedAt),
            r.is_system   = false,
-           r.createdAt   = datetime()
-         RETURN elementId(r) AS relId`,
+           r.createdAt   = datetime(),
+           ${edgeValidityOnCreateSet("r")}
+         RETURN elementId(r) AS relId, tgt.publicId AS tgtId`,
         {
           orgId: ctx.orgId,
           workspaceId: ctx.workspaceId,
@@ -155,19 +164,40 @@ export const semanticEdgeApproveHandler: CapabilityHandler<typeof semanticEdgeAp
           confidence,
           approvedBy: approvedBy ?? "unknown",
           approvedAt,
+          ...validity,
         },
       );
 
-       
       const permanentEdgeId = relResult.records[0]?.get("relId") as string | undefined;
-       
+      const materializedTargetId = relResult.records[0]?.get("tgtId") as string | undefined;
+
+      // Supersession (opt-in): treat this as the single valid object for
+      // (source, relType) — close every OTHER currently open edge of the same
+      // type from the source node, preserving history instead of overwriting.
+      let superseded = 0;
+      if (input.supersede && materializedTargetId) {
+        const closeResult = await sess.run(
+          `MATCH (src:EntityNode {publicId: $sourceNodeId, orgId: $orgId})
+           MATCH (src)-[old:${relType}]->(other:GraphNode)
+           WHERE other.publicId <> $materializedTargetId AND ${edgeOpenPredicate("old")}
+           SET ${edgeCloseOnSupersedeSet("old")}
+           RETURN count(old) AS closed`,
+          {
+            orgId: ctx.orgId,
+            sourceNodeId,
+            materializedTargetId,
+            ...edgeCloseParams(input.observedAt),
+          },
+        );
+        superseded = Number(closeResult.records[0]?.get("closed") ?? 0);
+      }
 
       logger.info(
-        { edgeId, permanentEdgeId, orgId: ctx.orgId, decision: "approve" },
+        { edgeId, permanentEdgeId, superseded, orgId: ctx.orgId, decision: "approve" },
         "semantic.edge.approve: approved — permanent edge created",
       );
 
-      return { edgeId, decision: "approve" as const, permanentEdgeId };
+      return { edgeId, decision: "approve" as const, permanentEdgeId, superseded };
     } finally {
       await sess.close();
     }

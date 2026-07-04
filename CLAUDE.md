@@ -90,7 +90,7 @@ This gate is non-negotiable. Do not mark the work ready to merge until all four 
 
 Before running any mutation/migration script, **confirm you are targeting the correct database.**
 
-- **Migration files go in `packages/database/migrations/`**, never in `apps/`.
+- **Migration files go in `packages/database/atlas/migrations/`**, never in `apps/`. After adding or renaming one, regenerate the checksum: `atlas migrate hash --dir "file://atlas/migrations"` from `packages/database` (never hand-edit `atlas.sum`). Pick a timestamp prefix later than every existing file AND later than the shared local DB's current version — parallel sessions collide otherwise.
 - **Echo the target DB URL before any mutation script.** Local = `localhost:5433`; prod = Vercel secrets.
 - `tsx --env-file=.env.local` does NOT override a shell `DATABASE_URL` — `unset DATABASE_URL` to force local targeting.
 - **Verify with a query after migration.** Don't trust logs alone.
@@ -276,7 +276,7 @@ git fetch origin && git rebase origin/main  # on main: sync local to remote befo
 - **Rebase before cutting a branch** — `git fetch origin`, and if `origin/main` is ahead, `git switch main && git rebase origin/main` (resolve conflicts), then cut your branch/worktree from the updated local `main`. Once your branch is cut, push it and work on it; don't rebase shared branch history to tidy it (see **Operating mode**).
 - **`apps/app` does not bootstrap IAM** — `invoke()` from `apps/app` skips IAM role checks. Add explicit `assertBillingManager` / `assertOrgMember` gates at the call site; do not rely on the kernel.
 - **Better Auth `rateLimits` plural** — `drizzleAdapter` with `usePlural: true` pluralizes `rateLimit` → `rateLimits`. Wrong table = 500 on all auth calls in prod (passes dev/e2e since rate-limiting is disabled locally). Always verify auth changes against a prod-equivalent environment.
-- **`tsx --env-file` does NOT override shell `DATABASE_URL`** — `unset DATABASE_URL` for local targeting. Always confirm target env before any migration. Migration files go in `packages/database/migrations/`, never in `apps/`.
+- **`tsx --env-file` does NOT override shell `DATABASE_URL`** — `unset DATABASE_URL` for local targeting. Always confirm target env before any migration. Migration files go in `packages/database/atlas/migrations/`, never in `apps/`.
 - **Stripe webhook tunnel** — `pnpm dev` auto-starts the tunnel. Restarting `apps/api` in isolation loses the per-session signing secret — restart the full stack via `pnpm dev`.
 - **AI Gateway slug drift** — always use `modelIdOf()`, never hard-code slugs. Verify against `/v1/models` for new models.
 - **`agent.subagent.dispatch` / `agent.subagent.aggregate`** — use these contracts for fan-out; they emit lineage and metering through `invoke()`. Don't hand-roll fan-out.

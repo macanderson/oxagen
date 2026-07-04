@@ -27,6 +27,15 @@ export function LoginForm({ mode = "signin" }: { mode?: "signin" | "signup" }) {
       } else {
         const res = await authClient.signIn.email({ email, password });
         if (res.error) throw new Error(res.error.message);
+        // When the account has 2FA enabled, Better Auth withholds the session
+        // and returns twoFactorRedirect — the password step alone is not a
+        // full sign-in. Route to the second-factor page instead of the app,
+        // which has no session cookie yet and would bounce back to /login.
+        const data = res.data as { twoFactorRedirect?: boolean } | null;
+        if (data?.twoFactorRedirect) {
+          router.push("/two-factor");
+          return;
+        }
       }
       router.push(mode === "signup" ? "/new-organization" : "/");
       router.refresh();

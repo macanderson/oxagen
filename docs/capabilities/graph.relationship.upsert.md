@@ -20,12 +20,19 @@ MERGE a typed relationship between two KnowledgeNodes. Relationship type must ma
 | `toNodeId` | string | yes | `publicId` of the target KnowledgeNode |
 | `relationshipType` | string | yes | Relationship type name — must match `[A-Z][A-Z0-9_]{0,62}` (open vocabulary, not a fixed enum) |
 | `properties` | record<string, string> | no | Optional string key-value metadata for the relationship |
+| `observedAt` | string (ISO-8601) | no | **Valid time** of the asserted fact (its event time). Omit to stamp `validFrom = now`. |
+| `supersede` | boolean | no | Treat as a single-valued fact: close any other currently-open edge of the same type from the source (preserving history) instead of leaving a contradiction. Default false. |
 
 ## Output
 | Field | Type | Description |
 |-------|------|-------------|
 | `relationshipId` | string | Composite identifier: `fromNodeId:relationshipType:toNodeId` |
 | `created` | boolean | True if newly created; false if already existed |
+| `superseded` | number | Count of prior open edges closed by supersession (0 when `supersede=false`) |
+
+## Bi-temporal validity
+
+Every write stamps the edge with bi-temporal validity: `validFrom` (valid-time start, from `observedAt` or now) + `recordedAt` (transaction-time start, now), with `validTo` / `invalidatedAt` left null (still true / still known). Re-asserting an edge reopens it if a prior supersession had closed it. Reads (`ontology.query`, `ontology.neighbors`) default to currently-valid, currently-known and accept `asOf` / `asKnownAt` for time-travel. See `@oxagen/ontology/temporal`.
 
 ## Example
 

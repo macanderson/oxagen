@@ -65,13 +65,6 @@ export const fade = {
   exit: { opacity: 0, transition: { duration: duration.micro, ease: easing.exit } },
 } as const;
 
-/** Scale + fade for popover/menu-style surfaces driven by framer-motion. */
-export const popScale = {
-  hidden: { opacity: 0, scale: 0.96, y: -4 },
-  visible: { opacity: 1, scale: 1, y: 0, transition: { duration: duration.overlay, ease: easing.entry } },
-  exit: { opacity: 0, scale: 0.96, transition: { duration: duration.micro, ease: easing.exit } },
-} as const;
-
 /**
  * Stagger container — children animate in sequence. Use on a list wrapper with
  * `variants={staggerContainer}` and `fadeInUp` on each child.

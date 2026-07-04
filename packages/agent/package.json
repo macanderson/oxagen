@@ -33,6 +33,7 @@
     "@oxagen/engram": "workspace:*",
     "@oxagen/mcp-config": "workspace:*",
     "@oxagen/ontology": "workspace:*",
+    "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",
     "@oxagen/sandbox": "workspace:*",
     "@oxagen/storage": "workspace:*",
@@ -42,15 +43,13 @@
     "diff": "9.0.0",
     "drizzle-orm": "0.45.2",
     "inngest": "3.54.2",
-    "neo4j-driver": "5.28.3",
-    "@oxagen/oxagen": "workspace:*",
     "pino": "9.14.0",
     "postgres": "3.4.9",
     "zod": "3.25.76"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "2.1.9",
     "typescript": "6.0.3",
-    "vitest": "2.1.9",
-    "@vitest/coverage-v8": "2.1.9"
+    "vitest": "2.1.9"
   }
 }

@@ -155,6 +155,9 @@ function contractNameToPathSegment(name: string): string {
     // Vault routes use kebab-case for underscore-containing action names.
     "environment.set_default": "environment/set-default",
     "secret.import_env": "secret/import-env",
+    // A2A card read is mounted at the resource path (GET /a2a/card), not
+    // /a2a/card/get — the transport itself lives at /a2a + /.well-known.
+    "a2a.card.get": "a2a/card",
   };
 
   // Try progressively shorter prefixes

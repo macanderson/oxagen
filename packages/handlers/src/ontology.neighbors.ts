@@ -2,11 +2,17 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { ontologyNeighbors } from "@oxagen/oxagen/contracts/ontology.neighbors";
 import { RELATIONSHIP_TYPE_PATTERN } from "@oxagen/oxagen/contracts/graph.relationship.upsert";
 import { scopedSession } from "@oxagen/ontology/tenant";
+import {
+  buildValidityFilter,
+  edgeValidityReturn,
+  readEdgeValidity,
+  type EdgeValidity,
+} from "@oxagen/ontology/temporal";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { getPinnedSchema } from "./schema.pinned";
 import { logger } from "./logger";
 
-interface NeighborEntry {
+interface NeighborEntry extends EdgeValidity {
   nodeId: string;
   label: string;
   displayName: string;
@@ -110,6 +116,11 @@ export const ontologyNeighborsHandler: CapabilityHandler<typeof ontologyNeighbor
       // for an unconstrained traversal.
       const relTypeClause = edgeTypes ? "AND type(r) IN $edgeTypes" : "";
 
+      // Bi-temporal read filter — only edges valid + known at the requested
+      // instants survive. Defaults to now/now so an unstamped legacy edge (null
+      // lower bounds) and a currently-valid edge both pass unchanged.
+      const validity = buildValidityFilter("r", { asOf: input.asOf, asKnownAt: input.asKnownAt });
+
       // Fetch one extra row beyond the cap so we can flag truncation honestly.
       // BigInt forces the driver to send INTEGER on the Bolt wire — a plain JS
       // number would be serialised as Float and Neo4j rejects it for LIMIT.
@@ -120,16 +131,18 @@ export const ontologyNeighborsHandler: CapabilityHandler<typeof ontologyNeighbor
          WHERE m.orgId = $orgId AND m.workspaceId = $workspaceId
            ${relTypeClause}
            ${directionClause}
+           AND ${validity.clause}
          RETURN
            m.publicId    AS nodeId,
            m.label       AS label,
            m.displayName AS displayName,
            m.description AS description,
            type(r)       AS edgeType,
-           CASE WHEN startNode(r) = n THEN 'out' ELSE 'in' END AS direction
+           CASE WHEN startNode(r) = n THEN 'out' ELSE 'in' END AS direction,
+           ${edgeValidityReturn("r")}
          ORDER BY m.displayName ASC
          LIMIT $fetchLimit`,
-        { nodeId: input.nodeId, orgId, workspaceId, edgeTypes, fetchLimit },
+        { nodeId: input.nodeId, orgId, workspaceId, edgeTypes, fetchLimit, ...validity.params },
       );
 
       for (const record of result.records) {
@@ -144,6 +157,7 @@ export const ontologyNeighborsHandler: CapabilityHandler<typeof ontologyNeighbor
           description: record.get("description") as string | null,
           edgeType: record.get("edgeType") as string,
           direction: record.get("direction") as "out" | "in",
+          ...readEdgeValidity((k) => record.get(k)),
         });
       }
     } finally {

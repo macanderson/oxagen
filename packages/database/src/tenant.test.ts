@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   // For assertRlsConnectionSafe — db().execute returns rows directly (no .transaction).
   dbExecute: vi.fn(async () => [] as unknown[]),
   recordIfUnscoped: vi.fn(),
+  // Controls the fail-closed-in-production guard branch.
+  isProductionRuntime: vi.fn(() => false),
 }));
 
 mocks.transaction.mockImplementation(
@@ -18,6 +20,12 @@ vi.mock("./client", () => ({
 }));
 // rlsEnforced reads env; stub it so the test controls the branch.
 vi.mock("./tenant-flag", () => ({ rlsEnforced: mocks.rlsEnforced }));
+// isProductionRuntime reads ambient env; stub it so the test controls the
+// fail-closed-in-production guard without mutating process.env.
+vi.mock("@oxagen/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@oxagen/config/env")>();
+  return { ...actual, isProductionRuntime: mocks.isProductionRuntime };
+});
 // Spy on the unscoped-access meter so we can assert withSystemDb wires it.
 vi.mock("./unscoped-meter", () => ({
   recordIfUnscoped: mocks.recordIfUnscoped,
@@ -25,7 +33,12 @@ vi.mock("./unscoped-meter", () => ({
 }));
 
 import { runInTenantScope } from "@oxagen/tenancy";
-import { withTenantDb, withSystemDb, assertRlsConnectionSafe } from "./tenant";
+import {
+  withTenantDb,
+  withSystemDb,
+  assertRlsConnectionSafe,
+  assertRlsEnforcedInProduction,
+} from "./tenant";
 
 const ORG = "00000000-0000-0000-0000-00000000a111";
 const WS = "00000000-0000-0000-0000-00000000b222";
@@ -40,6 +53,7 @@ beforeEach(() => {
   mocks.dbExecute.mockClear();
   mocks.recordIfUnscoped.mockClear();
   mocks.rlsEnforced.mockReturnValue(false);
+  mocks.isProductionRuntime.mockReturnValue(false);
 });
 
 describe("withTenantDb", () => {
@@ -156,5 +170,41 @@ describe("assertRlsConnectionSafe", () => {
     ] as unknown[]);
     await assertRlsConnectionSafe();
     expect(mocks.dbExecute).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws (before touching the db) when production has RLS enforcement disabled", async () => {
+    mocks.isProductionRuntime.mockReturnValue(true);
+    mocks.rlsEnforced.mockReturnValue(false);
+    await expect(assertRlsConnectionSafe()).rejects.toThrow(
+      /Refusing to start|Production runtime/i,
+    );
+    // The prod guard fires first — the connection-role probe never runs.
+    expect(mocks.dbExecute).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// assertRlsEnforcedInProduction (synchronous fail-closed-in-prod guard)
+// ---------------------------------------------------------------------------
+
+describe("assertRlsEnforcedInProduction", () => {
+  it("throws when production runs with enforcement disabled", () => {
+    mocks.isProductionRuntime.mockReturnValue(true);
+    mocks.rlsEnforced.mockReturnValue(false);
+    expect(() => assertRlsEnforcedInProduction()).toThrow(
+      /TENANT_RLS_ENFORCEMENT_ENABLED=false|Refusing to start/i,
+    );
+  });
+
+  it("is a no-op when production runs with enforcement enabled", () => {
+    mocks.isProductionRuntime.mockReturnValue(true);
+    mocks.rlsEnforced.mockReturnValue(true);
+    expect(() => assertRlsEnforcedInProduction()).not.toThrow();
+  });
+
+  it("is a no-op in a non-production runtime even with enforcement disabled", () => {
+    mocks.isProductionRuntime.mockReturnValue(false);
+    mocks.rlsEnforced.mockReturnValue(false);
+    expect(() => assertRlsEnforcedInProduction()).not.toThrow();
   });
 });

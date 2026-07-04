@@ -16,6 +16,8 @@ export {
   isFanoutNotFoundError,
   SubagentRunNotFoundError,
   isSubagentRunNotFoundError,
+  ExecutionNotFoundError,
+  isExecutionNotFoundError,
 } from "./handlers/subagent-errors";
 export { buildChatSystemPrompt } from "./system-prompt";
 export type { SystemPromptContext } from "./system-prompt";

@@ -48,6 +48,36 @@ export { streamAgentReply } from "./stream";
 export type { StreamAgentReplyArgs } from "./stream";
 export { embedText } from "./embed";
 export type { EmbedTextOpts } from "./embed";
+
+// Response cache — opt-in layered (exact + semantic) cache for deterministic
+// background inference. See ./cache; wired into generateObjectFor via `cache`.
+export {
+  readCache,
+  writeCache,
+  buildCacheKey,
+  cosineSimilarity,
+  sha256Hex,
+} from "./cache";
+export type {
+  CacheOptions,
+  CacheContext,
+  CacheReadResult,
+  CachedUsage,
+  CachedResponseKind,
+} from "./cache";
+
+// Message Batches — background inference at half price (direct Anthropic).
+export { submitBatch, pollBatch } from "./batch";
+export type {
+  BatchRequestInput,
+  BatchTelemetry,
+  SubmitBatchArgs,
+  SubmitBatchResult,
+  PollBatchArgs,
+  PollBatchResult,
+  BatchResultItem,
+} from "./batch";
+
 export { generateObjectFor } from "./generate-object";
 export type {
   GenerateObjectArgs,

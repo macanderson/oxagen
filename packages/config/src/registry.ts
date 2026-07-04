@@ -200,6 +200,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "https://otel.example.com/v1/traces",
   },
+  OTEL_EXPORTER_OTLP_HEADERS: {
+    group: "OpenTelemetry",
+    description:
+      "Standard OTEL comma-separated `key=value` header list sent to the collector " +
+      '(e.g. "authorization=Bearer xxx,x-tenant=oxagen"). Optional — for collectors ' +
+      "that require auth headers. Parsed by packages/telemetry/src/tracer.ts.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OTEL_SERVICE_NAME: {
     group: "OpenTelemetry",
     description:
@@ -211,6 +223,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "oxagen",
+  },
+
+  // ── Error alerting (vendor-neutral outbound webhook) ────────────────────────
+  ALERT_WEBHOOK_URL: {
+    group: "Error alerting",
+    description:
+      "When set, high-severity/unhandled server errors are POSTed as a Slack-compatible " +
+      "`{ text, blocks }` JSON payload here (Slack/Mattermost/Discord incoming webhook, or " +
+      "any compatible endpoint). BYO webhook — no vendor SDK. When unset, errors are still " +
+      "recorded to the ClickHouse error_events table; only the webhook alert is skipped.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
   },
 
   // ── Better Auth ─────────────────────────────────────────────────────────────
@@ -930,6 +957,20 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: { development: "http://localhost:4000", production: API_PROD_URL },
   },
+  A2A_PUBLIC_URL: {
+    group: "Public URLs",
+    description:
+      "Public origin advertised in the A2A (Agent2Agent) protocol Agent Card's " +
+      "service endpoint and the /.well-known/agent-card.json URL. Optional — the " +
+      "A2A routes derive the origin from the live request; this only overrides the " +
+      "default for out-of-band card reads (MCP/CLI). Falls back to the API origin.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "http://localhost:4000", production: API_PROD_URL },
+  },
   APP_URL: {
     group: "Public URLs",
     description:
@@ -971,10 +1012,12 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   TENANT_RLS_ENFORCEMENT_ENABLED: {
     group: "Security",
     description:
-      "When true, Postgres RLS policies filter by org/workspace. Production-safe " +
-      "default — leave true for all deployed environments. Local dev override: set " +
-      "false in .env.local only if seeding/migration scripts need to bypass RLS; " +
-      "revert to true before running app code against the DB.",
+      "When true, Postgres RLS policies filter by org/workspace. Fail-closed: " +
+      "when UNSET it defaults ON in production (NODE_ENV/VERCEL_ENV=production) " +
+      "and OFF in dev/test/preview. A production process refuses to boot if this " +
+      "is forced to false (assertRlsEnforcedInProduction). Local dev override: " +
+      "set false in .env.local only if seeding/migration scripts need to bypass " +
+      "RLS; revert before running app code against the DB.",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -1893,6 +1936,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
+  },
+  INGESTION_FEATURE_BATCH: {
+    group: "Ingestion",
+    description:
+      "When '1', route GitHub feature inference through the Anthropic Message Batches API (async, half price) instead of per-file synchronous calls. Unset/absent = synchronous per-file (default).",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { development: "", preview: "", production: "" },
   },
   PRIVACY_ERASURE_GRACE_DAYS: {
     group: "Privacy",

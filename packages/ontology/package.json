@@ -11,7 +11,9 @@
     "./migrate": "./src/migrate.ts",
     "./types": "./src/types.ts",
     "./labels": "./src/labels.ts",
-    "./tenant": "./src/tenant.ts"
+    "./tenant": "./src/tenant.ts",
+    "./temporal": "./src/temporal.ts",
+    "./ann": "./src/ann.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -22,6 +24,7 @@
   },
   "dependencies": {
     "@oxagen/config": "workspace:*",
+    "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "neo4j-driver": "5.28.3"
   },

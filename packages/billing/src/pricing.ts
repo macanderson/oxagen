@@ -533,9 +533,3 @@ export function resolveMeterMarkup(): number {
   _resolvedMarkup = OXAGEN_METER_MARKUP ?? derivePricing(resolveTargetMargin()).meterMarkup;
   return _resolvedMarkup;
 }
-
-/** Test-only: clear the memoised env-derived margin + markup. */
-export function __resetPricingCacheForTests(): void {
-  _resolvedMargin = null;
-  _resolvedMarkup = null;
-}

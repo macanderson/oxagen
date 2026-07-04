@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { requireScope } from "@oxagen/tenancy";
+import { isProductionRuntime } from "@oxagen/config/env";
 import { db, type Database } from "./client";
 import { rlsEnforced } from "./tenant-flag";
 import { recordIfUnscoped } from "./unscoped-meter";
@@ -63,15 +64,41 @@ export async function withSystemDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
 }
 
 /**
+ * Fail-fast guard: a PRODUCTION runtime must never run with RLS enforcement
+ * disabled. The env default is already fail-closed (ON in production), so the
+ * only way to reach this state is an explicit TENANT_RLS_ENFORCEMENT_ENABLED=
+ * "false" override in a production deployment — which would run every tenant
+ * query with app.rls_bypass='on' and rely solely on the manual eq(orgId)
+ * predicates, one forgotten filter away from a cross-tenant leak. Refuse to
+ * boot. Synchronous (no DB round-trip) so it is cheap to call first at startup
+ * and trivially unit-testable. No-op in dev/test/preview (the seeding window).
+ */
+export function assertRlsEnforcedInProduction(): void {
+  if (isProductionRuntime() && !rlsEnforced()) {
+    throw new Error(
+      "[tenancy] Production runtime started with TENANT_RLS_ENFORCEMENT_ENABLED" +
+        "=false — Row-Level Security is disabled, so tenant isolation depends " +
+        "entirely on per-query org predicates and a single omission leaks data " +
+        "across tenants. Unset the override (production defaults to enforced) or " +
+        "set it to true. Refusing to start.",
+    );
+  }
+}
+
+/**
  * Fail-fast guard against the silent-bypass footgun: PostgreSQL superusers and
  * roles with BYPASSRLS ignore RLS unconditionally — even FORCE ROW LEVEL
  * SECURITY does not subject them to policies. If the app connects as such a
  * role while enforcement is on, every policy is dead weight and isolation
  * silently fails. Call this once at service startup; it throws (refuse to
  * start) when enforcement is enabled but the connection role can bypass RLS.
- * No-op while enforcement is off (seeding window).
+ * Always runs the production-enforcement guard first (independent of the
+ * connection-role check), so every runtime that already calls this gets the
+ * fail-closed-in-prod assertion for free. No-op while enforcement is off
+ * (seeding window) beyond that guard.
  */
 export async function assertRlsConnectionSafe(): Promise<void> {
+  assertRlsEnforcedInProduction();
   if (!rlsEnforced()) return;
   const result = await db().execute(sql`
     select
