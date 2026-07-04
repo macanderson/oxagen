@@ -211,6 +211,52 @@ describe("a2a JSON-RPC dispatcher", () => {
     expect(body.error.code).toBe(-32700);
   });
 
+  it("tasks/resubscribe streams the current status of a found task", async () => {
+    h.loadTask.mockResolvedValue(rowCompleted);
+    const res = await rpc({
+      jsonrpc: "2.0",
+      id: 11,
+      method: "tasks/resubscribe",
+      params: { id: "a2a_1" },
+    });
+    expect(res.headers.get("content-type")).toContain("text/event-stream");
+    const text = await res.text();
+    expect(text).toContain('"kind":"status-update"');
+    expect(text).toContain('"final":true'); // completed is terminal
+  });
+
+  it("tasks/resubscribe returns -32001 for an unknown task", async () => {
+    h.loadTask.mockResolvedValue(null);
+    const res = await rpc({
+      jsonrpc: "2.0",
+      id: 12,
+      method: "tasks/resubscribe",
+      params: { id: "a2a_missing" },
+    });
+    const body = await res.json();
+    expect(body.error.code).toBe(-32001);
+  });
+
+  it("message/stream surfaces a task failure as a JSON-RPC error frame", async () => {
+    h.createTask.mockResolvedValue({ ...rowCompleted, state: "submitted" });
+    h.runA2ATask.mockRejectedValue(new Error("kaboom"));
+    const res = await rpc({
+      jsonrpc: "2.0",
+      id: 13,
+      method: "message/stream",
+      params: sendParams,
+    });
+    const text = await res.text();
+    expect(text).toContain('"error"');
+    expect(text).toContain("kaboom");
+  });
+
+  it("returns -32602 for invalid tasks/get params", async () => {
+    const res = await rpc({ jsonrpc: "2.0", id: 14, method: "tasks/get", params: {} });
+    const body = await res.json();
+    expect(body.error.code).toBe(-32602);
+  });
+
   it("fails closed (400) when the request carries no org/workspace scope", async () => {
     // No scope-stamping middleware — mirrors an API key that never bound scope.
     const bare = new Hono();

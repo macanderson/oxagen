@@ -160,4 +160,33 @@ describe("runA2ATask", () => {
     const final = await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY });
     expect(final.state).toBe("completed");
   });
+
+  it("emits a working heartbeat with the capability name on tool-call", async () => {
+    setStreamParts([
+      { type: "tool-call", toolName: "t" },
+      { type: "text-delta", text: "done" },
+      { type: "finish", totalUsage: { inputTokens: 1, outputTokens: 1 } },
+    ]);
+    const events: Array<{ kind: string; status?: { message?: { parts: { text: string }[] } } }> = [];
+    await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, onEvent: (e) => events.push(e) });
+    const heartbeat = events.find(
+      (e) => e.kind === "status-update" && e.status?.message?.parts?.[0]?.text?.includes("tool.cap"),
+    );
+    expect(heartbeat).toBeDefined();
+  });
+
+  it("marks the task failed when streamAgentReply throws", async () => {
+    streamAgentReply.mockImplementationOnce(() => {
+      throw new Error("model down");
+    });
+    const final = await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY });
+    expect(final.state).toBe("failed");
+    expect(final.errorMessage).toBe("model down");
+  });
+
+  it("honors an explicit model override", async () => {
+    setStreamParts([{ type: "text-delta", text: "ok" }]);
+    await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, model: "gpt-x" });
+    expect(streamAgentReply).toHaveBeenCalledOnce();
+  });
 });

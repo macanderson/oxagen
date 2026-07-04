@@ -102,6 +102,22 @@ describe("toA2ATask", () => {
     const task = toA2ATask({ ...row, state: "failed", errorMessage: "boom" });
     expect(task.metadata).toEqual({ error: "boom" });
   });
+
+  it("includes the status message when present", () => {
+    const statusMessage = {
+      kind: "message" as const,
+      role: "agent" as const,
+      parts: [{ kind: "text" as const, text: "b" }],
+      messageId: "m2",
+    };
+    const task = toA2ATask({ ...row, statusMessage });
+    expect(task.status.message).toEqual(statusMessage);
+  });
+
+  it("ignores a negative historyLength (returns full history)", () => {
+    const task = toA2ATask(row, -1);
+    expect(task.history).toHaveLength(2);
+  });
 });
 
 describe("task store CRUD", () => {
