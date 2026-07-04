@@ -14,6 +14,8 @@ export type { CapabilityHandlerFn } from "./handlers/index";
 export {
   FanoutNotFoundError,
   isFanoutNotFoundError,
+  SubagentRunNotFoundError,
+  isSubagentRunNotFoundError,
 } from "./handlers/subagent-errors";
 export { buildChatSystemPrompt } from "./system-prompt";
 export type { SystemPromptContext } from "./system-prompt";
