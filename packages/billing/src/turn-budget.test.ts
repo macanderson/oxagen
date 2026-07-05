@@ -16,7 +16,10 @@ import {
   createTurnBudgetGuard,
   turnCostUsd,
   formatBudgetUsd,
+  strictestMode,
+  resolveEffectiveTurnBudget,
   type TurnBudgetPolicy,
+  type GovernedBudget,
 } from "./turn-budget";
 
 const policy = (over: Partial<TurnBudgetPolicy> = {}): TurnBudgetPolicy => ({
@@ -170,5 +173,108 @@ describe("formatBudgetUsd", () => {
     expect(formatBudgetUsd(0.0034)).toBe("$0.0034");
     expect(formatBudgetUsd(0)).toBe("$0.00");
     expect(formatBudgetUsd(Number.POSITIVE_INFINITY)).toBe("∞");
+  });
+});
+
+describe("strictestMode", () => {
+  it("ranks enforce > prompt > grace", () => {
+    expect(strictestMode("grace", "prompt")).toBe("prompt");
+    expect(strictestMode("prompt", "enforce")).toBe("enforce");
+    expect(strictestMode("grace", "enforce")).toBe("enforce");
+    expect(strictestMode("grace", "grace")).toBe("grace");
+  });
+});
+
+describe("resolveEffectiveTurnBudget", () => {
+  const p = (over: Partial<TurnBudgetPolicy>): TurnBudgetPolicy => ({
+    enabled: true,
+    limitUsd: 1,
+    mode: "enforce",
+    graceOveragePct: DEFAULT_GRACE_OVERAGE_PCT,
+    ...over,
+  });
+  const gov = (
+    policy: TurnBudgetPolicy,
+    enforcement: "default" | "ceiling",
+  ): GovernedBudget => ({ policy, enforcement });
+
+  // The six worked examples from the OXA-2081 spec — the governance guardrail.
+  it("off user + workspace enforce-ceiling → forced $5 enforce", () => {
+    const r = resolveEffectiveTurnBudget(
+      TURN_BUDGET_OFF,
+      null,
+      gov(p({ limitUsd: 5, mode: "enforce" }), "ceiling"),
+    );
+    expect(r).toMatchObject({ enabled: true, limitUsd: 5, mode: "enforce" });
+  });
+
+  it("grace $20 user + $5 enforce-ceiling → clamped to $5 enforce", () => {
+    const r = resolveEffectiveTurnBudget(
+      p({ limitUsd: 20, mode: "grace" }),
+      null,
+      gov(p({ limitUsd: 5, mode: "enforce" }), "ceiling"),
+    );
+    expect(r).toMatchObject({ limitUsd: 5, mode: "enforce" });
+  });
+
+  it("off user + org default $10 prompt → adopts $10 prompt", () => {
+    const r = resolveEffectiveTurnBudget(
+      TURN_BUDGET_OFF,
+      gov(p({ limitUsd: 10, mode: "prompt" }), "default"),
+      null,
+    );
+    expect(r).toMatchObject({ enabled: true, limitUsd: 10, mode: "prompt" });
+  });
+
+  it("off user + org default $10 prompt + workspace default $3 grace → workspace wins ($3 grace)", () => {
+    const r = resolveEffectiveTurnBudget(
+      TURN_BUDGET_OFF,
+      gov(p({ limitUsd: 10, mode: "prompt" }), "default"),
+      gov(p({ limitUsd: 3, mode: "grace" }), "default"),
+    );
+    expect(r).toMatchObject({ limitUsd: 3, mode: "grace" });
+  });
+
+  it("prompt $2 user + $5 enforce-ceiling → keeps lower $2 limit but stricter enforce mode", () => {
+    const r = resolveEffectiveTurnBudget(
+      p({ limitUsd: 2, mode: "prompt" }),
+      null,
+      gov(p({ limitUsd: 5, mode: "enforce" }), "ceiling"),
+    );
+    expect(r).toMatchObject({ limitUsd: 2, mode: "enforce" });
+  });
+
+  it("enforce $8 user + org $5 enforce-ceiling + workspace default $20 grace → $5 enforce (user opted in, default ignored; ceiling clamps)", () => {
+    const r = resolveEffectiveTurnBudget(
+      p({ limitUsd: 8, mode: "enforce" }),
+      gov(p({ limitUsd: 5, mode: "enforce" }), "ceiling"),
+      gov(p({ limitUsd: 20, mode: "grace" }), "default"),
+    );
+    expect(r).toMatchObject({ limitUsd: 5, mode: "enforce" });
+  });
+
+  // Edge cases.
+  it("a disabled or $0 ceiling never forces a turn-killing $0 budget", () => {
+    expect(resolveEffectiveTurnBudget(TURN_BUDGET_OFF, null, gov(p({ enabled: false }), "ceiling"))).toMatchObject({
+      enabled: false,
+    });
+    expect(
+      resolveEffectiveTurnBudget(TURN_BUDGET_OFF, null, gov(p({ limitUsd: 0 }), "ceiling")),
+    ).toMatchObject({ enabled: false });
+  });
+
+  it("grace ceiling takes the tighter cushion", () => {
+    const r = resolveEffectiveTurnBudget(
+      p({ limitUsd: 10, mode: "grace", graceOveragePct: 0.5 }),
+      null,
+      gov(p({ limitUsd: 10, mode: "grace", graceOveragePct: 0.1 }), "ceiling"),
+    );
+    expect(r.mode).toBe("grace");
+    expect(r.graceOveragePct).toBe(0.1);
+  });
+
+  it("no governance → returns the user policy unchanged", () => {
+    const u = p({ limitUsd: 7, mode: "prompt" });
+    expect(resolveEffectiveTurnBudget(u, null, null)).toMatchObject({ limitUsd: 7, mode: "prompt" });
   });
 });

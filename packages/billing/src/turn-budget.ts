@@ -297,3 +297,79 @@ export function formatBudgetUsd(usd: number): string {
   const decimals = usd < 0.1 ? 4 : 2;
   return `$${usd.toFixed(decimals)}`;
 }
+
+// ── Org / workspace governance ──────────────────────────────────────────────
+// A per-turn budget can be governed at the org and workspace level, not just by
+// the user. A governance policy is either a soft DEFAULT (seeds a member who
+// hasn't set their own budget; the member may raise OR lower it) or a hard
+// CEILING (clamps the member's effective budget — they cannot exceed it, and the
+// enforcement mode can only get STRICTER, never laxer). This section is pure —
+// the enforcement engine still consumes a single resolved TurnBudgetPolicy, so
+// governance changes NOTHING downstream of {@link resolveEffectiveTurnBudget}.
+
+/** How a governance policy relates to the member's own budget. */
+export type BudgetEnforcementKind = "default" | "ceiling";
+
+export interface GovernedBudget {
+  policy: TurnBudgetPolicy;
+  enforcement: BudgetEnforcementKind;
+}
+
+/** Strictness rank of a mode — a higher rank always wins on merge. */
+const MODE_STRICTNESS: Record<TurnBudgetMode, number> = {
+  grace: 0,
+  prompt: 1,
+  enforce: 2,
+};
+
+/** The stricter of two modes (enforce > prompt > grace). */
+export function strictestMode(a: TurnBudgetMode, b: TurnBudgetMode): TurnBudgetMode {
+  return MODE_STRICTNESS[a] >= MODE_STRICTNESS[b] ? a : b;
+}
+
+/** Apply one enabled ceiling to a base policy: clamp limit down, tighten mode, force on. */
+function applyCeiling(base: TurnBudgetPolicy, ceiling: TurnBudgetPolicy): TurnBudgetPolicy {
+  // A ceiling with no positive limit can't constrain a dollar amount — treat it
+  // as "no ceiling" rather than forcing a $0 (turn-killing) budget.
+  if (!ceiling.enabled || ceiling.limitUsd <= 0) return base;
+  const baseLimit = base.enabled && base.limitUsd > 0 ? base.limitUsd : Number.POSITIVE_INFINITY;
+  const limitUsd = Math.min(baseLimit, ceiling.limitUsd);
+  const mode = strictestMode(base.enabled ? base.mode : ceiling.mode, ceiling.mode);
+  // Only the grace cushion is meaningful when the resulting mode is grace; take
+  // the tighter (smaller) cushion so a ceiling never loosens the overage window.
+  const graceOveragePct =
+    mode === "grace" ? Math.min(base.graceOveragePct, ceiling.graceOveragePct) : base.graceOveragePct;
+  return { enabled: true, limitUsd, mode, graceOveragePct };
+}
+
+/**
+ * Resolve the effective per-turn budget from the member's own policy plus
+ * optional org and workspace governance. Precedence:
+ *   1. Base = the member's policy (per-turn override or saved default).
+ *   2. DEFAULTS apply only when the member has NOT opted in (base disabled):
+ *      org default first, then workspace default (workspace wins).
+ *   3. CEILINGS always apply and always clamp — limit is min()'d down and the
+ *      mode can only get stricter. Org ceiling then workspace ceiling.
+ * Governance the caller couldn't load should be passed as `null` (fail-open —
+ * a broken governance row must never block a turn).
+ */
+export function resolveEffectiveTurnBudget(
+  user: TurnBudgetPolicy,
+  org: GovernedBudget | null,
+  workspace: GovernedBudget | null,
+): TurnBudgetPolicy {
+  let effective: TurnBudgetPolicy = { ...user };
+
+  // 2. Defaults — only seed a member who hasn't set their own budget.
+  if (!effective.enabled) {
+    if (org?.enforcement === "default" && org.policy.enabled) effective = { ...org.policy };
+    if (workspace?.enforcement === "default" && workspace.policy.enabled)
+      effective = { ...workspace.policy };
+  }
+
+  // 3. Ceilings — always clamp, strictest wins. Org then workspace.
+  if (org?.enforcement === "ceiling") effective = applyCeiling(effective, org.policy);
+  if (workspace?.enforcement === "ceiling") effective = applyCeiling(effective, workspace.policy);
+
+  return effective;
+}
