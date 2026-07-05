@@ -66,7 +66,7 @@ describe("buildWorkspaceTools — agent file locking (write_file)", () => {
   });
 
   it("does NOT perform the write when every acquire attempt is denied — returns a clear denial instead of silently skipping", async () => {
-    const { provider } = fakeFileLock({
+    const { provider, acquire } = fakeFileLock({
       acquire: async () => deniedLock("agent-b", Date.now() + 60_000),
     });
     const ws = new MemoryWorkspace({ "a.ts": "original" });
@@ -82,6 +82,9 @@ describe("buildWorkspaceTools — agent file locking (write_file)", () => {
     expect(result).toContain("agent-b");
     // The write must NOT have happened — the file is unchanged.
     expect(await ws.readFile("a.ts")).toBe("original");
+    // Exhausts exactly the bounded retry budget (FILE_LOCK_ACQUIRE_ATTEMPTS = 3),
+    // never spins unbounded — a regression that changed the budget fails here.
+    expect(acquire).toHaveBeenCalledTimes(3);
   });
 
   it("retries a denied acquire up to the bounded budget and succeeds if a later attempt is granted", async () => {
@@ -138,6 +141,32 @@ describe("buildWorkspaceTools — agent file locking (write_file)", () => {
 
     const result = await run(tools.write_file, { path: "a.ts", content: "hello" });
     expect(result).toContain("Wrote 5 bytes");
+  });
+
+  it("an aborted turn breaks out of the acquire retry loop after the first denial and denies the write (no full-budget wait)", async () => {
+    // First attempt is denied; the retry then hits `delay(..., signal)`, which
+    // rejects immediately because the signal is already aborted — the loop's
+    // `catch { break; }` fires, falling through to the denial path WITHOUT a
+    // second acquire and WITHOUT performing the write. This exercises the
+    // abort-mid-retry break branch deterministically (only ONE acquire, not 3).
+    const controller = new AbortController();
+    controller.abort();
+    const { provider, acquire } = fakeFileLock({
+      acquire: async () => deniedLock("agent-b", Date.now() + 60_000),
+    });
+    const ws = new MemoryWorkspace({ "a.ts": "original" });
+    const tools = buildWorkspaceTools(ws, {
+      fileLock: provider,
+      lockContext: { agentId: "agent-a", executionId: "turn-1" },
+      signal: controller.signal,
+    });
+
+    const result = await run(tools.write_file, { path: "a.ts", content: "hello" });
+
+    expect(result).toContain("Blocked");
+    expect(await ws.readFile("a.ts")).toBe("original");
+    // Broke out after the FIRST denial instead of exhausting all 3 attempts.
+    expect(acquire).toHaveBeenCalledTimes(1);
   });
 });
 
