@@ -23,6 +23,7 @@ import type { BackgroundTaskSnapshot } from "@/components/chat/background-task-t
 import { getSessionOrRedirect } from "@/lib/session";
 import { assertWorkspaceMember } from "@/lib/resolve-org";
 import { logger } from "@oxagen/handlers/logger";
+import { parseAttachmentsField } from "./parse-attachments";
 
 // A composer-serialized attachment ref — mirrors MessageAttachment
 // (apps/app/src/components/chat/message-bubble.tsx). Bounded to 8 to match
@@ -42,23 +43,6 @@ const FormSchema = z.object({
   branchReason: z.enum(["edit", "regenerate", "tool_retry", "manual_fork"]).nullable().default(null),
   attachments: z.array(attachmentSchema).max(8).default([]),
 });
-
-/**
- * Parse the composer's `attachments` FormData field — a JSON-serialized
- * array (message-composer.tsx `fd.set("attachments", JSON.stringify(...))`)
- * — into a plain `unknown` value ready for `FormSchema.safeParse`. Malformed
- * or absent JSON degrades to `[]` (no attachments) rather than failing the
- * whole message send; exported standalone so the parsing/degradation
- * behavior is unit-testable without a DB.
- */
-export async function parseAttachmentsField(raw: FormDataEntryValue | undefined): Promise<unknown> {
-  if (typeof raw !== "string" || raw.length === 0) return [];
-  try {
-    return await JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
 
 // Implements the spec §6.9 DAG: persist the user message under the active
 // leaf and shift the conversation's active_leaf forward. The LLM call and

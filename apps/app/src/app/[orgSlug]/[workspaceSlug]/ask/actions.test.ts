@@ -9,6 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { z } from "zod";
 
 const { mockGetSession, mockInvoke, parseState, mockLoggerError, mockAssertWorkspaceMember } =
   vi.hoisted(() => ({
@@ -52,7 +53,8 @@ vi.mock("@oxagen/oxagen/contracts/agent.task.background.read", () => ({
   },
 }));
 
-import { readBackgroundTaskAction, parseAttachmentsField } from "./actions";
+import { readBackgroundTaskAction } from "./actions";
+import { parseAttachmentsField } from "./parse-attachments";
 
 const CTX = { orgId: "org-1", workspaceId: "ws-1" };
 const SESSION = { user: { id: "user-1" } };
@@ -165,5 +167,35 @@ describe("parseAttachmentsField", () => {
   it("returns [] for a non-string FormDataEntryValue (e.g. a File)", () => {
     const file = new File(["x"], "photo.png", { type: "image/png" });
     expect(parseAttachmentsField(file)).toEqual([]);
+  });
+
+  // Regression: chat-tool-io-structured.spec.ts / chat-streaming-fresh-user.spec.ts
+  // — "research.swarm.start input/result render as labeled key/value, not JSON".
+  // #589 shipped parseAttachmentsField as an `async` function (it lived in the
+  // sibling "use server" actions.ts, where every export must be async). Its sole
+  // caller feeds the result straight into a SYNCHRONOUS `FormSchema.safeParse`,
+  // so the un-awaited Promise reached `z.array()` as `received: "promise"` and
+  // failed EVERY text-only message send with "Invalid message" — the composer
+  // short-circuited before it ever fetched /api/v1/chat/stream, so no tool-call
+  // card (or any streamed turn) rendered. Guard: the helper must return
+  // synchronously (never a thenable) AND the value must validate against the
+  // same `z.array()` shape the send action uses.
+  it("returns synchronously (not a Promise) so FormSchema.safeParse sees an array, not a promise", () => {
+    const attachmentSchema = z.object({
+      publicId: z.string().min(1),
+      kind: z.string().min(1),
+      name: z.string().min(1),
+      mimeType: z.string().min(1),
+      url: z.string().min(1),
+    });
+    const attachmentsField = z.array(attachmentSchema).max(8).default([]);
+
+    for (const raw of [undefined, "", "[]", "{ not json"] as const) {
+      const value = parseAttachmentsField(raw);
+      // A thenable would slip past z.array() and fail the whole send.
+      expect(typeof (value as { then?: unknown })?.then).not.toBe("function");
+      const parsed = attachmentsField.safeParse(value);
+      expect(parsed.success).toBe(true);
+    }
   });
 });
