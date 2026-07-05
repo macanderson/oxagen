@@ -272,8 +272,6 @@ export {
   getTurnIds,
   endSession,
 } from "./session/event-log";
-export { forkSession, getFullHistory } from "./session/fork";
-export { analyzeReplay, extractTurnMetrics } from "./session/replay";
 export type {
   Session,
   SessionEvent,
@@ -285,7 +283,6 @@ export type {
   MemoryWriteData,
   TurnEndData,
 } from "./session/types";
-export type { ReplayStep, ReplayResult } from "./session/replay";
 
 // ---------------------------------------------------------------------------
 // Phase E: Multi-Agent Blackboard
