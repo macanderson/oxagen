@@ -1624,6 +1624,42 @@
       }
     },
     {
+      "name": "budget.policy.read",
+      "file": "budget.policy.read.ts",
+      "domain": "user",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "budget.policy.write",
+      "file": "budget.policy.write.ts",
+      "domain": "user",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
       "name": "chat.message.execution",
       "file": "chat.message.execution.ts",
       "domain": "chat",
