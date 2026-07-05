@@ -84,6 +84,11 @@ export const EdgeTypes = {
   AUTHORED_BY: "AUTHORED_BY", // document/commit → User
   // Agent coding lineage — written by the in-app coding agent on every turn.
   TOUCHED_FILE: "TOUCHED_FILE", // Execution → SourceFile (file was read/written this turn)
+  // Agent file locking (docs/specs/agent-file-locking/plan.md) — a graph-backed,
+  // cross-process file lock so no two live agents in a fleet clobber the same
+  // file. Carries { lockId, acquiredAt, expiresAt, workspaceId, action,
+  // executionId }; TTL-based, lazily expired (expiresAt < now) plus swept.
+  HOLDS_LOCK: "HOLDS_LOCK", // Agent → SourceFile (agent currently holds an exclusive lock on the file)
 } as const;
 export type EdgeType = (typeof EdgeTypes)[keyof typeof EdgeTypes];
 
