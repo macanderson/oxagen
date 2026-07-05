@@ -115,6 +115,17 @@ OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`
 
 // --- Source code ingestion — SourceFile, SourceSymbol, Feature ---
 CREATE CONSTRAINT source_file_public_id IF NOT EXISTS FOR (n:SourceFile) REQUIRE n.publicId IS UNIQUE;
+// Composite uniqueness on (naturalKey, orgId) — required for the agent
+// file-locking acquire (docs/specs/agent-file-locking/plan.md §4) to be
+// genuinely atomic: Neo4j only takes a serializing lock during MERGE when a
+// uniqueness constraint backs the merged properties, so two concurrent
+// acquireFileLock() calls for the SAME file would otherwise both pass the
+// MERGE + conflict-check read before either commits (a duplicate-node write
+// race), letting both be granted. Neo4j Community edition (5.x) supports
+// composite (multi-property) uniqueness constraints, verified against the
+// local dev instance.
+CREATE CONSTRAINT source_file_natural_key_org_unique IF NOT EXISTS
+FOR (n:SourceFile) REQUIRE (n.naturalKey, n.orgId) IS UNIQUE;
 CREATE INDEX source_file_natural_key IF NOT EXISTS FOR (n:SourceFile) ON (n.naturalKey);
 CREATE INDEX source_file_org IF NOT EXISTS FOR (n:SourceFile) ON (n.orgId);
 CREATE INDEX source_file_connection IF NOT EXISTS FOR (n:SourceFile) ON (n.connectionId);

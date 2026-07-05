@@ -9,6 +9,8 @@
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 import type { Workspace, CodeGraphProvider, CodeMapProvider, CodingEvent } from "./types";
+import type { FileLockProvider } from "./ports";
+import { delay } from "./loop-driver";
 
 const MAX_OUTPUT = 30_000; // chars; keep tool output from blowing the context window
 // When truncating, keep this fraction of the budget as the HEAD; the rest is the
@@ -261,6 +263,91 @@ function withBackstop(
   });
 }
 
+// ── Agent file locking (docs/specs/agent-file-locking/plan.md) ─────────────
+// The SINGLE wiring point: write_file/edit_file acquire the graph-backed
+// HOLDS_LOCK edge immediately before the real filesystem write and release it
+// immediately after, for EVERY caller of runCodingAgent (chat, CLI,
+// agent.repo.edit fleet dispatch) — there is exactly one enforcement point.
+
+/** Acquire retry budget: a real hold is expected to be release-then-reacquire
+ *  fast (this wiring releases right after each write), so a short bounded
+ *  retry resolves almost every transient collision without the model having
+ *  to react. */
+const FILE_LOCK_ACQUIRE_ATTEMPTS = 3;
+const FILE_LOCK_RETRY_DELAY_MS = 200;
+
+/**
+ * Acquire `path` (with a short bounded retry), run `execute`, and release the
+ * lock afterward — success or failure. When `fileLock`/`lockContext` are not
+ * supplied (the CLI's default: single-process, no shared Neo4j) this is a
+ * transparent passthrough to `execute()`. On a denied acquire, returns a
+ * clear denial string instead of performing the write — the calling agent
+ * (chat or fleet) sees it as a tool result and can react (try another file,
+ * wait, or tell the user), never a silently skipped write.
+ */
+async function withFileLock(
+  path: string,
+  action: "read" | "write",
+  fileLock: FileLockProvider | null | undefined,
+  lockContext: { agentId: string; executionId: string } | undefined,
+  signal: AbortSignal | undefined,
+  execute: () => Promise<string>,
+): Promise<string> {
+  if (!fileLock || !lockContext) return execute();
+
+  let lockId: string | null = null;
+  let heldBy: string | null = null;
+  let blockedUntil: number | null = null;
+  for (let attempt = 0; attempt < FILE_LOCK_ACQUIRE_ATTEMPTS; attempt++) {
+    if (attempt > 0) {
+      try {
+        await delay(FILE_LOCK_RETRY_DELAY_MS, signal);
+      } catch {
+        break; // aborted mid-retry — fall through to the denial path below
+      }
+    }
+    let grant;
+    try {
+      grant = await fileLock.acquire({
+        path,
+        agentId: lockContext.agentId,
+        executionId: lockContext.executionId,
+        action,
+      });
+    } catch {
+      // The port contract says acquire() never throws, but a misbehaving
+      // adapter must not hang or crash the tool call — degrade to denial.
+      grant = { granted: false, lockId: "", heldBy: null, blockedUntil: null };
+    }
+    if (grant.granted) {
+      lockId = grant.lockId;
+      break;
+    }
+    heldBy = grant.heldBy;
+    blockedUntil = grant.blockedUntil;
+  }
+
+  if (lockId === null) {
+    const until = blockedUntil ? new Date(blockedUntil).toISOString() : "shortly";
+    return (
+      `Blocked: ${path} is currently locked by another agent` +
+      (heldBy ? ` (${heldBy})` : "") +
+      ` until ${until}. Try a different file, or retry this edit shortly.`
+    );
+  }
+
+  try {
+    return await execute();
+  } finally {
+    try {
+      await Promise.resolve(fileLock.release({ lockId, agentId: lockContext.agentId }));
+    } catch {
+      // Release is best-effort — the TTL (default 300s) and the turn-end
+      // batch release-by-executionId backstop cover a failed release.
+    }
+  }
+}
+
 /** Wrap every tool's execute in {@link withBackstop}. Returns a new ToolSet. */
 function wrapToolsWithBackstop(tools: ToolSet): ToolSet {
   const out: ToolSet = {};
@@ -296,10 +383,20 @@ export function buildWorkspaceTools(
      * timeout. Undefined ⇒ bash is bounded only by its timeout (unchanged).
      */
     signal?: AbortSignal;
+    /**
+     * Graph-backed file lock (docs/specs/agent-file-locking/plan.md).
+     * Undefined ⇒ write_file/edit_file proceed unlocked (the CLI's default —
+     * single-process, no shared Neo4j session).
+     */
+    fileLock?: FileLockProvider | null;
+    /** Identity `fileLock` acquires/releases under. Required when `fileLock` is supplied. */
+    lockContext?: { agentId: string; executionId: string };
   } = {},
 ): ToolSet {
   const onEvent = opts.onEvent ?? (() => undefined);
   const signal = opts.signal;
+  const fileLock = opts.fileLock;
+  const lockContext = opts.lockContext;
   // Bench/CI-only gate (see OXAGEN_FORBID_TEST_EDITS in the config registry):
   // structurally denies mutations to test-shaped paths — see isTestPath above.
   const forbidTestEdits = process.env["OXAGEN_FORBID_TEST_EDITS"] === "1";
@@ -342,13 +439,15 @@ export function buildWorkspaceTools(
       }),
       execute: async ({ path, content }) => {
         if (forbidTestEdits && isTestPath(path)) return TEST_EDIT_DENIED_MESSAGE;
-        try {
-          await workspace.writeFile(path, content);
-          onEvent({ type: "file-edit", path, bytes: content.length });
-          return `Wrote ${content.length} bytes to ${path}`;
-        } catch (err) {
-          return `Error writing ${path}: ${err instanceof Error ? err.message : String(err)}`;
-        }
+        return withFileLock(path, "write", fileLock, lockContext, signal, async () => {
+          try {
+            await workspace.writeFile(path, content);
+            onEvent({ type: "file-edit", path, bytes: content.length });
+            return `Wrote ${content.length} bytes to ${path}`;
+          } catch (err) {
+            return `Error writing ${path}: ${err instanceof Error ? err.message : String(err)}`;
+          }
+        });
       },
     }),
 
@@ -370,17 +469,19 @@ export function buildWorkspaceTools(
       }),
       execute: async ({ path, old_string, new_string, replace_all }) => {
         if (forbidTestEdits && isTestPath(path)) return TEST_EDIT_DENIED_MESSAGE;
-        try {
-          const count = await workspace.editFile(path, old_string, new_string, {
-            replaceAll: replace_all,
-          });
-          onEvent({ type: "file-edit", path, bytes: new_string.length });
-          return replace_all
-            ? `Edited ${path} (${count} replacement${count === 1 ? "" : "s"})`
-            : `Edited ${path}`;
-        } catch (err) {
-          return `Error editing ${path}: ${err instanceof Error ? err.message : String(err)}`;
-        }
+        return withFileLock(path, "write", fileLock, lockContext, signal, async () => {
+          try {
+            const count = await workspace.editFile(path, old_string, new_string, {
+              replaceAll: replace_all,
+            });
+            onEvent({ type: "file-edit", path, bytes: new_string.length });
+            return replace_all
+              ? `Edited ${path} (${count} replacement${count === 1 ? "" : "s"})`
+              : `Edited ${path}`;
+          } catch (err) {
+            return `Error editing ${path}: ${err instanceof Error ? err.message : String(err)}`;
+          }
+        });
       },
     }),
 

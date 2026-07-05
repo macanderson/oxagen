@@ -272,6 +272,24 @@ describe("agentRepoEditHandler — pipeline (runTurn)", () => {
       }),
     );
   });
+
+  // OXA-2070 (docs/specs/agent-file-locking/plan.md): agent.repo.edit is the
+  // real fleet path (dispatched directly and as a subagent-fanout child), so
+  // it must inject the graph-backed FileLockProvider — the same wiring point
+  // write_file/edit_file in tools.ts acquire/release through.
+  it("passes a fileLock adapter (FileLockProvider) to runTurn", async () => {
+    await agentRepoEditHandler(BASE_INPUT, ctx);
+
+    expect(mocks.runTurnFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fileLock: expect.objectContaining({
+          acquire: expect.any(Function),
+          release: expect.any(Function),
+          releaseAll: expect.any(Function),
+        }),
+      }),
+    );
+  });
 });
 
 // ── Handler — happy path ──────────────────────────────────────────────────────

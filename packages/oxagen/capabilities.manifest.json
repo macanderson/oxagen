@@ -242,6 +242,60 @@
       }
     },
     {
+      "name": "agent.file.lock.acquire",
+      "file": "agent.file.lock.acquire.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.file.lock.list",
+      "file": "agent.file.lock.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
+      "name": "agent.file.lock.release",
+      "file": "agent.file.lock.release.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": false
+      }
+    },
+    {
       "name": "agent.mcp.consent.list",
       "file": "agent.mcp.consent.list.ts",
       "domain": "agent",

@@ -58,7 +58,7 @@ import type {
   ImageAttachment,
   EngineNonFatalError,
 } from "../types";
-import type { AgentAi, MemoryProvider, TraceStore, GraphSyncProvider } from "../ports";
+import type { AgentAi, MemoryProvider, TraceStore, GraphSyncProvider, FileLockProvider } from "../ports";
 import type {
   EnhancementTrace,
   JudgeVerdict,
@@ -174,6 +174,22 @@ export interface RunTurnOptions {
    * Platform: inject the adapter from `@oxagen/agent/adapters`.
    */
   graphSync?: GraphSyncProvider | null;
+  /**
+   * Graph-backed file lock (docs/specs/agent-file-locking/plan.md) — the
+   * SINGLE wiring point is inside `tools.ts`'s write_file/edit_file, which
+   * `runCodingAgent` (via `engine.ts`) threads this straight through to.
+   * `runTurn` generates one stable lock identity per turn (`lockContext`,
+   * below) and passes BOTH down to every `runCodingAgent` call this turn
+   * makes (including revision rounds), then batch-releases everything the
+   * turn holds in its `lockContext.executionId` once the turn ends — the
+   * backstop alongside `graphSync.recordLineage`.
+   *
+   * CLI: omit or pass null (no platform Neo4j session — unlocked).
+   * Platform: inject the adapter from `@oxagen/agent/adapters`, used by both
+   * the chat surface and `agent.repo.edit` (fleet dispatch) since both funnel
+   * through this same shared engine (docs/adr/ADR-017-unified-agent-engine.md).
+   */
+  fileLock?: FileLockProvider | null;
   /**
    * Max judge→revise rounds (default 1; 0 disables auto-revision). Set via
    * `OXAGEN_MAX_REVISE_ROUNDS` env var or this option; the option wins when
@@ -326,6 +342,18 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     collectActivity(name, input, filesTouched, commandsRun);
     opts.onToolCall?.(name, input);
   };
+  // Agent file locking (docs/specs/agent-file-locking/plan.md): ONE lock
+  // identity for the whole turn, generated up front (before any tool call) so
+  // write_file/edit_file can acquire under it from the very first round.
+  // Same value used as both agentId (renew semantics: this turn's OWN repeat
+  // edits never conflict with themselves) and executionId (turn-end batch
+  // release correlation) — distinct from `trace.id`, which is only assembled
+  // at the END of the turn and so can't be known early enough to acquire
+  // under. A DIFFERENT concurrently-running `runTurn`/`runCodingAgent` call
+  // (another chat turn, another fleet subagent child) gets its OWN id here,
+  // so two live agents correctly see each other as conflicting holders.
+  const turnLockId = newTraceId();
+  const lockContext = opts.fileLock ? { agentId: turnLockId, executionId: turnLockId } : undefined;
   // Verbose telemetry accumulators (left empty/undefined when verbose is off).
   const phases: PhaseStat[] = [];
   const toolEvents: ToolEvent[] = [];
@@ -463,6 +491,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       memory: opts.memory ?? undefined,
       onError: opts.onError,
       signal: opts.signal,
+      fileLock: opts.fileLock,
+      lockContext,
       onEvent: (e) => {
         if (e.type === "text") opts.onText?.(e.delta);
         if (e.type === "reasoning") {
@@ -625,6 +655,8 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         memory: opts.memory ?? undefined,
         onError: opts.onError,
         signal: opts.signal,
+        fileLock: opts.fileLock,
+        lockContext,
         onEvent: (e) => {
           if (e.type === "text") opts.onText?.(e.delta);
           if (e.type === "reasoning") {
@@ -788,6 +820,17 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     void Promise.resolve(
       opts.graphSync.recordLineage({ executionId: trace.id, touchedFiles: touchedArr }),
     ).catch(() => {});
+  }
+
+  // Turn-end batch release (docs/specs/agent-file-locking/plan.md §5): every
+  // HOLDS_LOCK edge this turn's lockContext.executionId holds is released
+  // here, as a backstop alongside the per-call release in tools.ts —
+  // covering a lock that leaked because a tool call didn't reach its own
+  // `finally` (e.g. the turn was aborted between rounds). Fire-and-forget,
+  // same fail-soft shape as graphSync above: a throwing release must never
+  // fail the turn — the lock's own TTL is the ultimate backstop.
+  if (opts.fileLock && lockContext) {
+    void Promise.resolve(opts.fileLock.releaseAll(lockContext.executionId)).catch(() => {});
   }
 
   // Record a lesson when the judge had to send the agent back (a gotcha).
@@ -963,6 +1006,11 @@ async function runBare(
   opts.onStage?.({ kind: "execute", label: "executing (pipeline off)" });
   const execStart = Date.now();
   let bareReasoning = "";
+  // Agent file locking (docs/specs/agent-file-locking/plan.md): same one-id-
+  // per-turn shape as the full pipeline path above — bare mode is its own
+  // single-round "turn", so it gets its own lock identity.
+  const bareLockId = newTraceId();
+  const lockContext = opts.fileLock ? { agentId: bareLockId, executionId: bareLockId } : undefined;
   const result = await runCodingAgent({
     workspace: opts.workspace,
     ai: opts.ai,
@@ -980,6 +1028,8 @@ async function runBare(
     memory: opts.memory ?? undefined,
     onError: opts.onError,
     signal: opts.signal,
+    fileLock: opts.fileLock,
+    lockContext,
     onEvent: (e) => {
       if (e.type === "text") opts.onText?.(e.delta);
       if (e.type === "reasoning") {
@@ -1045,6 +1095,11 @@ async function runBare(
     void Promise.resolve(
       opts.graphSync.recordLineage({ executionId: trace.id, touchedFiles: touchedArr }),
     ).catch(() => {});
+  }
+
+  // Turn-end batch release — see the full-pipeline path's identical block above.
+  if (opts.fileLock && lockContext) {
+    void Promise.resolve(opts.fileLock.releaseAll(lockContext.executionId)).catch(() => {});
   }
 
   if (opts.trace) {

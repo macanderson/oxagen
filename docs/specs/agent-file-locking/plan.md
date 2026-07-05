@@ -1,6 +1,13 @@
 # Agent File Locking — graph-backed, coordinator-free file locks for agent fleets
 
-Status: **Plan / restoration landed, wiring is the follow-up**
+Status: **Wired and live (OXA-2070).** The Neo4j-backed acquire/release/sweep
+mutations, the `HOLDS_LOCK` edge, and the single-wiring-point integration into
+`write_file`/`edit_file` are shipped and covered by tests (including a
+real-Neo4j integration test proving two racing agents serialize correctly).
+Capability parity (contracts/API/MCP) is done for schema/api/mcp/unit;
+`docs/capabilities/*.md` and a CLI command are deferred as fast-follows — see
+§11 below for exactly what shipped, what was adapted from this doc's original
+Cypher, and what's still open.
 Owner: platform / agent-engine
 Related: `docs/specs/graph-mediated-fanout-phase2/`, ADR-010 (subagent fan-out via Inngest)
 
@@ -184,3 +191,87 @@ heldBy?, blockedUntil? }`.
   the contracts (recommend: coordinator becomes a thin client of the contracts).
 - Requires a running Neo4j in the agent-execution runtime (already present for
   lineage), plus `bootstrapEntitlementRuntime()` at any new worker entrypoint.
+
+## 11. OXA-2070 — what actually shipped
+
+**(a) Neo4j-backed acquire/release/sweep — done.**
+`packages/ontology/src/mutations/{acquire-file-lock,release-file-lock,
+sweep-file-locks,list-file-locks}.ts` implement §4-§6 exactly, with two
+adaptations from this doc's literal Cypher, both discovered and verified
+against a real local Neo4j 5.24-community instance:
+
+1. **A composite uniqueness constraint was required.** Neo4j only takes the
+   MERGE-time lock that serializes two concurrent transactions racing to
+   create/match the SAME node when a uniqueness constraint backs the merged
+   properties. Without one, two concurrent `acquireFileLock()` calls for the
+   SAME file both passed their MERGE + conflict-check read before either
+   committed, and BOTH were granted — reproduced directly against the
+   integration test before the fix. Added
+   `source_file_natural_key_org_unique` (composite, `naturalKey`+`orgId`) to
+   `schema.cypher` — Neo4j Community DOES support composite/multi-property
+   uniqueness constraints (verified directly against the container; this is
+   not an Enterprise-only feature as one might assume). Applied automatically
+   by the existing `pnpm db:migrate` → `migrateNeo4j()` flow.
+2. **`CALL { ... }` → `OPTIONAL CALL { ... }`.** A bare `CALL` subquery
+   behaves like an inner join: when its inner `WITH f WHERE l IS NULL` filters
+   to zero rows (the conflict case), Neo4j silently drops the ENTIRE outer
+   row, so a denied acquire came back as an empty result set instead of
+   `granted:false` + `heldBy` + `blockedUntil`. `OPTIONAL CALL` (Neo4j 5.21+,
+   present on this instance) preserves the outer row with nulls instead.
+
+Also added `forceReleaseFileLock` (release by `lockId` only, no holder-identity
+check — the admin/debug path) alongside the plan's `releaseFileLock`
+(holder-checked) and `releaseFileLocksByExecution` (turn-end batch release).
+
+**(b) Wiring into the real execution path — done, at a DIFFERENT (better) point
+than §6 originally proposed.** §6 named `graph-sync.ts`'s end-of-turn
+`ensureGraph`/`recordLineage` call site and `agent.execute-subagent.ts` as the
+wiring points. In practice, files are only known AFTER the model decides to
+edit them mid-turn (the fanout executor calls generic capabilities by name and
+never sees target file paths itself), so a true *before-write* gate has to
+live where the write actually happens: `write_file`/`edit_file` in
+`packages/agent-engine/src/tools.ts`. This is also the ONE place shared by
+every caller of `runCodingAgent` — the chat surface
+(`apps/app/src/app/api/v1/chat/stream/route.ts`), the CLI, and
+`agent.repo.edit` (dispatched both directly and as a subagent-fanout child) —
+per `docs/adr/ADR-017-unified-agent-engine.md`'s shared engine, so wiring it
+once here protects all of them without per-caller code. See:
+`packages/agent-engine/src/ports.ts` (`FileLockProvider` port),
+`packages/agent-engine/src/tools.ts` (acquire-before-write / release-after,
+bounded retry, clear "Blocked" denial), `packages/agent-engine/src/pipeline/index.ts`
+(one lock identity per turn, turn-end `releaseAll` backstop),
+`packages/agent/src/adapters/file-lock.ts` (platform adapter), wired into
+`packages/handlers/src/agent.repo.edit.ts`.
+
+The restored `IntentLedger`/`LeaseManager`/`AgentCoordinator`
+(`packages/engram/src/blackboard/`) were deliberately NOT touched — they
+remain in-memory/single-process/unwired, exactly as PR #600 left them. The
+graph-backed path wires directly into `tools.ts` instead of routing through
+the blackboard, which is a cleaner fit than making the blackboard a "thin
+client" of the contracts (§10's suggestion) since the coordinator's
+`beforeWork`/`afterWork` shape doesn't map cleanly onto a per-tool-call
+acquire/release. Retiring or repurposing the blackboard classes is left as a
+follow-up decision, not part of this ticket.
+
+**(c) Tests — done.** Unit tests for every mutation/handler/contract/adapter;
+a `tools.file-lock.test.ts` + `pipeline.file-lock.test.ts` suite in
+`packages/agent-engine` proving the acquire/release wiring including a
+chat-vs-fleet-shaped race between two independent `runTurn` calls; a real-Neo4j
+integration test (`packages/ontology/src/mutations/file-lock.integration.test.ts`)
+covering race/renew/expiry/release/batch-release/sweep. No e2e — no
+user-facing lock view was added in this ticket.
+
+**(d) Capability parity — mostly done, two pieces deferred.**
+`agent.file.lock.{acquire,release,list}` contracts + handlers + API routes +
+MCP tools are shipped (`pnpm check:manifest --json` confirms schema/api/mcp/unit
+all present). **Deferred as fast-follows:** `docs/capabilities/agent.file.lock.*.md`
++ `_index.md`, and a CLI command. Both are mechanical, low-risk additions
+against the now-stable contracts.
+
+**§9 item 8 (sweep) — done.** `agent.lease-sweep.ts`'s existing 5-minute cron
+now also calls `sweepExpiredFileLocks()` as step 4, fail-soft (a Neo4j outage
+here logs a warning and reports `fileLocksSwept: 0` rather than failing the
+Postgres-backed lease sweep it shares a run with). Correctness never depended
+on this cron running — `acquireFileLock`'s lazy-expiry predicate already makes
+an expired lock invisible to new acquires — so this step is purely reclaiming
+orphaned `HOLDS_LOCK` rows, same as documented in §6.

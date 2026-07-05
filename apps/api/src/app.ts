@@ -177,6 +177,9 @@ import { skillMetricsReadRoute } from "./routes/v1/skill.metrics.read";
 import { skillAuthorRoute } from "./routes/v1/skill.author";
 import { skillCreateRoute } from "./routes/v1/skill.create";
 import { skillEnableRoute } from "./routes/v1/skill.enable";
+import { agentFileLockAcquireRoute } from "./routes/v1/agent.file.lock.acquire";
+import { agentFileLockReleaseRoute } from "./routes/v1/agent.file.lock.release";
+import { agentFileLockListRoute } from "./routes/v1/agent.file.lock.list";
 import { agentSubagentCancelRoute } from "./routes/v1/agent.subagent.cancel";
 import { agentSubagentDispatchRoute } from "./routes/v1/agent.subagent.dispatch";
 import { agentDefinitionCreateRoute } from "./routes/v1/agent.definition.create";
@@ -403,6 +406,12 @@ orgScoped.route("/agent/subagent/result", agentSubagentResultGetRoute);
 orgScoped.route("/agent/subagent/siblings", agentSubagentSiblingsRoute);
 orgScoped.route("/agent/subagent/cancel", agentSubagentCancelRoute);
 orgScoped.route("/agent/subagent/dispatch", agentSubagentDispatchRoute);
+// Agent file locking (docs/specs/agent-file-locking/plan.md §7): manual
+// acquire/force-release/introspection over the HOLDS_LOCK edge write_file/
+// edit_file acquire automatically inside every coding-agent turn.
+orgScoped.route("/agent/file/lock/acquire", agentFileLockAcquireRoute);
+orgScoped.route("/agent/file/lock/release", agentFileLockReleaseRoute);
+orgScoped.route("/agent/file/lock/list", agentFileLockListRoute);
 // Read side of the fan-out feature: list fan-outs, then get one with child runs.
 orgScoped.route("/agent/subagent/fanouts", agentSubagentFanoutListRoute);
 orgScoped.route("/agent/subagent/fanout", agentSubagentFanoutGetRoute);

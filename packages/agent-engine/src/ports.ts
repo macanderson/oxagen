@@ -112,3 +112,53 @@ export interface GraphSyncProvider {
    */
   recordLineage(args: { executionId: string; touchedFiles: string[] }): void | Promise<void>;
 }
+
+/** Result of a single acquire attempt (mirrors `@oxagen/ontology`'s `AcquireFileLockResult`). */
+export interface FileLockGrant {
+  granted: boolean;
+  lockId: string;
+  /** The conflicting holder's agentId, when `granted` is false. */
+  heldBy: string | null;
+  /** Epoch-ms the conflicting lock expires at, when `granted` is false. */
+  blockedUntil: number | null;
+}
+
+/**
+ * File-lock port: a tenant-scoped, cross-process exclusive lock on a file
+ * (docs/specs/agent-file-locking/plan.md) so two live agents — whether both
+ * are CLI/chat/fleet turns or subagent-fanout children — never clobber the
+ * same file. This is the SINGLE wiring point: `write_file`/`edit_file` in
+ * `tools.ts` acquire immediately before the real filesystem write and release
+ * immediately after, regardless of which surface (chat, CLI, `agent.repo.edit`
+ * fleet dispatch) called `runCodingAgent` — there is exactly one enforcement
+ * point, not one per caller.
+ *
+ * CLI: no `fileLock` is injected (undefined) — the CLI has no shared Neo4j
+ * session and runs single-process, so locking is a no-op there by omission.
+ * Platform: injects the in-app adapter from `@oxagen/agent/adapters`, backed
+ * by the `HOLDS_LOCK` Neo4j edge.
+ */
+export interface FileLockProvider {
+  /**
+   * Acquire (or, for the SAME `agentId`, renew) an exclusive lock on `path`.
+   * Never throws — a Neo4j failure here degrades to "not granted" so a
+   * transient graph outage fails a single tool call, not the whole turn; the
+   * caller decides whether to retry, deny, or (when uninjected) proceed
+   * unlocked.
+   */
+  acquire(args: {
+    path: string;
+    agentId: string;
+    executionId: string;
+    action?: string;
+  }): Promise<FileLockGrant>;
+  /** Release a single lock right after the write that acquired it (success or failure). */
+  release(args: { lockId: string; agentId: string }): void | Promise<void>;
+  /**
+   * Batch-release every lock this execution/turn holds — the turn-end
+   * backstop (alongside `graphSync.recordLineage`) so a crashed/aborted turn
+   * never leaks a lock past its own lifetime even if a per-call release was
+   * skipped.
+   */
+  releaseAll(executionId: string): void | Promise<void>;
+}

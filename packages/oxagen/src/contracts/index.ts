@@ -73,6 +73,9 @@ import { agentMemoryEvidenceAttach } from "./agent.memory.evidence.attach";
 import { agentMemoryCitationsList } from "./agent.memory.citations.list";
 import { agentPlanApprove } from "./agent.plan.approve";
 import { agentPlanCreate } from "./agent.plan.create";
+import { agentFileLockAcquire } from "./agent.file.lock.acquire";
+import { agentFileLockRelease } from "./agent.file.lock.release";
+import { agentFileLockList } from "./agent.file.lock.list";
 import { agentSkillList } from "./agent.skill.list";
 import { agentSkillLoad } from "./agent.skill.load";
 import { agentSubagentFanoutGet } from "./agent.subagent.fanout.get";
@@ -425,6 +428,9 @@ export {
   agentMemoryCitationsList,
   agentPlanApprove,
   agentPlanCreate,
+  agentFileLockAcquire,
+  agentFileLockRelease,
+  agentFileLockList,
   agentSkillList,
   agentSkillLoad,
   agentSubagentFanoutGet,
@@ -710,6 +716,9 @@ export const contracts = [
   agentMemoryCitationsList,
   agentPlanApprove,
   agentPlanCreate,
+  agentFileLockAcquire,
+  agentFileLockRelease,
+  agentFileLockList,
   agentSkillList,
   agentSkillLoad,
   agentSubagentFanoutGet,
