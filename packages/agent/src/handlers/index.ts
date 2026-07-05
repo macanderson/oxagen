@@ -73,6 +73,12 @@ const LOADERS: Record<string, LoaderEntry> = {
   "agent.subagent.aggregate": () => import("./agent.subagent.aggregate"),
   "agent.subagent.cancel": () => import("./agent.subagent.cancel"),
   "agent.subagent.dispatch": () => import("./agent.subagent.dispatch"),
+  // Agent file locking (docs/specs/agent-file-locking/plan.md §7) — manual
+  // acquire/force-release/introspection over the same HOLDS_LOCK edge
+  // write_file/edit_file in @oxagen/agent-engine's tools.ts acquire automatically.
+  "agent.file.lock.acquire": () => import("./agent.file.lock.acquire"),
+  "agent.file.lock.release": () => import("./agent.file.lock.release"),
+  "agent.file.lock.list": () => import("./agent.file.lock.list"),
   "agent.subagent.fanout.get": () => import("./agent.subagent.fanout.get"),
   "agent.subagent.result.get": () => import("./agent.subagent.result.get"),
   "agent.subagent.siblings": () => import("./agent.subagent.siblings"),
