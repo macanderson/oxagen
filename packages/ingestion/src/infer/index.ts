@@ -122,7 +122,7 @@ export async function inferSemanticEdges(
     const result = await readSession.run(
       `MATCH (n:EntityNode {publicId: $nodeId, orgId: $orgId})
        RETURN n.naturalKey AS naturalKey, n.displayName AS displayName`,
-      { nodeId },
+      { nodeId, orgId },
     );
     const record = result.records[0];
     if (record) {
@@ -215,7 +215,7 @@ export async function inferSemanticEdges(
       `UNWIND $naturalKeys AS nk
        MATCH (n:EntityNode {naturalKey: nk, orgId: $orgId})
        RETURN nk AS naturalKey, n.publicId AS nodeId`,
-      { naturalKeys: targetNaturalKeys },
+      { naturalKeys: targetNaturalKeys, orgId },
     );
     for (const record of result.records) {
       keyToNodeId.set(

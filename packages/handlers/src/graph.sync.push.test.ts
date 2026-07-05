@@ -139,6 +139,39 @@ describe("graphSyncPushHandler", () => {
     expect(mergeCypher).toContain("workspaceId: $workspaceId");
   });
 
+  // OXA-2062: several of this handler's session.run() calls referenced
+  // $orgId/$workspaceId in Cypher but omitted them from the local params
+  // object, relying entirely on scopedSession()'s auto-injection. A mocked
+  // scopedSession (as used here) does NOT auto-inject, so this defect class
+  // was invisible to this suite until orgId/workspaceId were bound explicitly
+  // on every call (node MERGE, domain-label SET, edge MERGE, tombstone).
+  it("binds orgId and workspaceId explicitly on every session.run call (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    mocks.run
+      .mockResolvedValueOnce(countResult(1)) // node MERGE
+      .mockResolvedValueOnce({ records: [] }) // domain label SET
+      .mockResolvedValueOnce(countResult(1)) // edge MERGE
+      .mockResolvedValueOnce(tombResult(1)); // tombstone DETACH DELETE
+
+    await graphSyncPushHandler(
+      {
+        ...BASE_INPUT,
+        nodes: [
+          { key: "code:r:a.ts", labels: ["SourceFile"], displayName: "a.ts", properties: {}, isSystem: true },
+          { key: "code:r:b.ts", labels: ["SourceFile"], displayName: "b.ts", properties: {}, isSystem: true },
+        ],
+        edges: [{ sourceKey: "code:r:a.ts", targetKey: "code:r:b.ts", type: "IMPORTS" }],
+        tombstones: [{ key: "code:r:old.ts" }],
+      },
+      CTX,
+    );
+
+    for (const call of mocks.run.mock.calls) {
+      const params = call[1] as Record<string, unknown>;
+      expect(params.orgId).toBe(CTX.orgId);
+      expect(params.workspaceId).toBe(CTX.workspaceId);
+    }
+  });
+
   it("naturalKey for nodes is prefixed with sync:{source}:", async () => {
     mocks.run.mockResolvedValue(countResult(1));
 

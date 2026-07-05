@@ -208,6 +208,25 @@ describe("semanticEdgeApproveHandler", () => {
     expect(params.approvedBy).toBe("user-1");
   });
 
+  // OXA-2062: both the "find the edge" and "update approvalStatus" queries
+  // reference $orgId (and the find query also $workspaceId) but the local
+  // params objects previously omitted them, relying entirely on
+  // scopedSession()'s auto-injection. This suite mocks scopedSession()
+  // directly (no auto-injection), so this bug was invisible until
+  // orgId/workspaceId were bound explicitly.
+  it("binds orgId/workspaceId explicitly on the find query and orgId on the update query (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    setupNeo4j(PENDING_EDGE_ROW);
+
+    await semanticEdgeApproveHandler({ edgeId: "edge-uuid-1", decision: "reject" }, CTX);
+
+    const findParams = mocks.runFn.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(findParams.orgId).toBe(CTX.orgId);
+    expect(findParams.workspaceId).toBe(CTX.workspaceId);
+
+    const updateParams = mocks.runFn.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(updateParams.orgId).toBe(CTX.orgId);
+  });
+
   it("closes the session even when neo4j throws on the update step", async () => {
     // find OK, then SET throws
     mocks.runFn

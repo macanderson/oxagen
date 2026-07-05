@@ -76,6 +76,21 @@ describe("resolveIngestVocabulary", () => {
     expect(vocab.labels).toHaveLength(0);
   });
 
+  // OXA-2062: the readGraphLabels() query referenced $orgId/$workspaceId but
+  // was previously invoked with NO params object at all, relying entirely on
+  // scopedSession()'s auto-injection. A mocked scopedSession (as used here)
+  // does NOT auto-inject, so this bug was invisible to this suite until
+  // orgId/workspaceId were bound explicitly.
+  it("binds orgId and workspaceId explicitly in the graph-labels query params (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    sessionRun.mockResolvedValue({ records: [] });
+    txExecute.mockResolvedValue([]);
+    await resolveIngestVocabulary(ctx);
+    const params = sessionRun.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params).toBeDefined();
+    expect(params.orgId).toBe(ctx.orgId);
+    expect(params.workspaceId).toBe(ctx.workspaceId);
+  });
+
   it("makes the pinned+enabled registry authoritative and enriches it with observed keys", async () => {
     sessionRun.mockResolvedValue({
       records: [rec({ label: "Submarine", c: 5, samples: ['{"hull_number":"SSN-571"}'] })],

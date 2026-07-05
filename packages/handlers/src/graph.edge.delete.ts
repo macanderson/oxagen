@@ -44,6 +44,8 @@ export const graphEdgeDeleteHandler: CapabilityHandler<typeof graphEdgeDelete> =
       const result = await session.run(query, {
         fromNodeId: input.fromNodeId,
         toNodeId: input.toNodeId,
+        orgId,
+        workspaceId,
       });
 
       const record = result.records[0];

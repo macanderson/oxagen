@@ -116,6 +116,18 @@ describe("graphNodeUpsertHandler", () => {
     );
   });
 
+  // OXA-2062: the MERGE Cypher referenced $orgId/$workspaceId but the local
+  // params object omitted both, relying entirely on scopedSession()'s
+  // auto-injection. A mocked scopedSession (as used here) does NOT
+  // auto-inject, so this defect class would be invisible to this test suite
+  // until orgId/workspaceId were bound explicitly in the handler.
+  it("binds orgId and workspaceId explicitly in the MERGE params (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    await graphNodeUpsertHandler({ label: "Person", displayName: "Grace" }, CTX);
+    const params = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.orgId).toBe(CTX.orgId);
+    expect(params.workspaceId).toBe(CTX.workspaceId);
+  });
+
   it("uses label+displayName+workspaceId as naturalKey when no externalId", async () => {
     await graphNodeUpsertHandler(
       { label: "Topic", displayName: "TypeScript" },
@@ -222,6 +234,9 @@ describe("graphNodeUpsertHandler", () => {
     expect(embedCypher).toContain("SET n.embedding = $embedding");
     expect(embedCypher).toContain("n.embeddingUpdatedAt = datetime()");
     expect(embedParams.embedding).toEqual(VECTOR);
+    // OXA-2062: this second session.run() MATCHes by $orgId but historically
+    // never bound it locally, relying solely on scopedSession auto-injection.
+    expect(embedParams.orgId).toBe(CTX.orgId);
   });
 
   it("upsert still succeeds when embedText throws (embedding is best-effort)", async () => {

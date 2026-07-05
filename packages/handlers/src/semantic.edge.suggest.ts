@@ -49,6 +49,8 @@ export const semanticEdgeSuggestHandler: CapabilityHandler<typeof semanticEdgeSu
          ORDER BY ie.confidence DESC
          LIMIT $limit`,
         {
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
           confidenceMin: confidenceMin ?? null,
           confidenceMax: confidenceMax ?? null,
           limit: BigInt(limit),
@@ -116,6 +118,8 @@ export const semanticEdgeSuggestHandler: CapabilityHandler<typeof semanticEdgeSu
            AND ($confidenceMax IS NULL OR ie.confidence <= $confidenceMax)
          RETURN count(ie) AS total`,
         {
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
           confidenceMin: confidenceMin ?? null,
           confidenceMax: confidenceMax ?? null,
         },

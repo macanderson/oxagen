@@ -113,6 +113,21 @@ describe("graphEdgeUpsertHandler — happy path", () => {
     const params = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(params.properties).toBeNull();
   });
+
+  // OXA-2062: both MATCH clauses reference $orgId/$workspaceId but the local
+  // params object previously omitted them, relying entirely on
+  // scopedSession()'s auto-injection. A mocked scopedSession (as used here)
+  // does NOT auto-inject, so this bug was invisible to this suite until
+  // orgId/workspaceId were bound explicitly.
+  it("binds orgId and workspaceId explicitly in the upsert params (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    await graphEdgeUpsertHandler(
+      { fromNodeId: FROM, toNodeId: TO, relationshipType: "RELATED_TO" },
+      CTX,
+    );
+    const params = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.orgId).toBe(CTX.orgId);
+    expect(params.workspaceId).toBe(CTX.workspaceId);
+  });
 });
 
 describe("graphEdgeUpsertHandler — relationship types dispatch guarded Cypher", () => {
@@ -252,6 +267,11 @@ describe("graphEdgeUpsertHandler — supersession (opt-in)", () => {
     expect(closeCypher).not.toMatch(/DELETE/i);
     expect(result.superseded).toBe(2);
     expect(result.created).toBe(true);
+    // OXA-2062: the supersede-close query also MATCHes by $orgId/$workspaceId
+    // and previously omitted both from its local params object.
+    const closeParams = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(closeParams.orgId).toBe(CTX.orgId);
+    expect(closeParams.workspaceId).toBe(CTX.workspaceId);
   });
 
   it("reports superseded=0 when no conflicting edges exist", async () => {

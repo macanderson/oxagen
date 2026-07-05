@@ -135,6 +135,7 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
        )`,
       {
         executionId,
+        orgId: input.orgId,
         workspaceId: input.workspaceId,
         status,
         originType,
@@ -159,7 +160,7 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
          MERGE (a:${NodeLabels.Agent} {id: $agentId, orgId: $orgId})
          MERGE (e)-[r:${EdgeTypes.INVOKED}]->(a)
          SET r.is_system = true`,
-        { executionId, agentId },
+        { executionId, orgId: input.orgId, agentId },
       );
     }
 
@@ -171,7 +172,7 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
          MERGE (o:${originLabel} {id: $originId, orgId: $orgId})
          MERGE (e)-[r:${EdgeTypes.ORIGINATED_FROM}]->(o)
          SET r.is_system = true`,
-        { executionId, originId },
+        { executionId, orgId: input.orgId, originId },
       );
     }
 
@@ -185,7 +186,7 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
          MERGE (t:${NodeLabels.Tool} {name: tc.toolName, type: tc.toolType, orgId: $orgId})
          MERGE (e)-[r:${EdgeTypes.CALLED_TOOL}]->(t)
          SET r.is_system = true`,
-        { executionId, toolCalls },
+        { executionId, orgId: input.orgId, toolCalls },
       );
     }
 
@@ -205,7 +206,7 @@ export async function recordExecutionInGraph(input: RecordExecutionInput): Promi
            f.createdAt    = datetime()
          MERGE (e)-[r:${EdgeTypes.TOUCHED_FILE}]->(f)
          SET r.is_system = true`,
-        { executionId, touchedFilePaths },
+        { executionId, orgId: input.orgId, touchedFilePaths },
       );
     }
   } finally {

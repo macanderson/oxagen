@@ -86,7 +86,7 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
              node.embedding = coalesce(n.embedding, node.embedding),
              node.embeddingUpdatedAt = CASE WHEN n.embedding IS NULL THEN node.embeddingUpdatedAt ELSE datetime() END
            RETURN count(node) AS total`,
-          { nodes: nodeParams },
+          { nodes: nodeParams, orgId, workspaceId },
         );
 
         nodesUpserted = toNumber(nodeResult.records[0]?.get("total"));
@@ -117,7 +117,7 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
                AND n.workspaceId = $workspaceId
                AND NOT n:${domainLabel}
              SET n:${domainLabel}`,
-            { keys },
+            { keys, orgId, workspaceId },
           );
         }
       }
@@ -165,7 +165,7 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
                r.inferred   = e.inferred,
                r.updatedAt  = datetime()
              RETURN count(r) AS total`,
-            { edges, ...edgeValidityParams() },
+            { edges, orgId, workspaceId, ...edgeValidityParams() },
           );
           edgesUpserted += toNumber(edgeResult.records[0]?.get("total"));
         }
@@ -186,7 +186,7 @@ export const graphSyncPushHandler: CapabilityHandler<typeof graphSyncPush> = asy
            WITH collect(n) AS nodes, count(n) AS tombstoned
            FOREACH (n IN nodes | DETACH DELETE n)
            RETURN tombstoned`,
-          { keys: tombstoneKeys },
+          { keys: tombstoneKeys, orgId, workspaceId },
         );
         tombstoned = toNumber(tombResult.records[0]?.get("tombstoned"));
       }

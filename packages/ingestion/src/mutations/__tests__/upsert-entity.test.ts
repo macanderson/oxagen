@@ -30,6 +30,7 @@ import {
   upsertEmbedding,
   createAliasEdge,
   upsertInferredEdges,
+  upsertSourceConnectionMeta,
 } from "../upsert-entity";
 import type { EntityMutation } from "../../types";
 
@@ -151,6 +152,25 @@ describe("upsertEntityNode", () => {
     await expect(upsertEntityNode(makeMutation(), "org-1")).rejects.toThrow(
       "upsertEntityNode: no record returned",
     );
+  });
+
+  // OXA-2062: the MERGE key is `{naturalKey: $naturalKey, orgId: $orgId}` but
+  // the local params object previously omitted `orgId` entirely (the second
+  // constructor arg was named `_orgId` and never threaded through), relying
+  // solely on scopedSession()'s auto-injection. This suite mocks
+  // scopedSession() directly (no auto-injection), so this bug was invisible
+  // until orgId was bound explicitly. This is the same defect class as
+  // OXA-2052 (packages/ingestion/src/dedup/resolve.ts), found here in the
+  // underlying mutation layer resolve.ts itself calls into.
+  it("binds orgId explicitly in the MERGE params (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    mocks.sessionRun.mockResolvedValueOnce({
+      records: [{ get: vi.fn().mockReturnValue("uuid-node-1") }],
+    });
+
+    await upsertEntityNode(makeMutation(), "org-42");
+
+    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(params["orgId"]).toBe("org-42");
   });
 });
 
@@ -400,6 +420,14 @@ describe("upsertEmbedding", () => {
     await upsertEmbedding("node-uuid", [], "model", "org-1");
     expect(mocks.sessionClose).toHaveBeenCalledOnce();
   });
+
+  // OXA-2062: the MATCH references $orgId but the local params object
+  // previously omitted it, relying solely on scopedSession auto-injection.
+  it("binds orgId explicitly in the local params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    await upsertEmbedding("node-uuid", [0.1], "model", "org-77");
+    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(params["orgId"]).toBe("org-77");
+  });
 });
 
 describe("createAliasEdge", () => {
@@ -431,6 +459,18 @@ describe("createAliasEdge", () => {
     expect(cypher).toContain("r.validFrom = coalesce(datetime($validFrom), datetime())");
     expect(cypher).toContain("r.recordedAt = datetime()");
     expect(params["validFrom"]).toBeNull();
+  });
+
+  // OXA-2062: both MATCH clauses reference $orgId but the local params object
+  // previously omitted it, relying solely on scopedSession auto-injection.
+  it("binds orgId explicitly in the local params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    await createAliasEdge("alias-id", "principal-id", {
+      confidence: 0.5,
+      matchReason: "x",
+      tentative: true,
+    }, "org-99");
+    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(params["orgId"]).toBe("org-99");
   });
 });
 
@@ -504,6 +544,79 @@ describe("upsertInferredEdges", () => {
   it("closes session on success", async () => {
     await upsertInferredEdges(
       [{ fromNodeId: "f", toNodeId: "t", edgeType: "SIMILAR_TO", confidence: 0.75 }],
+      "org-1",
+    );
+    expect(mocks.sessionClose).toHaveBeenCalledOnce();
+  });
+
+  // OXA-2062: every EDGE_TYPE_QUERIES template MATCHes both endpoints by
+  // $orgId but the local params object previously omitted it, relying solely
+  // on scopedSession auto-injection.
+  it("binds orgId explicitly in the local params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    await upsertInferredEdges(
+      [{ fromNodeId: "f", toNodeId: "t", edgeType: "PART_OF", confidence: 0.6 }],
+      "org-55",
+    );
+    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(params["orgId"]).toBe("org-55");
+  });
+});
+
+describe("upsertSourceConnectionMeta", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.scopedSession.mockReturnValue({
+      run: mocks.sessionRun,
+      close: mocks.sessionClose,
+    });
+    mocks.sessionRun.mockResolvedValue({ records: [] });
+  });
+
+  it("runs a MERGE keyed on connectionId + orgId", async () => {
+    await upsertSourceConnectionMeta(
+      {
+        connectionId: "conn-1",
+        workspaceId: "ws-1",
+        connectorType: "github",
+        cursor: "cursor-1",
+        lastSyncAt: "2026-01-01T00:00:00.000Z",
+      },
+      "org-1",
+    );
+    expect(mocks.sessionRun).toHaveBeenCalledOnce();
+    const [cypher, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(cypher).toContain("MERGE (sc:SourceConnection {id: $connectionId, orgId: $orgId})");
+    expect(params["connectionId"]).toBe("conn-1");
+    expect(params["workspaceId"]).toBe("ws-1");
+  });
+
+  // OXA-2062: the MERGE key is `{id: $connectionId, orgId: $orgId}` but the
+  // local params object previously omitted `orgId` entirely, relying solely
+  // on scopedSession()'s auto-injection.
+  it("binds orgId explicitly in the MERGE params (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    await upsertSourceConnectionMeta(
+      {
+        connectionId: "conn-2",
+        workspaceId: "ws-1",
+        connectorType: "github",
+        cursor: null,
+        lastSyncAt: "2026-01-01T00:00:00.000Z",
+      },
+      "org-88",
+    );
+    const [, params] = mocks.sessionRun.mock.calls[0] as [string, Record<string, unknown>];
+    expect(params["orgId"]).toBe("org-88");
+  });
+
+  it("closes session on success", async () => {
+    await upsertSourceConnectionMeta(
+      {
+        connectionId: "conn-3",
+        workspaceId: "ws-1",
+        connectorType: "github",
+        cursor: null,
+        lastSyncAt: "2026-01-01T00:00:00.000Z",
+      },
       "org-1",
     );
     expect(mocks.sessionClose).toHaveBeenCalledOnce();
