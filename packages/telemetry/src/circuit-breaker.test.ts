@@ -21,6 +21,8 @@ function fakeClock(start = 0) {
 
 const ok = () => Promise.resolve("ok");
 const boom = () => Promise.reject(new Error("dependency down"));
+/** Intentionally a non-Error rejection — exercises the `String(err)` fallback arm. */
+const boomNonError = () => Promise.reject("plain string failure");
 
 describe("CircuitBreaker", () => {
   it("stays closed and passes through while calls succeed", async () => {
@@ -78,6 +80,47 @@ describe("CircuitBreaker", () => {
     clock.advance(1);
     expect(await b.exec(ok)).toBe("ok");
     expect(b.getState()).toBe("closed");
+  });
+
+  it("getState() surfaces a matured open→half-open transition without a call (OXA-2059)", async () => {
+    const clock = fakeClock();
+    const b = new CircuitBreaker("k", {
+      failureThreshold: 1,
+      resetTimeoutMs: 1000,
+      now: clock.now,
+    });
+    await expect(b.exec(boom)).rejects.toThrow(); // trips open
+    expect(b.getState()).toBe("open");
+
+    // Advance past the reset window WITHOUT calling exec() — getState() must
+    // report "half-open" purely from reading the clock, for observability/UI
+    // reads that shouldn't themselves trigger a probe.
+    clock.advance(1000);
+    expect(b.getState()).toBe("half-open");
+  });
+
+  it("reset() forces the breaker back to a healthy closed state (OXA-2059)", async () => {
+    const b = new CircuitBreaker("k", { failureThreshold: 1 });
+    await expect(b.exec(boom)).rejects.toThrow(); // trips open
+    expect(b.getState()).toBe("open");
+
+    b.reset();
+    expect(b.getState()).toBe("closed");
+    // Failure count was cleared too — it takes a fresh failureThreshold hits
+    // to trip again rather than immediately re-opening.
+    expect(await b.exec(ok)).toBe("ok");
+    expect(b.getState()).toBe("closed");
+  });
+
+  it("stringifies a non-Error rejection in the transition's error field (OXA-2059)", async () => {
+    const transitions: BreakerTransition[] = [];
+    const b = new CircuitBreaker("k", {
+      failureThreshold: 1,
+      onTransition: (t) => transitions.push(t),
+    });
+    await expect(b.exec(boomNonError)).rejects.toBe("plain string failure");
+    expect(b.getState()).toBe("open");
+    expect(transitions[0]?.error).toBe("plain string failure");
   });
 
   it("re-opens immediately when the half-open probe fails", async () => {

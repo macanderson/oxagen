@@ -98,6 +98,19 @@ describe("buildAlertPayload", () => {
     });
     expect(payload.text.startsWith("🛑")).toBe(true);
   });
+
+  it("uses a warn icon for warn severity (OXA-2059)", () => {
+    const payload = buildAlertPayload({
+      severity: "warn",
+      source: "app",
+      errorClass: "Error",
+      message: "degraded",
+      capability: null,
+      requestId: null,
+      fingerprint: "f",
+    });
+    expect(payload.text.startsWith("⚠️")).toBe(true);
+  });
 });
 
 describe("captureError", () => {
@@ -170,6 +183,41 @@ describe("captureError", () => {
     expect(row.message).toBe("string failure");
   });
 
+  it("falls back to defaults for an Error with empty name/message and no stack (OXA-2059)", () => {
+    // Exercises the falsy arm of each `||`/`??` in normalizeError's Error
+    // branch: `error.name || "Error"`, `error.message || ""`, `error.stack ?? ""`.
+    const bare = new Error("");
+    bare.name = "";
+    bare.stack = undefined;
+    captureError({ error: bare, source: "api" });
+    const row = lastRow();
+    expect(row.error_class).toBe("Error");
+    expect(row.message).toBe("");
+    expect(row.stack).toBe("");
+  });
+
+  it("reads name/message/stack off a duck-typed error object (OXA-2059)", () => {
+    const duckTyped = {
+      name: "CustomLibError",
+      message: "third-party failure",
+      stack: "at thirdPartyLib.js:1",
+    };
+    captureError({ error: duckTyped, source: "api" });
+    const row = lastRow();
+    expect(row.error_class).toBe("CustomLibError");
+    expect(row.message).toBe("third-party failure");
+    expect(row.stack).toBe("at thirdPartyLib.js:1");
+  });
+
+  it("falls back to UnknownError/safeStringify/empty-stack for an object with no error-shaped fields (OXA-2059)", () => {
+    const shapeless = { code: 500, detail: "unexpected" };
+    captureError({ error: shapeless, source: "api" });
+    const row = lastRow();
+    expect(row.error_class).toBe("UnknownError");
+    expect(row.message).toBe(JSON.stringify(shapeless));
+    expect(row.stack).toBe("");
+  });
+
   it("truncates very long messages", () => {
     captureError({ error: new Error("y".repeat(5000)), source: "api" });
     const row = lastRow();
@@ -206,5 +254,76 @@ describe("captureError", () => {
     fetchSpy.mockImplementationOnce(() => Promise.reject(new Error("net")));
     expect(() => captureError({ error: new Error("z"), source: "api" })).not.toThrow();
     await flush();
+  });
+
+  it("falls back to String(value) when the thrown value is undefined (OXA-2059)", () => {
+    // normalizeError()'s final branch calls safeStringify(undefined);
+    // JSON.stringify(undefined) returns `undefined` (not a JSON string),
+    // exercising the `?? String(value)` fallback arm.
+    captureError({ error: undefined, source: "api" });
+    const row = lastRow();
+    expect(row.error_class).toBe("UnknownError");
+    expect(row.message).toBe("undefined");
+  });
+
+  it("logs a non-Error sink failure via String(err) (OXA-2059)", async () => {
+    // logCaptureFailure's `err instanceof Error ? err.message : String(err)` —
+    // reject the ClickHouse insert with a plain string, not an Error.
+    const writeSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    insertErrorEvents.mockImplementationOnce(() => Promise.reject("ch-string-failure"));
+    captureError({ error: new Error("z"), source: "api" });
+    await flush();
+    const line = writeSpy.mock.calls
+      .map((c) => String(c[0]))
+      .find((l) => l.includes("capture sink failed"));
+    expect(line).toBeDefined();
+    const parsed = JSON.parse((line ?? "").trim()) as { err: string };
+    expect(parsed.err).toBe("ch-string-failure");
+    writeSpy.mockRestore();
+  });
+
+  it("falls back to String(value) when a non-Error error object can't be JSON.stringify'd (OXA-2059)", () => {
+    // A circular reference with no string `.message`/`.name` forces
+    // normalizeError() into safeStringify(), which must swallow the
+    // JSON.stringify throw and fall back to String(value).
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    captureError({ error: circular, source: "api" });
+    const row = lastRow();
+    expect(row.error_class).toBe("UnknownError");
+    expect(row.message).toBe(String(circular));
+  });
+
+  it("never throws even when reading a property off the thrown value itself throws (OXA-2059)", () => {
+    // A duck-typed error whose `.name` getter throws — exercises captureError's
+    // own outer try/catch (the guard around normalizeError et al.), not just
+    // the inner sink .catch()s.
+    const poisoned: unknown = new Proxy(
+      {},
+      {
+        get(_target, prop) {
+          if (prop === "name") throw new Error("getter exploded");
+          return undefined;
+        },
+      },
+    );
+    expect(() => captureError({ error: poisoned, source: "api" })).not.toThrow();
+    // The ClickHouse insert never happens — capture failed before building the row.
+    expect(insertErrorEvents).not.toHaveBeenCalled();
+  });
+
+  it("swallows a failure in the last-resort logger itself (OXA-2059)", async () => {
+    // logCaptureFailure's own JSON.stringify+stderr.write is wrapped in a
+    // try/catch that does nothing on failure — simulate stderr.write throwing
+    // when the ClickHouse insert sink already failed.
+    const writeSpy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => {
+        throw new Error("stderr broken");
+      });
+    insertErrorEvents.mockImplementationOnce(() => Promise.reject(new Error("ch down")));
+    expect(() => captureError({ error: new Error("z"), source: "api" })).not.toThrow();
+    await flush();
+    writeSpy.mockRestore();
   });
 });

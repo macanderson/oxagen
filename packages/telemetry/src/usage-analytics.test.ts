@@ -120,6 +120,19 @@ describe("readUsageBreakdown", () => {
     ]);
   });
 
+  it("falls back to an empty string when a model row's provider aggregate is null (OXA-2059)", async () => {
+    // `any(provider)` can return null when ClickHouse has no non-null provider
+    // value to aggregate over for a group — the byModel mapper must not surface
+    // `null`/`undefined` to callers.
+    mockRows({
+      model: [
+        { group_key: "unknown-model", provider: null, ...agg({ input_tokens: "1", executions: "1" }) },
+      ],
+    });
+    const out = await readUsageBreakdown(WINDOW);
+    expect(out.byModel[0]).toMatchObject({ key: "unknown-model", provider: "" });
+  });
+
   it("groups the model breakdown by key only (provider is an aggregate, not a GROUP BY column)", async () => {
     // Regression: `any(provider) AS provider` must NOT appear in GROUP BY, or
     // ClickHouse rejects the query with ILLEGAL_AGGREGATION (code 184).
