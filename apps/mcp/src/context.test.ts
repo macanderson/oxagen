@@ -211,6 +211,69 @@ describe("resolveMcpContext", () => {
     const result = await resolveMcpContext("Bearer anothersessiontoken", requestId);
     expect(result).toEqual({ ok: false, reason: "invalid_token" });
   });
+
+  // ── Empty orgId defense in depth (OXA-2056) ───────────────────────────────
+  //
+  // resolveApiKey() should never return ok:true with an empty orgId (the
+  // apiKeys.org_id column is populated at key creation), but if it ever did
+  // — a data-integrity bug, a bad migration, a future refactor — an empty
+  // orgId/workspaceId must be rejected at this edge exactly like the
+  // session-token path is, rather than flowing through as an
+  // apparently-successful resolution (emitting an api_key.used "success"
+  // audit event and constructing a CapabilityContext with orgId:"").
+
+  it("rejects a resolved API key with an empty orgId (never a valid scope)", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+    });
+
+    const result = await resolveMcpContext("Bearer oxk_emptyorg", requestId);
+    expect(result).toEqual({ ok: false, reason: "invalid_token" });
+  });
+
+  it("rejects a resolved API key with an empty workspaceId (never a valid scope)", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-1",
+      workspaceId: "",
+      apiKeyId: "key-1",
+    });
+
+    const result = await resolveMcpContext("Bearer oxk_emptyws", requestId);
+    expect(result).toEqual({ ok: false, reason: "invalid_token" });
+  });
+
+  it("does NOT emit api_key.used when the resolved orgId is empty", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+    });
+
+    await resolveMcpContext("Bearer oxk_emptyorg", requestId);
+
+    expect(emitSecurityEventMock).not.toHaveBeenCalled();
+  });
+
+  it("buildContext throws McpUnauthorizedError with reason invalid_token for an empty-orgId resolution", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+    });
+
+    await expect(
+      buildContext({ authorization: "Bearer oxk_emptyorg" }),
+    ).rejects.toThrow(McpUnauthorizedError);
+    await expect(
+      buildContext({ authorization: "Bearer oxk_emptyorg" }),
+    ).rejects.toMatchObject({ reason: "invalid_token" });
+  });
 });
 
 // ── firstHeader (exercised via buildContext) ──────────────────────────────────
