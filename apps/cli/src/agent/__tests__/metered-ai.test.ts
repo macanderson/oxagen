@@ -12,7 +12,7 @@ import type { AgentAi, ObjectRunArgs, ObjectRunResult } from "@oxagen/agent-engi
 // Mock the CLI debug channel so we can assert an onMetrics failure is surfaced
 // (not swallowed) while an aborted-turn usage rejection stays silent.
 const debugLogMock = vi.hoisted(() => vi.fn());
-vi.mock("../lib/debug-log.js", () => ({ debugLog: debugLogMock }));
+vi.mock("../../lib/debug-log.js", () => ({ debugLog: debugLogMock }));
 
 import { createMeteredAi } from "../metered-ai.js";
 import type { MetricsEvent } from "../metrics.js";
