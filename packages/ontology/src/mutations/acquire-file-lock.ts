@@ -2,9 +2,10 @@ import { scopedSession } from "../tenant";
 import { EdgeTypes } from "../types";
 
 /**
- * Default lock lease, mirroring `IntentLedger`'s in-memory TTL
- * (`packages/engram/src/blackboard/intent.ts`) so the graph-backed lock and
- * the (now superseded) in-process lock expire on the same cadence.
+ * Default lock lease. Originally chosen to mirror the in-memory
+ * `IntentLedger`'s TTL from the now-retired `packages/engram/src/blackboard/`
+ * module (superseded by this graph-backed lock; see OXA-2075 and
+ * docs/specs/agent-file-locking/plan.md).
  */
 export const DEFAULT_FILE_LOCK_TTL_MS = 300_000;
 
