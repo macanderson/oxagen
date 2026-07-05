@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
   loadEffectiveModelDefaults: vi.fn(),
   resolvePrompt: vi.fn(),
   chatSystemPrompt: vi.fn(),
-  loadWorkspacePromptConfig: vi.fn(),
+  loadWorkspacePromptConfigSafe: vi.fn(),
 
   materializeTools: vi.fn(),
 
@@ -53,7 +53,7 @@ vi.mock("@oxagen/ai", () => ({
   loadEffectiveModelDefaults: mocks.loadEffectiveModelDefaults,
   resolvePrompt: mocks.resolvePrompt,
   chatSystemPrompt: mocks.chatSystemPrompt,
-  loadWorkspacePromptConfig: mocks.loadWorkspacePromptConfig,
+  loadWorkspacePromptConfigSafe: mocks.loadWorkspacePromptConfigSafe,
 }));
 
 vi.mock("@oxagen/agent", () => ({
@@ -192,7 +192,7 @@ beforeEach(() => {
   );
   mocks.chatSystemPrompt.mockReturnValue("You are a helpful assistant.");
   mocks.resolvePrompt.mockReturnValue("You are a helpful assistant.");
-  mocks.loadWorkspacePromptConfig.mockResolvedValue({});
+  mocks.loadWorkspacePromptConfigSafe.mockResolvedValue({});
   mocks.materializeTools.mockResolvedValue({ tools: {}, nameMap: {} });
   mocks.streamAgentReply.mockReturnValue({
     fullStream: textStream("Hello world"),
