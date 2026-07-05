@@ -13,6 +13,7 @@ import "./contracts/agent.definition.list";
 import "./contracts/agent.definition.publish";
 import "./contracts/agent.definition.update";
 import "./contracts/agent.deploy";
+import "./contracts/agent.execution.lineage";
 import "./contracts/agent.execution.list";
 import "./contracts/agent.execution.record";
 import "./contracts/agent.feature.verify";

@@ -44,6 +44,7 @@ import { agentTriggerDelete } from "./agent.trigger.delete";
 import { agentTriggerList } from "./agent.trigger.list";
 import { agentExecutionList } from "./agent.execution.list";
 import { agentExecutionRecord } from "./agent.execution.record";
+import { agentExecutionLineage } from "./agent.execution.lineage";
 import { agentTraceGet } from "./agent.trace.get";
 import { agentUiRender } from "./agent.ui.render";
 import { documentsGenerate } from "./documents.generate";
@@ -438,6 +439,7 @@ export {
   agentSubagentResultGet,
   agentSubagentSiblings,
   agentTraceGet,
+  agentExecutionLineage,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
@@ -726,6 +728,7 @@ export const contracts = [
   agentSubagentResultGet,
   agentSubagentSiblings,
   agentTraceGet,
+  agentExecutionLineage,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
   agentTaskBackgroundStart,
