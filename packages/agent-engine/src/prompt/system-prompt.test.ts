@@ -56,6 +56,16 @@ describe("buildSystemPrompt — profiles", () => {
     expect(buildSystemPrompt({ ...base, profile: "headless" })).toContain(readFirst);
     expect(buildSystemPrompt({ ...base, profile: "interactive" })).toContain(readFirst);
   });
+
+  it("both profiles mention A2A cross-agent interop: skillId addressing, resubscribe, and trace lineage", () => {
+    for (const profile of ["headless", "interactive"] as const) {
+      const p = buildSystemPrompt({ ...base, profile });
+      expect(p).toContain("A2A");
+      expect(p).toContain("message.metadata.skillId");
+      expect(p).toContain("tasks/resubscribe");
+      expect(p.toLowerCase()).toContain("agent.trace.get");
+    }
+  });
 });
 
 describe("buildSystemPrompt — graph-first tool guidance", () => {

@@ -174,6 +174,30 @@ describe("chatSystemPrompt — tools/skills/MCP/plugins discoverability", () => 
   });
 });
 
+describe("chatSystemPrompt — A2A (Agent2Agent) protocol awareness", () => {
+  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+
+  it("documents the A2A section header", () => {
+    expect(chatSystemPrompt(CTX)).toContain("## A2A (Agent2Agent) Protocol");
+  });
+
+  it("explains skillId addressing", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("message.metadata.skillId");
+  });
+
+  it("explains that an unknown/inactive skillId falls back rather than erroring", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt.toLowerCase()).toContain("falls back");
+  });
+
+  it("mentions tasks/resubscribe live-attaching to non-terminal tasks", () => {
+    const prompt = chatSystemPrompt(CTX);
+    expect(prompt).toContain("tasks/resubscribe");
+    expect(prompt.toLowerCase()).toContain("live-attach");
+  });
+});
+
 describe("chatSystemPrompt — page form fill guidance", () => {
   const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
 
