@@ -33,8 +33,12 @@ export interface GraphSyncAdapterArgs {
  * Build the SourceFile naturalKey.  Format mirrors graph.sync.push:
  *   `github:{owner}/{repo}:{path}` when coordinates are provided,
  *   otherwise the raw `path`.
+ *
+ * Exported so `file-lock.ts`'s `FileLockProvider` adapter derives the SAME
+ * node identity as this module's lineage writes — a locked file and a
+ * touched file are the same `:SourceFile` node (docs/specs/agent-file-locking/plan.md §3).
  */
-function toNaturalKey(path: string, owner: string | undefined, repo: string | undefined): string {
+export function toNaturalKey(path: string, owner: string | undefined, repo: string | undefined): string {
   if (owner && repo) {
     // Normalise leading slash
     const normalPath = path.startsWith("/") ? path.slice(1) : path;
