@@ -3,7 +3,7 @@ name: ci-unit-lane-neo4j-schema-not-migrated
 type: bug
 domain: ci
 severity: P1
-linear: OXA-2073
+linear: OXA-2076
 date: 2026-07-04
 ---
 

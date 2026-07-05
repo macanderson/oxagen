@@ -3,7 +3,7 @@ name: scopedsession-orgid-explicit-bind-breaks-mock-assertions
 type: observation
 domain: ingestion
 severity: P2
-linear: OXA-2073
+linear: OXA-2076
 date: 2026-07-04
 ---
 
