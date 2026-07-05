@@ -49,6 +49,22 @@ export interface EpisodicStore {
   /** Get the most recent records in a namespace, optionally filtered by salience. */
   recent(namespace: Namespace, limit: number, minSalience?: number): Promise<MemoryRecord[]>;
 
+  /**
+   * Lexical/full-text search over record bodies, scoped to `namespace`.
+   * Scores each record by the fraction of query tokens matched via a
+   * case-insensitive substring test (0.0-1.0) — real term-frequency recall
+   * for exact matches (error messages, function names, file paths, stack
+   * traces) that vector similarity alone misses. Backs
+   * `LexicalRetrievalEngine`'s injected `LexicalSearchFn`. DuckDB implements
+   * this with `contains()` over the JSON body cast to text; ClickHouse with
+   * `positionCaseInsensitive()`.
+   */
+  searchLexical(
+    namespace: Namespace,
+    query: string,
+    limit: number,
+  ): Promise<Array<{ recordId: string; score: number }>>;
+
   /** Close the store connection and release resources. */
   close(): Promise<void>;
 }

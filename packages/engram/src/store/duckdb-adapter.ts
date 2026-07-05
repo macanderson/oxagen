@@ -8,6 +8,7 @@
 import type { Database, Connection } from "duckdb";
 import type { MemoryRecord, Namespace, RecordKind } from "../types";
 import type { EpisodicQuery, EpisodicStore } from "./episodic";
+import { tokenizeLexicalQuery } from "./lexical-tokenize";
 
 /**
  * Serialize a MemoryRecord into column values for DuckDB insert.
@@ -267,6 +268,43 @@ export class DuckDBEpisodicStore implements EpisodicStore {
       limit,
       minSalience,
     });
+  }
+
+  async searchLexical(
+    namespace: Namespace,
+    query: string,
+    limit: number,
+  ): Promise<Array<{ recordId: string; score: number }>> {
+    await this.ready;
+    const tokens = tokenizeLexicalQuery(query);
+    if (tokens.length === 0 || limit <= 0) return [];
+
+    // Term-frequency score: each matched token contributes 1/tokens.length,
+    // so a record matching every query token scores 1.0. `contains()` is a
+    // case-sensitive substring test — both the body and the tokens are
+    // lowercased first to make this case-insensitive lexical matching.
+    const matchExprs = tokens.map(() => "CASE WHEN contains(lower_body, ?) THEN 1 ELSE 0 END");
+    const scoreSql = `(${matchExprs.join(" + ")}) / ${tokens.length}.0`;
+    const whereOr = tokens.map(() => "contains(lower_body, ?)").join(" OR ");
+
+    const sql = `
+      SELECT id, ${scoreSql} AS lexical_score
+      FROM (
+        SELECT id, lower(CAST(body AS VARCHAR)) AS lower_body
+        FROM episodic_records
+        WHERE namespace_org = ? AND namespace_workspace = ?
+      ) t
+      WHERE ${whereOr}
+      ORDER BY lexical_score DESC
+      LIMIT ?
+    `;
+    const params = [...tokens, namespace.org, namespace.workspace, ...tokens, limit];
+
+    const rows = await this.querySql(sql, params);
+    return rows.map((r) => ({
+      recordId: r["id"] as string,
+      score: Number(r["lexical_score"] ?? 0),
+    }));
   }
 
   async close(): Promise<void> {
