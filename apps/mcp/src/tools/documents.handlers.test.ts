@@ -113,6 +113,7 @@ describe("asset.upload handler", () => {
       key: "image/org/uuid.png",
       contentType: "image/png",
       bytes: 512,
+      publicId: null,
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
