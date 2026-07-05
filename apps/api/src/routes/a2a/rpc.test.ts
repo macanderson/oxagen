@@ -25,6 +25,11 @@ vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: h.invoke }));
 
 import { a2aRpcRoute } from "./rpc";
 import type { AppEnv } from "../../app";
+import {
+  _hasEntryForTest,
+  _listenerCountForTest,
+  publish,
+} from "./stream-registry";
 
 // A minimal app that stamps org+workspace scope the way authMiddleware would.
 function makeApp() {
@@ -50,6 +55,7 @@ function rpc(body: unknown) {
 }
 
 const rowCompleted = {
+  id: "task-uuid-1",
   publicId: "a2a_1",
   contextId: "ctx_1",
   state: "completed" as const,
@@ -88,6 +94,10 @@ describe("a2a JSON-RPC dispatcher", () => {
     expect(body.result.kind).toBe("task");
     expect(body.result.status.state).toBe("completed");
     expect(h.runA2ATask).toHaveBeenCalledOnce();
+    // The bridge receives the normalized inbound message (skillId/referenceTaskIds
+    // addressing — spec §3.1/§3.2), not just the flattened history.
+    const call = h.runA2ATask.mock.calls[0]![0] as { message: { messageId: string } };
+    expect(call.message.messageId).toBe("m1");
   });
 
   it("message/stream returns an SSE stream ending with a final status-update", async () => {
@@ -235,6 +245,70 @@ describe("a2a JSON-RPC dispatcher", () => {
     });
     const body = await res.json();
     expect(body.error.code).toBe(-32001);
+  });
+
+  it("tasks/resubscribe on a non-terminal task live-attaches and forwards published events until final", async () => {
+    h.loadTask.mockResolvedValue({ ...rowCompleted, state: "working" });
+    const res = await rpc({
+      jsonrpc: "2.0",
+      id: 15,
+      method: "tasks/resubscribe",
+      params: { id: "a2a_1" },
+    });
+    // The ReadableStream's `start` runs synchronously during construction —
+    // by the time the Response comes back, the registry subscription for
+    // "a2a_1" already exists.
+    expect(_hasEntryForTest("a2a_1")).toBe(true);
+
+    publish("a2a_1", {
+      kind: "artifact-update",
+      taskId: "a2a_1",
+      contextId: "ctx_1",
+      artifact: { artifactId: "art", parts: [{ kind: "text", text: "chunk" }] },
+      append: true,
+    });
+    publish("a2a_1", {
+      kind: "status-update",
+      taskId: "a2a_1",
+      contextId: "ctx_1",
+      status: { state: "completed" },
+      final: true,
+    });
+
+    const text = await res.text();
+    // Initial snapshot (working, not final) + the forwarded artifact chunk +
+    // the forwarded terminal status-update.
+    expect(text).toContain('"state":"working"');
+    expect(text).toContain('"kind":"artifact-update"');
+    expect(text.match(/"kind":"status-update"/g)).toHaveLength(2);
+    // The listener unregisters itself once the terminal event closes the stream.
+    expect(_hasEntryForTest("a2a_1")).toBe(false);
+  });
+
+  it("tasks/resubscribe on a terminal task does not touch the live registry", async () => {
+    h.loadTask.mockResolvedValue({ ...rowCompleted, state: "completed" });
+    const res = await rpc({
+      jsonrpc: "2.0",
+      id: 16,
+      method: "tasks/resubscribe",
+      params: { id: "a2a_1" },
+    });
+    await res.text();
+    expect(_hasEntryForTest("a2a_1")).toBe(false);
+    expect(_listenerCountForTest("a2a_1")).toBe(0);
+  });
+
+  it("tasks/resubscribe unregisters its listener when the client disconnects before a terminal event", async () => {
+    h.loadTask.mockResolvedValue({ ...rowCompleted, publicId: "a2a_dropped", state: "working" });
+    const res = await rpc({
+      jsonrpc: "2.0",
+      id: 17,
+      method: "tasks/resubscribe",
+      params: { id: "a2a_dropped" },
+    });
+    expect(_listenerCountForTest("a2a_dropped")).toBe(1);
+    await res.body?.cancel();
+    expect(_hasEntryForTest("a2a_dropped")).toBe(false);
   });
 
   it("message/stream surfaces a task failure as a JSON-RPC error frame", async () => {

@@ -69,6 +69,7 @@ beforeEach(() => {
 
 describe("toA2ATask", () => {
   const row: A2ATaskRow = {
+    id: "00000000-0000-0000-0000-000000000001",
     publicId: "a2a_1",
     contextId: "ctx_1",
     state: "completed",
@@ -123,7 +124,12 @@ describe("toA2ATask", () => {
 describe("task store CRUD", () => {
   it("creates a submitted task seeded with the user message", async () => {
     enqueue([
-      { publicId: "a2a_new", contextId: "ctx_1", updatedAt: new Date() },
+      {
+        id: "00000000-0000-0000-0000-0000000000aa",
+        publicId: "a2a_new",
+        contextId: "ctx_1",
+        updatedAt: new Date(),
+      },
     ]);
     const row = await createTask(CTX, {
       contextId: "ctx_1",
@@ -134,6 +140,7 @@ describe("task store CRUD", () => {
         messageId: "m1",
       },
     });
+    expect(row.id).toBe("00000000-0000-0000-0000-0000000000aa");
     expect(row.publicId).toBe("a2a_new");
     expect(row.state).toBe("submitted");
     expect(row.messageHistory).toHaveLength(1);
@@ -148,6 +155,7 @@ describe("task store CRUD", () => {
   it("loads a task and coerces jsonb columns", async () => {
     enqueue([
       {
+        id: "00000000-0000-0000-0000-000000000001",
         publicId: "a2a_1",
         contextId: "ctx_1",
         state: "working",
@@ -167,6 +175,7 @@ describe("task store CRUD", () => {
     enqueue(
       [
         {
+          id: "00000000-0000-0000-0000-000000000001",
           publicId: "a2a_1",
           contextId: "ctx_1",
           state: "working",
@@ -187,9 +196,33 @@ describe("task store CRUD", () => {
         { kind: "message", role: "agent", parts: [{ kind: "text", text: "b" }], messageId: "m2" },
       ],
     });
+    expect(row!.id).toBe("00000000-0000-0000-0000-000000000001");
     expect(row!.state).toBe("completed");
     expect(row!.messageHistory).toHaveLength(2);
     expect(row!.artifacts).toHaveLength(1);
+  });
+
+  it("threads agentId/fanoutRunId only when explicitly provided in the patch", async () => {
+    enqueue(
+      [
+        {
+          id: "00000000-0000-0000-0000-000000000001",
+          publicId: "a2a_1",
+          contextId: "ctx_1",
+          state: "submitted",
+          messageHistory: [],
+          artifacts: [],
+          statusMessage: null,
+          errorMessage: null,
+        },
+      ],
+      [{ updatedAt: new Date() }],
+    );
+    const row = await updateTask(CTX, "a2a_1", {
+      state: "working",
+      agentId: "00000000-0000-0000-0000-0000000000ab",
+    });
+    expect(row!.state).toBe("working");
   });
 
   it("returns null when updating a missing task", async () => {

@@ -85,6 +85,22 @@ export const a2aMessage = z.object({
 });
 export type A2AMessage = z.output<typeof a2aMessage>;
 
+/**
+ * Read the caller-addressed skill id (a workspace agent's slug) off a
+ * message's generic `metadata` bag. `skillId` is a reserved key on the
+ * existing free-form metadata field — zero wire-format break for A2A clients
+ * unaware of it (docs/specs/a2a-agent-identity/spec.md §3.1). Returns
+ * `undefined` (never throws) for anything that isn't a non-empty string, so a
+ * malformed metadata value falls back to the generic chat behavior instead of
+ * failing the task.
+ */
+export function getSkillId(message: A2AMessage): string | undefined {
+  const value = message.metadata?.skillId;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
+
 // ── Artifact ────────────────────────────────────────────────────────────────
 export const a2aArtifact = z.object({
   artifactId: z.string(),

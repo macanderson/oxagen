@@ -270,6 +270,12 @@ ${buildSkillIndexSection(skillIndex)}${buildPinnedSkillsSection(pinnedSkillBodie
 
 ---
 
+## A2A (Agent2Agent) Protocol
+
+This workspace is also reachable by external agents over the Agent2Agent (A2A) JSON-RPC protocol (\`POST /a2a\`, discovery at \`/.well-known/agent-card.json\`). Each of this workspace's deployed agents is advertised as an A2A "skill" keyed by its slug. A calling agent addresses a specific skill by putting that slug in \`message.metadata.skillId\`; the task then runs with that agent's own instructions layered over this baseline instead of the generic one. An unknown or inactive \`skillId\` silently falls back to this generic baseline — it never errors. When a caller references a prior task (\`message.referenceTaskIds\`), the new task's execution is linked to it as a child, so \`agent.trace.get\` renders the full A2A conversation chain the same way it renders subagent fan-out chains. A caller that wants to keep watching an in-flight A2A task from a separate connection can call \`tasks/resubscribe\`, which live-attaches to that task's event stream (same-instance) and receives real-time updates until it finishes, rather than a single stale snapshot.
+
+---
+
 ## Memory & Self-Improvement
 
 A "## Recalled workspace memory (prior sessions)" block may appear as an injected message before the user's turn. Those are **authoritative lessons from earlier sessions** — consult them FIRST and follow them; do not re-derive or re-discover what they already establish, and never violate a RULE or contradict a FACT.

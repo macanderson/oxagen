@@ -10,6 +10,7 @@ import {
   a2aStatusUpdateEvent,
   a2aTask,
   a2aTaskState,
+  getSkillId,
   jsonRpcError,
   jsonRpcRequest,
   jsonRpcResult,
@@ -123,5 +124,38 @@ describe("A2A protocol wire types", () => {
     });
     const withData = jsonRpcError(3, A2A_ERROR.invalidParams, "bad", [1]);
     expect(withData.error).toMatchObject({ code: -32602, data: [1] });
+  });
+
+  describe("getSkillId", () => {
+    const base = {
+      kind: "message" as const,
+      role: "user" as const,
+      parts: [{ kind: "text" as const, text: "hi" }],
+      messageId: "m1",
+    };
+
+    it("reads a non-empty string skillId from metadata", () => {
+      expect(getSkillId({ ...base, metadata: { skillId: "billing-bot" } })).toBe(
+        "billing-bot",
+      );
+    });
+
+    it("trims surrounding whitespace", () => {
+      expect(getSkillId({ ...base, metadata: { skillId: "  qa-chat  " } })).toBe(
+        "qa-chat",
+      );
+    });
+
+    it("returns undefined when metadata is absent", () => {
+      expect(getSkillId(base)).toBeUndefined();
+    });
+
+    it("returns undefined for a non-string skillId (never throws)", () => {
+      expect(getSkillId({ ...base, metadata: { skillId: 42 } })).toBeUndefined();
+    });
+
+    it("returns undefined for an empty/whitespace-only skillId", () => {
+      expect(getSkillId({ ...base, metadata: { skillId: "   " } })).toBeUndefined();
+    });
   });
 });
