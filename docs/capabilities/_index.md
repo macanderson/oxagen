@@ -411,8 +411,10 @@ contract-first design, IAM enforcement, and instrumentation.
 - [workflow.run](workflow.run.md) — Decompose a goal into N sub-tasks and dispatch them concurrently via Inngest
 - [workflow.status](workflow.status.md) — Read the current status and task-level progress of a workflow run
 
-## Workspace (8)
+## Workspace (10)
 
+- [workspace.budget.policy.read](workspace.budget.policy.read.md) — Read the workspace's governed per-turn dollar budget: whether enforcement is active, the limit in USD, enforcement mode (grace/prompt/enforce), grace cushion, and enforcement policy (ceiling/default)
+- [workspace.budget.policy.write](workspace.budget.policy.write.md) — Set the workspace's governed per-turn dollar budget (partial update); Owner/Admin only; controls how agent turns are budget-governed for members
 - [workspace.create](workspace.create.md) — Create a workspace inside the caller's active tenant
 - [workspace.invite.send](workspace.invite.send.md) — Send a workspace invitation to an email address with 7-day expiry
 - [workspace.list](workspace.list.md) — List the workspaces inside an organization the caller belongs to; backs the CLI workspace picker in oxagen init
