@@ -141,6 +141,18 @@ import {
   type PermissionMode,
 } from "../agent/permissions.js";
 import { loadSettings } from "../settings/resolve.js";
+import {
+  createTurnBudgetGuard,
+  formatBudgetUsd,
+  TURN_BUDGET_MODES,
+  TURN_BUDGET_OFF,
+  type TurnBudgetPolicy,
+  type TurnBudgetVerdict,
+} from "@oxagen/billing";
+import {
+  parseBudgetCommand,
+  describeBudgetModes,
+} from "../agent/budget.js";
 import pkg from "../../package.json" with { type: "json" };
 
 /**
@@ -163,6 +175,12 @@ export interface ReplOptions {
   bare?: boolean;
   /** Start in verbose mode: capture + emit full per-turn telemetry. */
   verbose?: boolean;
+  /**
+   * Initial per-turn dollar budget policy (from `--budget`/`--budget-mode`).
+   * Session-scoped — no platform persistence; `/budget` changes it in place.
+   * Undefined ⇒ off (unbounded turns), same as `TURN_BUDGET_OFF`.
+   */
+  budget?: TurnBudgetPolicy;
 }
 
 /**
@@ -207,6 +225,12 @@ export function ReplApp({
   // the model/server default decide). Driven by /effort; forwarded per turn.
   const [effort, setEffort] = useState<ReasoningEffort | undefined>(
     resolveEffort(options.effort),
+  );
+  // Per-turn dollar budget policy (session-scoped — see ReplOptions.budget).
+  // Driven by --budget/--budget-mode at launch and /budget in-session; read
+  // fresh per turn to build the createTurnBudgetGuard passed to runTurn.
+  const [budgetPolicy, setBudgetPolicy] = useState<TurnBudgetPolicy>(
+    options.budget ?? TURN_BUDGET_OFF,
   );
   const [turns, setTurns] = useState(0);
   // Live token/cost/cache metrics (Bug 2). Every model call the engine makes
@@ -389,10 +413,29 @@ export function ReplApp({
   modelRef.current = model;
   const effortRef = useRef(effort);
   effortRef.current = effort;
+  const budgetRef = useRef(budgetPolicy);
+  budgetRef.current = budgetPolicy;
   const modeRef = useRef(mode);
   modeRef.current = mode;
   const approvalRef = useRef(approval);
   approvalRef.current = approval;
+  // A budget-pause confirmation ("prompt" mode hit the limit — continue?").
+  // Reuses the ApprovalPrompt overlay component (it only ever renders
+  // req.reason/req.summary, never the tool/path/command fields) but keeps its
+  // OWN state + resolve callback, separate from `approval`/`resolveApproval` —
+  // that pathway persists "allow + remember" as a settings.json permission
+  // rule, which makes no sense for a budget pause.
+  const [budgetPause, setBudgetPause] = useState<{
+    req: ApprovalRequest;
+    resolve: (approved: boolean) => void;
+  } | null>(null);
+  const budgetPauseRef = useRef(budgetPause);
+  budgetPauseRef.current = budgetPause;
+  const resolveBudgetPause = useCallback((response: ApprovalResponse) => {
+    const cur = budgetPauseRef.current;
+    setBudgetPause(null);
+    cur?.resolve(response.decision === "allow");
+  }, []);
 
   // Whether we are showing the "reset conversation?" confirmation prompt.
   // The ref is the synchronous source of truth; the state drives the render.
@@ -1001,6 +1044,8 @@ export function ReplApp({
     }
     // While a permission prompt is up, ApprovalPrompt owns Esc and the answer keys.
     if (approvalRef.current) return;
+    // Same for a budget-pause confirmation (see budgetPause above).
+    if (budgetPauseRef.current) return;
     // While the /config panel is open it owns the keyboard (its own useInput
     // handles ↑/↓/e/x/Esc) — swallow everything here so those keys never
     // double-fire into panel-nav, transcript scroll, or the prompt bar.
@@ -1453,6 +1498,68 @@ export function ReplApp({
           pushAssistant(
             `Unknown effort "${arg}". Use ${EFFORT_LEVELS.join(", ")}, or default.`,
           );
+        }
+        return;
+      }
+      if (text.startsWith("/budget")) {
+        const parsed = parseBudgetCommand(text.slice("/budget".length));
+        switch (parsed.kind) {
+          case "status": {
+            const p = budgetRef.current;
+            if (!p.enabled) {
+              pushAssistant(
+                "Per-turn budget: off (turns run unbounded).\n" +
+                  "Use /budget <usd> [grace|prompt|enforce] to enable, e.g. /budget 2.50 prompt.\n" +
+                  describeBudgetModes(),
+              );
+            } else {
+              const meta = TURN_BUDGET_MODES[p.mode];
+              pushAssistant(
+                `Per-turn budget: ${formatBudgetUsd(p.limitUsd)} — ${meta.label} (${p.mode}). ` +
+                  `${meta.description}\n` +
+                  "Use /budget off to disable, /budget mode <mode> to change the mode, " +
+                  "or /budget <usd> to change the limit.",
+              );
+            }
+            break;
+          }
+          case "off": {
+            setBudgetPolicy(TURN_BUDGET_OFF);
+            pushAssistant("Per-turn budget disabled — turns run unbounded.");
+            break;
+          }
+          case "mode": {
+            const next: TurnBudgetPolicy = { ...budgetRef.current, mode: parsed.mode };
+            setBudgetPolicy(next);
+            const meta = TURN_BUDGET_MODES[parsed.mode];
+            pushAssistant(
+              `Budget mode set to ${meta.label} (${parsed.mode}). ${meta.description}` +
+                (next.enabled
+                  ? ""
+                  : " (Budget is currently off — set a limit with /budget <usd> to enable it.)"),
+            );
+            break;
+          }
+          case "set": {
+            setBudgetPolicy(parsed.policy);
+            const meta = TURN_BUDGET_MODES[parsed.policy.mode];
+            pushAssistant(
+              `Per-turn budget set to ${formatBudgetUsd(parsed.policy.limitUsd)} — ` +
+                `${meta.label} (${parsed.policy.mode}). ${meta.description}`,
+            );
+            break;
+          }
+          case "invalid": {
+            pushAssistant(
+              `Couldn't parse "/budget ${parsed.raw}". Use:\n` +
+                "  /budget                 show current policy\n" +
+                "  /budget off             disable\n" +
+                "  /budget <usd> [mode]    enable, e.g. /budget 2.50 prompt\n" +
+                "  /budget mode <mode>     change mode only\n" +
+                describeBudgetModes(),
+            );
+            break;
+          }
         }
         return;
       }
@@ -2030,6 +2137,47 @@ export function ReplApp({
         activePlanTaskId = plan.tasks[0]?.id ?? null;
         if (activePlanTaskId) taskRegistry.update(activePlanTaskId, { status: "in_progress" });
 
+        // Per-turn dollar budget (session-scoped; /budget or --budget/--budget-mode).
+        // Built fresh for this turn — a fresh model + a fresh "warn once" flag —
+        // and createTurnBudgetGuard returns undefined when the policy is off, so
+        // runTurn sees NO guard at all rather than a no-op one.
+        let budgetGraceWarned = false;
+        const budgetGuard = createTurnBudgetGuard(budgetRef.current, modelRef.current, {
+          // "grace" mode: at most once per turn is plenty of noise.
+          onWithinGrace: (verdict: TurnBudgetVerdict) => {
+            if (budgetGraceWarned) return;
+            budgetGraceWarned = true;
+            pushAssistant(
+              `⚠︎ Over budget — within grace window (${formatBudgetUsd(verdict.costUsd)} / ` +
+                `ceiling ${formatBudgetUsd(verdict.ceilingUsd)}).`,
+            );
+          },
+          // "prompt" mode: the turn hit the limit — ask via the same overlay
+          // component the permission broker uses (see budgetPause above), not
+          // its resolveApproval (which persists "remember" rules to settings).
+          onPause: (verdict: TurnBudgetVerdict) =>
+            new Promise<boolean>((resolve) => {
+              setBudgetPause({
+                req: {
+                  tool: "bash",
+                  cwd,
+                  reason: "⛔ per-turn budget",
+                  summary:
+                    `Reached ${formatBudgetUsd(verdict.costUsd)} of ${formatBudgetUsd(verdict.limitUsd)} — ` +
+                    `continue for another ${formatBudgetUsd(verdict.limitUsd)}?`,
+                },
+                resolve,
+              });
+            }),
+          onStop: (verdict: TurnBudgetVerdict) => {
+            closeStreamingBlocks();
+            pushAssistant(
+              `⛔ Per-turn budget reached — stopped at ${formatBudgetUsd(verdict.costUsd)} of ` +
+                `${formatBudgetUsd(verdict.limitUsd)} (${TURN_BUDGET_MODES[verdict.mode].label}).`,
+            );
+          },
+        });
+
         const result = await runTurn({
           // Paste placeholders (`[Text #N]`) expand to their full stored
           // text here — the model sees the real content even though the
@@ -2047,6 +2195,7 @@ export function ReplApp({
           readOnly: modeRef.current === "readonly",
           bare: bareRef.current,
           verbose: verboseRef.current,
+          budgetGuard,
           enhanceTimeoutMs,
           projectContext: projectContextRef.current,
           memory: turnMemory,
@@ -2570,6 +2719,8 @@ export function ReplApp({
         <Box flexShrink={0} flexDirection="column">
           {approval ? (
             <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
+          ) : budgetPause ? (
+            <ApprovalPrompt req={budgetPause.req} onResolve={resolveBudgetPause} />
           ) : configOpen ? (
             <ConfigPanel cwd={cwd} onClose={closeConfigPanel} width={Math.min(cols - 2, 100)} />
           ) : (
@@ -2741,6 +2892,8 @@ export function ReplApp({
       <Box marginTop={1} flexShrink={0} flexDirection="column">
         {approval ? (
           <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
+        ) : budgetPause ? (
+          <ApprovalPrompt req={budgetPause.req} onResolve={resolveBudgetPause} />
         ) : configOpen ? (
           <ConfigPanel cwd={cwd} onClose={closeConfigPanel} />
         ) : (

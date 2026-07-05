@@ -93,6 +93,14 @@ export function buildProgram(): Command {
       "--max-steps <n>",
       "Cap the agent tool loop at n steps per execution round (default 256)",
     )
+    .option(
+      "--budget <usd>",
+      "Enable a per-turn dollar budget, e.g. --budget 2.50 (session-scoped; unset = unbounded)",
+    )
+    .option(
+      "--budget-mode <mode>",
+      "What happens at the budget limit: grace | prompt | enforce (default: prompt; ignored without --budget)",
+    )
     .action(
       async (
         promptWords: string[],
@@ -107,6 +115,8 @@ export function buildProgram(): Command {
           agent?: string;
           outputFormat?: string;
           maxSteps?: string;
+          budget?: string;
+          budgetMode?: string;
         },
       ) => {
         const prompt = promptWords.join(" ").trim();
@@ -143,6 +153,21 @@ export function buildProgram(): Command {
             return;
           }
         }
+        // --budget/--budget-mode: a per-turn dollar budget, session-scoped (no
+        // platform persistence — the CLI runs BYOK/offline). Dynamic import so
+        // @oxagen/billing only loads when the flag is actually used, matching
+        // this file's "no side effects until an action runs" contract.
+        let budget: import("@oxagen/billing").TurnBudgetPolicy | undefined;
+        if (opts.budget !== undefined) {
+          const { resolveBudgetFlags } = await import("./agent/budget.js");
+          const resolved = resolveBudgetFlags(opts.budget, opts.budgetMode);
+          if (resolved.error) {
+            process.stderr.write(`Error: ${resolved.error}\n`);
+            process.exitCode = 1;
+            return;
+          }
+          budget = resolved.policy;
+        }
         // --local forces BYOK: run against the shell's AI_GATEWAY_API_KEY (or
         // ANTHROPIC_API_KEY fallback), not the platform account (requireSession
         // reads OXAGEN_LOCAL).
@@ -165,6 +190,7 @@ export function buildProgram(): Command {
           verbose: opts.verbose,
           outputFormat,
           maxSteps,
+          budget,
         };
 
         // Feed the anonymous usage-telemetry accumulator (index.tsx emits the

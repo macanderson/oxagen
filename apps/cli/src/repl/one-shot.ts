@@ -34,7 +34,14 @@ import { getAgent } from "../agents/loader.js";
 import { appendVerboseLog } from "../agent/verbose-log.js";
 import { formatVerboseSection } from "../agent/trace-format.js";
 import { readConfig } from "../lib/config.js";
-import { resolveEffort } from "../agent/model.js";
+import { resolveEffort, resolveModelId } from "../agent/model.js";
+import {
+  createTurnBudgetGuard,
+  formatBudgetUsd,
+  TURN_BUDGET_MODES,
+  type TurnBudgetPolicy,
+  type TurnBudgetVerdict,
+} from "@oxagen/billing";
 import { PermissionBroker, type PermissionMode } from "../agent/permissions.js";
 import { loadSettings } from "../settings/resolve.js";
 import { buildTurnExtras, type TurnExtras } from "../agent/turn-extras.js";
@@ -77,6 +84,55 @@ export interface OneShotOptions {
   outputFormat?: "text" | "json" | "stream-json";
   /** Cap the agent tool loop at n steps per execution round (default 256). */
   maxSteps?: number;
+  /**
+   * Per-turn dollar budget (from `--budget`/`--budget-mode`), session-scoped —
+   * no platform persistence. Undefined ⇒ unbounded. `mode: "prompt"` cannot ask
+   * interactively here (no TTY / no approver) — see {@link buildBudgetGuard}.
+   */
+  budget?: TurnBudgetPolicy;
+}
+
+/**
+ * Build the engine's per-turn budget guard for a NON-interactive run (one-shot,
+ * `--agent`, stdin). There is no interactive overlay here, so the three modes
+ * degrade as follows:
+ *   - "grace"   — same as everywhere: keep going within the cushion, warn once.
+ *   - "prompt"  — cannot ask a human; treated as a HARD STOP (same as
+ *                 "enforce") so a scripted/CI run never hangs waiting on input
+ *                 that will never arrive.
+ *   - "enforce" — hard stop, as designed.
+ * Returns undefined when the policy is off (createTurnBudgetGuard's own check).
+ */
+function buildBudgetGuard(
+  policy: TurnBudgetPolicy | undefined,
+  model: string,
+): ReturnType<typeof createTurnBudgetGuard> {
+  if (!policy) return undefined;
+  let graceWarned = false;
+  return createTurnBudgetGuard(policy, model, {
+    onWithinGrace: (verdict: TurnBudgetVerdict) => {
+      if (graceWarned) return;
+      graceWarned = true;
+      process.stderr.write(
+        `⚠︎ Over budget — within grace window (${formatBudgetUsd(verdict.costUsd)} / ` +
+          `ceiling ${formatBudgetUsd(verdict.ceilingUsd)}).\n`,
+      );
+    },
+    // Headless: "prompt" mode has no one to ask. Stop instead of hanging, and
+    // tell the user how to get a bigger window on the next run.
+    onPause: () => false,
+    onStop: (verdict: TurnBudgetVerdict) => {
+      const modeLabel = TURN_BUDGET_MODES[verdict.mode].label;
+      const note =
+        verdict.mode === "prompt"
+          ? " (prompt mode can't ask interactively in one-shot — raise --budget and rerun)"
+          : "";
+      process.stderr.write(
+        `⛔ Per-turn budget reached — stopped at ${formatBudgetUsd(verdict.costUsd)} of ` +
+          `${formatBudgetUsd(verdict.limitUsd)} (${modeLabel}).${note}\n`,
+      );
+    },
+  });
 }
 
 export async function runOneShot(
@@ -262,6 +318,11 @@ export async function runOneShot(
         ? 20
         : 0;
 
+  // Per-turn dollar budget: priced against the model this run actually uses
+  // (resolveModelId mirrors the fallback chain runTurn/the engine applies when
+  // options.model is undefined, so the guard never prices against "undefined").
+  const budgetGuard = buildBudgetGuard(options.budget, resolveModelId(options.model));
+
   try {
     let streamed = false;
     const result = await runTurn({
@@ -277,6 +338,7 @@ export async function runOneShot(
       bare: options.bare,
       verbose,
       maxSteps: options.maxSteps,
+      budgetGuard,
       enhanceTimeoutMs,
       midJudgeSteps: midJudgeSteps > 0 ? midJudgeSteps : undefined,
       memory: createCombinedMemory(memory, fleetMemory, {
@@ -478,6 +540,12 @@ export async function runAgentOneShot(
       }
     : projectContext;
 
+  // Per-turn dollar budget — same headless degrade as runOneShot (see
+  // buildBudgetGuard): "prompt" mode can't ask interactively here either.
+  // resolveModelId covers the same fallback chain as `model` below so the
+  // guard always prices against a concrete slug, never undefined.
+  const budgetGuard = buildBudgetGuard(options.budget, resolveModelId(options.model ?? agent.model));
+
   try {
     let streamed = false;
     await runTurn({
@@ -492,6 +560,7 @@ export async function runAgentOneShot(
       readOnly: options.readOnly,
       model: options.model ?? agent.model,
       maxSteps: options.maxSteps,
+      budgetGuard,
       effort: resolveEffort(options.effort),
       memory: createCombinedMemory(memory, fleetMemory, {
         server: serverMemory,
