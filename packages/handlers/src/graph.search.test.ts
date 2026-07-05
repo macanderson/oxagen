@@ -264,4 +264,58 @@ describe("graphSearchHandler", () => {
     const cypher = mocks.run.mock.calls[0]![0] as string;
     expect(cypher).not.toContain("coalesce(n.is_system, false) = $isSystem");
   });
+
+  // Linear OXA-1929 — ANN tenant-filter oversampling (silent recall degradation).
+  //
+  // `db.index.vector.queryNodes` returns the GLOBAL top-k by similarity; the
+  // tenant predicate (n.orgId/n.workspaceId) is applied AFTER that call. As
+  // other tenants accumulate more/higher-scoring graph volume, a naive query
+  // (k === limit) can be entirely crowded out for the active tenant — recall
+  // silently shrinks toward zero with no error. This test seeds a synthetic
+  // global ranking that reproduces that crowd-out and asserts the shipped
+  // implementation (oversampledLimit under the hood) still recovers the full
+  // requested K for the target tenant. It fails if graph.search ever
+  // regresses to requesting k = limit again.
+  it("multi-tenant recall regression: returns the full requested K for the target tenant even though other tenants dominate the global top-K (OXA-1929)", async () => {
+    const limit = 8;
+    // oversampledLimit(8) = 24, so 16 noise ranks + 24 target ranks (only the
+    // first 8 needed within the oversample window) reproduces the crowd-out.
+    const globalPool = [
+      ...Array.from({ length: 16 }, (_, i) => ({
+        nodeId: `noise-${i}`,
+        score: 1 - i * 0.001,
+        isTarget: false,
+      })),
+      ...Array.from({ length: 24 }, (_, i) => ({
+        nodeId: `target-${i}`,
+        score: 0.5 - i * 0.001,
+        isTarget: true,
+      })),
+    ];
+
+    // Sanity check the scenario is a genuine regression case: an unfixed
+    // k === limit query against this exact pool starves the target tenant.
+    expect(globalPool.slice(0, limit).filter((r) => r.isTarget)).toHaveLength(0);
+
+    mocks.run.mockImplementation(async (_cypher: string, params: Record<string, unknown>) => {
+      const k = Number(params.k as bigint);
+      const topK = globalPool.slice(0, k);
+      const tenantFiltered = topK.filter((r) => r.isTarget);
+      const trimmed = tenantFiltered.slice(0, limit);
+      return makeRows(
+        trimmed.map((r) => ({
+          nodeId: r.nodeId,
+          label: "Entity",
+          displayName: r.nodeId,
+          properties: null,
+          isSystem: false,
+          nodeLabels: ["Entity"],
+          score: r.score,
+        })),
+      );
+    });
+
+    const result = await graphSearchHandler({ query: "x", limit }, CTX);
+    expect(result.results).toHaveLength(limit);
+  });
 });

@@ -9,7 +9,33 @@ import { resolve, type ResolveResult } from "@oxagen/oxagen/iam";
 import { fetchAuthz } from "./fetch-authz";
 import { emitAudit } from "./emit-audit";
 import { resolveOrgTier, canAccessACL } from "@oxagen/billing";
+import { captureError } from "@oxagen/telemetry";
 import { logger } from "./logger";
+
+/**
+ * OXA-2058: an audit-emission failure (durable write exhausted its retries,
+ * or a hash computation failed and emitAudit refused to persist a corrupt
+ * row — see emit-audit.ts) must be observable beyond a log line nobody
+ * watches. Escalates to ClickHouse `error_events` + optional alert webhook
+ * via `captureError`, which is itself fire-and-forget and never throws.
+ */
+function reportAuditEmissionFailure(
+  capability: string,
+  ctx: CapabilityContext,
+  err: unknown,
+): void {
+  logger.error({ err, capability }, "[iam:audit] CRITICAL — audit event emission failed");
+  captureError({
+    error: err,
+    source: "api",
+    severity: "error",
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+    capability,
+    requestId: ctx.requestId,
+    context: "iam:checkIAM — audit event emission failed after retries (OXA-2058)",
+  });
+}
 
 export interface CheckIAMArgs {
   capability: string;
@@ -64,9 +90,7 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
       result: bypassResult,
       trace: bypassResult.trace,
       rawInputJson,
-    }).catch((err: unknown) => {
-      logger.error({ err, capability }, "[iam:audit] CRITICAL — audit event emission failed");
-    });
+    }).catch((err: unknown) => reportAuditEmissionFailure(capability, ctx, err));
     return { result: bypassResult, principal: null };
   }
 
@@ -108,7 +132,8 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
 
   const result = resolve(resolveInput);
 
-  // 3. Emit audit — fire-and-forget.
+  // 3. Emit audit — fire-and-forget. Audit failures must be loud but NEVER
+  // block the user path (see reportAuditEmissionFailure — OXA-2058).
   emitAudit({
     capability,
     ctx,
@@ -116,10 +141,7 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
     result,
     trace: result.trace,
     rawInputJson,
-  }).catch((err: unknown) => {
-    // Audit failures must be loud but NEVER block the user path.
-    logger.error({ err, capability }, "[iam:audit] CRITICAL — audit event emission failed");
-  });
+  }).catch((err: unknown) => reportAuditEmissionFailure(capability, ctx, err));
 
   return { result, principal };
 }

@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   emitAudit: vi.fn<() => Promise<void>>(),
   resolveOrgTier: vi.fn(),
   canAccessACL: vi.fn(),
+  captureError: vi.fn(),
 }));
 
 vi.mock("./fetch-authz", () => ({ fetchAuthz: mocks.fetchAuthz }));
@@ -31,6 +32,13 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
     resolveOrgTier: mocks.resolveOrgTier,
     canAccessACL: mocks.canAccessACL,
   };
+});
+// OXA-2058: checkIAM escalates an emitAudit failure via captureError (in
+// addition to logger.error) so a dropped/refused audit write is observable
+// in ClickHouse error_events, not just a log line.
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/telemetry")>();
+  return { ...real, captureError: mocks.captureError };
 });
 
 // Import AFTER mocks are wired.
@@ -107,6 +115,31 @@ describe("checkIAM()", () => {
     expect(result.result.outcome).toBe("allow");
     expect(mocks.resolve).not.toHaveBeenCalled();
     expect(mocks.fetchAuthz).not.toHaveBeenCalled();
+  });
+
+  it("OXA-2058: non-enterprise bypass path also escalates via captureError when emitAudit rejects", async () => {
+    mocks.canAccessACL.mockReturnValue(false);
+    mocks.resolveOrgTier.mockResolvedValue("build");
+    const auditErr = new Error("clickhouse down (bypass path)");
+    mocks.emitAudit.mockRejectedValue(auditErr);
+
+    const result = await checkIAM({
+      capability: "iam.roles.list",
+      ctx: CTX,
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect(result.result.outcome).toBe("allow");
+
+    // Let the fire-and-forget emitAudit(...).catch(...) handler run.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mocks.captureError).toHaveBeenCalledTimes(1);
+    const call = mocks.captureError.mock.calls[0]?.[0] as { error: unknown; capability: string };
+    expect(call.error).toBe(auditErr);
+    expect(call.capability).toBe("iam.roles.list");
   });
 
   it("uses ctx.planTier when present (no resolveOrgTier call)", async () => {
@@ -218,10 +251,11 @@ describe("checkIAM()", () => {
     expect(mocks.emitAudit).toHaveBeenCalledTimes(1);
   });
 
-  it("does NOT throw when emitAudit rejects — audit failure is non-fatal", async () => {
+  it("does NOT throw when emitAudit rejects — audit failure is non-fatal, but escalates via captureError (OXA-2058)", async () => {
     mocks.fetchAuthz.mockResolvedValue({ ...EMPTY_AUTHZ, principal: PRINCIPAL });
     mocks.resolve.mockReturnValue({ outcome: "allow", trace: ALLOW_TRACE });
-    mocks.emitAudit.mockRejectedValue(new Error("clickhouse down"));
+    const auditErr = new Error("clickhouse down");
+    mocks.emitAudit.mockRejectedValue(auditErr);
 
     // Must not throw despite emitAudit failing.
     const result = await checkIAM({
@@ -232,6 +266,18 @@ describe("checkIAM()", () => {
     });
 
     expect(result.result.outcome).toBe("allow");
+
+    // Let the fire-and-forget emitAudit(...).catch(...) handler run.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // OXA-2058: an audit-emission failure must be observable beyond a log
+    // line — escalated to captureError (ClickHouse error_events + optional
+    // alert webhook) so it can never silently vanish.
+    expect(mocks.captureError).toHaveBeenCalledTimes(1);
+    const call = mocks.captureError.mock.calls[0]?.[0] as { error: unknown; capability: string };
+    expect(call.error).toBe(auditErr);
+    expect(call.capability).toBe("chat.message.send");
   });
 
   // ── isAclCapability boundary cases ──────────────────────────────────────

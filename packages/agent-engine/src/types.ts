@@ -22,6 +22,24 @@ export interface ImageAttachment {
   mediaType: string;
 }
 
+/**
+ * A video attached to a turn's instruction. Becomes an AI-SDK `file` content
+ * part alongside the instruction text (see engine.ts) and is ONLY sent to a
+ * model the caller has verified accepts video input (Gemini class,
+ * `supportsVideoInput`) — a vision-only model gets sampled keyframes as
+ * `images` instead, and a model that can do neither never receives a video.
+ * The engine does not itself gate on model capability; the caller (the chat
+ * stream route's routing decision) resolves which of `images`/`videos` to pass.
+ */
+export interface VideoAttachment {
+  /** Raw video bytes. */
+  data: Buffer;
+  /** IANA media type, e.g. "video/mp4". */
+  mediaType: string;
+  /** Optional original filename, forwarded to the provider when present. */
+  filename?: string;
+}
+
 // ── Model tiers + usage accounting ──────────────────────────────────────────
 // Shared by router, trace types, evaluator, planner, and fleet.
 
@@ -180,6 +198,13 @@ export interface RunCodingAgentOptions {
   instruction: string;
   /** Images to attach alongside the instruction text (multimodal content parts). Omit for a text-only turn. */
   images?: ImageAttachment[];
+  /**
+   * Videos to attach alongside the instruction text as AI-SDK `file` content
+   * parts. Omit for a turn with no video. The caller MUST only pass this to a
+   * model that accepts video input (`supportsVideoInput`); a vision-only model
+   * receives sampled keyframes via `images` instead.
+   */
+  videos?: VideoAttachment[];
   model?: string;
   /** Reasoning effort for models that support it (forwarded to the AI port). */
   effort?: "low" | "medium" | "high" | "xhigh" | "max";

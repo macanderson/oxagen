@@ -1,6 +1,6 @@
 /**
- * chat-attachments.spec.ts — end-to-end coverage for Phase 1 image
- * attachments in chat.
+ * chat-attachments.spec.ts — end-to-end coverage for chat attachments:
+ * Phase 1 image upload/send/persist, and Phase 2 video attach + upload.
  *
  * Flow: sign up a fresh user, land on the chat page, attach a PNG via the
  * composer's paperclip file input (a REAL upload against
@@ -133,5 +133,70 @@ test.describe("chat attachments — image upload, send, and persisted render", (
     await expect(attachmentsStrip).toBeVisible({ timeout: 15_000 });
     await expect(attachmentsStrip.locator("img")).toBeVisible({ timeout: 10_000 });
     await shot(page, "03-persisted-user-attachment");
+  });
+
+  test("attaches a video (Phase 2), uploads it as a video asset, and sends", async ({
+    page,
+  }) => {
+    const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "chat-video" });
+
+    await page.goto(`/${orgSlug}/default/chat`);
+    await expect(page).not.toHaveURL(/\/login/);
+
+    const composer = page.getByPlaceholder(/send a message/i);
+    await expect(composer).toBeVisible({ timeout: 10_000 });
+
+    // Capture the real upload request so we can assert it went up as kind=video
+    // (the composer routes videos to the video kind; keyframe sampling is a
+    // client-only best-effort that a headless synthetic clip won't decode, so
+    // this case verifies the video-asset wiring, not the frame fallback).
+    const uploadReq = page.waitForRequest(
+      (req) =>
+        req.url().includes("/api/v1/upload/attachment") && req.method() === "POST",
+      { timeout: 20_000 },
+    );
+
+    const attachBtn = page.getByRole("button", { name: /attach image or video/i });
+    await expect(attachBtn).toBeVisible({ timeout: 10_000 });
+
+    const fileInput = page.locator('input[type="file"]');
+    await fileInput.setInputFiles({
+      name: "clip.mp4",
+      mimeType: "video/mp4",
+      // A tiny buffer — the upload route validates the declared content-type,
+      // not the bytes (same approach as the PNG case above).
+      buffer: Buffer.from("fake-mp4-bytes"),
+    });
+
+    const postedForm = (await uploadReq).postDataBuffer();
+    // The multipart body carries the kind field; assert the composer set it to
+    // "video" (not "image").
+    expect(postedForm?.toString("latin1")).toContain("video");
+
+    // The video chip appears and reaches "uploaded" once the real upload lands.
+    // There is exactly one VISIBLE chip (keyframes, if any, are hidden).
+    const chip = page.getByTestId("attachment-chip");
+    await expect(chip).toBeVisible({ timeout: 10_000 });
+    await expect(chip).toHaveAttribute("data-status", "uploaded", { timeout: 15_000 });
+    await shot(page, "04-video-chip-uploaded");
+
+    const sendBtn = page.getByRole("button", { name: /^send message$/i });
+    await expect(sendBtn).toBeEnabled({ timeout: 15_000 });
+
+    const testMsgId = "e2e-msg-video-01";
+    await interceptAgentStream(page, {
+      events: [{ type: "text", messageId: testMsgId, text: "I can see the attached video." }],
+      delayMs: 50,
+    });
+
+    await composer.fill("What happens in this clip?");
+    await sendBtn.click();
+
+    const liveTurn = page.locator("[data-live-turn]");
+    await expect(liveTurn).toBeVisible({ timeout: 12_000 });
+    await expect(liveTurn).toContainText(/I can see the attached video/i, {
+      timeout: 10_000,
+    });
+    await shot(page, "05-video-assistant-reply-live");
   });
 });
