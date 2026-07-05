@@ -5,7 +5,7 @@
  * The DB layer is mocked. We spy on drizzle-orm's `inArray` to verify the
  * right SQL condition is (or isn't) passed depending on serverAllowlist state.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { z } from "zod";
 
 // ── drizzle-orm spy ─────────────────────────────────────────────────────────
@@ -283,5 +283,75 @@ describe("contributeMcpTools — healthStatus: 'unknown' servers are included", 
 
     const serverIds = tools.map((t) => t.externalServerId).sort();
     expect(serverIds).toEqual(["srv_a", "srv_u"].sort());
+  });
+});
+
+// ── OXA-1982: auth_config is decrypted before use ────────────────────────────
+//
+// mcp_servers.auth_config is envelope-encrypted at rest. The contributor must
+// decrypt it before handing it to connectMcp() — otherwise a static bearer/
+// header MCP server would authenticate with the raw ciphertext blob instead
+// of the real secret and every call would 401.
+describe("contributeMcpTools — decrypts auth_config before connecting (OXA-1982)", () => {
+  const originalKey = process.env.AUTH_TOKEN_ENCRYPTION_KEY;
+  const TEST_KEY = Buffer.alloc(32, 5).toString("base64");
+
+  beforeEach(() => {
+    dbMocks.rowsByTable.clear();
+    vi.mocked(connectMcp).mockClear();
+  });
+
+  afterEach(() => {
+    if (originalKey === undefined) delete process.env.AUTH_TOKEN_ENCRYPTION_KEY;
+    else process.env.AUTH_TOKEN_ENCRYPTION_KEY = originalKey;
+  });
+
+  it("decrypts an encrypted auth_config and passes the plaintext secret to connectMcp", async () => {
+    process.env.AUTH_TOKEN_ENCRYPTION_KEY = TEST_KEY;
+    // Encrypt with the SAME module the contributor uses, so the test proves
+    // the real round trip rather than duplicating the encryption logic.
+    const { encryptMcpAuthConfig } = await import("../mcp-server-auth-crypto");
+    const encrypted = await encryptMcpAuthConfig({ token: "static-bearer-secret" });
+
+    const serverWithEncryptedAuth = {
+      ...SERVER_A,
+      id: "srv_enc",
+      publicId: "mcs_enc",
+      authStrategy: "bearer",
+      authConfig: encrypted,
+      orgListingId: null, // no workspace credential row — static auth only
+    };
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [serverWithEncryptedAuth]);
+
+    await contributeMcpTools(CTX, undefined);
+
+    expect(connectMcp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authStrategy: "bearer",
+        authConfig: { token: "static-bearer-secret" },
+      }),
+    );
+  });
+
+  it("passes through a legacy plaintext auth_config unchanged (pre-backfill back-compat)", async () => {
+    delete process.env.AUTH_TOKEN_ENCRYPTION_KEY;
+    const serverWithLegacyAuth = {
+      ...SERVER_A,
+      id: "srv_legacy",
+      publicId: "mcs_legacy",
+      authStrategy: "bearer",
+      authConfig: { token: "legacy-plaintext-token" },
+      orgListingId: null,
+    };
+    dbMocks.rowsByTable.set(dbMocks.schema.mcpServers, [serverWithLegacyAuth]);
+
+    await contributeMcpTools(CTX, undefined);
+
+    expect(connectMcp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authStrategy: "bearer",
+        authConfig: { token: "legacy-plaintext-token" },
+      }),
+    );
   });
 });

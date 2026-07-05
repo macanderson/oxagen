@@ -16,6 +16,7 @@ import { getWorkspaceSecret, DbOAuthClientProvider, markCredentialNeedsReauth } 
 import type { CapabilityContext } from "../../types";
 import { connectMcp, materializeMcpTools } from "../../dispatch/mcp-client";
 import { registerPluginType, type ContributedRawTool, type PluginContributeOptions } from "../plugin-type";
+import { decryptMcpAuthConfig } from "../mcp-server-auth-crypto";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "info", base: { app: "agent.plugin-types.mcp" } });
 
@@ -106,7 +107,9 @@ async function contributeMcpTools(ctx: CapabilityContext, options?: PluginContri
       } else {
         // Static bearer/secret path (Plan 3 behaviour).
         let authStrategy = server.authStrategy as "none" | "bearer" | "header";
-        let authConfig = (server.authConfig ?? {}) as Record<string, string>;
+        // Decrypt (OXA-1982): auth_config is envelope-encrypted at rest (or
+        // legacy plaintext, pre-backfill).
+        let authConfig = await decryptMcpAuthConfig(server.authConfig);
         if (server.orgListingId && authStrategy !== "none") {
           const cred = await getWorkspaceSecret({
             orgId: ctx.orgId,

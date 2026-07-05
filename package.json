@@ -63,6 +63,7 @@
     "db:backfill-iam": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-org-iam.ts",
     "db:backfill-capabilities": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-workspace-capabilities.ts",
     "db:backfill-workspace-seeds": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-workspace-seeds.ts",
+    "db:backfill-mcp-server-auth-config": "tsx --env-file-if-exists=.env.local tools/scripts/backfill-mcp-server-auth-config.ts",
     "metrics:fanout": "tsx --env-file-if-exists=.env.local tools/scripts/fanout-token-metrics.ts"
   },
   "devDependencies": {

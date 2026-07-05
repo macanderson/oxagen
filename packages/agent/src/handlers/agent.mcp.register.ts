@@ -2,6 +2,7 @@ import { withTenantDb, schema } from "@oxagen/database";
 import type { CapabilityContext } from "../types";
 import { healthcheck, type McpToolDescriptor } from "../dispatch/mcp-client";
 import { captureToolSnapshots } from "../runtime/mcp-snapshots";
+import { encryptMcpAuthConfig } from "../runtime/mcp-server-auth-crypto";
 import type { AgentMcpRegisterInput, AgentMcpRegisterOutput } from "@oxagen/oxagen/contracts/agent.mcp.register";
 
 export type { AgentMcpRegisterInput, AgentMcpRegisterOutput };
@@ -97,6 +98,12 @@ export async function agentMcpRegisterHandler(
         })
       : { status: "degraded", discoveredTools: [], descriptors: [] };
 
+  // Envelope-encrypt any secret material before it ever reaches the DB
+  // (OXA-1982). authStrategy "none" carries no secrets, so encryptMcpAuthConfig
+  // stores `{}`; bearer/header auth REQUIRES AUTH_TOKEN_ENCRYPTION_KEY to be
+  // configured and throws rather than persisting plaintext.
+  const encryptedAuthConfig = await encryptMcpAuthConfig(input.authConfig);
+
   const [row] = await withTenantDb((tx) =>
     tx
       .insert(schema.mcpServers)
@@ -107,7 +114,7 @@ export async function agentMcpRegisterHandler(
         transportType: input.transportType,
         endpointUrl: input.endpointUrl,
         authStrategy: input.authStrategy,
-        authConfig: (input.authConfig ?? {}) as object,
+        authConfig: encryptedAuthConfig,
         healthStatus: probe.status,
         lastHealthcheckAt: new Date(),
         discoveredTools: probe.discoveredTools as object,
