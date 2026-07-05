@@ -35,6 +35,8 @@ import {
   type SecurityEventType,
   type SecurityOutcome,
 } from "@oxagen/compliance";
+import { captureError } from "./error-reporting";
+import { retryWithBackoff } from "./retry";
 
 export { SECURITY_EVENT_TYPES };
 export type { SecurityEventType, SecurityOutcome };
@@ -77,12 +79,57 @@ export interface AuditInsertFn {
 }
 
 /**
- * `recordSecurityEvent` — fire-and-forget insert of one audit row.
+ * Attempts to persist `event` via `insert`, retrying transient failures with
+ * exponential backoff before giving up. Shared by the fire-and-forget and
+ * awaitable variants below so both get the same durability guarantee.
+ */
+function insertWithRetry(
+  insert: AuditInsertFn,
+  event: SecurityEventInput,
+): Promise<void> {
+  return retryWithBackoff(() => insert(event), { attempts: 3, baseDelayMs: 25 });
+}
+
+/**
+ * Escalates an audit-write failure to durable, alertable telemetry — a
+ * dropped security-audit row is a SOC2-relevant silent failure (OXA-2058), so
+ * this must be observable beyond a stderr line nobody watches. `captureError`
+ * writes to ClickHouse `error_events` and (when configured) an outbound
+ * alert webhook; it is itself fire-and-forget and never throws.
  *
- * Errors are caught and forwarded to the optional `onError` callback so that
- * an audit failure never surfaces to the caller as an unhandled rejection
- * (the capability invocation or auth action must succeed even when the audit
- * write is temporarily degraded).
+ * Never expand `event` beyond eventType/orgId/workspaceId/capability/requestId
+ * here — it may carry ip / user_agent, which must not be duplicated into the
+ * error-reporting pipeline.
+ */
+function escalateWriteFailure(event: SecurityEventInput, err: unknown): void {
+  captureError({
+    error: err,
+    // SecurityEventInput does not carry a runtime/surface tag (callers span
+    // apps/app, apps/api, apps/mcp, and handlers invoked from all three), so
+    // "api" is a coarse-but-consistent default for triage grouping — the
+    // fingerprint + capability + eventType fields carry the real signal.
+    source: "api",
+    severity: "error",
+    orgId: event.orgId,
+    workspaceId: event.workspaceId,
+    capability: event.capability,
+    requestId: event.requestId,
+    context: `security-audit: failed to durably write event (eventType=${event.eventType}) after retries exhausted`,
+  });
+}
+
+/**
+ * `recordSecurityEvent` — fire-and-forget insert of one audit row, durable
+ * against transient failures.
+ *
+ * The insert is retried with exponential backoff (see `insertWithRetry`)
+ * before being treated as failed. Once every attempt is exhausted, the
+ * failure is (1) escalated to `captureError` — ClickHouse `error_events` +
+ * optional alert webhook, so a dropped audit write is genuinely observable
+ * (OXA-2058) — and (2) forwarded to the optional `onError` callback / default
+ * stderr line. Neither path re-throws: the capability invocation or auth
+ * action must succeed even when the audit write is durably failing, but the
+ * failure itself is never silently swallowed anymore.
  *
  * @param insert  - A function that persists the row. Wire the real DB insert
  *                  via `makeSecurityEventInserter(db)` from @oxagen/database;
@@ -97,7 +144,9 @@ export function recordSecurityEvent(
   event: SecurityEventInput,
   onError?: (err: unknown) => void,
 ): void {
-  insert(event).catch((err: unknown) => {
+  insertWithRetry(insert, event).catch((err: unknown) => {
+    escalateWriteFailure(event, err);
+
     if (onError) {
       onError(err);
     } else {
@@ -105,11 +154,12 @@ export function recordSecurityEvent(
       // `event` here — it may contain ip / user_agent. Uses structured JSON
       // to stderr to match the rest of the telemetry package (no pino dep
       // in @oxagen/telemetry; process.stderr.write keeps the output
-      // machine-readable without adding a dependency).
+      // machine-readable without adding a dependency). This is now a SECOND,
+      // local signal alongside captureError above — not the only one.
       process.stderr.write(
         JSON.stringify({
           level: "error",
-          msg: "security-audit: failed to write event",
+          msg: "security-audit: failed to write event after retries exhausted",
           eventType: event.eventType,
           orgId: event.orgId,
           err: err instanceof Error ? err.message : String(err),
@@ -123,10 +173,20 @@ export function recordSecurityEvent(
  * `recordSecurityEventAsync` — awaitable variant for callers that need to
  * confirm the write before proceeding (e.g. tests, or places where the audit
  * record is load-bearing for compliance evidence).
+ *
+ * Retries transient failures the same way as `recordSecurityEvent`. If every
+ * attempt still fails, the failure is escalated via `captureError` (so it is
+ * observable even for callers that only check the rejection) and then
+ * re-thrown — the awaiting caller opted into knowing the write failed.
  */
 export async function recordSecurityEventAsync(
   insert: AuditInsertFn,
   event: SecurityEventInput,
 ): Promise<void> {
-  await insert(event);
+  try {
+    await insertWithRetry(insert, event);
+  } catch (err) {
+    escalateWriteFailure(event, err);
+    throw err;
+  }
 }

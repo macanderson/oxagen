@@ -1,5 +1,6 @@
 import { Box, Text } from "ink";
 import React, { useEffect, useState } from "react";
+import { useTerminalSize } from "../repl/use-terminal-size.js";
 
 // 5-row block glyphs, kept as literals so the wordmark renders identically
 // across terminals (no figlet dependency). Every glyph is a fixed-width
@@ -88,51 +89,6 @@ function gradientRuns(line: string, width: number): Array<{ text: string; color:
   return runs;
 }
 
-// ── Sunset gradient ──────────────────────────────────────────────────────────
-// Amber → orange → red → burnt red, swept left-to-right across the wordmark.
-const SUNSET_STOPS = ["#FBBF24", "#F97316", "#EF4444", "#B91C1C"] as const;
-
-function hexChannel(hex: string, i: number): number {
-  return parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
-}
-
-/** Color at horizontal position `t` ∈ [0,1] along the sunset gradient. */
-export function sunsetColorAt(t: number): string {
-  const clamped = Math.min(1, Math.max(0, t));
-  const segments = SUNSET_STOPS.length - 1;
-  const scaled = clamped * segments;
-  const idx = Math.min(segments - 1, Math.floor(scaled));
-  const local = scaled - idx;
-  const from = SUNSET_STOPS[idx] ?? SUNSET_STOPS[0];
-  const to = SUNSET_STOPS[idx + 1] ?? from;
-  const mix = (i: number): number =>
-    Math.round(hexChannel(from, i) + (hexChannel(to, i) - hexChannel(from, i)) * local);
-  return `#${[0, 1, 2].map((i) => mix(i).toString(16).padStart(2, "0")).join("")}`;
-}
-
-/**
- * Split one wordmark row into runs of same-colored characters, coloring each
- * column by its position along the gradient. Adjacent columns that resolve to
- * the same hex merge into one run so the element count stays small.
- */
-function gradientRuns(line: string, width: number): Array<{ text: string; color: string }> {
-  const runs: Array<{ text: string; color: string }> = [];
-  let text = "";
-  let color = "";
-  for (let i = 0; i < line.length; i++) {
-    const c = sunsetColorAt(width <= 1 ? 0 : i / (width - 1));
-    if (c === color) {
-      text += line[i];
-    } else {
-      if (text) runs.push({ text, color });
-      text = line[i] ?? "";
-      color = c;
-    }
-  }
-  if (text) runs.push({ text, color });
-  return runs;
-}
-
 /** ms between each revealed row of the wordmark during the intro animation. */
 const REVEAL_INTERVAL_MS = 70;
 
@@ -166,6 +122,7 @@ export const Banner = React.memo(function Banner({
 }: {
   animate?: boolean;
 }): React.ReactElement {
+  const { cols } = useTerminalSize();
   const mark =
     cols !== undefined && cols < WORDMARK_FULL_WIDTH + 2
       ? cols < WORDMARK_WIDTH + 2

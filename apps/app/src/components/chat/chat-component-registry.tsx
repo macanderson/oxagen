@@ -33,6 +33,8 @@ type AnyLazy = LazyExoticComponent<(props: Record<string, unknown>) => React.Rea
  *   "code-diff"                — renders a unified-diff patch set (agent.repo.edit, repo.file.put)
  *   "terminal-trace"           — long-form shell scrollback for large agent.sandbox.exec output
  *   "file-tree"                — collapsible workspace/repo file tree, changed files link to their diff
+ *   "coding-trace-panel"       — collapsible run-overview timeline composing terminal-trace/code-diff steps
+ *   "workspace-context-panel"  — active sandbox session's file tree (client-fetched agent.sandbox.files.list)
  */
 /**
  * Emit a structured warning when a componentId arrives with no registered
@@ -197,5 +199,15 @@ export const CHAT_COMPONENTS = {
   // section in a "code-diff" card via the shared diffAnchorId convention.
   "file-tree": lazy(
     () => import("@/components/chat/registry-components/file-tree-card"),
+  ),
+  // Collapsible run-overview panel composing per-step terminal-trace/code-diff
+  // cards into one timeline for a full coding-agent turn.
+  "coding-trace-panel": lazy(
+    () => import("@/components/chat/registry-components/coding-trace-panel"),
+  ),
+  // Client-fetched active sandbox session file tree (agent.sandbox.files.list),
+  // rendered via the shared FileTreeCard.
+  "workspace-context-panel": lazy(
+    () => import("@/components/chat/registry-components/workspace-context-panel"),
   ),
 } as unknown as Record<string, AnyLazy>;

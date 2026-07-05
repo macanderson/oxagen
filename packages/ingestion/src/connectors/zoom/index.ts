@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { registerConnector, type ConnectorDefinition, type NormalizedRecord, type RecordTypeSample } from "../types";
+import { constantTimeStringEqual } from "../safe-compare";
 
 const connectionConfigSchema = z.object({
   includePastMeetings: z.boolean().default(true),
@@ -112,12 +113,14 @@ const zoom: ConnectorDefinition<Config> = {
     }
   },
 
-  // Zoom sends Authorization: <token> as a static bearer token for webhook verification.
+  // Zoom sends Authorization: <token> as a static bearer token for webhook
+  // verification. OXA-2051: compare in constant time — a plain `===` here
+  // leaks the secret via response-time analysis on this unauthenticated route.
   verifyWebhook(_payload, headers, secret): boolean {
     if (!secret) return false;
     const auth = headers["authorization"];
     if (!auth) return false;
-    return auth === secret;
+    return constantTimeStringEqual(auth, secret);
   },
 };
 

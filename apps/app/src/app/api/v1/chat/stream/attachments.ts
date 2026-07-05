@@ -26,6 +26,15 @@ export interface ResolvedAttachmentImage {
   mediaType: string;
 }
 
+/** A resolved current-turn attachment, tagged with its stored kind so the
+ * route can partition image vs. video parts (Phase 2). Video is only ever
+ * sent to a video-capable model — see attachment-routing.ts. */
+export interface ResolvedAttachmentMedia {
+  kind: "image" | "video";
+  data: Buffer;
+  mediaType: string;
+}
+
 /** Drain a private-blob ReadableStream into a Buffer (same pattern as
  * `packages/agent/src/handlers/agent.feature.verify.ts`'s judge-image fetch —
  * duplicated locally since it's a tiny, dependency-free helper and the two
@@ -42,19 +51,20 @@ async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffe
 }
 
 /**
- * Resolve `publicIds` to their fetched image bytes. Org/workspace-scoped
- * (RLS via `runInTenantScope` + explicit predicates) and restricted to
- * `status: 'ready'`, `kind: 'image'`, non-deleted rows — Phase 1 sends only
- * image parts to the model; video/document attachments are not resolved here.
+ * Resolve `publicIds` to their fetched bytes for the two multimodal-input
+ * kinds — `image` and `video`. Org/workspace-scoped (RLS via `runInTenantScope`
+ * + explicit predicates) and restricted to `status: 'ready'`, non-deleted rows.
+ * Each entry carries its stored `kind` so the caller can partition image vs.
+ * video parts and route videos through the video/keyframe decision.
  *
  * Returns a Map keyed by publicId. An id that doesn't resolve (unknown,
- * foreign org, wrong kind, not ready, soft-deleted) is simply ABSENT from the
- * map — the caller decides whether that's a hard error or a silent degrade.
+ * foreign org, non-media kind, not ready, soft-deleted) is simply ABSENT from
+ * the map — the caller decides whether that's a hard error or a silent degrade.
  */
-export async function resolveAttachmentImages(
+export async function resolveAttachmentMedia(
   publicIds: string[],
   scope: { orgId: string; workspaceId: string },
-): Promise<Map<string, ResolvedAttachmentImage>> {
+): Promise<Map<string, ResolvedAttachmentMedia>> {
   if (publicIds.length === 0) return new Map();
 
   const rows = await runInTenantScope(scope, () =>
@@ -64,6 +74,7 @@ export async function resolveAttachmentImages(
           publicId: schema.generatedAssets.publicId,
           storageKey: schema.generatedAssets.storageKey,
           mimeType: schema.generatedAssets.mimeType,
+          kind: schema.generatedAssets.kind,
         })
         .from(schema.generatedAssets)
         .where(
@@ -72,7 +83,7 @@ export async function resolveAttachmentImages(
             eq(schema.generatedAssets.orgId, scope.orgId),
             eq(schema.generatedAssets.workspaceId, scope.workspaceId),
             eq(schema.generatedAssets.status, "ready"),
-            eq(schema.generatedAssets.kind, "image"),
+            inArray(schema.generatedAssets.kind, ["image", "video"]),
             isNull(schema.generatedAssets.deletedAt),
           ),
         ),
@@ -83,9 +94,37 @@ export async function resolveAttachmentImages(
     rows.map(async (row) => {
       const obj = await storage().get(row.storageKey);
       const data = await streamToBuffer(obj.body);
-      return [row.publicId, { data, mediaType: row.mimeType }] as const;
+      return [
+        row.publicId,
+        {
+          kind: row.kind === "video" ? "video" : "image",
+          data,
+          mediaType: row.mimeType,
+        } as ResolvedAttachmentMedia,
+      ] as const;
     }),
   );
 
   return new Map(entries);
+}
+
+/**
+ * Resolve `publicIds` to their fetched image bytes — the image-only view over
+ * {@link resolveAttachmentMedia}, used by bounded history replay (history.ts)
+ * where only prior-turn images are re-materialized. Video and other kinds are
+ * dropped (absent from the returned map). Same scoping + miss semantics as
+ * `resolveAttachmentMedia`.
+ */
+export async function resolveAttachmentImages(
+  publicIds: string[],
+  scope: { orgId: string; workspaceId: string },
+): Promise<Map<string, ResolvedAttachmentImage>> {
+  const media = await resolveAttachmentMedia(publicIds, scope);
+  const images = new Map<string, ResolvedAttachmentImage>();
+  for (const [publicId, entry] of media) {
+    if (entry.kind === "image") {
+      images.set(publicId, { data: entry.data, mediaType: entry.mediaType });
+    }
+  }
+  return images;
 }

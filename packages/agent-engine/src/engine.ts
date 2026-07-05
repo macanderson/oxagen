@@ -116,20 +116,31 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
   // so the platform's /v1/agent/llm route does not hoist it back into the cached
   // system string.
   const system = opts.system ?? DEFAULT_SYSTEM;
-  // Pasted images (REPL Ctrl-V) ride alongside the instruction text as
-  // multimodal content parts. Text-only (the common case, and every retry
-  // step after the first — see the pipeline) keeps the plain-string content
-  // shape, unchanged from before this option existed.
+  // Pasted images (REPL Ctrl-V) and attached videos ride alongside the
+  // instruction text as multimodal content parts — images as `image` parts,
+  // videos as AI-SDK `file` parts (only ever passed for a video-capable model;
+  // the caller downgrades to keyframe `images` otherwise). Text-only (the
+  // common case, and every retry step after the first — see the pipeline)
+  // keeps the plain-string content shape, unchanged from before these options
+  // existed.
+  const attachedImages = opts.images ?? [];
+  const attachedVideos = opts.videos ?? [];
   const instructionMessage: ModelMessage =
-    opts.images && opts.images.length > 0
+    attachedImages.length > 0 || attachedVideos.length > 0
       ? {
           role: "user",
           content: [
             { type: "text", text: opts.instruction },
-            ...opts.images.map((img) => ({
+            ...attachedImages.map((img) => ({
               type: "image" as const,
               image: img.data,
               mediaType: img.mediaType,
+            })),
+            ...attachedVideos.map((vid) => ({
+              type: "file" as const,
+              data: vid.data,
+              mediaType: vid.mediaType,
+              ...(vid.filename ? { filename: vid.filename } : {}),
             })),
           ],
         }
