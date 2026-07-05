@@ -25,6 +25,11 @@ describe("connection.get capability", () => {
       entityCount: 150,
       lastSyncAt: "2026-01-01T00:00:00Z",
       errorMessage: null,
+      healthStatus: "healthy",
+      consecutiveFailureCount: 0,
+      lastPollAt: "2026-01-01T00:00:00Z",
+      nextPollAt: "2026-01-01T00:15:00Z",
+      lastErrorAt: null,
       createdAt: "2025-12-01T00:00:00Z",
       updatedAt: "2026-01-01T00:00:00Z",
     });
@@ -47,6 +52,11 @@ describe("connection.get capability", () => {
       entityCount: 0,
       lastSyncAt: null,
       errorMessage: "OAuth token expired",
+      healthStatus: "errored",
+      consecutiveFailureCount: 3,
+      lastPollAt: "2026-01-10T00:00:00Z",
+      nextPollAt: null,
+      lastErrorAt: "2026-01-10T00:00:00Z",
       createdAt: "2025-11-01T00:00:00Z",
       updatedAt: "2026-01-10T00:00:00Z",
     });

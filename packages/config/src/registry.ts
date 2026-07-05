@@ -225,6 +225,45 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     placeholder: "oxagen",
   },
 
+  // ── Circuit breaker (shared thresholds for every per-dependency breaker —
+  //    Neo4j scopedSession, Stripe BillingProvider, ClickHouse insertRows) ────
+  CIRCUIT_BREAKER_FAILURE_THRESHOLD: {
+    group: "Circuit breaker",
+    description:
+      "Consecutive failures before a breaker opens for a wrapped dependency call " +
+      "(Neo4j / Stripe / ClickHouse). Optional — defaults to 5 in packages/config/src/env.ts.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "5",
+  },
+  CIRCUIT_BREAKER_RESET_TIMEOUT_MS: {
+    group: "Circuit breaker",
+    description:
+      "Milliseconds an open breaker waits before allowing a trial (half-open) request. " +
+      "Optional — defaults to 30000 in packages/config/src/env.ts.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "30000",
+  },
+  CIRCUIT_BREAKER_SUCCESS_THRESHOLD: {
+    group: "Circuit breaker",
+    description:
+      "Consecutive successes required in the half-open state before a breaker closes. " +
+      "Optional — defaults to 1 in packages/config/src/env.ts.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "1",
+  },
+
   // ── Error alerting (vendor-neutral outbound webhook) ────────────────────────
   ALERT_WEBHOOK_URL: {
     group: "Error alerting",

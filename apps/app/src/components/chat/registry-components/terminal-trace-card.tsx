@@ -64,28 +64,37 @@ export interface AnsiSegment {
 export function parseAnsiLine(line: string): AnsiSegment[] {
   const segments: AnsiSegment[] = [];
   let lastIndex = 0;
-  let currentClass: string | undefined;
+  // Bold and color are independent SGR attributes — tracked separately so a
+  // combined sequence like `\x1b[1;31m` (bold red) doesn't lose "font-semibold"
+  // when the color code is applied after it.
+  let currentColorClass: string | undefined;
+  let currentBold = false;
+  const currentClass = (): string | undefined =>
+    [currentColorClass, currentBold ? "font-semibold" : undefined].filter(Boolean).join(" ") ||
+    undefined;
   ANSI_SEQ_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
 
   while ((match = ANSI_SEQ_RE.exec(line)) !== null) {
     if (match.index > lastIndex) {
-      segments.push({ text: line.slice(lastIndex, match.index), className: currentClass });
+      segments.push({ text: line.slice(lastIndex, match.index), className: currentClass() });
     }
     const [, codeStr, letter] = match;
     if (letter === "m") {
       const codes = codeStr && codeStr.length > 0 ? codeStr.split(";") : ["0"];
       for (const code of codes) {
-        if (code === "0" || code === "") currentClass = undefined;
-        else if (code === "1") currentClass = [currentClass, "font-semibold"].filter(Boolean).join(" ");
-        else if (ANSI_COLOR_CLASS[code]) currentClass = ANSI_COLOR_CLASS[code];
+        if (code === "0" || code === "") {
+          currentColorClass = undefined;
+          currentBold = false;
+        } else if (code === "1") currentBold = true;
+        else if (ANSI_COLOR_CLASS[code]) currentColorClass = ANSI_COLOR_CLASS[code];
       }
     }
     // Non-SGR sequences (cursor movement, screen clears, …) are dropped.
     lastIndex = ANSI_SEQ_RE.lastIndex;
   }
   if (lastIndex < line.length) {
-    segments.push({ text: line.slice(lastIndex), className: currentClass });
+    segments.push({ text: line.slice(lastIndex), className: currentClass() });
   }
   return segments.length > 0 ? segments : [{ text: line }];
 }

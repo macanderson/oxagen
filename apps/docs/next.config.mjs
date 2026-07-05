@@ -12,6 +12,22 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // Serve the static HTML sales decks under public/decks/* at clean, extensionless
+  // URLs. Vercel resolves a directory's index.html at the clean path in production,
+  // but `next dev`/`next start` do not — these rewrites make the exact URLs
+  // (e.g. /decks/first-call-enterprise) resolve consistently across every runtime.
+  async rewrites() {
+    return [
+      {
+        source: "/decks/first-call-enterprise",
+        destination: "/decks/first-call-enterprise/index.html",
+      },
+      {
+        source: "/decks/first-call-enterprise/script",
+        destination: "/decks/first-call-enterprise/script.html",
+      },
+    ];
+  },
 };
 
 export default withMDX(nextConfig);

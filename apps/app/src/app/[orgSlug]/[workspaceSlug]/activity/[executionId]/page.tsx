@@ -14,6 +14,7 @@ import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org
 import { Skeleton } from "@/components/ui/skeleton";
 import { workspace } from "@/lib/routes";
 import { TraceSection } from "./trace-section";
+import { LineageSection } from "./lineage-section";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,17 @@ export default async function TracePage({ params }: PageProps) {
         }
       >
         <TraceSection
+          orgId={org.id}
+          workspaceId={ws.id}
+          userId={session.user.id}
+          executionId={executionId}
+        />
+      </Suspense>
+      {/* File-level lineage graph — the :Execution and every :SourceFile it
+          touched. Streams in its own Suspense boundary and renders nothing when
+          the run recorded no TOUCHED_FILE edges. */}
+      <Suspense fallback={null}>
+        <LineageSection
           orgId={org.id}
           workspaceId={ws.id}
           userId={session.user.id}

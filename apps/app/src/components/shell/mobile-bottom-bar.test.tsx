@@ -57,14 +57,18 @@ afterEach(() => {
 
 describe("MobileBottomBar — primary tabs", () => {
   it("renders the workspace destinations as client-routed tabs with resolved hrefs", () => {
-    // Workspace mode now has exactly four nav items (ask, knowledge, marketplace,
-    // settings), so all fit in the bar and none overflow into "More".
+    // Workspace mode has five nav items (ask, knowledge, activity, marketplace,
+    // settings); only the first four (MAX_BAR_ITEMS) fit the bar — Settings
+    // overflows into the "More" sheet, covered separately below.
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(within(nav).getByRole("link", { name: "Ask" })).toHaveAttribute("href", "/acme/prod/ask");
     expect(within(nav).getByRole("link", { name: "Knowledge" })).toHaveAttribute("href", "/acme/prod/knowledge");
-    expect(within(nav).getByRole("link", { name: "Marketplace" })).toHaveAttribute("href", "/acme/prod/settings/plugins");
-    expect(within(nav).getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/acme/prod/settings");
+    expect(within(nav).getByRole("link", { name: "Activity" })).toHaveAttribute("href", "/acme/prod/activity");
+    expect(within(nav).getByRole("link", { name: "Marketplace" })).toHaveAttribute(
+      "href",
+      "/acme/prod/settings/plugins",
+    );
   });
 
   it("marks the current destination with aria-current=page", () => {
@@ -73,14 +77,12 @@ describe("MobileBottomBar — primary tabs", () => {
     expect(screen.getByRole("link", { name: "Knowledge" })).not.toHaveAttribute("aria-current");
   });
 
-  it("keeps a More tab for the account control while all nav destinations stay in the bar", () => {
-    // With four items, nothing overflows — the More tab only exists to host the
-    // account control (present because a user is provided).
+  it("overflows Settings into the More sheet while the other four destinations stay in the bar", () => {
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(screen.getByRole("button", { name: /more navigation/i })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Marketplace" })).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: "Settings" })).toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
   });
 });
 
@@ -94,18 +96,17 @@ describe("MobileBottomBar — More sheet", () => {
     );
   });
 
-  it("omits the More tab in workspace mode when there is no user (nothing overflows)", () => {
-    // Four items all fit the bar and there is no account control, so the More
-    // sheet would be header-only — the More tab must not render at all.
+  it("still shows the More tab in workspace mode with no user, since Settings overflows regardless of the account control", () => {
     render(<MobileBottomBar ctx={wsCtx} user={undefined} />);
-    expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /more navigation/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /more navigation/i })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
+    expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
   });
 
-  it("marks the Settings destination active when the settings route is open", () => {
+  it("marks the More tab active when the settings route is open, since Settings lives behind it", () => {
     pathnameRef.current = "/acme/prod/settings";
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: /more navigation/i })).toHaveAttribute("aria-current", "page");
   });
 });
 

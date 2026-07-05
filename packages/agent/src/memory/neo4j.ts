@@ -1018,3 +1018,95 @@ export async function attachEvidence(
     await s.close();
   }
 }
+
+// ── Execution lineage (agent.execution.lineage) ──────────────────────────────
+
+/** Raw `:Execution` node projection, before the handler resolves it to a KnowledgeNodeRef. */
+export interface ExecutionLineageExecutionRow {
+  id: string;
+  publicId: string | null;
+  label: string | null;
+  displayName: string | null;
+  /** JSON-string properties bag written by recordExecutionInGraph — the handler safe-parses it. */
+  properties: string | null;
+  status: string | null;
+  originType: string | null;
+  summary: string | null;
+}
+
+/** Raw `:SourceFile` node + `[:TOUCHED_FILE]` edge projection for one touched file. */
+export interface ExecutionLineageFileRow {
+  naturalKey: string;
+  path: string | null;
+  displayName: string | null;
+  publicId: string | null;
+  edgeType: string;
+}
+
+export interface ExecutionLineageResult {
+  execution: ExecutionLineageExecutionRow | null;
+  files: ExecutionLineageFileRow[];
+}
+
+/**
+ * Load one `:Execution` node plus every `:SourceFile` it touched via
+ * `[:TOUCHED_FILE]` (written by `recordExecutionInGraph`), scoped to the
+ * active tenant. Two queries in one session: the execution first (matched by
+ * `id` OR `publicId`), then — only when it was found — its touched files. The
+ * `:SourceFile` neighbours are org-scoped (not workspace-scoped), reached only
+ * via the tenant-scoped execution's edges, per docs/specs on file lineage.
+ */
+export async function getExecutionLineage(executionId: string): Promise<ExecutionLineageResult> {
+  const s = scopedSession();
+  try {
+    const execResult = await s.run(
+      /* cypher */ `
+        MATCH (e:Execution {orgId: $orgId, workspaceId: $workspaceId})
+        WHERE e.id = $executionId OR e.publicId = $executionId
+        RETURN e.id AS id, e.publicId AS publicId, e.label AS label,
+               e.displayName AS displayName, e.properties AS properties,
+               e.status AS status, e.originType AS originType, e.summary AS summary
+        LIMIT 1
+      `,
+      { executionId },
+    );
+    const execRec = execResult.records[0];
+    if (!execRec) {
+      return { execution: null, files: [] };
+    }
+    const execution: ExecutionLineageExecutionRow = {
+      id: execRec.get("id") as string,
+      publicId: (execRec.get("publicId") as string | null) ?? null,
+      label: (execRec.get("label") as string | null) ?? null,
+      displayName: (execRec.get("displayName") as string | null) ?? null,
+      properties: (execRec.get("properties") as string | null) ?? null,
+      status: (execRec.get("status") as string | null) ?? null,
+      originType: (execRec.get("originType") as string | null) ?? null,
+      summary: (execRec.get("summary") as string | null) ?? null,
+    };
+
+    const filesResult = await s.run(
+      /* cypher */ `
+        MATCH (e:Execution {orgId: $orgId, workspaceId: $workspaceId})
+        WHERE e.id = $executionId OR e.publicId = $executionId
+        MATCH (e)-[r:TOUCHED_FILE]->(f:SourceFile)
+        RETURN f.naturalKey AS naturalKey, f.path AS path,
+               f.displayName AS displayName, f.publicId AS publicId, type(r) AS edgeType
+        ORDER BY coalesce(f.displayName, f.path, f.naturalKey) ASC
+        LIMIT 500
+      `,
+      { executionId },
+    );
+    const files: ExecutionLineageFileRow[] = filesResult.records.map((r) => ({
+      naturalKey: r.get("naturalKey") as string,
+      path: (r.get("path") as string | null) ?? null,
+      displayName: (r.get("displayName") as string | null) ?? null,
+      publicId: (r.get("publicId") as string | null) ?? null,
+      edgeType: r.get("edgeType") as string,
+    }));
+
+    return { execution, files };
+  } finally {
+    await s.close();
+  }
+}

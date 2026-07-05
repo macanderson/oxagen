@@ -111,6 +111,19 @@ vi.mock("@oxagen/database", () => ({
       workspaceId: "workspace_id",
       deletedAt: "deleted_at",
     },
+    // Required by packages/agent's _agent-definition module-level agentColumns
+    // initializer, transitively reached via the file-locking (OXA-2070) wiring.
+    agents: {
+      id: "id",
+      publicId: "public_id",
+      slug: "slug",
+      name: "name",
+      description: "description",
+      agentType: "agent_type",
+      status: "status",
+      deploymentStatus: "deployment_status",
+      activeVersionId: "active_version_id",
+    },
   },
 }));
 
