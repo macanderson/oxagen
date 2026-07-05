@@ -241,6 +241,15 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+    # next start hardcodes NODE_ENV=production regardless of this job's env,
+    # which isProductionRuntime() (packages/config/src/env.ts) would otherwise
+    # read as a real prod deployment and refuse to boot (TENANT_RLS_ENFORCEMENT_ENABLED
+    # fail-closed startup assertion — this Postgres service is a throwaway
+    # superuser role, never provisioned with the non-superuser oxagen_app role
+    # a real deployment requires). VERCEL_ENV is checked first and is the
+    # correct signal that this is not a real production runtime.
+    env:
+      VERCEL_ENV: preview
     timeout-minutes: 45
     strategy:
       matrix:
