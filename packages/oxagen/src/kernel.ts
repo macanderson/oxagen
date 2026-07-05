@@ -420,6 +420,14 @@ export interface InvokeOptions {
  *         throws CapabilityError(code='authz_denied') on deny or pending_approval.
  *       When enforcement=false (default):
  *         logs would-deny decisions and proceeds — zero lockout risk.
+ *       When checkFn THROWS (resolver error — DB down, migration missing,
+ *         resolver bug): ALWAYS fails closed (throws CapabilityError,
+ *         code='authz_denied')), regardless of the enforcement flag (OXA-2056).
+ *         A throw means the check could not be evaluated at all —
+ *         categorically different from a policy "deny" decision, which is the
+ *         only case the enforcement flag is allowed to soften. Silently
+ *         granting access because the resolver happened to error is a
+ *         fail-open bug, not graceful degradation.
  *   - When no IAM check function is registered: proceeds as before (no IAM).
  *
  * Emits a `KernelSecurityEvent` after every invocation attempt — allow,
@@ -608,18 +616,24 @@ async function _invokeCore(
           defaultEffect,
           rawInputJson,
         }).catch((err: unknown) => {
-          // IAM check failure is a critical incident. When enforcement is OFF we
-          // must never crash an invocation (log loudly and fall through), but when
-          // enforcement is ON we MUST fail closed — a transient resolver error
-          // (DB timeout, network blip, misconfig) must not silently grant access.
-          // Flag the throw and decide based on _iamEnforced below.
+          // IAM check failure is a critical incident — the check could not be
+          // evaluated at all (DB down, migration missing, resolver bug). This
+          // is categorically different from a policy "deny" decision: a deny
+          // decision legitimately still respects _iamEnforced (would-deny +
+          // log during the rollout window), but an UNEVALUATED check must
+          // never silently grant access. Flag the throw; the unconditional
+          // fail-closed below does NOT consult _iamEnforced (OXA-2056 — the
+          // prior `iamCheckThrew && _iamEnforced` gate fell through to
+          // fail-open whenever enforcement was off, which defeats the entire
+          // point of failing closed on an evaluation failure).
           iamCheckThrew = true;
           console.error(`[kernel] IAM check threw for "${name}":`, err);
           return null;
         });
 
-        // Fail closed on resolver error when enforcement is enabled.
-        if (iamCheckThrew && _iamEnforced) {
+        // Fail closed on resolver error UNCONDITIONALLY — never gated on
+        // _iamEnforced. See OXA-2056.
+        if (iamCheckThrew) {
           emitSecurityEvent({
             capability: name,
             outcome: "deny",
@@ -634,7 +648,7 @@ async function _invokeCore(
           throw new CapabilityError(
             name,
             "authz_denied",
-            `IAM check errored for "${name}" and IAM_ENFORCEMENT_ENABLED=true — failing closed.`,
+            `IAM check errored for "${name}" — failing closed (unconditional; independent of IAM_ENFORCEMENT_ENABLED, OXA-2056).`,
           );
         }
 
@@ -856,9 +870,11 @@ export interface AuthorizeExternalCapabilityResult {
  * kernel.invoke() uses:
  *
  *   1. Calls _iamCheckFn (if registered) with the synthetic capability name.
- *   2. Applies _iamEnforced semantics:
+ *   2. Applies _iamEnforced semantics to a resolved policy DECISION:
  *        - enforced=true  → allowed=false when outcome !== "allow"
  *        - enforced=false → allowed=true (but outcome/reason reflect would-deny)
+ *      A checkFn THROW (evaluation failure, not a decision) always fails
+ *      closed regardless of _iamEnforced — see OXA-2056.
  *   3. Emits a KernelSecurityEvent for the audit trail (fire-and-forget).
  *
  * When no IAM runtime is registered (tests / local dev without bootstrap),
@@ -889,13 +905,20 @@ export async function authorizeExternalCapability(
     defaultEffect,
     rawInputJson: "null",
   }).catch((err: unknown) => {
+    // A throw is an evaluation failure, not a policy decision — it must
+    // always fail closed, independent of _iamEnforced. See kernel.invoke()'s
+    // matching comment above; the same OXA-2056 rationale applies here.
     iamCheckThrew = true;
     console.error(`[kernel:external] IAM check threw for "${name}":`, err);
     return null;
   });
 
-  // Fail closed on resolver error when enforcement is enabled.
-  if (iamCheckThrew && _iamEnforced) {
+  // Fail closed on resolver error UNCONDITIONALLY — never gated on
+  // _iamEnforced. See OXA-2056 (a prior `iamCheckThrew && _iamEnforced` gate
+  // here fell through to an unconditional allow whenever enforcement was
+  // off, silently disabling authorization for every external-tool call while
+  // the resolver was erroring).
+  if (iamCheckThrew) {
     emitSecurityEvent({
       capability: name,
       outcome: "deny",
@@ -908,14 +931,6 @@ export async function authorizeExternalCapability(
       durationMs: Date.now() - startMs,
     });
     return { allowed: false, outcome: "deny", reason: "iam_check_error" };
-  }
-
-  // IAM check errored but enforcement is off — allow with a warning.
-  if (iamCheckThrew) {
-    console.warn(
-      `[kernel:external] IAM check errored for "${name}" (enforcement=off) — allowing.`,
-    );
-    return { allowed: true, outcome: "allow", reason: null };
   }
 
   const outcome = iamResult?.outcome ?? "deny";

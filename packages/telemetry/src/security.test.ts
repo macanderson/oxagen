@@ -7,11 +7,23 @@
 //      no updated_at, updated_by_user_id, deleted_at, deleted_by_user_id.
 //   2. recordSecurityEvent calls the insert fn with the expected row shape.
 //   3. recordSecurityEventAsync resolves after the insert fn resolves.
-//   4. recordSecurityEvent swallows insert errors and forwards them to onError.
+//   4. recordSecurityEvent retries transient insert failures with backoff
+//      (OXA-2058) and, once exhausted, escalates via captureError (ClickHouse
+//      error_events) in addition to forwarding to onError — a dropped audit
+//      write must never be observable only via a stderr line nobody watches.
 //   5. SECURITY_EVENT_TYPES contains the canonical event values so callers
 //      can build CHECKs / typed switches without reimporting from @oxagen/database.
 
 import { describe, expect, it, vi } from "vitest";
+
+// Mock the ClickHouse insert boundary so captureError() (invoked internally
+// on write-failure escalation, OXA-2058) never touches a live client — mirrors
+// the pattern in error-reporting.test.ts.
+const insertErrorEvents = vi.fn((_rows: unknown[]) => Promise.resolve());
+vi.mock("./clickhouse", () => ({
+  insertErrorEvents: (rows: unknown[]) => insertErrorEvents(rows),
+}));
+
 import {
   SECURITY_EVENT_TYPES,
   recordSecurityEvent,
@@ -19,6 +31,19 @@ import {
   type AuditInsertFn,
   type SecurityEventInput,
 } from "./security";
+
+/** Extract the single error_events row from the most recent captureError() escalation. */
+function lastErrorRow(): Record<string, unknown> {
+  const call = insertErrorEvents.mock.calls.at(-1);
+  if (!call) throw new Error("insertErrorEvents (captureError escalation) was not called");
+  const rows = call[0] as Array<Record<string, unknown>>;
+  const row = rows[0];
+  if (!row) throw new Error("captureError escalation called with no rows");
+  return row;
+}
+
+/** Waits long enough for recordSecurityEvent's internal retry/backoff (3 attempts, 25ms+50ms) to fully settle. */
+const flushRetries = () => new Promise((r) => setTimeout(r, 250));
 
 // ---------------------------------------------------------------------------
 // 1. Append-only schema assertion
@@ -106,7 +131,7 @@ describe("recordSecurityEvent", () => {
     expect(insert).toHaveBeenCalledWith(event);
   });
 
-  it("does not throw when the insert fn rejects — error is forwarded to onError", async () => {
+  it("does not throw when the insert fn rejects — error is forwarded to onError after retries exhausted", async () => {
     const insertErr = new Error("DB unavailable");
     const insert = vi.fn(() => Promise.reject(insertErr));
     const onError = vi.fn();
@@ -126,14 +151,73 @@ describe("recordSecurityEvent", () => {
     // Must not throw synchronously
     expect(() => recordSecurityEvent(insert as AuditInsertFn, event, onError)).not.toThrow();
 
-    // Let the rejection handler run
-    await Promise.resolve();
+    // Let the retry/backoff cycle (3 attempts) fully settle before asserting.
+    await flushRetries();
 
+    // OXA-2058: the insert is retried, not given up on after a single failure.
+    expect(insert).toHaveBeenCalledTimes(3);
     expect(onError).toHaveBeenCalledOnce();
     expect(onError).toHaveBeenCalledWith(insertErr);
   });
 
-  it("does not re-throw when no onError is provided — writes to process.stderr", async () => {
+  it("OXA-2058: escalates to captureError (ClickHouse error_events) once retries are exhausted", async () => {
+    const insertErr = new Error("connection reset");
+    const insert = vi.fn(() => Promise.reject(insertErr));
+
+    const event: SecurityEventInput = {
+      eventType: "capability.invoke_denied",
+      actorUserId: null,
+      orgId: "org-escalate",
+      workspaceId: "ws-escalate",
+      capability: "billing.subscription.cancel",
+      outcome: "deny",
+      ip: null,
+      userAgent: null,
+      requestId: "req-escalate",
+    };
+
+    recordSecurityEvent(insert as AuditInsertFn, event);
+    await flushRetries();
+
+    // The audit-write failure must be observable beyond stderr — this is the
+    // core OXA-2058 fix: a dropped security audit event is a SOC2-relevant
+    // silent failure and must land in the durable, alertable error pipeline.
+    expect(insertErrorEvents).toHaveBeenCalledTimes(1);
+    const row = lastErrorRow();
+    expect(row.capability).toBe("billing.subscription.cancel");
+    expect(row.message).toContain("failed to durably write event");
+    expect(row.message).toContain("capability.invoke_denied");
+  });
+
+  it("retries a transient failure and succeeds without escalating — insert succeeds on the 2nd attempt", async () => {
+    let calls = 0;
+    const insert = vi.fn(() => {
+      calls += 1;
+      return calls === 1 ? Promise.reject(new Error("transient")) : Promise.resolve();
+    });
+    const onError = vi.fn();
+
+    const event: SecurityEventInput = {
+      eventType: "auth.sign_in",
+      actorUserId: "user-1",
+      orgId: "org-transient",
+      workspaceId: null,
+      capability: null,
+      outcome: "success",
+      ip: null,
+      userAgent: null,
+      requestId: null,
+    };
+
+    recordSecurityEvent(insert as AuditInsertFn, event, onError);
+    await flushRetries();
+
+    expect(insert).toHaveBeenCalledTimes(2);
+    expect(onError).not.toHaveBeenCalled();
+    expect(insertErrorEvents).not.toHaveBeenCalled();
+  });
+
+  it("does not re-throw when no onError is provided — writes to process.stderr after retries exhausted", async () => {
     const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const insert = vi.fn(() => Promise.reject(new Error("disk full")));
 
@@ -150,7 +234,7 @@ describe("recordSecurityEvent", () => {
     };
 
     expect(() => recordSecurityEvent(insert as AuditInsertFn, event)).not.toThrow();
-    await Promise.resolve();
+    await flushRetries();
 
     expect(stderrSpy).toHaveBeenCalledOnce();
     // Confirm the structured output contains the event type and org id.
@@ -180,7 +264,7 @@ describe("recordSecurityEvent", () => {
     };
 
     expect(() => recordSecurityEvent(insert as AuditInsertFn, event)).not.toThrow();
-    await Promise.resolve();
+    await flushRetries();
 
     expect(stderrSpy).toHaveBeenCalledOnce();
     const written = stderrSpy.mock.calls[0]?.[0] as string;
@@ -214,7 +298,7 @@ describe("recordSecurityEventAsync", () => {
     expect(insert).toHaveBeenCalledOnce();
   });
 
-  it("rejects when the insert fn rejects", async () => {
+  it("rejects when the insert fn rejects — retries first, then escalates via captureError before re-throwing (OXA-2058)", async () => {
     const dbError = new Error("constraint violation");
     const insert = vi.fn(() => Promise.reject(dbError));
     const event: SecurityEventInput = {
@@ -232,6 +316,14 @@ describe("recordSecurityEventAsync", () => {
     await expect(recordSecurityEventAsync(insert as AuditInsertFn, event)).rejects.toThrow(
       "constraint violation",
     );
+
+    // OXA-2058: the awaitable variant retries transient failures (not a
+    // single-shot attempt) and still escalates to the durable, alertable
+    // error pipeline before re-throwing — the awaiting caller's compliance
+    // evidence is load-bearing, so the failure must be observable even though
+    // it also propagates as a rejection.
+    expect(insert).toHaveBeenCalledTimes(3);
+    expect(insertErrorEvents).toHaveBeenCalledTimes(1);
   });
 });
 

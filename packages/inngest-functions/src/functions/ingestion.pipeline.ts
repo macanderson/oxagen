@@ -33,7 +33,7 @@ export const [ingestionPipeline] = createFunction(
     concurrency: { limit: 5, key: "event.data.orgId" },
   },
   { event: "ingestion/entity.received" },
-  async ({ event, step }) => {
+  async ({ event, step, runId }) => {
     const { connectionId, workspaceId, orgId, connectorType, sourceRecordType, payload } = event.data as {
       connectionId: string;
       workspaceId: string;
@@ -177,8 +177,12 @@ export const [ingestionPipeline] = createFunction(
     // scopedSession() requires an active scope or it throws
     // TenantScopeError(no_tenant_scope), which broke all ingestion in prod
     // (OXA-1790). Steps 2 and 3 already wrap; steps 4 and 5 must too.
+    //
+    // `runId` (OXA-1932) is threaded through to upsertEntityNode so a retried
+    // execution of THIS step re-derives the same schema_conformance_events
+    // event_id instead of minting a fresh one — see upsert-entity.ts.
     await step.run("upsert-node", () =>
-      runInTenantScope({ orgId, workspaceId }, () => upsertEntityNode(mutation, orgId)),
+      runInTenantScope({ orgId, workspaceId }, () => upsertEntityNode(mutation, orgId, { runId })),
     );
 
     // ── Step 5: Embed ─────────────────────────────────────────────────────────

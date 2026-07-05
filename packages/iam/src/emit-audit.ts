@@ -12,8 +12,21 @@
 // HASH-CHAIN RACE: two concurrent calls for the same (org_id, capability) may
 // read the same prev_hash. This is documented in plan.md Phase 3 §Risks.
 // Chain verification is at the range level, not per-event ordering.
+//
+// OXA-2058: an empty `chain_hash` breaks tamper-evidence for every subsequent
+// row chained on top of it — a verifier cannot validate past an empty link.
+// Both hash computations below (`payloadHash`, `chainHash`) therefore
+// PROPAGATE a `sha256Hex` failure instead of swallowing it into `""`: this
+// function refuses to write a degraded/corrupt audit row at all rather than
+// silently persisting one. The insert itself is retried with backoff before
+// the same "fail loudly, never swallow" rule applies to the DB write.
+// Reading the PREVIOUS chain hash is a different, already-documented
+// non-fatal case (see HASH-CHAIN RACE above): a read failure re-anchors the
+// chain from an empty prevHash but still computes and persists a VALID
+// (non-empty) chain_hash for this row — it never produces the OXA-2058 empty
+// string.
 
-import { insertAuditEvent, latestAuditChainHash, type AuditEventRow } from "@oxagen/telemetry";
+import { insertAuditEvent, latestAuditChainHash, retryWithBackoff, type AuditEventRow } from "@oxagen/telemetry";
 import type { ResolveResult, Trace } from "@oxagen/oxagen/iam";
 import type { CapabilityContext, ResolvedPrincipal } from "@oxagen/oxagen";
 import { logger } from "./logger";
@@ -38,6 +51,10 @@ export interface EmitAuditArgs {
 /**
  * Emit an IAM audit event to ClickHouse. Fire-and-forget — callers must NOT
  * await this unless they are in a test or audit-critical path.
+ *
+ * Rejects (never silently drops) when either hash computation fails or the
+ * durable insert (after retries) still fails — see the OXA-2058 note at the
+ * top of this file. Callers are expected to `.catch()` this and alert.
  */
 export async function emitAudit(args: EmitAuditArgs): Promise<void> {
   const { capability, ctx, principal, result, trace, rawInputJson } = args;
@@ -48,13 +65,26 @@ export async function emitAudit(args: EmitAuditArgs): Promise<void> {
   const scopeKind: "org" | "workspace" = ctx.workspaceId ? "workspace" : "org";
   const scopeId = scopeKind === "workspace" ? ctx.workspaceId : ctx.orgId;
 
-  // Hash the input payload — we store a fingerprint, not the raw value.
-  const payloadHash = await sha256Hex(rawInputJson).catch((err) => {
-    logger.error({ err, capability }, "[iam:emit-audit] sha256 failed — audit chain integrity degraded");
-    return "";
-  });
+  // Hash the input payload — we store a fingerprint, not the raw value. A
+  // failure here is the same class of defect as an empty chain_hash
+  // (OXA-2058): never persist a degraded/empty fingerprint. Propagate so the
+  // caller's fire-and-forget `.catch()` alerts loudly and no row is written.
+  let payloadHash: string;
+  try {
+    payloadHash = await sha256Hex(rawInputJson);
+  } catch (err) {
+    logger.error(
+      { err, capability },
+      "[iam:emit-audit] sha256(payload) failed — refusing to persist a degraded audit row (OXA-2058)",
+    );
+    throw err;
+  }
 
-  // Read the previous chain hash — read failure is non-fatal.
+  // Read the previous chain hash — read failure is non-fatal: it re-anchors
+  // the chain from an empty prevHash (documented HASH-CHAIN RACE risk above),
+  // but still lets us COMPUTE a valid, non-empty chain_hash below. This is
+  // NOT the OXA-2058 empty-chain_hash defect — that only happens if the hash
+  // computation itself throws (handled next).
   let prevHash = "";
   try {
     prevHash = await latestAuditChainHash({
@@ -62,15 +92,24 @@ export async function emitAudit(args: EmitAuditArgs): Promise<void> {
       capability,
     });
   } catch (err) {
-    logger.warn({ err }, "[iam:emit-audit] Failed to read latest chain hash");
+    logger.warn({ err }, "[iam:emit-audit] Failed to read latest chain hash — chaining from empty prevHash");
   }
 
   // Compute this event's chain hash over (prev_hash || event_id || capability).
+  // OXA-2058: an empty chain_hash breaks tamper-evidence for every subsequent
+  // row in the chain. NEVER persist one — if the hash can't be computed,
+  // refuse to write the row at all instead of silently degrading the chain.
   const chainInput = `${prevHash}|${eventId}|${capability}`;
-  const chainHash = await sha256Hex(chainInput).catch((err) => {
-    logger.error({ err, capability }, "[iam:emit-audit] sha256 failed — audit chain integrity degraded");
-    return "";
-  });
+  let chainHash: string;
+  try {
+    chainHash = await sha256Hex(chainInput);
+  } catch (err) {
+    logger.error(
+      { err, capability },
+      "[iam:emit-audit] sha256(chain) failed — refusing to persist a row with an empty chain_hash (OXA-2058)",
+    );
+    throw err;
+  }
 
   const outcome = result.outcome;
   const decisionReason = result.trace.decidedBy.rule;
@@ -106,5 +145,10 @@ export async function emitAudit(args: EmitAuditArgs): Promise<void> {
     }),
   };
 
-  await insertAuditEvent(row);
+  // Durable write: retry transient ClickHouse failures with backoff before
+  // giving up (OXA-2058 — a fire-and-forget audit write must not vanish on
+  // the first blip). A still-failing insert propagates to the caller's
+  // `.catch()`, which is expected to alert loudly (see check-iam.ts) — never
+  // silently dropped.
+  await retryWithBackoff(() => insertAuditEvent(row), { attempts: 3, baseDelayMs: 25 });
 }

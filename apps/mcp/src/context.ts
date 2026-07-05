@@ -11,6 +11,12 @@
  * gives a confusing error. MCP clients must always authenticate with API keys.
  * See OXA-1515 for the tenancy-scope rationale.
  *
+ * OXA-2056: an orgId of "" (empty string) is NEVER a valid scope, from either
+ * path. The API-key path also explicitly rejects a resolved orgId/workspaceId
+ * that is empty (defense in depth alongside the session-token rejection
+ * above) rather than proceeding into a security-event emit + CapabilityContext
+ * construction that only fails later, deeper in the kernel.
+ *
  * Token classification: an API key always contains an underscore in the format
  * `<prefix>_<secret>`. A session token (Better Auth opaque token) never does.
  *
@@ -114,6 +120,23 @@ export async function resolveMcpContext(
         reason: resolution.kind === "expired" ? "expired_token" : "invalid_token",
       };
     }
+
+    // Defense in depth (OXA-2056): an API key MUST resolve to a non-empty
+    // org/workspace scope. resolveApiKey() should never return ok:true with
+    // an empty orgId (the DB column is populated at key creation), but if it
+    // ever did — a data-integrity bug, a bad migration, a future refactor —
+    // an empty orgId is exactly the "no real scope" shape that used to open
+    // access instead of rejecting it: runInTenantScope's own uuid guard
+    // fails closed on it deep in the kernel, but only AFTER a security event
+    // has already been emitted and downstream code has already seen an
+    // apparently-successful auth resolution. Reject here at the edge instead,
+    // same as the session-token path below, so an empty scope is treated as
+    // invalid_token and never reaches the kernel or the audit log as
+    // "success".
+    if (!resolution.orgId || !resolution.workspaceId) {
+      return { ok: false, reason: "invalid_token" };
+    }
+
     // SOC2 audit: record machine-credential usage. Fires once per MCP tool
     // invocation (buildContext runs per tool call) — the correct semantic for
     // an "api_key.used" access-log event. Fire-and-forget: an audit-pipeline

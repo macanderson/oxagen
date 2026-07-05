@@ -711,6 +711,9 @@ importers:
       '@oxagen/config':
         specifier: workspace:*
         version: link:../config
+      '@oxagen/crypto':
+        specifier: workspace:*
+        version: link:../crypto
       '@oxagen/database':
         specifier: workspace:*
         version: link:../database
@@ -1291,6 +1294,9 @@ importers:
         specifier: 3.25.76
         version: 3.25.76
     devDependencies:
+      '@oxagen/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
       '@vitest/coverage-v8':
         specifier: 2.1.9
         version: 2.1.9(vitest@2.1.9(@types/node@25.9.1)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(terser@5.48.0))
@@ -1833,6 +1839,9 @@ importers:
 
   tools/scripts:
     dependencies:
+      '@oxagen/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
       '@oxagen/bench':
         specifier: workspace:*
         version: link:../../packages/bench

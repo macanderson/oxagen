@@ -232,6 +232,137 @@ describe("ANN tenant-filter over-sampling", () => {
   });
 });
 
+// Linear OXA-1929 — ANN tenant-filter oversampling (silent recall degradation).
+//
+// `db.index.vector.queryNodes` returns the GLOBAL top-k by similarity; the
+// tenant predicate (m.orgId = $orgId) is applied AFTER that call in the WHERE
+// clause. As other tenants accumulate more/higher-scoring graph volume, a
+// naive query (k === limit) can be entirely crowded out for the active
+// tenant — recall silently shrinks to zero with no error. These tests seed a
+// synthetic global ranking that reproduces exactly that crowd-out and assert
+// the shipped implementation (oversampledLimit under the hood) still
+// recovers the full requested K for the target tenant. The mock's
+// `sessionRun` implementation below mirrors what Neo4j actually executes:
+// slice the global pool to the emitted `$k`, THEN filter to the target
+// tenant, THEN trim to `$limit` — so this test fails if `recallMemories` /
+// `recallPeerResults` ever regress to requesting `k = limit` again.
+describe("multi-tenant recall regression (OXA-1929)", () => {
+  beforeEach(() => {
+    sessionRun.mockReset();
+    sessionClose.mockClear();
+  });
+
+  function seedMemoryRow(orgId: string, score: number, i: number) {
+    return {
+      orgId,
+      score,
+      record: fakeRecord({
+        id: `m_${orgId}_${i}`,
+        publicId: `pub_${orgId}_${i}`,
+        nodeRef: "",
+        memoryClass: "OBSERVATION",
+        memoryKind: "constraint",
+        lesson: `lesson ${i}`,
+        source: "test",
+        confidenceScore: 100,
+        enforcementScore: null,
+        status: "ACTIVE",
+        subjectHint: "",
+        halfLifeDays: 30,
+        decayFloor: 5,
+        lastEvidenceAt: null,
+        citationCount: 0,
+        influenceCount: 0,
+        violationCount: 0,
+        createdByKind: "AGENT",
+        createdById: null,
+        confirmedByKind: null,
+        confirmedById: null,
+        createdAt: "2026-01-01T00:00:00Z",
+        lastReinforcedAt: null,
+        score,
+      }),
+    };
+  }
+
+  it("recallMemories returns the full requested K for the target tenant even though other tenants dominate the global top-K", async () => {
+    const limit = 10;
+    // Global ANN ranking (already sorted DESC by score, as Neo4j returns it):
+    //   ranks 0-19  → 20 higher-scoring memories from a noisy OTHER tenant
+    //   ranks 20-49 → 30 lower-scoring memories from the TARGET tenant
+    // A naive k=limit=10 query never reaches past rank 9, so the target
+    // tenant would get zero results. oversampledLimit(10) = 30, which reaches
+    // rank 29 and surfaces the first 10 target-tenant rows.
+    const globalPool = [
+      ...Array.from({ length: 20 }, (_, i) => seedMemoryRow("org-noise", 1 - i * 0.001, i)),
+      ...Array.from({ length: 30 }, (_, i) => seedMemoryRow("org-target", 0.5 - i * 0.001, i)),
+    ];
+
+    // Sanity check the scenario is a genuine regression case: an unfixed
+    // k === limit query against this exact pool starves the target tenant.
+    expect(
+      globalPool.slice(0, limit).filter((r) => r.orgId === "org-target"),
+    ).toHaveLength(0);
+
+    sessionRun.mockImplementation(async (_cypher: unknown, params: unknown) => {
+      const k = Number((params as Record<string, unknown>).k as bigint);
+      const topK = globalPool.slice(0, k);
+      const tenantFiltered = topK.filter((r) => r.orgId === "org-target");
+      const trimmed = tenantFiltered.slice(0, limit);
+      return { records: trimmed.map((r) => r.record) };
+    });
+
+    const rows = await withTestScope(() =>
+      recallMemories({ embedding: new Array<number>(1536).fill(0.1), limit }),
+    );
+
+    expect(rows).toHaveLength(limit);
+  });
+
+  it("recallPeerResults returns the full requested K for the target tenant even though other tenants dominate the global top-K", async () => {
+    const limit = 4;
+    // oversampledLimit(4) = 12, so 8 noise ranks + 8 target ranks (only the
+    // first 4 needed) reproduces the same crowd-out/recovery shape at a
+    // smaller K.
+    const globalPool = [
+      ...Array.from({ length: 8 }, (_, i) => ({
+        runId: `noise-${i}`,
+        summary: "noise",
+        score: 1 - i * 0.001,
+        orgId: "org-noise",
+      })),
+      ...Array.from({ length: 8 }, (_, i) => ({
+        runId: `target-${i}`,
+        summary: `peer result ${i}`,
+        score: 0.5 - i * 0.001,
+        orgId: "org-target",
+      })),
+    ];
+
+    expect(
+      globalPool.slice(0, limit).filter((r) => r.orgId === "org-target"),
+    ).toHaveLength(0);
+
+    sessionRun.mockImplementation(async (_cypher: unknown, params: unknown) => {
+      const k = Number((params as Record<string, unknown>).k as bigint);
+      const topK = globalPool.slice(0, k);
+      const tenantFiltered = topK.filter((r) => r.orgId === "org-target");
+      const trimmed = tenantFiltered.slice(0, limit);
+      return {
+        records: trimmed.map((r) =>
+          fakeRecord({ runId: r.runId, summary: r.summary, score: r.score }),
+        ),
+      };
+    });
+
+    const rows = await withTestScope(() =>
+      recallPeerResults({ embedding: new Array<number>(1536).fill(0.1), limit }),
+    );
+
+    expect(rows).toHaveLength(limit);
+  });
+});
+
 describe("writeMemory", () => {
   beforeEach(() => {
     sessionRun.mockReset();

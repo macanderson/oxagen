@@ -1,8 +1,14 @@
-// emit-audit.test.ts — unit tests for emitAudit() (OXA-1524).
+// emit-audit.test.ts — unit tests for emitAudit() (OXA-1524, OXA-2058).
 //
 // Tests:
 //   - sha256 chain hash is correctly computed
-//   - prevHash failure is non-fatal (error swallowed, empty prevHash used)
+//   - prevHash READ failure is non-fatal (chain re-anchors from empty prevHash,
+//     but chain_hash itself is still computed and non-empty)
+//   - sha256 COMPUTATION failure (payload OR chain) is FATAL: emitAudit rejects
+//     and insertAuditEvent is never called — an audit row with an empty
+//     chain_hash must never be persisted (OXA-2058)
+//   - the durable insert is retried with backoff before a write failure
+//     propagates to the caller
 //   - insertAuditEvent is called with correctly shaped row
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
@@ -391,15 +397,20 @@ describe("emitAudit()", () => {
     expect(row.chain_hash).toMatch(/^[a-f0-9]+$/);
   });
 
-  // ── sha256 (subtle.digest) failure is logged, non-fatal ──────────────────
+  // ── sha256 (subtle.digest) failure is FATAL — never persist an empty chain_hash (OXA-2058) ──
 
-  it("logs an error and does NOT throw when sha256 (subtle.digest) rejects — audit still inserted with empty hashes", async () => {
+  it("OXA-2058: logs an error and REJECTS when sha256 fails — insertAuditEvent is never called, no empty chain_hash is ever persisted", async () => {
     const digestSpy = vi
       .spyOn(globalThis.crypto.subtle, "digest")
       .mockRejectedValue(new Error("subtle.digest boom"));
 
     try {
-      // Fire-and-forget path must not throw even when hashing is broken.
+      // Both payloadHash and chainHash flow through sha256Hex — a failure on
+      // EITHER must reject the whole call. Persisting a row with an empty
+      // chain_hash breaks tamper-evidence for every subsequent row chained on
+      // top of it, so the correct behavior is to refuse the write entirely
+      // (a missing, alerted-on audit row is safer than a silently corrupted
+      // tamper chain).
       await expect(
         emitAudit({
           capability: "chat.message.send",
@@ -409,21 +420,94 @@ describe("emitAudit()", () => {
           trace: ALLOW_TRACE,
           rawInputJson: "{}",
         }),
-      ).resolves.toBeUndefined();
+      ).rejects.toThrow("subtle.digest boom");
 
-      // Both payloadHash and chainHash flow through sha256Hex → each logs an error.
       expect(loggerMocks.error).toHaveBeenCalled();
-      expect(loggerMocks.error.mock.calls[0]?.[1]).toContain("sha256 failed");
+      const [, message] = loggerMocks.error.mock.calls[0] as [unknown, string];
+      expect(message).toContain("sha256(payload) failed");
+      expect(message).toContain("OXA-2058");
 
-      // The event is still inserted — degraded (empty) hashes, but the chain
-      // is never blocked. This keeps the failure observable without becoming fatal.
-      expect(mocks.insertAuditEvent).toHaveBeenCalledTimes(1);
-      const row = mocks.insertAuditEvent.mock.calls[0]?.[0] as AuditEventRow;
-      expect(row.payload_hash).toBe("");
-      expect(row.chain_hash).toBe("");
+      // No row — not even a degraded one — is ever written.
+      expect(mocks.insertAuditEvent).not.toHaveBeenCalled();
     } finally {
       digestSpy.mockRestore();
     }
+  });
+
+  it("OXA-2058: chain-hash computation failure (payload hash succeeds, chain hash fails) also rejects and writes nothing", async () => {
+    // Payload hash uses the real digest; the SECOND call (chain hash) fails.
+    const realDigest = globalThis.crypto.subtle.digest.bind(globalThis.crypto.subtle);
+    let callCount = 0;
+    const digestSpy = vi
+      .spyOn(globalThis.crypto.subtle, "digest")
+      .mockImplementation(async (...args: Parameters<typeof realDigest>) => {
+        callCount += 1;
+        if (callCount === 1) return realDigest(...args);
+        throw new Error("chain digest boom");
+      });
+
+    try {
+      await expect(
+        emitAudit({
+          capability: "chat.message.send",
+          ctx: CTX,
+          principal: null,
+          result: ALLOW_RESULT,
+          trace: ALLOW_TRACE,
+          rawInputJson: '{"a":1}',
+        }),
+      ).rejects.toThrow("chain digest boom");
+
+      const chainLogCall = loggerMocks.error.mock.calls.find(([, msg]) =>
+        typeof msg === "string" ? msg.includes("sha256(chain) failed") : false,
+      );
+      expect(chainLogCall).toBeDefined();
+      expect(mocks.insertAuditEvent).not.toHaveBeenCalled();
+    } finally {
+      digestSpy.mockRestore();
+    }
+  });
+
+  // ── Durable insert: retried with backoff before propagating a failure ────
+
+  it("retries insertAuditEvent with backoff and succeeds on the 2nd attempt (no rejection)", async () => {
+    let attempts = 0;
+    mocks.insertAuditEvent.mockImplementation(() => {
+      attempts += 1;
+      return attempts === 1 ? Promise.reject(new Error("transient CH blip")) : Promise.resolve();
+    });
+
+    await expect(
+      emitAudit({
+        capability: "chat.message.send",
+        ctx: CTX,
+        principal: null,
+        result: ALLOW_RESULT,
+        trace: ALLOW_TRACE,
+        rawInputJson: "{}",
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(attempts).toBe(2);
+  });
+
+  it("propagates insertAuditEvent failure to the caller once retries are exhausted (no silent drop, OXA-2058)", async () => {
+    const insertErr = new Error("clickhouse permanently down");
+    mocks.insertAuditEvent.mockRejectedValue(insertErr);
+
+    await expect(
+      emitAudit({
+        capability: "chat.message.send",
+        ctx: CTX,
+        principal: null,
+        result: ALLOW_RESULT,
+        trace: ALLOW_TRACE,
+        rawInputJson: "{}",
+      }),
+    ).rejects.toThrow("clickhouse permanently down");
+
+    // Retried, not given up on after a single failure.
+    expect(mocks.insertAuditEvent).toHaveBeenCalledTimes(3);
   });
 
   // ── Concurrency: two parallel calls both insert exactly once ─────────────

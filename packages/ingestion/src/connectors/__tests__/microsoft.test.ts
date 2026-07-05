@@ -217,4 +217,14 @@ describe("microsoft connector – verifyWebhook", () => {
     const payload = Buffer.from(JSON.stringify({ value: [] }));
     expect(microsoft.verifyWebhook!(payload, {}, secret)).toBe(false);
   });
+
+  // OXA-2051: the clientState check previously used a plain `===` comparison,
+  // which is not constant-time. It must never throw on a length mismatch and
+  // must fail closed.
+  it("rejects a mismatched-length clientState without throwing", () => {
+    const payload = makeNotificationPayload("short");
+    const longSecret = "a-much-longer-client-state-secret-value";
+    expect(() => microsoft.verifyWebhook!(payload, {}, longSecret)).not.toThrow();
+    expect(microsoft.verifyWebhook!(payload, {}, longSecret)).toBe(false);
+  });
 });

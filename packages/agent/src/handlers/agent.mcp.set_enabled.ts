@@ -5,6 +5,7 @@ import { agentMcpSetEnabled } from "@oxagen/oxagen/contracts/agent.mcp.set_enabl
 import type { CapabilityContext } from "../types";
 import { healthcheck } from "../dispatch/mcp-client";
 import { captureToolSnapshots, recordServerChange } from "../runtime/mcp-snapshots";
+import { decryptMcpAuthConfig } from "../runtime/mcp-server-auth-crypto";
 import type {
   AgentMcpSetEnabledInput,
   AgentMcpSetEnabledOutput,
@@ -47,10 +48,13 @@ export async function agentMcpSetEnabledHandler(
   let snapshotCount = 0;
   let healthStatus: "healthy" | "degraded" | "unreachable" = "degraded";
   if (input.enabled && server.transportType === "streamable-http") {
+    // Decrypt (OXA-1982): server.authConfig is the envelope-encrypted (or
+    // legacy plaintext, pre-backfill) jsonb value read from the DB.
+    const decryptedAuthConfig = await decryptMcpAuthConfig(server.authConfig);
     const probe = await healthcheck({
       endpointUrl: server.endpointUrl,
       authStrategy: server.authStrategy as "none" | "bearer" | "header",
-      authConfig: (server.authConfig ?? {}) as Record<string, string>,
+      authConfig: decryptedAuthConfig,
     });
     healthStatus = probe.status;
     if (probe.descriptors.length > 0) {

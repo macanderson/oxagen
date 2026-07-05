@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   insertReturning: vi.fn(),
@@ -166,5 +166,70 @@ describe("agent.mcp.register handler", () => {
 
     expect(mocks.healthcheckMock).toHaveBeenCalledTimes(1);
     expect(result.mcpServerId).toBe("mcp_pub_1");
+  });
+
+  // ── OXA-1982: auth_config is envelope-encrypted before it reaches the DB ──
+  describe("auth_config encryption (OXA-1982)", () => {
+    const originalKey = process.env.AUTH_TOKEN_ENCRYPTION_KEY;
+    const TEST_KEY = Buffer.alloc(32, 3).toString("base64");
+
+    afterEach(() => {
+      if (originalKey === undefined) delete process.env.AUTH_TOKEN_ENCRYPTION_KEY;
+      else process.env.AUTH_TOKEN_ENCRYPTION_KEY = originalKey;
+    });
+
+    it("stores auth_config encrypted — the raw secret never reaches the insert values", async () => {
+      process.env.AUTH_TOKEN_ENCRYPTION_KEY = TEST_KEY;
+      mocks.healthcheckMock.mockResolvedValueOnce({ status: "healthy", discoveredTools: [], descriptors: [] });
+
+      const input = {
+        ...BASE_INPUT,
+        authStrategy: "bearer" as const,
+        authConfig: { token: "definitely-not-plaintext-in-db-9f8e7d" },
+      };
+
+      await agentMcpRegisterHandler(input, CTX);
+
+      const valuesArg = mocks.insertValues.mock.calls[0]?.[0] as Record<string, unknown>;
+      // The persisted value must not equal the plaintext record, and must not
+      // contain the secret substring anywhere in its serialized form.
+      expect(valuesArg.authConfig).not.toEqual(input.authConfig);
+      expect(JSON.stringify(valuesArg.authConfig)).not.toContain("definitely-not-plaintext-in-db-9f8e7d");
+      // It must be the documented encrypted envelope shape.
+      expect(valuesArg.authConfig).toMatchObject({ v: 1, kmsKeyId: expect.any(String) });
+      expect(typeof (valuesArg.authConfig as { ciphertext: string }).ciphertext).toBe("string");
+
+      // The live healthcheck probe still uses the RAW plaintext (needed to
+      // actually connect) — only the persisted row is encrypted.
+      expect(mocks.healthcheckMock).toHaveBeenCalledWith({
+        endpointUrl: input.endpointUrl,
+        authStrategy: input.authStrategy,
+        authConfig: input.authConfig,
+      });
+    });
+
+    it("stores {} for authStrategy 'none' with no authConfig — no key required", async () => {
+      delete process.env.AUTH_TOKEN_ENCRYPTION_KEY;
+      mocks.healthcheckMock.mockResolvedValueOnce({ status: "healthy", discoveredTools: [], descriptors: [] });
+
+      await agentMcpRegisterHandler(BASE_INPUT, CTX);
+
+      const valuesArg = mocks.insertValues.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(valuesArg.authConfig).toEqual({});
+    });
+
+    it("refuses to register a secret-bearing server when AUTH_TOKEN_ENCRYPTION_KEY is unset (fail-closed, never persists plaintext)", async () => {
+      delete process.env.AUTH_TOKEN_ENCRYPTION_KEY;
+      mocks.healthcheckMock.mockResolvedValueOnce({ status: "healthy", discoveredTools: [], descriptors: [] });
+
+      const input = {
+        ...BASE_INPUT,
+        authStrategy: "bearer" as const,
+        authConfig: { token: "would-be-plaintext" },
+      };
+
+      await expect(agentMcpRegisterHandler(input, CTX)).rejects.toThrow(/AUTH_TOKEN_ENCRYPTION_KEY/);
+      expect(mocks.insertSpy).not.toHaveBeenCalled();
+    });
   });
 });
