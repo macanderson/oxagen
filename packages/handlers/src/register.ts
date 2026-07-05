@@ -222,6 +222,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .userPreferencesWriteHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "budget.policy.read",
+    async () =>
+      (await import("./budget.policy.read"))
+        .budgetPolicyReadHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "budget.policy.write",
+    async () =>
+      (await import("./budget.policy.write"))
+        .budgetPolicyWriteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "workspace.model.settings.read",
     async () =>
       (await import("./workspace.model.settings.read"))

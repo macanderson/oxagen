@@ -27,6 +27,12 @@ describe("agent.file.lock.release capability", () => {
   it("is gated to Owner/Admin ONLY — no Member default grant (force-release is an admin/debug action)", () => {
     expect(agentFileLockRelease.defaultRoles.org.Owner).toBe("allow");
     expect(agentFileLockRelease.defaultRoles.org.Admin).toBe("allow");
-    expect(agentFileLockRelease.defaultRoles.workspace.Member).toBeUndefined();
+    // The workspace role map is intentionally typed as Owner-only, so index it
+    // through a widened view to assert Member is genuinely absent (not granted).
+    expect(
+      (
+        agentFileLockRelease.defaultRoles.workspace as Record<string, unknown>
+      ).Member,
+    ).toBeUndefined();
   });
 });
