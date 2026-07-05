@@ -35,6 +35,7 @@ import { randomUUID } from "node:crypto";
 import type {
   StreamEvent,
   AssistantContentBlock,
+  MemoryRecallHit,
 } from "@/components/chat/stream-event-types";
 import { autoTitleConversation } from "./auto-title";
 import { streamMediaGeneration } from "./media-generation";
@@ -43,7 +44,10 @@ import { formatStreamError } from "./stream-parts";
 import { buildHistoryMessages, collectRecentAttachmentPublicIds } from "./history";
 import { resolveAttachmentImages, resolveAttachmentMedia } from "./attachments";
 import { decideAttachmentRouting } from "./attachment-routing";
-import { recallWorkspaceMemory } from "./recall-context";
+import {
+  recallWorkspaceMemoryDetailed,
+  resolveGroundingCitations,
+} from "./recall-context";
 import { createChatMemoryProvider } from "./engine-memory";
 
 // Side-effect imports: bind every handler into the shared kernel BEFORE
@@ -620,7 +624,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           promptConfig,
           skillIndex,
           pinnedSkillBodies,
-          recalledMemoryMessage,
+          recalledMemory,
         ] = await runInTenantScope(
           { orgId: tenant.id, workspaceId: workspace.id },
           () =>
@@ -707,13 +711,31 @@ export async function POST(request: NextRequest): Promise<Response> {
               // turn as CONSIDERED citations (the promotion/self-improvement
               // flywheel). Best-effort + time-boxed inside the helper: a slow or
               // down Neo4j yields null and the turn proceeds untouched.
-              recallWorkspaceMemory({
+              recallWorkspaceMemoryDetailed({
                 query: content,
                 executionRef: capCtx.messageId,
                 ctx: capCtx,
               }),
             ]),
         );
+
+        // Resolve the knowledge-graph node each recalled memory is grounded in,
+        // CONCURRENTLY with the model turn. These feed the end-of-turn "Grounded
+        // in" citation strip only (never the model context), so they never delay
+        // the first token. Runs in its own tenant scope because graph.node.get
+        // reads through scopedSession, and degrades to [] on any failure so a
+        // slow/absent graph never affects the answer.
+        const citationsPromise: Promise<MemoryRecallHit[]> =
+          recalledMemory.memories.length > 0
+            ? runInTenantScope(
+                { orgId: tenant.id, workspaceId: workspace.id },
+                () =>
+                  resolveGroundingCitations({
+                    memories: recalledMemory.memories,
+                    ctx: capCtx,
+                  }),
+              ).catch(() => [] as MemoryRecallHit[])
+            : Promise.resolve<MemoryRecallHit[]>([]);
 
         // ── Page context (always) + Page-form-fill tool (request-scoped) ────
         // When the client sends pageContext, always inject the current route
@@ -892,7 +914,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           // engine prepends its own "## Recalled context" heading before the
           // provider's body.
           memory: createChatMemoryProvider({
-            recalledPromise: Promise.resolve(recalledMemoryMessage),
+            recalledPromise: Promise.resolve(recalledMemory.message),
           }),
           // NO `trace`: createClickHouseTraceStore writes up to 200 chars of the
           // raw instruction into ClickHouse, violating the chat surface's
@@ -903,6 +925,34 @@ export async function POST(request: NextRequest): Promise<Response> {
         });
 
         const { assistantText, persistedBlocks } = translator.finish();
+
+        // ── Grounded-in citations ──────────────────────────────────────────
+        // Surface the graph facts this answer was grounded in. The recalled
+        // memories were injected into the model context above; here we resolve
+        // them to their knowledge-graph node citations (already running) and
+        // emit them as a `memory-recalled` event so the client renders a
+        // "Grounded in" strip (NodeRef chips + View in graph) UNDER the answer.
+        // Persisted as a trailing content block so it survives a refresh. The
+        // await adds no first-token latency — resolution ran concurrently with
+        // the whole turn — and never throws (the promise is catch-guarded).
+        const citations = await citationsPromise;
+        let blocksToPersist: AssistantContentBlock[] = persistedBlocks;
+        if (citations.length > 0) {
+          emit({
+            type: "memory-recalled",
+            queryId: capCtx.messageId,
+            memories: citations,
+          });
+          blocksToPersist = [
+            ...persistedBlocks,
+            {
+              type: "memory-recall",
+              queryId: capCtx.messageId,
+              memories: citations,
+            },
+          ];
+        }
+
         // ONE aggregated usage event from the engine's summed per-step usage
         // (each step's own `finish` is suppressed by the translator). Credits are
         // charged per step inside streamAgentReply's onFinish — the ledger fans
@@ -910,7 +960,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         // same total the client sees here (C4).
         emitUsageEvent(emit, result.usage, modelId);
 
-        await persistAssistantTurn(assistantText, persistedBlocks);
+        await persistAssistantTurn(assistantText, blocksToPersist);
 
         // Auto-title new conversations using the fast model (fire-and-forget).
         // Only fires on the first turn; the isNull predicate in

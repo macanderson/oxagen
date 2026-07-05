@@ -4,6 +4,11 @@ import {
   agentMemoryRecall,
   type AgentMemoryRecallOutput,
 } from "@oxagen/oxagen/contracts/agent.memory.recall";
+import { graphNodeGet } from "@oxagen/oxagen/contracts/graph.node.get";
+import type {
+  KnowledgeNodeRef,
+  MemoryRecallHit,
+} from "@/components/chat/stream-event-types";
 
 // Deterministic memory recall for the chat agent's context BEFORE the turn runs
 // (OXA agent self-improvement). The chat route does NOT rely on the model
@@ -33,10 +38,23 @@ const RECALL_QUERY_MAX = 500;
 // chat, so we race the invoke against this timeout and inject nothing on expiry.
 const RECALL_TIMEOUT_MS = 2500;
 
-type RecalledMemory = AgentMemoryRecallOutput["memories"][number];
+export type RecalledMemory = AgentMemoryRecallOutput["memories"][number];
 
 /** DI seam so tests can stub the kernel without a live Neo4j. */
 export type InvokeFn = typeof invoke;
+
+/**
+ * Result of a deterministic recall: the volatile context message to inject into
+ * the model AND the raw recalled memories, so the route can BOTH ground the
+ * turn AND surface the grounding facts back to the chat client as citations
+ * (see `resolveGroundingCitations`). Separating the two lets citation
+ * resolution — which costs extra graph lookups — run concurrently with the
+ * model turn instead of blocking the first token.
+ */
+export interface DetailedRecall {
+  message: ModelMessage | null;
+  memories: RecalledMemory[];
+}
 
 /**
  * Render recalled memories into the volatile-message body, or `null` when there
@@ -109,15 +127,16 @@ export function stripRecalledMemoryHeading(body: string): string {
  * `timeoutMs`: any failure, timeout, or empty result yields `null` and the turn
  * proceeds untouched.
  */
-export async function recallWorkspaceMemory(args: {
+export async function recallWorkspaceMemoryDetailed(args: {
   query: string;
   executionRef: string;
   ctx: CapabilityContext;
   invokeFn?: InvokeFn;
   timeoutMs?: number;
-}): Promise<ModelMessage | null> {
+}): Promise<DetailedRecall> {
+  const empty: DetailedRecall = { message: null, memories: [] };
   const query = args.query.trim().slice(0, RECALL_QUERY_MAX);
-  if (query.length === 0) return null;
+  if (query.length === 0) return empty;
 
   const doInvoke = args.invokeFn ?? invoke;
   const timeoutMs = args.timeoutMs ?? RECALL_TIMEOUT_MS;
@@ -147,13 +166,126 @@ export async function recallWorkspaceMemory(args: {
       ).catch(() => null),
       timeout,
     ]);
-    if (raw === null || raw === undefined) return null;
+    if (raw === null || raw === undefined) return empty;
     const parsed = agentMemoryRecall.output.safeParse(raw);
-    if (!parsed.success) return null;
-    return buildRecalledMemoryMessage(parsed.data.memories);
+    if (!parsed.success) return empty;
+    return {
+      message: buildRecalledMemoryMessage(parsed.data.memories),
+      memories: parsed.data.memories,
+    };
   } catch {
-    return null;
+    return empty;
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
+}
+
+/**
+ * Backwards-compatible wrapper: returns only the volatile context message. The
+ * route uses `recallWorkspaceMemoryDetailed` so it can also emit the recalled
+ * facts as citations, but the MemoryProvider only needs the message.
+ */
+export async function recallWorkspaceMemory(args: {
+  query: string;
+  executionRef: string;
+  ctx: CapabilityContext;
+  invokeFn?: InvokeFn;
+  timeoutMs?: number;
+}): Promise<ModelMessage | null> {
+  return (await recallWorkspaceMemoryDetailed(args)).message;
+}
+
+// Hard ceiling on grounding-node resolution. Runs CONCURRENTLY with the model
+// turn (it only feeds the end-of-turn citation strip, never the model context),
+// so this is a safety valve, not a first-token latency budget.
+const CITATION_RESOLVE_TIMEOUT_MS = 3000;
+
+/**
+ * Resolve the knowledge-graph node each recalled memory is grounded in.
+ *
+ * A recalled memory carries a `nodeRef` — the publicId of the graph node it is
+ * ABOUT (its subject). We resolve each distinct `nodeRef` to the shared
+ * `KnowledgeNodeRef` shape via the wired, tenant-scoped `graph.node.get`
+ * capability (never a raw Neo4j call), so the chat client can cite the fact by
+ * its human label with a hover/inspect property bag and deep-link into the
+ * graph explorer — per CLAUDE.md "Citing nodes & edges in the UI". Memories
+ * whose subject is not a materialised node keep `node: undefined` (the chip
+ * still renders the lesson, just without a graph deep-link).
+ *
+ * Best-effort throughout: a failed or slow lookup drops that memory's `node`
+ * rather than failing the turn. MUST be called inside an active tenant scope
+ * (graph.node.get reads via scopedSession).
+ */
+export async function resolveGroundingCitations(args: {
+  memories: readonly RecalledMemory[];
+  ctx: CapabilityContext;
+  invokeFn?: InvokeFn;
+  timeoutMs?: number;
+}): Promise<MemoryRecallHit[]> {
+  const { memories } = args;
+  const toHit = (m: RecalledMemory, node?: KnowledgeNodeRef): MemoryRecallHit => ({
+    id: m.id,
+    lesson: m.lesson,
+    memoryClass: m.memoryClass,
+    memoryKind: m.memoryKind,
+    confidenceScore: m.confidenceScore,
+    enforcementScore: m.enforcementScore,
+    score: m.score,
+    nodeRef: m.nodeRef,
+    ...(node ? { node } : {}),
+  });
+
+  if (memories.length === 0) return [];
+
+  const doInvoke = args.invokeFn ?? invoke;
+  const timeoutMs = args.timeoutMs ?? CITATION_RESOLVE_TIMEOUT_MS;
+
+  // Distinct, non-empty subject publicIds — dedup so N memories about the same
+  // node cost a single lookup.
+  const uniqueRefs = [
+    ...new Set(memories.map((m) => m.nodeRef).filter((r): r is string => !!r)),
+  ];
+  if (uniqueRefs.length === 0) return memories.map((m) => toHit(m));
+
+  const refToNode = new Map<string, KnowledgeNodeRef>();
+
+  const resolveOne = async (nodeId: string): Promise<void> => {
+    try {
+      const raw = await doInvoke(
+        graphNodeGet.name,
+        { nodeId },
+        args.ctx,
+        { surface: "agent" },
+      );
+      const parsed = graphNodeGet.output.safeParse(raw);
+      if (!parsed.success || !parsed.data.node) return;
+      const n = parsed.data.node;
+      refToNode.set(nodeId, {
+        id: n.nodeId,
+        label: n.label,
+        displayName: n.displayName,
+        properties: {
+          ...(n.properties ?? {}),
+          ...(n.description ? { description: n.description } : {}),
+        },
+      });
+    } catch {
+      // Best-effort: leave this ref unresolved.
+    }
+  };
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(() => resolve(), timeoutMs);
+  });
+  try {
+    await Promise.race([
+      Promise.all(uniqueRefs.map(resolveOne)),
+      timeout,
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+
+  return memories.map((m) => toHit(m, m.nodeRef ? refToNode.get(m.nodeRef) : undefined));
 }

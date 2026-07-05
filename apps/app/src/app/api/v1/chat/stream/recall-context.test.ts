@@ -15,10 +15,13 @@
 import { describe, it, expect, vi } from "vitest";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { agentMemoryRecall } from "@oxagen/oxagen/contracts/agent.memory.recall";
+import { graphNodeGet } from "@oxagen/oxagen/contracts/graph.node.get";
 import {
   formatRecalledMemories,
   buildRecalledMemoryMessage,
   recallWorkspaceMemory,
+  recallWorkspaceMemoryDetailed,
+  resolveGroundingCitations,
   stripRecalledMemoryHeading,
 } from "./recall-context";
 
@@ -196,6 +199,151 @@ describe("recallWorkspaceMemory", () => {
       timeoutMs: 10,
     });
     expect(msg).toBeNull();
+  });
+});
+
+describe("recallWorkspaceMemoryDetailed", () => {
+  it("returns both the volatile message and the raw memories on success", async () => {
+    const invokeFn = vi
+      .fn()
+      .mockResolvedValue({ memories: [memory({ id: "m-9", lesson: "Detailed lesson" })] });
+
+    const { message, memories } = await recallWorkspaceMemoryDetailed({
+      query: "how does billing work?",
+      executionRef: "exec-9",
+      ctx: CTX,
+      invokeFn,
+    });
+
+    expect(message?.role).toBe("user");
+    expect(String(message?.content)).toContain("Detailed lesson");
+    expect(memories).toHaveLength(1);
+    expect(memories[0]!.id).toBe("m-9");
+  });
+
+  it("returns an empty result (message null, memories []) when recall throws", async () => {
+    const invokeFn = vi.fn().mockRejectedValue(new Error("neo4j down"));
+    const result = await recallWorkspaceMemoryDetailed({
+      query: "anything",
+      executionRef: "exec-1",
+      ctx: CTX,
+      invokeFn,
+    });
+    expect(result).toEqual({ message: null, memories: [] });
+  });
+
+  it("returns an empty result for a blank query without invoking recall", async () => {
+    const invokeFn = vi.fn();
+    const result = await recallWorkspaceMemoryDetailed({
+      query: "   ",
+      executionRef: "exec-1",
+      ctx: CTX,
+      invokeFn,
+    });
+    expect(result).toEqual({ message: null, memories: [] });
+    expect(invokeFn).not.toHaveBeenCalled();
+  });
+});
+
+describe("resolveGroundingCitations", () => {
+  const nodeOutput = (over: Partial<{ nodeId: string; label: string; displayName: string }> = {}) => ({
+    node: {
+      nodeId: over.nodeId ?? "node-1",
+      label: over.label ?? "Feature",
+      displayName: over.displayName ?? "Metered Billing",
+      description: "The usage→billing loop",
+      properties: { owner: "platform" },
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: null,
+    },
+  });
+
+  it("returns [] for no memories and never invokes the graph", async () => {
+    const invokeFn = vi.fn();
+    const hits = await resolveGroundingCitations({ memories: [], ctx: CTX, invokeFn });
+    expect(hits).toEqual([]);
+    expect(invokeFn).not.toHaveBeenCalled();
+  });
+
+  it("resolves each memory's grounding node via graph.node.get and attaches a KnowledgeNodeRef", async () => {
+    const invokeFn = vi.fn().mockResolvedValue(nodeOutput({ nodeId: "node-1" }));
+    const hits = await resolveGroundingCitations({
+      memories: [memory({ id: "m-1", nodeRef: "node-1", lesson: "Grounded fact" })],
+      ctx: CTX,
+      invokeFn,
+    });
+
+    expect(invokeFn).toHaveBeenCalledTimes(1);
+    const [name, input, ctxArg, opts] = invokeFn.mock.calls[0]!;
+    expect(name).toBe(graphNodeGet.name);
+    expect(input).toEqual({ nodeId: "node-1" });
+    expect(ctxArg).toBe(CTX);
+    expect(opts).toMatchObject({ surface: "agent" });
+
+    expect(hits).toHaveLength(1);
+    expect(hits[0]!.lesson).toBe("Grounded fact");
+    expect(hits[0]!.node).toMatchObject({
+      id: "node-1",
+      label: "Feature",
+      displayName: "Metered Billing",
+    });
+    // description folded into the property bag for hover/inspect.
+    expect(hits[0]!.node?.properties).toMatchObject({
+      owner: "platform",
+      description: "The usage→billing loop",
+    });
+  });
+
+  it("dedups repeated nodeRefs to a single graph lookup", async () => {
+    const invokeFn = vi.fn().mockResolvedValue(nodeOutput({ nodeId: "node-1" }));
+    const hits = await resolveGroundingCitations({
+      memories: [
+        memory({ id: "m-1", nodeRef: "node-1" }),
+        memory({ id: "m-2", nodeRef: "node-1" }),
+      ],
+      ctx: CTX,
+      invokeFn,
+    });
+    expect(invokeFn).toHaveBeenCalledTimes(1);
+    expect(hits).toHaveLength(2);
+    expect(hits[0]!.node?.id).toBe("node-1");
+    expect(hits[1]!.node?.id).toBe("node-1");
+  });
+
+  it("leaves node undefined when the graph lookup fails (best-effort)", async () => {
+    const invokeFn = vi.fn().mockRejectedValue(new Error("boom"));
+    const hits = await resolveGroundingCitations({
+      memories: [memory({ id: "m-1", nodeRef: "node-1" })],
+      ctx: CTX,
+      invokeFn,
+    });
+    expect(hits).toHaveLength(1);
+    expect(hits[0]!.node).toBeUndefined();
+    // The citation still carries the lesson + raw nodeRef for a fallback display.
+    expect(hits[0]!.lesson).toBeTruthy();
+    expect(hits[0]!.nodeRef).toBe("node-1");
+  });
+
+  it("leaves node undefined when the node is not found (null)", async () => {
+    const invokeFn = vi.fn().mockResolvedValue({ node: null });
+    const hits = await resolveGroundingCitations({
+      memories: [memory({ id: "m-1", nodeRef: "node-x" })],
+      ctx: CTX,
+      invokeFn,
+    });
+    expect(hits[0]!.node).toBeUndefined();
+  });
+
+  it("does not invoke the graph for memories that carry no nodeRef", async () => {
+    const invokeFn = vi.fn();
+    const hits = await resolveGroundingCitations({
+      memories: [memory({ id: "m-1", nodeRef: "" })],
+      ctx: CTX,
+      invokeFn,
+    });
+    expect(invokeFn).not.toHaveBeenCalled();
+    expect(hits).toHaveLength(1);
+    expect(hits[0]!.node).toBeUndefined();
   });
 });
 
