@@ -12,6 +12,7 @@ import {
   selectModel,
   supportsReasoning,
   supportsVision,
+  supportsVideoInput,
   modelIdOf,
   loadEffectiveModelDefaults,
   resolvePrompt,
@@ -25,7 +26,6 @@ import {
 import { materializeTools } from "@oxagen/agent";
 import { createPlatformAgentAi } from "@oxagen/agent/adapters";
 import { runCodingAgent } from "@oxagen/agent-engine";
-import { storage } from "@oxagen/storage";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
@@ -41,7 +41,8 @@ import { streamMediaGeneration } from "./media-generation";
 import { createTurnTranslator, emitUsageEvent } from "./translate-stream";
 import { formatStreamError } from "./stream-parts";
 import { buildHistoryMessages, collectRecentAttachmentPublicIds } from "./history";
-import { resolveAttachmentImages } from "./attachments";
+import { resolveAttachmentImages, resolveAttachmentMedia } from "./attachments";
+import { decideAttachmentRouting } from "./attachment-routing";
 import { recallWorkspaceMemory } from "./recall-context";
 import { createChatMemoryProvider } from "./engine-memory";
 
@@ -88,12 +89,25 @@ const BodySchema = z.object({
   // Pinned skills are injected directly (no tool call needed), so the model
   // applies them from the first turn. Capped at 5 to bound prompt bloat.
   skills: z.array(z.string().min(1).max(64)).max(5).optional().default([]),
-  // Image attachments for this turn — IDS ONLY (never base64/bytes through
-  // this 32 KiB body). Each publicId is re-resolved server-side below
-  // (ownership + status='ready' + kind='image' allowlist) before its bytes
-  // are fetched from private blob storage and attached as multimodal image
-  // parts. Capped at 8 to bound both request size and per-turn vision cost.
-  attachments: z.array(z.object({ publicId: z.string().min(1) })).max(8).default([]),
+  // Attachments for this turn — IDS ONLY (never base64/bytes through this
+  // 32 KiB body). Each publicId is re-resolved server-side below (ownership +
+  // status='ready' + kind ∈ {image,video} allowlist) before its bytes are
+  // fetched from private blob storage. Images become multimodal image parts;
+  // videos are routed (video-capable model → file part; vision-only → the
+  // client-extracted keyframes; neither → 422 — see attachment-routing.ts).
+  // `keyframeForVideo` marks an image that is a client-extracted keyframe of
+  // the referenced video attachment, so keyframes are dropped when the video
+  // rides as a real file part. Capped at 16 to bound request size + per-turn
+  // vision cost (a single video can contribute up to 6 keyframe images).
+  attachments: z
+    .array(
+      z.object({
+        publicId: z.string().min(1),
+        keyframeForVideo: z.string().min(1).nullable().optional(),
+      }),
+    )
+    .max(16)
+    .default([]),
   // Optional page context forwarded from the client at send-time. Carries the
   // current route and, when a fillable form is registered, its field list so
   // the agent can propose fill values via the `page_form_fill` tool.
@@ -299,18 +313,25 @@ export async function POST(request: NextRequest): Promise<Response> {
     });
   }
 
-  // ── Attachments (Phase 1: images) ─────────────────────────────────────────
+  // ── Attachments (Phase 1 images + Phase 2 video) ──────────────────────────
   // Resolve the current turn's attachment publicIds org-scoped (ownership +
-  // status='ready' + kind='image' allowlist enforced inside
-  // resolveAttachmentImages) and fetch their bytes server-side. An id that
+  // status='ready' + kind ∈ {image,video} allowlist enforced inside
+  // resolveAttachmentMedia) and fetch their bytes server-side. An id that
   // doesn't resolve is a hard 422 — the user explicitly attached it, so
-  // silently dropping it would mean the model answers about an image it never
+  // silently dropping it would mean the model answers about media it never
   // saw. Never a base64 round-trip through the client: refs-by-publicId in,
   // raw bytes fetched straight from private blob storage.
+  //
+  // decideAttachmentRouting then picks, purely, how each kind reaches the
+  // model: a video goes as a real file part when the model (or an upgrade
+  // candidate) is video-capable, else as its client-extracted keyframe images,
+  // else a hard 422. Images always ride the image path (with a vision upgrade
+  // of their own if needed).
   let imageAttachments: Array<{ data: Buffer; mediaType: string }> = [];
+  let videoAttachments: Array<{ data: Buffer; mediaType: string }> = [];
   if (attachments.length > 0) {
     const publicIds = attachments.map((a) => a.publicId);
-    const resolved = await resolveAttachmentImages(publicIds, {
+    const resolved = await resolveAttachmentMedia(publicIds, {
       orgId: tenant.id,
       workspaceId: workspace.id,
     });
@@ -318,42 +339,59 @@ export async function POST(request: NextRequest): Promise<Response> {
       return NextResponse.json(
         {
           error:
-            "One or more attachments could not be found, belong to another workspace, or are not ready yet. Please remove and re-attach the image, then try again.",
+            "One or more attachments could not be found, belong to another workspace, or are not ready yet. Please remove and re-attach the file, then try again.",
         },
         { status: 422 },
       );
     }
-    imageAttachments = publicIds.map((id) => resolved.get(id)!);
 
-    // Vision guard: the picker's selected model must accept image input. Try
-    // the white-labeled text tiers (balanced first — the platform default) for
-    // one that does; every tier is normally vision-capable (Claude/Gemini/GPT
-    // families all carry the capability), so this upgrade path is a rare
-    // safety net, not the common case.
-    if (!supportsVision(modelIdOf(turnModel))) {
-      const upgraded = ATTACHMENT_VISION_TIER_FALLBACK.map((fallbackTier) =>
-        selectModel({ tier: fallbackTier }),
-      ).find((candidate) => supportsVision(modelIdOf(candidate)));
-      if (!upgraded) {
-        return NextResponse.json(
-          {
-            error:
-              "This workspace has no vision-capable model configured, so it can't read the attached image. Remove the attachment, or ask an admin to enable a vision-capable model.",
-          },
-          { status: 422 },
-        );
-      }
+    // Partition into image vs. video refs by the AUTHORITATIVE stored kind
+    // (never the client's word). `keyframeForVideo` is a client grouping hint,
+    // only affecting which images are dropped when a video rides as a file part.
+    const imageRefs = attachments
+      .filter((a) => resolved.get(a.publicId)!.kind === "image")
+      .map((a) => ({ publicId: a.publicId, keyframeForVideo: a.keyframeForVideo }));
+    const videoRefs = attachments
+      .filter((a) => resolved.get(a.publicId)!.kind === "video")
+      .map((a) => ({ publicId: a.publicId }));
+
+    const upgradeCandidates = ATTACHMENT_VISION_TIER_FALLBACK.map((fallbackTier) =>
+      modelIdOf(selectModel({ tier: fallbackTier })),
+    );
+    const decision = decideAttachmentRouting({
+      model: modelIdOf(turnModel),
+      images: imageRefs,
+      videos: videoRefs,
+      supportsVision,
+      supportsVideoInput,
+      upgradeCandidates,
+    });
+    if (decision.kind === "error") {
+      return NextResponse.json({ error: decision.message }, { status: 422 });
+    }
+
+    if (decision.model !== modelIdOf(turnModel)) {
       logger.info(
         {
           orgId: tenant.id,
           workspaceId: workspace.id,
           requestedModel: modelIdOf(turnModel),
-          upgradedModel: modelIdOf(upgraded),
+          upgradedModel: decision.model,
+          hasVideo: videoRefs.length > 0,
         },
-        "[chat/stream] auto-upgraded to a vision-capable model for image attachments",
+        "[chat/stream] auto-upgraded model for multimodal attachments",
       );
-      turnModel = upgraded;
+      turnModel = selectModel({ model: decision.model });
     }
+
+    imageAttachments = decision.imagePublicIds.map((id) => {
+      const m = resolved.get(id)!;
+      return { data: m.data, mediaType: m.mediaType };
+    });
+    videoAttachments = decision.videoPublicIds.map((id) => {
+      const m = resolved.get(id)!;
+      return { data: m.data, mediaType: m.mediaType };
+    });
   }
 
   // Load conversation history from Postgres so the model has context for every
@@ -817,6 +855,11 @@ export async function POST(request: NextRequest): Promise<Response> {
           // the engine's plain-string content shape is unchanged (byte-
           // identical to before this feature for every existing caller).
           ...(imageAttachments.length > 0 ? { images: imageAttachments } : {}),
+          // Current-turn video attachments (Phase 2) — only ever populated
+          // when decideAttachmentRouting sent the turn down the video-capable
+          // path (otherwise videos arrive as keyframe images above). Passed as
+          // AI-SDK file parts by the engine.
+          ...(videoAttachments.length > 0 ? { videos: videoAttachments } : {}),
           history: historyForEngine,
           system: resolvePrompt({
             key: "chat.system",

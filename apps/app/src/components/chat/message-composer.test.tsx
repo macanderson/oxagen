@@ -172,6 +172,15 @@ vi.mock("next/image", () => ({
   ),
 }));
 
+// Client-side keyframe extraction needs a real <video>/<canvas> (absent in
+// jsdom) — mock it so a video test can control how many frames come back.
+const { mockExtractVideoFrames } = vi.hoisted(() => ({
+  mockExtractVideoFrames: vi.fn<() => Promise<Array<{ blob: Blob; atSeconds: number }>>>(),
+}));
+vi.mock("./extract-video-frames", () => ({
+  extractVideoFrames: mockExtractVideoFrames,
+}));
+
 // ── helpers ────────────────────────────────────────────────────────────────────
 
 const DEFAULT_MODEL_CONFIG: ResolvedTierCatalog = {
@@ -1781,6 +1790,8 @@ describe("MessageComposer — attachments", () => {
     vi.stubGlobal("XMLHttpRequest", FakeXHR);
     URL.createObjectURL = vi.fn(() => "blob:mock-preview");
     URL.revokeObjectURL = vi.fn();
+    // Default: no keyframes (image-only tests never attach a video).
+    mockExtractVideoFrames.mockResolvedValue([]);
   });
 
   it("hides the attach button when orgSlug/workspaceSlug are not provided", async () => {
@@ -1793,7 +1804,9 @@ describe("MessageComposer — attachments", () => {
         modelConfig={DEFAULT_MODEL_CONFIG}
       />,
     );
-    expect(screen.queryByRole("button", { name: "Attach image" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Attach image or video" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows the attach button when orgSlug/workspaceSlug are provided", async () => {
@@ -1808,7 +1821,9 @@ describe("MessageComposer — attachments", () => {
         workspaceSlug="main"
       />,
     );
-    expect(screen.getByRole("button", { name: "Attach image" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Attach image or video" }),
+    ).toBeInTheDocument();
   });
 
   it("uploads a picked file, shows progress, then renders the sent chip", async () => {
@@ -1956,5 +1971,106 @@ describe("MessageComposer — attachments", () => {
     await waitFor(() =>
       expect(screen.getByTestId("attachment-chip")).toHaveAttribute("data-status", "error"),
     );
+  });
+
+  it("attaches a video as one visible chip and uploads its sampled keyframes hidden", async () => {
+    const user = userEvent.setup();
+    mockExtractVideoFrames.mockResolvedValue([
+      { blob: new Blob(["f1"], { type: "image/webp" }), atSeconds: 1 },
+      { blob: new Blob(["f2"], { type: "image/webp" }), atSeconds: 2 },
+    ]);
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(fileInput, new File(["v"], "clip.mp4", { type: "video/mp4" }));
+
+    // The video uploads as kind=video and its keyframes upload as kind=image.
+    await waitFor(() => expect(FakeXHR.instances).toHaveLength(3));
+    expect(FakeXHR.instances[0]!.body?.get("kind")).toBe("video");
+    expect(FakeXHR.instances[1]!.body?.get("kind")).toBe("image");
+    expect(FakeXHR.instances[2]!.body?.get("kind")).toBe("image");
+
+    // Only the video shows a chip; the keyframes are hidden derived attachments.
+    expect(screen.getAllByTestId("attachment-chip")).toHaveLength(1);
+  });
+
+  it("links keyframes to their video via keyframeForVideo in the submitted FormData", async () => {
+    const user = userEvent.setup();
+    const action = makeAction();
+    mockExtractVideoFrames.mockResolvedValue([
+      { blob: new Blob(["f1"], { type: "image/webp" }), atSeconds: 1 },
+      { blob: new Blob(["f2"], { type: "image/webp" }), atSeconds: 2 },
+    ]);
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(fileInput, new File(["v"], "clip.mp4", { type: "video/mp4" }));
+    await waitFor(() => expect(FakeXHR.instances).toHaveLength(3));
+
+    act(() => {
+      FakeXHR.instances[0]!.respond(201, {
+        publicId: "gen_vid",
+        kind: "video",
+        name: "clip.mp4",
+        mimeType: "video/mp4",
+        url: "/api/v1/assets/gen_vid",
+      });
+      FakeXHR.instances[1]!.respond(201, {
+        publicId: "gen_kf1",
+        kind: "image",
+        name: "clip-frame-1.webp",
+        mimeType: "image/webp",
+        url: "/api/v1/assets/gen_kf1",
+      });
+      FakeXHR.instances[2]!.respond(201, {
+        publicId: "gen_kf2",
+        kind: "image",
+        name: "clip-frame-2.webp",
+        mimeType: "image/webp",
+        url: "/api/v1/assets/gen_kf2",
+      });
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Send message" })).not.toBeDisabled(),
+    );
+
+    await user.type(screen.getByRole("textbox"), "what happens in this clip?");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    const parsed = JSON.parse(fd.get("attachments") as string) as Array<{
+      publicId: string;
+      kind: string;
+      keyframeForVideo?: string;
+    }>;
+    expect(parsed).toEqual([
+      expect.objectContaining({ publicId: "gen_vid", kind: "video" }),
+      expect.objectContaining({ publicId: "gen_kf1", kind: "image", keyframeForVideo: "gen_vid" }),
+      expect.objectContaining({ publicId: "gen_kf2", kind: "image", keyframeForVideo: "gen_vid" }),
+    ]);
+    // The video carries no keyframeForVideo of its own.
+    expect(parsed[0]!.keyframeForVideo).toBeUndefined();
   });
 });
