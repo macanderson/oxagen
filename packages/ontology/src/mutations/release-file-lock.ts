@@ -36,6 +36,43 @@ export async function releaseFileLock(input: ReleaseFileLockInput): Promise<Rele
   }
 }
 
+export interface ForceReleaseFileLockInput {
+  lockId: string;
+}
+
+export interface ForceReleaseFileLockResult {
+  released: boolean;
+}
+
+/**
+ * Admin/debug force-release (docs/specs/agent-file-locking/plan.md §7): the
+ * `agent.file.lock.release` capability is gated to Owner/Admin precisely so
+ * an operator can clear a lock a crashed agent left behind WITHOUT knowing
+ * the original holder's internal `agentId` — unlike {@link releaseFileLock},
+ * this does NOT check the holder's identity, only `lockId`. Never expose
+ * this as the per-call release inside `tools.ts`; that path must keep the
+ * "an agent can only release its own lock" invariant.
+ */
+export async function forceReleaseFileLock(
+  input: ForceReleaseFileLockInput,
+): Promise<ForceReleaseFileLockResult> {
+  const neo4j = scopedSession();
+  try {
+    const result = await neo4j.run(
+      `MATCH (:Agent {orgId: $orgId})-[h:${EdgeTypes.HOLDS_LOCK} {lockId: $lockId}]->(:SourceFile {orgId: $orgId})
+       WITH collect(h) AS locks, count(h) AS deletedCount
+       FOREACH (lock IN locks | DELETE lock)
+       RETURN deletedCount`,
+      { lockId: input.lockId },
+    );
+    const record = result.records[0];
+    const deletedCount = record ? Number(record.get("deletedCount") ?? 0) : 0;
+    return { released: deletedCount > 0 };
+  } finally {
+    await neo4j.close();
+  }
+}
+
 export interface ReleaseFileLocksByExecutionInput {
   executionId: string;
 }

@@ -8,7 +8,7 @@ vi.mock("../tenant", () => ({
 }));
 
 import { scopedSession } from "../tenant";
-import { releaseFileLock, releaseFileLocksByExecution } from "./release-file-lock";
+import { releaseFileLock, releaseFileLocksByExecution, forceReleaseFileLock } from "./release-file-lock";
 
 const mockScopedSession = vi.mocked(scopedSession);
 
@@ -51,6 +51,44 @@ describe("releaseFileLock", () => {
   it("always closes the session, even on failure", async () => {
     mockNeoRun.mockRejectedValue(new Error("neo4j down"));
     await expect(releaseFileLock({ lockId: "lock-1", agentId: "agent-a" })).rejects.toThrow("neo4j down");
+    expect(mockNeoClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("forceReleaseFileLock", () => {
+  let mockNeoRun: ReturnType<typeof vi.fn>;
+  let mockNeoClose: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockNeoRun = vi.fn().mockResolvedValue({ records: [mockRecord({ deletedCount: 1 })] });
+    mockNeoClose = vi.fn().mockResolvedValue(undefined);
+    mockScopedSession.mockReturnValue({ run: mockNeoRun, close: mockNeoClose });
+  });
+
+  it("matches by lockId ONLY — no holder identity check (admin/debug force-release)", async () => {
+    await forceReleaseFileLock({ lockId: "lock-1" });
+    const cypher = mockNeoRun.mock.calls[0]![0] as string;
+    expect(cypher).toContain("HOLDS_LOCK {lockId: $lockId}");
+    // Unlike releaseFileLock, the MATCH pattern must NOT constrain Agent.id.
+    expect(cypher).not.toContain("Agent {id: $agentId");
+    const params = mockNeoRun.mock.calls[0]![1] as Record<string, unknown>;
+    expect(params).toEqual({ lockId: "lock-1" });
+  });
+
+  it("returns released:true when an edge was deleted", async () => {
+    const result = await forceReleaseFileLock({ lockId: "lock-1" });
+    expect(result.released).toBe(true);
+  });
+
+  it("returns released:false for a nonexistent lock — idempotent, not an error", async () => {
+    mockNeoRun.mockResolvedValue({ records: [mockRecord({ deletedCount: 0 })] });
+    const result = await forceReleaseFileLock({ lockId: "lock-missing" });
+    expect(result.released).toBe(false);
+  });
+
+  it("always closes the session, even on failure", async () => {
+    mockNeoRun.mockRejectedValue(new Error("neo4j down"));
+    await expect(forceReleaseFileLock({ lockId: "lock-1" })).rejects.toThrow("neo4j down");
     expect(mockNeoClose).toHaveBeenCalledTimes(1);
   });
 });
