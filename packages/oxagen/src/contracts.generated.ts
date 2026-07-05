@@ -94,6 +94,8 @@ import "./contracts/browser.read";
 import "./contracts/browser.refresh";
 import "./contracts/browser.screenshot";
 import "./contracts/browser.submit";
+import "./contracts/budget.policy.read";
+import "./contracts/budget.policy.write";
 import "./contracts/chat.message.execution";
 import "./contracts/chat.message.send";
 import "./contracts/code.diff";

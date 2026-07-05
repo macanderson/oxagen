@@ -121,6 +121,11 @@ contract-first design, IAM enforcement, and instrumentation.
 - [browser.screenshot](browser.screenshot.md) — Screenshot the durable sandbox browser's current page or element and store it as a private workspace asset for the cross-LLM judge
 - [browser.submit](browser.submit.md) — Submit a form on the durable sandbox browser's current page (click the given selector, or press Enter) and wait for the result to settle
 
+## Budget (2)
+
+- [budget.policy.read](budget.policy.read.md) — Read the calling user's saved per-turn dollar budget (enabled, limit, enforcement mode, grace cushion)
+- [budget.policy.write](budget.policy.write.md) — Update the calling user's saved per-turn dollar budget (partial update): on/off, USD limit, mode (grace/prompt/enforce), grace cushion
+
 ## Chat (2)
 
 - [chat.message.execution](chat.message.execution.md) — Record an agent execution that originated from a chat message; atomically links execution to message for observability

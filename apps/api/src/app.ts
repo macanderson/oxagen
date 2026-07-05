@@ -98,6 +98,8 @@ import { orgMemberRemoveRoute } from "./routes/v1/org.member.remove";
 import { orgMemberRoleChangeRoute } from "./routes/v1/org.member.role.change";
 import { userPreferencesReadRoute } from "./routes/v1/user.preferences.read";
 import { userPreferencesWriteRoute } from "./routes/v1/user.preferences.write";
+import { budgetPolicyReadRoute } from "./routes/v1/budget.policy.read";
+import { budgetPolicyWriteRoute } from "./routes/v1/budget.policy.write";
 import { authWhoamiRoute } from "./routes/v1/auth.whoami";
 import { workspaceModelSettingsReadRoute } from "./routes/v1/workspace.model.settings.read";
 import { workspaceModelSettingsWriteRoute } from "./routes/v1/workspace.model.settings.write";
@@ -313,6 +315,9 @@ userScoped.route("/user/organizations", orgListRoute);
 userScoped.route("/user/workspaces", workspaceListRoute);
 userScoped.route("/user/preferences/read", userPreferencesReadRoute);
 userScoped.route("/user/preferences/write", userPreferencesWriteRoute);
+// Per-turn dollar budget (user-scoped default).
+userScoped.route("/user/budget/read", budgetPolicyReadRoute);
+userScoped.route("/user/budget/write", budgetPolicyWriteRoute);
 app.route("/v1", userScoped);
 
 // /v1/:org_slug/:workspace_slug/* — org + workspace scoped routes.
