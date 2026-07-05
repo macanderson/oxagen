@@ -18,7 +18,7 @@
 import { scopedSession } from "@oxagen/ontology/tenant";
 import { sanitizeLabel } from "@oxagen/ontology/labels";
 import { edgeValidityOnCreateSet, edgeValidityParams } from "@oxagen/ontology/temporal";
-import { chInsert } from "@oxagen/telemetry";
+import { chInsert, deterministicEventId } from "@oxagen/telemetry";
 import { randomUUID } from "node:crypto";
 import type { EntityMutation } from "../types";
 import {
@@ -38,6 +38,18 @@ export interface UpsertEntityOptions {
   connectionId?: string;
   /** Connector record type for telemetry rationale. */
   sourceRecordType?: string;
+  /**
+   * OXA-1932: the enclosing Inngest run id (`ctx.runId`), threaded through so
+   * `schema_conformance_events` rows get a per-attempt idempotency key. Inngest
+   * keeps the SAME runId across every retry of one execution but mints a FRESH
+   * runId for the next genuinely separate trigger (e.g. tomorrow's re-sync of
+   * the same entity) — so a retried insert collapses into the original row
+   * (see emitConformanceEvent) while legitimate repeat observations over time
+   * still get their own row. Absent for non-Inngest callers (tests, direct
+   * invocations) — falls back to a fixed sentinel, same as before this fix
+   * (best-effort telemetry; never blocks the write).
+   */
+  runId?: string;
 }
 
 /** Outcome of an entity-node write, carrying the §8 conformance result. */
@@ -219,6 +231,22 @@ async function emitObservedLabel(
  *
  * NOTE: description/error text originates from the registry + payload and is
  * stored as DATA only — never interpreted as instructions (§11 posture).
+ *
+ * OXA-1932: `event_id` is derived deterministically (NOT `crypto.randomUUID()`)
+ * from stable inputs — the enclosing Inngest run id, the mutation's natural
+ * key, the schema version, the outcome, and a `role` discriminator. This
+ * function is called from inside `upsertEntityNode`, itself invoked from a
+ * single `step.run("upsert-node", ...)` in the ingestion pipeline; when
+ * Inngest retries that step the whole body re-executes, including this insert.
+ * A deterministic id means a retry re-derives the SAME row identity instead of
+ * minting a fresh one, and — paired with the table's ReplacingMergeTree
+ * engine (0021 migration) keyed on `event_id` — a retried insert collapses
+ * into the original row on merge (query with FINAL) rather than double-
+ * counting the conformance signal. `runId` is what makes this safe to do
+ * WITHOUT collapsing genuinely separate observations: Inngest keeps the same
+ * runId across retries of one execution but mints a fresh one for the next
+ * trigger (e.g. tomorrow's re-sync of the same entity), so that later,
+ * legitimate re-observation still gets its own row.
  */
 async function emitConformanceEvent(
   mutation: EntityMutation,
@@ -227,11 +255,18 @@ async function emitConformanceEvent(
   outcome: "accepted" | "rejected" | "written_below_floor" | "pruned",
   nodeId: string | null,
   opts: UpsertEntityOptions,
+  role: "result" | "low_alert" = "result",
 ): Promise<void> {
   try {
     await chInsert("schema_conformance_events", [
       {
-        event_id: randomUUID(),
+        event_id: deterministicEventId(
+          opts.runId ?? "no-inngest-run-id",
+          mutation.naturalKey,
+          pinnedSchema.versionId,
+          outcome,
+          role,
+        ),
         version_id: pinnedSchema.versionId,
         target_kind: "node",
         node_id: nodeId,
@@ -266,8 +301,9 @@ async function emitConformanceLowEvent(
   nodeId: string,
   opts: UpsertEntityOptions,
 ): Promise<void> {
-  // Distinct event_id keeps the alert row separate from the primary outcome row.
-  await emitConformanceEvent(mutation, pinnedSchema, validation, "written_below_floor", nodeId, opts);
+  // Distinct `role` keeps the alert row's deterministic event_id separate from
+  // the primary outcome row's, even though both share outcome="written_below_floor".
+  await emitConformanceEvent(mutation, pinnedSchema, validation, "written_below_floor", nodeId, opts, "low_alert");
 }
 
 export interface AliasEdgeProps {

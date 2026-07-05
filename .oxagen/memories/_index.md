@@ -5,6 +5,7 @@ Durable instincts recorded by `eval-*` evaluator agents and the break-fix agent.
 Format: `- [title](file-name.md) — one-line hook · type (bug|observation) · YYYY-MM-DD HH:mm[am|pm] GMT`
 
 <!-- entries below, newest first -->
+- [schema-conformance-events-inngest-retry-double-count](schema-conformance-events-inngest-retry-double-count.md) — retried Inngest step re-ran the whole conformance-event insert with a fresh randomUUID(); fixed with deterministicEventId(runId,...) + ReplacingMergeTree(occurred_at) (0021 migration); runPipeline/pinnedSchema wiring into the live ingestion function is still dead code — separate gap · bug · 2026-07-04
 - [iam-checkfn-throw-fail-open-on-enforcement-off](iam-checkfn-throw-fail-open-on-enforcement-off.md) — kernel.ts `iamCheckThrew && _iamEnforced` gate silently allowed on throw when enforcement off; now unconditional deny (OXA-2056) · bug · 2026-07-04
 - [iam-missing-migration-silent-defaulteffect-degrade](iam-missing-migration-silent-defaulteffect-degrade.md) — fetch-authz.ts 42P01 fell back to EMPTY_AUTHZ/defaultEffect for human sessions; now fails closed + logs loudly (error, not warn) (OXA-2056) · bug · 2026-07-04
 - [mcp-context-empty-orgid-defense-in-depth](mcp-context-empty-orgid-defense-in-depth.md) — apps/mcp/src/context.ts now rejects a resolved API key with empty orgId/workspaceId before emitting a success audit event (OXA-2056) · bug · 2026-07-04
