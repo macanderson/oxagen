@@ -14,6 +14,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 import {
   isUuid,
   resolveAgent,
+  resolveAgentForA2A,
   resolveTrigger,
   AgentManagedReadOnlyError,
   assertAgentMutable,
@@ -53,6 +54,55 @@ describe("resolveAgent (no-tx path)", () => {
       "ws_1",
     );
     expect(row?.publicId).toBe("agt_1");
+  });
+});
+
+describe("resolveAgentForA2A (no-tx path)", () => {
+  it("resolves an active/deployed agent with its active version's instructions", async () => {
+    fake.enqueue([
+      {
+        id: "uuid-1",
+        publicId: "agt_1",
+        slug: "qa-chat",
+        name: "QA Chat",
+        description: null,
+        agentType: "custom",
+        status: "active",
+        deploymentStatus: "active",
+        activeVersionId: "ver-1",
+        activeVersionId2: "ver-1",
+        activeVersionConfig: { instructions: "Be terse." },
+      },
+    ]);
+    const agent = await resolveAgentForA2A("ws_1", "qa-chat");
+    expect(agent?.publicId).toBe("agt_1");
+    expect(agent?.activeVersion).toEqual({ id: "ver-1", instructions: "Be terse." });
+  });
+
+  it("returns null for an unknown slug (no throw)", async () => {
+    fake.enqueue([]);
+    const agent = await resolveAgentForA2A("ws_1", "does-not-exist");
+    expect(agent).toBeNull();
+  });
+
+  it("returns an agent with a null activeVersion when it has no published version", async () => {
+    fake.enqueue([
+      {
+        id: "uuid-2",
+        publicId: "agt_2",
+        slug: "draftless",
+        name: "Draftless",
+        description: null,
+        agentType: "custom",
+        status: "active",
+        deploymentStatus: "active",
+        activeVersionId: null,
+        activeVersionId2: null,
+        activeVersionConfig: null,
+      },
+    ]);
+    const agent = await resolveAgentForA2A("ws_1", "draftless");
+    expect(agent?.activeVersion).toBeNull();
   });
 });
 
