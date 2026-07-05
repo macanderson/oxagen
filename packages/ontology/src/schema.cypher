@@ -83,6 +83,16 @@ CREATE VECTOR INDEX memory_embedding_index IF NOT EXISTS
 FOR (n:AgentMemory) ON (n.embedding)
 OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
 
+// Engram (packages/engram) memory dual-write projection — mirrors episodic
+// store records as :EngramMemory nodes (packages/inngest-functions
+// engram.sync-memory-to-graph / engram.embed-memory). Backs
+// VectorRetrievalEngine's ANN recall (OXA-2061) — the embed-memory worker
+// writes `m.embedding` expecting this index to exist for ANN queries.
+CREATE INDEX engram_memory_org IF NOT EXISTS FOR (n:EngramMemory) ON (n.orgId);
+CREATE VECTOR INDEX engram_memory_embedding_index IF NOT EXISTS
+FOR (n:EngramMemory) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+
 CREATE VECTOR INDEX message_embedding_index IF NOT EXISTS
 FOR (n:Message) ON (n.embedding)
 OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };

@@ -8,6 +8,7 @@
 import { createClient, type ClickHouseClient } from "@clickhouse/client";
 import type { MemoryRecord, Namespace, RecordKind } from "../types";
 import type { EpisodicQuery, EpisodicStore } from "./episodic";
+import { tokenizeLexicalQuery } from "./lexical-tokenize";
 
 export interface ClickHouseAdapterOpts {
   url: string;
@@ -238,6 +239,57 @@ export class ClickHouseEpisodicStore implements EpisodicStore {
     minSalience?: number,
   ): Promise<MemoryRecord[]> {
     return this.query({ namespace, limit, minSalience });
+  }
+
+  async searchLexical(
+    namespace: Namespace,
+    query: string,
+    limit: number,
+  ): Promise<Array<{ recordId: string; score: number }>> {
+    await this.ready;
+    const tokens = tokenizeLexicalQuery(query);
+    if (tokens.length === 0 || limit <= 0) return [];
+
+    // Same term-frequency scoring as the DuckDB adapter (see
+    // lexical-tokenize.ts): each matched token contributes 1/tokens.length.
+    // positionCaseInsensitive() returns the 1-based match position or 0 —
+    // ClickHouse's tokenbf_v1-friendly equivalent of DuckDB's contains().
+    const tokenParams: Record<string, string> = {};
+    tokens.forEach((t, i) => {
+      tokenParams[`tok${i}`] = t;
+    });
+    const matchExprs = tokens.map(
+      (_, i) => `if(positionCaseInsensitive(body, {tok${i}:String}) > 0, 1, 0)`,
+    );
+    const scoreSql = `(${matchExprs.join(" + ")}) / ${tokens.length}.0`;
+    const whereOr = tokens
+      .map((_, i) => `positionCaseInsensitive(body, {tok${i}:String}) > 0`)
+      .join(" OR ");
+
+    const sql = `
+      SELECT id, ${scoreSql} AS lexical_score
+      FROM engram_episodic_records FINAL
+      WHERE namespace_org = {org:String} AND namespace_workspace = {workspace:String}
+        AND (${whereOr})
+      ORDER BY lexical_score DESC
+      LIMIT {limit:UInt32}
+    `;
+
+    const result = await this.client.query({
+      query: sql,
+      query_params: {
+        ...tokenParams,
+        org: namespace.org,
+        workspace: namespace.workspace,
+        limit,
+      },
+      format: "JSONEachRow",
+    });
+    const rows = (await result.json()) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      recordId: r["id"] as string,
+      score: Number(r["lexical_score"] ?? 0),
+    }));
   }
 
   async close(): Promise<void> {
