@@ -4,8 +4,22 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   versionFindFirst: vi.fn(),
   execInsertReturning: vi.fn(),
+  execInsertValues: vi.fn(),
   inngestSend: vi.fn(),
 }));
+
+// Canonical agent_executions.origin_type set — mirror of AGENT_EXECUTION_ORIGIN_TYPES
+// / the agent_executions_origin_type_check CHECK constraint. Inlined here (not
+// imported) so the test fails loudly if the handler ever writes a value the DB
+// would reject at INSERT.
+const CANONICAL_ORIGIN_TYPES = [
+  "chat",
+  "event_trigger",
+  "scheduled_job",
+  "mcp_request",
+  "workflow_run",
+  "fanout",
+];
 
 // withTenantDb is called twice:
 //   call 1 → query.schemaVersions.findFirst (resolve version by publicId)
@@ -26,12 +40,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
           },
         });
       }
-      // call 2 → insert path
+      // call 2 → insert path. Capture the inserted values so tests can assert
+      // the row shape (esp. a canonical origin_type — see regression test below).
       return fn({
         insert: (_table: unknown) => ({
-          values: (_vals: unknown) => ({
-            returning: mocks.execInsertReturning,
-          }),
+          values: (vals: unknown) => {
+            mocks.execInsertValues(vals);
+            return { returning: mocks.execInsertReturning };
+          },
         }),
       });
     },
@@ -136,5 +152,21 @@ describe("schemaReconcileDispatchHandler (@oxagen/handlers)", () => {
     await schemaReconcileDispatchHandler(BASE_INPUT, CTX);
     expect(mocks.versionFindFirst).toHaveBeenCalledTimes(1);
     expect(mocks.execInsertReturning).toHaveBeenCalledTimes(1);
+  });
+
+  // Regression (prod login hotfix): the handler previously inserted
+  // origin_type='schema.reconcile.dispatch', a value outside the
+  // agent_executions_origin_type_check CHECK. Those rows blocked the prod
+  // migration chain (the CHECK add failed "violated by some row"), which
+  // cascaded into Better Auth's two_factor migration never applying and took
+  // production login down. origin_type MUST be a canonical value.
+  it("inserts a CHECK-valid canonical origin_type", async () => {
+    await schemaReconcileDispatchHandler(BASE_INPUT, CTX);
+    expect(mocks.execInsertValues).toHaveBeenCalledTimes(1);
+    const inserted = mocks.execInsertValues.mock.calls[0]?.[0] as {
+      originType?: string;
+    };
+    expect(inserted?.originType).toBe("event_trigger");
+    expect(CANONICAL_ORIGIN_TYPES).toContain(inserted?.originType);
   });
 });
