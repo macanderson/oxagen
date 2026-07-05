@@ -57,6 +57,7 @@ import type {
   CodingEvent,
   ImageAttachment,
   EngineNonFatalError,
+  RunCodingAgentResult,
 } from "../types";
 import type { AgentAi, MemoryProvider, TraceStore, GraphSyncProvider, FileLockProvider } from "../ports";
 import type {
@@ -235,6 +236,17 @@ export interface RunTurnOptions {
   verbose?: boolean;
   /** Abort the turn (e.g. user hit Ctrl-C / Esc). */
   signal?: AbortSignal;
+  /**
+   * Per-turn dollar budget gate. Forwarded to every `runCodingAgent` round this
+   * turn runs, but wrapped so it sees the turn's CUMULATIVE usage (prior rounds'
+   * tokens carried as a baseline) — the engine guard alone only sees one round's
+   * usage, so this is what makes the ceiling a true per-TURN cap across the
+   * evaluate→execute→judge→revise rounds. Omitted ⇒ no budget. Build it with
+   * `createTurnBudgetGuard` from @oxagen/billing. MUST NOT throw.
+   */
+  budgetGuard?: (
+    usage: RunCodingAgentResult["usage"],
+  ) => Promise<"continue" | "stop">;
   /** Live stage events for the UI. */
   /**
    * Injected sink for non-fatal internal engine failures (e.g. memory-recall
@@ -445,6 +457,28 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   // which is cost accounting and has no cache field.
   let cachedInputTokens = 0;
 
+  // Per-turn budget baseline: the engine guard sees only ONE round's usage, but
+  // the budget is a per-TURN cap, so carry a running baseline of the tokens
+  // spent by completed rounds (updated at each round start from the turn's
+  // `usage`/`cachedInputTokens` accumulators) and add it before delegating to
+  // the caller's guard. One wrapped guard, defined once, reads the mutable
+  // baseline — so a "prompt"-mode approval's raised ceiling (held inside the
+  // caller's guard) persists across rounds. Passed to every runCodingAgent call.
+  const budgetBaseline = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 };
+  const turnBudgetGuard: RunTurnOptions["budgetGuard"] = opts.budgetGuard
+    ? (u) =>
+        opts.budgetGuard!({
+          inputTokens: budgetBaseline.inputTokens + (u.inputTokens ?? 0),
+          outputTokens: budgetBaseline.outputTokens + (u.outputTokens ?? 0),
+          totalTokens:
+            budgetBaseline.inputTokens +
+            budgetBaseline.outputTokens +
+            (u.totalTokens ?? 0),
+          cachedInputTokens:
+            budgetBaseline.cachedInputTokens + (u.cachedInputTokens ?? 0),
+        })
+    : undefined;
+
   // Mid-session judge: run the agent in two halves on round 0, checking
   // completeness at the midpoint so missing acceptance criteria (e.g. a
   // required test case) are caught before the agent burns the remaining budget
@@ -491,6 +525,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       memory: opts.memory ?? undefined,
       onError: opts.onError,
       signal: opts.signal,
+      budgetGuard: turnBudgetGuard,
       fileLock: opts.fileLock,
       lockContext,
       onEvent: (e) => {
@@ -534,6 +569,12 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     });
 
     const execStart = Date.now();
+    // Snapshot the turn's cumulative usage as this round's budget baseline, so
+    // the per-turn ceiling accounts for every prior round (evaluate + earlier
+    // execute/judge rounds) — see `turnBudgetGuard` above.
+    budgetBaseline.inputTokens = usage.inputTokens;
+    budgetBaseline.outputTokens = usage.outputTokens;
+    budgetBaseline.cachedInputTokens = cachedInputTokens;
     // Capture bash command outputs THIS round so the judge sees test results
     // (the decisive completeness signal), not just the command strings.
     const roundCommandOutputs: Array<{ command: string; output: string; ok: boolean }> = [];
@@ -655,6 +696,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         memory: opts.memory ?? undefined,
         onError: opts.onError,
         signal: opts.signal,
+        budgetGuard: turnBudgetGuard,
         fileLock: opts.fileLock,
         lockContext,
         onEvent: (e) => {
@@ -1028,6 +1070,9 @@ async function runBare(
     memory: opts.memory ?? undefined,
     onError: opts.onError,
     signal: opts.signal,
+    // Bare path is a single execution round, so the caller's guard sees the
+    // whole turn's usage directly — no cross-round baseline wrapping needed.
+    budgetGuard: opts.budgetGuard,
     fileLock: opts.fileLock,
     lockContext,
     onEvent: (e) => {
