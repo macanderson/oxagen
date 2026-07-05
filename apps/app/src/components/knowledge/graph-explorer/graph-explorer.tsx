@@ -57,7 +57,18 @@ interface Selection {
   id: string;
 }
 
-export function GraphExplorer() {
+export interface GraphExplorerProps {
+  /**
+   * publicId of a node to focus on mount — used by the chat "Grounded in"
+   * citations' "View in graph" deep-link (`?focus=<publicId>`). The explorer
+   * expands that node's neighborhood into view, selects it (so the focus/mute
+   * highlight centers on it), and fits the canvas. Absent for the normal
+   * whole-graph browse.
+   */
+  focusNodeId?: string;
+}
+
+export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
   const tenant = useTenant();
   const slugs = React.useMemo(
     () => ({ orgSlug: tenant.orgSlug, workspaceSlug: tenant.workspaceSlug }),
@@ -102,6 +113,23 @@ export function GraphExplorer() {
 
   const canvasApi = React.useRef<GraphCanvasApi | null>(null);
   const [canvasReady, setCanvasReady] = React.useState(false);
+
+  // Deep-link focus (from the chat citation "View in graph" action). Once the
+  // graph has loaded, pull the focused node's neighborhood into view, select it
+  // so the focus/mute highlight centers on it, and fit the canvas. Guarded by a
+  // ref so it runs once per distinct focus target, never re-triggering on every
+  // data change.
+  const focusedRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!focusNodeId || data.status !== "ready") return;
+    if (focusedRef.current === focusNodeId) return;
+    focusedRef.current = focusNodeId;
+    setView((v) => (v === "table" ? "2d" : v));
+    void data.expand(focusNodeId).finally(() => {
+      setSelection({ type: "node", id: focusNodeId });
+      canvasApi.current?.fit();
+    });
+  }, [focusNodeId, data.status, data.expand]);
 
   React.useEffect(() => {
     const checkDark = () => {

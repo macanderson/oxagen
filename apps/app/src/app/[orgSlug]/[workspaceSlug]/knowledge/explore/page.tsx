@@ -10,11 +10,20 @@ import { GraphExplorer } from "@/components/knowledge/graph-explorer";
 
 export const dynamic = "force-dynamic";
 
-export default async function ExplorePage() {
+export default async function ExplorePage({
+  searchParams,
+}: {
+  // Next 16: searchParams is async. `?focus=<publicId>` deep-links the explorer
+  // onto a specific node — used by the chat "Grounded in" citation's "View in
+  // graph" action so a cited fact opens directly in a live graph view.
+  searchParams: Promise<{ focus?: string | string[] }>;
+}) {
+  const { focus } = await searchParams;
+  const focusNodeId = Array.isArray(focus) ? focus[0] : focus;
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1">
-        <GraphExplorer />
+        <GraphExplorer {...(focusNodeId ? { focusNodeId } : {})} />
       </div>
     </div>
   );

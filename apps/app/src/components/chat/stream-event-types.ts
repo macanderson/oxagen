@@ -6,7 +6,9 @@
 // Reuse the background-task status union defined by the tray so the inline
 // streaming card and the tray never drift (queued|running|completed|failed|cancelled).
 import type { BackgroundTaskStatus } from "./background-task-types";
+import type { KnowledgeNodeRef } from "@oxagen/oxagen/contracts/semantic.edge.list";
 export type { BackgroundTaskStatus };
+export type { KnowledgeNodeRef };
 
 export type RiskLevel = "low" | "medium" | "high";
 
@@ -78,6 +80,15 @@ export interface MemoryRecallHit {
   enforcementScore: number | null;
   score: number;
   nodeRef?: string;
+  /**
+   * The knowledge-graph node this memory is grounded in, resolved server-side to
+   * the shared `KnowledgeNodeRef` shape ({ id, label, displayName, properties }).
+   * Present when the memory's `nodeRef` (its subject publicId) resolves to a real
+   * node in the workspace graph, so the chat UI can cite the fact by its human
+   * label via `NodeRef` and deep-link to it in the graph explorer — never a bare
+   * UUID. Absent for memories whose subject is not (yet) materialised as a node.
+   */
+  node?: KnowledgeNodeRef;
 }
 
 export interface SubagentChild {
