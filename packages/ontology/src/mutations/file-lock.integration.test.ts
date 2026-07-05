@@ -36,6 +36,41 @@ function naturalKey(suffix: string): string {
 
 let neo4jUp = false;
 
+/**
+ * Ensure the one schema object the two-agent race test depends on — the
+ * composite `(naturalKey, orgId)` uniqueness constraint on `:SourceFile`
+ * (schema.cypher / acquire-file-lock.ts §Atomicity). Without it, two concurrent
+ * `MERGE (f:SourceFile {naturalKey, orgId})` transactions don't serialise, so
+ * the race either double-grants or hangs on lock contention (the "Test timed out
+ * in 5000ms" we saw in the CI unit lane).
+ *
+ * `pnpm dev` applies the full schema via `db:migrate`, but the CI unit lane
+ * spins up a bare Neo4j service container and only runs the Neo4j migrate step
+ * when a Postgres/telemetry migration changed — a schema.cypher-only change (or
+ * an "affected" run with no migration diff at all) leaves the graph
+ * unmigrated. Creating the constraint here (idempotent `IF NOT EXISTS`) makes
+ * this suite hermetic regardless of the CI migrate gating.
+ */
+async function ensureFileLockSchema(): Promise<void> {
+  const s = driver().session({ database: process.env.NEO4J_DATABASE });
+  try {
+    await s.run(
+      `CREATE CONSTRAINT source_file_natural_key_org_unique IF NOT EXISTS
+       FOR (n:SourceFile) REQUIRE (n.naturalKey, n.orgId) IS UNIQUE`,
+    );
+    // Constraint-backed index must be ONLINE before the race relies on its
+    // serialising lock; awaiting is a no-op once it already exists.
+    await s.run("CALL db.awaitIndexes(30000)");
+  } catch (err) {
+    // Tolerate a parallel integration suite winning the same idempotent create
+    // ("An equivalent constraint already exists") — benign under `IF NOT EXISTS`.
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/already exists|equivalent/i.test(msg)) throw err;
+  } finally {
+    await s.close();
+  }
+}
+
 async function cleanupFixtureNodes(): Promise<void> {
   const s = driver().session({ database: process.env.NEO4J_DATABASE });
   try {
@@ -63,6 +98,7 @@ beforeAll(async () => {
       await s.close();
     }
     neo4jUp = true;
+    await ensureFileLockSchema();
     await cleanupFixtureNodes();
   } catch (err) {
     console.error(

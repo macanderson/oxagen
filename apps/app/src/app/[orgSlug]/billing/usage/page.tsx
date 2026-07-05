@@ -90,44 +90,46 @@ export default async function BillingUsagePage({
   // Fetch the breakdown + workspace name map inside one tenant scope. The invoke
   // is wrapped so a ClickHouse outage degrades to zeros rather than a 500 — the
   // capability itself throws (honest); the dashboard chooses resilience.
-  let breakdown: BillingUsageBreakdownOutput = EMPTY;
-  let queryFailed = false;
   const workspaceNames: Record<string, string> = {};
 
-  await runInTenantScope({ orgId: org.id, workspaceId: ORG_ONLY_WS }, async () => {
-    try {
-      const wsRows = await withTenantDb((tx) =>
-        tx
-          .select({ id: schema.workspaces.id, name: schema.workspaces.name })
-          .from(schema.workspaces)
-          .where(eq(schema.workspaces.orgId, org.id)),
-      );
-      for (const w of wsRows) workspaceNames[w.id] = w.name;
-    } catch (err) {
-      logger.warn({ err, orgId: org.id }, "billing/usage: workspace name resolve failed");
-    }
+  const { breakdown, queryFailed } = await runInTenantScope(
+    { orgId: org.id, workspaceId: ORG_ONLY_WS },
+    async () => {
+      try {
+        const wsRows = await withTenantDb((tx) =>
+          tx
+            .select({ id: schema.workspaces.id, name: schema.workspaces.name })
+            .from(schema.workspaces)
+            .where(eq(schema.workspaces.orgId, org.id)),
+        );
+        for (const w of wsRows) workspaceNames[w.id] = w.name;
+      } catch (err) {
+        logger.warn({ err, orgId: org.id }, "billing/usage: workspace name resolve failed");
+      }
 
-    try {
-      const ctx = {
-        orgId: org.id,
-        workspaceId: ORG_ONLY_WS,
-        userId: viewerUserId,
-        apiKeyId: null as string | null,
-        requestId: crypto.randomUUID(),
-        surface: "app" as const,
-        messageId: null as string | null,
-      };
-      breakdown = (await invoke(
-        "billing.usage.breakdown",
-        { start: start.toISOString(), end: end.toISOString() },
-        ctx,
-        { surface: "agent" },
-      )) as BillingUsageBreakdownOutput;
-    } catch (err) {
-      logger.error({ err, orgId: org.id }, "billing/usage: breakdown invoke failed");
-      queryFailed = true;
-    }
-  });
+      try {
+        const ctx = {
+          orgId: org.id,
+          workspaceId: ORG_ONLY_WS,
+          userId: viewerUserId,
+          apiKeyId: null as string | null,
+          requestId: crypto.randomUUID(),
+          surface: "app" as const,
+          messageId: null as string | null,
+        };
+        const result = (await invoke(
+          "billing.usage.breakdown",
+          { start: start.toISOString(), end: end.toISOString() },
+          ctx,
+          { surface: "agent" },
+        )) as BillingUsageBreakdownOutput;
+        return { breakdown: result, queryFailed: false };
+      } catch (err) {
+        logger.error({ err, orgId: org.id }, "billing/usage: breakdown invoke failed");
+        return { breakdown: EMPTY, queryFailed: true };
+      }
+    },
+  );
 
   const { totals } = breakdown;
   const totalTokens = totals.inputTokens + totals.outputTokens;
