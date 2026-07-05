@@ -147,7 +147,7 @@ describe("asset.upload route", () => {
 
   it("invalid kind → 400", async () => {
     const res = await app.fetch(
-      post(PATH, { sourceUrl: "https://example.com/f.mp4", kind: "video" }),
+      post(PATH, { sourceUrl: "https://example.com/f.mp4", kind: "audio" }),
     );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
