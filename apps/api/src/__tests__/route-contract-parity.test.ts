@@ -85,6 +85,9 @@ function contractNameToPathSegment(name: string): string {
     organization: "organizations",
     workspace: "workspaces",
     "user.preferences": "user/preferences",
+    // Per-turn dollar budget is a user-scoped default, mounted alongside
+    // /user/preferences at /user/budget/{read,write} (not /budget/policy/*).
+    "budget.policy": "user/budget",
     "workspace.model": "workspace/model-settings",
     "prompt.settings": "workspace/prompt-settings",
     // org.settings.read/write collapse onto REST GET/POST at /org/settings.
