@@ -184,6 +184,7 @@ export function ChatShellClient({
     order,
     turnUsage,
     turnError,
+    turnBudgetNotice,
     consume,
     reset,
     hasBlockingApproval,
@@ -218,6 +219,39 @@ export function ChatShellClient({
       description: turnError.message,
     });
   }, [turnError, toast]);
+
+  // Per-turn dollar budget (OXA — turn-budget): surface the engine's non-
+  // blocking budget-guard notices as a toast, same dedupe-by-content pattern
+  // as the turnError effect above (a new object identity every render must
+  // not re-toast the same notice). "stopped" ends the turn early (mirrors the
+  // engine's `stopReason: "budget"`); "within_grace" is informational and the
+  // turn keeps streaming. The gated "prompt" mode's pause is NOT here — it
+  // renders as an approval card via pendingApprovals instead.
+  const lastToastedBudgetNoticeRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (turnBudgetNotice === undefined) {
+      lastToastedBudgetNoticeRef.current = null;
+      return;
+    }
+    const key = `${turnBudgetNotice.state} ${turnBudgetNotice.costUsd} ${turnBudgetNotice.limitUsd}`;
+    if (lastToastedBudgetNoticeRef.current === key) return;
+    lastToastedBudgetNoticeRef.current = key;
+    const cost = turnBudgetNotice.costUsd.toFixed(4);
+    const limit = turnBudgetNotice.limitUsd.toFixed(4);
+    if (turnBudgetNotice.state === "stopped") {
+      toast.add({
+        type: "warning",
+        title: "Turn stopped — per-turn budget reached",
+        description: `This turn cost $${cost} of your $${limit} budget and was stopped.`,
+      });
+    } else {
+      toast.add({
+        type: "info",
+        title: "Over budget — within grace window",
+        description: `This turn is at $${cost}, past your $${limit} budget but still inside the grace cushion.`,
+      });
+    }
+  }, [turnBudgetNotice, toast]);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -403,6 +437,16 @@ export function ChatShellClient({
                 const raw = formData.get("activeServerIds") as string | null;
                 if (!raw) return [];
                 try { return JSON.parse(raw) as string[]; } catch { return []; }
+              })(),
+              // Per-turn dollar budget (OXA — turn-budget). The composer
+              // always sets this (see message-composer.tsx budgetPayload) but
+              // a malformed/missing value degrades to `null`, which the route
+              // treats as "no per-turn override" and falls back to the user's
+              // saved default (budget.policy.read).
+              budget: (() => {
+                const raw = formData.get("budget") as string | null;
+                if (!raw) return null;
+                try { return JSON.parse(raw); } catch { return null; }
               })(),
               // Forward attachment IDS ONLY — never the base64 bytes or the
               // full conversationAssetItem the composer persisted — the stream

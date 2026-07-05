@@ -14,6 +14,7 @@ import { loadEffectiveModelDefaults } from "@oxagen/ai";
 import { buildSeededModelState } from "@/components/chat/model-state";
 import type { McpServerSummary } from "@/components/chat/mcp-types";
 import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
+import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
 import { conversationListHandler } from "@oxagen/handlers/conversation.list";
 import { logger } from "@oxagen/handlers/logger";
 import { ConversationNav } from "@/components/conversations/conversation-nav";
@@ -194,7 +195,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
 
   // Agent-surface capabilities feed the plan-card amend UX. Computed
   // once per render here so the client doesn't refetch / refilter.
-  const [agentCapabilities, userPrefs, effectiveModelDefaults, initialConversations, availableMcpServers] =
+  const [agentCapabilities, userPrefs, effectiveModelDefaults, initialConversations, availableMcpServers, budgetDefault] =
     await Promise.all([
       Promise.resolve(
         listCapabilities()
@@ -264,6 +265,20 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
           })),
         )
         .catch((err: unknown) => logAndFallback(err, "mcp-servers read", [] as McpServerSummary[])),
+      // Per-turn budget default (OXA — turn-budget): read the user's saved
+      // budget.policy so the composer's BudgetControl opens pre-filled with
+      // their last-saved preference rather than always defaulting to off.
+      // Direct handler call (not invoke()) — same pattern as
+      // userPreferencesReadHandler above; budget.policy is user-scoped
+      // (scoped: false) so it needs no IAM bootstrap.
+      budgetPolicyReadHandler({}, userCtx).catch((err: unknown) =>
+        logAndFallback(err, "budget-policy read", {
+          enabled: false as const,
+          limitUsd: null,
+          mode: "prompt" as const,
+          graceOveragePct: 0.25,
+        }),
+      ),
     ]);
 
   // Bind the workspace scope into the nav's server actions so the client only
@@ -283,6 +298,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
         textTier: effectiveModelDefaults.text.tier,
         imageModel: effectiveModelDefaults.image.model,
         videoModel: effectiveModelDefaults.video.model,
+        budget: budgetDefault,
       })
     : undefined;
 

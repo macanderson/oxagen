@@ -13,6 +13,8 @@ import type {
   SubagentChild,
   SubagentStatus,
   ToolCallStatus,
+  TurnBudgetModeName,
+  TurnBudgetNoticeState,
   TurnUsage,
 } from "./stream-event-types";
 
@@ -147,6 +149,20 @@ export interface LiveTurnError {
   code?: string;
 }
 
+/**
+ * Per-turn dollar budget notice from a "budget-notice" event — held off to the
+ * side (like LiveTurnError) so the shell renders it as a toast rather than
+ * inline text. The gated "prompt" mode's pause reuses pendingApprovals
+ * instead; this only ever carries "stopped" (enforce/grace hard-stop) or
+ * "within_grace" (grace-mode soft overage) states.
+ */
+export interface LiveBudgetNotice {
+  state: TurnBudgetNoticeState;
+  costUsd: number;
+  limitUsd: number;
+  mode: TurnBudgetModeName;
+}
+
 /** A live background task dispatched this turn, surfaced as an inline card. */
 export interface LiveBackgroundTask {
   taskId: string;
@@ -197,6 +213,11 @@ export interface ToolStreamState {
    * to `textSegments`, so it never renders as inline JSON.
    */
   turnError: LiveTurnError | undefined;
+  /**
+   * Latest per-turn budget notice from a "budget-notice" event; undefined
+   * until one arrives. Reset per turn like turnError/turnUsage.
+   */
+  turnBudgetNotice: LiveBudgetNotice | undefined;
 }
 
 export const INITIAL_STATE: ToolStreamState = {
@@ -217,6 +238,7 @@ export const INITIAL_STATE: ToolStreamState = {
   activeTextKey: null,
   turnUsage: undefined,
   turnError: undefined,
+  turnBudgetNotice: undefined,
 };
 
 /** Append a timeline key in first-appearance order (idempotent). */
@@ -587,6 +609,17 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
     case "usage": {
       return { ...state, turnUsage: e.usage };
     }
+    case "budget-notice": {
+      return {
+        ...state,
+        turnBudgetNotice: {
+          state: e.state,
+          costUsd: e.costUsd,
+          limitUsd: e.limitUsd,
+          mode: e.mode,
+        },
+      };
+    }
     case "error": {
       // Stash the failure for the shell to toast. Crucially we do NOT touch
       // textSegments/messages — a turn error must never render inline (that is
@@ -629,6 +662,9 @@ export interface UseToolStreamResult extends ToolStreamState {
   /** Token + credit usage for the completed turn. Undefined until the
    *  "usage" event arrives (just before [DONE]). */
   turnUsage: TurnUsage | undefined;
+  /** Latest per-turn budget notice ("stopped" | "within_grace"). Undefined
+   *  until a "budget-notice" event arrives. */
+  turnBudgetNotice: LiveBudgetNotice | undefined;
 }
 
 export function useToolStream(): UseToolStreamResult {
