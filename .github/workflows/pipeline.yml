@@ -208,7 +208,14 @@ jobs:
       - name: Detect migration changes
         id: migration_changes
         run: |
-          if git diff --name-only "${TURBO_BASE}"...HEAD | grep -qE '^packages/database/atlas/migrations/|^packages/telemetry/'; then
+          # Neo4j-backed integration tests (e.g. ontology file-lock,
+          # ingestion dedup/resolve) run in THIS unit lane and depend on the
+          # graph schema in packages/ontology/src/*.cypher. A schema.cypher-only
+          # change (composite constraints, vector indexes) must therefore also
+          # trigger the "Migrate ClickHouse and Neo4j" step below — otherwise the
+          # bare Neo4j service container stays unmigrated and those tests fail
+          # ("no such vector schema index", concurrent-MERGE lock hangs).
+          if git diff --name-only "${TURBO_BASE}"...HEAD | grep -qE '^packages/database/atlas/migrations/|^packages/telemetry/|^packages/ontology/src/.*\.cypher$'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
