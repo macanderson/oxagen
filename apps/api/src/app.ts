@@ -77,6 +77,7 @@ import { agentSubagentSiblingsRoute } from "./routes/v1/agent.subagent.siblings"
 import { agentSubagentFanoutListRoute } from "./routes/v1/agent.subagent.fanout.list";
 import { agentSubagentFanoutGetRoute } from "./routes/v1/agent.subagent.fanout.get";
 import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
+import { agentExecutionLineageRoute } from "./routes/v1/agent.execution.lineage";
 import { agentExecutionListRoute } from "./routes/v1/agent.execution.list";
 import { formFillRoute } from "./routes/v1/form.fill";
 import { commandMenuSearchRoute } from "./routes/v1/command.menu.search";
@@ -419,6 +420,10 @@ orgScoped.route("/agent/subagent/fanout", agentSubagentFanoutGetRoute);
 // executions (subagent/A2A lineage). The list route backs the Activity index.
 orgScoped.route("/agent/executions", agentExecutionListRoute);
 orgScoped.route("/agent/trace", agentTraceGetRoute);
+// File-level lineage of one execution — the :Execution node plus every
+// :SourceFile it touched via TOUCHED_FILE edges, resolved to citable
+// KnowledgeNodeRefs (CLAUDE.md "Citing nodes & edges").
+orgScoped.route("/agent/executions/lineage", agentExecutionLineageRoute);
 // Agent lifecycle: definitions, deployment, triggers. The /update and /publish
 // sub-paths are mounted before the get route so they are not swallowed by its
 // GET /:agentId param match.
