@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.0
+
+_Changes since v0.11.0._
+
+- No commits since the last release.
+
 ## v0.11.0
 
 _Changes since v0.8.0._
