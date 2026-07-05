@@ -3,11 +3,16 @@
 // Reads the IAM tables (principals, grants, role_grants, roles, policies) for
 // a given principal/scope, so the pure resolver can decide without any I/O.
 //
-// GRACEFUL DEGRADATION: if the IAM tables do not exist yet (Postgres error
-// 42P01 — "relation does not exist"), returns empty AuthzData. The resolver
-// will fall through to rule 8 and use each contract's defaultEffect. This
-// lets the app boot and operate in dev environments where the IAM migration
-// has not been run. Remove this fallback after `pnpm db:migrate` is standard.
+// FAIL-CLOSED ON MISSING MIGRATION (OXA-2056): if the IAM tables do not exist
+// yet (Postgres error 42P01 — "relation does not exist"), this is "IAM
+// enforcement is silently disabled" — a critical incident, not a benign dev
+// convenience. It is logged LOUDLY at error level (not warn) and the caller
+// gets a synthetic fail-closed DENY (see denyAuthz below), never EMPTY_AUTHZ.
+// EMPTY_AUTHZ would let the resolver fall through to rule 8 (each contract's
+// defaultEffect) — for any capability whose defaultEffect is "allow" that is
+// an unnoticed IAM bypass in prod. Previously only the API-key path failed
+// closed here; human-session callers silently degraded to defaultEffect. Run
+// `pnpm db:migrate` to apply the IAM foundation migration and clear the alert.
 
 import { withTenantDb } from "@oxagen/database";
 import { eq, and, inArray, isNull, or, gt, sql } from "drizzle-orm";
@@ -33,35 +38,44 @@ const EMPTY_AUTHZ: AuthzData = {
 };
 
 /**
- * Sentinel principal id used for the fail-closed deny emitted for API-key
- * callers we cannot yet resolve to a real service principal. Distinct from the
- * all-zero principal the kernel substitutes so denials are traceable.
+ * Sentinel principal id used for a synthetic fail-closed deny — either an
+ * API-key caller we cannot yet resolve to a real service principal, or ANY
+ * caller when the IAM tables themselves are missing (42P01, OXA-2056).
+ * Distinct from the all-zero principal the kernel substitutes so denials are
+ * traceable.
  */
 const UNRESOLVED_SERVICE_PRINCIPAL_ID = "00000000-0000-0000-0000-0000000000ff";
 
 /**
- * Build a fail-closed AuthzData for an API-key-authenticated request whose
- * acting identity we cannot resolve.
+ * Build a fail-closed AuthzData: a synthetic org-enforced DENY policy for the
+ * requested capability. resolve()'s rule 2 (org enforced deny) is a hard stop
+ * that overrides defaultEffect, so the request is denied rather than
+ * degraded — used in two situations:
  *
- * API keys authorize AS THEIR CREATOR (api_keys.created_by_user_id) — see
- * _fetchAuthz. This fallback fires only when that resolution fails: the key row
- * is missing/soft-deleted/scoped to another org, carries no recorded creator,
- * or the creator has no principal in this org. In those cases we must NOT
- * return EMPTY_AUTHZ, because the resolver would then fall through to rule 8
- * (contract defaultEffect): any capability whose defaultEffect is "allow" would
- * be granted to the key regardless of the enterprise org's role-grant matrix,
- * and an explicit role-grant deny would be silently ignored — an IAM bypass on
- * the machine-to-machine surface (this resolver path runs only for enterprise
- * orgs; the tier gate in check-iam.ts bypasses it for everyone else).
+ * 1. An API-key-authenticated request whose acting identity we cannot
+ *    resolve. API keys authorize AS THEIR CREATOR (api_keys.created_by_user_id)
+ *    — see _fetchAuthz. This fires when that resolution fails: the key row is
+ *    missing/soft-deleted/scoped to another org, carries no recorded creator,
+ *    or the creator has no principal in this org. In those cases we must NOT
+ *    return EMPTY_AUTHZ, because the resolver would then fall through to rule
+ *    8 (contract defaultEffect): any capability whose defaultEffect is
+ *    "allow" would be granted to the key regardless of the enterprise org's
+ *    role-grant matrix — an IAM bypass on the machine-to-machine surface
+ *    (this resolver path runs only for enterprise orgs; the tier gate in
+ *    check-iam.ts bypasses it for everyone else).
  *
- * Instead we fail closed by emitting a synthetic org-enforced DENY policy for
- * the requested capability. resolve()'s rule 2 (org enforced deny) is a hard
- * stop that overrides defaultEffect, so the request is denied rather than
- * degraded. A dedicated service principal per key is the durable model; the
+ * 2. ANY caller (human session or API key) when the IAM tables are missing
+ *    (Postgres 42P01 — migration not applied, OXA-2056). This used to return
+ *    EMPTY_AUTHZ for human sessions, silently degrading to defaultEffect —
+ *    "IAM enforcement is silently disabled in prod" is a critical incident,
+ *    not a benign dev convenience, so it now fails closed exactly like the
+ *    unresolved-API-key case.
+ *
+ * A dedicated service principal per key is the durable model; the
  * creator-inheritance path is the no-migration fix that unblocks API keys on
  * enterprise orgs today.
  */
-function denyApiKeyAuthz(orgId: string, workspaceId: string, capability: string): AuthzData {
+function denyAuthz(orgId: string, workspaceId: string, capability: string): AuthzData {
   return {
     principal: {
       id: UNRESOLVED_SERVICE_PRINCIPAL_ID,
@@ -109,26 +123,31 @@ export interface FetchAuthzArgs {
 
 /**
  * Load all IAM authorization data needed by the resolver for a single
- * invocation. Returns EMPTY_AUTHZ gracefully if the IAM tables are absent.
+ * invocation. FAILS CLOSED (never EMPTY_AUTHZ) if the IAM tables are absent —
+ * see denyAuthz() and the OXA-2056 module comment above.
  */
 export async function fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
   try {
     return await _fetchAuthz(args);
   } catch (err) {
     if (isUndefinedTable(err)) {
-      // IAM migration not yet applied — log a warning and fall back.
-      logger.warn(
-        { err },
-        "[iam] IAM tables not found (Postgres 42P01). Falling back to defaultEffect. " +
-          "Run `pnpm db:migrate` to apply the IAM foundation migration.",
+      // IAM migration not yet applied. This is "IAM enforcement is silently
+      // disabled in prod" — an operator-actionable incident, so it is logged
+      // LOUDLY at error level (OXA-2056; previously this was a warn that was
+      // easy to miss and the request silently degraded to defaultEffect).
+      logger.error(
+        { err, capability: args.capability, orgId: args.orgId },
+        "[iam] SECURITY ALERT: IAM tables not found (Postgres 42P01) — IAM " +
+          "enforcement is NOT ACTIVE for this request. Failing closed (deny) " +
+          "instead of silently falling back to defaultEffect. Run " +
+          "`pnpm db:migrate` to apply the IAM foundation migration and clear " +
+          "this alert.",
       );
-      // Preserve the machine-to-machine fail-closed invariant: an API-key
-      // caller must NEVER degrade to defaultEffect (that would bypass enterprise
-      // role grants), even when the IAM tables are absent.
-      if (!args.userId && args.apiKeyId) {
-        return denyApiKeyAuthz(args.orgId, args.workspaceId, args.capability);
-      }
-      return EMPTY_AUTHZ;
+      // Fail closed for EVERY caller (human session or API key) — never
+      // degrade to EMPTY_AUTHZ/defaultEffect on a missing migration. Before
+      // OXA-2056 only the API-key branch failed closed here; a human-session
+      // request silently ran with defaultEffect while IAM was effectively off.
+      return denyAuthz(args.orgId, args.workspaceId, args.capability);
     }
     throw err;
   }
@@ -181,7 +200,7 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
         )
         .limit(1);
       effectiveUserId = keyRows[0]?.createdByUserId ?? null;
-      if (!effectiveUserId) return denyApiKeyAuthz(orgId, workspaceId, capability);
+      if (!effectiveUserId) return denyAuthz(orgId, workspaceId, capability);
     }
 
     const principalRows = await tx
@@ -202,7 +221,7 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
       // MUST fail closed (do not degrade to defaultEffect, which would bypass
       // enterprise role grants). For a human session, fall through to
       // defaultEffect via EMPTY_AUTHZ as before.
-      return isApiKey ? denyApiKeyAuthz(orgId, workspaceId, capability) : EMPTY_AUTHZ;
+      return isApiKey ? denyAuthz(orgId, workspaceId, capability) : EMPTY_AUTHZ;
     }
 
     const principal: ResolvedPrincipal = {

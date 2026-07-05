@@ -5,6 +5,10 @@ Durable instincts recorded by `eval-*` evaluator agents and the break-fix agent.
 Format: `- [title](file-name.md) — one-line hook · type (bug|observation) · YYYY-MM-DD HH:mm[am|pm] GMT`
 
 <!-- entries below, newest first -->
+- [iam-checkfn-throw-fail-open-on-enforcement-off](iam-checkfn-throw-fail-open-on-enforcement-off.md) — kernel.ts `iamCheckThrew && _iamEnforced` gate silently allowed on throw when enforcement off; now unconditional deny (OXA-2056) · bug · 2026-07-04
+- [iam-missing-migration-silent-defaulteffect-degrade](iam-missing-migration-silent-defaulteffect-degrade.md) — fetch-authz.ts 42P01 fell back to EMPTY_AUTHZ/defaultEffect for human sessions; now fails closed + logs loudly (error, not warn) (OXA-2056) · bug · 2026-07-04
+- [mcp-context-empty-orgid-defense-in-depth](mcp-context-empty-orgid-defense-in-depth.md) — apps/mcp/src/context.ts now rejects a resolved API key with empty orgId/workspaceId before emitting a success audit event (OXA-2056) · bug · 2026-07-04
+- [unscoped-meter-already-wired-verify-before-refixing](unscoped-meter-already-wired-verify-before-refixing.md) — recordIfUnscoped was already called from withSystemDb (PR #561); ticket description was stale — run the narrow test first (OXA-2056) · observation · 2026-07-04
 - [ai-charge-credits-needs-tenant-scope-in-inngest](ai-charge-credits-needs-tenant-scope-in-inngest.md) — @oxagen/ai post-call credit charges (video/object/image/embed) threw TenantScopeError + were swallowed in Inngest context (no ambient scope) → free generations; wrap charge in runInTenantScope from telemetry orgId/workspaceId like stream.ts · bug · 2026-07-02
 - [repl-pump-unhandled-rejection-wedge](repl-pump-unhandled-rejection-wedge.md) — a failing REPL turn abandoned every queued prompt + escaped as an unhandled rejection; init throw left the spinner stuck; per-turn try/catch in the pump + init inside the try/finally · bug · 2026-06-28
 - [repl-session-memory-unmount-leak](repl-session-memory-unmount-leak.md) — REPL leaked its DuckDB session-memory handle when it unmounted before the async open resolved; cancellation guard closes the post-unmount handle · bug · 2026-06-28
