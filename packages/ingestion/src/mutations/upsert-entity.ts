@@ -82,7 +82,7 @@ export function resolveNodeLabel(entityType: string): string {
 
 export async function upsertEntityNode(
   mutation: EntityMutation,
-  _orgId: string,
+  orgId: string,
   opts: UpsertEntityOptions = {},
 ): Promise<UpsertEntityResult> {
   const pinnedSchema = opts.pinnedSchema ?? null;
@@ -145,6 +145,7 @@ export async function upsertEntityNode(
        RETURN n.publicId AS nodeId`,
       {
         naturalKey: mutation.naturalKey,
+        orgId,
         entityType: mutation.entityType,
         sourceRecordType: mutation.sourceRecordType,
         // `label` is the PascalCase type chip the explorer groups/filters/colours
@@ -316,7 +317,7 @@ export async function createAliasEdge(
   aliasNodeId: string,
   principalNodeId: string,
   props: AliasEdgeProps,
-  _orgId: string,
+  orgId: string,
 ): Promise<void> {
   const session = scopedSession();
   try {
@@ -337,6 +338,7 @@ export async function createAliasEdge(
       {
         aliasNodeId,
         principalNodeId,
+        orgId,
         confidence: props.confidence,
         matchReason: props.matchReason,
         tentative: props.tentative,
@@ -352,7 +354,7 @@ export async function upsertEmbedding(
   nodeId: string,
   vector: number[],
   model: string,
-  _orgId: string,
+  orgId: string,
 ): Promise<void> {
   const session = scopedSession();
   try {
@@ -361,7 +363,7 @@ export async function upsertEmbedding(
        SET n.embedding          = $vector,
            n.embeddingModel     = $model,
            n.embeddingUpdatedAt = datetime()`,
-      { nodeId, vector, model },
+      { nodeId, orgId, vector, model },
     );
   } finally {
     await session.close();
@@ -380,7 +382,7 @@ export interface SourceConnectionMeta {
 
 export async function upsertSourceConnectionMeta(
   meta: SourceConnectionMeta,
-  _orgId: string,
+  orgId: string,
 ): Promise<void> {
   const session = scopedSession();
   try {
@@ -402,6 +404,7 @@ export async function upsertSourceConnectionMeta(
          sc.updatedAt     = datetime()`,
       {
         connectionId: meta.connectionId,
+        orgId,
         workspaceId: meta.workspaceId,
         connectorType: meta.connectorType,
         cursor: meta.cursor ?? null,
@@ -443,7 +446,7 @@ const EDGE_TYPE_QUERIES: Record<string, string> = {
   PART_OF: inferredEdgeQuery("PART_OF"),
 };
 
-export async function upsertInferredEdges(edges: InferredEdge[], _orgId: string): Promise<void> {
+export async function upsertInferredEdges(edges: InferredEdge[], orgId: string): Promise<void> {
   if (edges.length === 0) return;
   const session = scopedSession();
   try {
@@ -455,6 +458,7 @@ export async function upsertInferredEdges(edges: InferredEdge[], _orgId: string)
       await session.run(query, {
         fromNodeId: edge.fromNodeId,
         toNodeId: edge.toNodeId,
+        orgId,
         confidence: edge.confidence,
         ...edgeValidityParams(),
       });

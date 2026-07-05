@@ -82,6 +82,8 @@ export const graphEdgeUpsertHandler: CapabilityHandler<typeof graphEdgeUpsert> =
         const closeResult = await session.run(buildSupersedeQuery(input.relationshipType), {
           fromNodeId: input.fromNodeId,
           toNodeId: input.toNodeId,
+          orgId,
+          workspaceId,
           ...edgeCloseParams(input.observedAt),
         });
         superseded = Number(closeResult.records[0]?.get("closed") ?? 0);
@@ -90,6 +92,8 @@ export const graphEdgeUpsertHandler: CapabilityHandler<typeof graphEdgeUpsert> =
       const result = await session.run(query, {
         fromNodeId: input.fromNodeId,
         toNodeId: input.toNodeId,
+        orgId,
+        workspaceId,
         properties: propertiesJson,
         ...validity,
       });

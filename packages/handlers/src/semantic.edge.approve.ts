@@ -58,7 +58,7 @@ export const semanticEdgeApproveHandler: CapabilityHandler<typeof semanticEdgeAp
            ie.relationshipType AS relationshipType,
            ie.confidence       AS confidence,
            ie.approvalStatus   AS approvalStatus`,
-        { edgeId },
+        { edgeId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
       );
 
       if (findRow.records.length === 0) {
@@ -93,6 +93,7 @@ export const semanticEdgeApproveHandler: CapabilityHandler<typeof semanticEdgeAp
              ie.comment        = $comment`,
         {
           edgeId,
+          orgId: ctx.orgId,
           newStatus,
           approvedBy: approvedBy ?? "unknown",
           approvedAt,

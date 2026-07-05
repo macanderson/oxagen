@@ -80,6 +80,19 @@ describe("graphNodeLabelAddHandler", () => {
       'node "missing" not found',
     );
   });
+
+  // OXA-2062: the Cypher's MATCH referenced $orgId/$workspaceId but the local
+  // params object omitted both, relying entirely on scopedSession()'s
+  // auto-injection. A mocked scopedSession (as used here) does NOT auto-inject,
+  // so this bug was invisible to this test suite until orgId/workspaceId were
+  // bound explicitly in the handler.
+  it("binds orgId and workspaceId explicitly in the local params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    mocks.run.mockResolvedValueOnce(rec({ after: ["GraphNode", "Billing"], before: ["GraphNode"] }));
+    await graphNodeLabelAddHandler({ nodeId: "n1", labels: ["Billing"] }, CTX);
+    const params = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.orgId).toBe(CTX.orgId);
+    expect(params.workspaceId).toBe(CTX.workspaceId);
+  });
 });
 
 describe("graphNodeLabelRemoveHandler", () => {
@@ -97,6 +110,17 @@ describe("graphNodeLabelRemoveHandler", () => {
     const out = await graphNodeLabelRemoveHandler({ nodeId: "n1", labels: ["GraphNode"] }, CTX);
     expect(out.removed).toEqual([]);
     expect(mocks.run).not.toHaveBeenCalled();
+  });
+
+  // OXA-2062 regression guard — see graphNodeLabelAddHandler above.
+  it("binds orgId and workspaceId explicitly in the local params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    mocks.run.mockResolvedValueOnce(
+      rec({ after: ["GraphNode", "Payment"], before: ["GraphNode", "Payment", "Billing"] }),
+    );
+    await graphNodeLabelRemoveHandler({ nodeId: "n1", labels: ["Billing"] }, CTX);
+    const params = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.orgId).toBe(CTX.orgId);
+    expect(params.workspaceId).toBe(CTX.workspaceId);
   });
 });
 
@@ -122,6 +146,15 @@ describe("graphNodeLabelsGetHandler", () => {
     mocks.run.mockResolvedValueOnce(rec({ labels: ["GraphNode", "Billing"] }));
     const out = await graphNodeLabelsGetHandler({ nodeId: "my-node" }, CTX);
     expect(out.nodeId).toBe("my-node");
+  });
+
+  // OXA-2062 regression guard — see graphNodeLabelAddHandler above.
+  it("binds orgId and workspaceId explicitly in the local params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    mocks.run.mockResolvedValueOnce(rec({ labels: ["GraphNode", "Billing"] }));
+    await graphNodeLabelsGetHandler({ nodeId: "n1" }, CTX);
+    const params = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.orgId).toBe(CTX.orgId);
+    expect(params.workspaceId).toBe(CTX.workspaceId);
   });
 });
 

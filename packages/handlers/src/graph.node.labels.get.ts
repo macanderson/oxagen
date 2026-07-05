@@ -18,7 +18,7 @@ export const graphNodeLabelsGetHandler: CapabilityHandler<typeof graphNodeLabels
       const result = await session.run(
         `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
          RETURN labels(n) AS labels`,
-        { nodeId: input.nodeId },
+        { nodeId: input.nodeId, orgId, workspaceId },
       );
       const record = result.records[0];
       if (!record) throw new Error(`graph.node.labels.get: node "${input.nodeId}" not found`);

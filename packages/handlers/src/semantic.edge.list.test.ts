@@ -204,6 +204,25 @@ describe("semanticEdgeListHandler", () => {
     expect(params.confidenceMax).toBeNull();
   });
 
+  // OXA-2062: both the rows query and the count query MATCH by
+  // $orgId/$workspaceId but the shared local params object previously
+  // omitted them, relying entirely on scopedSession()'s auto-injection. This
+  // suite mocks scopedSession() directly (no auto-injection), so this bug was
+  // invisible until orgId/workspaceId were bound explicitly.
+  it("binds orgId and workspaceId explicitly in the shared params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    setupNeo4j([]);
+
+    await semanticEdgeListHandler({ limit: 50, offset: 0 }, CTX);
+
+    const rowsParams = mocks.runFn.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(rowsParams.orgId).toBe(CTX.orgId);
+    expect(rowsParams.workspaceId).toBe(CTX.workspaceId);
+
+    const countParams = mocks.runFn.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(countParams.orgId).toBe(CTX.orgId);
+    expect(countParams.workspaceId).toBe(CTX.workspaceId);
+  });
+
   it("passes BigInt offset and limit to Cypher", async () => {
     setupNeo4j([]);
 

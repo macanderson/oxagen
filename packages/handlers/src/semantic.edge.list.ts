@@ -25,6 +25,8 @@ export const semanticEdgeListHandler: CapabilityHandler<typeof semanticEdgeList>
     try {
       // Parallelize page and count queries (independent, same filter parameters)
       const params = {
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
         type: type ?? null,
         sourceId: sourceId ?? null,
         confidenceMin: confidenceMin ?? null,

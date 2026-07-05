@@ -71,6 +71,17 @@ describe("graphNodeDeleteHandler", () => {
     expect(cypher).toContain("workspaceId: $workspaceId");
   });
 
+  // OXA-2062: the Cypher referenced $orgId/$workspaceId but the local params
+  // object omitted both, relying entirely on scopedSession()'s auto-injection.
+  // A mocked scopedSession (as used here) does NOT auto-inject, so this bug
+  // was invisible to this suite until orgId/workspaceId were bound explicitly.
+  it("binds orgId and workspaceId explicitly in the local params object (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    await graphNodeDeleteHandler({ nodeId: "n-2" }, CTX);
+    const params = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.orgId).toBe(CTX.orgId);
+    expect(params.workspaceId).toBe(CTX.workspaceId);
+  });
+
   it("emits a destructive-op telemetry row through the shared seam", async () => {
     await graphNodeDeleteHandler({ nodeId: "n-3" }, CTX);
     // fire-and-forget — flush microtasks so the void promise resolves

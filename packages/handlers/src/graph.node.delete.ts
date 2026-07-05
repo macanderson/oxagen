@@ -26,7 +26,7 @@ export const graphNodeDeleteHandler: CapabilityHandler<typeof graphNodeDelete> =
          WITH n, count(n) AS found
          DETACH DELETE n
          RETURN found > 0 AS wasDeleted`,
-        { nodeId: input.nodeId },
+        { nodeId: input.nodeId, orgId, workspaceId },
       );
 
       const record = result.records[0];

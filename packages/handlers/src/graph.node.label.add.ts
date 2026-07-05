@@ -32,13 +32,14 @@ export const graphNodeLabelAddHandler: CapabilityHandler<typeof graphNodeLabelAd
     const session = scopedSession();
     try {
       const result = await session.run(
-        // $orgId / $workspaceId injected by scopedSession(). Labels are NOT
+        // scopedSession() also auto-injects $orgId/$workspaceId as a safety
+        // net; bound explicitly below too (OXA-2062). Labels are NOT
         // parameterizable in Cypher; they are LABEL_PATTERN-guarded above.
         `MATCH (n:GraphNode {publicId: $nodeId, orgId: $orgId, workspaceId: $workspaceId})
          WITH n, labels(n) AS before
          SET n:${setClause}, n.updatedAt = datetime()
          RETURN labels(n) AS after, before`,
-        { nodeId: input.nodeId },
+        { nodeId: input.nodeId, orgId, workspaceId },
       );
       const record = result.records[0];
       if (!record) throw new Error(`graph.node.label.add: node "${input.nodeId}" not found`);

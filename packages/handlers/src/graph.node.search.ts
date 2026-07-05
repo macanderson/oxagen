@@ -58,6 +58,8 @@ export const graphNodeSearchHandler: CapabilityHandler<typeof graphNodeSearch> =
            n.description AS description,
            score`,
         {
+          orgId,
+          workspaceId,
           query: input.query,
           labels: input.labels ?? [],
           // BigInt forces the Bolt driver to send INTEGER — plain numbers become

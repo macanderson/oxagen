@@ -37,7 +37,7 @@ export const graphNodeLabelRemoveHandler: CapabilityHandler<typeof graphNodeLabe
          REMOVE n:${removeClause}
          SET n.updatedAt = datetime()
          RETURN labels(n) AS after, before`,
-        { nodeId: input.nodeId },
+        { nodeId: input.nodeId, orgId, workspaceId },
       );
       const record = result.records[0];
       if (!record) throw new Error(`graph.node.label.remove: node "${input.nodeId}" not found`);

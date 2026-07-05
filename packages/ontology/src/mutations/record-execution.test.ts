@@ -401,4 +401,26 @@ describe("recordExecutionInGraph", () => {
     );
     expect(touchedCall).toBeUndefined();
   });
+
+  // ── OXA-2062: orgId bound explicitly on every session.run() call ─────────
+  //
+  // Every MERGE/MATCH in this module keys on `orgId: $orgId` (the Execution
+  // MERGE uses it as part of the idempotency key), but the local params
+  // objects previously omitted `orgId` on all five session.run() calls,
+  // relying entirely on scopedSession()'s auto-injection. This suite mocks
+  // scopedSession() directly (no auto-injection — see the module-level
+  // vi.mock above), so this bug was invisible until orgId was bound
+  // explicitly on every call.
+  it("binds orgId explicitly on every session.run call (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    await recordExecutionInGraph({
+      ...BASE_INPUT,
+      touchedFilePaths: ["github:owner/repo:src/a.ts"],
+    });
+
+    expect(mockNeoRun.mock.calls.length).toBeGreaterThanOrEqual(4);
+    for (const call of mockNeoRun.mock.calls) {
+      const params = call[1] as Record<string, unknown>;
+      expect(params.orgId).toBe(BASE_INPUT.orgId);
+    }
+  });
 });

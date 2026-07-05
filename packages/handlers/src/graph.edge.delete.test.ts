@@ -106,6 +106,18 @@ describe("graphEdgeDeleteHandler — relationship types are scoped and guard-che
     });
   }
 
+  // OXA-2062: the Cypher scoped both endpoints by $orgId/$workspaceId but the
+  // local params object previously omitted them, relying entirely on
+  // scopedSession()'s auto-injection. A mocked scopedSession (as used here)
+  // does NOT auto-inject, so this bug was invisible to this suite until
+  // orgId/workspaceId were bound explicitly.
+  it("binds orgId and workspaceId explicitly in the delete params (regression: previously relied solely on scopedSession auto-injection)", async () => {
+    await graphEdgeDeleteHandler({ fromNodeId: FROM, toNodeId: TO, edgeType: "RELATED_TO" }, CTX);
+    const params = mocks.run.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(params.orgId).toBe(CTX.orgId);
+    expect(params.workspaceId).toBe(CTX.workspaceId);
+  });
+
   it("rejects an injection-shaped relationship type before any Cypher runs", async () => {
     await expect(
       graphEdgeDeleteHandler(
