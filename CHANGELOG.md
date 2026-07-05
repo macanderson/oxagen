@@ -1,5 +1,255 @@
 # Changelog
 
+## v0.11.0
+
+_Changes since v0.8.0._
+
+- feat(chat): surface graph-grounded citations under assistant answers (#618) (8174690a) — Mac Anderson
+- fix(mcp): externalize native duckdb chain in xmcp build (#620) (e271fcf5) — Mac Anderson
+- fix(app): resolve react-hooks/immutability lint failures blocking CI (#619) (d007e0f5) — Mac Anderson
+- fix(ci): provision Neo4j schema for unit-lane integration tests + refresh stale orgId assertion (#617) (4512710e) — Mac Anderson
+- OXA-2070 follow-ups: file-lock CLI/docs hardening + retire blackboard (OXA-2075) (#616) (ed02442f) — Mac Anderson
+- fix(ci): cancel superseded push runs on the same branch (#615) (74f1436d) — Mac Anderson
+- [OXA-2070] Wire agent-file-locking (blackboard) to Neo4j (#613) (fe378011) — Mac Anderson
+- fix(database): validate mcp_servers auth_config encrypted-shape constraint (#607) (34e9a243) — Mac Anderson
+- Feat/multimodal phase 2 4 (#614) (7fb4b35a) — Mac Anderson
+- fix(agent): wire Vector, Graph, and Lexical retrieval engines into compileAgentContext (#611) (7e1e2889) — Mac Anderson
+- fix(telemetry): close branch-coverage gate gap with targeted regression tests (#609) (ad2fb7ae) — Mac Anderson
+- fix(ontology): bind orgId/workspaceId explicitly across 16 scopedSession resolvers (OXA-2062) (#608) (52c568ce) — Mac Anderson
+- [OXA-2071] Wire engram session/fork.ts + session/replay.ts (trace UI + daemon) (#605) (0ae8302b) — Mac Anderson
+- A2A: per-agent identity, execution lineage, live resubscribe (#604) (a532205f) — Mac Anderson
+- fix(test): use a genuinely-invalid kind in asset.upload's 400 test (#612) (43ff5bfa) — Mac Anderson
+- fix(test): add eval.*/agent.trace.get/agent.sandbox.files.list to route-parity map (#610) (47af5062) — Mac Anderson
+- fix(test): mock loadWorkspacePromptConfigSafe in api chat.stream test (#606) (602929aa) — Mac Anderson
+- fix: restore two main regressions reintroduced by #596's early merge + fix e2e RLS boot failure (#603) (c417fd4f) — Mac Anderson
+- chore:upgrade nextjs 16.2.10 (9a3d97ea) — macanderson
+- fix(mcp): add missing publicId to asset.upload mock fixture (#602) (3659e97b) — Mac Anderson
+- feat(engram): restore blackboard sub-barrel + graph-file-lock wiring plan (#600) (f1b5520e) — Mac Anderson
+- fix(mcp): envelope-encrypt external MCP server credentials (#601) (8f71775d) — Mac Anderson
+- fix(ingestion): idempotent ClickHouse conformance events under Inngest retries (#599) (12849abc) — Mac Anderson
+- fix(security): fail-closed IAM edges — checkFn throw, 42P01 downgrade, MCP empty orgId (OXA-2056) (#598) (333479ee) — Mac Anderson
+- fix(security): durable audit writes + refuse-to-persist empty chain_hash (#597) (c5bcd4bb) — Mac Anderson
+- feat(app): multimodal phase 2+4 — video model input + coding-trace/workspace-context panels (#596) (3ecb72ae) — Mac Anderson
+- [OXA-2052] Fix ingestion dedup unbound $orgId param (#595) (345fb0ba) — Mac Anderson
+- test(ann): add multi-tenant recall regression tests for OXA-1929 (#594) (c88166b2) — Mac Anderson
+- fix(app): add missing workspace-membership gate on wand resolve actions (OXA-2049) (#593) (9f0f24e1) — Mac Anderson
+- fix(connectors): constant-time secret comparison in Zoom/Microsoft webhook verification (OXA-2051) (#592) (eec5da8c) — Mac Anderson
+- docs(memory): record that OXA-2028 (single-source StageKind) is already fixed on main (#591) (9e5c7325) — Mac Anderson
+- chore:added new agent skill files (d7574908) — macanderson
+- fix(auth): unblock prod migration chain so login works (P0) (5f99d9ce) — Claude
+- fix(ci): always reconcile prod Postgres on push to main (P0 login outage) (a837ca0e) — Claude
+- feat(cli): markdown rendering for assistant prose in the REPL transcript (#590) (42739621) — Mac Anderson
+- chore:added new agent skill files (772af6f8) — macanderson
+- feat(app): multimodal coding-agent web experience — image attachments, artifact cards, parity (#589) (15c93166) — Mac Anderson
+- feat(cli): banner v2 — gradient OXAGEN wordmark only; version+scope in HeaderBar (#588) (3ee60b0a) — Mac Anderson
+- Feat/evals v1 (#587) (604ed143) — Mac Anderson
+- Feat/usage dashboard (#586) (20483e17) — Mac Anderson
+- feat(cli): sunset-gradient oxagen.sh cli banner, persistent like Claude Code (#584) (e275fdca) — Mac Anderson
+- fix(mcp): register agent.trace.get + agent.execution.list in parity test (#585) (1b7bc715) — Mac Anderson
+- fix(handlers): drop stale duplicate createPlatformAgentAi import in agent.repo.edit (#582) (4698b0a3) — Mac Anderson
+- fix(handlers): audit-exempt the read-only billing.usage.breakdown handler (#581) (70730336) — Mac Anderson
+- fix(database): register agent.a2a_tasks in the RLS policy manifest (#580) (e7bf1298) — Mac Anderson
+- fix+feat: log swallowed errors and build buildable-now TODO sites (#578) (4b0b42de) — Mac Anderson
+- fix(database): register ai.* and eval.* tables in the RLS policy manifest (#579) (e12dedb4) — Mac Anderson
+- feat(a2a): Agent2Agent protocol surface alongside MCP (#572) (9c63eff6) — Mac Anderson
+- feat(ci): lint atlas migrations for duplicate versions and atlas.sum drift (#577) (694f02b3) — Mac Anderson
+- chore(bloat): verified rip-out — dead exports, unused deps, stale assets, zombie schema, dead tests (#564) (a346dcf9) — Mac Anderson
+- test(e2e): TOTP 2FA enrollment + second-factor sign-in flow (#575) (1ebde0ac) — Mac Anderson
+- feat(observability): light up OTel export + vendor-neutral error alerting + agent run-trace span-tree UI (#574) (145d1f0a) — Mac Anderson
+- fix(db): repair atlas.sum corrupted by #569 merge (stale + duplicate entries) (#576) (12992aa3) — Mac Anderson
+- reliability: circuit breakers, Inngest idempotency, StageKind drift, loud memory-recall (#570) (f2b5980a) — Mac Anderson
+- feat(evals): Evals v1 — datasets + LLM-as-judge over metered run traces (#569) (2e027539) — Mac Anderson
+- fix(db): resolve atlas migration version collision + checksum break on main (#568) (87e707ee) — Mac Anderson
+- feat(app): run the in-app chat agent on @oxagen/agent-engine (unify execution stacks) (#566) (8d1b9ed6) — Mac Anderson
+- docs(capabilities): sync registry — add 30 missing capability docs (#565) (90699379) — Mac Anderson
+- fix(handlers): typecheck error in bitemporal ontology test asserts (#571) (dce26615) — Mac Anderson
+- fix(mcp): register billing.usage.breakdown in parity test; fix CLAUDE.md migration path; regen .env.example (#567) (6c29b3f9) — Mac Anderson
+- fixed package.json (2cd5a81f) — macanderson
+- feat(graph): bi-temporal fact validity (valid + transaction time) in the knowledge graph (#563) (2e992ae3) — Mac Anderson
+- fix(ci): pass PLAYWRIGHT_BROWSERS_PATH through turbo to test:e2e (#562) (6a28adbe) — Mac Anderson
+- fix(security): RLS fail-closed in prod, TOTP 2FA for Owner/Admin, CORS localhost dev-only (#561) (653c09d5) — Mac Anderson
+- feat(ai): semantic response cache + Anthropic Message Batches (background inference) (#560) (d379fce6) — Mac Anderson
+- feat(billing): usage dashboard — per-model/surface/workspace breakdowns (OXA-1585) (#559) (9f51e8ef) — Mac Anderson
+- feat(connectors): generic poll/sync loop — make existing sources real (#558) (0df7f9b8) — Mac Anderson
+- fix(app): close apps/app IAM gate gap — gate ungated server actions (IDOR) (#557) (a7cfd88d) — Mac Anderson
+- fix(ann): oversample tenant-filtered vector searches to stop silent recall decay (#555) (f742ca02) — Mac Anderson
+- fix(handlers): align subagent child fixtures with summary/outputBytes contract fields (#556) (ed8e6e45) — Mac Anderson
+- docs: refresh all repo-level docs to Stripe-for-agents vision + current architecture (#554) (406bfcf7) — Mac Anderson
+- fix(env-manager): skip chmod-000 unreadable-file test when running as root (a6bc6122) — macanderson
+- docs: archive Specs & Plans section with shipped-status verdicts (#553) (ba85446a) — Mac Anderson
+- feat(web): apps/web static site — platform health deck as interim homepage (#552) (651336fd) — Mac Anderson
+- feat(agent): graph-mediated fleet coordination Phase 2 — claim/lease self-healing, graph projection, peer reads, scaling policy (#551) (9be0e774) — Mac Anderson
+- feat(vision): Stripe-for-agents north star + LLM vision gate in CI (#550) (678c6c14) — Mac Anderson
+- feat(cli): CI-aware turn inactivity guard — probe CI before aborting instead of a blanket 2h timeout (#549) (d455e95c) — Mac Anderson
+- feat(cli): /config TUI panel + /config doctor over the 4-tier governed config (#548) (2ae82500) — Mac Anderson
+- docs(specs): oxagen-cache-review — monorepo cache audit spec + phased plan (#547) (b392e2fa) — Mac Anderson
+- perf(ci+bench): run CI in prebuilt GHCR toolchain images; prewarm SWE-bench task images (#546) (bb92ab7f) — Mac Anderson
+- ci: add GHCR CI toolchain image + publish workflow (bootstrap) (#545) (d1bf7530) — Mac Anderson
+- docs(spec): Oxagen Rust CLI — standalone OSS BYOK spec + phased plan (#544) (72d20881) — Mac Anderson
+- fix(config): dedupe convergent OXAGEN_CLI_MOTION/OXAGEN_PLAN_TIMEOUT_MS registrations (#543) (5de97a00) — Mac Anderson
+- docs(specs): Phase 2 fleet coordination spec + fanout metrics harness + Atlas decision doc (#541) (1bb1428a) — Mac Anderson
+- fix(api): parity-map entry for agent.subagent.result.get (main test job red) (#538) (563f833b) — Mac Anderson
+- fix(config): register OXAGEN_CLI_MOTION + OXAGEN_PLAN_TIMEOUT_MS, regen .env.example (main env-check red) (#539) (486ed6e3) — Mac Anderson
+- fix(config): dedupe DO_NOT_TRACK/OXAGEN_TELEMETRY registry keys (TS1117, main red) (#537) (0bf7afae) — Mac Anderson
+- feat(cli): F4b cache-forked best-of-N mode (trunk snapshot + consensus select) (#534) (d8071bb4) — Mac Anderson
+- feat(cli): real per-turn planning + fleet subagent fan-out in the interactive TUI (#535) (1d6edf2a) — Mac Anderson
+- fix(cli): restore right panel borders; add /motion full|reduced|off animation config (#532) (c20e8a87) — Mac Anderson
+- test(cli): spread real agent-engine module in interactive REPL test mocks (#536) (5a8b02a8) — Mac Anderson
+- fix(cli): stream token burn live and show pipeline models at TUI launch (#533) (2d79d78d) — Mac Anderson
+- test(agent)+fix(api): fanout aggregate follow-ups from test-completeness audit (#530) (8784c752) — Mac Anderson
+- docs(specs): correct bench-report-and-dashboard.md to the private @oxagen/bench structure (#528) (d326db08) — Mac Anderson
+- feat(agent): compact-by-default fanout aggregate + agent.subagent.result.get (#527) (d58c0a75) — Mac Anderson
+- Fix/bench private package restructure (#526) (5b8e570f) — Mac Anderson
+- fix(agent-engine): don't let F1 localizer run a second semantic fallback in ENHANCE (#525) (51ca4110) — Mac Anderson
+- Feat/bench clickhouse schema (#524) (6706c107) — Mac Anderson
+- Spec/graph mediated fanout results (#523) (0cee6797) — Mac Anderson
+- fix(cli,bench,config): xhigh/max effort docs, bench effort default, telemetry env registration (#522) (c00da61b) — Mac Anderson
+- Worktree feat+model cache effort (#520) (a4d9188d) — Mac Anderson
+- Feat/swe rank1 scalpel (#521) (ea733070) — Mac Anderson
+- Feat/swe rank1 scalpel (#516) (53e08f18) — Mac Anderson
+- feat(cli,api,telemetry): anonymous opt-out CLI usage telemetry (#519) (6ace1e58) — Mac Anderson
+- docs(specs): graph-mediated fanout results spec (blackboard-lite) (#518) (d2147ac0) — Mac Anderson
+- feat: bench ClickHouse schema, typed ingestion, and oxagen bench list/replay (#517) (e63e749b) — Mac Anderson
+- Scalpel: SWE-bench rank-#1 spec + implementation (#514) (01b9d3e5) — Mac Anderson
+- feat(scripts): AI Gateway key rotation script (pnpm vercel:rotate-ai-key) (#515) (0339bdc3) — Mac Anderson
+- ci: bump test job timeout to 60m for whole-repo-affected runs (#513) (948551d7) — Mac Anderson
+- fix(config): regenerate .env.example, register OXAGEN_BEST_OF_N_VERIFY (#512) (f0347e3c) — Mac Anderson
+- fix(cli): finish Sonnet 4.6->5 sweep in metrics test, de-flake init-animation TUI tests (#511) (0b9d2317) — Mac Anderson
+- fix: repair merge artifacts breaking CI on main (#510) (1904dd61) — Mac Anderson
+- Feat/cli input bar animation (#509) (0ff4e091) — Mac Anderson
+- fix(cli): stop /mouse stale toggle, bound enhance timeout, fail fast on billing errors (#508) (db732a32) — Mac Anderson
+- test(cli): complete the init-animation test suite + fix a real bug + unblock CI (#507) (40464e02) — Mac Anderson
+- fix(cli): sweep retired Sonnet 4.6 to Sonnet 5, default balanced tier to Sonnet 5 (#506) (e5304366) — Mac Anderson
+- feat(cli,bench): auto-verify test union, N=5 cross-family, apply-fallback, defect fixes (#505) (e8fe85fd) — Mac Anderson
+- feat(cli): space-invaders + OXAGEN reveal animation for oxagen init (#504) (d7d48a63) — Mac Anderson
+- fix(cli): drop SGR mouse reports in PromptInput so clicks/scrolls don't spray garbage (#503) (0f86348e) — Mac Anderson
+- Feat/bench best of n (#502) (2b233727) — Mac Anderson
+- Fix/env register cli mouse (#500) (da66041c) — Mac Anderson
+- fix(env): register OXAGEN_CLI_MOUSE in ENV_REGISTRY + SCHEMA_EXEMPT (#499) (d53ca9b8) — Mac Anderson
+- feat(bench+cli): pipeline-per-candidate best-of-N + differentiated config + init/graph-reuse fixes (#498) (3e321c14) — Mac Anderson
+- feat(cli): REPO panel (worktree path + branch + PR#) + worktree-branch fix for the full-screen TUI (#497) (1075edb2) — Mac Anderson
+- feat(cli): local, free, AI-SDK-free embedding providers for the code graph (#496) (51199ac6) — Mac Anderson
+- fix(env): register OXAGEN_CLI_MOUSE in ENV_REGISTRY + SCHEMA_EXEMPT (#494) (060837cd) — Mac Anderson
+- fix(ai): allow system-in-messages under AI SDK v7 — unbreaks every platform CLI turn (#493) (8f9bdc74) — Mac Anderson
+- Feat/cli anthropic key fallback (#492) (4940561d) — Mac Anderson
+- chore:.gitignore the ai gateway key file (8e0fe56a) — macanderson
+- feat(cli): full-screen TUI REPL with in-app scroll and a live-telemetry dock (#491) (5cae1681) — Mac Anderson
+- feat(agent-engine): local coordinator + Sonnet 5 / Fable 5 defaults; turbo build green (#489) (4d7046f2) — Mac Anderson
+- feat(bench): wire oxagen solve best-of-N into the terminal-bench adapter (#488) (a4ac2bba) — Mac Anderson
+- fix(cli): pin FORCE_COLOR=3 in vitest env — deterministic ANSI for slash-menu tests (#490) (cdd346e1) — Mac Anderson
+- feat(cli): ANTHROPIC_API_KEY BYOK fallback + AI SDK v7 / provider-v4 migration (#487) (8ca806bb) — Mac Anderson
+- fix(env): register OXAGEN_MID_JUDGE_STEPS in ENV_REGISTRY + SCHEMA_EXEMPT (#486) (be8d3737) — Mac Anderson
+- docs(bench): benchmark analysis HTML — SWE-bench smoke run findings, process gaps, Rust verdict (#485) (0853d719) — Mac Anderson
+- feat(skills): publishable npx installer + CLI install.sh (#484) (cb60df48) — Mac Anderson
+- feat(docs): add TUI screenshot-style SVG screens to CLI docs (#483) (43545687) — Mac Anderson
+- feat(docs): CLI install landing page, site-wide install button + celebration, doc illustrations (#482) (51fa3f6d) — Mac Anderson
+- perf(cli): SWE-bench speedups — bounded enhance, prompt caching, verification budget (#481) (53475a38) — Mac Anderson
+- fix(ai): establish tenant scope around post-call credit charges (Inngest billing leak) (#480) (8584a0d5) — Mac Anderson
+- Fix/video duration clamp (#479) (e7c404dd) — Mac Anderson
+- fix(api): raise Vercel maxDuration to 800s so Inngest video renders survive (#478) (fd9bf5f9) — Mac Anderson
+- fix(video): snap durations to model-supported set, surface provider alternatives (#477) (b87d7b77) — Mac Anderson
+- fix(cli): render REPL inline so native terminal scrollback works (#475) (ce290613) — Mac Anderson
+- Fix the suggested prompts UI in the command menu: (26f0f4c3) — Mac Anderson
+- Fix/video duration clamp (#476) (c8f00a87) — Mac Anderson
+- fix(agent): structurally block test-file edits (OXAGEN_FORBID_TEST_EDITS) for the bench (#474) (9053f633) — Mac Anderson
+- feat(cli): replace cat-mouse thinking animation with rocket-vs-UFO duel (#472) (d49322d2) — Mac Anderson
+- feat(cli): slash-menu v2 — uniform cells, amber/green, monochrome lock, no rules (#471) (265909c9) — Mac Anderson
+- refactor(cli): clean up the slash command catalog — tighten, group, dedupe (#469) (a82523e3) — Mac Anderson
+- fix(bench): upload tree-sitter wasm assets into the container, not just oxagen.mjs (#470) (2b3c5afa) — Mac Anderson
+- feat(cli): embed markdown content + tag nodes/edges with domain in code graph (#467) (c2edea09) — Mac Anderson
+- fix(cli): local BYOK mode — use AI_GATEWAY_API_KEY without an Oxagen login (#462) (7c9688bb) — Mac Anderson
+- feat(cli): paste images + large text as [Image #N] / [Text #N] placeholders (#466) (3606724d) — Mac Anderson
+- feat(cli): slash-menu redesign — inline descriptions, per-command product colors, separators (#463) (a231d3cd) — Mac Anderson
+- feat(cli): oxagen config commands + multi-scope indexer (phases 4-5) (#464) (a1ad619e) — Mac Anderson
+- fix(cli): bundled code-graph broken by __dirname in ESM — the bench-blocking P0 (#465) (34fa0a80) — Mac Anderson
+- fix(bench): repair SWE-bench harness for current harbor + pin version (#461) (de896448) — Mac Anderson
+- Fix/duplicate solve command (#459) (023903c6) — Mac Anderson
+- fix(cli): drop unused activityGlyph import breaking @oxagen/cli lint (#458) (d0b9f8d0) — Mac Anderson
+- refactor: derive CodeGraphOperation from CodeGraphProvider instead of hand-copying the union (#456) (e51e263f) — Mac Anderson
+- fix(cli): remove duplicate solve command registration crashing the CLI (#457) (8ab2cecf) — Mac Anderson
+- --no-verify (af776153) — macanderson
+- Feat/cli best of n (#455) (846f46b0) — Mac Anderson
+- feat(cli): semantic_search over the local code graph + enhancer fallback (#451) (1c87af73) — Mac Anderson
+- feat(cli): fleet cancel-drain, isolate-by-default, and headless --json mode (#453) (c5327154) — Mac Anderson
+- feat(cli): shared activity vocabulary + slash single-source + REPL input editor (#454) (7cbe37be) — Mac Anderson
+- feat(cli): oxagen pr fix — active fix-to-green loop for PR CI (#452) (ff066da7) — Mac Anderson
+- feat(cli): mine recurring lessons into promotable workspace rules (#450) (ead81e15) — Mac Anderson
+- feat(cli): workspace config foundation — schema + 4-scope governed resolver (#449) (fe5e6b9f) — Mac Anderson
+- fix(engine): remove unused modelForTier import breaking main lint (#448) (fc6dbb0b) — Mac Anderson
+- fix(cli): remove dead agent/loop mock + update stale runAgent JSDoc references (#447) (b2a5d211) — Mac Anderson
+- feat(cli): oxagen solve — best-of-N task solving with a live multi-lane view (#446) (8e902f0f) — Mac Anderson
+- fix(agent): make code_graph a hard, prominent first-move mandate in the system prompt (#445) (d2529a98) — Mac Anderson
+- Feat/cli engine unification (#443) (06f7dc5a) — Mac Anderson
+- Feat/cli phase2 dead island (#444) (f8804e1d) — Mac Anderson
+- feat(cli): engine unification foundation — tool seams + shared extras + one-shot parity (#442) (60f67545) — Mac Anderson
+- fix(cli): copy-runtime-assets no longer references deleted dead-island JSONs (#441) (cb1084e7) — Mac Anderson
+- refactor(cli): delete ~8,400 LOC of dead code (pre-migration brain island) (#440) (4da9407a) — Mac Anderson
+- fix(mcp): green checks — recall test args carry all InferSchema keys (#439) (f6063198) — Mac Anderson
+- fix(agent-engine): headless localize step lists only wired locate tools + restore lost profile tests (#436) (7924a78c) — Mac Anderson
+- feat(memory): agents recall memories before acting — CLI loops + chat agent self-improvement wiring (#437) (d94cf8c3) — Mac Anderson
+- Feat/cli swe bench hardening (#435) (1c383d5a) — Mac Anderson
+- Feat/agents graph first context (#434) (2f92935f) — Mac Anderson
+- Feat/cli swe bench hardening (#433) (b163ae62) — Mac Anderson
+- Feat/agents graph first context (#432) (e80c71b2) — Mac Anderson
+- Feat/cli swe bench hardening (#431) (17bf5a0c) — Mac Anderson
+- Feat/cli swe bench hardening (#430) (ea96abbe) — Mac Anderson
+- Feat/memories sort filter citations (#429) (0e1109d8) — Mac Anderson
+- feat(ui): higher-contrast vibrant theme — de-pink light neutrals, ember dev code block, subtle in-app grid (#428) (93dd2985) — Mac Anderson
+- fix(config): declare OXAGEN_PROMPT_PROFILE in ENV_REGISTRY (#427) (6a30f558) — Mac Anderson
+- fix(app): repoint knowledge node pages to renamed inference route (#426) (a1e60514) — Mac Anderson
+- feat(ai): add Claude Fable 5 + Sonnet 5 to model selectors and rate cards (#425) (408102a5) — Mac Anderson
+- feat(cli): SWE-bench hardening — step-driver, compaction, retry, evidence judge, headless (#424) (df938d7f) — Mac Anderson
+- feat(memories): sort by citation count + filter by minimum citations (#423) (ddf9f06f) — Mac Anderson
+- Feat/cli swe bench hardening (#422) (800fe50d) — Mac Anderson
+- fix(app): green main — drop stale weight-axis imports + retarget memories edit test to two-axis model (#421) (d6b30684) — Mac Anderson
+- Feat/cli swe bench hardening (#420) (d6e76c75) — Mac Anderson
+- fix(app): green main — drop stale weight-axis imports + retarget memories edit test (#419) (fe3f710b) — Mac Anderson
+- Feat/cli swe bench hardening (#418) (55309e09) — Mac Anderson
+- fix(e2e): chat connection-create-inline spec asserts current wizard gate copy (#417) (2defb080) — Mac Anderson
+- Feat/cli swe bench hardening (#416) (04080b87) — Mac Anderson
+- fix(cli): repair REPL crash on launch (resetPending ReferenceError) (#415) (bea88e96) — Mac Anderson
+- fix(cli): repair CLI typecheck + lint clobbered by #403 merge — get main green (#414) (f2f19d8d) — Mac Anderson
+- Feat/cli swe bench hardening (#413) (d6be1f95) — Mac Anderson
+- Feat/cli swe bench hardening (#412) (c3e775d1) — Mac Anderson
+- fix(cli): document /coordinator + Ctrl-O fold in /help; reuse PanelTarget type (#411) (4ba4c9a0) — Mac Anderson
+- feat(cli): Fable default (opus→fable) + /coordinator remote|local on-device toggle (#408) (14bec31d) — Mac Anderson
+- fix(cli): make current main green — reconcile the half-merged terminal-fold + live-status REPL (#410) (29302a1f) — Mac Anderson
+- Fix/cli shell runner import and panel dupe (#407) (5d8ec272) — Mac Anderson
+- fix(cli): repair the REPL render — restore cat-mouse chase + the dropped live-status stack (#406) (8ea1acb5) — Mac Anderson
+- fix(cli): stop agent bash from hanging forever on timeout (#405) (46cdc2f3) — Mac Anderson
+- Update README.md (ef953245) — Mac Anderson
+- Update README.md (1eac3ef0) — Mac Anderson
+- fix(tests): update stale opus→fable model slug assertions after catalog migration (#404) (2ff6cb7d) — Mac Anderson
+- Feat/cli bang terminal panel (#403) (8cc163e9) — Mac Anderson
+- feat(cli): arrow-key navigation of the REPL Agent Team / Task panels (#400) (add3f627) — Mac Anderson
+- fix(cli): pin the REPL prompt bar to the bottom (full-screen TUI) (#401) (8501aebb) — Mac Anderson
+- --no-verify (#402) (47a1bec1) — Mac Anderson
+- feat(cli): pin REPL prompt bar to bottom-left with bottom-aligned agent panels (#399) (047658b8) — Mac Anderson
+- test(cli): cover !command terminal panel + fix store.ts override modifiers (#398) (0af0bde5) — Mac Anderson
+- fix(cli): repair REPL crash + get CLI package green (25f73f5c) — macanderson
+- feat(cli): !command live terminal panel + verbose agent narration (9d002848) — macanderson
+- save (57eb7e60) — macanderson
+- save (b0c6fc13) — macanderson
+- Feat/cli bang terminal panel (#397) (dcc87eac) — Mac Anderson
+- feat(cli): Agent Team + Task Progress side panel in the REPL TUI (#396) (5620c891) — Mac Anderson
+- feat(cli): Agent Team + Task Progress side panel in the REPL TUI (#395) (5463e168) — Mac Anderson
+- feat(cli): ascii cat-and-mouse chase on the REPL status rail (#394) (ab7930c9) — Mac Anderson
+- fix(cli): judge heuristic confidence + REPL cat-and-mouse whimsy (#393) (2330d818) — Mac Anderson
+- fix(billing): dunning-sweep low-balance check fails for every org (no tenant scope) (#392) (618d6e25) — Mac Anderson
+- fix: judge heuristic always returns 30/100 — wrong advisor model + hardcoded confidence (#391) (6b243805) — Mac Anderson
+- fix(cli): silence benign AI SDK responseFormat warning (#390) (ca668028) — Mac Anderson
+- feat(cli): latest-GA model defaults (single source of truth) + /hud running-agents view (#388) (4ccafe26) — Mac Anderson
+- Fix/cli ci green repl tests (#389) (1b8af311) — Mac Anderson
+- fix(agent): continue tool loop past first step in app chat; raise runaway backstop to 256 (46d6377e) — macanderson
+- Feat/cli latest model defaults and hud (#387) (a69cb305) — Mac Anderson
+- test(cli): replace flaky alt-screen frame guard with deterministic launchRepl test (#386) (0bdd6f52) — Mac Anderson
+- fix(cli): interrupt (Esc) no longer wedges the prompt queue (#385) (a55f29e7) — Mac Anderson
+- Fix/cli interrupt queue drain (#384) (b2fbebc6) — Mac Anderson
+- fix(cli): honor settings.json Bash(*) allow in the interactive broker (#383) (b16f1318) — Mac Anderson
+- fix(cli): stop duplicated REPL output (#382) (35966fcc) — Mac Anderson
+- fix(cli): repair oxagen REPL launch (broken JSX + missing Message fields) (#381) (594c946d) — Mac Anderson
+- feat(cli): graph-before-grep context layer + sync-embedding fix (pipeline Group 3) (#380) (b5567626) — Mac Anderson
+
 ## Oxagen v0.10.0
 
 This release significantly overhauls the CLI's interactive REPL experience — introducing a full-screen TUI with live agent and task progress panels, a `!command` terminal panel for running shell commands inline, arrow-key panel navigation, a pinned prompt bar, and a new `/coordinator remote|local` command for switching to on-device GGUF inference. It also promotes the "precise" model tier from Opus to Fable, fixes several long-standing REPL stability bugs, and hardens the billing dunning sweep and judge heuristic.
