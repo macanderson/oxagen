@@ -25,25 +25,44 @@ import type { McpServerSummary } from "./mcp-types";
 import { McpServerPicker } from "./mcp-server-picker";
 import { MessageQueue } from "./message-queue";
 import { AttachmentChip, hasInFlightUploads, type PendingAttachment } from "./attachment-chip";
+import { extractVideoFrames } from "./extract-video-frames";
 
-/** Only image attachments are wired to the composer in Phase 1 (video/PDF
- * attach UI is deferred — see the multimodal blueprint Phase 2). */
-const ATTACHMENT_ACCEPT = "image/*";
-/** Bounds a single turn's attachment count — mirrors the stream route's
- * `attachments` array cap (BodySchema `.max(8)`). */
+/** Images attach directly; videos attach too (Phase 2) — a video-capable model
+ * receives the video file, otherwise the server falls back to keyframes the
+ * composer extracts client-side (see extract-video-frames.ts). */
+const ATTACHMENT_ACCEPT = "image/*,video/*";
+/** Bounds a single turn's VISIBLE attachment count. Hidden video keyframes
+ * don't count here; the total serialized set (visible + keyframes) is bounded
+ * by the stream route's `attachments` array cap (BodySchema `.max(16)`). */
 const MAX_ATTACHMENTS = 8;
+/** Keyframes sampled per attached video for the vision-only fallback path.
+ * Kept low so a video + its frames stays well under the server's 16-attachment
+ * cap even with a couple of videos in one turn. */
+const VIDEO_KEYFRAME_COUNT = 3;
 
 /** The serializable subset of an uploaded attachment sent to the server —
- * mirrors `conversationAssetItem` minus fields the composer never needs. */
+ * mirrors `conversationAssetItem` minus fields the composer never needs, plus
+ * the video↔keyframe link (Phase 2). */
 export interface UploadedAttachmentMeta {
   publicId: string;
   kind: string;
   name: string;
   mimeType: string;
   url: string;
+  /** Set on a keyframe image to the server publicId of its source video. */
+  keyframeForVideo?: string;
 }
 
 function toUploadedMeta(attachments: PendingAttachment[]): UploadedAttachmentMeta[] {
+  // Map each video attachment's LOCAL id → its server publicId, so a keyframe
+  // (which references the video by local id, created before the video finished
+  // uploading) can be linked to the real publicId at submit time.
+  const videoPublicIdByLocalId = new Map<string, string>();
+  for (const a of attachments) {
+    if (a.status === "uploaded" && a.kind === "video" && a.publicId) {
+      videoPublicIdByLocalId.set(a.id, a.publicId);
+    }
+  }
   return attachments
     .filter(
       (a): a is PendingAttachment & Required<Pick<PendingAttachment, "publicId" | "kind" | "mimeType" | "url" | "name">> =>
@@ -54,7 +73,23 @@ function toUploadedMeta(attachments: PendingAttachment[]): UploadedAttachmentMet
         a.url !== undefined &&
         a.name !== undefined,
     )
-    .map((a) => ({ publicId: a.publicId, kind: a.kind, name: a.name, mimeType: a.mimeType, url: a.url }));
+    // Drop an orphan keyframe whose source video failed to upload — sending it
+    // as a plain image would misrepresent it as a user-picked picture.
+    .filter(
+      (a) =>
+        a.keyframeForVideoLocalId === undefined ||
+        videoPublicIdByLocalId.has(a.keyframeForVideoLocalId),
+    )
+    .map((a) => ({
+      publicId: a.publicId,
+      kind: a.kind,
+      name: a.name,
+      mimeType: a.mimeType,
+      url: a.url,
+      ...(a.keyframeForVideoLocalId
+        ? { keyframeForVideo: videoPublicIdByLocalId.get(a.keyframeForVideoLocalId)! }
+        : {}),
+    }));
 }
 
 export interface ComposerAction {
@@ -202,13 +237,13 @@ export function MessageComposer({
   }, []);
 
   const uploadAttachment = React.useCallback(
-    (id: string, file: File) => {
+    (id: string, file: Blob, kind: "image" | "video", filename: string) => {
       const xhr = new XMLHttpRequest();
       xhrsRef.current.set(id, xhr);
 
       const fd = new FormData();
-      fd.set("file", file);
-      fd.set("kind", "image");
+      fd.set("file", file, filename);
+      fd.set("kind", kind);
       if (orgSlug) fd.set("orgSlug", orgSlug);
       if (workspaceSlug) fd.set("workspaceSlug", workspaceSlug);
       if (conversationIdRef.current) fd.set("conversationId", conversationIdRef.current);
@@ -282,20 +317,64 @@ export function MessageComposer({
     [orgSlug, workspaceSlug],
   );
 
+  const newLocalId = React.useCallback(
+    () =>
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `att-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    [],
+  );
+
+  /**
+   * Sample keyframes from a just-attached video and add them as HIDDEN image
+   * attachments linked to the video's local id, uploading each as kind=image.
+   * Best-effort: extractVideoFrames never throws (returns [] on an unsupported
+   * codec), in which case the turn relies on a video-capable model or the
+   * server returns an honest 422. Runs after the video is queued so the video
+   * chip appears immediately.
+   */
+  const attachVideoKeyframes = React.useCallback(
+    async (videoLocalId: string, file: File) => {
+      const frames = await extractVideoFrames(file, { maxFrames: VIDEO_KEYFRAME_COUNT });
+      if (frames.length === 0) return;
+      const baseName = file.name.replace(/\.[^.]+$/, "") || "video";
+      const keyframes: PendingAttachment[] = frames.map((frame, i) => ({
+        id: newLocalId(),
+        // Wrap the blob as a File so the hidden attachment carries a stable
+        // name/type; it never renders a chip (hidden), so previewUrl is unused
+        // but kept non-empty for the shared cleanup path.
+        file: new File([frame.blob], `${baseName}-frame-${i + 1}.webp`, {
+          type: frame.blob.type || "image/webp",
+        }),
+        previewUrl: URL.createObjectURL(frame.blob),
+        status: "uploading",
+        progress: 0,
+        hidden: true,
+        keyframeForVideoLocalId: videoLocalId,
+      }));
+      setAttachments((prev) => [...prev, ...keyframes]);
+      queueMicrotask(() => {
+        for (const kf of keyframes) uploadAttachment(kf.id, kf.file, "image", kf.file.name);
+      });
+    },
+    [newLocalId, uploadAttachment],
+  );
+
   /** Add newly picked/pasted/dropped files as pending attachments and start uploading each. */
   const addFiles = React.useCallback(
     (files: FileList | File[]) => {
-      const incoming = Array.from(files).filter((f) => f.type.startsWith("image/"));
+      const incoming = Array.from(files).filter(
+        (f) => f.type.startsWith("image/") || f.type.startsWith("video/"),
+      );
       if (incoming.length === 0) return;
       setAttachments((prev) => {
-        const room = MAX_ATTACHMENTS - prev.length;
+        // Only VISIBLE attachments count toward the strip cap; hidden keyframes
+        // are added later out-of-band.
+        const room = MAX_ATTACHMENTS - prev.filter((a) => !a.hidden).length;
         if (room <= 0) return prev;
         const accepted = incoming.slice(0, room);
         const next: PendingAttachment[] = accepted.map((file) => ({
-          id:
-            typeof crypto !== "undefined" && "randomUUID" in crypto
-              ? crypto.randomUUID()
-              : `att-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          id: newLocalId(),
           file,
           previewUrl: URL.createObjectURL(file),
           status: "uploading",
@@ -304,21 +383,36 @@ export function MessageComposer({
         // Kick off uploads outside the updater (setState updaters must stay
         // pure) — deferred via microtask so this runs after the state commits.
         queueMicrotask(() => {
-          for (const a of next) uploadAttachment(a.id, a.file);
+          for (const a of next) {
+            const isVideo = a.file.type.startsWith("video/");
+            uploadAttachment(a.id, a.file, isVideo ? "video" : "image", a.file.name);
+            if (isVideo) void attachVideoKeyframes(a.id, a.file);
+          }
         });
         return [...prev, ...next];
       });
     },
-    [uploadAttachment],
+    [attachVideoKeyframes, newLocalId, uploadAttachment],
   );
 
   const removeAttachment = React.useCallback((id: string) => {
     xhrsRef.current.get(id)?.abort();
     xhrsRef.current.delete(id);
     setAttachments((prev) => {
-      const target = prev.find((a) => a.id === id);
-      if (target) URL.revokeObjectURL(target.previewUrl);
-      return prev.filter((a) => a.id !== id);
+      // Removing a video also removes its hidden keyframes (else they'd upload,
+      // block send via hasInFlightUploads, then be dropped as orphans at submit).
+      const removeIds = new Set<string>([id]);
+      for (const a of prev) {
+        if (a.keyframeForVideoLocalId === id) removeIds.add(a.id);
+      }
+      for (const a of prev) {
+        if (removeIds.has(a.id)) {
+          xhrsRef.current.get(a.id)?.abort();
+          xhrsRef.current.delete(a.id);
+          URL.revokeObjectURL(a.previewUrl);
+        }
+      }
+      return prev.filter((a) => !removeIds.has(a.id));
     });
   }, []);
 
@@ -329,8 +423,8 @@ export function MessageComposer({
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = Array.from(e.clipboardData?.files ?? []).filter((f) =>
-      f.type.startsWith("image/"),
+    const files = Array.from(e.clipboardData?.files ?? []).filter(
+      (f) => f.type.startsWith("image/") || f.type.startsWith("video/"),
     );
     if (files.length > 0) addFiles(files);
   };
@@ -680,6 +774,9 @@ export function MessageComposer({
   };
 
   const uploadsInFlight = hasInFlightUploads(attachments);
+  // Video keyframes are hidden derived attachments — the pending strip and the
+  // attachment cap only reflect the visible ones the user actually picked.
+  const visibleAttachments = attachments.filter((a) => !a.hidden);
   // Without a resolved org+workspace scope the upload endpoint's membership
   // guard can't run — degrade to a text-only composer rather than uploading
   // with a malformed request.
@@ -697,8 +794,9 @@ export function MessageComposer({
         isDragOver && "ring-2 ring-primary",
       )}
     >
-      {/* Hidden native file input — triggered by the paperclip button. Phase 1
-          accepts images only; video/PDF attach UI is a later phase. */}
+      {/* Hidden native file input — triggered by the paperclip button. Accepts
+          images and videos; a video's keyframes are sampled client-side for the
+          vision-only fallback path (Phase 2). */}
       {canAttach ? (
         <input
           ref={fileInputRef}
@@ -722,10 +820,11 @@ export function MessageComposer({
         onPaste={canAttach ? handlePaste : undefined}
         className="border-none bg-transparent shadow-none focus-visible:ring-0"
       />
-      {/* Pending attachment strip — thumbnails with upload progress/remove. */}
-      {attachments.length > 0 ? (
+      {/* Pending attachment strip — thumbnails with upload progress/remove.
+          Hidden video keyframes are excluded (they ride with their video). */}
+      {visibleAttachments.length > 0 ? (
         <div className="flex flex-wrap gap-2" data-testid="attachment-strip">
-          {attachments.map((a) => (
+          {visibleAttachments.map((a) => (
             <AttachmentChip key={a.id} attachment={a} onRemove={removeAttachment} />
           ))}
         </div>
@@ -772,14 +871,15 @@ export function MessageComposer({
           </Select>
         )}
 
-        {/* Attach image — opens the native file picker; paste/drag-drop also work. */}
+        {/* Attach image or video — opens the native file picker; paste/drag-drop
+            also work. */}
         {canAttach ? (
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            aria-label="Attach image"
-            disabled={pending || disabled || attachments.length >= MAX_ATTACHMENTS}
+            aria-label="Attach image or video"
+            disabled={pending || disabled || visibleAttachments.length >= MAX_ATTACHMENTS}
             onClick={() => fileInputRef.current?.click()}
             className="h-8 w-8 p-0"
           >

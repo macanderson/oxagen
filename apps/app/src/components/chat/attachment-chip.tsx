@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Image from "next/image";
-import { X, FileText, Loader2, AlertCircle } from "lucide-react";
+import { X, FileText, Film, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +33,15 @@ export interface PendingAttachment {
   /** Access-controlled serving URL (e.g. /api/v1/assets/gen_…) — never a raw blob URL. */
   url?: string;
   name?: string;
+  /**
+   * Set on a client-extracted video keyframe (Phase 2) to the LOCAL id of the
+   * video attachment it was sampled from. Resolved to that video's server
+   * `publicId` at submit time (the video may still be uploading when the frame
+   * is created). Keyframes are `hidden` from the pending strip.
+   */
+  keyframeForVideoLocalId?: string;
+  /** True for derived attachments (video keyframes) not shown as their own chip. */
+  hidden?: boolean;
 }
 
 /** True when every attachment finished uploading (used to gate the send button). */
@@ -48,6 +57,7 @@ export function AttachmentChip({
   onRemove: (id: string) => void;
 }) {
   const isImage = attachment.file.type.startsWith("image/");
+  const isVideo = attachment.file.type.startsWith("video/");
   const displayName = attachment.name ?? attachment.file.name;
 
   return (
@@ -68,6 +78,8 @@ export function AttachmentChip({
           unoptimized
           className="object-cover"
         />
+      ) : isVideo ? (
+        <Film className="size-6 text-muted-foreground" aria-hidden="true" />
       ) : (
         <FileText className="size-6 text-muted-foreground" aria-hidden="true" />
       )}
