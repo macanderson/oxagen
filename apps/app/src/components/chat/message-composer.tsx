@@ -23,6 +23,7 @@ import {
 } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 import { McpServerPicker } from "./mcp-server-picker";
+import { BudgetControl } from "./budget-control";
 import { MessageQueue } from "./message-queue";
 import { AttachmentChip, hasInFlightUploads, type PendingAttachment } from "./attachment-chip";
 import { extractVideoFrames } from "./extract-video-frames";
@@ -90,6 +91,18 @@ function toUploadedMeta(attachments: PendingAttachment[]): UploadedAttachmentMet
         ? { keyframeForVideo: videoPublicIdByLocalId.get(a.keyframeForVideoLocalId)! }
         : {}),
     }));
+}
+
+/** Build the per-turn budget wire payload from a model-state snapshot. Shared
+ * by buildFormData (live submit) and dispatchQueued (queued-message drain) so
+ * the two send paths can never drift on the budget shape. */
+function budgetPayload(modelSnapshot: ComposerModelState) {
+  return {
+    enabled: modelSnapshot.budgetEnabled,
+    limitUsd: modelSnapshot.budgetEnabled ? modelSnapshot.budgetUsd : null,
+    mode: modelSnapshot.budgetMode,
+    graceOveragePct: modelSnapshot.budgetGracePct,
+  };
 }
 
 export interface ComposerAction {
@@ -536,6 +549,7 @@ export function MessageComposer({
     if (activeServerIds.size > 0) {
       fd.set("activeServerIds", JSON.stringify([...activeServerIds]));
     }
+    fd.set("budget", JSON.stringify(budgetPayload(modelSnapshot)));
     return fd;
   }
 
@@ -655,6 +669,7 @@ export function MessageComposer({
       if (currentActiveServerIds.size > 0) {
         fd.set("activeServerIds", JSON.stringify([...currentActiveServerIds]));
       }
+      fd.set("budget", JSON.stringify(budgetPayload(ms)));
       // Defer the dispatch out of the caller (effect / event handler) so the
       // queue-drain doesn't cascade synchronously within a React effect
       // (satisfies react-hooks/set-state-in-effect) and so send-now doesn't
@@ -927,6 +942,15 @@ export function MessageComposer({
             onActiveServerIdsChange={setActiveServerIds}
           />
         )}
+
+        {/* Per-turn dollar budget — off by default */}
+        <BudgetControl
+          budgetEnabled={model.budgetEnabled}
+          budgetUsd={model.budgetUsd}
+          budgetMode={model.budgetMode}
+          budgetGracePct={model.budgetGracePct}
+          onChange={(patch) => setModel((s) => ({ ...s, ...patch }))}
+        />
 
         <div className="ml-auto flex items-center gap-1.5">
           {isStreaming && queue.length > 0 ? (

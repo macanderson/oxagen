@@ -53,6 +53,21 @@ export type ConsentResolution = "granted" | "denied" | "expired";
 
 export type PlanDecision = "approved" | "denied" | "amended";
 
+/** Mirrors TurnBudgetMode in @oxagen/billing (kept as a literal string union
+ * here — this module is imported by client code, so it stays dependency-light
+ * rather than importing the value-heavy @oxagen/billing barrel; see
+ * budget-control.tsx for the same rationale). */
+export type TurnBudgetModeName = "grace" | "prompt" | "enforce";
+
+/** The two non-blocking budget states a turn can report inline: "stopped" —
+ * the turn ended because the ceiling was crossed (enforce mode, or a grace
+ * cushion exhausted); "within_grace" — the turn is running past its base
+ * limit but still inside the grace cushion (grace mode only). The gated
+ * "prompt" mode pause reuses the existing approval-required/-resolved events
+ * instead of a bespoke one — it needs a blocking round-trip, which those
+ * events (and the client's approval-waiter machinery) already provide. */
+export type TurnBudgetNoticeState = "stopped" | "within_grace";
+
 export type SubagentStatus = "running" | "completed" | "partial" | "timed_out";
 
 /** Epistemic status on the confidence ladder (agent.memory.model#memoryClassEnum). */
@@ -246,6 +261,22 @@ export type StreamEvent =
        */
       type: "usage";
       usage: TurnUsage;
+    }
+  | {
+      /**
+       * Per-turn dollar budget (OXA — turn-budget): a non-blocking notice from
+       * the engine's budgetGuard, emitted by its onStop/onWithinGrace hooks in
+       * the stream route. "stopped" ends the turn early (mirrors the engine's
+       * `stopReason: "budget"`); "within_grace" is an informational notice
+       * that keeps streaming. The gated "prompt" mode's pause-for-approval is
+       * NOT this event — it reuses approval-required/-resolved instead (see
+       * TurnBudgetNoticeState).
+       */
+      type: "budget-notice";
+      state: TurnBudgetNoticeState;
+      costUsd: number;
+      limitUsd: number;
+      mode: TurnBudgetModeName;
     }
   | {
       /**

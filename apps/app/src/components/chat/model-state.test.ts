@@ -41,6 +41,13 @@ describe("defaultModelState", () => {
   it("has seededVideoModel = null", () => {
     expect(defaultModelState.seededVideoModel).toBeNull();
   });
+
+  it("has the per-turn budget off by default", () => {
+    expect(defaultModelState.budgetEnabled).toBe(false);
+    expect(defaultModelState.budgetUsd).toBeNull();
+    expect(defaultModelState.budgetMode).toBe("prompt");
+    expect(defaultModelState.budgetGracePct).toBe(0.25);
+  });
 });
 
 describe("buildSeededModelState", () => {
@@ -117,5 +124,44 @@ describe("buildSeededModelState", () => {
       videoModel: null,
     });
     expect(state.effort).toBe("medium");
+  });
+
+  it("defaults the budget to off when the seed omits it", () => {
+    const state = buildSeededModelState({
+      textModel: null,
+      textTier: null,
+      imageModel: null,
+      videoModel: null,
+    });
+    expect(state.budgetEnabled).toBe(false);
+    expect(state.budgetUsd).toBeNull();
+    expect(state.budgetMode).toBe("prompt");
+    expect(state.budgetGracePct).toBe(0.25);
+  });
+
+  it("seeds an enabled saved budget default", () => {
+    const state = buildSeededModelState({
+      textModel: null,
+      textTier: null,
+      imageModel: null,
+      videoModel: null,
+      budget: { enabled: true, limitUsd: 2, mode: "enforce", graceOveragePct: 0.5 },
+    });
+    expect(state.budgetEnabled).toBe(true);
+    expect(state.budgetUsd).toBe(2);
+    expect(state.budgetMode).toBe("enforce");
+    expect(state.budgetGracePct).toBe(0.5);
+  });
+
+  it("normalizes budgetUsd to null when the saved default is disabled, even if limitUsd is set", () => {
+    const state = buildSeededModelState({
+      textModel: null,
+      textTier: null,
+      imageModel: null,
+      videoModel: null,
+      budget: { enabled: false, limitUsd: 5, mode: "prompt", graceOveragePct: 0.25 },
+    });
+    expect(state.budgetEnabled).toBe(false);
+    expect(state.budgetUsd).toBeNull();
   });
 });

@@ -205,6 +205,9 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
   // model stops re-running the same command and either declares done or acts.
   const successCounts = new Map<string, number>();
   const successNudged = new Set<string>();
+  // Set when the per-turn budget guard stops the turn — surfaced on the result
+  // so a caller can tell the user the turn cut off on its dollar ceiling.
+  let stopReason: "budget" | undefined;
 
   while (steps < maxSteps) {
     if (opts.signal?.aborted) break;
@@ -330,6 +333,26 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
       conversation = [...conversation, ...response.messages];
       steps += (await result.steps).length || 1;
 
+      // Per-turn budget gate. The cumulative `usage` was just updated for this
+      // step, so check the dollar ceiling at every step boundary — BEFORE the
+      // next (billable) model call. The guard prices the usage and applies the
+      // policy; a "prompt"-mode breach blocks for approval inside the guard and
+      // resolves to continue/stop. "stop" ends the turn here with a `budget`
+      // stopReason — the same graceful exit as a natural finish, so the diff,
+      // memory, and trace below still run on the partial turn.
+      if (opts.budgetGuard) {
+        const verdict = await opts.budgetGuard({
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          totalTokens: usage.totalTokens,
+          cachedInputTokens: usage.cachedInputTokens,
+        });
+        if (verdict === "stop") {
+          stopReason = "budget";
+          break;
+        }
+      }
+
       // `tool-calls` means the model wants to act again — keep looping. Any other
       // finish reason (stop / length / content-filter / error) ends the turn.
       if (finishReason !== "tool-calls") break;
@@ -415,5 +438,6 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
     // (and may have been compacted) across steps, so it already includes every
     // assistant/tool message from this turn.
     messages: conversation,
+    ...(stopReason ? { stopReason } : {}),
   };
 }

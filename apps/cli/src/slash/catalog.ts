@@ -71,6 +71,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
     description: "Show or set reasoning effort for thinking-capable models",
     argumentHint: "[low|medium|high|xhigh|max|default]",
   },
+  {
+    name: "budget",
+    description: "Show or set a per-turn dollar budget (grace | prompt | enforce)",
+    argumentHint: "off | <usd> [grace|prompt|enforce] | mode <mode> | status",
+  },
   { name: "mode", description: "Show or set the tool-permission mode", argumentHint: "[ask|auto-edit|bypass|readonly]" },
   { name: "pipeline", description: "Toggle prompt evaluation, context injection, and judging", argumentHint: "[on|off]" },
   {

@@ -23,7 +23,11 @@ import {
   type ModelMessage,
   type SkillIndexEntry,
 } from "@oxagen/ai";
-import { materializeTools } from "@oxagen/agent";
+import {
+  materializeTools,
+  createApprovalRequest,
+  waitForApproval,
+} from "@oxagen/agent";
 import { createPlatformAgentAi } from "@oxagen/agent/adapters";
 import { runCodingAgent } from "@oxagen/agent-engine";
 import { withTenantDb, schema } from "@oxagen/database";
@@ -49,6 +53,17 @@ import {
   resolveGroundingCitations,
 } from "./recall-context";
 import { createChatMemoryProvider } from "./engine-memory";
+// Per-turn dollar budget (OXA — turn-budget). The gate itself (policy shape,
+// modes, the pure evaluator, createTurnBudgetGuard) lives in @oxagen/billing —
+// this route only resolves the effective policy and wires the three hooks to
+// its own SSE/approval machinery.
+import { createTurnBudgetGuard, formatBudgetUsd, TURN_BUDGET_OFF } from "@oxagen/billing";
+import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
+import {
+  requestTurnBudgetSchema,
+  resolveTurnBudgetPolicy,
+  turnBudgetPolicyFromSaved,
+} from "./turn-budget-policy";
 
 // Side-effect imports: bind every handler into the shared kernel BEFORE
 // materializeTools runs so invoke() can resolve both agent.* and all
@@ -138,6 +153,13 @@ const BodySchema = z.object({
     })
     .nullable()
     .default(null),
+  // Per-turn dollar budget override (OXA — turn-budget). `null`/omitted means
+  // "no override for this turn" — the route falls back to the user's saved
+  // default (budget.policy.read). An explicit object always wins, including
+  // an explicit `{ enabled: false }` that turns OFF a saved default for one
+  // turn. Schema (incl. the "positive limitUsd when enabled" refinement)
+  // lives in turn-budget-policy.ts so it is unit-testable in isolation.
+  budget: requestTurnBudgetSchema.nullable().default(null),
 });
 
 // Maximum number of prior messages to include in the context window. Keeps
@@ -217,6 +239,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     skills: pinnedSkillSlugs,
     pageContext,
     attachments,
+    budget: requestBudget,
   } = parsed.data;
 
   let tenant: Awaited<ReturnType<typeof resolveOrg>>;
@@ -625,6 +648,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           skillIndex,
           pinnedSkillBodies,
           recalledMemory,
+          turnBudgetPolicy,
         ] = await runInTenantScope(
           { orgId: tenant.id, workspaceId: workspace.id },
           () =>
@@ -716,6 +740,19 @@ export async function POST(request: NextRequest): Promise<Response> {
                 executionRef: capCtx.messageId,
                 ctx: capCtx,
               }),
+              // Per-turn dollar budget (OXA — turn-budget): an explicit
+              // per-turn `requestBudget` always wins (no DB round-trip
+              // needed); omitting it falls back to the user's saved default
+              // via budget.policy.read (direct handler call, same pattern as
+              // userPreferencesReadHandler in conversation-page.tsx — budget
+              // policy is user-scoped and needs no IAM bootstrap). A failed
+              // read degrades to TURN_BUDGET_OFF so a broken preferences row
+              // never blocks a turn from running.
+              requestBudget
+                ? Promise.resolve(resolveTurnBudgetPolicy(requestBudget, TURN_BUDGET_OFF))
+                : budgetPolicyReadHandler({}, capCtx)
+                    .then(turnBudgetPolicyFromSaved)
+                    .catch(() => TURN_BUDGET_OFF),
             ]),
         );
 
@@ -869,6 +906,81 @@ export async function POST(request: NextRequest): Promise<Response> {
         const ai = createPlatformAgentAi(capCtx, capCtx.messageId, "app");
 
         const modelId = modelIdOf(turnModel);
+
+        // Per-turn dollar budget (OXA — turn-budget). createTurnBudgetGuard
+        // returns undefined when the resolved policy is off, so an unbudgeted
+        // turn passes no guard at all (unbounded, byte-identical to before
+        // this feature). The three hooks are the ONLY app-specific part of
+        // enforcement — the policy shape, the mode ladder, and the pure
+        // evaluator all live in @oxagen/billing and must not be reimplemented
+        // here.
+        const budgetGuard = createTurnBudgetGuard(turnBudgetPolicy, modelId, {
+          // grace mode: informational, non-blocking — the turn keeps running
+          // past its base limit but inside the grace cushion.
+          onWithinGrace: (verdict) => {
+            emit({
+              type: "budget-notice",
+              state: "within_grace",
+              costUsd: verdict.costUsd,
+              limitUsd: verdict.limitUsd,
+              mode: verdict.mode,
+            });
+          },
+          // enforce mode, or a grace cushion exhausted, or a denied/expired
+          // prompt-mode pause (below): the turn ends here with
+          // `stopReason: "budget"` on the engine result.
+          onStop: (verdict) => {
+            emit({
+              type: "budget-notice",
+              state: "stopped",
+              costUsd: verdict.costUsd,
+              limitUsd: verdict.limitUsd,
+              mode: verdict.mode,
+            });
+          },
+          // prompt mode: reuse the EXISTING tool-approval machinery verbatim
+          // (packages/agent/src/runtime/approval.ts + the approval-required /
+          // approval-resolved SSE events + the client's approval-waiter in
+          // use-tool-stream.ts) rather than inventing a second pause protocol.
+          // createApprovalRequest/waitForApproval read/write via withTenantDb,
+          // which needs an active ALS tenant scope — this hook runs from
+          // INSIDE the engine's step loop, OUTSIDE the runInTenantScope that
+          // wrapped materializeTools above, so re-enter scope here exactly
+          // like the tool-approval execute() closure does.
+          onPause: async (verdict) => {
+            const costLabel = formatBudgetUsd(verdict.costUsd);
+            const limitLabel = formatBudgetUsd(verdict.limitUsd);
+            const inputPreview = {
+              costUsd: verdict.costUsd,
+              limitUsd: verdict.limitUsd,
+              message: `Per-turn budget reached: ${costLabel} of ${limitLabel}. Approve to continue for another ${limitLabel}.`,
+            };
+            const { approvalId } = await runInTenantScope(
+              { orgId: tenant.id, workspaceId: workspace.id },
+              () =>
+                createApprovalRequest({
+                  orgId: tenant.id,
+                  workspaceId: workspace.id,
+                  messageId: capCtx.messageId,
+                  capabilityName: "budget.turn.continue",
+                  inputPreview,
+                  riskLevel: "low",
+                }),
+            );
+            const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+            emit({
+              type: "approval-required",
+              approvalId,
+              capability: "budget.turn.continue",
+              inputPreview,
+              riskLevel: "low",
+              expiresAt,
+            });
+            const resolution = await waitForApproval(approvalId);
+            return resolution.resolution === "approved";
+          },
+        });
+
         const result = await runCodingAgent({
           ai,
           instruction: content,
@@ -922,6 +1034,10 @@ export async function POST(request: NextRequest): Promise<Response> {
           // through the metered AI port's streamAgentReply.
           signal: request.signal,
           onStreamPart: (part) => translator?.onPart(part),
+          // Per-turn dollar budget (OXA — turn-budget). undefined when the
+          // resolved policy is off — an unbudgeted turn runs exactly as
+          // before this feature.
+          budgetGuard,
         });
 
         const { assistantText, persistedBlocks } = translator.finish();

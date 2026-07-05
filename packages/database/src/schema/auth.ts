@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   integer,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -335,6 +336,23 @@ export const userPreferences = authSchema.table(
     notificationSettings: jsonb("notification_settings")
       .notNull()
       .default(sql`'{}'::jsonb`),
+    // Per-turn dollar budget (the user's default; a turn may override it at
+    // submit time). OFF by default — enabled=false means turns run with no
+    // dollar ceiling. When enabled, `perTurnBudgetUsd` is the ceiling and
+    // `perTurnBudgetMode` decides what happens at it (grace/prompt/enforce).
+    perTurnBudgetEnabled: boolean("per_turn_budget_enabled")
+      .notNull()
+      .default(false),
+    // Ceiling in USD; NULL when no limit is set. Nullable so "enabled but no
+    // amount yet" is representable (the UI then prompts for a figure).
+    perTurnBudgetUsd: real("per_turn_budget_usd"),
+    // Enforcement mode: "grace" | "prompt" | "enforce" (validated by the
+    // budget.policy contracts). Text-with-default mirrors theme/language above.
+    perTurnBudgetMode: text("per_turn_budget_mode").notNull().default("prompt"),
+    // grace mode: fraction ABOVE the limit allowed before a hard stop (0.25 = 25%).
+    perTurnBudgetGracePct: real("per_turn_budget_grace_pct")
+      .notNull()
+      .default(0.25),
   },
   (t) => ({
     // Enforces the 1:1 relationship — one preferences row per user.

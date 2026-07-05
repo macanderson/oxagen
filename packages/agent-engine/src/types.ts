@@ -291,7 +291,25 @@ export interface RunCodingAgentOptions {
    * `--agent`, and the fleet with identical safety wiring (no second loop).
    */
   wrapTools?: (tools: ToolSet) => ToolSet;
+  /**
+   * Per-turn budget gate. Invoked after EACH committed step with the turn's
+   * cumulative token usage, so a dollar ceiling is checked at every step
+   * boundary. Returns "continue" to run the next step or "stop" to end the turn
+   * immediately (the result then carries `stopReason: "budget"`). The engine
+   * stays dependency-light — it never prices tokens: the CALLER converts usage
+   * to dollars (via @oxagen/billing) and applies the budget policy, including a
+   * "prompt"-mode PAUSE for approval that blocks INSIDE the guard and resolves
+   * to continue (ceiling raised) or stop. Omitted ⇒ no budget (unbounded).
+   *
+   * MUST NOT throw — it runs on the step-commit path; a throw would be
+   * misclassified as a model error and hit the retry loop. Swallow internally
+   * and return "continue" on failure so a broken meter never wedges a turn.
+   */
+  budgetGuard?: (usage: RunCodingAgentResult["usage"]) => Promise<"continue" | "stop">;
 }
+
+/** Why {@link runCodingAgent} ended the turn. Absent ⇒ natural finish. */
+export type TurnStopReason = "budget";
 
 export interface RunCodingAgentResult {
   text: string;
@@ -306,4 +324,10 @@ export interface RunCodingAgentResult {
     cachedInputTokens?: number;
   };
   messages: ModelMessage[];
+  /**
+   * Set when the turn ended for a reason other than the model finishing —
+   * currently only `"budget"` (a per-turn dollar ceiling stopped it). Lets a
+   * surface tell the user WHY the turn cut off. Absent on a natural finish.
+   */
+  stopReason?: TurnStopReason;
 }

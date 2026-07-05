@@ -86,6 +86,14 @@ vi.mock("./mcp-server-picker", () => ({
   ),
 }));
 
+// BudgetControl stub — the real component pulls in Base UI Popover/Switch,
+// which aren't otherwise exercised in this file (mirrors the McpServerPicker
+// stub above: these tests isolate MessageComposer's own submit/queue/dispatch
+// logic, not the toolbar controls' internal rendering).
+vi.mock("./budget-control", () => ({
+  BudgetControl: () => <div data-testid="budget-control" />,
+}));
+
 vi.mock("@/components/ui/button", () => ({
   Button: ({
     children,
@@ -1041,6 +1049,10 @@ describe("MessageComposer — queue drain with generate mode", () => {
           mediaModel: null,
           seededImageModel: null,
           seededVideoModel: null,
+          budgetEnabled: false,
+          budgetUsd: null,
+          budgetMode: "prompt",
+          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1064,6 +1076,10 @@ describe("MessageComposer — queue drain with generate mode", () => {
           mediaModel: null,
           seededImageModel: null,
           seededVideoModel: null,
+          budgetEnabled: false,
+          budgetUsd: null,
+          budgetMode: "prompt",
+          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1138,6 +1154,10 @@ describe("MessageComposer — effort control", () => {
           mediaModel: null,
           seededImageModel: null,
           seededVideoModel: null,
+          budgetEnabled: false,
+          budgetUsd: null,
+          budgetMode: "prompt",
+          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1171,6 +1191,10 @@ describe("MessageComposer — model branch (explicit model.model)", () => {
           mediaModel: null,
           seededImageModel: null,
           seededVideoModel: null,
+          budgetEnabled: false,
+          budgetUsd: null,
+          budgetMode: "prompt",
+          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1202,6 +1226,10 @@ describe("MessageComposer — seeded media model branch", () => {
           mediaModel: null,
           seededImageModel: "flux-2-max",
           seededVideoModel: null,
+          budgetEnabled: false,
+          budgetUsd: null,
+          budgetMode: "prompt",
+          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1234,6 +1262,10 @@ describe("MessageComposer — explicit mediaModel in FormData", () => {
           mediaModel: "gpt-image-1",
           seededImageModel: null,
           seededVideoModel: null,
+          budgetEnabled: false,
+          budgetUsd: null,
+          budgetMode: "prompt",
+          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1294,6 +1326,10 @@ describe("MessageComposer — null tier in initialModelState", () => {
           mediaModel: null,
           seededImageModel: null,
           seededVideoModel: null,
+          budgetEnabled: false,
+          budgetUsd: null,
+          budgetMode: "prompt",
+          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1325,6 +1361,10 @@ describe("MessageComposer — null mediaTier fallback in buildFormData", () => {
           mediaModel: null,
           seededImageModel: null,
           seededVideoModel: null,
+          budgetEnabled: false,
+          budgetUsd: null,
+          budgetMode: "prompt",
+          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1394,6 +1434,10 @@ describe("MessageComposer — queue drain: null tier fallback", () => {
       mediaModel: null as null,
       seededImageModel: null as null,
       seededVideoModel: null as null,
+      budgetEnabled: false as false,
+      budgetUsd: null as null,
+      budgetMode: "prompt" as "prompt",
+      budgetGracePct: 0.25 as 0.25,
     };
     const { rerender } = render(
       <MessageComposer
@@ -1440,6 +1484,10 @@ describe("MessageComposer — queue drain: mediaModel set", () => {
       mediaModel: "flux-2-max",
       seededImageModel: null as null,
       seededVideoModel: null as null,
+      budgetEnabled: false as false,
+      budgetUsd: null as null,
+      budgetMode: "prompt" as "prompt",
+      budgetGracePct: 0.25 as 0.25,
     };
     const { rerender } = render(
       <MessageComposer
@@ -1487,6 +1535,10 @@ describe("MessageComposer — queue drain: null mediaTier fallback", () => {
       mediaModel: null as null,
       seededImageModel: null as null,
       seededVideoModel: null as null,
+      budgetEnabled: false as false,
+      budgetUsd: null as null,
+      budgetMode: "prompt" as "prompt",
+      budgetGracePct: 0.25 as 0.25,
     };
     const { rerender } = render(
       <MessageComposer
@@ -1535,6 +1587,10 @@ describe("MessageComposer — queue drain: effort in drained message", () => {
       mediaModel: null as null,
       seededImageModel: null as null,
       seededVideoModel: null as null,
+      budgetEnabled: false as false,
+      budgetUsd: null as null,
+      budgetMode: "prompt" as "prompt",
+      budgetGracePct: 0.25 as 0.25,
     };
     const { rerender } = render(
       <MessageComposer
