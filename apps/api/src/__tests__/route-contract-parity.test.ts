@@ -155,6 +155,20 @@ function contractNameToPathSegment(name: string): string {
     // Vault routes use kebab-case for underscore-containing action names.
     "environment.set_default": "environment/set-default",
     "secret.import_env": "secret/import-env",
+    // agent.trace.get is mounted at the resource path (GET /agent/trace),
+    // not /agent/trace/get.
+    "agent.trace": "agent/trace",
+    // agent.sandbox.files.list is mounted at the plural collection
+    // (GET /agent/sandbox/files), not /agent/sandbox/files/list.
+    "agent.sandbox.files.list": "agent/sandbox/files",
+    // eval.dataset.* — create/list share the plural collection path
+    // (differentiated by HTTP method); get/item.add/from_traces are
+    // sub-resources of that same collection, so the shared prefix covers
+    // all five via substring containment.
+    "eval.dataset": "eval/datasets",
+    // eval.run.* — start is the plural collection (POST); status/get are
+    // sub-resources of it, covered the same way.
+    "eval.run": "eval/runs",
     // A2A card read is mounted at the resource path (GET /a2a/card), not
     // /a2a/card/get — the transport itself lives at /a2a + /.well-known.
     "a2a.card.get": "a2a/card",
