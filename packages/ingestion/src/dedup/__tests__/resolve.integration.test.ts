@@ -61,6 +61,39 @@ function makeMutation(overrides: Partial<EntityMutation> = {}): EntityMutation {
 
 let neo4jUp = false;
 
+/**
+ * Ensure the vector index `resolveEntity` Pass B queries
+ * (`CALL db.index.vector.queryNodes('entity_node_embedding_index', ...)`) exists.
+ * Without it Neo4j throws "There is no such vector schema index:
+ * entity_node_embedding_index" — the exact CI unit-lane failure.
+ *
+ * `pnpm dev` applies this via `db:migrate` (schema.cypher), but the CI unit lane
+ * uses a bare Neo4j service container and only runs the Neo4j migrate step when a
+ * Postgres/telemetry migration changed. An ontology-source ("affected") run with
+ * no migration diff leaves the graph unmigrated, so this suite ensures its one
+ * required index idempotently (`IF NOT EXISTS`) and is hermetic regardless of the
+ * CI migrate gating. Mirrors schema.cypher.
+ */
+async function ensureDedupSchema(): Promise<void> {
+  const s = driver().session({ database: process.env.NEO4J_DATABASE });
+  try {
+    await s.run(
+      `CREATE VECTOR INDEX entity_node_embedding_index IF NOT EXISTS
+       FOR (n:EntityNode) ON (n.embedding)
+       OPTIONS { indexConfig: { \`vector.dimensions\`: 1536, \`vector.similarity_function\`: 'cosine' } }`,
+    );
+    // The vector index must be ONLINE before Pass B can query it by name;
+    // no-op once it already exists.
+    await s.run("CALL db.awaitIndexes(30000)");
+  } catch (err) {
+    // Tolerate a parallel integration suite winning the same idempotent create.
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/already exists|equivalent/i.test(msg)) throw err;
+  } finally {
+    await s.close();
+  }
+}
+
 async function cleanupFixtureNodes(): Promise<void> {
   const s = driver().session({ database: process.env.NEO4J_DATABASE });
   try {
@@ -82,6 +115,7 @@ beforeAll(async () => {
       await s.close();
     }
     neo4jUp = true;
+    await ensureDedupSchema();
     await cleanupFixtureNodes();
   } catch (err) {
     console.error(

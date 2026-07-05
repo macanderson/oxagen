@@ -200,7 +200,12 @@ describe("runPipeline — full 6-stage integration", () => {
     expect(cypher).toContain("MERGE (n:`CodeChange`:`EntityNode` {naturalKey: $naturalKey, orgId: $orgId})");
     expect(params["naturalKey"]).toBe("github:conn-integration-1:99");
     expect(params["entityType"]).toBe("code_change");
-    expect(params["orgId"]).toBeUndefined(); // orgId is in the MERGE pattern, not params
+    // OXA-2062 (#608): upsertEntityNode now binds $orgId EXPLICITLY in its params,
+    // no longer relying solely on scopedSession's auto-injection of orgId/workspaceId.
+    // This mock replaces scopedSession with a bare fn that does NOT inject, so the
+    // captured params reflect exactly what upsertEntityNode passes — and orgId is
+    // now present (was `undefined` before #608 bound it explicitly).
+    expect(params["orgId"]).toBe("org-integration");
     expect(params["connectionId"]).toBe("conn-integration-1");
     expect(params["workspaceId"]).toBe("ws-integration");
 
