@@ -26,9 +26,14 @@ export const schemaReconcileDispatchHandler: CapabilityHandler<typeof schemaReco
     }
 
     // Step 2: insert an agent_executions row tracking this reconciliation job.
-    // originType 'schema.reconcile.dispatch' is outside the Drizzle CHECK enum list
-    // but the CHECK only exists in the Drizzle schema layer, NOT in the actual
-    // migration SQL (§ instructions). The DB accepts any string for origin_type.
+    // originType MUST be one of AGENT_EXECUTION_ORIGIN_TYPES — the
+    // agent_executions_origin_type_check CHECK constraint (migration
+    // 20260703150000) rejects anything else at INSERT. This dispatch fires an
+    // Inngest event (`schema/reconcile.start`) that kicks off the async reconcile
+    // worker, so 'event_trigger' is the canonical origin. (A prior comment here
+    // claimed the DB accepts any string; that stopped being true once the CHECK
+    // was added to the migration SQL, and the stale 'schema.reconcile.dispatch'
+    // value is what blocked the prod migration chain — OXA login hotfix.)
     const initialState = {
       totalNodes: 0,
       processedNodes: 0,
@@ -50,7 +55,7 @@ export const schemaReconcileDispatchHandler: CapabilityHandler<typeof schemaReco
           workspaceId: ctx.workspaceId,
           agentId: null,
           agentVersionId: null,
-          originType: "schema.reconcile.dispatch",
+          originType: "event_trigger",
           originId: versionRow.id,
           status: "planning",
           inputPayload: { versionId: input.versionId, prune: input.prune },
