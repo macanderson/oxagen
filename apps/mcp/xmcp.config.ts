@@ -45,6 +45,22 @@ const config: XmcpConfig = {
     // They resolve from node_modules at runtime because the xmcp Vercel preset
     // runs `pnpm install` at the monorepo root alongside the function bundle.
     const heavyPackages = [
+      // duckdb is a native CJS addon reached via `require("duckdb")` in
+      // @oxagen/engram's graph-store, pulled into this build transitively:
+      //   src/middleware.ts -> @oxagen/agent register/handlers
+      //   -> agent.trace.get.ts -> @oxagen/engram barrel -> store/graph-store.ts.
+      // Its node-pre-gyp/node-gyp toolchain ships non-JS assets rspack cannot
+      // parse (C# Find-VisualStudio.cs, HTML, s3_setup.js) and dynamically
+      // require()s aws-sdk/mock-aws-s3/nock. Externalize the whole chain so it
+      // resolves from node_modules at runtime — mirrors the identical externals
+      // already declared in apps/app/next.config.mjs.
+      "duckdb",
+      "@mapbox/node-pre-gyp",
+      "node-gyp",
+      "mock-aws-s3",
+      "aws-sdk",
+      "nock",
+      "blake3",
       "dockerode",
       "exceljs",
       "pptxgenjs",
