@@ -339,6 +339,48 @@ export function buildProgram(): Command {
       await daemonStatus();
     });
 
+  const daemonSession = daemon
+    .command("session")
+    .description(
+      "Inspect and fork the daemon's recorded compile sessions (in-memory event log, resets on restart)",
+    );
+
+  daemonSession
+    .command("list")
+    .description("List sessions recorded by the running daemon")
+    .option("--json", "Output JSON", false)
+    .action(async (opts: { json: boolean }) => {
+      const { sessionList } = await import("./daemon/lifecycle.js");
+      await sessionList(opts);
+    });
+
+  daemonSession
+    .command("fork")
+    .description("Fork a recorded session at a given event index")
+    .argument("<sessionId>", "Session ID to fork from")
+    .argument("<forkPoint>", "Event index to fork at (integer)")
+    .option("--json", "Output JSON", false)
+    .action(async (sessionId: string, forkPointArg: string, opts: { json: boolean }) => {
+      const forkPoint = parseInt(forkPointArg, 10);
+      if (Number.isNaN(forkPoint)) {
+        process.stderr.write(`Invalid fork point "${forkPointArg}". Use an integer event index.\n`);
+        process.exitCode = 1;
+        return;
+      }
+      const { sessionFork } = await import("./daemon/lifecycle.js");
+      await sessionFork(sessionId, forkPoint, opts);
+    });
+
+  daemonSession
+    .command("replay")
+    .description("Check a recorded session's determinism and print its per-turn metrics")
+    .argument("<sessionId>", "Session ID to replay")
+    .option("--json", "Output JSON", false)
+    .action(async (sessionId: string, opts: { json: boolean }) => {
+      const { sessionReplay } = await import("./daemon/lifecycle.js");
+      await sessionReplay(sessionId, opts);
+    });
+
   // ── replay: inspect how a past turn was handled ─────────────────────────────
 
   program

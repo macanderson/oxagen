@@ -238,6 +238,52 @@ describe("agent.trace.get handler", () => {
     expect(out.executionId).toBe("aex_root");
   });
 
+  it("derives turnMetrics + replayDeterministic from steps via @oxagen/engram (OXA-2071)", async () => {
+    setup({
+      root: exec(),
+      steps: [
+        {
+          id: "aesuuid_1",
+          publicId: "aes_1",
+          executionId: "aexuuid_root",
+          stepNumber: 1,
+          stepType: "tool_call",
+          status: "completed",
+          failureReason: null,
+          startedAt: new Date("2026-06-16T00:00:01Z"),
+          completedAt: new Date("2026-06-16T00:00:02Z"),
+          latencyMs: 1000,
+          inputTokens: 10,
+          outputTokens: 5,
+        },
+      ],
+      tools: [
+        {
+          id: "atcuuid_1",
+          publicId: "atc_1",
+          executionStepId: "aesuuid_1",
+          toolName: "ontology.neighbors",
+          toolType: "capability",
+          status: "completed",
+          latencyMs: 800,
+          inputTokens: 4,
+          outputTokens: 2,
+          requestPayload: {},
+          responsePayload: {},
+        },
+      ],
+    });
+    const out = await agentTraceGetHandler({ executionId: "aex_root" }, CTX);
+    expect(out.turnMetrics).toHaveLength(1);
+    const metric = out.turnMetrics![0]!;
+    expect(metric.turnId).toBe("aes_1");
+    expect(metric.compileMs).toBe(1000);
+    expect(metric.tokens).toBe(15); // step's inputTokens(10) + outputTokens(5)
+    expect(metric.toolCalls).toBe(1);
+    expect(metric.outcome).toBe("success");
+    expect(out.replayDeterministic).toBe(true);
+  });
+
   it("does not nest a child whose parent was not collected (root stays root)", async () => {
     // Child references a parent id that is NOT in the collected set.
     setup({

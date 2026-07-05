@@ -402,6 +402,36 @@ function DetailPanel({ selection }: { selection: Selection | null }) {
             value={<span className="text-destructive">{n.failureReason}</span>}
           />
         ) : null}
+        {n.turnMetrics && n.turnMetrics.length > 0 ? (
+          <>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                Turn metrics
+              </span>
+              <Badge
+                variant={n.replayDeterministic ? "success" : "warning"}
+                size="sm"
+              >
+                {n.replayDeterministic ? "deterministic" : "non-deterministic"}
+              </Badge>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {n.turnMetrics.map((t) => (
+                <div
+                  key={t.turnId}
+                  className="flex items-center justify-between rounded-md bg-muted/40 px-2 py-1 text-xs"
+                >
+                  <span className="font-mono text-muted-foreground">{t.turnId}</span>
+                  <span className="text-right">
+                    {t.compileMs}ms · {t.tokens} tok · {t.toolCalls} tool
+                    {t.toolCalls === 1 ? "" : "s"} · {t.outcome}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : null}
       </div>
     );
   }
