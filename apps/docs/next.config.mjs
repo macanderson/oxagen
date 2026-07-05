@@ -26,6 +26,10 @@ const nextConfig = {
         source: "/decks/first-call-enterprise/script",
         destination: "/decks/first-call-enterprise/script.html",
       },
+      {
+        source: "/decks/architecture-deep-dive",
+        destination: "/decks/architecture-deep-dive/index.html",
+      },
     ];
   },
 };
