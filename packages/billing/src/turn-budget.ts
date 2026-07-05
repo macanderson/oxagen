@@ -225,6 +225,70 @@ export function turnCostUsd(
   );
 }
 
+/** Surface-supplied reactions the shared guard invokes when a turn hits its budget. */
+export interface TurnBudgetGuardHooks {
+  /**
+   * "prompt" mode only: the turn reached the limit and needs approval to spend
+   * more. Resolve `true` to grant ANOTHER budget window (the ceiling is raised
+   * by the original limit so the turn doesn't immediately re-pause), or `false`
+   * to stop. The CLI shows a TUI confirm here; the app emits an approval card
+   * and blocks on the existing approval resolve path.
+   */
+  onPause?: (verdict: TurnBudgetVerdict) => Promise<boolean> | boolean;
+  /** Invoked just before the guard returns "stop" (any mode) — surface the reason to the user. */
+  onStop?: (verdict: TurnBudgetVerdict) => void;
+  /** "grace" mode: invoked each step the turn runs PAST the limit but within the cushion. */
+  onWithinGrace?: (verdict: TurnBudgetVerdict) => void;
+}
+
+/**
+ * Build the engine's per-turn budget guard from a policy + the model producing
+ * the turn. Returns a function shaped for `RunCodingAgentOptions.budgetGuard`
+ * (usage → "continue" | "stop"), or `undefined` when the budget is off (so the
+ * caller passes no guard and the engine runs unbounded).
+ *
+ * This is the SINGLE enforcement implementation every surface shares: the CLI,
+ * the app chat route, and any future runner wire the SAME guard and differ only
+ * in the {@link TurnBudgetGuardHooks} they supply. The guard is resilient —
+ * `onPause` rejecting or `hooks` throwing must never wedge a turn, so callers
+ * should keep hooks side-effect-only; a throw here would be misclassified by the
+ * engine as a model error.
+ */
+export function createTurnBudgetGuard(
+  policy: TurnBudgetPolicy,
+  model: string,
+  hooks: TurnBudgetGuardHooks = {},
+  rateCard?: RateCard,
+): ((usage: TurnUsageSnapshot) => Promise<"continue" | "stop">) | undefined {
+  if (!policy.enabled || policy.limitUsd <= 0) return undefined;
+
+  // Mutable ceiling: a "prompt"-mode approval extends it by another full window
+  // so an approved turn keeps going until it spends the granted amount again.
+  let limitUsd = policy.limitUsd;
+
+  return async (usage: TurnUsageSnapshot) => {
+    const cost = turnCostUsd(model, usage, rateCard);
+    const verdict = evaluateTurnBudget({ ...policy, limitUsd }, cost);
+    switch (verdict.action) {
+      case "continue":
+        if (verdict.state === "within_grace") hooks.onWithinGrace?.(verdict);
+        return "continue";
+      case "pause": {
+        const approved = (await hooks.onPause?.(verdict)) ?? false;
+        if (approved) {
+          limitUsd = cost + policy.limitUsd; // grant another window from here
+          return "continue";
+        }
+        hooks.onStop?.(verdict);
+        return "stop";
+      }
+      case "stop":
+        hooks.onStop?.(verdict);
+        return "stop";
+    }
+  };
+}
+
 /** Format a USD amount for user-facing budget copy (e.g. "$1.20", "$0.0034"). */
 export function formatBudgetUsd(usd: number): string {
   if (!Number.isFinite(usd)) return "∞";
