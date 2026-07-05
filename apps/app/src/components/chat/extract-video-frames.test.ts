@@ -141,12 +141,18 @@ describe("extractVideoFrames", () => {
     fakeVideo.videoHeight = 180;
     fakeVideo.dispatchEvent(new Event("loadedmetadata"));
 
-    // Each seek sets currentTime then waits for "seeked" — dispatch it on the
-    // next microtask so the awaiting seekTo() promise settles in order.
+    // Each seek sets currentTime then waits for "seeked" — dispatch it once
+    // that specific iteration's seek has actually been requested. Checking
+    // only `> 0` is insufficient: it's already true after the first seek, so
+    // it would pass immediately on later iterations too and dispatch
+    // "seeked" before extract-video-frames.ts has even called seekTo() for
+    // that frame — losing the event and stalling on the real (unmocked)
+    // seekTimeoutMs setTimeout.
+    // Evenly spaced across (0, 9): 9/4, 18/4, 27/4 = 2.25, 4.5, 6.75
+    const expectedSeekTimes = [2.25, 4.5, 6.75];
     for (let i = 0; i < 3; i += 1) {
       await vi.waitFor(() => {
-        // currentTime is set synchronously by seekTo before it awaits "seeked".
-        expect(fakeVideo.currentTime).toBeGreaterThan(0);
+        expect(fakeVideo.currentTime).toBeCloseTo(expectedSeekTimes[i]!);
       });
       fakeVideo.dispatchEvent(new Event("seeked"));
     }
