@@ -445,10 +445,24 @@ jobs:
             fi
           fi
           DIFF="$(git diff --name-only "${BASE}"...HEAD)"
+          echo "migration change-detection base=${BASE} event=${EVENT_NAME}"
+          echo "changed files:"; echo "$DIFF"
           PG=false; CH=false; NEO=false
           echo "$DIFF" | grep -qE '^packages/database/atlas/migrations/' && PG=true
           echo "$DIFF" | grep -qE '^packages/telemetry/' && CH=true
           echo "$DIFF" | grep -qE '^packages/ontology/src/.*\.cypher$' && NEO=true
+          # Prod Postgres safety net: on push to main, ALWAYS reconcile Postgres
+          # via `atlas migrate apply` regardless of the diff. Atlas applies only
+          # PENDING revisions and no-ops when the DB is current, so this is
+          # idempotent and cheap. Relying on git-diff detection silently skipped
+          # prod migrations whenever the computed base drifted (e.g. squash-merge
+          # base mismatch), leaving the live schema behind deployed code — the
+          # root cause of the two_factor_enabled auth outage. Atlas's revision
+          # ledger, not a git diff, is the source of truth for what prod is
+          # missing. (push only fires on main — see on.push.branches above.)
+          if [ "$EVENT_NAME" = "push" ]; then
+            PG=true
+          fi
           STORES=""
           [ "$CH" = "true" ] && STORES="clickhouse"
           [ "$NEO" = "true" ] && STORES="${STORES:+$STORES,}neo4j"
@@ -466,6 +480,36 @@ jobs:
       - name: Bootstrap Postgres extensions (idempotent)
         if: steps.changes.outputs.pg == 'true'
         run: psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
+
+      # Legacy data backfill — MUST run before Atlas apply.
+      #
+      # Before the agent_executions_origin_type_check CHECK existed in the
+      # migration SQL, schema.reconcile.dispatch wrote a non-canonical
+      # origin_type ('schema.reconcile.dispatch'). Migration 20260703150000
+      # adds that CHECK; on a DB holding such rows the ADD CONSTRAINT fails
+      # ("violated by some row"), aborting the whole migration transaction — so
+      # every later migration (incl. Better Auth's two_factor) never applies.
+      # That is exactly what took production login down.
+      #
+      # This idempotent normalization maps any pre-existing non-canonical
+      # origin_type to the canonical 'event_trigger' so the CHECK can be added.
+      # The source bug is fixed in schema.reconcile.dispatch.ts, so once prod is
+      # migrated this is a permanent no-op (0 rows). Guarded on table existence
+      # so it is safe on a not-yet-migrated / fresh DB.
+      - name: Normalize legacy agent_executions.origin_type (idempotent)
+        if: steps.changes.outputs.pg == 'true'
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
+            DO \$\$
+            BEGIN
+              IF to_regclass('agent.agent_executions') IS NOT NULL THEN
+                UPDATE agent.agent_executions
+                   SET origin_type = 'event_trigger'
+                 WHERE origin_type NOT IN
+                   ('chat','event_trigger','scheduled_job','mcp_request','workflow_run','fanout');
+              END IF;
+            END
+            \$\$;"
 
       - name: Migrate Postgres (Atlas)
         if: steps.changes.outputs.pg == 'true'

@@ -398,6 +398,13 @@ export async function wandResolveApprovalAction(
   if (!resolved) return { ok: false, error: "No active workspace." };
   const { orgId, workspaceId } = resolved;
 
+  // Assert user is a member of the workspace (explicit IAM gate in apps/app —
+  // invoke() from apps/app skips IAM role checks, so without this any
+  // authenticated user who knows/guesses an orgSlug + workspaceSlug +
+  // approvalId could resolve approvals in a workspace they don't belong to).
+  const isMember = await assertWorkspaceMember(orgId, workspaceId, session.user.id);
+  if (!isMember) return { ok: false, error: "You don't have access to this workspace." };
+
   const parsed = agentApprovalResolve.input.safeParse({ approvalId, decision });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
 
@@ -436,6 +443,12 @@ export async function wandResolveConsentAction(
   if (!resolved) return { ok: false, error: "No active workspace." };
   const { orgId, workspaceId } = resolved;
 
+  // Assert user is a member of the workspace (explicit IAM gate in apps/app —
+  // see wandResolveApprovalAction above for why this cannot rely on invoke()'s
+  // kernel IAM check from this surface).
+  const isMember = await assertWorkspaceMember(orgId, workspaceId, session.user.id);
+  if (!isMember) return { ok: false, error: "You don't have access to this workspace." };
+
   const parsed = agentMcpConsentResolve.input.safeParse({ approvalId, decision, grantAllTools });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
 
@@ -469,6 +482,12 @@ export async function wandResolvePlanAction(
   const resolved = await resolveWorkspaceFromSlugs(orgSlug, workspaceSlug);
   if (!resolved) return { ok: false, error: "No active workspace." };
   const { orgId, workspaceId } = resolved;
+
+  // Assert user is a member of the workspace (explicit IAM gate in apps/app —
+  // see wandResolveApprovalAction above for why this cannot rely on invoke()'s
+  // kernel IAM check from this surface).
+  const isMember = await assertWorkspaceMember(orgId, workspaceId, session.user.id);
+  if (!isMember) return { ok: false, error: "You don't have access to this workspace." };
 
   const verbMap: Record<typeof decision, "approve" | "deny" | "amend"> = {
     approved: "approve",
