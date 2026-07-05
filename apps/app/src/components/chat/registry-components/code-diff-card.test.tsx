@@ -120,8 +120,11 @@ describe("CodeDiffCard", () => {
 
   it("shows computed additions/deletions totals when patches are present", () => {
     render(<CodeDiffCard files={[{ path: "src/a.ts", patch: SAMPLE_PATCH }]} />);
-    expect(screen.getByText("+2")).toBeInTheDocument();
-    expect(screen.getByText("-1")).toBeInTheDocument();
+    // With a single file, the header aggregate and the per-file row show the
+    // same totals — scope to the file's own row to avoid an ambiguous match.
+    const fileRow = within(document.getElementById("diff-src%2Fa.ts")!);
+    expect(fileRow.getByText("+2")).toBeInTheDocument();
+    expect(fileRow.getByText("-1")).toBeInTheDocument();
   });
 
   it("prefers explicit additions/deletions over computed values", () => {
@@ -130,8 +133,9 @@ describe("CodeDiffCard", () => {
         files={[{ path: "src/a.ts", patch: SAMPLE_PATCH, additions: 40, deletions: 5 }]}
       />,
     );
-    expect(screen.getByText("+40")).toBeInTheDocument();
-    expect(screen.getByText("-5")).toBeInTheDocument();
+    const fileRow = within(document.getElementById("diff-src%2Fa.ts")!);
+    expect(fileRow.getByText("+40")).toBeInTheDocument();
+    expect(fileRow.getByText("-5")).toBeInTheDocument();
   });
 
   it("shows a fallback message when a file has no patch content", () => {
