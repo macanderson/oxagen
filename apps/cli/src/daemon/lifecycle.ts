@@ -135,6 +135,112 @@ export async function daemonStatus(): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Sessions — fork/replay/list a daemon-recorded compile session
+// ---------------------------------------------------------------------------
+
+interface SessionSummary {
+  sessionId: string;
+  parentId: string | null;
+  forkPoint: number | null;
+  status: string;
+  eventCount: number;
+  createdAt: number;
+}
+
+async function requireRunningDaemon(client: DaemonClient): Promise<boolean> {
+  if (await client.isRunning()) return true;
+  console.log("Daemon is not running. Start it with `oxagen daemon start`.");
+  process.exitCode = 1;
+  return false;
+}
+
+/** `oxagen daemon session list` — sessions recorded by the running daemon. */
+export async function sessionList(opts: { json?: boolean } = {}): Promise<void> {
+  const client = getClient();
+  if (!(await requireRunningDaemon(client))) return;
+
+  const result = (await client.listSessions()) as { sessions: SessionSummary[] };
+  if (opts.json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  if (result.sessions.length === 0) {
+    console.log(
+      "No sessions recorded yet. Sessions are recorded in-memory whenever `compile` is " +
+        "called with a taskFrame.sessionId, and reset on daemon restart.",
+    );
+    return;
+  }
+  for (const s of result.sessions) {
+    const lineage = s.parentId ? ` (forked from ${s.parentId} @${s.forkPoint})` : "";
+    console.log(`${s.sessionId}  ${s.status}  ${s.eventCount} event(s)${lineage}`);
+  }
+}
+
+/** `oxagen daemon session fork <sessionId> <forkPoint>` — branch a session's history. */
+export async function sessionFork(
+  sessionId: string,
+  forkPoint: number,
+  opts: { json?: boolean } = {},
+): Promise<void> {
+  const client = getClient();
+  if (!(await requireRunningDaemon(client))) return;
+
+  try {
+    const result = (await client.forkSession(sessionId, forkPoint)) as {
+      sessionId: string;
+      parentId: string | null;
+      forkPoint: number | null;
+    };
+    if (opts.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+    console.log(`✓ Forked session ${result.parentId} at event ${result.forkPoint} -> new session ${result.sessionId}`);
+  } catch (err) {
+    console.log(`Fork failed: ${err instanceof Error ? err.message : String(err)}`);
+    process.exitCode = 1;
+  }
+}
+
+/** `oxagen daemon session replay <sessionId>` — determinism check + per-turn metrics. */
+export async function sessionReplay(sessionId: string, opts: { json?: boolean } = {}): Promise<void> {
+  const client = getClient();
+  if (!(await requireRunningDaemon(client))) return;
+
+  try {
+    const result = (await client.replaySession(sessionId)) as {
+      replay: { deterministic: boolean; stepsReplayed: number; divergences: unknown[] };
+      turns: {
+        turnId: string;
+        compileMs: number;
+        tokens: number;
+        cacheHitRate: number;
+        toolCalls: number;
+        outcome: string;
+      }[];
+    };
+    if (opts.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+    const verdict = result.replay.deterministic
+      ? "deterministic ✓"
+      : `${result.replay.divergences.length} divergence(s) ✗`;
+    console.log(`Session ${sessionId}: ${verdict} across ${result.replay.stepsReplayed} compiled step(s).`);
+    for (const t of result.turns) {
+      console.log(
+        `  turn ${t.turnId}: ${t.compileMs}ms compile, ${t.tokens} tokens, ` +
+          `${(t.cacheHitRate * 100).toFixed(0)}% cache hit, ${t.toolCalls} tool call(s), outcome=${t.outcome}`,
+      );
+    }
+  } catch (err) {
+    console.log(`Replay failed: ${err instanceof Error ? err.message : String(err)}`);
+    process.exitCode = 1;
+  }
+}
+
 function formatUptime(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);

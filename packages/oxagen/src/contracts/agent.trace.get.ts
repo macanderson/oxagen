@@ -49,6 +49,20 @@ const stepNode = z.object({
   toolCalls: z.array(toolCallNode),
 });
 
+// One step's derived metrics, computed by @oxagen/engram's extractTurnMetrics
+// over a synthetic per-step session (session/replay.ts) -- each execution step
+// is treated as one "turn". cacheHitRate is always 0 here: Postgres execution
+// rows don't carry engram's context-compile cache telemetry, only tokens/
+// latency/tool-call counts, which is what this reuses.
+const turnMetric = z.object({
+  turnId: z.string().describe("The step's public id (aes_…)"),
+  compileMs: z.number().int().describe("The step's latencyMs, reused as the turn's duration"),
+  tokens: z.number().int().describe("inputTokens + outputTokens for the step"),
+  cacheHitRate: z.number(),
+  toolCalls: z.number().int(),
+  outcome: z.string(),
+});
+
 // The recursive execution span node. Each node carries its own steps and any
 // child executions (subagent fan-out / A2A). z.lazy defers the self-reference.
 export interface TraceExecutionNode {
@@ -68,6 +82,14 @@ export interface TraceExecutionNode {
   updatedAt: string;
   steps: z.infer<typeof stepNode>[];
   children: TraceExecutionNode[];
+  /**
+   * Per-step metrics + a determinism sanity-check, populated ONLY on the root
+   * node (children omit them -- recomputing per descendant isn't worth the
+   * cost for a read the UI only ever renders once per trace). See
+   * packages/agent/src/handlers/agent.trace.get.ts's deriveTurnMetrics.
+   */
+  turnMetrics?: z.infer<typeof turnMetric>[];
+  replayDeterministic?: boolean;
 }
 
 const executionNode: z.ZodType<TraceExecutionNode> = z.lazy(() =>
@@ -88,6 +110,8 @@ const executionNode: z.ZodType<TraceExecutionNode> = z.lazy(() =>
     updatedAt: z.string(),
     steps: z.array(stepNode),
     children: z.array(executionNode),
+    turnMetrics: z.array(turnMetric).optional(),
+    replayDeterministic: z.boolean().optional(),
   }),
 );
 

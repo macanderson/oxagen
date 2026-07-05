@@ -133,6 +133,47 @@ export class DaemonClient {
   }
 
   /**
+   * Fork a recorded session at a given event index. Sessions are populated
+   * in-memory as `compile()` is called with a `taskFrame.sessionId`; forking
+   * creates a new session sharing that prefix, returned as
+   * `{ sessionId, parentId, forkPoint, status }`.
+   */
+  async forkSession(sessionId: string, forkPoint: number): Promise<unknown> {
+    const response = await this.send({
+      id: crypto.randomUUID(),
+      method: "session.fork",
+      params: { sessionId, forkPoint },
+    });
+    if (response.error) throw new Error(response.error.message);
+    return response.result;
+  }
+
+  /**
+   * Analyze a recorded session for determinism and extract its per-turn
+   * metrics (compile time, tokens, cache hit rate, tool calls, outcome).
+   */
+  async replaySession(sessionId: string): Promise<unknown> {
+    const response = await this.send({
+      id: crypto.randomUUID(),
+      method: "session.replay",
+      params: { sessionId },
+    });
+    if (response.error) throw new Error(response.error.message);
+    return response.result;
+  }
+
+  /** List every session (root or forked) recorded by this daemon instance. */
+  async listSessions(): Promise<unknown> {
+    const response = await this.send({
+      id: crypto.randomUUID(),
+      method: "session.list",
+      params: {},
+    });
+    if (response.error) throw new Error(response.error.message);
+    return response.result;
+  }
+
+  /**
    * Ask the daemon to shut down gracefully.
    */
   async shutdown(): Promise<void> {

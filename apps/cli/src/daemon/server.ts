@@ -11,12 +11,35 @@ import * as fs from "node:fs";
 import type { DaemonRequest, DaemonResponse, DaemonConfig } from "./protocol";
 import { DAEMON_ERRORS } from "./protocol";
 import type { CodeGraph, CodeEdgeType } from "./code-graph/types";
+import type { Session, TaskFrame } from "@oxagen/engram";
+import type { ContextWindow } from "@oxagen/engram";
+
+/**
+ * RPC-level error carrying a JSON-RPC error code (see DAEMON_ERRORS). Thrown
+ * by handlers that need a specific code (e.g. SESSION_NOT_FOUND) rather than
+ * the generic INTERNAL_ERROR every other thrown Error maps to.
+ */
+class DaemonRpcError extends Error {
+  constructor(
+    public readonly code: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
 
 export class ContextDaemon {
   private server: net.Server | null = null;
   private config: DaemonConfig;
   private lastActivity: number = Date.now();
   private idleTimer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * Sessions recorded via `compile` calls that carry a `taskFrame.sessionId`.
+   * In-memory only — resets on daemon restart. Backs the session.fork /
+   * session.replay / session.list RPCs (@oxagen/engram's event-sourced
+   * Session model — see session/fork.ts and session/replay.ts).
+   */
+  private readonly sessions = new Map<string, Session>();
 
   constructor(config: DaemonConfig) {
     this.config = config;
@@ -105,7 +128,7 @@ export class ContextDaemon {
       this.sendResponse(socket, {
         id: request.id,
         error: {
-          code: DAEMON_ERRORS.INTERNAL_ERROR,
+          code: err instanceof DaemonRpcError ? err.code : DAEMON_ERRORS.INTERNAL_ERROR,
           message: err instanceof Error ? err.message : String(err),
         },
       });
@@ -132,6 +155,12 @@ export class ContextDaemon {
         return this.handleGraphQuery(request.params);
       case "graph.search":
         return this.handleGraphSearch(request.params);
+      case "session.fork":
+        return this.handleSessionFork(request.params);
+      case "session.replay":
+        return this.handleSessionReplay(request.params);
+      case "session.list":
+        return this.handleSessionList();
       default:
         throw new Error(`Method not found: ${request.method}`);
     }
@@ -146,7 +175,102 @@ export class ContextDaemon {
     const budget = (params.budget ?? computeBudget(taskFrame.modelId)) as Parameters<typeof compile>[1];
     const window = await compile(taskFrame, budget, { engines, store });
     await store.close();
+    // Record this compile as one turn of the taskFrame's session, if it names
+    // one. This is what actually populates the session registry that
+    // session.fork / session.replay / session.list operate on.
+    if (taskFrame.sessionId) {
+      await this.recordCompileTurn(taskFrame.sessionId, taskFrame, window);
+    }
     return window;
+  }
+
+  /**
+   * Append a session_start (on first use)/turn_start/context_compiled/turn_end
+   * sequence to the named session's in-memory event log. Each `compile` RPC
+   * call is treated as one turn — the daemon has no visibility into the model
+   * call that happens after compile(), so turn_end is recorded immediately
+   * with an optimistic "success" outcome.
+   */
+  private async recordCompileTurn(
+    sessionId: string,
+    taskFrame: TaskFrame,
+    window: ContextWindow,
+  ): Promise<void> {
+    const { createSession, appendEvent } = await import("@oxagen/engram");
+    let session = this.sessions.get(sessionId);
+    if (!session) {
+      session = createSession(sessionId, taskFrame.namespace);
+      this.sessions.set(sessionId, session);
+    }
+    const turnId = crypto.randomUUID();
+    appendEvent(session, "turn_start", turnId, { taskFrame });
+    appendEvent(session, "context_compiled", turnId, {
+      candidatesRetrieved: window.metadata.candidatesRetrieved,
+      candidatesPacked: window.metadata.candidatesPacked,
+      candidatesEvicted: window.metadata.candidatesEvicted,
+      totalTokens: window.tokenUsage.total,
+      cacheHitRate: window.cachePrefix.hitRate,
+      compileMs: window.metadata.totalMs,
+    });
+    appendEvent(session, "turn_end", turnId, {
+      outcome: "success",
+      totalTokens: window.tokenUsage.total,
+      durationMs: window.metadata.totalMs,
+    });
+  }
+
+  /**
+   * Fork a recorded session at a given event index (session/fork.ts's
+   * forkSession). The new session is registered so it can itself be listed,
+   * replayed, or forked again.
+   */
+  private async handleSessionFork(params: { sessionId: string; forkPoint: number }): Promise<unknown> {
+    const parent = this.sessions.get(params.sessionId);
+    if (!parent) {
+      throw new DaemonRpcError(DAEMON_ERRORS.SESSION_NOT_FOUND, `Session not found: ${params.sessionId}`);
+    }
+    const { forkSession } = await import("@oxagen/engram");
+    const newSessionId = crypto.randomUUID();
+    const forked = forkSession(parent, params.forkPoint, newSessionId);
+    this.sessions.set(forked.id, forked);
+    return {
+      sessionId: forked.id,
+      parentId: forked.parentId ?? null,
+      forkPoint: forked.forkPoint ?? null,
+      status: forked.status,
+    };
+  }
+
+  /**
+   * Analyze a recorded session's determinism (session/replay.ts's
+   * analyzeReplay) and extract its per-turn metrics (extractTurnMetrics),
+   * including the parent-prefix history if the session was forked
+   * (getFullHistory).
+   */
+  private async handleSessionReplay(params: { sessionId: string }): Promise<unknown> {
+    const session = this.sessions.get(params.sessionId);
+    if (!session) {
+      throw new DaemonRpcError(DAEMON_ERRORS.SESSION_NOT_FOUND, `Session not found: ${params.sessionId}`);
+    }
+    const { analyzeReplay, extractTurnMetrics, getFullHistory } = await import("@oxagen/engram");
+    const replay = analyzeReplay(session);
+    const turns = extractTurnMetrics(session);
+    const history = getFullHistory(session, (id) => this.sessions.get(id) ?? null);
+    return { replay, turns, inheritedEventCount: history.inherited };
+  }
+
+  /** List every session (root or forked) recorded by this daemon instance. */
+  private handleSessionList(): unknown {
+    return {
+      sessions: [...this.sessions.values()].map((s) => ({
+        sessionId: s.id,
+        parentId: s.parentId ?? null,
+        forkPoint: s.forkPoint ?? null,
+        status: s.status,
+        eventCount: s.events.length,
+        createdAt: s.createdAt,
+      })),
+    };
   }
 
   private async handleQuery(params: { namespace: { org: string; workspace: string }; kinds?: string[]; limit?: number }): Promise<unknown> {
