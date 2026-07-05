@@ -1,5 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import type { CapabilityContext } from "@oxagen/oxagen";
+import type { AgentForA2A } from "@oxagen/agent";
+import type { A2ATaskRow } from "./task-store";
 
 // ── mocks (vi.hoisted so the factories can reference them) ────────────────────
 const h = vi.hoisted(() => {
@@ -12,6 +14,7 @@ const h = vi.hoisted(() => {
   const insertEvents = vi.fn(async () => undefined);
   const updateTask = vi.fn(
     async (_ctx: unknown, _id: string, patch: Record<string, unknown>) => ({
+      id: "task-uuid-1",
       publicId: "a2a_1",
       contextId: "ctx_1",
       state: patch.state ?? "working",
@@ -22,9 +25,59 @@ const h = vi.hoisted(() => {
       updatedAt: new Date(),
     }),
   );
-  return { state, streamAgentReply, insertEvents, updateTask };
+  const loadTask = vi.fn(
+    async (_ctx: unknown, _taskId: string): Promise<A2ATaskRow | null> => null,
+  );
+  const resolveAgentForA2A = vi.fn(
+    async (_workspaceId: string, _slug: string): Promise<AgentForA2A | null> => null,
+  );
+
+  // Minimal Postgres double for the agent_executions lineage writes
+  // (insertExecutionRow/updateExecutionRow/findExecutionIdForTask in
+  // bridge.ts). Records what was inserted/updated so lifecycle tests can
+  // assert on it; the select branch (parentExecutionId lookup) resolves via
+  // `selectResult`, settable per test.
+  const dbState = {
+    insertedValues: [] as Record<string, unknown>[],
+    updatedSets: [] as Record<string, unknown>[],
+    selectResult: [] as Array<{ id: string }>,
+    insertReturns: { id: "exec_new" } as { id: string } | null,
+  };
+  const fakeTx = {
+    insert: () => ({
+      values: (v: Record<string, unknown>) => {
+        dbState.insertedValues.push(v);
+        return {
+          returning: async () => (dbState.insertReturns ? [dbState.insertReturns] : []),
+        };
+      },
+    }),
+    update: () => ({
+      set: (v: Record<string, unknown>) => {
+        dbState.updatedSets.push(v);
+        return { where: async () => [] };
+      },
+    }),
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => dbState.selectResult,
+        }),
+      }),
+    }),
+  };
+  return {
+    state,
+    streamAgentReply,
+    insertEvents,
+    updateTask,
+    loadTask,
+    resolveAgentForA2A,
+    dbState,
+    fakeTx,
+  };
 });
-const { streamAgentReply, insertEvents, updateTask } = h;
+const { streamAgentReply, insertEvents, updateTask, loadTask, resolveAgentForA2A, dbState } = h;
 
 vi.mock("@oxagen/ai", () => ({
   streamAgentReply: h.streamAgentReply,
@@ -35,19 +88,27 @@ vi.mock("@oxagen/ai", () => ({
 }));
 vi.mock("@oxagen/agent", () => ({
   materializeTools: vi.fn(async () => ({ tools: {}, nameMap: { t: "tool.cap" } })),
+  resolveAgentForA2A: h.resolveAgentForA2A,
 }));
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: (_s: unknown, fn: () => unknown) => fn(),
 }));
 vi.mock("@oxagen/telemetry", () => ({ insertEvents: h.insertEvents }));
-vi.mock("./task-store", () => ({ updateTask: h.updateTask }));
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  return {
+    ...real,
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => fn(h.fakeTx),
+  };
+});
+vi.mock("./task-store", () => ({ updateTask: h.updateTask, loadTask: h.loadTask }));
 
 function setStreamParts(parts: unknown[]): void {
   h.state.streamParts = parts;
 }
 
 import { runA2ATask, messageText } from "./bridge";
-import type { A2ATaskRow } from "./task-store";
+import type { A2AMessage } from "./protocol";
 import type {
   A2AStatusUpdateEvent,
   A2AArtifactUpdateEvent,
@@ -64,6 +125,7 @@ const CTX: CapabilityContext = {
 };
 
 const TASK: A2ATaskRow = {
+  id: "task-uuid-1",
   publicId: "a2a_1",
   contextId: "ctx_1",
   state: "submitted",
@@ -78,11 +140,21 @@ const HISTORY = [
   { kind: "message" as const, role: "user" as const, parts: [{ kind: "text" as const, text: "hi" }], messageId: "m1" },
 ];
 
+const USER_MESSAGE: A2AMessage = HISTORY[0]!;
+
 beforeEach(() => {
   setStreamParts([]);
   streamAgentReply.mockClear();
   updateTask.mockClear();
   insertEvents.mockClear();
+  loadTask.mockClear();
+  resolveAgentForA2A.mockClear();
+  loadTask.mockResolvedValue(null);
+  resolveAgentForA2A.mockResolvedValue(null);
+  dbState.insertedValues = [];
+  dbState.updatedSets = [];
+  dbState.selectResult = [];
+  dbState.insertReturns = { id: "exec_new" };
 });
 
 describe("messageText", () => {
@@ -114,6 +186,7 @@ describe("runA2ATask", () => {
       ctx: CTX,
       task: TASK,
       history: HISTORY,
+      message: USER_MESSAGE,
       onEvent: (e) => events.push(e),
     });
 
@@ -147,6 +220,7 @@ describe("runA2ATask", () => {
       ctx: CTX,
       task: TASK,
       history: HISTORY,
+      message: USER_MESSAGE,
       onEvent: (e) => events.push(e),
     });
     expect(final.state).toBe("failed");
@@ -161,7 +235,7 @@ describe("runA2ATask", () => {
 
   it("runs without onEvent (message/send blocking path)", async () => {
     setStreamParts([{ type: "text-delta", text: "ok" }]);
-    const final = await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY });
+    const final = await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, message: USER_MESSAGE });
     expect(final.state).toBe("completed");
   });
 
@@ -172,7 +246,13 @@ describe("runA2ATask", () => {
       { type: "finish", totalUsage: { inputTokens: 1, outputTokens: 1 } },
     ]);
     const events: Array<A2AStatusUpdateEvent | A2AArtifactUpdateEvent> = [];
-    await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, onEvent: (e) => events.push(e) });
+    await runA2ATask({
+      ctx: CTX,
+      task: TASK,
+      history: HISTORY,
+      message: USER_MESSAGE,
+      onEvent: (e) => events.push(e),
+    });
     const heartbeat = events.find((e) => {
       if (e.kind !== "status-update") return false;
       const part = e.status.message?.parts[0];
@@ -185,14 +265,161 @@ describe("runA2ATask", () => {
     streamAgentReply.mockImplementationOnce(() => {
       throw new Error("model down");
     });
-    const final = await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY });
+    const final = await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, message: USER_MESSAGE });
     expect(final.state).toBe("failed");
     expect(final.errorMessage).toBe("model down");
   });
 
   it("honors an explicit model override", async () => {
     setStreamParts([{ type: "text-delta", text: "ok" }]);
-    await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, model: "gpt-x" });
+    await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, message: USER_MESSAGE, model: "gpt-x" });
     expect(streamAgentReply).toHaveBeenCalledOnce();
+  });
+});
+
+describe("runA2ATask — skill-addressed routing (spec §3.1)", () => {
+  it("falls back to the generic baseline when the message carries no skillId", async () => {
+    setStreamParts([{ type: "text-delta", text: "ok" }]);
+    await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, message: USER_MESSAGE });
+    expect(resolveAgentForA2A).not.toHaveBeenCalled();
+  });
+
+  it("resolves an active/deployed skill and layers its instructions over the chat baseline", async () => {
+    resolveAgentForA2A.mockResolvedValueOnce({
+      id: "agt-uuid-1",
+      publicId: "agt_1",
+      slug: "billing-bot",
+      name: "Billing Bot",
+      description: null,
+      agentType: "custom",
+      status: "active",
+      deploymentStatus: "active",
+      activeVersionId: "ver-1",
+      activeVersion: { id: "ver-1", instructions: "Only discuss billing." },
+    });
+    setStreamParts([{ type: "text-delta", text: "ok" }]);
+    const messageWithSkill: A2AMessage = {
+      ...USER_MESSAGE,
+      metadata: { skillId: "billing-bot" },
+    };
+    await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, message: messageWithSkill });
+    expect(resolveAgentForA2A).toHaveBeenCalledWith("ws_1", "billing-bot");
+    // The task row's routing column is updated in the same "working" transition write.
+    const workingCall = updateTask.mock.calls.find(
+      (c) => (c[2] as Record<string, unknown>).state === "working",
+    );
+    expect((workingCall?.[2] as Record<string, unknown>).agentId).toBe("agt-uuid-1");
+  });
+
+  it("falls back to generic (never throws) when resolveAgentForA2A rejects", async () => {
+    resolveAgentForA2A.mockRejectedValueOnce(new Error("db down"));
+    setStreamParts([{ type: "text-delta", text: "ok" }]);
+    const messageWithSkill: A2AMessage = {
+      ...USER_MESSAGE,
+      metadata: { skillId: "flaky-skill" },
+    };
+    const final = await runA2ATask({
+      ctx: CTX,
+      task: TASK,
+      history: HISTORY,
+      message: messageWithSkill,
+    });
+    expect(final.state).toBe("completed");
+  });
+
+  it("falls back to generic when the skillId names an unknown/inactive agent", async () => {
+    resolveAgentForA2A.mockResolvedValueOnce(null);
+    setStreamParts([{ type: "text-delta", text: "ok" }]);
+    const messageWithSkill: A2AMessage = {
+      ...USER_MESSAGE,
+      metadata: { skillId: "archived-agent" },
+    };
+    const final = await runA2ATask({
+      ctx: CTX,
+      task: TASK,
+      history: HISTORY,
+      message: messageWithSkill,
+    });
+    expect(final.state).toBe("completed");
+    const workingCall = updateTask.mock.calls.find(
+      (c) => (c[2] as Record<string, unknown>).state === "working",
+    );
+    expect((workingCall?.[2] as Record<string, unknown>).agentId).toBeNull();
+  });
+});
+
+describe("runA2ATask — agent_executions lineage (spec §3.2)", () => {
+  it("inserts one agent_executions row (originType a2a) on the working transition, updated on completion", async () => {
+    setStreamParts([
+      { type: "text-delta", text: "hi" },
+      { type: "finish", totalUsage: { inputTokens: 3, outputTokens: 2 } },
+    ]);
+    await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, message: USER_MESSAGE });
+
+    expect(dbState.insertedValues).toHaveLength(1);
+    const inserted = dbState.insertedValues[0]!;
+    expect(inserted.originType).toBe("a2a");
+    expect(inserted.originId).toBe(TASK.id);
+    expect(inserted.status).toBe("running");
+    expect(inserted.parentExecutionId).toBeNull();
+
+    expect(dbState.updatedSets).toHaveLength(1);
+    const updated = dbState.updatedSets[0]!;
+    expect(updated.status).toBe("completed");
+    expect(updated.inputTokens).toBe(3);
+    expect(updated.outputTokens).toBe(2);
+  });
+
+  it("marks the execution row failed on a stream error", async () => {
+    setStreamParts([{ type: "error", error: "boom" }]);
+    await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, message: USER_MESSAGE });
+    expect(dbState.updatedSets).toHaveLength(1);
+    expect(dbState.updatedSets[0]!.status).toBe("failed");
+    expect(dbState.updatedSets[0]!.failureReason).toBe("boom");
+  });
+
+  it("chains parentExecutionId from message.referenceTaskIds[0]", async () => {
+    loadTask.mockResolvedValueOnce({
+      id: "prior-task-uuid",
+      publicId: "a2a_prior",
+      contextId: "ctx_1",
+      state: "completed",
+      messageHistory: [],
+      artifacts: [],
+      statusMessage: null,
+      errorMessage: null,
+      updatedAt: new Date(),
+    } satisfies A2ATaskRow);
+    dbState.selectResult = [{ id: "prior-exec-uuid" }];
+    setStreamParts([{ type: "text-delta", text: "ok" }]);
+
+    const referencing: A2AMessage = {
+      ...USER_MESSAGE,
+      referenceTaskIds: ["a2a_prior"],
+    };
+    await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, message: referencing });
+
+    expect(loadTask).toHaveBeenCalledWith(CTX, "a2a_prior");
+    expect(dbState.insertedValues[0]!.parentExecutionId).toBe("prior-exec-uuid");
+  });
+
+  it("leaves parentExecutionId null when the referenced task can't be resolved", async () => {
+    loadTask.mockResolvedValueOnce(null);
+    setStreamParts([{ type: "text-delta", text: "ok" }]);
+    const referencing: A2AMessage = {
+      ...USER_MESSAGE,
+      referenceTaskIds: ["a2a_missing"],
+    };
+    await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, message: referencing });
+    expect(dbState.insertedValues[0]!.parentExecutionId).toBeNull();
+  });
+
+  it("does not fail the task when the agent_executions insert throws (best-effort lineage)", async () => {
+    dbState.insertReturns = null;
+    setStreamParts([{ type: "text-delta", text: "ok" }]);
+    const final = await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, message: USER_MESSAGE });
+    expect(final.state).toBe("completed");
+    // No executionId (insert returned no row) — the terminal update never runs.
+    expect(dbState.updatedSets).toHaveLength(0);
   });
 });

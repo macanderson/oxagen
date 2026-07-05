@@ -1,5 +1,6 @@
 import { withTenantDb, schema } from "@oxagen/database";
 import { and, asc, eq, inArray } from "drizzle-orm";
+import { createSession, appendEvent, analyzeReplay, extractTurnMetrics } from "@oxagen/engram";
 import type { CapabilityContext } from "../types";
 import type {
   AgentTraceGetInput,
@@ -285,5 +286,54 @@ export async function agentTraceGetHandler(
     };
   }
 
-  return build(rootId);
+  const root = build(rootId);
+  const { turnMetrics, replayDeterministic } = deriveTurnMetrics(root, ctx);
+  return { ...root, turnMetrics, replayDeterministic };
+}
+
+/**
+ * Treat each of the root execution's steps as one "turn" of a synthetic
+ * @oxagen/engram Session, then reuse session/replay.ts's extractTurnMetrics
+ * (per-step compile time / tokens / tool-call count / outcome) and
+ * analyzeReplay (a determinism sanity-check over the synthesized metrics) to
+ * power the trace UI's per-step metrics panel. Postgres execution rows don't
+ * carry engram's context-compile cache telemetry (candidatesRetrieved/
+ * cacheHitRate), so those fields are always 0/omitted here — this reuses the
+ * turn/tool-call/outcome shape, not the context-compile-specific one.
+ */
+function deriveTurnMetrics(
+  root: TraceExecutionNode,
+  ctx: CapabilityContext,
+): { turnMetrics: NonNullable<TraceExecutionNode["turnMetrics"]>; replayDeterministic: boolean } {
+  const session = createSession(root.executionId, { org: ctx.orgId, workspace: ctx.workspaceId });
+  for (const step of root.steps) {
+    const totalTokens = (step.inputTokens ?? 0) + (step.outputTokens ?? 0);
+    appendEvent(session, "turn_start", step.stepId, {});
+    appendEvent(session, "context_compiled", step.stepId, {
+      candidatesRetrieved: 0,
+      candidatesPacked: 0,
+      candidatesEvicted: 0,
+      totalTokens,
+      cacheHitRate: 0,
+      compileMs: step.latencyMs ?? 0,
+    });
+    for (const tc of step.toolCalls) {
+      appendEvent(session, "tool_call", step.stepId, { tool: tc.toolName, input: null });
+    }
+    appendEvent(session, "turn_end", step.stepId, {
+      outcome: step.status === "completed" ? "success" : step.status === "failed" ? "failure" : "interrupted",
+      totalTokens,
+      durationMs: step.latencyMs ?? 0,
+    });
+  }
+  const turnMetrics = extractTurnMetrics(session).map((m) => ({
+    turnId: m.turnId,
+    compileMs: m.compileMs,
+    tokens: m.tokens,
+    cacheHitRate: m.cacheHitRate,
+    toolCalls: m.toolCalls,
+    outcome: m.outcome,
+  }));
+  const replay = analyzeReplay(session);
+  return { turnMetrics, replayDeterministic: replay.deterministic };
 }

@@ -337,7 +337,7 @@ export const agentExecutions = agentSchema.table(
     // packages/oxagen/src/contracts/agent.execution.record.ts.
     originTypeCheck: check(
       "agent_executions_origin_type_check",
-      sql`${t.originType} IN ('chat', 'event_trigger', 'scheduled_job', 'mcp_request', 'workflow_run', 'fanout')`,
+      sql`${t.originType} IN ('chat', 'event_trigger', 'scheduled_job', 'mcp_request', 'workflow_run', 'fanout', 'a2a')`,
     ),
   }),
 );
@@ -511,11 +511,22 @@ export const a2aTasks = agentSchema.table(
     errorMessage: text("error_message"),
     // Arbitrary caller/agent metadata carried on the task.
     metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+    // Which agent this task is/was addressed to (routing input — the
+    // resolved skillId target). App-enforced ref to agent.agents.id; null
+    // when the task ran the generic chat baseline (no skillId, or an
+    // unknown/inactive one, which falls back rather than 500ing).
+    agentId: uuid("agent_id"),
+    // Set only when this task was opened from inside a leased subagent run
+    // (agent.subagent_runs.id), so a fanout child and the A2A task it opened
+    // can be joined. App-enforced ref, no cross-table FK (spec §3.3).
+    fanoutRunId: uuid("fanout_run_id"),
   },
   (t) => ({
     orgIdx: index("a2a_tasks_org_idx").on(t.orgId, t.workspaceId),
     contextIdx: index("a2a_tasks_context_idx").on(t.workspaceId, t.contextId),
     stateIdx: index("a2a_tasks_state_idx").on(t.orgId, t.workspaceId, t.state),
+    // "List this agent's A2A tasks" — paginated per performance conventions.
+    agentIdx: index("a2a_tasks_agent_idx").on(t.orgId, t.workspaceId, t.agentId),
     stateCheck: check(
       "a2a_tasks_state_check",
       sql`${t.state} IN ('submitted','working','input-required','auth-required','completed','canceled','failed','rejected','unknown')`,

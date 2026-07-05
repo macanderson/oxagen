@@ -108,6 +108,77 @@ export async function resolveAgent(
   return tx ? run(tx) : withTenantDb(run);
 }
 
+/**
+ * An agent resolved for A2A skill addressing, with its active version's
+ * instructions inlined so the caller (the A2A bridge) doesn't need a second
+ * round trip to compose the per-skill system prompt.
+ */
+export interface AgentForA2A extends AgentRow {
+  activeVersion: { id: string; instructions: string | null } | null;
+}
+
+/**
+ * Resolve a workspace agent by slug for A2A skill addressing
+ * (message.metadata.skillId — spec docs/specs/a2a-agent-identity/spec.md §3.1).
+ *
+ * Deliberately stricter than `resolveAgent`: matches by slug ONLY (skillId is
+ * always the agent's slug, per the a2a.card.get skill listing), and requires
+ * `status='active' AND deploymentStatus='active'` — the same gate
+ * a2a.card.get uses to decide whether to list the skill at all, so a stale or
+ * since-archived skillId can never resolve to a definition the card no longer
+ * advertises. Returns null (never throws) when nothing matches — the A2A
+ * bridge falls back to the generic chat baseline rather than failing the task.
+ */
+export async function resolveAgentForA2A(
+  workspaceId: string,
+  slug: string,
+  tx?: Tx,
+): Promise<AgentForA2A | null> {
+  const run = async (d: Tx): Promise<AgentForA2A | null> => {
+    const [row] = await d
+      .select({
+        ...agentColumns,
+        activeVersionId2: schema.agentVersions.id,
+        activeVersionConfig: schema.agentVersions.config,
+      })
+      .from(schema.agents)
+      .leftJoin(
+        schema.agentVersions,
+        eq(schema.agentVersions.id, schema.agents.activeVersionId),
+      )
+      .where(
+        and(
+          eq(schema.agents.workspaceId, workspaceId),
+          eq(schema.agents.slug, slug),
+          eq(schema.agents.status, "active"),
+          eq(schema.agents.deploymentStatus, "active"),
+          isNull(schema.agents.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!row) return null;
+    const config = (row.activeVersionConfig ?? null) as {
+      instructions?: string;
+    } | null;
+    return {
+      id: row.id,
+      publicId: row.publicId,
+      slug: row.slug,
+      name: row.name,
+      description: row.description,
+      agentType: row.agentType,
+      // Both are already gated to these exact values by the WHERE clause above.
+      status: row.status as "active",
+      deploymentStatus: row.deploymentStatus as "active",
+      activeVersionId: row.activeVersionId,
+      activeVersion: row.activeVersionId2
+        ? { id: row.activeVersionId2, instructions: config?.instructions ?? null }
+        : null,
+    };
+  };
+  return tx ? run(tx) : withTenantDb(run);
+}
+
 export interface TriggerRow {
   id: string;
   publicId: string;

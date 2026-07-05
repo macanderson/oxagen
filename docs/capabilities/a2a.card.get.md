@@ -19,6 +19,18 @@ the card; the unauthenticated discovery document is served separately at
 Skills on the card are derived from the workspace's active agent definitions
 plus a baseline general-purpose conversational skill.
 
+**Addressing a skill.** Each listed skill's `id` is the agent's slug. A caller
+addresses that agent on `message/send`/`message/stream` by putting the slug in
+`message.metadata.skillId`; the task then runs with that agent's active-version
+`instructions` layered over the generic chat baseline instead of the generic
+prompt alone. An unknown or since-deactivated `skillId` (status/deploymentStatus
+no longer `active`) falls back to the generic baseline rather than erroring —
+the same gate this capability uses to decide whether to list the skill at all.
+Every resulting task is recorded as an `agent_executions` row (`originType:
+'a2a'`), with `parentExecutionId` chained from `message.referenceTaskIds[0]`
+when the caller references a prior task, so `agent.trace.get` renders full A2A
+conversation chains. See `docs/specs/a2a-agent-identity/spec.md`.
+
 ## Input
 
 | Field     | Type      | Notes                                                                                             |

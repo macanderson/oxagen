@@ -115,4 +115,23 @@ describe("SpanTree", () => {
     await user.click(copyBtns[0]!);
     await expect(navigator.clipboard.readText()).resolves.toBe("aex_root");
   });
+
+  it("renders turn metrics + determinism badge when the handler populates them (OXA-2071)", () => {
+    const withMetrics: AgentTraceGetOutput = {
+      ...trace(),
+      turnMetrics: [
+        { turnId: "aes_1", compileMs: 1000, tokens: 15, cacheHitRate: 0, toolCalls: 1, outcome: "success" },
+      ],
+      replayDeterministic: true,
+    };
+    render(<SpanTree trace={withMetrics} />);
+    expect(screen.getByText("Turn metrics")).toBeInTheDocument();
+    expect(screen.getByText("deterministic")).toBeInTheDocument();
+    expect(screen.getByText(/1000ms · 15 tok · 1 tool · success/)).toBeInTheDocument();
+  });
+
+  it("omits the turn-metrics panel when the handler didn't populate it", () => {
+    render(<SpanTree trace={trace()} />);
+    expect(screen.queryByText("Turn metrics")).not.toBeInTheDocument();
+  });
 });

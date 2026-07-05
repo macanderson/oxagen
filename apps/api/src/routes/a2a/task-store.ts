@@ -14,6 +14,8 @@ type Scope = Pick<CapabilityContext, "orgId" | "workspaceId" | "userId" | "apiKe
 
 /** Persisted A2A task row projected to the fields the transport needs. */
 export interface A2ATaskRow {
+  /** Internal UUID — the value agent_executions.origin_id / a2a_tasks.agent_id joins reference. Never sent on the wire (the wire taskId is publicId). */
+  id: string;
   publicId: string;
   contextId: string;
   state: A2ATaskState;
@@ -77,12 +79,14 @@ export async function createTask(
           updatedByUserId: authorId(ctx),
         })
         .returning({
+          id: schema.a2aTasks.id,
           publicId: schema.a2aTasks.publicId,
           contextId: schema.a2aTasks.contextId,
           updatedAt: schema.a2aTasks.updatedAt,
         });
       if (!inserted) throw new Error("Failed to create A2A task");
       return {
+        id: inserted.id,
         publicId: inserted.publicId,
         contextId: inserted.contextId,
         state: "submitted" as const,
@@ -132,6 +136,7 @@ export async function loadTask(
     withTenantDb(async (tx) => {
       const [row] = await tx
         .select({
+          id: schema.a2aTasks.id,
           publicId: schema.a2aTasks.publicId,
           contextId: schema.a2aTasks.contextId,
           state: schema.a2aTasks.state,
@@ -152,6 +157,7 @@ export async function loadTask(
         .limit(1);
       if (!row) return null;
       return {
+        id: row.id,
         publicId: row.publicId,
         contextId: row.contextId,
         state: row.state as A2ATaskState,
@@ -165,7 +171,7 @@ export async function loadTask(
   );
 }
 
-/** Patch a task's state / artifacts / history / status message. */
+/** Patch a task's state / artifacts / history / status message / routing. */
 export async function updateTask(
   ctx: CapabilityContext,
   taskId: string,
@@ -175,12 +181,17 @@ export async function updateTask(
     appendMessages?: A2AMessage[];
     statusMessage?: A2AMessage | null;
     errorMessage?: string | null;
+    /** Resolved skillId target (agent.agents.id) — set once, at skill resolution. */
+    agentId?: string | null;
+    /** subagent_runs.id this task was opened from, if any (spec §3.3). */
+    fanoutRunId?: string | null;
   },
 ): Promise<A2ATaskRow | null> {
   return runInTenantScope(scopeOf(ctx), () =>
     withTenantDb(async (tx) => {
       const [current] = await tx
         .select({
+          id: schema.a2aTasks.id,
           publicId: schema.a2aTasks.publicId,
           contextId: schema.a2aTasks.contextId,
           state: schema.a2aTasks.state,
@@ -227,6 +238,14 @@ export async function updateTask(
           errorMessage: nextError,
           updatedAt: new Date(),
           updatedByUserId: authorId(ctx),
+          // Routing/lineage columns are set-once-when-known — only touch the
+          // column when the caller actually passed a value, so an unrelated
+          // lifecycle update (e.g. the terminal-state patch) never clobbers a
+          // resolution written by an earlier patch in the same task's life.
+          ...(patch.agentId !== undefined ? { agentId: patch.agentId } : {}),
+          ...(patch.fanoutRunId !== undefined
+            ? { fanoutRunId: patch.fanoutRunId }
+            : {}),
         })
         .where(
           and(
@@ -237,6 +256,7 @@ export async function updateTask(
         .returning({ updatedAt: schema.a2aTasks.updatedAt });
 
       return {
+        id: current.id,
         publicId: current.publicId,
         contextId: current.contextId,
         state: nextState,

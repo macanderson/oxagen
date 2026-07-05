@@ -103,6 +103,13 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
     "- Before editing a file you have not read this session, `read_file` it first.",
     "- Use `bash` for builds, tests, git, and anything the dedicated tools don't cover.",
     "- Keep changes minimal and consistent with the surrounding code's style and conventions.",
+    "- Cross-agent interop (A2A): the platform also exposes deployed agents over the",
+    "  Agent2Agent (A2A) JSON-RPC protocol. An external caller addresses a specific agent by",
+    "  its slug via `message.metadata.skillId` (unknown/inactive slugs fall back to the",
+    "  generic agent rather than erroring), can live-attach to an in-flight task's event",
+    "  stream via `tasks/resubscribe` instead of polling, and every A2A-originated execution",
+    "  now shows up in `agent.trace.get`/`oxagen trace` lineage the same way subagent",
+    "  fan-out runs do.",
   ];
 
   if (profile === "headless") {
