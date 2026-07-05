@@ -5,6 +5,7 @@ Durable instincts recorded by `eval-*` evaluator agents and the break-fix agent.
 Format: `- [title](file-name.md) — one-line hook · type (bug|observation) · YYYY-MM-DD HH:mm[am|pm] GMT`
 
 <!-- entries below, newest first -->
+- [stagekind-already-single-sourced-oxa-2028](stagekind-already-single-sourced-oxa-2028.md) — OXA-2028 (single-source StageKind) already fixed on main by prior commits 77b34576/f2b5980a (PR #570) before this worktree was cut; no code changes needed, "memory" stage never existed as a StageKind member · observation · 2026-07-04
 - [ai-charge-credits-needs-tenant-scope-in-inngest](ai-charge-credits-needs-tenant-scope-in-inngest.md) — @oxagen/ai post-call credit charges (video/object/image/embed) threw TenantScopeError + were swallowed in Inngest context (no ambient scope) → free generations; wrap charge in runInTenantScope from telemetry orgId/workspaceId like stream.ts · bug · 2026-07-02
 - [repl-pump-unhandled-rejection-wedge](repl-pump-unhandled-rejection-wedge.md) — a failing REPL turn abandoned every queued prompt + escaped as an unhandled rejection; init throw left the spinner stuck; per-turn try/catch in the pump + init inside the try/finally · bug · 2026-06-28
 - [repl-session-memory-unmount-leak](repl-session-memory-unmount-leak.md) — REPL leaked its DuckDB session-memory handle when it unmounted before the async open resolved; cancellation guard closes the post-unmount handle · bug · 2026-06-28
