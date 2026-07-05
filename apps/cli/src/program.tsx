@@ -655,6 +655,65 @@ export function buildProgram(): Command {
       await handleA2ACard({ json: opts.json });
     });
 
+  // ── file-lock: manual acquire/release/introspection over agent file locks ──
+  const fileLock = program
+    .command("file-lock")
+    .description(
+      "Inspect or manage the workspace's agent file locks (HOLDS_LOCK edges) — the same locks write_file/edit_file acquire automatically",
+    );
+  fileLock
+    .command("list")
+    .description("List every currently-live file lock in the workspace, optionally filtered to one file")
+    .option("--path <path>", "File path (or naturalKey) to filter to")
+    .option("--owner <owner>", "GitHub owner — combined with --repo + --path to derive the naturalKey filter")
+    .option("--repo <repo>", "GitHub repo — see --owner")
+    .option("--json", "Output as JSON")
+    .action(
+      async (opts: { path?: string; owner?: string; repo?: string; json?: boolean }) => {
+        const { handleFileLockList } = await import("./commands/file-lock.js");
+        await handleFileLockList(opts);
+      },
+    );
+  fileLock
+    .command("acquire <path>")
+    .description(
+      "Acquire (or renew) an exclusive, TTL-bounded lock on a file so no two agents edit it concurrently",
+    )
+    .option("--owner <owner>", "GitHub owner — combined with --repo to derive the naturalKey")
+    .option("--repo <repo>", "GitHub repo — see --owner")
+    .option("--action <action>", "Free-text action label stored on the lock edge: read|write (default write)")
+    .option("--ttl-ms <n>", "Lease length in ms (default 300000 = 5 minutes; capped at 1 hour)")
+    .option("--agent-id <id>", "Identity to hold the lock as (default: the calling user/api-key id)")
+    .option("--execution-id <id>", "Correlates this lock for a later batch/manual release")
+    .option("--json", "Output as JSON")
+    .action(
+      async (
+        path: string,
+        opts: {
+          owner?: string;
+          repo?: string;
+          action?: string;
+          ttlMs?: string;
+          agentId?: string;
+          executionId?: string;
+          json?: boolean;
+        },
+      ) => {
+        const { handleFileLockAcquire } = await import("./commands/file-lock.js");
+        await handleFileLockAcquire(path, opts);
+      },
+    );
+  fileLock
+    .command("release <lockId>")
+    .description(
+      "Force-release a file lock by its lockId — for clearing a lock a crashed/stuck agent left behind",
+    )
+    .option("--json", "Output as JSON")
+    .action(async (lockId: string, opts: { json?: boolean }) => {
+      const { handleFileLockRelease } = await import("./commands/file-lock.js");
+      await handleFileLockRelease(lockId, opts);
+    });
+
   // ── memory: manage the workspace's agent memories ───────────────────────────
 
   const memory = program

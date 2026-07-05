@@ -288,45 +288,6 @@ export type {
 export type { ReplayStep, ReplayResult } from "./session/replay";
 
 // ---------------------------------------------------------------------------
-// Phase E: Multi-Agent Blackboard
-// ---------------------------------------------------------------------------
-
-export { BlackboardBus } from "./blackboard/bus";
-export {
-  enforceAccess,
-  hasAccess,
-  defaultAgentPermissions,
-  NamespaceAccessError as BlackboardAccessError,
-} from "./blackboard/access-control";
-export type {
-  AgentPermissions,
-  NamespaceGrant,
-} from "./blackboard/access-control";
-export { IntentLedger } from "./blackboard/intent";
-export type { Intent, IntentStatus, ClaimResult } from "./blackboard/intent";
-export { LeaseManager } from "./blackboard/lease";
-export type { Lease, LeaseResult } from "./blackboard/lease";
-export { AgentCoordinator } from "./blackboard/coordinator";
-export type {
-  WorkDecision,
-  CoordinationResult,
-} from "./blackboard/coordinator";
-export {
-  traceLineage,
-  findDerived,
-  agentContributionStats,
-} from "./blackboard/lineage";
-export type { LineageNode, LineageChain } from "./blackboard/lineage";
-export type {
-  BlackboardConfig,
-  AgentRegistration,
-  BlackboardEvent,
-  BlackboardEventType,
-  BlackboardPriority,
-  SubscriptionPattern,
-} from "./blackboard/types";
-
-// ---------------------------------------------------------------------------
 // Phase F: Sync, CRDTs, and Eval
 // ---------------------------------------------------------------------------
 

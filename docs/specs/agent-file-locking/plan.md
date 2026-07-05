@@ -185,10 +185,12 @@ heldBy?, blockedUntil? }`.
 
 - Needs a `HOLDS_LOCK` `EdgeType` and three new mutations — net-new graph surface,
   but reuses `:SourceFile` + `naturalKey` so no new node identity.
-- The restored `IntentLedger`/`LeaseManager`/`AgentCoordinator` stay in-memory for
+- ~~The restored `IntentLedger`/`LeaseManager`/`AgentCoordinator` stay in-memory for
   single-process use; the graph handlers are the durable, cross-process path. Decide
   whether the coordinator delegates to the graph handlers or is retired in favor of
-  the contracts (recommend: coordinator becomes a thin client of the contracts).
+  the contracts (recommend: coordinator becomes a thin client of the contracts).~~
+  **Resolved in OXA-2075:** the blackboard module was retired (deleted) rather
+  than made a thin client — see §11(b).
 - Requires a running Neo4j in the agent-execution runtime (already present for
   lineage), plus `bootstrapEntitlementRuntime()` at any new worker entrypoint.
 
@@ -244,14 +246,25 @@ bounded retry, clear "Blocked" denial), `packages/agent-engine/src/pipeline/inde
 `packages/handlers/src/agent.repo.edit.ts`.
 
 The restored `IntentLedger`/`LeaseManager`/`AgentCoordinator`
-(`packages/engram/src/blackboard/`) were deliberately NOT touched — they
-remain in-memory/single-process/unwired, exactly as PR #600 left them. The
-graph-backed path wires directly into `tools.ts` instead of routing through
-the blackboard, which is a cleaner fit than making the blackboard a "thin
-client" of the contracts (§10's suggestion) since the coordinator's
+(`packages/engram/src/blackboard/`) were deliberately NOT touched in OXA-2070 —
+they remained in-memory/single-process/unwired, exactly as PR #600 left them.
+The graph-backed path wires directly into `tools.ts` instead of routing
+through the blackboard, which is a cleaner fit than making the blackboard a
+"thin client" of the contracts (§10's suggestion) since the coordinator's
 `beforeWork`/`afterWork` shape doesn't map cleanly onto a per-tool-call
-acquire/release. Retiring or repurposing the blackboard classes is left as a
-follow-up decision, not part of this ticket.
+acquire/release.
+
+**Update (OXA-2075): the blackboard module has been retired (deleted).**
+`packages/engram/src/blackboard/` (and its re-exports from
+`packages/engram/src/index.ts`) is gone as of this ticket. Rationale: it was
+superseded by the graph-backed locks wired into `tools.ts` above; a repo-wide
+consumer sweep (`grep` for the module path plus the bare class names
+`IntentLedger`/`LeaseManager`/`AgentCoordinator`/`BlackboardBus` across
+`packages/` and `apps/`) turned up zero real consumers outside the module's
+own tests, so keeping it around would only be dead code per this repo's
+prime directive. If a single-process, non-graph coordination primitive is
+ever needed again, it is fully recoverable from git history at PR #541
+(original add) / PR #600 (restore) — do not treat this as data loss.
 
 **(c) Tests — done.** Unit tests for every mutation/handler/contract/adapter;
 a `tools.file-lock.test.ts` + `pipeline.file-lock.test.ts` suite in
