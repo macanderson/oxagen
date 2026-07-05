@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.1
+
+_Changes since v0.11.0._
+
+- chore(release): v1.0.0 (134cbd01) — macanderson
+
 ## v1.0.0
 
 _Changes since v0.11.0._
