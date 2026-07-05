@@ -222,13 +222,16 @@ describe("assetUploadHandler — oversize rejection", () => {
 
 describe("assetUploadHandler — disallowed content-type rejection", () => {
   it("rejects when the server returns an unsupported content type", async () => {
+    // gif is allowed for "image" (agent screenshots/recordings are commonly
+    // gif) — use svg, which isn't in any kind's allowlist, to stay genuinely
+    // unsupported regardless of future allowlist changes.
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      makeResponse(pngBuffer(), "image/gif"), // gif is not allowed
+      makeResponse(pngBuffer(), "image/svg+xml"),
     );
 
     await expect(
       assetUploadHandler(
-        { sourceUrl: "https://example.com/anim.gif", kind: "image" },
+        { sourceUrl: "https://example.com/icon.svg", kind: "image" },
         validCtx,
       ),
     ).rejects.toThrow(/Unsupported/i);
