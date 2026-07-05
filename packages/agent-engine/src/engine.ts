@@ -84,6 +84,13 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
         onEvent,
         // Forward the turn signal so an aborted turn kills any in-flight bash subtree.
         signal: opts.signal,
+        // Agent file locking (docs/specs/agent-file-locking/plan.md) — the
+        // SINGLE wiring point: write_file/edit_file acquire before the real
+        // write and release after, for every caller of runCodingAgent (chat,
+        // CLI, agent.repo.edit fleet dispatch) alike. Undefined ⇒ unlocked
+        // (the CLI's default).
+        fileLock: opts.fileLock,
+        lockContext: opts.lockContext,
       })
     : ({} as ToolSet);
   // Merge caller-supplied extra tools (e.g. MCP), then apply the caller's final

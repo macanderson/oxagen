@@ -1,5 +1,5 @@
 import type { ModelMessage, ToolSet } from "ai";
-import type { AgentAi, MemoryProvider, TraceStore } from "./ports";
+import type { AgentAi, MemoryProvider, TraceStore, FileLockProvider } from "./ports";
 
 /**
  * A non-fatal internal failure the engine surfaces through `onError` instead of
@@ -234,6 +234,24 @@ export interface RunCodingAgentOptions {
   codeMap?: CodeMapProvider;
   memory?: MemoryProvider;
   trace?: TraceStore;
+  /**
+   * Graph-backed file lock (docs/specs/agent-file-locking/plan.md). Omitted
+   * (undefined) ⇒ `write_file`/`edit_file` proceed unlocked — the CLI's
+   * single-process, no-shared-Neo4j default. When supplied, `lockContext`
+   * MUST also be supplied so the tool executor has an identity to acquire
+   * under.
+   */
+  fileLock?: FileLockProvider | null;
+  /**
+   * Identity the file-lock port acquires/releases under. `agentId` MUST be
+   * stable across every `runCodingAgent` call within the SAME turn (so a
+   * revision round renews its own lock instead of conflicting with itself)
+   * but DIFFERENT across concurrently-running turns/subagent children (so two
+   * live agents correctly see each other as conflicting holders).
+   * `executionId` correlates every lock this turn holds for the turn-end
+   * batch release. Ignored when `fileLock` is not supplied.
+   */
+  lockContext?: { agentId: string; executionId: string };
   signal?: AbortSignal;
   onEvent?: (e: CodingEvent) => void;
   /**
