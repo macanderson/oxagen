@@ -46,8 +46,7 @@ export default async function WorkspacePluginsPage({ params }: PageProps) {
   );
 
   // Fetch workspace-scoped installed plugins.
-  let pluginsLoadError = false;
-  const installedPlugins = await runInTenantScope(
+  const installedPluginsRead = await runInTenantScope(
     { orgId: org.id, workspaceId: ws.id },
     () =>
       withTenantDb((tx) =>
@@ -63,16 +62,23 @@ export default async function WorkspacePluginsPage({ params }: PageProps) {
           )
           .orderBy(schema.pluginInstalledPlugins.name),
       ),
-  ).catch((err) => {
-    // Non-fatal: render an empty list but surface a load-error notice so an
-    // RLS/DB failure doesn't look like "no plugins installed" to the user.
-    pluginsLoadError = true;
-    logger.error(
-      { err, orgSlug, workspaceSlug },
-      "plugins: installed-plugins read failed — rendering empty list with load-error notice",
-    );
-    return [] as (typeof schema.pluginInstalledPlugins.$inferSelect)[];
-  });
+  ).then(
+    (data) => ({ data, failed: false as const }),
+    (err) => {
+      // Non-fatal: render an empty list but surface a load-error notice so an
+      // RLS/DB failure doesn't look like "no plugins installed" to the user.
+      logger.error(
+        { err, orgSlug, workspaceSlug },
+        "plugins: installed-plugins read failed — rendering empty list with load-error notice",
+      );
+      return {
+        data: [] as (typeof schema.pluginInstalledPlugins.$inferSelect)[],
+        failed: true as const,
+      };
+    },
+  );
+  const installedPlugins = installedPluginsRead.data;
+  const pluginsLoadError = installedPluginsRead.failed;
 
   // Fetch workspace-scoped registries via contract.
   const ctx = {
