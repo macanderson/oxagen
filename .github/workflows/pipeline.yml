@@ -445,10 +445,24 @@ jobs:
             fi
           fi
           DIFF="$(git diff --name-only "${BASE}"...HEAD)"
+          echo "migration change-detection base=${BASE} event=${EVENT_NAME}"
+          echo "changed files:"; echo "$DIFF"
           PG=false; CH=false; NEO=false
           echo "$DIFF" | grep -qE '^packages/database/atlas/migrations/' && PG=true
           echo "$DIFF" | grep -qE '^packages/telemetry/' && CH=true
           echo "$DIFF" | grep -qE '^packages/ontology/src/.*\.cypher$' && NEO=true
+          # Prod Postgres safety net: on push to main, ALWAYS reconcile Postgres
+          # via `atlas migrate apply` regardless of the diff. Atlas applies only
+          # PENDING revisions and no-ops when the DB is current, so this is
+          # idempotent and cheap. Relying on git-diff detection silently skipped
+          # prod migrations whenever the computed base drifted (e.g. squash-merge
+          # base mismatch), leaving the live schema behind deployed code — the
+          # root cause of the two_factor_enabled auth outage. Atlas's revision
+          # ledger, not a git diff, is the source of truth for what prod is
+          # missing. (push only fires on main — see on.push.branches above.)
+          if [ "$EVENT_NAME" = "push" ]; then
+            PG=true
+          fi
           STORES=""
           [ "$CH" = "true" ] && STORES="clickhouse"
           [ "$NEO" = "true" ] && STORES="${STORES:+$STORES,}neo4j"
