@@ -28,6 +28,7 @@ import {
   updateTask,
 } from "./task-store";
 import { runA2ATask } from "./bridge";
+import { subscribe } from "./stream-registry";
 
 export const a2aRpcRoute = new Hono<AppEnv>();
 
@@ -99,7 +100,7 @@ a2aRpcRoute.post("/", async (c) => {
         const userMessage = normalizeUserMessage(parsed.data.message, contextId);
         const task = await createTask(ctx, { contextId, userMessage });
         const history = await loadContextHistory(ctx, contextId);
-        const final = await runA2ATask({ ctx, task, history });
+        const final = await runA2ATask({ ctx, task, history, message: userMessage });
         return c.json(jsonRpcResult(rpcId, toA2ATask(final)), 200);
       }
 
@@ -138,6 +139,7 @@ a2aRpcRoute.post("/", async (c) => {
                 ctx,
                 task,
                 history,
+                message: userMessage,
                 onEvent: (
                   event: A2AStatusUpdateEvent | A2AArtifactUpdateEvent,
                 ) => send(event),
@@ -232,9 +234,22 @@ a2aRpcRoute.post("/", async (c) => {
             200,
           );
         }
+        const isTerminal = A2A_TERMINAL_STATES.has(row.state);
         const encoder = new TextEncoder();
+        // Live-attach for a non-terminal task (spec §3.4): registered outside
+        // the ReadableStream `start`/`cancel` closures so `cancel` (fired on
+        // client disconnect) can unregister whatever `start` subscribed,
+        // without leaking a listener into the module-level registry.
+        let unsubscribe: (() => void) | null = null;
         const stream = new ReadableStream<Uint8Array>({
           start(controller) {
+            const send = (result: unknown): void => {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify(jsonRpcResult(rpcId, result))}\n\n`,
+                ),
+              );
+            };
             const statusEvent: A2AStatusUpdateEvent = {
               kind: "status-update",
               taskId: row.publicId,
@@ -244,14 +259,32 @@ a2aRpcRoute.post("/", async (c) => {
                 ...(row.statusMessage ? { message: row.statusMessage } : {}),
                 timestamp: row.updatedAt.toISOString(),
               },
-              final: A2A_TERMINAL_STATES.has(row.state),
+              final: isTerminal,
             };
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify(jsonRpcResult(rpcId, statusEvent))}\n\n`,
-              ),
-            );
-            controller.close();
+            send(statusEvent);
+
+            if (isTerminal) {
+              // Correct A2A behavior for a finished task — one snapshot, done.
+              controller.close();
+              return;
+            }
+
+            // Non-terminal: forward every subsequent event verbatim until a
+            // terminal status-update arrives, then unsubscribe and close.
+            unsubscribe = subscribe(row.publicId, (event) => {
+              send(event);
+              if (event.kind === "status-update" && event.final) {
+                unsubscribe?.();
+                unsubscribe = null;
+                controller.close();
+              }
+            });
+          },
+          cancel() {
+            // Client disconnected before a terminal event arrived — unregister
+            // so the dropped connection doesn't leak a listener (spec §3.4/§6).
+            unsubscribe?.();
+            unsubscribe = null;
           },
         });
         return new Response(stream, { headers: SSE_HEADERS });
