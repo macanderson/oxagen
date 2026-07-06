@@ -35,8 +35,12 @@ function globToRegExp(pattern: string): RegExp {
 // ---------------------------------------------------------------------------
 
 const EXEC_UNSUPPORTED =
-  "Command execution is not available in this API-backed GitHub workspace. " +
-  "Use read_file/write_file/edit_file/grep/glob to make changes; do not run shell commands.";
+  "Command execution is not available in this API-backed GitHub workspace: it " +
+  "edits files through the GitHub API with no real checkout, so builds, tests, " +
+  "and git commands cannot run. Set SANDBOX_ENABLED=true (with a Modal driver) " +
+  "so the platform coding agent runs in a durable sandbox with a cloned repo. " +
+  "Until then, use read_file/write_file/edit_file/grep/glob to make changes; do " +
+  "not run shell commands.";
 
 const MAX_GREP_FILES = 200;
 const MAX_GREP_HITS = 200;
