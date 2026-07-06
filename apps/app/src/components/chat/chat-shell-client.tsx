@@ -24,6 +24,8 @@ import type { StreamEvent } from "./stream-event-types";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
 import type { ComposerModelState } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
+import type { RepoOption } from "./repo-selector";
+import type { EnvironmentOption } from "./environment-selector";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import { ConversationFiles } from "./conversation-files";
 import { useLatestRef } from "@/lib/use-latest-ref";
@@ -101,6 +103,8 @@ export function ChatShellClient({
   pendingPromptBehavior = "queue",
   initialModelState,
   availableMcpServers,
+  availableRepos,
+  availableEnvironments,
   pageContext,
   onFormFillStart,
   onFormFillEnd,
@@ -129,6 +133,10 @@ export function ChatShellClient({
   initialModelState?: ComposerModelState;
   /** Available MCP servers for the per-turn activation picker. */
   availableMcpServers?: McpServerSummary[];
+  /** GitHub repos usable as the code-mode target (see _shared/code-mode-data.ts). */
+  availableRepos?: RepoOption[];
+  /** Workspace environments usable as the code-mode target. */
+  availableEnvironments?: EnvironmentOption[];
   /**
    * Page context forwarded from the current page. When a fillable form is
    * registered (e.g. in AskDrawer/WandPanel wrappers), this is passed to the
@@ -500,6 +508,20 @@ export function ChatShellClient({
               })(),
               // Forward page context so the route can inject the page_form_fill tool.
               pageContext: pageContextRef.current ?? null,
+              // Code-mode sandbox target (OXA app-code-mode). The composer only
+              // sets this formData field when Code mode is ON and both a repo
+              // and environment are selected (see message-composer.tsx's send
+              // gate) — otherwise this is `null`, matching the stream route's
+              // BodySchema `code: {...} | null`.
+              code: (() => {
+                const raw = formData.get("code") as string | null;
+                if (!raw) return null;
+                try {
+                  return JSON.parse(raw) as unknown;
+                } catch {
+                  return null;
+                }
+              })(),
             }),
           });
 
@@ -1069,6 +1091,8 @@ export function ChatShellClient({
         onInterrupt={handleInterrupt}
         initialModelState={initialModelState}
         availableMcpServers={availableMcpServers}
+        availableRepos={availableRepos}
+        availableEnvironments={availableEnvironments}
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
       />

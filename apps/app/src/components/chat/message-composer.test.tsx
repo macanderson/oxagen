@@ -151,7 +151,7 @@ vi.mock("@/components/ui/select", () => ({
   SelectTrigger: ({ children, "aria-label": ariaLabel }: { children: React.ReactNode; "aria-label"?: string; size?: string; className?: string }) => (
     <div data-testid="select-trigger" aria-label={ariaLabel}>{children}</div>
   ),
-  SelectValue: () => <span />,
+  SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
   SelectPopup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   SelectItem: ({ children, value }: { children: React.ReactNode; value: string }) => (
     <div data-value={value}>{children}</div>
@@ -1434,10 +1434,10 @@ describe("MessageComposer — queue drain: null tier fallback", () => {
       mediaModel: null as null,
       seededImageModel: null as null,
       seededVideoModel: null as null,
-      budgetEnabled: false as false,
+      budgetEnabled: false as const,
       budgetUsd: null as null,
-      budgetMode: "prompt" as "prompt",
-      budgetGracePct: 0.25 as 0.25,
+      budgetMode: "prompt" as const,
+      budgetGracePct: 0.25 as const,
     };
     const { rerender } = render(
       <MessageComposer
@@ -1484,10 +1484,10 @@ describe("MessageComposer — queue drain: mediaModel set", () => {
       mediaModel: "flux-2-max",
       seededImageModel: null as null,
       seededVideoModel: null as null,
-      budgetEnabled: false as false,
+      budgetEnabled: false as const,
       budgetUsd: null as null,
-      budgetMode: "prompt" as "prompt",
-      budgetGracePct: 0.25 as 0.25,
+      budgetMode: "prompt" as const,
+      budgetGracePct: 0.25 as const,
     };
     const { rerender } = render(
       <MessageComposer
@@ -1535,10 +1535,10 @@ describe("MessageComposer — queue drain: null mediaTier fallback", () => {
       mediaModel: null as null,
       seededImageModel: null as null,
       seededVideoModel: null as null,
-      budgetEnabled: false as false,
+      budgetEnabled: false as const,
       budgetUsd: null as null,
-      budgetMode: "prompt" as "prompt",
-      budgetGracePct: 0.25 as 0.25,
+      budgetMode: "prompt" as const,
+      budgetGracePct: 0.25 as const,
     };
     const { rerender } = render(
       <MessageComposer
@@ -1587,10 +1587,10 @@ describe("MessageComposer — queue drain: effort in drained message", () => {
       mediaModel: null as null,
       seededImageModel: null as null,
       seededVideoModel: null as null,
-      budgetEnabled: false as false,
+      budgetEnabled: false as const,
       budgetUsd: null as null,
-      budgetMode: "prompt" as "prompt",
-      budgetGracePct: 0.25 as 0.25,
+      budgetMode: "prompt" as const,
+      budgetGracePct: 0.25 as const,
     };
     const { rerender } = render(
       <MessageComposer
@@ -2128,5 +2128,155 @@ describe("MessageComposer — attachments", () => {
     ]);
     // The video carries no keyframeForVideo of its own.
     expect(parsed[0]!.keyframeForVideo).toBeUndefined();
+  });
+});
+
+// ── code mode ──────────────────────────────────────────────────────────────────
+//
+// ChatAgentToolbar/RepoSelector/EnvironmentSelector are NOT mocked here — they
+// render for real on top of the shared `@/components/ui/select` mock above,
+// whose onValueChange always fires with "high" (see the reasoning-effort
+// tests). A single-repo fixture with key "high" lets a click on the repo
+// Select resolve deterministically through that shared mock.
+const CODE_REPO = { key: "high", connectionId: "con_1", owner: "acme", name: "widgets", defaultBranch: "main" };
+const CODE_ENV_DEFAULT = { id: "env_default", name: "Default", isDefault: true };
+
+describe("MessageComposer — code mode", () => {
+  it("does not render the agent toolbar until code mode is toggled on", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    expect(container.querySelector('[aria-label="Select repository"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Select environment"]')).toBeNull();
+  });
+
+  it("toggling code mode on reveals the repo + environment pickers", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
+    expect(container.querySelector('[aria-label="Select repository"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Select environment"]')).not.toBeNull();
+  });
+
+  it("the code toggle is disabled when there are no available repos", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Toggle code mode" })).toBeDisabled();
+  });
+
+  it("blocks send with a hint until both a repo and environment are selected", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[]}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "fix the bug");
+    await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
+    // No environments supplied, so isDefault auto-select has nothing to pick —
+    // the gate stays blocked with neither repo nor environment chosen.
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+    expect(screen.getByTestId("code-mode-gate-hint")).toHaveTextContent(
+      "Select a repository and environment to start coding.",
+    );
+  });
+
+  it("auto-selects the workspace default environment when code mode turns on", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "fix the bug");
+    await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
+    // Environment auto-defaults, but the repo still isn't picked — gate stays shut.
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+
+    // Selecting the repo (via the shared Select mock's fixed "high" value,
+    // matching CODE_REPO.key) opens the gate.
+    const repoSelect = container.querySelector('[data-testid="select"]');
+    expect(repoSelect).not.toBeNull();
+    fireEvent.click(repoSelect!);
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Send message" })).not.toBeDisabled(),
+    );
+    expect(screen.queryByTestId("code-mode-gate-hint")).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    const code = JSON.parse(fd.get("code") as string) as {
+      connectionId: string;
+      owner: string;
+      name: string;
+      defaultBranch: string | null;
+      environmentId: string;
+      sandboxSessionId: string | null;
+    };
+    expect(code).toEqual({
+      connectionId: "con_1",
+      owner: "acme",
+      name: "widgets",
+      defaultBranch: "main",
+      environmentId: "env_default",
+      sandboxSessionId: null,
+    });
+  });
+
+  it("does NOT encode a code field when code mode is off", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "hello");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalled());
+    const fd = action.mock.calls[0][0] as FormData;
+    expect(fd.get("code")).toBeNull();
   });
 });

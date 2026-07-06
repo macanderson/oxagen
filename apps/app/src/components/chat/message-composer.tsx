@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Brain, ImageIcon, Paperclip, Send, Video } from "lucide-react";
+import { Brain, Code2, ImageIcon, Paperclip, Send, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -24,6 +24,9 @@ import {
 import type { McpServerSummary } from "./mcp-types";
 import { McpServerPicker } from "./mcp-server-picker";
 import { BudgetControl } from "./budget-control";
+import { ChatAgentToolbar } from "./chat-agent-toolbar";
+import type { RepoOption } from "./repo-selector";
+import type { EnvironmentOption } from "./environment-selector";
 import { MessageQueue } from "./message-queue";
 import { AttachmentChip, hasInFlightUploads, type PendingAttachment } from "./attachment-chip";
 import { extractVideoFrames } from "./extract-video-frames";
@@ -105,6 +108,38 @@ function budgetPayload(modelSnapshot: ComposerModelState) {
   };
 }
 
+/** The wire shape of the stream route's `code` BodySchema field. */
+export interface CodeModePayload {
+  connectionId: string;
+  owner: string;
+  name: string;
+  defaultBranch: string | null;
+  environmentId: string;
+  sandboxSessionId: string | null;
+}
+
+/**
+ * Build the `code` wire payload from the composer's code-mode state, or
+ * `null` when code mode is off or a required selection is missing (the send
+ * gate keeps the latter from ever reaching submit, but this stays defensive).
+ * `sandboxSessionId` is always `null` here — reserved for future session reuse.
+ */
+function codePayload(
+  codeMode: boolean,
+  repo: RepoOption | null,
+  environmentId: string | null,
+): CodeModePayload | null {
+  if (!codeMode || !repo || !environmentId) return null;
+  return {
+    connectionId: repo.connectionId,
+    owner: repo.owner,
+    name: repo.name,
+    defaultBranch: repo.defaultBranch,
+    environmentId,
+    sandboxSessionId: null,
+  };
+}
+
 export interface ComposerAction {
   (formData: FormData): Promise<{
     ok: boolean;
@@ -152,6 +187,8 @@ export function MessageComposer({
   onInterrupt,
   initialModelState,
   availableMcpServers,
+  availableRepos,
+  availableEnvironments,
   onInputHasContentChange,
   orgSlug,
   workspaceSlug,
@@ -183,6 +220,10 @@ export function MessageComposer({
   initialModelState?: ComposerModelState;
   /** Available MCP servers for the per-turn activation picker. */
   availableMcpServers?: McpServerSummary[];
+  /** GitHub repos usable as the code-mode target (see _shared/code-mode-data.ts). */
+  availableRepos?: RepoOption[];
+  /** Workspace environments usable as the code-mode target. */
+  availableEnvironments?: EnvironmentOption[];
   /**
    * Called whenever the textarea transitions between empty and non-empty.
    * `true`  → user has typed content (hide suggested prompts).
@@ -196,6 +237,35 @@ export function MessageComposer({
     initialModelState ?? defaultModelState,
   );
   const [activeServerIds, setActiveServerIds] = React.useState<Set<string>>(new Set());
+
+  // ── Code mode (OXA app-code-mode) ─────────────────────────────────────────
+  // When on, a coding turn runs in a sandbox against a selected repo +
+  // environment — both are REQUIRED before the send gate opens (see
+  // `codeGateBlocked` below).
+  const [codeMode, setCodeMode] = React.useState(false);
+  const [selectedRepoKey, setSelectedRepoKey] = React.useState<string | null>(null);
+  const [selectedEnvId, setSelectedEnvId] = React.useState<string | null>(null);
+  const selectedRepo = availableRepos?.find((r) => r.key === selectedRepoKey) ?? null;
+
+  // Default the environment picker to the workspace default (isDefault) the
+  // first time code mode is turned on with no environment chosen yet.
+  React.useEffect(() => {
+    if (!codeMode || selectedEnvId) return;
+    const defaultEnv = availableEnvironments?.find((e) => e.isDefault);
+    if (defaultEnv) setSelectedEnvId(defaultEnv.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-derive when codeMode flips on; availableEnvironments is stable per render from server props
+  }, [codeMode]);
+
+  const codeGateBlocked = codeMode && (!selectedRepo || !selectedEnvId);
+
+  // Ref mirror of the code-mode selection so dispatchQueued (queue-drain path)
+  // reads the CURRENT selection at drain time, same pattern as
+  // activeServerIdsRef/parentMessageIdRef below.
+  const codeStateRef = React.useRef({ codeMode, selectedRepo, selectedEnvId });
+  React.useEffect(() => {
+    codeStateRef.current = { codeMode, selectedRepo, selectedEnvId };
+  }, [codeMode, selectedRepo, selectedEnvId]);
+
   const formRef = React.useRef<HTMLFormElement>(null);
 
   // Stable ref for the callback so the textarea onChange handler never
@@ -550,6 +620,8 @@ export function MessageComposer({
       fd.set("activeServerIds", JSON.stringify([...activeServerIds]));
     }
     fd.set("budget", JSON.stringify(budgetPayload(modelSnapshot)));
+    const code = codePayload(codeMode, selectedRepo, selectedEnvId);
+    if (code) fd.set("code", JSON.stringify(code));
     return fd;
   }
 
@@ -574,6 +646,10 @@ export function MessageComposer({
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (disabled) return;
+    // Code mode requires BOTH a repo and an environment before the first
+    // coding turn — the submit button is disabled for this too, but guard
+    // here as well since Enter/Cmd+Enter bypass the button.
+    if (codeGateBlocked) return;
     // Never submit while an upload is still in flight — the model would
     // otherwise resolve an attachment the server hasn't finished persisting.
     if (hasInFlightUploads(attachments)) return;
@@ -670,6 +746,9 @@ export function MessageComposer({
         fd.set("activeServerIds", JSON.stringify([...currentActiveServerIds]));
       }
       fd.set("budget", JSON.stringify(budgetPayload(ms)));
+      const currentCode = codeStateRef.current;
+      const code = codePayload(currentCode.codeMode, currentCode.selectedRepo, currentCode.selectedEnvId);
+      if (code) fd.set("code", JSON.stringify(code));
       // Defer the dispatch out of the caller (effect / event handler) so the
       // queue-drain doesn't cascade synchronously within a React effect
       // (satisfies react-hooks/set-state-in-effect) and so send-now doesn't
@@ -769,7 +848,7 @@ export function MessageComposer({
       return;
     }
 
-    if (pending || disabled) return;
+    if (pending || disabled || codeGateBlocked) return;
 
     if (enterToSubmit) {
       if (!e.shiftKey) {
@@ -796,19 +875,34 @@ export function MessageComposer({
   // guard can't run — degrade to a text-only composer rather than uploading
   // with a malformed request.
   const canAttach = Boolean(orgSlug) && Boolean(workspaceSlug);
+  const hasRepos = (availableRepos?.length ?? 0) > 0;
 
   return (
-    <form
-      ref={formRef}
-      onSubmit={onSubmit}
-      onDragOver={canAttach ? handleDragOver : undefined}
-      onDragLeave={canAttach ? handleDragLeave : undefined}
-      onDrop={canAttach ? handleDrop : undefined}
-      className={cn(
-        "flex flex-col gap-2 rounded-2xl border border-border bg-card p-3 text-card-foreground shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring",
-        isDragOver && "ring-2 ring-primary",
+    <div className="flex flex-col">
+      {/* Code-mode agent toolbar: repo + environment pickers. Shown only while
+          code mode is on — the toggle button below turns it on/off. */}
+      {codeMode && (
+        <ChatAgentToolbar
+          repositories={availableRepos ?? []}
+          environments={availableEnvironments ?? []}
+          selectedRepoKey={selectedRepoKey}
+          selectedEnvId={selectedEnvId}
+          onSelectRepo={(repo) => setSelectedRepoKey(repo.key)}
+          onSelectEnv={setSelectedEnvId}
+        />
       )}
-    >
+      <form
+        ref={formRef}
+        onSubmit={onSubmit}
+        onDragOver={canAttach ? handleDragOver : undefined}
+        onDragLeave={canAttach ? handleDragLeave : undefined}
+        onDrop={canAttach ? handleDrop : undefined}
+        className={cn(
+          "flex flex-col gap-2 rounded-2xl border border-border bg-card p-3 text-card-foreground shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring",
+          codeMode && "rounded-t-none",
+          isDragOver && "ring-2 ring-primary",
+        )}
+      >
       {/* Hidden native file input — triggered by the paperclip button. Accepts
           images and videos; a video's keyframes are sampled client-side for the
           vision-only fallback path (Phase 2). */}
@@ -857,6 +951,11 @@ export function MessageComposer({
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
       {disabled && disabledReason ? (
         <p className="text-xs text-muted-foreground">{disabledReason}</p>
+      ) : null}
+      {codeGateBlocked ? (
+        <p className="text-xs text-muted-foreground" data-testid="code-mode-gate-hint">
+          Select a repository and environment to start coding.
+        </p>
       ) : null}
 
       {/* Toolbar */}
@@ -934,6 +1033,26 @@ export function MessageComposer({
           <Video className="h-4 w-4" />
         </Button>
 
+        {/* Code mode toggle — routes the turn to a sandboxed coding agent
+            against the selected repo + environment (see ChatAgentToolbar
+            above). Requires both selections before send unblocks. */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label="Toggle code mode"
+          aria-pressed={codeMode}
+          disabled={!hasRepos && !codeMode}
+          title={!hasRepos && !codeMode ? "Connect a GitHub repository to use code mode" : undefined}
+          onClick={() => setCodeMode((v) => !v)}
+          className={cn(
+            "h-8 w-8 p-0",
+            codeMode && "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
+          )}
+        >
+          <Code2 className="h-4 w-4" />
+        </Button>
+
         {/* MCP server activation picker — only shown when servers are available */}
         {(availableMcpServers?.length ?? 0) > 0 && (
           <McpServerPicker
@@ -962,7 +1081,9 @@ export function MessageComposer({
             type="submit"
             // Disabled while any attachment upload is still in flight — sending
             // now would resolve a publicId the server hasn't finished persisting.
-            disabled={pending || disabled || uploadsInFlight}
+            // Also disabled while code mode is on but repo/environment aren't
+            // both selected yet (see codeGateBlocked).
+            disabled={pending || disabled || uploadsInFlight || codeGateBlocked}
             size="sm"
             aria-label={
               isStreaming && pendingPromptBehavior === "interrupt"
@@ -972,7 +1093,7 @@ export function MessageComposer({
                   : "Send message"
             }
             style={
-              !pending && !disabled && !uploadsInFlight
+              !pending && !disabled && !uploadsInFlight && !codeGateBlocked
                 ? {
                     background: "var(--primary)",
                     border: "none",
@@ -993,5 +1114,6 @@ export function MessageComposer({
         </div>
       </div>
     </form>
+    </div>
   );
 }
