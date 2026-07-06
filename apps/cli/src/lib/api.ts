@@ -96,26 +96,33 @@ function httpErrorHint(status: number, traceId?: string): string | undefined {
 }
 
 /**
- * Log a rich `error` entry for a non-2xx response and throw the matching
- * `ApiError`. Centralizes the diagnostics every request site needs — full URL,
- * method, status + statusText, latency, the diagnostic response headers (incl.
- * the `x-vercel-id` server-log pivot), the response body, a local call stack,
- * and a status-specific hint — so a single `oxagen logs` entry tells an
- * engineer exactly where to look next.
+ * Log a rich `error` entry for a non-2xx response and return the matching
+ * `ApiError` for the caller to throw. Centralizes the diagnostics every request
+ * site needs — full URL, method, status + statusText, latency, the diagnostic
+ * response headers (incl. the `x-vercel-id` server-log pivot), the response
+ * body, a local call stack, and a status-specific hint — so a single
+ * `oxagen logs` entry tells an engineer exactly where to look next.
+ *
+ * The debug write is **awaited**, not fire-and-forget: one-shot commands call
+ * `process.exit(1)` the instant this error propagates, and an un-awaited
+ * `void debugLog(...)` append would be abandoned before it flushes — losing the
+ * single most important entry (the error itself) on exactly the commands most
+ * likely to fail. Callers do `throw await buildHttpError(...)` so the write
+ * completes before the throw reaches the exit.
  */
-async function throwHttpError(
+async function buildHttpError(
   event: string,
   method: string,
   url: string,
   path: string,
   res: Response,
   startedAt: number,
-): Promise<never> {
+): Promise<ApiError> {
   const body = await res.text().catch(() => res.statusText);
   const headers = diagnosticHeaders(res);
   const traceId = headers["x-vercel-id"];
   const hint = httpErrorHint(res.status, traceId);
-  void debugLog("error", event, {
+  await debugLog("error", event, {
     method,
     url,
     path,
@@ -130,19 +137,23 @@ async function throwHttpError(
     ...(hint ? { hint } : {}),
   });
   const suffix = traceId ? ` (trace ${traceId})` : "";
-  throw new ApiError(`Error ${res.status} from ${path}: ${body}${suffix}`, res.status, traceId);
+  return new ApiError(`Error ${res.status} from ${path}: ${body}${suffix}`, res.status, traceId);
 }
 
-/** Log a rich `error` entry for a network-layer failure and throw `ApiError`. */
-function throwNetworkError(
+/**
+ * Log a rich `error` entry for a network-layer failure and return the matching
+ * `ApiError` for the caller to throw. Awaited for the same
+ * flush-before-`process.exit` reason as {@link buildHttpError}.
+ */
+async function buildNetworkError(
   event: string,
   method: string,
   url: string,
   path: string,
   err: unknown,
   startedAt: number,
-): never {
-  void debugLog("error", event, {
+): Promise<ApiError> {
+  await debugLog("error", event, {
     method,
     url,
     path,
@@ -152,7 +163,7 @@ function throwNetworkError(
     error: err,
     hint: "Network/transport failure before an HTTP response. Check connectivity, the API base URL, and any proxy.",
   });
-  throw new ApiError(
+  return new ApiError(
     `Network error calling ${path}: ${err instanceof Error ? err.message : String(err)}`,
   );
 }
@@ -208,10 +219,10 @@ export async function apiGetOrThrow<T>(
       },
     });
   } catch (err) {
-    throwNetworkError("api.get.network", "GET", url.toString(), path, err, startedAt);
+    throw await buildNetworkError("api.get.network", "GET", url.toString(), path, err, startedAt);
   }
   if (!res.ok) {
-    await throwHttpError("api.get.response", "GET", url.toString(), path, res, startedAt);
+    throw await buildHttpError("api.get.response", "GET", url.toString(), path, res, startedAt);
   }
   const json = (await res.json()) as T;
   void debugLog("api", "api.get.response", {
@@ -249,10 +260,10 @@ export async function userApiPostOrThrow<T>(
       body: JSON.stringify(body ?? {}),
     });
   } catch (err) {
-    throwNetworkError("api.user-post.network", "POST", url, path, err, startedAt);
+    throw await buildNetworkError("api.user-post.network", "POST", url, path, err, startedAt);
   }
   if (!res.ok) {
-    await throwHttpError("api.user-post.response", "POST", url, path, res, startedAt);
+    throw await buildHttpError("api.user-post.response", "POST", url, path, res, startedAt);
   }
   const json = (await res.json()) as T;
   void debugLog("api", "api.user-post.response", {
@@ -288,10 +299,10 @@ export async function apiPostOrThrow<T>(path: string, body: unknown): Promise<T>
       body: JSON.stringify(body ?? {}),
     });
   } catch (err) {
-    throwNetworkError("api.post.network", "POST", url, path, err, startedAt);
+    throw await buildNetworkError("api.post.network", "POST", url, path, err, startedAt);
   }
   if (!res.ok) {
-    await throwHttpError("api.post.response", "POST", url, path, res, startedAt);
+    throw await buildHttpError("api.post.response", "POST", url, path, res, startedAt);
   }
   const json = (await res.json()) as T;
   void debugLog(category, "api.post.response", {
