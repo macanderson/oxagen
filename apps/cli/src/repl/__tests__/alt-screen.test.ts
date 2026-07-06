@@ -43,6 +43,17 @@ describe("enterFullscreen", () => {
     expect(joined.indexOf("\x1b[?25h")).toBeLessThan(joined.indexOf("\x1b[?1049l"));
   });
 
+  it("leave() ALSO disarms SGR mouse tracking (modes 1000/1002/1006) — a signal-kill (SIGTERM/SIGINT) tears the process down before React's own use-mouse-wheel cleanup ever runs, so this is the only backstop that keeps a killed CLI from stranding the user's terminal reporting raw mouse escapes into their shell", () => {
+    const { stream, writes } = fakeStream();
+    const handle = enterFullscreen(stream);
+    writes.length = 0; // isolate the leave() writes
+    handle.leave();
+    const joined = writes.join("");
+    expect(joined).toContain("\x1b[?1000l");
+    expect(joined).toContain("\x1b[?1002l");
+    expect(joined).toContain("\x1b[?1006l");
+  });
+
   it("leave() is idempotent — a second call writes nothing further", () => {
     const { stream, writes } = fakeStream();
     const handle = enterFullscreen(stream);
