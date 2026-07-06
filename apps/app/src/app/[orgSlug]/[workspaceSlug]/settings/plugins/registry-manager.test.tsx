@@ -130,7 +130,14 @@ describe("RegistryManager — add registry", () => {
       registryId: "new_reg",
       isDefault: false,
     });
-    const user = userEvent.setup();
+    // This is the typing-heaviest case (an 11-char name + a 31-char URL). The
+    // default userEvent inter-keystroke delay is a real timer whose wall-clock
+    // cost balloons under a saturated `pnpm gate` runner — it timed out at 5s
+    // there while passing in ~300ms in isolation. `delay: null` removes the
+    // artificial pacing so typing cost no longer scales with machine load; the
+    // generous per-test deadline below is belt-and-suspenders against event-loop
+    // starvation between the awaited interactions.
+    const user = userEvent.setup({ delay: null });
 
     render(
       <RegistryManager
@@ -162,7 +169,7 @@ describe("RegistryManager — add registry", () => {
       expect(screen.queryByTestId("registry-name-input")).not.toBeInTheDocument(),
     );
     expect(screen.getByText("My Registry")).toBeInTheDocument();
-  });
+  }, 20000);
 
   it("shows an error when addRegistryAction fails", async () => {
     const addAction = vi.fn().mockResolvedValue({ ok: false, error: "URL already exists" });

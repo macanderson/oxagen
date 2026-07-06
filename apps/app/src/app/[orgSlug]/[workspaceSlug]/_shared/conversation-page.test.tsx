@@ -107,6 +107,14 @@ vi.mock("@/components/conversations/conversation-nav", () => ({
 vi.mock("@oxagen/oxagen", () => ({
   listCapabilities: vi.fn(() => []),
   getSurfaces: vi.fn(() => []),
+  // Workspace budget governance is resolved via invoke("workspace.budget.policy.read")
+  // (OXA-2081). Return a benign no-governance row; the page maps limitUsd → 0.
+  invoke: vi.fn(async () => ({
+    enabled: false,
+    limitUsd: null,
+    mode: "prompt",
+    enforcement: "ceiling",
+  })),
 }));
 
 vi.mock("@oxagen/ai", () => ({
@@ -138,6 +146,30 @@ vi.mock("./conversation-actions", () => ({
 
 vi.mock("./walk-active-branch", () => ({
   walkActiveBranch: vi.fn(() => []),
+}));
+
+// conversation-page side-effect-imports "@oxagen/handlers/register" to make the
+// invoke() handlers resolvable. Stub it out — the real module eagerly loads
+// @oxagen/plugins (vault-secret-service dereferences schema.secretKeys at
+// module init), which this test's partial @oxagen/database schema mock does not
+// provide. The invoke() path itself is mocked on @oxagen/oxagen above.
+vi.mock("@oxagen/handlers/register", () => ({}));
+
+// Per-turn budget default (OXA — turn-budget). budgetPolicyReadHandler is a
+// direct handler call in the page; stub it to the off state.
+vi.mock("@oxagen/handlers/budget.policy.read", () => ({
+  budgetPolicyReadHandler: vi.fn(async () => ({
+    enabled: false,
+    limitUsd: null,
+    mode: "prompt",
+    graceOveragePct: 0.25,
+  })),
+}));
+
+// Code-mode picker options (repos + environments, #648). loadCodeModeOptions
+// never throws in the real page (degrades to empty lists); stub it to empty.
+vi.mock("./code-mode-data", () => ({
+  loadCodeModeOptions: vi.fn(async () => ({ repos: [], environments: [] })),
 }));
 
 // ── Import after mocks ───────────────────────────────────────────────────────
