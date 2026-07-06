@@ -113,7 +113,7 @@ export interface GraphSyncProvider {
   recordLineage(args: { executionId: string; touchedFiles: string[] }): void | Promise<void>;
 }
 
-/** Result of a single acquire attempt (mirrors `@oxagen/ontology`'s `AcquireFileLockResult`). */
+/** Result of a single acquire attempt (mirrors the Postgres lease service's `AcquiredLease`). */
 export interface FileLockGrant {
   granted: boolean;
   lockId: string;
@@ -121,6 +121,14 @@ export interface FileLockGrant {
   heldBy: string | null;
   /** Epoch-ms the conflicting lock expires at, when `granted` is false. */
   blockedUntil: number | null;
+  /**
+   * Monotonic per-resource fencing token for a granted lease (ADR-021 §5) — a
+   * takeover after expiry always issues a strictly higher token, so a caller
+   * that carries the token can be rejected at write time if a newer holder took
+   * over. Optional/null for providers that don't fence (the legacy Neo4j
+   * adapter) or a denied grant.
+   */
+  fencingToken?: number | null;
 }
 
 /**
