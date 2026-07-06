@@ -130,7 +130,14 @@ export const baseEnvSchema = z.object({
   // deployments are unaffected. Adding a new driver requires: (1) implementing
   // the StorageAdapter interface, (2) extending this enum, (3) adding a case
   // in client.ts resolveAdapter(). See docs/guides/storage-driver-authoring.md.
-  STORAGE_DRIVER: z.enum(["vercel-blob"]).default("vercel-blob").optional(),
+  STORAGE_DRIVER: z.enum(["vercel-blob", "fs"]).default("vercel-blob").optional(),
+
+  // Root directory for the "fs" storage driver. Only read when STORAGE_DRIVER=fs
+  // (the CI e2e container and local dev without a Vercel Blob token). Absolute
+  // paths are used as-is; a relative path is anchored at process.cwd(). When
+  // unset the driver defaults to an OS-tmp-scoped directory. See
+  // docs/guides/storage-driver-authoring.md.
+  STORAGE_FS_ROOT: z.string().min(1).optional(),
 
   // Vercel AI Gateway — the platform's single AI auth boundary. AI_GATEWAY_API_KEY
   // authenticates every model call (text, image, embeddings, video); @oxagen/ai
