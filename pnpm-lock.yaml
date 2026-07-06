@@ -1186,6 +1186,9 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@oxagen/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
       '@oxagen/skills':
         specifier: workspace:*
         version: link:../skills
