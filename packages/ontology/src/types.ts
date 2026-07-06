@@ -84,11 +84,15 @@ export const EdgeTypes = {
   AUTHORED_BY: "AUTHORED_BY", // document/commit → User
   // Agent coding lineage — written by the in-app coding agent on every turn.
   TOUCHED_FILE: "TOUCHED_FILE", // Execution → SourceFile (file was read/written this turn)
-  // Agent file locking (docs/specs/agent-file-locking/plan.md) — a graph-backed,
-  // cross-process file lock so no two live agents in a fleet clobber the same
-  // file. Carries { lockId, acquiredAt, expiresAt, workspaceId, action,
-  // executionId }; TTL-based, lazily expired (expiresAt < now) plus swept.
-  HOLDS_LOCK: "HOLDS_LOCK", // Agent → SourceFile (agent currently holds an exclusive lock on the file)
+  // @deprecated Authority moved to the Postgres lease (ADR-021 §5) — a graph
+  // lock is unsound (async sync lag hides it from a concurrent agent). Retained
+  // only for the legacy Neo4j adapter; do not enforce locks on this edge.
+  HOLDS_LOCK: "HOLDS_LOCK", // Agent → SourceFile (legacy graph-backed lock)
+  // Async LINEAGE projection of Postgres file leases (ADR-021 §5). Written
+  // fire-and-forget by agent.project-file-lock-to-graph for hot-file analytics
+  // and conflict prediction — never load-bearing for mutual exclusion. Carries
+  // { holder, action, fencingToken, acquiredAt, releasedAt, executionId }.
+  LOCKED: "LOCKED", // Agent → SourceFile (projected: this agent held a lease on the file)
 } as const;
 export type EdgeType = (typeof EdgeTypes)[keyof typeof EdgeTypes];
 

@@ -40,9 +40,12 @@ export function promotePatterns(
   const candidates: PromotionCandidate[] = [];
 
   for (const pattern of patterns) {
-    // Check thresholds
+    // Check thresholds. minPromotionCount is documented as "minimum total
+    // occurrences", so gate on total (success + failure), not successCount —
+    // otherwise a pattern that succeeds 5× but also fails 20× would promote.
+    const totalOccurrences = pattern.successCount + pattern.failureCount;
     if (pattern.successRate < config.minSuccessRate) continue;
-    if (pattern.successCount < config.minPromotionCount) continue;
+    if (totalOccurrences < config.minPromotionCount) continue;
 
     // Check if already captured by an existing rule
     if (isPatternCaptured(pattern, existingRules)) continue;
@@ -67,16 +70,15 @@ function isPatternCaptured(
   pattern: ActionPattern,
   existingRules: MemoryRecord[],
 ): boolean {
-  const _sequenceStr = pattern.sequence.join(", ");
+  // Order-sensitive: a rule capturing A → B does NOT capture B → A. Match the
+  // ordered sequence string the same way generateRule() renders it, so we don't
+  // treat a differently-ordered pattern as already covered.
+  const sequenceStr = pattern.sequence.join(" → ").toLowerCase();
   for (const rule of existingRules) {
     if (rule.kind !== "procedural") continue;
     const body = rule.body as Record<string, unknown>;
-    const ruleText = (body.rule as string) ?? "";
-    // Simple check: does the rule mention the same tools?
-    const mentionsAll = pattern.sequence.every((tool) =>
-      ruleText.toLowerCase().includes(tool.toLowerCase()),
-    );
-    if (mentionsAll) return true;
+    const ruleText = ((body.rule as string) ?? "").toLowerCase();
+    if (ruleText.includes(sequenceStr)) return true;
   }
   return false;
 }

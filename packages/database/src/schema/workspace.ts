@@ -123,3 +123,46 @@ export const workspaceMemoryPolicy = workspaceSchema.table(
     orgWorkspaceIdx: index("workspace_memory_policy_org_workspace_idx").on(t.orgId, t.workspaceId),
   }),
 );
+
+// Per-workspace per-turn dollar budget GOVERNANCE. An org/workspace admin sets a
+// budget an org admin can dictate for a workspace: a soft `default` (seeds
+// members who haven't set their own) or a hard `ceiling` (clamps members — they
+// can't exceed it and the enforcement mode can only get stricter). Resolved
+// against the member's own budget by resolveEffectiveTurnBudget in @oxagen/billing;
+// the shared runCodingAgent guard enforces the single merged policy. Rows created
+// on first write; absent ⇒ no governance (members keep their personal budget).
+// (Org-WIDE default across all workspaces is a planned follow-up — the merge
+// function already accepts an org level, so it needs no billing change.)
+export const workspaceBudgetPolicy = workspaceSchema.table(
+  "workspace_budget_policy",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`COALESCE(
+        CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
+          THEN uuid_generate_v7() ELSE uuid_generate_v4() END,
+        uuid_generate_v4())`),
+    orgId: uuid("org_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull().unique(),
+    // Whether the governed budget is active for this workspace.
+    enabled: boolean("enabled").notNull().default(true),
+    // Governed ceiling/default in USD; NULL when no amount is set yet.
+    limitUsd: real("limit_usd"),
+    // Enforcement mode at the ceiling: "grace" | "prompt" | "enforce".
+    mode: text("mode").notNull().default("enforce"),
+    // grace mode: fraction ABOVE the limit allowed before a hard stop (0.25 = 25%).
+    graceOveragePct: real("grace_overage_pct").notNull().default(0.25),
+    // "ceiling" = hard cap members can't exceed; "default" = seed members can override.
+    enforcement: text("enforcement").notNull().default("ceiling"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    workspaceIdx: uniqueIndex("workspace_budget_policy_workspace_idx").on(t.workspaceId),
+    orgWorkspaceIdx: index("workspace_budget_policy_org_workspace_idx").on(t.orgId, t.workspaceId),
+  }),
+);

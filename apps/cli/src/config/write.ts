@@ -16,8 +16,9 @@
  * busts the per-process resolution cache so a `resolveWorkspaceConfig` call
  * right after a write sees it.
  */
-import { writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { atomicWriteFileSync } from "../lib/atomic-write.js";
 import { readScopeDoc } from "../settings/write.js";
 import {
   workspaceConfigSchema,
@@ -60,7 +61,7 @@ function scopePath(scope: ConfigScope, ctx: ConfigWriteCtx): string {
 export function writeConfigScopeDoc(path: string, doc: Record<string, unknown>): void {
   const validated = workspaceConfigSchema.parse(doc);
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(validated, null, 2) + "\n", "utf8");
+  atomicWriteFileSync(path, JSON.stringify(validated, null, 2) + "\n");
   clearWorkspaceConfigCache();
 }
 

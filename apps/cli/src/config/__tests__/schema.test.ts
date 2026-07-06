@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { workspaceConfigSchema } from "../schema.js";
+import { workspaceConfigSchema, RUNTIME_DEAD_KEYS, RUNTIME_DEAD_KEY_REDIRECT } from "../schema.js";
 
 describe("workspaceConfigSchema — minimal identity-only file", () => {
   it("accepts today's real workspace.json shape (WorkspaceLink, no config sections)", () => {
@@ -237,5 +237,31 @@ describe("workspaceConfigSchema — validation", () => {
   it("passes through unknown top-level keys (forward-compat)", () => {
     const parsed = workspaceConfigSchema.parse({ someFutureSection: { ok: true } });
     expect((parsed as Record<string, unknown>).someFutureSection).toEqual({ ok: true });
+  });
+});
+
+describe("workspaceConfigSchema — RUNTIME_DEAD_KEYS guard (item 5, fix/cli-config-truth)", () => {
+  it("rejects each dead-key top-level field with a message naming the real redirect command", () => {
+    for (const key of RUNTIME_DEAD_KEYS) {
+      const result = workspaceConfigSchema.safeParse({ [key]: "x" });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const issue = result.error.issues.find((i) => i.path.join(".") === key);
+        expect(issue).toBeDefined();
+        expect(issue?.message).toContain(`oxagen config ${RUNTIME_DEAD_KEY_REDIRECT[key]}`);
+      }
+    }
+  });
+
+  it("still accepts a document with a dead key stripped out and every other section intact", () => {
+    const result = workspaceConfigSchema.safeParse({ vision: { statement: "ok" } });
+    expect(result.success).toBe(true);
+  });
+
+  it("does not reject unrelated unknown top-level keys just because RUNTIME_DEAD_KEYS exists", () => {
+    // Regression guard: the fix must deny-list exactly the 4 dead keys, not
+    // flip the schema to `.strict()` (which would break forward-compat).
+    const result = workspaceConfigSchema.safeParse({ someFutureSection: { ok: true } });
+    expect(result.success).toBe(true);
   });
 });

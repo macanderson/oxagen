@@ -16,6 +16,7 @@
  */
 export { storage } from "./client";
 export { createVercelBlobAdapter, publicBaseUrlFromToken } from "./vercel-blob";
+export { createFsAdapter } from "./fs-driver";
 export { StorageNotFoundError } from "./errors";
 export type {
   StorageAdapter,

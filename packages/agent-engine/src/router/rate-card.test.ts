@@ -130,6 +130,30 @@ describe("projectCost", () => {
     expect(p.inputCostUsd).toBeCloseTo(3, 5);
     expect(p.outputTokens).toBe(0);
   });
+
+  it("prices the cached subset at the cache-read rate (does not overstate)", () => {
+    // Anthropic Sonnet: fresh input 3/1M, cache-read 0.3/1M. Half the input
+    // tokens are cache reads → 0.5M×3 + 0.5M×0.3 = 1.5 + 0.15 = 1.65.
+    const p = projectCost("anthropic/claude-sonnet-5", {
+      inputTokens: 1_000_000,
+      cachedTokens: 500_000,
+    });
+    expect(p.cachedTokens).toBe(500_000);
+    expect(p.inputCostUsd).toBeCloseTo(1.65, 5);
+    expect(p.totalUsd).toBeCloseTo(1.65, 5);
+  });
+
+  it("omitting cachedTokens reproduces the full-price (pre-cache) number", () => {
+    const p = projectCost("anthropic/claude-sonnet-5", { inputTokens: 1_000_000 });
+    expect(p.cachedTokens).toBe(0);
+    expect(p.inputCostUsd).toBeCloseTo(3, 5);
+  });
+
+  it("agrees with estimateCostUsd on totalUsd for a cache-heavy usage", () => {
+    const usage = { inputTokens: 800_000, outputTokens: 120_000, cachedTokens: 600_000 };
+    const model = "anthropic/claude-sonnet-5";
+    expect(projectCost(model, usage).totalUsd).toBeCloseTo(estimateCostUsd(model, usage), 8);
+  });
 });
 
 describe("compareModels", () => {

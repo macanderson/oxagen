@@ -19,7 +19,9 @@ import type { ResolvedTierCatalog, EffortLevel } from "@oxagen/ai/catalog";
 import {
   ModelPicker,
   defaultModelState,
+  applyWorkspaceBudgetGovernance,
   type ComposerModelState,
+  type WorkspaceBudgetGovernance,
 } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 import { McpServerPicker } from "./mcp-server-picker";
@@ -189,6 +191,7 @@ export function MessageComposer({
   availableMcpServers,
   availableRepos,
   availableEnvironments,
+  workspaceBudgetGovernance,
   onInputHasContentChange,
   orgSlug,
   workspaceSlug,
@@ -225,6 +228,12 @@ export function MessageComposer({
   /** Workspace environments usable as the code-mode target. */
   availableEnvironments?: EnvironmentOption[];
   /**
+   * Workspace-level per-turn budget governance (OXA-2081), resolved
+   * server-side via `workspace.budget.policy.read`. Null/omitted ⇒ no
+   * governance — the composer behaves exactly as before this feature.
+   */
+  workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
+  /**
    * Called whenever the textarea transitions between empty and non-empty.
    * `true`  → user has typed content (hide suggested prompts).
    * `false` → input is empty / cleared (show suggested prompts).
@@ -233,8 +242,15 @@ export function MessageComposer({
 }) {
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
-  const [model, setModel] = React.useState<ComposerModelState>(
-    initialModelState ?? defaultModelState,
+  // Seed once at mount, applying any workspace budget governance (OXA-2081)
+  // on top of the server-resolved default — a "default" governance pre-fills
+  // an unset control, a "ceiling" clamps it. Lazy initializer: governance is
+  // resolved server-side and doesn't change over the composer's lifetime.
+  const [model, setModel] = React.useState<ComposerModelState>(() =>
+    applyWorkspaceBudgetGovernance(
+      initialModelState ?? defaultModelState,
+      workspaceBudgetGovernance ?? null,
+    ),
   );
   const [activeServerIds, setActiveServerIds] = React.useState<Set<string>>(new Set());
 
@@ -1062,13 +1078,23 @@ export function MessageComposer({
           />
         )}
 
-        {/* Per-turn dollar budget — off by default */}
+        {/* Per-turn dollar budget — off by default. Every change is re-clamped
+            against workspace governance (OXA-2081) so a "ceiling" can never be
+            exceeded, even transiently, by a member's own edit. */}
         <BudgetControl
           budgetEnabled={model.budgetEnabled}
           budgetUsd={model.budgetUsd}
           budgetMode={model.budgetMode}
           budgetGracePct={model.budgetGracePct}
-          onChange={(patch) => setModel((s) => ({ ...s, ...patch }))}
+          governance={workspaceBudgetGovernance}
+          onChange={(patch) =>
+            setModel((s) =>
+              applyWorkspaceBudgetGovernance(
+                { ...s, ...patch },
+                workspaceBudgetGovernance ?? null,
+              ),
+            )
+          }
         />
 
         <div className="ml-auto flex items-center gap-1.5">

@@ -419,6 +419,50 @@ export const workspaceConfigSchema = z
   // Forward-compatible: sections that land in later build phases (§10) may
   // already be present in a user's file; pass them through rather than
   // failing validation, matching settings/schema.ts's convention.
-  .passthrough();
+  .passthrough()
+  // Dead-key guard (see RUNTIME_DEAD_KEYS above): reject the four CLI
+  // runtime/session keys specifically, while every other passthrough key
+  // (including genuinely unknown future sections) still validates fine.
+  .superRefine((doc, ctx) => {
+    for (const key of RUNTIME_DEAD_KEYS) {
+      if (key in doc) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message:
+            `"${key}" is a CLI runtime setting (see \`oxagen config ${RUNTIME_DEAD_KEY_REDIRECT[key]}\`), not a ` +
+            `Workspace Config field — nothing reads it from workspace/user/repo/managed config, so writing it ` +
+            `here would be a silent no-op.`,
+        });
+      }
+    }
+  });
 
 export type WorkspaceConfig = z.infer<typeof workspaceConfigSchema>;
+
+// ── Dead-key guard ────────────────────────────────────────────────────────────
+
+/**
+ * Top-level keys that belong to the CLI *runtime* credential/session store
+ * (`~/.config/oxagen/config.json`, see `lib/config.ts`'s `CliConfig`) or to
+ * `settings.json` (`../settings/schema.ts`) — NOT to this Workspace Config
+ * schema. Nothing in `resolveWorkspaceConfig`/`explain`/the agent's project
+ * context ever reads these paths off a `WorkspaceConfig`, so historically the
+ * root `.passthrough()` below let `oxagen config set model <x>` (etc.) write a
+ * value here that printed a confident "✓" and then was silently never read by
+ * anything — a dead-key write. `workspaceConfigParseIssues` below rejects
+ * exactly these keys at the schema layer (defense in depth alongside the
+ * command-layer redirect in `commands/config.ts`'s `configSet`), while still
+ * passing through genuinely-unknown future keys so forward-compat is
+ * preserved.
+ */
+export const RUNTIME_DEAD_KEYS = ["model", "apiUrl", "effort", "token"] as const;
+export type RuntimeDeadKey = (typeof RUNTIME_DEAD_KEYS)[number];
+
+/** The actual `oxagen config <key>` legacy-command spelling for each dead key ("api-url" is hyphenated there, unlike the `apiUrl` field name). */
+export const RUNTIME_DEAD_KEY_REDIRECT: Record<RuntimeDeadKey, string> = {
+  model: "model",
+  apiUrl: "api-url",
+  effort: "effort",
+  token: "token",
+};

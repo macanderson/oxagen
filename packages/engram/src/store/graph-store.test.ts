@@ -210,6 +210,26 @@ describe("GraphStore", () => {
     expect(results).toHaveLength(2);
   });
 
+  it("searchNodes treats LIKE wildcards as literals (S-3)", async () => {
+    await store.upsertNodes([
+      makeNode({ id: "pct1", displayName: "loss is 50% today" }),
+      makeNode({ id: "pct2", displayName: "totally unrelated node" }),
+    ]);
+    // A bare "%" would match everything if not escaped; it must match only the
+    // node whose text literally contains "%".
+    const results = await store.searchNodes(ORG, WS, "50%", 10);
+    expect(results.map((n) => n.id)).toEqual(["pct1"]);
+  });
+
+  it("searchNodes treats underscore as a literal, not a single-char wildcard", async () => {
+    await store.upsertNodes([
+      makeNode({ id: "u1", displayName: "null_pointer" }),
+      makeNode({ id: "u2", displayName: "nullXpointer" }),
+    ]);
+    const results = await store.searchNodes(ORG, WS, "null_pointer", 10);
+    expect(results.map((n) => n.id)).toEqual(["u1"]);
+  });
+
   // ── lineage push cursor ────────────────────────────────────────────────────
 
   it("getLineageCursor returns null when no lineage sync has been run", async () => {

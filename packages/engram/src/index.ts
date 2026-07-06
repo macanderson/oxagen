@@ -4,8 +4,11 @@
  * Public API surface. All consumers import from this barrel.
  */
 
-// Hash (blake3 with SHA-256 fallback for bundled environments)
+// Hash (SHA-256 content addressing)
 export { initHash, contentHash } from "./hash";
+
+// Canonical JSON serialization for content-address hashing (sorted keys)
+export { canonicalStringify } from "./canonical-json";
 
 // Core types
 export type {
@@ -213,6 +216,7 @@ export type {
 export { embedRecord, extractEmbeddingText } from "./embed/pipeline";
 export type { EmbedResult, EmbedOpts } from "./embed/pipeline";
 export { quantizeToInt8, dequantizeFromInt8 } from "./embed/quantize";
+export type { QuantizedVector } from "./embed/quantize";
 
 // ---------------------------------------------------------------------------
 // Phase D: Consolidation & Learning
@@ -244,8 +248,8 @@ export type {
   DistillationResult,
   DistillationLlmOptions,
 } from "./consolidation/distill";
-export { deduplicateSemanticRecords } from "./consolidation/dedup";
-export type { DedupResult } from "./consolidation/dedup";
+export { deduplicateSemanticRecords } from "./consolidation/dedupe";
+export type { DedupeResult } from "./consolidation/dedupe";
 export { detectContradiction, resolveConflict } from "./consolidation/resolve";
 export type {
   ConflictRecord,
@@ -303,9 +307,16 @@ export type { MergeResult, MergeConflict } from "./sync/merge";
 export {
   buildMerkleTree,
   diffMerkleTrees,
-  collectRecordIds,
+  compareVersions,
+  MerkleTree,
 } from "./sync/merkle";
-export type { MerkleNode } from "./sync/merkle";
+export type {
+  MerkleNode,
+  MerkleChildRef,
+  MerkleDiff,
+  RecordVersion,
+} from "./sync/merkle";
+export { recordVersionDigest, toRecordVersion } from "./sync/merge";
 export { syncWithPeer } from "./sync/protocol";
 export type {
   SyncPeer,

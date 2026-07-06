@@ -49,17 +49,25 @@ export class LexicalRetrievalEngine implements RetrievalEngine {
 
     if (searchResults.length === 0) return [];
 
-    // Look up full records
+    // Look up full records. getByIds returns storage order, not BM25 rank order,
+    // so re-emit in the searchResults order (fusion reads array index as rank).
     const recordIds = searchResults.map((r) => r.recordId);
     const records = await this.store.getByIds(recordIds);
+    const recordMap = new Map(records.map((r) => [r.id, r]));
 
     const scoreMap = new Map(searchResults.map((r) => [r.recordId, r.score]));
 
-    return records.map((record) => ({
-      record,
-      score: Math.min(1, scoreMap.get(record.id) ?? 0),
-      source: "lexical" as const,
-      tokenCost: estimateTokens(record.body),
-    }));
+    const candidates: RetrievalCandidate[] = [];
+    for (const id of recordIds) {
+      const record = recordMap.get(id);
+      if (!record) continue; // Drop misses
+      candidates.push({
+        record,
+        score: Math.min(1, scoreMap.get(id) ?? 0),
+        source: "lexical" as const,
+        tokenCost: estimateTokens(record.body),
+      });
+    }
+    return candidates;
   }
 }

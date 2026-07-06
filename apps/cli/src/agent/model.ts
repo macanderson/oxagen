@@ -8,6 +8,7 @@
  * the default below.
  */
 import { readConfig } from "../lib/config.js";
+import { loadSettings, type SettingsScope } from "../settings/index.js";
 import { DEFAULT_CODING_MODEL } from "./model-catalog.js";
 
 /**
@@ -28,6 +29,57 @@ export function resolveModelId(override?: string): string {
     readConfig().model ??
     DEFAULT_MODEL
   );
+}
+
+export interface ModelMask {
+  /** The value that actually wins at runtime (differs from what the caller is about to set). */
+  value: string;
+  /** Human-readable description of where the winning value lives. */
+  source: string;
+}
+
+export interface FindModelMaskOptions {
+  cwd?: string;
+  /** Test-injection seam — see settings/resolve.ts's ResolveSettingsOptions. Real callers omit it. */
+  userSettingsPath?: string;
+  projectDirName?: string;
+}
+
+/**
+ * Detect whether `newValue` (about to be written to store #2,
+ * `~/.config/oxagen/config.json`, via `oxagen config model <x>`) would
+ * actually take effect, or whether `OXAGEN_MODEL` — set directly in the shell,
+ * or projected from `settings.json`'s `model` by `applySettingsToEnv`
+ * (../settings/runtime.ts) — permanently masks it (`resolveModelId` above
+ * checks `OXAGEN_MODEL` before ever consulting store #2). Returns `null` when
+ * nothing would mask `newValue`. Best-effort/offline: reads settings files
+ * fresh via `loadSettings`, never throws.
+ */
+export function findModelMask(newValue: string, opts: FindModelMaskOptions = {}): ModelMask | null {
+  const envValue = process.env["OXAGEN_MODEL"];
+  if (envValue === undefined || envValue === "" || envValue === newValue) return null;
+
+  const cwd = opts.cwd ?? process.cwd();
+  const { settings, scopes } = loadSettings({
+    cwd,
+    userSettingsPath: opts.userSettingsPath,
+    projectDirName: opts.projectDirName,
+    noCache: true,
+  });
+  if (settings.model !== undefined && settings.model === envValue) {
+    // The winning env value matches what settings.json resolves to — most
+    // likely it got there via applySettingsToEnv's projection. Identify the
+    // most-specific scope that actually declares `model` (local > project > user).
+    const order: SettingsScope[] = ["local", "project", "user"];
+    const winner = scopes.find((s) => s.scope === order[0] && s.settings?.model !== undefined) ??
+      scopes.find((s) => s.scope === order[1] && s.settings?.model !== undefined) ??
+      scopes.find((s) => s.scope === order[2] && s.settings?.model !== undefined);
+    if (winner) {
+      return { value: envValue, source: `${winner.scope} settings.json (${winner.path}), projected to OXAGEN_MODEL` };
+    }
+    return { value: envValue, source: "settings.json, projected to OXAGEN_MODEL" };
+  }
+  return { value: envValue, source: "the OXAGEN_MODEL environment variable already exported in your shell" };
 }
 
 /**

@@ -66,6 +66,11 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Durable A2A task store (orgScopeMixin + tenant_isolation RLS in
   // 20260704230000_a2a_tasks.sql).
   { table: "agent.a2a_tasks", policyClass: "standard" },
+  // File-lock lease authority + fencing-token counter (ADR-021 §5;
+  // orgScopeMixin + tenant_isolation RLS in
+  // 20260708120000_agent_file_locks.sql).
+  { table: "agent.file_locks", policyClass: "standard" },
+  { table: "agent.file_lock_fences", policyClass: "standard" },
 
   // ── ai.* — response cache + batch jobs use orgScopeMixin (tenant_isolation
   // RLS created in 20260704200000_ai_cache_and_batch_jobs.sql) ─────────────
@@ -207,6 +212,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Agent-memory decay policy (OXA-1374). org_id + workspace_id both NOT NULL
   // → standard tenant_isolation RLS.
   { table: "workspace.workspace_memory_policy", policyClass: "standard" },
+  // Per-turn budget governance (OXA-2081). org_id + workspace_id both NOT NULL
+  // → standard tenant_isolation RLS.
+  { table: "workspace.workspace_budget_policy", policyClass: "standard" },
 
   // ── environments.* — Agent Environments & Credential Vault (Phase 0, Spec §5).
   //   All four carry org_id + workspace_id NOT NULL → standard tenant_isolation.

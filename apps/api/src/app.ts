@@ -77,6 +77,7 @@ import { agentSubagentSiblingsRoute } from "./routes/v1/agent.subagent.siblings"
 import { agentSubagentFanoutListRoute } from "./routes/v1/agent.subagent.fanout.list";
 import { agentSubagentFanoutGetRoute } from "./routes/v1/agent.subagent.fanout.get";
 import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
+import { agentDebugTraceRoute } from "./routes/v1/agent.debug.trace";
 import { agentExecutionLineageRoute } from "./routes/v1/agent.execution.lineage";
 import { agentExecutionListRoute } from "./routes/v1/agent.execution.list";
 import { formFillRoute } from "./routes/v1/form.fill";
@@ -100,6 +101,8 @@ import { userPreferencesReadRoute } from "./routes/v1/user.preferences.read";
 import { userPreferencesWriteRoute } from "./routes/v1/user.preferences.write";
 import { budgetPolicyReadRoute } from "./routes/v1/budget.policy.read";
 import { budgetPolicyWriteRoute } from "./routes/v1/budget.policy.write";
+import { workspaceBudgetPolicyReadRoute } from "./routes/v1/workspace.budget.policy.read";
+import { workspaceBudgetPolicyWriteRoute } from "./routes/v1/workspace.budget.policy.write";
 import { authWhoamiRoute } from "./routes/v1/auth.whoami";
 import { workspaceModelSettingsReadRoute } from "./routes/v1/workspace.model.settings.read";
 import { workspaceModelSettingsWriteRoute } from "./routes/v1/workspace.model.settings.write";
@@ -425,6 +428,7 @@ orgScoped.route("/agent/subagent/fanout", agentSubagentFanoutGetRoute);
 // executions (subagent/A2A lineage). The list route backs the Activity index.
 orgScoped.route("/agent/executions", agentExecutionListRoute);
 orgScoped.route("/agent/trace", agentTraceGetRoute);
+orgScoped.route("/agent/debug/trace", agentDebugTraceRoute);
 // File-level lineage of one execution — the :Execution node plus every
 // :SourceFile it touched via TOUCHED_FILE edges, resolved to citable
 // KnowledgeNodeRefs (CLAUDE.md "Citing nodes & edges").
@@ -469,6 +473,8 @@ orgScoped.route("/org/members/remove", orgMemberRemoveRoute);
 orgScoped.route("/org/members/role", orgMemberRoleChangeRoute);
 orgScoped.route("/org/invitations/accept", orgMemberInviteAcceptRoute);
 orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
+orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyReadRoute);
+orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyWriteRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsReadRoute);
 orgScoped.route("/workspace/model-settings", workspaceModelSettingsWriteRoute);
 orgScoped.route("/workspace/prompt-settings", promptSettingsReadRoute);

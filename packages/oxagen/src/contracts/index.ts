@@ -46,6 +46,7 @@ import { agentExecutionList } from "./agent.execution.list";
 import { agentExecutionRecord } from "./agent.execution.record";
 import { agentExecutionLineage } from "./agent.execution.lineage";
 import { agentTraceGet } from "./agent.trace.get";
+import { agentDebugTrace } from "./agent.debug.trace";
 import { agentUiRender } from "./agent.ui.render";
 import { documentsGenerate } from "./documents.generate";
 import { documentsPdfCreate } from "./documents.pdf.create";
@@ -118,6 +119,8 @@ import { userPreferencesRead } from "./user.preferences.read";
 import { userPreferencesWrite } from "./user.preferences.write";
 import { budgetPolicyRead } from "./budget.policy.read";
 import { budgetPolicyWrite } from "./budget.policy.write";
+import { workspaceBudgetPolicyRead } from "./workspace.budget.policy.read";
+import { workspaceBudgetPolicyWrite } from "./workspace.budget.policy.write";
 import { workspaceModelSettingsRead } from "./workspace.model.settings.read";
 import { workspaceModelSettingsWrite } from "./workspace.model.settings.write";
 import { promptSettingsRead } from "./prompt.settings.read";
@@ -441,6 +444,7 @@ export {
   agentSubagentResultGet,
   agentSubagentSiblings,
   agentTraceGet,
+  agentDebugTrace,
   agentExecutionLineage,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
@@ -477,6 +481,8 @@ export {
   userPreferencesWrite,
   budgetPolicyRead,
   budgetPolicyWrite,
+  workspaceBudgetPolicyRead,
+  workspaceBudgetPolicyWrite,
   workspaceModelSettingsRead,
   workspaceModelSettingsWrite,
   promptSettingsRead,
@@ -732,6 +738,7 @@ export const contracts = [
   agentSubagentResultGet,
   agentSubagentSiblings,
   agentTraceGet,
+  agentDebugTrace,
   agentExecutionLineage,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
@@ -768,6 +775,8 @@ export const contracts = [
   userPreferencesWrite,
   budgetPolicyRead,
   budgetPolicyWrite,
+  workspaceBudgetPolicyRead,
+  workspaceBudgetPolicyWrite,
   workspaceModelSettingsRead,
   workspaceModelSettingsWrite,
   promptSettingsRead,

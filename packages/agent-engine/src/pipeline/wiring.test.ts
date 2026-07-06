@@ -6,6 +6,8 @@ import {
   buildLadderSignals,
   countDiffLines,
   decideLadderPath,
+  resolveJudgeSkipEnabled,
+  shouldSkipJudgeReadOnly,
 } from "./wiring";
 
 describe("specGateInstruction", () => {
@@ -359,5 +361,60 @@ describe("decideLadderPath", () => {
       ladderEnabled: true,
     });
     expect(decision?.rung).toBeLessThanOrEqual(3);
+  });
+});
+
+describe("resolveJudgeSkipEnabled (ADR-021 §1 — default ON, opt-out)", () => {
+  it("defaults to ON when OXAGEN_LADDER is unset", () => {
+    expect(resolveJudgeSkipEnabled({})).toBe(true);
+  });
+
+  it("opts OUT on an explicit falsey value", () => {
+    for (const v of ["0", "false", "off", "no", "FALSE", "Off"]) {
+      expect(resolveJudgeSkipEnabled({ OXAGEN_LADDER: v })).toBe(false);
+    }
+  });
+
+  it("stays ON for legacy truthy / any other value", () => {
+    for (const v of ["1", "true", "on", "yes"]) {
+      expect(resolveJudgeSkipEnabled({ OXAGEN_LADDER: v })).toBe(true);
+    }
+  });
+});
+
+describe("shouldSkipJudgeReadOnly", () => {
+  it("skips a read-only turn with an empty diff", () => {
+    expect(shouldSkipJudgeReadOnly({ readOnly: true, diff: "" })).toBe(true);
+    expect(shouldSkipJudgeReadOnly({ readOnly: true, diff: "\n  \n" })).toBe(true);
+  });
+
+  it("does NOT skip when the turn changed files, even if read-only-flagged", () => {
+    expect(
+      shouldSkipJudgeReadOnly({ readOnly: true, diff: "--- a/x\n+++ b/x\n+new line" }),
+    ).toBe(false);
+  });
+
+  it("does NOT skip a writable turn", () => {
+    expect(shouldSkipJudgeReadOnly({ readOnly: false, diff: "" })).toBe(false);
+  });
+});
+
+describe("decideLadderPath — failing oracle keeps the judge (does not fast-path)", () => {
+  it("returns a non-submit-fast decision when the oracle is failing so the judge runs", () => {
+    const decision = decideLadderPath({
+      signals: {
+        oracle: "failing",
+        touchedTestsGreen: false,
+        diffLines: 10,
+        filesTouched: 1,
+        stepsUsed: 3,
+        loopNudges: 0,
+      },
+      currentRung: 0,
+      ladderEnabled: true,
+    });
+    // Not undefined (skip enabled), but NOT submit-fast — so the caller runs the judge.
+    expect(decision).toBeDefined();
+    expect(decision!.action).not.toBe("submit-fast");
   });
 });

@@ -13,6 +13,7 @@
  */
 
 import type { Database, Connection } from "duckdb";
+import { NativeModuleUnavailableError } from "./errors";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -141,10 +142,16 @@ export class GraphStore {
   private ready: Promise<void>;
 
   constructor(opts: GraphStoreOpts) {
-    // DuckDB is a native CJS module; require() is shimmed in the CLI entry
-    // point and is available natively in Node/vitest environments.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- duckdb uses CJS
-    const duckdb = require("duckdb") as typeof import("duckdb");
+    // DuckDB is an optional native CJS module. Guard the synchronous require so
+    // a missing binary surfaces a clear, typed error at construction instead of
+    // an opaque MODULE_NOT_FOUND that crashes the caller with no remedy hint.
+    let duckdb: typeof import("duckdb");
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- duckdb uses CJS
+      duckdb = require("duckdb") as typeof import("duckdb");
+    } catch (err) {
+      throw new NativeModuleUnavailableError("duckdb", err);
+    }
     this.db = new duckdb.Database(opts.duckdbPath);
     this.conn = this.db.connect();
     this.ready = this.initialize();
@@ -425,11 +432,19 @@ export class GraphStore {
     limit: number,
   ): Promise<GraphNode[]> {
     await this.ready;
-    const q = `%${query.toLowerCase()}%`;
+    // Escape LIKE wildcards in the user term so a query containing `%` or `_`
+    // is matched literally instead of turning into a wildcard (e.g. searching
+    // for "50%" must not match everything). Escape the escape char first.
+    const escaped = query
+      .toLowerCase()
+      .replace(/\\/g, "\\\\")
+      .replace(/%/g, "\\%")
+      .replace(/_/g, "\\_");
+    const q = `%${escaped}%`;
     const rows = await this.querySql(
       `SELECT * FROM graph_nodes
        WHERE org = ? AND workspace = ?
-         AND (LOWER(display_name) LIKE ? OR LOWER(CAST(properties AS VARCHAR)) LIKE ?)
+         AND (LOWER(display_name) LIKE ? ESCAPE '\\' OR LOWER(CAST(properties AS VARCHAR)) LIKE ? ESCAPE '\\')
        LIMIT ?`,
       [org, workspace, q, q, limit],
     );

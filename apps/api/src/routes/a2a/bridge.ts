@@ -1,17 +1,29 @@
 import {
-  streamAgentReply,
   selectModel,
+  modelIdOf,
   resolvePrompt,
   chatSystemPrompt,
   loadWorkspacePromptConfig,
 } from "@oxagen/ai";
 import { materializeTools, resolveAgentForA2A } from "@oxagen/agent";
+import { createPlatformAgentAi } from "@oxagen/agent/adapters";
+import { runCodingAgent } from "@oxagen/agent-engine";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { insertEvents } from "@oxagen/telemetry";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import type { ModelMessage } from "ai";
 import type { CapabilityContext } from "@oxagen/oxagen";
+import {
+  createTurnBudgetGuard,
+  TURN_BUDGET_OFF,
+  type TurnBudgetPolicy,
+} from "@oxagen/billing";
+import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
+import {
+  recallWorkspaceMemoryMessage,
+  createRecalledMemoryProvider,
+} from "../v1/chat-memory";
 import {
   getSkillId,
   type A2AArtifact,
@@ -23,6 +35,26 @@ import {
 } from "./protocol";
 import { loadTask, updateTask, type A2ATaskRow } from "./task-store";
 import { publish } from "./stream-registry";
+
+// Runaway backstop for the agentic tool loop, NOT a functional limit. A turn
+// ends naturally when the model returns a step with no tool call. Matches the
+// REST chat route + agent-engine defaults.
+const MAX_AGENT_STEPS = 256;
+
+/** Convert the budget.policy.read output to the engine's TurnBudgetPolicy shape. */
+function turnBudgetPolicyFromSaved(saved: {
+  enabled: boolean;
+  limitUsd: number | null;
+  mode: TurnBudgetPolicy["mode"];
+  graceOveragePct: number;
+}): TurnBudgetPolicy {
+  return {
+    enabled: saved.enabled,
+    limitUsd: saved.limitUsd ?? 0,
+    mode: saved.mode,
+    graceOveragePct: saved.graceOveragePct,
+  };
+}
 
 /** Concatenate an A2A message's text parts into a single string. */
 export function messageText(message: A2AMessage): string {
@@ -243,7 +275,9 @@ async function resolveParentExecutionId(
 
 /**
  * Run one A2A task by bridging to the same agent execution path the chat
- * surface uses (streamAgentReply inside runInTenantScope). Token usage is
+ * surface uses — the shared coding engine (runCodingAgent) in workspace-optional
+ * conversational mode, so the multi-step tool loop, invoke()-gated tools,
+ * per-turn memory recall, and the USD budget guard all apply. Token usage is
  * metered automatically by @oxagen/ai; task lifecycle is emitted to ClickHouse
  * and persisted to Postgres. Returns the final task row.
  *
@@ -347,10 +381,28 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
   let outputTokens = 0;
 
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
-  const turnModel = selectModel(model ? { model } : {});
+  const modelId = modelIdOf(selectModel(model ? { model } : {}));
+
+  // The current turn's text becomes the engine `instruction`; the rest of the
+  // conversation is `history`. `history` already includes the inbound turn as
+  // its last entry (the bridge appends before calling), so drop a trailing user
+  // message that duplicates the instruction — the engine appends it itself.
+  const instruction = messageText(inboundMessage);
+  const engineHistory = toModelMessages(history);
+  const lastHist = engineHistory[engineHistory.length - 1];
+  const historyForEngine: ModelMessage[] =
+    lastHist !== undefined &&
+    lastHist.role === "user" &&
+    lastHist.content === instruction
+      ? engineHistory.slice(0, -1)
+      : engineHistory;
 
   try {
-    const [{ tools: agentTools, nameMap: toolNameMap }, promptConfig] =
+    // Materialize tools + prompt config AND kick off deterministic memory recall
+    // in ONE tenant scope so recall runs CONCURRENTLY with tool materialization
+    // (no serial latency before the first token). The recalled block is injected
+    // per-turn by the engine AFTER the cached system prefix (ADR-021 §2/§8).
+    const [{ tools: agentTools, nameMap: toolNameMap }, promptConfig, recalled] =
       await runInTenantScope(scope, () =>
         Promise.all([
           materializeTools({
@@ -364,6 +416,11 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
             clientIp: ctx.clientIp,
           }),
           loadWorkspacePromptConfig(ctx.workspaceId).catch(() => ({})),
+          recallWorkspaceMemoryMessage({
+            query: instruction,
+            executionRef: ctx.requestId,
+            ctx,
+          }),
         ]),
       );
 
@@ -381,74 +438,116 @@ export async function runA2ATask(args: RunA2ATaskArgs): Promise<A2ATaskRow> {
       ? `${chatBaseline}\n\n${skillInstructions}`
       : chatBaseline;
 
-    const result = streamAgentReply({
-      messages: toModelMessages(history),
-      model: turnModel,
-      tools: agentTools,
-      system: resolvePrompt({
-        key: "chat.system",
-        baseline,
-        config: promptConfig,
-      }),
-      telemetry: {
-        orgId: ctx.orgId,
-        workspaceId: ctx.workspaceId,
-        surface: "api",
-        messageId: ctx.requestId,
-      },
-    });
-
-    for await (const raw of result.fullStream as AsyncIterable<unknown>) {
-      const pType =
-        typeof raw === "object" && raw !== null && "type" in raw
-          ? String((raw as { type: unknown }).type)
-          : undefined;
-      if (pType === "text-delta") {
-        const text = (raw as { text: string }).text;
-        assistantText += text;
-        // Stream incremental artifact chunks (append) for message/stream.
-        emit({
-          kind: "artifact-update",
-          taskId,
-          contextId,
-          artifact: {
-            artifactId,
-            name: "response",
-            parts: [{ kind: "text", text }],
-          },
-          append: true,
-          lastChunk: false,
-        });
-      } else if (pType === "tool-call") {
-        const { toolName } = raw as { toolName: string };
-        const capability = toolNameMap[toolName] ?? toolName;
-        // A progress heartbeat so streaming clients see tool activity.
+    // Per-turn dollar budget (OXA — turn-budget). A2A is non-interactive, so
+    // resolve the caller's saved default only when a user is present (agent-to-
+    // agent tasks carry no user ⇒ OFF), and treat prompt-mode as non-pausing:
+    // onPause returns false (deny → stop) since there is no approver on the A2A
+    // wire. Off-by-default ⇒ createTurnBudgetGuard returns undefined (unbounded).
+    const turnBudgetPolicy: TurnBudgetPolicy = ctx.userId
+      ? await budgetPolicyReadHandler({}, ctx)
+          .then(turnBudgetPolicyFromSaved)
+          .catch(() => TURN_BUDGET_OFF)
+      : TURN_BUDGET_OFF;
+    const budgetGuard = createTurnBudgetGuard(turnBudgetPolicy, modelId, {
+      onStop: (verdict) => {
         statusUpdate("working", false, {
           kind: "message",
           role: "agent",
           messageId: crypto.randomUUID(),
           taskId,
           contextId,
-          parts: [{ kind: "text", text: `Using ${capability}…` }],
+          parts: [
+            {
+              kind: "text",
+              text: `Per-turn budget reached ($${verdict.costUsd.toFixed(4)} of $${verdict.limitUsd.toFixed(2)}); stopping.`,
+            },
+          ],
         });
-      } else if (pType === "finish") {
-        const { totalUsage } = raw as {
-          totalUsage?: { inputTokens?: number; outputTokens?: number };
-        };
-        inputTokens = totalUsage?.inputTokens ?? 0;
-        outputTokens = totalUsage?.outputTokens ?? 0;
-      } else if (pType === "error") {
-        streamErrored = true;
-        const errVal = (raw as { error?: unknown }).error;
-        errorMessage =
-          errVal instanceof Error
-            ? errVal.message
-            : typeof errVal === "string"
-              ? errVal
-              : "Agent stream error";
-        console.error("[a2a.bridge] LLM stream error part:", errorMessage);
-      }
-    }
+      },
+      // No interactive approver on the A2A wire — deny (stop) rather than hang.
+      onPause: () => false,
+    });
+
+    // Run the SAME coding engine the CLI + in-app chat use (runCodingAgent),
+    // workspace-optional conversational mode: the multi-step tool loop
+    // (`stopWhen`), invoke()-gated tools, per-turn memory recall, and the USD
+    // budget guard now all apply. Raw AI-SDK parts are mapped to A2A artifact/
+    // status events via `onStreamPart`, preserving the JSON-RPC wire format.
+    const ai = createPlatformAgentAi(ctx, ctx.requestId, "api");
+
+    const result = await runCodingAgent({
+      ai,
+      instruction,
+      history: historyForEngine,
+      system: resolvePrompt({
+        key: "chat.system",
+        baseline,
+        config: promptConfig,
+      }),
+      model: modelId,
+      maxSteps: MAX_AGENT_STEPS,
+      // Byte-identical behaviour: no step retries / no overflow re-run — an
+      // overflow surfaces via the catch as a task failure, as before.
+      maxRetries: 0,
+      maxOverflowRetries: 0,
+      extraTools: agentTools,
+      memory: createRecalledMemoryProvider({
+        recalledPromise: Promise.resolve(recalled),
+      }),
+      budgetGuard,
+      onStreamPart: (raw: unknown) => {
+        const pType =
+          typeof raw === "object" && raw !== null && "type" in raw
+            ? String((raw as { type: unknown }).type)
+            : undefined;
+        if (pType === "text-delta") {
+          const text = (raw as { text: string }).text;
+          assistantText += text;
+          // Stream incremental artifact chunks (append) for message/stream.
+          emit({
+            kind: "artifact-update",
+            taskId,
+            contextId,
+            artifact: {
+              artifactId,
+              name: "response",
+              parts: [{ kind: "text", text }],
+            },
+            append: true,
+            lastChunk: false,
+          });
+        } else if (pType === "tool-call") {
+          const { toolName } = raw as { toolName: string };
+          const capability = toolNameMap[toolName] ?? toolName;
+          // A progress heartbeat so streaming clients see tool activity.
+          statusUpdate("working", false, {
+            kind: "message",
+            role: "agent",
+            messageId: crypto.randomUUID(),
+            taskId,
+            contextId,
+            parts: [{ kind: "text", text: `Using ${capability}…` }],
+          });
+        } else if (pType === "error") {
+          // Defensive: the engine THROWS provider/stream errors to the catch
+          // below rather than yielding an `error` part, but if one arrives here
+          // mark the turn errored so it fails cleanly.
+          streamErrored = true;
+          const errVal = (raw as { error?: unknown }).error;
+          errorMessage =
+            errVal instanceof Error
+              ? errVal.message
+              : typeof errVal === "string"
+                ? errVal
+                : "Agent stream error";
+          console.error("[a2a.bridge] LLM stream error part:", errorMessage);
+        }
+      },
+    });
+
+    // Authoritative token totals: the engine's summed per-step usage.
+    inputTokens = result.usage.inputTokens ?? 0;
+    outputTokens = result.usage.outputTokens ?? 0;
   } catch (err) {
     streamErrored = true;
     errorMessage = err instanceof Error ? err.message : "Agent execution failed";

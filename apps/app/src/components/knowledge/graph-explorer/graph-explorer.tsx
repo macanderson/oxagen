@@ -120,16 +120,18 @@ export function GraphExplorer({ focusNodeId }: GraphExplorerProps = {}) {
   // ref so it runs once per distinct focus target, never re-triggering on every
   // data change.
   const focusedRef = React.useRef<string | null>(null);
+  const dataStatus = data.status;
+  const expandNode = data.expand;
   React.useEffect(() => {
-    if (!focusNodeId || data.status !== "ready") return;
+    if (!focusNodeId || dataStatus !== "ready") return;
     if (focusedRef.current === focusNodeId) return;
     focusedRef.current = focusNodeId;
     setView((v) => (v === "table" ? "2d" : v));
-    void data.expand(focusNodeId).finally(() => {
+    void expandNode(focusNodeId).finally(() => {
       setSelection({ type: "node", id: focusNodeId });
       canvasApi.current?.fit();
     });
-  }, [focusNodeId, data.status, data.expand]);
+  }, [focusNodeId, dataStatus, expandNode]);
 
   React.useEffect(() => {
     const checkDark = () => {

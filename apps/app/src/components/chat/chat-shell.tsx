@@ -8,7 +8,7 @@ import {
   type BackgroundTaskSnapshot,
 } from "./background-task-tray";
 import { resolvedTierCatalog } from "@oxagen/ai";
-import type { ComposerModelState } from "./model-picker";
+import type { ComposerModelState, WorkspaceBudgetGovernance } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
@@ -55,6 +55,9 @@ export interface ChatShellProps {
   availableRepos?: RepoOption[];
   /** Workspace environments usable as the code-mode target. */
   availableEnvironments?: EnvironmentOption[];
+  /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
+   * no governance active for this workspace. */
+  workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
 }
 
 // RSC streaming: the messages promise resolves inside a Suspense boundary
@@ -82,6 +85,7 @@ export function ChatShell({
   availableMcpServers,
   availableRepos,
   availableEnvironments,
+  workspaceBudgetGovernance,
 }: ChatShellProps) {
   return (
     <>
@@ -104,6 +108,7 @@ export function ChatShell({
           availableMcpServers={availableMcpServers}
           availableRepos={availableRepos}
           availableEnvironments={availableEnvironments}
+          workspaceBudgetGovernance={workspaceBudgetGovernance}
         />
       </Suspense>
       <BackgroundTaskTray
@@ -133,6 +138,7 @@ async function AsyncShell({
   availableMcpServers,
   availableRepos,
   availableEnvironments,
+  workspaceBudgetGovernance,
 }: {
   promise: Promise<ChatMessage[]>;
   conversationId: string | null;
@@ -151,6 +157,7 @@ async function AsyncShell({
   availableMcpServers?: McpServerSummary[];
   availableRepos?: RepoOption[];
   availableEnvironments?: EnvironmentOption[];
+  workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
 }) {
   const messages = await promise;
   const modelConfig = resolvedTierCatalog();
@@ -174,6 +181,7 @@ async function AsyncShell({
       availableMcpServers={availableMcpServers}
       availableRepos={availableRepos}
       availableEnvironments={availableEnvironments}
+      workspaceBudgetGovernance={workspaceBudgetGovernance}
     />
   );
 }

@@ -48,6 +48,17 @@ export interface CompileMetadata {
    * dropped candidates or, worst case, dropped salience-1.0 procedural rules.
    */
   retrievalFailures: number;
+  /**
+   * How many pinned procedural rules the packer dropped because the pinned set
+   * exceeded the budget (lowest-salience first). 0 normally.
+   */
+  pinnedTruncated: number;
+  /**
+   * How many included records had their rendered text truncated to fit the
+   * per-record token allowance during layout. 0 when everything rendered in
+   * full.
+   */
+  contentTruncated: number;
 }
 
 export interface LayoutInput {
@@ -65,7 +76,21 @@ export interface LayoutInput {
   tokenUsage: TokenUsage;
   /** Compile timing metadata. */
   metadata: CompileMetadata;
+  /**
+   * How many pinned rules the packer truncated (surfaced into metadata).
+   */
+  pinnedTruncated?: number;
+  /**
+   * Per-record token allowance for the retrieved section. A record whose
+   * rendered text exceeds this is truncated on a token boundary (not the old
+   * hard 500-char slice, which cut token-dense code mid-budget). Default: 500
+   * tokens.
+   */
+  maxRecordTokens?: number;
 }
+
+/** Default per-record token allowance for rendered retrieved content. */
+const DEFAULT_MAX_RECORD_TOKENS = 500;
 
 // ---------------------------------------------------------------------------
 // Implementation
@@ -77,6 +102,8 @@ export interface LayoutInput {
 export function buildLayout(input: LayoutInput): ContextWindow {
   const sections: ContextSection[] = [];
   const { included, compressed, pinned, systemPrompt, modelId, tokenUsage, metadata } = input;
+  const maxRecordTokens = input.maxRecordTokens ?? DEFAULT_MAX_RECORD_TOKENS;
+  let contentTruncated = 0;
 
   // Section 0: System prompt (always stable)
   if (systemPrompt) {
@@ -109,7 +136,12 @@ export function buildLayout(input: LayoutInput): ContextWindow {
   const retrievedRecords = included.filter((r) => r.kind !== "semantic" && !pinned.some((p) => p.id === r.id));
   if (retrievedRecords.length > 0) {
     const content = retrievedRecords
-      .map((r) => formatRecordForContext(r))
+      .map((r) => {
+        const rendered = formatRecordForContext(r);
+        const { text, truncated } = truncateToTokens(rendered, maxRecordTokens, modelId);
+        if (truncated) contentTruncated += 1;
+        return text;
+      })
       .join("\n\n");
     sections.push(makeSection("retrieved", "retrieved-memories", content, modelId));
   }
@@ -131,6 +163,12 @@ export function buildLayout(input: LayoutInput): ContextWindow {
     .reduce((sum, s) => sum + s.content.length, 0);
   const totalBytes = sections.reduce((sum, s) => sum + s.content.length, 0);
 
+  // Surface truncation counts into metadata so a caller can see when context
+  // was degraded (pinned rules dropped by the packer, or record bodies trimmed
+  // to their token allowance here).
+  metadata.pinnedTruncated = input.pinnedTruncated ?? metadata.pinnedTruncated ?? 0;
+  metadata.contentTruncated = contentTruncated;
+
   return {
     sections,
     tokenUsage,
@@ -141,6 +179,30 @@ export function buildLayout(input: LayoutInput): ContextWindow {
     },
     metadata,
   };
+}
+
+/**
+ * Truncate `text` so its token count under `modelId` does not exceed
+ * `maxTokens`. Binary-searches the longest character prefix that fits, then
+ * appends an ellipsis marker. Returns whether truncation occurred so the
+ * caller can record it. O(log n) tokenizer calls.
+ */
+function truncateToTokens(
+  text: string,
+  maxTokens: number,
+  modelId: string,
+): { text: string; truncated: boolean } {
+  if (maxTokens <= 0) return { text: "", truncated: text.length > 0 };
+  if (countTokens(text, modelId) <= maxTokens) return { text, truncated: false };
+
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (countTokens(text.slice(0, mid), modelId) <= maxTokens) lo = mid;
+    else hi = mid - 1;
+  }
+  return { text: `${text.slice(0, lo).trimEnd()}…`, truncated: true };
 }
 
 function makeSection(type: SectionType, id: string, content: string, modelId: string): ContextSection {
@@ -162,7 +224,8 @@ function formatRecordForContext(record: MemoryRecord): string {
       const outcome = body.outcome ? ` [${body.outcome}]` : "";
       const payload = body.payload;
       const detail = typeof payload === "string" ? payload : JSON.stringify(payload ?? {});
-      return `${event}${outcome}: ${detail}`.slice(0, 500);
+      // Full text — the caller truncates by token allowance, not a hard char slice.
+      return `${event}${outcome}: ${detail}`;
     }
     case "procedural":
       return String(body.rule ?? JSON.stringify(body));
@@ -171,6 +234,6 @@ function formatRecordForContext(record: MemoryRecord): string {
     case "edge":
       return `${body.edgeType}: ${body.sourceId} → ${body.targetId}`;
     default:
-      return JSON.stringify(body).slice(0, 500);
+      return JSON.stringify(body);
   }
 }

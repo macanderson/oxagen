@@ -20,6 +20,8 @@ import {
   getScopePaths,
   writeSettingsValue,
   writeStarterSettings,
+  envVarForSettingsKey,
+  shellShadowsSettingsKey,
   type SettingsScope,
   type OxagenSettings,
   type ResolveSettingsOptions,
@@ -93,6 +95,13 @@ export function settingsSet(
   try {
     const path = writeSettingsValue({ ...ctx, scope, key, value });
     console.log(`✓ ${key} = ${value}  (${scope}: ${path})`);
+    if (shellShadowsSettingsKey(key)) {
+      const envVar = envVarForSettingsKey(key);
+      console.log(
+        `  Note: shell value wins until you unset ${envVar} — it is already exported in this shell, ` +
+          `and shell env always beats settings.json (see runtime.ts's projection gate).`,
+      );
+    }
   } catch (err) {
     console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
     process.exitCode = 1;

@@ -144,6 +144,8 @@ export const workspace = {
       `${wsBase(ctx)}/settings/memory`,
     environments: (ctx: Required<ScopeContext>): string =>
       `${wsBase(ctx)}/settings/environments`,
+    budget: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/settings/budget`,
   },
 
   // Evals — score what actually ran and got billed (eval.* capability family).

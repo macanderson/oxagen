@@ -64,12 +64,19 @@ import { createChatMemoryProvider } from "./engine-memory";
 // modes, the pure evaluator, createTurnBudgetGuard) lives in @oxagen/billing —
 // this route only resolves the effective policy and wires the three hooks to
 // its own SSE/approval machinery.
-import { createTurnBudgetGuard, formatBudgetUsd, TURN_BUDGET_OFF } from "@oxagen/billing";
+import {
+  createTurnBudgetGuard,
+  formatBudgetUsd,
+  resolveEffectiveTurnBudget,
+  TURN_BUDGET_OFF,
+} from "@oxagen/billing";
 import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
 import {
   requestTurnBudgetSchema,
   resolveTurnBudgetPolicy,
   turnBudgetPolicyFromSaved,
+  governedBudgetFromRead,
+  type SavedWorkspaceGovernance,
 } from "./turn-budget-policy";
 import {
   isCurrentUserTurnAtHead,
@@ -689,6 +696,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           pinnedSkillBodies,
           recalledMemory,
           turnBudgetPolicy,
+          workspaceBudgetGovernance,
         ] = await runInTenantScope(
           { orgId: tenant.id, workspaceId: workspace.id },
           () =>
@@ -793,7 +801,40 @@ export async function POST(request: NextRequest): Promise<Response> {
                 : budgetPolicyReadHandler({}, capCtx)
                     .then(turnBudgetPolicyFromSaved)
                     .catch(() => TURN_BUDGET_OFF),
+              // Workspace-level budget governance (OXA-2081): a workspace
+              // Owner/Admin may impose a governed budget (a soft "default"
+              // that seeds a member who hasn't opted in, or a hard "ceiling"
+              // that clamps every member's effective policy — see
+              // resolveEffectiveTurnBudget in @oxagen/billing). Read via
+              // invoke() (not a raw handler import like budget.policy.read
+              // above) because this is Owner/Admin-managed governance state,
+              // not a user preference row, so it goes through the same
+              // metering/IAM chokepoint every other capability call does.
+              // { surface: "agent" } because the contract's `surfaces` list
+              // is ["api","mcp","agent"] and does not include "app".
+              //
+              // FAIL-OPEN: any error — an unregistered handler, a down DB, a
+              // denied IAM check — resolves to `null` governance, which makes
+              // resolveEffectiveTurnBudget's merge below a documented no-op
+              // (the member's own policy applies unchanged). A broken
+              // governance row must never block a turn from running, exactly
+              // like the TURN_BUDGET_OFF fallback above.
+              invoke("workspace.budget.policy.read", {}, capCtx, { surface: "agent" })
+                .then((raw) => governedBudgetFromRead(raw as SavedWorkspaceGovernance))
+                .catch(() => null),
             ]),
+        );
+
+        // Merge in workspace-level governance (OXA-2081) on top of the
+        // member's own resolved policy. `resolveEffectiveTurnBudget` is the
+        // SAME pure merge every surface (CLI/API/app) will share once org-level
+        // governance also lands — org governance is a separate follow-up, so
+        // `org` is passed `null` here (a no-op in the merge). This is the
+        // policy actually handed to the guard below.
+        const effectiveTurnBudgetPolicy = resolveEffectiveTurnBudget(
+          turnBudgetPolicy,
+          null,
+          workspaceBudgetGovernance,
         );
 
         // Resolve the knowledge-graph node each recalled memory is grounded in,
@@ -953,8 +994,11 @@ export async function POST(request: NextRequest): Promise<Response> {
         // this feature). The three hooks are the ONLY app-specific part of
         // enforcement — the policy shape, the mode ladder, and the pure
         // evaluator all live in @oxagen/billing and must not be reimplemented
-        // here.
-        const budgetGuard = createTurnBudgetGuard(turnBudgetPolicy, modelId, {
+        // here. Uses the GOVERNED effective policy (member ⊕ workspace
+        // governance, resolved above via resolveEffectiveTurnBudget), not the
+        // raw member policy — a workspace ceiling must bind even when the
+        // member never configured (or tried to loosen) their own budget.
+        const budgetGuard = createTurnBudgetGuard(effectiveTurnBudgetPolicy, modelId, {
           // grace mode: informational, non-blocking — the turn keeps running
           // past its base limit but inside the grace cushion.
           onWithinGrace: (verdict) => {

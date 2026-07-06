@@ -55,25 +55,28 @@ describe("extractFactFromCluster — LLM path", () => {
     vi.unstubAllEnvs();
   });
 
-  it("uses the LLM structured output as the fact when a gateway key + options are present", async () => {
+  it("keeps the deterministic fact and only adopts the LLM's domain label (ADR-021 §1)", async () => {
+    // The model decorates the DOMAIN; the fact TEXT is the deterministic
+    // heuristic identity and must not come from the model.
     generateObjectFor.mockResolvedValueOnce({
-      object: { fact: "grep reliably locates code", domain: "tooling" },
+      object: { domain: "tooling" },
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     });
 
     const fact = await extractFactFromCluster(cluster, TELEMETRY);
+    const heuristic = extractFactHeuristic(cluster)!;
 
     expect(generateObjectFor).toHaveBeenCalledTimes(1);
-    // Fast/cheap tier selected for the background job.
+    // Fast/cheap tier + temperature 0 for a deterministic background job.
     expect(selectModel).toHaveBeenCalledWith({ tier: "fast" });
-    expect(fact).toEqual({ fact: "grep reliably locates code", domain: "tooling" });
-    // The heuristic (a % success-rate string) is NOT what was returned.
-    expect(fact).not.toEqual(extractFactHeuristic(cluster));
+    expect(generateObjectFor.mock.calls[0]![0]).toMatchObject({ temperature: 0 });
+    expect(fact!.fact).toBe(heuristic.fact); // identity is deterministic
+    expect(fact!.domain).toBe("tooling"); // decoration adopted
   });
 
   it("forwards the caller's telemetry into generateObjectFor", async () => {
     generateObjectFor.mockResolvedValueOnce({
-      object: { fact: "x", domain: "general" },
+      object: { domain: "general" },
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     });
     await extractFactFromCluster(cluster, TELEMETRY);
@@ -91,9 +94,9 @@ describe("extractFactFromCluster — LLM path", () => {
     expect(fact).toEqual(extractFactHeuristic(cluster));
   });
 
-  it("falls back to the heuristic when the model returns an empty fact", async () => {
+  it("keeps the heuristic domain when the model returns an empty domain label", async () => {
     generateObjectFor.mockResolvedValueOnce({
-      object: { fact: "   ", domain: "tooling" },
+      object: { domain: "   " },
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     });
     const fact = await extractFactFromCluster(cluster, TELEMETRY);
@@ -130,20 +133,19 @@ describe("distill — LLM path integration", () => {
   beforeEach(() => vi.stubEnv("AI_GATEWAY_API_KEY", "test-key"));
   afterEach(() => vi.unstubAllEnvs());
 
-  it("threads LLM-distilled facts through distill() when options are provided", async () => {
+  it("threads the deterministic fact with the LLM's domain through distill()", async () => {
     generateObjectFor.mockResolvedValue({
-      object: { fact: "grep is a dependable search tool", domain: "tooling" },
+      object: { domain: "tooling" },
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     });
 
     const result = await distill(cluster, [], undefined, TELEMETRY);
+    const heuristic = extractFactHeuristic(cluster)!;
 
     expect(generateObjectFor).toHaveBeenCalled();
     expect(result.newFacts).toHaveLength(1);
-    expect(result.newFacts[0]!.fact).toEqual({
-      fact: "grep is a dependable search tool",
-      domain: "tooling",
-    });
+    expect(result.newFacts[0]!.fact.fact).toBe(heuristic.fact);
+    expect(result.newFacts[0]!.fact.domain).toBe("tooling");
     expect(result.processedEventIds).toHaveLength(3);
   });
 

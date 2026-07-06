@@ -31,3 +31,5 @@ export { sweepExpiredFileLocks } from "./mutations/sweep-file-locks";
 export type { SweepFileLocksResult } from "./mutations/sweep-file-locks";
 export { listFileLocks } from "./mutations/list-file-locks";
 export type { FileLockRecord, ListFileLocksInput, ListFileLocksResult } from "./mutations/list-file-locks";
+export { projectFileLockToGraph } from "./mutations/project-file-lock";
+export type { ProjectFileLockInput, ProjectFileLockResult } from "./mutations/project-file-lock";

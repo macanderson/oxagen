@@ -6,18 +6,24 @@ import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { ChatShell, type ChatMessage } from "@/components/chat/chat-shell";
 import type { AgentCapability } from "@/components/chat/plan-card";
-import { listCapabilities, getSurfaces } from "@oxagen/oxagen";
+import { listCapabilities, getSurfaces, invoke } from "@oxagen/oxagen";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { BackgroundTaskSnapshot } from "@/components/chat/background-task-tray";
 import type { PlanStep } from "@/components/chat/stream-event-types";
 import { loadEffectiveModelDefaults } from "@oxagen/ai";
 import { buildSeededModelState } from "@/components/chat/model-state";
+import type { WorkspaceBudgetGovernance } from "@/components/chat/model-state";
 import type { McpServerSummary } from "@/components/chat/mcp-types";
 import { loadCodeModeOptions } from "./code-mode-data";
 import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
 import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
 import { conversationListHandler } from "@oxagen/handlers/conversation.list";
 import { logger } from "@oxagen/handlers/logger";
+// Side-effect import: bind every foundation handler into the shared kernel so
+// invoke("workspace.budget.policy.read", …) below can resolve its handler.
+// Without this the call silently throws "No handler registered" (see CLAUDE.md
+// gotcha) — caught below and treated as fail-open null governance regardless.
+import "@oxagen/handlers/register";
 import { ConversationNav } from "@/components/conversations/conversation-nav";
 import type { ConversationNavActions } from "@/components/conversations/types";
 import {
@@ -204,6 +210,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
     availableMcpServers,
     budgetDefault,
     codeModeOptions,
+    workspaceBudgetGovernance,
   ] =
     await Promise.all([
       Promise.resolve(
@@ -292,6 +299,40 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
       // loadCodeModeOptions never throws (degrades to empty lists internally),
       // so no .catch needed here.
       loadCodeModeOptions(tenant.id, workspace.id, userCtx),
+      // Workspace-level budget governance (OXA-2081): resolved via invoke()
+      // (Owner/Admin-managed governance state, not a user preference row) so
+      // the composer can surface an enforced ceiling / seed a soft default.
+      // { surface: "agent" } — the contract's `surfaces` does not include
+      // "app". FAIL-OPEN: any error (unregistered handler, down DB, denied
+      // check) degrades to `null` (no governance) so a broken governance row
+      // never blocks the chat page from rendering.
+      runInTenantScope({ orgId: tenant.id, workspaceId: workspace.id }, () =>
+        invoke("workspace.budget.policy.read", {}, userCtx, { surface: "agent" }),
+      )
+        .then(
+          (raw): WorkspaceBudgetGovernance => {
+            const read = raw as {
+              enabled: boolean;
+              limitUsd: number | null;
+              mode: "grace" | "prompt" | "enforce";
+              enforcement: "default" | "ceiling";
+            };
+            return {
+              enabled: read.enabled,
+              limitUsd: read.limitUsd ?? 0,
+              mode: read.mode,
+              enforcement: read.enforcement,
+            };
+          },
+        )
+        .catch((err: unknown) =>
+          logAndFallback(err, "workspace-budget-governance read", {
+            enabled: false as const,
+            limitUsd: 0,
+            mode: "prompt" as const,
+            enforcement: "ceiling" as const,
+          }),
+        ),
     ]);
 
   // Bind the workspace scope into the nav's server actions so the client only
@@ -345,6 +386,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
             availableMcpServers={availableMcpServers}
             availableRepos={codeModeOptions.repos}
             availableEnvironments={codeModeOptions.environments}
+            workspaceBudgetGovernance={workspaceBudgetGovernance}
           />
         </div>
       </div>

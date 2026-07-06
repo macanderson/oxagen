@@ -22,7 +22,7 @@ import { useToolStream } from "./use-tool-stream";
 import type { ChatShellProps } from "./chat-shell";
 import type { StreamEvent } from "./stream-event-types";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
-import type { ComposerModelState } from "./model-picker";
+import type { ComposerModelState, WorkspaceBudgetGovernance } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
@@ -105,6 +105,7 @@ export function ChatShellClient({
   availableMcpServers,
   availableRepos,
   availableEnvironments,
+  workspaceBudgetGovernance,
   pageContext,
   onFormFillStart,
   onFormFillEnd,
@@ -137,6 +138,9 @@ export function ChatShellClient({
   availableRepos?: RepoOption[];
   /** Workspace environments usable as the code-mode target. */
   availableEnvironments?: EnvironmentOption[];
+  /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
+   * no governance active for this workspace. */
+  workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
   /**
    * Page context forwarded from the current page. When a fillable form is
    * registered (e.g. in AskDrawer/WandPanel wrappers), this is passed to the
@@ -1093,6 +1097,7 @@ export function ChatShellClient({
         availableMcpServers={availableMcpServers}
         availableRepos={availableRepos}
         availableEnvironments={availableEnvironments}
+        workspaceBudgetGovernance={workspaceBudgetGovernance}
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
       />

@@ -7,8 +7,8 @@ export const repoFork = registerCapability({
   description:
     "Fork a GitHub repository into the authenticated user's account or a specified organization.",
   mode: "sync",
-  surfaces: ["agent", "api"],
-  layers: ["api", "unit", "docs"],
+  surfaces: ["agent", "api", "mcp"],
+  layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "high", category: "vcs" },
   sensitivity: "high",

@@ -38,35 +38,81 @@ export const DEFAULT_PATTERN_CONFIG: PatternConfig = {
   minOccurrences: 3,
 };
 
+/** A contiguous run of tool calls within a single turn. */
+export interface ToolSequence {
+  /** Tool names in call order. */
+  tools: string[];
+  /** Record IDs of the tool_call events, aligned 1:1 with `tools`. */
+  eventIds: string[];
+  /** Occurrence times (record.createdAt) aligned 1:1 with `tools`. */
+  timestamps: number[];
+  /** Turn outcome. */
+  outcome: "success" | "failure" | "unknown";
+}
+
+/** The turn a tool_call belongs to, or null if unknown. */
+function turnOf(body: Record<string, unknown>): string | null {
+  const payload = body.payload as Record<string, unknown> | undefined;
+  const t = payload?.turnId ?? body.turnId;
+  return typeof t === "string" ? t : null;
+}
+
 /**
- * Extract tool call sequences from a session's episodic events.
- * A sequence is a contiguous series of tool_call events within one turn.
+ * Extract tool-call sequences from a session's episodic events.
+ *
+ * A sequence is a contiguous run of tool_call events within ONE turn — it must
+ * not span turns, or a pattern like `[deploy]→[read_file]` could be fabricated
+ * from the end of one turn and the start of the next. Turn boundaries are the
+ * explicit `turn_start`/`turn_end` marker events and a change in `payload.turnId`.
  */
-export function extractToolSequences(
-  events: MemoryRecord[],
-): Array<{ tools: string[]; outcome: "success" | "failure" | "unknown" }> {
-  const sequences: Array<{ tools: string[]; outcome: "success" | "failure" | "unknown" }> = [];
-  let current: string[] = [];
+export function extractToolSequences(events: MemoryRecord[]): ToolSequence[] {
+  const sequences: ToolSequence[] = [];
+  let tools: string[] = [];
+  let eventIds: string[] = [];
+  let timestamps: number[] = [];
+  let currentTurn: string | null = null;
+
+  const flush = (outcome: "success" | "failure" | "unknown") => {
+    if (tools.length > 0) {
+      sequences.push({ tools, eventIds, timestamps, outcome });
+    }
+    tools = [];
+    eventIds = [];
+    timestamps = [];
+  };
 
   for (const event of events) {
     const body = event.body as Record<string, unknown>;
-    if (body.event === "tool_call") {
+    const eventType = body.event;
+
+    // Explicit turn boundaries flush the in-progress sequence.
+    if (eventType === "turn_start" || eventType === "turn_end") {
+      const outcome = (body.outcome as "success" | "failure" | "unknown") ?? "unknown";
+      flush(outcome);
+      currentTurn = eventType === "turn_start" ? turnOf(body) : null;
+      continue;
+    }
+
+    if (eventType === "tool_call") {
+      const turn = turnOf(body);
+      // A change in turnId ends the previous turn's sequence.
+      if (tools.length > 0 && turn !== null && currentTurn !== null && turn !== currentTurn) {
+        flush("unknown");
+      }
+      if (turn !== null) currentTurn = turn;
       const payload = body.payload as Record<string, unknown> | undefined;
       const toolName = (payload?.tool as string) ?? (payload?.name as string) ?? "unknown";
-      current.push(toolName);
-    } else if (current.length > 0) {
-      // End of tool sequence — determine outcome from the next event
+      tools.push(toolName);
+      eventIds.push(event.id);
+      timestamps.push(Number(event.createdAt));
+    } else if (tools.length > 0) {
+      // A non-tool event within the turn ends the run and carries its outcome.
       const outcome = (body.outcome as "success" | "failure" | "unknown") ?? "unknown";
-      sequences.push({ tools: [...current], outcome });
-      current = [];
+      flush(outcome);
     }
   }
 
-  // Flush trailing sequence
-  if (current.length > 0) {
-    sequences.push({ tools: current, outcome: "unknown" });
-  }
-
+  flush("unknown");
   return sequences;
 }
 
@@ -94,9 +140,16 @@ export function detectPatterns(
         if (seq.outcome === "success") existing.success++;
         else if (seq.outcome === "failure") existing.failure++;
 
-        existing.lastSeen = Date.now();
+        // lastSeen is the newest OCCURRENCE time of the pattern (from the event
+        // record), not wall-clock Date.now() — otherwise every pattern looks
+        // like it was just seen and recency-based decisions are meaningless.
+        const occurredAt = Math.max(...seq.timestamps.slice(start, start + len));
+        if (occurredAt > existing.lastSeen) existing.lastSeen = occurredAt;
+
+        // Examples are the concrete event IDs that formed this occurrence, so a
+        // promoted rule can cite the evidence — not the n-gram string itself.
         if (existing.examples.length < 10) {
-          existing.examples.push(key); // Placeholder — in production, store event IDs
+          existing.examples.push(...seq.eventIds.slice(start, start + len));
         }
         ngramCounts.set(key, existing);
       }

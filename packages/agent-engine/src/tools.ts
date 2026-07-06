@@ -555,9 +555,11 @@ export function buildWorkspaceTools(
         "that import a given file (what a change could break); 'imports' lists the " +
         "local files a given file imports; 'semantic_search' finds files " +
         "conceptually related to a natural-language description (e.g. 'project " +
-        "level configuration for the cli app') via embedding similarity — use it " +
-        "when the other operations return nothing because the query names no " +
-        "exact symbol or path.",
+        "level configuration for the cli app') via embedding similarity, returning " +
+        "a flat ranked FILE LIST — use it when 'search' returns nothing because the " +
+        "query names no exact symbol or path. Anti-trigger: for a fuller domain map " +
+        "(those files PLUS their symbols, call edges, and recent commits in one " +
+        "bundle) prefer `code_map`, not this.",
       inputSchema: z.object({
         operation: z.enum([
           "search",
@@ -594,13 +596,16 @@ export function buildWorkspaceTools(
     const codeMapProvider = opts.codeMap;
     tools.code_map = tool({
       description:
-        "Return a structured code-map bundle for a conceptual or multi-word query — " +
-        "semantically matched source files, their symbols (functions/classes/types), " +
-        "inter-symbol call edges, and recent commits that touched those files. " +
-        "PREFER THIS OVER `grep` or `bash find` for questions like 'everything related " +
-        "to payments', 'auth session handling', or 'where does billing live'. " +
-        "Use `code_graph` for precise structural lookups ('where is X defined'); use " +
-        "`code_map` for conceptual exploration across a domain.",
+        "Return a structured code-map BUNDLE for a conceptual or multi-word query: " +
+        "semantically-matched source files PLUS their symbols (functions/classes/types), " +
+        "inter-symbol call edges, and the recent commits that touched them — everything " +
+        "needed to ORIENT in an unfamiliar domain in one call. Prefer this for questions " +
+        "like 'everything related to payments', 'auth session handling', or 'where does " +
+        "billing live'. Prefer it over `code_graph` semantic_search when you want that " +
+        "fuller picture (symbols + call edges + history), not just a ranked list of files. " +
+        "Anti-triggers: for a single symbol's definition or who-imports-what use " +
+        "`code_graph` (search/file_symbols/dependents); for an exact string use `grep`. " +
+        "Do NOT call it for a precise path you already know.",
       inputSchema: z.object({
         query: z
           .string()

@@ -1,51 +1,71 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const onto = vi.hoisted(() => ({ listFileLocks: vi.fn() }));
-vi.mock("@oxagen/ontology", () => ({ listFileLocks: onto.listFileLocks }));
+const lease = vi.hoisted(() => ({ listFileLeases: vi.fn() }));
+vi.mock("../file-lock/lease", () => ({ listFileLeases: lease.listFileLeases }));
 
 import { agentFileLockListHandler } from "./agent.file.lock.list";
-import { TEST_CTX } from "../test-utils/fixtures";
+import { TEST_CTX, makeCTX } from "../test-utils/fixtures";
 
 describe("agentFileLockListHandler", () => {
   beforeEach(() => {
-    onto.listFileLocks.mockReset().mockResolvedValue({ locks: [] });
+    lease.listFileLeases.mockReset().mockResolvedValue({ leases: [] });
   });
 
-  it("lists every live lock (naturalKey undefined) when no path filter is given", async () => {
-    await agentFileLockListHandler({}, TEST_CTX);
-    expect(onto.listFileLocks).toHaveBeenCalledWith({ naturalKey: undefined });
+  it("lists every live lock (resourceKey undefined) when no path filter is given", async () => {
+    await agentFileLockListHandler({}, makeCTX({ orgId: "org_1", workspaceId: "ws_1" }));
+    expect(lease.listFileLeases).toHaveBeenCalledWith({
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      resourceKey: undefined,
+    });
   });
 
-  it("derives the naturalKey filter from path + owner + repo", async () => {
+  it("derives the resourceKey filter from path + owner + repo", async () => {
     await agentFileLockListHandler(
       { path: "src/a.ts", owner: "oxageninc", repo: "oxagen-platform" },
       TEST_CTX,
     );
-    expect(onto.listFileLocks).toHaveBeenCalledWith({
-      naturalKey: "github:oxageninc/oxagen-platform:src/a.ts",
-    });
+    expect(lease.listFileLeases).toHaveBeenCalledWith(
+      expect.objectContaining({ resourceKey: "github:oxageninc/oxagen-platform:src/a.ts" }),
+    );
   });
 
   it("falls back to the raw path when owner/repo are omitted", async () => {
     await agentFileLockListHandler({ path: "src/a.ts" }, TEST_CTX);
-    expect(onto.listFileLocks).toHaveBeenCalledWith({ naturalKey: "src/a.ts" });
+    expect(lease.listFileLeases).toHaveBeenCalledWith(
+      expect.objectContaining({ resourceKey: "src/a.ts" }),
+    );
   });
 
-  it("returns the mutation's result as-is", async () => {
-    const locks = [
-      {
-        lockId: "lock-1",
-        naturalKey: "src/a.ts",
-        agentId: "agent-a",
-        acquiredAt: 1,
-        expiresAt: 2,
-        workspaceId: "ws-1",
-        action: "write",
-        executionId: "turn-1",
-      },
-    ];
-    onto.listFileLocks.mockResolvedValue({ locks });
-    const result = await agentFileLockListHandler({}, TEST_CTX);
-    expect(result).toEqual({ locks });
+  it("maps lease records to the contract's FileLockRecord shape (naturalKey = resourceKey, agentId = holder)", async () => {
+    lease.listFileLeases.mockResolvedValue({
+      leases: [
+        {
+          lockId: "lock-1",
+          resourceKey: "src/a.ts",
+          holder: "agent-a",
+          executionId: "turn-1",
+          action: "write",
+          fencingToken: 3,
+          acquiredAt: 1,
+          expiresAt: 2,
+        },
+      ],
+    });
+    const result = await agentFileLockListHandler({}, makeCTX({ workspaceId: "ws-1" }));
+    expect(result).toEqual({
+      locks: [
+        {
+          lockId: "lock-1",
+          naturalKey: "src/a.ts",
+          agentId: "agent-a",
+          acquiredAt: 1,
+          expiresAt: 2,
+          workspaceId: "ws-1",
+          action: "write",
+          executionId: "turn-1",
+        },
+      ],
+    });
   });
 });

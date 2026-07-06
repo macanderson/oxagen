@@ -9,6 +9,54 @@
 import { platform, release } from "node:os";
 import type { ProjectContext } from "../types";
 
+// ── Shared coding core (ADR-021 §7 convergence groundwork) ───────────────────
+//
+// Three system-prompt builders exist across surfaces — the engine's
+// `DEFAULT_SYSTEM` (the workspace-less chat default), the CLI's richer
+// `buildSystemPrompt` below, and the app's `chatSystemPrompt`. They restate the
+// same coding discipline (tools-first, read before edit, verify, minimal change)
+// in three drifting copies. These exported constants are the SINGLE source of
+// that core wording; the CLI and app can converge onto `buildCodingCorePrompt`
+// in their own waves (§7 says behavior lives in the engine, surfaces own only
+// adapters). Splitting the sentences out changes NO rendered output today.
+
+/** Core identity sentence — a surface may override it to name itself. */
+export const CODING_CORE_IDENTITY =
+  "You are an expert software engineer working in a checked-out repository.";
+/** Tools-first + read/search/edit/run mandate. */
+export const CODING_CORE_TOOLS =
+  "Use the provided tools to read, search, and edit files and run commands.";
+/** Minimal-change + verify-then-stop discipline. */
+export const CODING_CORE_DISCIPLINE =
+  "Make the smallest correct change that satisfies the request, run the repo's " +
+  "tests or build when relevant, and stop when the task is complete.";
+
+/** Per-surface adapters over the shared coding core. */
+export interface CodingSurfaceAdapters {
+  /** Replace the identity sentence (e.g. the CLI/app naming themselves). */
+  identity?: string;
+  /**
+   * Surface-specific sections appended after the shared core paragraph (e.g. the
+   * CLI's narration rules, the app's knowledge-graph-first mandate). Each is
+   * rendered verbatim, separated from the core by a blank line. Empty/blank
+   * entries are dropped.
+   */
+  extraSections?: string[];
+}
+
+/**
+ * Build the shared coding-core system prompt. With no adapters this renders the
+ * engine's historical `DEFAULT_SYSTEM` string BYTE-FOR-BYTE (a stable cache
+ * prefix; ADR-021 §2), so it is a safe drop-in. Surfaces pass adapters to add
+ * their own identity/sections while sharing the exact core wording.
+ */
+export function buildCodingCorePrompt(adapters: CodingSurfaceAdapters = {}): string {
+  const identity = adapters.identity ?? CODING_CORE_IDENTITY;
+  const core = [identity, CODING_CORE_TOOLS, CODING_CORE_DISCIPLINE].join(" ");
+  const extra = (adapters.extraSections ?? []).filter((s) => s.trim().length > 0);
+  return extra.length > 0 ? [core, "", ...extra].join("\n") : core;
+}
+
 export interface SystemPromptOptions {
   cwd: string;
   projectContext?: ProjectContext;
