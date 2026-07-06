@@ -214,6 +214,12 @@ export interface ToolStreamState {
    */
   turnError: LiveTurnError | undefined;
   /**
+   * Non-fatal advisory from a "warning" event (e.g. the reply failed to persist
+   * to history); undefined until one arrives. Toasted like turnError but the
+   * turn is NOT considered failed. Reset per turn.
+   */
+  turnWarning: LiveTurnError | undefined;
+  /**
    * Latest per-turn budget notice from a "budget-notice" event; undefined
    * until one arrives. Reset per turn like turnError/turnUsage.
    */
@@ -238,6 +244,7 @@ export const INITIAL_STATE: ToolStreamState = {
   activeTextKey: null,
   turnUsage: undefined,
   turnError: undefined,
+  turnWarning: undefined,
   turnBudgetNotice: undefined,
 };
 
@@ -618,6 +625,15 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
           limitUsd: e.limitUsd,
           mode: e.mode,
         },
+      };
+    }
+    case "warning": {
+      // Non-fatal advisory (e.g. persist-to-history failed). Stash for the shell
+      // to toast; the turn is NOT failed, so we do NOT clear activeTextKey or
+      // touch the timeline.
+      return {
+        ...state,
+        turnWarning: { message: e.message, ...(e.code !== undefined ? { code: e.code } : {}) },
       };
     }
     case "error": {

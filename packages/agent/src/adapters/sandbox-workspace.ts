@@ -13,6 +13,7 @@
 // primitive `agent.sandbox.files.list` already uses — no per-driver FS surface.
 import { isSandboxAvailable, WORKSPACE_ROOT, isSafeWorkspacePath } from "@oxagen/sandbox";
 import type { Workspace, CommandResult } from "@oxagen/agent-engine";
+import { runInTenantScope } from "@oxagen/tenancy";
 import type { CapabilityContext } from "../types";
 import { agentSandboxStartHandler } from "../handlers/agent.sandbox.start";
 import { agentSandboxExecHandler } from "../handlers/agent.sandbox.exec";
@@ -109,18 +110,34 @@ export class ModalSandboxWorkspace implements Workspace {
     return this.sessionPromise;
   }
 
+  /**
+   * Run a durable-session handler inside this workspace's tenant scope. The
+   * handlers use withTenantDb (ALS-scoped), and this workspace is driven from
+   * the engine's tool loop, which does NOT guarantee an active scope — so we
+   * establish one here. Re-entrant: nesting inside the kernel's own scope (the
+   * agent.repo.edit path) simply re-sets the same tenant and is harmless.
+   */
+  private withScope<T>(fn: () => Promise<T>): Promise<T> {
+    return runInTenantScope(
+      { orgId: this.ctx.orgId, workspaceId: this.ctx.workspaceId },
+      fn,
+    );
+  }
+
   private async bootstrap(): Promise<string> {
-    const start = await agentSandboxStartHandler(
-      {
-        image: "agent",
-        sessionKey: this.sessionKey,
-        memoryMb: 2048,
-        ttlSeconds: 86_400,
-        idleTimeoutSeconds: 1_200,
-        network: "allow",
-        environmentId: this.environmentId,
-      },
-      this.ctx,
+    const start = await this.withScope(() =>
+      agentSandboxStartHandler(
+        {
+          image: "agent",
+          sessionKey: this.sessionKey,
+          memoryMb: 2048,
+          ttlSeconds: 86_400,
+          idleTimeoutSeconds: 1_200,
+          network: "allow",
+          environmentId: this.environmentId,
+        },
+        this.ctx,
+      ),
     );
     this.sessionId = start.sessionId;
     if (this.repo) await this.ensureCloned(start.sessionId, this.repo);
@@ -162,8 +179,9 @@ export class ModalSandboxWorkspace implements Workspace {
   /** Terminate the durable session. Safe to call multiple times. */
   async dispose(): Promise<void> {
     if (!this.sessionId) return;
+    const sessionId = this.sessionId;
     try {
-      await agentSandboxStopHandler({ sessionId: this.sessionId }, this.ctx);
+      await this.withScope(() => agentSandboxStopHandler({ sessionId }, this.ctx));
     } catch {
       // Best-effort teardown; the registry TTL reaps an orphaned session anyway.
     }
@@ -176,15 +194,17 @@ export class ModalSandboxWorkspace implements Workspace {
     sessionId: string,
     opts: { command: string; timeoutMs: number; env?: Record<string, string>; stdin?: string },
   ): Promise<CommandResult> {
-    const out = await agentSandboxExecHandler(
-      {
-        sessionId,
-        command: opts.command,
-        timeoutMs: opts.timeoutMs,
-        env: opts.env,
-        stdin: opts.stdin,
-      },
-      this.ctx,
+    const out = await this.withScope(() =>
+      agentSandboxExecHandler(
+        {
+          sessionId,
+          command: opts.command,
+          timeoutMs: opts.timeoutMs,
+          env: opts.env,
+          stdin: opts.stdin,
+        },
+        this.ctx,
+      ),
     );
     return {
       exitCode: out.exitCode,

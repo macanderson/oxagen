@@ -3,64 +3,66 @@
 import * as React from "react";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { RepoSelector, type Repository } from "./repo-selector";
-import { EnvironmentSelector, type Environment } from "./environment-selector";
+import { RepoSelector, type RepoOption } from "./repo-selector";
+import { EnvironmentSelector, type EnvironmentOption } from "./environment-selector";
 import { cn } from "@/lib/utils";
 
 interface ChatAgentToolbarProps {
-  repositories: Repository[];
-  environments: Environment[];
-  selectedRepoId: string | null;
+  repositories: RepoOption[];
+  environments: EnvironmentOption[];
+  selectedRepoKey: string | null;
   selectedEnvId: string | null;
-  onSelectRepo: (repoId: string) => void;
+  onSelectRepo: (repo: RepoOption) => void;
   onSelectEnv: (envId: string) => void;
-  onAddRepo?: () => void;
   isLoading?: boolean;
   isCollapsed?: boolean;
   onToggleCollapse?: (collapsed: boolean) => void;
 }
 
+/**
+ * Code-mode agent toolbar: repo + environment pickers shown above the
+ * composer while code mode is active. Both selections are required before a
+ * coding turn can be sent — see the composer's send-gate.
+ */
 export function ChatAgentToolbar({
   repositories,
   environments,
-  selectedRepoId,
+  selectedRepoKey,
   selectedEnvId,
   onSelectRepo,
   onSelectEnv,
-  onAddRepo,
   isLoading = false,
   isCollapsed = false,
   onToggleCollapse,
 }: ChatAgentToolbarProps) {
-  const selectedRepo = repositories.find((r) => r.id === selectedRepoId);
+  const selectedRepo = repositories.find((r) => r.key === selectedRepoKey);
   const selectedEnv = environments.find((e) => e.id === selectedEnvId);
 
   return (
-    <div className="border-b border-border bg-card/50 backdrop-blur-sm">
+    <div className="rounded-t-2xl border border-b-0 border-border bg-card/50 backdrop-blur-sm">
       <div className="flex items-center justify-between gap-4 px-4 py-3">
-        <div className={cn("flex flex-1 gap-4", isCollapsed && "hidden")}>
-          {repositories.length > 0 && (
-            <RepoSelector
-              repositories={repositories}
-              selectedRepoId={selectedRepoId}
-              onSelectRepo={onSelectRepo}
-              onAddRepo={onAddRepo}
-              isLoading={isLoading}
-            />
-          )}
-          {environments.length > 0 && (
-            <EnvironmentSelector
-              environments={environments}
-              selectedEnvId={selectedEnvId}
-              onSelectEnv={onSelectEnv}
-              isLoading={isLoading}
-            />
-          )}
+        <div className={cn("flex flex-1 flex-wrap gap-4", isCollapsed && "hidden")}>
+          <RepoSelector
+            repositories={repositories}
+            selectedKey={selectedRepoKey}
+            onSelectRepo={onSelectRepo}
+            isLoading={isLoading}
+          />
+          <EnvironmentSelector
+            environments={environments}
+            selectedEnvId={selectedEnvId}
+            onSelectEnv={onSelectEnv}
+            isLoading={isLoading}
+          />
         </div>
 
         {(selectedRepo || selectedEnv) && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            {selectedRepo && <span className="truncate">{selectedRepo.owner}/{selectedRepo.name}</span>}
+            {selectedRepo && (
+              <span className="truncate">
+                {selectedRepo.owner}/{selectedRepo.name}
+              </span>
+            )}
             {selectedRepo && selectedEnv && <span>•</span>}
             {selectedEnv && <span>{selectedEnv.name}</span>}
           </div>
@@ -68,6 +70,7 @@ export function ChatAgentToolbar({
 
         {onToggleCollapse && (
           <Button
+            type="button"
             size="icon"
             variant="ghost"
             onClick={() => onToggleCollapse(!isCollapsed)}

@@ -14,6 +14,7 @@ import { loadEffectiveModelDefaults } from "@oxagen/ai";
 import { buildSeededModelState } from "@/components/chat/model-state";
 import type { WorkspaceBudgetGovernance } from "@/components/chat/model-state";
 import type { McpServerSummary } from "@/components/chat/mcp-types";
+import { loadCodeModeOptions } from "./code-mode-data";
 import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
 import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
 import { conversationListHandler } from "@oxagen/handlers/conversation.list";
@@ -208,6 +209,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
     initialConversations,
     availableMcpServers,
     budgetDefault,
+    codeModeOptions,
     workspaceBudgetGovernance,
   ] =
     await Promise.all([
@@ -293,6 +295,10 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
           graceOveragePct: 0.25,
         }),
       ),
+      // Repo + environment options for the composer's code-mode pickers.
+      // loadCodeModeOptions never throws (degrades to empty lists internally),
+      // so no .catch needed here.
+      loadCodeModeOptions(tenant.id, workspace.id, userCtx),
       // Workspace-level budget governance (OXA-2081): resolved via invoke()
       // (Owner/Admin-managed governance state, not a user preference row) so
       // the composer can surface an enforced ceiling / seed a soft default.
@@ -378,6 +384,8 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
             pendingPromptBehavior={userPrefs.pendingPromptBehavior}
             initialModelState={initialModelState}
             availableMcpServers={availableMcpServers}
+            availableRepos={codeModeOptions.repos}
+            availableEnvironments={codeModeOptions.environments}
             workspaceBudgetGovernance={workspaceBudgetGovernance}
           />
         </div>

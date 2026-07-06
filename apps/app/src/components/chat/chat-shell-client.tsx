@@ -24,6 +24,8 @@ import type { StreamEvent } from "./stream-event-types";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
 import type { ComposerModelState, WorkspaceBudgetGovernance } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
+import type { RepoOption } from "./repo-selector";
+import type { EnvironmentOption } from "./environment-selector";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import { ConversationFiles } from "./conversation-files";
 import { useLatestRef } from "@/lib/use-latest-ref";
@@ -101,6 +103,8 @@ export function ChatShellClient({
   pendingPromptBehavior = "queue",
   initialModelState,
   availableMcpServers,
+  availableRepos,
+  availableEnvironments,
   workspaceBudgetGovernance,
   pageContext,
   onFormFillStart,
@@ -130,6 +134,10 @@ export function ChatShellClient({
   initialModelState?: ComposerModelState;
   /** Available MCP servers for the per-turn activation picker. */
   availableMcpServers?: McpServerSummary[];
+  /** GitHub repos usable as the code-mode target (see _shared/code-mode-data.ts). */
+  availableRepos?: RepoOption[];
+  /** Workspace environments usable as the code-mode target. */
+  availableEnvironments?: EnvironmentOption[];
   /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
    * no governance active for this workspace. */
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
@@ -188,6 +196,7 @@ export function ChatShellClient({
     order,
     turnUsage,
     turnError,
+    turnWarning,
     turnBudgetNotice,
     consume,
     reset,
@@ -214,7 +223,7 @@ export function ChatShellClient({
       lastToastedErrorRef.current = null;
       return;
     }
-    const key = `${turnError.code ?? ""} ${turnError.message}`;
+    const key = `${turnError.code ?? ""}::${turnError.message}`;
     if (lastToastedErrorRef.current === key) return;
     lastToastedErrorRef.current = key;
     toast.add({
@@ -223,6 +232,25 @@ export function ChatShellClient({
       description: turnError.message,
     });
   }, [turnError, toast]);
+
+  // Non-fatal advisory (e.g. the reply failed to persist to history): toast it
+  // as a warning so the user knows, without marking the turn failed. Same
+  // dedupe-by-content guard as the turnError effect above.
+  const lastToastedWarningRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (turnWarning === undefined) {
+      lastToastedWarningRef.current = null;
+      return;
+    }
+    const key = `${turnWarning.code ?? ""}::${turnWarning.message}`;
+    if (lastToastedWarningRef.current === key) return;
+    lastToastedWarningRef.current = key;
+    toast.add({
+      type: "warning",
+      title: "Heads up",
+      description: turnWarning.message,
+    });
+  }, [turnWarning, toast]);
 
   // Per-turn dollar budget (OXA — turn-budget): surface the engine's non-
   // blocking budget-guard notices as a toast, same dedupe-by-content pattern
@@ -484,6 +512,20 @@ export function ChatShellClient({
               })(),
               // Forward page context so the route can inject the page_form_fill tool.
               pageContext: pageContextRef.current ?? null,
+              // Code-mode sandbox target (OXA app-code-mode). The composer only
+              // sets this formData field when Code mode is ON and both a repo
+              // and environment are selected (see message-composer.tsx's send
+              // gate) — otherwise this is `null`, matching the stream route's
+              // BodySchema `code: {...} | null`.
+              code: (() => {
+                const raw = formData.get("code") as string | null;
+                if (!raw) return null;
+                try {
+                  return JSON.parse(raw) as unknown;
+                } catch {
+                  return null;
+                }
+              })(),
             }),
           });
 
@@ -1053,6 +1095,8 @@ export function ChatShellClient({
         onInterrupt={handleInterrupt}
         initialModelState={initialModelState}
         availableMcpServers={availableMcpServers}
+        availableRepos={availableRepos}
+        availableEnvironments={availableEnvironments}
         workspaceBudgetGovernance={workspaceBudgetGovernance}
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}

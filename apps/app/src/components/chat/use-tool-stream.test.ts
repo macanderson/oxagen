@@ -762,3 +762,33 @@ describe("unknown event type", () => {
     expect(next).toBe(s);
   });
 });
+
+// ---------------------------------------------------------------------------
+// warning events (non-fatal advisories, e.g. persist-to-history failed)
+// ---------------------------------------------------------------------------
+
+describe("warning events", () => {
+  it("stashes turnWarning without marking the turn failed", () => {
+    const s = reducer(
+      INITIAL_STATE,
+      event({ type: "warning", message: "reply not saved", code: "assistant_persist_failed" }),
+    );
+    expect(s.turnWarning).toEqual({ message: "reply not saved", code: "assistant_persist_failed" });
+    // A warning is NON-fatal: it must not populate turnError.
+    expect(s.turnError).toBeUndefined();
+  });
+
+  it("does not clear an in-progress text segment (turn still succeeding)", () => {
+    let s = reducer(INITIAL_STATE, event({ type: "text", messageId: MSG_ID, text: "hi" }));
+    const activeBefore = s.activeTextKey;
+    s = reducer(s, event({ type: "warning", message: "heads up" }));
+    // Unlike an error, a warning leaves the active timeline untouched.
+    expect(s.activeTextKey).toBe(activeBefore);
+    expect(s.textSegments[`text:${MSG_ID}:0`]?.text).toBe("hi");
+  });
+
+  it("omits code when the warning has none", () => {
+    const s = reducer(INITIAL_STATE, event({ type: "warning", message: "just so you know" }));
+    expect(s.turnWarning).toEqual({ message: "just so you know" });
+  });
+});

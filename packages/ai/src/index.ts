@@ -123,6 +123,7 @@ export {
   isOverridablePromptKey,
   OVERRIDABLE_PROMPT_KEYS,
   chatSystemPrompt,
+  codeModeSystemPrompt,
   conversationTitlePrompt,
   svgGeneratePrompt,
   imageAnalyzePrompt,

@@ -3,6 +3,7 @@ import {
   resolvePrompt,
   isOverridablePromptKey,
   chatSystemPrompt,
+  codeModeSystemPrompt,
   conversationTitlePrompt,
 } from "./registry";
 
@@ -242,5 +243,36 @@ describe("chatSystemPrompt — memory & self-improvement", () => {
     const prompt = chatSystemPrompt(CTX);
     expect(prompt.toLowerCase()).toContain("authoritative");
     expect(prompt).toMatch(/never violate a RULE/i);
+  });
+});
+
+describe("codeModeSystemPrompt", () => {
+  const CTX = { orgSlug: "acme", workspaceSlug: "main", orgName: "Acme", workspaceName: "Main" };
+
+  it("extends the chat baseline with a coding-discipline section", () => {
+    const prompt = codeModeSystemPrompt(CTX);
+    // Superset of the chat baseline...
+    expect(prompt.startsWith(chatSystemPrompt(CTX))).toBe(true);
+    // ...plus the code-mode section and its tools-first discipline.
+    expect(prompt).toContain("Code Mode");
+    for (const tool of ["read_file", "write_file", "edit_file", "grep", "bash", "code_graph"]) {
+      expect(prompt).toContain(tool);
+    }
+    expect(prompt).toMatch(/read before you edit/i);
+    expect(prompt).toMatch(/verify/i);
+  });
+
+  it("is STABLE — no per-turn repo/branch/environment interpolation (ADR-021 §2)", () => {
+    // Same session context ⇒ byte-identical string, so the prompt-cache prefix
+    // stays warm. Repo/branch/env context is injected per-turn as a user
+    // message, never into this cached block.
+    expect(codeModeSystemPrompt(CTX)).toBe(codeModeSystemPrompt(CTX));
+    const prompt = codeModeSystemPrompt(CTX);
+    expect(prompt).not.toMatch(/github\.com\//);
+    expect(prompt).not.toMatch(/\benv_[a-z0-9]/i);
+  });
+
+  it("warns against leaking environment secrets", () => {
+    expect(codeModeSystemPrompt(CTX)).toMatch(/never print secret values/i);
   });
 });

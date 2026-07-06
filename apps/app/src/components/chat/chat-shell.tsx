@@ -10,6 +10,8 @@ import {
 import { resolvedTierCatalog } from "@oxagen/ai";
 import type { ComposerModelState, WorkspaceBudgetGovernance } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
+import type { RepoOption } from "./repo-selector";
+import type { EnvironmentOption } from "./environment-selector";
 
 export { type ChatMessage, type MessageAttachment } from "./message-bubble";
 
@@ -49,6 +51,10 @@ export interface ChatShellProps {
   initialModelState?: ComposerModelState;
   /** Available MCP servers for the per-turn activation picker. */
   availableMcpServers?: McpServerSummary[];
+  /** GitHub repos usable as the code-mode target (see _shared/code-mode-data.ts). */
+  availableRepos?: RepoOption[];
+  /** Workspace environments usable as the code-mode target. */
+  availableEnvironments?: EnvironmentOption[];
   /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
    * no governance active for this workspace. */
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
@@ -77,6 +83,8 @@ export function ChatShell({
   pendingPromptBehavior,
   initialModelState,
   availableMcpServers,
+  availableRepos,
+  availableEnvironments,
   workspaceBudgetGovernance,
 }: ChatShellProps) {
   return (
@@ -98,6 +106,8 @@ export function ChatShell({
           pendingPromptBehavior={pendingPromptBehavior}
           initialModelState={initialModelState}
           availableMcpServers={availableMcpServers}
+          availableRepos={availableRepos}
+          availableEnvironments={availableEnvironments}
           workspaceBudgetGovernance={workspaceBudgetGovernance}
         />
       </Suspense>
@@ -126,6 +136,8 @@ async function AsyncShell({
   pendingPromptBehavior,
   initialModelState,
   availableMcpServers,
+  availableRepos,
+  availableEnvironments,
   workspaceBudgetGovernance,
 }: {
   promise: Promise<ChatMessage[]>;
@@ -143,6 +155,8 @@ async function AsyncShell({
   pendingPromptBehavior?: "queue" | "interrupt";
   initialModelState?: ComposerModelState;
   availableMcpServers?: McpServerSummary[];
+  availableRepos?: RepoOption[];
+  availableEnvironments?: EnvironmentOption[];
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
 }) {
   const messages = await promise;
@@ -165,6 +179,8 @@ async function AsyncShell({
       pendingPromptBehavior={pendingPromptBehavior}
       initialModelState={initialModelState}
       availableMcpServers={availableMcpServers}
+      availableRepos={availableRepos}
+      availableEnvironments={availableEnvironments}
       workspaceBudgetGovernance={workspaceBudgetGovernance}
     />
   );

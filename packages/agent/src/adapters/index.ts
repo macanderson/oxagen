@@ -22,3 +22,6 @@ export type {
   ModalSandboxWorkspaceOptions,
   SandboxRepoSpec,
 } from "./sandbox-workspace";
+// Re-exported so surfaces (e.g. apps/app) can gate code-mode on a configured
+// sandbox driver without taking a direct @oxagen/sandbox dependency.
+export { isSandboxAvailable } from "@oxagen/sandbox";
