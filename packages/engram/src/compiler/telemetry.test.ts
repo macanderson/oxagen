@@ -48,6 +48,8 @@ const contextWindow: ContextWindow = {
     candidatesCompressed: 3,
     candidatesEvicted: 12,
     retrievalFailures: 0,
+    pinnedTruncated: 0,
+    contentTruncated: 0,
   },
 };
 

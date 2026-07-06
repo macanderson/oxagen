@@ -4,7 +4,14 @@
  * they validate the entire write path end-to-end in a single process.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { createEngram, createStore, type Engram, type EpisodicStore } from "./index";
+import {
+  createEngram,
+  createStore,
+  createRecord,
+  type Engram,
+  type EpisodicStore,
+} from "./index";
+import type { EntityBody } from "./types";
 
 const NS = { org: "test-org", workspace: "test-ws" };
 const PROV = { author: "test-agent", derivedFrom: [], timestamp: Date.now() };
@@ -33,11 +40,13 @@ describe("createEngram facade", () => {
       expect(id).toMatch(/^[0-9a-f]{64}$/);
     });
 
-    it("is idempotent — same content produces same ID", async () => {
+    it("does NOT alias identical episodic events (P1-5)", async () => {
+      // Two genuine occurrences of the same event are two records — episodic
+      // events are facts-of-record, never deduped by content.
       const event = { event: "observation", payload: { x: 1 } };
       const id1 = await engram.remember(event, OPTS);
       const id2 = await engram.remember(event, OPTS);
-      expect(id1).toBe(id2);
+      expect(id1).not.toBe(id2);
     });
 
     it("different events produce different IDs", async () => {
@@ -74,18 +83,41 @@ describe("createEngram facade", () => {
   });
 
   describe("relate()", () => {
+    async function seedEntity(name: string): Promise<string> {
+      const body: EntityBody = { entityType: "service", name, properties: {} };
+      const record = createRecord({
+        kind: "entity",
+        namespace: NS,
+        body,
+        salience: 0.5,
+        confidence: 1.0,
+        provenance: PROV,
+      });
+      await store.append(record);
+      return record.id;
+    }
+
     it("writes an edge between two entities", async () => {
-      const id = await engram.relate("src-id", "DEPENDS_ON", "tgt-id", OPTS, { weight: 0.8 });
+      const srcId = await seedEntity("api");
+      const tgtId = await seedEntity("database");
+      const id = await engram.relate(srcId, "DEPENDS_ON", tgtId, OPTS, { weight: 0.8 });
       expect(id).toHaveLength(64);
 
       const record = await store.getById(id);
       expect(record!.kind).toBe("edge");
       expect(record!.body).toEqual({
-        sourceId: "src-id",
-        targetId: "tgt-id",
+        sourceId: srcId,
+        targetId: tgtId,
         edgeType: "DEPENDS_ON",
         properties: { weight: 0.8 },
       });
+    });
+
+    it("rejects an edge with a non-existent endpoint (M-3 dangling guard)", async () => {
+      const srcId = await seedEntity("api");
+      await expect(
+        engram.relate(srcId, "DEPENDS_ON", "ghost", OPTS),
+      ).rejects.toThrow(/target node/);
     });
   });
 

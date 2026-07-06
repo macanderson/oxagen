@@ -30,7 +30,13 @@ function recordToRow(record: MemoryRecord): Record<string, unknown> {
     namespace_agent: record.namespace.agent ?? "",
     body: JSON.stringify(record.body),
     embedding: record.embedding
-      ? Buffer.from(record.embedding.buffer).toString("base64")
+      ? // Respect byteOffset/byteLength so a subarray view over a larger buffer
+        // serializes only its own window, not the whole backing ArrayBuffer.
+        Buffer.from(
+          record.embedding.buffer,
+          record.embedding.byteOffset,
+          record.embedding.byteLength,
+        ).toString("base64")
       : "",
     salience: record.salience,
     confidence: record.confidence,
@@ -91,7 +97,14 @@ const CREATE_TABLE_SQL = `
     provenance      String,
     causality       String,
     ttl             UInt64 DEFAULT 0,
-    created_at      UInt64
+    created_at      UInt64,
+    -- Skip index for lexical search. searchLexical() matches lowercased
+    -- substrings via position(lower(body), token); an ngram bloom filter over
+    -- lower(body) lets ClickHouse prune granules that can't contain the token
+    -- instead of full-scanning the partition. ngram (not token) because the
+    -- search is substring-based and keeps path/identifier tokens glued
+    -- (e.g. "auth.ts:42").
+    INDEX idx_body_ngram lower(body) TYPE ngrambf_v1(3, 65536, 3, 0) GRANULARITY 4
   )
   ENGINE = ReplacingMergeTree()
   PARTITION BY (namespace_org, toYYYYMM(fromUnixTimestamp64Milli(created_at)))
@@ -187,6 +200,10 @@ export class ClickHouseEpisodicStore implements EpisodicStore {
       params["minSalience"] = opts.minSalience;
     }
 
+    // FINAL retained: query() feeds the pinned-rule lookup and temporal engine,
+    // where an un-merged duplicate row would list the same rule/record twice and
+    // return a stale salience (reinforcement re-inserts the same key). These are
+    // bounded (LIMIT + salience filter) reads, so merge-on-read is affordable.
     const sql = `
       SELECT * FROM engram_episodic_records FINAL
       WHERE ${conditions.join(" AND ")}
@@ -209,6 +226,9 @@ export class ClickHouseEpisodicStore implements EpisodicStore {
 
   async getById(id: string): Promise<MemoryRecord | null> {
     await this.ready;
+    // FINAL retained: a single-row point lookup must return the merged/latest
+    // version. Without it, LIMIT 1 could pick a stale duplicate (e.g. pre-
+    // reinforcement salience). Cheap — it's one key.
     const result = await this.client.query({
       query:
         "SELECT * FROM engram_episodic_records FINAL WHERE id = {id:String} LIMIT 1",
@@ -223,9 +243,13 @@ export class ClickHouseEpisodicStore implements EpisodicStore {
   async getByIds(ids: string[]): Promise<MemoryRecord[]> {
     await this.ready;
     if (ids.length === 0) return [];
+    // No FINAL: this is a hot fan-in read. Un-merged duplicate rows are harmless
+    // here — every caller (the retrieval engines) builds a Map keyed by record
+    // id from the result, so a duplicate collapses. Skipping the merge-on-read
+    // avoids a large cost on the batch lookup path.
     const result = await this.client.query({
       query:
-        "SELECT * FROM engram_episodic_records FINAL WHERE id IN ({ids:Array(String)})",
+        "SELECT * FROM engram_episodic_records WHERE id IN ({ids:Array(String)})",
       query_params: { ids },
       format: "JSONEachRow",
     });
@@ -258,17 +282,24 @@ export class ClickHouseEpisodicStore implements EpisodicStore {
     tokens.forEach((t, i) => {
       tokenParams[`tok${i}`] = t;
     });
+    // Match against lower(body) with already-lowercased tokens (equivalent to
+    // positionCaseInsensitive) so the predicate lines up with the
+    // `lower(body)` ngram skip index and ClickHouse can prune granules instead
+    // of full-scanning.
     const matchExprs = tokens.map(
-      (_, i) => `if(positionCaseInsensitive(body, {tok${i}:String}) > 0, 1, 0)`,
+      (_, i) => `if(position(lower(body), {tok${i}:String}) > 0, 1, 0)`,
     );
     const scoreSql = `(${matchExprs.join(" + ")}) / ${tokens.length}.0`;
     const whereOr = tokens
-      .map((_, i) => `positionCaseInsensitive(body, {tok${i}:String}) > 0`)
+      .map((_, i) => `position(lower(body), {tok${i}:String}) > 0`)
       .join(" OR ");
 
+    // No FINAL: search returns (id, score); duplicate rows would just repeat an
+    // id, and callers dedupe by id when fetching full records via getByIds.
+    // Skipping merge-on-read is the whole point of adding the skip index.
     const sql = `
       SELECT id, ${scoreSql} AS lexical_score
-      FROM engram_episodic_records FINAL
+      FROM engram_episodic_records
       WHERE namespace_org = {org:String} AND namespace_workspace = {workspace:String}
         AND (${whereOr})
       ORDER BY lexical_score DESC

@@ -8,7 +8,7 @@ import {
 } from "../decay";
 import { ReinforcementTracker } from "../reinforcement";
 import { distill, clusterEvents, DEFAULT_DISTILLATION_CONFIG } from "./distill";
-import { deduplicateSemanticRecords } from "./dedup";
+import { deduplicateSemanticRecords } from "./dedupe";
 import { detectContradiction, resolveConflict } from "./resolve";
 import {
   detectPatterns,

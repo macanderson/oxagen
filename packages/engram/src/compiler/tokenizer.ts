@@ -14,12 +14,49 @@
  */
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
+import { resolveFamily } from "./model-family";
 
 export interface Tokenizer {
   /** Count tokens in text. */
   count(text: string): number;
   /** Which model family this tokenizer handles. */
   modelFamily: string;
+}
+
+// ---------------------------------------------------------------------------
+// Fallback observability (T-2)
+// ---------------------------------------------------------------------------
+//
+// Silently degrading a real vendor tokenizer to the character estimator makes
+// every downstream budget number wrong by ~10% with no signal. We keep a
+// process-wide counter of how often that happened and warn exactly once per
+// family so the first degradation is visible in logs without spamming.
+
+let charEstimatorFallbacks = 0;
+const warnedFamilies = new Set<string>();
+
+/** How many times a real tokenizer fell back to the character estimator. */
+export function getCharEstimatorFallbackCount(): number {
+  return charEstimatorFallbacks;
+}
+
+/** Test seam: reset the fallback counter and warn-once memory. */
+export function resetTokenizerFallbackStats(): void {
+  charEstimatorFallbacks = 0;
+  warnedFamilies.clear();
+}
+
+function recordFallback(family: string, reason: string): void {
+  charEstimatorFallbacks += 1;
+  if (!warnedFamilies.has(family)) {
+    warnedFamilies.add(family);
+    // One-time degradation signal; there is no telemetry hook wired into
+    // this leaf package (console.warn is permitted by the lint config).
+    console.warn(
+      `[engram/tokenizer] ${family} tokenizer unavailable (${reason}); ` +
+        `falling back to character estimate — token budgets are approximate.`,
+    );
+  }
 }
 
 /**
@@ -143,19 +180,21 @@ export class TiktokenTokenizer implements Tokenizer {
     if (!this.encoder && !this.loadFailed) {
       try {
         this.encoder = this.load(this.modelId);
-      } catch {
-        // Dep unavailable or WASM init failed — degrade silently and stick to
-        // the estimator for the lifetime of this (cached) tokenizer.
+      } catch (err) {
+        // Dep unavailable or WASM init failed — degrade to the estimator for
+        // the lifetime of this (cached) tokenizer, but surface it once.
         this.loadFailed = true;
+        recordFallback("openai", err instanceof Error ? err.message : "load failed");
       }
     }
     if (this.encoder) {
       try {
         return this.encoder.encode(text).length;
-      } catch {
+      } catch (err) {
         // A per-call encode failure shouldn't crash budgeting; fall back.
         this.loadFailed = true;
         this.encoder = null;
+        recordFallback("openai", err instanceof Error ? err.message : "encode failed");
       }
     }
     return this.fallback.count(text);
@@ -179,16 +218,18 @@ export class AnthropicTokenizer implements Tokenizer {
     if (!this.counter && !this.loadFailed) {
       try {
         this.counter = this.load();
-      } catch {
+      } catch (err) {
         this.loadFailed = true;
+        recordFallback("anthropic", err instanceof Error ? err.message : "load failed");
       }
     }
     if (this.counter) {
       try {
         return this.counter(text);
-      } catch {
+      } catch (err) {
         this.loadFailed = true;
         this.counter = null;
+        recordFallback("anthropic", err instanceof Error ? err.message : "count failed");
       }
     }
     return this.fallback.count(text);
@@ -238,12 +279,4 @@ export function getTokenizer(modelId: string): Tokenizer {
  */
 export function countTokens(text: string, modelId: string): number {
   return getTokenizer(modelId).count(text);
-}
-
-function resolveFamily(modelId: string): string {
-  const lower = modelId.toLowerCase();
-  if (lower.includes("gpt") || lower.includes("o1") || lower.includes("openai")) return "openai";
-  if (lower.includes("claude") || lower.includes("anthropic")) return "anthropic";
-  if (lower.includes("gemini") || lower.includes("google")) return "google";
-  return "default";
 }

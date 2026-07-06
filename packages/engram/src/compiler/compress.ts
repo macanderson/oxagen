@@ -6,6 +6,7 @@
  * discoverability (the agent knows the memory exists) at minimal token cost.
  */
 import type { MemoryRecord } from "../types";
+import { countTokens } from "./tokenizer";
 
 export interface CompressedItem {
   /** Record ID for engram.recall() page-back-in. */
@@ -22,10 +23,16 @@ export interface CompressedItem {
  * Compress a memory record into a short summary + handle.
  * The summary is the first meaningful sentence from the body, truncated.
  */
-export function compressRecord(record: MemoryRecord, score: number): CompressedItem {
+export function compressRecord(
+  record: MemoryRecord,
+  score: number,
+  modelId = "estimate",
+): CompressedItem {
   const summary = extractSummary(record.kind, record.body as Record<string, unknown>);
-  // Estimate ~4 chars per token for the summary
-  const tokenCost = Math.max(1, Math.ceil(summary.length / 4));
+  // Real tokenizer count so the packer's budget math is exact (a chars/4
+  // estimate under-counts token-dense code summaries). Defaults to the
+  // character estimator when no model id is supplied.
+  const tokenCost = countTokens(summary, modelId);
 
   return {
     recordId: record.id,

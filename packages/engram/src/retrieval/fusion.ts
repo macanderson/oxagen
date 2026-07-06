@@ -33,10 +33,19 @@ const RECENCY_LAMBDA = 0.1;
 /**
  * Fuse candidates from multiple engines into a single ranked list.
  * Deduplicates by record ID (same record from multiple engines gets combined score).
+ *
+ * Recency has exactly ONE home: this function (ADR-021 §8 — deterministic
+ * retrieval with a single, auditable scoring path). The temporal engine no
+ * longer applies its own recency decay; it contributes rank only (salience
+ * within the recent window), so recency is not double-counted here.
+ *
+ * @param topK Optional cap on the number of fused candidates returned. When
+ *   omitted, all fused candidates are returned (previous behavior).
  */
 export function fuseAndRank(
   engineResults: RetrievalCandidate[][],
   weights: FusionWeights = DEFAULT_WEIGHTS,
+  topK?: number,
 ): RetrievalCandidate[] {
   // Step 1: Compute RRF scores across all engines
   const rrfScores = new Map<string, number>();
@@ -78,7 +87,13 @@ export function fuseAndRank(
     // Token cost penalty (normalized: assume max useful record is 500 tokens)
     const normalizedTokenCost = Math.min(1, candidate.tokenCost / 500);
 
-    // Weighted combination
+    // Weighted combination. Kept as a RAW, unclamped score: clamping to [0,1]
+    // (the old behavior) collapsed every candidate whose weighted sum went
+    // negative — after the token penalty — to exactly 0, destroying their
+    // relative order and creating spurious ties. The score is a *relative*
+    // ranking signal; downstream (packer value-per-token, compression floor)
+    // compares scores, so the absolute range is irrelevant and the sign is
+    // meaningful information we must not throw away.
     const finalScore =
       weights.relevance * rrfScore * 10 + // Scale RRF (typically 0.01–0.05) to match others
       weights.recency * recencyScore +
@@ -88,13 +103,13 @@ export function fuseAndRank(
 
     fused.push({
       record,
-      score: Math.max(0, Math.min(1, finalScore)),
+      score: finalScore,
       source: candidate.source,
       tokenCost: candidate.tokenCost,
     });
   }
 
-  // Step 3: Sort by final score descending
+  // Step 3: Sort by raw final score descending, then apply the optional topK cap.
   fused.sort((a, b) => b.score - a.score);
-  return fused;
+  return typeof topK === "number" && topK >= 0 ? fused.slice(0, topK) : fused;
 }

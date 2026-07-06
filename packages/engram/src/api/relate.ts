@@ -30,6 +30,21 @@ export async function relate(
 ): Promise<string> {
   const namespace = validateNamespace(opts.namespace);
 
+  // Dangling-edge guard: an edge whose endpoints don't exist is unresolvable at
+  // retrieval time (the graph engine would surface a UUID with no node behind
+  // it). Verify both endpoints resolve to stored records before writing. The
+  // lookup is a cheap indexed getById on each side.
+  const [sourceRecord, targetRecord] = await Promise.all([
+    store.getById(source),
+    store.getById(target),
+  ]);
+  if (!sourceRecord) {
+    throw new Error(`relate(): source node "${source}" does not exist`);
+  }
+  if (!targetRecord) {
+    throw new Error(`relate(): target node "${target}" does not exist`);
+  }
+
   const body: EdgeBody = {
     sourceId: source,
     targetId: target,

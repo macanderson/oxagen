@@ -39,12 +39,25 @@ export function effectiveSalience(
   successCount: number,
   config: DecayConfig = DEFAULT_DECAY_CONFIG,
 ): number {
-  const age = now - Number(record.createdAt);
+  const createdAt = Number(record.createdAt);
+  // A record with a corrupt/missing createdAt (NaN, undefined) or a base
+  // salience that isn't a finite number would otherwise propagate NaN through
+  // every comparison — and `NaN < minSalience` is false, so a poisoned record
+  // would never be evicted and would linger forever. Treat it as fully decayed
+  // (minimum salience) so it's an eviction candidate instead.
+  if (!Number.isFinite(createdAt) || !Number.isFinite(record.salience)) {
+    return 0;
+  }
+
+  // Clamp age to >= 0: a record with a createdAt in the future (clock skew,
+  // bad backfill) would otherwise get timeDecay > 1 and inflate salience.
+  const age = Math.max(0, now - createdAt);
   const timeDecay = Math.pow(0.5, age / config.halfLife);
   const freqBoost = Math.pow(config.frequencyBoost, Math.min(retrievalCount, 10));
   const outBoost = Math.pow(config.outcomeBoost, Math.min(successCount, 5));
 
-  return Math.min(1.0, record.salience * timeDecay * freqBoost * outBoost);
+  const effective = record.salience * timeDecay * freqBoost * outBoost;
+  return Number.isFinite(effective) ? Math.min(1.0, effective) : 0;
 }
 
 /**

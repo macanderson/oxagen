@@ -349,6 +349,8 @@ describe("buildLayout", () => {
         candidatesCompressed: 1,
         candidatesEvicted: 7,
         retrievalFailures: 0,
+        pinnedTruncated: 0,
+        contentTruncated: 0,
       },
     });
 
@@ -387,6 +389,8 @@ describe("buildLayout", () => {
         candidatesCompressed: 0,
         candidatesEvicted: 0,
         retrievalFailures: 0,
+        pinnedTruncated: 0,
+        contentTruncated: 0,
       },
     });
     const systemSection = window.sections.find((s) => s.type === "system");
@@ -421,6 +425,8 @@ describe("buildLayout", () => {
         candidatesCompressed: 0,
         candidatesEvicted: 0,
         retrievalFailures: 0,
+        pinnedTruncated: 0,
+        contentTruncated: 0,
       },
     });
     expect(window.cachePrefix.hitRate).toBeGreaterThan(0);
