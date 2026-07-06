@@ -1,9 +1,10 @@
 import { requireEnv } from "@oxagen/config/env";
 import { createVercelBlobAdapter } from "./vercel-blob";
+import { createFsAdapter } from "./fs-driver";
 import type { StorageAdapter } from "./types";
 
 /** Drivers supported by the STORAGE_DRIVER env var. */
-const SUPPORTED_DRIVERS = ["vercel-blob"] as const;
+const SUPPORTED_DRIVERS = ["vercel-blob", "fs"] as const;
 
 /**
  * Resolve the configured storage adapter based on the STORAGE_DRIVER env var.
@@ -30,6 +31,13 @@ function resolveAdapter(): StorageAdapter {
         );
       }
       return createVercelBlobAdapter(BLOB_READ_WRITE_TOKEN);
+    }
+    case "fs": {
+      // Filesystem driver — no credential required. Bytes land under
+      // STORAGE_FS_ROOT (an absolute OS-tmp path by default). Used by the CI
+      // e2e container and local dev where no Vercel Blob token exists.
+      const { STORAGE_FS_ROOT } = requireEnv(["STORAGE_FS_ROOT"] as const);
+      return createFsAdapter(STORAGE_FS_ROOT);
     }
     default:
       throw new Error(

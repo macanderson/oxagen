@@ -447,8 +447,10 @@ Before merging a new storage driver:
 |------|---------|
 | `packages/storage/src/types.ts` | `StorageAdapter` interface definition |
 | `packages/storage/src/errors.ts` | `StorageNotFoundError` (shared across all drivers) |
-| `packages/storage/src/vercel-blob.ts` | Reference implementation (Vercel Blob driver) |
+| `packages/storage/src/vercel-blob.ts` | Reference implementation (Vercel Blob driver, `STORAGE_DRIVER=vercel-blob`, prod default) |
 | `packages/storage/src/vercel-blob.test.ts` | Reference test file with `vi.mock` pattern |
+| `packages/storage/src/fs-driver.ts` | Built-in filesystem driver (`STORAGE_DRIVER=fs`) — no credential; bytes under `STORAGE_FS_ROOT`. Used by CI e2e and local dev without a Vercel Blob token. |
+| `packages/storage/src/fs-driver.test.ts` | Filesystem driver tests (round-trip, path-traversal rejection, byte fidelity) |
 | `packages/storage/src/client.ts` | Driver resolution logic (`resolveAdapter()`) |
 | `packages/config/src/env.ts` | Environment variable schema |
 | `packages/storage/src/index.ts` | Public API barrel (re-exports) |
