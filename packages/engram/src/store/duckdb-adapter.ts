@@ -322,6 +322,49 @@ export class DuckDBEpisodicStore implements EpisodicStore {
     }));
   }
 
+  async listNamespaces(): Promise<Namespace[]> {
+    await this.ready;
+    const rows = await this.querySql(
+      `SELECT DISTINCT namespace_org, namespace_workspace FROM episodic_records`,
+    );
+    return rows.map((r) => ({
+      org: r["namespace_org"] as string,
+      workspace: r["namespace_workspace"] as string,
+    }));
+  }
+
+  async updateSalience(id: string, salience: number): Promise<void> {
+    await this.ready;
+    await this.runSql(`UPDATE episodic_records SET salience = ? WHERE id = ?`, [
+      salience,
+      id,
+    ]);
+  }
+
+  async updateConfidence(id: string, confidence: number): Promise<void> {
+    await this.ready;
+    await this.runSql(`UPDATE episodic_records SET confidence = ? WHERE id = ?`, [
+      confidence,
+      id,
+    ]);
+  }
+
+  async evictExpired(namespace: Namespace, now: number): Promise<number> {
+    await this.ready;
+    const where = `namespace_org = ? AND namespace_workspace = ? AND ttl IS NOT NULL AND ttl > 0 AND ttl <= ?`;
+    const params = [namespace.org, namespace.workspace, now];
+    // Count first (DuckDB's run() doesn't return an affected-row count).
+    const rows = await this.querySql(
+      `SELECT count(*) AS n FROM episodic_records WHERE ${where}`,
+      params,
+    );
+    const n = Number(rows[0]?.["n"] ?? 0);
+    if (n > 0) {
+      await this.runSql(`DELETE FROM episodic_records WHERE ${where}`, params);
+    }
+    return n;
+  }
+
   async close(): Promise<void> {
     // Ensure initialization has settled before tearing down so that native
     // DuckDB callbacks don't fire on a closed connection.

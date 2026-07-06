@@ -3,9 +3,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
 const mocks = vi.hoisted(() => ({
   createFunction: vi.fn(),
-  storeMock: { close: vi.fn() },
+  storeMock: { close: vi.fn(), listNamespaces: vi.fn() },
   createStore: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  consolidateWorkspace: vi.fn(),
 }));
 
 vi.mock("../create-function", () => ({
@@ -18,6 +19,10 @@ vi.mock("@oxagen/engram", () => ({
 
 vi.mock("../logger", () => ({
   logger: mocks.logger,
+}));
+
+vi.mock("./engram.consolidation.impl", () => ({
+  consolidateWorkspace: mocks.consolidateWorkspace,
 }));
 
 // ── Capture handler ───────────────────────────────────────────────────────────
@@ -44,51 +49,72 @@ function makeStep(): StepCtx {
   };
 }
 
+const EMPTY_TOTALS = {
+  workspaces: 0,
+  newFacts: 0,
+  boostedFacts: 0,
+  deduped: 0,
+  promotedRules: 0,
+  reinforced: 0,
+  evicted: 0,
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("engramConsolidationRun Inngest handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.storeMock.close.mockResolvedValue(undefined);
+    mocks.storeMock.listNamespaces.mockResolvedValue([]);
     mocks.createStore.mockReturnValue(mocks.storeMock);
   });
 
-  it("returns zero counts on a normal run", async () => {
+  it("returns zero totals when no workspaces have activity", async () => {
     const result = await capturedHandler!({ step: makeStep() });
-
-    expect(result).toEqual({ totalFacts: 0, totalBoosted: 0, totalPatterns: 0 });
+    expect(result).toEqual(EMPTY_TOTALS);
+    expect(mocks.consolidateWorkspace).not.toHaveBeenCalled();
   });
 
-  it("calls store.close in the finally block after a successful run", async () => {
-    await capturedHandler!({ step: makeStep() });
+  it("consolidates every namespace and aggregates the counts", async () => {
+    mocks.storeMock.listNamespaces.mockResolvedValue([
+      { org: "o1", workspace: "w1" },
+      { org: "o1", workspace: "w2" },
+    ]);
+    mocks.consolidateWorkspace
+      .mockResolvedValueOnce({ newFacts: 2, boostedFacts: 1, deduped: 1, promotedRules: 1, reinforced: 3, evicted: 4 })
+      .mockResolvedValueOnce({ newFacts: 1, boostedFacts: 0, deduped: 2, promotedRules: 0, reinforced: 1, evicted: 0 });
 
+    const result = await capturedHandler!({ step: makeStep() });
+
+    expect(mocks.consolidateWorkspace).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({
+      workspaces: 2,
+      newFacts: 3,
+      boostedFacts: 1,
+      deduped: 3,
+      promotedRules: 1,
+      reinforced: 4,
+      evicted: 4,
+    });
+  });
+
+  it("closes the store in the finally block after a successful run", async () => {
+    await capturedHandler!({ step: makeStep() });
     expect(mocks.storeMock.close).toHaveBeenCalledTimes(1);
   });
 
-  it("calls store.close even when step.run throws", async () => {
+  it("closes the store even when a step throws", async () => {
     const throwingStep: StepCtx = {
-      run: async (_name: string, _fn: () => Promise<unknown>) => {
+      run: async () => {
         throw new Error("step failed");
       },
     };
-
     await expect(capturedHandler!({ step: throwingStep })).rejects.toThrow("step failed");
-
     expect(mocks.storeMock.close).toHaveBeenCalledTimes(1);
-  });
-
-  it("logs completion with the result counts", async () => {
-    await capturedHandler!({ step: makeStep() });
-
-    expect(mocks.logger.info).toHaveBeenCalledWith(
-      { totalFacts: 0, totalBoosted: 0, totalPatterns: 0 },
-      "engram.consolidation.run: completed",
-    );
   });
 
   it("creates a store via createStore on each invocation", async () => {
     await capturedHandler!({ step: makeStep() });
-
     expect(mocks.createStore).toHaveBeenCalledTimes(1);
   });
 });
