@@ -50,8 +50,8 @@ function recordFallback(family: string, reason: string): void {
   charEstimatorFallbacks += 1;
   if (!warnedFamilies.has(family)) {
     warnedFamilies.add(family);
-    // eslint-disable-next-line no-console -- one-time degradation signal; there
-    // is no telemetry hook wired into this leaf package.
+    // One-time degradation signal; there is no telemetry hook wired into
+    // this leaf package (console.warn is permitted by the lint config).
     console.warn(
       `[engram/tokenizer] ${family} tokenizer unavailable (${reason}); ` +
         `falling back to character estimate — token budgets are approximate.`,
