@@ -13,6 +13,7 @@
  * uses `CharBasedTokenizer`.
  */
 import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 
 export interface Tokenizer {
   /** Count tokens in text. */
@@ -61,7 +62,32 @@ export type TokenCounterLoader = () => (text: string) => number;
 // synchronous — a dynamic import() would force count() async, changing the
 // interface. require() still loads the WASM lazily on first invocation of the
 // loader (i.e. first count() of that family), never at module evaluation.
-const nodeRequire = createRequire(import.meta.url);
+//
+// The requirer itself is built LAZILY and defensively. When this module is
+// bundled to CJS (esbuild for the Vercel API function), `import.meta.url`
+// collapses to `undefined`, and `createRequire(undefined)` throws
+// ERR_INVALID_ARG_VALUE. Doing that at module top-level would crash the entire
+// serverless function at cold boot — taking down every route, not just token
+// counting. So we defer construction to first use, guard `import.meta.url`, and
+// fall back to `__filename` (present in the CJS bundle) and finally the process
+// cwd, mirroring packages/code-graph/src/loader.ts's `moduleRequire()`.
+let cachedRequire: ReturnType<typeof createRequire> | null = null;
+function nodeRequire(id: string): unknown {
+  if (!cachedRequire) {
+    let base: string;
+    if (typeof import.meta.url === "string" && import.meta.url.length > 0) {
+      base = import.meta.url;
+    } else if (typeof __filename === "string" && __filename.length > 0) {
+      base = __filename;
+    } else {
+      // Last resort: resolve packages relative to the process working directory
+      // so a missing module URL degrades to a normal require, never a boot crash.
+      base = pathToFileURL(`${process.cwd()}/`).href;
+    }
+    cachedRequire = createRequire(base);
+  }
+  return cachedRequire(id);
+}
 
 /** Minimal typed views of the vendor modules (avoid `any` at the require seam). */
 interface TiktokenModule {
