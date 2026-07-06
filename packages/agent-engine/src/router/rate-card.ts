@@ -137,6 +137,17 @@ export interface CostProjection {
   vendor: string;
   inputTokens: number;
   outputTokens: number;
+  /**
+   * Prompt tokens served from the provider cache — a SUBSET of `inputTokens`,
+   * priced at the cache-read rate inside `inputCostUsd`. Echoed for display.
+   */
+  cachedTokens: number;
+  /**
+   * Total input-side cost: the fresh remainder at `inputPer1M` PLUS the cached
+   * subset at `cachedInputPer1M`. Honoring the cache split here is what keeps
+   * `projectCost(...).totalUsd` equal to `estimateCostUsd(model, usage)` — see
+   * ADR-021 §6, projections must match metered actuals.
+   */
   inputCostUsd: number;
   outputCostUsd: number;
   totalUsd: number;
@@ -144,13 +155,26 @@ export interface CostProjection {
   fallback: boolean;
 }
 
-/** Project the dollar cost of a token usage on a specific model. */
+/**
+ * Project the dollar cost of a token usage on a specific model. Splits
+ * `inputTokens` into billable-fresh and cached-read exactly as
+ * {@link estimateCostUsd} does, so a cache-heavy turn is not overstated — the
+ * two functions are guaranteed to agree on `totalUsd`. `cachedTokens` defaults
+ * to 0 (every input token priced fresh — the old, pre-cache-aware behavior), so
+ * existing callers that omit it are unaffected.
+ */
 export function projectCost(model: string, usage: TokenUsage): CostProjection {
   const entry = entryFor(model);
   const rate = entry?.rate ?? FALLBACK_RATE;
   const input = usage.inputTokens ?? 0;
   const output = usage.outputTokens ?? 0;
-  const inputCostUsd = (input / 1_000_000) * rate.inputPer1M;
+  const cached = Math.max(0, usage.cachedTokens ?? 0);
+  // cachedTokens is a subset of inputTokens, never additional to it — split
+  // them apart and never let the billable-fresh remainder go negative.
+  const billableInput = Math.max(0, input - cached);
+  const inputCostUsd =
+    (billableInput / 1_000_000) * rate.inputPer1M +
+    (cached / 1_000_000) * rate.cachedInputPer1M;
   const outputCostUsd = (output / 1_000_000) * rate.outputPer1M;
   return {
     model,
@@ -159,6 +183,7 @@ export function projectCost(model: string, usage: TokenUsage): CostProjection {
     vendor: entry?.vendor ?? "unknown",
     inputTokens: input,
     outputTokens: output,
+    cachedTokens: cached,
     inputCostUsd,
     outputCostUsd,
     totalUsd: inputCostUsd + outputCostUsd,

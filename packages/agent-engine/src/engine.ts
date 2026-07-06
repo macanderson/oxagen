@@ -47,7 +47,15 @@ export function isErrorResult(out: unknown): boolean {
   if (out instanceof Error) return true;
   if (out && typeof out === "object") {
     const o = out as { isError?: unknown; error?: unknown };
-    if (o.isError === true || (o.error != null && o.error !== false)) return true;
+    if (o.isError === true) return true;
+    // An `error` field flags failure — EXCEPT an empty/whitespace-only string,
+    // which is a "no error" sentinel some tools emit (`{ ok, error: "" }`).
+    // Treating `error: ""` as a failure fired a bogus loop-nudge on successful
+    // calls; an empty error string is success.
+    if (o.error != null && o.error !== false) {
+      if (typeof o.error === "string" && o.error.trim() === "") return false;
+      return true;
+    }
   }
   return false;
 }
@@ -223,6 +231,17 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
 
     let streamError: unknown = null;
     let stepText = "";
+    // Per-attempt emit buffer. Every side effect the stream produces — the raw
+    // `onStreamPart` tap, the translated `CodingEvent`s, AND the loop-detection
+    // counter mutations — is captured here as an ordered closure and flushed
+    // ONLY after the step commits (past the streamError check below). A step
+    // that fails mid-stream and gets retried therefore emits NOTHING on the
+    // doomed attempt, so the retried attempt cannot replay a duplicated
+    // transcript (text deltas, tool events) to the CLI/SSE consumer — there is
+    // no retraction event in the wire protocol, so buffer-then-flush is the
+    // correct fix. Steps almost always succeed on the first attempt, so this
+    // adds a flush at the step boundary, not a per-token stall.
+    const deferred: Array<() => void> = [];
     try {
       const result = opts.ai.stream({
         model,
@@ -241,72 +260,86 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
         // Raw part tap: forward EVERY part verbatim before the engine's own
         // subset translation below. The in-app SSE translator consumes this to
         // reproduce the client wire protocol byte-for-byte. Must not throw.
-        opts.onStreamPart?.(part);
+        // Buffered (not called inline) so a retried step does not replay it.
+        deferred.push(() => opts.onStreamPart?.(part));
         if (part.type === "text-delta") {
-          stepText += part.text;
-          onEvent({ type: "text", delta: part.text });
+          const delta = part.text;
+          stepText += delta;
+          deferred.push(() => onEvent({ type: "text", delta }));
         } else if (part.type === "reasoning-delta") {
-          onEvent({ type: "reasoning", delta: part.text });
+          const delta = part.text;
+          deferred.push(() => onEvent({ type: "reasoning", delta }));
         } else if (part.type === "tool-call") {
           toolStartedAt.set(part.toolCallId, Date.now());
-          onEvent({ type: "tool-call", name: part.toolName, input: part.input });
+          const { toolName, input } = part;
+          deferred.push(() => onEvent({ type: "tool-call", name: toolName, input }));
         } else if (part.type === "tool-result") {
           // `preliminary` results (streamed partial output) are progress, not
           // completion — the final result for the same call follows.
           if (!part.preliminary) {
             const started = toolStartedAt.get(part.toolCallId);
             toolStartedAt.delete(part.toolCallId);
+            const durationMs = started ? Date.now() - started : 0;
             const ok = !isErrorResult(part.output);
             const sig = toolCallSignature(part.toolName, part.input);
-            if (ok) {
-              failingCounts.delete(sig); // progress — reset the failing loop counter
-              // Successful-repeat detection: count identical successful calls.
-              // Only applies to bash (the expensive repeated-test-run pattern);
-              // read_file/code_graph repeats are cheap and sometimes intentional.
-              if (part.toolName === "bash") {
-                const succCount = (successCounts.get(sig) ?? 0) + 1;
-                successCounts.set(sig, succCount);
-                if (succCount >= SUCCESSFUL_REPEAT_THRESHOLD && !successNudged.has(sig)) {
-                  pendingNudge = successfulRepeatNudgeMessage(part.toolName, succCount);
-                  successNudged.add(sig);
+            const { toolName, input, output } = part;
+            // Counter mutations + nudge decisions run at flush time (commit),
+            // in stream order, so a discarded attempt never double-counts.
+            deferred.push(() => {
+              if (ok) {
+                failingCounts.delete(sig); // progress — reset the failing loop counter
+                // Successful-repeat detection: count identical successful calls.
+                // Only applies to bash (the expensive repeated-test-run pattern);
+                // read_file/code_graph repeats are cheap and sometimes intentional.
+                if (toolName === "bash") {
+                  const succCount = (successCounts.get(sig) ?? 0) + 1;
+                  successCounts.set(sig, succCount);
+                  if (succCount >= SUCCESSFUL_REPEAT_THRESHOLD && !successNudged.has(sig)) {
+                    pendingNudge = successfulRepeatNudgeMessage(toolName, succCount);
+                    successNudged.add(sig);
+                  }
+                }
+              } else {
+                successCounts.delete(sig); // a failure resets the success counter
+                const count = (failingCounts.get(sig) ?? 0) + 1;
+                failingCounts.set(sig, count);
+                if (count >= LOOP_NUDGE_THRESHOLD && !nudged.has(sig)) {
+                  pendingNudge = loopNudgeMessage(toolName, count, stringifyCapped(output, 400));
+                  nudged.add(sig);
                 }
               }
-            } else {
-              successCounts.delete(sig); // a failure resets the success counter
-              const count = (failingCounts.get(sig) ?? 0) + 1;
-              failingCounts.set(sig, count);
-              if (count >= LOOP_NUDGE_THRESHOLD && !nudged.has(sig)) {
-                pendingNudge = loopNudgeMessage(part.toolName, count, stringifyCapped(part.output, 400));
-                nudged.add(sig);
-              }
-            }
-            onEvent({
-              type: "tool-result",
-              name: part.toolName,
-              input: stringifyCapped(part.input, 1000),
-              result: stringifyCapped(part.output, 2000),
-              durationMs: started ? Date.now() - started : 0,
-              ok,
+              onEvent({
+                type: "tool-result",
+                name: toolName,
+                input: stringifyCapped(input, 1000),
+                result: stringifyCapped(output, 2000),
+                durationMs,
+                ok,
+              });
             });
           }
         } else if (part.type === "tool-error") {
           const started = toolStartedAt.get(part.toolCallId);
           toolStartedAt.delete(part.toolCallId);
+          const durationMs = started ? Date.now() - started : 0;
           const sig = toolCallSignature(part.toolName, part.input);
-          successCounts.delete(sig); // a tool-error resets the success counter
-          const count = (failingCounts.get(sig) ?? 0) + 1;
-          failingCounts.set(sig, count);
-          if (count >= LOOP_NUDGE_THRESHOLD && !nudged.has(sig)) {
-            pendingNudge = loopNudgeMessage(part.toolName, count, stringifyCapped(part.error, 400));
-            nudged.add(sig);
-          }
-          onEvent({
-            type: "tool-result",
-            name: part.toolName,
-            input: stringifyCapped(part.input, 1000),
-            result: stringifyCapped(part.error, 2000),
-            durationMs: started ? Date.now() - started : 0,
-            ok: false,
+          const { toolName, input, error } = part;
+          deferred.push(() => {
+            successCounts.delete(sig); // a tool-error resets the success counter
+            const count = (failingCounts.get(sig) ?? 0) + 1;
+            failingCounts.set(sig, count);
+            if (count >= LOOP_NUDGE_THRESHOLD && !nudged.has(sig)) {
+              pendingNudge = loopNudgeMessage(toolName, count, stringifyCapped(error, 400));
+              nudged.add(sig);
+            }
+            onEvent({
+              type: "tool-result",
+              name: toolName,
+              input: stringifyCapped(input, 1000),
+              result: stringifyCapped(error, 2000),
+              durationMs,
+              ok: false,
+            });
           });
         }
       }
@@ -321,7 +354,9 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
       const response = await result.response;
 
       // Commit the step: nothing above this line mutated turn state, so a throw
-      // before here leaves the step safely retryable.
+      // before here leaves the step safely retryable. Flush the buffered emits
+      // and counter updates now — exactly once, only for the attempt that stuck.
+      for (const emit of deferred) emit();
       text += stepText;
       usage.inputTokens += stepUsage.inputTokens ?? 0;
       usage.outputTokens += stepUsage.outputTokens ?? 0;
