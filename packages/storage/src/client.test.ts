@@ -25,12 +25,20 @@ const createVercelBlobAdapterMock = vi.hoisted(() =>
   vi.fn((_token: string) => ({ driver: "vercel-blob" as const })),
 );
 
+const createFsAdapterMock = vi.hoisted(() =>
+  vi.fn((_root: string | undefined) => ({ driver: "fs" as const })),
+);
+
 vi.mock("@oxagen/config/env", () => ({
   requireEnv: requireEnvMock,
 }));
 
 vi.mock("./vercel-blob", () => ({
   createVercelBlobAdapter: createVercelBlobAdapterMock,
+}));
+
+vi.mock("./fs-driver", () => ({
+  createFsAdapter: createFsAdapterMock,
 }));
 
 // ---------------------------------------------------------------------------
@@ -47,6 +55,7 @@ async function freshStorage() {
 beforeEach(() => {
   requireEnvMock.mockClear();
   createVercelBlobAdapterMock.mockClear();
+  createFsAdapterMock.mockClear();
   vi.resetModules();
 });
 
@@ -167,5 +176,43 @@ describe("storage() — driver selection", () => {
     const { storage } = await freshStorage();
     expect(() => storage()).toThrow(/Unknown STORAGE_DRIVER: "s3"/);
     expect(() => storage()).toThrow(/vercel-blob/);
+    // The error must enumerate the fs driver too, now that it is supported.
+    expect(() => storage()).toThrow(/fs/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fs driver — resolves WITHOUT a Vercel Blob token (the CI/local fix)
+// ---------------------------------------------------------------------------
+
+describe("storage() — fs driver", () => {
+  it("resolves the fs adapter without BLOB_READ_WRITE_TOKEN present", async () => {
+    // Critical regression guard: the whole point of the fs driver is that
+    // storage() must NOT require a Vercel Blob token. requireEnv only ever
+    // returns STORAGE_DRIVER + STORAGE_FS_ROOT here — no blob token at all.
+    requireEnvMock.mockImplementation((keys: readonly string[]) => {
+      if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "fs" };
+      if (keys.includes("STORAGE_FS_ROOT")) return { STORAGE_FS_ROOT: "/tmp/oxagen-storage" };
+      return {};
+    });
+    const { storage } = await freshStorage();
+    expect(() => storage()).not.toThrow();
+    const adapter = storage();
+    expect(adapter.driver).toBe("fs");
+    expect(createFsAdapterMock).toHaveBeenCalledWith("/tmp/oxagen-storage");
+    // The vercel-blob adapter must never be constructed on the fs path.
+    expect(createVercelBlobAdapterMock).not.toHaveBeenCalled();
+  });
+
+  it("passes an undefined root through to the fs adapter (driver defaults it)", async () => {
+    requireEnvMock.mockImplementation((keys: readonly string[]) => {
+      if (keys.includes("STORAGE_DRIVER")) return { STORAGE_DRIVER: "fs" };
+      if (keys.includes("STORAGE_FS_ROOT")) return { STORAGE_FS_ROOT: undefined };
+      return {};
+    });
+    const { storage } = await freshStorage();
+    const adapter = storage();
+    expect(adapter.driver).toBe("fs");
+    expect(createFsAdapterMock).toHaveBeenCalledWith(undefined);
   });
 });
