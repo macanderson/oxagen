@@ -42,8 +42,11 @@ export const ontologyQuery = registerCapability({
   name: "ontology.query",
   domain: "ontology",
   description:
-    "Typed multi-hop traversal from a start node over named relationship type(s) to a given depth. " +
-    "Returns the reachable subgraph (nodes + edges), org + workspace scoped. Read-only; no Cypher required.",
+    "Multi-hop traversal FROM a known start node over named relationship type(s) to a given depth (1–5); " +
+    "returns the reachable subgraph (nodes + edges), org + workspace scoped, read-only, no Cypher required. " +
+    "Prefer over ontology.neighbors when you need MORE than one hop. This tool discovers CONNECTIONS, not " +
+    "nodes: it requires a startNodeId you already have — do NOT use it to find a node by name, topic, or " +
+    "keyword (use graph.search for semantic lookup or graph.node.search for name/label lookup first).",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"] as const,
   layers: ["schema", "api", "mcp", "unit", "docs"],

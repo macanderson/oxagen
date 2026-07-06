@@ -346,13 +346,15 @@ export const baseEnvSchema = z.object({
     .union([z.literal("1"), z.literal("true"), z.literal("0"), z.literal("false")])
     .optional()
     .transform((v) => v === "1" || v === "true"),
-  // F3 adaptive compute ladder: gate escalation on measured signals
-  // (oracle flipped + tests green + diff size) instead of fixed schedule.
-  // Fast-path (rung 0) skips judge entirely when conditions are met.
+  // Deterministic judge-skip / adaptive compute ladder (ADR-021 §1). ON by
+  // DEFAULT: when executed evidence (oracle flipped + tests green + diff size,
+  // or a read-only turn with no diff) already settles completeness, the frontier
+  // completeness judge is skipped. Set to 0/false to OPT OUT and force the judge
+  // to run every round. Normalized boolean = "judge-skip enabled".
   OXAGEN_LADDER: z
     .union([z.literal("1"), z.literal("true"), z.literal("0"), z.literal("false")])
     .optional()
-    .transform((v) => v === "1" || v === "true"),
+    .transform((v) => v !== "0" && v !== "false"),
   // Diff line count threshold for fast-path submission (default 120).
   // When oracle flipped + tests green + diff ≤ budget, skip judge.
   OXAGEN_DIFF_BUDGET: z.coerce.number().positive().default(120),

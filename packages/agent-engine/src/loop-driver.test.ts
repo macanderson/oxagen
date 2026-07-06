@@ -6,6 +6,8 @@ import {
   contextWindowFor,
   delay,
   estimateMessageTokens,
+  IMAGE_PART_TOKENS,
+  FILE_PART_TOKENS,
   isContextOverflowError,
   isFatalAuthOrBillingError,
   isRetryableModelError,
@@ -65,6 +67,47 @@ describe("estimateMessageTokens", () => {
 
   it("returns 0 for empty content", () => {
     expect(estimateMessageTokens([{ role: "user", content: "" }])).toBe(0);
+  });
+
+  it("costs a large base64 image at the flat per-asset constant, not its length", () => {
+    // A ~1 MB base64 image payload: length/4 would be ~350k tokens. It must be
+    // counted flat instead, so a single screenshot never stampedes compaction.
+    const bigImage = "A".repeat(1_400_000);
+    const messages: ModelMessage[] = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "what is in this screenshot?" },
+          { type: "image", image: bigImage, mediaType: "image/png" },
+        ] as never,
+      },
+    ];
+    const tokens = estimateMessageTokens(messages);
+    // Near the image constant + the short text, NOT hundreds of thousands.
+    expect(tokens).toBeLessThan(IMAGE_PART_TOKENS + 100);
+    expect(tokens).toBeGreaterThanOrEqual(IMAGE_PART_TOKENS);
+  });
+
+  it("costs a base64 video/file part at the flat file constant", () => {
+    const bigVideo = "B".repeat(3_000_000);
+    const tokens = estimateMessageTokens([
+      {
+        role: "user",
+        content: [{ type: "file", data: bigVideo, mediaType: "video/mp4" }] as never,
+      },
+    ]);
+    expect(tokens).toBe(FILE_PART_TOKENS);
+  });
+
+  it("does NOT trigger compaction for a small conversation that carries one image", () => {
+    // Reproduces the C3 defect: an otherwise-tiny turn with one image must stay
+    // far below any reasonable compaction threshold (0.8 × a 200k window).
+    const image = "C".repeat(2_000_000);
+    const messages: ModelMessage[] = [
+      { role: "user", content: [{ type: "image", image, mediaType: "image/png" }] as never },
+      { role: "assistant", content: "Looks like a login screen." },
+    ];
+    expect(estimateMessageTokens(messages)).toBeLessThan(200_000 * 0.8);
   });
 });
 

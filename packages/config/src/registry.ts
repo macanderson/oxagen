@@ -1897,24 +1897,24 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_LADDER: {
     group: "CLI",
     description:
-      "Enable the verification-gated adaptive compute ladder (F3): gate escalation on " +
-      "measured signals (oracle state, test outcomes, diff size) instead of a fixed " +
-      "schedule. When on, fast-path (rung 0) skips the judge if oracle flipped and " +
-      "diff budget allows. 0 or unset disables; existing judge/revise pipeline used instead. " +
-      "Only for headless/benchmark runs.",
+      "Deterministic judge-skip / adaptive compute ladder (ADR-021 §1). ON BY DEFAULT: " +
+      "the frontier completeness judge is skipped when executed evidence already settles " +
+      "the outcome (oracle flipped + touched tests green + diff within budget, or a " +
+      "read-only turn with no diff). Set to 0/false to OPT OUT and force the judge to run " +
+      "every round.",
     secret: false,
     clientExposed: false,
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
-    placeholder: "1",
+    placeholder: "0",
   },
   OXAGEN_DIFF_BUDGET: {
     group: "CLI",
     description:
       "Line-count threshold (default 120) for the fast-path terminal condition in the " +
       "adaptive ladder (F3). When oracle is 'flipped' and touched-file tests pass, " +
-      "if diff lines ≤ budget, skip judge and submit. Ignored if OXAGEN_LADDER is unset.",
+      "if diff lines ≤ budget, skip judge and submit. Only applies while judge-skip is enabled (the default; opt out via OXAGEN_LADDER=0).",
     secret: false,
     clientExposed: false,
     services: [],
@@ -1928,7 +1928,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "Hard cap on ladder rung (0–3) in the adaptive compute controller (F3). " +
       "Prevents escalation beyond the specified rung even when signals suggest higher. " +
       "Default 3 (no cap). 0–3 only; invalid values silently use default. " +
-      "Ignored if OXAGEN_LADDER is unset.",
+      "Only applies while judge-skip is enabled (the default; opt out via OXAGEN_LADDER=0).",
     secret: false,
     clientExposed: false,
     services: [],

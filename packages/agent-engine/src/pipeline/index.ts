@@ -39,6 +39,8 @@ import {
   shouldInjectSpecGate,
   buildLadderSignals,
   decideLadderPath,
+  resolveJudgeSkipEnabled,
+  shouldSkipJudgeReadOnly,
 } from "./wiring";
 import {
   classifyTier,
@@ -496,7 +498,9 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
 
   // F2/F3 feature flags.
   const specGateEnabled = Boolean(process.env["OXAGEN_SPEC_GATE"]);
-  const ladderEnabled = Boolean(process.env["OXAGEN_LADDER"]);
+  // ADR-021 §1: deterministic judge-skip is the DEFAULT; a falsey OXAGEN_LADDER
+  // opts OUT and forces the frontier judge to run every round.
+  const judgeSkipEnabled = resolveJudgeSkipEnabled(process.env);
 
   /** Run one execution segment and accumulate its results into shared state. */
   async function runSegment(
@@ -742,47 +746,69 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     // all execution environments — e.g. when onStepFinish is not called).
     for (const f of result.changedFiles) filesTouched.add(f);
 
-    // ── 5. JUDGE (or F3 ladder fast-path bypass) ──
+    // ── 5. JUDGE (or deterministic judge-skip) ──
     const judgeStart = Date.now();
 
-    // F3: Ladder fast-path: check if we should skip the judge entirely
-    // based on measured signals (oracle state, test outcomes, diff size).
+    // ADR-021 §1: the deterministic judge-skip is ON by default (opt out with a
+    // falsey OXAGEN_LADDER). Never spend a frontier completeness judge where
+    // executed evidence already settles the outcome.
     let verdict: typeof judgeRounds[0] | undefined;
-    if (ladderEnabled) {
-      const signals = buildLadderSignals({
-        tracker,
-        diff: result.diff,
-        filesTouchedCount: filesTouched.size,
-        stepsUsed: result.steps,
-      });
-      const decision = decideLadderPath({
-        signals,
-        currentRung: Math.min(round, 3) as 0 | 1 | 2 | 3,
-        ladderEnabled,
-      });
-
-      if (decision && decision.action === "submit-fast") {
-        // Fast-path: oracle flipped + tests green + diff within budget.
-        // Skip judge and treat as complete.
+    if (judgeSkipEnabled) {
+      // (1) Read-only turn that changed nothing: the judge can never trigger a
+      // revise (canRevise gates on !readOnly) and there is no diff to verify, so
+      // a judge call here is pure waste. Settle it deterministically.
+      if (shouldSkipJudgeReadOnly({ readOnly: !!opts.readOnly, diff: result.diff })) {
         verdict = {
           complete: true,
-          confidence: 95,
+          confidence: 100,
           findings: [],
           remainingWork: [],
-          model: "ladder/fast-path",
+          model: "deterministic/read-only",
           usage: emptyUsage(),
           fallback: false,
-          reasoning: `Ladder fast-path: oracle ${signals.oracle}, tests ${signals.touchedTestsGreen ? "green" : "red"}, diff ${signals.diffLines}/${process.env["OXAGEN_DIFF_BUDGET"] ?? 120} lines`,
+          reasoning: "Read-only turn with no file changes — nothing to verify; judge skipped.",
         };
         opts.onStage?.({
           kind: "judge",
-          label: "ladder fast-path: skipped judge",
-          detail: `oracle ${signals.oracle}, diff ${signals.diffLines} lines`,
+          label: "read-only turn: skipped judge",
+          detail: "no file changes to verify",
         });
+      } else {
+        // (2) Ladder fast-path: oracle flipped + touched tests green + diff within
+        // budget — executed tests already prove completion, so skip the judge.
+        const signals = buildLadderSignals({
+          tracker,
+          diff: result.diff,
+          filesTouchedCount: filesTouched.size,
+          stepsUsed: result.steps,
+        });
+        const decision = decideLadderPath({
+          signals,
+          currentRung: Math.min(round, 3) as 0 | 1 | 2 | 3,
+          ladderEnabled: judgeSkipEnabled,
+        });
+
+        if (decision && decision.action === "submit-fast") {
+          verdict = {
+            complete: true,
+            confidence: 95,
+            findings: [],
+            remainingWork: [],
+            model: "ladder/fast-path",
+            usage: emptyUsage(),
+            fallback: false,
+            reasoning: `Ladder fast-path: oracle ${signals.oracle}, tests ${signals.touchedTestsGreen ? "green" : "red"}, diff ${signals.diffLines}/${process.env["OXAGEN_DIFF_BUDGET"] ?? 120} lines`,
+          };
+          opts.onStage?.({
+            kind: "judge",
+            label: "ladder fast-path: skipped judge",
+            detail: `oracle ${signals.oracle}, diff ${signals.diffLines} lines`,
+          });
+        }
       }
     }
 
-    // Standard judge path (if not fast-path skipped).
+    // Standard judge path (if not deterministically skipped).
     if (!verdict) {
       const judgeInput = {
         request: opts.prompt,

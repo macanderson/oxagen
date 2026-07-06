@@ -106,16 +106,42 @@ export function countDiffLines(diff: string): number {
 }
 
 /**
+ * Whether deterministic judge-skip is enabled. ADR-021 §1: skipping the frontier
+ * completeness judge when executed signals already settle the outcome is the
+ * DEFAULT — a model call the ladder/evidence can replace is a defect, not a
+ * feature to opt into. So this returns `true` unless `OXAGEN_LADDER` is set to an
+ * explicit falsey value (`0`/`false`/`off`/`no`), which opts OUT and forces the
+ * judge to run every round. Legacy `OXAGEN_LADDER=1` still enables it (now the
+ * default). Exported for tests.
+ */
+export function resolveJudgeSkipEnabled(env: Record<string, string | undefined>): boolean {
+  const raw = env["OXAGEN_LADDER"];
+  if (raw === undefined) return true;
+  return !/^(0|false|off|no)$/i.test(raw.trim());
+}
+
+/**
+ * True when the judge can be skipped because the turn was read-only and changed
+ * nothing. ADR-021 §1: a read-only turn can never trigger a revise (the pipeline
+ * gates revision on `!readOnly`), and there is no diff to verify, so running a
+ * frontier completeness judge on it is pure waste. Exported for tests.
+ */
+export function shouldSkipJudgeReadOnly(opts: { readOnly: boolean; diff: string }): boolean {
+  return opts.readOnly && countDiffLines(opts.diff) === 0;
+}
+
+/**
  * Decide the next ladder rung and determine whether to skip the judge.
  *
- * When `OXAGEN_LADDER=1` is set, calls the decision engine with measured signals.
- * Returns the decision (which action to take) and whether to skip the judge.
+ * When judge-skip is enabled (the default — see {@link resolveJudgeSkipEnabled}),
+ * calls the decision engine with measured signals and returns the decision.
  *
- * 'submit-fast' action means: skip the judge this round, treat the turn as complete.
- * Other actions mean: run the existing judge logic unchanged.
+ * 'submit-fast' action means: skip the judge this round, treat the turn as complete
+ * (oracle flipped + touched tests green + diff within budget — executed evidence
+ * already proves completion). Other actions mean: run the existing judge logic.
  *
- * When `OXAGEN_LADDER` is unset, returns undefined and the caller should run
- * the standard judge path.
+ * When judge-skip is disabled, returns undefined and the caller runs the standard
+ * judge path.
  */
 export function decideLadderPath(opts: {
   signals: LadderSignals;

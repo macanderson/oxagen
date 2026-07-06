@@ -10,9 +10,38 @@
  * that is not wired for the run (hasCodeGraph / hasCodeMap).
  */
 import { describe, it, expect } from "vitest";
-import { buildSystemPrompt } from "./system-prompt";
+import { buildSystemPrompt, buildCodingCorePrompt } from "./system-prompt";
 
 const base = { cwd: "/repo" } as const;
+
+describe("buildCodingCorePrompt — shared coding core (ADR-021 §7)", () => {
+  // The engine's DEFAULT_SYSTEM is built from this with no adapters — it MUST
+  // render the historical string byte-for-byte so the cache prefix stays stable.
+  const HISTORICAL_DEFAULT_SYSTEM =
+    "You are an expert software engineer working in a checked-out repository. " +
+    "Use the provided tools to read, search, and edit files and run commands. " +
+    "Make the smallest correct change that satisfies the request, run the repo's " +
+    "tests or build when relevant, and stop when the task is complete.";
+
+  it("renders the historical DEFAULT_SYSTEM byte-for-byte with no adapters", () => {
+    expect(buildCodingCorePrompt()).toBe(HISTORICAL_DEFAULT_SYSTEM);
+  });
+
+  it("lets a surface override the identity while keeping the shared discipline", () => {
+    const p = buildCodingCorePrompt({ identity: "You are oxagen, running in the terminal." });
+    expect(p.startsWith("You are oxagen, running in the terminal.")).toBe(true);
+    expect(p).toContain("Use the provided tools to read, search, and edit");
+    expect(p).toContain("Make the smallest correct change");
+  });
+
+  it("appends surface sections after the core, dropping blank ones", () => {
+    const p = buildCodingCorePrompt({ extraSections: ["## Extra\nrule one", "   ", ""] });
+    expect(p).toContain(HISTORICAL_DEFAULT_SYSTEM);
+    expect(p).toContain("## Extra\nrule one");
+    // Exactly one blank-line separator between core and the single kept section.
+    expect(p).toBe(`${HISTORICAL_DEFAULT_SYSTEM}\n\n## Extra\nrule one`);
+  });
+});
 
 describe("buildSystemPrompt — profiles", () => {
   it("headless adds the verification protocol and drops the live narration", () => {
