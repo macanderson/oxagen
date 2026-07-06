@@ -11,6 +11,7 @@ import { z } from "zod";
 import type { Workspace, CodeGraphProvider, CodeMapProvider, CodingEvent } from "./types";
 import type { FileLockProvider } from "./ports";
 import { delay } from "./loop-driver";
+import { buildStructuredTools } from "./tools-structured";
 
 const MAX_OUTPUT = 30_000; // chars; keep tool output from blowing the context window
 // When truncating, keep this fraction of the budget as the HEAD; the rest is the
@@ -161,36 +162,12 @@ export function describeEditFailure(content: string, oldString: string): string 
 // edit is discarded before grading. When the env flag is set, buildWorkspaceTools
 // denies every mutation under a test-shaped path so the model is structurally
 // unable to go down that path, rather than merely asked not to.
-
-/** Directory-name path segments that mark everything beneath them as test code. */
-const TEST_DIR_NAMES = new Set(["tests", "test", "__tests__"]);
-
-/** Basename patterns, matched against the lowercased filename only. */
-const TEST_BASENAME_PATTERNS: RegExp[] = [
-  /^test_.*\.py$/, // test_*.py
-  /_test\.py$/, // *_test.py
-  /^conftest\.py$/, // conftest.py
-  /\.test\.(ts|tsx|js|jsx)$/, // *.test.ts(x) / *.test.js(x)
-  /\.spec\.(ts|tsx|js|jsx)$/, // *.spec.ts(x) / *.spec.js(x)
-  /_spec\.rb$/, // *_spec.rb
-  /test\.java$/, // *Test.java
-  /_test\.go$/, // *_test.go
-];
-
-/**
- * True when `relPath` looks like a test file, by directory convention
- * (`tests/`, `test/`, `__tests__/` anywhere in the path) or by filename
- * convention (`test_*.py`, `*.test.ts`, `*_spec.rb`, …). Case-insensitive;
- * matches anywhere in the path, whether absolute or repo-relative. Pure —
- * exported for its own unit tests and for reuse by any other mutating tool
- * that needs the same check.
- */
-export function isTestPath(relPath: string): boolean {
-  const segments = relPath.replace(/\\/g, "/").toLowerCase().split("/").filter(Boolean);
-  const basename = segments[segments.length - 1] ?? "";
-  if (segments.slice(0, -1).some((seg) => TEST_DIR_NAMES.has(seg))) return true;
-  return TEST_BASENAME_PATTERNS.some((re) => re.test(basename));
-}
+//
+// `isTestPath` lives in ./tools-shared so the structured tools (tools-structured/)
+// can reuse it without a tools ↔ tools-structured import cycle; re-exported here
+// so this module's public surface (and its existing importers) is unchanged.
+export { isTestPath } from "./tools-shared";
+import { isTestPath } from "./tools-shared";
 
 /** Denial returned in place of a mutation when OXAGEN_FORBID_TEST_EDITS blocks it. */
 export const TEST_EDIT_DENIED_MESSAGE =
