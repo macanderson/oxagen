@@ -6,9 +6,10 @@
  * in different words.
  */
 import type { MemoryRecord, SemanticBody } from "../types";
+import { tokenize, jaccardSets } from "./text-similarity";
 
 export interface DedupeResult {
-  /** Records to keep (unique facts). */
+  /** Records to keep (unique facts + all non-semantic records untouched). */
   unique: MemoryRecord[];
   /** Records identified as duplicates (lower confidence kept as secondary). */
   duplicates: Array<{ keep: string; remove: string; similarity: number }>;
@@ -17,49 +18,71 @@ export interface DedupeResult {
 /**
  * Deduplicate semantic records by checking for near-identical facts.
  *
- * Uses a simple text overlap heuristic. In production, this would use
- * embedding cosine similarity for fuzzy matching.
+ * Correctness/scale properties:
+ * - Non-semantic records pass through into `unique` UNTOUCHED — a caller that
+ *   deletes everything not in `unique` must not lose episodic/procedural/entity
+ *   records that this function never even considered.
+ * - Similarity is the real token Jaccard between the two facts (recorded on each
+ *   duplicate), not a hard-coded 1.0.
+ * - Facts are tokenized ONCE up front, and comparisons are blocked by domain, so
+ *   the O(n²) pairwise cost only pays within a domain — making tens of thousands
+ *   of records feasible.
  */
 export function deduplicateSemanticRecords(
   records: MemoryRecord[],
   similarityThreshold = 0.85,
 ): DedupeResult {
-  const semanticRecords = records.filter((r) => r.kind === "semantic");
   const unique: MemoryRecord[] = [];
   const duplicates: DedupeResult["duplicates"] = [];
 
-  for (const record of semanticRecords) {
-    const body = record.body as SemanticBody;
-    const existingMatch = unique.find((u) => {
-      const uBody = u.body as SemanticBody;
-      return uBody.domain === body.domain && textSimilarity(uBody.fact, body.fact) >= similarityThreshold;
-    });
+  // Non-semantic records are pass-through survivors.
+  const semantic: MemoryRecord[] = [];
+  for (const r of records) {
+    if (r.kind === "semantic") semantic.push(r);
+    else unique.push(r);
+  }
 
-    if (existingMatch) {
-      // Keep the one with higher confidence
-      if (record.confidence > existingMatch.confidence) {
-        // New one is better — swap
-        const idx = unique.indexOf(existingMatch);
-        unique[idx] = record;
-        duplicates.push({ keep: record.id, remove: existingMatch.id, similarity: 1.0 });
+  // Pre-tokenize each fact once; block survivors by domain so we only compare
+  // within a domain.
+  const tokenById = new Map<string, Set<string>>();
+  for (const r of semantic) {
+    tokenById.set(r.id, tokenize((r.body as SemanticBody).fact));
+  }
+  const survivorsByDomain = new Map<string, MemoryRecord[]>();
+
+  for (const record of semantic) {
+    const body = record.body as SemanticBody;
+    const tokens = tokenById.get(record.id)!;
+    const domainSurvivors = survivorsByDomain.get(body.domain) ?? [];
+
+    let matched: MemoryRecord | null = null;
+    let matchedSim = 0;
+    for (const survivor of domainSurvivors) {
+      const sim = jaccardSets(tokens, tokenById.get(survivor.id)!);
+      if (sim >= similarityThreshold) {
+        matched = survivor;
+        matchedSim = sim;
+        break;
+      }
+    }
+
+    if (matched) {
+      if (record.confidence > matched.confidence) {
+        // New one is better — it replaces the survivor in its domain block.
+        const idx = domainSurvivors.indexOf(matched);
+        domainSurvivors[idx] = record;
+        const uidx = unique.indexOf(matched);
+        if (uidx >= 0) unique[uidx] = record;
+        duplicates.push({ keep: record.id, remove: matched.id, similarity: matchedSim });
       } else {
-        duplicates.push({ keep: existingMatch.id, remove: record.id, similarity: 1.0 });
+        duplicates.push({ keep: matched.id, remove: record.id, similarity: matchedSim });
       }
     } else {
       unique.push(record);
+      domainSurvivors.push(record);
+      survivorsByDomain.set(body.domain, domainSurvivors);
     }
   }
 
   return { unique, duplicates };
-}
-
-/**
- * Simple text similarity using word overlap (Jaccard coefficient).
- */
-function textSimilarity(a: string, b: string): number {
-  const wordsA = new Set(a.toLowerCase().split(/\s+/));
-  const wordsB = new Set(b.toLowerCase().split(/\s+/));
-  const intersection = new Set([...wordsA].filter((w) => wordsB.has(w)));
-  const union = new Set([...wordsA, ...wordsB]);
-  return union.size > 0 ? intersection.size / union.size : 0;
 }

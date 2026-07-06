@@ -323,6 +323,70 @@ export class ClickHouseEpisodicStore implements EpisodicStore {
     }));
   }
 
+  async listNamespaces(): Promise<Namespace[]> {
+    await this.ready;
+    const result = await this.client.query({
+      query:
+        "SELECT DISTINCT namespace_org, namespace_workspace FROM engram_episodic_records",
+      format: "JSONEachRow",
+    });
+    const rows = (await result.json()) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      org: r["namespace_org"] as string,
+      workspace: r["namespace_workspace"] as string,
+    }));
+  }
+
+  async updateSalience(id: string, salience: number): Promise<void> {
+    await this.reinsertWith(id, (row) => ({ ...row, salience }));
+  }
+
+  async updateConfidence(id: string, confidence: number): Promise<void> {
+    await this.reinsertWith(id, (row) => ({ ...row, confidence }));
+  }
+
+  /**
+   * ReplacingMergeTree "update": re-insert the full row (same sort key) with a
+   * mutated field. A later `SELECT ... FINAL` returns the newest version, so an
+   * in-place UPDATE isn't needed — and a full-row re-insert is far cheaper than
+   * an `ALTER TABLE ... UPDATE` mutation for a per-record nightly job.
+   */
+  private async reinsertWith(
+    id: string,
+    mutate: (row: Record<string, unknown>) => Record<string, unknown>,
+  ): Promise<void> {
+    await this.ready;
+    const record = await this.getById(id);
+    if (!record) return;
+    await this.client.insert({
+      table: "engram_episodic_records",
+      values: [mutate(recordToRow(record))],
+      format: "JSONEachRow",
+    });
+  }
+
+  async evictExpired(namespace: Namespace, now: number): Promise<number> {
+    await this.ready;
+    const where =
+      "namespace_org = {org:String} AND namespace_workspace = {workspace:String} AND ttl > 0 AND ttl <= {now:UInt64}";
+    const params = { org: namespace.org, workspace: namespace.workspace, now };
+    const countRes = await this.client.query({
+      query: `SELECT count() AS n FROM engram_episodic_records FINAL WHERE ${where}`,
+      query_params: params,
+      format: "JSONEachRow",
+    });
+    const rows = (await countRes.json()) as Array<{ n: string | number }>;
+    const n = Number(rows[0]?.n ?? 0);
+    if (n > 0) {
+      // Lightweight DELETE (ClickHouse ≥ 22.8) — a nightly TTL sweep, not a hot path.
+      await this.client.command({
+        query: `DELETE FROM engram_episodic_records WHERE ${where}`,
+        query_params: params,
+      });
+    }
+    return n;
+  }
+
   async close(): Promise<void> {
     await this.client.close();
   }
