@@ -77,6 +77,7 @@ import { agentSubagentSiblingsRoute } from "./routes/v1/agent.subagent.siblings"
 import { agentSubagentFanoutListRoute } from "./routes/v1/agent.subagent.fanout.list";
 import { agentSubagentFanoutGetRoute } from "./routes/v1/agent.subagent.fanout.get";
 import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
+import { agentDebugTraceRoute } from "./routes/v1/agent.debug.trace";
 import { agentExecutionLineageRoute } from "./routes/v1/agent.execution.lineage";
 import { agentExecutionListRoute } from "./routes/v1/agent.execution.list";
 import { formFillRoute } from "./routes/v1/form.fill";
@@ -427,6 +428,7 @@ orgScoped.route("/agent/subagent/fanout", agentSubagentFanoutGetRoute);
 // executions (subagent/A2A lineage). The list route backs the Activity index.
 orgScoped.route("/agent/executions", agentExecutionListRoute);
 orgScoped.route("/agent/trace", agentTraceGetRoute);
+orgScoped.route("/agent/debug/trace", agentDebugTraceRoute);
 // File-level lineage of one execution — the :Execution node plus every
 // :SourceFile it touched via TOUCHED_FILE edges, resolved to citable
 // KnowledgeNodeRefs (CLAUDE.md "Citing nodes & edges").

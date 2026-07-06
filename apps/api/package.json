@@ -15,6 +15,7 @@
   "dependencies": {
     "@hono/node-server": "1.19.14",
     "@oxagen/agent": "workspace:*",
+    "@oxagen/agent-engine": "workspace:*",
     "@oxagen/ai": "workspace:*",
     "@oxagen/auth": "workspace:*",
     "@oxagen/billing": "workspace:*",

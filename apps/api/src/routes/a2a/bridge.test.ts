@@ -1,4 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { AgentForA2A } from "@oxagen/agent";
 import type { A2ATaskRow } from "./task-store";
@@ -6,11 +8,29 @@ import type { A2ATaskRow } from "./task-store";
 // ── mocks (vi.hoisted so the factories can reference them) ────────────────────
 const h = vi.hoisted(() => {
   const state: { streamParts: unknown[] } = { streamParts: [] };
-  const streamAgentReply = vi.fn(() => ({
-    fullStream: (async function* () {
-      for (const p of state.streamParts) yield p;
-    })(),
-  }));
+  // runCodingAgent double: drives the caller's onStreamPart with the scripted
+  // parts (mirroring the engine's per-step fullStream tap) and returns the
+  // turn's summed usage read from the last `finish` part's totalUsage.
+  const runCodingAgent = vi.fn(
+    async (opts: { onStreamPart?: (p: unknown) => void }) => {
+      let usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+      for (const p of state.streamParts) {
+        if (
+          p &&
+          typeof p === "object" &&
+          (p as { type?: string }).type === "finish" &&
+          (p as { totalUsage?: unknown }).totalUsage
+        ) {
+          usage = {
+            ...usage,
+            ...(p as { totalUsage: Record<string, number> }).totalUsage,
+          };
+        }
+        opts.onStreamPart?.(p);
+      }
+      return { text: "", steps: 1, diff: "", changedFiles: [], usage, messages: [] };
+    },
+  );
   const insertEvents = vi.fn(async () => undefined);
   const updateTask = vi.fn(
     async (_ctx: unknown, _id: string, patch: Record<string, unknown>) => ({
@@ -68,7 +88,7 @@ const h = vi.hoisted(() => {
   };
   return {
     state,
-    streamAgentReply,
+    runCodingAgent,
     insertEvents,
     updateTask,
     loadTask,
@@ -77,11 +97,11 @@ const h = vi.hoisted(() => {
     fakeTx,
   };
 });
-const { streamAgentReply, insertEvents, updateTask, loadTask, resolveAgentForA2A, dbState } = h;
+const { runCodingAgent, insertEvents, updateTask, loadTask, resolveAgentForA2A, dbState } = h;
 
 vi.mock("@oxagen/ai", () => ({
-  streamAgentReply: h.streamAgentReply,
   selectModel: vi.fn(() => ({ modelId: "test" })),
+  modelIdOf: vi.fn(() => "test-model"),
   resolvePrompt: vi.fn(() => "system"),
   chatSystemPrompt: vi.fn(() => "baseline"),
   loadWorkspacePromptConfig: vi.fn(async () => ({})),
@@ -89,6 +109,33 @@ vi.mock("@oxagen/ai", () => ({
 vi.mock("@oxagen/agent", () => ({
   materializeTools: vi.fn(async () => ({ tools: {}, nameMap: { t: "tool.cap" } })),
   resolveAgentForA2A: h.resolveAgentForA2A,
+}));
+vi.mock("@oxagen/agent/adapters", () => ({
+  createPlatformAgentAi: vi.fn(() => ({})),
+}));
+vi.mock("@oxagen/agent-engine", () => ({
+  runCodingAgent: h.runCodingAgent,
+}));
+vi.mock("@oxagen/billing", () => ({
+  // Budget off in these tests (CTX.userId is null) — the guard is undefined so
+  // the turn runs unbounded, exactly as before this feature.
+  createTurnBudgetGuard: vi.fn(() => undefined),
+  TURN_BUDGET_OFF: { enabled: false, limitUsd: 0, mode: "prompt", graceOveragePct: 0.25 },
+}));
+vi.mock("@oxagen/handlers/budget.policy.read", () => ({
+  budgetPolicyReadHandler: vi.fn(async () => ({
+    enabled: false,
+    limitUsd: null,
+    mode: "prompt",
+    graceOveragePct: 0.25,
+  })),
+}));
+vi.mock("../v1/chat-memory", () => ({
+  recallWorkspaceMemoryMessage: vi.fn(async () => null),
+  createRecalledMemoryProvider: vi.fn(() => ({
+    recallContext: async () => "",
+    remember: () => undefined,
+  })),
 }));
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: (_s: unknown, fn: () => unknown) => fn(),
@@ -144,7 +191,7 @@ const USER_MESSAGE: A2AMessage = HISTORY[0]!;
 
 beforeEach(() => {
   setStreamParts([]);
-  streamAgentReply.mockClear();
+  runCodingAgent.mockClear();
   updateTask.mockClear();
   insertEvents.mockClear();
   loadTask.mockClear();
@@ -203,9 +250,9 @@ describe("runA2ATask", () => {
     expect(last.kind).toBe("status-update");
     expect(last.final).toBe(true);
 
-    // Token usage is metered via streamAgentReply telemetry; lifecycle events
-    // are emitted to ClickHouse (started + completed at minimum).
-    expect(streamAgentReply).toHaveBeenCalledOnce();
+    // Token usage is metered via the engine's AI port; lifecycle events are
+    // emitted to ClickHouse (started + completed at minimum).
+    expect(runCodingAgent).toHaveBeenCalledOnce();
     const eventTypes = (
       insertEvents.mock.calls as unknown as Array<[Array<{ event_type: string }>]>
     ).map((c) => c[0][0]!.event_type);
@@ -261,8 +308,8 @@ describe("runA2ATask", () => {
     expect(heartbeat).toBeDefined();
   });
 
-  it("marks the task failed when streamAgentReply throws", async () => {
-    streamAgentReply.mockImplementationOnce(() => {
+  it("marks the task failed when the engine throws", async () => {
+    runCodingAgent.mockImplementationOnce(() => {
       throw new Error("model down");
     });
     const final = await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, message: USER_MESSAGE });
@@ -273,7 +320,7 @@ describe("runA2ATask", () => {
   it("honors an explicit model override", async () => {
     setStreamParts([{ type: "text-delta", text: "ok" }]);
     await runA2ATask({ ctx: CTX, task: TASK, history: HISTORY, message: USER_MESSAGE, model: "gpt-x" });
-    expect(streamAgentReply).toHaveBeenCalledOnce();
+    expect(runCodingAgent).toHaveBeenCalledOnce();
   });
 });
 
@@ -421,5 +468,78 @@ describe("runA2ATask — agent_executions lineage (spec §3.2)", () => {
     expect(final.state).toBe("completed");
     // No executionId (insert returned no row) — the terminal update never runs.
     expect(dbState.updatedSets).toHaveLength(0);
+  });
+});
+
+// A2A JSON-RPC wire snapshot (task D). The bridge was refactored to run through
+// runCodingAgent (multi-step tool loop, invoke()-gated tools, per-turn memory
+// recall, USD budget guard) instead of a single hand-rolled streamAgentReply.
+// The A2A protocol wire — the sequence of status-update / artifact-update events
+// pushed to onEvent — MUST be preserved: the same part→event mapping now runs in
+// the engine's onStreamPart tap. This test captures a representative turn's
+// events and writes them (with volatile ids/timestamps normalized) to a
+// verifications snapshot so any protocol drift is caught.
+describe("runA2ATask — JSON-RPC wire snapshot (task D)", () => {
+  it("preserves the status-update / artifact-update event sequence", async () => {
+    setStreamParts([
+      { type: "tool-call", toolName: "t" },
+      { type: "text-delta", text: "Hello " },
+      { type: "text-delta", text: "world" },
+      { type: "finish", totalUsage: { inputTokens: 12, outputTokens: 8 } },
+    ]);
+    const events: Array<Record<string, unknown>> = [];
+    await runA2ATask({
+      ctx: CTX,
+      task: TASK,
+      history: HISTORY,
+      message: USER_MESSAGE,
+      onEvent: (e) => events.push(e as unknown as Record<string, unknown>),
+    });
+
+    // Normalize volatile fields (random messageId/artifactId, timestamps) so the
+    // snapshot asserts structure + ordering, not run-specific ids.
+    const normalize = (v: unknown): unknown => {
+      if (Array.isArray(v)) return v.map(normalize);
+      if (v && typeof v === "object") {
+        const out: Record<string, unknown> = {};
+        for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+          if (k === "messageId" || k === "artifactId") out[k] = `<${k}>`;
+          else if (k === "timestamp") out[k] = "<timestamp>";
+          else out[k] = normalize(val);
+        }
+        return out;
+      }
+      return v;
+    };
+
+    const normalized = events.map(normalize);
+    const kinds = events.map((e) => e.kind);
+
+    // Structural invariants of the A2A protocol wire.
+    expect(kinds[0]).toBe("status-update"); // working transition
+    expect(kinds).toContain("artifact-update"); // streamed prose chunks
+    const last = events[events.length - 1] as { kind: string; final: boolean };
+    expect(last.kind).toBe("status-update");
+    expect(last.final).toBe(true); // terminal completed
+
+    // Every artifact-update carries the response artifact with text parts.
+    for (const e of events) {
+      if (e.kind === "artifact-update") {
+        const art = e.artifact as { name: string; parts: Array<{ kind: string }> };
+        expect(art.name).toBe("response");
+        expect(art.parts[0]!.kind).toBe("text");
+      }
+    }
+
+    const dir = join(
+      __dirname,
+      "../../../../../verifications/session_01WQkDajXjxLXveaPhWzsup7",
+    );
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "a2a-bridge-jsonrpc-snapshot.txt"),
+      JSON.stringify(normalized, null, 2) + "\n",
+      "utf8",
+    );
   });
 });

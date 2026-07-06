@@ -4,8 +4,8 @@ description: Generate a root-cause summary for a failed run, including the faili
 category: investigate
 tags: [run, failure, summary, debug]
 applicableTo:
-  - routePattern: /{org}/{ws}/activity/runs/:runId
-capability: activity.run.read
+  - routePattern: /{org}/{ws}/agents/runs/:runId
+capability: agent.debug.trace
 autoSubmit: true
 variables:
   - name: run_id
@@ -13,6 +13,7 @@ variables:
     source: params.runId
     required: true
 body: |
-  Summarize the failure of run {{run_id}}. Include the failing step,
-  the error message, and the most likely root cause based on the run's trace
-  and related recent runs. Format as: Problem → Root Cause → Recommended Fix.
+  Diagnose the failure of run {{run_id}} using agent.debug.trace with
+  summarize:true. Report the failing step, the error class and message, the
+  ranked suspect files, and the root-cause diagnosis. Format as:
+  Problem → Root Cause → Recommended Fix.

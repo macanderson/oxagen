@@ -327,3 +327,26 @@ describe("captureError", () => {
     writeSpy.mockRestore();
   });
 });
+
+describe("captureError execution correlation", () => {
+  it("stamps executionId/stepId onto the row (coalesced at the insert boundary)", async () => {
+    captureError({
+      error: new Error("step blew up"),
+      source: "runner",
+      executionId: "22222222-2222-2222-2222-222222222222",
+      stepId: "33333333-3333-3333-3333-333333333333",
+    });
+    await flush();
+    const row = lastRow();
+    expect(row.execution_id).toBe("22222222-2222-2222-2222-222222222222");
+    expect(row.step_id).toBe("33333333-3333-3333-3333-333333333333");
+  });
+
+  it("passes null execution/step when the caller has no execution scope", async () => {
+    captureError({ error: new Error("boot crash"), source: "api" });
+    await flush();
+    const row = lastRow();
+    expect(row.execution_id).toBeNull();
+    expect(row.step_id).toBeNull();
+  });
+});
