@@ -271,7 +271,8 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
           deferred.push(() => onEvent({ type: "reasoning", delta }));
         } else if (part.type === "tool-call") {
           toolStartedAt.set(part.toolCallId, Date.now());
-          const { toolName, input } = part;
+          const toolName = part.toolName;
+          const input: unknown = part.input;
           deferred.push(() => onEvent({ type: "tool-call", name: toolName, input }));
         } else if (part.type === "tool-result") {
           // `preliminary` results (streamed partial output) are progress, not
@@ -282,7 +283,9 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
             const durationMs = started ? Date.now() - started : 0;
             const ok = !isErrorResult(part.output);
             const sig = toolCallSignature(part.toolName, part.input);
-            const { toolName, input, output } = part;
+            const toolName = part.toolName;
+            const input: unknown = part.input;
+            const output: unknown = part.output;
             // Counter mutations + nudge decisions run at flush time (commit),
             // in stream order, so a discarded attempt never double-counts.
             deferred.push(() => {
@@ -323,7 +326,9 @@ export async function runCodingAgent(opts: RunCodingAgentOptions): Promise<RunCo
           toolStartedAt.delete(part.toolCallId);
           const durationMs = started ? Date.now() - started : 0;
           const sig = toolCallSignature(part.toolName, part.input);
-          const { toolName, input, error } = part;
+          const toolName = part.toolName;
+          const input: unknown = part.input;
+          const error: unknown = part.error;
           deferred.push(() => {
             successCounts.delete(sig); // a tool-error resets the success counter
             const count = (failingCounts.get(sig) ?? 0) + 1;
