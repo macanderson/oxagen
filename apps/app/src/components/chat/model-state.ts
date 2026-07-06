@@ -130,3 +130,87 @@ export function buildSeededModelState(seed: ModelStateSeed): ComposerModelState 
     budgetGracePct: seed.budget?.graceOveragePct ?? BUDGET_OFF_DEFAULTS.budgetGracePct,
   };
 }
+
+// ── Workspace budget governance (OXA-2081) ──────────────────────────────────
+// A workspace Owner/Admin may impose a governed budget on top of a member's
+// own per-turn budget — mirrors `GovernedBudget`/`resolveEffectiveTurnBudget`
+// in @oxagen/billing, but kept as a small dependency-light local type (same
+// rationale as BUDGET_OFF_DEFAULTS above: this module is imported by client
+// composer code, so it must not drag in @oxagen/billing's Stripe/DB-touching
+// value exports — only types are ever imported from it here).
+
+/** Resolved via `workspace.budget.policy.read`, server-side. `enabled: false`
+ * means no governance is active for this workspace. */
+export interface WorkspaceBudgetGovernance {
+  enabled: boolean;
+  /** Governed limit in USD. Ignored when `enabled` is false. */
+  limitUsd: number;
+  mode: TurnBudgetMode;
+  /** "ceiling" = hard cap the member cannot exceed; "default" = soft seed the
+   * member may override in either direction. */
+  enforcement: "default" | "ceiling";
+}
+
+/** Strictness rank of a mode — mirrors MODE_STRICTNESS in
+ * packages/billing/src/turn-budget.ts (enforce > prompt > grace). */
+const MODE_STRICTNESS: Record<TurnBudgetMode, number> = {
+  grace: 0,
+  prompt: 1,
+  enforce: 2,
+};
+
+/**
+ * Apply workspace budget governance to a composer state — the CLIENT-SIDE
+ * mirror of `resolveEffectiveTurnBudget`'s precedence in @oxagen/billing,
+ * scoped to what the composer UI needs to reflect/enforce:
+ *
+ *   - No governance (`null`, or `enabled: false`) ⇒ state is untouched.
+ *   - `"default"` (soft seed) ⇒ only applies when the member hasn't opted
+ *     into their own budget yet (`!state.budgetEnabled`); once a member has a
+ *     budget on, their own choice always stands.
+ *   - `"ceiling"` (hard cap) ⇒ ALWAYS applies: forces the budget on, clamps
+ *     the limit down to `min(current, ceiling)`, and clamps the mode up to
+ *     whichever of (current, ceiling) is stricter. A member can still set a
+ *     TIGHTER limit/mode than the ceiling — this only ever pulls a looser
+ *     choice back down, never loosens one.
+ *
+ * The server is still the source of truth (route.ts re-runs the equivalent
+ * merge via resolveEffectiveTurnBudget before enforcing) — this only keeps
+ * the composer's displayed/submitted values from ever claiming a laxer
+ * budget than the workspace actually allows, so the UI doesn't lie to the
+ * user about what will happen.
+ */
+export function applyWorkspaceBudgetGovernance(
+  state: ComposerModelState,
+  governance: WorkspaceBudgetGovernance | null,
+): ComposerModelState {
+  if (!governance || !governance.enabled || governance.limitUsd <= 0) return state;
+
+  if (governance.enforcement === "default") {
+    if (state.budgetEnabled) return state;
+    return {
+      ...state,
+      budgetEnabled: true,
+      budgetUsd: governance.limitUsd,
+      budgetMode: governance.mode,
+    };
+  }
+
+  // "ceiling" — always clamp, never loosen.
+  const currentLimit =
+    state.budgetEnabled && state.budgetUsd && state.budgetUsd > 0
+      ? state.budgetUsd
+      : Number.POSITIVE_INFINITY;
+  const clampedLimit = Math.min(currentLimit, governance.limitUsd);
+  const currentMode = state.budgetEnabled ? state.budgetMode : governance.mode;
+  const clampedMode =
+    MODE_STRICTNESS[governance.mode] >= MODE_STRICTNESS[currentMode]
+      ? governance.mode
+      : currentMode;
+  return {
+    ...state,
+    budgetEnabled: true,
+    budgetUsd: Number.isFinite(clampedLimit) ? clampedLimit : governance.limitUsd,
+    budgetMode: clampedMode,
+  };
+}

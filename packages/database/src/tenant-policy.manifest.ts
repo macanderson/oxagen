@@ -207,6 +207,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Agent-memory decay policy (OXA-1374). org_id + workspace_id both NOT NULL
   // → standard tenant_isolation RLS.
   { table: "workspace.workspace_memory_policy", policyClass: "standard" },
+  // Per-turn budget governance (OXA-2081). org_id + workspace_id both NOT NULL
+  // → standard tenant_isolation RLS.
   { table: "workspace.workspace_budget_policy", policyClass: "standard" },
 
   // ── environments.* — Agent Environments & Credential Vault (Phase 0, Spec §5).

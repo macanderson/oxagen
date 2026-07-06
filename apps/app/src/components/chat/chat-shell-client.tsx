@@ -22,7 +22,7 @@ import { useToolStream } from "./use-tool-stream";
 import type { ChatShellProps } from "./chat-shell";
 import type { StreamEvent } from "./stream-event-types";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
-import type { ComposerModelState } from "./model-picker";
+import type { ComposerModelState, WorkspaceBudgetGovernance } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import { ConversationFiles } from "./conversation-files";
@@ -101,6 +101,7 @@ export function ChatShellClient({
   pendingPromptBehavior = "queue",
   initialModelState,
   availableMcpServers,
+  workspaceBudgetGovernance,
   pageContext,
   onFormFillStart,
   onFormFillEnd,
@@ -129,6 +130,9 @@ export function ChatShellClient({
   initialModelState?: ComposerModelState;
   /** Available MCP servers for the per-turn activation picker. */
   availableMcpServers?: McpServerSummary[];
+  /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
+   * no governance active for this workspace. */
+  workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
   /**
    * Page context forwarded from the current page. When a fillable form is
    * registered (e.g. in AskDrawer/WandPanel wrappers), this is passed to the
@@ -1049,6 +1053,7 @@ export function ChatShellClient({
         onInterrupt={handleInterrupt}
         initialModelState={initialModelState}
         availableMcpServers={availableMcpServers}
+        workspaceBudgetGovernance={workspaceBudgetGovernance}
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
       />
