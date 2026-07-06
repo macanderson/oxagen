@@ -5,6 +5,7 @@
  * MCP, and agent surfaces.
  */
 import { apiPost } from "../lib/api.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
 interface SandboxFilesResponse {
   entries: Array<{ path: string; kind: "file" | "dir"; sizeBytes: number }>;
@@ -13,26 +14,27 @@ interface SandboxFilesResponse {
 export async function handleSandboxFiles(
   sessionId: string,
   opts: { path?: string; depth?: string; json?: boolean },
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   const body: Record<string, unknown> = { sessionId };
   if (opts.path) body.path = opts.path;
   if (opts.depth !== undefined) body.depth = parseInt(opts.depth, 10);
 
-  const res = await apiPost<SandboxFilesResponse>("agent/sandbox/files", body);
+  const res = await apiPost<SandboxFilesResponse>("agent/sandbox/files", body, writer);
 
   if (opts.json) {
-    process.stdout.write(JSON.stringify(res, null, 2) + "\n");
+    writer.write(JSON.stringify(res, null, 2));
     return;
   }
 
   if (res.entries.length === 0) {
-    process.stderr.write("(empty)\n");
+    writer.writeErr("(empty)");
     return;
   }
 
   for (const e of res.entries) {
     const marker = e.kind === "dir" ? "d" : "-";
     const size = e.kind === "dir" ? "" : ` ${e.sizeBytes}`;
-    process.stdout.write(`${marker} ${e.path}${size}\n`);
+    writer.write(`${marker} ${e.path}${size}`);
   }
 }

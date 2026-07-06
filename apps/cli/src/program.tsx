@@ -26,22 +26,42 @@ export interface CliCommandMeta {
   argumentHint?: string;
 }
 
+/** Join a command path the same way everywhere — the REPL dispatcher (see
+ * repl/cli-bridge.ts) splits back on ":" to recover the path segments. */
+export function joinCliCommandPath(pathParts: readonly string[]): string {
+  return pathParts.join(":");
+}
+
 /**
- * Read every top-level command's name + description + argument shape straight
- * from the Commander tree. This is what makes the slash menu and `--help` stay
- * in lockstep: there is no second list to drift.
+ * Read every command's name + description + argument shape straight from the
+ * Commander tree — top-level AND every nested subcommand (`graph search`,
+ * `mcp add`, `secret set`, …), walked recursively. This is what makes the
+ * slash menu and `--help` stay in lockstep: there is no second list to drift.
+ *
+ * A subcommand's catalog `name` is its full path colon-joined (e.g.
+ * "graph:search") so it is a single unambiguous token the REPL can parse with
+ * a plain `parseInvocation` (which only splits on the first whitespace) —
+ * `/graph:search -q foo` unambiguously names the "graph search" leaf command
+ * with `-q foo` as its arguments. Top-level commands are unaffected (a
+ * one-segment path colon-joins to itself), so every existing catalog entry
+ * keeps its exact former name.
  */
 export function describeCliCommands(program: Command): CliCommandMeta[] {
-  return program.commands.map((cmd) => {
+  const out: CliCommandMeta[] = [];
+  const walk = (cmd: Command, parentPath: readonly string[]): void => {
+    const path = [...parentPath, cmd.name()];
     const hint = cmd.registeredArguments
       .map((arg) => (arg.required ? `<${arg.name()}>` : `[${arg.name()}]`))
       .join(" ");
-    return {
-      name: cmd.name(),
+    out.push({
+      name: joinCliCommandPath(path),
       description: cmd.description(),
       argumentHint: hint || undefined,
-    };
-  });
+    });
+    for (const sub of cmd.commands) walk(sub, path);
+  };
+  for (const cmd of program.commands) walk(cmd, []);
+  return out;
 }
 
 /**

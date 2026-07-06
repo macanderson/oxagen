@@ -28,6 +28,14 @@ vi.mock("../../lib/linker.js", () => ({
   resolveLinkedAccount: vi.fn(),
 }));
 
+// Mock the browser-based PKCE loopback flow — runBrowserLogin's tests (below)
+// exercise only its own persistence contract, never the real HTTP
+// server/browser-open side effects (those are lib/loopback-login.ts's own
+// unit tests).
+vi.mock("../../lib/loopback-login.js", () => ({
+  browserLogin: vi.fn(),
+}));
+
 // Mock fetch to avoid real network calls
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
@@ -42,7 +50,10 @@ import {
   clearConfig,
 } from "../../lib/config.js";
 import { resolveLinkedAccount } from "../../lib/linker.js";
-import { handleLogin, handleLogout, validatePlatformToken } from "../auth.js";
+import { browserLogin } from "../../lib/loopback-login.js";
+import { handleLogin, handleLogout, validatePlatformToken, runBrowserLogin } from "../auth.js";
+
+const mockBrowserLogin = browserLogin as ReturnType<typeof vi.fn>;
 
 const mockGetApiUrl = getApiUrl as ReturnType<typeof vi.fn>;
 const mockGetToken = getToken as ReturnType<typeof vi.fn>;
@@ -330,6 +341,55 @@ describe("handleLogin — headless (--token/--org/--workspace flags)", () => {
       orgSlug: "picked-org",
       workspaceSlug: "picked-ws",
     });
+  });
+});
+
+// ── runBrowserLogin — the UI-agnostic core the REPL's Ink /login panel uses ─
+
+describe("runBrowserLogin", () => {
+  beforeEach(() => {
+    mockBrowserLogin.mockReset();
+  });
+
+  it("persists the session returned by browserLogin via writeConfig — the exact same shape `oxagen login` writes", async () => {
+    mockBrowserLogin.mockResolvedValue({ token: "tok_x", orgSlug: "acme", workspaceSlug: "main" });
+
+    const result = await runBrowserLogin();
+
+    expect(result).toEqual({ token: "tok_x", orgSlug: "acme", workspaceSlug: "main" });
+    expect(mockWriteConfig).toHaveBeenCalledWith({
+      token: "tok_x",
+      orgSlug: "acme",
+      workspaceSlug: "main",
+      appUrl: "https://app.oxagen.sh",
+    });
+  });
+
+  it("passes onStatus/signal straight through to browserLogin (no readline, no direct stdout write)", async () => {
+    mockBrowserLogin.mockResolvedValue({ token: "t", orgSlug: "o", workspaceSlug: "w" });
+    const onStatus = vi.fn();
+    const controller = new AbortController();
+
+    await runBrowserLogin(onStatus, controller.signal);
+
+    expect(mockBrowserLogin).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiUrl: "https://api.oxagen.sh",
+        appUrl: "https://app.oxagen.sh",
+        onStatus,
+        signal: controller.signal,
+      }),
+    );
+    // The status callback is the ONLY channel status lines can reach — proves
+    // this call path never falls back to a hardcoded process.stdout.write.
+    expect(stdout).toBe("");
+  });
+
+  it("propagates a browserLogin rejection (e.g. cancelled via the signal) without persisting anything", async () => {
+    mockBrowserLogin.mockRejectedValue(new Error("Login cancelled."));
+
+    await expect(runBrowserLogin()).rejects.toThrow("Login cancelled.");
+    expect(mockWriteConfig).not.toHaveBeenCalled();
   });
 });
 

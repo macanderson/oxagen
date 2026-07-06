@@ -114,6 +114,36 @@ export async function validatePlatformToken(
   return { kind: "unexpected", status: res.status };
 }
 
+export interface InteractiveLoginResult {
+  token: string;
+  orgSlug: string;
+  workspaceSlug: string;
+}
+
+/**
+ * UI-agnostic core of the browser-based PKCE login flow: runs `browserLogin`
+ * and persists the resulting session via `writeConfig` — the exact same
+ * persistence path `oxagen login` uses. Shared by the one-shot CLI path
+ * (`handleLogin` below) and the REPL's Ink-native `/login` panel (see
+ * `repl/login-panel.tsx`), so there is exactly one implementation of "run
+ * browser login and persist the session."
+ *
+ * `onStatus`/`signal` are passed straight through to `browserLogin` — see its
+ * docs for why they exist (an Ink-mounted caller can't touch process.stdout,
+ * and needs to be able to cancel a pending wait on Esc).
+ */
+export async function runBrowserLogin(
+  onStatus?: (line: string) => void,
+  signal?: AbortSignal,
+): Promise<InteractiveLoginResult> {
+  const apiUrl = getApiUrl();
+  const appUrl = getAppUrl();
+  const { browserLogin } = await import("../lib/loopback-login.js");
+  const { token, orgSlug, workspaceSlug } = await browserLogin({ apiUrl, appUrl, onStatus, signal });
+  writeConfig({ token, orgSlug, workspaceSlug, appUrl });
+  return { token, orgSlug, workspaceSlug };
+}
+
 export async function handleLogin(opts: LoginOptions): Promise<void> {
   const apiUrl = getApiUrl();
   const appUrl = getAppUrl();
@@ -146,9 +176,9 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
 
   if (useBrowser) {
     try {
-      const { browserLogin } = await import("../lib/loopback-login.js");
-      const { token, orgSlug, workspaceSlug } = await browserLogin({ apiUrl, appUrl });
-      writeConfig({ token, orgSlug, workspaceSlug, appUrl });
+      const { token, orgSlug, workspaceSlug } = await runBrowserLogin((line) =>
+        process.stdout.write(`\n${line}\n`),
+      );
       process.stdout.write(`\nLogged in to Oxagen:\n`);
       process.stdout.write(`  token:     ${maskToken(token)}\n`);
       process.stdout.write(`  org:       ${orgSlug}\n`);
