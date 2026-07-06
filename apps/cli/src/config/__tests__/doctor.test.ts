@@ -12,13 +12,28 @@ let managedPath: string;
 let userPath: string;
 
 function opts(env: Record<string, string | undefined> = {}): DoctorOptions {
-  return { managedConfigPath: managedPath, userConfigPath: userPath, noCache: true, env };
+  // userSettingsPath keeps runConfigDoctor's settings.env diffing (item 7b)
+  // from ever touching the real $HOME/.oxagen/settings.json during tests.
+  return {
+    managedConfigPath: managedPath,
+    userConfigPath: userPath,
+    userSettingsPath: join(homeDir, "settings.json"),
+    noCache: true,
+    env,
+  };
 }
 
 function write(scope: ConfigScope, body: WorkspaceConfig): void {
   const paths = getConfigScopePaths(cwd, { managedConfigPath: managedPath, userConfigPath: userPath });
   mkdirSync(join(paths[scope], ".."), { recursive: true });
   writeFileSync(paths[scope], JSON.stringify(body), "utf8");
+}
+
+/** Writes <cwd>/.oxagen/settings.json (project-scope settings.json — a different file from workspace.json/repo.json). */
+function writeProjectSettings(body: Record<string, unknown>): void {
+  const dir = join(cwd, ".oxagen");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "settings.json"), JSON.stringify(body), "utf8");
 }
 
 beforeEach(() => {
@@ -90,6 +105,57 @@ describe("runConfigDoctor — governance and shadowing", () => {
     const env = report.findings.find((f) => f.title.includes("Environment variables"));
     expect(env?.detail).toContain("OXAGEN_MODEL");
     expect(env?.detail).toContain("OXAGEN_EFFORT");
+  });
+
+  // Item 7b: doctor used to check a FIXED 7-var list and never loaded
+  // settings.json at all, so a `settings set env.MY_KEY <value>` shadowed by
+  // the shell had no way to surface here. Now every declared settings.env key
+  // (plus model/apiUrl) is diffed against the live environment, per key.
+  describe("settings.env precedence diffing", () => {
+    it("warns per-key when the shell shadows a declared settings.env value, naming the scope", () => {
+      writeProjectSettings({ env: { MY_TOKEN: "from-settings" } });
+      const report = runConfigDoctor(cwd, opts({ MY_TOKEN: "from-shell" }));
+      const finding = report.findings.find((f) => f.title.includes("MY_TOKEN"));
+      expect(finding?.severity).toBe("warn");
+      expect(finding?.detail).toContain("project settings");
+      expect(finding?.detail).toContain("MY_TOKEN");
+    });
+
+    it("does not warn when the shell does not export a declared settings.env key", () => {
+      writeProjectSettings({ env: { MY_TOKEN: "from-settings" } });
+      const report = runConfigDoctor(cwd, opts({}));
+      expect(report.findings.some((f) => f.title.includes("MY_TOKEN"))).toBe(false);
+    });
+
+    it("diffs settings.model against OXAGEN_MODEL specifically (not just the generic env list)", () => {
+      writeProjectSettings({ model: "vendor/from-settings" });
+      const report = runConfigDoctor(cwd, opts({ OXAGEN_MODEL: "vendor/from-shell" }));
+      const finding = report.findings.find((f) => f.title.includes("OXAGEN_MODEL"));
+      expect(finding?.severity).toBe("warn");
+      expect(finding?.detail).toContain("project settings");
+      // Superseded by the per-key finding — no longer double-reported in the
+      // generic "Environment variables are overriding file config" bucket.
+      const generic = report.findings.find((f) => f.title.includes("Environment variables are overriding"));
+      expect(generic?.detail ?? "").not.toContain("OXAGEN_MODEL");
+    });
+
+    it("still reports OXAGEN_EFFORT (no settings.json equivalent) via the generic fallback list", () => {
+      writeProjectSettings({ model: "vendor/from-settings" });
+      const report = runConfigDoctor(cwd, opts({ OXAGEN_MODEL: "vendor/from-shell", OXAGEN_EFFORT: "high" }));
+      const generic = report.findings.find((f) => f.title.includes("Environment variables are overriding"));
+      expect(generic?.detail).toContain("OXAGEN_EFFORT");
+    });
+  });
+});
+
+describe("formatDoctorReport — precedence table (item 10)", () => {
+  it("prints the real, code-verified precedence for model/apiUrl, settings.env, and workspace config", () => {
+    const text = formatDoctorReport(runConfigDoctor(cwd, opts()));
+    expect(text).toContain("Effective precedence (highest wins):");
+    expect(text).toContain("OXAGEN_MODEL");
+    expect(text).toContain("settings.local.json");
+    expect(text).toContain("config.json (store #2)");
+    expect(text).toContain("managed.json (org, always locked)");
   });
 });
 

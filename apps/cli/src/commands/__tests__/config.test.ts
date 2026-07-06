@@ -117,6 +117,47 @@ describe("configGet", () => {
     configGet("vision.statement", ctx);
     expect(text()).toBe("vision.statement: Ship it.  (workspace)");
   });
+
+  // Item 8b: `config get model` (Workspace Config) and `config model` (store
+  // #2) used to read entirely different stores, so `config get model` always
+  // reported "(not set)" even when store #2 had a real value — a split-brain
+  // get. Now `config get` on one of the 4 runtime keys prints every store
+  // with the actual runtime-effective winner marked.
+  describe("split-brain runtime keys (model/apiUrl/effort/token)", () => {
+    it("prints per-store breakdown for model instead of falling through to Workspace Config", () => {
+      configGet("model", ctx);
+      expect(text()).toContain("model — resolved from EACH store");
+      expect(text()).toContain("shell/session env OXAGEN_MODEL:");
+      expect(text()).toContain("settings.json");
+      expect(text()).toContain("~/.config/oxagen/config.json:");
+      expect(text()).toContain("→ effective at runtime:");
+    });
+
+    it("reflects a shell-exported OXAGEN_MODEL as the effective winner", () => {
+      const saved = process.env["OXAGEN_MODEL"];
+      process.env["OXAGEN_MODEL"] = "vendor/from-shell";
+      try {
+        configGet("model", ctx);
+        expect(text()).toContain("shell/session env OXAGEN_MODEL:  vendor/from-shell");
+        expect(text()).toContain("→ effective at runtime:  vendor/from-shell");
+      } finally {
+        if (saved === undefined) delete process.env["OXAGEN_MODEL"];
+        else process.env["OXAGEN_MODEL"] = saved;
+      }
+    });
+
+    it("masks the token value like the legacy getter does", () => {
+      configGet("token", ctx);
+      expect(text()).toContain("token — resolved from EACH store");
+      expect(text()).not.toContain("settings.json"); // token has no settings.json equivalent
+    });
+
+    it("does not print a settings.json row for effort (no settings.json equivalent)", () => {
+      configGet("effort", ctx);
+      expect(text()).toContain("effort — resolved from EACH store");
+      expect(text().split("\n").some((l) => l.includes("settings.json"))).toBe(false);
+    });
+  });
 });
 
 describe("configSet", () => {
@@ -148,6 +189,47 @@ describe("configSet", () => {
     out = [];
     configSet("packageManagers.primary", "pnpm2", "workspace", ctx);
     expect(text()).not.toContain("Note:");
+  });
+
+  // Item 8a: previously this warning fired ONLY for a locked-scope win. A
+  // more-specific-but-unlocked scope (e.g. workspace already sets the path
+  // while this write targets the less-specific `user` scope) silently
+  // shadowed the new write with no warning at all.
+  it("warns when a more-specific UNLOCKED scope already shadows the write target", () => {
+    configSet("packageManagers.primary", "pnpm", "workspace", ctx); // workspace is more specific than user
+    out = [];
+    configSet("packageManagers.primary", "npm", "user", ctx);
+    expect(text()).toContain("Note:");
+    expect(text()).toContain("most specific: workspace.json (workspace)");
+  });
+
+  it("does not warn when writing to a MORE specific scope than the current (less-specific) winner", () => {
+    configSet("packageManagers.primary", "npm", "user", ctx);
+    out = [];
+    configSet("packageManagers.primary", "pnpm", "workspace", ctx); // workspace is more specific — this write will win
+    expect(text()).not.toContain("Note:");
+  });
+
+  // Item 5: model/apiUrl/effort/token are store #2 / settings.json fields —
+  // nothing in Workspace Config ever reads them back, so `config set` used to
+  // print a confident "✓" for a write that was a total no-op.
+  describe("dead-key redirect", () => {
+    it.each(["model", "apiUrl", "effort", "token"])("redirects %s to the legacy command and exits non-zero", (key) => {
+      configSet(key, "some-value", "workspace", ctx);
+      expect(errText()).toContain(`"${key}"`);
+      expect(errText()).toContain("Did you mean: oxagen config");
+      expect(process.exitCode).toBe(1);
+    });
+
+    it("never writes workspace.json for a dead-key set", () => {
+      configSet("model", "vendor/x", "workspace", ctx);
+      expect(existsSync(getConfigScopePaths(cwd, ctx).workspace)).toBe(false);
+    });
+
+    it("apiUrl redirects to the hyphenated legacy key (api-url), not the field name", () => {
+      configSet("apiUrl", "https://example.com", "workspace", ctx);
+      expect(errText()).toContain("oxagen config api-url https://example.com");
+    });
   });
 });
 
