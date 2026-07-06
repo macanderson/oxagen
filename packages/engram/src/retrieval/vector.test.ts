@@ -165,4 +165,37 @@ describe("VectorRetrievalEngine", () => {
 
     expect(results[0]!.tokenCost).toBeGreaterThan(50);
   });
+
+  it("P0-1: emits records in the ANN score order, not store order", async () => {
+    // Seed three records; the store returns them in some internal (insertion)
+    // order via getByIds. The engine must re-emit them in the vectorQuery
+    // (score-descending) order so fusion's array-index-as-rank is correct.
+    const mk = (fact: string) =>
+      createRecord({
+        kind: "semantic",
+        namespace: NS,
+        body: { fact, domain: "auth" },
+        salience: 0.5,
+        confidence: 0.9,
+        provenance: PROV,
+      });
+    const r1 = mk("first-inserted");
+    const r2 = mk("second-inserted");
+    const r3 = mk("third-inserted");
+    await store.append(r1);
+    await store.append(r2);
+    await store.append(r3);
+
+    // Score order is r3 > r1 > r2 — deliberately different from insertion order.
+    vectorQuery = vi.fn(async () => [
+      { recordId: r3.id, score: 0.99 },
+      { recordId: r1.id, score: 0.80 },
+      { recordId: r2.id, score: 0.60 },
+    ]);
+    const engine = new VectorRetrievalEngine(store, embedFn, vectorQuery);
+    const results = await engine.retrieve(makeQuery());
+
+    expect(results.map((c) => c.record.id)).toEqual([r3.id, r1.id, r2.id]);
+    expect(results.map((c) => c.score)).toEqual([0.99, 0.8, 0.6]);
+  });
 });

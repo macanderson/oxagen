@@ -78,6 +78,15 @@ export interface CreateRecordParams {
   provenance: Provenance;
   causality?: string[];
   ttl?: number;
+  /**
+   * Explicit occurrence/creation time. Supply this for deterministic
+   * re-derivation — migration and replay pass the source event's original
+   * timestamp so re-running produces the SAME id (idempotent). Omit it for live
+   * writes, where a process-monotonic clock assigns a fresh, strictly
+   * increasing time (which, for episodic records, is the occurrence
+   * discriminator that keeps identical back-to-back events distinct).
+   */
+  createdAt?: number;
 }
 
 /**
@@ -89,8 +98,9 @@ export interface CreateRecordParams {
  */
 export function createRecord(params: CreateRecordParams): MemoryRecord {
   // Occurrence time doubles as the episodic ID discriminator, so it must be
-  // fixed before the ID is computed.
-  const createdAt = monotonicNow();
+  // fixed before the ID is computed. An explicit createdAt (migration/replay)
+  // makes the id deterministic; otherwise the monotonic clock assigns one.
+  const createdAt = params.createdAt ?? monotonicNow();
   const id = computeRecordId(
     params.kind,
     params.namespace,
