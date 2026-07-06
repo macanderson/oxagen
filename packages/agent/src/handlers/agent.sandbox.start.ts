@@ -34,6 +34,7 @@ export async function agentSandboxStartHandler(
     ttlSeconds: input.ttlSeconds,
     idleTimeoutSeconds: input.idleTimeoutSeconds,
     network: input.network,
+    ...(input.environmentId ? { environmentId: input.environmentId } : {}),
   };
   const spec: SandboxSessionSpec = {
     image: input.image,

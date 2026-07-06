@@ -236,7 +236,15 @@ export async function materializeTools(
     if (!getSurfaces(cap).includes("agent")) continue;
     if (opts.allowlist && !opts.allowlist.has(cap.name)) continue;
     if (!passesRisk(cap, opts.riskCeiling)) continue;
-    if (cap.name === "agent.code.execute" && !sandboxAvailable) continue;
+    // Gate the entire sandbox-execution family on a configured driver: both the
+    // one-shot agent.code.execute and the durable agent.sandbox.* session tools
+    // require SANDBOX_ENABLED + a driver. Advertising a tool the model cannot
+    // actually run wastes billed steps on guaranteed failures (ADR-021 §3).
+    if (
+      !sandboxAvailable &&
+      (cap.name === "agent.code.execute" || cap.name.startsWith("agent.sandbox."))
+    )
+      continue;
 
     // Entitlement filter: if this capability is claimed by a plugin, verify the
     // org has that plugin installed and enabled. Lazily fetch the entitled set
