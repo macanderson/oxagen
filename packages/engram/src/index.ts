@@ -4,8 +4,11 @@
  * Public API surface. All consumers import from this barrel.
  */
 
-// Hash (blake3 with SHA-256 fallback for bundled environments)
+// Hash (SHA-256 content addressing)
 export { initHash, contentHash } from "./hash";
+
+// Canonical JSON serialization for content-address hashing (sorted keys)
+export { canonicalStringify } from "./canonical-json";
 
 // Core types
 export type {
