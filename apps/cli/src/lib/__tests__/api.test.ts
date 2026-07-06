@@ -38,7 +38,10 @@ function lastErrorEntry(): Record<string, unknown> | undefined {
 const originalFetch = globalThis.fetch;
 
 describe("apiGetOrThrow error diagnostics", () => {
-  beforeEach(() => debugLog.mockClear());
+  beforeEach(() => {
+    debugLog.mockReset();
+    debugLog.mockImplementation(() => Promise.resolve());
+  });
   afterEach(() => {
     globalThis.fetch = originalFetch;
   });
@@ -121,5 +124,33 @@ describe("apiGetOrThrow error diagnostics", () => {
     // The sanitized Error keeps { name, message, stack } — a genuinely local trace.
     const logged = entry?.error as { message?: string } | undefined;
     expect(logged?.message).toContain("ECONNREFUSED");
+  });
+
+  it("awaits the error debug write before the error propagates (no lost entry on exit)", async () => {
+    // Regression: one-shot commands call process.exit(1) the instant the error
+    // propagates, so a fire-and-forget `void debugLog(...)` append is abandoned
+    // before it flushes. The `throw await build…(…)` shape must gate the throw on
+    // the write completing. We prove it by holding the error write open and
+    // asserting the call cannot settle until the write resolves.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    debugLog.mockImplementation((category: string) =>
+      category === "error" ? gate : Promise.resolve(),
+    );
+    globalThis.fetch = vi.fn(async () => {
+      return new Response("boom", { status: 500, headers: { "x-vercel-id": "x" } });
+    }) as typeof fetch;
+
+    let settled = false;
+    const p = apiGetOrThrow("agent/file/lock/list").catch(() => {
+      settled = true;
+    });
+    // Drain microtasks: request log + fetch + res.text + the START of the error
+    // write all run, but the error write is gated, so the call cannot settle.
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    expect(settled).toBe(false); // error has NOT propagated — write not yet flushed
+    release();
+    await p;
+    expect(settled).toBe(true); // only after the write resolves does the error throw
   });
 });
