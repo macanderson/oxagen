@@ -263,9 +263,38 @@ describe("runTurn — full pipeline path", () => {
       stream: () => ({ reasoning: "read-only analysis" }), // no file edit in read-only
     });
 
+    // Opt OUT of the default deterministic judge-skip so the judge actually runs
+    // and returns incomplete — this asserts the readOnly-never-revises invariant
+    // still holds even when the judge says the work is incomplete.
+    process.env["OXAGEN_LADDER"] = "0";
+    try {
+      const result = await runTurn({ prompt: "explain src/a.ts", workspace: ws, ai, readOnly: true });
+      expect(result.trace.judgeRounds).toHaveLength(1);
+      expect(result.trace.finalComplete).toBe(false);
+    } finally {
+      delete process.env["OXAGEN_LADDER"];
+    }
+  });
+
+  it("skips the judge model call on a read-only turn with no diff (ADR-021 §1)", async () => {
+    const ws = new MemoryWorkspace({ "src/a.ts": "before" });
+    // judgeVerdicts would say incomplete IF the judge ran — it must not.
+    const { ai, generateObject } = makeAi({
+      judgeVerdicts: [{ complete: false }],
+      stream: () => ({ reasoning: "read-only analysis" }), // no file edit ⇒ empty diff
+    });
+
+    // Default behavior (judge-skip ON): no OXAGEN_LADDER set.
     const result = await runTurn({ prompt: "explain src/a.ts", workspace: ws, ai, readOnly: true });
+
+    // The judge (completeness) model was never invoked — only the evaluator.
+    const judgeCalls = generateObject.mock.calls.filter(([a]) =>
+      (a as { system?: string }).system?.includes("completeness judge"),
+    );
+    expect(judgeCalls).toHaveLength(0);
     expect(result.trace.judgeRounds).toHaveLength(1);
-    expect(result.trace.finalComplete).toBe(false);
+    expect(result.trace.judgeRounds[0]!.model).toBe("deterministic/read-only");
+    expect(result.trace.finalComplete).toBe(true);
   });
 
   it("honours a pinned model and skips auto-routing", async () => {
