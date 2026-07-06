@@ -1,4 +1,12 @@
 /**
+ * @deprecated Superseded by `./file-lock-lease.ts` (Postgres lease, ADR-021 §5).
+ * A Neo4j-backed lock is UNSOUND for mutual exclusion: the graph sync path is
+ * asynchronous (ADR-018), so a lock written here is invisible to a concurrent
+ * agent for the duration of sync lag. `agent.repo.edit` now injects
+ * `createFileLeaseLockAdapter`; Neo4j carries only an async lineage projection
+ * of the Postgres leases. This file is retained for reference only — do not
+ * wire it into new call sites.
+ *
  * In-app FileLockProvider — the platform implementation of the
  * `@oxagen/agent-engine` file-lock port (docs/specs/agent-file-locking/plan.md),
  * backed by the tenant-scoped Neo4j `HOLDS_LOCK` edge in `@oxagen/ontology`.

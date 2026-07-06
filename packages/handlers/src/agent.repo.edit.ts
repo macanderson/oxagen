@@ -7,7 +7,7 @@ import {
   createPlatformMemoryProvider,
   createClickHouseTraceStore,
   createGraphSyncAdapter,
-  createFileLockAdapter,
+  createFileLeaseLockAdapter,
   createPlatformAgentAi,
 } from "@oxagen/agent/adapters";
 import { resolveGitHubToken } from "./lib/github-token";
@@ -74,13 +74,20 @@ export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = asy
     // record (:Execution)-[:TOUCHED_FILE]->(:SourceFile) lineage edges in Neo4j.
     // Both writes are async + fire-and-forget — never block or fail the turn.
     graphSync: createGraphSyncAdapter({ owner: input.owner, repo: input.repo }),
-    // Agent file locking (docs/specs/agent-file-locking/plan.md): this is the
-    // real fleet path — agent.repo.edit is dispatched both directly and as a
-    // subagent-fanout child (agent.execute-subagent invoking a capability by
-    // name), so two agents racing to edit the same file in the same repo now
-    // genuinely serialize via the Neo4j HOLDS_LOCK edge instead of silently
-    // clobbering each other's writes.
-    fileLock: createFileLockAdapter({ owner: input.owner, repo: input.repo, workspaceId: ctx.workspaceId }),
+    // Agent file locking (ADR-021 §5): this is the real fleet path —
+    // agent.repo.edit is dispatched both directly and as a subagent-fanout
+    // child (agent.execute-subagent invoking a capability by name), so two
+    // agents racing to edit the same file in the same repo now genuinely
+    // serialize via the transactional Postgres lease (with fencing tokens)
+    // instead of silently clobbering each other's writes. Neo4j carries only
+    // an async lineage projection of these leases now — a graph lock would be
+    // invisible to a concurrent agent during sync lag.
+    fileLock: createFileLeaseLockAdapter({
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      owner: input.owner,
+      repo: input.repo,
+    }),
     // Surface non-fatal engine failures the engine would otherwise swallow (e.g.
     // memory-recall failure). The platform memory adapter already logs + emits a
     // telemetry event for its own recall failures; this is the belt for any
