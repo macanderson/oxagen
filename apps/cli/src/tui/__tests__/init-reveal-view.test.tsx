@@ -18,8 +18,16 @@ import React from "react";
 import { InitRevealView } from "../init-reveal-view.js";
 import { WORDMARK } from "../banner.js";
 
-/** Poll until `cond` holds (or the deadline passes — the caller's assertion then reports the real failure). */
-async function until(cond: () => boolean, timeoutMs = 4000, stepMs = 10): Promise<void> {
+/**
+ * Poll until `cond` holds (or the deadline passes — the caller's assertion then
+ * reports the real failure). The reveal advances on REAL 1ms timers, so its
+ * wall-clock completion time balloons when the host is CPU-starved — e.g. the
+ * full `pnpm gate`, which runs every package's vitest concurrently across all
+ * cores. A 4s deadline flaked there (observed ~4.6–5.2s) even though the reveal
+ * completes in ~350ms in isolation; the deadline is generous so a saturated
+ * runner still passes, while the happy path returns the instant `cond` holds.
+ */
+async function until(cond: () => boolean, timeoutMs = 20000, stepMs = 10): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!cond() && Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, stepMs));
