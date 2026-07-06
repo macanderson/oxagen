@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 // is therefore mirrored as a literal (see comment on BUDGET_MODES).
 import type { TurnBudgetMode } from "@oxagen/billing";
 import { saveBudgetDefaultAction } from "./budget-actions";
+import type { WorkspaceBudgetGovernance } from "./model-state";
 
 /**
  * Mirrors TURN_BUDGET_MODES in packages/billing/src/turn-budget.ts — THE
@@ -58,6 +59,23 @@ const BUDGET_MODES: ReadonlyArray<{
 
 const DEFAULT_GRACE_PCT = 0.25;
 
+// Strictness rank of a mode — mirrors MODE_STRICTNESS in model-state.ts /
+// packages/billing/src/turn-budget.ts (enforce > prompt > grace).
+const MODE_STRICTNESS: Record<TurnBudgetMode, number> = {
+  grace: 0,
+  prompt: 1,
+  enforce: 2,
+};
+
+/** Mirrors formatBudgetUsd in @oxagen/billing (kept as a local copy for the
+ * same dependency-light reason as BUDGET_MODES above). */
+function formatUsd(usd: number): string {
+  if (!Number.isFinite(usd)) return "∞";
+  if (usd === 0) return "$0.00";
+  const decimals = usd < 0.1 ? 4 : 2;
+  return `$${usd.toFixed(decimals)}`;
+}
+
 export interface BudgetControlValue {
   budgetEnabled: boolean;
   budgetUsd: number | null;
@@ -67,6 +85,18 @@ export interface BudgetControlValue {
 
 export interface BudgetControlProps extends BudgetControlValue {
   onChange: (patch: Partial<BudgetControlValue>) => void;
+  /**
+   * Workspace-level budget governance (OXA-2081), resolved server-side via
+   * `workspace.budget.policy.read`. `null`/`enabled: false` ⇒ no governance,
+   * renders exactly as before. A `"default"` governance only ever pre-fills
+   * an unset control (handled upstream, before this component ever sees the
+   * value — see `applyWorkspaceBudgetGovernance` in model-state.ts), so this
+   * component only has to actively RENDER/ENFORCE the `"ceiling"` case: the
+   * switch is forced on and disabled, the limit input is capped at the
+   * ceiling, and the mode picker only offers modes at least as strict as the
+   * ceiling's.
+   */
+  governance?: WorkspaceBudgetGovernance | null;
 }
 
 /** Compact per-turn dollar budget control for the composer toolbar. Off by
@@ -78,7 +108,17 @@ export function BudgetControl({
   budgetMode,
   budgetGracePct,
   onChange,
+  governance,
 }: BudgetControlProps) {
+  const ceiling =
+    governance && governance.enabled && governance.enforcement === "ceiling" && governance.limitUsd > 0
+      ? governance
+      : null;
+  // Only offer modes at least as strict as the ceiling's — picking a laxer
+  // mode from this list is structurally impossible rather than snapping back.
+  const availableModes = ceiling
+    ? BUDGET_MODES.filter((m) => MODE_STRICTNESS[m.mode] >= MODE_STRICTNESS[ceiling.mode])
+    : BUDGET_MODES;
   const [saveState, setSaveState] = React.useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
@@ -130,6 +170,15 @@ export function BudgetControl({
       </PopoverTrigger>
 
       <PopoverPopup align="start" sideOffset={8} className="w-80 space-y-3">
+        {ceiling ? (
+          <p className="rounded-md bg-muted/60 px-2 py-1.5 text-xs text-muted-foreground">
+            Your workspace caps turns at{" "}
+            <span className="font-medium text-foreground">{formatUsd(ceiling.limitUsd)}</span>
+            {" · "}
+            {BUDGET_MODES.find((m) => m.mode === ceiling.mode)?.label ?? ceiling.mode}
+          </p>
+        ) : null}
+
         <div className="flex items-center justify-between gap-2">
           <Label htmlFor="budget-enabled-switch" className="text-sm font-medium">
             Per-turn budget
@@ -137,6 +186,7 @@ export function BudgetControl({
           <Switch
             id="budget-enabled-switch"
             checked={budgetEnabled}
+            disabled={ceiling !== null}
             onCheckedChange={(checked) => onChange({ budgetEnabled: checked })}
           />
         </div>
@@ -152,6 +202,7 @@ export function BudgetControl({
                 type="number"
                 inputMode="decimal"
                 min={0.01}
+                max={ceiling?.limitUsd}
                 step={0.01}
                 size="sm"
                 placeholder="e.g. 1.00"
@@ -163,11 +214,14 @@ export function BudgetControl({
                     return;
                   }
                   const parsedValue = Number(raw);
+                  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+                    onChange({ budgetUsd: null });
+                    return;
+                  }
+                  // A ceiling clamps down (never up) — the member may still
+                  // dial in a TIGHTER limit than the ceiling.
                   onChange({
-                    budgetUsd:
-                      Number.isFinite(parsedValue) && parsedValue > 0
-                        ? parsedValue
-                        : null,
+                    budgetUsd: ceiling ? Math.min(parsedValue, ceiling.limitUsd) : parsedValue,
                   });
                 }}
               />
@@ -185,7 +239,7 @@ export function BudgetControl({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectPopup>
-                  {BUDGET_MODES.map((m) => (
+                  {availableModes.map((m) => (
                     <SelectItem key={m.mode} value={m.mode}>
                       {m.label}
                     </SelectItem>

@@ -46,6 +46,14 @@ export interface CaptureErrorInput {
   /** Request/correlation id when available. */
   requestId?: string | null;
   /**
+   * Agent execution id, when the error was captured inside an agent run. Stamped
+   * onto the row so `agent.debug.trace` (debug_with_trace) can join every error
+   * for one execution. Omit/undefined → recorded under the nil UUID sentinel.
+   */
+  executionId?: string | null;
+  /** Execution step id, when the error is tied to a specific step. */
+  stepId?: string | null;
+  /**
    * Optional human context prepended to the alert message (e.g.
    * "inngest fn agent.execute-subagent failed"). Not stored separately — folded
    * into the message so a single field drives both the row and the alert.
@@ -142,6 +150,10 @@ export function captureError(input: CaptureErrorInput): void {
       request_id: input.requestId ?? "",
       fingerprint,
       created_at: new Date().toISOString(),
+      // Coalesced to the nil UUID / null at the insert boundary
+      // (insertErrorEvents) so a caller with no execution scope stays valid.
+      execution_id: input.executionId ?? null,
+      step_id: input.stepId ?? null,
     };
 
     // Sink 1: ClickHouse. Always attempted.

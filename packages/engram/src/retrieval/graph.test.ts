@@ -161,4 +161,55 @@ describe("GraphRetrievalEngine", () => {
 
     expect(results[0]!.tokenCost).toBeGreaterThan(50);
   });
+
+  it("P0-1: emits records in salience-descending order, not store order", async () => {
+    const mk = (fact: string) =>
+      createRecord({
+        kind: "semantic",
+        namespace: NS,
+        body: { fact, domain: "auth" },
+        salience: 0.5,
+        confidence: 1.0,
+        provenance: PROV,
+      });
+    const r1 = mk("first");
+    const r2 = mk("second");
+    const r3 = mk("third");
+    await store.append(r1);
+    await store.append(r2);
+    await store.append(r3);
+
+    // Graph returns them with r2 highest salience, then r3, then r1 —
+    // different from insertion order. Engine must sort by salience desc.
+    queryFn = vi.fn(async () => [
+      { recordId: r1.id, salience: 0.3 },
+      { recordId: r2.id, salience: 0.9 },
+      { recordId: r3.id, salience: 0.6 },
+    ]);
+    const engine = new GraphRetrievalEngine(store, queryFn);
+    const results = await engine.retrieve(makeQuery());
+
+    expect(results.map((c) => c.record.id)).toEqual([r2.id, r3.id, r1.id]);
+  });
+
+  it("P0-1: dedupes a record seen twice, keeping the higher salience", async () => {
+    const r = createRecord({
+      kind: "semantic",
+      namespace: NS,
+      body: { fact: "dup", domain: "auth" },
+      salience: 0.5,
+      confidence: 1.0,
+      provenance: PROV,
+    });
+    await store.append(r);
+    // Same record from both REMEMBERS and ABOUT branches with different salience.
+    queryFn = vi.fn(async () => [
+      { recordId: r.id, salience: 0.4 },
+      { recordId: r.id, salience: 0.8 },
+    ]);
+    const engine = new GraphRetrievalEngine(store, queryFn);
+    const results = await engine.retrieve(makeQuery());
+    expect(results).toHaveLength(1);
+    expect(results[0]!.score).toBeCloseTo(0.8, 5);
+  });
 });

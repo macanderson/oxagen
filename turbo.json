@@ -90,6 +90,8 @@
         "MCP_PORT",
         "LOG_LEVEL",
         "BLOB_READ_WRITE_TOKEN",
+        "STORAGE_DRIVER",
+        "STORAGE_FS_ROOT",
         "STRIPE_TAX_ENABLED",
         "CLICKHOUSE_URL",
         "CLICKHOUSE_USERNAME",
@@ -185,6 +187,8 @@
         "SMTP_FROM_EMAIL",
         "SMTP_FROM_NAME",
         "BLOB_READ_WRITE_TOKEN",
+        "STORAGE_DRIVER",
+        "STORAGE_FS_ROOT",
         "SANDBOX_ENABLED",
         "SANDBOX_DRIVER",
         "MODAL_RUNNER_URL",
@@ -260,6 +264,8 @@
         "SMTP_FROM_EMAIL",
         "SMTP_FROM_NAME",
         "BLOB_READ_WRITE_TOKEN",
+        "STORAGE_DRIVER",
+        "STORAGE_FS_ROOT",
         "SANDBOX_ENABLED",
         "SANDBOX_DRIVER",
         "MODAL_RUNNER_URL",
@@ -327,7 +333,10 @@
         "GITHUB_APP_CLIENT_ID",
         "GITHUB_APP_CLIENT_SECRET",
         "GITHUB_APP_INSTALL_STATE_SECRET",
-        "GITHUB_APP_SLUG"
+        "GITHUB_APP_SLUG",
+        "STORAGE_DRIVER",
+        "STORAGE_FS_ROOT",
+        "BLOB_READ_WRITE_TOKEN"
       ],
       "passThroughEnv": ["CI", "PLAYWRIGHT_BROWSERS_PATH"]
     },

@@ -202,22 +202,66 @@ describe("ReinforcementTracker", () => {
       expect(updateSalience).not.toHaveBeenCalled();
     });
 
-    it("does not update when retrieval count is below threshold", async () => {
-      const record = makeRecord("rare-event", 0.5);
+    it("does not touch a record that was never retrieved", async () => {
+      const record = makeRecord("unretrieved", 0.5);
       await store.append(record);
-
-      // Only 2 retrievals — below the >= 3 threshold
-      tracker.recordRetrieval(record.id);
-      tracker.recordRetrieval(record.id);
-      tracker.reinforceTurn([record.id], "success");
-      tracker.reinforceTurn([record.id], "success");
-
+      // No recordRetrieval → nothing to reconcile.
       const updateSalience = vi.fn(async (): Promise<void> => undefined);
       const { boosted, penalized } = await tracker.applyToStore(store, updateSalience);
-
       expect(boosted).toBe(0);
       expect(penalized).toBe(0);
       expect(updateSalience).not.toHaveBeenCalled();
+    });
+
+    it("#8: applying twice with no new events is a no-op (idempotent)", async () => {
+      const record = makeRecord("stable", 0.5);
+      await store.append(record);
+      tracker.recordRetrieval(record.id);
+      tracker.recordRetrieval(record.id);
+      tracker.recordRetrieval(record.id);
+      tracker.reinforceTurn([record.id], "success");
+      tracker.reinforceTurn([record.id], "success");
+      tracker.reinforceTurn([record.id], "success");
+
+      const salienceByCall: number[] = [];
+      const updateSalience = vi.fn(async (_id: string, s: number): Promise<void> => {
+        salienceByCall.push(s);
+        await store.updateSalience(_id, s);
+      });
+
+      const first = await tracker.applyToStore(store, updateSalience);
+      expect(first.boosted).toBe(1);
+      const callsAfterFirst = updateSalience.mock.calls.length;
+
+      // No new retrievals/outcomes recorded between applies.
+      const second = await tracker.applyToStore(store, updateSalience);
+      expect(second.boosted).toBe(0);
+      expect(second.penalized).toBe(0);
+      // The second apply performed no writes.
+      expect(updateSalience.mock.calls.length).toBe(callsAfterFirst);
+    });
+
+    it("#8: does not compound — target is anchored to the base, not the last output", async () => {
+      const record = makeRecord("anchored", 0.5);
+      await store.append(record);
+      tracker.recordRetrieval(record.id);
+      tracker.reinforceTurn([record.id], "success");
+
+      let last = 0;
+      const updateSalience = vi.fn(async (id: string, s: number): Promise<void> => {
+        last = s;
+        await store.updateSalience(id, s);
+      });
+      await tracker.applyToStore(store, updateSalience);
+      const afterOne = last;
+
+      // A new success arrives; apply again. The target is computed from the
+      // stable base + observed rate, so it stays bounded (never spirals to 1.0).
+      tracker.recordRetrieval(record.id);
+      tracker.reinforceTurn([record.id], "success");
+      await tracker.applyToStore(store, updateSalience);
+      expect(last).toBeLessThanOrEqual(0.5 + 0.25 + 1e-9);
+      expect(last).toBeGreaterThanOrEqual(afterOne - 1e-9);
     });
 
     it("caps boosted salience at 1.0", async () => {

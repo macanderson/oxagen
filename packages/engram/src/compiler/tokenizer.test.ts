@@ -13,6 +13,8 @@ import {
   CharBasedTokenizer,
   TiktokenTokenizer,
   AnthropicTokenizer,
+  getCharEstimatorFallbackCount,
+  resetTokenizerFallbackStats,
   type TokenEncoder,
 } from "./tokenizer";
 
@@ -129,5 +131,25 @@ describe("failed tokenizer load falls back to the char estimator", () => {
     const expected = new CharBasedTokenizer(4.0).count(text);
     expect(() => tok.count(text)).not.toThrow();
     expect(tok.count(text)).toBe(expected);
+  });
+
+  it("T-2: records the fallback and warns exactly once per family", () => {
+    resetTokenizerFallbackStats();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const load = vi.fn(() => {
+        throw new Error("wasm unavailable");
+      });
+      const tok = new TiktokenTokenizer("openai/gpt-4o", load);
+      const before = getCharEstimatorFallbackCount();
+      tok.count(text);
+      tok.count(text); // memoized failure — no second load, but no second warn
+      expect(getCharEstimatorFallbackCount()).toBe(before + 1);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain("openai");
+    } finally {
+      warn.mockRestore();
+      resetTokenizerFallbackStats();
+    }
   });
 });

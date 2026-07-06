@@ -1434,10 +1434,10 @@ describe("MessageComposer — queue drain: null tier fallback", () => {
       mediaModel: null as null,
       seededImageModel: null as null,
       seededVideoModel: null as null,
-      budgetEnabled: false as false,
+      budgetEnabled: false as const,
       budgetUsd: null as null,
-      budgetMode: "prompt" as "prompt",
-      budgetGracePct: 0.25 as 0.25,
+      budgetMode: "prompt" as const,
+      budgetGracePct: 0.25 as const,
     };
     const { rerender } = render(
       <MessageComposer
@@ -1484,10 +1484,10 @@ describe("MessageComposer — queue drain: mediaModel set", () => {
       mediaModel: "flux-2-max",
       seededImageModel: null as null,
       seededVideoModel: null as null,
-      budgetEnabled: false as false,
+      budgetEnabled: false as const,
       budgetUsd: null as null,
-      budgetMode: "prompt" as "prompt",
-      budgetGracePct: 0.25 as 0.25,
+      budgetMode: "prompt" as const,
+      budgetGracePct: 0.25 as const,
     };
     const { rerender } = render(
       <MessageComposer
@@ -1535,10 +1535,10 @@ describe("MessageComposer — queue drain: null mediaTier fallback", () => {
       mediaModel: null as null,
       seededImageModel: null as null,
       seededVideoModel: null as null,
-      budgetEnabled: false as false,
+      budgetEnabled: false as const,
       budgetUsd: null as null,
-      budgetMode: "prompt" as "prompt",
-      budgetGracePct: 0.25 as 0.25,
+      budgetMode: "prompt" as const,
+      budgetGracePct: 0.25 as const,
     };
     const { rerender } = render(
       <MessageComposer
@@ -1587,10 +1587,10 @@ describe("MessageComposer — queue drain: effort in drained message", () => {
       mediaModel: null as null,
       seededImageModel: null as null,
       seededVideoModel: null as null,
-      budgetEnabled: false as false,
+      budgetEnabled: false as const,
       budgetUsd: null as null,
-      budgetMode: "prompt" as "prompt",
-      budgetGracePct: 0.25 as 0.25,
+      budgetMode: "prompt" as const,
+      budgetGracePct: 0.25 as const,
     };
     const { rerender } = render(
       <MessageComposer

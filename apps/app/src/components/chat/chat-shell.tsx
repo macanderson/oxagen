@@ -8,7 +8,7 @@ import {
   type BackgroundTaskSnapshot,
 } from "./background-task-tray";
 import { resolvedTierCatalog } from "@oxagen/ai";
-import type { ComposerModelState } from "./model-picker";
+import type { ComposerModelState, WorkspaceBudgetGovernance } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 
 export { type ChatMessage, type MessageAttachment } from "./message-bubble";
@@ -49,6 +49,9 @@ export interface ChatShellProps {
   initialModelState?: ComposerModelState;
   /** Available MCP servers for the per-turn activation picker. */
   availableMcpServers?: McpServerSummary[];
+  /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
+   * no governance active for this workspace. */
+  workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
 }
 
 // RSC streaming: the messages promise resolves inside a Suspense boundary
@@ -74,6 +77,7 @@ export function ChatShell({
   pendingPromptBehavior,
   initialModelState,
   availableMcpServers,
+  workspaceBudgetGovernance,
 }: ChatShellProps) {
   return (
     <>
@@ -94,6 +98,7 @@ export function ChatShell({
           pendingPromptBehavior={pendingPromptBehavior}
           initialModelState={initialModelState}
           availableMcpServers={availableMcpServers}
+          workspaceBudgetGovernance={workspaceBudgetGovernance}
         />
       </Suspense>
       <BackgroundTaskTray
@@ -121,6 +126,7 @@ async function AsyncShell({
   pendingPromptBehavior,
   initialModelState,
   availableMcpServers,
+  workspaceBudgetGovernance,
 }: {
   promise: Promise<ChatMessage[]>;
   conversationId: string | null;
@@ -137,6 +143,7 @@ async function AsyncShell({
   pendingPromptBehavior?: "queue" | "interrupt";
   initialModelState?: ComposerModelState;
   availableMcpServers?: McpServerSummary[];
+  workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
 }) {
   const messages = await promise;
   const modelConfig = resolvedTierCatalog();
@@ -158,6 +165,7 @@ async function AsyncShell({
       pendingPromptBehavior={pendingPromptBehavior}
       initialModelState={initialModelState}
       availableMcpServers={availableMcpServers}
+      workspaceBudgetGovernance={workspaceBudgetGovernance}
     />
   );
 }

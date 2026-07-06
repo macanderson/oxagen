@@ -9,13 +9,14 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // OXA-1898: lines/statements raised to the 85% gate (measured 91.8).
-      // branches/functions left at prior floors (measured 85.9 / 94.1).
+      // Ratcheted after adding the fs driver + tests (measured 92.93 lines/
+      // statements, 87.87 branches, 95.83 functions). Each floor kept ≥2.5%
+      // below measured per the coverage-ratchet rule (functions capped at 90).
       thresholds: {
-        lines: 85,
-        branches: 78,
-        functions: 68,
-        statements: 85,
+        lines: 90,
+        branches: 85,
+        functions: 90,
+        statements: 90,
       },
     },
   },

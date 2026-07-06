@@ -19,6 +19,7 @@ export * from "./security";
 export * from "./retry";
 export * from "./skill-telemetry";
 export * from "./usage-analytics";
+export * from "./execution-diagnostics";
 export * from "./usage-events";
 export { chInsert, chSelect } from "./tenant";
 export * from "./eval-item-results";

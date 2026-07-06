@@ -13,6 +13,18 @@ export interface ReinforcementStats {
   successCount: number;
   failureCount: number;
   lastRetrievedAt: number;
+  /**
+   * The record's salience the first time apply anchored it. Adjustments are
+   * computed from this stable base (never from the previous run's output), so
+   * repeated application converges to a target instead of compounding.
+   */
+  baseSalience?: number;
+  /**
+   * Retrieval count already folded into the persisted salience at the last
+   * apply (the checkpoint). Apply is a no-op while `retrievalCount` hasn't moved
+   * past this, which makes re-running with no new events idempotent.
+   */
+  appliedRetrievalCount?: number;
 }
 
 /**
@@ -89,6 +101,12 @@ export class ReinforcementTracker {
   /**
    * Apply reinforcement by updating salience in the store.
    * Called periodically (e.g., by the consolidation job).
+   *
+   * Idempotent: the target salience is computed from a stable `baseSalience`
+   * anchor plus the observed success rate, NOT by nudging the current
+   * (already-adjusted) salience — so it converges to a target rather than
+   * compounding to 1.0/0.01. After applying, the retrieval checkpoint advances,
+   * so a re-run with no new events touches nothing.
    */
   async applyToStore(
     store: EpisodicStore,
@@ -98,25 +116,32 @@ export class ReinforcementTracker {
     let penalized = 0;
 
     for (const [id, s] of this.stats) {
+      // No new retrievals since the last apply → nothing to reconcile. This is
+      // what makes a re-run a no-op.
+      const appliedAt = s.appliedRetrievalCount ?? 0;
+      if (s.retrievalCount <= appliedAt) continue;
+
       const record = await store.getById(id);
       if (!record) continue;
 
-      const successRate =
-        s.retrievalCount > 0 ? s.successCount / s.retrievalCount : 0;
+      // Anchor on the record's salience the first time we touch it, then always
+      // compute from that anchor so the result is a function of the observed
+      // outcomes, not of the previous run's output.
+      const base = s.baseSalience ?? record.salience;
+      s.baseSalience = base;
 
-      let newSalience = record.salience;
-      if (successRate > 0.7 && s.retrievalCount >= 3) {
-        // High success rate + enough samples → boost
-        newSalience = Math.min(1.0, record.salience * 1.1);
-        boosted++;
-      } else if (successRate < 0.3 && s.retrievalCount >= 3) {
-        // Low success rate + enough samples → penalize
-        newSalience = Math.max(0.01, record.salience * 0.9);
-        penalized++;
-      }
+      const target = targetSalience(base, s.successCount, s.failureCount, s.retrievalCount);
 
-      if (newSalience !== record.salience) {
-        await updateSalience(id, newSalience);
+      if (target > base) boosted++;
+      else if (target < base) penalized++;
+
+      // Advance the checkpoint regardless, so the next run only reacts to
+      // genuinely new activity.
+      s.appliedRetrievalCount = s.retrievalCount;
+      this.stats.set(id, s);
+
+      if (target !== record.salience) {
+        await updateSalience(id, target);
       }
     }
 
@@ -127,4 +152,31 @@ export class ReinforcementTracker {
   clear(): void {
     this.stats.clear();
   }
+}
+
+/**
+ * Compute the reconciled target salience for a record from its stable base and
+ * observed outcomes. Deterministic and bounded: the same stats always map to
+ * the same target (so re-applying is a no-op), and the adjustment is capped so
+ * repeated reinforcement can't saturate a record.
+ *
+ * successRate uses success/(success+failure) — the outcome fraction (M-2) — not
+ * success/retrievalCount, which could exceed 1 when a memory is reinforced more
+ * often than it is formally retrieved.
+ */
+export function targetSalience(
+  base: number,
+  successCount: number,
+  failureCount: number,
+  retrievalCount: number,
+): number {
+  const outcomes = successCount + failureCount;
+  // No outcomes yet → neutral, so the fact keeps its base salience.
+  const successRate = outcomes > 0 ? successCount / outcomes : 0.5;
+  // More retrievals → more confidence in the signal → larger allowed swing,
+  // capped at a full-weight adjustment of ±0.25 around the base.
+  const sampleWeight = Math.min(1, retrievalCount / 10);
+  const adjustment = (successRate - 0.5) * 0.5 * sampleWeight;
+  const target = base + adjustment;
+  return Math.min(1, Math.max(0.01, target));
 }

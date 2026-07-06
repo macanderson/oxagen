@@ -85,6 +85,16 @@ export const agentSandboxStart = registerCapability({
       .describe(
         "Optional shell command run ONCE at create time (e.g. `git clone … && pnpm i`).",
       ),
+    environmentId: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Optional workspace environment id (env_…) bound to this session. Its vault " +
+          "secrets are resolved server-side and injected into every agent.sandbox.exec " +
+          "run BELOW the caller-supplied env (caller values win). Trusted vault secrets " +
+          "are NOT subject to the reserved-key denylist.",
+      ),
   }),
   output: z.object({
     sessionId: z

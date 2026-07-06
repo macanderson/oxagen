@@ -14,3 +14,11 @@ export type { FileLeaseLockAdapterArgs } from "./file-lock-lease";
 export { createFileLockAdapter } from "./file-lock";
 export type { FileLockAdapterArgs } from "./file-lock";
 export { createPlatformAgentAi } from "./platform-agent-ai";
+export {
+  ModalSandboxWorkspace,
+  SandboxWorkspaceUnavailableError,
+} from "./sandbox-workspace";
+export type {
+  ModalSandboxWorkspaceOptions,
+  SandboxRepoSpec,
+} from "./sandbox-workspace";

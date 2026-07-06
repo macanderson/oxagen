@@ -9,7 +9,7 @@
  * in its full-screen render branch, passing in its own state as props.
  */
 import { Box, Text } from "ink";
-import React from "react";
+import React, { useMemo } from "react";
 import { theme } from "../tui/theme.js";
 import { formatUsd } from "../agent/model-router.js";
 import { MessageView, humanizeTokens, type Message } from "./components.js";
@@ -128,12 +128,27 @@ export function TranscriptViewport({
     ? [...committedMessages, liveMessage]
     : committedMessages;
 
+  // Row height per COMMITTED message, recomputed only when the committed
+  // transcript (identity — see interactive.tsx's own memoized
+  // `committedMessages`) or `width` actually changes. This used to re-measure
+  // the ENTIRE transcript, including scrollback long off-screen, on every
+  // render of this component — including the 1Hz clock tick and every
+  // streamed token of the live message, neither of which touches anything
+  // BUT that live message. The live message's own height is cheap (a single
+  // message) and computed fresh below.
+  const committedRowHeights = useMemo(
+    () => committedMessages.map((m) => estimateMessageRows(m, width)),
+    [committedMessages, width],
+  );
+  const rowHeights = liveMessage
+    ? [...committedRowHeights, estimateMessageRows(liveMessage, width)]
+    : committedRowHeights;
+
   // One row is always reserved for the indicator slot (shown as an amber hint
   // when scrolled up, an empty spacer at the bottom) so the message area's
   // height never changes as the user scrolls — no 1-row reflow jump at the
   // boundary between "scrolled up" and "at bottom".
   const contentHeight = Math.max(1, height - 1);
-  const rowHeights = all.map((m) => estimateMessageRows(m, width));
   const totalLines = rowHeights.reduce((a, b) => a + b, 0);
   const ctx = { totalLines, viewportHeight: contentHeight };
   const offset = effectiveOffset(scroll, ctx);

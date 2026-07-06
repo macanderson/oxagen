@@ -1,14 +1,46 @@
 /**
  * Record merge — CRDT merge semantics for memory records.
  *
- * When two offline nodes sync, their records are merged using these rules:
- * - Episodic: union (append-only, content-addressed → no duplicates)
- * - Semantic: OR-Set semantics (both retained on conflict)
- * - Procedural: OR-Set semantics
- * - Salience: PN-Counter merge (max per node)
- * - Causality: union of DAG edges
+ * When two offline replicas sync, records that share a content-addressed ID
+ * (same kind + namespace + body) can still carry divergent *metadata*. That
+ * metadata is merged with these convergent, state-based rules:
+ *
+ * - Salience   — bounded max-register: `Math.max`. Salience is a [0,1]
+ *   importance score, so max is a join over a totally-ordered bounded lattice
+ *   (commutative, associative, idempotent → convergent). Concurrent boosts on
+ *   different replicas collapse to the highest, which is the intended semantics
+ *   for a bounded importance score. (The record schema stores salience as a
+ *   scalar, not per-node counter state, so an additive PN-Counter is not
+ *   representable without a schema change — out of scope for the sync layer.)
+ * - Confidence — bounded max-register: `Math.max`, same reasoning.
+ * - Causality  — grow-only set: union of DAG edges.
+ *
+ * The `versionDigest` below is derived from exactly these merge-relevant fields
+ * so the Merkle layer detects metadata-only divergence between replicas that
+ * share an ID set (see sync/merkle.ts).
  */
 import type { MemoryRecord } from "../types";
+import { canonicalStringify } from "../canonical-json";
+import type { RecordVersion } from "./merkle";
+
+/**
+ * Digest of a record's mergeable metadata. Two replicas of the same record
+ * (same ID) produce equal digests iff their salience, confidence, and causality
+ * are identical; any divergence changes the digest and is surfaced by the
+ * Merkle diff so the protocol reconciles it via `mergeRecordSets`.
+ */
+export function recordVersionDigest(record: MemoryRecord): string {
+  return canonicalStringify({
+    salience: record.salience,
+    confidence: record.confidence,
+    causality: [...record.causality].sort(),
+  });
+}
+
+/** Pair a record with its version digest for Merkle-tree construction. */
+export function toRecordVersion(record: MemoryRecord): RecordVersion {
+  return { id: record.id, versionDigest: recordVersionDigest(record) };
+}
 
 /**
  * Merge two sets of memory records from different nodes.
@@ -40,7 +72,7 @@ export function mergeRecordSets(
     }
   }
 
-  // Records in both → merge metadata (salience, confidence)
+  // Records in both → merge metadata (salience, confidence, causality)
   for (const [id, localRecord] of localMap) {
     const remoteRecord = remoteMap.get(id);
     if (!remoteRecord) continue;
@@ -74,25 +106,26 @@ export interface MergeConflict {
 }
 
 /**
- * Merge metadata for two instances of the same record (same content-addressed ID).
- * Uses last-write-wins for timestamps, max for salience, and union for causality.
+ * Merge metadata for two instances of the same record (same content-addressed
+ * ID). Bounded max-register for salience and confidence; grow-only set union
+ * for causality. The result is independent of argument order (convergent).
  */
-function mergeRecordMetadata(
+export function mergeRecordMetadata(
   local: MemoryRecord,
   remote: MemoryRecord,
 ): { record: MemoryRecord; conflict?: MergeConflict } {
   let conflict: MergeConflict | undefined;
 
-  // Salience: take max (optimistic — highest importance wins)
+  // Salience: bounded max-register (highest importance wins, order-independent).
   const salience = Math.max(local.salience, remote.salience);
 
-  // Confidence: take max (most confident assertion wins)
+  // Confidence: bounded max-register (most confident assertion wins).
   const confidence = Math.max(local.confidence, remote.confidence);
 
-  // Causality: union of DAG edges
-  const causality = [...new Set([...local.causality, ...remote.causality])];
+  // Causality: grow-only set — union of DAG edges (deterministically ordered).
+  const causality = [...new Set([...local.causality, ...remote.causality])].sort();
 
-  // If salience differs significantly, note a conflict
+  // If salience differs significantly, note a conflict for observability.
   if (Math.abs(local.salience - remote.salience) > 0.2) {
     conflict = {
       recordId: local.id,

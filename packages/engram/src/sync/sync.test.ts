@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { tick, mergeClock, compareClock, generateTag } from "./crdt";
+import { tick, mergeClock, compareClock } from "./crdt";
 import { ORSet } from "./or-set";
 import { PNCounter } from "./pn-counter";
-import { mergeRecordSets } from "./merge";
+import { mergeRecordSets, toRecordVersion } from "./merge";
 import { buildMerkleTree, diffMerkleTrees } from "./merkle";
 import { prioritizeForSync } from "./priority";
 import { createRecord } from "../record";
@@ -79,6 +79,16 @@ describe("ORSet", () => {
     // b's tag survives a's remove (a only tombstoned "a:1", not "b:1")
     expect(merged.has("fact")).toBe(true);
   });
+
+  it("structurally-equal object values collapse onto one entry (canonical id)", () => {
+    const set = new ORSet<{ a: number; b: number }>();
+    set.add({ a: 1, b: 2 }, "t1");
+    // Same value, keys in different order — must be the SAME element.
+    set.add({ b: 2, a: 1 }, "t2");
+    expect(set.size).toBe(1);
+    set.remove({ b: 2, a: 1 });
+    expect(set.has({ a: 1, b: 2 })).toBe(false);
+  });
 });
 
 describe("PNCounter", () => {
@@ -99,9 +109,6 @@ describe("PNCounter", () => {
     b.increment("node-b", 4);
 
     const merged = a.merge(b);
-    // node-a positive: max(3, 2) = 3
-    // node-b positive: max(0, 4) = 4
-    // node-b negative: max(1, 0) = 1
     expect(merged.value()).toBe(3 + 4 - 1); // 6
   });
 
@@ -111,6 +118,16 @@ describe("PNCounter", () => {
     const b = new PNCounter();
     b.increment("y", 3);
     expect(a.merge(b).value()).toBe(b.merge(a).value());
+  });
+
+  it("rejects negative and non-finite amounts (grow-only invariant)", () => {
+    const c = new PNCounter();
+    expect(() => c.increment("n", -1)).toThrow(RangeError);
+    expect(() => c.decrement("n", -1)).toThrow(RangeError);
+    expect(() => c.increment("n", Number.NaN)).toThrow(RangeError);
+    expect(() => c.increment("n", Number.POSITIVE_INFINITY)).toThrow(RangeError);
+    // Zero is a permitted no-op.
+    expect(() => c.increment("n", 0)).not.toThrow();
   });
 });
 
@@ -123,41 +140,59 @@ describe("mergeRecordSets", () => {
     expect(result.newFromRemote).toHaveLength(1);
   });
 
-  it("same record in both: takes max salience", () => {
+  it("same record in both: takes max salience and confidence", () => {
     const record = createRecord({ kind: "semantic", namespace: NS, body: { fact: "x", domain: "t" }, salience: 0.5, confidence: 0.8, provenance: PROV });
-    const local = [{ ...record, salience: 0.3 }];
-    const remote = [{ ...record, salience: 0.9 }];
+    const local = [{ ...record, salience: 0.3, confidence: 0.4 }];
+    const remote = [{ ...record, salience: 0.9, confidence: 0.6 }];
     const result = mergeRecordSets(local, remote);
     expect(result.merged).toHaveLength(1);
     expect(result.merged[0]!.salience).toBe(0.9);
+    expect(result.merged[0]!.confidence).toBe(0.6);
+  });
+
+  it("unions causality edges deterministically", () => {
+    const record = createRecord({ kind: "semantic", namespace: NS, body: { fact: "y", domain: "t" }, salience: 0.5, confidence: 0.5, provenance: PROV });
+    const local = [{ ...record, causality: ["b", "a"] }];
+    const remote = [{ ...record, causality: ["c", "a"] }];
+    const result = mergeRecordSets(local, remote);
+    expect(result.merged[0]!.causality).toEqual(["a", "b", "c"]);
   });
 });
 
 describe("Merkle tree", () => {
-  it("identical sets produce identical root hashes", () => {
-    const ids = ["aaa", "bbb", "ccc"];
-    const tree1 = buildMerkleTree(ids);
-    const tree2 = buildMerkleTree(ids);
-    expect(tree1.hash).toBe(tree2.hash);
+  it("identical version sets produce identical root hashes (order-independent)", () => {
+    const vs = [
+      { id: "aaa", versionDigest: "v1" },
+      { id: "bbb", versionDigest: "v1" },
+      { id: "ccc", versionDigest: "v1" },
+    ];
+    expect(buildMerkleTree(vs).rootHash).toBe(buildMerkleTree([...vs].reverse()).rootHash);
   });
 
-  it("different sets produce different root hashes", () => {
-    const tree1 = buildMerkleTree(["aaa", "bbb"]);
-    const tree2 = buildMerkleTree(["aaa", "ccc"]);
-    expect(tree1.hash).not.toBe(tree2.hash);
+  it("different id sets produce different root hashes", () => {
+    const t1 = buildMerkleTree([{ id: "aaa", versionDigest: "v1" }, { id: "bbb", versionDigest: "v1" }]);
+    const t2 = buildMerkleTree([{ id: "aaa", versionDigest: "v1" }, { id: "ccc", versionDigest: "v1" }]);
+    expect(t1.rootHash).not.toBe(t2.rootHash);
   });
 
   it("diff finds records in remote but not local", () => {
-    const local = buildMerkleTree(["aaa", "bbb"]);
-    const remote = buildMerkleTree(["aaa", "bbb", "ccc"]);
-    const missing = diffMerkleTrees(local, remote);
-    expect(missing).toContain("ccc");
-    expect(missing).not.toContain("aaa");
+    const local = buildMerkleTree([{ id: "aaa", versionDigest: "v1" }, { id: "bbb", versionDigest: "v1" }]);
+    const remote = buildMerkleTree([{ id: "aaa", versionDigest: "v1" }, { id: "bbb", versionDigest: "v1" }, { id: "ccc", versionDigest: "v1" }]);
+    const diff = diffMerkleTrees(local, remote);
+    expect(diff.remoteOnly).toContain("ccc");
+    expect(diff.remoteOnly).not.toContain("aaa");
+    expect(diff.divergent).toEqual([]);
   });
 
-  it("diff returns empty for identical trees", () => {
-    const tree = buildMerkleTree(["a", "b", "c"]);
-    expect(diffMerkleTrees(tree, tree)).toEqual([]);
+  it("diff returns empty groups for identical trees", () => {
+    const tree = buildMerkleTree([{ id: "a", versionDigest: "v1" }, { id: "b", versionDigest: "v1" }]);
+    expect(diffMerkleTrees(tree, tree)).toEqual({ remoteOnly: [], localOnly: [], divergent: [] });
+  });
+
+  it("toRecordVersion digests real records by mergeable metadata", () => {
+    const r = createRecord({ kind: "semantic", namespace: NS, body: { fact: "z", domain: "t" }, salience: 0.5, confidence: 0.5, provenance: PROV });
+    expect(toRecordVersion(r).id).toBe(r.id);
+    expect(toRecordVersion({ ...r, salience: 0.9 }).versionDigest).not.toBe(toRecordVersion(r).versionDigest);
   });
 });
 

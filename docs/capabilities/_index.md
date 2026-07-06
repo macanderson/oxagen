@@ -4,7 +4,7 @@ Reference for all declared capabilities across the Oxagen platform.
 Each capability is implemented across API, MCP, and agent surfaces with
 contract-first design, IAM enforcement, and instrumentation.
 
-## Agent (61)
+## Agent (62)
 
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
 - [agent.code.execute](agent.code.execute.md) — Execute a code snippet in an isolated sandbox and return the exit code, stdout, stderr, and execution time
@@ -65,6 +65,7 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.execution.list](agent.execution.list.md) — List recent top-level agent runs for the workspace, newest first, with keyset pagination — each row's status, origin, duration, and token/cost figures
 - [agent.tool.list](agent.tool.list.md) — List the capabilities surfaced as agent tools for the active workspace, filtered by role, entitlements, and denylist
 - [agent.trace.get](agent.trace.get.md) — Fetch one agent execution as a collapsible span tree: the run, its ordered steps, each step's tool calls with durations/tokens/cost/status, and child executions (subagent/A2A lineage)
+- [agent.debug.trace](agent.debug.trace.md) — Diagnose why an agent execution failed as a structured failure frame: failing step, error class, parsed top stack frames, related spans, and deterministically-ranked suspect files (optional LLM diagnosis via summarize)
 - [agent.trigger.create](agent.trigger.create.md) — Create a manual, scheduled (cron), or event trigger for an agent, validated against the trigger schema
 - [agent.trigger.delete](agent.trigger.delete.md) — Soft-delete an agent trigger so the binding stops firing while preserving the audit record
 - [agent.trigger.list](agent.trigger.list.md) — List the non-deleted triggers configured for an agent in the current workspace
@@ -411,8 +412,10 @@ contract-first design, IAM enforcement, and instrumentation.
 - [workflow.run](workflow.run.md) — Decompose a goal into N sub-tasks and dispatch them concurrently via Inngest
 - [workflow.status](workflow.status.md) — Read the current status and task-level progress of a workflow run
 
-## Workspace (8)
+## Workspace (10)
 
+- [workspace.budget.policy.read](workspace.budget.policy.read.md) — Read the workspace's governed per-turn dollar budget: whether enforcement is active, the limit in USD, enforcement mode (grace/prompt/enforce), grace cushion, and enforcement policy (ceiling/default)
+- [workspace.budget.policy.write](workspace.budget.policy.write.md) — Set the workspace's governed per-turn dollar budget (partial update); Owner/Admin only; controls how agent turns are budget-governed for members
 - [workspace.create](workspace.create.md) — Create a workspace inside the caller's active tenant
 - [workspace.invite.send](workspace.invite.send.md) — Send a workspace invitation to an email address with 7-day expiry
 - [workspace.list](workspace.list.md) — List the workspaces inside an organization the caller belongs to; backs the CLI workspace picker in oxagen init

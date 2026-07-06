@@ -85,7 +85,14 @@ export function resolveConflict(
   let resolution: ConflictResolution;
   let reason: string;
 
-  if (confidenceDiff > 0.3) {
+  // A contradiction between two HIGH-confidence facts must never be auto-
+  // resolved — it escalates to a human. This check comes first (before the
+  // evidence-strength auto-keep_new below) so a well-evidenced new fact can't
+  // silently overwrite an equally-confident existing one.
+  if (existing.confidence >= 0.9 && newConfidence >= 0.9) {
+    resolution = "human_review";
+    reason = `Both facts have high confidence — requires human decision`;
+  } else if (confidenceDiff > 0.3) {
     resolution = "keep_new";
     reason = `New fact has significantly higher confidence (${newConfidence.toFixed(2)} vs ${existing.confidence.toFixed(2)})`;
   } else if (confidenceDiff < -0.3) {
@@ -94,9 +101,6 @@ export function resolveConflict(
   } else if (evidenceStrength >= 5) {
     resolution = "keep_new";
     reason = `New fact supported by ${evidenceStrength} independent observations`;
-  } else if (existing.confidence >= 0.9 && newConfidence >= 0.9) {
-    resolution = "human_review";
-    reason = `Both facts have high confidence — requires human decision`;
   } else {
     resolution = "keep_both";
     reason = `Ambiguous conflict — both retained with provenance for future resolution`;

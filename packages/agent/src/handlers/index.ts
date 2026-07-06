@@ -85,6 +85,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   "agent.subagent.fanout.list": () => import("./agent.subagent.fanout.list"),
   "agent.execution.list": () => import("./agent.execution.list"),
   "agent.trace.get": () => import("./agent.trace.get"),
+  "agent.debug.trace": () => import("./agent.debug.trace"),
   "agent.execution.lineage": () => import("./agent.execution.lineage"),
   "agent.ui.render": () => import("./agent.ui.render"),
   "agent.definition.create": () => import("./agent.definition.create"),

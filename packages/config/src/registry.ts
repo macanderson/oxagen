@@ -778,13 +778,24 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   STORAGE_DRIVER: {
     group: "File storage",
     description:
-      "Selects the @oxagen/storage backend. Currently only 'vercel-blob'; the swap-point for an S3/R2 driver.",
+      "Selects the @oxagen/storage backend: 'vercel-blob' (default, prod) or 'fs' (local/CI filesystem driver, no token needed). The swap-point for an S3/R2 driver.",
     secret: false,
     clientExposed: false,
     services: ["app"],
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "vercel-blob",
+  },
+  STORAGE_FS_ROOT: {
+    group: "File storage",
+    description:
+      "Root directory for the 'fs' storage driver. Only read when STORAGE_DRIVER=fs. Absolute path used as-is; a relative path is anchored at process.cwd(); unset falls back to an OS-tmp directory.",
+    secret: false,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
   },
   AI_GATEWAY_API_KEY: {
     group: "AI providers",

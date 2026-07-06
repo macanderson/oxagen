@@ -40,8 +40,20 @@ export interface FullscreenHandle {
  * Switches `stream` into the CLI's full-screen presentation: alternate
  * screen buffer + hidden cursor. Returns a handle whose `leave()` reverses
  * both, in the opposite order — call it on every exit path (normal
- * `waitUntilExit`, an uncaught error, `process.exit`) so a crash never
- * strands the user's terminal in the alternate buffer.
+ * `waitUntilExit`, an uncaught error, `process.exit`, or a SIGTERM/SIGINT
+ * handler — see launchRepl) so a crash or signal-kill never strands the
+ * user's terminal.
+ *
+ * `leave()` ALSO disarms SGR mouse-wheel/click reporting (the same sequences
+ * `disableMouseReporting` below writes), even though arming it is a separate,
+ * React-level, user-toggleable concern (`/mouse`, `use-mouse-wheel.ts`) that
+ * this module doesn't otherwise track. That React effect's own cleanup
+ * disarms it on a clean unmount, but a signal-kill (SIGTERM/SIGINT) tears the
+ * process down WITHOUT running React effect cleanups — the mouse-disable
+ * escape sequence would simply never be written, leaving the user's terminal
+ * stuck reporting raw SGR mouse escapes into their shell after the CLI exits.
+ * Emitting the disable sequence here unconditionally is safe (idempotent) even
+ * when mouse reporting was never armed in the first place.
  */
 export function enterFullscreen(stream: NodeJS.WriteStream): FullscreenHandle {
   stream.write(ENTER_ALT_SCREEN + HIDE_CURSOR);
@@ -49,7 +61,7 @@ export function enterFullscreen(stream: NodeJS.WriteStream): FullscreenHandle {
   const leave = (): void => {
     if (left) return;
     left = true;
-    stream.write(SHOW_CURSOR + LEAVE_ALT_SCREEN);
+    stream.write(SHOW_CURSOR + DISABLE_MOUSE + LEAVE_ALT_SCREEN);
   };
   return { leave };
 }
