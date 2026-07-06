@@ -22,7 +22,7 @@
  * in-process guard rather than crashing a turn.
  */
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, normalize } from "node:path";
 import type { FileLockProvider, FileLockGrant } from "@oxagen/agent-engine";
 

@@ -43,21 +43,23 @@ vi.mock("@oxagen/ai/catalog", () => ({
   getModel: (id: unknown) => mockGetModel(id),
 }));
 
-vi.mock("./model-picker", () => ({
-  ModelPicker: ({ onChange }: { onChange: (v: unknown) => void }) => (
-    <div data-testid="model-picker" onClick={() => onChange({ tier: "fast", generate: null, model: null, effort: null, mediaTier: null, mediaModel: null, seededImageModel: null, seededVideoModel: null })} />
-  ),
-  defaultModelState: {
-    tier: "fast",
-    generate: null,
-    model: null,
-    effort: null,
-    mediaTier: null,
-    mediaModel: null,
-    seededImageModel: null,
-    seededVideoModel: null,
-  },
-}));
+// model-picker re-exports its pure state helpers (defaultModelState,
+// buildSeededModelState, applyWorkspaceBudgetGovernance) from model-state.ts,
+// which has no UI imports. Pull the REAL implementations from there so the
+// composer's budget-governance path runs faithfully — only the interactive
+// ModelPicker component itself is stubbed. Listing helpers by hand here is how
+// this mock silently dropped applyWorkspaceBudgetGovernance when PR #630 added
+// it (→ undefined at call time); spreading the real module keeps it in sync.
+// Clamp/strip behaviour is covered by model-state.test.ts.
+vi.mock("./model-picker", async () => {
+  const state = await vi.importActual<typeof import("./model-state")>("./model-state");
+  return {
+    ...state,
+    ModelPicker: ({ onChange }: { onChange: (v: unknown) => void }) => (
+      <div data-testid="model-picker" onClick={() => onChange({ tier: "fast", generate: null, model: null, effort: null, mediaTier: null, mediaModel: null, seededImageModel: null, seededVideoModel: null })} />
+    ),
+  };
+});
 
 // McpServerPicker stub that exposes a button to change active server IDs
 vi.mock("./mcp-server-picker", () => ({
