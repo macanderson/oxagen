@@ -398,6 +398,14 @@ export interface ErrorEventRow {
   /** SHA-256(class + normalized message) prefix — stable grouping key. */
   fingerprint: string;
   created_at: string;
+  /**
+   * Agent execution id this error belongs to. Nil UUID when the error occurred
+   * outside any execution (the join key `agent.debug.trace` reads by). Coalesced
+   * to the nil UUID at the insert boundary, mirroring org_id/workspace_id.
+   */
+  execution_id?: string | null;
+  /** Execution step id when the error is tied to a specific step, else null. */
+  step_id?: string | null;
   /** OTEL trace id; stamped automatically from the active span when omitted. */
   trace_id?: string;
   /** OTEL span id; stamped automatically from the active span when omitted. */
@@ -414,6 +422,10 @@ export const insertErrorEvents = (rows: readonly ErrorEventRow[]) => {
       ...r,
       org_id: r.org_id ?? NIL_UUID,
       workspace_id: r.workspace_id ?? NIL_UUID,
+      // "no execution" → nil UUID (a non-UUID string over-reads the UUID parser
+      // and aborts the whole row); "no step" → null (Nullable(UUID) column).
+      execution_id: r.execution_id ?? NIL_UUID,
+      step_id: r.step_id ?? null,
       trace_id: r.trace_id ?? trace_id,
       span_id: r.span_id ?? span_id,
     })),
