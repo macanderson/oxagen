@@ -19,7 +19,7 @@
  * Presentational pieces live in ./components; this file is the container.
  */
 import { Box, Static, Text, useApp, useInput } from "ink";
-import React, { useState, useCallback, useRef, useEffect, useReducer } from "react";
+import React, { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
 import type { ModelMessage } from "ai";
 import { readFile } from "node:fs/promises";
 import { theme } from "../tui/theme.js";
@@ -103,12 +103,13 @@ import { Banner, bannerRowCount } from "../tui/banner.js";
 import { useTerminalSize } from "./use-terminal-size.js";
 import {
   scrollReducer,
-  totalEstimatedRows,
+  estimateMessageRows,
   INITIAL_SCROLL_STATE,
   type ScrollState,
   type ScrollAction,
   type ScrollCtx,
 } from "./scroll.js";
+import { createRenderThrottle, type RenderThrottle } from "./render-throttle.js";
 import { telemetryReducer, INITIAL_TELEMETRY_STATE } from "./telemetry.js";
 import { resolveModelRoles } from "./model-roles.js";
 import { borderPhaseFor, promptBorderColorFor, RAINBOW_FLASH_INTERVAL_MS } from "./border-phase.js";
@@ -195,6 +196,20 @@ interface QueuedPrompt {
   paste?: PasteSubmission;
 }
 
+/**
+ * Imperative escape hatch for `launchRepl`'s SIGTERM/SIGINT handlers (see
+ * below): a signal tears the process down without running React effect
+ * cleanups, so there is no other way for the process-level handler to reach
+ * ReplApp's live `abortRef`/`terminalHandleRef`/`renderThrottleRef` and abort
+ * the in-flight turn + kill a live `!command` child before the process exits.
+ * ReplApp populates `ref.current` on mount and clears it on unmount so a
+ * signal arriving after teardown (or before mount) is a safe no-op.
+ */
+export interface ReplSignalHandle {
+  /** Abort the in-flight turn, kill any live `!command` child, and cancel any pending render-throttle timer. Idempotent. */
+  reapChildren: () => void;
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 
 /**
@@ -212,10 +227,37 @@ function summarizeInput(toolName: string, input: unknown): string {
  */
 const CTRL_X_WINDOW_MS = 1500;
 
+/**
+ * Isolates the 1Hz live-clock tick (header time-of-day, thinking-elapsed
+ * readout, dock counters) so it invalidates ONLY the small subtree that
+ * actually renders `now` — not the whole full-screen viewport. The clock used
+ * to live as `ReplApp`-level state: every tick re-rendered the entire
+ * component tree (transcript, sidebar, prompt bar and all), which is exactly
+ * the kind of unrelated re-render the row-height memoization elsewhere in
+ * this file is trying to avoid paying for. Each call site gets its OWN
+ * `LiveClock` (and its own 1s timer) — three cheap intervals is a non-issue;
+ * a full fullscreen re-render every second is not.
+ */
+function LiveClock({
+  render,
+}: {
+  render: (now: number) => React.ReactElement;
+}): React.ReactElement {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return render(now);
+}
+
 export function ReplApp({
   options,
+  signalHandleRef,
 }: {
   options: ReplOptions;
+  /** See {@link ReplSignalHandle} — optional so ReplApp still renders standalone in tests. */
+  signalHandleRef?: { current: ReplSignalHandle | null };
 }): React.ReactElement {
   const { exit } = useApp();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -408,6 +450,12 @@ export function ReplApp({
   // Multi-turn conversation history fed back to the model each turn.
   const historyRef = useRef<ModelMessage[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+  // The in-flight turn's render throttle (see render-throttle.ts): coalesces
+  // this turn's rapid-fire `render()` calls onto a ~30fps commit cadence.
+  // Held at component scope (not just inside handleSubmit's closure) so
+  // cancelTurn and the unmount effect can reach in and cancel a pending
+  // frame timer for whichever turn currently owns it.
+  const renderThrottleRef = useRef<RenderThrottle<Message[]> | null>(null);
   const streamingRef = useRef(false);
   const modelRef = useRef(model);
   modelRef.current = model;
@@ -476,6 +524,31 @@ export function ReplApp({
   // into the transcript as a collapsed, expandable accordion (see
   // foldTerminalInline). This timer drives that time-based hand-off.
   const foldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Zombie-process guard: nothing previously aborted an in-flight turn or
+  // killed a live `!command` child on unmount. If ReplApp is torn down mid-turn
+  // (a fatal render error elsewhere, a test harness unmount, or — with the
+  // SIGTERM/SIGINT handlers added in launchRepl — a signal-driven exit that
+  // unmounts the Ink tree) the model call kept streaming into a dead
+  // component and any detached `bash -c` process group (see shell-runner.ts)
+  // kept running with no one left to reap it. Abort the turn, kill the
+  // terminal child, and cancel any pending render-throttle frame timer so it
+  // can never fire a `setState` after teardown.
+  const reapChildren = useCallback((): void => {
+    abortRef.current?.abort();
+    terminalHandleRef.current?.kill();
+    renderThrottleRef.current?.cancel();
+  }, []);
+  useEffect(() => {
+    // Publish the reaper for launchRepl's SIGTERM/SIGINT handlers (see
+    // ReplSignalHandle) — populated on mount, cleared on unmount so a signal
+    // arriving before mount / after teardown is a safe no-op rather than
+    // calling into a stale closure.
+    if (signalHandleRef) signalHandleRef.current = { reapChildren };
+    return () => {
+      reapChildren();
+      if (signalHandleRef) signalHandleRef.current = null;
+    };
+  }, [signalHandleRef, reapChildren]);
   // Live terminal geometry. `fullscreen` is true only on a real TTY: it gates
   // BOTH the classic inline mode's live-frame height cap (see "Transcript
   // rendering" below) AND the full-screen TUI layout (header/viewport/dock) —
@@ -565,15 +638,11 @@ export function ReplApp({
   // click/drag mapping) in classic mode where that geometry doesn't apply.
   const promptMouseRow = fullscreen ? inputContentRow(rows) : undefined;
   const promptMouseEnabled = fullscreen && mouseOn;
-  // 1Hz clock for the header's live time-of-day and the dock's live elapsed
-  // counters. Only ticks in full-screen mode — the classic inline layout has
-  // no use for it.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!fullscreen) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [fullscreen]);
+  // The 1Hz clock (header time-of-day + dock elapsed counters) used to live
+  // here as top-level state: every tick re-rendered the WHOLE ReplApp tree,
+  // including the transcript viewport and sidebar. It's now isolated into the
+  // <LiveClock> component below (used at each of its 3 call sites) so a tick
+  // invalidates only that small subtree.
   // REPO dock panel: worktree path, live branch (re-read periodically — a
   // `!git checkout` mid-session changes it), and PR number (async via `gh`,
   // cached, never blocking). Full-screen only — see use-repo-info.ts.
@@ -716,6 +785,11 @@ export function ReplApp({
     // the current stream ends, and the stream callbacks below no-op once
     // aborted, so no late text renders.
     abortRef.current?.abort();
+    // Cancel (don't flush) any pending render-throttle frame timer: the turn's
+    // own `finally` still runs its final untrottled flush once the aborted
+    // stream actually settles, so there is nothing to lose by dropping a
+    // frame that was only ever going to re-render the same, now-stale content.
+    renderThrottleRef.current?.cancel();
     // Return the UI to idle IMMEDIATELY so Esc feels instant even if the
     // underlying HTTP stream takes a moment to unwind. The turn's own finally
     // block also clears this state when the aborted promise finally settles.
@@ -1854,7 +1928,18 @@ export function ReplApp({
       const turn: Message[] = [];
       let assistantOpen = false;
       let reasoningOpen = false;
-      const render = (): void => commit([...base, ...turn]);
+      // Every stream sink below (onReasoning, onText, onFileChange, etc.) calls
+      // `render()` on every streamed token/delta — a fast model call can fire
+      // this dozens of times a second. Route it through a throttle that
+      // coalesces same-frame calls into ONE `commit()` (~30fps) instead of one
+      // per token; the turn's own `finally` below does one final, untrottled
+      // flush so the very last tokens always land immediately. The getter
+      // closure re-reads `base`/`turn` fresh each time it's invoked (at
+      // whatever moment the frame timer actually fires), never a snapshot
+      // taken when `render()` was called — see render-throttle.ts.
+      const renderThrottle = createRenderThrottle<Message[]>(commit, { frameMs: 33 });
+      renderThrottleRef.current = renderThrottle;
+      const render = (): void => renderThrottle.schedule(() => [...base, ...turn]);
       // Close any open streaming block (assistant prose or reasoning aside) so a
       // switch between the two — or a tool call in between — renders as a clean
       // break rather than concatenating into one run-on line.
@@ -2439,6 +2524,14 @@ export function ReplApp({
         turn.push({ role: "assistant", content, timestamp: Date.now() });
         render();
       } finally {
+        // ONE final, untrottled flush: guarantees the very last streamed tokens
+        // land immediately (no waiting out a pending ~33ms frame) and cancels
+        // any pending frame timer for THIS turn so it can never fire late (e.g.
+        // after unmount, or after a later turn has already claimed the shared
+        // UI state below). Runs unconditionally — even a cancelled/aborted
+        // turn's last committed content should land, not vanish mid-frame.
+        renderThrottle.flush(() => [...base, ...turn]);
+        if (renderThrottleRef.current === renderThrottle) renderThrottleRef.current = null;
         stall.stop();
         // This turn is over (success, error, or cancel) — retire its HUD entry.
         // It's this turn's own handle, so retiring it is safe even when an
@@ -2590,7 +2683,27 @@ export function ReplApp({
   // interactive.transcript.test.tsx for the regression guard).
   const lastMessage = messages.length > 0 ? messages[messages.length - 1] : undefined;
   const liveMessage = lastMessage?.streaming ? lastMessage : undefined;
-  const committedMessages = liveMessage ? messages.slice(0, -1) : messages;
+  // Memoized so identity is stable across renders that don't touch `messages`
+  // (e.g. the 1Hz clock tick) — a bare `.slice` would allocate a fresh array
+  // every render even when the underlying messages haven't changed, which
+  // would defeat the row-height memoization below.
+  const committedMessages = useMemo(
+    () => (liveMessage ? messages.slice(0, -1) : messages),
+    [messages, liveMessage],
+  );
+
+  // Estimated on-screen row height per COMMITTED message, recomputed only
+  // when the committed transcript or viewport width actually changes — not on
+  // every render. Previously the full-screen branch below re-measured the
+  // ENTIRE transcript (including scrollback long off-screen) on every render,
+  // including the idle 1Hz clock tick and every streamed token. Computed
+  // unconditionally (not inside `if (fullscreen)`) so this hook always runs in
+  // the same order across renders; it's simply unused off a TTY.
+  const fullscreenViewportWidth = Math.max(20, cols - (cols >= SIDEBAR_MIN_COLS ? 36 : 0));
+  const committedRowHeights = useMemo(
+    () => committedMessages.map((m) => estimateMessageRows(m, fullscreenViewportWidth)),
+    [committedMessages, fullscreenViewportWidth],
+  );
 
   // ── Full-screen TUI render (real TTY only) ──────────────────────────────
   // A fundamentally different rendering model from inline mode below: the
@@ -2604,8 +2717,10 @@ export function ReplApp({
     // Reserve room for the sidebar only when it COULD be showing (mirrors
     // AgentSidebar's own MIN_TERMINAL_COLS gate) — an estimate (its exact
     // PANEL_WIDTH isn't exported), generous enough that the transcript never
-    // visually collides with a docked sidebar.
-    const viewportWidth = Math.max(20, cols - (cols >= SIDEBAR_MIN_COLS ? 36 : 0));
+    // visually collides with a docked sidebar. Computed above (unconditionally)
+    // as `fullscreenViewportWidth` so the row-height useMemo can key on it;
+    // aliased here under its original name to keep this block's diff minimal.
+    const viewportWidth = fullscreenViewportWidth;
     // The persistent sunset banner (gradient wordmark only — version and
     // org/workspace scope live in the HeaderBar below it) is pinned at the
     // top of the frame — the alt screen has no scrollback, so
@@ -2625,26 +2740,34 @@ export function ReplApp({
     const CHROME_ROWS = 12 + (showBanner ? bannerRowCount() : 0);
     const transcriptOuterHeight = Math.max(4, rows - CHROME_ROWS);
     const transcriptContentHeight = Math.max(1, transcriptOuterHeight - 1);
-    const allMessages = liveMessage ? [...committedMessages, liveMessage] : committedMessages;
+    // Sum of the memoized committed row heights plus the live (streaming)
+    // message's own height, computed fresh each render (it's a single message,
+    // O(1) — the O(N) cost is the committed-heights memo above, not this).
+    const committedTotalLines = committedRowHeights.reduce((a, b) => a + b, 0);
+    const liveRows = liveMessage ? estimateMessageRows(liveMessage, viewportWidth) : 0;
     // Written during render (same "latest value" convention as modelRef.current
     // = model elsewhere in this file) so the NEXT dispatch — from the very next
     // keystroke or wheel tick — clamps against this frame's content size.
     scrollCtxRef.current = {
-      totalLines: totalEstimatedRows(allMessages, viewportWidth),
+      totalLines: committedTotalLines + liveRows,
       viewportHeight: transcriptContentHeight,
     };
 
     return (
       <Box flexDirection="column" height={rows} width={cols} overflow="hidden">
         {showBanner && <Banner />}
-        <HeaderBar
-          model={model}
-          version={pkg.version}
-          scope={`${options.session.orgSlug}/${options.session.workspaceSlug}`}
-          branch={repoInfo.branch}
-          sessionLabel={repoInfo.root.split("/").pop() || "session"}
-          sessionCostUsd={metrics.sessionCostUsd}
-          now={now}
+        <LiveClock
+          render={(now) => (
+            <HeaderBar
+              model={model}
+              version={pkg.version}
+              scope={`${options.session.orgSlug}/${options.session.workspaceSlug}`}
+              branch={repoInfo.branch}
+              sessionLabel={repoInfo.root.split("/").pop() || "session"}
+              sessionCostUsd={metrics.sessionCostUsd}
+              now={now}
+            />
+          )}
         />
 
         <Box flexDirection="row" flexGrow={1} overflow="hidden">
@@ -2709,10 +2832,14 @@ export function ReplApp({
         <Box paddingX={1}>
           {motion === "full" ? <SpaceInvaders active={isStreaming} /> : null}
           {motion !== "off" && isStreaming && turnStartedAt !== null ? (
-            <Text color="#FBBF24">
-              {"  thinking… "}
-              {formatElapsed(now - turnStartedAt)}
-            </Text>
+            <LiveClock
+              render={(now) => (
+                <Text color="#FBBF24">
+                  {"  thinking… "}
+                  {formatElapsed(now - turnStartedAt)}
+                </Text>
+              )}
+            />
           ) : null}
         </Box>
 
@@ -2740,14 +2867,18 @@ export function ReplApp({
         </Box>
 
         <Box marginBottom={1} flexShrink={0}>
-          <TelemetryDock
-            telemetry={telemetry}
-            metrics={metrics}
-            cacheHit={metrics.sessionCachedTokens}
-            isStreaming={isStreaming}
-            now={now}
-            cols={cols}
-            repo={repoInfo}
+          <LiveClock
+            render={(now) => (
+              <TelemetryDock
+                telemetry={telemetry}
+                metrics={metrics}
+                cacheHit={metrics.sessionCachedTokens}
+                isStreaming={isStreaming}
+                now={now}
+                cols={cols}
+                repo={repoInfo}
+              />
+            )}
           />
         </Box>
       </Box>
@@ -2969,14 +3100,49 @@ export async function launchRepl(options: ReplOptions): Promise<void> {
   const isTTY = Boolean(process.stdout.isTTY);
   const fullscreenHandle = isTTY ? enterFullscreen(process.stdout) : null;
   if (fullscreenHandle) {
-    // Best-effort net for abnormal termination (SIGINT/SIGTERM, an uncaught
-    // exception) — the normal path's `finally` below already covers a clean exit.
+    // Best-effort net for abnormal termination (an uncaught exception,
+    // `process.exit`) — the normal path's `finally` below already covers a
+    // clean exit. `"exit"` does NOT fire on a signal kill (SIGTERM/SIGINT),
+    // which is what the explicit handlers below are for.
     process.once("exit", fullscreenHandle.leave);
   }
+  // Reaches into the live ReplApp instance's abortRef/terminalHandleRef/
+  // renderThrottleRef — see ReplSignalHandle's doc comment for why a
+  // process-level ref is the only way to do that from a signal handler.
+  const signalHandleRef: { current: ReplSignalHandle | null } = { current: null };
+  // SIGTERM/SIGINT net: a signal kill previously left the terminal stranded
+  // in the alternate screen buffer (with mouse tracking still armed) AND
+  // leaked the in-flight turn's model call + any detached `!command` child
+  // process group, because neither `waitUntilExit`'s `finally` nor any React
+  // effect cleanup ever runs when the process is torn down by a signal —
+  // only `"exit"` listeners (registered above) do, and `"exit"` itself is not
+  // emitted for a signal kill. Restore the terminal FIRST (so the signal is
+  // visibly handled even if reaping children is slow), then reap, then exit
+  // with the conventional 128+signal code.
+  const onSignal = (signal: "SIGTERM" | "SIGINT"): void => {
+    fullscreenHandle?.leave();
+    signalHandleRef.current?.reapChildren();
+    process.exit(signal === "SIGINT" ? 130 : 143);
+  };
+  const onSigterm = (): void => onSignal("SIGTERM");
+  const onSigint = (): void => onSignal("SIGINT");
+  process.on("SIGTERM", onSigterm);
+  process.on("SIGINT", onSigint);
   try {
-    const { waitUntilExit } = renderInk(<ReplApp options={options} />);
+    const { waitUntilExit } = renderInk(
+      <ReplApp options={options} signalHandleRef={signalHandleRef} />,
+    );
     await waitUntilExit();
   } finally {
     fullscreenHandle?.leave();
+    // Remove the signal handlers on a clean exit — `launchRepl` can run more
+    // than once in the same process (e.g. a REPL restart from a command that
+    // re-enters it), and process-level listeners are never garbage collected
+    // on their own: leaving them registered would both leak a listener per
+    // restart and mean an OLD instance's stale `onSignal` fires (still
+    // pointing at a torn-down `fullscreenHandle`/`signalHandleRef`) alongside
+    // every newer one on the next Ctrl-C.
+    process.off("SIGTERM", onSigterm);
+    process.off("SIGINT", onSigint);
   }
 }
