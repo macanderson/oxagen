@@ -303,9 +303,16 @@ export type { MergeResult, MergeConflict } from "./sync/merge";
 export {
   buildMerkleTree,
   diffMerkleTrees,
-  collectRecordIds,
+  compareVersions,
+  MerkleTree,
 } from "./sync/merkle";
-export type { MerkleNode } from "./sync/merkle";
+export type {
+  MerkleNode,
+  MerkleChildRef,
+  MerkleDiff,
+  RecordVersion,
+} from "./sync/merkle";
+export { recordVersionDigest, toRecordVersion } from "./sync/merge";
 export { syncWithPeer } from "./sync/protocol";
 export type {
   SyncPeer,

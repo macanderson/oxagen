@@ -6,8 +6,27 @@
  * The global value = sum(all positives) - sum(all negatives).
  * Merge = point-wise max on each node's P and N vectors.
  *
- * Used for: salience scores (multiple agents can boost/penalize).
+ * The per-node P and N registers are **grow-only** — that invariant is what
+ * makes point-wise max a valid join (convergent, commutative, associative,
+ * idempotent). Feeding a negative amount into either register would break the
+ * monotonicity the merge relies on, so `increment`/`decrement` reject negative
+ * and non-finite amounts.
+ *
+ * Used for: unbounded additive tallies (e.g. success/failure counts).
  */
+
+/**
+ * Guard the grow-only invariant of the P and N registers. A finite amount of
+ * zero is allowed (a no-op); anything negative or non-finite is a programming
+ * error that would silently break convergence, so it throws.
+ */
+function assertGrowOnlyAmount(amount: number): void {
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new RangeError(
+      `PNCounter increment/decrement amount must be a finite, non-negative number; got ${amount}`,
+    );
+  }
+}
 
 export class PNCounter {
   private positive: Map<string, number>;
@@ -20,15 +39,19 @@ export class PNCounter {
 
   /**
    * Increment the counter from a specific node.
+   * @throws RangeError if `amount` is negative or non-finite.
    */
   increment(nodeId: string, amount = 1): void {
+    assertGrowOnlyAmount(amount);
     this.positive.set(nodeId, (this.positive.get(nodeId) ?? 0) + amount);
   }
 
   /**
    * Decrement the counter from a specific node.
+   * @throws RangeError if `amount` is negative or non-finite.
    */
   decrement(nodeId: string, amount = 1): void {
+    assertGrowOnlyAmount(amount);
     this.negative.set(nodeId, (this.negative.get(nodeId) ?? 0) + amount);
   }
 
