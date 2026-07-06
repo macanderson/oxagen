@@ -279,7 +279,10 @@ export async function handleLogin(opts: LoginOptions): Promise<void> {
   }
 
   // ── Persist full session ─────────────────────────────────────────────────────
-  writeConfig({ token, orgSlug, workspaceSlug });
+  // Persist appUrl alongside the session so getAppUrl() resolves it later, the
+  // same way the browser flow's runBrowserLogin() does — otherwise the token
+  // path would silently drop the resolved app URL.
+  writeConfig({ token, orgSlug, workspaceSlug, appUrl });
 
   process.stdout.write(`\nLogged in to Oxagen:\n`);
   process.stdout.write(`  token:     ${maskToken(token)}\n`);

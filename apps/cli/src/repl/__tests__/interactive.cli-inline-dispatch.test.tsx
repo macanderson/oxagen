@@ -98,6 +98,9 @@ async function submit(stdin: { write: (s: string) => void }, text: string): Prom
 }
 
 describe("REPL /cost — inline CLI-command execution (no shell dead-end, no raw stdout)", () => {
+  // Loosely typed on purpose: process.stdout.write is heavily overloaded, so the
+  // precise MockInstance signature doesn't unify with the shared-scope let. We
+  // only ever call .mockClear() and assert call-count, so the loose type is safe.
   let stdoutSpy: ReturnType<typeof vi.spyOn>;
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
 
@@ -106,8 +109,10 @@ describe("REPL /cost — inline CLI-command execution (no shell dead-end, no raw
     // caught as a call, not silently absorbed. ink-testing-library's render()
     // does not route Ink's frames through the real process.stdout, so any
     // call seen here is necessarily code that bypassed the capture-writer seam.
-    stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-    consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    stdoutSpy = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((() => true) as typeof process.stdout.write) as unknown as typeof stdoutSpy;
+    consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => undefined) as unknown as typeof consoleLogSpy;
   });
 
   afterEach(() => {
