@@ -17,6 +17,7 @@ import {
   loadEffectiveModelDefaults,
   resolvePrompt,
   chatSystemPrompt,
+  codeModeSystemPrompt,
   loadWorkspacePromptConfig,
   tool,
   type ToolSet,
@@ -28,7 +29,13 @@ import {
   createApprovalRequest,
   waitForApproval,
 } from "@oxagen/agent";
-import { createPlatformAgentAi } from "@oxagen/agent/adapters";
+import {
+  createPlatformAgentAi,
+  createNeo4jCodeGraphProvider,
+  ModalSandboxWorkspace,
+  isSandboxAvailable,
+} from "@oxagen/agent/adapters";
+import { resolveGitHubToken } from "@oxagen/handlers/lib/github-token";
 import { runCodingAgent } from "@oxagen/agent-engine";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -57,13 +64,25 @@ import { createChatMemoryProvider } from "./engine-memory";
 // modes, the pure evaluator, createTurnBudgetGuard) lives in @oxagen/billing —
 // this route only resolves the effective policy and wires the three hooks to
 // its own SSE/approval machinery.
-import { createTurnBudgetGuard, formatBudgetUsd, TURN_BUDGET_OFF } from "@oxagen/billing";
+import {
+  createTurnBudgetGuard,
+  formatBudgetUsd,
+  resolveEffectiveTurnBudget,
+  TURN_BUDGET_OFF,
+} from "@oxagen/billing";
 import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
 import {
   requestTurnBudgetSchema,
   resolveTurnBudgetPolicy,
   turnBudgetPolicyFromSaved,
+  governedBudgetFromRead,
+  type SavedWorkspaceGovernance,
 } from "./turn-budget-policy";
+import {
+  isCurrentUserTurnAtHead,
+  CHAT_MAX_RETRIES,
+  CHAT_MAX_OVERFLOW_RETRIES,
+} from "./history-dedup";
 
 // Side-effect imports: bind every handler into the shared kernel BEFORE
 // materializeTools runs so invoke() can resolve both agent.* and all
@@ -160,6 +179,26 @@ const BodySchema = z.object({
   // turn. Schema (incl. the "positive limitUsd when enabled" refinement)
   // lives in turn-budget-policy.ts so it is unit-testable in isolation.
   budget: requestTurnBudgetSchema.nullable().default(null),
+  // Code mode (forced repo + environment selection in the composer). When
+  // present, the turn runs the coding engine against a durable sandbox with the
+  // repo cloned and the environment's vault secrets injected, using the
+  // code-mode system prompt and the full workspace toolset (read_file/write_file/
+  // edit_file/list_dir/glob/grep/bash/code_graph). `null`/omitted ⇒ normal chat.
+  // owner/name come from the client's repo picker (the workspace GitHub token
+  // gates access, exactly like repo.branch.create); the sandbox only activates
+  // when a driver is configured (SANDBOX_ENABLED) — otherwise the turn still uses
+  // the code-mode prompt but advertises no filesystem tools and says so.
+  code: z
+    .object({
+      connectionId: z.string().min(1),
+      owner: z.string().min(1).max(256),
+      name: z.string().min(1).max(256),
+      defaultBranch: z.string().min(1).max(256).nullable().default(null),
+      environmentId: z.string().min(1),
+      sandboxSessionId: z.string().min(1).nullable().default(null),
+    })
+    .nullable()
+    .default(null),
 });
 
 // Maximum number of prior messages to include in the context window. Keeps
@@ -240,6 +279,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     pageContext,
     attachments,
     budget: requestBudget,
+    code: codeMode,
   } = parsed.data;
 
   let tenant: Awaited<ReturnType<typeof resolveOrg>>;
@@ -424,6 +464,13 @@ export async function POST(request: NextRequest): Promise<Response> {
   // Load conversation history from Postgres so the model has context for every
   // prior turn (without this the model has SSE amnesia, OXA-1509).
   let historyMessages: ModelMessage[] = [];
+  // True when the trailing (newest) history row IS this turn's user message —
+  // detected by message id, not text. sendMessageAction persists the user turn
+  // concurrently, so it may already be the newest row; the engine appends the
+  // instruction itself, so we must drop that row or the model sees the prompt
+  // twice. Id comparison is robust to equal text and equal createdAt (the
+  // failure mode of the old text-only dedup).
+  let currentAlreadyInHistory = false;
   if (conversationId) {
     // Fetch the most-recent HISTORY_LIMIT rows (DESC + LIMIT), then reverse in
     // JS so they end up chronological (oldest→newest). ASC + LIMIT would return
@@ -438,6 +485,9 @@ export async function POST(request: NextRequest): Promise<Response> {
         withTenantDb((tx) =>
           tx
             .select({
+              // id: used to dedup this turn's user message from history by id
+              // (see currentAlreadyInHistory) — robust to equal text/createdAt.
+              id: schema.messages.id,
               role: schema.messages.role,
               content: schema.messages.content,
               // content_blocks carries the assistant turn's real output (tool
@@ -469,6 +519,9 @@ export async function POST(request: NextRequest): Promise<Response> {
       metadata: r.metadata,
     }));
 
+    // Dedup this turn's user message by id (see isCurrentUserTurnAtHead).
+    currentAlreadyInHistory = isCurrentUserTurnAtHead(rows, parentMessageId);
+
     // Bounded image replay: only the most recent RECENT_IMAGE_TURN_LIMIT user
     // turns' attachments are re-fetched as real image parts; older turns fall
     // back to a `[attached image: <name>]` text placeholder inside
@@ -491,32 +544,10 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   // The engine appends `instruction` (this turn's content) itself, so the
-  // history it receives must EXCLUDE the current user message. sendMessageAction
-  // (running concurrently) may already have persisted this turn as the trailing
-  // history row — drop it so the model never sees the current turn twice.
-  //
-  // A row with attachments is a multimodal `content` array (text part +
-  // image parts), not a plain string — extract just the text part before
-  // comparing, so a turn WITH attachments is still correctly deduped instead
-  // of slipping through as a "different" message and doubling the image.
-  const lastHistory = historyMessages[historyMessages.length - 1];
-  const lastHistoryText =
-    typeof lastHistory?.content === "string"
-      ? lastHistory.content
-      : Array.isArray(lastHistory?.content)
-        ? lastHistory.content
-            .filter(
-              (p): p is { type: "text"; text: string } =>
-                (p as { type?: string }).type === "text",
-            )
-            .map((p) => p.text)
-            .join("\n")
-        : undefined;
-  const currentAlreadyInHistory =
-    lastHistory !== undefined &&
-    lastHistory.role === "user" &&
-    lastHistoryText === content;
-
+  // history it receives must EXCLUDE the current user message. When it is
+  // already the trailing history row (detected by id above), drop it so the
+  // model never sees the current turn twice. Rows are chronological here
+  // (buildHistoryMessages reversed them), so the newest is the last element.
   const historyForEngine: ModelMessage[] = currentAlreadyInHistory
     ? historyMessages.slice(0, -1)
     : historyMessages;
@@ -560,6 +591,11 @@ export async function POST(request: NextRequest): Promise<Response> {
       // — today an error PART did not throw, so partial output still persisted;
       // the engine throws instead, so we reproduce that behaviour explicitly.
       let translator: ReturnType<typeof createTurnTranslator> | null = null;
+
+      // Code mode: a durable sandbox workspace bound to the selected repo for
+      // this turn. Declared here so the finally can always tear the session
+      // down. Null unless the turn is a code-mode turn with a configured driver.
+      let codeWorkspace: ModalSandboxWorkspace | null = null;
 
       // Persist the assistant reply so it survives a refresh and is included in
       // the next turn's history (OXA-1509). Best-effort: a DB failure here must
@@ -618,6 +654,17 @@ export async function POST(request: NextRequest): Promise<Response> {
             { err: persistErr },
             "[chat/stream] failed to persist assistant reply",
           );
+          // The turn itself succeeded and the client already consumed the reply;
+          // only history persistence failed. Surface a NON-fatal warning so the
+          // user knows this turn may be missing after a refresh, instead of
+          // silently swallowing it. Never rethrow — a persist failure must not
+          // corrupt the SSE response.
+          emit({
+            type: "warning",
+            message:
+              "Your reply streamed but could not be saved to history — it may be missing if you refresh.",
+            code: "assistant_persist_failed",
+          });
         }
       }
 
@@ -649,6 +696,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           pinnedSkillBodies,
           recalledMemory,
           turnBudgetPolicy,
+          workspaceBudgetGovernance,
         ] = await runInTenantScope(
           { orgId: tenant.id, workspaceId: workspace.id },
           () =>
@@ -753,7 +801,40 @@ export async function POST(request: NextRequest): Promise<Response> {
                 : budgetPolicyReadHandler({}, capCtx)
                     .then(turnBudgetPolicyFromSaved)
                     .catch(() => TURN_BUDGET_OFF),
+              // Workspace-level budget governance (OXA-2081): a workspace
+              // Owner/Admin may impose a governed budget (a soft "default"
+              // that seeds a member who hasn't opted in, or a hard "ceiling"
+              // that clamps every member's effective policy — see
+              // resolveEffectiveTurnBudget in @oxagen/billing). Read via
+              // invoke() (not a raw handler import like budget.policy.read
+              // above) because this is Owner/Admin-managed governance state,
+              // not a user preference row, so it goes through the same
+              // metering/IAM chokepoint every other capability call does.
+              // { surface: "agent" } because the contract's `surfaces` list
+              // is ["api","mcp","agent"] and does not include "app".
+              //
+              // FAIL-OPEN: any error — an unregistered handler, a down DB, a
+              // denied IAM check — resolves to `null` governance, which makes
+              // resolveEffectiveTurnBudget's merge below a documented no-op
+              // (the member's own policy applies unchanged). A broken
+              // governance row must never block a turn from running, exactly
+              // like the TURN_BUDGET_OFF fallback above.
+              invoke("workspace.budget.policy.read", {}, capCtx, { surface: "agent" })
+                .then((raw) => governedBudgetFromRead(raw as SavedWorkspaceGovernance))
+                .catch(() => null),
             ]),
+        );
+
+        // Merge in workspace-level governance (OXA-2081) on top of the
+        // member's own resolved policy. `resolveEffectiveTurnBudget` is the
+        // SAME pure merge every surface (CLI/API/app) will share once org-level
+        // governance also lands — org governance is a separate follow-up, so
+        // `org` is passed `null` here (a no-op in the merge). This is the
+        // policy actually handed to the guard below.
+        const effectiveTurnBudgetPolicy = resolveEffectiveTurnBudget(
+          turnBudgetPolicy,
+          null,
+          workspaceBudgetGovernance,
         );
 
         // Resolve the knowledge-graph node each recalled memory is grounded in,
@@ -913,8 +994,11 @@ export async function POST(request: NextRequest): Promise<Response> {
         // this feature). The three hooks are the ONLY app-specific part of
         // enforcement — the policy shape, the mode ladder, and the pure
         // evaluator all live in @oxagen/billing and must not be reimplemented
-        // here.
-        const budgetGuard = createTurnBudgetGuard(turnBudgetPolicy, modelId, {
+        // here. Uses the GOVERNED effective policy (member ⊕ workspace
+        // governance, resolved above via resolveEffectiveTurnBudget), not the
+        // raw member policy — a workspace ceiling must bind even when the
+        // member never configured (or tried to loosen) their own budget.
+        const budgetGuard = createTurnBudgetGuard(effectiveTurnBudgetPolicy, modelId, {
           // grace mode: informational, non-blocking — the turn keeps running
           // past its base limit but inside the grace cushion.
           onWithinGrace: (verdict) => {
@@ -981,9 +1065,49 @@ export async function POST(request: NextRequest): Promise<Response> {
           },
         });
 
+        // ── Code mode: bind the durable sandbox workspace + code graph ────────
+        // When the composer selected a repo + environment, run the coding engine
+        // against a sandbox with the repo cloned. The per-turn repo/env context
+        // rides as a USER message (ADR-021 §2), never the cached system prompt.
+        let codeGraphForTurn:
+          | ReturnType<typeof createNeo4jCodeGraphProvider>
+          | undefined;
+        let codeContextMessage: ModelMessage | undefined;
+        if (codeMode) {
+          const branch = codeMode.defaultBranch ?? "main";
+          const sandboxOn = isSandboxAvailable();
+          codeContextMessage = {
+            role: "user",
+            content:
+              "## Code mode context\n" +
+              `Repository: ${codeMode.owner}/${codeMode.name} (branch ${branch})\n` +
+              `Environment: ${codeMode.environmentId}\n` +
+              (sandboxOn
+                ? "A sandbox with this repository checked out is bound to this turn — use the file and bash tools to read, edit, build, and test."
+                : "No code sandbox is configured on this deployment, so repository tools are unavailable this turn — give read-only guidance and say so."),
+          };
+          if (sandboxOn) {
+            const token = await runInTenantScope(
+              { orgId: tenant.id, workspaceId: workspace.id },
+              () => resolveGitHubToken(capCtx),
+            ).catch(() => undefined);
+            codeWorkspace = new ModalSandboxWorkspace({
+              ctx: capCtx,
+              // Stable per-(workspace, conversation, repo) key so every turn of
+              // one conversation reuses ONE warm sandbox across turns.
+              sessionKey: `chat:${workspace.id}:${conversationId ?? requestId}:${codeMode.connectionId}`,
+              environmentId: codeMode.environmentId,
+              repo: { owner: codeMode.owner, repo: codeMode.name, ref: branch, token },
+            });
+            codeGraphForTurn = createNeo4jCodeGraphProvider();
+          }
+        }
+
         const result = await runCodingAgent({
           ai,
           instruction: content,
+          ...(codeWorkspace ? { workspace: codeWorkspace } : {}),
+          ...(codeGraphForTurn ? { codeGraph: codeGraphForTurn } : {}),
           // Current-turn image attachments (Phase 1) — resolved + fetched
           // above, org-scoped. Omitted entirely for a no-attachment turn so
           // the engine's plain-string content shape is unchanged (byte-
@@ -994,18 +1118,29 @@ export async function POST(request: NextRequest): Promise<Response> {
           // path (otherwise videos arrive as keyframe images above). Passed as
           // AI-SDK file parts by the engine.
           ...(videoAttachments.length > 0 ? { videos: videoAttachments } : {}),
-          history: historyForEngine,
+          history: codeContextMessage
+            ? [...historyForEngine, codeContextMessage]
+            : historyForEngine,
           system: resolvePrompt({
             key: "chat.system",
             baseline:
-              chatSystemPrompt({
-                orgSlug,
-                workspaceSlug,
-                orgName: tenant.name,
-                workspaceName: workspace.name,
-                skillIndex,
-                pinnedSkillBodies,
-              }) + pageContextSystemSuffix,
+              (codeMode
+                ? codeModeSystemPrompt({
+                    orgSlug,
+                    workspaceSlug,
+                    orgName: tenant.name,
+                    workspaceName: workspace.name,
+                    skillIndex,
+                    pinnedSkillBodies,
+                  })
+                : chatSystemPrompt({
+                    orgSlug,
+                    workspaceSlug,
+                    orgName: tenant.name,
+                    workspaceName: workspace.name,
+                    skillIndex,
+                    pinnedSkillBodies,
+                  })) + pageContextSystemSuffix,
             config: promptConfig,
           }),
           model: modelId,
@@ -1014,12 +1149,14 @@ export async function POST(request: NextRequest): Promise<Response> {
           // stopWhen: stepCountIs(MAX_AGENT_STEPS)). Loop ends naturally on the
           // model's final answer.
           maxSteps: MAX_AGENT_STEPS,
-          // Phase 1 byte-identical client behaviour: no step retries (a retry
-          // would re-forward a step's already-streamed parts) and no
-          // context-overflow re-run (see maxOverflowRetries, C1) — an overflow
-          // surfaces via the catch as a single `error` event, as it did before.
-          maxRetries: 0,
-          maxOverflowRetries: 0,
+          // Resilience: allow a small number of transient retries so a single
+          // 429/5xx from the gateway does not kill the whole turn, and re-enable
+          // the engine's context-overflow compaction retry (engine.ts:372) so an
+          // overflow triggers one compact-and-retry instead of a hard error
+          // event. The translator only forwards a step's parts once it finishes,
+          // so a retried step does not double-stream to the client.
+          maxRetries: CHAT_MAX_RETRIES,
+          maxOverflowRetries: CHAT_MAX_OVERFLOW_RETRIES,
           extraTools: allTools,
           // Recall ran CONCURRENTLY in the setup Promise.all above; the provider
           // just reads its already-resolved value (no serial latency — C3). The
@@ -1117,6 +1254,9 @@ export async function POST(request: NextRequest): Promise<Response> {
           ...(code !== undefined ? { code } : {}),
         });
       } finally {
+        // Tear down the code-mode sandbox session (best-effort; the registry TTL
+        // reaps an orphan anyway). Must run whether the turn succeeded or threw.
+        if (codeWorkspace) await codeWorkspace.dispose();
         try {
           controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));
         } catch {

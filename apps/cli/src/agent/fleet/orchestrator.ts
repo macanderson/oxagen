@@ -18,8 +18,9 @@
  * without touching the gateway.
  */
 import { EventEmitter } from "node:events";
-import type { MemoryProvider } from "@oxagen/agent-engine";
+import type { MemoryProvider, FileLockProvider } from "@oxagen/agent-engine";
 import { createEngineRunner } from "../engine-runner.js";
+import { createLocalFileLockProvider } from "./local-file-lock.js";
 import {
   createCombinedMemory,
   type ServerMemory,
@@ -52,6 +53,13 @@ export type AgentRunner = (opts: {
   readOnly?: boolean;
   signal?: AbortSignal;
   memory?: MemoryProvider | null;
+  /**
+   * File-lock port injected per task (ADR-021 §5). When present, the engine's
+   * write-path tools acquire on first write to a path so two tasks never
+   * clobber the same file. `runTurn` mints its own per-turn holder identity, so
+   * no lock context is threaded here. Omitted → unlocked (as before).
+   */
+  fileLock?: FileLockProvider | null;
   onText?: (delta: string) => void;
   onToolCall?: (name: string, input: unknown) => void;
 }) => Promise<{
@@ -108,6 +116,16 @@ export interface FleetOptions {
    * agents share `cwd` and overlapping-file tasks are serialized instead.
    */
   isolation?: Isolation | null;
+  /**
+   * File-lock provider shared across tasks (ADR-021 §5). When omitted, a
+   * {@link createLocalFileLockProvider} rooted at `cwd` is used for shared-tree
+   * fleets so every task dynamically locks the files it actually writes —
+   * fixing ad-hoc tasks (which declare no predicted `files`) racing on the same
+   * file. With `isolation` on, locking is skipped: each agent has its own
+   * worktree, so collisions surface as merge conflicts, not corruption. Pass
+   * `null` to force-disable.
+   */
+  fileLock?: FileLockProvider | null;
 }
 
 const TERMINAL = new Set(["done", "failed", "cancelled", "blocked"]);
@@ -123,6 +141,7 @@ export class Fleet extends EventEmitter {
   private readonly runner: AgentRunner;
   private readonly readOnly: boolean;
   private readonly isolation: Isolation | null;
+  private readonly fileLock: FileLockProvider | null;
 
   private readonly tasks = new Map<string, Task>();
   private readonly snapshots = new Map<string, AgentSnapshot>();
@@ -148,6 +167,15 @@ export class Fleet extends EventEmitter {
     this.runner = opts.runner ?? createEngineRunner();
     this.readOnly = opts.readOnly ?? false;
     this.isolation = opts.isolation ?? null;
+    // Shared-tree fleets get a local file lock so undeclared-overlap tasks
+    // (esp. ad-hoc prompts with no predicted `files`) can't clobber the same
+    // file. Isolation makes it unnecessary — each agent has its own worktree.
+    this.fileLock =
+      opts.fileLock !== undefined
+        ? opts.fileLock
+        : this.isolation
+          ? null
+          : createLocalFileLockProvider({ root: this.cwd });
   }
 
   /** Register every task in a plan (does not start it). */
@@ -365,6 +393,11 @@ export class Fleet extends EventEmitter {
         readOnly: this.readOnly,
         signal: controller.signal,
         memory: taskMemory,
+        // File lock (ADR-021 §5): runTurn mints a unique per-turn holder, so
+        // two tasks writing the same file see each other as conflicting holders
+        // and the engine serializes their writes (or surfaces a "Blocked" tool
+        // result) instead of clobbering.
+        fileLock: this.fileLock,
         onText: (delta) => {
           appendLog(delta);
           this.update(task.id, { logTail: log });

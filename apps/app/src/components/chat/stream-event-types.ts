@@ -280,6 +280,17 @@ export type StreamEvent =
     }
   | {
       /**
+       * A NON-fatal advisory — the turn itself SUCCEEDED. Emitted e.g. when
+       * persisting the assistant reply to history failed, so the user knows this
+       * turn may be missing after a refresh. Surfaced as a toast like `error`,
+       * but it never marks the turn failed and is never folded into text.
+       */
+      type: "warning";
+      message: string;
+      code?: string;
+    }
+  | {
+      /**
        * A turn-level failure — a provider/gateway error, a billing block
        * (e.g. insufficient_credits), or an unexpected server throw. Carries a
        * human-readable `message` (and optional machine `code`) already parsed

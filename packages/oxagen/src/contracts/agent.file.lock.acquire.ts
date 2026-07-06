@@ -2,11 +2,11 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 // Manual/introspectable acquire (docs/specs/agent-file-locking/plan.md §7).
-// The SAME atomic acquire (@oxagen/ontology's acquireFileLock, via the
-// HOLDS_LOCK edge) that write_file/edit_file in packages/agent-engine/src/tools.ts
-// call automatically for every coding-agent turn — exposed here so a caller
-// (a dashboard, a script, a human debugging a stuck fleet) can hold or probe
-// a lock directly, without running a turn.
+// The SAME atomic acquire (the transactional Postgres lease, ADR-021 §5) that
+// write_file/edit_file in packages/agent-engine/src/tools.ts call automatically
+// for every coding-agent turn — exposed here so a caller (a dashboard, a
+// script, a human debugging a stuck fleet) can hold or probe a lock directly,
+// without running a turn.
 export const agentFileLockAcquire = registerCapability({
   name: "agent.file.lock.acquire",
   domain: "agent",
@@ -49,6 +49,13 @@ export const agentFileLockAcquire = registerCapability({
     lockId: z.string().describe("Empty string when not granted."),
     heldBy: z.string().nullable().describe("The conflicting holder's agentId, when granted is false."),
     blockedUntil: z.number().int().nullable().describe("Epoch-ms the conflicting lock expires at, when granted is false."),
+    fencingToken: z
+      .number()
+      .int()
+      .nullable()
+      .describe(
+        "Monotonic per-resource fencing token for a granted lease (ADR-021 §5) — a takeover after expiry always issues a strictly higher token, so a stale holder's late write can be rejected. Null when not granted.",
+      ),
   }),
 });
 

@@ -59,7 +59,12 @@ export function convertLegacyRow(row: LegacyMemoryRow): MemoryRecord | null {
   const salience = WEIGHT_TO_SALIENCE[row.weight] ?? 0.3;
   const confidence = typeof row.score === "number" ? Math.min(1, Math.max(0, row.score)) : 0.5;
 
-  const record = createRecord({
+  // Pass the original timestamp as createdAt so the content-addressed id is
+  // derived from it (episodic records fold occurrence time into the id).
+  // Overriding createdAt AFTER createRecord would leave the id computed from a
+  // fresh monotonic time, making migration non-idempotent (re-running would
+  // mint new ids and never dedupe).
+  return createRecord({
     kind,
     namespace,
     body,
@@ -67,13 +72,8 @@ export function convertLegacyRow(row: LegacyMemoryRow): MemoryRecord | null {
     confidence,
     provenance,
     causality: [],
-  });
-
-  // Override createdAt to preserve original timestamp
-  return {
-    ...record,
     createdAt: parseCreatedAt(row.createdAt),
-  };
+  });
 }
 
 /**

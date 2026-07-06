@@ -1,49 +1,32 @@
 /**
- * hash.ts — Content hashing abstraction.
+ * hash.ts — Content hashing for record IDs.
  *
- * Uses blake3 when available (CLI, API server, background workers).
- * Falls back to Node's built-in SHA-256 when blake3 native bindings
- * can't load (e.g. Next.js bundled server components on Vercel).
+ * Uses Node's built-in SHA-256 unconditionally. Content addressing REQUIRES a
+ * single, environment-independent algorithm: the record ID is derived from the
+ * content, so if the CLI hashed with blake3 while the bundled Vercel server
+ * fell back to SHA-256 (blake3's native bindings don't load under esbuild),
+ * identical content produced *different* IDs on the two surfaces — silently
+ * defeating dedup and cross-surface record identity.
  *
- * The hash algorithm choice doesn't affect correctness — record IDs are
- * opaque strings. It only affects collision resistance and speed.
- * Blake3 is ~3x faster for large inputs, but SHA-256 is universally available.
+ * SHA-256 is available everywhere with no native dependency, so it is the fixed
+ * choice. Speed is a non-issue for the small inputs we hash (kind + namespace +
+ * body); collision resistance is far more than we need for content addressing.
  */
 import { createHash as nodeCreateHash } from "node:crypto";
 
-interface Blake3Like {
-  createHash: () => {
-    update(input: string): void;
-    digest(encoding: "hex"): string;
-  };
-}
-
-let _blake3: Blake3Like | null | undefined = undefined;
-
 /**
- * Eagerly initialize blake3. Call once at process start (daemon, CLI, API bootstrap).
- * After this resolves, contentHash() uses blake3 synchronously.
+ * Retained for API compatibility. Hashing no longer requires any async
+ * initialization (SHA-256 is synchronous and always available), so this is a
+ * no-op that callers may still invoke at startup without effect.
  */
 export async function initHash(): Promise<void> {
-  if (_blake3 !== undefined) return;
-  try {
-    const mod = (await import("blake3")) as unknown as Blake3Like;
-    _blake3 = mod;
-  } catch {
-    _blake3 = null;
-  }
+  // Intentionally empty — SHA-256 needs no initialization. See module docs.
 }
 
 /**
- * Create a content hash. Uses blake3 if already loaded via initHash(),
- * otherwise falls back to SHA-256 (always available, no native deps).
+ * Create a content hash (SHA-256, hex). Deterministic and identical across
+ * every environment (CLI, bundled server, worker).
  */
 export function contentHash(input: string): string {
-  if (_blake3) {
-    const h = _blake3.createHash();
-    h.update(input);
-    return h.digest("hex");
-  }
-  // Fallback: SHA-256 via Node crypto
   return nodeCreateHash("sha256").update(input).digest("hex");
 }

@@ -77,6 +77,12 @@ export function createEngineRunner(runnerOpts: EngineRunnerOptions = {}): AgentR
         codeGraph: createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l)),
         memory: opts.memory ?? undefined,
         signal: opts.signal,
+        // File locking (ADR-021 §5): the fleet injects a LocalFileLockProvider so
+        // write_file/edit_file serialize on shared files. runTurn mints its own
+        // stable per-turn lock identity (turnLockId), so each task is a distinct
+        // holder and two tasks writing the same file correctly conflict.
+        // Undefined ⇒ unlocked (single-agent CLI default).
+        fileLock: opts.fileLock ?? undefined,
         onText: opts.onText,
         onToolCall: opts.onToolCall,
       });

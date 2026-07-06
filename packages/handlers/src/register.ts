@@ -439,6 +439,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .workspaceMemberListHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "workspace.budget.policy.read",
+    async () =>
+      (await import("./workspace.budget.policy.read"))
+        .workspaceBudgetPolicyReadHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "workspace.budget.policy.write",
+    async () =>
+      (await import("./workspace.budget.policy.write"))
+        .workspaceBudgetPolicyWriteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "workspace.invite.send",
     async () =>
       (await import("./workspace.invite.send"))

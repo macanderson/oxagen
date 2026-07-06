@@ -41,25 +41,29 @@ describe("agent.file.lock.acquire capability", () => {
     expect(() => agentFileLockAcquire.input.parse({ path: "a.ts", action: "delete" })).toThrow();
   });
 
-  it("parses a granted output", () => {
+  it("parses a granted output with a fencing token", () => {
     const parsed = agentFileLockAcquire.output.parse({
       granted: true,
       lockId: "lock-1",
       heldBy: null,
       blockedUntil: null,
+      fencingToken: 7,
     });
     expect(parsed.granted).toBe(true);
+    expect(parsed.fencingToken).toBe(7);
   });
 
-  it("parses a denied output", () => {
+  it("parses a denied output (null fencing token)", () => {
     const parsed = agentFileLockAcquire.output.parse({
       granted: false,
       lockId: "",
       heldBy: "agent-b",
       blockedUntil: 1_700_000_000_000,
+      fencingToken: null,
     });
     expect(parsed.granted).toBe(false);
     expect(parsed.heldBy).toBe("agent-b");
+    expect(parsed.fencingToken).toBeNull();
   });
 
   it("is registered in the capability registry", () => {

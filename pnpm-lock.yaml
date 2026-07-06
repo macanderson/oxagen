@@ -65,6 +65,9 @@ importers:
       '@oxagen/agent':
         specifier: workspace:*
         version: link:../../packages/agent
+      '@oxagen/agent-engine':
+        specifier: workspace:*
+        version: link:../../packages/agent-engine
       '@oxagen/ai':
         specifier: workspace:*
         version: link:../../packages/ai
@@ -1186,6 +1189,9 @@ importers:
       '@oxagen/plugins':
         specifier: workspace:*
         version: link:../plugins
+      '@oxagen/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
       '@oxagen/skills':
         specifier: workspace:*
         version: link:../skills

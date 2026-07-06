@@ -155,7 +155,10 @@ describe("tenant policy manifest", () => {
     //      eval.eval_runs (Evals v1, 20260704220000) — all orgScopeMixin → standard.
     // 82 = 81 + agent.a2a_tasks (A2A durable task store, orgScopeMixin →
     //      standard, 20260704230000, PR #572).
-    expect(POLICY_MANIFEST.length).toBe(82);
+    // 83 = 82 + workspace.workspace_budget_policy (per-turn budget governance,
+    //      org_id + workspace_id both NOT NULL → standard, OXA-2081,
+    //      20260708120000).
+    expect(POLICY_MANIFEST.length).toBe(83);
   });
 
   it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {

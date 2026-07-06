@@ -26,14 +26,23 @@ import type { AgentAi } from "../ports";
 import type { JudgeVerdict } from "../trace/types";
 
 /**
- * The default completeness advisor: the flagship Anthropic model (Fable 5).
+ * The default completeness advisor: the BALANCED tier (Sonnet), not the
+ * flagship. ADR-021 §1 (determinism ladder, rung 4 — "small model for a single
+ * narrow judgment"): completeness is a bounded, structured-output judgment, not
+ * open-ended synthesis, so it does not warrant the most expensive frontier model
+ * on every pipeline turn. Sonnet costs ~5× less than Fable per token
+ * (rate-card.ts: 3/15 vs 15/75 per 1M in/out) while comfortably clearing this
+ * bar. Resolved through `modelForTier("balanced")` so it tracks the tier config
+ * and stays a single source of truth.
+ *
  * The default must work on an Anthropic-only key (the CLI's ANTHROPIC_API_KEY
- * BYOK fallback resolves no other vendor), so it stays same-vendor; the
- * distinct-from-executor guarantee below preserves judge independence. Set
- * `OXAGEN_LLM_ADVISOR` to a cross-vendor slug (e.g. an OpenAI model) when a
- * gateway key is available and vendor-independent judging is preferred.
+ * BYOK fallback resolves no other vendor), so it stays same-vendor (the balanced
+ * tier is Anthropic); the distinct-from-executor guarantee below preserves judge
+ * independence. Set `OXAGEN_LLM_ADVISOR` to a cross-vendor slug (e.g. an OpenAI
+ * model) when a gateway key is available and vendor-independent judging is
+ * preferred; a caller may also pass `advisorModel` to override per-call.
  */
-export const DEFAULT_ADVISOR_MODEL = "anthropic/claude-fable-5";
+export const DEFAULT_ADVISOR_MODEL = modelForTier("balanced");
 
 /**
  * Choose the advisor model — guaranteed distinct from the executor so the work is
@@ -237,6 +246,12 @@ function heuristicVerdict(opts: JudgeOptions, model: string): JudgeVerdict {
 export async function judgeCompleteness(opts: JudgeOptions, ai: AgentAi): Promise<JudgeVerdict> {
   const model = opts.advisorModel ?? pickAdvisorModel(opts.executorModel);
   try {
+    // ADR-021 §1 rung 4: this is the completeness judgment — a single narrow,
+    // schema-constrained verdict over ground-truth evidence (diff + test exit
+    // codes) that no pure function or index lookup can render. The pipeline
+    // reaches this call ONLY after the deterministic skip ladder
+    // (pipeline/index.ts) has failed to settle completeness from executed
+    // signals, so a model call here is the lowest sufficient rung.
     const { object, usage } = await ai.generateObject({
       model,
       schema: verdictSchema,
@@ -281,8 +296,8 @@ export function pickJudgePanel(executorModel: string, override?: string): string
   return panel;
 }
 
-/** Dedup a list of strings, preserving first-seen order. */
-function dedup(items: string[]): string[] {
+/** Dedupe a list of strings, preserving first-seen order. */
+function dedupe(items: string[]): string[] {
   const seen = new Set<string>();
   return items.filter((s) => !seen.has(s) && seen.add(s));
 }
@@ -299,7 +314,7 @@ export async function judgePanel(
   ai: AgentAi,
   advisorModels?: string[],
 ): Promise<JudgeVerdict> {
-  const models = dedup(advisorModels ?? pickJudgePanel(opts.executorModel));
+  const models = dedupe(advisorModels ?? pickJudgePanel(opts.executorModel));
   if (models.length <= 1) {
     return judgeCompleteness({ ...opts, advisorModel: models[0] }, ai);
   }
@@ -309,8 +324,8 @@ export async function judgePanel(
   const completes = verdicts.filter((v) => v.complete).length;
   const complete = completes * 2 > verdicts.length; // strict majority
   const dissenting = verdicts.filter((v) => !v.complete);
-  const findings = dedup(dissenting.flatMap((v) => v.findings));
-  const remainingWork = dedup(dissenting.flatMap((v) => v.remainingWork));
+  const findings = dedupe(dissenting.flatMap((v) => v.findings));
+  const remainingWork = dedupe(dissenting.flatMap((v) => v.remainingWork));
   const confidence = Math.round(
     verdicts.reduce((s, v) => s + v.confidence, 0) / verdicts.length,
   );

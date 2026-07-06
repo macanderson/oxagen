@@ -354,6 +354,25 @@ type Events = {
     };
   };
 
+  // ── File-lock graph projection (ADR-021 §5) ─────────────────────────────────
+  // Fired fire-and-forget by the Postgres file-lock lease on acquire/release.
+  // agent.project-file-lock-to-graph MERGEs an (:Agent)-[:LOCKED]->(:SourceFile)
+  // lineage edge for hot-file analytics + conflict prediction. NEVER
+  // load-bearing for mutual exclusion — the lock authority is the Postgres lease.
+  "agent/file-lock.projected": {
+    data: {
+      orgId: string;
+      workspaceId: string;
+      resourceKey: string;
+      holder: string;
+      executionId: string;
+      action: string;
+      event: "acquired" | "released";
+      fencingToken?: number;
+      expiresAt?: number;
+    };
+  };
+
   // ── Generated-file graph sync ───────────────────────────────────────────────
   // Fired by persistGeneratedAsset() after a generated_assets row is committed.
   // content.sync-generated-file-to-graph mirrors the file into Neo4j as a

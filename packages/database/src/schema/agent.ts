@@ -533,3 +533,81 @@ export const a2aTasks = agentSchema.table(
     ),
   }),
 );
+
+// ── File locks — the transactional lock authority (ADR-021 §5) ──────────────
+//
+// File locks are mutual-exclusion state, so Postgres is the source of truth,
+// NOT Neo4j: the graph sync path is asynchronous (ADR-018), so a lock "written
+// to the graph" is invisible to a concurrent agent for the duration of sync
+// lag — fatal for mutual exclusion. Neo4j only carries an async LINEAGE
+// projection of these rows (packages/inngest-functions/agent.project-file-lock-to-graph).
+//
+// This extends the Inngest claim/lease mechanism (subagent_runs / execution
+// steps above) to file-path granularity rather than inventing a second lock
+// system: atomic acquire (advisory-lock + conditional upsert), TTL expiry, and
+// a monotonic fencing token per resource so a stale lease-holder's late write
+// is rejected at write time (verifyFileLease). One live lock per
+// (workspace, resource_key) is enforced by the partial unique index.
+export const fileLocks = agentSchema.table(
+  "file_locks",
+  {
+    ...idMixin("flk"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    // Normalized resource identity — a repo-relative path (local CLI) or the
+    // SourceFile naturalKey toNaturalKey(path, owner, repo) produces (platform),
+    // so a locked file and its lineage projection key off the identical node.
+    resourceKey: text("resource_key").notNull(),
+    // Identity of the lock holder — an agent/session/mission/fleet-task id. Two
+    // concurrent holders MUST pass different values to see each other as
+    // conflicting; re-acquiring under the SAME holder renews instead of racing.
+    holder: text("holder").notNull(),
+    // Correlates every lock a turn/execution holds, for batch release-by-execution.
+    executionId: text("execution_id").notNull(),
+    // Monotonic per (workspace_id, resource_key), sourced from file_lock_fences
+    // (below). A takeover after expiry always issues a strictly higher token, so
+    // the previous holder's late write fails verifyFileLease.
+    fencingToken: bigint("fencing_token", { mode: "number" }).notNull(),
+    action: text("action").notNull().default("write"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true, mode: "date" }).notNull(),
+    // Soft-release marker (NOT a soft delete): the partial unique index below
+    // keys off it, so releasing frees the resource while keeping the row for a
+    // final projection. Expired-but-unreleased rows are treated as free by
+    // acquire (takeover) and reaped by sweepExpiredFileLeases.
+    releasedAt: timestamp("released_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    // At most ONE live lock per resource per workspace — the core invariant.
+    activeUniq: uniqueIndex("file_locks_active_uniq")
+      .on(t.workspaceId, t.resourceKey)
+      .where(sql`released_at IS NULL`),
+    orgIdx: index("file_locks_org_idx").on(t.orgId, t.workspaceId),
+    // Batch release-by-execution (turn-end backstop) scans by execution_id.
+    executionIdx: index("file_locks_execution_idx")
+      .on(t.orgId, t.executionId)
+      .where(sql`released_at IS NULL`),
+    actionCheck: check("file_locks_action_check", sql`${t.action} IN ('read', 'write')`),
+  }),
+);
+
+// Durable, monotonic fencing-token counter per resource. Lives in its own table
+// (not derived from file_locks) precisely so the counter SURVIVES release: a
+// lock row can be released/reaped, but the next acquirer of the same resource
+// must still receive a strictly higher token than any prior holder ever held.
+// Bumped only on a SUCCESSFUL acquire (INSERT ... ON CONFLICT DO UPDATE
+// current_token + 1); a denied acquire never advances it.
+export const fileLockFences = agentSchema.table(
+  "file_lock_fences",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    resourceKey: text("resource_key").notNull(),
+    currentToken: bigint("current_token", { mode: "number" }).notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    resourceUniq: uniqueIndex("file_lock_fences_resource_uniq").on(t.workspaceId, t.resourceKey),
+    orgIdx: index("file_lock_fences_org_idx").on(t.orgId, t.workspaceId),
+  }),
+);

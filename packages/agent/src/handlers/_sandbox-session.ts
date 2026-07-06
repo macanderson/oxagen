@@ -64,6 +64,15 @@ export interface SessionMeta {
   ttlSeconds: number;
   idleTimeoutSeconds: number;
   network: "allow" | "deny";
+  /**
+   * Workspace environment id (env_…) bound to this session at start time, if
+   * any. `agent.sandbox.exec` resolves this environment's vault secrets and
+   * injects them (below the caller-supplied env) into every command, so a
+   * durable session carries its trusted secrets across turns without them
+   * living in the sandbox filesystem. Stored in the metadata JSON blob — no
+   * migration — and absent for sessions started without an environment.
+   */
+  environmentId?: string;
 }
 
 export interface SessionRow {

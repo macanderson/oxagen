@@ -30,6 +30,14 @@ vi.mock("@oxagen/telemetry", () => ({
   insertEvents: mockInsertEvents,
 }));
 
+const { mockResolveEnvSecrets } = vi.hoisted(() => ({
+  mockResolveEnvSecrets: vi.fn(async (): Promise<Record<string, string>> => ({})),
+}));
+vi.mock("@oxagen/plugins", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/plugins")>();
+  return { ...real, resolveEnvironmentSecrets: mockResolveEnvSecrets };
+});
+
 import { agentCodeExecuteHandler } from "./agent.code.execute";
 import { isSandboxAvailable, getSandbox } from "@oxagen/sandbox";
 
@@ -42,6 +50,8 @@ describe("agent.code.execute handler", () => {
     mockInsertEvents.mockResolvedValue(undefined);
     vi.mocked(isSandboxAvailable).mockReturnValue(true);
     vi.mocked(getSandbox).mockReturnValue(mockDriver);
+    mockResolveEnvSecrets.mockReset();
+    mockResolveEnvSecrets.mockResolvedValue({});
   });
 
   it("returns sandbox result mapped to contract output", async () => {
@@ -236,5 +246,60 @@ describe("agent.code.execute handler", () => {
       ),
     ).rejects.toThrow(/unsafe workspace path/);
     expect(mockRun).not.toHaveBeenCalled();
+  });
+
+  it("surfaces stripped reserved env keys as a run warning", async () => {
+    const result = await agentCodeExecuteHandler(
+      {
+        language: "shell",
+        code: "echo hi",
+        env: { SAFE: "keep", DATABASE_URL: "leak", PATH: "/evil" },
+        timeoutMs: 5_000,
+        memoryMb: 64,
+        network: "deny",
+      },
+      CTX,
+    );
+    expect(result.warnings).toEqual(["reserved env key stripped: DATABASE_URL, PATH"]);
+    expect(mockRun).toHaveBeenCalledWith(expect.objectContaining({ env: { SAFE: "keep" } }));
+  });
+
+  it("omits warnings when the caller env is clean", async () => {
+    const result = await agentCodeExecuteHandler(
+      {
+        language: "shell",
+        code: "echo hi",
+        env: { SAFE: "keep" },
+        timeoutMs: 5_000,
+        memoryMb: 64,
+        network: "deny",
+      },
+      CTX,
+    );
+    expect(result.warnings).toBeUndefined();
+  });
+
+  it("injects environment vault secrets below the caller env (caller wins)", async () => {
+    mockResolveEnvSecrets.mockResolvedValue({ API_BASE: "vault", TOKEN: "t" });
+    await agentCodeExecuteHandler(
+      {
+        language: "shell",
+        code: "echo hi",
+        environmentId: "env_1",
+        env: { API_BASE: "caller" },
+        timeoutMs: 5_000,
+        memoryMb: 64,
+        network: "deny",
+      },
+      CTX,
+    );
+    expect(mockRun).toHaveBeenCalledWith(
+      expect.objectContaining({ env: { API_BASE: "caller", TOKEN: "t" } }),
+    );
+    expect(mockResolveEnvSecrets).toHaveBeenCalledWith({
+      orgId: "org_1",
+      workspaceId: "ws_1",
+      environmentId: "env_1",
+    });
   });
 });

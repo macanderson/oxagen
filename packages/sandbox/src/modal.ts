@@ -13,7 +13,7 @@ import type {
 
 /**
  * Modal sandbox driver. Talks to Modal's Sandbox HTTP API via a thin
- * function-as-a-service shim deployed once (see ops/modal/runner.py),
+ * function-as-a-service shim deployed once (see ops/modal-sandbox/runner.py),
  * which accepts {language, code, env, timeoutMs, memoryMb, network} and
  * returns the captured exec result.
  *
@@ -42,7 +42,7 @@ interface ModalRunRequest {
   stdin?: string;
   env?: Record<string, string>;
   // Extra workspace files (relative path → contents) landed before the
-  // entrypoint runs. The Modal runner shim (ops/modal/runner.py) writes them
+  // entrypoint runs. The Modal runner shim (ops/modal-sandbox/runner.py) writes them
   // into the sandbox workdir; older shims that ignore the field simply run with
   // the entrypoint alone. Paths are pre-confined to the workspace upstream.
   files?: Record<string, string>;

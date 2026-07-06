@@ -8,7 +8,7 @@
  * model resolution per tier.
  */
 import { describe, it, expect, vi } from "vitest";
-import { planTasks } from "./index";
+import { planTasks, isSingleTaskGoal } from "./index";
 import { modelForTier } from "../router/model-router";
 import type { AgentAi } from "../ports";
 import type { AgentDefinition } from "../fleet/types";
@@ -42,10 +42,10 @@ describe("planTasks", () => {
       { id: "add-route", title: "Add route", description: "add a GET route", dependsOn: [], files: ["api.ts"], tier: "balanced" },
     ]);
 
-    const plan = await planTasks({ goal: "add a listing endpoint", ai });
+    const plan = await planTasks({ goal: "add a listing endpoint, then document it", ai });
 
     expect(plan.status).toBe("draft");
-    expect(plan.goal).toBe("add a listing endpoint");
+    expect(plan.goal).toBe("add a listing endpoint, then document it");
     expect(plan.id).toMatch(/^plan_/);
     expect(plan.tasks).toHaveLength(1);
     const [task] = plan.tasks;
@@ -61,7 +61,7 @@ describe("planTasks", () => {
       { id: "auth", title: "Rework login", description: "change the auth session password flow", dependsOn: [], files: ["auth.ts"], tier: "fast" },
     ]);
 
-    const plan = await planTasks({ goal: "harden auth", ai });
+    const plan = await planTasks({ goal: "harden auth, and add tests", ai });
     expect(plan.tasks[0]!.tier).toBe("precise");
     expect(plan.tasks[0]!.model).toBe(modelForTier("precise"));
   });
@@ -72,7 +72,7 @@ describe("planTasks", () => {
       { id: "t1", title: "rename var", description: "rename a local variable", dependsOn: [], files: ["a.ts"], tier: "precise" },
     ]);
 
-    const plan = await planTasks({ goal: "rename", ai });
+    const plan = await planTasks({ goal: "rename, then reformat", ai });
     expect(plan.tasks[0]!.tier).toBe("precise");
   });
 
@@ -100,7 +100,7 @@ describe("planTasks", () => {
       { id: "b", title: "ghost", description: "do it", tier: "balanced", files: [], dependsOn: [], agent: "nonexistent" },
     ]);
 
-    const plan = await planTasks({ goal: "db work", ai, agents: roster });
+    const plan = await planTasks({ goal: "db work, then migrate", ai, agents: roster });
     expect(plan.tasks.find((t) => t.id === "a")!.agent).toBe("db-expert");
     expect(plan.tasks.find((t) => t.id === "b")!.agent).toBeUndefined();
   });
@@ -111,7 +111,7 @@ describe("planTasks", () => {
       { id: "b", title: "B", description: "do b", tier: "fast", files: [], dependsOn: ["a"] },
     ]);
 
-    const plan = await planTasks({ goal: "two tasks", ai });
+    const plan = await planTasks({ goal: "two tasks, in sequence", ai });
     expect(plan.tasks.find((t) => t.id === "a")!.dependsOn).toEqual([]); // ghost + self removed
     expect(plan.tasks.find((t) => t.id === "b")!.dependsOn).toEqual(["a"]); // real dep kept
   });
@@ -126,7 +126,7 @@ describe("planTasks", () => {
       capture,
     );
 
-    await planTasks({ goal: "with roster", ai, agents: roster });
+    await planTasks({ goal: "with roster, and more", ai, agents: roster });
     const prompt = (capture.args as { prompt: string }).prompt;
     expect(prompt).toContain("Available specialized agents");
     expect(prompt).toContain("db-expert: database specialist");
@@ -139,7 +139,48 @@ describe("planTasks", () => {
       capture,
     );
 
-    await planTasks({ goal: "pinned", ai, model: "openai/gpt-5" });
+    await planTasks({ goal: "pinned, then run", ai, model: "openai/gpt-5" });
     expect((capture.args as { model: string }).model).toBe("openai/gpt-5");
+  });
+});
+
+describe("isSingleTaskGoal (ADR-021 §1 deterministic fast-path heuristic)", () => {
+  it("treats a concrete single action as one task", () => {
+    expect(isSingleTaskGoal("fix the typo in README")).toBe(true);
+    expect(isSingleTaskGoal("add a null check to parseConfig")).toBe(true);
+  });
+
+  it("treats conjunctions / lists / multiplicity as multi-task (err toward planning)", () => {
+    expect(isSingleTaskGoal("do X, then Y, and also Z")).toBe(false);
+    expect(isSingleTaskGoal("add a route and document it")).toBe(false);
+    expect(isSingleTaskGoal("refactor the parser; then add tests")).toBe(false);
+    expect(isSingleTaskGoal("update several files")).toBe(false);
+    expect(isSingleTaskGoal("1. do a\n2. do b")).toBe(false);
+    expect(isSingleTaskGoal("First fix the bug. Then add a test.")).toBe(false);
+    expect(isSingleTaskGoal("")).toBe(false);
+    // Very long ⇒ not confidently one task.
+    expect(isSingleTaskGoal("x".repeat(200))).toBe(false);
+  });
+});
+
+describe("planTasks — deterministic single-task fast-path", () => {
+  it("skips the planner model call for a trivially single-task goal", async () => {
+    const ai = makeAi([]); // if the model were called it would return zero tasks
+    const plan = await planTasks({ goal: "fix the typo in README", ai });
+
+    expect(ai.generateObject).not.toHaveBeenCalled();
+    expect(plan.tasks).toHaveLength(1);
+    expect(plan.tasks[0]!.title).toBe("fix the typo in README");
+    expect(plan.tasks[0]!.description).toBe("fix the typo in README");
+    expect(plan.tasks[0]!.dependsOn).toEqual([]);
+    expect(plan.status).toBe("draft");
+  });
+
+  it("still runs the planner model call for a multi-part goal", async () => {
+    const ai = makeAi([
+      { id: "a", title: "A", description: "do a", tier: "fast", files: [], dependsOn: [] },
+    ]);
+    await planTasks({ goal: "do X, then Y, and also Z", ai });
+    expect(ai.generateObject).toHaveBeenCalledOnce();
   });
 });

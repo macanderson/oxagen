@@ -257,6 +257,13 @@ jobs:
     # correct signal that this is not a real production runtime.
     env:
       VERCEL_ENV: preview
+      # No Vercel Blob token exists in CI, so file uploads use the hermetic
+      # filesystem storage driver (@oxagen/storage fs-driver). Without this the
+      # attachment upload route 500s and chat-attachments.spec.ts fails. The root
+      # is an absolute container path so the app (next start) and API (tsx)
+      # webServers — which have different cwds — resolve the SAME directory.
+      STORAGE_DRIVER: fs
+      STORAGE_FS_ROOT: /tmp/oxagen-storage
     timeout-minutes: 45
     strategy:
       matrix:
