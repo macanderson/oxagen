@@ -1,8 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeSettingsValue, writeStarterSettings } from "../write.js";
+import {
+  writeSettingsValue,
+  writeStarterSettings,
+  envVarForSettingsKey,
+  shellShadowsSettingsKey,
+} from "../write.js";
 import { loadSettings, getScopePaths, clearSettingsCache } from "../resolve.js";
 
 let dir: string;
@@ -68,5 +73,81 @@ describe("writeStarterSettings", () => {
     writeStarterSettings({ scope: "project", cwd: dir });
     const resolved = loadSettings({ cwd: dir, userSettingsPath: userPath, noCache: true });
     expect(resolved.scopes.find((s) => s.scope === "project")?.error).toBeUndefined();
+  });
+
+  // Item 6a: the starter file used to plant DEFAULT_CODING_MODEL, which meant
+  // a fresh `oxagen settings init` permanently masked `oxagen config model
+  // <x>` (store #2) with no warning — applySettingsToEnv projects
+  // settings.model into OXAGEN_MODEL whenever the shell hasn't set it, and
+  // resolveModelId checks OXAGEN_MODEL before ever consulting store #2.
+  it("does NOT seed a default model — store #2 / built-in default governs until the user opts in", () => {
+    const { path } = writeStarterSettings({ scope: "project", cwd: dir });
+    const doc = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    expect(doc["model"]).toBeUndefined();
+    const resolved = loadSettings({ cwd: dir, userSettingsPath: userPath, noCache: true });
+    expect(resolved.settings.model).toBeUndefined();
+  });
+});
+
+describe("envVarForSettingsKey / shellShadowsSettingsKey (item 7a)", () => {
+  const saved: Record<string, string | undefined> = {};
+  const TOUCHED = ["OXAGEN_MODEL", "OXAGEN_API_URL", "OXAGEN_WT_TEST"];
+
+  beforeEach(() => {
+    for (const k of TOUCHED) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+  });
+  afterEach(() => {
+    for (const k of TOUCHED) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  it("maps model/apiUrl/env.<NAME> to their projected env var names", () => {
+    expect(envVarForSettingsKey("model")).toBe("OXAGEN_MODEL");
+    expect(envVarForSettingsKey("apiUrl")).toBe("OXAGEN_API_URL");
+    expect(envVarForSettingsKey("env.OXAGEN_WT_TEST")).toBe("OXAGEN_WT_TEST");
+  });
+
+  it("returns undefined for a key that isn't projected at all", () => {
+    expect(envVarForSettingsKey("permissions")).toBeUndefined();
+    expect(envVarForSettingsKey("env.")).toBeUndefined();
+  });
+
+  it("shellShadowsSettingsKey is false when the shell doesn't export the var", () => {
+    expect(shellShadowsSettingsKey("model")).toBe(false);
+  });
+
+  it("shellShadowsSettingsKey is true when the shell already exports the projected var", () => {
+    process.env["OXAGEN_MODEL"] = "vendor/shell";
+    expect(shellShadowsSettingsKey("model")).toBe(true);
+    process.env["OXAGEN_WT_TEST"] = "x";
+    expect(shellShadowsSettingsKey("env.OXAGEN_WT_TEST")).toBe(true);
+  });
+
+  it("treats an empty-string env var as unset (not shadowed)", () => {
+    process.env["OXAGEN_API_URL"] = "";
+    expect(shellShadowsSettingsKey("apiUrl")).toBe(false);
+  });
+});
+
+describe("atomic writes (item 9) — writeScopeDoc/writeStarterSettings never leave a partial file", () => {
+  it("writeSettingsValue leaves no stray .tmp files behind after a successful write", () => {
+    writeSettingsValue({ scope: "project", key: "model", value: "a/b", cwd: dir });
+    const projectDir = join(dir, ".oxagen");
+    const entries = readdirSync(projectDir);
+    expect(entries.some((f) => f.endsWith(".tmp"))).toBe(false);
+    expect(entries).toContain("settings.json");
+  });
+
+  it("a write that fails schema validation never touches the target file (temp-write-then-rename semantics)", () => {
+    // apiUrl must be a valid URL — an invalid one fails oxagenSettingsSchema.parse
+    // before writeScopeDoc ever calls atomicWriteFileSync, so no rename happens.
+    expect(() => writeSettingsValue({ scope: "project", key: "apiUrl", value: "not-a-url", cwd: dir })).toThrow();
+    const path = getScopePaths({ cwd: dir }).project;
+    expect(existsSync(path)).toBe(false);
   });
 });
