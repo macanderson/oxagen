@@ -74,6 +74,24 @@
       }
     },
     {
+      "name": "agent.debug.trace",
+      "file": "agent.debug.trace.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "agent.definition.create",
       "file": "agent.definition.create.ts",
       "domain": "agent",
@@ -185,6 +203,24 @@
         "unit": true,
         "e2e": false,
         "docs": true
+      }
+    },
+    {
+      "name": "agent.execution.lineage",
+      "file": "agent.execution.lineage.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": false
       }
     },
     {
@@ -741,10 +777,12 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "agent"
+        "agent",
+        "mcp"
       ],
       "layers": {
         "api": false,
+        "mcp": true,
         "unit": false,
         "docs": true
       }
@@ -3641,10 +3679,12 @@
       "mode": "sync",
       "surfaces": [
         "agent",
-        "api"
+        "api",
+        "mcp"
       ],
       "layers": {
         "api": false,
+        "mcp": true,
         "unit": false,
         "docs": true
       }
@@ -3675,10 +3715,12 @@
       "mode": "sync",
       "surfaces": [
         "agent",
-        "api"
+        "api",
+        "mcp"
       ],
       "layers": {
         "api": false,
+        "mcp": true,
         "unit": false,
         "docs": true
       }
@@ -3690,10 +3732,12 @@
       "mode": "sync",
       "surfaces": [
         "agent",
-        "api"
+        "api",
+        "mcp"
       ],
       "layers": {
         "api": false,
+        "mcp": true,
         "unit": false,
         "docs": true
       }
@@ -3705,10 +3749,12 @@
       "mode": "sync",
       "surfaces": [
         "agent",
-        "api"
+        "api",
+        "mcp"
       ],
       "layers": {
         "api": false,
+        "mcp": true,
         "unit": false,
         "docs": true
       }
@@ -3757,10 +3803,12 @@
       "mode": "sync",
       "surfaces": [
         "agent",
-        "api"
+        "api",
+        "mcp"
       ],
       "layers": {
         "api": false,
+        "mcp": true,
         "unit": false,
         "docs": true
       }

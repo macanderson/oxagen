@@ -7,8 +7,8 @@ export const repoCreate = registerCapability({
   description:
     "Create a new GitHub repository. Omit `org` to create it in the connected user's personal account; pass `org` only to create it inside a GitHub organisation the user belongs to.",
   mode: "sync",
-  surfaces: ["agent", "api"],
-  layers: ["api", "unit", "docs"],
+  surfaces: ["agent", "api", "mcp"],
+  layers: ["api", "mcp", "unit", "docs"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "high", category: "vcs" },
   sensitivity: "high",
