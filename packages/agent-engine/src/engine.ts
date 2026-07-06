@@ -1,5 +1,6 @@
 import { stepCountIs, type ModelMessage, type ToolSet } from "ai";
 import { buildWorkspaceTools } from "./tools";
+import { buildCodingCorePrompt } from "./prompt/system-prompt";
 import type { RunCodingAgentOptions, RunCodingAgentResult } from "./types";
 import {
   backoffMs,
@@ -16,11 +17,11 @@ import {
   toolCallSignature,
 } from "./loop-driver";
 
-const DEFAULT_SYSTEM =
-  "You are an expert software engineer working in a checked-out repository. " +
-  "Use the provided tools to read, search, and edit files and run commands. " +
-  "Make the smallest correct change that satisfies the request, run the repo's " +
-  "tests or build when relevant, and stop when the task is complete.";
+// The workspace-less chat default. Built from the shared coding core
+// (buildCodingCorePrompt) so its wording is a single source of truth the CLI and
+// app can converge onto (ADR-021 §7). With no adapters this renders BYTE-FOR-BYTE
+// the historical string, keeping the cache prefix stable (§2).
+const DEFAULT_SYSTEM = buildCodingCorePrompt();
 
 /**
  * The coding loop's own default model, applied when a caller passes no
