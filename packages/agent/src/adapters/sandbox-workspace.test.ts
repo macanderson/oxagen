@@ -14,6 +14,12 @@ vi.mock("@oxagen/sandbox", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/sandbox")>();
   return { ...real, isSandboxAvailable: () => h.available };
 });
+// The workspace wraps its handler calls in runInTenantScope; make it a
+// pass-through so the test's non-UUID fixture ctx doesn't trip UUID validation.
+vi.mock("@oxagen/tenancy", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/tenancy")>();
+  return { ...real, runInTenantScope: (_scope: unknown, fn: () => unknown) => fn() };
+});
 vi.mock("../handlers/agent.sandbox.start", () => ({ agentSandboxStartHandler: h.startFn }));
 vi.mock("../handlers/agent.sandbox.exec", () => ({ agentSandboxExecHandler: h.execFn }));
 vi.mock("../handlers/agent.sandbox.stop", () => ({ agentSandboxStopHandler: h.stopFn }));
