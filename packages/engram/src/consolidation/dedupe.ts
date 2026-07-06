@@ -7,7 +7,7 @@
  */
 import type { MemoryRecord, SemanticBody } from "../types";
 
-export interface DedupResult {
+export interface DedupeResult {
   /** Records to keep (unique facts). */
   unique: MemoryRecord[];
   /** Records identified as duplicates (lower confidence kept as secondary). */
@@ -23,10 +23,10 @@ export interface DedupResult {
 export function deduplicateSemanticRecords(
   records: MemoryRecord[],
   similarityThreshold = 0.85,
-): DedupResult {
+): DedupeResult {
   const semanticRecords = records.filter((r) => r.kind === "semantic");
   const unique: MemoryRecord[] = [];
-  const duplicates: DedupResult["duplicates"] = [];
+  const duplicates: DedupeResult["duplicates"] = [];
 
   for (const record of semanticRecords) {
     const body = record.body as SemanticBody;

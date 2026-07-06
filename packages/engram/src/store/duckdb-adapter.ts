@@ -9,6 +9,7 @@ import type { Database, Connection } from "duckdb";
 import type { MemoryRecord, Namespace, RecordKind } from "../types";
 import type { EpisodicQuery, EpisodicStore } from "./episodic";
 import { tokenizeLexicalQuery } from "./lexical-tokenize";
+import { NativeModuleUnavailableError } from "./errors";
 
 /**
  * Serialize a MemoryRecord into column values for DuckDB insert.
@@ -23,7 +24,14 @@ function recordToRow(record: MemoryRecord): unknown[] {
     record.namespace.agent ?? null,
     JSON.stringify(record.body),
     record.embedding
-      ? Buffer.from(record.embedding.buffer).toString("base64")
+      ? // Honor the view's byteOffset/byteLength — an Int8Array can be a window
+        // over a larger ArrayBuffer (e.g. a subarray), and Buffer.from(buf)
+        // alone would serialize the whole backing buffer, corrupting the value.
+        Buffer.from(
+          record.embedding.buffer,
+          record.embedding.byteOffset,
+          record.embedding.byteLength,
+        ).toString("base64")
       : null,
     record.salience,
     record.confidence,
@@ -104,10 +112,17 @@ export class DuckDBEpisodicStore implements EpisodicStore {
   private ready: Promise<void>;
 
   constructor(opts: DuckDBAdapterOpts) {
-    // Dynamic import pattern — duckdb is a native module and we lazy-load
-    // to avoid hard dependency issues in environments where it's not needed.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- duckdb uses CJS
-    const duckdb = require("duckdb") as typeof import("duckdb");
+    // duckdb is an optional native (CJS) module. Guard the synchronous require
+    // so a missing binary degrades to a clear, typed error at construction
+    // (createStore) time instead of an opaque MODULE_NOT_FOUND that takes down
+    // the caller with no hint that the fix is installing the optional dep.
+    let duckdb: typeof import("duckdb");
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- duckdb uses CJS
+      duckdb = require("duckdb") as typeof import("duckdb");
+    } catch (err) {
+      throw new NativeModuleUnavailableError("duckdb", err);
+    }
     this.db = new duckdb.Database(opts.path);
     this.conn = this.db.connect();
     this.ready = this.initialize();

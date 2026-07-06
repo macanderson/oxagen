@@ -54,6 +54,13 @@ export interface PackResult {
   evicted: MemoryRecord[];
   /** Token usage breakdown. */
   tokenUsage: TokenUsage;
+  /**
+   * How many pinned procedural records were dropped because the pinned set
+   * alone exceeded the budget. Normally 0 — a non-zero value means even
+   * MUST-include rules had to be truncated (lowest-salience first) to keep the
+   * budget invariant, which the caller should surface.
+   */
+  pinnedTruncated: number;
 }
 
 export interface TokenUsage {
@@ -85,7 +92,25 @@ function diversityKey(record: MemoryRecord): string {
 }
 
 /**
+ * Real per-record token cost for budget math. `RetrievalCandidate.tokenCost` is
+ * a chars/4 estimate produced by the engines, which under-counts token-dense
+ * code bodies and lets the greedy loop overspend. We recount the serialized
+ * body with the model's real tokenizer so the budget invariant holds. Using the
+ * full JSON body is a conservative upper bound on the (often shorter/truncated)
+ * rendered text, so the window can never exceed budget.
+ */
+function recordTokenCost(record: MemoryRecord, modelId: string): number {
+  return countTokens(JSON.stringify(record.body), modelId);
+}
+
+/**
  * Pack candidates into a budget-constrained context window.
+ *
+ * Invariant guaranteed on return: `tokenUsage.total <= budget.total` (so
+ * `budgetRemaining >= 0`). Pinned procedural rules are included first; if the
+ * pinned set alone (plus the fixed system/working reservations) would exceed
+ * the budget, the lowest-salience pinned rules are truncated last and counted
+ * in `pinnedTruncated`.
  */
 export function pack(input: PackerInput): PackResult {
   const { candidates, budget, pinnedRecords, diversityConstraint, modelId } = input;
@@ -94,25 +119,45 @@ export function pack(input: PackerInput): PackResult {
   const compressed: CompressedItem[] = [];
   const evicted: MemoryRecord[] = [];
 
-  // Step 1: Account for pinned procedural rules (always included)
-  let proceduralTokens = 0;
-  for (const record of pinnedRecords) {
-    const text = JSON.stringify(record.body);
-    proceduralTokens += countTokens(text, modelId);
-    included.push(record);
-  }
+  const systemTokens = budget.reserved.system;
+  const workingTokens = budget.reserved.working;
 
-  // Step 2: Available budget for retrieved volatile content
-  const availableBudget = budget.reserved.volatile;
+  // Step 1: Fit pinned procedural rules under the real budget. They are
+  // MUST-include, but they cannot be allowed to blow the budget — so if the
+  // pinned set overflows, drop the lowest-salience rules first (truncate last).
+  const pinnedBudget = Math.max(0, budget.total - systemTokens - workingTokens);
+  const pinnedBySalience = [...pinnedRecords].sort((a, b) => b.salience - a.salience);
+  let proceduralTokens = 0;
+  let pinnedTruncated = 0;
+  for (const record of pinnedBySalience) {
+    const cost = recordTokenCost(record, modelId);
+    if (proceduralTokens + cost <= pinnedBudget) {
+      proceduralTokens += cost;
+      included.push(record);
+    } else {
+      // Doesn't fit even at max priority — this is the truncation case.
+      evicted.push(record);
+      pinnedTruncated += 1;
+    }
+  }
+  const includedPinnedIds = new Set(included.map((r) => r.id));
+
+  // Step 2: Remaining budget for retrieved volatile content, after the fixed
+  // system/working reservations AND the actual pinned cost.
+  const availableBudget = Math.max(
+    0,
+    budget.total - systemTokens - workingTokens - proceduralTokens,
+  );
   let usedTokens = 0;
 
-  // Step 3: Sort candidates by value-per-token (greedy knapsack)
+  // Step 3: Sort candidates by value-per-token (greedy knapsack). Cost is the
+  // real tokenizer count, not the engine's chars/4 estimate.
   const ranked = candidates
-    .filter((c) => !pinnedRecords.some((p) => p.id === c.record.id)) // Skip already-included pinned
-    .map((c) => ({
-      ...c,
-      vpt: c.tokenCost > 0 ? c.score / c.tokenCost : c.score,
-    }))
+    .filter((c) => !includedPinnedIds.has(c.record.id)) // Skip already-included pinned
+    .map((c) => {
+      const cost = recordTokenCost(c.record, modelId);
+      return { ...c, cost, vpt: cost > 0 ? c.score / cost : c.score };
+    })
     .sort((a, b) => b.vpt - a.vpt);
 
   // Step 4: Greedy pack with diversity constraint
@@ -126,7 +171,7 @@ export function pack(input: PackerInput): PackResult {
     if (currentCount >= diversityConstraint) {
       // Still consider for compression if score is high enough
       if (candidate.score >= COMPRESSION_FLOOR) {
-        const item = compressRecord(candidate.record, candidate.score);
+        const item = compressRecord(candidate.record, candidate.score, modelId);
         if (usedTokens + item.tokenCost <= availableBudget) {
           compressed.push(item);
           usedTokens += item.tokenCost;
@@ -140,13 +185,13 @@ export function pack(input: PackerInput): PackResult {
     }
 
     // Budget check for full inclusion
-    if (usedTokens + candidate.tokenCost <= availableBudget) {
+    if (usedTokens + candidate.cost <= availableBudget) {
       included.push(candidate.record);
-      usedTokens += candidate.tokenCost;
+      usedTokens += candidate.cost;
       diversityCounts.set(key, currentCount + 1);
     } else if (candidate.score >= COMPRESSION_FLOOR) {
       // Doesn't fit at full size — try compression
-      const item = compressRecord(candidate.record, candidate.score);
+      const item = compressRecord(candidate.record, candidate.score, modelId);
       if (usedTokens + item.tokenCost <= availableBudget) {
         compressed.push(item);
         usedTokens += item.tokenCost;
@@ -158,19 +203,20 @@ export function pack(input: PackerInput): PackResult {
     }
   }
 
-  const totalUsed = budget.reserved.system + proceduralTokens + usedTokens + budget.reserved.working;
+  const totalUsed = systemTokens + proceduralTokens + usedTokens + workingTokens;
 
   return {
     included,
     compressed,
     evicted,
     tokenUsage: {
-      system: budget.reserved.system,
+      system: systemTokens,
       procedural: proceduralTokens,
       volatile: usedTokens,
-      working: budget.reserved.working,
+      working: workingTokens,
       total: totalUsed,
       budgetRemaining: budget.total - totalUsed,
     },
+    pinnedTruncated,
   };
 }

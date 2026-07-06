@@ -16,6 +16,8 @@ import type { TaskFrame, RetrievalEngine, RetrievalQuery } from "../retrieval/ty
 import { fuseAndRank, type FusionWeights, DEFAULT_WEIGHTS } from "../retrieval/fusion";
 import { pack, type TokenBudget, type PackResult } from "./packer";
 import { buildLayout, type ContextWindow } from "./layout";
+import { resolveFamily } from "./model-family";
+import { resolveActivePins } from "../api/pin";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,12 +44,45 @@ export interface CompileOptions {
    * silent — the failure count is also surfaced in `metadata.retrievalFailures`.
    */
   onError?: (err: unknown, context: { phase: string; engine?: string }) => void;
+  /**
+   * Per-engine retrieval timeout in ms. A single hung engine (a stuck Neo4j
+   * driver, a slow embedding call) must not stall the whole turn, so each
+   * engine races this deadline and a timeout degrades to an empty result plus a
+   * recorded failure — exactly like a rejection. Default: 2000ms.
+   */
+  retrievalTimeoutMs?: number;
 }
 
 /** One recorded retrieval failure, collected during compile for observability. */
 interface RetrievalFailure {
   engine?: string;
   error: string;
+}
+
+/** Sentinel thrown when an engine exceeds {@link CompileOptions.retrievalTimeoutMs}. */
+class RetrievalTimeoutError extends Error {
+  constructor(engine: string, ms: number) {
+    super(`retrieval engine "${engine}" exceeded ${ms}ms timeout`);
+    this.name = "RetrievalTimeoutError";
+  }
+}
+
+/**
+ * Race a retrieval against a deadline. Resolves to the engine's result if it
+ * settles first; rejects with {@link RetrievalTimeoutError} on timeout. The
+ * timer is always cleared so a slow-but-eventual engine can't leak a handle.
+ */
+function withTimeout<T>(
+  work: Promise<T>,
+  ms: number,
+  engine: string,
+): Promise<T> {
+  if (!Number.isFinite(ms) || ms <= 0) return work;
+  let timer: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new RetrievalTimeoutError(engine, ms)), ms);
+  });
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
 }
 
 // ---------------------------------------------------------------------------
@@ -80,14 +115,6 @@ export function computeBudget(modelId: string): TokenBudget {
     total,
     reserved: { system, procedural, volatile, working },
   };
-}
-
-function resolveFamily(modelId: string): string {
-  const lower = modelId.toLowerCase();
-  if (lower.includes("gpt") || lower.includes("o1") || lower.includes("openai")) return "openai";
-  if (lower.includes("claude") || lower.includes("anthropic")) return "anthropic";
-  if (lower.includes("gemini") || lower.includes("google")) return "google";
-  return "default";
 }
 
 // ---------------------------------------------------------------------------
@@ -124,15 +151,19 @@ export async function compile(
   // salience-1.0 procedural rules.
   const retrievalFailures: RetrievalFailure[] = [];
 
-  // 2. Run all retrieval engines in parallel
+  // 2. Run all retrieval engines in parallel, each under its own timeout so one
+  //    hung engine can't stall the turn (S-5).
+  const retrievalTimeoutMs = options.retrievalTimeoutMs ?? 2000;
   const retrievalStart = Date.now();
   const engineResults = await Promise.all(
     options.engines.map((engine) =>
-      engine.retrieve(query).catch((err: unknown) => {
-        retrievalFailures.push({ engine: engine.name, error: String(err) });
-        options.onError?.(err, { phase: "engine-retrieve", engine: engine.name });
-        return [] as Awaited<ReturnType<RetrievalEngine["retrieve"]>>;
-      }),
+      withTimeout(engine.retrieve(query), retrievalTimeoutMs, engine.name).catch(
+        (err: unknown) => {
+          retrievalFailures.push({ engine: engine.name, error: String(err) });
+          options.onError?.(err, { phase: "engine-retrieve", engine: engine.name });
+          return [] as Awaited<ReturnType<RetrievalEngine["retrieve"]>>;
+        },
+      ),
     ),
   );
   const retrievalMs = Date.now() - retrievalStart;
@@ -143,7 +174,7 @@ export async function compile(
   const fused = fuseAndRank(engineResults, options.fusionWeights ?? DEFAULT_WEIGHTS);
 
   // 4. Get pinned procedural records (salience = 1.0)
-  const pinned = await options.store
+  const pinnedRaw = await options.store
     .query({
       namespace: taskFrame.namespace,
       kinds: ["procedural"],
@@ -158,6 +189,26 @@ export async function compile(
       return [];
     });
 
+  // 4b. Honor unpin: a procedural record whose newest pin/unpin marker is an
+  //     unpin must be suppressed (M-3). Fetch recent episodic markers and let
+  //     the latest event per rule decide. Fail-open (keep all pinned) if the
+  //     marker query rejects, so a store hiccup never silently drops rules.
+  let pinned = pinnedRaw;
+  if (pinnedRaw.length > 0) {
+    const markers = await options.store
+      .query({
+        namespace: taskFrame.namespace,
+        kinds: ["episodic"],
+        limit: 500,
+      })
+      .catch((err: unknown) => {
+        retrievalFailures.push({ error: String(err) });
+        options.onError?.(err, { phase: "pin-marker-query" });
+        return [];
+      });
+    pinned = resolveActivePins(pinnedRaw, markers);
+  }
+
   // 5. Pack under budget
   const packStart = Date.now();
   const packResult: PackResult = pack({
@@ -169,15 +220,20 @@ export async function compile(
   });
   const packingMs = Date.now() - packStart;
 
-  // 6. Layout for cache stability
+  // 6. Layout for cache stability. Only render pinned rules the packer actually
+  //    kept — a pinned rule the packer had to truncate (budget overflow) must
+  //    not reappear in the procedural section.
+  const includedIds = new Set(packResult.included.map((r) => r.id));
+  const effectivePinned = pinned.filter((p) => includedIds.has(p.id));
   const layoutStart = Date.now();
   const window = buildLayout({
     included: packResult.included,
     compressed: packResult.compressed,
-    pinned,
+    pinned: effectivePinned,
     systemPrompt: options.systemPrompt ?? "",
     modelId: taskFrame.modelId,
     tokenUsage: packResult.tokenUsage,
+    pinnedTruncated: packResult.pinnedTruncated,
     metadata: {
       compiledAt: Date.now(),
       retrievalMs,
@@ -189,6 +245,8 @@ export async function compile(
       candidatesCompressed: packResult.compressed.length,
       candidatesEvicted: packResult.evicted.length,
       retrievalFailures: retrievalFailures.length,
+      pinnedTruncated: packResult.pinnedTruncated,
+      contentTruncated: 0, // Filled by buildLayout
     },
   });
   const layoutMs = Date.now() - layoutStart;

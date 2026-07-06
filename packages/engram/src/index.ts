@@ -216,6 +216,7 @@ export type {
 export { embedRecord, extractEmbeddingText } from "./embed/pipeline";
 export type { EmbedResult, EmbedOpts } from "./embed/pipeline";
 export { quantizeToInt8, dequantizeFromInt8 } from "./embed/quantize";
+export type { QuantizedVector } from "./embed/quantize";
 
 // ---------------------------------------------------------------------------
 // Phase D: Consolidation & Learning
@@ -247,8 +248,8 @@ export type {
   DistillationResult,
   DistillationLlmOptions,
 } from "./consolidation/distill";
-export { deduplicateSemanticRecords } from "./consolidation/dedup";
-export type { DedupResult } from "./consolidation/dedup";
+export { deduplicateSemanticRecords } from "./consolidation/dedupe";
+export type { DedupeResult } from "./consolidation/dedupe";
 export { detectContradiction, resolveConflict } from "./consolidation/resolve";
 export type {
   ConflictRecord,
