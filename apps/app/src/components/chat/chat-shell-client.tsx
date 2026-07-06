@@ -184,6 +184,7 @@ export function ChatShellClient({
     order,
     turnUsage,
     turnError,
+    turnWarning,
     turnBudgetNotice,
     consume,
     reset,
@@ -210,7 +211,7 @@ export function ChatShellClient({
       lastToastedErrorRef.current = null;
       return;
     }
-    const key = `${turnError.code ?? ""} ${turnError.message}`;
+    const key = `${turnError.code ?? ""}::${turnError.message}`;
     if (lastToastedErrorRef.current === key) return;
     lastToastedErrorRef.current = key;
     toast.add({
@@ -219,6 +220,25 @@ export function ChatShellClient({
       description: turnError.message,
     });
   }, [turnError, toast]);
+
+  // Non-fatal advisory (e.g. the reply failed to persist to history): toast it
+  // as a warning so the user knows, without marking the turn failed. Same
+  // dedupe-by-content guard as the turnError effect above.
+  const lastToastedWarningRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (turnWarning === undefined) {
+      lastToastedWarningRef.current = null;
+      return;
+    }
+    const key = `${turnWarning.code ?? ""}::${turnWarning.message}`;
+    if (lastToastedWarningRef.current === key) return;
+    lastToastedWarningRef.current = key;
+    toast.add({
+      type: "warning",
+      title: "Heads up",
+      description: turnWarning.message,
+    });
+  }, [turnWarning, toast]);
 
   // Per-turn dollar budget (OXA — turn-budget): surface the engine's non-
   // blocking budget-guard notices as a toast, same dedupe-by-content pattern

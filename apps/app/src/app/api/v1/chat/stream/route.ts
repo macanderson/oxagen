@@ -64,6 +64,11 @@ import {
   resolveTurnBudgetPolicy,
   turnBudgetPolicyFromSaved,
 } from "./turn-budget-policy";
+import {
+  isCurrentUserTurnAtHead,
+  CHAT_MAX_RETRIES,
+  CHAT_MAX_OVERFLOW_RETRIES,
+} from "./history-dedup";
 
 // Side-effect imports: bind every handler into the shared kernel BEFORE
 // materializeTools runs so invoke() can resolve both agent.* and all
@@ -424,6 +429,13 @@ export async function POST(request: NextRequest): Promise<Response> {
   // Load conversation history from Postgres so the model has context for every
   // prior turn (without this the model has SSE amnesia, OXA-1509).
   let historyMessages: ModelMessage[] = [];
+  // True when the trailing (newest) history row IS this turn's user message —
+  // detected by message id, not text. sendMessageAction persists the user turn
+  // concurrently, so it may already be the newest row; the engine appends the
+  // instruction itself, so we must drop that row or the model sees the prompt
+  // twice. Id comparison is robust to equal text and equal createdAt (the
+  // failure mode of the old text-only dedup).
+  let currentAlreadyInHistory = false;
   if (conversationId) {
     // Fetch the most-recent HISTORY_LIMIT rows (DESC + LIMIT), then reverse in
     // JS so they end up chronological (oldest→newest). ASC + LIMIT would return
@@ -438,6 +450,9 @@ export async function POST(request: NextRequest): Promise<Response> {
         withTenantDb((tx) =>
           tx
             .select({
+              // id: used to dedup this turn's user message from history by id
+              // (see currentAlreadyInHistory) — robust to equal text/createdAt.
+              id: schema.messages.id,
               role: schema.messages.role,
               content: schema.messages.content,
               // content_blocks carries the assistant turn's real output (tool
@@ -469,6 +484,9 @@ export async function POST(request: NextRequest): Promise<Response> {
       metadata: r.metadata,
     }));
 
+    // Dedup this turn's user message by id (see isCurrentUserTurnAtHead).
+    currentAlreadyInHistory = isCurrentUserTurnAtHead(rows, parentMessageId);
+
     // Bounded image replay: only the most recent RECENT_IMAGE_TURN_LIMIT user
     // turns' attachments are re-fetched as real image parts; older turns fall
     // back to a `[attached image: <name>]` text placeholder inside
@@ -491,32 +509,10 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   // The engine appends `instruction` (this turn's content) itself, so the
-  // history it receives must EXCLUDE the current user message. sendMessageAction
-  // (running concurrently) may already have persisted this turn as the trailing
-  // history row — drop it so the model never sees the current turn twice.
-  //
-  // A row with attachments is a multimodal `content` array (text part +
-  // image parts), not a plain string — extract just the text part before
-  // comparing, so a turn WITH attachments is still correctly deduped instead
-  // of slipping through as a "different" message and doubling the image.
-  const lastHistory = historyMessages[historyMessages.length - 1];
-  const lastHistoryText =
-    typeof lastHistory?.content === "string"
-      ? lastHistory.content
-      : Array.isArray(lastHistory?.content)
-        ? lastHistory.content
-            .filter(
-              (p): p is { type: "text"; text: string } =>
-                (p as { type?: string }).type === "text",
-            )
-            .map((p) => p.text)
-            .join("\n")
-        : undefined;
-  const currentAlreadyInHistory =
-    lastHistory !== undefined &&
-    lastHistory.role === "user" &&
-    lastHistoryText === content;
-
+  // history it receives must EXCLUDE the current user message. When it is
+  // already the trailing history row (detected by id above), drop it so the
+  // model never sees the current turn twice. Rows are chronological here
+  // (buildHistoryMessages reversed them), so the newest is the last element.
   const historyForEngine: ModelMessage[] = currentAlreadyInHistory
     ? historyMessages.slice(0, -1)
     : historyMessages;
@@ -618,6 +614,17 @@ export async function POST(request: NextRequest): Promise<Response> {
             { err: persistErr },
             "[chat/stream] failed to persist assistant reply",
           );
+          // The turn itself succeeded and the client already consumed the reply;
+          // only history persistence failed. Surface a NON-fatal warning so the
+          // user knows this turn may be missing after a refresh, instead of
+          // silently swallowing it. Never rethrow — a persist failure must not
+          // corrupt the SSE response.
+          emit({
+            type: "warning",
+            message:
+              "Your reply streamed but could not be saved to history — it may be missing if you refresh.",
+            code: "assistant_persist_failed",
+          });
         }
       }
 
@@ -1014,12 +1021,14 @@ export async function POST(request: NextRequest): Promise<Response> {
           // stopWhen: stepCountIs(MAX_AGENT_STEPS)). Loop ends naturally on the
           // model's final answer.
           maxSteps: MAX_AGENT_STEPS,
-          // Phase 1 byte-identical client behaviour: no step retries (a retry
-          // would re-forward a step's already-streamed parts) and no
-          // context-overflow re-run (see maxOverflowRetries, C1) — an overflow
-          // surfaces via the catch as a single `error` event, as it did before.
-          maxRetries: 0,
-          maxOverflowRetries: 0,
+          // Resilience: allow a small number of transient retries so a single
+          // 429/5xx from the gateway does not kill the whole turn, and re-enable
+          // the engine's context-overflow compaction retry (engine.ts:372) so an
+          // overflow triggers one compact-and-retry instead of a hard error
+          // event. The translator only forwards a step's parts once it finishes,
+          // so a retried step does not double-stream to the client.
+          maxRetries: CHAT_MAX_RETRIES,
+          maxOverflowRetries: CHAT_MAX_OVERFLOW_RETRIES,
           extraTools: allTools,
           // Recall ran CONCURRENTLY in the setup Promise.all above; the provider
           // just reads its already-resolved value (no serial latency — C3). The
