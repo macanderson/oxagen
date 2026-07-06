@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { TURN_BUDGET_MODE_VALUES, type TurnBudgetMode, type TurnBudgetPolicy } from "@oxagen/billing";
+import {
+  TURN_BUDGET_MODE_VALUES,
+  type TurnBudgetMode,
+  type TurnBudgetPolicy,
+  type GovernedBudget,
+} from "@oxagen/billing";
 
 /**
  * turn-budget-policy.ts — pure per-turn budget resolution for the chat stream
@@ -71,5 +76,51 @@ export function resolveTurnBudgetPolicy(
     limitUsd: requestBudget.enabled ? (requestBudget.limitUsd ?? 0) : 0,
     mode: requestBudget.mode,
     graceOveragePct: requestBudget.graceOveragePct,
+  };
+}
+
+// ── Workspace governance (OXA-2081) ─────────────────────────────────────────
+// A workspace can impose a governed budget on top of the member's own policy
+// (resolveEffectiveTurnBudget in @oxagen/billing does the actual pure merge —
+// this section only adapts workspace.budget.policy.read's wire shape into the
+// GovernedBudget input that merge expects).
+
+/** The workspace.budget.policy.read handler's output shape (mirrors
+ * WorkspaceBudgetPolicyReadOutput without importing the contract layer here,
+ * same rationale as SavedBudgetPolicy above — this module stays unit-testable
+ * without pulling in the contract/registry layer). */
+export interface SavedWorkspaceGovernance {
+  enabled: boolean;
+  limitUsd: number | null;
+  mode: TurnBudgetMode;
+  graceOveragePct: number;
+  enforcement: "default" | "ceiling";
+}
+
+/**
+ * Convert a workspace.budget.policy.read output into the `GovernedBudget`
+ * shape `resolveEffectiveTurnBudget` (from @oxagen/billing) expects for its
+ * `workspace` argument. Returns `null` when the workspace has no governance
+ * active (`enabled: false`) so the merge is a documented no-op rather than an
+ * accidental $0 ceiling — mirrors `applyCeiling`'s own "no positive limit ⇒ no
+ * ceiling" guard in @oxagen/billing.
+ *
+ * The CALLER must also fail-open to `null` on any read/parse error (an
+ * unregistered handler, a down DB, or a denied IAM check must never block a
+ * turn) — see the route's `.catch(() => null)` around the
+ * `workspace.budget.policy.read` invoke() call.
+ */
+export function governedBudgetFromRead(
+  read: SavedWorkspaceGovernance,
+): GovernedBudget | null {
+  if (!read.enabled) return null;
+  return {
+    policy: {
+      enabled: true,
+      limitUsd: read.limitUsd ?? 0,
+      mode: read.mode,
+      graceOveragePct: read.graceOveragePct,
+    },
+    enforcement: read.enforcement,
   };
 }

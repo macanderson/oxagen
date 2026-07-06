@@ -8,10 +8,12 @@ import {
   requestTurnBudgetSchema,
   resolveTurnBudgetPolicy,
   turnBudgetPolicyFromSaved,
+  governedBudgetFromRead,
   type RequestTurnBudget,
   type SavedBudgetPolicy,
+  type SavedWorkspaceGovernance,
 } from "./turn-budget-policy";
-import { TURN_BUDGET_OFF } from "@oxagen/billing";
+import { TURN_BUDGET_OFF, resolveEffectiveTurnBudget, type TurnBudgetPolicy } from "@oxagen/billing";
 
 describe("requestTurnBudgetSchema", () => {
   it("accepts a valid enabled budget", () => {
@@ -184,5 +186,144 @@ describe("turnBudgetPolicyFromSaved", () => {
       mode: "prompt",
       graceOveragePct: 0.25,
     });
+  });
+});
+
+describe("governedBudgetFromRead", () => {
+  it("returns null when the workspace read reports enabled: false (no governance)", () => {
+    const read: SavedWorkspaceGovernance = {
+      enabled: false,
+      limitUsd: null,
+      mode: "enforce",
+      graceOveragePct: 0.25,
+      enforcement: "ceiling",
+    };
+    expect(governedBudgetFromRead(read)).toBeNull();
+  });
+
+  it("maps an enabled ceiling read to a GovernedBudget", () => {
+    const read: SavedWorkspaceGovernance = {
+      enabled: true,
+      limitUsd: 5,
+      mode: "enforce",
+      graceOveragePct: 0.1,
+      enforcement: "ceiling",
+    };
+    expect(governedBudgetFromRead(read)).toEqual({
+      policy: { enabled: true, limitUsd: 5, mode: "enforce", graceOveragePct: 0.1 },
+      enforcement: "ceiling",
+    });
+  });
+
+  it("maps an enabled default read to a GovernedBudget", () => {
+    const read: SavedWorkspaceGovernance = {
+      enabled: true,
+      limitUsd: 2,
+      mode: "grace",
+      graceOveragePct: 0.5,
+      enforcement: "default",
+    };
+    expect(governedBudgetFromRead(read)).toEqual({
+      policy: { enabled: true, limitUsd: 2, mode: "grace", graceOveragePct: 0.5 },
+      enforcement: "default",
+    });
+  });
+
+  it("normalizes a null limitUsd on an enabled read to 0", () => {
+    const read: SavedWorkspaceGovernance = {
+      enabled: true,
+      limitUsd: null,
+      mode: "prompt",
+      graceOveragePct: 0.25,
+      enforcement: "ceiling",
+    };
+    expect(governedBudgetFromRead(read)?.policy.limitUsd).toBe(0);
+  });
+});
+
+describe("route effective-policy resolution (governedBudgetFromRead + resolveEffectiveTurnBudget)", () => {
+  it("a workspace enforce-$5 ceiling clamps a member's grace-$20 down to enforce-$5", () => {
+    const memberPolicy: TurnBudgetPolicy = {
+      enabled: true,
+      limitUsd: 20,
+      mode: "grace",
+      graceOveragePct: 0.25,
+    };
+    const workspaceRead: SavedWorkspaceGovernance = {
+      enabled: true,
+      limitUsd: 5,
+      mode: "enforce",
+      graceOveragePct: 0.25,
+      enforcement: "ceiling",
+    };
+    const governance = governedBudgetFromRead(workspaceRead);
+    const effective = resolveEffectiveTurnBudget(memberPolicy, null, governance);
+    expect(effective).toEqual({
+      enabled: true,
+      limitUsd: 5,
+      mode: "enforce",
+      graceOveragePct: 0.25,
+    });
+  });
+
+  it("a disabled workspace policy leaves the member's policy unchanged", () => {
+    const memberPolicy: TurnBudgetPolicy = {
+      enabled: true,
+      limitUsd: 20,
+      mode: "grace",
+      graceOveragePct: 0.25,
+    };
+    const workspaceRead: SavedWorkspaceGovernance = {
+      enabled: false,
+      limitUsd: null,
+      mode: "enforce",
+      graceOveragePct: 0.25,
+      enforcement: "ceiling",
+    };
+    const governance = governedBudgetFromRead(workspaceRead);
+    expect(governance).toBeNull();
+    const effective = resolveEffectiveTurnBudget(memberPolicy, null, governance);
+    expect(effective).toEqual(memberPolicy);
+  });
+
+  it("fails open to the member's unchanged policy when governance is null (read error)", () => {
+    // Mirrors the route's `.catch(() => null)` around the
+    // workspace.budget.policy.read invoke() call — a broken/garbage read must
+    // never block or alter a turn.
+    const memberPolicy: TurnBudgetPolicy = {
+      enabled: false,
+      limitUsd: 0,
+      mode: "prompt",
+      graceOveragePct: 0.25,
+    };
+    const effective = resolveEffectiveTurnBudget(memberPolicy, null, null);
+    expect(effective).toEqual(memberPolicy);
+  });
+
+  it("a workspace 'default' seeds a member who hasn't opted in, but never overrides an opted-in member", () => {
+    const workspaceRead: SavedWorkspaceGovernance = {
+      enabled: true,
+      limitUsd: 3,
+      mode: "prompt",
+      graceOveragePct: 0.25,
+      enforcement: "default",
+    };
+    const governance = governedBudgetFromRead(workspaceRead);
+
+    const unsetMember: TurnBudgetPolicy = TURN_BUDGET_OFF;
+    expect(resolveEffectiveTurnBudget(unsetMember, null, governance)).toEqual({
+      enabled: true,
+      limitUsd: 3,
+      mode: "prompt",
+      graceOveragePct: 0.25,
+    });
+
+    const optedInMember: TurnBudgetPolicy = {
+      enabled: true,
+      limitUsd: 1,
+      mode: "enforce",
+      graceOveragePct: 0.25,
+    };
+    expect(resolveEffectiveTurnBudget(optedInMember, null, governance)).toEqual(optedInMember);
   });
 });

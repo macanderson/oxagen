@@ -7,7 +7,12 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { defaultModelState, buildSeededModelState } from "./model-state";
+import {
+  defaultModelState,
+  buildSeededModelState,
+  applyWorkspaceBudgetGovernance,
+  type WorkspaceBudgetGovernance,
+} from "./model-state";
 
 describe("defaultModelState", () => {
   it("has generate = null (text chat mode)", () => {
