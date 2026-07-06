@@ -4837,6 +4837,24 @@
       }
     },
     {
+      "name": "telemetry.error.cluster",
+      "file": "telemetry.error.cluster.ts",
+      "domain": "telemetry",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "user.preferences.read",
       "file": "user.preferences.read.ts",
       "domain": "user",
@@ -4980,6 +4998,42 @@
         "mcp": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "workspace.budget.policy.read",
+      "file": "workspace.budget.policy.read.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true
+      }
+    },
+    {
+      "name": "workspace.budget.policy.write",
+      "file": "workspace.budget.policy.write.ts",
+      "domain": "workspace",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "docs": true,
+        "mcp": true,
+        "unit": true
       }
     },
     {

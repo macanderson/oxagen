@@ -392,6 +392,10 @@ contract-first design, IAM enforcement, and instrumentation.
 
 - [system.install.instructions](system.install.instructions.md) — Return ordered, copy-ready MCP/CLI installation instructions per client
 
+## Telemetry (1)
+
+- [telemetry.error.cluster](telemetry.error.cluster.md) — Cluster recent captured errors by fingerprint to see which error classes are recurring and how often across the org — the triage overview
+
 ## User (2)
 
 - [user.preferences.read](user.preferences.read.md) — Read the calling user's UI and model preferences
