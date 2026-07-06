@@ -21,8 +21,10 @@
  * the legacy keys (token/model/api-url/org/workspace) and the new subcommands.
  */
 import { existsSync } from "node:fs";
-import { readConfig, writeConfig, type CliConfig } from "../lib/config.js";
+import { readConfig, writeConfig, getApiUrl, getToken, type CliConfig } from "../lib/config.js";
 import { userApiPostOrThrow } from "../lib/api.js";
+import { resolveModelId, resolveEffort, findModelMask, isReasoningEffort, EFFORT_LEVELS } from "../agent/model.js";
+import { loadSettings } from "../settings/index.js";
 import {
   resolveWorkspaceConfig,
   explain,
@@ -35,7 +37,10 @@ import {
   writeConsolidated,
   buildConsolidatedIndex,
   CONFIG_SCOPES,
+  CONFIG_SCOPE_ORDER,
   LANGUAGE_ITEM_KINDS,
+  RUNTIME_DEAD_KEYS,
+  RUNTIME_DEAD_KEY_REDIRECT,
   type ConfigScope,
   type LanguageItem,
   type LanguageItemKind,
@@ -44,7 +49,14 @@ import {
   type BuildIndexOptions,
 } from "../config/index.js";
 
-const VALID_KEYS = ["token", "model", "api-url", "org", "workspace"] as const;
+// "effort" was omitted here historically even though `CliConfig`/store #2
+// (~/.config/oxagen/config.json) has always had an `effort` field
+// (`resolveEffort` in agent/model.ts reads it) — there was simply no CLI
+// command to persist it, only the transient per-turn `--effort` flag. Added
+// alongside item 5's dead-key redirect so `oxagen config effort <level>` (the
+// redirect target for a mistaken `config set effort <level>`) is a real,
+// working command rather than another dead end.
+const VALID_KEYS = ["token", "model", "api-url", "org", "workspace", "effort"] as const;
 type ConfigKey = (typeof VALID_KEYS)[number];
 
 function keyToConfigField(key: ConfigKey): keyof CliConfig {
@@ -54,6 +66,7 @@ function keyToConfigField(key: ConfigKey): keyof CliConfig {
     case "org": return "orgSlug";
     case "workspace": return "workspaceSlug";
     case "model": return "model" as keyof CliConfig;
+    case "effort": return "effort" as keyof CliConfig;
   }
 }
 
@@ -72,6 +85,7 @@ export async function handleConfig(key?: string, value?: string): Promise<void> 
     console.log(`  api-url:   ${config.apiUrl ?? "https://api.oxagen.sh"}`);
     console.log(`  org:       ${config.orgSlug ?? "(not set)"}`);
     console.log(`  workspace: ${config.workspaceSlug ?? "(not set)"}`);
+    console.log(`  effort:    ${config.effort ?? "(not set)"}`);
     console.log(`\nSet a value: oxagen config <key> <value>`);
     return;
   }
@@ -99,9 +113,35 @@ export async function handleConfig(key?: string, value?: string): Promise<void> 
   }
 
   // Set
-  writeConfig({ [field]: value });
+  if (field === "effort") {
+    if (!isReasoningEffort(value)) {
+      console.error(`Invalid effort "${value}". Valid: ${EFFORT_LEVELS.join(", ")}`);
+      process.exitCode = 1;
+      return;
+    }
+    writeConfig({ effort: value });
+  } else {
+    writeConfig({ [field]: value } as Partial<CliConfig>);
+  }
   const display = key === "token" ? maskToken(value) : value;
   console.log(`✓ ${key} = ${display}`);
+
+  // Item 6: a model set here (store #2) can be permanently masked at runtime
+  // by OXAGEN_MODEL — either exported directly in the shell, or projected
+  // from settings.json by applySettingsToEnv (../settings/runtime.ts). Tell
+  // the user right away, with exactly where the mask lives, instead of
+  // leaving them to discover their new model is silently never used.
+  if (key === "model") {
+    const mask = findModelMask(value);
+    if (mask) {
+      console.log(
+        `  Note: ${mask.source} currently resolves to "${mask.value}", which wins at runtime over this ` +
+          `config.json value. Unset OXAGEN_MODEL, remove "model" from that settings file, or run ` +
+          `\`oxagen settings set model ${value} --scope local\` to match — then \`oxagen config model\` will ` +
+          `report the value that's actually in effect.`,
+      );
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -170,8 +210,60 @@ export function configInit(scopeArg: string | undefined, ctx: WorkspaceConfigCtx
   console.log(`  Edit it with \`oxagen config set <path> <value> --scope ${scope}\` or \`oxagen config add <lang> <kind> "…"\`.`);
 }
 
+/** The env var each runtime dead key resolves through at runtime (see the resolvers in agent/model.ts + lib/config.ts). */
+const RUNTIME_KEY_ENV_VAR: Record<(typeof RUNTIME_DEAD_KEYS)[number], string> = {
+  model: "OXAGEN_MODEL",
+  apiUrl: "OXAGEN_API_URL",
+  effort: "OXAGEN_EFFORT",
+  token: "OXAGEN_API_TOKEN",
+};
+
+/**
+ * Item 8b (split-brain get): `oxagen config get model` (this Workspace Config
+ * surface) and `oxagen config model` (the legacy store #2 getter) read
+ * DIFFERENT stores — and store #3 never had `model` in the first place (item
+ * 5 now blocks it from ever being written there). Rather than pick one store
+ * to read arbitrarily, print every store that could plausibly hold the value
+ * — shell env, settings.json (model/apiUrl only), config.json (store #2) —
+ * with the actual runtime-effective winner (via the same resolver the agent
+ * loop uses) clearly marked, so there's no ambiguity about what wins.
+ */
+function printRuntimeKeyGet(key: (typeof RUNTIME_DEAD_KEYS)[number], ctx: WorkspaceConfigCtx): void {
+  const cwd = ctx.cwd ?? process.cwd();
+  const envVar = RUNTIME_KEY_ENV_VAR[key];
+  const envValue = process.env[envVar];
+  const config = readConfig();
+  const configValue = config[key as keyof CliConfig] as string | undefined;
+  const mask = (v: string | undefined): string => (v === undefined ? "(not set)" : key === "token" ? maskToken(v) : v);
+
+  console.log(`${key} — resolved from EACH store (config get / config set never touch these — see \`oxagen config ${RUNTIME_DEAD_KEY_REDIRECT[key]}\`):`);
+  console.log(`  shell/session env ${envVar}:  ${mask(envValue)}`);
+
+  if (key === "model" || key === "apiUrl") {
+    const { settings, scopes } = loadSettings({ cwd, userSettingsPath: ctx.userSettingsPath, noCache: true });
+    const settingsValue = settings[key];
+    const winner = [...scopes].reverse().find((s) => s.settings?.[key] !== undefined);
+    console.log(`  settings.json${winner ? ` (${winner.scope}: ${winner.path})` : ""}:  ${mask(settingsValue)}`);
+  }
+
+  console.log(`  ~/.config/oxagen/config.json:  ${mask(configValue)}`);
+
+  let effective: string | undefined;
+  switch (key) {
+    case "model": effective = resolveModelId(); break;
+    case "apiUrl": effective = getApiUrl(); break;
+    case "effort": effective = resolveEffort(); break;
+    case "token": effective = getToken(); break;
+  }
+  console.log(`  → effective at runtime:  ${mask(effective)}`);
+}
+
 /** `oxagen config get <path>` — print the merged value + which scope it resolved from. */
 export function configGet(dottedPath: string, ctx: WorkspaceConfigCtx = {}): void {
+  if ((RUNTIME_DEAD_KEYS as readonly string[]).includes(dottedPath)) {
+    printRuntimeKeyGet(dottedPath as (typeof RUNTIME_DEAD_KEYS)[number], ctx);
+    return;
+  }
   const cwd = ctx.cwd ?? process.cwd();
   const { config } = resolveWorkspaceConfig(cwd, { ...ctx, noCache: true });
   const value = getByPath(config, dottedPath);
@@ -191,6 +283,23 @@ export function configSet(
   scopeArg: string | undefined,
   ctx: WorkspaceConfigCtx = {},
 ): void {
+  // Item 5 (dead-key writes): model/apiUrl/effort/token belong to store #2
+  // (~/.config/oxagen/config.json) or settings.json, never to this Workspace
+  // Config surface — nothing reads them back from workspace/user/repo/managed
+  // config. Redirect instead of printing a confident "✓" for a write that
+  // would be a silent no-op (schema.ts's superRefine also rejects these
+  // defense-in-depth, but that produces a less actionable zod error).
+  if ((RUNTIME_DEAD_KEYS as readonly string[]).includes(dottedPath)) {
+    const redirect = RUNTIME_DEAD_KEY_REDIRECT[dottedPath as (typeof RUNTIME_DEAD_KEYS)[number]];
+    console.error(
+      `"${dottedPath}" is a CLI runtime setting, not a Workspace Config field — nothing reads it from ` +
+        `workspace/user/repo/managed config, so this write would be silently ignored. ` +
+        `Did you mean: oxagen config ${redirect} ${value}`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   const scope = scopeArg ?? DEFAULT_SCOPE;
   if (!isConfigScope(scope)) return reportScopeError(scope);
   const cwd = ctx.cwd ?? process.cwd();
@@ -198,11 +307,21 @@ export function configSet(
   try {
     const path = writeSetPath(scope, dottedPath, value, ctx);
     console.log(`✓ ${dottedPath} = ${value}  (${scope}: ${path})`);
-    if (before.locked && before.scope && before.scope !== scope) {
-      console.log(
-        `  Note: ${before.reason} — this write may be overridden at resolve time. ` +
-          `Run \`oxagen config explain ${dottedPath}\` to confirm.`,
-      );
+    // Item 8a: warn whenever a DIFFERENT scope currently wins this path and
+    // will keep winning after this write — either because it's governance-
+    // locked (the original check) OR because it's simply a more-specific,
+    // unlocked scope (e.g. writing to `user` while `workspace`/`repo` already
+    // set the same path — CONFIG_SCOPE_ORDER puts those later/"more specific",
+    // so they'd silently keep shadowing this write otherwise).
+    if (before.scope && before.scope !== scope) {
+      const specificity = (s: ConfigScope) => CONFIG_SCOPE_ORDER.indexOf(s);
+      const stillWins = before.locked || specificity(before.scope) > specificity(scope);
+      if (stillWins) {
+        console.log(
+          `  Note: ${before.reason} — this write may be overridden at resolve time. ` +
+            `Run \`oxagen config explain ${dottedPath}\` to confirm.`,
+        );
+      }
     }
   } catch (err) {
     reportError(err);

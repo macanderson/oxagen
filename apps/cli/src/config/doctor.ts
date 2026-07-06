@@ -13,6 +13,7 @@
  */
 import { resolveWorkspaceConfig, CONFIG_SCOPE_ORDER, type ResolveWorkspaceConfigOptions } from "./resolve.js";
 import type { ConfigScope, WorkspaceConfig } from "./schema.js";
+import { loadSettings, type SettingsScope, type ResolveSettingsOptions } from "../settings/resolve.js";
 
 export type DoctorSeverity = "ok" | "info" | "warn" | "error";
 
@@ -37,15 +38,19 @@ export interface DoctorReport {
   findings: DoctorFinding[];
 }
 
-export interface DoctorOptions extends ResolveWorkspaceConfigOptions {
+export interface DoctorOptions extends ResolveWorkspaceConfigOptions, Pick<ResolveSettingsOptions, "userSettingsPath" | "projectDirName"> {
   /** Env snapshot to scan for file-config shadowing. Defaults to process.env. */
   env?: Record<string, string | undefined>;
 }
 
 /**
- * Env vars that silently take precedence over file config for the session.
- * Not exhaustive of every OXAGEN_* var — just the ones that shadow values a
- * user would otherwise expect their config files to control.
+ * Baseline CLI-wide env vars that shadow file config but have no `settings.env`
+ * equivalent (they're read straight off `process.env` by lib/config.ts /
+ * agent/model.ts, never projected FROM settings.json) — kept as a fallback
+ * "these are active this session" notice. Item 7b's per-key diff below
+ * supersedes this list for anything the user has actually declared in
+ * `settings.env` (or `settings.model` / `settings.apiUrl`), where we can name
+ * the exact scope file being shadowed instead of just the var name.
  */
 const SHADOWING_ENV_VARS = [
   "OXAGEN_MODEL",
@@ -121,8 +126,61 @@ export function runConfigDoctor(cwd: string, opts: DoctorOptions = {}): DoctorRe
     }
   }
 
-  // ── Env shadowing: session env beats file config silently ──
-  const shadowing = SHADOWING_ENV_VARS.filter((v) => env[v] !== undefined && env[v] !== "");
+  // ── Item 7b: settings.env precedence — diff EVERY declared settings.env key
+  // (plus the model/apiUrl scalars, which project the same way) against the
+  // live environment, per key, naming which scope loses. Previously this only
+  // checked a fixed 7-var list and never loaded settings.json at all, so a
+  // `settings set env.MY_KEY <value>` that was actually shadowed by the shell
+  // had no way to surface here short of reading runtime.ts's source.
+  const settingsResult = loadSettings({
+    cwd,
+    userSettingsPath: opts.userSettingsPath,
+    projectDirName: opts.projectDirName,
+    noCache: true,
+  });
+  const settingsKeysToCheck = new Map<string, "env" | "model" | "apiUrl">();
+  for (const s of settingsResult.scopes) {
+    for (const name of Object.keys(s.settings?.env ?? {})) settingsKeysToCheck.set(name, "env");
+  }
+  if (settingsResult.settings.model !== undefined) settingsKeysToCheck.set("OXAGEN_MODEL", "model");
+  if (settingsResult.settings.apiUrl !== undefined) settingsKeysToCheck.set("OXAGEN_API_URL", "apiUrl");
+
+  const findSettingsSource = (
+    envVar: string,
+    kind: "env" | "model" | "apiUrl",
+  ): { scope: SettingsScope; path: string } | undefined => {
+    // local ▸ project ▸ user — most specific first (settingsResult.scopes is user▸project▸local).
+    for (const s of [...settingsResult.scopes].reverse()) {
+      if (!s.settings) continue;
+      const has =
+        kind === "env"
+          ? s.settings.env?.[envVar] !== undefined
+          : kind === "model"
+            ? s.settings.model !== undefined
+            : s.settings.apiUrl !== undefined;
+      if (has) return { scope: s.scope, path: s.path };
+    }
+    return undefined;
+  };
+
+  for (const [envVar, kind] of settingsKeysToCheck) {
+    if (env[envVar] === undefined || env[envVar] === "") continue; // shell doesn't set it — settings correctly wins, nothing to flag
+    const source = findSettingsSource(envVar, kind);
+    findings.push({
+      severity: "warn",
+      title: `${envVar} — shell environment wins over settings.json`,
+      detail: source
+        ? `${source.scope} settings (${source.path}) sets this, but the shell already exports ${envVar} — the settings value is silently ignored this session.`
+        : `The shell already exports ${envVar}, silently overriding settings.json.`,
+      fix: `Unset ${envVar} in your shell to let settings.json control it (or keep the shell override if that's intentional).`,
+    });
+  }
+
+  // ── Baseline env shadowing: CLI-wide vars with no settings.json equivalent ──
+  const settingsControlledVars = new Set(settingsKeysToCheck.keys());
+  const shadowing = SHADOWING_ENV_VARS.filter(
+    (v) => env[v] !== undefined && env[v] !== "" && !settingsControlledVars.has(v),
+  );
   if (shadowing.length > 0) {
     findings.push({
       severity: "info",
@@ -230,6 +288,21 @@ export function formatDoctorReport(report: DoctorReport): string {
     const label = tier.scope === "org" ? "org (managed, enforced)" : tier.scope;
     lines.push(`  ${tier.error ? "✗" : tier.present ? "●" : "○"} ${label.padEnd(24)} ${status.padEnd(8)} ${tier.path}`);
   }
+  lines.push("");
+  // Item 10: the actual, verified-in-code precedence across the CLI's three
+  // overlapping config stores (see fix/cli-config-truth) — printed so a user
+  // never has to read source to know what wins.
+  lines.push("Effective precedence (highest wins):");
+  lines.push(
+    "  model / apiUrl:        shell env (OXAGEN_MODEL / OXAGEN_API_URL) > settings.local.json > " +
+      "settings (project) > settings (user) > ~/.config/oxagen/config.json (store #2) > built-in default",
+  );
+  lines.push("  settings.env.<NAME>:   shell env > settings.local.json > settings (project) > settings (user)");
+  lines.push(
+    "  workspace config       managed.json (org, always locked) > any scope's declared \"locked\" path > " +
+      "most-specific unlocked scope (repo > workspace > user)",
+  );
+  lines.push("  (vision/commands/languages/vcs/…, this file's own tiers, unrelated to model/apiUrl/settings.env above)");
   lines.push("");
   const ordered = [...report.findings].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
   for (const f of ordered) {

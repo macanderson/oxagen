@@ -218,6 +218,18 @@ describe("setVision / setVoice / setWorktreeSeed — shallow merge", () => {
   });
 });
 
+describe("dead-key guard — defense in depth (item 5)", () => {
+  it("setValueAtPath rejects a runtime dead key even bypassing the command-layer redirect", () => {
+    expect(() => setValueAtPath("workspace", "model", "vendor/x", ctx)).toThrow(/oxagen config model/i);
+  });
+
+  it("never writes the dead key to disk when the schema rejects it", () => {
+    expect(() => setValueAtPath("workspace", "apiUrl", "https://evil.example", ctx)).toThrow();
+    const path = getConfigScopePaths(cwd, ctx).workspace;
+    expect(existsSync(path)).toBe(false);
+  });
+});
+
 describe("writeConsolidated", () => {
   it("always targets workspace scope, preserving other workspace.json sections", () => {
     setValueAtPath("workspace", "vision.statement", "keep me", ctx);

@@ -1,6 +1,7 @@
 import { homedir } from "os";
 import { join } from "path";
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
+import { readFileSync, mkdirSync, existsSync } from "fs";
+import { atomicWriteFileSync } from "./atomic-write.js";
 
 export interface CliConfig {
   token?: string;
@@ -111,7 +112,11 @@ export function writeConfig(patch: Partial<CliConfig>): void {
   const current = readConfig();
   const next = { ...current, ...patch };
   if (!existsSync(CONFIG_DIR)) mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(CONFIG_FILE, JSON.stringify(next, null, 2), "utf8");
+  // Atomic (write temp + rename) — a plain writeFileSync truncates the file
+  // before the new bytes land, so a kill mid-write (or a second parallel CLI
+  // session writing the same config.json) can strand a corrupt/empty file
+  // (see item 9, fix/cli-config-truth).
+  atomicWriteFileSync(CONFIG_FILE, JSON.stringify(next, null, 2));
 }
 
 export function clearConfig(): void {

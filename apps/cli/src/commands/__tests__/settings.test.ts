@@ -101,4 +101,37 @@ describe("settings command handlers", () => {
     expect(err.join("\n")).toContain("Unknown scope");
     expect(process.exitCode).toBe(1);
   });
+
+  // Item 7a: settings.set used to print a confident "✓" even when the shell
+  // already exported the same env var the key projects to — meaning
+  // applySettingsToEnv's `isUnset` gate (runtime.ts) would silently ignore
+  // the write for the rest of the session.
+  describe("shell-shadow warning at set time", () => {
+    const savedModel = process.env["OXAGEN_MODEL"];
+    const savedCustom = process.env["OXAGEN_CFG_TEST_SHADOW"];
+    afterEach(() => {
+      if (savedModel === undefined) delete process.env["OXAGEN_MODEL"];
+      else process.env["OXAGEN_MODEL"] = savedModel;
+      if (savedCustom === undefined) delete process.env["OXAGEN_CFG_TEST_SHADOW"];
+      else process.env["OXAGEN_CFG_TEST_SHADOW"] = savedCustom;
+    });
+
+    it("warns when setting `model` while the shell already exports OXAGEN_MODEL", () => {
+      process.env["OXAGEN_MODEL"] = "vendor/shell";
+      settingsSet("model", "vendor/settings", "project", ctx);
+      expect(text()).toContain("shell value wins until you unset OXAGEN_MODEL");
+    });
+
+    it("warns when setting env.<NAME> while the shell already exports that name", () => {
+      process.env["OXAGEN_CFG_TEST_SHADOW"] = "already-here";
+      settingsSet("env.OXAGEN_CFG_TEST_SHADOW", "new-value", "project", ctx);
+      expect(text()).toContain("shell value wins until you unset OXAGEN_CFG_TEST_SHADOW");
+    });
+
+    it("does not warn when the shell has no matching export", () => {
+      delete process.env["OXAGEN_MODEL"];
+      settingsSet("model", "vendor/settings", "project", ctx);
+      expect(text()).not.toContain("shell value wins");
+    });
+  });
 });
