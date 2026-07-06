@@ -10,6 +10,8 @@ import {
 import { resolvedTierCatalog } from "@oxagen/ai";
 import type { ComposerModelState } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
+import type { RepoOption } from "./repo-selector";
+import type { EnvironmentOption } from "./environment-selector";
 
 export { type ChatMessage, type MessageAttachment } from "./message-bubble";
 
@@ -49,6 +51,10 @@ export interface ChatShellProps {
   initialModelState?: ComposerModelState;
   /** Available MCP servers for the per-turn activation picker. */
   availableMcpServers?: McpServerSummary[];
+  /** GitHub repos usable as the code-mode target (see _shared/code-mode-data.ts). */
+  availableRepos?: RepoOption[];
+  /** Workspace environments usable as the code-mode target. */
+  availableEnvironments?: EnvironmentOption[];
 }
 
 // RSC streaming: the messages promise resolves inside a Suspense boundary
@@ -74,6 +80,8 @@ export function ChatShell({
   pendingPromptBehavior,
   initialModelState,
   availableMcpServers,
+  availableRepos,
+  availableEnvironments,
 }: ChatShellProps) {
   return (
     <>
@@ -94,6 +102,8 @@ export function ChatShell({
           pendingPromptBehavior={pendingPromptBehavior}
           initialModelState={initialModelState}
           availableMcpServers={availableMcpServers}
+          availableRepos={availableRepos}
+          availableEnvironments={availableEnvironments}
         />
       </Suspense>
       <BackgroundTaskTray
@@ -121,6 +131,8 @@ async function AsyncShell({
   pendingPromptBehavior,
   initialModelState,
   availableMcpServers,
+  availableRepos,
+  availableEnvironments,
 }: {
   promise: Promise<ChatMessage[]>;
   conversationId: string | null;
@@ -137,6 +149,8 @@ async function AsyncShell({
   pendingPromptBehavior?: "queue" | "interrupt";
   initialModelState?: ComposerModelState;
   availableMcpServers?: McpServerSummary[];
+  availableRepos?: RepoOption[];
+  availableEnvironments?: EnvironmentOption[];
 }) {
   const messages = await promise;
   const modelConfig = resolvedTierCatalog();
@@ -158,6 +172,8 @@ async function AsyncShell({
       pendingPromptBehavior={pendingPromptBehavior}
       initialModelState={initialModelState}
       availableMcpServers={availableMcpServers}
+      availableRepos={availableRepos}
+      availableEnvironments={availableEnvironments}
     />
   );
 }

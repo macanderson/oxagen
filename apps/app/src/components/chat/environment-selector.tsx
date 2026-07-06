@@ -2,33 +2,34 @@
 
 import * as React from "react";
 import { Settings } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
-  SelectContent,
+  SelectPopup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 
-export interface Environment {
+/**
+ * A workspace environment as returned by the `environment.list` capability
+ * (`environmentSummarySchema` in `packages/oxagen/src/contracts/environment.create.ts`).
+ * There is no "local/staging/production" `type` field on the real contract —
+ * environments are workspace-defined (name + slug), with exactly one
+ * `isDefault` per workspace.
+ */
+export interface EnvironmentOption {
   id: string;
   name: string;
-  type: "local" | "staging" | "production";
-  apiUrl?: string;
+  isDefault: boolean;
 }
 
 interface EnvironmentSelectorProps {
-  environments: Environment[];
+  environments: EnvironmentOption[];
   selectedEnvId: string | null;
   onSelectEnv: (envId: string) => void;
   isLoading?: boolean;
 }
-
-const environmentBadgeColor: Record<Environment["type"], string> = {
-  local: "bg-blue-100 text-blue-800",
-  staging: "bg-yellow-100 text-yellow-800",
-  production: "bg-red-100 text-red-800",
-};
 
 export function EnvironmentSelector({
   environments,
@@ -40,27 +41,29 @@ export function EnvironmentSelector({
     <div className="flex items-center gap-2">
       <Settings className="size-4 text-muted-foreground" />
       <Select
-        value={selectedEnvId || ""}
+        value={selectedEnvId ?? ""}
         onValueChange={(value) => {
           if (value) onSelectEnv(value);
         }}
-        disabled={isLoading}
+        disabled={isLoading || environments.length === 0}
       >
-        <SelectTrigger className="w-40">
+        <SelectTrigger className="w-40" aria-label="Select environment">
           <SelectValue placeholder="Select environment" />
         </SelectTrigger>
-        <SelectContent>
+        <SelectPopup>
           {environments.map((env) => (
             <SelectItem key={env.id} value={env.id}>
               <div className="flex items-center gap-2">
                 <span>{env.name}</span>
-                <span className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${environmentBadgeColor[env.type]}`}>
-                  {env.type}
-                </span>
+                {env.isDefault && (
+                  <Badge variant="secondary" className="text-[10px]">
+                    Default
+                  </Badge>
+                )}
               </div>
             </SelectItem>
           ))}
-        </SelectContent>
+        </SelectPopup>
       </Select>
     </div>
   );

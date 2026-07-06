@@ -1,71 +1,65 @@
 "use client";
 
 import * as React from "react";
-import { GitBranch, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { GitBranch } from "lucide-react";
 import {
   Select,
-  SelectContent,
+  SelectPopup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 
-export interface Repository {
-  id: string;
-  name: string;
+/**
+ * A single repo a code-mode turn can target, derived from a `connectorId ===
+ * "github"` `connection.list` row plus its `connection.get` deliveryConfig
+ * (`{ owner, repo, defaultBranch }` or `{ selectedRepos: ["owner/repo", …] }`
+ * — see `_shared/code-mode-data.ts`). `key` is unique per repo (not per
+ * connection) because a single GitHub connection can sync multiple repos.
+ */
+export interface RepoOption {
+  key: string;
+  connectionId: string;
   owner: string;
-  url: string;
-  branch: string;
+  name: string;
+  defaultBranch: string | null;
 }
 
 interface RepoSelectorProps {
-  repositories: Repository[];
-  selectedRepoId: string | null;
-  onSelectRepo: (repoId: string) => void;
-  onAddRepo?: () => void;
+  repositories: RepoOption[];
+  selectedKey: string | null;
+  onSelectRepo: (repo: RepoOption) => void;
   isLoading?: boolean;
 }
 
 export function RepoSelector({
   repositories,
-  selectedRepoId,
+  selectedKey,
   onSelectRepo,
-  onAddRepo,
   isLoading = false,
 }: RepoSelectorProps) {
   return (
     <div className="flex items-center gap-2">
       <GitBranch className="size-4 text-muted-foreground" />
       <Select
-        value={selectedRepoId || ""}
+        value={selectedKey ?? ""}
         onValueChange={(value) => {
-          if (value) onSelectRepo(value);
+          const repo = repositories.find((r) => r.key === value);
+          if (repo) onSelectRepo(repo);
         }}
-        disabled={isLoading}
+        disabled={isLoading || repositories.length === 0}
       >
-        <SelectTrigger className="w-48">
+        <SelectTrigger className="w-48" aria-label="Select repository">
           <SelectValue placeholder="Select repository" />
         </SelectTrigger>
-        <SelectContent>
+        <SelectPopup>
           {repositories.map((repo) => (
-            <SelectItem key={repo.id} value={repo.id}>
+            <SelectItem key={repo.key} value={repo.key}>
               {repo.owner}/{repo.name}
             </SelectItem>
           ))}
-        </SelectContent>
+        </SelectPopup>
       </Select>
-      {onAddRepo && (
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={onAddRepo}
-          disabled={isLoading}
-          title="Add repository"
-        >
-          <Plus className="size-4" />
-        </Button>
-      )}
     </div>
   );
 }
