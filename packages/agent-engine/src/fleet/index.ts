@@ -20,11 +20,12 @@
  * connect to the gateway directly. The caller (CLI or platform) wires these in.
  */
 import { EventEmitter } from "node:events";
+import type { ToolSet } from "ai";
 import { enhancePrompt } from "../evaluate/prompt-enhancer";
 import { accumulateUsage, routeModel } from "../router/model-router";
 import { emptyUsage } from "../types";
-import type { CodeGraphProvider } from "../types";
-import type { MemoryProvider } from "../ports";
+import type { CodeGraphProvider, RunCodingAgentResult } from "../types";
+import type { MemoryProvider, FileLockProvider } from "../ports";
 import type {
   AgentDefinition,
   AgentSnapshot,
@@ -36,7 +37,20 @@ import type { ProjectContext } from "../types";
 
 export * from "./types";
 
-/** The subset of the coding loop the fleet depends on (injectable for tests). */
+/**
+ * The subset of the coding loop the fleet depends on (injectable for tests).
+ *
+ * The safety/governance seams — budget guard, memory, file locking, and tool
+ * wiring — are OPTIONAL passthroughs: a concrete runner forwards each straight
+ * into `runCodingAgent`. Before this seam existed, a fleet subagent silently ran
+ * with NO per-turn budget ceiling and NO file lock, so parallel fleet agents
+ * could overspend or clobber the same file even when the caller had wired both
+ * for its top-level turns. All fields stay optional so the CLI's minimal local
+ * runner (no platform round-trip) is unaffected when it passes none. ADR-021 §5:
+ * `fileLock`/`lockContext` are the exact seam the Postgres lock-lease migration
+ * plugs into — the port shape and per-task `lockContext` do not change, only the
+ * provider behind them.
+ */
 export type AgentRunner = (opts: {
   prompt: string;
   cwd: string;
@@ -47,6 +61,18 @@ export type AgentRunner = (opts: {
   signal?: AbortSignal;
   onText?: (delta: string) => void;
   onToolCall?: (name: string, input: unknown) => void;
+  /** Recall/writeback provider, threaded per task. */
+  memory?: MemoryProvider | null;
+  /** File-lock provider so parallel subagents never clobber the same file. */
+  fileLock?: FileLockProvider | null;
+  /** Per-task lock identity (distinct agentId per subagent, shared executionId). */
+  lockContext?: { agentId: string; executionId: string };
+  /** Caller-supplied extra tools (e.g. MCP) forwarded to the subagent. */
+  extraTools?: ToolSet;
+  /** Final tool wrapper (permission gate / hooks / timeouts) applied per subagent. */
+  wrapTools?: (tools: ToolSet) => ToolSet;
+  /** Per-turn budget guard applied to the subagent's own turn. */
+  budgetGuard?: (usage: RunCodingAgentResult["usage"]) => Promise<"continue" | "stop">;
 }) => Promise<{
   text: string;
   steps: number;
@@ -68,6 +94,25 @@ export interface FleetOptions {
   agents?: Map<string, AgentDefinition>;
   /** Read-only subagents (explain, don't edit). */
   readOnly?: boolean;
+  /**
+   * File-lock provider threaded to EVERY subagent so parallel fleet agents never
+   * clobber the same file. The fleet already serializes tasks with overlapping
+   * PREDICTED files, but predictions are imperfect — the lock is the ground-truth
+   * backstop. Undefined ⇒ unlocked (the CLI's single-process default). ADR-021 §5.
+   */
+  fileLock?: FileLockProvider | null;
+  /** Caller-supplied extra tools (e.g. MCP) forwarded to each subagent. */
+  extraTools?: ToolSet;
+  /** Final tool wrapper (permission gate / hooks / timeouts) applied per subagent. */
+  wrapTools?: (tools: ToolSet) => ToolSet;
+  /** Per-turn budget guard applied to each subagent's own turn. */
+  budgetGuard?: (usage: RunCodingAgentResult["usage"]) => Promise<"continue" | "stop">;
+  /**
+   * Execution/lease id shared by every subagent lock in this fleet run; a
+   * distinct per-task `agentId` is derived from it at dispatch. Defaults to a
+   * generated id when a `fileLock` is supplied without one.
+   */
+  executionId?: string;
 }
 
 const TERMINAL = new Set(["done", "failed", "cancelled", "blocked"]);
@@ -81,6 +126,13 @@ export class Fleet extends EventEmitter {
   private readonly agents: Map<string, AgentDefinition>;
   private readonly runner: AgentRunner;
   private readonly readOnly: boolean;
+  private readonly fileLock: FileLockProvider | null;
+  private readonly extraTools: ToolSet | undefined;
+  private readonly wrapTools: ((tools: ToolSet) => ToolSet) | undefined;
+  private readonly budgetGuard:
+    | ((usage: RunCodingAgentResult["usage"]) => Promise<"continue" | "stop">)
+    | undefined;
+  private readonly executionId: string;
 
   private readonly tasks = new Map<string, Task>();
   private readonly snapshots = new Map<string, AgentSnapshot>();
@@ -101,6 +153,12 @@ export class Fleet extends EventEmitter {
     this.agents = opts.agents ?? new Map<string, AgentDefinition>();
     this.runner = opts.runner;
     this.readOnly = opts.readOnly ?? false;
+    this.fileLock = opts.fileLock ?? null;
+    this.extraTools = opts.extraTools;
+    this.wrapTools = opts.wrapTools;
+    this.budgetGuard = opts.budgetGuard;
+    this.executionId =
+      opts.executionId ?? `fleet_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   }
 
   /** Register every task in a plan (does not start it). */
@@ -252,6 +310,20 @@ export class Fleet extends EventEmitter {
         agent: task.agent ? this.agents.get(task.agent) : undefined,
         readOnly: this.readOnly,
         signal: controller.signal,
+        // Governance/safety seams threaded per task so a subagent runs with the
+        // SAME budget ceiling, memory, tool wiring, and file locking the caller
+        // wired for its top-level turns — not silently unbounded/unlocked.
+        memory: this.memory,
+        fileLock: this.fileLock,
+        // Distinct lock identity per subagent, shared lease/execution id. This is
+        // the seam the Postgres lock-lease migration plugs into (ADR-021 §5) —
+        // only the provider changes, not this per-task lockContext shape.
+        lockContext: this.fileLock
+          ? { agentId: `${this.executionId}:${task.id}`, executionId: this.executionId }
+          : undefined,
+        extraTools: this.extraTools,
+        wrapTools: this.wrapTools,
+        budgetGuard: this.budgetGuard,
         onText: (delta) => {
           appendLog(delta);
           this.update(task.id, { logTail: log });

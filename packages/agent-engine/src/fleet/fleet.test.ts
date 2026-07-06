@@ -8,6 +8,7 @@
  * success/failure memory records.
  */
 import { describe, it, expect, vi } from "vitest";
+import type { ToolSet } from "ai";
 import { Fleet } from "./index";
 import type { AgentRunner } from "./index";
 import type { Plan, Task } from "./types";
@@ -257,5 +258,62 @@ describe("Fleet — accounting + memory", () => {
     const kinds = remember.mock.calls.map((c) => c[0]);
     expect(kinds).toContain("bug-root-cause");
     expect(kinds).toContain("routine-change");
+  });
+});
+
+describe("Fleet — governance seams threaded to each subagent (ADR-021 §5)", () => {
+  it("passes budgetGuard, memory, fileLock, extraTools, wrapTools + a per-task lockContext", async () => {
+    const received: Array<Parameters<AgentRunner>[0]> = [];
+    const runner: AgentRunner = async (opts) => {
+      received.push(opts);
+      return { text: "ok", steps: 1, usage: { inputTokens: 1, outputTokens: 1 } };
+    };
+
+    const budgetGuard = vi.fn(async () => "continue" as const);
+    const wrapTools: (t: ToolSet) => ToolSet = vi.fn((t: ToolSet) => t);
+    const extraTools = {} as ToolSet;
+    const memory = { recallContext: vi.fn(async () => ""), remember: vi.fn(async () => undefined) };
+    const fileLock = {
+      acquire: vi.fn(async () => ({ granted: true, lockId: "l1", heldBy: null, blockedUntil: null })),
+      release: vi.fn(),
+      releaseAll: vi.fn(),
+    };
+
+    const fleet = new Fleet({
+      cwd: "/repo",
+      runner,
+      memory,
+      fileLock,
+      extraTools,
+      wrapTools,
+      budgetGuard,
+      executionId: "exec-1",
+    });
+    fleet.loadPlan(plan([task("a")]));
+    await fleet.start();
+
+    expect(received).toHaveLength(1);
+    const opts = received[0]!;
+    expect(opts.budgetGuard).toBe(budgetGuard);
+    expect(opts.memory).toBe(memory);
+    expect(opts.fileLock).toBe(fileLock);
+    expect(opts.extraTools).toBe(extraTools);
+    expect(opts.wrapTools).toBe(wrapTools);
+    // Per-task lock identity: distinct agentId (carries the task id), shared executionId.
+    expect(opts.lockContext).toEqual({ agentId: "exec-1:a", executionId: "exec-1" });
+  });
+
+  it("omits lockContext when no fileLock is injected (CLI default — unlocked)", async () => {
+    const received: Array<Parameters<AgentRunner>[0]> = [];
+    const runner: AgentRunner = async (opts) => {
+      received.push(opts);
+      return { text: "ok", steps: 1, usage: {} };
+    };
+    const fleet = new Fleet({ cwd: "/repo", runner });
+    fleet.loadPlan(plan([task("a")]));
+    await fleet.start();
+
+    expect(received[0]!.fileLock).toBeNull();
+    expect(received[0]!.lockContext).toBeUndefined();
   });
 });
