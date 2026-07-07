@@ -167,6 +167,12 @@ export const oxagenSettingsSchema = z
     toolVisibility: z.record(toolVisibilitySchema).optional(),
     /** Inline named agent definitions, keyed by agent name. */
     agents: z.record(inlineAgentSchema).optional(),
+    /**
+     * When true, the interactive REPL pauses before executing each turn to show
+     * the enhanced prompt and an estimated cost, letting you edit the prompt or
+     * cancel before any work runs. Default false (turns run immediately).
+     */
+    confirmScope: z.boolean().optional(),
   })
   // Forward-compatible: sections that land in later PRs (agents, commands,
   // skills) may already be present in a user's file; pass them through rather
