@@ -40,7 +40,7 @@ export type GithubSetupQueries = {
   mostRecentMembership: (userId: string) => Promise<GithubSetupTargetRow[]>;
 };
 
-/** Build the GitHub connections (knowledge sources) URL for a workspace. */
+/** Build the GitHub connections (Knowledge → Repos) URL for a workspace. */
 export function buildSourcesPath(orgSlug: string, workspaceSlug: string): string {
   return `/${orgSlug}/${workspaceSlug}/knowledge/repos?setup=github`;
 }

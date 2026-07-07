@@ -18,7 +18,7 @@ afterEach(cleanup);
 
 // Mock the wizard — we just want to verify it receives open=true when button
 // is clicked; we don't want to boot the full wizard in unit tests.
-vi.mock("@/components/knowledge/sources/github-connection-wizard", () => ({
+vi.mock("@/components/knowledge/connections/github-connection-wizard", () => ({
   GitHubConnectionWizard: ({
     open,
     orgSlug,

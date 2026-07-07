@@ -216,6 +216,9 @@ importers:
       '@oxagen/iam':
         specifier: workspace:*
         version: link:../../packages/iam
+      '@oxagen/ingestion':
+        specifier: workspace:*
+        version: link:../../packages/ingestion
       '@oxagen/inngest-functions':
         specifier: workspace:*
         version: link:../../packages/inngest-functions

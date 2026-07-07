@@ -93,12 +93,19 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/handlers/register", () => ({}));
 
-// Mock the routes module for the workspace.settings.skills path builder
+// Mock the routes module for the workspace.studio.tools.* path builders the
+// actions revalidate.
 vi.mock("@/lib/routes", () => ({
   workspace: {
-    settings: {
-      skills: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-        `/${orgSlug}/${workspaceSlug}/settings/skills`,
+    studio: {
+      tools: {
+        skills: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
+          `/${orgSlug}/${workspaceSlug}/studio/tools/skills`,
+        skill: (
+          { orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string },
+          skillSlug: string,
+        ) => `/${orgSlug}/${workspaceSlug}/studio/tools/skills/${encodeURIComponent(skillSlug)}`,
+      },
     },
   },
 }));
@@ -194,7 +201,7 @@ describe("installSkill", () => {
     const [capability, payload] = mockInvoke.mock.calls[0] as [string, { skillSlug: string }];
     expect(capability).toBe("skill.workspace.install");
     expect(payload.skillSlug).toBe("summarizer");
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/research/settings/skills");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/research/studio/tools/skills");
   });
 
   it("returns ok:false when invoke throws", async () => {
@@ -311,7 +318,7 @@ describe("activateVersion", () => {
     expect(capability).toBe("skill.version.activate");
     expect(payload.skillSlug).toBe("summarizer");
     expect(payload.versionId).toBe("ver_abc123");
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/research/settings/skills");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/research/studio/tools/skills");
   });
 
   it("returns ok:false when invoke throws", async () => {

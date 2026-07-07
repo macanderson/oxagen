@@ -67,7 +67,7 @@ vi.mock("@/components/ui/menu", () => ({
   MenuSeparator: () => <hr />,
 }));
 
-import { KnowledgeSourcesClient } from "./knowledge-sources-client";
+import { KnowledgeConnectionsClient } from "./knowledge-connections-client";
 import {
   storePendingGithubConnection,
   readPendingGithubConnection,
@@ -93,16 +93,16 @@ const BASE = { orgSlug: "acme", workspaceSlug: "main" };
 
 afterEach(cleanup);
 
-describe("KnowledgeSourcesClient — row actions", () => {
+describe("KnowledgeConnectionsClient — row actions", () => {
   it("renders a row with edit and delete menu items", () => {
-    render(<KnowledgeSourcesClient connections={[CONNECTION]} {...BASE} />);
+    render(<KnowledgeConnectionsClient connections={[CONNECTION]} {...BASE} />);
     expect(screen.getByTestId("connection-row-con_pub1")).toBeTruthy();
     expect(screen.getByTestId("edit-source-con_pub1")).toBeTruthy();
     expect(screen.getByTestId("delete-source-con_pub1")).toBeTruthy();
   });
 
   it("opens the edit sheet with the selected connection", () => {
-    render(<KnowledgeSourcesClient connections={[CONNECTION]} {...BASE} />);
+    render(<KnowledgeConnectionsClient connections={[CONNECTION]} {...BASE} />);
     expect(screen.getByTestId("edit-sheet").getAttribute("data-open")).toBe("false");
     fireEvent.click(screen.getByTestId("edit-source-con_pub1"));
     const sheet = screen.getByTestId("edit-sheet");
@@ -111,7 +111,7 @@ describe("KnowledgeSourcesClient — row actions", () => {
   });
 
   it("opens the delete dialog with the selected connection", () => {
-    render(<KnowledgeSourcesClient connections={[CONNECTION]} {...BASE} />);
+    render(<KnowledgeConnectionsClient connections={[CONNECTION]} {...BASE} />);
     expect(screen.getByTestId("delete-dialog").getAttribute("data-open")).toBe("false");
     fireEvent.click(screen.getByTestId("delete-source-con_pub1"));
     const dialog = screen.getByTestId("delete-dialog");
@@ -121,7 +121,7 @@ describe("KnowledgeSourcesClient — row actions", () => {
 
   it("hides deleted connections", () => {
     render(
-      <KnowledgeSourcesClient
+      <KnowledgeConnectionsClient
         connections={[{ ...CONNECTION, status: "deleted" }]}
         {...BASE}
       />,
@@ -131,7 +131,7 @@ describe("KnowledgeSourcesClient — row actions", () => {
   });
 });
 
-describe("KnowledgeSourcesClient — GitHub wizard resume after redirect", () => {
+describe("KnowledgeConnectionsClient — GitHub wizard resume after redirect", () => {
   let replaceSpy: ReturnType<typeof vi.fn>;
   const realLocation = window.location;
 
@@ -157,7 +157,7 @@ describe("KnowledgeSourcesClient — GitHub wizard resume after redirect", () =>
     storePendingGithubConnection({ connectionId: "con_PENDING", orgSlug: "acme", workspaceSlug: "main" });
 
     render(
-      <KnowledgeSourcesClient connections={[]} {...BASE} setupConnector="github" />,
+      <KnowledgeConnectionsClient connections={[]} {...BASE} setupConnector="github" />,
     );
 
     await waitFor(() =>
@@ -173,7 +173,7 @@ describe("KnowledgeSourcesClient — GitHub wizard resume after redirect", () =>
     storePendingGithubConnection({ connectionId: "con_STALE", orgSlug: "acme", workspaceSlug: "main" });
 
     render(
-      <KnowledgeSourcesClient
+      <KnowledgeConnectionsClient
         connections={[]}
         {...BASE}
         setupConnector="github"
@@ -190,7 +190,7 @@ describe("KnowledgeSourcesClient — GitHub wizard resume after redirect", () =>
     storePendingGithubConnection({ connectionId: "con_X", orgSlug: "acme", workspaceSlug: "research" });
 
     render(
-      <KnowledgeSourcesClient connections={[]} {...BASE} setupConnector="github" />,
+      <KnowledgeConnectionsClient connections={[]} {...BASE} setupConnector="github" />,
     );
 
     await waitFor(() =>
@@ -200,7 +200,7 @@ describe("KnowledgeSourcesClient — GitHub wizard resume after redirect", () =>
 
   it("leaves the wizard at Step 1 when there is no handoff and no URL id", () => {
     render(
-      <KnowledgeSourcesClient connections={[]} {...BASE} setupConnector="github" />,
+      <KnowledgeConnectionsClient connections={[]} {...BASE} setupConnector="github" />,
     );
     expect(screen.getByTestId("wizard").getAttribute("data-initial-connection-id")).toBe("");
     expect(replaceSpy).not.toHaveBeenCalled();

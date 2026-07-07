@@ -37,6 +37,16 @@ vi.mock("next/link", () => ({
   }) => <a href={href}>{children}</a>,
 }));
 
+// The embedded NewSkillDialog uses next/navigation + toast; the panel tests
+// never open it, so shallow mocks are enough.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
+
+vi.mock("@/components/ui/toast", () => ({
+  useToast: () => ({ add: vi.fn() }),
+}));
+
 vi.mock("@/components/ui/badge", () => ({
   Badge: ({
     children,
@@ -162,7 +172,10 @@ function makeSkill(overrides: Partial<SkillRow> = {}): SkillRow {
 const DEFAULT_PROPS = {
   orgSlug: "acme",
   workspaceSlug: "main",
-};
+  canManage: true,
+  createAction: vi.fn(async () => ({ ok: true as const, slug: "new-skill" })),
+  draftAction: vi.fn(async () => ({ ok: false as const, error: "not wired in tests" })),
+} satisfies Partial<React.ComponentProps<typeof SkillsPanel>>;
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -333,7 +346,7 @@ describe("SkillsPanel", () => {
   });
 
   // (j) Detail link has correct href
-  it("detail link points to the correct skill settings URL", () => {
+  it("detail link points to the correct skill detail URL", () => {
     render(
       <SkillsPanel
         {...DEFAULT_PROPS}
@@ -344,7 +357,7 @@ describe("SkillsPanel", () => {
     const link = screen.getByRole("link");
     expect(link).toHaveAttribute(
       "href",
-      "/acme/main/settings/skills/summarize-text",
+      "/acme/main/studio/tools/skills/summarize-text",
     );
   });
 

@@ -57,17 +57,17 @@ afterEach(() => {
 
 describe("MobileBottomBar — primary tabs", () => {
   it("renders the workspace destinations as client-routed tabs with resolved hrefs", () => {
-    // Workspace mode has five nav items (ask, knowledge, activity, marketplace,
-    // settings); only the first four (MAX_BAR_ITEMS) fit the bar — Settings
-    // overflows into the "More" sheet, covered separately below.
+    // Workspace mode has seven nav items (ask, knowledge, activity, agents,
+    // agent-tools, marketplace, settings); only the first four (MAX_BAR_ITEMS)
+    // fit the bar — the rest overflow into the "More" sheet, covered below.
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(within(nav).getByRole("link", { name: "Ask" })).toHaveAttribute("href", "/acme/prod/ask");
     expect(within(nav).getByRole("link", { name: "Knowledge" })).toHaveAttribute("href", "/acme/prod/knowledge");
     expect(within(nav).getByRole("link", { name: "Activity" })).toHaveAttribute("href", "/acme/prod/activity");
-    expect(within(nav).getByRole("link", { name: "Marketplace" })).toHaveAttribute(
+    expect(within(nav).getByRole("link", { name: "Agents" })).toHaveAttribute(
       "href",
-      "/acme/prod/settings/plugins",
+      "/acme/prod/studio/agents",
     );
   });
 
@@ -77,11 +77,13 @@ describe("MobileBottomBar — primary tabs", () => {
     expect(screen.getByRole("link", { name: "Knowledge" })).not.toHaveAttribute("aria-current");
   });
 
-  it("overflows Settings into the More sheet while the other four destinations stay in the bar", () => {
+  it("overflows Agent Tools, Marketplace, and Settings into the More sheet while the first four destinations stay in the bar", () => {
     render(<MobileBottomBar ctx={wsCtx} user={user} />);
     const nav = screen.getByRole("navigation", { name: /mobile navigation/i });
     expect(screen.getByRole("button", { name: /more navigation/i })).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: "Marketplace" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Agents" })).toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: "Agent Tools" })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: "Marketplace" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
   });
 });

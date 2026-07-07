@@ -37,7 +37,7 @@ function makeQueries(overrides: {
 }
 
 describe("buildSourcesPath", () => {
-  it("builds the knowledge sources URL with the github setup marker", () => {
+  it("builds the repos connections URL with the github setup marker", () => {
     expect(buildSourcesPath("acme", "research")).toBe(
       "/acme/research/knowledge/repos?setup=github",
     );

@@ -1,18 +1,16 @@
 import { redirect } from "next/navigation";
 import { workspace } from "@/lib/routes";
 
-interface PageProps {
-  params: Promise<{ orgSlug: string; workspaceSlug: string }>;
-}
-
 /**
- * Settings → Plugins has been promoted to a first-class Marketplace surface
- * (Browse / Installed / MCP Servers tabs). This route now redirects to the
- * Marketplace root, which itself redirects to the first tab (Browse) — see
- * marketplace/layout.tsx, marketplace/page.tsx, and the `defaultTab` map in
- * @/lib/routes.
+ * Settings → Plugins (moved twice). Plugin management became the Marketplace,
+ * then consolidated into Studio → Agent Tools: installed capability packs live
+ * under the Capabilities tab. Kept as a redirect for old links/bookmarks.
  */
-export default async function WorkspacePluginsRedirectPage({ params }: PageProps) {
+export default async function WorkspacePluginsRedirectPage({
+  params,
+}: {
+  params: Promise<{ orgSlug: string; workspaceSlug: string }>;
+}) {
   const { orgSlug, workspaceSlug } = await params;
-  redirect(workspace.marketplace.root({ orgSlug, workspaceSlug }));
+  redirect(workspace.studio.tools.capabilities({ orgSlug, workspaceSlug }));
 }

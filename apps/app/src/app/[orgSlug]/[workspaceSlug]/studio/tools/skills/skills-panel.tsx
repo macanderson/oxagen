@@ -1,10 +1,12 @@
 "use client";
 /**
- * skills-panel.tsx — Workspace → Settings → Skills list panel.
+ * skills-panel.tsx — Workspace → Studio → Skills list panel.
  *
  * Renders the installed skills table with name, source/provenance, active
- * version, last updated, last used, and usage count. Links through to the
- * per-skill detail view.
+ * version, last updated, last used, and usage count, plus a "+ New skill"
+ * action that opens the create dialog. Links through to the per-skill
+ * detail view. Adapted from settings/skills/skills-panel.tsx (same table),
+ * moved under Studio and extended with the create flow.
  */
 import * as React from "react";
 import Link from "next/link";
@@ -12,7 +14,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ExternalLink, Search, Sparkles } from "lucide-react";
+import { ExternalLink, Plus, Search, Sparkles } from "lucide-react";
+import {
+  NewSkillDialog,
+  type CreateSkillAction,
+  type DraftSkillAction,
+} from "./new-skill-dialog";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -32,6 +39,9 @@ interface SkillsPanelProps {
   orgSlug: string;
   workspaceSlug: string;
   skills: SkillRow[];
+  canManage: boolean;
+  createAction: CreateSkillAction;
+  draftAction: DraftSkillAction;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -56,8 +66,16 @@ function sourceBadgeVariant(source: string): "default" | "secondary" | "outline"
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function SkillsPanel({ orgSlug, workspaceSlug, skills }: SkillsPanelProps) {
+export function SkillsPanel({
+  orgSlug,
+  workspaceSlug,
+  skills,
+  canManage,
+  createAction,
+  draftAction,
+}: SkillsPanelProps) {
   const [filter, setFilter] = React.useState("");
+  const [newSkillOpen, setNewSkillOpen] = React.useState(false);
 
   const filtered = React.useMemo(
     () =>
@@ -85,8 +103,20 @@ export function SkillsPanel({ orgSlug, workspaceSlug, skills }: SkillsPanelProps
             data-testid="skills-search-input"
           />
         </div>
-        <div className="text-sm text-muted-foreground">
-          {filtered.length} skill{filtered.length !== 1 ? "s" : ""}
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-muted-foreground">
+            {filtered.length} skill{filtered.length !== 1 ? "s" : ""}
+          </div>
+          {canManage && (
+            <Button
+              size="sm"
+              onClick={() => setNewSkillOpen(true)}
+              data-testid="new-skill-btn"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+              New skill
+            </Button>
+          )}
         </div>
       </div>
 
@@ -164,7 +194,7 @@ export function SkillsPanel({ orgSlug, workspaceSlug, skills }: SkillsPanelProps
                       data-testid={`skill-detail-link-${skill.slug}`}
                       render={
                         <Link
-                          href={`/${orgSlug}/${workspaceSlug}/settings/skills/${encodeURIComponent(skill.slug)}`}
+                          href={`/${orgSlug}/${workspaceSlug}/studio/tools/skills/${encodeURIComponent(skill.slug)}`}
                         />
                       }
                     >
@@ -176,6 +206,17 @@ export function SkillsPanel({ orgSlug, workspaceSlug, skills }: SkillsPanelProps
             </tbody>
           </table>
         </div>
+      )}
+
+      {canManage && (
+        <NewSkillDialog
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          action={createAction}
+          draftAction={draftAction}
+          open={newSkillOpen}
+          onOpenChange={setNewSkillOpen}
+        />
       )}
     </div>
   );

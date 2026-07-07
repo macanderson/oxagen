@@ -25,7 +25,7 @@ import { resolveStudioScope } from "@/lib/studio/scope";
 const NOT_AUTHORIZED = "Only workspace owners and admins can manage skills.";
 
 function skillsPath(ctx: Required<ScopeContext>): string {
-  return workspace.studio.skills(ctx);
+  return workspace.studio.tools.skills(ctx);
 }
 
 // ── installSkill ──────────────────────────────────────────────────────────────
@@ -281,7 +281,7 @@ export async function createSkillAction(
     const typed = out as { slug: string; created: boolean };
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
     revalidatePath(skillsPath(routeCtx));
-    revalidatePath(workspace.studio.skill(routeCtx, typed.slug));
+    revalidatePath(workspace.studio.tools.skill(routeCtx, typed.slug));
     return { ok: true, slug: typed.slug };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Create failed" };
