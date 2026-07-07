@@ -29,7 +29,10 @@ import { BudgetControl } from "./budget-control";
 import { ChatAgentToolbar } from "./chat-agent-toolbar";
 import { ChatContextBar } from "./chat-context-bar";
 import { SlashCommandMenu } from "./slash-command-menu";
-import { matchSlashCommands, type SlashCommand } from "@oxagen/ai";
+// Import from the client-safe subpath, NOT the @oxagen/ai barrel: the barrel
+// pulls telemetry/clickhouse/opentelemetry (async_hooks) into the client bundle
+// and breaks the build. slash-commands.ts is dependency-free.
+import { matchSlashCommands, type SlashCommand } from "@oxagen/ai/slash-commands";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
 import {

@@ -2282,3 +2282,195 @@ describe("MessageComposer — code mode", () => {
     expect(fd.get("code")).toBeNull();
   });
 });
+
+describe("MessageComposer — pin context & slash commands", () => {
+  // Pin persistence writes to localStorage keyed by a workspace-scoped draft
+  // key. Clear it between tests so a pin written by one test can't rehydrate
+  // (and auto-select/auto-pin) in the next.
+  beforeEach(() => {
+    try {
+      window.localStorage.clear();
+    } catch {
+      // jsdom without a real localStorage — pinning degrades to in-memory,
+      // which is exactly what these single-render assertions exercise.
+    }
+  });
+
+  it("renders the chat context bar when NOT in code mode and repos are available", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    expect(screen.getByTestId("chat-context-bar")).toBeInTheDocument();
+    // The context bar's selectors use the "Pinned …" labels; the code-mode
+    // toolbar's "Select repository" selector must NOT be present yet.
+    expect(container.querySelector('[aria-label="Pinned repository"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Select repository"]')).toBeNull();
+  });
+
+  it("swaps the context bar for the code-mode toolbar once code mode is on", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    expect(screen.getByTestId("chat-context-bar")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
+
+    // Code mode replaces the pin bar with the sandbox toolbar (its selector
+    // uses the default "Select repository" label).
+    expect(container.querySelector('[aria-label="Select repository"]')).not.toBeNull();
+    expect(screen.queryByTestId("chat-context-bar")).not.toBeInTheDocument();
+  });
+
+  it("opens the slash-command menu when the input is a lone slash token", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "/");
+    expect(await screen.findByTestId("slash-command-menu")).toBeInTheDocument();
+  });
+
+  it("filters the slash menu to the matching command as the query narrows", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "/ci");
+    const options = await screen.findAllByRole("option");
+    expect(options).toHaveLength(1);
+    expect(options[0]).toHaveTextContent("/ci");
+  });
+
+  it("closes the slash menu when the input is no longer a lone slash token", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    const textbox = screen.getByRole("textbox");
+    await userEvent.type(textbox, "/");
+    expect(screen.getByTestId("slash-command-menu")).toBeInTheDocument();
+    // Typing normal text after the slash (a space breaks the lone-slash token).
+    await userEvent.type(textbox, " deploy the app");
+    await waitFor(() =>
+      expect(screen.queryByTestId("slash-command-menu")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("closes the slash menu when Escape is pressed", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    const textbox = screen.getByRole("textbox");
+    await userEvent.type(textbox, "/");
+    expect(screen.getByTestId("slash-command-menu")).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(screen.queryByTestId("slash-command-menu")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("encodes pinnedContext in FormData when a repo is pinned (not code mode)", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    // Select the repo via the context bar's repo selector (the first Select;
+    // the shared Select mock fires onValueChange("high") === CODE_REPO.key).
+    const repoSelect = screen.getAllByTestId("select")[0];
+    expect(repoSelect).toBeDefined();
+    await userEvent.click(repoSelect!);
+
+    // Pin the selection — enabled now that a repo is chosen.
+    const pinButton = screen.getByTestId("pin-to-chat");
+    await waitFor(() => expect(pinButton).not.toBeDisabled());
+    await userEvent.click(pinButton);
+
+    await userEvent.type(screen.getByRole("textbox"), "look at this repo");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    const pinned = JSON.parse(fd.get("pinnedContext") as string) as {
+      repo: { connectionId: string; owner: string; name: string; defaultBranch: string | null } | null;
+      environment: { id: string; name: string } | null;
+    };
+    expect(pinned.repo).toEqual({
+      connectionId: "con_1",
+      owner: "acme",
+      name: "widgets",
+      defaultBranch: "main",
+    });
+  });
+
+  it("does NOT encode pinnedContext when nothing is pinned", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    // Select a repo but leave it unpinned — pinnedContext only rides along when
+    // the selection is explicitly pinned.
+    const repoSelect = screen.getAllByTestId("select")[0];
+    expect(repoSelect).toBeDefined();
+    await userEvent.click(repoSelect!);
+
+    await userEvent.type(screen.getByRole("textbox"), "hello");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    expect(fd.get("pinnedContext")).toBeNull();
+  });
+});

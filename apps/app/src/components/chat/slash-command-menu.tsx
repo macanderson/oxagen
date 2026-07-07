@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { SlashCommand } from "@oxagen/ai";
+import type { SlashCommand } from "@oxagen/ai/slash-commands";
 import { cn } from "@/lib/utils";
 
 interface SlashCommandMenuProps {
