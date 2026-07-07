@@ -14,14 +14,20 @@
  *
  * All calls go through the shared org-scoped API client in lib/api.ts — no
  * bespoke HTTP here. GET routes use apiGetOrThrow, POST routes use
- * apiPostOrThrow; both throw ApiError on failure, which the CLI's top-level
- * fatal handler (index.tsx) renders as a clean `Error: <message>` line.
+ * apiPostOrThrow.
+ *
+ * Output discipline (ADR-023 §4): every handler takes a CommandWriter (default
+ * real stdout/stderr; the REPL passes a capture writer) and routes through
+ * createOutput. `--json` emits one single-line JSON value on stdout carrying
+ * the exact legacy payload shape; pretty mode renders the human table/summary
+ * on stdout; and every failure — a client-side usage error (exit 2) or an API
+ * failure (exit 1) — is a uniform stderr error line that never touches stdout.
  */
 import { readFileSync } from "fs";
 import { apiGetOrThrow, apiPostOrThrow, printTable } from "../lib/api.js";
 import { formatUsd } from "../agent/rate-card.js";
-
-const out = (s: string): void => void process.stdout.write(s + "\n");
+import { createOutput } from "../lib/output.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
 // ── Shared output shapes (mirror the eval.* contract outputs) ────────────────
 
@@ -89,30 +95,35 @@ interface EvalRunResultItem {
   rationale: string;
 }
 
-function printJsonOr<T>(value: T, json: boolean | undefined, render: (v: T) => void): void {
-  if (json) {
-    out(JSON.stringify(value, null, 2));
-    return;
-  }
-  render(value);
-}
-
 // ── eval.dataset.list ─────────────────────────────────────────────────────────
 
-export async function evalDatasetList(opts: { json?: boolean } = {}): Promise<void> {
-  const { datasets } = await apiGetOrThrow<{ datasets: EvalDatasetSummary[] }>(
-    "eval/datasets",
+export async function evalDatasetList(
+  opts: { json?: boolean } = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const cmd = createOutput({ json: opts.json }, writer);
+  let result: { datasets: EvalDatasetSummary[] };
+  try {
+    result = await apiGetOrThrow<{ datasets: EvalDatasetSummary[] }>("eval/datasets");
+  } catch (err) {
+    cmd.error(err, "api");
+    return;
+  }
+  const { datasets } = result;
+  // Legacy --json shape: the bare array of datasets.
+  if (cmd.isJson) {
+    cmd.data(datasets);
+    return;
+  }
+  if (datasets.length === 0) {
+    writer.write("No eval datasets yet. Create one with `oxagen eval dataset-create <name>`.");
+    return;
+  }
+  printTable(
+    ["NAME", "SLUG", "SOURCE", "ITEMS", "PUBLIC ID"],
+    datasets.map((d) => [d.name, d.slug, d.source, String(d.itemCount), d.datasetId]),
+    writer,
   );
-  printJsonOr(datasets, opts.json, (rows) => {
-    if (rows.length === 0) {
-      out("No eval datasets yet. Create one with `oxagen eval dataset-create <name>`.");
-      return;
-    }
-    printTable(
-      ["NAME", "SLUG", "SOURCE", "ITEMS", "PUBLIC ID"],
-      rows.map((d) => [d.name, d.slug, d.source, String(d.itemCount), d.datasetId]),
-    );
-  });
 }
 
 // ── eval.dataset.get ──────────────────────────────────────────────────────────
@@ -120,34 +131,55 @@ export async function evalDatasetList(opts: { json?: boolean } = {}): Promise<vo
 export async function evalDatasetGet(
   id: string,
   opts: { limit?: number; cursor?: string; json?: boolean } = {},
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
-  const result = await apiGetOrThrow<{
+  const cmd = createOutput({ json: opts.json }, writer);
+  let result: {
     dataset: EvalDatasetSummary;
     items: EvalDatasetItem[];
     nextCursor: string | null;
-  }>("eval/datasets/get", {
-    datasetPublicId: id,
-    limit: opts.limit,
-    cursor: opts.cursor,
-  });
-  printJsonOr(result, opts.json, ({ dataset, items, nextCursor }) => {
-    out(`${dataset.name} (${dataset.slug}) — ${dataset.itemCount} item(s), source: ${dataset.source}`);
-    if (dataset.description) out(dataset.description);
-    out("");
-    if (items.length === 0) {
-      out("No items on this page.");
-    } else {
-      printTable(
-        ["ITEM ID", "INPUT", "EXPECTED"],
-        items.map((i) => [
-          i.itemId,
-          truncate(i.input, 60),
-          i.expectedOutput ? truncate(i.expectedOutput, 40) : "—",
-        ]),
-      );
-    }
-    if (nextCursor) out(`\nMore items available — pass --cursor ${nextCursor} for the next page.`);
-  });
+  };
+  try {
+    result = await apiGetOrThrow<{
+      dataset: EvalDatasetSummary;
+      items: EvalDatasetItem[];
+      nextCursor: string | null;
+    }>("eval/datasets/get", {
+      datasetPublicId: id,
+      limit: opts.limit,
+      cursor: opts.cursor,
+    });
+  } catch (err) {
+    cmd.error(err, "api");
+    return;
+  }
+  // Legacy --json shape: the full { dataset, items, nextCursor } envelope.
+  if (cmd.isJson) {
+    cmd.data(result);
+    return;
+  }
+  const { dataset, items, nextCursor } = result;
+  writer.write(
+    `${dataset.name} (${dataset.slug}) — ${dataset.itemCount} item(s), source: ${dataset.source}`,
+  );
+  if (dataset.description) writer.write(dataset.description);
+  writer.write("");
+  if (items.length === 0) {
+    writer.write("No items on this page.");
+  } else {
+    printTable(
+      ["ITEM ID", "INPUT", "EXPECTED"],
+      items.map((i) => [
+        i.itemId,
+        truncate(i.input, 60),
+        i.expectedOutput ? truncate(i.expectedOutput, 40) : "—",
+      ]),
+      writer,
+    );
+  }
+  if (nextCursor) {
+    writer.write(`\nMore items available — pass --cursor ${nextCursor} for the next page.`);
+  }
 }
 
 // ── eval.dataset.create ───────────────────────────────────────────────────────
@@ -155,14 +187,20 @@ export async function evalDatasetGet(
 export async function evalDatasetCreate(
   name: string,
   opts: { slug?: string; description?: string; json?: boolean } = {},
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
-  const result = await apiPostOrThrow<{ datasetId: string; publicId: string; slug: string }>(
-    "eval/datasets",
-    { name, slug: opts.slug, description: opts.description },
-  );
-  printJsonOr(result, opts.json, (r) => {
-    out(`Created eval dataset "${name}" (${r.slug}) — ${r.publicId}`);
-  });
+  const cmd = createOutput({ json: opts.json }, writer);
+  let result: { datasetId: string; publicId: string; slug: string };
+  try {
+    result = await apiPostOrThrow<{ datasetId: string; publicId: string; slug: string }>(
+      "eval/datasets",
+      { name, slug: opts.slug, description: opts.description },
+    );
+  } catch (err) {
+    cmd.error(err, "api");
+    return;
+  }
+  cmd.data(result, () => `Created eval dataset "${name}" (${result.slug}) — ${result.publicId}`);
 }
 
 // ── eval.dataset.item.add ─────────────────────────────────────────────────────
@@ -182,22 +220,38 @@ export async function evalDatasetItemAdd(
     file?: string;
     json?: boolean;
   } = {},
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
-  const items = resolveItems(opts);
-  if (items.length === 0) {
-    process.stderr.write(
-      "Provide --input <text> (optionally --expected <text> --metadata <json>), or --file <path.json> with an array of items.\n",
-    );
-    process.exitCode = 1;
+  const cmd = createOutput({ json: opts.json }, writer);
+  let items: EvalItemInput[];
+  try {
+    items = resolveItems(opts);
+  } catch (err) {
+    // A bad --file (missing, non-JSON, or not an array) or bad --metadata JSON
+    // is a client-side input problem, not an API failure.
+    process.exitCode = 2;
+    cmd.error(err, "usage");
     return;
   }
-  const result = await apiPostOrThrow<{ datasetId: string; added: number; itemCount: number }>(
-    "eval/datasets/items",
-    { datasetPublicId: id, items },
-  );
-  printJsonOr(result, opts.json, (r) => {
-    out(`Added ${r.added} item(s) to dataset ${id} — ${r.itemCount} total.`);
-  });
+  if (items.length === 0) {
+    process.exitCode = 2;
+    cmd.error(
+      "Provide --input <text> (optionally --expected <text> --metadata <json>), or --file <path.json> with an array of items.",
+      "usage",
+    );
+    return;
+  }
+  let result: { datasetId: string; added: number; itemCount: number };
+  try {
+    result = await apiPostOrThrow<{ datasetId: string; added: number; itemCount: number }>(
+      "eval/datasets/items",
+      { datasetPublicId: id, items },
+    );
+  } catch (err) {
+    cmd.error(err, "api");
+    return;
+  }
+  cmd.data(result, () => `Added ${result.added} item(s) to dataset ${id} — ${result.itemCount} total.`);
 }
 
 function resolveItems(opts: {
@@ -238,25 +292,38 @@ export async function evalDatasetFromTraces(
     limit?: number;
     json?: boolean;
   } = {},
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
-  const result = await apiPostOrThrow<{
+  const cmd = createOutput({ json: opts.json }, writer);
+  let result: {
     datasetId: string;
     publicId: string;
     slug: string;
     itemCount: number;
-  }>("eval/datasets/from-traces", {
-    name,
-    slug: opts.slug,
-    description: opts.description,
-    capabilityName: opts.capability,
-    sinceHours: opts.sinceHours,
-    limit: opts.limit,
-  });
-  printJsonOr(result, opts.json, (r) => {
-    out(
-      `Captured ${r.itemCount} item(s) from metered traces into "${name}" (${r.slug}) — ${r.publicId}`,
-    );
-  });
+  };
+  try {
+    result = await apiPostOrThrow<{
+      datasetId: string;
+      publicId: string;
+      slug: string;
+      itemCount: number;
+    }>("eval/datasets/from-traces", {
+      name,
+      slug: opts.slug,
+      description: opts.description,
+      capabilityName: opts.capability,
+      sinceHours: opts.sinceHours,
+      limit: opts.limit,
+    });
+  } catch (err) {
+    cmd.error(err, "api");
+    return;
+  }
+  cmd.data(
+    result,
+    () =>
+      `Captured ${result.itemCount} item(s) from metered traces into "${name}" (${result.slug}) — ${result.publicId}`,
+  );
 }
 
 // ── eval.run.start ────────────────────────────────────────────────────────────
@@ -273,31 +340,46 @@ export async function evalRunStart(
     maxItems?: number;
     json?: boolean;
   } = {},
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
+  const cmd = createOutput({ json: opts.json }, writer);
   const target: EvalTarget = opts.agent
     ? { kind: "agent", agentSlug: opts.agent }
     : { kind: "model", model: opts.model, systemPrompt: opts.systemPrompt };
-  const result = await apiPostOrThrow<{ runId: string; status: "pending"; itemCount: number }>(
-    "eval/runs",
-    {
-      datasetPublicId: datasetId,
-      target,
-      judgeModel: opts.judgeModel,
-      name: opts.name,
-      passThreshold: opts.passThreshold,
-      maxItems: opts.maxItems,
-    },
+  let result: { runId: string; status: "pending"; itemCount: number };
+  try {
+    result = await apiPostOrThrow<{ runId: string; status: "pending"; itemCount: number }>(
+      "eval/runs",
+      {
+        datasetPublicId: datasetId,
+        target,
+        judgeModel: opts.judgeModel,
+        name: opts.name,
+        passThreshold: opts.passThreshold,
+        maxItems: opts.maxItems,
+      },
+    );
+  } catch (err) {
+    cmd.error(err, "api");
+    return;
+  }
+  cmd.data(
+    result,
+    () =>
+      `Started eval run ${result.runId} — ${result.itemCount} item(s) queued (status: ${result.status}).\n` +
+      `Poll with: oxagen eval run-status ${result.runId}`,
   );
-  printJsonOr(result, opts.json, (r) => {
-    out(`Started eval run ${r.runId} — ${r.itemCount} item(s) queued (status: ${r.status}).`);
-    out(`Poll with: oxagen eval run-status ${r.runId}`);
-  });
 }
 
 // ── eval.run.status ───────────────────────────────────────────────────────────
 
-export async function evalRunStatus(runId: string, opts: { json?: boolean } = {}): Promise<void> {
-  const result = await apiGetOrThrow<{
+export async function evalRunStatus(
+  runId: string,
+  opts: { json?: boolean } = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const cmd = createOutput({ json: opts.json }, writer);
+  let result: {
     runId: string;
     status: EvalRunStatusValue;
     itemCount: number;
@@ -305,44 +387,79 @@ export async function evalRunStatus(runId: string, opts: { json?: boolean } = {}
     failedCount: number;
     avgScore: number | null;
     failureReason: string | null;
-  }>("eval/runs/status", { runPublicId: runId });
-  printJsonOr(result, opts.json, (r) => {
-    out(`Run ${r.runId}: ${r.status}`);
-    out(`  progress: ${r.completedCount}/${r.itemCount} completed, ${r.failedCount} failed`);
-    out(`  avg score: ${r.avgScore === null ? "—" : r.avgScore.toFixed(3)}`);
-    if (r.failureReason) out(`  failure reason: ${r.failureReason}`);
+  };
+  try {
+    result = await apiGetOrThrow<{
+      runId: string;
+      status: EvalRunStatusValue;
+      itemCount: number;
+      completedCount: number;
+      failedCount: number;
+      avgScore: number | null;
+      failureReason: string | null;
+    }>("eval/runs/status", { runPublicId: runId });
+  } catch (err) {
+    cmd.error(err, "api");
+    return;
+  }
+  cmd.data(result, () => {
+    const lines = [
+      `Run ${result.runId}: ${result.status}`,
+      `  progress: ${result.completedCount}/${result.itemCount} completed, ${result.failedCount} failed`,
+      `  avg score: ${result.avgScore === null ? "—" : result.avgScore.toFixed(3)}`,
+    ];
+    if (result.failureReason) lines.push(`  failure reason: ${result.failureReason}`);
+    return lines.join("\n");
   });
 }
 
 // ── eval.run.get ──────────────────────────────────────────────────────────────
 
-export async function evalRunGet(runId: string, opts: { json?: boolean } = {}): Promise<void> {
-  const result = await apiGetOrThrow<{ run: EvalRunSummary; results: EvalRunResultItem[] }>(
-    "eval/runs/get",
-    { runPublicId: runId },
+export async function evalRunGet(
+  runId: string,
+  opts: { json?: boolean } = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const cmd = createOutput({ json: opts.json }, writer);
+  let result: { run: EvalRunSummary; results: EvalRunResultItem[] };
+  try {
+    result = await apiGetOrThrow<{ run: EvalRunSummary; results: EvalRunResultItem[] }>(
+      "eval/runs/get",
+      { runPublicId: runId },
+    );
+  } catch (err) {
+    cmd.error(err, "api");
+    return;
+  }
+  // Legacy --json shape: the full { run, results } envelope.
+  if (cmd.isJson) {
+    cmd.data(result);
+    return;
+  }
+  const { run, results } = result;
+  writer.write(
+    `Run ${run.runId} (${run.name ?? "unnamed"}) — ${run.status} — ${run.completedCount}/${run.itemCount} completed, avg score ${run.avgScore === null ? "—" : run.avgScore.toFixed(3)}`,
   );
-  printJsonOr(result, opts.json, ({ run, results }) => {
-    out(
-      `Run ${run.runId} (${run.name ?? "unnamed"}) — ${run.status} — ${run.completedCount}/${run.itemCount} completed, avg score ${run.avgScore === null ? "—" : run.avgScore.toFixed(3)}`,
-    );
-    out(`  target: ${run.target.kind === "agent" ? `agent:${run.target.agentSlug}` : `model:${run.target.model ?? "(default)"}`} · judge: ${run.judgeModel} · pass threshold: ${run.passThreshold}`);
-    out("");
-    if (results.length === 0) {
-      out("No item results yet.");
-      return;
-    }
-    printTable(
-      ["ITEM ID", "SCORE", "PASS", "TOKENS", "COST", "STATUS"],
-      results.map((r) => [
-        r.itemId,
-        r.score.toFixed(3),
-        r.passed ? "✓" : "✗",
-        `${r.inputTokens}→${r.outputTokens}`,
-        formatUsd(r.costUsdMicros / 1_000_000),
-        r.status,
-      ]),
-    );
-  });
+  writer.write(
+    `  target: ${run.target.kind === "agent" ? `agent:${run.target.agentSlug}` : `model:${run.target.model ?? "(default)"}`} · judge: ${run.judgeModel} · pass threshold: ${run.passThreshold}`,
+  );
+  writer.write("");
+  if (results.length === 0) {
+    writer.write("No item results yet.");
+    return;
+  }
+  printTable(
+    ["ITEM ID", "SCORE", "PASS", "TOKENS", "COST", "STATUS"],
+    results.map((r) => [
+      r.itemId,
+      r.score.toFixed(3),
+      r.passed ? "✓" : "✗",
+      `${r.inputTokens}→${r.outputTokens}`,
+      formatUsd(r.costUsdMicros / 1_000_000),
+      r.status,
+    ]),
+    writer,
+  );
 }
 
 function truncate(s: string, max: number): string {
