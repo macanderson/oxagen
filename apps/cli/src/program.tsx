@@ -373,25 +373,28 @@ export function buildProgram(): Command {
     .command("start")
     .description("Start the context daemon (warm indexes, code graph)")
     .option("--foreground", "Run in foreground (don't daemonize)", false)
-    .action(async (opts: { foreground: boolean }) => {
+    .option("--json", "Output the start result as JSON", false)
+    .action(async (opts: { foreground: boolean; json: boolean }) => {
       const { startDaemon } = await import("./daemon/lifecycle.js");
-      await startDaemon({ foreground: opts.foreground });
+      await startDaemon({ foreground: opts.foreground, json: opts.json });
     });
 
   daemon
     .command("stop")
     .description("Stop the running context daemon")
-    .action(async () => {
+    .option("--json", "Output the stop result as JSON", false)
+    .action(async (opts: { json: boolean }) => {
       const { stopDaemon } = await import("./daemon/lifecycle.js");
-      await stopDaemon();
+      await stopDaemon({ json: opts.json });
     });
 
   daemon
     .command("status")
     .description("Show daemon health and uptime")
-    .action(async () => {
+    .option("--json", "Output the health envelope as JSON", false)
+    .action(async (opts: { json: boolean }) => {
       const { daemonStatus } = await import("./daemon/lifecycle.js");
-      await daemonStatus();
+      await daemonStatus({ json: opts.json });
     });
 
   const daemonSession = daemon
