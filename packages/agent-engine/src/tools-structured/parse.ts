@@ -145,9 +145,11 @@ function cleanReason(msg: string): string {
 /**
  * Parse vitest's `--reporter=json` (jest-compatible) output into a bounded,
  * typed summary. On unparseable input returns `{ parseError: true }` with zeroed
- * counts so the caller can fall back to exit-code + stderr tail.
+ * counts so the caller can fall back to exit-code + stderr tail. `maxFailures`
+ * (default {@link MAX_TEST_FAILURES}) lets the tool raise the cap for a higher
+ * verbosity level; `truncatedFailures` reflects the applied cap.
  */
-export function parseVitestJson(raw: string): VitestParseResult {
+export function parseVitestJson(raw: string, maxFailures: number = MAX_TEST_FAILURES): VitestParseResult {
   const obj = extractJsonObject(raw) as VitestJson | null;
   if (!obj || typeof obj !== "object" || !Array.isArray(obj.testResults)) {
     return {
@@ -196,8 +198,8 @@ export function parseVitestJson(raw: string): VitestParseResult {
     failed: obj.numFailedTests ?? allFailures.length,
     skipped: (obj.numPendingTests ?? 0) + (obj.numTodoTests ?? 0),
     durationMs,
-    failures: allFailures.slice(0, MAX_TEST_FAILURES),
-    truncatedFailures: allFailures.length > MAX_TEST_FAILURES,
+    failures: allFailures.slice(0, maxFailures),
+    truncatedFailures: allFailures.length > maxFailures,
   };
 }
 
@@ -288,10 +290,11 @@ const TSC_ERROR_RE = /^(.+?)\((\d+),(\d+)\):\s+error\s+(TS\d+):\s+(.*)$/;
 /**
  * Parse `tsc --pretty false` output into deduped, file-grouped errors. Identical
  * (file+line+code+message) lines collapse to one; the result is grouped by file
- * (stable order of first appearance) and capped at {@link MAX_BUILD_ERRORS}.
- * `errorCount` is the total distinct error count BEFORE the cap.
+ * (stable order of first appearance) and capped at `maxErrors` (default
+ * {@link MAX_BUILD_ERRORS}, raised by higher verbosity). `errorCount` is the
+ * total distinct error count BEFORE the cap.
  */
-export function parseTscErrors(output: string): TscParseResult {
+export function parseTscErrors(output: string, maxErrors: number = MAX_BUILD_ERRORS): TscParseResult {
   const seen = new Set<string>();
   const byFile = new Map<string, BuildError[]>();
   let total = 0;
@@ -316,7 +319,7 @@ export function parseTscErrors(output: string): TscParseResult {
   const errors: BuildError[] = [];
   for (const bucket of byFile.values()) {
     for (const e of bucket) {
-      if (errors.length >= MAX_BUILD_ERRORS) break;
+      if (errors.length >= maxErrors) break;
       errors.push(e);
     }
   }
@@ -433,8 +436,12 @@ export function parseDiffU0(
   return out;
 }
 
-/** Combine numstat + U0 into the bounded {@link DiffSummary}. Pure. */
-export function combineDiff(numstatOut: string, u0Out: string): DiffSummary {
+/**
+ * Combine numstat + U0 into the bounded {@link DiffSummary}. `maxFiles` (default
+ * {@link MAX_DIFF_FILES}, raised by higher verbosity) caps the file list; totals
+ * always reflect every changed file, not just the shown page. Pure.
+ */
+export function combineDiff(numstatOut: string, u0Out: string, maxFiles: number = MAX_DIFF_FILES): DiffSummary {
   const stats = parseNumstat(numstatOut);
   const meta = parseDiffU0(u0Out);
   const paths = new Set<string>([...stats.keys(), ...meta.keys()]);
@@ -459,9 +466,9 @@ export function combineDiff(numstatOut: string, u0Out: string): DiffSummary {
     (a, b) => b.additions + b.deletions - (a.additions + a.deletions) || a.path.localeCompare(b.path),
   );
   return {
-    files: files.slice(0, MAX_DIFF_FILES),
+    files: files.slice(0, maxFiles),
     totals: { files: paths.size, additions: totalAdd, deletions: totalDel },
-    truncated: paths.size > MAX_DIFF_FILES,
+    truncated: paths.size > maxFiles,
   };
 }
 

@@ -673,8 +673,16 @@ export function buildWorkspaceTools(
     },
   });
 
+  // Deterministic structured tools (ADR-021 §3) — test_unit_run, build_package_run,
+  // git_diff_summarize, workspace_health_check. They run tests/typecheck/diff/status
+  // and return typed, bounded output instead of the model parsing raw `bash`
+  // scrollback. They never mutate the filesystem, so they are advertised in BOTH
+  // read-write and read-only modes (unlike write_file/edit_file/bash below).
+  Object.assign(tools, buildStructuredTools(workspace, { signal, onEvent }));
+
   // Read-only mode: withhold every mutating tool so the model literally cannot
-  // change the filesystem or run commands.
+  // change the filesystem or run arbitrary commands. The structured tools above
+  // stay — they only run fixed read-only diagnostics (no file writes).
   if (opts.readOnly) {
     delete tools["write_file"];
     delete tools["edit_file"];

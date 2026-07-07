@@ -1,15 +1,28 @@
-// tools-structured/test-run-unit.ts
+// tools-structured/test-unit-run.ts
 //
-// test_run_unit — run vitest deterministically over a SELECTED set of test files
-// and return a small typed pass/fail summary instead of the reporter's raw
-// scrollback. ADR-021 §1: file selection is a pure function (the lowest rung —
-// no model); ADR-021 §3: the JSON reporter output passes a deterministic parser
-// (parseVitestJson) before the model ever sees it, so a 500-line failing run
-// collapses to counts + the first N assertion messages. ZERO model calls.
+// test.unit.run (model-facing test_unit_run) — run vitest deterministically over
+// a SELECTED set of test files and return a small typed pass/fail summary instead
+// of the reporter's raw scrollback. ADR-021 §1: file selection is a pure function
+// (the lowest rung — no model); ADR-021 §3: the JSON reporter output passes a
+// deterministic parser (parseVitestJson) before the model ever sees it, so a
+// 500-line failing run collapses to counts + the first N assertion messages.
+// ZERO model calls.
+//
+// STATE, not STRUCTURE: this tool answers "does the change pass?" — a runtime
+// STATE question. It never answers "what tests exercise this symbol?" or "who
+// imports this?" — those are STRUCTURE questions owned by code_graph/code_map.
+// It only uses import edges to SELECT which existing tests to execute.
 
-import { tool } from "ai";
+import { tool, type Tool } from "ai";
 import { z } from "zod";
 import type { Workspace, CodingEvent } from "../types";
+import {
+  scopeSchema,
+  verbositySchema,
+  limitSchema,
+  resolveLimit,
+  type Verbosity,
+} from "../tools-shared";
 import {
   parseVitestJson,
   siblingTestCandidates,
@@ -17,6 +30,7 @@ import {
   testFilesFromGrepHits,
   shQuote,
   clipStr,
+  MAX_TEST_FAILURES,
   MAX_SELECTED_TESTS,
   MAX_STDERR_TAIL,
 } from "./parse";
@@ -25,6 +39,9 @@ const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_TIMEOUT_MS = 600_000;
 /** Cap on grep hits scanned per changed module when finding importers. */
 const IMPORTER_GREP_CAP = 200;
+
+/** Per-verbosity ceiling on reported failing assertions (minimal = the default cap). */
+export const TEST_FAILURE_CAPS = { minimal: MAX_TEST_FAILURES, standard: 40, verbose: 80 } as const;
 
 interface StructuredToolDeps {
   signal?: AbortSignal;
@@ -121,27 +138,27 @@ export function buildVitestCommand(opts: {
   return parts.join(" ");
 }
 
-export function buildTestRunUnitTool(workspace: Workspace, deps: StructuredToolDeps) {
+export function buildTestUnitRunTool(workspace: Workspace, deps: StructuredToolDeps): Tool {
   return tool({
     description:
       "Run vitest over ONLY the test files implicated by a change and return a typed " +
       "pass/fail summary (counts + the first failing assertions with file:line), not the " +
       "reporter's raw scrollback. Prefer this over `bash pnpm vitest`/`test:unit` whenever " +
-      "you want to know if a change passes: it selects the sibling test + importers of your " +
-      "changedFiles deterministically and parses the JSON reporter, so you spend tokens on " +
-      "failures, not logs. Anti-triggers: it NEVER runs a whole-repo suite (empty selection " +
-      "returns a hint, not everything) — pass `package` or explicit `files` to run a broad " +
-      "set; for a non-test command (build, git, install) use `bash`; to typecheck use " +
-      "`build_execute`.",
+      "you want to know if a change PASSES: it selects the sibling test + importing tests of " +
+      "your `changedFiles` deterministically and parses the JSON reporter, so you spend tokens " +
+      "on failures, not logs. Set `scope.package` to run one package's suite or `scope.files` " +
+      "for exact paths. Anti-triggers: it NEVER runs a whole-repo suite (`scope.all` and an " +
+      "empty selection both return a hint, not everything); for a non-test command (build, git, " +
+      "install) use `bash`; to typecheck use `build_package_run`. This answers the STATE " +
+      "question 'does it pass?' — to find WHICH tests cover a symbol or who imports a module " +
+      "(structure), use `code_graph`, then pass those files here as `changedFiles`.",
     inputSchema: z.object({
-      package: z
-        .string()
+      scope: scopeSchema
         .optional()
-        .describe("Workspace package name (e.g. '@oxagen/billing') to scope the run to."),
-      files: z
-        .array(z.string())
-        .optional()
-        .describe("Explicit test file paths to run (relative to cwd). Union'd with changedFiles selection."),
+        .describe(
+          "Where to run: {package} for one package's suite, {files} for exact test paths. " +
+            "{all:true} is rejected — this tool never runs the whole repo. Omit to select purely from changedFiles.",
+        ),
       changedFiles: z
         .array(z.string())
         .optional()
@@ -154,27 +171,44 @@ export function buildTestRunUnitTool(workspace: Workspace, deps: StructuredToolD
         .int()
         .optional()
         .describe("Max run time in ms (default 120000, max 600000)."),
+      verbosity: verbositySchema.optional(),
+      limit: limitSchema(TEST_FAILURE_CAPS.verbose).describe(
+        `Max failing assertions to report (1–${TEST_FAILURE_CAPS.verbose}). Omit to let verbosity choose.`,
+      ),
     }),
-    execute: async ({ package: pkg, files, changedFiles, failFast, timeoutMs }) => {
+    execute: async ({ scope, changedFiles, failFast, timeoutMs, verbosity, limit }) => {
+      // Guardrail (ADR-021 §3 / CLAUDE.md "NEVER run all tests"): `all` would
+      // mean the whole repo — refuse structurally before any command is built.
+      if (scope?.all) {
+        return {
+          selected: [],
+          hint:
+            "This tool never runs the whole repo. Pass `scope.package` to run one package's " +
+            "suite, or `scope.files` for explicit paths.",
+        };
+      }
+      const pkg = scope?.package;
+      const explicit = scope?.files ?? [];
+
       // Deterministic selection: explicit files ∪ derived-from-changedFiles.
-      const explicit = files ?? [];
-      const derived = changedFiles && changedFiles.length > 0
-        ? await selectTestsForChanges(workspace, changedFiles)
-        : [];
+      const derived =
+        changedFiles && changedFiles.length > 0
+          ? await selectTestsForChanges(workspace, changedFiles)
+          : [];
       const selected = [...new Set([...explicit, ...derived])].slice(0, MAX_SELECTED_TESTS);
 
-      // Guardrail (ADR-021 §3 / CLAUDE.md "NEVER run all tests"): with no files
-      // AND no package, running vitest would sweep the whole repo — refuse and
-      // hint instead. A package with no selected files runs that package only.
+      // With no files AND no package, running vitest would sweep the whole repo —
+      // refuse and hint. A package with no selected files runs that package only.
       if (selected.length === 0 && !pkg) {
         return {
           selected: [],
           hint:
-            "No test files matched. Pass `package` to run one package's suite, or `files` " +
-            "for explicit paths — this tool never runs the whole repo.",
+            "No test files matched. Pass `scope.package` to run one package's suite, or " +
+            "`scope.files` for explicit paths — this tool never runs the whole repo.",
         };
       }
 
+      const maxFailures = resolveLimit((verbosity ?? "minimal") as Verbosity, TEST_FAILURE_CAPS, limit);
       const command = buildVitestCommand({ pkg, files: selected, failFast });
       const timeout = Math.min(timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
       let result;
@@ -189,7 +223,7 @@ export function buildTestRunUnitTool(workspace: Workspace, deps: StructuredToolD
         return { selected, timedOut: true, hint: `vitest timed out after ${timeout}ms; narrow the selection.` };
       }
 
-      const parsed = parseVitestJson(result.stdout);
+      const parsed = parseVitestJson(result.stdout, maxFailures);
       if (parsed.parseError) {
         // Reporter output unparseable → fall back to exit code + a bounded
         // stderr tail (never the whole firehose), flagged so the model knows the

@@ -15,8 +15,8 @@
 
 import type { ToolSet } from "ai";
 import type { Workspace, CodingEvent } from "../types";
-import { buildTestRunUnitTool } from "./test-run-unit";
-import { buildBuildExecuteTool } from "./build-execute";
+import { buildTestUnitRunTool } from "./test-unit-run";
+import { buildBuildPackageRunTool } from "./build-package-run";
 import { buildGitDiffSummarizeTool } from "./git-diff-summarize";
 import { buildWorkspaceHealthCheckTool } from "./workspace-health-check";
 
@@ -37,9 +37,11 @@ export function buildStructuredTools(
   opts: StructuredToolOptions = {},
 ): ToolSet {
   const deps = { signal: opts.signal, onEvent: opts.onEvent };
+  // Keys are the model-facing tool names (canonical dotted names with dots→
+  // underscores; see CANONICAL_TOOL_NAMES / modelToolName in ../tools-shared).
   return {
-    test_run_unit: buildTestRunUnitTool(workspace, deps),
-    build_execute: buildBuildExecuteTool(workspace, deps),
+    test_unit_run: buildTestUnitRunTool(workspace, deps),
+    build_package_run: buildBuildPackageRunTool(workspace, deps),
     git_diff_summarize: buildGitDiffSummarizeTool(workspace, deps),
     workspace_health_check: buildWorkspaceHealthCheckTool(workspace, deps),
   };
@@ -47,7 +49,7 @@ export function buildStructuredTools(
 
 // Re-export the pure parsers/selectors so the unit tests exercise them directly.
 export * from "./parse";
-export { selectTestsForChanges, buildVitestCommand } from "./test-run-unit";
-export { buildCompileCommand } from "./build-execute";
-export { buildDiffCommands } from "./git-diff-summarize";
-export { parseEslintJson } from "./workspace-health-check";
+export { selectTestsForChanges, buildVitestCommand, TEST_FAILURE_CAPS } from "./test-unit-run";
+export { buildCompileCommand, BUILD_ERROR_CAPS } from "./build-package-run";
+export { buildDiffCommands, DIFF_FILE_CAPS } from "./git-diff-summarize";
+export { parseEslintJson, HEALTH_SAMPLE_CAPS } from "./workspace-health-check";
