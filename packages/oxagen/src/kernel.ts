@@ -183,7 +183,7 @@ export function clearKernelIAMRuntime(): void {
 
 export type CapabilityHandlerFn = (
   input: unknown,
-  ctx: CapabilityContext,
+  ctx: CheckedContext,
 ) => Promise<unknown>;
 
 export type HandlerLoader = () => Promise<CapabilityHandlerFn>;

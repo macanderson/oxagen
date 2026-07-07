@@ -28,12 +28,14 @@ vi.mock("./clickhouse", async (importOriginal) => {
 import { readUsageBreakdown } from "./usage-analytics";
 
 // Classify a query by its projection so returns don't depend on call ordering.
-type Kind = "series" | "model" | "surface" | "workspace";
+type Kind = "series" | "model" | "surface" | "workspace" | "capability" | "principal";
 function classify(query: string): Kind {
   if (query.includes("toDate(created_at)")) return "series";
   if (query.includes("any(provider)")) return "model";
   if (query.includes("SELECT surface AS group_key")) return "surface";
   if (query.includes("SELECT workspace_id AS group_key")) return "workspace";
+  if (query.includes("SELECT capability_name AS group_key")) return "capability";
+  if (query.includes("toString(principal_id) AS group_key")) return "principal";
   throw new Error(`unclassified query: ${query.slice(0, 120)}`);
 }
 
@@ -81,6 +83,16 @@ describe("readUsageBreakdown", () => {
       workspace: [
         { group_key: "ws-a", ...agg({ input_tokens: "100", output_tokens: "40", cached_tokens: "10", cost_micros: "5000", executions: "3" }) },
       ],
+      capability: [
+        { group_key: "ontology.query", ...agg({ input_tokens: "60", cost_micros: "3000", executions: "2" }) },
+      ],
+      principal: [
+        {
+          group_key: "00000000-0000-0000-0000-0000000000e5",
+          provider: "agent",
+          ...agg({ input_tokens: "60", cost_micros: "3000", executions: "2" }),
+        },
+      ],
     });
 
     const out = await readUsageBreakdown(WINDOW);
@@ -104,6 +116,22 @@ describe("readUsageBreakdown", () => {
     });
     expect(out.bySurface[0]).toMatchObject({ key: "api", provider: "", costMicros: 5000 });
     expect(out.byWorkspace[0]).toMatchObject({ key: "ws-a", provider: "" });
+    // Principal-spine dimensions (migration 0023).
+    expect(out.byCapability[0]).toMatchObject({
+      key: "ontology.query",
+      provider: "",
+      costMicros: 3000,
+      executions: 2,
+    });
+    expect(out.byPrincipal[0]).toEqual({
+      principalId: "00000000-0000-0000-0000-0000000000e5",
+      principalKind: "agent",
+      inputTokens: 60,
+      outputTokens: 0,
+      cachedTokens: 0,
+      costMicros: 3000,
+      executions: 2,
+    });
   });
 
   it("maps the daily series with its day key", async () => {

@@ -230,6 +230,8 @@ describe("billing.usage.breakdown handler", () => {
       byModel: [],
       bySurface: [],
       byWorkspace: [],
+      byCapability: [],
+      byPrincipal: [],
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 

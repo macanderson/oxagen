@@ -37,12 +37,20 @@ export interface UsageTimePoint extends UsageTotals {
   day: string;
 }
 
-/** One grouped row of a dimension breakdown (by model / surface / workspace). */
+/** One grouped row of a dimension breakdown (by model / surface / workspace / …). */
 export interface UsageBreakdownRow extends UsageTotals {
-  /** The grouping key: model id, surface name, or workspace_id UUID. */
+  /** The grouping key: model id, surface name, workspace/principal UUID, or capability name. */
   key: string;
   /** Provider slug — populated for the model breakdown only; empty string otherwise. */
   provider: string;
+}
+
+/** One grouped row of the principal breakdown (accountability chain). */
+export interface UsagePrincipalRow extends UsageTotals {
+  /** Acting principal uuid; the nil UUID groups unattributed legacy/system spend. */
+  principalId: string;
+  /** "human" | "agent" | "service", or '' for unattributed rows. */
+  principalKind: string;
 }
 
 export interface UsageBreakdown {
@@ -51,6 +59,17 @@ export interface UsageBreakdown {
   byModel: UsageBreakdownRow[];
   bySurface: UsageBreakdownRow[];
   byWorkspace: UsageBreakdownRow[];
+  /**
+   * Per-capability spend (migration 0023). Rows written before the principal
+   * spine landed group under the '' key.
+   */
+  byCapability: UsageBreakdownRow[];
+  /**
+   * Per-principal spend (migration 0023) — the "who spent it" dimension that
+   * makes per-seat / per-agent metering possible. Pre-spine rows group under
+   * the nil UUID.
+   */
+  byPrincipal: UsagePrincipalRow[];
 }
 
 /** Raw JSONEachRow shape: ClickHouse serializes UInt64 sums as decimal strings. */
@@ -163,13 +182,18 @@ export async function readUsageBreakdown(args: {
     return rows.map((r) => ({ day: r.day, ...toTotals(r) }));
   })();
 
-  const [seriesRows, modelRows, surfaceRows, workspaceRows] = await Promise.all([
-    seriesPromise,
-    // `any(provider)` is exact here: a given model id maps to exactly one provider.
-    runGrouped("model", "any(provider) AS provider"),
-    runGrouped("surface"),
-    runGrouped("workspace_id"),
-  ]);
+  const [seriesRows, modelRows, surfaceRows, workspaceRows, capabilityRows, principalRows] =
+    await Promise.all([
+      seriesPromise,
+      // `any(provider)` is exact here: a given model id maps to exactly one provider.
+      runGrouped("model", "any(provider) AS provider"),
+      runGrouped("surface"),
+      runGrouped("workspace_id"),
+      runGrouped("capability_name"),
+      // principal_kind rides along like provider does for models: a principal
+      // uuid maps to exactly one kind, so `any()` is exact per group.
+      runGrouped("toString(principal_id)", "any(principal_kind) AS provider"),
+    ]);
 
   const byModel: UsageBreakdownRow[] = modelRows.map((r) => ({
     key: r.group_key,
@@ -186,6 +210,16 @@ export async function readUsageBreakdown(args: {
     provider: "",
     ...toTotals(r),
   }));
+  const byCapability: UsageBreakdownRow[] = capabilityRows.map((r) => ({
+    key: r.group_key,
+    provider: "",
+    ...toTotals(r),
+  }));
+  const byPrincipal: UsagePrincipalRow[] = principalRows.map((r) => ({
+    principalId: r.group_key,
+    principalKind: r.provider ?? "",
+    ...toTotals(r),
+  }));
 
   const totals = byModel.reduce<UsageTotals>(
     (acc, r) => ({
@@ -198,5 +232,13 @@ export async function readUsageBreakdown(args: {
     { ...EMPTY_TOTALS },
   );
 
-  return { totals, series: seriesRows, byModel, bySurface, byWorkspace };
+  return {
+    totals,
+    series: seriesRows,
+    byModel,
+    bySurface,
+    byWorkspace,
+    byCapability,
+    byPrincipal,
+  };
 }

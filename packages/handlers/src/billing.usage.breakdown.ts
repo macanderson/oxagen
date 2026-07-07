@@ -43,6 +43,8 @@ export const billingUsageBreakdownHandler: CapabilityHandler<
       models: breakdown.byModel.length,
       surfaces: breakdown.bySurface.length,
       workspaces: breakdown.byWorkspace.length,
+      capabilities: breakdown.byCapability.length,
+      principals: breakdown.byPrincipal.length,
       executions: breakdown.totals.executions,
     },
     "billing.usage.breakdown: returned usage breakdown",
@@ -55,5 +57,7 @@ export const billingUsageBreakdownHandler: CapabilityHandler<
     byModel: breakdown.byModel,
     bySurface: breakdown.bySurface,
     byWorkspace: breakdown.byWorkspace,
+    byCapability: breakdown.byCapability,
+    byPrincipal: breakdown.byPrincipal,
   };
 };

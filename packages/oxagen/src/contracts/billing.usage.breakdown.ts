@@ -25,10 +25,17 @@ const totals = z.object({
 });
 
 const breakdownRow = totals.extend({
-  /** Grouping key: model id, surface name, or workspace_id UUID. */
+  /** Grouping key: model id, surface name, workspace_id UUID, or capability name. */
   key: z.string(),
   /** Provider slug — populated for the model breakdown only, else "". */
   provider: z.string(),
+});
+
+const principalRow = totals.extend({
+  /** Acting principal uuid; the nil UUID groups unattributed pre-spine/system spend. */
+  principalId: z.string(),
+  /** "human" | "agent" | "service", or "" for unattributed rows. */
+  principalKind: z.string(),
 });
 
 // A one-year ceiling bounds the ClickHouse scan and the payload's series length.
@@ -57,7 +64,7 @@ export const billingUsageBreakdown = registerCapability({
   name: "billing.usage.breakdown",
   domain: "billing",
   description:
-    "Aggregated usage for a time window broken down by model, surface, and workspace, plus a daily time series of tokens and cost. Org-scoped; pass workspaceId to narrow to one workspace. Powers the usage dashboard.",
+    "Aggregated usage for a time window broken down by model, surface, workspace, capability, and acting principal, plus a daily time series of tokens and cost. Org-scoped; pass workspaceId to narrow to one workspace. Powers the usage dashboard and per-seat/per-agent metering.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
@@ -92,6 +99,10 @@ export const billingUsageBreakdown = registerCapability({
     byModel: z.array(breakdownRow),
     bySurface: z.array(breakdownRow),
     byWorkspace: z.array(breakdownRow),
+    /** Per-capability spend (principal spine, migration 0023). Pre-spine rows key "". */
+    byCapability: z.array(breakdownRow),
+    /** Per-principal spend — who spent it (human | agent | service). */
+    byPrincipal: z.array(principalRow),
   }),
 });
 
