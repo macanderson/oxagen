@@ -128,7 +128,7 @@ describe("tenant policy manifest", () => {
     expect(unique.size).toBe(tables.length);
   });
 
-  it("covers exactly the 76 policied tables of the v0.4.x schema", () => {
+  it("covers exactly the 85 policied tables of the v0.4.x schema", () => {
     // Intentional ratchet: adding a tenant-owned table means updating BOTH the
     // manifest and this count (and regenerating the Atlas RLS migration).
     // 62 = 63 baseline − plugin.org_denylist (removed 2026-06-17 workspace-scoping rebuild).
@@ -157,8 +157,12 @@ describe("tenant policy manifest", () => {
     //      standard, 20260704230000, PR #572).
     // 83 = 82 + workspace.workspace_budget_policy (per-turn budget governance,
     //      org_id + workspace_id both NOT NULL → standard, OXA-2081,
-    //      20260708120000).
-    expect(POLICY_MANIFEST.length).toBe(83);
+    //      20260708120000_workspace_budget_policy.sql, PR #630).
+    // 85 = 83 + agent.file_locks + agent.file_lock_fences (file-lock lease
+    //      authority + fencing-token counter, ADR-021 §5, orgScopeMixin +
+    //      forced tenant_isolation RLS, 20260708130000_agent_file_locks.sql —
+    //      bumped past the budget-policy prefix collision, PR #647).
+    expect(POLICY_MANIFEST.length).toBe(85);
   });
 
   it("covers slug-history tables for org + workspace renames (OXA-1779)", () => {
