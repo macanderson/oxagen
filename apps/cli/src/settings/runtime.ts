@@ -23,14 +23,24 @@ export interface AppliedSettingsEnv {
   envKeys: string[];
   /** Whether OXAGEN_API_URL was set from settings.apiUrl. */
   apiUrl: boolean;
-  /** Whether OXAGEN_MODEL was set from settings.model. */
+  /** Whether OXAGEN_MODEL was set from settings.workerModel ?? settings.model. */
   model: boolean;
+  /** Whether OXAGEN_LLM_ADVISOR was set from settings.judgeModel. */
+  judgeModel: boolean;
+  /** Whether OXAGEN_LLM_EVALUATOR was set from settings.triageModel. */
+  triageModel: boolean;
 }
 
 /**
- * Project `env`, `apiUrl`, and `model` from the resolved settings into
- * `process.env` (filling only unset vars). Call once at CLI startup. Returns
- * what was applied (useful for `--verbose` / diagnostics).
+ * Project `env`, `apiUrl`, and the per-role model slugs from the resolved
+ * settings into `process.env` (filling only unset vars). Call once at CLI
+ * startup. Returns what was applied (useful for `--verbose` / diagnostics).
+ *
+ * Per-role model mapping (each fills the env var the engine already reads):
+ *   - worker  → OXAGEN_MODEL          (workerModel ?? model)
+ *   - judge   → OXAGEN_LLM_ADVISOR    (judgeModel)
+ *   - triage  → OXAGEN_LLM_EVALUATOR  (triageModel) — also drives the planner
+ *               via the CLI runtime, which reads triageModel directly.
  */
 export function applySettingsToEnv(opts: ResolveSettingsOptions = {}): AppliedSettingsEnv {
   const { settings } = loadSettings(opts);
@@ -49,11 +59,25 @@ export function applySettingsToEnv(opts: ResolveSettingsOptions = {}): AppliedSe
     apiUrl = true;
   }
 
+  // Worker: an explicit workerModel wins over the generic `model` default.
   let model = false;
-  if (settings.model && isUnset("OXAGEN_MODEL")) {
-    process.env["OXAGEN_MODEL"] = settings.model;
+  const workerSlug = settings.workerModel ?? settings.model;
+  if (workerSlug && isUnset("OXAGEN_MODEL")) {
+    process.env["OXAGEN_MODEL"] = workerSlug;
     model = true;
   }
 
-  return { envKeys, apiUrl, model };
+  let judgeModel = false;
+  if (settings.judgeModel && isUnset("OXAGEN_LLM_ADVISOR")) {
+    process.env["OXAGEN_LLM_ADVISOR"] = settings.judgeModel;
+    judgeModel = true;
+  }
+
+  let triageModel = false;
+  if (settings.triageModel && isUnset("OXAGEN_LLM_EVALUATOR")) {
+    process.env["OXAGEN_LLM_EVALUATOR"] = settings.triageModel;
+    triageModel = true;
+  }
+
+  return { envKeys, apiUrl, model, judgeModel, triageModel };
 }

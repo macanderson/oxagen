@@ -13,7 +13,13 @@ import { getScopePaths, clearSettingsCache, type SettingsScope } from "./resolve
 import { atomicWriteFileSync } from "../lib/atomic-write.js";
 
 /** Keys `oxagen settings set` accepts. Complex sections are edited in the file. */
-export const SETTABLE_KEYS = ["model", "apiUrl"] as const;
+export const SETTABLE_KEYS = [
+  "model",
+  "workerModel",
+  "judgeModel",
+  "triageModel",
+  "apiUrl",
+] as const;
 
 export interface WriteValueOptions {
   scope: SettingsScope;
@@ -79,7 +85,9 @@ export function writeSettingsValue(opts: WriteValueOptions): string {
  */
 export function envVarForSettingsKey(key: string): string | undefined {
   if (key.startsWith("env.")) return key.slice("env.".length) || undefined;
-  if (key === "model") return "OXAGEN_MODEL";
+  if (key === "model" || key === "workerModel") return "OXAGEN_MODEL";
+  if (key === "judgeModel") return "OXAGEN_LLM_ADVISOR";
+  if (key === "triageModel") return "OXAGEN_LLM_EVALUATOR";
   if (key === "apiUrl") return "OXAGEN_API_URL";
   return undefined;
 }
