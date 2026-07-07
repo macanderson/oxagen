@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { render } from "ink-testing-library";
-import { DiffView, parseDiffLines, languageForPath } from "../diff-view.js";
+import {
+  DiffView,
+  parseDiffLines,
+  languageForPath,
+  numberDiffLines,
+} from "../diff-view.js";
 import { DARK_DIFF_THEME, LIGHT_DIFF_THEME } from "../../tui/terminal-theme.js";
 
 const SAMPLE_DIFF = [
@@ -115,6 +120,74 @@ describe("languageForPath", () => {
       expect(languageForPath(path)).toBeUndefined();
     },
   );
+});
+
+describe("numberDiffLines", () => {
+  it("assigns old/new numbers from the hunk header, advancing per line kind", () => {
+    const numbered = numberDiffLines(parseDiffLines(SAMPLE_DIFF));
+    // Meta + hunk lines carry no numbers.
+    expect(numbered[0]).toMatchObject({ kind: "meta" });
+    expect(numbered[0]!.oldLine).toBeUndefined();
+    const hunk = numbered.find((l) => l.kind === "hunk")!;
+    expect(hunk.oldLine).toBeUndefined();
+    expect(hunk.newLine).toBeUndefined();
+    // `@@ -1,3 +1,3 @@` → first context line is old 1 / new 1.
+    const firstContext = numbered.find((l) => l.kind === "context")!;
+    expect(firstContext).toMatchObject({ oldLine: 1, newLine: 1 });
+    // The removed line has only an old number; the added line only a new number.
+    const del = numbered.find((l) => l.kind === "del")!;
+    expect(del.oldLine).toBe(2);
+    expect(del.newLine).toBeUndefined();
+    const add = numbered.find((l) => l.kind === "add")!;
+    expect(add.newLine).toBe(2);
+    expect(add.oldLine).toBeUndefined();
+    // The trailing context line advanced past the change: old 3 / new 3.
+    const contexts = numbered.filter((l) => l.kind === "context");
+    expect(contexts[contexts.length - 1]).toMatchObject({ oldLine: 3, newLine: 3 });
+  });
+
+  it("resets counters across multiple hunks and handles the omitted-count form", () => {
+    const twoHunks = [
+      "@@ -5 +5 @@", // omitted-count form: single line at 5/5
+      " context a",
+      "@@ -20,2 +21,2 @@",
+      "-removed at 20",
+      "+added at 21",
+      " context after",
+    ].join("\n");
+    const numbered = numberDiffLines(parseDiffLines(twoHunks));
+    // First hunk (omitted counts) starts both counters at 5.
+    expect(numbered.find((l) => l.kind === "context")).toMatchObject({ oldLine: 5, newLine: 5 });
+    // Second hunk reset to old 20 / new 21.
+    const del = numbered.find((l) => l.kind === "del")!;
+    expect(del.oldLine).toBe(20);
+    const add = numbered.find((l) => l.kind === "add")!;
+    expect(add.newLine).toBe(21);
+    const trailing = numbered.filter((l) => l.kind === "context");
+    expect(trailing[trailing.length - 1]).toMatchObject({ oldLine: 21, newLine: 22 });
+  });
+});
+
+describe("DiffView — showLineNumbers", () => {
+  it("renders a right-aligned old/new gutter with a divider, aligned across line kinds", () => {
+    const { lastFrame } = render(
+      <DiffView diff={SAMPLE_DIFF} theme={DARK_DIFF_THEME} showLineNumbers />,
+    );
+    const frame = lastFrame() ?? "";
+    // Gutter divider present, and the code content still renders.
+    expect(frame).toContain("│");
+    expect(frame).toContain("hello");
+    // Every rendered row shares the same divider column (stable gutter width).
+    const rows = frame.split("\n").filter((r) => r.includes("│"));
+    expect(rows.length).toBeGreaterThan(0);
+    const dividerCols = new Set(rows.map((r) => r.indexOf("│")));
+    expect(dividerCols.size).toBe(1);
+  });
+
+  it("omits the gutter by default (existing usages unchanged)", () => {
+    const { lastFrame } = render(<DiffView diff={SAMPLE_DIFF} theme={DARK_DIFF_THEME} />);
+    expect(lastFrame() ?? "").not.toContain("│");
+  });
 });
 
 describe("DiffView", () => {

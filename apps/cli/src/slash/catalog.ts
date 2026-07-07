@@ -98,6 +98,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
   { name: "traces", description: "List recent turns you can /replay" },
 
   // Interface
+  {
+    name: "diff",
+    description: "Review working-tree changes — pick a changed file, view its diff",
+    argumentHint: "[path]",
+  },
   { name: "hud", description: "Toggle the running-agents heads-up display" },
   { name: "panel", description: "Toggle the Agent Team + Task side panel" },
   { name: "mouse", description: "Toggle mouse-wheel scroll (off by default so native copy/paste works)" },

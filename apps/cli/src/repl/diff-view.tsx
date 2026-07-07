@@ -84,6 +84,81 @@ export function parseDiffLines(diff: string): DiffLine[] {
   });
 }
 
+/** A {@link DiffLine} annotated with its old-file and/or new-file line number. */
+export interface NumberedDiffLine extends DiffLine {
+  /** Line number in the OLD file (context + removed lines); undefined for added/meta/hunk. */
+  oldLine?: number;
+  /** Line number in the NEW file (context + added lines); undefined for removed/meta/hunk. */
+  newLine?: number;
+}
+
+/** Parses `@@ -<oldStart>[,n] +<newStart>[,m] @@`, tolerating the omitted-count form. */
+const HUNK_RANGE = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+
+/**
+ * Annotate each diff line with its source line numbers. Pure: walks the lines,
+ * resetting counters at every hunk header (`@@ -old +new @@`), then advancing
+ * the old counter on context/removed lines and the new counter on
+ * context/added lines. Meta and hunk lines carry no numbers.
+ */
+export function numberDiffLines(lines: DiffLine[]): NumberedDiffLine[] {
+  let oldLine = 0;
+  let newLine = 0;
+  return lines.map((line): NumberedDiffLine => {
+    if (line.kind === "hunk") {
+      const m = HUNK_RANGE.exec(line.text);
+      if (m) {
+        oldLine = Number.parseInt(m[1]!, 10);
+        newLine = Number.parseInt(m[2]!, 10);
+      }
+      return { ...line };
+    }
+    if (line.kind === "meta") return { ...line };
+    if (line.kind === "context") {
+      const numbered = { ...line, oldLine, newLine };
+      oldLine++;
+      newLine++;
+      return numbered;
+    }
+    if (line.kind === "del") {
+      const numbered = { ...line, oldLine };
+      oldLine++;
+      return numbered;
+    }
+    // add
+    const numbered = { ...line, newLine };
+    newLine++;
+    return numbered;
+  });
+}
+
+/** Gutter column widths: the max old/new line-number digit count, floored at 3. */
+export interface GutterWidths {
+  oldWidth: number;
+  newWidth: number;
+}
+
+/** Compute {@link GutterWidths} for a set of numbered lines (min 3 per column). */
+export function computeGutterWidths(lines: NumberedDiffLine[]): GutterWidths {
+  let maxOld = 0;
+  let maxNew = 0;
+  for (const line of lines) {
+    if (line.oldLine !== undefined) maxOld = Math.max(maxOld, line.oldLine);
+    if (line.newLine !== undefined) maxNew = Math.max(maxNew, line.newLine);
+  }
+  return {
+    oldWidth: Math.max(3, String(maxOld).length),
+    newWidth: Math.max(3, String(maxNew).length),
+  };
+}
+
+/** Right-aligned `<old> <new>│` gutter text; blank columns keep alignment for meta/hunk/add/del. */
+function gutterText(line: NumberedDiffLine, widths: GutterWidths): string {
+  const oldStr = line.oldLine !== undefined ? String(line.oldLine) : "";
+  const newStr = line.newLine !== undefined ? String(line.newLine) : "";
+  return `${oldStr.padStart(widths.oldWidth)} ${newStr.padStart(widths.newWidth)}│`;
+}
+
 /** File-extension → `cli-highlight` language id, for common source types. */
 const EXTENSION_LANGUAGE: Record<string, string> = {
   ts: "typescript",
@@ -148,7 +223,7 @@ function inferLanguageFromDiff(diff: string): string | undefined {
  * `cli-highlight` `Theme`. Accepts an already-concrete token map as-is, or
  * resolves the two named built-ins.
  */
-function resolveHighlightTheme(selection: DiffTheme["highlightjs"]): HighlightJsTheme {
+export function resolveHighlightTheme(selection: DiffTheme["highlightjs"]): HighlightJsTheme {
   if (selection === "github") return GITHUB_HIGHLIGHT_THEME;
   if (selection === "monokai") return MONOKAI_HIGHLIGHT_THEME;
   return selection;
@@ -172,6 +247,81 @@ function safeHighlight(
   }
 }
 
+export interface DiffLineRowProps {
+  /** The (optionally numbered) line to render. */
+  line: NumberedDiffLine;
+  /** Resolved diff color theme (concrete, not inferred). */
+  theme: DiffTheme;
+  /** Resolved `cli-highlight` language id, or undefined for no highlighting. */
+  language: string | undefined;
+  /** Pre-resolved `cli-highlight` token theme (resolve once, reuse per row). */
+  hlTheme: HighlightJsTheme;
+  /** When set, prefixes a right-aligned old/new line-number gutter of these widths. */
+  gutter?: GutterWidths;
+}
+
+/**
+ * Renders one unified-diff line: an optional dim line-number gutter, a colored
+ * +/-/space marker (for code lines), and syntax-highlighted code content.
+ * Shared by {@link DiffView} and the `/diff` panel so the gutter + highlight
+ * logic lives in exactly one place.
+ */
+export function DiffLineRow({
+  line,
+  theme,
+  language,
+  hlTheme,
+  gutter,
+}: DiffLineRowProps): React.ReactElement {
+  const gutterEl = gutter ? (
+    <Text color={theme.lineNumber} dimColor>
+      {gutterText(line, gutter)}
+    </Text>
+  ) : null;
+
+  if (line.kind === "meta") {
+    return (
+      <Box>
+        {gutterEl}
+        <Text color={theme.meta} dimColor>
+          {line.text}
+        </Text>
+      </Box>
+    );
+  }
+  if (line.kind === "hunk") {
+    return (
+      <Box>
+        {gutterEl}
+        <Text color={theme.hunk} bold>
+          {line.text}
+        </Text>
+      </Box>
+    );
+  }
+
+  const marker = line.kind === "add" ? "+" : line.kind === "del" ? "-" : " ";
+  const markerColor =
+    line.kind === "add"
+      ? theme.addEmphasis
+      : line.kind === "del"
+        ? theme.delEmphasis
+        : theme.context;
+  const codeColor =
+    line.kind === "add" ? theme.add : line.kind === "del" ? theme.del : theme.context;
+  const highlighted = safeHighlight(line.code, language, hlTheme);
+
+  return (
+    <Box>
+      {gutterEl}
+      <Text color={markerColor} bold={line.kind !== "context"}>
+        {marker}
+      </Text>
+      <Text color={codeColor}>{highlighted}</Text>
+    </Box>
+  );
+}
+
 export interface DiffViewProps {
   /** Unified `git diff` text. */
   diff: string;
@@ -181,6 +331,11 @@ export interface DiffViewProps {
   language?: string;
   /** Max lines to render before truncating with a summary note. Default 500. */
   maxLines?: number;
+  /**
+   * Render a dim right-aligned old/new line-number gutter before each row.
+   * Default false so existing usages are unchanged.
+   */
+  showLineNumbers?: boolean;
 }
 
 /** Renders a unified diff with a colored +/- gutter and syntax-highlighted code content. */
@@ -189,56 +344,28 @@ export function DiffView({
   theme,
   language,
   maxLines = DEFAULT_MAX_LINES,
+  showLineNumbers = false,
 }: DiffViewProps): React.ReactElement {
   const resolvedTheme = theme ?? diffThemeFor(detectTerminalBackground());
   const hlTheme = resolveHighlightTheme(resolvedTheme.highlightjs);
   const resolvedLanguage = language ?? inferLanguageFromDiff(diff);
-  const lines = parseDiffLines(diff);
+  const lines = numberDiffLines(parseDiffLines(diff));
   const truncated = lines.length > maxLines;
   const visible = truncated ? lines.slice(0, maxLines) : lines;
+  const gutter = showLineNumbers ? computeGutterWidths(visible) : undefined;
 
   return (
     <Box flexDirection="column">
-      {visible.map((line, i) => {
-        if (line.kind === "meta") {
-          return (
-            <Text key={i} color={resolvedTheme.meta} dimColor>
-              {line.text}
-            </Text>
-          );
-        }
-        if (line.kind === "hunk") {
-          return (
-            <Text key={i} color={resolvedTheme.hunk} bold>
-              {line.text}
-            </Text>
-          );
-        }
-
-        const marker = line.kind === "add" ? "+" : line.kind === "del" ? "-" : " ";
-        const markerColor =
-          line.kind === "add"
-            ? resolvedTheme.addEmphasis
-            : line.kind === "del"
-              ? resolvedTheme.delEmphasis
-              : resolvedTheme.context;
-        const codeColor =
-          line.kind === "add"
-            ? resolvedTheme.add
-            : line.kind === "del"
-              ? resolvedTheme.del
-              : resolvedTheme.context;
-        const highlighted = safeHighlight(line.code, resolvedLanguage, hlTheme);
-
-        return (
-          <Box key={i}>
-            <Text color={markerColor} bold={line.kind !== "context"}>
-              {marker}
-            </Text>
-            <Text color={codeColor}>{highlighted}</Text>
-          </Box>
-        );
-      })}
+      {visible.map((line, i) => (
+        <DiffLineRow
+          key={i}
+          line={line}
+          theme={resolvedTheme}
+          language={resolvedLanguage}
+          hlTheme={hlTheme}
+          gutter={gutter}
+        />
+      ))}
       {truncated && (
         <Text dimColor>
           … ({lines.length - maxLines} more lines — scroll or /replay to see all)
