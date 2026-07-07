@@ -9,10 +9,15 @@
  *     directory collapse/expand
  */
 
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { render, screen, cleanup, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import FileTreeCard, { buildFileTree, formatBytes, type FileTreeEntry } from "./file-tree-card";
+import FileTreeCard, {
+  buildFileTree,
+  formatBytes,
+  truncateMiddle,
+  type FileTreeEntry,
+} from "./file-tree-card";
 import { diffAnchorId } from "./diff-anchor";
 
 afterEach(cleanup);
@@ -124,5 +129,103 @@ describe("FileTreeCard", () => {
     expect(screen.queryByText("file.ts")).not.toBeInTheDocument();
     await userEvent.click(screen.getByText("nested"));
     expect(screen.getByText("file.ts")).toBeInTheDocument();
+  });
+
+  it("renders header actions when provided", () => {
+    render(
+      <FileTreeCard
+        entries={[{ path: "a.ts", kind: "file" }]}
+        actions={<span>strip-content</span>}
+      />,
+    );
+    expect(screen.getByText("strip-content")).toBeInTheDocument();
+  });
+
+  it("keeps the header (and actions) visible when there are no entries", () => {
+    render(<FileTreeCard entries={[]} actions={<span>strip-content</span>} />);
+    expect(screen.getByText("strip-content")).toBeInTheDocument();
+    expect(screen.getByText("No files.")).toBeInTheDocument();
+  });
+
+  it("makes file rows tappable and reports the full path via onFileSelect", async () => {
+    const onFileSelect = vi.fn();
+    render(
+      <FileTreeCard
+        entries={[{ path: "src/index.ts", kind: "file" }]}
+        onFileSelect={onFileSelect}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "View src/index.ts" }));
+    expect(onFileSelect).toHaveBeenCalledWith("src/index.ts");
+  });
+
+  it("does not render file rows as buttons without onFileSelect", () => {
+    render(<FileTreeCard entries={[{ path: "src/index.ts", kind: "file" }]} />);
+    expect(screen.queryByRole("button", { name: "View src/index.ts" })).not.toBeInTheDocument();
+  });
+
+  it("fires onDirExpand for default-open directories on mount", async () => {
+    const onDirExpand = vi.fn();
+    render(
+      <FileTreeCard
+        entries={[{ path: "src/index.ts", kind: "file" }]}
+        onDirExpand={onDirExpand}
+      />,
+    );
+    await waitFor(() => expect(onDirExpand).toHaveBeenCalledWith("src"));
+  });
+
+  it("fires onDirExpand when a collapsed directory is opened", async () => {
+    const onDirExpand = vi.fn();
+    render(
+      <FileTreeCard
+        entries={[{ path: "src/nested/file.ts", kind: "file" }]}
+        onDirExpand={onDirExpand}
+      />,
+    );
+    await userEvent.click(screen.getByText("nested"));
+    expect(onDirExpand).toHaveBeenCalledWith("src/nested");
+  });
+
+  it("shows a spinner on directories with an in-flight lazy fetch", () => {
+    render(
+      <FileTreeCard
+        entries={[{ path: "src/index.ts", kind: "file" }]}
+        loadingDirs={new Set(["src"])}
+      />,
+    );
+    expect(screen.getByLabelText("Loading src")).toBeInTheDocument();
+  });
+
+  it("truncates long names in the middle, keeping the extension visible", () => {
+    render(
+      <FileTreeCard
+        entries={[
+          { path: "extremely-long-component-file-name-for-mobile.tsx", kind: "file" },
+        ]}
+      />,
+    );
+    const truncated = truncateMiddle("extremely-long-component-file-name-for-mobile.tsx");
+    expect(truncated).toContain("…");
+    expect(truncated.endsWith(".tsx")).toBe(true);
+    expect(screen.getByText(truncated)).toBeInTheDocument();
+  });
+});
+
+describe("truncateMiddle", () => {
+  it("returns short names unchanged", () => {
+    expect(truncateMiddle("index.ts")).toBe("index.ts");
+  });
+
+  it("caps output at the requested max length", () => {
+    const out = truncateMiddle("a".repeat(100), 20);
+    expect(out.length).toBe(20);
+    expect(out).toContain("…");
+  });
+
+  it("preserves both the start and the end of the name", () => {
+    const out = truncateMiddle("prefix-abcdefghijklmnopqrstuvwxyz-suffix.txt", 24);
+    expect(out.startsWith("prefix-")).toBe(true);
+    expect(out.endsWith(".txt")).toBe(true);
   });
 });
