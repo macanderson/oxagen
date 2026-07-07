@@ -9,6 +9,7 @@
     "commands",
     "configuration",
     "models",
+    "budget",
     "knowledge-graph"
   ]
 }

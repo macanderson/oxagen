@@ -1,14 +1,21 @@
-# agent.file.lock.list
+# agent.file_lock.list
 
 **Domain:** agent
 **Mode:** sync
 **Scope:** tenant + workspace
 **Surfaces:** api, mcp, agent
 **Risk level:** low
+**Aliases:** `agent.file.lock.list` (pre-ADR-022 name; still resolves)
 
 ## Intent
 
-List every currently-live file lock in the workspace, optionally filtered to one file. Introspection for debugging a stuck fleet — a lock that outlives its owning turn (crash before release) is visible here until its TTL lapses or the sweep reaps it.
+List every currently-live file lock in the workspace, optionally filtered to
+one file. Introspection for debugging a stuck fleet — a lock that outlives its
+owning turn (crash before release) is visible here until its TTL lapses or the
+sweep reaps it. Backed by the same Postgres lease table
+(`agent.file_locks`, ADR-021 §5) as
+[`agent.file_lock.acquire`](agent.file_lock.acquire.md); Neo4j plays no role in
+this read — it only receives an async lineage projection on acquire.
 
 ## Input
 
@@ -22,15 +29,19 @@ List every currently-live file lock in the workspace, optionally filtered to one
 
 | Field | Type | Notes |
 |---|---|---|
-| `locks` | `Lock[]` | Every currently-live lock, newest-acquired first. |
-| `locks[].lockId` | `string` | Lock id, usable with `agent.file.lock.release`. |
-| `locks[].naturalKey` | `string` | The locked `SourceFile`'s naturalKey. |
-| `locks[].agentId` | `string` | Identity currently holding the lock. |
-| `locks[].acquiredAt` | `number` (int) | Epoch-ms the lock was acquired (or last renewed). |
-| `locks[].expiresAt` | `number` (int) | Epoch-ms the lock expires at. |
-| `locks[].workspaceId` | `string` | Workspace the lock was acquired under. |
+| `locks` | `Lock[]` | Every currently-live lease, newest-acquired first. |
+| `locks[].lockId` | `string` | Lock id, usable with `agent.file_lock.release`. |
+| `locks[].naturalKey` | `string` | The locked resource's naturalKey (the lease's `resource_key`). |
+| `locks[].agentId` | `string` | Identity currently holding the lease (the lease's `holder`). |
+| `locks[].acquiredAt` | `number` (int) | Epoch-ms the lease was acquired (or last renewed). |
+| `locks[].expiresAt` | `number` (int) | Epoch-ms the lease expires at. |
+| `locks[].workspaceId` | `string` | Workspace the lease was acquired under. |
 | `locks[].action` | `string` | Free-text action label stored at acquire time (e.g. `"read"`/`"write"`). |
-| `locks[].executionId` | `string` | Execution/turn id that acquired the lock, for correlating a batch release. |
+| `locks[].executionId` | `string` | Execution/turn id that acquired the lease, for correlating a batch release. |
+
+Note: the output does not carry the lease's `fencingToken` — call
+[`agent.file_lock.acquire`](agent.file_lock.acquire.md) (same holder, to renew)
+if the caller needs the current token for a resource.
 
 ## Roles
 
@@ -38,7 +49,10 @@ Org Owner, Org Admin, Workspace Owner, Workspace Member.
 
 ## Side effects
 
-- None — read-only. Neo4j MATCH of `(:Agent)-[:HOLDS_LOCK]->(:SourceFile)` edges scoped to the tenant, filtered to `expiresAt > now` (and to `naturalKey` when a `path` filter is given).
+- None — read-only. Queries `agent.file_locks` (Postgres, RLS-scoped to the
+  tenant via `withTenantDb`/`runInTenantScope`) for rows with
+  `released_at IS NULL AND lease_expires_at > now()`, optionally filtered to a
+  single `resource_key`.
 
 ## Errors
 

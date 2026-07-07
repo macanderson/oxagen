@@ -3,9 +3,11 @@ title: Code execution
 description: How the agent runs sandboxed code — languages, limits, approval flow, and audit trail.
 ---
 
-The `agent.code.execute` capability runs user-supplied Node, Python, or shell code inside a hardened sandbox. It never runs in the same process as the platform.
+The `agent.code.execute` capability runs user-supplied Node, Python, or shell code inside a hardened, **ephemeral** sandbox — provisioned per invocation and torn down immediately after, with no repository context. It never runs in the same process as the platform.
 
 For the full security analysis of the sandbox — isolation guarantees, hardware boundaries, and what code cannot do — see [Code execution security](/docs/security/code-execution).
+
+This is a different mechanism from **Code mode** — the chat composer's toggle that binds a whole turn's filesystem/exec tools to a real, checked-out repository in a durable, session-reusable sandbox. See [Chat interface → Code mode](/docs/agent/chat-interface#code-mode) for that flow.
 
 ## Using code execution
 
