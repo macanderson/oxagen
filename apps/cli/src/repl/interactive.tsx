@@ -74,6 +74,7 @@ import {
   AgentSidebar,
   AgentFocusView,
   panelNavTargets,
+  hasFleetActivity,
   stepPanelFocus,
   SIDEBAR_MIN_COLS,
   type PanelMode,
@@ -1070,11 +1071,19 @@ export function ReplApp({
     [],
   );
 
-  // Only move focus into the dock when it is actually docked (terminal wide
-  // enough) AND has a row to land on — never strand the highlight off-screen.
+  // Only move focus into the dock when it is actually ON SCREEN (terminal wide
+  // enough, not hidden by mode/auto) AND has a row to land on — never strand the
+  // highlight off-screen. Mirrors AgentSidebar's own visibility test so Down can
+  // never open (or fail to reach) a dock the render just decided to hide: with
+  // `auto`, that means the dock must have real fleet activity (hasFleetActivity);
+  // `/panel on` pins it reachable, `/panel off` makes it unreachable.
   const panelReachable = useCallback((): boolean => {
     const cols = process.stdout.columns ?? 80;
-    return cols >= SIDEBAR_MIN_COLS && navTargets().length > 0;
+    if (cols < SIDEBAR_MIN_COLS || navTargets().length === 0) return false;
+    const mode = panelModeRef.current;
+    if (mode === "off") return false;
+    if (mode === "on") return true;
+    return hasFleetActivity(agentRegistry.snapshot(), taskRegistry.snapshot());
   }, [navTargets]);
 
   const setInputFocus = useCallback((): void => {
