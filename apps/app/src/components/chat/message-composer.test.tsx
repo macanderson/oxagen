@@ -61,6 +61,37 @@ vi.mock("@/components/ui/sheet", () => ({
   SheetDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
 }));
 
+// AgentSelector stub — renders null when there are no agents (matching the real
+// component) and, otherwise, one button per agent (+ a default) so a test can
+// drive the selection deterministically without opening a real menu portal.
+vi.mock("./agent-selector", () => ({
+  AgentSelector: ({
+    agents,
+    onChange,
+  }: {
+    agents: Array<{ agentId: string; isCode: boolean }>;
+    value: string | null;
+    onChange: (id: string | null) => void;
+  }) =>
+    agents.length === 0 ? null : (
+      <div data-testid="agent-selector" data-count={agents.length}>
+        {agents.map((a) => (
+          <button
+            key={a.agentId}
+            type="button"
+            data-testid={`pick-${a.agentId}`}
+            onClick={() => onChange(a.agentId)}
+          >
+            pick {a.agentId}
+          </button>
+        ))}
+        <button type="button" data-testid="pick-default" onClick={() => onChange(null)}>
+          pick default
+        </button>
+      </div>
+    ),
+}));
+
 afterEach(() => {
   mockViewport.isMobile = false;
   window.localStorage.clear();
@@ -2281,6 +2312,7 @@ describe("MessageComposer — code mode", () => {
       name: string;
       defaultBranch: string | null;
       environmentId: string;
+      environmentName: string | null;
       sandboxSessionId: string | null;
     };
     expect(code).toEqual({
@@ -2289,6 +2321,7 @@ describe("MessageComposer — code mode", () => {
       name: "widgets",
       defaultBranch: "main",
       environmentId: "env_default",
+      environmentName: "Default",
       sandboxSessionId: null,
     });
   });
@@ -2792,5 +2825,121 @@ describe("MessageComposer — pin context & slash commands", () => {
     await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
     const fd = action.mock.calls[0][0] as FormData;
     expect(fd.get("pinnedContext")).toBeNull();
+  });
+});
+
+describe("MessageComposer — agent selection gating", () => {
+  const CODE_AGENT = {
+    agentId: "agt_code",
+    slug: "coder",
+    name: "Coder",
+    description: null,
+    agentType: "code",
+    isCode: true,
+  };
+  const CHAT_AGENT = {
+    agentId: "agt_chat",
+    slug: "chatter",
+    name: "Chatter",
+    description: null,
+    agentType: "custom",
+    isCode: false,
+  };
+
+  it("shows the manual code toggle and no agent selector when no agents exist", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[]}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Toggle code mode" })).toBeInTheDocument();
+    expect(screen.queryByTestId("agent-selector")).not.toBeInTheDocument();
+  });
+
+  it("renders the agent selector and keeps the manual toggle at the default (no agent governs)", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT, CHAT_AGENT]}
+      />,
+    );
+    expect(screen.getByTestId("agent-selector")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Toggle code mode" })).toBeInTheDocument();
+  });
+
+  it("hides the manual toggle once a code agent governs code mode", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT, CHAT_AGENT]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("pick-agt_code"));
+    expect(screen.queryByRole("button", { name: "Toggle code mode" })).not.toBeInTheDocument();
+  });
+
+  it("also hides the manual toggle for a chat agent (its identity governs)", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT, CHAT_AGENT]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("pick-agt_chat"));
+    expect(screen.queryByRole("button", { name: "Toggle code mode" })).not.toBeInTheDocument();
+  });
+
+  it("restores the manual toggle when the default (no agent) is re-selected", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT, CHAT_AGENT]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("pick-agt_code"));
+    fireEvent.click(screen.getByTestId("pick-default"));
+    expect(screen.getByRole("button", { name: "Toggle code mode" })).toBeInTheDocument();
+  });
+
+  it("forwards the selected agentId in the submit payload", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableAgents={[CODE_AGENT, CHAT_AGENT]}
+      />,
+    );
+    // A chat agent keeps code mode off, so send isn't gated on a repo/env.
+    fireEvent.click(screen.getByTestId("pick-agt_chat"));
+    await userEvent.type(screen.getByRole("textbox"), "hi");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalled());
+    const fd = action.mock.calls[0][0] as FormData;
+    expect(fd.get("agentId")).toBe("agt_chat");
   });
 });

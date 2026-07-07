@@ -173,24 +173,34 @@ describe("createGatewayAgentAi", () => {
     expect("providerOptions" in call).toBe(false);
   });
 
-  it("generateObject passes messages XOR prompt and returns object + usage", async () => {
+  it("generateObject folds `prompt` into a cached message array and returns object + usage", async () => {
     const ai = createGatewayAgentAi();
     const res = await ai.generateObject({
       model: "openai/gpt-5.2",
       schema: {} as never,
+      system: "sys",
       prompt: "classify",
     } as never);
 
     expect(generateObjectMock).toHaveBeenCalledTimes(1);
     const call = generateObjectMock.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(call["model"]).toBe("openai/gpt-5.2");
-    expect(call["prompt"]).toBe("classify");
-    expect("messages" in call).toBe(false);
+    // `prompt` never reaches the SDK call — it becomes the sole user message so
+    // the same message-level cache_control shaping as `stream` applies (see
+    // withPromptCaching).
+    expect("prompt" in call).toBe(false);
+    expect(call["allowSystemInMessages"]).toBe(true);
+    const messages = call["messages"] as Array<Record<string, unknown>>;
+    const cache = { anthropic: { cacheControl: { type: "ephemeral" } } };
+    expect(messages[0]).toMatchObject({ role: "system", content: "sys" });
+    expect(messages[0]?.["providerOptions"]).toEqual(cache);
+    expect(messages[1]).toMatchObject({ role: "user", content: "classify" });
+    expect(messages[1]?.["providerOptions"]).toEqual(cache); // tail breakpoint
     expect(res.object).toEqual({ ok: true });
     expect(res.usage.totalTokens).toBe(15);
   });
 
-  it("generateObject prefers messages when provided", async () => {
+  it("generateObject prefers messages when provided, tagging the tail with a cache breakpoint", async () => {
     const ai = createGatewayAgentAi();
     await ai.generateObject({
       model: "openai/gpt-5.2",
@@ -198,7 +208,13 @@ describe("createGatewayAgentAi", () => {
       messages: [{ role: "user", content: "hi" }],
     } as never);
     const call = generateObjectMock.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(call["messages"]).toEqual([{ role: "user", content: "hi" }]);
+    expect(call["messages"]).toEqual([
+      {
+        role: "user",
+        content: "hi",
+        providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
+      },
+    ]);
     expect("prompt" in call).toBe(false);
   });
 });

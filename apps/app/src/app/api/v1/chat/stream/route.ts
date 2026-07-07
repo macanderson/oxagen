@@ -39,7 +39,7 @@ import { resolveGitHubToken } from "@oxagen/handlers/lib/github-token";
 import { runCodingAgent } from "@oxagen/agent-engine";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { invoke } from "@oxagen/oxagen";
+import { invoke, isCodeAgentType } from "@oxagen/oxagen";
 import { formFill } from "@oxagen/oxagen/contracts/form.fill";
 import { fieldDescriptorSchema } from "@oxagen/oxagen/contracts/form.fill";
 import { randomUUID } from "node:crypto";
@@ -131,13 +131,6 @@ const BodySchema = z.object({
   // Pinned skills are injected directly (no tool call needed), so the model
   // applies them from the first turn. Capped at 5 to bound prompt bloat.
   skills: z.array(z.string().min(1).max(64)).max(5).optional().default([]),
-  // OPTIONAL agent binding: when the request carries a published agent's public
-  // id (agt_…), this turn is BOUND to that agent — its instructions ride the
-  // system prompt, its equipped skills + MCP servers extend the toolset, and a
-  // `coding` agent forces code mode. Absent `agentId`, every downstream value is
-  // untouched (byte-for-byte the pre-binding behavior). Threaded from the Ask
-  // page's `?agent=<publicId>` URL param via the chat client's request body.
-  agentId: z.string().optional(),
   // Attachments for this turn — IDS ONLY (never base64/bytes through this
   // 32 KiB body). Each publicId is re-resolved server-side below (ownership +
   // status='ready' + kind ∈ {image,video} allowlist) before its bytes are
@@ -213,6 +206,18 @@ const BodySchema = z.object({
     })
     .nullable()
     .default(null),
+  // Selected/bound agent (OXA app-agent-selector + Studio chat↔agent binding) —
+  // the publicId (`agt_…`) of the agent chosen in the composer (or threaded
+  // from the Ask page's `?agent=<publicId>` URL param), or null/omitted for the
+  // default (generic chat) agent. When present, this turn is BOUND to that
+  // agent: its instructions ride the system prompt, its equipped skills + MCP
+  // servers extend the toolset, and a code agent (agentType === "code") forces
+  // code mode ON. A code agent is also the AUTHORITATIVE gate for code mode:
+  // only a code agent may bind the sandbox + code tools, so a `code` payload
+  // sent alongside a non-code agent is ignored server-side (see the code-mode
+  // branch below). Absent `agentId`, every downstream value is untouched
+  // (byte-for-byte the pre-binding behavior).
+  agentId: z.string().min(1).max(64).nullable().default(null),
   // Pinned chat context (org/repo + environment) the user stuck to this
   // conversation via the composer's context bar. Unlike `code` this is
   // LIGHTWEIGHT — no sandbox — it just tells the agent which repository /
@@ -322,7 +327,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     pageContext,
     attachments,
     budget: requestBudget,
-    code: codeMode,
+    code: codeModeRaw,
     pinnedContext,
   } = parsed.data;
 
@@ -734,14 +739,18 @@ export async function POST(request: NextRequest): Promise<Response> {
         };
 
         // ── Optional agent binding (launch a published agent into this session) ─
-        // When the request carries an `agentId`, load that agent's definition and
-        // merge its config into THIS turn BEFORE tools + prompt are assembled:
+        // When the request carries an `agentId`, load that agent's definition ONCE
+        // and merge its config into THIS turn BEFORE tools + prompt are assembled:
         //   • instructions → appended to the system-prompt baseline (below),
         //   • skill agentTools → unioned into the pinned-skill slugs,
         //   • mcp_server agentTools → unioned into the MCP server allowlist,
-        //   • agentType "coding" → forces code mode on for the turn.
-        // Absent `agentId`, these three effective values are exactly the request
-        // values, so the whole turn is byte-identical to before this feature.
+        //   • agentType "code"/"coding" → forces code mode ON for the turn
+        //     (`useCodeModePrompt`, system-prompt flavor only), AND is the
+        //     AUTHORITATIVE gate that can force code mode OFF: a `code` payload
+        //     paired with a non-code agent is dropped (see `codeMode` below,
+        //     computed from `agentIsCode`) regardless of what the client sent.
+        // Absent `agentId`, every effective value is exactly the request value,
+        // so the whole turn is byte-identical to before this feature.
         //
         // FAIL-OPEN: a failed/denied agent.definition.get must NEVER break the
         // turn — log and fall through to the normal (unbound) behavior, exactly
@@ -751,11 +760,13 @@ export async function POST(request: NextRequest): Promise<Response> {
         let boundInstructions = "";
         let effectiveSkillSlugs = pinnedSkillSlugs;
         let effectiveServerIds = activeServerIds;
+        let agentIsCode = false;
         // `useCodeModePrompt` drives the code-mode SYSTEM PROMPT; the sandbox is
-        // still only bound when `codeMode` (body.code) carried a repo/env. A
-        // coding agent with no repo therefore degrades to the code-mode prompt
-        // with no filesystem tools (see the code-mode block further below).
-        let useCodeModePrompt = Boolean(codeMode);
+        // still only bound when `codeMode` (the authoritative, agent-gated value
+        // computed below) carried a repo/env. A coding agent with no repo
+        // therefore degrades to the code-mode prompt with no filesystem tools
+        // (see the code-mode block further below).
+        let useCodeModePrompt = Boolean(codeModeRaw);
         if (agentId) {
           try {
             const def = await runInTenantScope(
@@ -768,11 +779,12 @@ export async function POST(request: NextRequest): Promise<Response> {
                   { surface: "agent" },
                 ),
             );
+            agentIsCode = isCodeAgentType((def as AgentBindingDefinition).agentType);
             const binding = applyAgentBinding({
               def: def as AgentBindingDefinition,
               skills: pinnedSkillSlugs,
               serverAllowlist: activeServerIds,
-              codeMode: Boolean(codeMode),
+              codeMode: Boolean(codeModeRaw),
             });
             boundInstructions = binding.instructions;
             effectiveSkillSlugs = binding.skills;
@@ -1170,6 +1182,14 @@ export async function POST(request: NextRequest): Promise<Response> {
         // When the composer selected a repo + environment, run the coding engine
         // against a sandbox with the repo cloned. The per-turn repo/env context
         // rides as a USER message (ADR-021 §2), never the cached system prompt.
+        // `agentIsCode` was already resolved in the agent-binding block above
+        // (one `agent.definition.get` load, not two) — this is just the
+        // AUTHORITATIVE gate on top of it: only a code agent may bind the
+        // sandbox + code tools, so a `code` payload paired with a non-code agent
+        // is dropped here regardless of what the client sent; with no agent
+        // selected the client's payload stands (unchanged legacy behavior).
+        const codeMode = agentId && !agentIsCode ? null : codeModeRaw;
+
         let codeGraphForTurn:
           | ReturnType<typeof createNeo4jCodeGraphProvider>
           | undefined;
@@ -1282,6 +1302,11 @@ export async function POST(request: NextRequest): Promise<Response> {
                     skillIndex,
                     pinnedSkillBodies,
                   })) +
+              // Fold the bound agent's own instructions into the system prompt
+              // so selecting an agent actually shapes its behavior, not just
+              // the UI. `boundInstructions` is "" for an unbound turn ⇒
+              // byte-identical baseline. Appended last so it can refine the
+              // baseline.
               (boundInstructions
                 ? `\n\n---\n\n## Agent instructions\n\n${boundInstructions}`
                 : "") +

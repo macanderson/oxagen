@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "email",
-    "local-development"
+    "local-development",
+    "storage"
   ]
 }

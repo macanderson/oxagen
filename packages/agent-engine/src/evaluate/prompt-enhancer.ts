@@ -311,29 +311,72 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
         // Multi-word topics that aren't identifiers are skipped — they won't resolve.
       }
 
-      // Symbol definitions — "where is X defined".
-      for (const sym of [...symSet].slice(0, max)) {
-        if (remaining() <= 0) break;
-        symbolsQueried.push(sym);
-        const res = await queryWithin(codeGraph.query("search", sym, 4), remaining());
-        if (isHit(res)) {
-          sections.push(`Definitions of \`${sym}\`:\n${res}`);
-          resolved.push(sym);
+      // Symbol definitions — "where is X defined". Each lookup is independent
+      // of the others, so fire them concurrently instead of one `await` per
+      // symbol — a serial loop of up to `max` round-trips was the dominant
+      // cost before the worker's first token. The budget check happens once,
+      // up front, against the candidate count (rather than per-item inside a
+      // serial loop): either the whole wave fires within the remaining
+      // budget, or none of it does. `queryWithin` still races each query
+      // against that same remaining-budget snapshot.
+      const symCandidates = [...symSet].slice(0, max);
+      if (symCandidates.length > 0 && remaining() > 0) {
+        symbolsQueried.push(...symCandidates);
+        const budget = remaining();
+        const symPairs = await Promise.all(
+          symCandidates.map(async (sym) => ({
+            sym,
+            res: await queryWithin(codeGraph.query("search", sym, 4), budget),
+          })),
+        );
+        for (const { sym, res } of symPairs) {
+          if (isHit(res)) {
+            sections.push(`Definitions of \`${sym}\`:\n${res}`);
+            resolved.push(sym);
+          }
         }
       }
 
       // File context — symbols a referenced file defines, plus its dependents
       // (what a change to it could break). This is the impact-analysis the agent
-      // would otherwise have to discover by hand.
-      for (const p of [...pathSet].slice(0, max)) {
-        if (remaining() <= 0) break;
-        pathsQueried.push(p);
-        const syms = await queryWithin(codeGraph.query("file_symbols", p, 12), remaining());
-        if (isHit(syms)) {
-          sections.push(`Symbols in ${p}:\n${syms}`);
-          resolved.push(p);
-          const deps = await queryWithin(codeGraph.query("dependents", p, 8), remaining());
-          if (isHit(deps)) sections.push(deps);
+      // would otherwise have to discover by hand. The `file_symbols` lookups are
+      // independent of each other, so they fire as one concurrent wave; the
+      // `dependents` lookups depend on which files actually resolved, so they
+      // form a second concurrent wave over just the hits. Results are re-keyed
+      // by path and re-assembled in original candidate order below, preserving
+      // the exact "Symbols in P" immediately followed by its own dependents
+      // section ordering the serial loop produced.
+      const pathCandidates = [...pathSet].slice(0, max);
+      if (pathCandidates.length > 0 && remaining() > 0) {
+        pathsQueried.push(...pathCandidates);
+        const symsBudget = remaining();
+        const symsPairs = await Promise.all(
+          pathCandidates.map(async (p) => ({
+            p,
+            syms: await queryWithin(codeGraph.query("file_symbols", p, 12), symsBudget),
+          })),
+        );
+
+        const hitPaths = symsPairs.filter(({ syms }) => isHit(syms)).map(({ p }) => p);
+        const depsBudget = remaining();
+        const depsPairs =
+          hitPaths.length > 0 && depsBudget > 0
+            ? await Promise.all(
+                hitPaths.map(async (p) => ({
+                  p,
+                  deps: await queryWithin(codeGraph.query("dependents", p, 8), depsBudget),
+                })),
+              )
+            : [];
+        const depsByPath = new Map(depsPairs.map(({ p, deps }) => [p, deps]));
+
+        for (const { p, syms } of symsPairs) {
+          if (isHit(syms)) {
+            sections.push(`Symbols in ${p}:\n${syms}`);
+            resolved.push(p);
+            const deps = depsByPath.get(p);
+            if (deps && isHit(deps)) sections.push(deps);
+          }
         }
       }
 

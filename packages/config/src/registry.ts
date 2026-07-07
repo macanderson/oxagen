@@ -1880,6 +1880,35 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "2",
   },
+  OXAGEN_REVISE_MIN_CONFIDENCE: {
+    group: "CLI",
+    description:
+      "Perf #10: minimum judge confidence (0-100) an 'incomplete' verdict must carry before " +
+      "the pipeline spends a full execute+judge round revising it. A low-confidence incomplete " +
+      "call is a coin-flip that leans complete, so revising it doubles turn cost for marginal " +
+      "expected gain — confident-incomplete verdicts still revise. Default 40; 0 restores " +
+      "always-revise.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "40",
+  },
+  OXAGEN_JUDGE_FAST_COMPLEXITY_MAX: {
+    group: "CLI",
+    description:
+      "Complexity ceiling (0-100) under which pickTieredAdvisor substitutes a cheap 'fast' " +
+      "tier model as the completeness judge instead of the executor's own model, provided the " +
+      "diff also stays under OXAGEN_DIFF_BUDGET. An explicit OXAGEN_LLM_ADVISOR always wins. A " +
+      "non-positive value opts out entirely. Default 35.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "35",
+  },
   OXAGEN_SPEC_GATE: {
     group: "CLI",
     description:

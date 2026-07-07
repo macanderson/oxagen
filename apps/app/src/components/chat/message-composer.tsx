@@ -56,6 +56,7 @@ import { SlashCommandMenu } from "./slash-command-menu";
 import { matchSlashCommands, type SlashCommand } from "@oxagen/ai/slash-commands";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
+import { AgentSelector, type AgentOption } from "./agent-selector";
 import {
   pinStorageKey,
   readStoredPins,
@@ -244,6 +245,7 @@ export function MessageComposer({
   availableMcpServers,
   availableRepos,
   availableEnvironments,
+  availableAgents,
   workspaceBudgetGovernance,
   onInputHasContentChange,
   orgSlug,
@@ -281,6 +283,8 @@ export function MessageComposer({
   availableRepos?: RepoOption[];
   /** Workspace environments usable as the code-mode target. */
   availableEnvironments?: EnvironmentOption[];
+  /** Selectable agents for the agent picker; a code agent governs code mode. */
+  availableAgents?: AgentOption[];
   /**
    * Workspace-level per-turn budget governance (OXA-2081), resolved
    * server-side via `workspace.budget.policy.read`. Null/omitted ⇒ no
@@ -319,11 +323,23 @@ export function MessageComposer({
   // When on, a coding turn runs in a sandbox against a selected repo +
   // environment — both are REQUIRED before the send gate opens (see
   // `codeGateBlocked` below).
-  const [codeMode, setCodeMode] = React.useState(false);
+  const [manualCodeMode, setManualCodeMode] = React.useState(false);
   const [selectedRepoKey, setSelectedRepoKey] = React.useState<string | null>(null);
   const [selectedEnvId, setSelectedEnvId] = React.useState<string | null>(null);
   const selectedRepo = availableRepos?.find((r) => r.key === selectedRepoKey) ?? null;
   const selectedEnv = availableEnvironments?.find((e) => e.id === selectedEnvId) ?? null;
+
+  // ── Agent selection (OXA app-agent-selector) ──────────────────────────────
+  // The selected agent GOVERNS code mode: a code agent (isCode) forces it on
+  // and reveals the repo/code tooling + UI; a chat agent forces it off and
+  // hides that UI. With no agent selected (the "Default chat" option, or a
+  // workspace that never created an agent) the manual Code2 toggle owns code
+  // mode, so agent-less workspaces behave exactly as they did before.
+  const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
+  const selectedAgent =
+    availableAgents?.find((a) => a.agentId === selectedAgentId) ?? null;
+  const agentGovernsCode = selectedAgent !== null;
+  const codeMode = agentGovernsCode ? selectedAgent.isCode : manualCodeMode;
 
   // Default the environment picker to the workspace default (isDefault) the
   // first time code mode is turned on with no environment chosen yet.
@@ -469,19 +485,27 @@ export function MessageComposer({
   );
   const slashOpen = slashQuery !== null && slashCommands.length > 0;
 
-  // Ref mirror of the code-mode + pin selection so dispatchQueued (queue-drain
-  // path) reads the CURRENT selection at drain time, same pattern as
-  // activeServerIdsRef/parentMessageIdRef below.
+  // Ref mirror of the code-mode + pin + agent selection so dispatchQueued
+  // (queue-drain path) reads the CURRENT selection at drain time, same pattern
+  // as activeServerIdsRef/parentMessageIdRef below.
   const codeStateRef = React.useRef({
     codeMode,
     selectedRepo,
     selectedEnvId,
     isPinned,
     selectedEnv,
+    selectedAgentId,
   });
   React.useEffect(() => {
-    codeStateRef.current = { codeMode, selectedRepo, selectedEnvId, isPinned, selectedEnv };
-  }, [codeMode, selectedRepo, selectedEnvId, isPinned, selectedEnv]);
+    codeStateRef.current = {
+      codeMode,
+      selectedRepo,
+      selectedEnvId,
+      isPinned,
+      selectedEnv,
+      selectedAgentId,
+    };
+  }, [codeMode, selectedRepo, selectedEnvId, isPinned, selectedEnv, selectedAgentId]);
 
   // Stable ref for the callback so the textarea onChange handler never
   // captures a stale closure — the identity of the ref never changes.
@@ -881,6 +905,7 @@ export function MessageComposer({
     fd.set("budget", JSON.stringify(budgetPayload(modelSnapshot)));
     const code = codePayload(codeMode, selectedRepo, selectedEnv);
     if (code) fd.set("code", JSON.stringify(code));
+    if (selectedAgentId) fd.set("agentId", selectedAgentId);
     // Pinned chat context — only when pinned and NOT in code mode (code mode
     // already conveys the repo/env via `code`, so the two never double up).
     if (isPinned && !codeMode) {
@@ -1014,6 +1039,7 @@ export function MessageComposer({
       const currentCode = codeStateRef.current;
       const code = codePayload(currentCode.codeMode, currentCode.selectedRepo, currentCode.selectedEnv);
       if (code) fd.set("code", JSON.stringify(code));
+      if (currentCode.selectedAgentId) fd.set("agentId", currentCode.selectedAgentId);
       if (currentCode.isPinned && !currentCode.codeMode) {
         const pinned = buildPinnedContext(currentCode.selectedRepo, currentCode.selectedEnv);
         if (pinned) fd.set("pinnedContext", JSON.stringify(pinned));
@@ -1367,11 +1393,20 @@ export function MessageComposer({
           </button>
         ) : (
           <>
-            {/* Model picker + reasoning effort — inline on desktop, in the
-                overflow sheet on mobile. */}
+            {/* Model picker + agent picker + reasoning effort — inline on
+                desktop, in the overflow sheet on mobile. The agent picker:
+                selecting a code agent reveals the repo/code tooling + UI (and
+                runs the turn in the sandbox); a chat agent / the default keeps
+                the plain composer. Renders nothing when the workspace has no
+                agents, so agent-less workspaces are unaffected. */}
             {!isMobile && (
               <>
                 <ModelPicker value={model} onChange={setModel} modelConfig={modelConfig} />
+                <AgentSelector
+                  agents={availableAgents ?? []}
+                  value={selectedAgentId}
+                  onChange={setSelectedAgentId}
+                />
                 {showEffortControl && effortSelect}
               </>
             )}
@@ -1429,25 +1464,30 @@ export function MessageComposer({
 
             {/* Code mode toggle — routes the turn to a sandboxed coding agent
                 against the selected repo + environment (see ChatAgentToolbar
-                above). Requires both selections before send unblocks.
-                Essential — always inline. */}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-label="Toggle code mode"
-              aria-pressed={codeMode}
-              disabled={!hasRepos && !codeMode}
-              title={!hasRepos && !codeMode ? "Connect a GitHub repository to use code mode" : undefined}
-              onClick={() => setCodeMode((v) => !v)}
-              className={cn(
-                "p-0",
-                isMobile ? "h-11 w-11" : "h-8 w-8",
-                codeMode && "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
-              )}
-            >
-              <Code2 className="h-4 w-4" />
-            </Button>
+                above). Requires both selections before send unblocks. Hidden
+                when a selected agent governs code mode (its identity — code
+                vs chat — decides, so a manual toggle would contradict it);
+                the manual toggle only owns code mode for the default
+                (no-agent) path. Essential — always inline when shown. */}
+            {!agentGovernsCode && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label="Toggle code mode"
+                aria-pressed={codeMode}
+                disabled={!hasRepos && !codeMode}
+                title={!hasRepos && !codeMode ? "Connect a GitHub repository to use code mode" : undefined}
+                onClick={() => setManualCodeMode((v) => !v)}
+                className={cn(
+                  "p-0",
+                  isMobile ? "h-11 w-11" : "h-8 w-8",
+                  codeMode && "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
+                )}
+              >
+                <Code2 className="h-4 w-4" />
+              </Button>
+            )}
 
             {!isMobile && (
               <>
@@ -1485,7 +1525,6 @@ export function MessageComposer({
             )}
           </>
         )}
-
         <div className="ml-auto flex items-center gap-1.5">
           {isStreaming && queue.length > 0 ? (
             <span className="text-xs tabular-nums text-muted-foreground">
@@ -1571,6 +1610,16 @@ export function MessageComposer({
               <span className="text-sm">Model</span>
               <ModelPicker value={model} onChange={setModel} modelConfig={modelConfig} />
             </div>
+            {(availableAgents?.length ?? 0) > 0 && (
+              <div className="flex min-h-11 items-center justify-between gap-2">
+                <span className="text-sm">Agent</span>
+                <AgentSelector
+                  agents={availableAgents ?? []}
+                  value={selectedAgentId}
+                  onChange={setSelectedAgentId}
+                />
+              </div>
+            )}
             {showEffortControl && (
               <div className="flex min-h-11 items-center justify-between gap-2">
                 <span className="text-sm">Reasoning effort</span>

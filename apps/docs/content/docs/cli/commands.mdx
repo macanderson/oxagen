@@ -21,6 +21,8 @@ With no prompt in a terminal, opens the interactive REPL. With a prompt, runs on
 | `--mode <mode>` | Permission mode: `ask`, `accept-edits`, `bypass`, `readonly`. REPL default is `ask`; one-shot is ungated unless set. |
 | `--no-pipeline` | Skip prompt evaluation, context injection, and completeness judging (raw model loop). |
 | `--verbose` | Emit full per-turn telemetry: per-phase timing, model, tokens, cost, and tool results. |
+| `--budget <usd>` | Enable a session-scoped per-turn dollar budget, e.g. `--budget 2.50`. See [Per-turn budget](/docs/cli/budget). |
+| `--budget-mode <mode>` | What happens at the budget limit: `grace` \| `prompt` \| `enforce` (default `prompt`; ignored without `--budget`). |
 
 ## oxagen agents — dispatch a fleet
 

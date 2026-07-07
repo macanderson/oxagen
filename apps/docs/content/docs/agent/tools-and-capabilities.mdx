@@ -40,6 +40,22 @@ Memories persist across sessions and are visible in **Workspace → Knowledge �
 
 See [Code execution](/docs/agent/code-execution) for full details on the sandbox environment.
 
+### Deterministic coding tools
+
+Every coding-agent turn — the CLI, the in-app [Code mode](/docs/agent/chat-interface#code-mode) sandbox, an API-triggered agent run, or the MCP sandbox agent — also advertises a fixed set of **structured, deterministic tools** (ADR-021 §3). These replace the model's usual approach of shelling out and parsing raw scrollback for the most common mechanical duties — running tests, typechecking, reading a diff, checking repo health — with a tool that runs **zero model calls**: a pure function resolves scope, a shell command executes, and a deterministic parser compresses the result into a small typed object before the model ever sees it. The point is token economy and accuracy: the agent spends its context on the handful of failures or errors that matter, not on a 500-line reporter dump it would otherwise have to re-derive structure from.
+
+Four of these are **engine-internal** — unlike the capability-backed tools elsewhere on this page, they have no REST route or standalone MCP tool. They live only inside the coding-agent's tool map (`buildWorkspaceTools` in `packages/agent-engine/src/tools.ts`), the same registration point as the primitive `read_file`/`bash`/`code_graph` tools, so they are identical across every surface that runs the turn loop. The fifth, `debug_with_trace`, IS a full capability (`agent.debug.trace`) with its own API route and MCP tool, so it can also be called directly outside a turn — see `docs/capabilities/agent.debug.trace.md` in the capability reference set for the full input/output shape.
+
+| Tool (model-facing) | Canonical name | Surface | Purpose |
+|---|---|---|---|
+| `test_unit_run` | `test.unit.run` | Agent turn only | Runs vitest over only the sibling/importing tests implicated by a set of changed files (or an explicit `scope.package`/`scope.files`) and returns a typed pass/fail summary — counts, duration, and the first failing assertions with file:line — instead of the reporter's raw output. It never runs the whole repo: an empty selection or `scope.all` returns a hint rather than sweeping every test. |
+| `build_package_run` | `build.package.run` | Agent turn only | Typechecks (default `mode: "typecheck"`) or builds a package/file scope and returns deduped, file-grouped compiler errors as a typed list instead of raw `tsc`/build output. |
+| `git_diff_summarize` | `git.diff.summarize` | Agent turn only | Summarizes the working diff as a typed per-file overview — change type, added/removed line counts, and the enclosing symbols touched (read from git's own hunk headers, no AST) — the cheap orientation before reading the actual patch. |
+| `workspace_health_check` | `workspace.health.check` | Agent turn only | One compact snapshot of repo state: git branch, dirty-file count, and ahead/behind vs. upstream (always cheap), plus opt-in typecheck and lint summaries capped to a small bounded sample. |
+| `debug_with_trace` | `agent.debug.trace` | Full capability (API, MCP, agent) | Diagnoses why an agent execution failed as a structured failure frame — the failing step, error class, parsed top stack frames, related trace spans, and deterministically-ranked suspect files. Set `summarize: true` to add exactly one LLM call for a root-cause diagnosis; every other field is produced without a model. |
+
+Every tool shares a small set of argument conventions so the model learns them once: `verbosity` (`minimal` default, `standard`, or `verbose`) caps how much detail comes back, an optional numeric `limit` bounds list length directly, and repo-scoped tools take a `scope` that is exactly one of `{ package }`, `{ files }`, or `{ all }`. Canonical tool names follow the `domain.subject.action` naming standard (see [ADR-022](/docs/api/capabilities#capability-naming-and-aliases)); the model-facing name is the same string with dots replaced by underscores.
+
 ### Planning
 
 | Tool | Description |
