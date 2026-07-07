@@ -21,6 +21,7 @@ import { GITHUB_MCP_SERVER } from "@oxagen/plugins";
 import { logger } from "@oxagen/handlers/logger";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
+import { resolveAgentToolsManager } from "./authz";
 
 const InstallGithubMcpSchema = z.object({
   orgSlug: z.string().min(1),
@@ -48,36 +49,11 @@ export async function installGithubMcp(
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
   const { orgSlug, workspaceSlug } = parsed.data;
-  const session = await getSessionOrRedirect();
-  const org = await resolveOrg(orgSlug);
-  const ws = await resolveWorkspace(org.id, workspaceSlug);
-  await assertOrgMember(org.id, session.user.id);
-
-  // Gate: workspace owner or admin only.
-  const wsRoleRows = await runInTenantScope(
-    { orgId: org.id, workspaceId: ws.id },
-    () =>
-      withTenantDb((tx) =>
-        tx
-          .select({ role: schema.workspaceUsers.role })
-          .from(schema.workspaceUsers)
-          .where(
-            and(
-              eq(schema.workspaceUsers.workspaceId, ws.id),
-              eq(schema.workspaceUsers.userId, session.user.id),
-            ),
-          )
-          .limit(1),
-      ),
-  );
-
-  const wsRole = wsRoleRows[0]?.role ?? "";
-  if (!["owner", "admin"].includes(wsRole.toLowerCase())) {
-    return {
-      ok: false,
-      error: "Only workspace owners and admins can install plugins.",
-    };
-  }
+  // Gate: the shared agent-tools authz seam (workspace owner/admin today,
+  // Marketplace Install role later — see ./authz.ts).
+  const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { org, ws } = auth.scope;
 
   try {
     // Upsert: install or retrieve the existing listing (idempotent).
