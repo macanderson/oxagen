@@ -29,11 +29,17 @@ vi.mock("node:child_process", () => ({
 
 const runTurnMock = vi.fn();
 const selectMock = vi.fn();
-vi.mock("@oxagen/agent-engine", () => ({
-  runTurn: (a: unknown) => runTurnMock(a),
-  selectBestCandidate: (a: unknown) => selectMock(a),
-  looksPassing: (o: string | undefined) => Boolean(o && !/fail/i.test(o)),
-}));
+vi.mock("@oxagen/agent-engine", async (importOriginal) => {
+  // Keep the REAL decideSelection (a pure heuristic we exercise, not mock) and
+  // everything else; override only the two calls the test drives directly.
+  const actual = await importOriginal<typeof import("@oxagen/agent-engine")>();
+  return {
+    ...actual,
+    runTurn: (a: unknown) => runTurnMock(a),
+    selectBestCandidate: (a: unknown) => selectMock(a),
+    looksPassing: (o: string | undefined) => Boolean(o && !/fail/i.test(o)),
+  };
+});
 // Capture the closure runCandidate hands to createCodeGraphProvider so tests
 // can invoke it directly and see which cwd it forwards to queryCodeGraph.
 const createCodeGraphProviderMock = vi.fn((fn: unknown) => ({ __fn: fn }));
@@ -74,7 +80,16 @@ describe("runBestOfN", () => {
     let call = 0;
     runTurnMock.mockImplementation(async (o: { onFileChange?: (d: string, f: string[]) => void; onStage?: (s: { label: string }) => void }) => {
       call++;
-      const diff = `--- a/x.py\n+++ b/x.py\n+cand${call}`;
+      // Non-equivalent diffs (same file, DIFFERENT added content) so each gets a
+      // distinct consensus fingerprint — proven non-clustering by consensus.test.ts
+      // (old2→X vs old2→Y is "selector-needed"). With all three passing this is a
+      // genuine tie, which is what routes decideSelection to the LLM selector
+      // (the consensus short-circuit is covered by its own test above). Using the
+      // real git-diff shape the fingerprinter expects, not a hand-shortened one.
+      const foo = (added: string) =>
+        `diff --git a/src/foo.ts b/src/foo.ts\nindex 1..2 100644\n--- a/src/foo.ts\n+++ b/src/foo.ts\n@@ -1,4 +1,4 @@\n line1\n-old2\n+${added}\n line3\n line4`;
+      const distinctDiffs = [foo("alpha"), foo("beta"), foo("gamma")];
+      const diff = distinctDiffs[(call - 1) % distinctDiffs.length]!;
       o.onStage?.({ label: "executing" });
       o.onFileChange?.(diff, ["x.py"]);
       return { text: `candidate ${call}`, steps: 3, messages: [], usage: {}, trace: { id: `t${call}` } };
@@ -98,6 +113,10 @@ describe("runBestOfN", () => {
       onEvent: (e) => events.push(e),
     });
 
+    // The LLM selector actually ran (genuine tie) and its verdict was used —
+    // assert the mechanism, not a value the heuristic might coincidentally match.
+    expect(selectMock).toHaveBeenCalledTimes(1);
+    expect(result.selection.model).toBe("openai/gpt-4o");
     // Winner selected + returned.
     expect(result.selection.winnerId).toBe("candidate-2");
     expect(result.winner?.id).toBe("candidate-2");
@@ -118,6 +137,32 @@ describe("runBestOfN", () => {
     // A worktree was created per candidate and the winner applied.
     expect(gitCalls.filter((a) => a[0] === "worktree" && a[1] === "add")).toHaveLength(3);
     expect(gitCalls.some((a) => a[0] === "apply")).toBe(true);
+  });
+
+  it("perf #6: skips the LLM selector when the executed evidence reaches a consensus", async () => {
+    // All candidates converge on the SAME passing diff → a consensus the
+    // deterministic heuristic settles for free. The comparative selector (an
+    // extra frontier round-trip over N diffs) must NOT be called.
+    runTurnMock.mockImplementation(async (o: { onFileChange?: (d: string, f: string[]) => void }) => {
+      o.onFileChange?.("--- a/x.py\n+++ b/x.py\n+same", ["x.py"]);
+      return { text: "ok", steps: 1, messages: [], usage: {}, trace: {} };
+    });
+
+    const events: BestOfNEvent[] = [];
+    const result = await runBestOfN({
+      prompt: "fix the bug",
+      cwd: "/repo",
+      candidates: 3,
+      ai,
+      verifyCommand: "pytest -q", // all pass (verifyMock → exit 0, "2 passed")
+      onEvent: (e) => events.push(e),
+    });
+
+    expect(selectMock).not.toHaveBeenCalled();
+    // Still resolves and applies a winner via the heuristic.
+    expect(result.selection.model).toBe("heuristic");
+    expect(result.winner).not.toBeNull();
+    expect(events.map((e) => e.type)).toContain("select-done");
   });
 
   it("does not apply anything in readOnly mode", async () => {
@@ -301,29 +346,31 @@ describe("runBestOfN", () => {
 
   it("keeps every candidate's worktree alive through selection, removing them only after", async () => {
     // P1: worktree cleanup used to happen in runCandidate's own `finally`,
-    // before selection ever ran. Assert the inverse now holds: AT THE MOMENT
-    // the selector is invoked, nothing has been removed yet; only once the
-    // whole race (selection + apply) is done are all 3 worktrees cleaned up.
+    // before selection ever ran. Assert the inverse now holds: at the moment
+    // selection COMPLETES (the `select-done` event), nothing has been removed
+    // yet — the worktrees must survive the whole race; only once selection +
+    // apply are done are all 3 cleaned up. Observing `select-done` (not the LLM
+    // selector) keeps this robust whether selection took the deterministic
+    // heuristic short-circuit or the comparative selector.
     runTurnMock.mockImplementation(async (o: { onFileChange?: (d: string, f: string[]) => void }) => {
       o.onFileChange?.("--- a/x\n+++ b/x\n+z", ["x"]);
       return { text: "ok", steps: 1, messages: [], usage: {}, trace: {} };
     });
-    let removedCountDuringSelect = -1;
-    selectMock.mockImplementation(async () => {
-      removedCountDuringSelect = gitCalls.filter((a) => a[0] === "worktree" && a[1] === "remove").length;
-      return {
-        winnerId: "candidate-1",
-        reasoning: "",
-        ranking: [{ id: "candidate-1", score: 90, note: "ok" }],
-        model: "m",
-        fallback: false,
-        usage: {},
-      };
+
+    let removedAtSelectDone = -1;
+    await runBestOfN({
+      prompt: "explain",
+      cwd: "/repo",
+      candidates: 3,
+      ai,
+      onEvent: (e) => {
+        if (e.type === "select-done") {
+          removedAtSelectDone = gitCalls.filter((a) => a[0] === "worktree" && a[1] === "remove").length;
+        }
+      },
     });
 
-    await runBestOfN({ prompt: "explain", cwd: "/repo", candidates: 3, ai });
-
-    expect(removedCountDuringSelect).toBe(0);
+    expect(removedAtSelectDone).toBe(0);
     expect(gitCalls.filter((a) => a[0] === "worktree" && a[1] === "add")).toHaveLength(3);
     expect(gitCalls.filter((a) => a[0] === "worktree" && a[1] === "remove")).toHaveLength(3);
   });

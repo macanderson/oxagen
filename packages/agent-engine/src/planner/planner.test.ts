@@ -142,6 +142,31 @@ describe("planTasks", () => {
     await planTasks({ goal: "pinned, then run", ai, model: "openai/gpt-5" });
     expect((capture.args as { model: string }).model).toBe("openai/gpt-5");
   });
+
+  it("perf #9: defaults the planner call to the fast tier for a non-precise multi-part goal", async () => {
+    const capture: { args?: unknown } = {};
+    const ai = makeAi(
+      [{ id: "a", title: "A", description: "do a", tier: "fast", files: [], dependsOn: [] }],
+      capture,
+    );
+    // Multi-part (has "and"/"then") but nothing high-stakes → cheap decomposition.
+    await planTasks({ goal: "rename the helper and update its callers, then run the tests", ai });
+    expect((capture.args as { model: string }).model).toBe(modelForTier("fast"));
+  });
+
+  it("perf #9: escalates the planner call to precise for a high-stakes multi-part goal", async () => {
+    const capture: { args?: unknown } = {};
+    const ai = makeAi(
+      [{ id: "a", title: "A", description: "do a", tier: "precise", files: [], dependsOn: [] }],
+      capture,
+    );
+    // Auth/billing/migration hits PRECISE_DOMAINS → decomposition must not under-tier.
+    await planTasks({
+      goal: "add auth to the billing API and migrate the payments schema, then document it",
+      ai,
+    });
+    expect((capture.args as { model: string }).model).toBe(modelForTier("precise"));
+  });
 });
 
 describe("isSingleTaskGoal (ADR-021 §1 deterministic fast-path heuristic)", () => {
