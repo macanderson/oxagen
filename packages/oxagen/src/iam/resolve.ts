@@ -101,8 +101,17 @@ export type ResolveResult =
 export interface ResolveInput {
   /** The principal whose access is being evaluated. */
   principal: ResolvedPrincipal;
-  /** The capability identifier string, e.g. "organization.create". */
+  /** The capability identifier string, e.g. "org.create". */
   capability: string;
+  /**
+   * Legacy names this capability was previously known by (ADR-022). A grant,
+   * policy, or role-grant row keyed by any of these OR by `capability` matches.
+   * Lets existing `role_grants` rows written under an old name keep granting
+   * access after a rename, without a data migration. Absent/empty → only
+   * `capability` matches (the pre-alias behaviour). The caller (fetch-authz)
+   * derives this from the contract's `aliases`.
+   */
+  capabilityAliases?: readonly string[];
   /** The scope of the invocation — org or workspace. */
   scope: ResolveScope;
   /** Direct grants for this principal. Pre-fetched by the caller. */
@@ -177,6 +186,12 @@ export function resolve(input: ResolveInput): ResolveResult {
     clientIp: input.clientIp ?? null,
   };
 
+  // Capability matching is alias-aware (ADR-022): a row keyed by the canonical
+  // name OR any retired alias is relevant. Existing grants written under an old
+  // name therefore keep resolving after a rename.
+  const capabilityNames = new Set<string>([capability, ...(input.capabilityAliases ?? [])]);
+  const matchesCapability = (id: string): boolean => capabilityNames.has(id);
+
   const steps: TraceStep[] = [];
 
   // Filter grants to those relevant to this (principal, capability, scope).
@@ -191,7 +206,7 @@ export function resolve(input: ResolveInput): ResolveResult {
   const relevantGrants = grants.filter(
     (g) =>
       g.principalId === principal.id &&
-      g.capabilityId === capability &&
+      matchesCapability(g.capabilityId) &&
       ((g.scopeKind === "workspace" &&
         scope.kind === "workspace" &&
         g.scopeId === scope.workspaceId) ||
@@ -212,7 +227,7 @@ export function resolve(input: ResolveInput): ResolveResult {
   // OXA-1390 where org policies had no condition evaluation at all.
   const orgEnforcedDenyPolicies = policies.filter(
     (p) =>
-      p.capabilityId === capability &&
+      matchesCapability(p.capabilityId) &&
       p.enforced &&
       p.effect === "deny" &&
       p.scopeKind === "org" &&
@@ -221,7 +236,7 @@ export function resolve(input: ResolveInput): ResolveResult {
   );
   const orgEnforcedAllowPolicies = policies.filter(
     (p) =>
-      p.capabilityId === capability &&
+      matchesCapability(p.capabilityId) &&
       p.enforced &&
       p.effect === "allow" &&
       p.scopeKind === "org" &&
@@ -432,7 +447,7 @@ export function resolve(input: ResolveInput): ResolveResult {
 
   // Find role grants for this capability from the principal's roles.
   const matchingRoleGrants = roleGrants.filter(
-    (rg) => principalRoleIds.includes(rg.roleId) && rg.capabilityId === capability,
+    (rg) => principalRoleIds.includes(rg.roleId) && matchesCapability(rg.capabilityId),
   );
 
   const roleAllowGrant = matchingRoleGrants.find((rg) => rg.effect === "allow");
