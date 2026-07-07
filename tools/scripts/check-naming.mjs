@@ -77,6 +77,7 @@ const GRANDFATHER = new Map([
   ["schema.validate.node", "action-in-middle (validate.node) → schema.node.validate"],
   ["schema.validate.relationship", "action-in-middle (validate.relationship) → schema.relationship.validate"],
   ["system.install.instructions", "noun-terminal read → system.install_instructions.get"],
+  ["telemetry.error.cluster", "noun-terminal read (cluster used as a noun) → telemetry.error_cluster.list or telemetry.error.summarize"],
 ]);
 
 // Charset: lowercase alnum words joined by `_` inside a segment; segments joined

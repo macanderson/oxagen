@@ -4,7 +4,7 @@ Reference for all declared capabilities across the Oxagen platform.
 Each capability is implemented across API, MCP, and agent surfaces with
 contract-first design, IAM enforcement, and instrumentation.
 
-## Agent (62)
+## Agent (63)
 
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
 - [agent.code.execute](agent.code.execute.md) — Execute a code snippet in an isolated sandbox and return the exit code, stdout, stderr, and execution time
@@ -46,6 +46,7 @@ contract-first design, IAM enforcement, and instrumentation.
 - [agent.repo.edit](agent.repo.edit.md) — Run the coding agent to edit files in a connected GitHub repo and open a pull request with the changes
 - [agent.sandbox.exec](agent.sandbox.exec.md) — Run a shell command inside a durable sandbox session; filesystem/process state persists across calls; returns stdout, stderr, exit code
 - [agent.sandbox.files.list](agent.sandbox.files.list.md) — List files and directories inside a durable sandbox session's workspace
+- [agent.sandbox_file.read](agent.sandbox_file.read.md) — Read one file's contents from a durable sandbox session's workspace (UTF-8 text or base64 for binary, truncated at maxBytes)
 - [agent.sandbox.snapshot](agent.sandbox.snapshot.md) — Capture a filesystem snapshot of a durable sandbox session so it can be restored after an idle reap or the 24h lifetime ceiling
 - [agent.sandbox.start](agent.sandbox.start.md) — Provision or reconnect to a durable code-agent sandbox that persists across turns; pass a stable sessionKey to reuse one warm sandbox
 - [agent.sandbox.stop](agent.sandbox.stop.md) — Terminate a durable sandbox session and release its resources; call when the work is finished
@@ -157,12 +158,13 @@ contract-first design, IAM enforcement, and instrumentation.
 - [connection.preview](connection.preview.md) — Preview sample records from a data source connection for the setup wizard
 - [connection.update](connection.update.md) — Rename a connection and/or adjust its delivery configuration (sync schedule/scope)
 
-## Conversation (7)
+## Conversation (8)
 
 - [conversation.archive](conversation.archive.md) — Archive or restore one or more conversations in a single set-based update
 - [conversation.chat](conversation.chat.md) — Post a message to an existing conversation; appends to the conversation thread
 - [conversation.attachment.add](conversation.attachment.add.md) — Link an already-uploaded asset to a conversation as a chat attachment and return its conversation-file record
 - [conversation.delete](conversation.delete.md) — Permanently delete one or more conversations from the user's view via soft-delete
+- [conversation.export](conversation.export.md) — Export an entire conversation (active branch) as a Markdown document or a formatted PDF
 - [conversation.files.list](conversation.files.list.md) — List the ready generated assets attached to a conversation, access-policy filtered, newest-first, keyset-paginated
 - [conversation.list](conversation.list.md) — List a user's conversations in a workspace, filtered by active or archived status
 - [conversation.purge](conversation.purge.md) — Bulk soft-delete every archived conversation the caller owns in the active workspace

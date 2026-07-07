@@ -32,7 +32,20 @@ render directive for the `image-preview` chat component.
 | `dataUri`  | `string` (optional) | Base-64 `data:image/png;base64,...` URI. Present when provider returns bytes. |
 | `alt`      | `string`            | Accessible alt text for the image.                                           |
 | `placeholder` | `boolean`        | `true` when generation was skipped (no key) or failed.                       |
-| `render`   | `RenderDirective`   | `{ componentId: "image-preview", props: { url?, dataUri?, alt, placeholder } }` |
+| `assetPublicId` | `string` (optional) | `gen_…` id of the persisted `generated_assets` row. Absent when persistence was skipped or failed. |
+| `serveUrl` | `string` (optional) | Access-controlled serving URL (`/api/v1/assets/{publicId}`) for the persisted image; preferred over `dataUri` for display. |
+| `persistWarning` | `string` (optional) | Present when the image could not be saved to conversation files (inline data URI unaffected). |
+| `render`   | `RenderDirective`   | `{ componentId: "image-preview", props: { url?, dataUri?, alt, placeholder } }` — `url` is set to `serveUrl` when the asset persisted. |
+
+## Conversation-file persistence
+
+Successful generations are uploaded to blob storage and recorded as an
+org-visible `generated_assets` row (kind `image`, `image/png`) via
+`persistGeneratedAsset`, with conversation linkage resolved from the chat
+turn's `messageId`, so they appear in the Conversation Files panel.
+Persistence is strictly non-fatal — when it is skipped (no image bytes / no
+user identity) or fails, the inline data-URI result still returns and the
+output carries a `persistWarning`.
 
 ## Behaviour without AI_GATEWAY_API_KEY
 

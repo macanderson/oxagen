@@ -23,6 +23,7 @@ const LOADERS: Record<string, LoaderEntry> = {
   "agent.sandbox.snapshot": () => import("./agent.sandbox.snapshot"),
   "agent.sandbox.stop": () => import("./agent.sandbox.stop"),
   "agent.sandbox_file.list": () => import("./agent.sandbox_file.list"),
+  "agent.sandbox_file.read": () => import("./agent.sandbox_file.read"),
   // Browser automation inside a durable session — all seven thin wrappers live
   // in one module (browser.ts) that drives `browserctl` via execInSession.
   "browser.navigate": () => import("./browser"),
@@ -128,9 +129,28 @@ export async function resolveHandler(capName: string): Promise<CapabilityHandler
   if (!loader) throw new Error(`No handler registered for capability ${capName}`);
   const mod = await loader();
   const exportName = toHandlerExportName(capName);
-  const handler = (mod[exportName] ?? mod.default) as CapabilityHandlerFn | undefined;
+  let handler = (mod[exportName] ?? mod.default) as CapabilityHandlerFn | undefined;
   if (typeof handler !== "function") {
-    throw new Error(`Handler module for ${capName} did not export ${exportName} or default`);
+    // ADR-022 snake_case capability names ("agent.sandbox_file.list",
+    // "agent.background_task.start", …) don't camelize to their module's
+    // readable export name via the dot-segment derivation above — e.g.
+    // "agent.sandbox_file.list" derives "agentSandbox_fileListHandler" while
+    // the module exports "agentSandboxFilesListHandler". Those modules were
+    // unresolvable at invoke time (the set_enabled module documents the gap
+    // and worked around it with a default export; the other snake_case
+    // modules had no workaround). Fall back to the module's single `*Handler`
+    // function export — every handler module exports exactly one, so this is
+    // unambiguous; if a module ever exports several, we still fail loudly.
+    const named = Object.entries(mod).filter(
+      (entry): entry is [string, CapabilityHandlerFn] =>
+        entry[0].endsWith("Handler") && typeof entry[1] === "function",
+    );
+    if (named.length === 1) handler = named[0]![1];
+  }
+  if (typeof handler !== "function") {
+    throw new Error(
+      `Handler module for ${capName} did not export ${exportName}, a unique *Handler function, or default`,
+    );
   }
   cache.set(capName, handler);
   return handler;

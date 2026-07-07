@@ -65,4 +65,34 @@ describe("SvgPreview", () => {
     const expected = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(SVG)}`;
     expect(img).toHaveAttribute("src", expected);
   });
+
+  it("shows a Download link when the persisted serveUrl is provided", () => {
+    render(
+      <SvgPreview
+        svg={SVG}
+        title={TITLE}
+        serveUrl="/api/v1/assets/gen_abc123"
+        assetPublicId="gen_abc123"
+      />,
+    );
+    const link = screen.getByLabelText(`Download ${TITLE} as SVG file`);
+    expect(link).toHaveAttribute("href", "/api/v1/assets/gen_abc123");
+    // The download attribute forces a save (with a readable name) even though
+    // the serve route ships SVG with attachment disposition.
+    expect(link).toHaveAttribute("download", `${TITLE}.svg`);
+  });
+
+  it("hides the Download link when no serveUrl is provided (persistence skipped/failed)", () => {
+    render(<SvgPreview svg={SVG} title={TITLE} />);
+    expect(screen.queryByLabelText(`Download ${TITLE} as SVG file`)).not.toBeInTheDocument();
+  });
+
+  it("never renders the SVG markup into the DOM (no dangerouslySetInnerHTML)", () => {
+    const malicious = '<svg xmlns="http://www.w3.org/2000/svg"><circle r="9"/></svg>';
+    const { container } = render(<SvgPreview svg={malicious} title={TITLE} />);
+    // The raw markup must only ever appear encoded inside the img src —
+    // querying the DOM for an actual <circle> element must find nothing.
+    expect(container.querySelector("circle")).toBeNull();
+    expect(container.querySelector("svg:not([class])")).toBeNull();
+  });
 });
