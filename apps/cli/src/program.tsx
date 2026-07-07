@@ -992,6 +992,31 @@ export function buildProgram(): Command {
       },
     );
 
+  // ── conversation: export & inspect chat conversations ───────────────────────
+
+  const conversation = program
+    .command("conversation")
+    .description("Export and inspect chat conversations");
+
+  conversation
+    .command("export <id>")
+    .description(
+      "Export a conversation's active branch as Markdown (stdout/file) or a " +
+        "formatted PDF (stored privately; prints the serve URL).",
+    )
+    .option("--format <format>", "Export format: md|markdown|pdf (default md)")
+    .option("-o, --output <file>", "Write markdown output to a file instead of stdout")
+    .option("--json", "Emit raw JSON output")
+    .action(
+      async (
+        id: string,
+        opts: { format?: string; output?: string; json?: boolean },
+      ) => {
+        const { handleConversationExport } = await import("./commands/conversation.js");
+        await handleConversationExport(id, opts);
+      },
+    );
+
   // ── sandbox: durable code-agent sandbox utilities ───────────────────────────
 
   const sandbox = program

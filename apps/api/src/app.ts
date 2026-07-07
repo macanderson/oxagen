@@ -119,6 +119,7 @@ import { conversationArchiveRoute } from "./routes/v1/conversation.archive";
 import { conversationDeleteRoute } from "./routes/v1/conversation.delete";
 import { conversationPurgeRoute } from "./routes/v1/conversation.purge";
 import { conversationFilesListRoute } from "./routes/v1/conversation.files.list";
+import { conversationExportRoute } from "./routes/v1/conversation.export";
 import { conversationAttachmentAddRoute } from "./routes/v1/conversation.attachment.add";
 import { assetUploadRoute } from "./routes/v1/asset.upload";
 import { pluginRegistryListRoute } from "./routes/v1/plugin.registry.list";
@@ -343,6 +344,8 @@ orgScoped.route("/conversations", conversationListRoute);
 // list route; Hono dispatches by method+full path so it does not clash with the
 // bare GET /conversations list or the /conversations/{rename,archive,…} sub-paths.
 orgScoped.route("/conversations", conversationFilesListRoute);
+// GET /conversations/:conversationId/export — same prefix trick as /files above.
+orgScoped.route("/conversations", conversationExportRoute);
 orgScoped.route("/conversations/rename", conversationRenameRoute);
 orgScoped.route("/conversations/archive", conversationArchiveRoute);
 orgScoped.route("/conversations/delete", conversationDeleteRoute);

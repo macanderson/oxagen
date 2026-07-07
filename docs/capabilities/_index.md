@@ -157,12 +157,13 @@ contract-first design, IAM enforcement, and instrumentation.
 - [connection.preview](connection.preview.md) — Preview sample records from a data source connection for the setup wizard
 - [connection.update](connection.update.md) — Rename a connection and/or adjust its delivery configuration (sync schedule/scope)
 
-## Conversation (7)
+## Conversation (8)
 
 - [conversation.archive](conversation.archive.md) — Archive or restore one or more conversations in a single set-based update
 - [conversation.chat](conversation.chat.md) — Post a message to an existing conversation; appends to the conversation thread
 - [conversation.attachment.add](conversation.attachment.add.md) — Link an already-uploaded asset to a conversation as a chat attachment and return its conversation-file record
 - [conversation.delete](conversation.delete.md) — Permanently delete one or more conversations from the user's view via soft-delete
+- [conversation.export](conversation.export.md) — Export an entire conversation (active branch) as a Markdown document or a formatted PDF
 - [conversation.files.list](conversation.files.list.md) — List the ready generated assets attached to a conversation, access-policy filtered, newest-first, keyset-paginated
 - [conversation.list](conversation.list.md) — List a user's conversations in a workspace, filtered by active or archived status
 - [conversation.purge](conversation.purge.md) — Bulk soft-delete every archived conversation the caller owns in the active workspace
