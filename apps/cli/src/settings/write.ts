@@ -13,6 +13,9 @@ import { getScopePaths, clearSettingsCache, type SettingsScope } from "./resolve
 import { atomicWriteFileSync } from "../lib/atomic-write.js";
 
 /** Keys `oxagen settings set` accepts. Complex sections are edited in the file. */
+// NOTE: merge union of PR #663 (per-function models) and PR #661 (confirmScope) —
+// the two branches each declared this list and the auto-merge kept both, which
+// broke the esbuild bundle with a duplicate-export error.
 export const SETTABLE_KEYS = [
   "model",
   "workerModel",
