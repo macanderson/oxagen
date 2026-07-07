@@ -80,10 +80,21 @@ export default function FileAttachment({
 }: FileAttachmentProps) {
   const { Icon, label, iconClass } = kindMeta(kind);
 
-  // Determine if the file should open inline (PDFs) or force download (others).
-  const isPdf = kind === "pdf" || mimeType?.startsWith("application/pdf");
-  const _openTarget = isPdf ? "_blank" : undefined;
+  // PDFs are browser-renderable, so they get an open-in-new-tab affordance.
+  // Other document kinds (docx/xlsx/pptx/zip/…) are download-only — the serve
+  // route ships them with attachment disposition, so a new-tab "open" would
+  // just be a confusing forced download (mobile browsers surface it as
+  // "file not supported").
+  const isPdf = kind === "pdf" || Boolean(mimeType?.startsWith("application/pdf"));
   const rel = "noopener noreferrer";
+
+  // ≥44px touch targets on mobile (size-11), compact size-8 from sm up.
+  const actionCls = cn(
+    "inline-flex size-11 sm:size-8 items-center justify-center rounded-md",
+    "text-muted-foreground hover:bg-muted hover:text-foreground",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    "transition-colors",
+  );
 
   return (
     <div
@@ -115,32 +126,24 @@ export default function FileAttachment({
 
       {/* Action buttons */}
       <div className="flex shrink-0 items-center gap-1">
-        {/* Open / preview */}
-        <a
-          href={url}
-          target="_blank"
-          rel={rel}
-          className={cn(
-            "inline-flex h-8 w-8 items-center justify-center rounded-md",
-            "text-muted-foreground hover:bg-muted hover:text-foreground",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            "transition-colors",
-          )}
-          aria-label={`Open ${name} in new tab`}
-        >
-          <ExternalLink className="size-4" aria-hidden="true" />
-        </a>
+        {/* Open / preview — PDFs only (browser-renderable) */}
+        {isPdf ? (
+          <a
+            href={url}
+            target="_blank"
+            rel={rel}
+            className={actionCls}
+            aria-label={`Open ${name} in new tab`}
+          >
+            <ExternalLink className="size-4" aria-hidden="true" />
+          </a>
+        ) : null}
         {/* Download */}
         <a
           href={url}
           download={name}
           rel={rel}
-          className={cn(
-            "inline-flex h-8 w-8 items-center justify-center rounded-md",
-            "text-muted-foreground hover:bg-muted hover:text-foreground",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            "transition-colors",
-          )}
+          className={actionCls}
           aria-label={`Download ${name}`}
         >
           <Download className="size-4" aria-hidden="true" />
