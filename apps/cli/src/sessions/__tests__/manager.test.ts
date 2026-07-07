@@ -247,7 +247,7 @@ describe("FleetSessionManager — detached dispatch", () => {
     const meta = await store.readMeta(sid);
     expect(meta?.owner).toBe("worker");
     expect(meta?.pid).toBe(0);
-    expect(meta?.mode).toBe("once"); // detached defaults to fire-and-forget
+    expect(meta?.mode).toBe("conversation"); // conversational by default (ADR-023 §5, spec §3)
   });
 
   it("uses the default node worker spawn when none is injected", async () => {

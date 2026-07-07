@@ -149,8 +149,9 @@ export class FleetSessionManager {
 
   /**
    * Dispatch new work as a DETACHED worker (`fleet worker <sid>`) so the caller
-   * can exit. Fire-and-forget (`once`) by default — a script dispatch that no
-   * one will follow up on. Returns the sid once the session exists on disk.
+   * can exit. Conversational by default (ADR-023 decision 5 / spec §3: sessions
+   * are conversational unless `--once`), so another terminal can follow up via
+   * `fleet send`. Returns the sid once the session exists on disk.
    */
   async dispatchDetached(opts: DispatchOptions): Promise<string> {
     const sid = newSessionId(this.now());
@@ -161,7 +162,7 @@ export class FleetSessionManager {
       owner: "worker",
       pid: 0,
       cwd: this.cwd,
-      mode: opts.mode ?? "once",
+      mode: opts.mode ?? "conversation",
       model: opts.model,
       agent: opts.agent,
       state: "queued",
