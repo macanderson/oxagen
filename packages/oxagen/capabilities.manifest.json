@@ -4672,6 +4672,24 @@
       }
     },
     {
+      "name": "skill.draft",
+      "file": "skill.draft.ts",
+      "domain": "skill",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "skill.edit",
       "file": "skill.edit.ts",
       "domain": "skill",

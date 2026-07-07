@@ -599,6 +599,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .skillAuthorHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "skill.draft",
+    async () =>
+      (await import("./skill.draft"))
+        .skillDraftHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "skill.create",
     async () =>
       (await import("./skill.create"))

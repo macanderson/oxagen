@@ -127,7 +127,7 @@ export const [agentLeaseSweep] = createFunction(
           await tx.execute(sql`
             UPDATE agent.subagent_runs
             SET status = 'pending', claimed_by = NULL, lease_expires_at = NULL, updated_at = now()
-            WHERE id = ANY(${requeueIds}::uuid[])
+            WHERE id = ANY(${sql.param(requeueIds)}::uuid[])
               AND status = 'running' AND lease_expires_at < now()
           `);
         }
@@ -138,7 +138,7 @@ export const [agentLeaseSweep] = createFunction(
                 error_reason = 'lease expired after ' || attempts || ' attempts',
                 summary = 'lease expired after ' || attempts || ' attempts',
                 completed_at = now(), lease_expires_at = NULL, updated_at = now()
-            WHERE id = ANY(${failIds}::uuid[])
+            WHERE id = ANY(${sql.param(failIds)}::uuid[])
               AND status = 'running' AND lease_expires_at < now()
           `);
         }
@@ -170,7 +170,7 @@ export const [agentLeaseSweep] = createFunction(
           await tx.execute(sql`
             UPDATE agent.agent_execution_steps
             SET status = 'pending', claimed_by = NULL, lease_expires_at = NULL, updated_at = now()
-            WHERE id = ANY(${requeueIds}::uuid[])
+            WHERE id = ANY(${sql.param(requeueIds)}::uuid[])
               AND status = 'running' AND lease_expires_at < now()
           `);
         }
@@ -180,7 +180,7 @@ export const [agentLeaseSweep] = createFunction(
             SET status = 'failed',
                 failure_reason = 'lease expired after ' || attempts || ' attempts',
                 completed_at = now(), lease_expires_at = NULL, updated_at = now()
-            WHERE id = ANY(${failIds}::uuid[])
+            WHERE id = ANY(${sql.param(failIds)}::uuid[])
               AND status = 'running' AND lease_expires_at < now()
           `);
         }

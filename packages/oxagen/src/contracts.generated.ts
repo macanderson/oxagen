@@ -269,6 +269,7 @@ import "./contracts/semantic.relationship.list";
 import "./contracts/semantic.relationship.suggest";
 import "./contracts/skill.author";
 import "./contracts/skill.create";
+import "./contracts/skill.draft";
 import "./contracts/skill.edit";
 import "./contracts/skill.enable";
 import "./contracts/skill.export";

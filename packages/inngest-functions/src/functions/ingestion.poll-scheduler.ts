@@ -54,7 +54,7 @@ export const [ingestionPollScheduler] = createFunction(
             FROM   ingestion.source_connections
             WHERE  status = 'connected'
             AND    deleted_at IS NULL
-            AND    connector_id = ANY(${sql`${pollableConnectorIds}`}::text[])
+            AND    connector_id = ANY(${sql.param(pollableConnectorIds)}::text[])
             AND    (next_poll_at IS NULL OR next_poll_at <= NOW())
             ORDER  BY next_poll_at ASC NULLS FIRST
             LIMIT  200
