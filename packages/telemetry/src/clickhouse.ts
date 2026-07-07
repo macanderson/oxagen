@@ -1,5 +1,6 @@
 import { createClient, type ClickHouseClient } from "@clickhouse/client";
 import { requireEnv } from "@oxagen/config/env";
+import { getPrincipalAttribution } from "@oxagen/tenancy";
 import { currentTraceIds } from "./tracer";
 import { getBreaker, type BreakerTransition, type CircuitBreaker } from "./circuit-breaker";
 import { breakerEnvConfig } from "./breaker-config";
@@ -240,6 +241,19 @@ export interface TokenUsageRow {
   trace_id?: string;
   /** OTEL span id (16-char lowercase hex) of the enclosing span. */
   span_id?: string;
+  /**
+   * Acting IAM principal uuid (migration 0023). Stamped automatically by
+   * insertTokenUsage() from the ambient tenant scope
+   * (@oxagen/tenancy getPrincipalAttribution) — same pattern as trace_id.
+   * Nil UUID when no principal was resolved. Explicit caller values win.
+   */
+  principal_id?: string;
+  /** "human" | "agent" | "service", or '' when no principal was resolved. */
+  principal_kind?: string;
+  /** Originating human user uuid, or the nil UUID. */
+  user_id?: string;
+  /** Canonical capability the spend occurred inside, or ''. */
+  capability_name?: string;
 }
 
 async function insertRows<T>(table: string, rows: readonly T[]): Promise<void> {
@@ -273,6 +287,28 @@ async function insertRows<T>(table: string, rows: readonly T[]): Promise<void> {
  * `"unknown"`, which the UUID text parser over-read on and aborted the whole row.
  */
 export const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * Principal attribution columns (migration 0023) for the current async
+ * context, coalesced to their ClickHouse sentinels (nil UUID / '') so the
+ * non-nullable columns always receive parseable values. Reads the ambient
+ * tenant scope stamped by the kernel (runInTenantScope + runWithPrincipal);
+ * never throws — a write outside any scope simply carries the sentinels.
+ */
+function currentPrincipalStamp(): {
+  principal_id: string;
+  principal_kind: string;
+  user_id: string;
+  capability_name: string;
+} {
+  const a = getPrincipalAttribution();
+  return {
+    principal_id: a.principalId ?? NIL_UUID,
+    principal_kind: a.principalKind ?? "",
+    user_id: a.userId ?? NIL_UUID,
+    capability_name: a.capabilityName ?? "",
+  };
+}
 
 export const insertExecutionLogs = (rows: readonly ExecutionLogRow[]) =>
   insertRows("execution_logs", rows);
@@ -314,15 +350,22 @@ export const insertEvents = (rows: readonly EventRow[]) => {
 };
 export const insertTokenUsage = (rows: readonly TokenUsageRow[]) => {
   const { trace_id, span_id } = currentTraceIds();
+  const attribution = currentPrincipalStamp();
   return insertRows(
     "token_usage",
     // Coalesce the "no execution step" sentinel (null/undefined) to the nil UUID
     // so the non-nullable UUID key column always receives a parseable value.
-    // Also stamp trace_id/span_id from the active OTEL context for log↔trace join.
+    // Also stamp trace_id/span_id from the active OTEL context for log↔trace
+    // join, and principal attribution from the ambient tenant scope
+    // (migration 0023) — explicit caller values win over ambient ones.
     rows.map((r) => ({
       ...(r.execution_step_id == null ? { ...r, execution_step_id: NIL_UUID } : r),
       trace_id: r.trace_id ?? trace_id,
       span_id: r.span_id ?? span_id,
+      principal_id: r.principal_id ?? attribution.principal_id,
+      principal_kind: r.principal_kind ?? attribution.principal_kind,
+      user_id: r.user_id ?? attribution.user_id,
+      capability_name: r.capability_name ?? attribution.capability_name,
     })),
   );
 };
@@ -358,15 +401,29 @@ export interface ToolInvocationRow {
   trace_id?: string;
   /** OTEL span id (16-char lowercase hex). */
   span_id?: string;
+  /**
+   * Acting IAM principal uuid (migration 0023). Stamped automatically from
+   * the ambient tenant scope — same pattern as trace_id. Nil UUID when no
+   * principal was resolved. Explicit caller values win.
+   */
+  principal_id?: string;
+  /** "human" | "agent" | "service", or '' when no principal was resolved. */
+  principal_kind?: string;
+  /** Originating human user uuid, or the nil UUID. */
+  user_id?: string;
 }
 
 export const insertToolInvocation = (row: ToolInvocationRow) => {
   const { trace_id, span_id } = currentTraceIds();
+  const attribution = currentPrincipalStamp();
   return insertRows("tool_invocations", [
     {
       ...row,
       trace_id: row.trace_id ?? trace_id,
       span_id: row.span_id ?? span_id,
+      principal_id: row.principal_id ?? attribution.principal_id,
+      principal_kind: row.principal_kind ?? attribution.principal_kind,
+      user_id: row.user_id ?? attribution.user_id,
     },
   ]);
 };
