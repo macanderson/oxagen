@@ -101,6 +101,8 @@ import {
   ThinkingIndicator,
   type Message,
 } from "./components.js";
+import { ScopeReview } from "./scope-review.js";
+import type { ScopeReviewInfo, ScopeReviewDecision } from "../agent/trace.js";
 import { HudPanel } from "./hud.js";
 import { ConfigPanel } from "./config-panel.js";
 import { LoginPanel } from "./login-panel.js";
@@ -509,6 +511,41 @@ export function ReplApp({
     cur?.resolve(response.decision === "allow");
   }, []);
 
+  // The pre-execution scope-review gate (the `confirmScope` setting). When the
+  // engine reaches ROUTE and the setting is on, it awaits `confirmScope`, which
+  // parks the promise resolver here and surfaces the ScopeReview overlay (same
+  // takeover pattern as the permission/budget prompts). The overlay owns the
+  // keyboard via its own useInput; `resolveScopeReview` is what it calls with
+  // the user's Run / Edit / Cancel decision, closing the overlay and settling
+  // the engine's awaited promise so EXECUTE proceeds, runs an edited prompt, or
+  // cancels before any work. Null when no gate is pending.
+  const [scopeReview, setScopeReview] = useState<{
+    info: ScopeReviewInfo;
+    resolve: (decision: ScopeReviewDecision) => void;
+  } | null>(null);
+  const scopeReviewRef = useRef(scopeReview);
+  scopeReviewRef.current = scopeReview;
+  const resolveScopeReview = useCallback((decision: ScopeReviewDecision) => {
+    const cur = scopeReviewRef.current;
+    setScopeReview(null);
+    cur?.resolve(decision);
+  }, []);
+
+  // Verbose/expanded ("Ctrl-O") mode: render long prompts, the enhanced-prompt
+  // scope card, and reasoning in FULL rather than a truncated preview. A ref
+  // mirrors the state so the synchronous key handler flips it without a stale
+  // closure; the state drives the re-render of the live frame.
+  const [detailExpanded, setDetailExpanded] = useState(false);
+  const detailExpandedRef = useRef(detailExpanded);
+  detailExpandedRef.current = detailExpanded;
+
+  // Short label of what the turn is doing RIGHT NOW (the in-flight stage or
+  // tool), fed to the ThinkingIndicator's sub-10s heartbeat so a silent step
+  // still tells the user what it's working on. A ref (not state) so updating it
+  // on every stage/tool never thrashes React — the indicator polls it on its
+  // own 100ms tick.
+  const lastActivityRef = useRef<string | null>(null);
+
   // Whether we are showing the "reset conversation?" confirmation prompt.
   // The ref is the synchronous source of truth; the state drives the render.
   const [resetPending, setResetPending] = useState(false);
@@ -865,6 +902,10 @@ export function ReplApp({
     // Release any pending permission prompt as a denial so the tool unblocks.
     approvalRef.current?.resolve({ decision: "deny" });
     setApproval(null);
+    // Release a pending scope-review gate as a cancel so the engine's awaited
+    // confirmScope promise settles and the turn unwinds cleanly.
+    scopeReviewRef.current?.resolve({ proceed: false });
+    setScopeReview(null);
     // Abort the turn signal. The engine throws on an aborted signal the moment
     // the current stream ends, and the stream callbacks below no-op once
     // aborted, so no late text renders.
@@ -1212,6 +1253,9 @@ export function ReplApp({
     if (approvalRef.current) return;
     // Same for a budget-pause confirmation (see budgetPause above).
     if (budgetPauseRef.current) return;
+    // Same for the pre-execution scope-review gate (its ScopeReview overlay owns
+    // Run / Edit / Cancel via its own useInput).
+    if (scopeReviewRef.current) return;
     // While the /config panel is open it owns the keyboard (its own useInput
     // handles ↑/↓/e/x/Esc) — swallow everything here so those keys never
     // double-fire into panel-nav, transcript scroll, or the prompt bar.
@@ -1219,10 +1263,14 @@ export function ReplApp({
     // Same for the /login panel (its own useInput handles Esc/any-key).
     if (loginOpenRef.current) return;
 
-    // Ctrl-O expands/collapses the most recent folded `!command` accordion. Bound
-    // before the focus-zone gate so it works whether focus is on the input or a
-    // dock row.
+    // Ctrl-O is the global "reveal detail" gesture (Claude Code style): it
+    // flips verbose/expanded mode — long prompts, the enhanced-prompt scope
+    // card, and reasoning render in FULL instead of a truncated preview — AND
+    // expands/collapses the most recent folded `!command` accordion, so one key
+    // reveals everything on screen. Bound before the focus-zone gate so it works
+    // whether focus is on the input or a dock row.
     if (key.ctrl && input === "o") {
+      setDetailExpanded((v) => !v);
       toggleLatestTerminal();
       return;
     }
@@ -2190,6 +2238,7 @@ export function ReplApp({
         const goalText = paste?.expandedText ?? submission;
         const pushStage = (stage: StageEvent): void => {
           closeStreamingBlocks();
+          lastActivityRef.current = stage.detail ?? stage.label;
           turn.push({ role: "stage", stage, content: stage.label, timestamp: Date.now() });
           dispatchTelemetry({ type: "stage", stage });
           render();
@@ -2419,9 +2468,40 @@ export function ReplApp({
           trace: traceStoreRef.current,
           graphSync: graphSyncRef.current,
           signal: turnController.signal,
+          // Always surface the pre-execution snapshot as a scope card in the
+          // transcript, so the user ALWAYS sees both their original prompt and
+          // the enhanced version the agent will run, plus the routed model and
+          // an estimated cost — no setting required (feature 2). Long prompts
+          // render truncated; Ctrl-O expands them (see ScopeCard).
+          onScopeReview: (info) => {
+            if (turnController.signal.aborted) return;
+            noteProgress();
+            closeStreamingBlocks();
+            turn.push({ role: "scope", scope: info, content: "", timestamp: Date.now() });
+            render();
+          },
+          // The "confirm scope & cost" gate (feature 3/4): only when the
+          // `confirmScope` setting is on, pause AFTER route / BEFORE execute and
+          // hand the user the ScopeReview overlay to Run / Edit the enhanced
+          // prompt / Cancel. Reads the setting fresh per turn (loadSettings is
+          // process-cached) so toggling it in /config takes effect next turn.
+          // Undefined when off ⇒ the engine runs with no gate at all.
+          ...(loadSettings({ cwd }).settings.confirmScope === true
+            ? {
+                confirmScope: (info: ScopeReviewInfo) =>
+                  new Promise<ScopeReviewDecision>((resolve) => {
+                    // The overlay's own useInput drives the answer; releasing it
+                    // on abort is handled by cancelTurn (see resolveScopeReview).
+                    setScopeReview({ info, resolve });
+                  }),
+              }
+            : {}),
           onStage: (stage) => {
             if (turnController.signal.aborted) return;
             noteProgress();
+            // Heartbeat: name what's happening now so a silent step still tells
+            // the user what it's doing (feature 1).
+            lastActivityRef.current = stage.detail ?? stage.label;
             void debugLog("turn", "turn.stage", { label: stage.label, detail: stage.detail });
             // Keep the HUD's live detail on the current stage.
             hudHandle?.update({ detail: stage.detail ?? stage.label });
@@ -2446,6 +2526,9 @@ export function ReplApp({
             inFlightTools++;
             ciProbe.noteToolCall(name, input);
             noteProgress();
+            // Heartbeat: an executing tool is the classic silent stretch — name
+            // it (e.g. "bash · pnpm test") so the indicator shows what's running.
+            lastActivityRef.current = summarizeInput(name, input);
             void debugLog("turn", "turn.tool-call", { name, input });
             // Full-screen TURN/TOOLS dock — step count (a live proxy for the
             // engine's own step counter) and per-tool call tallies.
@@ -2685,6 +2768,7 @@ export function ReplApp({
           metricsBusRef.current.flush();
           dispatchTelemetry({ type: "turn-end" });
           lastProgressRef.current = null;
+          lastActivityRef.current = null;
           abortRef.current = null;
           streamingRef.current = false;
           setIsStreaming(false);
@@ -2979,6 +3063,13 @@ export function ReplApp({
             <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
           ) : budgetPause ? (
             <ApprovalPrompt req={budgetPause.req} onResolve={resolveBudgetPause} />
+          ) : scopeReview ? (
+            <ScopeReview
+              info={scopeReview.info}
+              onDecision={resolveScopeReview}
+              width={Math.min(cols - 2, 100)}
+              expanded={detailExpanded}
+            />
           ) : configOpen ? (
             <ConfigPanel cwd={cwd} onClose={closeConfigPanel} width={Math.min(cols - 2, 100)} />
           ) : loginOpen ? (
@@ -3035,7 +3126,7 @@ export function ReplApp({
           item === "banner" ? (
             <Banner key="banner" />
           ) : (
-            <MessageView key={i} msg={item} diffTheme={diffThemeRef.current} />
+            <MessageView key={i} msg={item} diffTheme={diffThemeRef.current} expanded={detailExpanded} />
           )
         }
       </Static>
@@ -3078,7 +3169,7 @@ export function ReplApp({
 
             {/* The one message still being streamed into, if any. */}
             {liveMessage && (
-              <MessageView msg={liveMessage} diffTheme={diffThemeRef.current} />
+              <MessageView msg={liveMessage} diffTheme={diffThemeRef.current} expanded={detailExpanded} />
             )}
           </Box>
 
@@ -3118,6 +3209,7 @@ export function ReplApp({
           startedAt={turnStartedAt}
           getTokens={() => Math.round(streamCharsRef.current / 4)}
           getLastProgressAt={() => lastProgressRef.current}
+          getActivity={() => lastActivityRef.current}
         />
       )}
 
@@ -3162,6 +3254,13 @@ export function ReplApp({
           <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
         ) : budgetPause ? (
           <ApprovalPrompt req={budgetPause.req} onResolve={resolveBudgetPause} />
+        ) : scopeReview ? (
+          <ScopeReview
+            info={scopeReview.info}
+            onDecision={resolveScopeReview}
+            width={Math.min((cols || 80) - 2, 100)}
+            expanded={detailExpanded}
+          />
         ) : configOpen ? (
           <ConfigPanel cwd={cwd} onClose={closeConfigPanel} />
         ) : loginOpen ? (
