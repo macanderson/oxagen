@@ -262,6 +262,66 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     expect(result.suggestion.slug).toBe("risk-watcher");
   });
 
+  it("drops invalid skill and mcp_server refs while keeping valid ones of each type", async () => {
+    setupWorld();
+    const synth = baseSynthesis();
+    synth.agentTools = [
+      { type: "skill", ref: "summarization" }, // valid
+      { type: "skill", ref: "nonexistent-skill" }, // invalid → dropped
+      { type: "mcp_server", ref: "mcp_srv1" }, // valid
+      { type: "mcp_server", ref: "ghost-server" }, // invalid → dropped
+    ];
+    mocks.generateObjectFor.mockResolvedValue({ object: synth });
+
+    const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
+
+    expect(result.suggestion.config.agentTools).toEqual([
+      { type: "skill", ref: "summarization" },
+      { type: "mcp_server", ref: "mcp_srv1" },
+    ]);
+    expect(result.warnings).toHaveLength(2);
+    expect(result.warnings[0]).toContain("nonexistent-skill");
+    expect(result.warnings[1]).toContain("ghost-server");
+  });
+
+  it("passes agentType 'code' through the suggestion", async () => {
+    setupWorld();
+    const synth = baseSynthesis();
+    synth.agentType = "code";
+    mocks.generateObjectFor.mockResolvedValue({ object: synth });
+
+    const coded = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
+    expect(coded.suggestion.agentType).toBe("code");
+  });
+
+  // ── candidate-source failure tolerance ──────────────────────────────────────
+
+  it("degrades gracefully when one candidate source fails, keeping the others", async () => {
+    setupWorld();
+    const base = mocks.invoke.getMockImplementation()!;
+    // schema.list is unavailable; every other read keeps working.
+    mocks.invoke.mockImplementation(async (cap: string, input: unknown, ctx: unknown) => {
+      if (cap === "schema.list") throw new Error("clickhouse is on fire");
+      return base(cap, input, ctx);
+    });
+    mocks.generateObjectFor.mockResolvedValue({ object: baseSynthesis() });
+
+    const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
+
+    // Ontology candidates fell back to empty → the model's id can't bind.
+    expect(result.suggestion.config.graph.ontologyId).toBe("");
+    expect(result.warnings.some((w) => w.includes("no graph schema"))).toBe(true);
+    // The other candidate sources still ground the suggestion.
+    expect(result.suggestion.config.agentTools).toContainEqual({
+      type: "skill",
+      ref: "summarization",
+    });
+    const call = mocks.generateObjectFor.mock.calls[0]![0] as { system: string };
+    expect(call.system).toContain("summarization");
+    // Still a contract-valid, create-shaped suggestion.
+    expect(() => agentDefinitionSuggest.output.parse(result)).not.toThrow();
+  });
+
   // ── skill loading ───────────────────────────────────────────────────────────
 
   it("falls back to the builtin filesystem skill when no tenant copy is loaded", async () => {
