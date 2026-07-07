@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 /**
  * A workspace environment as returned by the `environment.list` capability
@@ -29,6 +30,12 @@ interface EnvironmentSelectorProps {
   selectedEnvId: string | null;
   onSelectEnv: (envId: string) => void;
   isLoading?: boolean;
+  /**
+   * Extra classes for the select trigger. Defaults to a mobile-first width
+   * (`w-full` below `sm`, fixed `sm:w-40` on desktop) with a ≥44px touch
+   * target on phones — pass a class to override from the parent layout.
+   */
+  className?: string;
 }
 
 export function EnvironmentSelector({
@@ -36,10 +43,11 @@ export function EnvironmentSelector({
   selectedEnvId,
   onSelectEnv,
   isLoading = false,
+  className,
 }: EnvironmentSelectorProps) {
   return (
-    <div className="flex items-center gap-2">
-      <Settings className="size-4 text-muted-foreground" />
+    <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+      <Settings className="size-4 shrink-0 text-muted-foreground" />
       <Select
         value={selectedEnvId ?? ""}
         onValueChange={(value) => {
@@ -47,7 +55,10 @@ export function EnvironmentSelector({
         }}
         disabled={isLoading || environments.length === 0}
       >
-        <SelectTrigger className="w-40" aria-label="Select environment">
+        <SelectTrigger
+          className={cn("min-h-11 w-full sm:min-h-0 sm:w-40", className)}
+          aria-label="Select environment"
+        >
           <SelectValue placeholder="Select environment" />
         </SelectTrigger>
         <SelectPopup>

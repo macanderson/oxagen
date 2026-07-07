@@ -35,6 +35,37 @@ vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
 }));
 
+// Controllable viewport: false = desktop (jsdom default), true = phone width.
+const { mockViewport } = vi.hoisted(() => ({ mockViewport: { isMobile: false } }));
+vi.mock("@/hooks/use-media-query", () => ({
+  useIsMobile: () => mockViewport.isMobile,
+  useMediaQuery: () => mockViewport.isMobile,
+}));
+
+// Sheet shim — renders children inline when open (the real component portals
+// a Base UI dialog; these tests assert the composer's own composition).
+vi.mock("@/components/ui/sheet", () => ({
+  Sheet: ({ children, open }: { children: React.ReactNode; open?: boolean }) =>
+    open ? <div data-testid="sheet-root">{children}</div> : null,
+  SheetPopup: ({
+    children,
+    "data-testid": testId,
+  }: {
+    children: React.ReactNode;
+    side?: string;
+    "data-testid"?: string;
+  }) => <div data-testid={testId ?? "sheet-popup"}>{children}</div>,
+  SheetHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SheetPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SheetTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  SheetDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+}));
+
+afterEach(() => {
+  mockViewport.isMobile = false;
+  window.localStorage.clear();
+});
+
 const mockSupportsReasoning = vi.fn((_model: unknown) => false);
 const mockGetModel = vi.fn((_id: unknown) => undefined);
 
@@ -2280,5 +2311,294 @@ describe("MessageComposer — code mode", () => {
     await waitFor(() => expect(action).toHaveBeenCalled());
     const fd = action.mock.calls[0][0] as FormData;
     expect(fd.get("code")).toBeNull();
+  });
+});
+
+// ── collapsible composer (OXA mobile-agent-ux) ─────────────────────────────────
+
+const COLLAPSED_KEY = "oxagen.chat.composerCollapsed";
+
+describe("MessageComposer — collapsible composer", () => {
+  it("starts expanded and collapses via the toggle, persisting the preference", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    const ta = screen.getByRole("textbox");
+    expect(ta.className).not.toContain("hidden");
+    expect(screen.queryByTestId("composer-expand-affordance")).toBeNull();
+
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+
+    expect(ta.className).toContain("hidden");
+    expect(screen.getByTestId("composer-expand-affordance")).toBeInTheDocument();
+    expect(window.localStorage.getItem(COLLAPSED_KEY)).toBe("1");
+    // Send stays reachable in the slim row.
+    expect(screen.getByRole("button", { name: "Send message" })).toBeInTheDocument();
+  });
+
+  it("expands via the affordance, restores the textarea, and focuses it", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+    await userEvent.click(screen.getByTestId("composer-expand-affordance"));
+
+    const ta = screen.getByRole("textbox");
+    expect(ta.className).not.toContain("hidden");
+    expect(window.localStorage.getItem(COLLAPSED_KEY)).toBe("0");
+    // Focus lands on the frame after the expanded layout commits (rAF).
+    await waitFor(() => expect(ta).toHaveFocus());
+  });
+
+  it("restores the persisted collapsed state on mount (hydration-safe)", async () => {
+    window.localStorage.setItem(COLLAPSED_KEY, "1");
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    expect(screen.getByTestId("composer-expand-affordance")).toBeInTheDocument();
+    expect(screen.getByRole("textbox").className).toContain("hidden");
+  });
+
+  it("exports the storage key used for persistence", async () => {
+    const { COMPOSER_COLLAPSED_STORAGE_KEY } = await import("./message-composer");
+    expect(COMPOSER_COLLAPSED_STORAGE_KEY).toBe(COLLAPSED_KEY);
+  });
+
+  it("keeps the draft and submits it while collapsed", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "draft survives collapse");
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    expect(fd.get("content")).toBe("draft survives collapse");
+  });
+
+  it("auto-expands when a printable key is pressed outside editable controls", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+    expect(screen.getByTestId("composer-expand-affordance")).toBeInTheDocument();
+
+    fireEvent.keyDown(document.body, { key: "a" });
+
+    await waitFor(() =>
+      expect(screen.queryByTestId("composer-expand-affordance")).toBeNull(),
+    );
+    expect(window.localStorage.getItem(COLLAPSED_KEY)).toBe("0");
+  });
+
+  it("does NOT auto-expand on modifier combos or non-printable keys", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    fireEvent.keyDown(document.body, { key: "a", ctrlKey: true });
+    fireEvent.keyDown(document.body, { key: "c", metaKey: true });
+
+    expect(screen.getByTestId("composer-expand-affordance")).toBeInTheDocument();
+  });
+
+  it("hides the code-mode agent toolbar and gate hint while collapsed", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
+    expect(container.querySelector('[aria-label="Select repository"]')).not.toBeNull();
+    expect(screen.getByTestId("code-mode-gate-hint")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+    expect(container.querySelector('[aria-label="Select repository"]')).toBeNull();
+    expect(screen.queryByTestId("code-mode-gate-hint")).toBeNull();
+  });
+});
+
+describe("MessageComposer — agent toolbar collapse wiring", () => {
+  it("collapses the repo/env picker row via the toolbar's own toggle", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
+    const repoTrigger = container.querySelector('[aria-label="Select repository"]')!;
+    expect(repoTrigger).not.toBeNull();
+    // Expanded: the picker row is visible (no hidden class on its ancestor).
+    expect(repoTrigger.closest("div[class*='hidden']")).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Hide code mode toolbar" }));
+    // Collapsed: the picker row is CSS-hidden and the toggle flips its label.
+    expect(screen.getByRole("button", { name: "Show code mode toolbar" })).toBeInTheDocument();
+    expect(repoTrigger.closest("div[class*='hidden']")).not.toBeNull();
+  });
+});
+
+// ── mobile toolbar (OXA mobile-agent-ux) ───────────────────────────────────────
+
+describe("MessageComposer — mobile toolbar", () => {
+  beforeEach(() => {
+    mockViewport.isMobile = true;
+  });
+  afterEach(() => {
+    mockViewport.isMobile = false;
+  });
+
+  it("keeps only the essentials inline and moves the rest behind the overflow button", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableMcpServers={[makeMcpServer()]}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+    // Essentials inline:
+    expect(screen.getByRole("button", { name: "Attach image or video" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Toggle code mode" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send message" })).toBeInTheDocument();
+    expect(screen.getByTestId("composer-overflow-btn")).toBeInTheDocument();
+    // Overflow controls NOT inline (sheet is closed):
+    expect(screen.queryByTestId("model-picker")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Generate image" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Generate video" })).toBeNull();
+    expect(screen.queryByTestId("mcp-server-picker")).toBeNull();
+    expect(screen.queryByTestId("budget-control")).toBeNull();
+  });
+
+  it("opens the bottom sheet with the overflow controls", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableMcpServers={[makeMcpServer()]}
+      />,
+    );
+    expect(screen.queryByTestId("composer-overflow-sheet")).toBeNull();
+    await userEvent.click(screen.getByTestId("composer-overflow-btn"));
+    expect(screen.getByTestId("composer-overflow-sheet")).toBeInTheDocument();
+    expect(screen.getByTestId("model-picker")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate image" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate video" })).toBeInTheDocument();
+    expect(screen.getByTestId("mcp-server-picker")).toBeInTheDocument();
+    expect(screen.getByTestId("budget-control")).toBeInTheDocument();
+  });
+
+  it("toggling image generation from the sheet switches the composer to image mode", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.click(screen.getByTestId("composer-overflow-btn"));
+    await userEvent.click(screen.getByRole("button", { name: "Generate image" }));
+    expect(screen.getByPlaceholderText("Describe the image you want…")).toBeInTheDocument();
+  });
+
+  it("uses a 2-row textarea and 44px inline touch targets on mobile", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+    expect(screen.getByRole("textbox")).toHaveAttribute("rows", "2");
+    expect(
+      screen.getByRole("button", { name: "Attach image or video" }).className,
+    ).toContain("h-11");
+    expect(screen.getByRole("button", { name: "Toggle code mode" }).className).toContain(
+      "h-11",
+    );
+  });
+
+  it("keeps a 3-row textarea and the full inline control row on desktop", async () => {
+    mockViewport.isMobile = false;
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableMcpServers={[makeMcpServer()]}
+      />,
+    );
+    expect(screen.getByRole("textbox")).toHaveAttribute("rows", "3");
+    expect(screen.getByTestId("model-picker")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate image" })).toBeInTheDocument();
+    expect(screen.getByTestId("mcp-server-picker")).toBeInTheDocument();
+    expect(screen.getByTestId("budget-control")).toBeInTheDocument();
+    expect(screen.queryByTestId("composer-overflow-btn")).toBeNull();
   });
 });
