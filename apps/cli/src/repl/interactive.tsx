@@ -120,7 +120,7 @@ import {
 } from "./scroll.js";
 import { createRenderThrottle, type RenderThrottle } from "./render-throttle.js";
 import { telemetryReducer, INITIAL_TELEMETRY_STATE } from "./telemetry.js";
-import { resolveModelRoles } from "./model-roles.js";
+import { resolveModelRoles, persistRoleModel, type ModelRole } from "./model-roles.js";
 import { borderPhaseFor, promptBorderColorFor, RAINBOW_FLASH_INTERVAL_MS } from "./border-phase.js";
 import { inputContentRow } from "./mouse-select.js";
 import { HeaderBar, TranscriptViewport, TelemetryDock, formatElapsed } from "./fullscreen-chrome.js";
@@ -175,7 +175,12 @@ const TERMINAL_FOLD_DELAY_MS = 6000;
 export interface ReplOptions {
   /** Authenticated platform session (token, org, workspace). */
   session: Session;
+  /** Initial WORKER (executor) model — the tool loop. Set via `/worker-model` / `/model`. */
   model?: string;
+  /** Initial JUDGE (advisor) model. Set via `/judge-model`. Undefined ⇒ engine default. */
+  judgeModel?: string;
+  /** Initial TRIAGE/coordinator (planner + evaluator) model. Set via `/triage-model`. */
+  triageModel?: string;
   /** Initial reasoning effort for models that support it (low|medium|high). */
   effort?: string;
   readOnly?: boolean;
@@ -272,6 +277,11 @@ export function ReplApp({
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [model, setModel] = useState<string>(resolveModelId(options.model));
+  // Per-function model overrides (undefined ⇒ the engine's own default for that
+  // role: advisor tier for judge, local heuristic / OXAGEN_LLM_EVALUATOR for
+  // triage). Driven by /judge-model and /triage-model; threaded per turn.
+  const [judgeModel, setJudgeModel] = useState<string | undefined>(options.judgeModel);
+  const [triageModel, setTriageModel] = useState<string | undefined>(options.triageModel);
   // Reasoning effort for models that support a thinking mode (undefined = let
   // the model/server default decide). Driven by /effort; forwarded per turn.
   const [effort, setEffort] = useState<ReasoningEffort | undefined>(
@@ -482,6 +492,10 @@ export function ReplApp({
   const streamingRef = useRef(false);
   const modelRef = useRef(model);
   modelRef.current = model;
+  const judgeModelRef = useRef(judgeModel);
+  judgeModelRef.current = judgeModel;
+  const triageModelRef = useRef(triageModel);
+  triageModelRef.current = triageModel;
   const effortRef = useRef(effort);
   effortRef.current = effort;
   const budgetRef = useRef(budgetPolicy);
@@ -615,7 +629,13 @@ export function ReplApp({
   const [telemetry, dispatchTelemetry] = useReducer(
     telemetryReducer,
     INITIAL_TELEMETRY_STATE,
-    (initial) => ({ ...initial, models: resolveModelRoles(resolveModelId(options.model)) }),
+    (initial) => ({
+      ...initial,
+      models: resolveModelRoles(resolveModelId(options.model), {
+        triage: options.triageModel,
+        judge: options.judgeModel,
+      }),
+    }),
   );
   // Prompt-input border color, animated through the turn lifecycle (see
   // border-phase.ts): derived from the SAME telemetry.turn.phase the TURN
@@ -1532,23 +1552,61 @@ export function ReplApp({
         );
         return;
       }
-      if (text.startsWith("/model")) {
-        const slug = text.slice("/model".length).trim();
-        if (slug) {
-          // Any gateway/Vercel-SDK model slug that supports text I/O is accepted
-          // — there is no allowlist. If the gateway rejects the slug the next
-          // turn surfaces a clear 4xx; switch with /model <vendor/model>.
-          setModel(slug);
-          // The judge is chosen to differ from the worker, so a worker switch
-          // can change it — refresh the MODELS readout to what will now run.
-          dispatchTelemetry({ type: "seed-models", models: resolveModelRoles(slug) });
-          pushAssistant(
-            `Model set to ${slug}. (Any valid text model slug is accepted; ` +
-              `the gateway resolves it at request time.)`,
-          );
-        } else {
-          pushAssistant(`Current model: ${modelRef.current}`);
+      // Shared applier for the per-function model commands: update session
+      // state, persist to the LOCAL settings scope (durable across sessions),
+      // refresh the MODELS readout to what will now run, and confirm. Any
+      // gateway/Vercel-SDK text model slug is accepted — no allowlist; a bad
+      // slug surfaces as a clear 4xx on the next turn.
+      const applyRoleModel = (role: ModelRole, slug: string): void => {
+        if (role === "worker") setModel(slug);
+        else if (role === "judge") setJudgeModel(slug);
+        else setTriageModel(slug);
+        let saved = false;
+        try {
+          persistRoleModel(role, slug);
+          saved = true;
+        } catch {
+          // Persistence is best-effort — the in-session change still applies.
         }
+        // Compute the readout with the just-changed role plus the current others.
+        const worker = role === "worker" ? slug : modelRef.current;
+        const triage = role === "triage" ? slug : triageModelRef.current;
+        const judge = role === "judge" ? slug : judgeModelRef.current;
+        dispatchTelemetry({ type: "seed-models", models: resolveModelRoles(worker, { triage, judge }) });
+        pushAssistant(
+          `${role[0]!.toUpperCase()}${role.slice(1)} model set to ${slug}` +
+            (saved ? " (saved to .oxagen/settings.local.json)." : "."),
+        );
+      };
+      if (text.startsWith("/worker-model")) {
+        const slug = text.slice("/worker-model".length).trim();
+        if (slug) applyRoleModel("worker", slug);
+        else pushAssistant(`Current worker model: ${modelRef.current}`);
+        return;
+      }
+      if (text.startsWith("/judge-model")) {
+        const slug = text.slice("/judge-model".length).trim();
+        if (slug) applyRoleModel("judge", slug);
+        else
+          pushAssistant(
+            `Current judge model: ${judgeModelRef.current ?? "(engine default — advisor tier, distinct from worker)"}`,
+          );
+        return;
+      }
+      if (text.startsWith("/triage-model")) {
+        const slug = text.slice("/triage-model".length).trim();
+        if (slug) applyRoleModel("triage", slug);
+        else
+          pushAssistant(
+            `Current triage model: ${triageModelRef.current ?? "(engine default — local heuristic / OXAGEN_LLM_EVALUATOR)"}`,
+          );
+        return;
+      }
+      if (text.startsWith("/model")) {
+        // Alias for /worker-model — sets and persists the executor model.
+        const slug = text.slice("/model".length).trim();
+        if (slug) applyRoleModel("worker", slug);
+        else pushAssistant(`Current model: ${modelRef.current}`);
         return;
       }
       if (text.startsWith("/coordinator")) {
@@ -2207,6 +2265,8 @@ export function ReplApp({
             goal: goalText,
             history: historyRef.current,
             ai: activeAiRef.current,
+            // The planner is a coordinator stage — run it on the triage model.
+            model: triageModelRef.current,
             codeGraph: codeGraphRef.current,
             memory: turnMemory,
             agents: [...agentsRef.current.values()],
@@ -2397,6 +2457,10 @@ export function ReplApp({
           ),
           ai: activeAiRef.current,
           model: modelRef.current,
+          // Per-function overrides (undefined ⇒ engine default for that role).
+          // Judge takes a panel-shaped list; a single slug is a one-judge panel.
+          judgeModels: judgeModelRef.current ? [judgeModelRef.current] : undefined,
+          triageModel: triageModelRef.current,
           effort: effortRef.current,
           readOnly: modeRef.current === "readonly",
           bare: bareRef.current,

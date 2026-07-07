@@ -20,15 +20,59 @@
  * turn — but there should be none: keep this aligned with the engine.
  */
 import { pickAdvisorModel, pickJudgePanel, LOCAL_EVALUATOR } from "@oxagen/agent-engine";
+import { writeSettingsValue } from "../settings/write.js";
 import type { TelemetryModels } from "./telemetry.js";
 
-/** Resolve the planner/worker/judge slugs the pipeline will use for `worker`. */
-export function resolveModelRoles(worker: string): TelemetryModels {
-  const planner = process.env["OXAGEN_LLM_EVALUATOR"] ?? LOCAL_EVALUATOR;
-  const judge = process.env["OXAGEN_JUDGE_PANEL"]
-    ? `panel(${pickJudgePanel(worker)
-        .map((m) => m.split("/").pop())
-        .join(",")})`
-    : pickAdvisorModel(worker);
+/** The three configurable pipeline roles, as named by the `/…-model` commands. */
+export type ModelRole = "worker" | "judge" | "triage";
+
+/** Role → the `.oxagen/settings.json` key that persists it. */
+const ROLE_SETTINGS_KEY: Record<ModelRole, string> = {
+  worker: "workerModel",
+  judge: "judgeModel",
+  triage: "triageModel",
+};
+
+/**
+ * Persist a per-role model to the LOCAL settings scope (`.oxagen/settings.local.json`)
+ * so the choice survives across sessions — on next launch `applySettingsToEnv`
+ * projects it into the env var the engine reads. The CURRENT session takes effect
+ * via the caller threading the slug explicitly into the next turn (no process.env
+ * mutation here — the run-time override stays an explicit argument, not global
+ * state). Returns the settings file path written.
+ */
+export function persistRoleModel(role: ModelRole, slug: string, cwd?: string): string {
+  return writeSettingsValue({ scope: "local", key: ROLE_SETTINGS_KEY[role], value: slug, cwd });
+}
+
+/**
+ * Explicit per-role model overrides chosen at runtime (e.g. via `/triage-model`
+ * / `/judge-model`), which take precedence over the env/heuristic defaults.
+ * `triage` drives the planner + evaluator; `judge` drives the advisor/panel.
+ */
+export interface ModelRoleOverrides {
+  triage?: string | undefined;
+  judge?: string | undefined;
+}
+
+/**
+ * Resolve the triage(planner)/worker/judge slugs the pipeline will use for a
+ * given `worker` slug. Explicit `overrides` (from a live `/…-model` command)
+ * win; otherwise we mirror the engine's own env/heuristic resolution so the
+ * readout matches what will actually run.
+ */
+export function resolveModelRoles(
+  worker: string,
+  overrides: ModelRoleOverrides = {},
+): TelemetryModels {
+  const planner =
+    overrides.triage ?? process.env["OXAGEN_LLM_EVALUATOR"] ?? LOCAL_EVALUATOR;
+  const judge =
+    overrides.judge ??
+    (process.env["OXAGEN_JUDGE_PANEL"]
+      ? `panel(${pickJudgePanel(worker)
+          .map((m) => m.split("/").pop())
+          .join(",")})`
+      : pickAdvisorModel(worker));
   return { planner, worker, judge };
 }
