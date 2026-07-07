@@ -29,6 +29,7 @@
  */
 import type { ModelMessage, ToolSet } from "ai";
 import { runCodingAgent, DEFAULT_AGENT_MODEL } from "../engine";
+import { estimateMessageTokens } from "../loop-driver";
 import { buildSystemPrompt } from "../prompt/system-prompt";
 import { evaluatePrompt } from "../evaluate/evaluator";
 import { judgeCompleteness, judgePanel, buildRevisionPrompt } from "../evaluate/judge";
@@ -49,6 +50,7 @@ import {
   tierLabel,
   accumulateUsage,
 } from "../router/model-router";
+import { projectCost } from "../router/rate-card";
 import { emptyUsage, mergeUsage } from "../types";
 import type {
   ModelTier,
@@ -67,6 +69,8 @@ import type {
   JudgeVerdict,
   PhaseStat,
   PromptEvaluation,
+  ScopeReviewDecision,
+  ScopeReviewInfo,
   StageEvent,
   ToolEvent,
   TurnTrace,
@@ -261,6 +265,20 @@ export interface RunTurnOptions {
   budgetGuard?: (
     usage: RunCodingAgentResult["usage"],
   ) => Promise<"continue" | "stop">;
+  /**
+   * Fired once, after ROUTE and before EXECUTE, with a full pre-execution
+   * snapshot (enhanced prompt + estimated cost). Always non-blocking display —
+   * use it to show the user what is about to run. Independent of `confirmScope`.
+   */
+  onScopeReview?: (info: ScopeReviewInfo) => void;
+  /**
+   * Optional pre-execution gate. When provided, EXECUTE waits on this promise.
+   * Resolve `{ proceed: false }` to cancel the turn cleanly before any model
+   * execution; `{ proceed: true, prompt }` to run (optionally with an edited
+   * prompt that replaces the enhanced prompt). When omitted, execution proceeds
+   * with no gate.
+   */
+  confirmScope?: (info: ScopeReviewInfo) => Promise<ScopeReviewDecision>;
   /** Live stage events for the UI. */
   /**
    * Injected sink for non-fatal internal engine failures (e.g. memory-recall
@@ -464,6 +482,90 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
   const judgeRounds: JudgeVerdict[] = [];
   let history = opts.history ?? [];
   let prompt = enhanced.prompt;
+
+  // ── Scope review (optional) ──
+  // Surfaces the fully-enhanced prompt + a rough pre-flight cost estimate right
+  // before any model execution happens, so a caller (the CLI) can show the user
+  // what is about to run and — if `confirmScope` is wired — gate execution
+  // behind a confirmation. `onScopeReview` alone is pure display and never
+  // blocks; `confirmScope` is the only thing that can cancel or edit the turn.
+  {
+    // Heuristic pre-flight estimate only (chars/4, same convention as
+    // loop-driver's estimateMessageTokens) — never billed usage, just enough
+    // to give the user a ballpark before the executor actually runs.
+    const estimatedInputTokens =
+      Math.ceil(enhanced.prompt.length / 4) +
+      estimateMessageTokens(history) +
+      Math.ceil(composeAgentSystem(opts, cwd).length / 4);
+    const estimatedOutputTokens = Math.round(400 + (evaluation.complexity / 100) * 4000);
+    const costProjection = projectCost(routed.model, {
+      inputTokens: estimatedInputTokens,
+      outputTokens: estimatedOutputTokens,
+    });
+    const scopeInfo: ScopeReviewInfo = {
+      originalPrompt: opts.prompt,
+      refinedPrompt: evaluation.refinedPrompt,
+      enhancedPrompt: enhanced.prompt,
+      context: enhanced.context,
+      model: routed.model,
+      tier: routed.tier,
+      estimatedInputTokens,
+      estimatedOutputTokens,
+      estimatedCostUsd: costProjection.totalUsd,
+    };
+    opts.onScopeReview?.(scopeInfo);
+
+    if (opts.confirmScope) {
+      const decision: ScopeReviewDecision = await opts.confirmScope(scopeInfo);
+      if (!decision.proceed) {
+        opts.onStage?.({ kind: "complete", label: "cancelled at scope review" });
+        const cancelText = "⛔ Cancelled at scope review — nothing was executed.";
+        const trace = assembleTrace({
+          cwd,
+          originalPrompt: opts.prompt,
+          evaluation,
+          enhancement,
+          routed,
+          response: cancelText,
+          filesTouched: [],
+          commandsRun: [],
+          judgeRounds: [],
+          finalComplete: true,
+          steps: 0,
+          usage,
+          startedAt,
+          verbose: opts.verbose,
+          phases,
+          toolEvents,
+          thinkingLog,
+        });
+        if (opts.trace) {
+          void Promise.resolve(opts.trace.record(trace)).catch(() => {});
+        }
+        return {
+          text: cancelText,
+          steps: 0,
+          messages: history,
+          usage: {
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            // No execution round has run yet at the scope-review gate, so no
+            // provider cache reads have happened either — always 0 here.
+            cachedInputTokens: 0,
+          },
+          trace,
+        };
+      }
+      if (decision.prompt && decision.prompt !== enhanced.prompt) {
+        // Flow the edited prompt into what EXECUTE actually runs, and reflect
+        // it on the trace so `/replay` shows what really happened.
+        enhanced.prompt = decision.prompt;
+        enhancement.prompt = decision.prompt;
+        prompt = decision.prompt;
+      }
+    }
+  }
+
   let lastText = "";
   let totalSteps = 0;
   // Cache-read tokens summed across execution rounds (drives the CLI status
