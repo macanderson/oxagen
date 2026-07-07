@@ -5,14 +5,21 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // vi.mock is hoisted above all declarations, so the mock fns it references must
 // be created with vi.hoisted() (a plain top-level const would be uninitialized
 // at mock time — "Cannot access before initialization").
-const { resolveStudioScope, createAgent, updateAgent, publishAgent, deployAgent } =
-  vi.hoisted(() => ({
-    resolveStudioScope: vi.fn(),
-    createAgent: vi.fn(),
-    updateAgent: vi.fn(),
-    publishAgent: vi.fn(),
-    deployAgent: vi.fn(),
-  }));
+const {
+  resolveStudioScope,
+  createAgent,
+  updateAgent,
+  publishAgent,
+  deployAgent,
+  suggestAgentDefinition,
+} = vi.hoisted(() => ({
+  resolveStudioScope: vi.fn(),
+  createAgent: vi.fn(),
+  updateAgent: vi.fn(),
+  publishAgent: vi.fn(),
+  deployAgent: vi.fn(),
+  suggestAgentDefinition: vi.fn(),
+}));
 
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -22,12 +29,14 @@ vi.mock("@/lib/studio/agents", () => ({
   updateAgent,
   publishAgent,
   deployAgent,
+  suggestAgentDefinition,
 }));
 
 import {
   createAgentAction,
   updateAgentAction,
   deployAgentAction,
+  suggestAgentAction,
 } from "./actions";
 
 const SCOPE = { orgSlug: "acme", workspaceSlug: "eng" };
@@ -149,6 +158,87 @@ describe("updateAgentAction", () => {
     });
     expect(res.ok).toBe(false);
     expect(updateAgent).not.toHaveBeenCalled();
+  });
+});
+
+describe("suggestAgentAction", () => {
+  const SUGGESTION = {
+    slug: "release-notes-writer",
+    name: "Release Notes Writer",
+    description: "Drafts changelogs from merged PRs.",
+    agentType: "custom",
+    config: {
+      graph: GRAPH,
+      agentTools: [],
+      triggers: [{ type: "manual" as const, enabled: true }],
+      instructions: "You draft release notes.",
+    },
+  };
+
+  it("rejects a too-short description before touching scope", async () => {
+    const res = await suggestAgentAction({
+      ...SCOPE,
+      description: "too short",
+    });
+    expect(res.ok).toBe(false);
+    expect(resolveStudioScope).not.toHaveBeenCalled();
+    expect(suggestAgentDefinition).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-kebab nameHint", async () => {
+    const res = await suggestAgentAction({
+      ...SCOPE,
+      description: "A perfectly valid, sufficiently long description.",
+      nameHint: "Not Kebab",
+    });
+    expect(res.ok).toBe(false);
+    expect(suggestAgentDefinition).not.toHaveBeenCalled();
+  });
+
+  it("denies a non-manager", async () => {
+    resolveStudioScope.mockResolvedValue({ ctx: CTX, canManage: false });
+    const res = await suggestAgentAction({
+      ...SCOPE,
+      description: "A perfectly valid, sufficiently long description.",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/owners and admins/i);
+    expect(suggestAgentDefinition).not.toHaveBeenCalled();
+  });
+
+  it("returns the suggestion, rationale and warnings for a manager", async () => {
+    suggestAgentDefinition.mockResolvedValue({
+      suggestion: SUGGESTION,
+      rationale: "Manual trigger keeps it human-in-the-loop.",
+      warnings: ["dropped an unknown tool ref"],
+    });
+    const res = await suggestAgentAction({
+      ...SCOPE,
+      description: "A release-notes writer grounded in the engineering ontology.",
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.suggestion.slug).toBe("release-notes-writer");
+      expect(res.rationale).toMatch(/human-in-the-loop/);
+      expect(res.warnings).toEqual(["dropped an unknown tool ref"]);
+    }
+    // description flows through to the helper.
+    expect(suggestAgentDefinition).toHaveBeenCalledWith(
+      CTX,
+      expect.objectContaining({
+        description: "A release-notes writer grounded in the engineering ontology.",
+      }),
+    );
+  });
+
+  it("surfaces a helper failure as { ok: false }", async () => {
+    suggestAgentDefinition.mockRejectedValue(new Error("model unavailable"));
+    const res = await suggestAgentAction({
+      ...SCOPE,
+      description: "A perfectly valid, sufficiently long description.",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/model unavailable/);
   });
 });
 
