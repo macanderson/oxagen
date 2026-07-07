@@ -1,6 +1,6 @@
 "use server";
 import { and, eq } from "drizzle-orm";
-import { withTenantDb, withSystemDb, schema, isUniqueViolation } from "@oxagen/database";
+import { withTenantDb, withSystemDb, schema, isUniqueViolation, deriveNamespace } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { logger } from "@oxagen/handlers/logger";
@@ -89,12 +89,25 @@ export async function createWorkspaceAction(
       // workspace and its creator's membership row ARE the objects being
       // created, so there is no prior scope to derive from. — OXA-1515
       const { workspaceId, workspaceSlug } = await withSystemDb(async (tx) => {
+        // Derive the immutable namespace, unique within this (existing) org.
+        // The (org_id, namespace) unique index is the hard race guard.
+        const takenNamespaces = new Set(
+          (
+            await tx
+              .select({ namespace: schema.workspaces.namespace })
+              .from(schema.workspaces)
+              .where(eq(schema.workspaces.orgId, org.id))
+          ).map((r) => r.namespace.toLowerCase()),
+        );
+        const namespace = deriveNamespace(parsed.data.slug, takenNamespaces);
+
         const [ws] = await tx
           .insert(schema.workspaces)
           .values({
             orgId: org.id,
             name: parsed.data.name,
             slug: parsed.data.slug,
+            namespace,
             createdByUserId: session.user.id,
             updatedByUserId: session.user.id,
           })

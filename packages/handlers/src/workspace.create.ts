@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
-import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
+import { schema, withTenantDb, isUniqueViolation, deriveNamespace } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
@@ -49,12 +49,26 @@ export const workspaceCreateHandler: CapabilityHandler<typeof workspaceCreate> =
   let workspaceId: string = "";
   try {
     const result = await withTenantDb(async (tx) => {
+      // Derive the immutable namespace from the slug, unique WITHIN this org
+      // (workspace namespaces are per-org, like slugs). The (org_id, namespace)
+      // unique index is the authoritative guard against a concurrent-create race.
+      const takenNamespaces = new Set(
+        (
+          await tx
+            .select({ namespace: schema.workspaces.namespace })
+            .from(schema.workspaces)
+            .where(eq(schema.workspaces.orgId, ctx.orgId))
+        ).map((r) => r.namespace.toLowerCase()),
+      );
+      const namespace = deriveNamespace(input.slug, takenNamespaces);
+
       const [ws] = await tx
         .insert(schema.workspaces)
         .values({
           orgId: ctx.orgId,
           name: input.name,
           slug: input.slug,
+          namespace,
           createdByUserId: ctx.userId,
           updatedByUserId: ctx.userId,
         })

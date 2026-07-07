@@ -1,6 +1,6 @@
 "use server";
 import { z } from "zod";
-import { withSystemDb, schema, isUniqueViolation } from "@oxagen/database";
+import { withSystemDb, schema, isUniqueViolation, deriveNamespace } from "@oxagen/database";
 // tenancy: unscoped seam (org creation bootstrap — no org or workspace exists
 // yet at call time; this action IS what creates the first tenant identity, so
 // a scope cannot be entered before the org row exists; withSystemDb bypasses
@@ -170,11 +170,23 @@ export async function createOrgAction(
 
   try {
     const result = await withSystemDb(async (tx) => {
+      // Derive the immutable, globally-unique org namespace from the slug,
+      // avoiding any already taken. The unique index is the hard race guard.
+      const takenOrgNamespaces = new Set(
+        (
+          await tx
+            .select({ namespace: schema.organizations.namespace })
+            .from(schema.organizations)
+        ).map((r) => r.namespace.toLowerCase()),
+      );
+      const orgNamespace = deriveNamespace(org.slug, takenOrgNamespaces);
+
       const [tenant] = await tx
         .insert(schema.organizations)
         .values({
           name: org.name,
           slug: org.slug,
+          namespace: orgNamespace,
           planType: org.planSlug,
           status: "active",
           type: org.type,
@@ -197,12 +209,20 @@ export async function createOrgAction(
         updatedByUserId: session.user.id,
       });
 
+      // The org was just created, so it has no other workspaces yet — the
+      // taken set is empty. The (org_id, namespace) unique index still guards.
+      const workspaceNamespace = deriveNamespace(
+        workspaceInput.data.slug,
+        new Set<string>(),
+      );
+
       const [workspace] = await tx
         .insert(schema.workspaces)
         .values({
           orgId: tenant.id,
           name: workspaceInput.data.name,
           slug: workspaceInput.data.slug,
+          namespace: workspaceNamespace,
           createdByUserId: session.user.id,
           updatedByUserId: session.user.id,
         })

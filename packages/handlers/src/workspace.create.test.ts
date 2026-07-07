@@ -89,6 +89,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         organizations: { findFirst: mocks.orgFindFirst },
         workspaces: { findFirst: mocks.wsFindFirst },
       },
+      // Namespace derivation reads the org's existing workspace namespaces
+      // before inserting; empty means the slug-derived namespace is used as-is.
+      select: () => ({ from: () => ({ where: async () => [] }) }),
       insert: (table: unknown): unknown => {
         insertCountRef.n++;
         if (insertCountRef.n === 1) return mocks.txInsertWs(table) as unknown;
