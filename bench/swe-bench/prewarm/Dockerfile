@@ -63,3 +63,17 @@ RUN set -eu; \
     chmod +x /usr/local/bin/oxagen; \
     if [ -f /usr/local/bin/rg ]; then chmod 755 /usr/local/bin/rg; fi; \
     oxagen --version
+
+# DuckDB for the persistent context engine (OXAGEN_INSTALL_DUCKDB=1 — the
+# differentiated recipe's default). The adapter's runtime `npm install duckdb`
+# was measured to blow Harbor's 360s agent-setup budget under Rosetta
+# emulation (AgentSetupTimeoutError, job optimal-bo3-20260707); with the
+# package pre-baked the runtime install resolves in seconds. Best-effort by
+# design: the adapter already treats a missing duckdb as a soft failure and
+# falls back to the in-memory context engine.
+RUN set -u; \
+    if npm install --prefix /usr/local/lib/oxagen duckdb; then \
+      echo "oxagen-prewarm: duckdb baked"; \
+    else \
+      echo "oxagen-prewarm: duckdb bake failed; adapter installs at runtime (or degrades gracefully)" >&2; \
+    fi

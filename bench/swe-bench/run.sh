@@ -263,16 +263,37 @@ with open(out_path, "w") as f:
 print(f"==> Wrote bench replay config snapshot: {out_path}")
 PYEOF
 
+# 7b) Agent-setup timeout headroom. With OXAGEN_INSTALL_DUCKDB=1 (the
+#     differentiated recipe's default) agent setup runs `npm install duckdb`
+#     (native module, slow under Rosetta emulation) plus the `oxagen init`
+#     code-graph pre-build (tree-sitter parse of the whole task repo, 2–3 min
+#     on large repos). The adapter's own per-step budgets (600s install +
+#     300s init) exceed Harbor's default 360s *total* setup cap, which killed
+#     pytest-dev__pytest-5631 in job optimal-bo3-20260707 with
+#     AgentSetupTimeoutError before a single LLM call. Raise the cap to fit
+#     the adapter's real budgets unless the caller already set one.
+SETUP_TIMEOUT_ARGS=()
+if [ "${OXAGEN_INSTALL_DUCKDB:-}" = "1" ] && [ "$AGENT" = "oxagen" ] \
+   && [[ "${HARBOR_EXTRA:-}" != *"agent-setup-timeout"* ]]; then
+  SETUP_TIMEOUT_ARGS=(--agent-setup-timeout-multiplier 4)
+fi
+
 # 8) Go.
 echo "==> harbor run  dataset=$DATASET  agent=$AGENT  model=${MODEL_SLUG}  n=$N_CONCURRENT  attempts=$N_ATTEMPTS  jobs-dir=$JOBS_DIR  job-name=$JOB_NAME"
+# The ${ARR[@]+"${ARR[@]}"} form is the bash-3.2-safe empty-array expansion:
+# under `set -u`, a plain "${ARR[@]}" on an EMPTY array is an "unbound
+# variable" error on macOS's /bin/bash 3.2 (fixed in bash 4.4). MODEL_ARGS
+# (OXAGEN_ROUTE=1), TASK_ID_ARGS (full-dataset run), ENV_ARGS (no prewarm) and
+# SETUP_TIMEOUT_ARGS (no duckdb) can each legitimately be empty.
 exec uv run harbor run \
   -d "$DATASET" \
-  "${AGENT_ARGS[@]}" \
-  "${MODEL_ARGS[@]}" \
+  ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"} \
+  ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
   --n-concurrent "$N_CONCURRENT" \
   --n-attempts "$N_ATTEMPTS" \
   --jobs-dir "$JOBS_DIR" \
   --job-name "$JOB_NAME" \
-  "${TASK_ID_ARGS[@]}" \
-  "${ENV_ARGS[@]}" \
+  ${TASK_ID_ARGS[@]+"${TASK_ID_ARGS[@]}"} \
+  ${ENV_ARGS[@]+"${ENV_ARGS[@]}"} \
+  ${SETUP_TIMEOUT_ARGS[@]+"${SETUP_TIMEOUT_ARGS[@]}"} \
   ${HARBOR_EXTRA:-}
