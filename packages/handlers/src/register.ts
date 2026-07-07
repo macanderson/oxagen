@@ -19,6 +19,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .agentComposeHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "agent.definition.suggest",
+    async () =>
+      (await import("./agent.definition.suggest"))
+        .agentDefinitionSuggestHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "agent.memory_policy.read",
     async () =>
       (await import("./agent.memory_policy.read"))
@@ -597,6 +603,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./skill.author"))
         .skillAuthorHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "skill.draft",
+    async () =>
+      (await import("./skill.draft"))
+        .skillDraftHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "skill.create",

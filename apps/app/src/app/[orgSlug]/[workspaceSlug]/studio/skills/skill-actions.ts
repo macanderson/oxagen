@@ -165,6 +165,50 @@ export async function exportSkill(
   }
 }
 
+// ── draftSkillAction ──────────────────────────────────────────────────────────
+//
+// AI-assisted setup, step 1: the user describes the skill in natural language
+// and skill.draft synthesises the full configuration (display name, slug,
+// description, weight, body) WITHOUT persisting anything. The wizard presents
+// the draft as a prefilled form; the confirmed result saves via
+// createSkillAction → skill.create.
+
+const DraftSkillSchema = z.object({
+  orgSlug: z.string().min(1),
+  workspaceSlug: z.string().min(1),
+  prompt: z.string().min(10).max(4000),
+});
+
+export interface SkillDraftResult {
+  displayName: string;
+  slug: string;
+  description: string;
+  weight: "low" | "high" | "critical";
+  category?: string;
+  body: string;
+}
+
+export async function draftSkillAction(
+  input: z.infer<typeof DraftSkillSchema>,
+): Promise<{ ok: true; draft: SkillDraftResult } | { ok: false; error: string }> {
+  const parsed = DraftSkillSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+
+  const { orgSlug, workspaceSlug, prompt } = parsed.data;
+  const { canManage, ctx } = await resolveStudioScope(orgSlug, workspaceSlug);
+  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
+
+  try {
+    const out = await invoke("skill.draft", { prompt }, ctx, { surface: "agent" });
+    const typed = out as { draft: SkillDraftResult };
+    return { ok: true, draft: typed.draft };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Draft failed" };
+  }
+}
+
 // ── createSkillAction ─────────────────────────────────────────────────────────
 //
 // Composes the YAML frontmatter that the skill loader expects (see

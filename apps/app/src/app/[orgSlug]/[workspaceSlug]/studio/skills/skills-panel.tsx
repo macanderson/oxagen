@@ -15,7 +15,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ExternalLink, Plus, Search, Sparkles } from "lucide-react";
-import { NewSkillDialog, type CreateSkillAction } from "./new-skill-dialog";
+import {
+  NewSkillDialog,
+  type CreateSkillAction,
+  type DraftSkillAction,
+} from "./new-skill-dialog";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -37,6 +41,7 @@ interface SkillsPanelProps {
   skills: SkillRow[];
   canManage: boolean;
   createAction: CreateSkillAction;
+  draftAction: DraftSkillAction;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -67,6 +72,7 @@ export function SkillsPanel({
   skills,
   canManage,
   createAction,
+  draftAction,
 }: SkillsPanelProps) {
   const [filter, setFilter] = React.useState("");
   const [newSkillOpen, setNewSkillOpen] = React.useState(false);
@@ -207,6 +213,7 @@ export function SkillsPanel({
           orgSlug={orgSlug}
           workspaceSlug={workspaceSlug}
           action={createAction}
+          draftAction={draftAction}
           open={newSkillOpen}
           onOpenChange={setNewSkillOpen}
         />

@@ -33,6 +33,7 @@ import { codePatch } from "./code.patch";
 import { codeFormat } from "./code.format";
 import { codeMap } from "./code.map";
 import { agentDefinitionCreate } from "./agent.definition.create";
+import { agentDefinitionSuggest } from "./agent.definition.suggest";
 import { agentDefinitionUpdate } from "./agent.definition.update";
 import { agentDefinitionPublish } from "./agent.definition.publish";
 import { agentDefinitionGet } from "./agent.definition.get";
@@ -250,6 +251,7 @@ import { workspaceSettingsWrite } from "./workspace.settings.write";
 import { commandMenuSearch } from "./command.menu.search";
 import { commandMenuSuggest } from "./command.menu.suggest";
 import { skillAuthor } from "./skill.author";
+import { skillDraft } from "./skill.draft";
 import { schemaRegistryGet } from "./schema.registry.get";
 import { schemaRegistryConfig } from "./schema.registry.config";
 import { schemaList } from "./schema.list";
@@ -404,6 +406,7 @@ export {
   codeFormat,
   codeMap,
   agentDefinitionCreate,
+  agentDefinitionSuggest,
   agentDefinitionUpdate,
   agentDefinitionPublish,
   agentDefinitionGet,
@@ -618,6 +621,7 @@ export {
   commandMenuSearch,
   commandMenuSuggest,
   skillAuthor,
+  skillDraft,
   schemaRegistryGet,
   schemaRegistryConfig,
   schemaList,
@@ -706,6 +710,7 @@ export const contracts = [
   codeFormat,
   codeMap,
   agentDefinitionCreate,
+  agentDefinitionSuggest,
   agentDefinitionUpdate,
   agentDefinitionPublish,
   agentDefinitionGet,
@@ -920,6 +925,7 @@ export const contracts = [
   commandMenuSearch,
   commandMenuSuggest,
   skillAuthor,
+  skillDraft,
   schemaRegistryGet,
   schemaRegistryConfig,
   schemaList,

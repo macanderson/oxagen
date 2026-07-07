@@ -249,6 +249,24 @@ oxagen plugin org list
 oxagen plugin org uninstall --listing listing_linear
 ```
 
+### Run a fleet of local agent sessions (Mission Control)
+
+Every session is an append-only NDJSON event log on disk; the TUI, `--json`
+pipes, and a second terminal all render the same stream (ADR-023).
+
+```bash
+oxagen fleet                          # Mission Control TUI: rail, merged timeline, live composer
+oxagen fleet dispatch "fix the auth bug"   # detached session; prints its sid and returns immediately
+oxagen fleet ls --json | jq '.[].sid'      # roster as machine JSON
+oxagen fleet watch --json                  # every agent's events, one NDJSON stream (pipe it anywhere)
+oxagen fleet send 7f2q "also add tests"    # follow-up turn into a running session
+oxagen fleet attach 7f2q                   # focus one session (TTY) or stream it (--json)
+oxagen fleet cancel --all && oxagen fleet clean
+```
+
+In the REPL, end any prompt with ` &` to background it into the fleet and keep
+typing. Full reference: the Fleet and Scripting pages in the docs.
+
 ### Run background agent tasks
 
 ```bash

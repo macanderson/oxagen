@@ -29,6 +29,12 @@ export const agentDefinitionList = registerCapability({
         agentId: z.string(),
         publicId: z.string(),
         slug: z.string(),
+        agentKey: z
+          .string()
+          .nullable()
+          .describe(
+            "Globally-unique, immutable agent identifier: org_namespace.workspace_namespace.agent_slug (≤32 chars for agents created after namespaces shipped). Null only pre-backfill.",
+          ),
         name: z.string(),
         description: z.string().nullable(),
         /**

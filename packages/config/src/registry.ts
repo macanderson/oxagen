@@ -1598,6 +1598,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  OXAGEN_FLEET_DIR: {
+    group: "CLI",
+    description:
+      "Override the fleet session-store root directory (default ~/.oxagen/fleet). " +
+      "Per-project session state is stored under <dir>/<project-hash>.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   OXAGEN_NO_TUI: {
     group: "CLI",
     description:

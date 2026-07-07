@@ -70,7 +70,8 @@ describe("oxagenSettingsSchema", () => {
     expect(parsed.workerModel).toBe("anthropic/claude-fable-5");
     expect(parsed.judgeModel).toBe("openai/gpt-5.5-pro");
     expect(parsed.triageModel).toBe("anthropic/claude-haiku-4.5");
-    
+  });
+
   it("parses confirmScope as an optional boolean", () => {
     const result = oxagenSettingsSchema.safeParse({ confirmScope: true });
     expect(result.success).toBe(true);

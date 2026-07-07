@@ -152,6 +152,11 @@ describe("tierForSlug", () => {
     expect(tierForSlug("anthropic/claude-opus-4.8")).toBe("precise");
   });
 
+  it("fable / mythos → precise", () => {
+    expect(tierForSlug("anthropic/claude-fable-5")).toBe("precise");
+    expect(tierForSlug("anthropic/claude-mythos-5")).toBe("precise");
+  });
+
   it("sonnet → balanced", () => {
     expect(tierForSlug("anthropic/claude-sonnet-5")).toBe("balanced");
   });

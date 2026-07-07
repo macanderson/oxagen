@@ -15,6 +15,9 @@ export const orgListItemSchema = z.object({
   id: z.string(),
   publicId: z.string(),
   slug: z.string(),
+  // Immutable, globally-unique namespace (the first segment of an agentKey).
+  // Distinct from slug, which is renameable.
+  namespace: z.string(),
   name: z.string(),
   role: z.string().describe("The caller's role in this org (lowercase, e.g. owner/admin/member)"),
   avatarUrl: z.string().nullable(),

@@ -17,6 +17,8 @@ export const workspaceListItemSchema = z.object({
   id: z.string(),
   publicId: z.string(),
   slug: z.string(),
+  // Immutable namespace, unique within the org (the middle agentKey segment).
+  namespace: z.string(),
   name: z.string(),
   role: z
     .string()
@@ -53,6 +55,7 @@ export const workspaceList = registerCapability({
       id: z.string(),
       publicId: z.string(),
       slug: z.string(),
+      namespace: z.string(),
       name: z.string(),
     }),
     workspaces: z.array(workspaceListItemSchema),

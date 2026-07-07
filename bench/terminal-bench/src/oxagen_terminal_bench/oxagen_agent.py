@@ -521,14 +521,14 @@ class OxagenAgent(BaseInstalledAgent):
         if not _is_truthy(os.environ.get("OXAGEN_SKIP_INIT")) and not _is_truthy(
             os.environ.get("OXAGEN_NO_PIPELINE")
         ):
-            fwd = self._forwarded_env()
-            # Build env string for the shell command (key=value pairs, shell-quoted).
-            env_prefix = " ".join(
-                f"{k}={shlex.quote(v)}" for k, v in fwd.items()
-            )
+            # Pass env via the exec env= channel (same as the run() call
+            # below), NOT inlined into the command string: Harbor logs every
+            # command verbatim to trial.log, so an inline `env KEY=...` prefix
+            # wrote the AI_GATEWAY_API_KEY secret into the log file.
             await self.exec_as_agent(
                 environment,
-                command=f"env {env_prefix} {_INIT_SCRIPT}",
+                command=_INIT_SCRIPT,
+                env=self._forwarded_env(),
                 timeout_sec=300,  # tree-sitter parse of a large repo can take 2–3 min
             )
 

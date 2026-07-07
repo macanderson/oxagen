@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Bot, Plus, Rocket } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CopyableId } from "@/components/knowledge/graph-explorer/copyable-id";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { resolveStudioScope } from "@/lib/studio/scope";
@@ -122,6 +123,18 @@ export default async function StudioAgentsPage({ params }: PageProps) {
                           {agent.slug}
                         </span>
                       </Link>
+                      {/* Globally-unique agent key — copyable for API calls and
+                          A2A routing. Rendered outside the row Link so the copy
+                          button isn't a nested interactive control. */}
+                      {agent.agentKey ? (
+                        <div className="mt-1.5">
+                          <CopyableId
+                            value={agent.agentKey}
+                            label="key"
+                            max={40}
+                          />
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3">
                       <Badge

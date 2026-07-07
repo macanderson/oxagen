@@ -22,7 +22,8 @@ Fetch a single agent definition together with its active (or, if none is publish
 |---|---|---|
 | `agentId` | `string` | Internal UUID. |
 | `publicId` | `string` | Prefixed public identifier (`agt_…`). |
-| `slug` | `string` | Agent slug. |
+| `slug` | `string` | Agent slug (immutable; new agents capped at 18 chars). |
+| `agentKey` | `string \| null` | Immutable, globally-unique key `org_namespace.workspace_namespace.agent_slug` (e.g. `acme.core.qa-chat`). Null only for pre-namespace-backfill scopes. Segments are immutable; the 32-char budget is 6 + 1 + 6 + 1 + 18. |
 | `name` | `string` | Human-readable name. |
 | `description` | `string \| null` | Description or null. |
 | `agentType` | `string` | Kind of agent. |

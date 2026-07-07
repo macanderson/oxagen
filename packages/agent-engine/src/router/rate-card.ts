@@ -60,9 +60,20 @@ export const RATE_CARD: RateCardEntry[] = [
   { family: "claude-opus", label: "Claude Opus", vendor: "anthropic", rate: { inputPer1M: 15.0, outputPer1M: 75.0, cachedInputPer1M: 1.5 } },
   { family: "claude-sonnet", label: "Claude Sonnet", vendor: "anthropic", rate: { inputPer1M: 3.0, outputPer1M: 15.0, cachedInputPer1M: 0.3 } },
   { family: "claude-haiku", label: "Claude Haiku", vendor: "anthropic", rate: { inputPer1M: 1.0, outputPer1M: 5.0, cachedInputPer1M: 0.1 } },
+  // gpt-5.5-pro/gpt-5.5 rows are from the AI Gateway's /v1/models pricing
+  // (2026-07-07, base tier ≤272k context). They MUST sort before the generic
+  // "gpt-5" prefix row: without them every gpt-5.5-pro token was priced at
+  // the generic $1.25/$10 — an 18–24× under-report that made pro-judge
+  // configs look affordable on the cost dashboards while draining the real
+  // gateway balance. gpt-5.5-pro publishes no cache-read rate; 50% of fresh
+  // input follows the same OpenAI ratio as the other rows.
+  { family: "gpt-5.5-pro", label: "GPT-5.5 Pro", vendor: "openai", rate: { inputPer1M: 30.0, outputPer1M: 180.0, cachedInputPer1M: 15.0 } },
+  { family: "gpt-5.5", label: "GPT-5.5", vendor: "openai", rate: { inputPer1M: 5.0, outputPer1M: 30.0, cachedInputPer1M: 0.5 } },
   { family: "gpt-5", label: "GPT-5", vendor: "openai", rate: { inputPer1M: 1.25, outputPer1M: 10.0, cachedInputPer1M: 0.625 } },
   { family: "gpt-4o-mini", label: "GPT-4o mini", vendor: "openai", rate: { inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 } },
   { family: "gpt-4o", label: "GPT-4o", vendor: "openai", rate: { inputPer1M: 2.5, outputPer1M: 10.0, cachedInputPer1M: 1.25 } },
+  // Gateway /v1/models 2026-07-07 (base tier ≤200k): gemini-3-pro* $2/$12.
+  { family: "gemini-3-pro", label: "Gemini 3 Pro", vendor: "google", rate: { inputPer1M: 2.0, outputPer1M: 12.0, cachedInputPer1M: 0.2 } },
   { family: "gemini", label: "Gemini", vendor: "google", rate: { inputPer1M: 1.25, outputPer1M: 5.0, cachedInputPer1M: 0.3125 } },
 ];
 

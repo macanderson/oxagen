@@ -44,6 +44,9 @@ mocks.withSystemDbFn.mockImplementation(
       query: {
         organizations: { findFirst: mocks.orgFindFirst },
       },
+      // Namespace derivation reads existing org namespaces before the insert;
+      // an empty set means the slug-derived namespace is used verbatim.
+      select: () => ({ from: async () => [] }),
       insert: (table: unknown): unknown => {
         insertCount++;
         if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
@@ -127,6 +130,8 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
           query: {
             organizations: { findFirst: mocks.orgFindFirst },
           },
+          // See note above: namespace derivation reads existing namespaces first.
+          select: () => ({ from: async () => [] }),
           insert: (table: unknown): unknown => {
             insertCount++;
             if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
@@ -256,6 +261,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
           query: {
             organizations: { findFirst: mocks.orgFindFirst },
           },
+          select: () => ({ from: async () => [] }),
           insert: (table: unknown): unknown => {
             insertCount++;
             if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
@@ -299,6 +305,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
           query: {
             organizations: { findFirst: mocks.orgFindFirst },
           },
+          select: () => ({ from: async () => [] }),
           insert: (table: unknown): unknown => {
             insertCount++;
             if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
@@ -350,6 +357,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
           query: {
             organizations: { findFirst: mocks.orgFindFirst },
           },
+          select: () => ({ from: async () => [] }),
           insert: (table: unknown): unknown => {
             insertCount++;
             if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
@@ -399,6 +407,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
           query: {
             organizations: { findFirst: mocks.orgFindFirst },
           },
+          select: () => ({ from: async () => [] }),
           insert: (table: unknown): unknown => {
             insertCount++;
             if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;

@@ -189,8 +189,17 @@ export function tierForSlug(model: string): ModelTier {
   const family = (model.split("/").pop() ?? model).toLowerCase();
   // Cheap/small variants win first — every vendor marks them the same way.
   if (family.startsWith("claude-haiku") || SMALL_MARKER.test(family)) return "fast";
-  // Frontier / high-capability families across vendors → precise.
-  if (family.startsWith("claude-opus") || family.startsWith("gpt-5") || PRECISE_MARKER.test(family))
+  // Frontier / high-capability families across vendors → precise. claude-fable
+  // / claude-mythos (the Mythos-class tier above Opus) match none of the
+  // legacy markers, so without their own prefixes a pinned fable-5 was
+  // mislabelled "Sonnet" in route stage events.
+  if (
+    family.startsWith("claude-opus") ||
+    family.startsWith("claude-fable") ||
+    family.startsWith("claude-mythos") ||
+    family.startsWith("gpt-5") ||
+    PRECISE_MARKER.test(family)
+  )
     return "precise";
   return "balanced";
 }

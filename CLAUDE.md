@@ -4,7 +4,7 @@
 
 **Oxagen is the metered, governed, graph-grounded control plane for teams that build and resell AI agents — the neutral Stripe-for-agents.** The full positioning, market gaps, and drift tests live in `docs/VISION.md`. It is the north star for every feature decision.
 
-- **The wedge (own this intersection):** (a) capability-parity typed contracts that make every MCP tool inherently governed and un-poisonable; (b) the Neo4j graph + ontology that grounds agent answers in cited, time-aware context; (c) the ClickHouse→Stripe loop that turns observed usage directly into customer billing.
+- **The wedge (own this intersection):** (a) capability-parity typed contracts that make every MCP tool inherently governed and un-poisonable — the one enforced object binding identity → knowledge scope → permitted action → commercial terms → verified outcome → audit record (the accountability chain nobody else bundles); (b) the Neo4j graph + ontology that grounds agent answers in cited, time-aware context; (c) the ClickHouse→Stripe loop that turns observed usage directly into customer billing.
 - **Moats:** knowledge graph = accuracy moat; vendor-neutral BYOK = trust moat.
 - **Do not fight on the front line of:** connector breadth (Glean), standalone evals (Braintrust), framework mindshare (LangGraph). Those are fast-follows after the wedge is won, never the lead.
 - **Agent duty:** when recommending, designing, or prioritizing features, steer toward this future. Prefer work that deepens metering→billing, contract governance, graph grounding, vendor neutrality, or fleet lineage. If a request drifts from the wedge, say so explicitly and propose the vision-aligned alternative alongside doing what was asked.

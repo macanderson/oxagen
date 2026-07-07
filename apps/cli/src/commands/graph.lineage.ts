@@ -40,13 +40,24 @@
  *
  * Lineage subgraph → Neo4j (is_system=true) via graph.sync.push.
  * Cursor → DuckDB (local, same file as the code-push cursor).
+ *
+ * Output discipline (ADR-023 §4): `--json` emits one single-line JSON value on
+ * stdout (both the summary and the up-to-date `{ upToDate: true }` shapes are
+ * preserved); pretty mode prints the human summary on stdout; the single
+ * "Syncing N turn(s)…" status line is progress → stderr via `out.info`. Every
+ * failure is a uniform stderr error line with exit code 1, and `store.close()`
+ * always runs in `finally` — so the push uses `apiPostOrThrow` (which throws
+ * into the surrounding catch) rather than `apiPost` (which hard-exits and would
+ * skip `finally`).
  */
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { apiPost } from "../lib/api.js";
+import { apiPostOrThrow } from "../lib/api.js";
 import { getOrgId, getWorkspaceId } from "../lib/config.js";
+import { createOutput } from "../lib/output.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import { projectTrace, mergeEnvelopes } from "../agent/lineage-projection.js";
 import { createGraphStore } from "@oxagen/engram";
@@ -107,16 +118,18 @@ function resolveRepoId(root: string): string {
 
 export async function handleGraphLineage(
   opts: GraphLineageOptions,
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
   const org = getOrgId();
   const workspace = getWorkspaceId();
 
   if (!org || !workspace) {
-    process.stderr.write(
+    out.error(
       "Missing org or workspace. Run `oxagen config` or set " +
-        "OXAGEN_ORG_ID / OXAGEN_WORKSPACE_ID.\n",
+        "OXAGEN_ORG_ID / OXAGEN_WORKSPACE_ID.",
+      "config",
     );
-    process.exitCode = 1;
     return;
   }
 
@@ -147,13 +160,10 @@ export async function handleGraphLineage(
 
     if (pendingTraces.length === 0) {
       const msg = lastSyncedAt
-        ? `Lineage up to date — no new turns since ${new Date(lastSyncedAt).toISOString()}.\n`
-        : "No turns found in the local trace store. Run at least one CLI query first.\n";
-      if (opts.json) {
-        process.stdout.write(JSON.stringify({ upToDate: true }) + "\n");
-      } else {
-        process.stdout.write(msg);
-      }
+        ? `Lineage up to date — no new turns since ${new Date(lastSyncedAt).toISOString()}.`
+        : "No turns found in the local trace store. Run at least one CLI query first.";
+      // `--json` preserves the exact `{ upToDate: true }` shape as a single line.
+      out.data({ upToDate: true }, () => msg);
       return;
     }
 
@@ -168,12 +178,15 @@ export async function handleGraphLineage(
     const maxCreatedAt = Math.max(...pendingTraces.map((t) => t.createdAt));
     const idempotencyKey = `lineage:${org}:${workspace}:${minCreatedAt}:${maxCreatedAt}`;
 
-    process.stderr.write(
+    // Single status line → progress on stderr (no `\r`, so out.info is fine).
+    out.info(
       `Syncing ${pendingTraces.length} turn(s): ` +
-        `${merged.nodes.length} node(s), ${merged.edges.length} edge(s)...\n`,
+        `${merged.nodes.length} node(s), ${merged.edges.length} edge(s)...`,
     );
 
-    const result = await apiPost<PushResult>("graph/sync/push", {
+    // apiPostOrThrow (not apiPost): a push failure must throw into the catch
+    // below so out.error reports it uniformly AND the finally closes the store.
+    const result = await apiPostOrThrow<PushResult>("graph/sync/push", {
       source: "lineage",
       idempotencyKey,
       nodes: merged.nodes,
@@ -191,17 +204,18 @@ export async function handleGraphLineage(
       lastSyncedAt: maxCreatedAt,
     };
 
-    if (opts.json) {
-      process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
-    } else {
-      process.stdout.write(
+    out.data(
+      summary,
+      () =>
         `Lineage synced to workspace graph:\n` +
-          `  Turns synced:    ${pendingTraces.length}\n` +
-          `  Nodes upserted:  ${result.nodesUpserted}\n` +
-          `  Edges upserted:  ${result.edgesUpserted}\n` +
-          `  Last turn at:    ${new Date(maxCreatedAt).toISOString()}\n`,
-      );
-    }
+        `  Turns synced:    ${pendingTraces.length}\n` +
+        `  Nodes upserted:  ${result.nodesUpserted}\n` +
+        `  Edges upserted:  ${result.edgesUpserted}\n` +
+        `  Last turn at:    ${new Date(maxCreatedAt).toISOString()}`,
+    );
+  } catch (err) {
+    out.error(err, "api");
+    return;
   } finally {
     await store.close();
   }

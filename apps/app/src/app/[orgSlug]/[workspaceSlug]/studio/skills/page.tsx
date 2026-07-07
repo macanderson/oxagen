@@ -15,7 +15,7 @@ import "@oxagen/handlers/register";
 import { resolveStudioScope } from "@/lib/studio/scope";
 import { SkillsPanel } from "./skills-panel";
 import type { SkillRow } from "./skills-panel";
-import { createSkillAction } from "./skill-actions";
+import { createSkillAction, draftSkillAction } from "./skill-actions";
 
 export const metadata: Metadata = {
   title: "Skills | Studio",
@@ -107,6 +107,7 @@ export default async function StudioSkillsPage({ params }: PageProps) {
         skills={rows}
         canManage={canManage}
         createAction={createSkillAction}
+        draftAction={draftSkillAction}
       />
     </div>
   );

@@ -23,7 +23,8 @@ List the agent definitions in the current workspace with their identity, lifecyc
 | `agents` | `AgentSummary[]` | The workspace's agent definitions — see fields below. |
 | `agents[].agentId` | `string` | Internal UUID. |
 | `agents[].publicId` | `string` | Prefixed public identifier (`agt_…`). |
-| `agents[].slug` | `string` | Agent slug. |
+| `agents[].slug` | `string` | Agent slug (immutable; new agents capped at 18 chars). |
+| `agents[].agentKey` | `string \| null` | Immutable, globally-unique key `org_namespace.workspace_namespace.agent_slug` (e.g. `acme.core.qa-chat`). Resolved once per call from the tenant's namespaces (no N+1). Null only for pre-namespace-backfill scopes. |
 | `agents[].name` | `string` | Human-readable name. |
 | `agents[].description` | `string \| null` | Description or null. |
 | `agents[].agentType` | `string` | Type discriminator (`custom`, `interactive_chat`, `code`, …). `code` marks a code agent (repo/code tools + UI); see `isCodeAgentType`. |

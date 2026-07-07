@@ -74,9 +74,37 @@ export const SCHEMA_EXEMPT = new Set<string>([
   "OXAGEN_DEBUG",
   "OXAGEN_MID_JUDGE_STEPS",
   "OXAGEN_MAX_REVISE_ROUNDS",
+  "OXAGEN_JUDGE_FAST_COMPLEXITY_MAX",
   "OXAGEN_CLI_MOUSE",
-  // Test/sandbox fleet-store override (ADR-023) — never validated by services
+  // CLI / agent-engine local pipeline knobs — read via process.env in the CLI
+  // turn pipeline and local tooling; never validated by deployed services
+  "OXAGEN_ALLOW_NO_SESSION",
+  "OXAGEN_ALLOW_STDIO_MCP",
+  "OXAGEN_BEST_OF_N_MODE",
+  "OXAGEN_BEST_OF_N_PIPELINE",
+  "OXAGEN_BEST_OF_N_VERIFY",
+  "OXAGEN_CLI_FUN",
+  "OXAGEN_CLI_MOTION",
   "OXAGEN_FLEET_DIR",
+  "OXAGEN_COMMIT_LEDGER",
+  "OXAGEN_DISABLE_MEMORY",
+  "OXAGEN_EMBED_MODEL",
+  "OXAGEN_EMBED_PROVIDER",
+  "OXAGEN_ENHANCE_TIMEOUT_MS",
+  "OXAGEN_GRAPH_DISABLED",
+  "OXAGEN_JUDGE_PANEL",
+  "OXAGEN_LOCAL",
+  "OXAGEN_LOCALIZE",
+  "OXAGEN_PLAN_TIMEOUT_MS",
+  "OXAGEN_PROMPT_PROFILE",
+  "OXAGEN_RECALL_FILTER",
+  "OXAGEN_REPO_PRIORS",
+  "OXAGEN_REVISE_MIN_CONFIDENCE",
+  "OXAGEN_TELEMETRY",
+  // Local-embeddings provider endpoint (CLI code-graph embeddings)
+  "OLLAMA_HOST",
+  // Console Do Not Track standard — CLI telemetry opt-out, never a service var
+  "DO_NOT_TRACK",
   // CLI-only BYOK fallback key (see ENV_REGISTRY) — never validated by services
   "ANTHROPIC_API_KEY",
   // Dev-tooling signal — set by tools/scripts/dev.ts; services: []

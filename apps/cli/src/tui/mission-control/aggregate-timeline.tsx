@@ -44,14 +44,21 @@ function emphasisProps(emphasis: AggregateEmphasis): {
   }
 }
 
+// Gutter cells pin flexShrink={0} + truncate: Ink shrinks fixed-width boxes by
+// default when a row is tight, wrapping the clock mid-digit instead of
+// truncating the one flexible cell — the message text.
 function TimelineRow({ line }: { line: RenderableLine }): React.ReactElement {
   return (
     <Box>
-      <Box width={9}>
-        <Text dimColor>{formatClock(line.ts)}</Text>
+      <Box width={9} flexShrink={0}>
+        <Text dimColor wrap="truncate">
+          {formatClock(line.ts)}
+        </Text>
       </Box>
-      <Box width={5}>
-        <Text color={colorForSid(line.sid)}>{shortSid(line.sid)}</Text>
+      <Box width={5} flexShrink={0}>
+        <Text color={colorForSid(line.sid)} wrap="truncate">
+          {shortSid(line.sid)}
+        </Text>
       </Box>
       <Box flexGrow={1} minWidth={0}>
         <Text {...emphasisProps(line.emphasis)} wrap="truncate-end">
@@ -87,11 +94,13 @@ export function AggregateTimeline({
         <Box flexDirection="column" marginTop={1}>
           {tails.map((tail) => (
             <Box key={tail.sid}>
-              <Box width={2}>
+              <Box width={2} flexShrink={0}>
                 <Text color={theme.cyan}>⋯</Text>
               </Box>
-              <Box width={5}>
-                <Text color={colorForSid(tail.sid)}>{shortSid(tail.sid)}</Text>
+              <Box width={5} flexShrink={0}>
+                <Text color={colorForSid(tail.sid)} wrap="truncate">
+                  {shortSid(tail.sid)}
+                </Text>
               </Box>
               <Box flexGrow={1} minWidth={0}>
                 <Text dimColor wrap="truncate-start">

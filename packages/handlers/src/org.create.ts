@@ -1,6 +1,6 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
-import { schema, withSystemDb, isUniqueViolation } from "@oxagen/database";
+import { schema, withSystemDb, isUniqueViolation, deriveNamespace } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { eq } from "drizzle-orm";
 import { grantFreeCredits } from "@oxagen/billing";
@@ -32,11 +32,25 @@ export const organizationCreateHandler: CapabilityHandler<typeof organizationCre
 
   try {
     const txResult = await withSystemDb(async (tx) => {
+      // Derive the immutable, globally-unique namespace from the slug, avoiding
+      // any namespace already taken. The unique index is the authoritative guard
+      // against a concurrent-create race; this best-effort read just picks a
+      // non-colliding value in the common case.
+      const takenNamespaces = new Set(
+        (
+          await tx
+            .select({ namespace: schema.organizations.namespace })
+            .from(schema.organizations)
+        ).map((r) => r.namespace.toLowerCase()),
+      );
+      const namespace = deriveNamespace(input.slug, takenNamespaces);
+
       const [org] = await tx
         .insert(schema.organizations)
         .values({
           name: input.name,
           slug: input.slug,
+          namespace,
           planType: input.planSlug,
           status: "active",
           type: input.type,
