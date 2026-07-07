@@ -2,9 +2,15 @@
  * telemetry command unit tests — `oxagen telemetry on|off|status`.
  *
  * Mocks: config reads/writes (../../lib/config.js). No filesystem writes.
+ * Output is captured through the `CommandWriter` seam every handler now takes
+ * as an optional trailing argument (see lib/capture-writer.ts — the REPL's
+ * inline capture-execution seam, PR C item 11) rather than spying on
+ * `console.log`/`console.error`.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
+import { vi } from "vitest";
 import type { CliConfig } from "../../lib/config.js";
+import { captureWriter } from "../../lib/capture-writer.js";
 
 vi.mock("../../lib/config.js", () => ({
   getApiUrl: vi.fn(() => "https://api.oxagen.sh"),
@@ -22,44 +28,41 @@ function setConfigReturn(config: CliConfig): void {
   mockReadConfig.mockReturnValue(config);
 }
 
-let logSpy: ReturnType<typeof vi.spyOn>;
-let errorSpy: ReturnType<typeof vi.spyOn>;
+let writer: ReturnType<typeof captureWriter>["writer"];
+let logged: () => string;
 
 beforeEach(() => {
   vi.clearAllMocks();
   setConfigReturn({});
-  logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
-  errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  const cap = captureWriter();
+  writer = cap.writer;
+  logged = cap.output;
   process.exitCode = undefined;
 });
-
-function logged(): string {
-  return logSpy.mock.calls.map((c) => c.join(" ")).join("\n");
-}
 
 describe("telemetryStatus", () => {
   it("reports enabled by default and the ingest endpoint", () => {
     setConfigReturn({});
-    telemetryStatus();
+    telemetryStatus(writer);
     expect(logged()).toContain("Telemetry: enabled");
     expect(logged()).toContain("https://api.oxagen.sh/v1/telemetry/usage");
   });
 
   it("reports disabled when telemetry.enabled=false", () => {
     setConfigReturn({ telemetry: { enabled: false } });
-    telemetryStatus();
+    telemetryStatus(writer);
     expect(logged()).toContain("Telemetry: disabled");
   });
 
   it("shows the persisted install id when one exists", () => {
     setConfigReturn({ telemetry: { installId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" } });
-    telemetryStatus();
+    telemetryStatus(writer);
     expect(logged()).toContain("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
   });
 
   it("never generates an id as a side effect (status is read-only)", () => {
     setConfigReturn({});
-    telemetryStatus();
+    telemetryStatus(writer);
     expect(mockWriteConfig).not.toHaveBeenCalled();
     expect(logged()).toContain("not yet generated");
   });
@@ -68,7 +71,7 @@ describe("telemetryStatus", () => {
 describe("telemetryOn / telemetryOff", () => {
   it("telemetryOff persists telemetry.enabled=false", () => {
     setConfigReturn({});
-    telemetryOff();
+    telemetryOff(writer);
     expect(mockWriteConfig).toHaveBeenCalledWith(
       expect.objectContaining({ telemetry: expect.objectContaining({ enabled: false }) }),
     );
@@ -76,7 +79,7 @@ describe("telemetryOn / telemetryOff", () => {
 
   it("telemetryOn persists telemetry.enabled=true", () => {
     setConfigReturn({ telemetry: { enabled: false } });
-    telemetryOn();
+    telemetryOn(writer);
     expect(mockWriteConfig).toHaveBeenCalledWith(
       expect.objectContaining({ telemetry: expect.objectContaining({ enabled: true }) }),
     );
@@ -84,7 +87,7 @@ describe("telemetryOn / telemetryOff", () => {
 
   it("preserves the existing installId/disclosed fields when toggling", () => {
     setConfigReturn({ telemetry: { installId: "id-1", disclosed: true, enabled: false } });
-    telemetryOn();
+    telemetryOn(writer);
     expect(mockWriteConfig).toHaveBeenCalledWith(
       expect.objectContaining({
         telemetry: expect.objectContaining({ installId: "id-1", disclosed: true, enabled: true }),
@@ -95,32 +98,32 @@ describe("telemetryOn / telemetryOff", () => {
 
 describe("handleTelemetry — subcommand dispatch", () => {
   it("defaults to status with no argument", () => {
-    handleTelemetry(undefined);
+    handleTelemetry(undefined, writer);
     expect(logged()).toContain("Telemetry:");
   });
 
   it("dispatches on/off/status by name", () => {
-    handleTelemetry("off");
+    handleTelemetry("off", writer);
     expect(mockWriteConfig).toHaveBeenCalledWith(
       expect.objectContaining({ telemetry: expect.objectContaining({ enabled: false }) }),
     );
 
     vi.clearAllMocks();
     setConfigReturn({});
-    handleTelemetry("on");
+    handleTelemetry("on", writer);
     expect(mockWriteConfig).toHaveBeenCalledWith(
       expect.objectContaining({ telemetry: expect.objectContaining({ enabled: true }) }),
     );
 
     vi.clearAllMocks();
     setConfigReturn({});
-    handleTelemetry("status");
+    handleTelemetry("status", writer);
     expect(logged()).toContain("Telemetry:");
   });
 
   it("rejects an unknown subcommand with a non-zero exit code", () => {
-    handleTelemetry("bogus");
-    expect(errorSpy).toHaveBeenCalled();
+    handleTelemetry("bogus", writer);
+    expect(logged()).toContain("Unknown telemetry subcommand");
     expect(process.exitCode).toBe(1);
   });
 });

@@ -118,6 +118,14 @@ export const BUILTIN_SLASH_NAMES: ReadonlySet<string> = new Set(
 
 const SOURCE_RANK: Record<SlashSource, number> = { builtin: 0, cli: 1, custom: 2 };
 
+/**
+ * Prefix used to disambiguate a CLI command whose bare name is shadowed by a
+ * built-in (e.g. `config`, `init`). `/cli:config` always resolves to the CLI
+ * command tree, never the built-in — see `buildSlashCatalog` and the REPL
+ * dispatcher, which strips this prefix before resolving/running the command.
+ */
+export const CLI_DISAMBIGUATION_PREFIX = "cli:";
+
 export interface BuildCatalogOptions extends LoadCommandsOptions {
   /** CLI command metadata (from describeCliCommands(buildProgram())). */
   cliCommands: ReadonlyArray<CliCommandMeta>;
@@ -138,7 +146,24 @@ export function buildSlashCatalog(opts: BuildCatalogOptions): SlashCatalogEntry[
   }
 
   for (const c of opts.cliCommands) {
-    if (byName.has(c.name)) continue; // a built-in already owns this name
+    if (byName.has(c.name)) {
+      // A built-in (or an earlier CLI command — top-level `describeCliCommands`
+      // order is stable) already owns this bare name. Rather than silently
+      // dropping the CLI command (it used to be genuinely unreachable), expose
+      // it under a `cli:<name>` alias so it stays reachable — see
+      // CLI_DISAMBIGUATION_PREFIX and the REPL dispatcher in interactive.tsx,
+      // which strips the prefix back off before resolving/running it.
+      const aliased = `${CLI_DISAMBIGUATION_PREFIX}${c.name}`;
+      if (byName.has(aliased)) continue; // pathological double-collision — give up quietly
+      byName.set(aliased, {
+        name: aliased,
+        description: `${c.description} (shadowed by a built-in /${c.name} — use this alias)`,
+        argumentHint: c.argumentHint,
+        source: "cli",
+        productized: true,
+      });
+      continue;
+    }
     byName.set(c.name, {
       name: c.name,
       description: c.description,

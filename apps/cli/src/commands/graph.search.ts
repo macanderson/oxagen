@@ -1,6 +1,7 @@
 /** `oxagen graph search …` — unified natural-language (vector) search across the
  *  entire knowledge graph, via the org-scoped `/graph/search` API. */
 import { apiPost } from "../lib/api.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
 export interface GraphSearchOptions {
   query: string;
@@ -20,7 +21,10 @@ function splitCsv(value: string | undefined): string[] | undefined {
   return parts.length > 0 ? parts : undefined;
 }
 
-export async function handleGraphSearch(opts: GraphSearchOptions): Promise<void> {
+export async function handleGraphSearch(
+  opts: GraphSearchOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
   // --system => isSystem=true, --no-system => false, neither => undefined (both).
   const isSystem = opts.system === true ? true : opts.system === false ? false : undefined;
 
@@ -32,5 +36,5 @@ export async function handleGraphSearch(opts: GraphSearchOptions): Promise<void>
     isSystem,
   });
 
-  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  writer.write(JSON.stringify(result, null, 2));
 }

@@ -7,6 +7,7 @@
  * indented tree. `--json` prints the raw contract output for scripting.
  */
 import { apiGetOrThrow, ApiError } from "../lib/api.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
 export interface TraceOptions {
   json?: boolean;
@@ -116,6 +117,7 @@ function renderExecution(node: ExecNode, indent: string, out: string[]): void {
 export async function handleTrace(
   executionId: string,
   opts: TraceOptions,
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   let trace: AgentTraceGetOutput;
   try {
@@ -124,22 +126,20 @@ export async function handleTrace(
     );
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
-      process.stderr.write(`Execution not found: ${executionId}\n`);
+      writer.writeErr(`Execution not found: ${executionId}`);
     } else {
-      process.stderr.write(
-        `${err instanceof Error ? err.message : String(err)}\n`,
-      );
+      writer.writeErr(err instanceof Error ? err.message : String(err));
     }
     process.exitCode = 1;
     return;
   }
 
   if (opts.json) {
-    process.stdout.write(JSON.stringify(trace, null, 2) + "\n");
+    writer.write(JSON.stringify(trace, null, 2));
     return;
   }
 
   const out: string[] = [];
   renderExecution(trace, "", out);
-  process.stdout.write(out.join("\n") + "\n");
+  writer.write(out.join("\n"));
 }

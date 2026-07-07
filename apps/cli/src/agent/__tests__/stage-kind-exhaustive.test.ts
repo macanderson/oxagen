@@ -48,8 +48,11 @@ const KNOWN_STAGE_KINDS: readonly StageKind[] = [
 describe("StageKind source of truth", () => {
   it("trace.ts re-exports StageKind from @oxagen/agent-engine instead of redefining it", () => {
     const source = readFileSync(traceTsPath, "utf8");
-    expect(source).toContain('import type { StageKind } from "@oxagen/agent-engine"');
-    expect(source).toContain("export type { StageKind }");
+    // StageKind is re-exported from the engine barrel — alone or bundled with the
+    // other trace interfaces in one `export type { … } from "@oxagen/agent-engine"`.
+    expect(source).toMatch(
+      /export type \{[^}]*\bStageKind\b[^}]*\}\s*from\s*"@oxagen\/agent-engine"/s,
+    );
     // Guard against a future hand-copied union reappearing alongside the
     // re-export (the exact drift this test suite exists to catch).
     expect(source).not.toMatch(/export type StageKind\s*=/);
