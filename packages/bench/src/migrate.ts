@@ -13,6 +13,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDirectRunEntry } from "@oxagen/telemetry";
 import { closeClickhouse } from "@oxagen/telemetry";
 import { splitStatements } from "@oxagen/telemetry/migrate";
 import { chBenchCommand } from "@oxagen/telemetry/bench-client";
@@ -55,8 +56,8 @@ export async function migrateBench(): Promise<void> {
   }
 }
 
-const isDirectRun = import.meta.url === `file://${process.argv[1]}`;
-if (isDirectRun) {
+// Bundle-safe direct-run guard — see @oxagen/telemetry is-direct-run.ts.
+if (isDirectRunEntry(import.meta.url, process.argv[1], "migrate")) {
   migrateBench()
     .then(() => closeClickhouse())
     .then(() => {

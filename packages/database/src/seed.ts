@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { isDirectRunEntry } from "@oxagen/telemetry";
 import { closeDatabase } from "./client";
 import { withSystemDb } from "./tenant";
 import {
@@ -197,8 +198,8 @@ export async function seed(): Promise<void> {
   await seedDev();
 }
 
-const isDirectRun = import.meta.url === `file://${process.argv[1]}`;
-if (isDirectRun) {
+// Bundle-safe direct-run guard — see @oxagen/telemetry is-direct-run.ts.
+if (isDirectRunEntry(import.meta.url, process.argv[1], "seed")) {
   seed()
     .then(() => closeDatabase())
     .then(() => {

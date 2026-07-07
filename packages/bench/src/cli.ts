@@ -9,7 +9,7 @@
  *   pnpm --filter @oxagen/bench list [-- --type <bench_type>] [-- -n <limit>] [-- --json]
  *   pnpm --filter @oxagen/bench replay -- <public_id> [--run] [--json]
  */
-import { closeClickhouse } from "@oxagen/telemetry";
+import { closeClickhouse, isDirectRunEntry } from "@oxagen/telemetry";
 import { handleBenchList, handleBenchReplay } from "./commands";
 
 export function parseFlags(argv: string[]): { positional: string[]; flags: Record<string, string | boolean> } {
@@ -60,8 +60,8 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
 
 // Only auto-run when invoked directly (tsx src/cli.ts ...), not when imported
 // by a test — same guard telemetry's migrate.ts uses.
-const isDirectRun = import.meta.url === `file://${process.argv[1]}`;
-if (isDirectRun) {
+// Bundle-safe direct-run guard — see @oxagen/telemetry is-direct-run.ts.
+if (isDirectRunEntry(import.meta.url, process.argv[1], "cli")) {
   main()
     .then(() => closeClickhouse())
     .catch(async (err: unknown) => {
