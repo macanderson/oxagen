@@ -1041,6 +1041,24 @@ export function buildProgram(): Command {
       },
     );
 
+  sandbox
+    .command("cat <session-id> <path>")
+    .description(
+      "Print one file's contents from a durable sandbox session's workspace",
+    )
+    .option("--max-bytes <n>", "Max bytes to read (default 256 KiB, cap 1 MiB)")
+    .option("--json", "Emit raw JSON output (includes base64 for binary files)")
+    .action(
+      async (
+        sessionId: string,
+        path: string,
+        opts: { maxBytes?: string; json?: boolean },
+      ) => {
+        const { handleSandboxCat } = await import("./commands/sandbox.js");
+        await handleSandboxCat(sessionId, path, opts);
+      },
+    );
+
   // ── init: scaffold project + global settings, build code graph ──────────────
 
   program

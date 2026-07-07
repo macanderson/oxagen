@@ -26,6 +26,7 @@ import { agentSandboxExecRoute } from "./routes/v1/agent.sandbox.exec";
 import { agentSandboxSnapshotRoute } from "./routes/v1/agent.sandbox.snapshot";
 import { agentSandboxStopRoute } from "./routes/v1/agent.sandbox.stop";
 import { agentSandboxFilesListRoute } from "./routes/v1/agent.sandbox_file.list";
+import { agentSandboxFileReadRoute } from "./routes/v1/agent.sandbox_file.read";
 import { agentFeatureVerifyRoute } from "./routes/v1/agent.feature.verify";
 import { browserNavigateRoute } from "./routes/v1/browser.navigate";
 import { browserScreenshotRoute } from "./routes/v1/browser.screenshot";
@@ -361,6 +362,8 @@ orgScoped.route("/agent/sandbox/exec", agentSandboxExecRoute);
 orgScoped.route("/agent/sandbox/snapshot", agentSandboxSnapshotRoute);
 orgScoped.route("/agent/sandbox/stop", agentSandboxStopRoute);
 orgScoped.route("/agent/sandbox/files", agentSandboxFilesListRoute);
+// Single-file read — the viewer counterpart of the /files listing above.
+orgScoped.route("/agent/sandbox/file", agentSandboxFileReadRoute);
 // Browser automation inside a durable sandbox (proof-of-done), org+workspace scoped.
 orgScoped.route("/browser/navigate", browserNavigateRoute);
 orgScoped.route("/browser/screenshot", browserScreenshotRoute);
