@@ -1505,6 +1505,29 @@ export function ReplApp({
         return;
       }
 
+      // ── Trailing ` &`: background the prompt into the fleet (ADR-023) ──
+      // Shell-familiar: `fix the login bug &` dispatches a detached fleet
+      // session immediately and the composer stays free for the next thought.
+      {
+        const { parseAmpersandDispatch } = await import("../sessions/dispatch.js");
+        const fleetPrompt = parseAmpersandDispatch(text);
+        if (fleetPrompt !== null) {
+          try {
+            const { dispatchDetachedSession } = await import("../sessions/dispatch.js");
+            const { sid } = await dispatchDetachedSession({ cwd, prompt: fleetPrompt });
+            pushAssistant(
+              `◇ dispatched ${sid} to the fleet — \`oxagen fleet\` to watch it work, ` +
+                `\`oxagen fleet send ${sid} "…"\` to follow up.`,
+            );
+          } catch (err) {
+            pushAssistant(
+              `Fleet dispatch failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+          return;
+        }
+      }
+
       // ── Slash commands ──
       if (text === "/help") {
         pushAssistant(HELP);
