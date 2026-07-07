@@ -102,6 +102,20 @@ vi.mock("@oxagen/database", () => ({
       workspaceId: "workspace_id",
       deletedAt: "deleted_at",
     },
+    // Required by packages/agent's _sandbox-session module-level SESSION_COLUMNS
+    // initializer, transitively reached via runCodingAgent and the agent.sandbox.*
+    // handlers registered through @oxagen/handlers (PR #644 chat→runCodingAgent).
+    sandboxSessions: {
+      id: "id",
+      publicId: "public_id",
+      sandboxId: "sandbox_id",
+      snapshotId: "snapshot_id",
+      image: "image",
+      status: "status",
+      metadata: "metadata",
+      workspaceId: "workspace_id",
+      sessionKey: "session_key",
+    },
   },
 }));
 
@@ -161,6 +175,33 @@ async function* textStream(text: string) {
   };
 }
 
+/**
+ * Wrap a `fullStream` generator in the full StreamTextResult shape the unified
+ * agent engine (runCodingAgent, PR #644) now awaits. The engine reads `usage`,
+ * `finishReason`, `response`, and `steps` as top-level promises on the stream
+ * result — the pre-unification transport instead carried usage inside the
+ * stream's `finish` part. A mock returning only `{ fullStream }` makes the
+ * engine throw when it awaits the missing `usage`, aborting the turn before the
+ * route can emit the usage event, persist the messages, or record the SOC 2
+ * execution — which is exactly what these tests exercise.
+ */
+function streamResult(
+  fullStream: AsyncGenerator<unknown>,
+  usage: { inputTokens: number; outputTokens: number; totalTokens: number } = {
+    inputTokens: 10,
+    outputTokens: 5,
+    totalTokens: 15,
+  },
+) {
+  return {
+    fullStream,
+    steps: Promise.resolve([{}]),
+    usage: Promise.resolve(usage),
+    response: Promise.resolve({ messages: [] }),
+    finishReason: Promise.resolve("stop"),
+  };
+}
+
 /** Parse all `data:` lines from a text/event-stream body into objects. */
 async function readSseEvents(res: Response): Promise<unknown[]> {
   const text = await res.text();
@@ -194,9 +235,7 @@ beforeEach(() => {
   mocks.resolvePrompt.mockReturnValue("You are a helpful assistant.");
   mocks.loadWorkspacePromptConfigSafe.mockResolvedValue({});
   mocks.materializeTools.mockResolvedValue({ tools: {}, nameMap: {} });
-  mocks.streamAgentReply.mockReturnValue({
-    fullStream: textStream("Hello world"),
-  });
+  mocks.streamAgentReply.mockReturnValue(streamResult(textStream("Hello world")));
 
   // runInTenantScope executes its callback directly
   mocks.runInTenantScope.mockImplementation(
@@ -518,7 +557,13 @@ describe("chat stream: tool-call events", () => {
       tools: {},
       nameMap: { agent_code_execute: "agent.code.execute" },
     });
-    mocks.streamAgentReply.mockReturnValue({ fullStream: toolStream() });
+    mocks.streamAgentReply.mockReturnValue(
+      streamResult(toolStream(), {
+        inputTokens: 5,
+        outputTokens: 3,
+        totalTokens: 8,
+      }),
+    );
   });
 
   it("emits tool-call-start with real capability name", async () => {
@@ -551,7 +596,7 @@ describe("chat stream: error handling", () => {
     async function* errorStream(): AsyncGenerator<never> {
       throw new Error("LLM provider error");
     }
-    mocks.streamAgentReply.mockReturnValue({ fullStream: errorStream() });
+    mocks.streamAgentReply.mockReturnValue(streamResult(errorStream()));
 
     const res = await app.fetch(post({ content: "cause error" }));
     expect(res.status).toBe(200); // SSE always 200
@@ -575,9 +620,9 @@ describe("chat stream: error handling", () => {
         totalUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
       };
     }
-    mocks.streamAgentReply.mockReturnValue({
-      fullStream: providerErrorStream(),
-    });
+    mocks.streamAgentReply.mockReturnValue(
+      streamResult(providerErrorStream()),
+    );
 
     const res = await app.fetch(post({ content: "check errors" }));
     const events = await readSseEvents(res);
@@ -606,9 +651,9 @@ describe("chat stream: error handling", () => {
         totalUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
       };
     }
-    mocks.streamAgentReply.mockReturnValue({
-      fullStream: providerErrorStream(),
-    });
+    mocks.streamAgentReply.mockReturnValue(
+      streamResult(providerErrorStream()),
+    );
 
     const insertSpy = vi.fn().mockReturnThis();
     mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) => {
@@ -669,6 +714,11 @@ describe("chat stream: error handling", () => {
     );
     // SSE response still completes (the failure must not corrupt the stream).
     expect(res.status).toBe(200);
+    // Drain so the stream's start() callback completes: under the unified engine
+    // (runCodingAgent) persistence runs asynchronously inside the stream body,
+    // AFTER the engine's usage/finishReason promises resolve — so the log is only
+    // guaranteed to have fired once the SSE body is fully read.
+    await res.text();
     // …but the failure was logged, not silently swallowed.
     const logged =
       consoleErrorSpy.mock.calls.some((c) =>
