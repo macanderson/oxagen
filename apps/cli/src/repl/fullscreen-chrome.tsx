@@ -22,6 +22,7 @@ import { abbreviatePath } from "./git-info.js";
 import {
   estimateMessageRows,
   computeVisibleWindow,
+  computeBottomWindow,
   effectiveOffset,
   maxOffsetFor,
   type ScrollState,
@@ -153,8 +154,25 @@ export function TranscriptViewport({
   const ctx = { totalLines, viewportHeight: contentHeight };
   const offset = effectiveOffset(scroll, ctx);
   const atBottom = offset >= maxOffsetFor(ctx);
-  const { startIndex, endIndex, hiddenAbove } = computeVisibleWindow(rowHeights, offset, contentHeight);
-  const visible = all.slice(startIndex, endIndex);
+
+  // Two render strategies (see scroll.ts):
+  //  · Pinned to the bottom (the default, and wherever sticky-bottom is
+  //    engaged): anchor the transcript's TAIL to the viewport's bottom edge
+  //    with flex-end, so the newest output is always fully visible at REAL
+  //    rendered heights — height-estimate drift can't cut it off. While the
+  //    transcript is still shorter than the viewport, render top-down instead
+  //    (anchorBottom false), like any fresh session.
+  //  · Scrolled up: window the messages around the offset and slide the first
+  //    one partially off the top via negative marginTop (clipTop) — Ink clips
+  //    both edges of an overflow-hidden Box, so scrolling is line-exact even
+  //    through a message taller than the whole viewport.
+  const bottomWindow = computeBottomWindow(rowHeights, contentHeight);
+  const scrolledWindow = computeVisibleWindow(rowHeights, offset, contentHeight);
+  const hiddenRows = scrolledWindow.hiddenAbove + scrolledWindow.clipTop;
+  const visible = atBottom
+    ? all.slice(bottomWindow.startIndex)
+    : all.slice(scrolledWindow.startIndex, scrolledWindow.endIndex);
+  const firstVisibleIndex = atBottom ? bottomWindow.startIndex : scrolledWindow.startIndex;
 
   return (
     <Box flexDirection="column" height={height} overflow="hidden">
@@ -165,17 +183,24 @@ export function TranscriptViewport({
           <>
             <Text color={AMBER} bold>
               {"▲ "}
-              {hiddenAbove}
+              {hiddenRows}
               {" lines above"}
             </Text>
             <Text dimColor>{" · End to jump"}</Text>
           </>
         )}
       </Box>
-      <Box flexDirection="column" height={contentHeight} overflow="hidden">
-        {visible.map((msg, i) => (
-          <MessageView key={startIndex + i} msg={msg} diffTheme={diffTheme} />
-        ))}
+      <Box
+        flexDirection="column"
+        height={contentHeight}
+        overflow="hidden"
+        justifyContent={atBottom && bottomWindow.anchorBottom ? "flex-end" : "flex-start"}
+      >
+        <Box flexDirection="column" flexShrink={0} marginTop={atBottom ? 0 : -scrolledWindow.clipTop}>
+          {visible.map((msg, i) => (
+            <MessageView key={firstVisibleIndex + i} msg={msg} diffTheme={diffTheme} />
+          ))}
+        </Box>
       </Box>
     </Box>
   );
