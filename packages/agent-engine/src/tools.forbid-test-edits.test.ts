@@ -39,6 +39,8 @@ describe("isTestPath", () => {
     "TESTS/Foo.ts", // directory match is case-insensitive
     "Foo.TEST.TS", // filename match is case-insensitive
     "FOO_SPEC.RB",
+    "testing/python/integration.py", // pytest's own suite dir — escaped the guard on SWE-bench
+    "src/testing/helpers.py",
   ])("matches test path: %s", (p) => {
     expect(isTestPath(p)).toBe(true);
   });

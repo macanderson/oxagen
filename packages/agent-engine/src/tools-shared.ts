@@ -17,8 +17,17 @@
 
 import { z } from "zod";
 
-/** Directory-name path segments that mark everything beneath them as test code. */
-const TEST_DIR_NAMES = new Set(["tests", "test", "__tests__"]);
+/**
+ * Directory-name path segments that mark everything beneath them as test code.
+ * "testing" is included because pytest's own suite lives in `testing/` — on
+ * SWE-bench a candidate edited `testing/python/integration.py` (a graded
+ * FAIL_TO_PASS file) right past the guard. Some repos (e.g. matplotlib's
+ * `lib/matplotlib/testing/`) keep test *utilities* there, so a rare
+ * legitimate source fix can be denied — acceptable for this bench/CI-only
+ * gate: a false block redirects the agent to the real source, while a false
+ * allow lets it self-certify against tests it rewrote.
+ */
+const TEST_DIR_NAMES = new Set(["tests", "test", "__tests__", "testing"]);
 
 /** Basename patterns, matched against the lowercased filename only. */
 const TEST_BASENAME_PATTERNS: RegExp[] = [
