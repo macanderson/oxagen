@@ -88,7 +88,8 @@ interface Candidates {
   ontologies: Array<{ id: string; displayName: string }>;
   /** Agent-surface capabilities — refs for `function` tools. */
   functions: Array<{ name: string; description: string }>;
-  /** Workspace skills — refs (slugs) for `skill` tools. */
+  /** Enabled workspace skills — refs (slugs) for `skill` tools. Excludes disabled
+   *  skills, which are surfaced as recommendations (enable before equipping). */
   skills: Array<{ slug: string; description: string }>;
   /** Registered MCP servers — refs (publicIds) for `mcp_server` tools. */
   mcpServers: Array<{ ref: string; name: string }>;
@@ -96,6 +97,15 @@ interface Candidates {
   subagents: Array<{ slug: string; description: string }>;
   /** Every existing agent slug (any status) — for slug-collision de-conflict. */
   existingSlugs: string[];
+  /**
+   * SECOND TIER — connect-first recommendation candidates. These are NOT
+   * equipable (never in agentTools): the user must connect/enable them first.
+   */
+  /** Catalog MCP servers not registered in the workspace — refs are registry
+   *  names (e.g. "github/github-mcp-server"). */
+  connectableMcpServers: Array<{ ref: string; name: string; description: string }>;
+  /** Workspace skills that exist but are disabled — refs are slugs. */
+  disabledSkills: Array<{ ref: string; name: string; description: string }>;
 }
 
 /** Invoke a read capability, degrading to a fallback so one unavailable source
@@ -104,9 +114,10 @@ async function invokeSafe<T>(
   cap: string,
   ctx: CapabilityContext,
   fallback: T,
+  input: Record<string, unknown> = {},
 ): Promise<T> {
   try {
-    return (await invoke(cap, {}, ctx)) as T;
+    return (await invoke(cap, input, ctx)) as T;
   } catch (err) {
     logger.warn({ err, cap }, "agent.definition.suggest: candidate source failed");
     return fallback;
@@ -114,13 +125,13 @@ async function invokeSafe<T>(
 }
 
 async function assembleCandidates(ctx: CapabilityContext): Promise<Candidates> {
-  const [schemaOut, skillOut, mcpOut, agentOut] = await Promise.all([
+  const [schemaOut, skillOut, mcpOut, agentOut, catalogOut, wsSkillOut] = await Promise.all([
     invokeSafe<{ schemas: Array<{ schemaName: string; displayName: string; enabled: boolean }> }>(
       "schema.list",
       ctx,
       { schemas: [] },
     ),
-    invokeSafe<{ skills: Array<{ slug: string; description: string }> }>(
+    invokeSafe<{ skills: Array<{ slug: string; name?: string; description: string }> }>(
       "agent.skill.list",
       ctx,
       { skills: [] },
@@ -133,6 +144,26 @@ async function assembleCandidates(ctx: CapabilityContext): Promise<Candidates> {
     invokeSafe<{
       agents: Array<{ slug: string; description: string | null; status: string }>;
     }>("agent.definition.list", ctx, { agents: [] }),
+    // Catalog MCP servers not yet installed in this workspace — recommendation
+    // candidates. Ask for the not-installed slice directly; belt-and-suspenders
+    // dedup against agent.mcp.list below handles registries lagging the flag.
+    invokeSafe<{
+      servers: Array<{
+        name: string;
+        title: string | null;
+        description: string;
+        installed: boolean;
+      }>;
+    }>("plugin.catalog.browse", ctx, { servers: [] }, {
+      pluginType: "mcp_server",
+      installed: false,
+      limit: 50,
+    }),
+    // Every workspace skill WITH its enabled flag — the only source that exposes
+    // disabled skills. Carries a publicId, not a slug; joined by name below.
+    invokeSafe<{
+      skills: Array<{ id: string; name: string; description: string; enabled: boolean }>;
+    }>("skill.workspace.list", ctx, { skills: [] }),
   ]);
 
   const functions = listCapabilities()
@@ -140,17 +171,52 @@ async function assembleCandidates(ctx: CapabilityContext): Promise<Candidates> {
     .filter((c) => c.name !== agentDefinitionSuggest.name)
     .map((c) => ({ name: c.name, description: c.description }));
 
+  // Disabled workspace skills → recover each slug by joining skill.workspace.list
+  // (has enabled + name) to agent.skill.list (has slug + name) on the name. A
+  // disabled skill whose slug can't be recovered is dropped — a recommendation
+  // needs a real slug ref the caller can enable.
+  const slugByName = new Map(
+    skillOut.skills
+      .filter((s): s is { slug: string; name: string; description: string } => Boolean(s.name))
+      .map((s) => [s.name.toLowerCase(), s.slug]),
+  );
+  const disabledSkills = wsSkillOut.skills
+    .filter((s) => !s.enabled)
+    .map((s) => {
+      const slug = slugByName.get(s.name.toLowerCase());
+      return slug ? { ref: slug, name: s.name, description: s.description } : null;
+    })
+    .filter((s): s is { ref: string; name: string; description: string } => s !== null);
+  const disabledSlugs = new Set(disabledSkills.map((s) => s.ref));
+
+  // Catalog servers the workspace already has — matched by the catalog's canonical
+  // registry NAME against installed server names/publicIds (never the display
+  // title, which is an unreliable label and would over-exclude).
+  const installedMcpIdentity = new Set(
+    mcpOut.servers.flatMap((s) => [s.publicId.toLowerCase(), s.name.toLowerCase()]),
+  );
+  const connectableMcpServers = catalogOut.servers
+    .filter((s) => !s.installed)
+    .filter((s) => !installedMcpIdentity.has(s.name.toLowerCase()))
+    .slice(0, 50)
+    .map((s) => ({ ref: s.name, name: s.title ?? s.name, description: s.description }));
+
   return {
     ontologies: schemaOut.schemas
       .filter((s) => s.enabled)
       .map((s) => ({ id: s.schemaName, displayName: s.displayName })),
     functions,
-    skills: skillOut.skills.map((s) => ({ slug: s.slug, description: s.description })),
+    // Equippable skills exclude the disabled ones — those go to recommendations.
+    skills: skillOut.skills
+      .filter((s) => !disabledSlugs.has(s.slug))
+      .map((s) => ({ slug: s.slug, description: s.description })),
     mcpServers: mcpOut.servers.map((s) => ({ ref: s.publicId, name: s.name })),
     subagents: agentOut.agents
       .filter((a) => a.status === "active")
       .map((a) => ({ slug: a.slug, description: a.description ?? "" })),
     existingSlugs: agentOut.agents.map((a) => a.slug),
+    connectableMcpServers,
+    disabledSkills,
   };
 }
 
@@ -178,6 +244,22 @@ function formatCandidates(c: Candidates): string {
     section(
       "SUBAGENT CANDIDATES (ref for agentTools of type 'agent')",
       c.subagents.map((a) => `- ${a.slug}: ${a.description}`),
+    ),
+    // SECOND TIER. These are deliberately fenced off from the equipable candidate
+    // lists above: they do not exist in the workspace yet, so they can only be
+    // RECOMMENDED (returned in `recommendations`), never equipped (`agentTools`).
+    [
+      "CONNECTABLE (recommendations ONLY — these are NOT equipable; never put them in agentTools).",
+      "Recommend one when the description clearly needs it, with a reason tied to the description.",
+      "The caller connects the MCP server / enables the skill first, then equips it in a later edit.",
+    ].join("\n"),
+    section(
+      "CATALOG MCP SERVERS (recommend with kind 'mcp_server'; ref = the registry name shown)",
+      c.connectableMcpServers.map((s) => `- ${s.ref} — ${s.name}: ${s.description}`),
+    ),
+    section(
+      "DISABLED WORKSPACE SKILLS (recommend with kind 'skill'; ref = the slug shown; enable before equipping)",
+      c.disabledSkills.map((s) => `- ${s.ref} — ${s.name}: ${s.description}`),
     ),
   ].join("\n\n");
 }
@@ -275,6 +357,31 @@ const synthesisSchema = z.object({
       }),
     )
     .describe("What starts the agent. Prefer 'manual'. Every trigger is suggested disabled."),
+  recommendations: z
+    .array(
+      z.object({
+        kind: z
+          .enum(["mcp_server", "skill"])
+          .describe(
+            "'mcp_server' for a CATALOG MCP SERVER; 'skill' for a DISABLED WORKSPACE SKILL. Both come ONLY from the CONNECTABLE lists.",
+          ),
+        ref: z
+          .string()
+          .describe(
+            "The EXACT ref from a CONNECTABLE list — the registry name for an mcp_server, the slug for a skill. Never invent one; never a ref from the equipable candidate lists.",
+          ),
+        name: z.string().describe("The human-readable name shown for it in the CONNECTABLE list."),
+        reason: z
+          .string()
+          .describe(
+            "Why THIS agent needs it, phrased against the user's description (e.g. 'watches PRs for schema changes — needs GitHub access'). One sentence.",
+          ),
+      }),
+    )
+    .optional()
+    .describe(
+      "Tools the agent SHOULD have that are not available in the workspace yet — connectable catalog MCP servers or disabled workspace skills. NEVER equip these (never in agentTools); the caller connects/enables them first. Omit anything already available; equip that instead.",
+    ),
   rationale: z
     .string()
     .min(1)
@@ -285,6 +392,11 @@ type Synthesis = z.infer<typeof synthesisSchema>;
 
 // ── Deterministic repair helpers ─────────────────────────────────────────────
 
+// Agent slugs are capped so the global agent key (org_ns.workspace_ns.slug) never
+// exceeds 32 chars — see the contract's slug .max(18). The model can return a
+// longer slug; code clamps it here so the contract never rejects the suggestion.
+const SLUG_MAX = 18;
+
 function toKebab(value: string): string {
   return value
     .toLowerCase()
@@ -293,12 +405,26 @@ function toKebab(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-/** Append a numeric suffix until the slug no longer collides with an existing one. */
-function deconflictSlug(slug: string, existing: Set<string>): string {
+/** Truncate a kebab slug to `max` chars, trimming any trailing hyphen the cut
+ *  leaves behind so the result stays valid kebab-case. */
+function clampSlug(slug: string, max = SLUG_MAX): string {
+  if (slug.length <= max) return slug;
+  return slug.slice(0, max).replace(/-+$/g, "");
+}
+
+/**
+ * Append a numeric suffix until the slug no longer collides with an existing one,
+ * keeping the result within the `max` budget: the base is re-truncated to leave
+ * room for the `-N` suffix, so `super-long-name` + `-2` never blows past 18.
+ */
+function deconflictSlug(slug: string, existing: Set<string>, max = SLUG_MAX): string {
   if (!existing.has(slug)) return slug;
-  let n = 2;
-  while (existing.has(`${slug}-${n}`)) n++;
-  return `${slug}-${n}`;
+  for (let n = 2; ; n++) {
+    const suffix = `-${n}`;
+    const base = clampSlug(slug, Math.max(1, max - suffix.length));
+    const candidate = `${base}${suffix}`;
+    if (!existing.has(candidate)) return candidate;
+  }
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -375,7 +501,15 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
   const agentType = object.agentType === "code" ? "code" : "custom";
 
   // Slug: honour the caller's nameHint, else the model's slug, else the name.
-  let slug = toKebab(input.nameHint ?? object.slug) || toKebab(object.name) || "agent";
+  // Clamp to the 18-char budget BEFORE de-conflict — the model (or a long
+  // nameHint) can exceed it, and the contract would otherwise reject the output.
+  const slugBase = toKebab(input.nameHint ?? object.slug) || toKebab(object.name) || "agent";
+  let slug = clampSlug(slugBase);
+  if (slug !== slugBase) {
+    warnings.push(
+      `Suggested slug "${slugBase}" exceeded the ${SLUG_MAX}-character budget; truncated to "${slug}".`,
+    );
+  }
   const deconflicted = deconflictSlug(slug, existingSlugs);
   if (deconflicted !== slug) {
     warnings.push(
@@ -401,6 +535,73 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
       warnings.push(
         `Removed ${tool.type} tool "${tool.ref}" — it does not exist in this workspace.`,
       );
+    }
+  }
+
+  // Recommendations: catalog MCP servers + disabled skills the agent SHOULD have
+  // but that are not available yet. Validated against the connectable candidate
+  // lists; a ref that is actually already available is moved into agentTools
+  // (where it belongs) rather than recommended; unknown refs are dropped.
+  const connectableMcpByRef = new Map(
+    candidates.connectableMcpServers.map((s) => [s.ref, s]),
+  );
+  const disabledSkillByRef = new Map(candidates.disabledSkills.map((s) => [s.ref, s]));
+  const equippedMcp = new Set(
+    agentTools.filter((t) => t.type === "mcp_server").map((t) => t.ref),
+  );
+  const equippedSkills = new Set(
+    agentTools.filter((t) => t.type === "skill").map((t) => t.ref),
+  );
+
+  const recommendations: Array<{
+    kind: "mcp_server" | "skill";
+    ref: string;
+    name: string;
+    reason: string;
+  }> = [];
+  const seenRec = new Set<string>();
+
+  for (const rec of object.recommendations ?? []) {
+    const key = `${rec.kind}:${rec.ref}`;
+    if (seenRec.has(key)) continue;
+    seenRec.add(key);
+
+    if (rec.kind === "mcp_server") {
+      const cand = connectableMcpByRef.get(rec.ref);
+      if (cand) {
+        recommendations.push({ kind: "mcp_server", ref: rec.ref, name: cand.name, reason: rec.reason });
+      } else if (mcpRefs.has(rec.ref)) {
+        // Already registered → it is equipable, not a recommendation. Move it.
+        if (!equippedMcp.has(rec.ref)) {
+          agentTools.push({ type: "mcp_server", ref: rec.ref });
+          equippedMcp.add(rec.ref);
+        }
+        warnings.push(
+          `Recommended MCP server "${rec.ref}" is already registered; equipped it as a tool instead.`,
+        );
+      } else {
+        warnings.push(
+          `Dropped recommended MCP server "${rec.ref}" — it is not in the connectable catalog.`,
+        );
+      }
+    } else {
+      const cand = disabledSkillByRef.get(rec.ref);
+      if (cand) {
+        recommendations.push({ kind: "skill", ref: rec.ref, name: cand.name, reason: rec.reason });
+      } else if (skillRefs.has(rec.ref)) {
+        // Enabled skill → equipable, not a recommendation. Move it.
+        if (!equippedSkills.has(rec.ref)) {
+          agentTools.push({ type: "skill", ref: rec.ref });
+          equippedSkills.add(rec.ref);
+        }
+        warnings.push(
+          `Recommended skill "${rec.ref}" is enabled; equipped it as a tool instead.`,
+        );
+      } else {
+        warnings.push(
+          `Dropped recommended skill "${rec.ref}" — it is not a disabled workspace skill.`,
+        );
+      }
     }
   }
 
@@ -481,6 +682,7 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
       agentType,
       tools: config.agentTools.length,
       triggers: config.triggers.length,
+      recommendations: recommendations.length,
       warnings: warnings.length,
     },
     "agent.definition.suggest: suggestion produced",
@@ -504,7 +706,6 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
     },
     rationale: object.rationale,
     warnings,
-    // Catalog-aware (not-yet-connected) recommendations land in the follow-up wiring.
-    recommendations: [],
+    recommendations,
   };
 };

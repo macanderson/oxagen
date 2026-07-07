@@ -94,7 +94,42 @@ function setupWorld(opts: { skillLoaded?: boolean; schemas?: unknown[] } = {}) {
       case "schema.list":
         return { schemas };
       case "agent.skill.list":
-        return { skills: [{ slug: "summarization", description: "Summarise text" }] };
+        return {
+          skills: [
+            { slug: "summarization", name: "Summarise Text", description: "Summarise text" },
+            { slug: "deep-review", name: "Deep Review", description: "Deep code review" },
+          ],
+        };
+      case "skill.workspace.list":
+        // Same two skills, now with their enabled flag: "deep-review" is disabled,
+        // so it is a recommendation candidate, not an equipable one.
+        return {
+          skills: [
+            { id: "sk_summ", name: "Summarise Text", description: "Summarise text", enabled: true },
+            { id: "sk_review", name: "Deep Review", description: "Deep code review", enabled: false },
+          ],
+        };
+      case "plugin.catalog.browse":
+        // Catalog MCP servers not registered in this workspace (the local server
+        // "GitHub"/mcp_srv1 is a differently-named label, so neither is excluded).
+        return {
+          servers: [
+            {
+              name: "github/github-mcp-server",
+              title: "GitHub",
+              description: "Watch PRs, read repo files, open pull requests.",
+              installed: false,
+            },
+            {
+              name: "supabase/supabase-mcp",
+              title: "Supabase",
+              description: "Query Supabase Postgres databases and inspect schemas.",
+              installed: false,
+            },
+          ],
+          nextOffset: null,
+          total: 2,
+        };
       case "agent.mcp.list":
         return { servers: [{ publicId: "mcp_srv1", name: "GitHub" }] };
       case "agent.definition.list":
@@ -319,6 +354,199 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
     const call = mocks.generateObjectFor.mock.calls[0]![0] as { system: string };
     expect(call.system).toContain("summarization");
     // Still a contract-valid, create-shaped suggestion.
+    expect(() => agentDefinitionSuggest.output.parse(result)).not.toThrow();
+  });
+
+  // ── catalog-aware recommendations ───────────────────────────────────────────
+
+  it("lists connectable catalog servers + disabled skills in the system prompt, fenced from agentTools", async () => {
+    setupWorld();
+    mocks.generateObjectFor.mockResolvedValue({ object: baseSynthesis() });
+
+    await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
+
+    const call = mocks.generateObjectFor.mock.calls[0]![0] as { system: string };
+    expect(call.system).toContain("CONNECTABLE");
+    expect(call.system).toContain("github/github-mcp-server");
+    expect(call.system).toContain("supabase/supabase-mcp");
+    // The disabled skill is offered for recommendation, not for equipping.
+    expect(call.system).toContain("DISABLED WORKSPACE SKILLS");
+    expect(call.system).toContain("deep-review");
+    // And it must NOT appear among the equipable SKILL CANDIDATES.
+    const skillSection = call.system.slice(
+      call.system.indexOf("SKILL CANDIDATES"),
+      call.system.indexOf("MCP SERVER CANDIDATES"),
+    );
+    expect(skillSection).not.toContain("deep-review");
+  });
+
+  it("passes through recommendations whose refs are in the catalog / disabled-skill lists", async () => {
+    setupWorld();
+    const synth = {
+      ...baseSynthesis(),
+      recommendations: [
+        {
+          kind: "mcp_server" as const,
+          ref: "github/github-mcp-server",
+          name: "GitHub",
+          reason: "watches PRs for schema changes — needs GitHub access.",
+        },
+        {
+          kind: "mcp_server" as const,
+          ref: "supabase/supabase-mcp",
+          name: "Supabase",
+          reason: "validates the schema against the Supabase databases.",
+        },
+        {
+          kind: "skill" as const,
+          ref: "deep-review",
+          name: "Deep Review",
+          reason: "reviews the schema change carefully before flagging it.",
+        },
+      ],
+    };
+    mocks.generateObjectFor.mockResolvedValue({ object: synth });
+
+    const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
+
+    expect(result.recommendations).toEqual([
+      {
+        kind: "mcp_server",
+        ref: "github/github-mcp-server",
+        name: "GitHub",
+        reason: "watches PRs for schema changes — needs GitHub access.",
+      },
+      {
+        kind: "mcp_server",
+        ref: "supabase/supabase-mcp",
+        name: "Supabase",
+        reason: "validates the schema against the Supabase databases.",
+      },
+      {
+        kind: "skill",
+        ref: "deep-review",
+        name: "Deep Review",
+        reason: "reviews the schema change carefully before flagging it.",
+      },
+    ]);
+    // Recommendations never leak into the equipable tool set.
+    const toolRefs = result.suggestion.config.agentTools.map((t) => t.ref);
+    expect(toolRefs).not.toContain("github/github-mcp-server");
+    expect(toolRefs).not.toContain("deep-review");
+    expect(() => agentDefinitionSuggest.output.parse(result)).not.toThrow();
+  });
+
+  it("drops recommendations whose ref is in neither connectable list, with a warning each", async () => {
+    setupWorld();
+    const synth = {
+      ...baseSynthesis(),
+      recommendations: [
+        {
+          kind: "mcp_server" as const,
+          ref: "made-up/ghost-mcp",
+          name: "Ghost",
+          reason: "invented by the model.",
+        },
+        {
+          kind: "skill" as const,
+          ref: "nonexistent-skill",
+          name: "Nope",
+          reason: "not a real disabled skill.",
+        },
+      ],
+    };
+    mocks.generateObjectFor.mockResolvedValue({ object: synth });
+
+    const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
+
+    expect(result.recommendations).toEqual([]);
+    expect(result.warnings.some((w) => w.includes("made-up/ghost-mcp"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("nonexistent-skill"))).toBe(true);
+    expect(() => agentDefinitionSuggest.output.parse(result)).not.toThrow();
+  });
+
+  it("moves an already-registered MCP server out of recommendations into agentTools with a warning", async () => {
+    setupWorld();
+    const synth = {
+      ...baseSynthesis(),
+      // The model wrongly recommends a server that is already registered (mcp_srv1).
+      recommendations: [
+        {
+          kind: "mcp_server" as const,
+          ref: "mcp_srv1",
+          name: "GitHub",
+          reason: "already registered — belongs in agentTools.",
+        },
+      ],
+    };
+    mocks.generateObjectFor.mockResolvedValue({ object: synth });
+
+    const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
+
+    expect(result.recommendations).toEqual([]);
+    expect(result.suggestion.config.agentTools).toContainEqual({
+      type: "mcp_server",
+      ref: "mcp_srv1",
+    });
+    expect(result.warnings.some((w) => w.includes("already registered"))).toBe(true);
+    expect(() => agentDefinitionSuggest.output.parse(result)).not.toThrow();
+  });
+
+  it("degrades to empty recommendations when the catalog source fails", async () => {
+    setupWorld();
+    const base = mocks.invoke.getMockImplementation()!;
+    mocks.invoke.mockImplementation(async (cap: string, input: unknown, ctx: unknown) => {
+      if (cap === "plugin.catalog.browse") throw new Error("registry unreachable");
+      return base(cap, input, ctx);
+    });
+    const synth = {
+      ...baseSynthesis(),
+      recommendations: [
+        {
+          kind: "mcp_server" as const,
+          ref: "github/github-mcp-server",
+          name: "GitHub",
+          reason: "needs GitHub access.",
+        },
+      ],
+    };
+    mocks.generateObjectFor.mockResolvedValue({ object: synth });
+
+    const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
+
+    // Catalog unreachable → the recommendation can't be validated → dropped.
+    expect(result.recommendations).toEqual([]);
+    expect(result.warnings.some((w) => w.includes("github/github-mcp-server"))).toBe(true);
+    expect(() => agentDefinitionSuggest.output.parse(result)).not.toThrow();
+  });
+
+  // ── slug budget ─────────────────────────────────────────────────────────────
+
+  it("clamps a >18-char model slug to the budget and de-conflicts within it", async () => {
+    setupWorld();
+    // 25-char slug; clamps to "audit-schema-addit" (18). Seed that clamped value
+    // as an existing agent so the de-conflict must ALSO stay within 18 chars.
+    const base = mocks.invoke.getMockImplementation()!;
+    mocks.invoke.mockImplementation(async (cap: string, input: unknown, ctx: unknown) => {
+      if (cap === "agent.definition.list") {
+        return {
+          agents: [
+            { slug: "audit-schema-addit", description: "collision", status: "active" },
+          ],
+        };
+      }
+      return base(cap, input, ctx);
+    });
+    const synth = { ...baseSynthesis(), slug: "audit-schema-additions-pr" };
+    expect(synth.slug.length).toBe(25);
+    mocks.generateObjectFor.mockResolvedValue({ object: synth });
+
+    const result = await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
+
+    expect(result.suggestion.slug.length).toBeLessThanOrEqual(18);
+    expect(result.suggestion.slug).not.toBe("audit-schema-addit"); // de-conflicted
+    expect(result.warnings.some((w) => w.includes("budget"))).toBe(true);
+    // Still a contract-valid suggestion (slug .max(18) holds).
     expect(() => agentDefinitionSuggest.output.parse(result)).not.toThrow();
   });
 
