@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Copy, Check, Code2 } from "lucide-react";
+import { Copy, Check, Code2, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface MermaidDiagramProps {
@@ -11,6 +11,14 @@ export interface MermaidDiagramProps {
   title: string;
   /** Mermaid theme. Defaults to 'default'. */
   theme?: "default" | "dark" | "neutral" | "forest";
+  /**
+   * Access-controlled serving URL (/api/v1/assets/gen_…) of the persisted
+   * .mmd source conversation file. Present when the handler persisted the
+   * source; enables the Download affordance.
+   */
+  sourceUrl?: string;
+  /** Public id of the persisted generated_assets row (provenance, unused for render). */
+  assetPublicId?: string;
 }
 
 type RenderState =
@@ -40,6 +48,7 @@ export default function MermaidDiagram({
   source,
   title,
   theme = "default",
+  sourceUrl,
 }: MermaidDiagramProps) {
   const [state, setState] = React.useState<RenderState>({ status: "idle" });
   const [showSource, setShowSource] = React.useState(false);
@@ -127,6 +136,25 @@ export default function MermaidDiagram({
           <Code2 className="size-3" aria-hidden="true" />
           <span>Source</span>
         </button>
+
+        {/* Download persisted .mmd source (present when the handler persisted
+            the diagram as a conversation file) */}
+        {sourceUrl ? (
+          <a
+            href={sourceUrl}
+            download={`${title}.mmd`}
+            aria-label={`Download ${title} diagram source`}
+            title="Download diagram source (.mmd)"
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <Download className="size-3" aria-hidden="true" />
+            <span>Download</span>
+          </a>
+        ) : null}
 
         {/* Copy button */}
         <button

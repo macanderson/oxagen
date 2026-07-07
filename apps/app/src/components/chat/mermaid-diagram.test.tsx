@@ -43,6 +43,7 @@ vi.mock("lucide-react", () => ({
   Copy: () => <span data-testid="icon-copy" />,
   Check: () => <span data-testid="icon-check" />,
   Code2: () => <span data-testid="icon-code2" />,
+  Download: () => <span data-testid="icon-download" />,
 }));
 
 // ── clipboard mock ────────────────────────────────────────────────────────────
@@ -76,6 +77,32 @@ function renderDiagram(
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 describe("MermaidDiagram", () => {
+  it("shows a Download link for the persisted .mmd source when sourceUrl is set", () => {
+    mockMermaidRender.mockReturnValue(new Promise(() => { /* never resolves */ }));
+
+    render(
+      <MermaidDiagram
+        source="graph LR\nA-->B"
+        title="My Flow"
+        sourceUrl="/api/v1/assets/gen_mmd1"
+      />,
+    );
+
+    const link = screen.getByLabelText("Download My Flow diagram source");
+    expect(link).toHaveAttribute("href", "/api/v1/assets/gen_mmd1");
+    expect(link).toHaveAttribute("download", "My Flow.mmd");
+  });
+
+  it("hides the Download link when sourceUrl is absent (persistence skipped/failed)", () => {
+    mockMermaidRender.mockReturnValue(new Promise(() => { /* never resolves */ }));
+
+    renderDiagram({ title: "No Persist" });
+
+    expect(
+      screen.queryByLabelText("Download No Persist diagram source"),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders the title in header and as aria-label on figure", () => {
     // Keep render in loading state so we can inspect synchronously
     mockMermaidRender.mockReturnValue(new Promise(() => { /* never resolves */ }));

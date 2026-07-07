@@ -40,8 +40,16 @@ export function ChatAgentToolbar({
 
   return (
     <div className="rounded-t-2xl border border-b-0 border-border bg-card/50 backdrop-blur-sm">
-      <div className="flex items-center justify-between gap-4 px-4 py-3">
-        <div className={cn("flex flex-1 flex-wrap gap-4", isCollapsed && "hidden")}>
+      <div className="flex items-center justify-between gap-2 px-3 py-2 sm:gap-4 sm:px-4 sm:py-3">
+        {/* Pickers stack vertically full-width on phones (thumb-friendly ≥44px
+            triggers via the selectors' own mobile-first classes) and lay out
+            inline on ≥sm. */}
+        <div
+          className={cn(
+            "flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-4",
+            isCollapsed && "hidden",
+          )}
+        >
           <RepoSelector
             repositories={repositories}
             selectedKey={selectedRepoKey}
@@ -57,14 +65,21 @@ export function ChatAgentToolbar({
         </div>
 
         {(selectedRepo || selectedEnv) && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div
+            className={cn(
+              "flex min-w-0 items-center gap-2 text-xs text-muted-foreground",
+              // On phones the summary only appears while collapsed — the
+              // full-width stacked pickers already show the selection.
+              !isCollapsed && "hidden sm:flex",
+            )}
+          >
             {selectedRepo && (
               <span className="truncate">
                 {selectedRepo.owner}/{selectedRepo.name}
               </span>
             )}
             {selectedRepo && selectedEnv && <span>•</span>}
-            {selectedEnv && <span>{selectedEnv.name}</span>}
+            {selectedEnv && <span className="truncate">{selectedEnv.name}</span>}
           </div>
         )}
 
@@ -75,6 +90,9 @@ export function ChatAgentToolbar({
             variant="ghost"
             onClick={() => onToggleCollapse(!isCollapsed)}
             title={isCollapsed ? "Show toolbar" : "Hide toolbar"}
+            aria-label={isCollapsed ? "Show code mode toolbar" : "Hide code mode toolbar"}
+            aria-expanded={!isCollapsed}
+            className="h-11 w-11 shrink-0 self-start sm:h-8 sm:w-8 sm:self-auto"
           >
             <ChevronDown className={cn("size-4 transition-transform", isCollapsed && "rotate-180")} />
           </Button>

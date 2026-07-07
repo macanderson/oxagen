@@ -28,6 +28,7 @@ import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import { ConversationFiles } from "./conversation-files";
+import { ConversationExportMenu } from "./conversation-export-menu";
 import { useLatestRef } from "@/lib/use-latest-ref";
 import type { FieldDescriptor } from "@/lib/ask/fill-types";
 import { interceptFormFillEvents } from "./intercept-form-fill";
@@ -799,9 +800,8 @@ export function ChatShellClient({
               stderr={tc.stderr}
               errorReason={tc.errorReason}
               durationMs={tc.durationMs}
-              // Auto-expand the in-flight call so the user watches the agent
-              // compose its arguments and stream output live.
-              defaultOpen={active}
+              // In-flight calls stay collapsed — the spinner in the compact
+              // row signals progress; the user can tap to watch live output.
             />
           ),
           tone,
@@ -999,11 +999,18 @@ export function ChatShellClient({
 
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4">
-      {/* Toolbar row: files panel trigger (right-aligned). Hidden in the
-          floating in-app panel (showFiles=false) — conversation files live on
-          the full /ask page, reachable via "Open in conversations". */}
+      {/* Toolbar row: export + files panel triggers (right-aligned). Hidden in
+          the floating in-app panel (showFiles=false) — conversation files live
+          on the full /ask page, reachable via "Open in conversations". */}
       {showFiles ? (
-        <div className="flex shrink-0 items-center justify-end">
+        <div className="flex shrink-0 items-center justify-end gap-1">
+          {conversationPublicId ? (
+            <ConversationExportMenu
+              conversationId={conversationPublicId}
+              orgSlug={orgSlug}
+              workspaceSlug={workspaceSlug}
+            />
+          ) : null}
           <ConversationFiles conversationPublicId={conversationPublicId} />
         </div>
       ) : null}

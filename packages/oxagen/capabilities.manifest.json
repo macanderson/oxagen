@@ -914,6 +914,25 @@
       }
     },
     {
+      "name": "agent.sandbox_file.read",
+      "file": "agent.sandbox_file.read.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "agent.skill.list",
       "file": "agent.skill.list.ts",
       "domain": "agent",
@@ -2051,6 +2070,24 @@
     {
       "name": "conversation.delete",
       "file": "conversation.delete.ts",
+      "domain": "conversation",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "conversation.export",
+      "file": "conversation.export.ts",
       "domain": "conversation",
       "mode": "sync",
       "surfaces": [

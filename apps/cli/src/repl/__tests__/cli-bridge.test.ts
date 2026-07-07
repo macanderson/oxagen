@@ -81,6 +81,7 @@ describe("isInlineDispatchableCliCommand", () => {
       "settings:validate",
       "settings:init",
       "sandbox:files",
+      "sandbox:cat",
       "telemetry",
     ]) {
       expect(isInlineDispatchableCliCommand(name)).toBe(true);

@@ -47,12 +47,14 @@ vi.mock("@/components/ui/select", () => ({
   ),
   SelectTrigger: ({
     children,
+    className,
     "aria-label": ariaLabel,
   }: {
     children: React.ReactNode;
+    className?: string;
     "aria-label"?: string;
   }) => (
-    <div data-testid="select-trigger" aria-label={ariaLabel}>
+    <div data-testid="select-trigger" className={className} aria-label={ariaLabel}>
       {children}
     </div>
   ),
@@ -118,5 +120,27 @@ describe("EnvironmentSelector", () => {
     const { EnvironmentSelector } = await import("./environment-selector");
     render(<EnvironmentSelector environments={[]} selectedEnvId={null} onSelectEnv={vi.fn()} />);
     expect(screen.getByTestId("select")).toHaveAttribute("data-disabled", "true");
+  });
+
+  it("uses a mobile-first full-width trigger with a fixed desktop width", async () => {
+    const { EnvironmentSelector } = await import("./environment-selector");
+    render(<EnvironmentSelector environments={[makeEnv()]} selectedEnvId={null} onSelectEnv={vi.fn()} />);
+    const trigger = screen.getByTestId("select-trigger");
+    expect(trigger.className).toContain("w-full");
+    expect(trigger.className).toContain("sm:w-40");
+    expect(trigger.className).toContain("min-h-11");
+  });
+
+  it("appends a caller-supplied className to the trigger", async () => {
+    const { EnvironmentSelector } = await import("./environment-selector");
+    render(
+      <EnvironmentSelector
+        environments={[makeEnv()]}
+        selectedEnvId={null}
+        onSelectEnv={vi.fn()}
+        className="custom-class"
+      />,
+    );
+    expect(screen.getByTestId("select-trigger").className).toContain("custom-class");
   });
 });

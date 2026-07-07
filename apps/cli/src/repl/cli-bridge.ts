@@ -386,6 +386,14 @@ const REGISTRY: Record<string, CliAdapter> = {
     await handleSandboxFiles(sessionId, opts as Parameters<typeof handleSandboxFiles>[1], writer);
   },
 
+  "sandbox:cat": async (rawArgs, node, writer) => {
+    const { handleSandboxCat } = await import("../commands/sandbox.js");
+    const { opts, operands } = parseArgs(node, rawArgs);
+    const sessionId = requirePositional(operands, 0, "<sessionId> — usage: /sandbox:cat <sessionId> <path> [--max-bytes n] [--json]");
+    const path = requirePositional(operands, 1, "<path> — usage: /sandbox:cat <sessionId> <path> [--max-bytes n] [--json]");
+    await handleSandboxCat(sessionId, path, opts as Parameters<typeof handleSandboxCat>[2], writer);
+  },
+
   telemetry: async (rawArgs, node, writer) => {
     const { handleTelemetry } = await import("../commands/telemetry.js");
     const { operands } = parseArgs(node, rawArgs);

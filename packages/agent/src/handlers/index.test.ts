@@ -24,6 +24,26 @@ describe("handler registry", () => {
     expect(res).toEqual({ tools: [] });
   });
 
+  // ADR-022 snake_case capability names don't camelize to their module's
+  // readable export via the dot-segment derivation ("agent.sandbox_file.list"
+  // derives "agentSandbox_fileListHandler" but the module exports
+  // "agentSandboxFilesListHandler"). resolveHandler must fall back to the
+  // module's unique `*Handler` export — regression coverage for the fix.
+  it.each([
+    "agent.sandbox_file.list",
+    "agent.sandbox_file.read",
+    "agent.background_task.start",
+    "agent.file_lock.acquire",
+    "agent.mcp_consent.resolve",
+  ])(
+    "resolves a handler function for snake_case capability %s",
+    async (cap) => {
+      const fn = await resolveHandler(cap);
+      expect(typeof fn).toBe("function");
+    },
+    30_000,
+  );
+
   // Exercise every agent-lifecycle loader so the lazy import() arrows are
   // covered and each handler module's expected export name is verified.
   it.each([

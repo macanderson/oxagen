@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 /**
  * A single repo a code-mode turn can target, derived from a `connectorId ===
@@ -31,6 +32,12 @@ interface RepoSelectorProps {
   onSelectRepo: (repo: RepoOption) => void;
   isLoading?: boolean;
   /**
+   * Extra classes for the select trigger. Defaults to a mobile-first width
+   * (`w-full` below `sm`, fixed `sm:w-48` on desktop) with a ≥44px touch
+   * target on phones — pass a class to override from the parent layout.
+   */
+  className?: string;
+  /**
    * Accessible label for the trigger. Defaults to "Select repository". The
    * pin context bar overrides it ("Pinned repository") so the always-visible
    * pin selector doesn't collide with the code-mode toolbar's selector in
@@ -45,12 +52,13 @@ export function RepoSelector({
   selectedKey,
   onSelectRepo,
   isLoading = false,
+  className,
   ariaLabel = "Select repository",
   placeholder = "Select repository",
 }: RepoSelectorProps) {
   return (
-    <div className="flex items-center gap-2">
-      <GitBranch className="size-4 text-muted-foreground" />
+    <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+      <GitBranch className="size-4 shrink-0 text-muted-foreground" />
       <Select
         value={selectedKey ?? ""}
         onValueChange={(value) => {
@@ -59,7 +67,10 @@ export function RepoSelector({
         }}
         disabled={isLoading || repositories.length === 0}
       >
-        <SelectTrigger className="w-48" aria-label={ariaLabel}>
+        <SelectTrigger
+          className={cn("min-h-11 w-full sm:min-h-0 sm:w-48", className)}
+          aria-label={ariaLabel}
+        >
           {/* Resolve the label with a function child so a programmatically-set
               value (e.g. a rehydrated pin) shows owner/name, not the raw repo
               key — the SelectItems aren't mounted until the popup first opens. */}
