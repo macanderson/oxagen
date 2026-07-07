@@ -47,6 +47,7 @@ import { agentExecutionRecord } from "./agent.execution.record";
 import { agentExecutionLineage } from "./agent.execution.lineage";
 import { agentTraceGet } from "./agent.trace.get";
 import { agentDebugTrace } from "./agent.debug.trace";
+import { telemetryErrorCluster } from "./telemetry.error.cluster";
 import { agentUiRender } from "./agent.ui.render";
 import { documentsGenerate } from "./documents.generate";
 import { documentsPdfCreate } from "./documents.pdf.create";
@@ -445,6 +446,7 @@ export {
   agentSubagentSiblings,
   agentTraceGet,
   agentDebugTrace,
+  telemetryErrorCluster,
   agentExecutionLineage,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,
@@ -739,6 +741,7 @@ export const contracts = [
   agentSubagentSiblings,
   agentTraceGet,
   agentDebugTrace,
+  telemetryErrorCluster,
   agentExecutionLineage,
   agentTaskBackgroundCancel,
   agentTaskBackgroundRead,

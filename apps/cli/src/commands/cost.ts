@@ -22,6 +22,7 @@ import {
 } from "../agent/rate-card.js";
 import { openTraceStore } from "../agent/trace-store.js";
 import type { TurnTrace } from "../agent/trace.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
 export interface CostOptions {
   in?: number;
@@ -32,16 +33,18 @@ export interface CostOptions {
   json?: boolean;
 }
 
-const out = (s: string): void => void process.stdout.write(s + "\n");
-
-export async function handleCost(opts: CostOptions): Promise<void> {
-  if (opts.rates) return printRates(opts.json ?? false);
-  if (opts.session) return printSession(process.cwd(), opts.json ?? false);
-  return printProjection(opts);
+export async function handleCost(
+  opts: CostOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  if (opts.rates) return printRates(opts.json ?? false, writer);
+  if (opts.session) return printSession(process.cwd(), opts.json ?? false, writer);
+  return printProjection(opts, writer);
 }
 
 /** Dump the baked-in rate card (USD per 1M tokens). */
-function printRates(json: boolean): void {
+function printRates(json: boolean, writer: CommandWriter): void {
+  const out = writer.write;
   if (json) {
     out(JSON.stringify(RATE_CARD, null, 2));
     return;
@@ -58,7 +61,8 @@ function printRates(json: boolean): void {
 }
 
 /** Project a token usage across one model or every model (cheapest first). */
-function printProjection(opts: CostOptions): void {
+function printProjection(opts: CostOptions, writer: CommandWriter): void {
+  const out = writer.write;
   const inputTokens = opts.in ?? 0;
   const outputTokens = opts.out ?? 0;
   if (inputTokens === 0 && outputTokens === 0) {
@@ -128,7 +132,8 @@ function attribute(trace: TurnTrace, byModel: Map<string, ModelSpend>): void {
 }
 
 /** Roll up what this project's recorded turns actually cost, by model. */
-function printSession(cwd: string, json: boolean): void {
+function printSession(cwd: string, json: boolean, writer: CommandWriter): void {
+  const out = writer.write;
   const traces = openTraceStore(cwd).list();
   const byModel = new Map<string, ModelSpend>();
   let totalCost = 0;

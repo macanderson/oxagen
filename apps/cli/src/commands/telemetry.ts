@@ -12,28 +12,29 @@
  */
 import { readConfig, writeConfig, getApiUrl } from "../lib/config.js";
 import { isTelemetryEnabled } from "../telemetry/usage.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
-export function telemetryStatus(): void {
+export function telemetryStatus(writer: CommandWriter = stdoutWriter): void {
   const enabled = isTelemetryEnabled();
   const config = readConfig();
-  console.log(`Telemetry: ${enabled ? "enabled" : "disabled"}`);
-  console.log(
+  writer.write(`Telemetry: ${enabled ? "enabled" : "disabled"}`);
+  writer.write(
     `Install id: ${config.telemetry?.installId ?? "(not yet generated — created on first command)"}`,
   );
-  console.log(`Ingest endpoint: ${getApiUrl()}/v1/telemetry/usage`);
-  console.log("See TELEMETRY.md for the full disclosure.");
+  writer.write(`Ingest endpoint: ${getApiUrl()}/v1/telemetry/usage`);
+  writer.write("See TELEMETRY.md for the full disclosure.");
 }
 
-export function telemetryOn(): void {
+export function telemetryOn(writer: CommandWriter = stdoutWriter): void {
   const config = readConfig();
   writeConfig({ telemetry: { ...config.telemetry, enabled: true } });
-  console.log("✓ Telemetry enabled.");
+  writer.write("✓ Telemetry enabled.");
 }
 
-export function telemetryOff(): void {
+export function telemetryOff(writer: CommandWriter = stdoutWriter): void {
   const config = readConfig();
   writeConfig({ telemetry: { ...config.telemetry, enabled: false } });
-  console.log("✓ Telemetry disabled — no usage data will be sent.");
+  writer.write("✓ Telemetry disabled — no usage data will be sent.");
 }
 
 const SUBCOMMANDS = ["on", "off", "status"] as const;
@@ -44,21 +45,24 @@ function isSubcommand(value: string): value is Subcommand {
 }
 
 /** `oxagen telemetry [on|off|status]` — defaults to `status` with no argument. */
-export function handleTelemetry(subcommand?: string): void {
+export function handleTelemetry(
+  subcommand?: string,
+  writer: CommandWriter = stdoutWriter,
+): void {
   const cmd = subcommand ?? "status";
   if (!isSubcommand(cmd)) {
-    console.error(`Unknown telemetry subcommand "${cmd}". Use one of: ${SUBCOMMANDS.join(", ")}`);
+    writer.writeErr(`Unknown telemetry subcommand "${cmd}". Use one of: ${SUBCOMMANDS.join(", ")}`);
     process.exitCode = 1;
     return;
   }
   switch (cmd) {
     case "on":
-      telemetryOn();
+      telemetryOn(writer);
       return;
     case "off":
-      telemetryOff();
+      telemetryOff(writer);
       return;
     case "status":
-      telemetryStatus();
+      telemetryStatus(writer);
   }
 }

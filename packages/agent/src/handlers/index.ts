@@ -86,6 +86,10 @@ const LOADERS: Record<string, LoaderEntry> = {
   "agent.execution.list": () => import("./agent.execution.list"),
   "agent.trace.get": () => import("./agent.trace.get"),
   "agent.debug.trace": () => import("./agent.debug.trace"),
+  // Fleet-wide error triage overview — clusters ClickHouse error_events by
+  // fingerprint. Pure SQL (ADR-021 §1), the counterpart to the single-execution
+  // failure frame above.
+  "telemetry.error.cluster": () => import("./telemetry.error.cluster"),
   "agent.execution.lineage": () => import("./agent.execution.lineage"),
   "agent.ui.render": () => import("./agent.ui.render"),
   "agent.definition.create": () => import("./agent.definition.create"),
