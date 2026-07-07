@@ -34,6 +34,8 @@ const EXT_BY_MIME: Record<string, string> = {
   "application/zip": ".zip",
   "text/markdown": ".md",
   "text/plain": ".txt",
+  // Mermaid diagram source persisted by mermaid.generate.
+  "text/vnd.mermaid": ".mmd",
 };
 
 // Asset-kind → extension, used only when the mimeType is unknown/generic.

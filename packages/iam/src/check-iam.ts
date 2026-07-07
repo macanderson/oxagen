@@ -4,7 +4,7 @@
 // latency). Enterprise orgs run the full resolver: fetchAuthz → resolve →
 // emitAudit.
 
-import type { CapabilityContext, CapabilityEffect, ResolvedPrincipal } from "@oxagen/oxagen";
+import { type CapabilityContext, type CapabilityEffect, type ResolvedPrincipal, namesForCapability } from "@oxagen/oxagen";
 import { resolve, type ResolveResult } from "@oxagen/oxagen/iam";
 import { fetchAuthz } from "./fetch-authz";
 import { emitAudit } from "./emit-audit";
@@ -114,6 +114,10 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
       workspaceId: ctx.workspaceId,
     },
     capability,
+    // Retired names for this capability (ADR-022) so the resolver matches
+    // role_grants rows keyed by an old name. namesForCapability returns
+    // [canonical, ...aliases]; resolve() folds these into its match set.
+    capabilityAliases: namesForCapability(capability),
     scope: {
       kind: (ctx.workspaceId ? "workspace" : "org") as "org" | "workspace",
       orgId: ctx.orgId,

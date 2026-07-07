@@ -3,7 +3,7 @@
  * code-execute-card-render.test.tsx
  *
  * Render + interaction tests for CodeExecuteCard:
- *   - Renders agent.code.execute badge
+ *   - Renders the human-readable "Run code" header label
  *   - Renders language badge
  *   - Renders code content in a pre block
  *   - Renders status icon
@@ -85,10 +85,19 @@ describe("CodeExecuteCard", () => {
     exitCode: 0,
   };
 
-  it("renders agent.code.execute badge", async () => {
+  it("renders the human-readable 'Run code' label, not the raw capability", async () => {
     const { CodeExecuteCard } = await import("./code-execute-card");
     render(<CodeExecuteCard {...baseProps} />);
-    expect(screen.getByText("agent.code.execute")).toBeInTheDocument();
+    expect(screen.getByText("Run code")).toBeInTheDocument();
+    expect(screen.queryByText("agent.code.execute")).not.toBeInTheDocument();
+  });
+
+  it("exposes the raw capability via data-capability and header title", async () => {
+    const { CodeExecuteCard } = await import("./code-execute-card");
+    render(<CodeExecuteCard {...baseProps} />);
+    const root = document.querySelector("[data-component='code-execute-card']");
+    expect(root).toHaveAttribute("data-capability", "agent.code.execute");
+    expect(document.querySelector("[title='agent.code.execute']")).toBeInTheDocument();
   });
 
   it("renders language badge", async () => {

@@ -8,7 +8,7 @@ import { ORG_EMPLOYEE_SIZES } from "./org.settings.read";
 //   null  = clear (only the nullable profile fields accept null)
 export const orgSettingsWrite = registerCapability({
   name: "org.settings.write",
-  domain: "organization",
+  domain: "org",
   description:
     "Update the active organization's profile settings (partial): name, slug, avatar, website, industry, and employee size. Routes the settings page edit through the kernel so the same fields are reachable from the agent, MCP, and CLI with metering + audit.",
   mode: "sync",

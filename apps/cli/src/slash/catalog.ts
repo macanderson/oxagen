@@ -97,7 +97,7 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
   // Interface
   { name: "hud", description: "Toggle the running-agents heads-up display" },
   { name: "panel", description: "Toggle the Agent Team + Task side panel" },
-  { name: "mouse", description: "Toggle mouse-wheel transcript scroll (full-screen mode)" },
+  { name: "mouse", description: "Toggle mouse-wheel scroll (off by default so native copy/paste works)" },
   {
     name: "motion",
     description:

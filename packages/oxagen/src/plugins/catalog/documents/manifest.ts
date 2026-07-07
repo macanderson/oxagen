@@ -13,8 +13,8 @@ export const documentsManifest: OxagenPluginManifest = {
   icon: "notebook-pen",
   color: "#10b981",
   contracts: [
-    "documents.generate",
-    "documents.pdf.create",
+    "document.generate",
+    "document.pdf.create",
     "markdown.generate",
     "mermaid.generate",
   ],

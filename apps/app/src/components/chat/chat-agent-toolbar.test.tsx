@@ -10,6 +10,7 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 afterEach(cleanup);
 
@@ -30,8 +31,29 @@ vi.mock("./environment-selector", () => ({
 }));
 
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, onClick, title }: { children: React.ReactNode; onClick?: () => void; title?: string }) => (
-    <button type="button" onClick={onClick} title={title}>
+  Button: ({
+    children,
+    onClick,
+    title,
+    className,
+    "aria-label": ariaLabel,
+    "aria-expanded": ariaExpanded,
+  }: {
+    children: React.ReactNode;
+    onClick?: () => void;
+    title?: string;
+    className?: string;
+    "aria-label"?: string;
+    "aria-expanded"?: boolean;
+  }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={className}
+      aria-label={ariaLabel}
+      aria-expanded={ariaExpanded}
+    >
       {children}
     </button>
   ),
@@ -90,5 +112,79 @@ describe("ChatAgentToolbar", () => {
     );
     const pickerRow = container.querySelector(".hidden");
     expect(pickerRow).not.toBeNull();
+  });
+
+  it("does not render a collapse toggle without onToggleCollapse", async () => {
+    const { ChatAgentToolbar } = await import("./chat-agent-toolbar");
+    render(
+      <ChatAgentToolbar
+        repositories={[]}
+        environments={[]}
+        selectedRepoKey={null}
+        selectedEnvId={null}
+        onSelectRepo={vi.fn()}
+        onSelectEnv={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Hide code mode toolbar" })).toBeNull();
+  });
+
+  it("calls onToggleCollapse(true) when collapsing from expanded", async () => {
+    const { ChatAgentToolbar } = await import("./chat-agent-toolbar");
+    const onToggleCollapse = vi.fn();
+    render(
+      <ChatAgentToolbar
+        repositories={[]}
+        environments={[]}
+        selectedRepoKey={null}
+        selectedEnvId={null}
+        onSelectRepo={vi.fn()}
+        onSelectEnv={vi.fn()}
+        onToggleCollapse={onToggleCollapse}
+      />,
+    );
+    const toggle = screen.getByRole("button", { name: "Hide code mode toolbar" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(toggle);
+    expect(onToggleCollapse).toHaveBeenCalledWith(true);
+  });
+
+  it("calls onToggleCollapse(false) when expanding from collapsed", async () => {
+    const { ChatAgentToolbar } = await import("./chat-agent-toolbar");
+    const onToggleCollapse = vi.fn();
+    render(
+      <ChatAgentToolbar
+        repositories={[]}
+        environments={[]}
+        selectedRepoKey={null}
+        selectedEnvId={null}
+        onSelectRepo={vi.fn()}
+        onSelectEnv={vi.fn()}
+        isCollapsed
+        onToggleCollapse={onToggleCollapse}
+      />,
+    );
+    const toggle = screen.getByRole("button", { name: "Show code mode toolbar" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(toggle);
+    expect(onToggleCollapse).toHaveBeenCalledWith(false);
+  });
+
+  it("gives the collapse toggle a 44px touch target on phones", async () => {
+    const { ChatAgentToolbar } = await import("./chat-agent-toolbar");
+    render(
+      <ChatAgentToolbar
+        repositories={[]}
+        environments={[]}
+        selectedRepoKey={null}
+        selectedEnvId={null}
+        onSelectRepo={vi.fn()}
+        onSelectEnv={vi.fn()}
+        onToggleCollapse={vi.fn()}
+      />,
+    );
+    const toggle = screen.getByRole("button", { name: "Hide code mode toolbar" });
+    expect(toggle.className).toContain("h-11");
+    expect(toggle.className).toContain("w-11");
   });
 });

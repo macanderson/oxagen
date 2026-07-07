@@ -216,7 +216,7 @@ vi.mock("@oxagen/oxagen/contracts/agent.approval.resolve", () => ({
     },
   },
 }));
-vi.mock("@oxagen/oxagen/contracts/agent.mcp.consent.resolve", () => ({
+vi.mock("@oxagen/oxagen/contracts/agent.mcp_consent.resolve", () => ({
   agentMcpConsentResolve: {
     input: {
       safeParse: (raw: unknown) => {
@@ -443,7 +443,7 @@ describe("wandResolveConsentAction", () => {
     );
     expect(res.ok).toBe(true);
     expect(mockInvoke).toHaveBeenCalledWith(
-      "agent.mcp.consent.resolve",
+      "agent.mcp_consent.resolve",
       expect.objectContaining({ approvalId: "appr-1", decision: "granted", grantAllTools: true }),
       expect.objectContaining({ orgId: "org-1", workspaceId: "ws-1" }),
       { surface: "agent" },

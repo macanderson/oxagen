@@ -25,6 +25,14 @@ describe("extensionForAsset", () => {
     expect(extensionForAsset("text/markdown; charset=utf-8", "document")).toBe(".md");
   });
 
+  it("maps Mermaid diagram source to .mmd", () => {
+    expect(extensionForAsset("text/vnd.mermaid", "document")).toBe(".mmd");
+  });
+
+  it("maps SVG to .svg", () => {
+    expect(extensionForAsset("image/svg+xml", "image")).toBe(".svg");
+  });
+
   it("falls back to the kind extension when the mimeType is unknown", () => {
     expect(extensionForAsset("application/octet-stream", "archive")).toBe(".zip");
     expect(extensionForAsset("application/octet-stream", "image")).toBe(".png");
@@ -156,6 +164,10 @@ describe("assetDispositionType", () => {
 
   it("forces SVG to attachment (stored-XSS defence)", () => {
     expect(assetDispositionType("image/svg+xml")).toBe("attachment");
+  });
+
+  it("serves Mermaid source inline (text/*, safe under nosniff)", () => {
+    expect(assetDispositionType("text/vnd.mermaid")).toBe("inline");
   });
 
   it("downloads office/zip binaries", () => {

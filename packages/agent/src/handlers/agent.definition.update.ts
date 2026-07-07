@@ -6,7 +6,11 @@ import type {
   AgentDefinitionUpdateOutput,
 } from "@oxagen/oxagen/contracts/agent.definition.update";
 import type { CapabilityContext } from "../types";
-import { resolveAgent, assertAgentMutable } from "./_agent-definition";
+import {
+  resolveAgent,
+  assertAgentMutable,
+  isManagedAgentType,
+} from "./_agent-definition";
 
 export type { AgentDefinitionUpdateInput, AgentDefinitionUpdateOutput };
 
@@ -34,6 +38,15 @@ export async function agentDefinitionUpdateHandler(
     }
     assertAgentMutable(agent);
 
+    // A caller may not promote a user agent into a managed/built-in type — that
+    // reserved space is owned by the platform, not the Studio editor. Guard
+    // before any write so no version snapshot is wasted.
+    if (input.agentType !== undefined && isManagedAgentType(input.agentType)) {
+      throw new Error(
+        `agentType "${input.agentType}" is reserved for managed agents`,
+      );
+    }
+
     const [latest] = await tx
       .select({ version: schema.agentVersions.version })
       .from(schema.agentVersions)
@@ -59,13 +72,20 @@ export async function agentDefinitionUpdateHandler(
       });
     if (!inserted) throw new Error("agent_versions insert failed");
 
-    if (input.name !== undefined || input.description !== undefined) {
+    if (
+      input.name !== undefined ||
+      input.description !== undefined ||
+      input.agentType !== undefined
+    ) {
       await tx
         .update(schema.agents)
         .set({
           ...(input.name !== undefined ? { name: input.name } : {}),
           ...(input.description !== undefined
             ? { description: input.description }
+            : {}),
+          ...(input.agentType !== undefined
+            ? { agentType: input.agentType }
             : {}),
           updatedByUserId: userId,
         })

@@ -25,7 +25,7 @@ import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 import { withTenantDb, schema } from "@oxagen/database";
 import type { AgentMemoryRecord } from "@oxagen/oxagen/contracts/agent.memory.list";
-import type { AgentMemoryPromotionCandidatesOutput } from "@oxagen/oxagen/contracts/agent.memory.promotion.candidates";
+import type { AgentMemoryPromotionCandidatesOutput } from "@oxagen/oxagen/contracts/agent.memory_promotion.list";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 
@@ -393,7 +393,7 @@ export async function promotionCandidatesAction(input: {
 
     try {
       const out = (await invoke(
-        "agent.memory.promotion.candidates",
+        "agent.memory_promotion.list",
         { ...(limit != null ? { limit } : {}) },
         ctx,
         { surface: "agent" },

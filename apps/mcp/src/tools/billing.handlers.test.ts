@@ -108,12 +108,12 @@ describe("billing.subscription.read handler", () => {
 import handler_billingSubscriptionUpgradeStart, {
   schema as billingSubscriptionUpgradeStartSchema,
   metadata as billingSubscriptionUpgradeStartMetadata,
-} from "./billing.subscription.upgrade.start";
+} from "./billing.subscription_upgrade.start";
 
 describe("billing.subscription.upgrade.start handler", () => {
   it("exports schema and metadata", () => {
     expect(billingSubscriptionUpgradeStartSchema).toBeDefined();
-    expect(billingSubscriptionUpgradeStartMetadata.name).toBe("billing.subscription.upgrade.start");
+    expect(billingSubscriptionUpgradeStartMetadata.name).toBe("billing.subscription_upgrade.start");
   });
 
   it("calls invoke with upgrade args", async () => {
@@ -133,7 +133,7 @@ describe("billing.subscription.upgrade.start handler", () => {
     const result = await handler_billingSubscriptionUpgradeStart(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "billing.subscription.upgrade.start",
+      "billing.subscription_upgrade.start",
       args,
       fakeCtx,
       { surface: "mcp" },

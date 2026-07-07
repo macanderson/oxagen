@@ -10,7 +10,7 @@ import { obj } from "./_schema-test-helpers";
 
 // ── organization.create ───────────────────────────────────────────────────────
 
-import { schema as orgCreateSchema } from "./organization.create";
+import { schema as orgCreateSchema } from "./org.create";
 
 describe("organization.create schema", () => {
   const Schema = obj(orgCreateSchema);
@@ -249,7 +249,7 @@ describe("chat.message.send schema", () => {
 
 // ── agent.task.background.start ───────────────────────────────────────────────
 
-import { schema as agentTaskStartSchema } from "./agent.task.background.start";
+import { schema as agentTaskStartSchema } from "./agent.background_task.start";
 
 describe("agent.task.background.start schema", () => {
   const Schema = obj(agentTaskStartSchema);

@@ -272,7 +272,7 @@ List actions like `listNotificationsAction()` SHALL accept an optional `opts` pa
 <!-- entities: Notification, Input -->
 <!-- enforced: markNotificationAction() -->
 
-The `markNotificationAction()` SHALL accept an optional `opts` parameter with `read` and `archived` boolean flags. These flags are merged into the capability input (e.g., `{ id, read, archived }`) and passed to `invoke("notifications.mark", ...)`. The action returns the marked notification object on success.
+The `markNotificationAction()` SHALL accept an optional `opts` parameter with `read` and `archived` boolean flags. These flags are merged into the capability input (e.g., `{ id, read, archived }`) and passed to `invoke("notification.mark", ...)`. The action returns the marked notification object on success.
 
 #### Scenario: Mark notification as read
 <!-- test: markNotificationAction.passes id and read flag to the capability input -->

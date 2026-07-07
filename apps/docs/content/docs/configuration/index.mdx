@@ -19,6 +19,7 @@ feature.
 | --- | --- |
 | [Email &amp; SMTP](/docs/configuration/email) | The `SMTP_*` variables that power verification and password-reset email, TLS behavior, and how a misconfigured transport now fails loudly instead of silently. |
 | [Local development](/docs/configuration/local-development) | The `OXAGEN_LOCAL_DEV` flag and how Oxagen relaxes deployed-only controls (email verification, token encryption, cookie/rate-limit hardening) on a developer machine — without ever weakening a real deployment. |
+| [Storage driver](/docs/configuration/storage) | `STORAGE_DRIVER` and the filesystem driver (`STORAGE_FS_ROOT`) — running blob storage locally or in CI without a Vercel Blob token. |
 
 ## How environment values are loaded
 

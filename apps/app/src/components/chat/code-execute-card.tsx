@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsPanel, TabsList, TabsTab } from "@/components/ui/tabs";
 import { StatusIcon } from "./status-icon";
 import { formatDuration } from "./tool-call-card";
+import { toolCallMeta } from "./tool-call-meta";
 import type { ToolCallStatus } from "./stream-event-types";
 import { lazy, Suspense } from "react";
 
@@ -68,17 +69,21 @@ export function CodeExecuteCard({
     stdout != null &&
     looksLikeHtml(stdout);
 
+  // Same compact header language as ToolCallCard: icon + human label; the raw
+  // capability string only appears in the `title` attribute and data attrs.
+  const { label, Icon } = toolCallMeta("agent.code.execute");
+
   return (
     <div
-      className="rounded-xl border bg-card text-card-foreground shadow my-2 space-y-3 p-3 text-sm animate-in"
+      className="rounded-lg border bg-card text-card-foreground my-1 space-y-2 p-2.5 text-sm animate-in"
       data-component="code-execute-card"
+      data-capability="agent.code.execute"
       data-status={status}
     >
-      <div className="flex items-center gap-2">
-        <Badge variant="outline" className="font-mono">
-          agent.code.execute
-        </Badge>
-        <Badge variant="muted" className="uppercase">
+      <div className="flex min-h-9 items-center gap-2" title="agent.code.execute">
+        <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span className="truncate text-xs font-medium">{label}</span>
+        <Badge variant="muted" size="sm" className="uppercase">
           {language}
         </Badge>
         <StatusIcon status={status} />
@@ -101,7 +106,7 @@ export function CodeExecuteCard({
         <TabsPanel value="stdout">
           <pre
             ref={stdoutRef}
-            className="max-h-64 overflow-y-auto rounded-lg bg-black/85 p-2 font-mono text-xs text-success"
+            className="max-h-48 overflow-y-auto rounded-lg bg-black/85 p-2 font-mono text-xs text-success"
           >
             {stdout ?? (status === "running" ? "Waiting for output…" : "")}
           </pre>
@@ -109,7 +114,7 @@ export function CodeExecuteCard({
         <TabsPanel value="stderr">
           <pre
             ref={stderrRef}
-            className="max-h-64 overflow-y-auto rounded-lg bg-black/85 p-2 font-mono text-xs text-error"
+            className="max-h-48 overflow-y-auto rounded-lg bg-black/85 p-2 font-mono text-xs text-error"
           >
             {stderr ?? ""}
           </pre>

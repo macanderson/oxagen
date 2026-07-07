@@ -222,7 +222,7 @@ describe("translateAgentStream — background-task lifecycle (OXA-1469)", () => 
       {
         type: "tool-call",
         toolCallId: "tc-1",
-        toolName: "agent.task.background.start",
+        toolName: "agent.background_task.start",
         input: { kind: "graph.ingest", label: "Ingest doc", payload: {} },
       },
       {
@@ -262,7 +262,7 @@ describe("translateAgentStream — background-task lifecycle (OXA-1469)", () => 
       {
         type: "tool-call",
         toolCallId: "tc-2",
-        toolName: "agent.task.background.start",
+        toolName: "agent.background_task.start",
         input: { kind: "agent.task", payload: {} },
       },
       { type: "tool-result", toolCallId: "tc-2", output: {} },

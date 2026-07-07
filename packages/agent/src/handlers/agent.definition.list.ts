@@ -61,6 +61,7 @@ export async function agentDefinitionListHandler(
       slug: r.slug,
       name: r.name,
       description: r.description,
+      agentType: r.agentType,
       status: r.status as "draft" | "active" | "archived",
       deploymentStatus: r.deploymentStatus as "inactive" | "active",
       latestVersion: r.latestVersion ?? null,

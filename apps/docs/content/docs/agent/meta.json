@@ -3,6 +3,7 @@
   "pages": [
     "overview",
     "tools-and-capabilities",
+    "chat-interface",
     "code-execution",
     "plan-mode-and-approvals",
     "memory",

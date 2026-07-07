@@ -127,7 +127,7 @@ const FAKE_CAPABILITIES = [
     },
   },
   {
-    name: "organization.create",
+    name: "org.create",
     defaultRoles: {
       org: { Owner: "allow" },
       workspace: {},
@@ -272,7 +272,7 @@ describe("bootstrapOrgIAM()", () => {
 
     const capabilities = rgInserts.map((r) => r.values["capabilityId"] as string);
     expect(capabilities).toContain("chat.message.send");
-    expect(capabilities).toContain("organization.create");
+    expect(capabilities).toContain("org.create");
   });
 
   it("skips inserting an existing principal (idempotent — no duplicate insert)", async () => {

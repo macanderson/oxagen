@@ -3,7 +3,8 @@
  * tool-call-card-render.test.tsx
  *
  * Render + interaction tests for the ToolCallCard component:
- *   - Shows capability badge
+ *   - Shows a human-readable label (never the raw dotted capability)
+ *   - Shows the raw capability only in the expanded body + title attr
  *   - Shows/hides detail panel on toggle
  *   - Renders input preview in detail panel
  *   - Shows output when completed
@@ -19,12 +20,6 @@ import { ToolCallCard } from "./tool-call-card";
 
 afterEach(cleanup);
 
-vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children, variant }: { children: React.ReactNode; variant?: string }) => (
-    <span data-testid="badge" data-variant={variant}>{children}</span>
-  ),
-}));
-
 vi.mock("lucide-react", async (importOriginal) => {
   const real = await importOriginal<typeof import("lucide-react")>();
   return {
@@ -35,7 +30,8 @@ vi.mock("lucide-react", async (importOriginal) => {
 });
 
 vi.mock("./risk-badge", () => ({
-  RiskBadge: ({ risk }: { risk: string }) => <span data-testid="risk-badge">{risk}</span>,
+  RiskBadge: ({ risk }: { risk: string }) =>
+    risk === "low" ? null : <span data-testid="risk-badge">{risk}</span>,
 }));
 
 vi.mock("./status-icon", () => ({
@@ -47,21 +43,52 @@ vi.mock("./status-icon", () => ({
 describe("ToolCallCard", () => {
   const baseProps = {
     toolCallId: "tc-1",
-    capability: "search.web",
+    capability: "web.search",
     inputPreview: { query: "hello" },
     riskLevel: "low" as const,
     status: "completed" as const,
     durationMs: 1500,
   };
 
-  it("renders the capability badge", () => {
+  it("renders the human-readable label instead of the raw capability", () => {
     render(<ToolCallCard {...baseProps} />);
-    expect(screen.getByText("search.web")).toBeInTheDocument();
+    expect(screen.getByText("Search the web")).toBeInTheDocument();
+    // The raw dotted string never appears in the collapsed row.
+    expect(screen.queryByText("web.search")).not.toBeInTheDocument();
   });
 
-  it("renders the risk badge", () => {
+  it("derives a label for uncurated capabilities", () => {
+    render(<ToolCallCard {...baseProps} capability="semantic.edge.suggest" />);
+    expect(screen.getByText("Suggest semantic edge")).toBeInTheDocument();
+    expect(screen.queryByText("semantic.edge.suggest")).not.toBeInTheDocument();
+  });
+
+  it("exposes the raw capability as the header button title", () => {
     render(<ToolCallCard {...baseProps} />);
-    expect(screen.getByTestId("risk-badge")).toHaveTextContent("low");
+    const toggle = screen.getByRole("button", { name: /tool call details/i });
+    expect(toggle).toHaveAttribute("title", "web.search");
+  });
+
+  it("shows the raw capability inside the expanded body", async () => {
+    render(<ToolCallCard {...baseProps} />);
+    await userEvent.click(screen.getByRole("button", { name: /tool call details/i }));
+    expect(screen.getByText("web.search")).toBeInTheDocument();
+  });
+
+  it("does not render a risk chip for low risk", () => {
+    render(<ToolCallCard {...baseProps} />);
+    expect(screen.queryByTestId("risk-badge")).not.toBeInTheDocument();
+  });
+
+  it("renders the risk badge for elevated risk", () => {
+    render(<ToolCallCard {...baseProps} riskLevel="high" />);
+    expect(screen.getByTestId("risk-badge")).toHaveTextContent("high");
+  });
+
+  it("marks the label with destructive text when the call failed", () => {
+    render(<ToolCallCard {...baseProps} status="failed" />);
+    const label = screen.getByText("Search the web");
+    expect(label.className).toContain("text-destructive");
   });
 
   it("renders status icon with correct status", () => {
@@ -182,7 +209,7 @@ describe("ToolCallCard", () => {
   it("sets data-capability and data-status attributes", () => {
     const { container } = render(<ToolCallCard {...baseProps} />);
     const root = container.querySelector("[data-component='tool-call-card']");
-    expect(root).toHaveAttribute("data-capability", "search.web");
+    expect(root).toHaveAttribute("data-capability", "web.search");
     expect(root).toHaveAttribute("data-status", "completed");
   });
 });

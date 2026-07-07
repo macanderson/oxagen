@@ -4,9 +4,9 @@ import { invoke } from "@oxagen/oxagen";
 import {
   billingSubscriptionUpgradeStart,
   type BillingSubscriptionUpgradeStartOutput,
-} from "@oxagen/oxagen/contracts/billing.subscription.upgrade.start";
+} from "@oxagen/oxagen/contracts/billing.subscription_upgrade.start";
 // Side-effect import: binds every foundation handler into the shared kernel so
-// invoke("billing.subscription.upgrade.start", …) resolves its handler at
+// invoke("billing.subscription_upgrade.start", …) resolves its handler at
 // runtime. Without this, invoke() throws "No handler registered" (the type
 // system cannot catch a missing side-effect import). Mirrors models-action.ts.
 import "@oxagen/handlers/register";

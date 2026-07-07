@@ -1,5 +1,6 @@
 /**
- * Regression: `/mouse` must flip ON→OFF→ON, not get stuck OFF after one toggle.
+ * Regression: `/mouse` must flip repeatedly (OFF→ON→OFF→ON), not get stuck
+ * after one toggle.
  *
  * `handleSubmit` (which handles `/mouse` inline) is a `useCallback` whose deps
  * don't include the `mouseOn` state — reading it directly inside the handler
@@ -7,6 +8,9 @@
  * `!mouseOn` kept recomputing the SAME flip on every subsequent `/mouse` call.
  * The fix mirrors `mouseOn` into a ref (the same pattern already used for
  * `hudVisibleRef`/`panelModeRef`) so the handler always reads the latest value.
+ *
+ * Mouse reporting now defaults OFF (so native terminal copy/paste works out of
+ * the box), so the FIRST toggle turns it ON.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render } from "ink-testing-library";
@@ -97,31 +101,31 @@ describe("REPL /mouse toggle", () => {
     delete process.env["OXAGEN_CLI_MOUSE"];
   });
 
-  it("flips ON -> OFF -> ON across repeated invocations, not stuck OFF after one toggle", async () => {
+  it("flips OFF -> ON -> OFF across repeated invocations, not stuck after one toggle", async () => {
     const { stdin, lastFrame } = render(<ReplApp options={{ session: TEST_SESSION }} />);
     await tick();
 
     const countOf = (needle: string): number =>
       (lastFrame() ?? "").split(needle).length - 1;
 
-    // Starts ON (OXAGEN_CLI_MOUSE unset), so the first toggle turns it OFF.
-    await submit(stdin, "/mouse");
-    await waitFor(() => countOf("Mouse-wheel scroll OFF") >= 1);
-
-    // Second toggle must turn it back ON — on the stale-closure bug this
-    // recomputed `!mouseOn` against the FIRST render's value and reported OFF
-    // again instead of flipping back, so "Mouse-wheel scroll ON" would never
-    // reappear after the initial startup state and this wait would time out.
+    // Starts OFF (default, OXAGEN_CLI_MOUSE unset), so the first toggle turns it ON.
     await submit(stdin, "/mouse");
     await waitFor(() => countOf("Mouse-wheel scroll ON") >= 1);
 
-    // Third toggle must turn it OFF again — confirms the ref keeps tracking
+    // Second toggle must turn it back OFF — on the stale-closure bug this
+    // recomputed `!mouseOn` against the FIRST render's value and reported ON
+    // again instead of flipping back, so "Mouse-wheel scroll OFF" would never
+    // reappear and this wait would time out.
+    await submit(stdin, "/mouse");
+    await waitFor(() => countOf("Mouse-wheel scroll OFF") >= 1);
+
+    // Third toggle must turn it ON again — confirms the ref keeps tracking
     // correctly across more than one flip, not just recovering once. Asserted
     // as a growing occurrence count (rather than string position) so it holds
     // regardless of whether the transcript's Static history accumulates past
     // messages into the same frame.
-    const offCountBeforeThirdToggle = countOf("Mouse-wheel scroll OFF");
+    const onCountBeforeThirdToggle = countOf("Mouse-wheel scroll ON");
     await submit(stdin, "/mouse");
-    await waitFor(() => countOf("Mouse-wheel scroll OFF") > offCountBeforeThirdToggle);
+    await waitFor(() => countOf("Mouse-wheel scroll ON") > onCountBeforeThirdToggle);
   });
 });

@@ -193,20 +193,27 @@ export function createGatewayAgentAi(opts: GatewayAgentAiOptions = {}): AgentAi 
     },
 
     async generateObject<T>(args: ObjectRunArgs<T>): Promise<ObjectRunResult<T>> {
-      const common = {
-        model: args.model,
-        schema: args.schema,
-        system: args.system,
-        abortSignal: args.abortSignal,
-      };
       void debugLog("llm", "llm.object.request", {
         transport: "gateway-direct",
         model: args.model,
       });
-      // generateObject takes a `prompt` XOR `messages` — pass exactly one.
-      const result = args.messages
-        ? await generateObject({ ...common, messages: args.messages })
-        : await generateObject({ ...common, prompt: args.prompt ?? "" });
+      // Fold system into a cached system message via the same
+      // `withPromptCaching` breakpoint the `stream` path uses. The judge,
+      // planner, evaluator, and selector all call `generateObject` with a
+      // large, stable system prompt on every invocation — without a cache
+      // breakpoint here it was rebilled at full input price every call
+      // instead of the provider's much cheaper cached-read rate. `prompt`
+      // (when given, XOR with `messages`) becomes the sole message so the
+      // same message-level cache_control shaping applies uniformly.
+      const baseMessages: ModelMessage[] =
+        args.messages ?? [{ role: "user", content: args.prompt ?? "" }];
+      const result = await generateObject({
+        model: args.model,
+        schema: args.schema,
+        messages: withPromptCaching(args.system, baseMessages),
+        allowSystemInMessages: true,
+        abortSignal: args.abortSignal,
+      });
       const usage = {
         inputTokens: result.usage.inputTokens,
         outputTokens: result.usage.outputTokens,

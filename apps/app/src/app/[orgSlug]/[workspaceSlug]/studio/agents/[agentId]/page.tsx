@@ -1,0 +1,81 @@
+import { notFound } from "next/navigation";
+import { resolveStudioScope } from "@/lib/studio/scope";
+import { getAgent, listAgents } from "@/lib/studio/agents";
+import { listAgentTools } from "@/lib/studio/tools";
+import {
+  listWorkspaceSkills,
+  listInstalledMcpServers,
+} from "@/lib/studio/equip-sources";
+import { AgentBuilder } from "../agent-builder";
+
+export const dynamic = "force-dynamic";
+
+interface PageProps {
+  params: Promise<{
+    orgSlug: string;
+    workspaceSlug: string;
+    agentId: string;
+  }>;
+}
+
+/**
+ * Studio → Agents → [agentId]. Loads the agent definition and the four Equip
+ * pools, then renders the Agent Builder in "edit" mode. A `managed` (built-in)
+ * agent is read-only: the builder still renders for inspection but every
+ * mutation is disabled. A non-manager also gets a read-only view.
+ */
+export default async function EditAgentPage({ params }: PageProps) {
+  const { orgSlug, workspaceSlug, agentId } = await params;
+
+  const { ctx, org, ws, canManage } = await resolveStudioScope(
+    orgSlug,
+    workspaceSlug,
+  );
+
+  let agent;
+  try {
+    agent = await getAgent(ctx, agentId);
+  } catch {
+    notFound();
+  }
+
+  const [skills, tools, subagents, mcp] = await Promise.all([
+    listWorkspaceSkills(ctx),
+    listAgentTools(ctx),
+    listAgents(ctx),
+    listInstalledMcpServers(ctx, org.id, ws.id),
+  ]);
+
+  const readOnly = agent.managed || !canManage;
+
+  return (
+    <AgentBuilder
+      mode="edit"
+      orgSlug={orgSlug}
+      workspaceSlug={workspaceSlug}
+      canManage={canManage}
+      readOnly={readOnly}
+      initialAgent={{
+        publicId: agent.publicId,
+        slug: agent.slug,
+        name: agent.name,
+        description: agent.description,
+        agentType: agent.agentType,
+        status: agent.status,
+        deploymentStatus: agent.deploymentStatus,
+        version: agent.version,
+        isPublished: agent.isPublished,
+        config: agent.config,
+      }}
+      sources={{
+        skills,
+        tools,
+        // A subagent may not load itself; exclude the current agent from the pool.
+        subagents: subagents
+          .filter((a) => a.publicId !== agent.publicId)
+          .map((a) => ({ ref: a.publicId, name: a.name, slug: a.slug })),
+        mcp,
+      }}
+    />
+  );
+}

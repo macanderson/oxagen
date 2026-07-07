@@ -290,9 +290,9 @@ describe("documents.generate route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'documents.generate'", async () => {
+  it("calls invoke with 'document.generate'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("documents.generate");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("document.generate");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.kind).toBe("document");
     expect(body.title).toBe("Q1 Report");
@@ -327,9 +327,9 @@ describe("documents.pdf.create route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'documents.pdf.create'", async () => {
+  it("calls invoke with 'document.pdf.create'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("documents.pdf.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("document.pdf.create");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.title).toBe("My PDF");
   });

@@ -55,6 +55,24 @@ vi.mock("@/components/ui/alert", () => ({
   AlertDescription: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
+// Dialog primitives — used by the in-app SVG preview. Rendered only when open
+// so assertions can key off the dialog's presence.
+vi.mock("@/components/ui/dialog", () => ({
+  Dialog: ({
+    children,
+    open,
+  }: {
+    children: React.ReactNode;
+    open?: boolean;
+    onOpenChange?: (v: boolean) => void;
+  }) => (open ? <div data-testid="preview-dialog">{children}</div> : null),
+  DialogPopup: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="preview-dialog-popup">{children}</div>
+  ),
+  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
 vi.mock("@/components/ui/sheet", () => ({
   Sheet: ({
     children,
@@ -131,6 +149,19 @@ const MOCK_ASSETS = [
     url: "/api/v1/assets/asset_3",
     createdAt: "2026-06-23T18:36:00.000Z",
     sizeBytes: 4096,
+    status: "ready",
+    accessPolicy: "org",
+  },
+  {
+    // An SVG — served with attachment disposition (stored-XSS defence), so it
+    // previews IN-APP via <img> instead of opening/downloading directly.
+    publicId: "asset_4",
+    name: "agentic-flow-diagram.svg",
+    kind: "image",
+    mimeType: "image/svg+xml",
+    url: "/api/v1/assets/asset_4",
+    createdAt: "2026-06-23T18:37:00.000Z",
+    sizeBytes: 2048,
     status: "ready",
     accessPolicy: "org",
   },
@@ -220,6 +251,93 @@ describe("ConversationFiles", () => {
       "download",
       "onboarding-checklist.docx",
     );
+  });
+
+  it("renders inline <img> thumbnails for image rows (including SVG)", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(MOCK_ASSETS),
+    });
+    const { ConversationFiles } = await import("./conversation-files");
+    const { container } = render(<ConversationFiles conversationPublicId="conv_abc" />);
+    await userEvent.click(screen.getByTestId("sheet-open-trigger"));
+    await waitFor(() => {
+      expect(screen.getByText("agentic-flow-diagram.svg")).toBeInTheDocument();
+    });
+
+    // Both image-kind rows render an <img> thumbnail sourced from the
+    // auth-gated serving route. <img> ignores Content-Disposition and never
+    // executes SVG scripts, so this is XSS-safe for SVG too.
+    const thumbs = Array.from(container.querySelectorAll("img"));
+    const srcs = thumbs.map((t) => t.getAttribute("src"));
+    expect(srcs).toContain("/api/v1/assets/asset_1"); // png
+    expect(srcs).toContain("/api/v1/assets/asset_4"); // svg
+    // Non-image rows get no thumbnail.
+    expect(srcs).not.toContain("/api/v1/assets/asset_2");
+    expect(srcs).not.toContain("/api/v1/assets/asset_3");
+  });
+
+  it("SVG rows open an in-app preview dialog with an <img> and a Download button", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(MOCK_ASSETS),
+    });
+    const { ConversationFiles } = await import("./conversation-files");
+    render(<ConversationFiles conversationPublicId="conv_abc" />);
+    await userEvent.click(screen.getByTestId("sheet-open-trigger"));
+    await waitFor(() => {
+      expect(screen.getByText("agentic-flow-diagram.svg")).toBeInTheDocument();
+    });
+
+    // The SVG name is a BUTTON (in-app preview), never a direct open/download
+    // anchor — mobile browsers bounce the attachment-disposition SVG download
+    // with "file not supported".
+    const nameEl = screen.getByText("agentic-flow-diagram.svg");
+    expect(nameEl.closest("a")).toBeNull();
+    expect(screen.queryByTestId("preview-dialog")).not.toBeInTheDocument();
+
+    await userEvent.click(nameEl);
+
+    const dialog = await screen.findByTestId("preview-dialog");
+    // Full-size preview rendered via <img> against the serving route
+    // (XSS-safe: the image decoder never executes scripts).
+    const img = dialog.querySelector("img")!;
+    expect(img).not.toBeNull();
+    expect(img).toHaveAttribute("src", "/api/v1/assets/asset_4");
+    // Download button inside the dialog carries the slug filename.
+    const dialogDownloads = Array.from(dialog.querySelectorAll("a[download]"));
+    expect(
+      dialogDownloads.some(
+        (a) =>
+          a.getAttribute("href") === "/api/v1/assets/asset_4" &&
+          a.getAttribute("download") === "agentic-flow-diagram.svg",
+      ),
+    ).toBe(true);
+  });
+
+  it("SVG rows still expose a direct Download action button", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(MOCK_ASSETS),
+    });
+    const { ConversationFiles } = await import("./conversation-files");
+    render(<ConversationFiles conversationPublicId="conv_abc" />);
+    await userEvent.click(screen.getByTestId("sheet-open-trigger"));
+    await waitFor(() => {
+      expect(screen.getByText("agentic-flow-diagram.svg")).toBeInTheDocument();
+    });
+
+    const download = screen.getByLabelText("Download agentic-flow-diagram.svg");
+    expect(download).toHaveAttribute("href", "/api/v1/assets/asset_4");
+    expect(download).toHaveAttribute("download", "agentic-flow-diagram.svg");
+    // But no "open in new tab" affordance — that navigation is the forced
+    // download mobile browsers can't handle.
+    expect(
+      screen.queryByLabelText("Open agentic-flow-diagram.svg in a new tab"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows an info Alert (not an error) when there are no assets", async () => {

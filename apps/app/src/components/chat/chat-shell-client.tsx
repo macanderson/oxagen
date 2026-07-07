@@ -26,8 +26,10 @@ import type { ComposerModelState, WorkspaceBudgetGovernance } from "./model-pick
 import type { McpServerSummary } from "./mcp-types";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
+import type { AgentOption } from "./agent-selector";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import { ConversationFiles } from "./conversation-files";
+import { ConversationExportMenu } from "./conversation-export-menu";
 import { useLatestRef } from "@/lib/use-latest-ref";
 import type { FieldDescriptor } from "@/lib/ask/fill-types";
 import { interceptFormFillEvents } from "./intercept-form-fill";
@@ -105,7 +107,10 @@ export function ChatShellClient({
   availableMcpServers,
   availableRepos,
   availableEnvironments,
+  availableAgents,
   workspaceBudgetGovernance,
+  agentId,
+  boundAgentName,
   pageContext,
   onFormFillStart,
   onFormFillEnd,
@@ -138,9 +143,17 @@ export function ChatShellClient({
   availableRepos?: RepoOption[];
   /** Workspace environments usable as the code-mode target. */
   availableEnvironments?: EnvironmentOption[];
+  /** Selectable agents for the composer's agent picker. */
+  availableAgents?: AgentOption[];
   /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
    * no governance active for this workspace. */
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
+  /** Bound published agent's public id (Ask page ?agent=…). Sent as `agentId`
+   * in each stream request so the route applies the agent's config. Null ⇒
+   * unbound. */
+  agentId?: string | null;
+  /** Human name of the bound agent — shown as the composer's bound indicator. */
+  boundAgentName?: string | null;
   /**
    * Page context forwarded from the current page. When a fillable form is
    * registered (e.g. in AskDrawer/WandPanel wrappers), this is passed to the
@@ -324,6 +337,10 @@ export function ChatShellClient({
   const consentSignalRef = useLatestRef(signalConsentResolved);
   const orgSlugRef = useLatestRef(orgSlug);
   const workspaceSlugRef = useLatestRef(workspaceSlug);
+  // Bound-agent id read at send-time (stable ref, like the slug refs) so the
+  // request body carries the CURRENT ?agent binding without re-creating the
+  // send callback on every navigation.
+  const agentIdRef = useLatestRef(agentId ?? null);
   const setIsStreamingRef = useLatestRef(setIsStreaming);
   // Page-form-fill callback refs — stable so wrappedSendAction deps don't change.
   const pageContextRef = useLatestRef(pageContext ?? null);
@@ -459,6 +476,11 @@ export function ChatShellClient({
               newConversation: wasNewConversation,
               orgSlug: orgSlugRef.current,
               workspaceSlug: workspaceSlugRef.current,
+              // Optional agent binding — the route loads this agent's definition
+              // and applies its instructions/skills/servers/code-mode. Omitted
+              // (undefined) when unbound, so the request is byte-identical to
+              // before this feature for a normal chat.
+              ...(agentIdRef.current ? { agentId: agentIdRef.current } : {}),
               tier: (formData.get("tier") as string) || null,
               model: (formData.get("model") as string) || null,
               effort: (formData.get("effort") as string) || null,
@@ -519,6 +541,25 @@ export function ChatShellClient({
               // BodySchema `code: {...} | null`.
               code: (() => {
                 const raw = formData.get("code") as string | null;
+                if (!raw) return null;
+                try {
+                  return JSON.parse(raw) as unknown;
+                } catch {
+                  return null;
+                }
+              })(),
+              // Selected agent (OXA app-agent-selector). The composer sets this
+              // to the chosen agent's publicId, or omits it for the default
+              // (generic chat) agent — matching the stream route's BodySchema
+              // `agentId: string | null`. A code agent (agentType==="code")
+              // drives the server's code-mode branch (sandbox + code tools).
+              agentId: (formData.get("agentId") as string) || null,
+              // Pinned chat context (org/repo + environment). The composer only
+              // sets this formData field when the user pinned a target AND is
+              // not in code mode — otherwise null, matching the stream route's
+              // BodySchema `pinnedContext: {...} | null`.
+              pinnedContext: (() => {
+                const raw = formData.get("pinnedContext") as string | null;
                 if (!raw) return null;
                 try {
                   return JSON.parse(raw) as unknown;
@@ -769,9 +810,8 @@ export function ChatShellClient({
               stderr={tc.stderr}
               errorReason={tc.errorReason}
               durationMs={tc.durationMs}
-              // Auto-expand the in-flight call so the user watches the agent
-              // compose its arguments and stream output live.
-              defaultOpen={active}
+              // In-flight calls stay collapsed — the spinner in the compact
+              // row signals progress; the user can tap to watch live output.
             />
           ),
           tone,
@@ -969,11 +1009,18 @@ export function ChatShellClient({
 
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4">
-      {/* Toolbar row: files panel trigger (right-aligned). Hidden in the
-          floating in-app panel (showFiles=false) — conversation files live on
-          the full /ask page, reachable via "Open in conversations". */}
+      {/* Toolbar row: export + files panel triggers (right-aligned). Hidden in
+          the floating in-app panel (showFiles=false) — conversation files live
+          on the full /ask page, reachable via "Open in conversations". */}
       {showFiles ? (
-        <div className="flex shrink-0 items-center justify-end">
+        <div className="flex shrink-0 items-center justify-end gap-1">
+          {conversationPublicId ? (
+            <ConversationExportMenu
+              conversationId={conversationPublicId}
+              orgSlug={orgSlug}
+              workspaceSlug={workspaceSlug}
+            />
+          ) : null}
           <ConversationFiles conversationPublicId={conversationPublicId} />
         </div>
       ) : null}
@@ -1097,9 +1144,11 @@ export function ChatShellClient({
         availableMcpServers={availableMcpServers}
         availableRepos={availableRepos}
         availableEnvironments={availableEnvironments}
+        availableAgents={availableAgents}
         workspaceBudgetGovernance={workspaceBudgetGovernance}
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
+        boundAgentName={boundAgentName ?? null}
       />
     </div>
   );

@@ -15,6 +15,14 @@ browser, satisfying the serverless pure-JS constraint. All diagram types support
 Mermaid v11 are accepted: flowcharts, sequence diagrams, class diagrams, Gantt charts,
 state diagrams, ER diagrams, and more.
 
+Because the rendered SVG only ever exists client-side, the durable conversation-file
+artifact is the diagram **source** itself: the handler persists it as a `.mmd` document
+asset (`text/vnd.mermaid`, kind `document`, org access policy) via
+`persistGeneratedAsset`, so it appears in the Conversation Files panel (conversation
+linkage resolves from the chat turn's `messageId`). Persistence is strictly non-fatal —
+when it is skipped (no user identity) or fails, the inline render still succeeds and the
+output carries a `persistWarning`.
+
 ## Input
 
 | Field     | Type                                                   | Notes                                                         |
@@ -25,11 +33,14 @@ state diagrams, ER diagrams, and more.
 
 ## Output
 
-| Field    | Type              | Notes                                                                                                            |
-| -------- | ----------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `title`  | `string` (min 1)  | Human-readable title passed through from input.                                                                  |
-| `source` | `string` (min 1)  | Validated Mermaid source text.                                                                                   |
-| `render` | `RenderDirective` | `{ componentId: "mermaid-diagram", props: { source, title, theme } }` — wires the chat render pipeline.        |
+| Field           | Type                | Notes                                                                                                            |
+| --------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `title`         | `string` (min 1)    | Human-readable title passed through from input.                                                                  |
+| `source`        | `string` (min 1)    | Validated Mermaid source text.                                                                                   |
+| `assetPublicId` | `string` (optional) | `gen_…` id of the persisted `.mmd` source asset. Absent when persistence was skipped or failed.                  |
+| `serveUrl`      | `string` (optional) | Access-controlled serving URL (`/api/v1/assets/{publicId}`) for the persisted source file.                        |
+| `persistWarning`| `string` (optional) | Present when the source could not be saved to conversation files (inline render unaffected).                     |
+| `render`        | `RenderDirective`   | `{ componentId: "mermaid-diagram", props: { source, title, theme, sourceUrl?, assetPublicId? } }` — wires the chat render pipeline. |
 
 ## Validation
 
@@ -46,7 +57,14 @@ Available on API, MCP, and agent surfaces.
 
 `mermaid-diagram` — lazily loads the `mermaid` npm package and renders the source to
 SVG client-side. Shows a loading spinner while rendering, and a friendly error card if
-the source is malformed. Supports source view toggle and clipboard copy.
+the source is malformed. Supports source view toggle, clipboard copy, and — when the
+handler persisted the source (`sourceUrl` prop present) — downloading the `.mmd` file.
+
+## Side effects
+
+- Blob storage + Postgres: one `generated_assets` row (`document` kind,
+  `text/vnd.mermaid`) holding the `.mmd` source, linked to the conversation, and
+  mirrored to the knowledge graph as a `:GeneratedFile` node (best-effort).
 
 ## Example (flowchart)
 

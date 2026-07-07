@@ -629,10 +629,10 @@ describe("workspace.model.settings.read route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'workspace.model.settings.read' and surface 'api'", async () => {
+  it("calls invoke with 'workspace.model_settings.read' and surface 'api'", async () => {
     await app.fetch(get(PATH));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workspace.model.settings.read");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workspace.model_settings.read");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -654,10 +654,10 @@ describe("workspace.model.settings.write route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'workspace.model.settings.write' and surface 'api'", async () => {
+  it("calls invoke with 'workspace.model_settings.write' and surface 'api'", async () => {
     await app.fetch(patch(PATH, { defaultTextModel: "claude-3-5-haiku" }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workspace.model.settings.write");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workspace.model_settings.write");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 

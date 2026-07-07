@@ -5,7 +5,7 @@ import { z } from "zod";
 // one high-risk agent, one non-agent.* agent-surface capability (form.fill).
 const FIXTURE = [
   {
-    name: "organization.create",
+    name: "org.create",
     description: "non-agent capability",
     surfaces: ["api", "mcp"] as const,
     input: z.object({}),
@@ -248,7 +248,7 @@ describe("materializeTools", () => {
     // so the gateway accepts them; undotted names (capA/capB) pass through.
     const { tools } = await materializeTools(CTX);
     expect(Object.keys(tools).sort()).toEqual(["capA", "capB", "form_fill"]);
-    expect(tools["organization.create"]).toBeUndefined();
+    expect(tools["org.create"]).toBeUndefined();
     expect(tools["form.fill"]).toBeUndefined();
   });
 

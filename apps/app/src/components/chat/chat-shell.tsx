@@ -12,6 +12,7 @@ import type { ComposerModelState, WorkspaceBudgetGovernance } from "./model-pick
 import type { McpServerSummary } from "./mcp-types";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
+import type { AgentOption } from "./agent-selector";
 
 export { type ChatMessage, type MessageAttachment } from "./message-bubble";
 
@@ -55,9 +56,18 @@ export interface ChatShellProps {
   availableRepos?: RepoOption[];
   /** Workspace environments usable as the code-mode target. */
   availableEnvironments?: EnvironmentOption[];
+  /** Selectable agents for the composer's agent picker (see _shared/agent-options-data.ts). */
+  availableAgents?: AgentOption[];
   /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
    * no governance active for this workspace. */
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
+  /** Bound published agent's public id (from the Ask page's ?agent=… param).
+   * Forwarded verbatim in each /api/v1/chat/stream request body as `agentId`.
+   * Null/omitted ⇒ normal unbound chat. */
+  agentId?: string | null;
+  /** Human name of the bound agent, resolved server-side — shown as the
+   * "Session bound to: <name>" indicator. Null when unbound or unresolved. */
+  boundAgentName?: string | null;
 }
 
 // RSC streaming: the messages promise resolves inside a Suspense boundary
@@ -85,7 +95,10 @@ export function ChatShell({
   availableMcpServers,
   availableRepos,
   availableEnvironments,
+  availableAgents,
   workspaceBudgetGovernance,
+  agentId,
+  boundAgentName,
 }: ChatShellProps) {
   return (
     <>
@@ -108,7 +121,10 @@ export function ChatShell({
           availableMcpServers={availableMcpServers}
           availableRepos={availableRepos}
           availableEnvironments={availableEnvironments}
+          availableAgents={availableAgents}
           workspaceBudgetGovernance={workspaceBudgetGovernance}
+          agentId={agentId}
+          boundAgentName={boundAgentName}
         />
       </Suspense>
       <BackgroundTaskTray
@@ -138,7 +154,10 @@ async function AsyncShell({
   availableMcpServers,
   availableRepos,
   availableEnvironments,
+  availableAgents,
   workspaceBudgetGovernance,
+  agentId,
+  boundAgentName,
 }: {
   promise: Promise<ChatMessage[]>;
   conversationId: string | null;
@@ -157,7 +176,10 @@ async function AsyncShell({
   availableMcpServers?: McpServerSummary[];
   availableRepos?: RepoOption[];
   availableEnvironments?: EnvironmentOption[];
+  availableAgents?: AgentOption[];
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
+  agentId?: string | null;
+  boundAgentName?: string | null;
 }) {
   const messages = await promise;
   const modelConfig = resolvedTierCatalog();
@@ -181,7 +203,10 @@ async function AsyncShell({
       availableMcpServers={availableMcpServers}
       availableRepos={availableRepos}
       availableEnvironments={availableEnvironments}
+      availableAgents={availableAgents}
       workspaceBudgetGovernance={workspaceBudgetGovernance}
+      agentId={agentId}
+      boundAgentName={boundAgentName}
     />
   );
 }
