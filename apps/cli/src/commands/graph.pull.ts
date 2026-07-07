@@ -10,12 +10,22 @@
  * Pagination: the pull loop calls `graph/export` with `limit=500` + an
  * incrementing `offset` until `hasMore` is false, then persists the cursor
  * returned by the last page.
+ *
+ * Output discipline (ADR-023 §4): `--json` emits one single-line JSON summary
+ * on stdout (fields preserved); pretty mode prints the human summary on stdout.
+ * The paginated pull is a long-runner: its in-place `\r` progress redraw is kept
+ * RAW on stderr (routing it through `out.info` would append a newline and break
+ * the redraw). Every failure is a uniform stderr error line with exit code 1,
+ * and `store.close()` always runs in `finally` — so switching from `apiPost`
+ * (which hard-exits and skips `finally`) to `apiPostOrThrow` is load-bearing.
  */
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { apiPost } from "../lib/api.js";
+import { apiPostOrThrow } from "../lib/api.js";
 import { getOrgId, getWorkspaceId } from "../lib/config.js";
+import { createOutput } from "../lib/output.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 import { createGraphStore } from "@oxagen/engram";
 import type { GraphNode, GraphEdge } from "@oxagen/engram";
 
@@ -87,16 +97,20 @@ function splitCsv(value: string | undefined): string[] | undefined {
 // Handler
 // ---------------------------------------------------------------------------
 
-export async function handleGraphPull(opts: GraphPullOptions): Promise<void> {
+export async function handleGraphPull(
+  opts: GraphPullOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
   const org = getOrgId();
   const workspace = getWorkspaceId();
 
   if (!org || !workspace) {
-    process.stderr.write(
+    out.error(
       "Missing org or workspace. Run `oxagen config` or set " +
-        "OXAGEN_ORG_ID / OXAGEN_WORKSPACE_ID.\n",
+        "OXAGEN_ORG_ID / OXAGEN_WORKSPACE_ID.",
+      "config",
     );
-    process.exitCode = 1;
     return;
   }
 
@@ -125,9 +139,11 @@ export async function handleGraphPull(opts: GraphPullOptions): Promise<void> {
     let totalEdges = 0;
     let newCursor: string | undefined;
 
-     
     while (true) {
-      const page = await apiPost<GraphExportPage>("graph/export", {
+      // apiPostOrThrow (not apiPost): a mid-pull API failure must throw so the
+      // catch below routes it to out.error AND the finally still closes the
+      // store — apiPost would hard-exit and skip both.
+      const page = await apiPostOrThrow<GraphExportPage>("graph/export", {
         updatedAfter,
         labels: labelArray,
         isSystem,
@@ -166,6 +182,9 @@ export async function handleGraphPull(opts: GraphPullOptions): Promise<void> {
       totalEdges += edges.length;
       if (page.cursor) newCursor = page.cursor;
 
+      // Long-runner progress: an in-place `\r` redraw. Kept RAW on stderr — this
+      // MUST NOT go through out.info, which would append a newline per page and
+      // turn the single redrawn line into a scrolling wall of text.
       process.stderr.write(
         `  Pulled ${totalNodes} nodes, ${totalEdges} edges (offset=${offset})...\r`,
       );
@@ -174,7 +193,7 @@ export async function handleGraphPull(opts: GraphPullOptions): Promise<void> {
       offset += PAGE_SIZE;
     }
 
-    // Clear the progress line.
+    // Clear the progress line (terminates the `\r` redraw — also raw on stderr).
     process.stderr.write("\n");
 
     // Persist the cursor after a successful pull.
@@ -188,7 +207,8 @@ export async function handleGraphPull(opts: GraphPullOptions): Promise<void> {
       finalStats.edgeCount,
     );
 
-    // Report summary.
+    // Report summary. `--json` → one single-line JSON value (shape preserved);
+    // pretty → the multi-line human summary. Both on stdout.
     const summary = {
       pulled: { nodes: totalNodes, edges: totalEdges },
       total: { nodes: finalStats.nodeCount, edges: finalStats.edgeCount },
@@ -196,16 +216,17 @@ export async function handleGraphPull(opts: GraphPullOptions): Promise<void> {
       path: duckdbPath,
     };
 
-    if (opts.json) {
-      process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
-    } else {
-      process.stdout.write(
+    out.data(
+      summary,
+      () =>
         `Pulled ${totalNodes} node(s) and ${totalEdges} edge(s) this run.\n` +
-          `Total in local store: ${finalStats.nodeCount} nodes, ${finalStats.edgeCount} edges.\n` +
-          `Cursor: ${cursorToStore}\n` +
-          `Path: ${duckdbPath}\n`,
-      );
-    }
+        `Total in local store: ${finalStats.nodeCount} nodes, ${finalStats.edgeCount} edges.\n` +
+        `Cursor: ${cursorToStore}\n` +
+        `Path: ${duckdbPath}`,
+    );
+  } catch (err) {
+    out.error(err, "api");
+    return;
   } finally {
     await store.close();
   }

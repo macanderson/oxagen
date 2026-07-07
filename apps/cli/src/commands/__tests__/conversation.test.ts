@@ -5,7 +5,11 @@
  *   - Mock `../../lib/api.js` so apiGetOrThrow returns controlled results or
  *     throws ApiError.
  *   - Mock node:fs/promises writeFile for the --output path.
- *   - Capture stdout/stderr and process.exit to assert on output.
+ *   - Capture stdout/stderr and process.exitCode to assert on output.
+ *
+ * Output discipline (ADR-023 §4): the exported document / serve URL → stdout;
+ * a file-write confirmation is progress → stderr; a bad --format is a usage
+ * error (exit 2); an API failure is a uniform `✗ …` stderr line (exit 1).
  */
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
 
@@ -39,6 +43,7 @@ const restorers: Array<() => void> = [];
 beforeEach(() => {
   out = "";
   err = "";
+  process.exitCode = undefined;
   const outSpy = vi
     .spyOn(process.stdout, "write")
     .mockImplementation(((s: unknown) => {
@@ -51,18 +56,15 @@ beforeEach(() => {
       err += String(s);
       return true;
     }) as never);
-  const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
-    throw new Error(`process.exit:${code}`);
-  }) as never);
   restorers.push(
     () => outSpy.mockRestore(),
     () => errSpy.mockRestore(),
-    () => exitSpy.mockRestore(),
   );
 });
 
 afterEach(() => {
   for (const r of restorers.splice(0)) r();
+  process.exitCode = undefined;
   mockGet.mockReset();
   mockWrite.mockReset();
 });
@@ -101,14 +103,16 @@ describe("handleConversationExport", () => {
     });
   });
 
-  it("writes markdown to a file with --output", async () => {
+  it("writes markdown to a file with --output and reports the write on stderr", async () => {
     mockGet.mockResolvedValueOnce(MD_RESPONSE);
     await handleConversationExport("cnv_1", { format: "markdown", output: "chat.md" });
     expect(mockWrite).toHaveBeenCalledWith("chat.md", "# Planning\n\nhello\n", "utf8");
-    expect(out).toContain("Exported 4 messages to chat.md");
+    // Document went to the file; stdout stays machine-pure, confirmation → stderr.
+    expect(out).toBe("");
+    expect(err).toContain("Exported 4 messages to chat.md");
   });
 
-  it("prints filename and serve URL for pdf exports", async () => {
+  it("prints filename and serve URL for pdf exports on stdout", async () => {
     mockGet.mockResolvedValueOnce(PDF_RESPONSE);
     await handleConversationExport("cnv_1", { format: "pdf" });
     expect(mockGet).toHaveBeenCalledWith("conversations/cnv_1/export", {
@@ -119,26 +123,26 @@ describe("handleConversationExport", () => {
     expect(out).toContain("/api/v1/assets/gen_9");
   });
 
-  it("emits raw JSON with --json", async () => {
+  it("emits a single-line JSON value with --json (shape preserved)", async () => {
     mockGet.mockResolvedValueOnce(PDF_RESPONSE);
     await handleConversationExport("cnv_1", { format: "pdf", json: true });
+    expect(out.trim()).toBe(JSON.stringify(PDF_RESPONSE));
     expect(JSON.parse(out)).toEqual(PDF_RESPONSE);
   });
 
-  it("rejects an invalid --format client-side", async () => {
-    await expect(
-      handleConversationExport("cnv_1", { format: "docx" }),
-    ).rejects.toThrow("process.exit:1");
+  it("rejects an invalid --format client-side as a usage error (exit 2)", async () => {
+    await handleConversationExport("cnv_1", { format: "docx" });
     expect(err).toContain('Invalid --format "docx"');
+    expect(process.exitCode).toBe(2);
     expect(mockGet).not.toHaveBeenCalled();
   });
 
-  it("exits(1) with a friendly message on ApiError", async () => {
+  it("exits 1 with a uniform error line on ApiError", async () => {
     mockGet.mockRejectedValueOnce(new ApiError("Not logged in"));
-    await expect(handleConversationExport("cnv_1", {})).rejects.toThrow(
-      "process.exit:1",
-    );
+    await handleConversationExport("cnv_1", {});
+    expect(err).toMatch(/^✗ /);
     expect(err).toContain("Not logged in");
+    expect(process.exitCode).toBe(1);
   });
 
   it("url-encodes the conversation id", async () => {
