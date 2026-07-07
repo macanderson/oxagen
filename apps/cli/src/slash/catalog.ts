@@ -60,7 +60,10 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<
   { name: "init", description: "Scaffold .oxagen/ and build the local code graph" },
 
   // Turn configuration
-  { name: "model", description: "Show or set the gateway model for this session", argumentHint: "[slug]" },
+  { name: "model", description: "Show or set the WORKER model (alias for /worker-model)", argumentHint: "[slug]" },
+  { name: "worker-model", description: "Show or set the worker (executor) model", argumentHint: "[slug]" },
+  { name: "judge-model", description: "Show or set the judge (completeness advisor) model", argumentHint: "[slug]" },
+  { name: "triage-model", description: "Show or set the triage/coordinator (planner + evaluator) model", argumentHint: "[slug]" },
   {
     name: "coordinator",
     description: "Run turns on the remote gateway or a local on-device model",

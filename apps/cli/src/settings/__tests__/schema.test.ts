@@ -60,6 +60,17 @@ describe("oxagenSettingsSchema", () => {
     expect(oxagenSettingsSchema.parse({})).toEqual({});
   });
 
+  it("parses the per-function model keys", () => {
+    const parsed = oxagenSettingsSchema.parse({
+      model: "anthropic/claude-sonnet-5",
+      workerModel: "anthropic/claude-fable-5",
+      judgeModel: "openai/gpt-5.5-pro",
+      triageModel: "anthropic/claude-haiku-4.5",
+    });
+    expect(parsed.workerModel).toBe("anthropic/claude-fable-5");
+    expect(parsed.judgeModel).toBe("openai/gpt-5.5-pro");
+    expect(parsed.triageModel).toBe("anthropic/claude-haiku-4.5");
+    
   it("parses confirmScope as an optional boolean", () => {
     const result = oxagenSettingsSchema.safeParse({ confirmScope: true });
     expect(result.success).toBe(true);
