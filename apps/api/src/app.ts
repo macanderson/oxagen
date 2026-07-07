@@ -78,6 +78,7 @@ import { agentSubagentFanoutListRoute } from "./routes/v1/agent.subagent.fanout.
 import { agentSubagentFanoutGetRoute } from "./routes/v1/agent.subagent.fanout.get";
 import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
 import { agentDebugTraceRoute } from "./routes/v1/agent.debug.trace";
+import { telemetryErrorClusterRoute } from "./routes/v1/telemetry.error.cluster";
 import { agentExecutionLineageRoute } from "./routes/v1/agent.execution.lineage";
 import { agentExecutionListRoute } from "./routes/v1/agent.execution.list";
 import { formFillRoute } from "./routes/v1/form.fill";
@@ -429,6 +430,10 @@ orgScoped.route("/agent/subagent/fanout", agentSubagentFanoutGetRoute);
 orgScoped.route("/agent/executions", agentExecutionListRoute);
 orgScoped.route("/agent/trace", agentTraceGetRoute);
 orgScoped.route("/agent/debug/trace", agentDebugTraceRoute);
+// Fleet-wide error triage overview — clusters ClickHouse error_events by
+// fingerprint. Pure SQL (ADR-021 §1), the counterpart to agent/debug/trace's
+// single-execution failure frame above.
+orgScoped.route("/telemetry/error/cluster", telemetryErrorClusterRoute);
 // File-level lineage of one execution — the :Execution node plus every
 // :SourceFile it touched via TOUCHED_FILE edges, resolved to citable
 // KnowledgeNodeRefs (CLAUDE.md "Citing nodes & edges").
