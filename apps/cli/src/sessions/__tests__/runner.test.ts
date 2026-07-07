@@ -57,6 +57,28 @@ async function until(cond: () => boolean, timeoutMs = 4000, stepMs = 10): Promis
   }
 }
 
+/**
+ * Poll the on-disk event log until `cond` is satisfied. The bus tap fires
+ * synchronously (see runner.ts "Bus vs disk"), but disk appends are queued
+ * behind an async `appendFile` chain — a bus condition settling does NOT mean
+ * the disk log has caught up yet, so any assertion against `readEvents` needs
+ * its own poll rather than a single post-bus snapshot (this raced under load).
+ */
+async function untilDisk(
+  sid: string,
+  cond: (events: SessionEvent[]) => boolean,
+  timeoutMs = 4000,
+  stepMs = 10,
+): Promise<SessionEvent[]> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const events = await store.readEvents(sid);
+    if (cond(events)) return events;
+    if (Date.now() > deadline) throw new Error("untilDisk(): condition not met before deadline");
+    await tick(stepMs);
+  }
+}
+
 /** A throwaway AgentAi — the fake runTurn ignores it, but the runner requires one. */
 const fakeAi = {} as unknown as AgentAi;
 
@@ -210,11 +232,14 @@ describe("runSession — event order and coalescing", () => {
       onLocalEvent: (e) => bus.push(e),
     });
 
-    // Wait until the session parks in `waiting` (turn 1 fully settled).
+    // Wait until the session parks in `waiting` (turn 1 fully settled) on the
+    // bus, THEN separately poll the disk log to catch up (see `untilDisk`).
     await until(() => bus.some((e) => e.type === "session.state" && e.state === "waiting"));
 
     // Disk order is the canonical, coalesced sequence.
-    const disk = await store.readEvents(meta.sid);
+    const disk = await untilDisk(meta.sid, (events) =>
+      events.some((e) => e.type === "session.state" && e.state === "waiting"),
+    );
     expect(disk.map(label)).toEqual([
       "session.start",
       "session.state:running",
