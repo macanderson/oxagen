@@ -14,6 +14,15 @@
  * Storage boundary (ADR-018):
  *   - Code subgraph → Neo4j (is_system=true) via `graph.sync.push`.
  *   - Local cursor (last synced SHA) → DuckDB (GraphStore.code_push_cursor).
+ *
+ * Output discipline (ADR-023 §4): `--json` emits one single-line JSON value on
+ * stdout (the success summary and the `{ upToDate }` / `{ pushed: false }`
+ * shapes are all preserved); pretty mode prints the human summary on stdout; the
+ * "Pushing N node(s)…" status line is progress → stderr via `out.info`. The
+ * push always uses `apiPostOrThrow`; the surrounding catch honours the
+ * `throwOnError` seam (used by `oxagen init` to degrade gracefully): when set it
+ * re-throws, otherwise it routes to out.error (exit 1, never a hard-exit) — and
+ * either way `store.close()` runs in `finally`.
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
@@ -23,8 +32,10 @@ import { createHash } from "node:crypto";
 import { generateObject } from "ai";
 import { buildCodeGraph } from "../daemon/code-graph/builder.js";
 import { createCodeGraphStore, defaultCodeGraphDbPath } from "../daemon/code-graph/store.js";
-import { apiPost, apiPostOrThrow } from "../lib/api.js";
+import { apiPostOrThrow } from "../lib/api.js";
 import { getOrgId, getWorkspaceId } from "../lib/config.js";
+import { createOutput } from "../lib/output.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 import { createGraphStore } from "@oxagen/engram";
 import { graphStorePath } from "./graph.pull.js";
 import { inferDomains } from "@oxagen/code-graph";
@@ -348,7 +359,11 @@ async function buildEnvelopeForFiles(
 // Handler
 // ---------------------------------------------------------------------------
 
-export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
+export async function handleGraphPush(
+  opts: GraphPushOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
   const org = getOrgId();
   const workspace = getWorkspaceId();
 
@@ -356,9 +371,9 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
     const msg =
       "Missing org or workspace. Run `oxagen config` or set " +
       "OXAGEN_ORG_ID / OXAGEN_WORKSPACE_ID.";
+    // throwOnError (oxagen init) degrades gracefully by catching — keep throwing.
     if (opts.throwOnError) throw new Error(msg);
-    process.stderr.write(`${msg}\n`);
-    process.exitCode = 1;
+    out.error(msg, "config");
     return;
   }
 
@@ -370,8 +385,7 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
     const msg =
       "Not inside a git repository. `oxagen graph push` requires a git repo.";
     if (opts.throwOnError) throw new Error(msg);
-    process.stderr.write(`${msg}\n`);
-    process.exitCode = 1;
+    out.error(msg, "git");
     return;
   }
 
@@ -396,16 +410,11 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
       addedFiles = allTrackedFiles(root);
       deletedFiles = [];
     } else if (lastSha === currentSha) {
-      // Already up to date — idempotent no-op.
-      if (opts.json) {
-        process.stdout.write(
-          JSON.stringify({ upToDate: true, sha: currentSha, repo }) + "\n",
-        );
-      } else {
-        process.stdout.write(
-          `Already up to date (HEAD: ${currentSha.slice(0, 8)}).\n`,
-        );
-      }
+      // Already up to date — idempotent no-op. JSON shape preserved.
+      out.data(
+        { upToDate: true, sha: currentSha, repo },
+        () => `Already up to date (HEAD: ${currentSha.slice(0, 8)}).`,
+      );
       return;
     } else {
       const changed = changedFiles(lastSha, currentSha, root);
@@ -477,28 +486,27 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
     };
 
     if (nodes.length === 0 && edges.length === 0 && tombstones.length === 0) {
-      if (opts.json) {
-        process.stdout.write(
-          JSON.stringify({ pushed: false, reason: "no changes", sha: currentSha, repo }) + "\n",
-        );
-      } else {
-        process.stdout.write(`No source file changes since ${lastSha?.slice(0, 8) ?? "start"}.\n`);
-      }
+      // JSON shape preserved: { pushed: false, reason, sha, repo }.
+      out.data(
+        { pushed: false, reason: "no changes", sha: currentSha, repo },
+        () => `No source file changes since ${lastSha?.slice(0, 8) ?? "start"}.`,
+      );
       // Still update the cursor so next run doesn't re-scan
       await store.setCodeCursor(org, workspace, repo, currentSha);
       return;
     }
 
-    process.stderr.write(
+    // Single status line → progress on stderr (no `\r`, so out.info is fine).
+    out.info(
       `Pushing ${nodes.length} node(s), ${edges.length} edge(s), ` +
-        `${tombstones.length} tombstone(s)...\n`,
+        `${tombstones.length} tombstone(s)...`,
     );
 
-    // `apiPost` hard-exits the process on API error (correct for the one-shot
-    // command), but a graceful caller (`throwOnError`) needs a catchable throw.
-    const result = opts.throwOnError
-      ? await apiPostOrThrow<PushResult>("graph/sync/push", envelope)
-      : await apiPost<PushResult>("graph/sync/push", envelope);
+    // Always apiPostOrThrow: the catch below decides the failure contract — a
+    // throw when throwOnError is set (graceful `oxagen init` caller), otherwise
+    // a uniform out.error (exit 1, never a hard-exit). Either way finally closes
+    // the store.
+    const result = await apiPostOrThrow<PushResult>("graph/sync/push", envelope);
 
     // Persist the cursor on success.
     await store.setCodeCursor(org, workspace, repo, currentSha);
@@ -512,19 +520,23 @@ export async function handleGraphPush(opts: GraphPushOptions): Promise<void> {
       fromSha: lastSha ?? "(full)",
     };
 
-    if (opts.json) {
-      process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
-    } else {
-      process.stdout.write(
+    out.data(
+      summary,
+      () =>
         `Pushed to workspace graph:\n` +
-          `  Nodes upserted:  ${result.nodesUpserted}\n` +
-          `  Edges upserted:  ${result.edgesUpserted}\n` +
-          `  Tombstoned:      ${result.tombstoned}\n` +
-          `  From SHA:        ${(lastSha ?? "(full)").toString().slice(0, 8)}\n` +
-          `  To SHA (HEAD):   ${currentSha.slice(0, 8)}\n` +
-          `  Repo:            ${repo}\n`,
-      );
-    }
+        `  Nodes upserted:  ${result.nodesUpserted}\n` +
+        `  Edges upserted:  ${result.edgesUpserted}\n` +
+        `  Tombstoned:      ${result.tombstoned}\n` +
+        `  From SHA:        ${(lastSha ?? "(full)").toString().slice(0, 8)}\n` +
+        `  To SHA (HEAD):   ${currentSha.slice(0, 8)}\n` +
+        `  Repo:            ${repo}`,
+    );
+  } catch (err) {
+    // throwOnError (oxagen init) needs a catchable throw to degrade gracefully;
+    // the normal command routes the failure to a uniform stderr error + exit 1.
+    if (opts.throwOnError) throw err;
+    out.error(err, "api");
+    return;
   } finally {
     await store.close();
   }
