@@ -56,12 +56,27 @@ describe("estimateMessageRows", () => {
     expect(estimateMessageRows(expanded, 80)).toBeGreaterThan(1);
   });
 
-  it("sizes a diff by its line count, capped", () => {
+  it("sizes a diff by its real rendered height: lines + header + marginY", () => {
     const shortDiff = msg({ role: "diff", diff: "line1\nline2\nline3" });
-    expect(estimateMessageRows(shortDiff, 80)).toBe(5); // 3 lines + 2
+    expect(estimateMessageRows(shortDiff, 80)).toBe(6); // 3 lines + header(1) + marginY(2)
 
-    const hugeDiff = msg({ role: "diff", diff: Array.from({ length: 500 }, () => "x").join("\n") });
-    expect(estimateMessageRows(hugeDiff, 80)).toBeLessThanOrEqual(60);
+    // A large diff must be estimated at its FULL rendered height (DiffView
+    // renders every line up to its 500-line cap) — the old 60-row cap made
+    // scroll positions above a big diff unreachable.
+    const bigDiff = msg({ role: "diff", diff: Array.from({ length: 200 }, () => "x").join("\n") });
+    expect(estimateMessageRows(bigDiff, 80)).toBe(203);
+
+    // Past DiffView's own truncation cap, the estimate tracks the cap + its
+    // one-line "… more lines" note instead of growing unboundedly.
+    const hugeDiff = msg({ role: "diff", diff: Array.from({ length: 800 }, () => "x").join("\n") });
+    expect(estimateMessageRows(hugeDiff, 80)).toBe(500 + 1 + 3);
+  });
+
+  it("caps a user prompt at its 4-line preview + expand hint (MessageView truncates it)", () => {
+    const longPrompt = msg({ role: "user", content: Array.from({ length: 30 }, (_, i) => `l${i}`).join("\n") });
+    expect(estimateMessageRows(longPrompt, 80)).toBe(5);
+    const shortPrompt = msg({ role: "user", content: "one\ntwo" });
+    expect(estimateMessageRows(shortPrompt, 80)).toBe(2);
   });
 
   it("gives a summary card a fixed small height and a replay trace a fixed tall one", () => {

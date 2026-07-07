@@ -20,6 +20,13 @@
  */
 import type { Message } from "./components.js";
 
+/**
+ * How many diff lines DiffView renders before truncating with a one-line note
+ * (mirrors diff-view.tsx's DEFAULT_MAX_LINES — kept in sync by
+ * scroll.test.ts).
+ */
+const DIFF_VIEW_MAX_LINES = 500;
+
 /** Estimated on-screen row height of one transcript message at `width` columns. */
 export function estimateMessageRows(msg: Message, width: number): number {
   const w = Math.max(20, width);
@@ -34,11 +41,25 @@ export function estimateMessageRows(msg: Message, width: number): number {
         ? Math.min(24, Math.max(3, msg.terminalRun.output.split("\n").length + 3))
         : 1;
     case "diff": {
-      // Header line + roughly one terminal row per diff line (DiffView renders
-      // one Text row per source line), capped so a huge diff can't blow the
-      // estimate out — the viewport's overflow clip is the safety net either way.
+      // Must track DiffMessage's REAL rendered height: marginY (2 rows) +
+      // header (1) + one row per diff line up to DiffView's own truncation
+      // cap (+1 for its "… more lines" note past it). An earlier version
+      // capped this estimate at 60 rows while DiffView happily rendered 500 —
+      // one big diff then made ~440 rows of scroll positions vanish from the
+      // math, leaving everything above it unreachable. Tall diffs are
+      // line-scrollable now (clipTop), so the estimate should be honest, not
+      // capped.
       const lines = (msg.diff ?? "").split("\n").length;
-      return Math.max(2, Math.min(60, lines + 2));
+      const rendered = Math.min(lines, DIFF_VIEW_MAX_LINES) + (lines > DIFF_VIEW_MAX_LINES ? 1 : 0);
+      return Math.max(2, rendered + 3);
+    }
+    case "user": {
+      // MessageView previews a prompt at 4 lines + a one-line Ctrl-O expand
+      // hint (previewLines in components.tsx) — the FULL content never
+      // renders in the viewport, so estimating it would overshoot by the
+      // whole hidden remainder.
+      const rows = wrappedRows(msg.content, w);
+      return rows > 4 ? 5 : rows;
     }
     default: {
       if (msg.summary) return 6; // bordered card: verdict + review? + files + cost + borders
