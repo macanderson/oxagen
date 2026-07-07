@@ -284,6 +284,8 @@ import "./contracts/web.search";
 import "./contracts/workflow.cancel";
 import "./contracts/workflow.run";
 import "./contracts/workflow.status";
+import "./contracts/workspace.budget.policy.read";
+import "./contracts/workspace.budget.policy.write";
 import "./contracts/workspace.create";
 import "./contracts/workspace.invite.send";
 import "./contracts/workspace.list";
