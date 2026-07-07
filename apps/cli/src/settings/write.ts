@@ -20,6 +20,24 @@ export const SETTABLE_KEYS = [
   "triageModel",
   "apiUrl",
 ] as const;
+export const SETTABLE_KEYS = ["model", "apiUrl", "confirmScope"] as const;
+
+/**
+ * Keys whose settings.json value is a JSON boolean rather than a string.
+ * `writeSettingsValue`'s `value` parameter is always a string (it comes from
+ * a CLI arg / panel text buffer) — for these keys it's parsed to `true`/
+ * `false` before being written, so the file holds a real boolean and not the
+ * string `"true"`, which would fail `oxagenSettingsSchema`'s `z.boolean()`.
+ */
+const BOOLEAN_SETTABLE_KEYS = new Set<string>(["confirmScope"]);
+
+/** `"true"`/`"false"` (case-insensitive, trimmed) → boolean. Throws otherwise. */
+function parseBooleanSettingValue(raw: string): boolean {
+  const v = raw.trim().toLowerCase();
+  if (v === "true") return true;
+  if (v === "false") return false;
+  throw new Error(`invalid boolean value "${raw}" — expected "true" or "false"`);
+}
 
 export interface WriteValueOptions {
   scope: SettingsScope;
@@ -65,7 +83,9 @@ export function writeSettingsValue(opts: WriteValueOptions): string {
     env[name] = opts.value;
     doc["env"] = env;
   } else if ((SETTABLE_KEYS as readonly string[]).includes(opts.key)) {
-    doc[opts.key] = opts.value;
+    doc[opts.key] = BOOLEAN_SETTABLE_KEYS.has(opts.key)
+      ? parseBooleanSettingValue(opts.value)
+      : opts.value;
   } else {
     throw new Error(
       `cannot set "${opts.key}". Settable: ${SETTABLE_KEYS.join(", ")}, env.<NAME>. ` +

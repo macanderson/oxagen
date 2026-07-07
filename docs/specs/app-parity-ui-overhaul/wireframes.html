@@ -1,0 +1,281 @@
+<title>Oxagen — App Parity UI Overhaul (Wireframes)</title>
+<style>
+  :root{
+    --ink:#1a1a1a; --line:#2b2b2b; --soft:#8a8a8a; --fill:#ededed; --bg:#faf9f7;
+    --accent:#c2410c; --new:#0d6b58; --paper:#ffffff;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    --sans:"Segoe UI",system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1120px;margin:0 auto;padding:40px 24px 96px}
+  header.top{border:2px solid var(--line);background:var(--paper);padding:28px 30px;margin-bottom:34px;
+    box-shadow:6px 6px 0 var(--line)}
+  header.top h1{margin:0 0 6px;font-size:26px;letter-spacing:-.01em}
+  header.top .sub{color:var(--soft);font-size:14px}
+  .pain{margin-top:16px;font-size:15px;border-left:4px solid var(--accent);padding:6px 0 6px 14px}
+  h2.sec{font-family:var(--mono);font-size:13px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--soft);margin:52px 0 16px;border-bottom:1.5px dashed var(--soft);padding-bottom:8px}
+  .caption{font-size:13px;color:var(--soft);margin:8px 2px 22px}
+  .key{font-size:12px;color:var(--soft);font-family:var(--mono);margin:6px 0 18px}
+  .key b{color:var(--new)}
+  /* generic wireframe box */
+  .frame{border:2px solid var(--line);background:var(--paper);box-shadow:5px 5px 0 var(--line)}
+  .bar{display:flex;align-items:center;gap:10px;border-bottom:1.5px solid var(--line);
+    padding:9px 14px;font-family:var(--mono);font-size:12px;background:var(--fill)}
+  .bar .grow{flex:1}
+  .chip{border:1.5px solid var(--line);border-radius:3px;padding:2px 8px;font-size:11px;background:var(--paper)}
+  .chip.spend{border-color:var(--accent);color:var(--accent)}
+  .badge{background:var(--accent);color:#fff;border-radius:10px;padding:0 7px;font-size:11px}
+  /* planes */
+  .planes{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .plane{border:2px solid var(--line);background:var(--paper);padding:14px;box-shadow:4px 4px 0 var(--line)}
+  .plane h3{margin:0 0 4px;font-family:var(--mono);font-size:13px;letter-spacing:.14em}
+  .plane .tag{font-size:11px;color:var(--accent);font-family:var(--mono);margin-bottom:10px}
+  .plane ul{margin:0;padding-left:16px;font-size:13px;color:#333}
+  .plane .promise{margin-top:10px;font-size:12px;color:var(--soft);font-style:italic}
+  .cut{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .cut span{border:1.5px dashed var(--soft);padding:4px 12px;font-family:var(--mono);font-size:12px}
+  /* nav rails */
+  .rails{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  nav.rail{font-family:var(--mono);font-size:13px}
+  nav.rail .bar{justify-content:space-between}
+  nav.rail ul{list-style:none;margin:0;padding:10px 0}
+  nav.rail li{padding:5px 16px;display:flex;align-items:center;gap:8px}
+  nav.rail li.grouphdr{color:var(--soft);font-size:11px;letter-spacing:.16em;margin-top:8px;padding-top:8px}
+  nav.rail li .n{color:var(--new);font-size:11px;border:1px solid var(--new);border-radius:3px;padding:0 5px}
+  nav.rail li .path{margin-left:auto;color:var(--soft);font-size:11px}
+  .diamond{color:var(--line)}
+  /* builder */
+  .builder{display:grid;grid-template-columns:150px 1fr 150px;min-height:340px}
+  .builder .steps{border-right:1.5px solid var(--line);padding:14px 0;font-family:var(--mono);font-size:12px}
+  .builder .steps div{padding:6px 14px}
+  .builder .steps .on{background:var(--fill);border-left:3px solid var(--accent);font-weight:600}
+  .builder .steps .done{color:var(--new)}
+  .builder .body{padding:18px 20px}
+  .builder .preview{border-left:1.5px solid var(--line);padding:16px 12px;background:var(--fill);
+    font-family:var(--mono);font-size:11px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12px;color:var(--soft);font-family:var(--mono);margin-bottom:5px}
+  .input{border:1.5px solid var(--line);background:var(--paper);padding:7px 10px;font-size:13px;
+    min-height:16px;color:#333}
+  .input.sel::after{content:"▾";float:right;color:var(--soft)}
+  .radio{font-family:var(--mono);font-size:13px}
+  .previewcard{border:1.5px solid var(--line);background:var(--paper);padding:8px;margin-bottom:10px;line-height:1.7}
+  /* equip picker */
+  .equip .row{display:flex;align-items:center;gap:10px;border:1.5px solid var(--line);background:var(--paper);
+    padding:7px 10px;margin-bottom:6px;font-size:13px}
+  .equip .row .type{font-family:var(--mono);font-size:11px;border:1.5px solid var(--line);padding:1px 7px;
+    min-width:52px;text-align:center}
+  .equip .row .type.skill{background:#eef6f3;border-color:var(--new);color:var(--new)}
+  .equip .row .type.tool{background:#f3f3f3}
+  .equip .row .type.mcp{background:#fdf1ea;border-color:var(--accent);color:var(--accent)}
+  .equip .row .type.agent{background:#eef1fb;border-color:#3b4fb0;color:#3b4fb0}
+  .equip .row .grow{flex:1}
+  .equip .row .risk{font-family:var(--mono);font-size:11px;color:var(--soft)}
+  .equip .row .warn{color:var(--accent);font-family:var(--mono);font-size:11px}
+  .equip .row .x{color:var(--soft);cursor:default}
+  .equip h4{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--soft);
+    margin:16px 0 8px;text-transform:uppercase}
+  .equip .filterbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  .equip .filterbar span{border:1.5px solid var(--line);padding:3px 12px;font-family:var(--mono);font-size:12px;background:var(--paper)}
+  .equip .filterbar span.act{background:var(--line);color:#fff}
+  /* golden path */
+  .flow{display:flex;flex-direction:column;gap:0}
+  .step{display:flex;gap:14px;align-items:flex-start}
+  .step .num{font-family:var(--mono);font-weight:700;border:2px solid var(--line);border-radius:50%;
+    width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:var(--paper);flex:0 0 30px}
+  .step .card{flex:1;border:1.5px solid var(--line);background:var(--paper);padding:10px 14px;margin-bottom:0;
+    box-shadow:3px 3px 0 var(--line)}
+  .step .card b{font-family:var(--mono);font-size:13px}
+  .step .card .bind{font-family:var(--mono);font-size:11px;color:var(--new)}
+  .connector{width:30px;display:flex;justify-content:center;color:var(--soft);height:18px}
+  /* reseller */
+  table.rs{border-collapse:collapse;width:100%;font-size:13px}
+  table.rs th,table.rs td{border:1.5px solid var(--line);padding:7px 10px;text-align:left;font-family:var(--mono);font-size:12px}
+  table.rs th{background:var(--fill)}
+  .meters{display:flex;gap:8px;margin:14px 0;flex-wrap:wrap}
+  .meters span{border:1.5px dashed var(--new);color:var(--new);padding:4px 12px;font-family:var(--mono);font-size:12px}
+  .footer{margin-top:60px;border-top:1.5px dashed var(--soft);padding-top:16px;font-size:12px;color:var(--soft);font-family:var(--mono)}
+  .newtag{color:var(--new);font-family:var(--mono);font-size:11px;border:1px solid var(--new);padding:0 5px;border-radius:3px}
+  @media(max-width:820px){.planes{grid-template-columns:1fr 1fr}.rails{grid-template-columns:1fr}
+    .builder{grid-template-columns:1fr}.builder .preview,.builder .steps{border:0;border-top:1.5px solid var(--line)}}
+  @media (prefers-color-scheme:dark){
+    :root{--ink:#e8e6e2;--line:#4a4a4a;--soft:#8a8a8a;--fill:#242424;--bg:#141414;--paper:#1c1c1c;
+      --accent:#f97316;--new:#34d399}
+    .equip .row .type.skill{background:#12251f}.equip .row .type.mcp{background:#2a1a12}
+    .equip .row .type.agent{background:#171d33}
+  }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Oxagen — App Parity UI Overhaul</h1>
+    <div class="sub">Low-fidelity wireframes · the app should do everything the platform can · 2026-07-06</div>
+    <div class="pain">You can do more from a terminal than from the product you pay for. The backend ships
+      ~287 governed capabilities across 41 domains. The app exposes a fraction, scattered across six settings
+      areas. There is no place to build an agent. This fixes that.</div>
+  </header>
+
+  <h2 class="sec">The four planes — the conceptual model behind the nav and the messaging</h2>
+  <div class="caption">Every capability falls into one plane. The planes map one-to-one onto the vision wedge
+    and onto the brand pillars. Two activities (Operate, Extend) cut across all four.</div>
+  <div class="planes">
+    <div class="plane"><h3>BUILD</h3><div class="tag">Studio</div>
+      <ul><li>Agents</li><li>Skills</li><li>Prompts</li><li>Commands</li><li>Tools</li></ul>
+      <div class="promise">"You build the agent."</div></div>
+    <div class="plane"><h3>GROUND</h3><div class="tag">Knowledge</div>
+      <ul><li>Graph</li><li>Ontology</li><li>Memory</li><li>Connections</li></ul>
+      <div class="promise">"grounded in cited context"</div></div>
+    <div class="plane"><h3>GOVERN</h3><div class="tag">Access · Security</div>
+      <ul><li>Members &amp; Roles</li><li>Approvals</li><li>Audit</li><li>Compliance</li></ul>
+      <div class="promise">"safe by default"</div></div>
+    <div class="plane"><h3>METER</h3><div class="tag">Billing</div>
+      <ul><li>Usage</li><li>Budgets</li><li>Invoices</li><li>Reseller meters</li></ul>
+      <div class="promise">"metered billing you can read"</div></div>
+  </div>
+  <div class="cut"><span>Operate ▸ Ask · Runs · Fleets · Approvals</span><span>Extend ▸ Marketplace · Plugins · MCP</span></div>
+
+  <h2 class="sec">The new navigation — two rails</h2>
+  <div class="key"><b>green</b> = net-new surface · grey path = route · Studio is one group of five, the hero of the refresh</div>
+  <div class="rails">
+    <nav class="rail frame">
+      <div class="bar"><span>OXAGEN</span><span class="grow">acme / research-ws ▾</span><span class="chip">⌘K</span><span class="chip spend">$12.40</span></div>
+      <ul>
+        <li class="grouphdr">OPERATE</li>
+        <li><span class="diamond">◇</span> Ask <span class="path">/ask</span></li>
+        <li><span class="diamond">◇</span> Runs <span class="path">/runs</span></li>
+        <li><span class="diamond">◇</span> Fleets <span class="n">NEW</span><span class="path">/fleets</span></li>
+        <li><span class="diamond">◇</span> Approvals <span class="badge">3</span><span class="n">NEW</span><span class="path">/approvals</span></li>
+        <li class="grouphdr">BUILD — STUDIO</li>
+        <li><span class="diamond">◇</span> Agents <span class="n">NEW</span><span class="path">/studio/agents</span></li>
+        <li><span class="diamond">◇</span> Skills <span class="path">/studio/skills</span></li>
+        <li><span class="diamond">◇</span> Prompts <span class="path">/studio/prompts</span></li>
+        <li><span class="diamond">◇</span> Commands <span class="n">NEW</span><span class="path">/studio/commands</span></li>
+        <li><span class="diamond">◇</span> Tools <span class="n">NEW</span><span class="path">/studio/tools</span></li>
+        <li class="grouphdr">GROUND — KNOWLEDGE</li>
+        <li><span class="diamond">◇</span> Graph <span class="path">/knowledge/explore</span></li>
+        <li><span class="diamond">◇</span> Ontology <span class="path">/knowledge/schema</span></li>
+        <li><span class="diamond">◇</span> Memory <span class="path">/knowledge/memories</span></li>
+        <li><span class="diamond">◇</span> Connections <span class="path">/knowledge/connections</span></li>
+        <li class="grouphdr">IMPROVE · EXTEND</li>
+        <li><span class="diamond">◇</span> Evals <span class="path">/evals</span></li>
+        <li><span class="diamond">◇</span> Marketplace <span class="path">/marketplace</span></li>
+      </ul>
+    </nav>
+    <nav class="rail frame">
+      <div class="bar"><span>OXAGEN</span><span class="grow">acme ▾ (organization)</span></div>
+      <ul>
+        <li><span class="diamond">◇</span> Overview <span class="path">/</span></li>
+        <li class="grouphdr">GOVERN</li>
+        <li><span class="diamond">◇</span> Members &amp; Roles <span class="n">+matrix</span><span class="path">/access</span></li>
+        <li><span class="diamond">◇</span> Security <span class="path">/security</span></li>
+        <li class="grouphdr">METER</li>
+        <li><span class="diamond">◇</span> Billing <span class="path">/billing</span></li>
+        <li><span class="diamond">◇</span> Budgets <span class="path">/billing/budgets</span></li>
+        <li><span class="diamond">◇</span> Reseller <span class="n">NEW</span><span class="path">/billing/reseller</span></li>
+        <li class="grouphdr">DEVELOP</li>
+        <li><span class="diamond">◇</span> API &amp; Endpoints <span class="path">/developer</span></li>
+      </ul>
+      <div style="padding:14px;font-size:12px;color:var(--soft)">
+        Members + Access merge into one <b>Members &amp; Roles</b> home with the capability grant matrix.
+        Billing grows a <b>Reseller</b> tab — the meter-to-revenue wedge gets a named surface.
+      </div>
+    </nav>
+  </div>
+
+  <h2 class="sec">The centerpiece — Agent Builder (Studio → Agents)</h2>
+  <div class="caption">One screen, seven steps, a live preview. Every field binds to <code>AgentDefinition</code>.
+    The backend and its versioning already exist; today it has zero authoring surface.</div>
+  <div class="frame">
+    <div class="bar"><span>‹ Agents</span><span>Auditor · <span style="color:var(--soft)">draft v3</span></span>
+      <span class="grow"></span><span class="chip">Save draft</span><span class="chip spend">Publish v3 ▸</span></div>
+    <div class="builder">
+      <div class="steps">
+        <div class="done">① Identity ✓</div>
+        <div class="on">② Instructions</div>
+        <div>③ Equip ●</div>
+        <div>④ Ground</div>
+        <div>⑤ Triggers</div>
+        <div>⑥ Govern</div>
+        <div>⑦ Review</div>
+      </div>
+      <div class="body">
+        <div class="field"><label>System prompt</label>
+          <div class="radio">( ) Write inline &nbsp; (•) Use a saved Prompt</div></div>
+        <div class="field"><div class="input sel">Website Audit &nbsp; v2 &nbsp;<span style="color:var(--new)">«prompt template»</span></div></div>
+        <div class="field"><label>+ Append instructions (optional)</label>
+          <div class="input">Always cite the page you scored.</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--new);margin-top:4px">«AgentDefinition.instructions»</div></div>
+      </div>
+      <div class="preview">
+        <div style="letter-spacing:.14em;margin-bottom:8px">LIVE PREVIEW</div>
+        <div class="previewcard">Auditor<br>precise · 5<br>7 tools<br>2 skills<br>graph: read<br>triggers: 2<br>risk: med</div>
+        <div>Est. cost / run<br><b style="color:var(--accent)">~ $0.9 – 1.4</b><br><span style="color:var(--soft)">«meter estimate»</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="sec">Step ③ Equip — one uniform picker for skills, tools, MCP servers, subagents</h2>
+  <div class="caption">Because <code>agentTools[]</code> loads all four through the same <code>{type, ref, config}</code>
+    shape, the user learns one flow, not four. Risk and approval show inline on every tool.</div>
+  <div class="frame equip" style="padding:18px 20px">
+    <div class="filterbar"><span class="act">Skills</span><span>Tools</span><span>MCP servers</span><span>Subagents</span>
+      <span style="margin-left:auto;border-style:dashed">search…</span></div>
+    <h4>Equipped (8)</h4>
+    <div class="row"><span class="type skill">skill</span><span>Brand Voice <span style="color:var(--soft)">v1</span></span><span class="grow"></span><span class="risk">✎</span><span class="x">✕</span></div>
+    <div class="row"><span class="type skill">skill</span><span>SEO Audit <span style="color:var(--soft)">v3</span></span><span class="grow"></span><span class="risk">✎</span><span class="x">✕</span></div>
+    <div class="row"><span class="type tool">tool</span><span>web.fetch</span><span class="grow"></span><span class="risk">low</span><span class="x">✕</span></div>
+    <div class="row"><span class="type tool">tool</span><span>browser.read</span><span class="grow"></span><span class="risk">low</span><span class="x">✕</span></div>
+    <div class="row"><span class="type tool">tool</span><span>browser.screenshot</span><span class="grow"></span><span class="warn">⚑ approve</span><span class="x">✕</span></div>
+    <div class="row"><span class="type tool">tool</span><span>graph.search</span><span class="grow"></span><span class="risk">low</span><span class="x">✕</span></div>
+    <div class="row"><span class="type mcp">mcp</span><span>Ahrefs (custom)</span><span class="grow"></span><span class="warn">⚑ consent</span><span class="x">✕</span></div>
+    <div class="row"><span class="type agent">agent</span><span>Link Checker (subagent)</span><span class="grow"></span><span class="risk">→ fleet</span><span class="x">✕</span></div>
+    <h4>Available &nbsp;·&nbsp; <span style="color:var(--accent)">Browse marketplace ▸</span></h4>
+    <div class="row" style="opacity:.75"><span class="type tool">tool</span><span>documents.generate</span><span class="grow"></span><span class="risk">low</span><span>+</span></div>
+    <div class="row" style="opacity:.75"><span class="type skill">skill</span><span>Accessibility Check <span style="color:var(--soft)">v1</span></span><span class="grow"></span><span class="risk">install</span><span>+</span></div>
+  </div>
+
+  <h2 class="sec">The golden path — nine screens, one story</h2>
+  <div class="caption">The exact scenario that does not work today: a Brand Voice skill, an agent equipped with it
+    and a tool subset, a saved audit prompt, a <code>/audit</code> command, a fleet, approvals, a metered run,
+    and a reseller invoice.</div>
+  <div class="flow">
+    <div class="step"><div class="num">1</div><div class="card"><b>Studio → Skills → New skill</b><br>Create "Brand Voice", weight high. <span class="bind">«skill.create»</span></div></div>
+    <div class="connector">│</div>
+    <div class="step"><div class="num">2</div><div class="card"><b>Studio → Prompts → New prompt</b><br>"Website Audit", body with {{domain}}, cite every page. <span class="bind">«new prompt template»</span></div></div>
+    <div class="connector">│</div>
+    <div class="step"><div class="num">3</div><div class="card"><b>Studio → Agents → New "Auditor"</b><br>Use prompt "Website Audit"; equip Brand Voice + SEO + web.fetch + browser.* + Ahrefs MCP + Link Checker sub; ground on acme-web; trigger /audit; publish v3. <span class="bind">«agent.definition.publish»</span></div></div>
+    <div class="connector">│</div>
+    <div class="step"><div class="num">4</div><div class="card"><b>Studio → Commands → New /audit</b><br>Runs Auditor with Website Audit, $1 → {{domain}}. <span class="bind">«command entity»</span></div></div>
+    <div class="connector">│</div>
+    <div class="step"><div class="num">5</div><div class="card"><b>Ask → /audit oxagen.sh</b><br>Plan approved, tools run, Ahrefs consent + screenshot approved.</div></div>
+    <div class="connector">│</div>
+    <div class="step"><div class="num">6</div><div class="card"><b>Fleets → Site Audit</b><br>Auditor fans out to Link Checker, SEO Scorer, A11y, Perf, Aggregator. Every branch shows tokens, cost, cited nodes. <span class="bind">«fanout lineage»</span></div></div>
+    <div class="connector">│</div>
+    <div class="step"><div class="num">7</div><div class="card"><b>Approvals</b><br>Resolve repo.pr.open + screenshot + Ahrefs consent in one inbox.</div></div>
+    <div class="connector">│</div>
+    <div class="step"><div class="num">8</div><div class="card"><b>Runs → aex_9f2</b><br>The trace, grounded-in citations by label, $4.10 metered. <span class="bind">«agent.trace.get»</span></div></div>
+    <div class="connector">│</div>
+    <div class="step"><div class="num">9</div><div class="card"><b>Billing → Reseller</b><br>The $4.10 (×1.4) becomes a $5.74 line on Northwind's invoice. <span class="bind">«ClickHouse → Stripe»</span></div></div>
+  </div>
+
+  <h2 class="sec">Billing → Reseller — the wedge on one screen <span class="newtag">NEW</span></h2>
+  <div class="caption">Turn observed agent usage into bills for your customers. Not a spend dashboard, revenue infrastructure.</div>
+  <div class="frame" style="padding:18px 20px">
+    <table class="rs">
+      <tr><th>Your customers</th><th>Plan</th><th>This month usage</th><th>You bill them</th></tr>
+      <tr><td>Northwind Co.</td><td>metered</td><td>48k tokens · 1.2k runs</td><td>$312</td></tr>
+      <tr><td>Contoso</td><td>flat + overage</td><td>210k tokens</td><td>$1,940</td></tr>
+    </table>
+    <div class="meters"><span>tokens ×1.4</span><span>runs $0.02</span><span>tool: repo.pr $0.50</span><span>+ define meter</span></div>
+    <div style="font-family:var(--mono);font-size:12px;color:var(--soft)">meter markup rules → Stripe prices &nbsp;·&nbsp; [ Sync to Stripe ] &nbsp; [ Preview invoice ]</div>
+  </div>
+
+  <div class="footer">
+    Parity is enforced, not promised: add an <b style="color:var(--new)">app</b> layer to
+    <code>check:manifest</code> so CI flags any operable capability with no app surface.
+    Full spec: README · 01-proposal · 02-information-architecture · 03-wireframes · 04-build-plan-and-prompts.
+  </div>
+</div>

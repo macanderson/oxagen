@@ -26,7 +26,7 @@ import {
   filterSlashCatalog,
   type SlashCatalogEntry,
 } from "../slash/catalog.js";
-import type { StageEvent, StageKind, TurnTrace, JudgeVerdict } from "../agent/trace.js";
+import type { StageEvent, StageKind, TurnTrace, JudgeVerdict, ScopeReviewInfo } from "../agent/trace.js";
 import type { ApprovalRequest, ApprovalResponse, PermissionMode } from "../agent/permissions.js";
 import { readClipboardImage as readClipboardImageDefault } from "../lib/clipboard-image.js";
 import {
@@ -57,13 +57,21 @@ import {
 } from "./mouse-select.js";
 
 export interface Message {
-  role: "user" | "assistant" | "reasoning" | "tool" | "stage" | "diff" | "terminal";
+  role: "user" | "assistant" | "reasoning" | "tool" | "stage" | "diff" | "terminal" | "scope";
   content: string;
   timestamp: number;
   toolName?: string;
   streaming?: boolean;
   /** Present on `role: "stage"` messages — a live pipeline progress event. */
   stage?: StageEvent;
+  /**
+   * Present on `role: "scope"` messages — the pre-execution scope-review
+   * snapshot (original + enhanced prompt, routed model, estimated cost). Always
+   * surfaced so the user sees how their prompt was enhanced and what the work is
+   * estimated to cost; rendered truncated unless the transcript is in verbose
+   * (Ctrl-O) mode. See {@link ScopeCard}.
+   */
+  scope?: ScopeReviewInfo;
   /** Present on `role: "diff"` messages — the unified git diff to render. */
   diff?: string;
   /** Present on `role: "diff"` messages — the relative paths the diff touches. */
@@ -891,13 +899,99 @@ export function DiffMessage({
   );
 }
 
+/**
+ * Take the first `max` lines of `text` for a compact preview. Returns the sliced
+ * text and whether anything was cut (either extra lines, or a very long single
+ * line that got hard-capped). Used so a long prompt shows its opening few lines
+ * with a "Ctrl-O for full" affordance rather than flooding the transcript.
+ */
+export function previewLines(
+  text: string,
+  max: number,
+): { text: string; truncated: boolean } {
+  const lines = text.split(/\r?\n/);
+  const sliced = lines.slice(0, max);
+  let truncated = lines.length > max;
+  // Also hard-cap a single runaway line so a one-line 4kB paste can't blow out
+  // the frame even when it's "within" the line budget.
+  const CAP = max * 200;
+  let joined = sliced.join("\n");
+  if (joined.length > CAP) {
+    joined = joined.slice(0, CAP);
+    truncated = true;
+  }
+  return { text: joined, truncated };
+}
+
+/**
+ * The pre-execution scope card — surfaced every turn (see the REPL's
+ * `onScopeReview` wiring) so the user always sees BOTH their original prompt and
+ * the enhanced version the agent will actually run, plus the routed model and an
+ * estimated cost. Rendered as a compact preview by default (first few lines of
+ * each prompt); `expanded` (Ctrl-O verbose mode) shows the prompts in full.
+ */
+export function ScopeCard({
+  info,
+  expanded = false,
+}: {
+  info: ScopeReviewInfo;
+  expanded?: boolean;
+}): React.ReactElement {
+  const origPrev = expanded
+    ? { text: info.originalPrompt, truncated: false }
+    : previewLines(info.originalPrompt, 3);
+  const enhPrev = expanded
+    ? { text: info.enhancedPrompt, truncated: false }
+    : previewLines(info.enhancedPrompt, 6);
+  const est = formatUsd(info.estimatedCostUsd);
+  return (
+    <Box paddingX={1} marginY={0} flexDirection="column">
+      <Box>
+        <Text color={theme.violet} bold>
+          {"✦ enhanced "}
+        </Text>
+        <Text dimColor>· </Text>
+        <Text color={theme.violet}>{info.model.split("/").pop()}</Text>
+        <Text dimColor> · {info.tier} · </Text>
+        <Text color="#FBBF24">est {est}</Text>
+        <Text dimColor>
+          {" · ~"}
+          {humanizeTokens(info.estimatedInputTokens)}→{humanizeTokens(info.estimatedOutputTokens)} tok
+        </Text>
+      </Box>
+      <Box paddingLeft={2} flexDirection="column">
+        <Text dimColor>you asked:</Text>
+        <Text wrap="wrap">{origPrev.text}</Text>
+      </Box>
+      <Box paddingLeft={2} flexDirection="column">
+        <Text dimColor>{info.context ? "enhanced with retrieved context:" : "enhanced prompt (no extra context found):"}</Text>
+        <Text dimColor wrap="wrap">{enhPrev.text}</Text>
+      </Box>
+      {origPrev.truncated || enhPrev.truncated ? (
+        <Box paddingLeft={2}>
+          <Text dimColor>… Ctrl-O for the full prompt</Text>
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
 export function MessageView({
   msg,
   diffTheme,
+  expanded = false,
 }: {
   msg: Message;
   /** Theme for `role: "diff"` rendering; derived from the terminal background. */
   diffTheme?: DiffTheme;
+  /**
+   * Verbose (Ctrl-O) mode: render long prompts and the scope card in full rather
+   * than a truncated preview. Only affects roles that truncate (`user`, `scope`).
+   * NOTE: committed transcript items render through `<Static>` and are baked at
+   * their first render, so this reflects the mode active WHEN each line
+   * committed — the live in-progress message always tracks the current mode.
+   */
+  expanded?: boolean;
 }): React.ReactElement {
   if (msg.trace) return <TraceView trace={msg.trace} />;
   if (msg.summary) return <TurnSummaryView summary={msg.summary} />;
@@ -905,13 +999,24 @@ export function MessageView({
     return <TerminalRunCard run={msg.terminalRun} expanded={msg.terminalExpanded ?? false} />;
   if (msg.role === "diff" && msg.diff) return <DiffMessage msg={msg} theme={diffTheme} />;
   if (msg.role === "stage" && msg.stage) return <StageBadge stage={msg.stage} />;
+  if (msg.role === "scope" && msg.scope) return <ScopeCard info={msg.scope} expanded={expanded} />;
   if (msg.role === "user") {
+    // Long prompts show their opening lines with a Ctrl-O affordance so a big
+    // paste never floods the transcript (verbose mode renders it in full).
+    const prev = expanded ? { text: msg.content, truncated: false } : previewLines(msg.content, 4);
     return (
-      <Box paddingX={1} marginY={0}>
-        <Text color={theme.cyan} bold>
-          {"❯ "}
-        </Text>
-        <Text bold>{msg.content}</Text>
+      <Box paddingX={1} marginY={0} flexDirection="column">
+        <Box>
+          <Text color={theme.cyan} bold>
+            {"❯ "}
+          </Text>
+          <Text bold wrap="wrap">{prev.text}</Text>
+        </Box>
+        {prev.truncated ? (
+          <Box paddingLeft={2}>
+            <Text dimColor>… Ctrl-O to expand</Text>
+          </Box>
+        ) : null}
       </Box>
     );
   }
@@ -1046,23 +1151,45 @@ export function TurnSummaryView({ summary }: { summary: TurnSummary }): React.Re
 const IDLE_WARN_SEC = 60;
 
 /**
+ * Seconds of silence after which we surface an explicit "still working"
+ * reassurance. A long, healthy step (a big `bash` test run, a silent fleet
+ * subagent) streams nothing while it executes, so the ONLY thing that moves is
+ * this indicator's spinner + elapsed clock — and a user who sees no *substantive*
+ * change for ~10s starts to wonder if it hung. Well under that, at this
+ * threshold, we start naming the current activity + a reassurance so there is
+ * always a meaningful signal on screen, not just a ticking number.
+ */
+const HEARTBEAT_SEC = 8;
+
+/**
  * Animated "the agent is working" indicator: a braille spinner, elapsed
- * seconds, a live output-token estimate, and — crucially — seconds since the
- * last completed call (progress). There is NO countdown to an auto-cancel
- * deadline, because a turn is bounded by progress and per-call timeouts, not by
- * total elapsed time: long, healthy work must not look like it is "running out
- * of time". The idle figure warms dim → amber → red only when progress genuinely
- * stalls. It runs its own ~100ms timer so it animates independently of streaming.
+ * seconds, a live output-token estimate, the CURRENT activity (the stage/tool in
+ * flight), and — crucially — seconds since the last completed call (progress).
+ * There is NO countdown to an auto-cancel deadline, because a turn is bounded by
+ * progress and per-call timeouts, not by total elapsed time: long, healthy work
+ * must not look like it is "running out of time". Instead, once a step has been
+ * silent past {@link HEARTBEAT_SEC} the indicator shows a "still working"
+ * reassurance (naming the activity when known) so the screen never goes ~10s
+ * without a meaningful update; the idle figure then warms amber → red only if the
+ * silence stretches toward the inactivity guard's window. It runs its own ~100ms
+ * timer so it animates independently of streaming.
  */
 export function ThinkingIndicator({
   startedAt,
   getTokens,
   getLastProgressAt,
+  getActivity,
 }: {
   startedAt: number;
   getTokens: () => number;
   /** Live getter for the timestamp of the last completed call (delta/tool/stage). */
   getLastProgressAt?: () => number | null;
+  /**
+   * Live getter for a short label of what's happening RIGHT NOW (the in-flight
+   * stage or tool, e.g. "executing" / "bash · pnpm test" / "planning the work").
+   * Shown so a silent step still tells the user what it's doing.
+   */
+  getActivity?: () => string | null;
 }): React.ReactElement {
   const [frame, setFrame] = useState(0);
   useEffect(() => {
@@ -1073,12 +1200,14 @@ export function ThinkingIndicator({
   const now = Date.now();
   const elapsed = Math.round(Math.max(0, now - startedAt) / 1000);
   const tokens = getTokens();
+  const activity = getActivity?.() ?? null;
 
-  // Seconds since the last unit of progress landed. Only surfaced once it grows
-  // past the warn threshold, so a normal fast turn stays clean.
+  // Seconds since the last unit of progress landed. Drives the reassurance +
+  // idle warning; a normal fast turn (progress landing constantly) stays clean.
   const lastProgressAt = getLastProgressAt?.() ?? null;
   const idleSec =
     lastProgressAt != null ? Math.round(Math.max(0, now - lastProgressAt) / 1000) : 0;
+  const heartbeat = idleSec >= HEARTBEAT_SEC;
   const idleColor =
     idleSec >= IDLE_WARN_SEC * 2 ? "#F87171" : idleSec >= IDLE_WARN_SEC ? "#FBBF24" : undefined;
 
@@ -1087,12 +1216,15 @@ export function ThinkingIndicator({
       <Text color="#FBBF24" bold>
         {SPINNER[frame % SPINNER.length]}{" "}
       </Text>
-      <Text color="#FBBF24">Thinking… </Text>
+      <Text color="#FBBF24">{heartbeat ? "Still working… " : "Thinking… "}</Text>
       <Text dimColor>
         {elapsed}s{tokens > 0 ? ` · ~${humanizeTokens(tokens)} tok` : ""}
       </Text>
-      {idleSec >= IDLE_WARN_SEC ? (
-        <Text color={idleColor}>{` · idle ${idleSec}s`}</Text>
+      {activity ? (
+        <Text color={theme.cyan}>{` · ${activity}`}</Text>
+      ) : null}
+      {heartbeat ? (
+        <Text color={idleColor ?? "#FBBF24"}>{` · working ${idleSec}s`}</Text>
       ) : null}
       <Text dimColor> · esc to cancel</Text>
     </Box>

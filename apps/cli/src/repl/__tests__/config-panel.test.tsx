@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render } from "ink-testing-library";
 import React from "react";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConfigPanel } from "../config-panel.js";
@@ -11,6 +11,7 @@ import {
   type ResolveWorkspaceConfigOptions,
 } from "../../config/resolve.js";
 import type { WorkspaceConfig, ConfigScope } from "../../config/schema.js";
+import { getScopePaths as getSettingsScopePaths, clearSettingsCache } from "../../settings/resolve.js";
 
 const ESC = String.fromCharCode(27);
 const ARROW_UP = `${ESC}[A`;
@@ -29,6 +30,7 @@ async function until(cond: () => boolean, timeoutMs = 4000, stepMs = 10): Promis
 let cwd: string;
 let homeDir: string;
 let resolveOpts: ResolveWorkspaceConfigOptions;
+let settingsResolveOpts: { userSettingsPath: string };
 
 function write(scope: ConfigScope, body: WorkspaceConfig): void {
   const paths = getConfigScopePaths(cwd, resolveOpts);
@@ -43,6 +45,12 @@ function readDoc(scope: ConfigScope): Record<string, unknown> {
   >;
 }
 
+/** Reads `.oxagen/settings.json` (project scope) — a different file from workspace.json. */
+function readSettingsDoc(scope: "user" | "project" | "local" = "project"): Record<string, unknown> {
+  const path = getSettingsScopePaths({ cwd, ...settingsResolveOpts })[scope];
+  return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+}
+
 beforeEach(() => {
   cwd = mkdtempSync(join(tmpdir(), "oxagen-panel-cwd-"));
   homeDir = mkdtempSync(join(tmpdir(), "oxagen-panel-home-"));
@@ -50,13 +58,16 @@ beforeEach(() => {
     managedConfigPath: join(homeDir, "managed.json"),
     userConfigPath: join(homeDir, "user.json"),
   };
+  settingsResolveOpts = { userSettingsPath: join(homeDir, "settings-user.json") };
   clearWorkspaceConfigCache();
+  clearSettingsCache();
 });
 
 afterEach(() => {
   rmSync(cwd, { recursive: true, force: true });
   rmSync(homeDir, { recursive: true, force: true });
   clearWorkspaceConfigCache();
+  clearSettingsCache();
 });
 
 describe("ConfigPanel — rendering", () => {
@@ -163,5 +174,96 @@ describe("ConfigPanel — navigation and keys", () => {
     expect(readDoc("repo")["packageManagers"]).toEqual({ primary: "npm" });
     stdin.write(ESC);
     await until(() => onClose.mock.calls.length === 1);
+  });
+});
+
+describe("ConfigPanel — confirmScope (settings.json row)", () => {
+  it("shows the confirmScope row, defaulting to false, tagged [settings] rather than a config tier", async () => {
+    const { lastFrame } = render(
+      <ConfigPanel
+        cwd={cwd}
+        onClose={() => {}}
+        resolveOpts={resolveOpts}
+        settingsResolveOpts={settingsResolveOpts}
+      />,
+    );
+    await until(() => (lastFrame() ?? "").includes("confirmScope"));
+    const frame = lastFrame()!;
+    expect(frame).toMatch(/confirmScope.*false/);
+    expect(frame).toContain("[settings]");
+  });
+
+  it("e edits confirmScope and Enter persists a real JSON boolean to project .oxagen/settings.json", async () => {
+    const { lastFrame, stdin } = render(
+      <ConfigPanel
+        cwd={cwd}
+        onClose={() => {}}
+        resolveOpts={resolveOpts}
+        settingsResolveOpts={settingsResolveOpts}
+      />,
+    );
+    await until(() => (lastFrame() ?? "").includes("confirmScope"));
+    // confirmScope is always the last row (appended after every Workspace Config
+    // row) — arrow-up from the initial selection (index 0) wraps to it.
+    stdin.write(ARROW_UP);
+    await until(() => /❯.*confirmScope/.test(lastFrame() ?? ""));
+    stdin.write("e");
+    await until(() => (lastFrame() ?? "").includes("✎"));
+    expect(lastFrame()).toContain("= false");
+    // Clear the prefilled "false" (5 backspaces), type "true", save.
+    stdin.write("\u007F\u007F\u007F\u007F\u007F");
+    await until(() => !(lastFrame() ?? "").includes("= false"));
+    stdin.write("true");
+    await until(() => (lastFrame() ?? "").includes("= true"));
+    stdin.write(ENTER);
+    await until(() => (lastFrame() ?? "").includes("confirmScope = true"));
+    const doc = readSettingsDoc();
+    expect(doc["confirmScope"]).toBe(true);
+    expect(typeof doc["confirmScope"]).toBe("boolean");
+  });
+
+  it("x resets confirmScope back to false in project scope", async () => {
+    // Pre-seed confirmScope: true directly in the project settings file.
+    mkdirSync(join(cwd, ".oxagen"), { recursive: true });
+    writeFileSync(join(cwd, ".oxagen", "settings.json"), JSON.stringify({ confirmScope: true }), "utf8");
+
+    const { lastFrame, stdin } = render(
+      <ConfigPanel
+        cwd={cwd}
+        onClose={() => {}}
+        resolveOpts={resolveOpts}
+        settingsResolveOpts={settingsResolveOpts}
+      />,
+    );
+    await until(() => /confirmScope.*true/.test(lastFrame() ?? ""));
+    stdin.write(ARROW_UP);
+    await until(() => /❯.*confirmScope/.test(lastFrame() ?? ""));
+    stdin.write("x");
+    await until(() => (lastFrame() ?? "").includes("reset to false"));
+    const doc = readSettingsDoc();
+    expect(doc["confirmScope"]).toBe(false);
+  });
+
+  it("rejects a non-boolean edit without writing the file", async () => {
+    const { lastFrame, stdin } = render(
+      <ConfigPanel
+        cwd={cwd}
+        onClose={() => {}}
+        resolveOpts={resolveOpts}
+        settingsResolveOpts={settingsResolveOpts}
+      />,
+    );
+    await until(() => (lastFrame() ?? "").includes("confirmScope"));
+    stdin.write(ARROW_UP);
+    await until(() => /❯.*confirmScope/.test(lastFrame() ?? ""));
+    stdin.write("e");
+    await until(() => (lastFrame() ?? "").includes("✎"));
+    stdin.write("\u007F\u007F\u007F\u007F\u007F"); // clear prefilled "false"
+    await until(() => !(lastFrame() ?? "").includes("= false"));
+    stdin.write("maybe");
+    await until(() => (lastFrame() ?? "").includes("= maybe"));
+    stdin.write(ENTER);
+    await until(() => (lastFrame() ?? "").includes('confirmScope must be "true" or "false"'));
+    expect(existsSync(join(cwd, ".oxagen", "settings.json"))).toBe(false);
   });
 });

@@ -19,6 +19,16 @@
  * mounted, interactive.tsx's central useInput yields the keyboard entirely
  * (configOpenRef gate) — except while a permission prompt is up, when
  * `active` is false so ApprovalPrompt alone owns the keys.
+ *
+ * One row is deliberately NOT Workspace Config: `confirmScope` (see
+ * CONFIRM_SCOPE_PATH below) lives in `.oxagen/settings.json`
+ * (../settings/schema.ts) — a separate file/schema from the
+ * workspace/repo/user/managed tiers this panel otherwise edits. It's
+ * appended to the row list and special-cased in handleUnset/commitEdit so it
+ * always targets the "project" settings scope via `writeSettingsValue`,
+ * never `setPath`/`unsetPath` (which would silently write it into
+ * workspace.json — a dead key nothing reads, exactly the bug the
+ * `RUNTIME_DEAD_KEYS` guard in ../config/schema.ts exists to prevent).
  */
 import { Box, Text, useInput } from "ink";
 import React, { useCallback, useState } from "react";
@@ -36,6 +46,7 @@ import {
   type LanguageItem,
   type ResolveWorkspaceConfigOptions,
 } from "../config/index.js";
+import { loadSettings, writeSettingsValue, type ResolveSettingsOptions } from "../settings/index.js";
 import { visibleWindow } from "./slash-menu.js";
 
 /** Max rows shown at once; the window scrolls to keep the selection visible. */
@@ -62,8 +73,14 @@ export interface ConfigPanelProps {
    * keyboard — the panel stays visible but ignores keys. Defaults to true.
    */
   active?: boolean;
-  /** Test seam: override the org/user scope file paths (see resolve.ts). */
+  /** Test seam: override the org/user scope file paths (see ../config/resolve.ts). */
   resolveOpts?: ResolveWorkspaceConfigOptions;
+  /**
+   * Test seam: override the `confirmScope` row's settings.json paths (see
+   * ../settings/resolve.ts). Defaults to the real user file (`~/.oxagen/settings.json`)
+   * — pass `userSettingsPath` in tests so they never touch the developer's home dir.
+   */
+  settingsResolveOpts?: Pick<ResolveSettingsOptions, "userSettingsPath" | "projectDirName">;
   width?: number;
 }
 
@@ -72,8 +89,41 @@ interface EditState {
   buffer: string;
 }
 
-function loadRows(cwd: string, resolveOpts?: ResolveWorkspaceConfigOptions): ConfigPanelRow[] {
-  return buildConfigRows(resolveWorkspaceConfig(cwd, { ...resolveOpts, noCache: true }));
+/**
+ * Sentinel path for the one row that's backed by `.oxagen/settings.json`
+ * (../settings/schema.ts) rather than Workspace Config — see the file header.
+ * No Workspace Config path is a bare top-level "confirmScope" key, so this
+ * can't collide with a real provenance path from buildConfigRows.
+ */
+const CONFIRM_SCOPE_PATH = "confirmScope";
+
+/** Build the synthetic `confirmScope` row from resolved settings.json, not Workspace Config. */
+function loadConfirmScopeRow(
+  cwd: string,
+  settingsResolveOpts?: ConfigPanelProps["settingsResolveOpts"],
+): ConfigPanelRow {
+  const enabled =
+    loadSettings({ cwd, ...settingsResolveOpts, noCache: true }).settings.confirmScope === true;
+  return {
+    path: CONFIRM_SCOPE_PATH,
+    kind: "leaf",
+    value: enabled,
+    display: formatRowValue(enabled),
+    // Not a ConfigScope tier — rendered with its own "[settings]" chip below.
+    scope: null,
+    locked: false,
+    reason: null,
+  };
+}
+
+function loadRows(
+  cwd: string,
+  resolveOpts?: ResolveWorkspaceConfigOptions,
+  settingsResolveOpts?: ConfigPanelProps["settingsResolveOpts"],
+): ConfigPanelRow[] {
+  const rows = buildConfigRows(resolveWorkspaceConfig(cwd, { ...resolveOpts, noCache: true }));
+  rows.push(loadConfirmScopeRow(cwd, settingsResolveOpts));
+  return rows;
 }
 
 /** The scope a row's edit/unset should target, or null with a notice when refused. */
@@ -90,21 +140,40 @@ export function ConfigPanel({
   onClose,
   active = true,
   resolveOpts,
+  settingsResolveOpts,
   width = 84,
 }: ConfigPanelProps): React.ReactElement {
-  const [rows, setRows] = useState<ConfigPanelRow[]>(() => loadRows(cwd, resolveOpts));
+  const [rows, setRows] = useState<ConfigPanelRow[]>(() =>
+    loadRows(cwd, resolveOpts, settingsResolveOpts),
+  );
   const [selected, setSelected] = useState(0);
   const [edit, setEdit] = useState<EditState | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback((): void => {
-    const next = loadRows(cwd, resolveOpts);
+    const next = loadRows(cwd, resolveOpts, settingsResolveOpts);
     setRows(next);
     setSelected((s) => Math.min(s, Math.max(0, next.length - 1)));
-  }, [cwd, resolveOpts]);
+  }, [cwd, resolveOpts, settingsResolveOpts]);
 
   const handleUnset = useCallback(
     (row: ConfigPanelRow): void => {
+      if (row.path === CONFIRM_SCOPE_PATH) {
+        try {
+          writeSettingsValue({
+            cwd,
+            ...settingsResolveOpts,
+            scope: "project",
+            key: "confirmScope",
+            value: "false",
+          });
+          setNotice("✓ confirmScope reset to false (default) in project scope (.oxagen/settings.json).");
+          refresh();
+        } catch (err) {
+          setNotice(err instanceof Error ? err.message : String(err));
+        }
+        return;
+      }
       if (row.scope === null) {
         setNotice(`${row.path} isn't set in any tier — nothing to unset.`);
         return;
@@ -135,7 +204,7 @@ export function ConfigPanel({
         setNotice(err instanceof Error ? err.message : String(err));
       }
     },
-    [cwd, refresh, resolveOpts],
+    [cwd, refresh, resolveOpts, settingsResolveOpts],
   );
 
   const beginEdit = useCallback((row: ConfigPanelRow): void => {
@@ -162,6 +231,29 @@ export function ConfigPanel({
         setEdit(null);
         return;
       }
+      if (state.row.path === CONFIRM_SCOPE_PATH) {
+        const normalized = value.toLowerCase();
+        if (normalized !== "true" && normalized !== "false") {
+          setNotice('confirmScope must be "true" or "false".');
+          setEdit(null);
+          return;
+        }
+        try {
+          writeSettingsValue({
+            cwd,
+            ...settingsResolveOpts,
+            scope: "project",
+            key: "confirmScope",
+            value: normalized,
+          });
+          setNotice(`✓ confirmScope = ${normalized} (project: .oxagen/settings.json).`);
+          refresh();
+        } catch (err) {
+          setNotice(err instanceof Error ? err.message : String(err));
+        }
+        setEdit(null);
+        return;
+      }
       const target = writableTarget(state.row);
       if ("refusal" in target) {
         setNotice(target.refusal);
@@ -185,7 +277,7 @@ export function ConfigPanel({
       }
       setEdit(null);
     },
-    [cwd, refresh, resolveOpts],
+    [cwd, refresh, resolveOpts, settingsResolveOpts],
   );
 
   useInput(
@@ -284,9 +376,13 @@ export function ConfigPanel({
                   </Text>
                 </Box>
                 <Box width={11} justifyContent="flex-end">
-                  <Text color={row.scope ? SCOPE_COLOR[row.scope] : undefined} dimColor={!row.scope}>
-                    [{row.scope ?? "unset"}]
-                  </Text>
+                  {row.path === CONFIRM_SCOPE_PATH ? (
+                    <Text color={theme.cyan}>[settings]</Text>
+                  ) : (
+                    <Text color={row.scope ? SCOPE_COLOR[row.scope] : undefined} dimColor={!row.scope}>
+                      [{row.scope ?? "unset"}]
+                    </Text>
+                  )}
                 </Box>
               </Box>
             );

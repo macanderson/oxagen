@@ -30,5 +30,12 @@
     "SessionStart": [],
     "PreToolUse": [],
     "PostToolUse": []
+  },
+  "mcpServers": {
+    "filesystem": {
+      "transport": "stdio",
+      "command": "npm",
+      "args": []
+    }
   }
 }

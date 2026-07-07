@@ -57,6 +57,33 @@ describe("writeSettingsValue", () => {
   });
 });
 
+describe("writeSettingsValue — confirmScope (boolean)", () => {
+  it("writes a real JSON boolean, not the string \"true\"", () => {
+    const path = writeSettingsValue({ scope: "project", key: "confirmScope", value: "true", cwd: dir });
+    const doc = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    expect(doc["confirmScope"]).toBe(true);
+    expect(typeof doc["confirmScope"]).toBe("boolean");
+  });
+
+  it("round-trips false through loadSettings", () => {
+    writeSettingsValue({ scope: "project", key: "confirmScope", value: "false", cwd: dir });
+    const reread = loadSettings({ cwd: dir, userSettingsPath: userPath, noCache: true }).settings;
+    expect(reread.confirmScope).toBe(false);
+  });
+
+  it("accepts case-insensitive / whitespace-padded boolean text", () => {
+    writeSettingsValue({ scope: "project", key: "confirmScope", value: "  TRUE  ", cwd: dir });
+    const reread = loadSettings({ cwd: dir, userSettingsPath: userPath, noCache: true }).settings;
+    expect(reread.confirmScope).toBe(true);
+  });
+
+  it("rejects a non-boolean value", () => {
+    expect(() =>
+      writeSettingsValue({ scope: "project", key: "confirmScope", value: "yes", cwd: dir }),
+    ).toThrow(/invalid boolean value/);
+  });
+});
+
 describe("writeStarterSettings", () => {
   it("creates a valid starter file and is idempotent", () => {
     const first = writeStarterSettings({ scope: "project", cwd: dir });

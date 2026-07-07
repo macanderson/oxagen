@@ -115,7 +115,13 @@ describe("DiffMessage — highlighted git diff (Feature B/C)", () => {
 });
 
 describe("ThinkingIndicator — idle since last progress (Bug 1)", () => {
-  it("surfaces an idle figure once progress stalls (no countdown-to-cancel)", () => {
+  it("surfaces a 'still working' heartbeat reassurance once progress stalls (no countdown-to-cancel)", () => {
+    // Superseded by the HEARTBEAT_SEC reassurance system: past HEARTBEAT_SEC
+    // (8s) of silence the indicator swaps "Thinking…" for "Still working…"
+    // and appends a "working Ns" chip naming how long progress has stalled,
+    // instead of the old bare "idle" label. There is still no countdown-to-
+    // auto-cancel wording ("left") — a turn is bounded by progress/per-call
+    // timeouts, not total elapsed time.
     const { lastFrame, unmount } = render(
       <ThinkingIndicator
         startedAt={Date.now() - 120_000}
@@ -124,14 +130,14 @@ describe("ThinkingIndicator — idle since last progress (Bug 1)", () => {
       />,
     );
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("Thinking…");
-    expect(frame).toContain("idle");
+    expect(frame).toContain("Still working…");
+    expect(frame).toContain("working 90s");
     // The old countdown wording must be gone.
     expect(frame).not.toContain("left");
     unmount();
   });
 
-  it("stays clean (no idle chip) when progress is fresh", () => {
+  it("stays clean (no heartbeat chip) when progress is fresh", () => {
     const { lastFrame, unmount } = render(
       <ThinkingIndicator
         startedAt={Date.now() - 3_000}
@@ -141,7 +147,8 @@ describe("ThinkingIndicator — idle since last progress (Bug 1)", () => {
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("Thinking…");
-    expect(frame).not.toContain("idle");
+    expect(frame).not.toContain("Still working…");
+    expect(frame).not.toContain("working ");
     unmount();
   });
 });
