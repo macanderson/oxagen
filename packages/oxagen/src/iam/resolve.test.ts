@@ -422,6 +422,36 @@ describe("resolve — Rule 5: workspace require_approval", () => {
   });
 });
 
+describe("resolve — capability aliases (ADR-022)", () => {
+  it("matches a role grant keyed by a legacy alias when capabilityAliases is supplied", () => {
+    // A role_grants row written under the OLD name before the rename.
+    const rg = makeRoleGrant({ capabilityId: "organization.create", effect: "allow" });
+    const result = resolve(
+      baseInput({
+        capability: "org.create",
+        capabilityAliases: ["org.create", "organization.create"],
+        roles: [makeRole()],
+        roleGrants: [rg],
+      }),
+    );
+    expect(result.outcome).toBe("allow");
+    expect(result.trace.decidedBy.rule).toBe("7:role_grant");
+  });
+
+  it("does NOT match an alias-keyed grant when no aliases are supplied (pre-alias behaviour)", () => {
+    const rg = makeRoleGrant({ capabilityId: "organization.create", effect: "allow" });
+    const result = resolve(
+      baseInput({
+        capability: "org.create",
+        roles: [makeRole()],
+        roleGrants: [rg],
+        defaultEffect: "deny",
+      }),
+    );
+    expect(result.outcome).toBe("deny");
+  });
+});
+
 describe("resolve — Rule 7: role-inherited grant", () => {
   it("role grant allow is used when no direct grants (rule 7)", () => {
     const role = makeRole();

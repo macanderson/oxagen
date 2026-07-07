@@ -4,7 +4,7 @@ import { notificationsMark } from "./notification.mark";
 describe("notifications.mark contract", () => {
   it("has the correct name and domain", () => {
     expect(notificationsMark.name).toBe("notification.mark");
-    expect(notificationsMark.domain).toBe("notifications");
+    expect(notificationsMark.domain).toBe("notification");
   });
 
   it("parses valid input with read=true", () => {

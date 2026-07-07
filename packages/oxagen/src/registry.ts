@@ -46,7 +46,7 @@ const aliasWarned: Set<string> =
 type AliasDeprecationSink = (alias: string, canonical: string) => void;
 let _aliasDeprecationSink: AliasDeprecationSink | null = null;
 
-export function setAliasDeprecationSink(sink: AliasDeprecationSink): void {
+export function setAliasDeprecationSink(sink: AliasDeprecationSink | null): void {
   _aliasDeprecationSink = sink;
 }
 
