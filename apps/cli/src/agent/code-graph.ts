@@ -72,6 +72,18 @@ export function getCodeGraph(cwd: string): Promise<CodeGraph> {
 }
 
 /**
+ * Prime the per-cwd code-graph cache in the background so the first turn's
+ * enhance stage hits a WARM graph instead of paying a cold tree-sitter build
+ * (135s+ on a large repo) on the critical path. Fire-and-forget: it kicks off
+ * (and memoizes) the same build `getCodeGraph` would, and swallows any error —
+ * a failed warm-up just means the first real query builds it, exactly as before.
+ * Call once at REPL/session startup.
+ */
+export function warmCodeGraph(cwd: string): void {
+  void getCodeGraph(cwd).catch(() => {});
+}
+
+/**
  * Load the code graph from the persistent store (incrementally refreshing it
  * first), falling back to an in-memory build when the store is unavailable.
  */

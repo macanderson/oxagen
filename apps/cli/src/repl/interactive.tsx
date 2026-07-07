@@ -40,7 +40,7 @@ import {
   type OnDeviceCoordinator,
 } from "../agent/adapters/on-device-agent-ai.js";
 import { getCoordinator, setCoordinator } from "../runtime/config.js";
-import { queryCodeGraph } from "../agent/code-graph.js";
+import { queryCodeGraph, warmCodeGraph } from "../agent/code-graph.js";
 import type { Session } from "../lib/session.js";
 import {
   resolveModelId,
@@ -764,6 +764,10 @@ export function ReplApp({
   }
 
   useEffect(() => {
+    // Warm the code-graph in the background at mount so the FIRST turn's enhance
+    // stage hits a built graph instead of paying a cold tree-sitter build on the
+    // critical path (previously the first prompt of a session ate that build).
+    warmCodeGraph(cwd);
     let mem: SessionMemory | null = null;
     // Guards the async-open race: if the component unmounts before
     // `openSessionMemory` resolves, the cleanup below runs while `mem` is still
