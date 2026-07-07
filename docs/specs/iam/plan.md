@@ -252,7 +252,7 @@ Drop the IAM tables in reverse FK order. ClickHouse table drop. Seed reverses cl
 ```ts
 // packages/oxagen/src/contracts/organization.create.ts
 export const organizationCreate = defineContract({
-  id: "organization.create",
+  id: "org.create",
   domain: "organization",
   description: "Create a new organization with an owner",
   sensitivity: "high",

@@ -19,7 +19,7 @@ import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
 // Side-effect import: bind every foundation handler into the shared kernel so
-// invoke("workspace.budget.policy.write", …) can resolve its handler. Without
+// invoke("workspace.budget_policy.write", …) can resolve its handler. Without
 // this, invoke() throws "No handler registered" at runtime.
 import "@oxagen/handlers/register";
 import { workspace } from "@/lib/routes";
@@ -110,7 +110,7 @@ export async function updateWorkspaceBudgetAction(
       // { surface: "agent" } — the contract's `surfaces` is
       // ["api","mcp","agent"] and does not include "app".
       await invoke(
-        "workspace.budget.policy.write",
+        "workspace.budget_policy.write",
         { enabled, limitUsd, mode, graceOveragePct, enforcement },
         ctx,
         { surface: "agent" },

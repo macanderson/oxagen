@@ -27,7 +27,7 @@
 - **Waterfalls in the heavy segments:**
   - `knowledge/graph/page.tsx` — 3 **sequential** `invoke()` calls (`semantic.edge.suggest`,
     `semantic.edge.list`, `graph.stats`). Worst offender.
-  - `activity/runs/page.tsx` — sequential resolves, then `invoke("agent.subagent.fanout.list")` then a
+  - `activity/runs/page.tsx` — sequential resolves, then `invoke("agent.subagent_fanout.list")` then a
     `withTenantDb` executions query, serial inside `runInTenantScope`.
   - `knowledge/sources/page.tsx` — single blocking `invoke("connection.list")` gates the whole page.
   - `billing/subscription/page.tsx` — two sequential `Promise.all` batches (batch 2 waits for all of batch 1).

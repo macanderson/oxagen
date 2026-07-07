@@ -458,11 +458,11 @@ Ideally use whatever structured observability wrapper (@oxagen/observability or 
 ```ts
 const parsed = agentTaskBackgroundRead.input.parse({ taskId });
   const out = await invoke(
-    "agent.task.background.read",
+    "agent.background_task.read",
     parsed,
     capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
     { surface: "agent" },
-  ) as import("@oxagen/oxagen/contracts/agent.task.background.read").AgentTaskBackgroundReadOutput;
+  ) as import("@oxagen/oxagen/contracts/agent.background_task.read").AgentTaskBackgroundReadOutput;
 ```
 
 <details><summary>Adversarial verification reasoning</summary>

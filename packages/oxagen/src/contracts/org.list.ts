@@ -22,7 +22,7 @@ export const orgListItemSchema = z.object({
 
 export const orgList = registerCapability({
   name: "org.list",
-  domain: "organization",
+  domain: "org",
   description:
     "List the organizations (tenants) the authenticated user belongs to, with the caller's role in each. Backs the CLI tenant picker.",
   mode: "sync",

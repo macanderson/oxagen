@@ -97,7 +97,7 @@ const fakeManifests = [
     category: "documents",
     icon: "notebook-pen",
     color: "#10b981",
-    contracts: ["documents.generate"],
+    contracts: ["document.generate"],
     scopes: [],
   },
   {

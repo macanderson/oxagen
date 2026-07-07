@@ -39,10 +39,10 @@ vi.mock("@oxagen/handlers/logger", () => ({
 // Only the background.read contract is exercised here; stub the rest minimally.
 vi.mock("@oxagen/oxagen/contracts/chat.message.send", () => ({ chatMessageSend: { input: { safeParse: () => ({ success: true, data: {} }) } } }));
 vi.mock("@oxagen/oxagen/contracts/agent.approval.resolve", () => ({ agentApprovalResolve: { input: { safeParse: () => ({ success: true, data: {} }) } } }));
-vi.mock("@oxagen/oxagen/contracts/agent.mcp.consent.resolve", () => ({ agentMcpConsentResolve: { input: { safeParse: () => ({ success: true, data: {} }) } } }));
+vi.mock("@oxagen/oxagen/contracts/agent.mcp_consent.resolve", () => ({ agentMcpConsentResolve: { input: { safeParse: () => ({ success: true, data: {} }) } } }));
 vi.mock("@oxagen/oxagen/contracts/agent.plan.approve", () => ({ agentPlanApprove: { input: { safeParse: () => ({ success: true, data: {} }) } } }));
-vi.mock("@oxagen/oxagen/contracts/agent.task.background.cancel", () => ({ agentTaskBackgroundCancel: { input: { safeParse: () => ({ success: true, data: {} }) } } }));
-vi.mock("@oxagen/oxagen/contracts/agent.task.background.read", () => ({
+vi.mock("@oxagen/oxagen/contracts/agent.background_task.cancel", () => ({ agentTaskBackgroundCancel: { input: { safeParse: () => ({ success: true, data: {} }) } } }));
+vi.mock("@oxagen/oxagen/contracts/agent.background_task.read", () => ({
   agentTaskBackgroundRead: {
     input: {
       safeParse: (raw: { taskId: string }) =>

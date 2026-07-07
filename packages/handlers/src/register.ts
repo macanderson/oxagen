@@ -19,15 +19,15 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .agentComposeHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "agent.memory.policy.read",
+    "agent.memory_policy.read",
     async () =>
-      (await import("./agent.memory.policy.read"))
+      (await import("./agent.memory_policy.read"))
         .agentMemoryPolicyReadHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "agent.memory.policy.write",
+    "agent.memory_policy.write",
     async () =>
-      (await import("./agent.memory.policy.write"))
+      (await import("./agent.memory_policy.write"))
         .agentMemoryPolicyWriteHandler as CapabilityHandlerFn,
   );
   registerHandler(
@@ -67,9 +67,9 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .assetUploadHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "organization.create",
+    "org.create",
     async () =>
-      (await import("./organization.create"))
+      (await import("./org.create"))
         .organizationCreateHandler as CapabilityHandlerFn,
   );
   registerHandler(
@@ -102,9 +102,9 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .billingUsageBreakdownHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "billing.subscription.upgrade.start",
+    "billing.subscription_upgrade.start",
     async () =>
-      (await import("./billing.subscription.upgrade.start"))
+      (await import("./billing.subscription_upgrade.start"))
         .billingSubscriptionUpgradeStartHandler as CapabilityHandlerFn,
   );
   registerHandler(
@@ -131,15 +131,15 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .archiveCreateHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "documents.generate",
+    "document.generate",
     async () =>
-      (await import("./documents.generate"))
+      (await import("./document.generate"))
         .documentsGenerateHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "documents.pdf.create",
+    "document.pdf.create",
     async () =>
-      (await import("./documents.pdf.create"))
+      (await import("./document.pdf.create"))
         .documentsPdfCreateHandler as CapabilityHandlerFn,
   );
   registerHandler(
@@ -186,15 +186,15 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .orgMemberAddHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "org.member.invite.accept",
+    "org.member_invite.accept",
     async () =>
-      (await import("./org.member.invite.accept"))
+      (await import("./org.member_invite.accept"))
         .orgMemberInviteAcceptHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "org.member.invite.decline",
+    "org.member_invite.decline",
     async () =>
-      (await import("./org.member.invite.decline"))
+      (await import("./org.member_invite.decline"))
         .orgMemberInviteDeclineHandler as CapabilityHandlerFn,
   );
   registerHandler(
@@ -204,9 +204,9 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .orgMemberRemoveHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "org.member.role.change",
+    "org.member_role.change",
     async () =>
-      (await import("./org.member.role.change"))
+      (await import("./org.member_role.change"))
         .orgMemberRoleChangeHandler as CapabilityHandlerFn,
   );
   registerHandler(
@@ -234,15 +234,15 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .budgetPolicyWriteHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "workspace.model.settings.read",
+    "workspace.model_settings.read",
     async () =>
-      (await import("./workspace.model.settings.read"))
+      (await import("./workspace.model_settings.read"))
         .workspaceModelSettingsReadHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "workspace.model.settings.write",
+    "workspace.model_settings.write",
     async () =>
-      (await import("./workspace.model.settings.write"))
+      (await import("./workspace.model_settings.write"))
         .workspaceModelSettingsWriteHandler as CapabilityHandlerFn,
   );
   registerHandler(
@@ -399,14 +399,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .handler as CapabilityHandlerFn,
   );
   registerHandler(
-    "notifications.list",
+    "notification.list",
     async () =>
-      (await import("./notifications.list")).handler as CapabilityHandlerFn,
+      (await import("./notification.list")).handler as CapabilityHandlerFn,
   );
   registerHandler(
-    "notifications.mark",
+    "notification.mark",
     async () =>
-      (await import("./notifications.mark")).handler as CapabilityHandlerFn,
+      (await import("./notification.mark")).handler as CapabilityHandlerFn,
   );
   registerHandler(
     "plugin.settings.set_auth_alerts",
@@ -439,15 +439,15 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .workspaceMemberListHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "workspace.budget.policy.read",
+    "workspace.budget_policy.read",
     async () =>
-      (await import("./workspace.budget.policy.read"))
+      (await import("./workspace.budget_policy.read"))
         .workspaceBudgetPolicyReadHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "workspace.budget.policy.write",
+    "workspace.budget_policy.write",
     async () =>
-      (await import("./workspace.budget.policy.write"))
+      (await import("./workspace.budget_policy.write"))
         .workspaceBudgetPolicyWriteHandler as CapabilityHandlerFn,
   );
   registerHandler(
@@ -683,21 +683,21 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .graphNodeUpsertHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "graph.node.label.add",
+    "graph.node_label.add",
     async () =>
-      (await import("./graph.node.label.add"))
+      (await import("./graph.node_label.add"))
         .graphNodeLabelAddHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "graph.node.label.remove",
+    "graph.node_label.remove",
     async () =>
-      (await import("./graph.node.label.remove"))
+      (await import("./graph.node_label.remove"))
         .graphNodeLabelRemoveHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "graph.node.labels.get",
+    "graph.node_label.get",
     async () =>
-      (await import("./graph.node.labels.get"))
+      (await import("./graph.node_label.get"))
         .graphNodeLabelsGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
@@ -1180,9 +1180,9 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .evalDatasetGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "eval.dataset.item.add",
+    "eval.dataset_item.add",
     async () =>
-      (await import("./eval.dataset.item.add"))
+      (await import("./eval.dataset_item.add"))
         .evalDatasetItemAddHandler as CapabilityHandlerFn,
   );
   registerHandler(

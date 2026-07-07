@@ -294,14 +294,14 @@ describe("agent.skill.list handler", () => {
 import handler_agentTaskBackgroundCancel, {
   schema as agentTaskBackgroundCancelSchema,
   metadata as agentTaskBackgroundCancelMetadata,
-} from "./agent.task.background.cancel";
+} from "./agent.background_task.cancel";
 
 describe("agent.task.background.cancel handler", () => {
   const validOutput = { taskId: "task_1", status: "cancelled" as const };
 
   it("exports schema and metadata", () => {
     expect(agentTaskBackgroundCancelSchema).toBeDefined();
-    expect(agentTaskBackgroundCancelMetadata.name).toBe("agent.task.background.cancel");
+    expect(agentTaskBackgroundCancelMetadata.name).toBe("agent.background_task.cancel");
   });
 
   it("calls invoke with cancel args", async () => {
@@ -310,7 +310,7 @@ describe("agent.task.background.cancel handler", () => {
     await handler_agentTaskBackgroundCancel(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "agent.task.background.cancel",
+      "agent.background_task.cancel",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -323,7 +323,7 @@ describe("agent.task.background.cancel handler", () => {
 import handler_agentTaskBackgroundRead, {
   schema as agentTaskBackgroundReadSchema,
   metadata as agentTaskBackgroundReadMetadata,
-} from "./agent.task.background.read";
+} from "./agent.background_task.read";
 
 describe("agent.task.background.read handler", () => {
   const validOutput = {
@@ -340,7 +340,7 @@ describe("agent.task.background.read handler", () => {
 
   it("exports schema and metadata", () => {
     expect(agentTaskBackgroundReadSchema).toBeDefined();
-    expect(agentTaskBackgroundReadMetadata.name).toBe("agent.task.background.read");
+    expect(agentTaskBackgroundReadMetadata.name).toBe("agent.background_task.read");
   });
 
   it("calls invoke with read args", async () => {
@@ -349,7 +349,7 @@ describe("agent.task.background.read handler", () => {
     const result = await handler_agentTaskBackgroundRead(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "agent.task.background.read",
+      "agent.background_task.read",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -363,14 +363,14 @@ describe("agent.task.background.read handler", () => {
 import handler_agentTaskBackgroundStart, {
   schema as agentTaskBackgroundStartSchema,
   metadata as agentTaskBackgroundStartMetadata,
-} from "./agent.task.background.start";
+} from "./agent.background_task.start";
 
 describe("agent.task.background.start handler", () => {
   const validOutput = { taskId: "task_1", inngestRunId: "inngest_run_1" };
 
   it("exports schema and metadata", () => {
     expect(agentTaskBackgroundStartSchema).toBeDefined();
-    expect(agentTaskBackgroundStartMetadata.name).toBe("agent.task.background.start");
+    expect(agentTaskBackgroundStartMetadata.name).toBe("agent.background_task.start");
   });
 
   it("calls invoke with start args", async () => {
@@ -379,7 +379,7 @@ describe("agent.task.background.start handler", () => {
     const result = await handler_agentTaskBackgroundStart(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "agent.task.background.start",
+      "agent.background_task.start",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -628,12 +628,12 @@ describe("agent.trigger.list handler", () => {
 import handler_agentSubagentFanoutList, {
   schema as agentSubagentFanoutListSchema,
   metadata as agentSubagentFanoutListMetadata,
-} from "./agent.subagent.fanout.list";
+} from "./agent.subagent_fanout.list";
 
 describe("agent.subagent.fanout.list handler", () => {
   it("exports schema and metadata", () => {
     expect(agentSubagentFanoutListSchema).toBeDefined();
-    expect(agentSubagentFanoutListMetadata.name).toBe("agent.subagent.fanout.list");
+    expect(agentSubagentFanoutListMetadata.name).toBe("agent.subagent_fanout.list");
     expect(agentSubagentFanoutListMetadata.annotations?.readOnlyHint).toBe(true);
   });
 
@@ -643,7 +643,7 @@ describe("agent.subagent.fanout.list handler", () => {
     const result = await handler_agentSubagentFanoutList(args as never);
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "agent.subagent.fanout.list",
+      "agent.subagent_fanout.list",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -664,7 +664,7 @@ describe("agent.subagent.fanout.list handler", () => {
 import handler_agentSubagentFanoutGet, {
   schema as agentSubagentFanoutGetSchema,
   metadata as agentSubagentFanoutGetMetadata,
-} from "./agent.subagent.fanout.get";
+} from "./agent.subagent_fanout.get";
 
 describe("agent.subagent.fanout.get handler", () => {
   const validOutput = {
@@ -680,7 +680,7 @@ describe("agent.subagent.fanout.get handler", () => {
 
   it("exports schema and metadata", () => {
     expect(agentSubagentFanoutGetSchema).toBeDefined();
-    expect(agentSubagentFanoutGetMetadata.name).toBe("agent.subagent.fanout.get");
+    expect(agentSubagentFanoutGetMetadata.name).toBe("agent.subagent_fanout.get");
   });
 
   it("forwards fanoutId to invoke and parses the output", async () => {
@@ -688,7 +688,7 @@ describe("agent.subagent.fanout.get handler", () => {
     const args = { fanoutId: "fan_1" };
     const result = await handler_agentSubagentFanoutGet(args as never);
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "agent.subagent.fanout.get",
+      "agent.subagent_fanout.get",
       args,
       fakeCtx,
       { surface: "mcp" },

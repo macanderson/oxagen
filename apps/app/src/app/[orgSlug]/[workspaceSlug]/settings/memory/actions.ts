@@ -10,7 +10,7 @@ import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 // agent.* capabilities (e.g. agent.memory.policy.write) bind via the agent register.
 import "@oxagen/agent/register";
-import type { AgentMemoryPolicyWriteOutput } from "@oxagen/oxagen/contracts/agent.memory.policy.write";
+import type { AgentMemoryPolicyWriteOutput } from "@oxagen/oxagen/contracts/agent.memory_policy.write";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 
@@ -112,7 +112,7 @@ export async function saveMemoryPolicyAction(
       // ["api","mcp","agent"] and does NOT include "app"; passing "app" throws
       // surface_denied. (Same as the workspace.settings.write precedent.)
       await invoke(
-        "agent.memory.policy.write",
+        "agent.memory_policy.write",
         {
           halfLifeLowDays,
           halfLifeHighDays,
@@ -171,7 +171,7 @@ export async function readMemoryPolicyAction(args: {
       messageId: null as string | null,
     };
     const result = await invoke(
-      "agent.memory.policy.read",
+      "agent.memory_policy.read",
       {},
       ctx,
       { surface: "agent" },

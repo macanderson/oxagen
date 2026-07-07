@@ -15,7 +15,7 @@ const fileRenderDirective = z.object({
 
 export const archiveCreate = registerCapability({
   name: "archive.create",
-  domain: "documents",
+  domain: "document",
   description:
     "Bundle one or more items — existing generated assets, inline base64 blobs, or plain text — " +
     "into a ZIP archive. The archive is built in-process with fflate, uploaded to blob storage, " +

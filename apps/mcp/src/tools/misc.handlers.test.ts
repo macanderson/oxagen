@@ -41,12 +41,12 @@ beforeEach(() => {
 import handler_notificationsList, {
   schema as notificationsListSchema,
   metadata as notificationsListMetadata,
-} from "./notifications.list";
+} from "./notification.list";
 
 describe("notifications.list handler", () => {
   it("exports schema and metadata", () => {
     expect(notificationsListSchema).toBeDefined();
-    expect(notificationsListMetadata.name).toBe("notifications.list");
+    expect(notificationsListMetadata.name).toBe("notification.list");
   });
 
   it("calls buildContext then invoke with correct args", async () => {
@@ -58,7 +58,7 @@ describe("notifications.list handler", () => {
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "notifications.list",
+      "notification.list",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -79,12 +79,12 @@ describe("notifications.list handler", () => {
 import handler_notificationsMark, {
   schema as notificationsMarkSchema,
   metadata as notificationsMarkMetadata,
-} from "./notifications.mark";
+} from "./notification.mark";
 
 describe("notifications.mark handler", () => {
   it("exports schema and metadata", () => {
     expect(notificationsMarkSchema).toBeDefined();
-    expect(notificationsMarkMetadata.name).toBe("notifications.mark");
+    expect(notificationsMarkMetadata.name).toBe("notification.mark");
   });
 
   it("calls invoke with mark args", async () => {
@@ -99,7 +99,7 @@ describe("notifications.mark handler", () => {
     await handler_notificationsMark(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "notifications.mark",
+      "notification.mark",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -144,12 +144,12 @@ describe("org.member.add handler", () => {
 import handler_orgMemberInviteAccept, {
   schema as orgMemberInviteAcceptSchema,
   metadata as orgMemberInviteAcceptMetadata,
-} from "./org.member.invite.accept";
+} from "./org.member_invite.accept";
 
 describe("org.member.invite.accept handler", () => {
   it("exports schema and metadata", () => {
     expect(orgMemberInviteAcceptSchema).toBeDefined();
-    expect(orgMemberInviteAcceptMetadata.name).toBe("org.member.invite.accept");
+    expect(orgMemberInviteAcceptMetadata.name).toBe("org.member_invite.accept");
   });
 
   it("calls invoke with invite accept args", async () => {
@@ -165,7 +165,7 @@ describe("org.member.invite.accept handler", () => {
     await handler_orgMemberInviteAccept(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "org.member.invite.accept",
+      "org.member_invite.accept",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -178,13 +178,13 @@ describe("org.member.invite.accept handler", () => {
 import handler_orgMemberInviteDecline, {
   schema as orgMemberInviteDeclineSchema,
   metadata as orgMemberInviteDeclineMetadata,
-} from "./org.member.invite.decline";
+} from "./org.member_invite.decline";
 
 describe("org.member.invite.decline handler", () => {
   it("exports schema and metadata", () => {
     expect(orgMemberInviteDeclineSchema).toBeDefined();
     expect(orgMemberInviteDeclineMetadata.name).toBe(
-      "org.member.invite.decline",
+      "org.member_invite.decline",
     );
   });
 
@@ -196,7 +196,7 @@ describe("org.member.invite.decline handler", () => {
     await handler_orgMemberInviteDecline(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "org.member.invite.decline",
+      "org.member_invite.decline",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -242,12 +242,12 @@ describe("org.member.remove handler", () => {
 import handler_orgMemberRoleChange, {
   schema as orgMemberRoleChangeSchema,
   metadata as orgMemberRoleChangeMetadata,
-} from "./org.member.role.change";
+} from "./org.member_role.change";
 
 describe("org.member.role.change handler", () => {
   it("exports schema and metadata", () => {
     expect(orgMemberRoleChangeSchema).toBeDefined();
-    expect(orgMemberRoleChangeMetadata.name).toBe("org.member.role.change");
+    expect(orgMemberRoleChangeMetadata.name).toBe("org.member_role.change");
   });
 
   it("calls invoke with role change args", async () => {
@@ -264,7 +264,7 @@ describe("org.member.role.change handler", () => {
     await handler_orgMemberRoleChange(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "org.member.role.change",
+      "org.member_role.change",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -277,12 +277,12 @@ describe("org.member.role.change handler", () => {
 import handler_organizationCreate, {
   schema as organizationCreateSchema,
   metadata as organizationCreateMetadata,
-} from "./organization.create";
+} from "./org.create";
 
 describe("organization.create handler", () => {
   it("exports schema and metadata", () => {
     expect(organizationCreateSchema).toBeDefined();
-    expect(organizationCreateMetadata.name).toBe("organization.create");
+    expect(organizationCreateMetadata.name).toBe("org.create");
   });
 
   it("calls invoke with create args", async () => {
@@ -309,7 +309,7 @@ describe("organization.create handler", () => {
     await handler_organizationCreate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "organization.create",
+      "org.create",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -448,13 +448,13 @@ describe("user.preferences.write handler", () => {
 import handler_workspaceModelSettingsRead, {
   schema as workspaceModelSettingsReadSchema,
   metadata as workspaceModelSettingsReadMetadata,
-} from "./workspace.model.settings.read";
+} from "./workspace.model_settings.read";
 
 describe("workspace.model.settings.read handler", () => {
   it("exports schema and metadata", () => {
     expect(workspaceModelSettingsReadSchema).toBeDefined();
     expect(workspaceModelSettingsReadMetadata.name).toBe(
-      "workspace.model.settings.read",
+      "workspace.model_settings.read",
     );
   });
 
@@ -470,7 +470,7 @@ describe("workspace.model.settings.read handler", () => {
     await handler_workspaceModelSettingsRead({});
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "workspace.model.settings.read",
+      "workspace.model_settings.read",
       {},
       fakeCtx,
       { surface: "mcp" },
@@ -483,13 +483,13 @@ describe("workspace.model.settings.read handler", () => {
 import handler_workspaceModelSettingsWrite, {
   schema as workspaceModelSettingsWriteSchema,
   metadata as workspaceModelSettingsWriteMetadata,
-} from "./workspace.model.settings.write";
+} from "./workspace.model_settings.write";
 
 describe("workspace.model.settings.write handler", () => {
   it("exports schema and metadata", () => {
     expect(workspaceModelSettingsWriteSchema).toBeDefined();
     expect(workspaceModelSettingsWriteMetadata.name).toBe(
-      "workspace.model.settings.write",
+      "workspace.model_settings.write",
     );
   });
 
@@ -511,7 +511,7 @@ describe("workspace.model.settings.write handler", () => {
     await handler_workspaceModelSettingsWrite(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "workspace.model.settings.write",
+      "workspace.model_settings.write",
       args,
       fakeCtx,
       { surface: "mcp" },

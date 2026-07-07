@@ -65,8 +65,8 @@ describe("getOxagenPlugin", () => {
   it("returns the documents manifest with correct contracts", () => {
     const plugin = getOxagenPlugin("oxagen/documents");
     expect(plugin).toBeDefined();
-    expect(plugin?.contracts).toContain("documents.generate");
-    expect(plugin?.contracts).toContain("documents.pdf.create");
+    expect(plugin?.contracts).toContain("document.generate");
+    expect(plugin?.contracts).toContain("document.pdf.create");
     expect(plugin?.contracts).toContain("markdown.generate");
     expect(plugin?.contracts).toContain("mermaid.generate");
     expect(plugin?.category).toBe("documents");
@@ -86,8 +86,8 @@ describe("pluginForContract", () => {
       ["image.analyze", "oxagen/media-image"],
       ["image.list", "oxagen/media-image"],
       ["svg.generate", "oxagen/media-svg"],
-      ["documents.generate", "oxagen/documents"],
-      ["documents.pdf.create", "oxagen/documents"],
+      ["document.generate", "oxagen/documents"],
+      ["document.pdf.create", "oxagen/documents"],
       ["markdown.generate", "oxagen/documents"],
       ["mermaid.generate", "oxagen/documents"],
     ];

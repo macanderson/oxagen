@@ -23,7 +23,7 @@
     ],
     "chainHints": [
       "graph.ingest",
-      "documents.generate"
+      "document.generate"
     ]
   },
   "render": {

@@ -23,7 +23,7 @@ const ORG_ID = "org_aaa";
 const WORKSPACE_ID = "ws_bbb";
 const PRINCIPAL_ID = "prn_ccc";
 const ROLE_ID = "rol_ddd";
-const CAPABILITY = "organization.create";
+const CAPABILITY = "org.create";
 
 const basePrincipal: TestPrincipal = {
   id: PRINCIPAL_ID,
@@ -419,6 +419,36 @@ describe("resolve — Rule 5: workspace require_approval", () => {
     const result = resolve(baseInput({ grants: [wsApproval], scope: wsScope }));
     expect(result.outcome).toBe("pending_approval");
     expect(result.trace.decidedBy.rule).toBe("5:workspace_require_approval");
+  });
+});
+
+describe("resolve — capability aliases (ADR-022)", () => {
+  it("matches a role grant keyed by a legacy alias when capabilityAliases is supplied", () => {
+    // A role_grants row written under the OLD name before the rename.
+    const rg = makeRoleGrant({ capabilityId: "organization.create", effect: "allow" });
+    const result = resolve(
+      baseInput({
+        capability: "org.create",
+        capabilityAliases: ["org.create", "organization.create"],
+        roles: [makeRole()],
+        roleGrants: [rg],
+      }),
+    );
+    expect(result.outcome).toBe("allow");
+    expect(result.trace.decidedBy.rule).toBe("7:role_grant");
+  });
+
+  it("does NOT match an alias-keyed grant when no aliases are supplied (pre-alias behaviour)", () => {
+    const rg = makeRoleGrant({ capabilityId: "organization.create", effect: "allow" });
+    const result = resolve(
+      baseInput({
+        capability: "org.create",
+        roles: [makeRole()],
+        roleGrants: [rg],
+        defaultEffect: "deny",
+      }),
+    );
+    expect(result.outcome).toBe("deny");
   });
 });
 

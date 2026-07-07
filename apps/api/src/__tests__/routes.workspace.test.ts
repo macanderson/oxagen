@@ -116,11 +116,11 @@ describe("organization.create route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'organization.create'", async () => {
+  it("calls invoke with 'org.create'", async () => {
     await app.fetch(
       post(PATH, { name: "Acme Corp", slug: "acme-corp" }, V1),
     );
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("organization.create");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("org.create");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.name).toBe("Acme Corp");
     expect(body.slug).toBe("acme-corp");
@@ -192,9 +192,9 @@ describe("workspace.model.settings.read route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'workspace.model.settings.read' and empty input", async () => {
+  it("calls invoke with 'workspace.model_settings.read' and empty input", async () => {
     await app.fetch(get(PATH));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workspace.model.settings.read");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workspace.model_settings.read");
     expect(mocks.invoke.mock.calls[0]?.[1]).toEqual({});
   });
 });
@@ -224,7 +224,7 @@ describe("workspace.model.settings.write route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'workspace.model.settings.write'", async () => {
+  it("calls invoke with 'workspace.model_settings.write'", async () => {
     await app.fetch(
       makeRequest(`${BASE}${PATH}`, {
         method: "PATCH",
@@ -232,7 +232,7 @@ describe("workspace.model.settings.write route", () => {
         body: JSON.stringify({ defaultTextTier: "fast" }),
       }),
     );
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workspace.model.settings.write");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("workspace.model_settings.write");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.defaultTextTier).toBe("fast");
   });
@@ -297,9 +297,9 @@ describe("org.member.invite.accept route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'org.member.invite.accept'", async () => {
+  it("calls invoke with 'org.member_invite.accept'", async () => {
     await app.fetch(post(PATH, { invitationPublicId: "inv_xyz" }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("org.member.invite.accept");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("org.member_invite.accept");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.invitationPublicId).toBe("inv_xyz");
   });
@@ -321,9 +321,9 @@ describe("org.member.invite.decline route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'org.member.invite.decline'", async () => {
+  it("calls invoke with 'org.member_invite.decline'", async () => {
     await app.fetch(post(PATH, { invitationPublicId: "inv_xyz" }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("org.member.invite.decline");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("org.member_invite.decline");
   });
 });
 
@@ -383,7 +383,7 @@ describe("org.member.role.change route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'org.member.role.change'", async () => {
+  it("calls invoke with 'org.member_role.change'", async () => {
     await app.fetch(
       makeRequest(`${BASE}${PATH}`, {
         method: "PATCH",
@@ -391,7 +391,7 @@ describe("org.member.role.change route", () => {
         body: JSON.stringify({ targetUserId: "usr-1", newRole: "Billing" }),
       }),
     );
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("org.member.role.change");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("org.member_role.change");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.newRole).toBe("Billing");
   });
@@ -471,9 +471,9 @@ describe("notifications.list route", () => {
     expect(await res.json()).toEqual({ notifications: [] });
   });
 
-  it("calls invoke with 'notifications.list' and defaults", async () => {
+  it("calls invoke with 'notification.list' and defaults", async () => {
     await app.fetch(get(PATH));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("notifications.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("notification.list");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     // defaults: unreadOnly=false, limit=50
     expect(body.unreadOnly).toBe(false);
@@ -534,9 +534,9 @@ describe("notifications.mark route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("calls invoke with 'notifications.mark'", async () => {
+  it("calls invoke with 'notification.mark'", async () => {
     await app.fetch(post(PATH, { id: "ntf_xyz", archived: true }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("notifications.mark");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("notification.mark");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.id).toBe("ntf_xyz");
     expect(body.archived).toBe(true);

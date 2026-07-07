@@ -108,7 +108,7 @@ export const roleGrants = iamSchema.table(
     ...auditMixin(),
     orgId: uuid("org_id").notNull(),
     roleId: uuid("role_id").notNull(),
-    // Capability identifier string (e.g. "organization.create").
+    // Capability identifier string (e.g. "org.create").
     // Not a FK — capability metadata lives on the contract objects, not a DB
     // table. Phase 3 (OXA-1390) will validate this at write time.
     capabilityId: text("capability_id").notNull(),

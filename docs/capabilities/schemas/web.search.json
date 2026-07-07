@@ -24,7 +24,7 @@
     ],
     "chainHints": [
       "graph.node.upsert",
-      "documents.generate"
+      "document.generate"
     ]
   },
   "render": {

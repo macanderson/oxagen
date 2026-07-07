@@ -20,7 +20,7 @@ import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
 import { conversationListHandler } from "@oxagen/handlers/conversation.list";
 import { logger } from "@oxagen/handlers/logger";
 // Side-effect import: bind every foundation handler into the shared kernel so
-// invoke("workspace.budget.policy.read", …) below can resolve its handler.
+// invoke("workspace.budget_policy.read", …) below can resolve its handler.
 // Without this the call silently throws "No handler registered" (see CLAUDE.md
 // gotcha) — caught below and treated as fail-open null governance regardless.
 import "@oxagen/handlers/register";
@@ -307,7 +307,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
       // check) degrades to `null` (no governance) so a broken governance row
       // never blocks the chat page from rendering.
       runInTenantScope({ orgId: tenant.id, workspaceId: workspace.id }, () =>
-        invoke("workspace.budget.policy.read", {}, userCtx, { surface: "agent" }),
+        invoke("workspace.budget_policy.read", {}, userCtx, { surface: "agent" }),
       )
         .then(
           (raw): WorkspaceBudgetGovernance => {
