@@ -31,6 +31,14 @@ export const agentDefinitionList = registerCapability({
         slug: z.string(),
         name: z.string(),
         description: z.string().nullable(),
+        /**
+         * The agent's type discriminator (free-form; e.g. `custom`,
+         * `interactive_chat`, or `code`). Surfaced so callers — notably the
+         * app's new-session agent selector — can classify a code agent
+         * (`agentType === "code"`, see isCodeAgentType) and gate the repo/code
+         * tooling + UI accordingly.
+         */
+        agentType: z.string(),
         status: z.enum(["draft", "active", "archived"]),
         deploymentStatus: z.enum(["inactive", "active"]),
         latestVersion: z.number().int().nullable(),

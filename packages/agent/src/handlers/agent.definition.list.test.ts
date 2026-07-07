@@ -46,6 +46,27 @@ describe("agent.definition.list handler", () => {
     expect(out.agents).toHaveLength(2);
     expect(out.agents[0]!.agentId).toBe("agt_1");
     expect(out.agents[1]!.latestVersion).toBeNull();
+    // agentType is surfaced so the selector can classify code vs chat agents.
+    expect(out.agents[0]!.agentType).toBe("interactive_chat");
+    expect(out.agents[1]!.agentType).toBe("custom");
+  });
+
+  it("surfaces agentType 'code' so callers can flag a code agent", async () => {
+    fake.enqueue([
+      {
+        id: "uuid-3",
+        publicId: "agt_3",
+        slug: "repo-fixer",
+        name: "Repo Fixer",
+        description: null,
+        agentType: "code",
+        status: "active",
+        deploymentStatus: "active",
+        latestVersion: 1,
+      },
+    ]);
+    const out = await agentDefinitionListHandler({}, CTX);
+    expect(out.agents[0]!.agentType).toBe("code");
   });
 
   it("sets managed=true for an interactive_chat agent", async () => {
