@@ -37,6 +37,14 @@ interface RepoSelectorProps {
    * target on phones — pass a class to override from the parent layout.
    */
   className?: string;
+  /**
+   * Accessible label for the trigger. Defaults to "Select repository". The
+   * pin context bar overrides it ("Pinned repository") so the always-visible
+   * pin selector doesn't collide with the code-mode toolbar's selector in
+   * tests / a11y trees when both can appear.
+   */
+  ariaLabel?: string;
+  placeholder?: string;
 }
 
 export function RepoSelector({
@@ -45,6 +53,8 @@ export function RepoSelector({
   onSelectRepo,
   isLoading = false,
   className,
+  ariaLabel = "Select repository",
+  placeholder = "Select repository",
 }: RepoSelectorProps) {
   return (
     <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
@@ -59,9 +69,17 @@ export function RepoSelector({
       >
         <SelectTrigger
           className={cn("min-h-11 w-full sm:min-h-0 sm:w-48", className)}
-          aria-label="Select repository"
+          aria-label={ariaLabel}
         >
-          <SelectValue placeholder="Select repository" />
+          {/* Resolve the label with a function child so a programmatically-set
+              value (e.g. a rehydrated pin) shows owner/name, not the raw repo
+              key — the SelectItems aren't mounted until the popup first opens. */}
+          <SelectValue placeholder={placeholder}>
+            {(value: string | null) => {
+              const repo = value ? repositories.find((r) => r.key === value) : null;
+              return repo ? `${repo.owner}/${repo.name}` : placeholder;
+            }}
+          </SelectValue>
         </SelectTrigger>
         <SelectPopup>
           {repositories.map((repo) => (

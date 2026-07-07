@@ -299,6 +299,39 @@ const STRUCTURAL_RENDER_TRANSFORMS: Readonly<
       },
     };
   },
+  // repo.pr.get output IS the pr-stats card's props (the card interface mirrors
+  // the contract output field-for-field), so this is a guarded pass-through.
+  "repo.pr.get": (output) => {
+    if (!isRecord(output) || typeof output.number !== "number") return null;
+    return { componentId: "pr-stats", props: output };
+  },
+  // repo.ci.status output IS the ci-status card's props.
+  "repo.ci.status": (output) => {
+    if (!isRecord(output) || !Array.isArray(output.runs)) return null;
+    return { componentId: "ci-status", props: output };
+  },
+  // repo.pr.diff → the existing code-diff card. Map the PR file list onto the
+  // card's flat {path, patch, additions, deletions} shape; parseUnifiedDiff
+  // renders full hunks from the real `patch` text.
+  "repo.pr.diff": (output) => {
+    if (!isRecord(output) || !Array.isArray(output.files)) return null;
+    const files = output.files
+      .filter(isRecord)
+      .map((f) => ({
+        path: typeof f.path === "string" ? f.path : "file",
+        patch: typeof f.patch === "string" ? f.patch : null,
+        additions: typeof f.additions === "number" ? f.additions : null,
+        deletions: typeof f.deletions === "number" ? f.deletions : null,
+      }));
+    if (files.length === 0) return null;
+    return {
+      componentId: "code-diff",
+      props: {
+        files,
+        summary: typeof output.summary === "string" ? output.summary : undefined,
+      },
+    };
+  },
 };
 
 // ── Curated render hints (prioritized capabilities) ──────────────────────────

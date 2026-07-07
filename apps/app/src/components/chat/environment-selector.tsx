@@ -36,6 +36,13 @@ interface EnvironmentSelectorProps {
    * target on phones — pass a class to override from the parent layout.
    */
   className?: string;
+  /**
+   * Accessible label for the trigger. Defaults to "Select environment". The
+   * pin context bar overrides it ("Pinned environment") so the always-visible
+   * pin selector doesn't collide with the code-mode toolbar's selector.
+   */
+  ariaLabel?: string;
+  placeholder?: string;
 }
 
 export function EnvironmentSelector({
@@ -44,6 +51,8 @@ export function EnvironmentSelector({
   onSelectEnv,
   isLoading = false,
   className,
+  ariaLabel = "Select environment",
+  placeholder = "Select environment",
 }: EnvironmentSelectorProps) {
   return (
     <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
@@ -57,9 +66,18 @@ export function EnvironmentSelector({
       >
         <SelectTrigger
           className={cn("min-h-11 w-full sm:min-h-0 sm:w-40", className)}
-          aria-label="Select environment"
+          aria-label={ariaLabel}
         >
-          <SelectValue placeholder="Select environment" />
+          {/* Resolve the label from the value with a function child so a
+              programmatically-set value (e.g. a rehydrated pin) shows the
+              environment NAME, not the raw env_… id — the SelectItems live in
+              the popup and aren't mounted until it's first opened. */}
+          <SelectValue placeholder={placeholder}>
+            {(value: string | null) =>
+              (value ? environments.find((e) => e.id === value)?.name : null) ??
+              placeholder
+            }
+          </SelectValue>
         </SelectTrigger>
         <SelectPopup>
           {environments.map((env) => (

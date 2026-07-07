@@ -3694,6 +3694,23 @@
       }
     },
     {
+      "name": "repo.ci.status",
+      "file": "repo.ci.status.ts",
+      "domain": "repo",
+      "mode": "sync",
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "repo.configure",
       "file": "repo.configure.ts",
       "domain": "repo",
@@ -3797,6 +3814,40 @@
         "api": false,
         "mcp": true,
         "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "repo.pr.diff",
+      "file": "repo.pr.diff.ts",
+      "domain": "repo",
+      "mode": "sync",
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "repo.pr.get",
+      "file": "repo.pr.get.ts",
+      "domain": "repo",
+      "mode": "sync",
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "api": false,
+        "mcp": true,
+        "unit": false,
         "docs": true
       }
     },

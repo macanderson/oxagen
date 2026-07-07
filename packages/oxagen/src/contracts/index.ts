@@ -214,6 +214,9 @@ import { repoCreate } from "./repo.create";
 import { repoFilePut } from "./repo.file.put";
 import { repoFork } from "./repo.fork";
 import { repoPrOpen } from "./repo.pr.open";
+import { repoPrGet } from "./repo.pr.get";
+import { repoPrDiff } from "./repo.pr.diff";
+import { repoCiStatus } from "./repo.ci.status";
 import { repoSync } from "./repo.sync";
 import { repoPause } from "./repo.pause";
 import { repoResume } from "./repo.resume";
@@ -579,6 +582,9 @@ export {
   repoFilePut,
   repoFork,
   repoPrOpen,
+  repoPrGet,
+  repoPrDiff,
+  repoCiStatus,
   repoSync,
   repoPause,
   repoResume,
@@ -878,6 +884,9 @@ export const contracts = [
   repoFilePut,
   repoFork,
   repoPrOpen,
+  repoPrGet,
+  repoPrDiff,
+  repoCiStatus,
   repoSync,
   repoPause,
   repoResume,

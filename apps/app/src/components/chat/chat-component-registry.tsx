@@ -35,6 +35,8 @@ type AnyLazy = LazyExoticComponent<(props: Record<string, unknown>) => React.Rea
  *   "file-tree"                — collapsible workspace/repo file tree, changed files link to their diff
  *   "coding-trace-panel"       — collapsible run-overview timeline composing terminal-trace/code-diff steps
  *   "workspace-context-panel"  — active sandbox session's file tree (client-fetched agent.sandbox.files.list)
+ *   "pr-stats"                 — PR summary + stats + expandable comments + CI status (repo.pr.get)
+ *   "ci-status"                — generic GitHub CI / check-run status for a ref (repo.ci.status)
  */
 /**
  * Emit a structured warning when a componentId arrives with no registered
@@ -209,5 +211,15 @@ export const CHAT_COMPONENTS = {
   // rendered via the shared FileTreeCard.
   "workspace-context-panel": lazy(
     () => import("@/components/chat/registry-components/workspace-context-panel"),
+  ),
+  // Pull-request summary + stats + comments (expandable) + CI status, backing
+  // repo.pr.get (via capability-meta's structural render transform).
+  "pr-stats": lazy(
+    () => import("@/components/chat/registry-components/pr-stats-card"),
+  ),
+  // Generic GitHub CI / check-run status for a branch, commit, or PR head,
+  // backing repo.ci.status.
+  "ci-status": lazy(
+    () => import("@/components/chat/registry-components/ci-status-card"),
   ),
 } as unknown as Record<string, AnyLazy>;

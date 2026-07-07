@@ -46,8 +46,21 @@ import type { McpServerSummary } from "./mcp-types";
 import { McpServerPicker } from "./mcp-server-picker";
 import { BudgetControl } from "./budget-control";
 import { ChatAgentToolbar } from "./chat-agent-toolbar";
+import { ChatContextBar } from "./chat-context-bar";
+import { SlashCommandMenu } from "./slash-command-menu";
+// Import from the client-safe subpath, NOT the @oxagen/ai barrel: the barrel
+// pulls telemetry/clickhouse/opentelemetry (async_hooks) into the client bundle
+// and breaks the build. slash-commands.ts is dependency-free.
+import { matchSlashCommands, type SlashCommand } from "@oxagen/ai/slash-commands";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
+import {
+  pinStorageKey,
+  readStoredPins,
+  writeStoredPins,
+  buildPinnedContext,
+  DRAFT_PREFIX,
+} from "./pinned-context";
 import { MessageQueue } from "./message-queue";
 import { AttachmentChip, hasInFlightUploads, type PendingAttachment } from "./attachment-chip";
 import { extractVideoFrames } from "./extract-video-frames";
@@ -136,6 +149,9 @@ export interface CodeModePayload {
   name: string;
   defaultBranch: string | null;
   environmentId: string;
+  /** Human label for the environment, so the agent context shows the name, not
+   * the opaque `env_…` id. Null when the id couldn't be resolved to an option. */
+  environmentName: string | null;
   sandboxSessionId: string | null;
 }
 
@@ -148,15 +164,16 @@ export interface CodeModePayload {
 function codePayload(
   codeMode: boolean,
   repo: RepoOption | null,
-  environmentId: string | null,
+  environment: EnvironmentOption | null,
 ): CodeModePayload | null {
-  if (!codeMode || !repo || !environmentId) return null;
+  if (!codeMode || !repo || !environment) return null;
   return {
     connectionId: repo.connectionId,
     owner: repo.owner,
     name: repo.name,
     defaultBranch: repo.defaultBranch,
-    environmentId,
+    environmentId: environment.id,
+    environmentName: environment.name,
     sandboxSessionId: null,
   };
 }
@@ -296,6 +313,7 @@ export function MessageComposer({
   const [selectedRepoKey, setSelectedRepoKey] = React.useState<string | null>(null);
   const [selectedEnvId, setSelectedEnvId] = React.useState<string | null>(null);
   const selectedRepo = availableRepos?.find((r) => r.key === selectedRepoKey) ?? null;
+  const selectedEnv = availableEnvironments?.find((e) => e.id === selectedEnvId) ?? null;
 
   // Default the environment picker to the workspace default (isDefault) the
   // first time code mode is turned on with no environment chosen yet.
@@ -373,13 +391,87 @@ export function MessageComposer({
     return () => document.removeEventListener("keydown", onDocumentKeyDown);
   }, [composerCollapsed, expandComposer]);
 
-  // Ref mirror of the code-mode selection so dispatchQueued (queue-drain path)
-  // reads the CURRENT selection at drain time, same pattern as
-  // activeServerIdsRef/parentMessageIdRef below.
-  const codeStateRef = React.useRef({ codeMode, selectedRepo, selectedEnvId });
+  // ── Pinned chat context (org/repo + environment) ──────────────────────────
+  // A pin sticks the current repo/environment selection to THIS conversation so
+  // the assistant knows which repo the user means on every future turn (see
+  // pinned-context.ts). Optional; repo/env are independent. Persistence is
+  // keyed per-conversation, with a workspace-scoped draft key for a new chat
+  // that migrates onto the real conversation key on first send.
+  const [isPinned, setIsPinned] = React.useState(false);
+  const pinKey = pinStorageKey(workspaceSlug, conversationId);
+  const prevPinKeyRef = React.useRef(pinKey);
   React.useEffect(() => {
-    codeStateRef.current = { codeMode, selectedRepo, selectedEnvId };
-  }, [codeMode, selectedRepo, selectedEnvId]);
+    const prevKey = prevPinKeyRef.current;
+    prevPinKeyRef.current = pinKey;
+    let stored = readStoredPins(pinKey);
+    // Carry a draft pin onto the real conversation key the first time a new
+    // chat gets an id (draft -> conv). Never migrate conv -> conv: switching
+    // conversations must not leak one chat's pin into another.
+    if (!stored && prevKey !== pinKey && prevKey.startsWith(DRAFT_PREFIX)) {
+      const carried = readStoredPins(prevKey);
+      if (carried) {
+        writeStoredPins(pinKey, carried);
+        writeStoredPins(prevKey, null);
+        stored = carried;
+      }
+    }
+    if (stored) {
+      if (stored.repoKey) setSelectedRepoKey(stored.repoKey);
+      if (stored.envId) setSelectedEnvId(stored.envId);
+      setIsPinned(true);
+    } else {
+      setIsPinned(false);
+    }
+  }, [pinKey]);
+
+  // Toggle the pin, persisting a snapshot of the current selection (pin) or
+  // clearing it (unpin). Writes happen here and in the selector handlers below,
+  // never in a pinKey-keyed effect, so switching conversations can never write
+  // the previous chat's selection under the new key.
+  const togglePin = React.useCallback(() => {
+    if (isPinned) {
+      setIsPinned(false);
+      writeStoredPins(pinKey, null);
+    } else {
+      setIsPinned(true);
+      writeStoredPins(pinKey, { repoKey: selectedRepoKey, envId: selectedEnvId });
+    }
+  }, [isPinned, pinKey, selectedRepoKey, selectedEnvId]);
+  const handleSelectRepoKey = (key: string) => {
+    setSelectedRepoKey(key);
+    if (isPinned) writeStoredPins(pinKey, { repoKey: key, envId: selectedEnvId });
+  };
+  const handleSelectEnvId = (id: string) => {
+    setSelectedEnvId(id);
+    if (isPinned) writeStoredPins(pinKey, { repoKey: selectedRepoKey, envId: id });
+  };
+
+  // ── Slash commands ────────────────────────────────────────────────────────
+  // `slashQuery` is the text after a lone leading slash ("/ci" -> "ci"), or
+  // null when the input isn't a slash command. The menu is an autocomplete
+  // affordance; the literal text is what gets sent, and the agent interprets it
+  // (its system prompt documents the commands — see @oxagen/ai slash-commands).
+  const [slashQuery, setSlashQuery] = React.useState<string | null>(null);
+  const [slashActiveIndex, setSlashActiveIndex] = React.useState(0);
+  const slashCommands = React.useMemo(
+    () => (slashQuery === null ? [] : matchSlashCommands(slashQuery)),
+    [slashQuery],
+  );
+  const slashOpen = slashQuery !== null && slashCommands.length > 0;
+
+  // Ref mirror of the code-mode + pin selection so dispatchQueued (queue-drain
+  // path) reads the CURRENT selection at drain time, same pattern as
+  // activeServerIdsRef/parentMessageIdRef below.
+  const codeStateRef = React.useRef({
+    codeMode,
+    selectedRepo,
+    selectedEnvId,
+    isPinned,
+    selectedEnv,
+  });
+  React.useEffect(() => {
+    codeStateRef.current = { codeMode, selectedRepo, selectedEnvId, isPinned, selectedEnv };
+  }, [codeMode, selectedRepo, selectedEnvId, isPinned, selectedEnv]);
 
   // Stable ref for the callback so the textarea onChange handler never
   // captures a stale closure — the identity of the ref never changes.
@@ -393,13 +485,57 @@ export function MessageComposer({
   const inputHasContentRef = React.useRef(false);
   const handleTextareaChange = React.useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const hasContent = e.target.value.length > 0;
+      const value = e.target.value;
+      const hasContent = value.length > 0;
       if (hasContent !== inputHasContentRef.current) {
         inputHasContentRef.current = hasContent;
         onInputHasContentChangeRef.current?.(hasContent);
       }
+      // Open the slash-command menu only while the whole input is a lone slash
+      // token ("/", "/ci", …) — never mid-message — so it can't shadow normal
+      // typing that happens to contain a slash.
+      const slashMatch = /^\/([a-zA-Z]*)$/.exec(value);
+      if (slashMatch) {
+        setSlashQuery(slashMatch[1] ?? "");
+        setSlashActiveIndex(0);
+      } else if (slashQuery !== null) {
+        setSlashQuery(null);
+      }
     },
-    [],
+    [slashQuery],
+  );
+
+  // Apply a chosen slash command. Client-action commands (e.g. /pin) run
+  // locally and clear the input; the rest insert "/<name> " so the user can
+  // type args, then submit — the agent interprets the literal command.
+  const applySlashCommand = React.useCallback(
+    (command: SlashCommand) => {
+      setSlashQuery(null);
+      const ta = formRef.current?.elements.namedItem("content") as
+        | HTMLTextAreaElement
+        | null;
+      if (command.clientAction === "pin") {
+        if (ta) {
+          ta.value = "";
+          if (inputHasContentRef.current) {
+            inputHasContentRef.current = false;
+            onInputHasContentChangeRef.current?.(false);
+          }
+        }
+        togglePin();
+        return;
+      }
+      if (ta) {
+        ta.value = `/${command.name} `;
+        ta.focus();
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+        if (!inputHasContentRef.current) {
+          inputHasContentRef.current = true;
+          onInputHasContentChangeRef.current?.(true);
+        }
+      }
+    },
+    [togglePin],
   );
 
   // Refs that always reflect the latest prop values so the queue-drain effect
@@ -733,8 +869,14 @@ export function MessageComposer({
       fd.set("activeServerIds", JSON.stringify([...activeServerIds]));
     }
     fd.set("budget", JSON.stringify(budgetPayload(modelSnapshot)));
-    const code = codePayload(codeMode, selectedRepo, selectedEnvId);
+    const code = codePayload(codeMode, selectedRepo, selectedEnv);
     if (code) fd.set("code", JSON.stringify(code));
+    // Pinned chat context — only when pinned and NOT in code mode (code mode
+    // already conveys the repo/env via `code`, so the two never double up).
+    if (isPinned && !codeMode) {
+      const pinned = buildPinnedContext(selectedRepo, selectedEnv);
+      if (pinned) fd.set("pinnedContext", JSON.stringify(pinned));
+    }
     return fd;
   }
 
@@ -860,8 +1002,12 @@ export function MessageComposer({
       }
       fd.set("budget", JSON.stringify(budgetPayload(ms)));
       const currentCode = codeStateRef.current;
-      const code = codePayload(currentCode.codeMode, currentCode.selectedRepo, currentCode.selectedEnvId);
+      const code = codePayload(currentCode.codeMode, currentCode.selectedRepo, currentCode.selectedEnv);
       if (code) fd.set("code", JSON.stringify(code));
+      if (currentCode.isPinned && !currentCode.codeMode) {
+        const pinned = buildPinnedContext(currentCode.selectedRepo, currentCode.selectedEnv);
+        if (pinned) fd.set("pinnedContext", JSON.stringify(pinned));
+      }
       // Defer the dispatch out of the caller (effect / event handler) so the
       // queue-drain doesn't cascade synchronously within a React effect
       // (satisfies react-hooks/set-state-in-effect) and so send-now doesn't
@@ -950,6 +1096,32 @@ export function MessageComposer({
     // IME composition guard — never submit during composition.
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
 
+    // Slash-command menu navigation takes precedence while it's open — Enter
+    // selects the highlighted command instead of submitting the form.
+    if (slashOpen) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSlashActiveIndex((i) => (i + 1) % slashCommands.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSlashActiveIndex((i) => (i - 1 + slashCommands.length) % slashCommands.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        const cmd = slashCommands[slashActiveIndex] ?? slashCommands[0];
+        if (cmd) applySlashCommand(cmd);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setSlashQuery(null);
+        return;
+      }
+    }
+
     const isEnter = e.key === "Enter";
     if (!isEnter) return;
 
@@ -989,6 +1161,11 @@ export function MessageComposer({
   // with a malformed request.
   const canAttach = Boolean(orgSlug) && Boolean(workspaceSlug);
   const hasRepos = (availableRepos?.length ?? 0) > 0;
+  const hasEnvironments = (availableEnvironments?.length ?? 0) > 0;
+  // The persistent pin context bar shows whenever there's something to pin and
+  // code mode isn't taking over the selectors (the two share selection state
+  // and render mutually exclusively).
+  const showContextBar = !codeMode && (hasRepos || hasEnvironments);
 
   // Shared between the desktop toolbar row and the mobile overflow sheet —
   // exactly one of the two renders at a time (see `isMobile` branches below).
@@ -1036,21 +1213,35 @@ export function MessageComposer({
 
   return (
     <div className="flex flex-col">
-      {/* Code-mode agent toolbar: repo + environment pickers. Shown only while
-          code mode is on — the toggle button below turns it on/off. Hidden
+      {/* Code-mode agent toolbar (sandbox coding turn) OR the persistent pin
+          context bar. Both drive the same selection state and render mutually
+          exclusively so there's never a duplicate repo/env selector. Hidden
           entirely while the composer is collapsed. */}
-      {codeMode && !composerCollapsed && (
-        <ChatAgentToolbar
-          repositories={availableRepos ?? []}
-          environments={availableEnvironments ?? []}
-          selectedRepoKey={selectedRepoKey}
-          selectedEnvId={selectedEnvId}
-          onSelectRepo={(repo) => setSelectedRepoKey(repo.key)}
-          onSelectEnv={setSelectedEnvId}
-          isCollapsed={agentToolbarCollapsed}
-          onToggleCollapse={setAgentToolbarCollapsed}
-        />
-      )}
+      {!composerCollapsed &&
+        (codeMode ? (
+          <ChatAgentToolbar
+            repositories={availableRepos ?? []}
+            environments={availableEnvironments ?? []}
+            selectedRepoKey={selectedRepoKey}
+            selectedEnvId={selectedEnvId}
+            onSelectRepo={(repo) => handleSelectRepoKey(repo.key)}
+            onSelectEnv={handleSelectEnvId}
+            isCollapsed={agentToolbarCollapsed}
+            onToggleCollapse={setAgentToolbarCollapsed}
+          />
+        ) : showContextBar ? (
+          <ChatContextBar
+            repositories={availableRepos ?? []}
+            environments={availableEnvironments ?? []}
+            selectedRepoKey={selectedRepoKey}
+            selectedEnvId={selectedEnvId}
+            onSelectRepo={(repo) => handleSelectRepoKey(repo.key)}
+            onSelectEnv={handleSelectEnvId}
+            isPinned={isPinned}
+            onTogglePin={togglePin}
+            disabled={pending || disabled}
+          />
+        ) : null)}
       <form
         ref={formRef}
         onSubmit={onSubmit}
@@ -1059,7 +1250,7 @@ export function MessageComposer({
         onDrop={canAttach ? handleDrop : undefined}
         className={cn(
           "flex flex-col gap-2 rounded-2xl border border-border bg-card p-3 text-card-foreground shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring",
-          codeMode && !composerCollapsed && "rounded-t-none",
+          (codeMode || showContextBar) && !composerCollapsed && "rounded-t-none",
           composerCollapsed && "gap-0 py-1.5",
           isDragOver && "ring-2 ring-primary",
         )}
@@ -1081,20 +1272,31 @@ export function MessageComposer({
       ) : null}
       {/* CSS-hidden (not unmounted) while collapsed so the draft text and the
           form's `content` field survive collapse/expand round-trips. */}
-      <Textarea
-        name="content"
-        required
-        placeholder={placeholder}
-        rows={isMobile ? 2 : 3}
-        disabled={pending || disabled}
-        onKeyDown={onKeyDown}
-        onChange={handleTextareaChange}
-        onPaste={canAttach ? handlePaste : undefined}
-        className={cn(
-          "border-none bg-transparent shadow-none focus-visible:ring-0",
-          composerCollapsed && "hidden",
-        )}
-      />
+      <div className="relative">
+        {slashOpen ? (
+          <SlashCommandMenu
+            commands={slashCommands}
+            activeIndex={slashActiveIndex}
+            onSelect={applySlashCommand}
+            onHoverIndex={setSlashActiveIndex}
+          />
+        ) : null}
+        <Textarea
+          name="content"
+          required
+          placeholder={placeholder}
+          rows={isMobile ? 2 : 3}
+          disabled={pending || disabled}
+          onKeyDown={onKeyDown}
+          onChange={handleTextareaChange}
+          onBlur={() => setSlashQuery(null)}
+          onPaste={canAttach ? handlePaste : undefined}
+          className={cn(
+            "border-none bg-transparent shadow-none focus-visible:ring-0",
+            composerCollapsed && "hidden",
+          )}
+        />
+      </div>
       {/* Pending attachment strip — thumbnails with upload progress/remove.
           Hidden video keyframes are excluded (they ride with their video). */}
       {visibleAttachments.length > 0 && !composerCollapsed ? (

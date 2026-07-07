@@ -803,6 +803,22 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./repo.pr.open")).repoPrOpenHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "repo.pr.get",
+    async () =>
+      (await import("./repo.pr.get")).repoPrGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "repo.pr.diff",
+    async () =>
+      (await import("./repo.pr.diff")).repoPrDiffHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "repo.ci.status",
+    async () =>
+      (await import("./repo.ci.status"))
+        .repoCiStatusHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "repo.sync",
     async () =>
       (await import("./repo.sync")).repoSyncHandler as CapabilityHandlerFn,

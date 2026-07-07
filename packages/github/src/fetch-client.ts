@@ -1,4 +1,14 @@
-import type { GitHubClient, GitHubClientOptions } from "./types";
+import type {
+  GitHubCheckRun,
+  GitHubCiChecks,
+  GitHubClient,
+  GitHubClientOptions,
+  GitHubCommitStatus,
+  GitHubPrComment,
+  GitHubPrComments,
+  GitHubPrFile,
+  GitHubPullRequest,
+} from "./types";
 
 // ---------------------------------------------------------------------------
 // GitHub API response shapes — internal use only
@@ -72,6 +82,87 @@ interface GHTreeItem {
 interface GHTreeResponse {
   tree: GHTreeItem[];
   truncated: boolean;
+}
+
+interface GHActor {
+  login: string;
+  avatar_url?: string;
+}
+
+interface GHPullDetail {
+  number: number;
+  title: string;
+  html_url: string;
+  state: "open" | "closed";
+  draft?: boolean;
+  merged?: boolean;
+  user: GHActor | null;
+  created_at: string;
+  updated_at: string;
+  body: string | null;
+  base: { ref: string };
+  head: { ref: string; sha: string | null };
+  additions?: number;
+  deletions?: number;
+  changed_files?: number;
+  commits?: number;
+  comments?: number;
+  review_comments?: number;
+}
+
+interface GHIssueComment {
+  id: number;
+  user: GHActor | null;
+  body: string | null;
+  created_at: string;
+  html_url: string | null;
+}
+
+interface GHReviewComment {
+  id: number;
+  user: GHActor | null;
+  body: string | null;
+  created_at: string;
+  html_url: string | null;
+  path: string | null;
+}
+
+interface GHCheckRun {
+  name: string;
+  status: string;
+  conclusion: string | null;
+  details_url: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  app: { name?: string } | null;
+}
+
+interface GHCheckRunsResponse {
+  total_count: number;
+  check_runs: GHCheckRun[];
+}
+
+interface GHStatusItem {
+  context: string;
+  state: string;
+  target_url: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+interface GHCombinedStatus {
+  sha: string | null;
+  statuses: GHStatusItem[];
+}
+
+interface GHPullFile {
+  filename: string;
+  previous_filename?: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  changes: number;
+  patch?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -358,6 +449,138 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       .map((item) => item.path);
   }
 
+  async function getPullRequest(args: {
+    owner: string;
+    repo: string;
+    number: number;
+  }): Promise<GitHubPullRequest> {
+    const data = await request<GHPullDetail>(
+      "GET",
+      `/repos/${args.owner}/${args.repo}/pulls/${args.number}`,
+    );
+    return {
+      number: data.number,
+      title: data.title,
+      htmlUrl: data.html_url,
+      state: data.state,
+      draft: data.draft ?? false,
+      merged: data.merged ?? false,
+      authorLogin: data.user?.login ?? null,
+      authorAvatarUrl: data.user?.avatar_url ?? null,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+      body: data.body,
+      baseRef: data.base.ref,
+      headRef: data.head.ref,
+      headSha: data.head.sha,
+      additions: data.additions ?? 0,
+      deletions: data.deletions ?? 0,
+      changedFiles: data.changed_files ?? 0,
+      commits: data.commits ?? 0,
+      commentCount: data.comments ?? 0,
+      reviewCommentCount: data.review_comments ?? 0,
+    };
+  }
+
+  async function listPullRequestComments(args: {
+    owner: string;
+    repo: string;
+    number: number;
+  }): Promise<GitHubPrComments> {
+    const [issueRaw, reviewRaw] = await Promise.all([
+      request<GHIssueComment[]>(
+        "GET",
+        `/repos/${args.owner}/${args.repo}/issues/${args.number}/comments?per_page=100`,
+      ),
+      request<GHReviewComment[]>(
+        "GET",
+        `/repos/${args.owner}/${args.repo}/pulls/${args.number}/comments?per_page=100`,
+      ),
+    ]);
+
+    const issue: GitHubPrComment[] = issueRaw.map((c) => ({
+      id: String(c.id),
+      authorLogin: c.user?.login ?? null,
+      authorAvatarUrl: c.user?.avatar_url ?? null,
+      body: c.body ?? "",
+      createdAt: c.created_at,
+      htmlUrl: c.html_url,
+      path: null,
+    }));
+
+    const review: GitHubPrComment[] = reviewRaw.map((c) => ({
+      id: String(c.id),
+      authorLogin: c.user?.login ?? null,
+      authorAvatarUrl: c.user?.avatar_url ?? null,
+      body: c.body ?? "",
+      createdAt: c.created_at,
+      htmlUrl: c.html_url,
+      path: c.path,
+    }));
+
+    return { issue, review };
+  }
+
+  async function listCiChecks(args: {
+    owner: string;
+    repo: string;
+    ref: string;
+  }): Promise<GitHubCiChecks> {
+    const ref = encodeURIComponent(args.ref);
+    const [checksRes, statusRes] = await Promise.all([
+      request<GHCheckRunsResponse>(
+        "GET",
+        `/repos/${args.owner}/${args.repo}/commits/${ref}/check-runs?per_page=100`,
+      ),
+      request<GHCombinedStatus>(
+        "GET",
+        `/repos/${args.owner}/${args.repo}/commits/${ref}/status?per_page=100`,
+      ),
+    ]);
+
+    const checkRuns: GitHubCheckRun[] = checksRes.check_runs.map((r) => ({
+      name: r.name,
+      status: normaliseCheckStatus(r.status),
+      conclusion: normaliseConclusion(r.conclusion),
+      detailsUrl: r.details_url,
+      startedAt: r.started_at,
+      completedAt: r.completed_at,
+      appName: r.app?.name ?? null,
+    }));
+
+    const statuses: GitHubCommitStatus[] = statusRes.statuses.map((s) => ({
+      context: s.context,
+      state: normaliseStatusState(s.state),
+      targetUrl: s.target_url,
+      createdAt: s.created_at,
+      updatedAt: s.updated_at,
+    }));
+
+    // Prefer the SHA from the combined-status endpoint; it always resolves the
+    // ref to a concrete commit.
+    return { sha: statusRes.sha, checkRuns, statuses };
+  }
+
+  async function listPullRequestFiles(args: {
+    owner: string;
+    repo: string;
+    number: number;
+  }): Promise<GitHubPrFile[]> {
+    const data = await request<GHPullFile[]>(
+      "GET",
+      `/repos/${args.owner}/${args.repo}/pulls/${args.number}/files?per_page=100`,
+    );
+    return data.map((f) => ({
+      path: f.filename,
+      previousPath: f.previous_filename ?? null,
+      status: normaliseFileStatus(f.status),
+      additions: f.additions,
+      deletions: f.deletions,
+      changes: f.changes,
+      patch: f.patch ?? null,
+    }));
+  }
+
   return {
     getAuthenticatedUser,
     createRepoInOrg,
@@ -367,5 +590,65 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     openPullRequest,
     getFileContent,
     getTree,
+    getPullRequest,
+    listPullRequestComments,
+    listCiChecks,
+    listPullRequestFiles,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Normalisers — coerce loose GitHub string enums to our typed unions
+// ---------------------------------------------------------------------------
+
+function normaliseCheckStatus(
+  status: string,
+): GitHubCheckRun["status"] {
+  return status === "queued" || status === "in_progress"
+    ? status
+    : "completed";
+}
+
+function normaliseConclusion(
+  conclusion: string | null,
+): GitHubCheckRun["conclusion"] {
+  switch (conclusion) {
+    case "success":
+    case "failure":
+    case "neutral":
+    case "cancelled":
+    case "timed_out":
+    case "action_required":
+    case "skipped":
+    case "stale":
+      return conclusion;
+    default:
+      return null;
+  }
+}
+
+function normaliseStatusState(state: string): GitHubCommitStatus["state"] {
+  switch (state) {
+    case "error":
+    case "failure":
+    case "pending":
+    case "success":
+      return state;
+    default:
+      return "pending";
+  }
+}
+
+function normaliseFileStatus(status: string): GitHubPrFile["status"] {
+  switch (status) {
+    case "added":
+    case "modified":
+    case "removed":
+    case "renamed":
+    case "copied":
+    case "changed":
+      return status;
+    default:
+      return "changed";
+  }
 }
