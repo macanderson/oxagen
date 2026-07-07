@@ -4,23 +4,43 @@ Static site deployed as the Vercel project **oxagen-v2-web**. No build step —
 Vercel serves this directory as-is (framework preset: Other, root directory
 `apps/web`).
 
-## Current homepage
+## Layout
 
-`index.html` is the July 2026 **platform health & investor deck** — a fully
-self-contained page (brand fonts embedded as data URIs, zero external
-requests). Interim content until the real v2 site lands.
+- `index.html` — the marketing one-pager: the terminal coding agent, the
+  platform, a gated field-manual download, and the "Get a demo" lead form.
+  Self-contained (inline CSS/JS); fonts load from `/fonts/`.
+- `field-manual/index.html` — the interactive ebook *Engineering Deterministic
+  AI Coding Agents* (fully self-contained; fonts embedded). A small script at
+  the top gates it behind the lead form on `/#field-manual`.
+- `field-manual/engineering-deterministic-ai-coding-agents.epub` — EPUB
+  download, served with `Content-Disposition: attachment` (see `vercel.json`).
+- `fonts/` — Aeonik + Aeonik Mono variable fonts (copied from
+  `packages/ui/src/styles/fonts/`), cached immutable for a year.
+- `favicon.svg` — the Oxagen hexagon mark.
+- `og.png` — social share card referenced by the Open Graph tags.
 
-- Navigate: arrow keys, dots, swipe. Deep-link a slide with `#<n>`.
-- **⌘P / Ctrl+P** produces a print-ready PDF: one A4-landscape page per slide,
-  light ink-friendly palette, all charts rendered at final state.
+## Lead capture
 
-## Regenerating the deck
+Both forms (field-manual gate + get-a-demo) POST JSON to
+`POST {api}/v1/marketing/leads` — `api.oxagen.sh` in production,
+`localhost:4000` when the page is served from localhost. The endpoint is the
+public, rate-limited route in `apps/api/src/routes/v1/marketing.lead.ts`;
+leads land in the Postgres `marketing.leads` table. The API's CORS allowlist
+must include the marketing origin (`MARKETING_URL`, defaults cover
+`https://oxagen.sh`).
 
-The deck is generated from a source file kept outside the repo (Claude session
-artifact — see `verifications/` and the `platform-health-audit-2026-07`
-project memory for provenance). To update it, edit the source, re-embed the
-fonts from `packages/ui/src/styles/fonts/*.woff2` as base64 data URIs, wrap in
-`<!doctype html><html lang="en">…</html>`, and replace `index.html`.
+The ebook gate is a marketing gate, not access control: form success sets
+`localStorage.ox_fm_unlocked` and the reader fails open on storage errors.
 
-> Note: the deck cites internal audit findings. Anything security-sensitive
-> should be reviewed before this project is attached to a public domain.
+## Local preview
+
+```bash
+cd apps/web && python3 -m http.server 5500
+# http://localhost:5500 — the API allows this origin in non-production
+```
+
+## History
+
+The previous interim homepage (July 2026 platform health & investor deck)
+was replaced by this marketing site; it cited internal audit findings and was
+never meant for a public domain. Recover it from git history if needed.

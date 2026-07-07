@@ -45,7 +45,9 @@ function dispatchedCommandNames(): Set<string> {
   }
   const block = INTERACTIVE_SOURCE.slice(start, end);
   const names = new Set<string>();
-  const pattern = /text(?:\s*===\s*|\.startsWith\()"\/([a-zA-Z]+)/g;
+  // Command names may contain hyphens (e.g. /worker-model), so match [a-zA-Z-]+,
+  // not just letters — otherwise "/worker-model" would mine as "worker".
+  const pattern = /text(?:\s*===\s*|\.startsWith\()"\/([a-zA-Z-]+)/g;
   for (const m of block.matchAll(pattern)) {
     names.add(m[1] as string);
   }

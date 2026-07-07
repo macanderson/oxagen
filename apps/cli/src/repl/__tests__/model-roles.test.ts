@@ -5,8 +5,12 @@
  * pickAdvisorModel/pickJudgePanel, planner follows OXAGEN_LLM_EVALUATOR.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DEFAULT_ADVISOR_MODEL } from "@oxagen/agent-engine";
-import { resolveModelRoles } from "../model-roles.js";
+import { resolveModelRoles, persistRoleModel } from "../model-roles.js";
+import { clearSettingsCache } from "../../settings/resolve.js";
 
 const ENV_KEYS = ["OXAGEN_LLM_EVALUATOR", "OXAGEN_LLM_ADVISOR", "OXAGEN_JUDGE_PANEL"] as const;
 const saved: Partial<Record<(typeof ENV_KEYS)[number], string | undefined>> = {};
@@ -61,5 +65,44 @@ describe("resolveModelRoles", () => {
     process.env["OXAGEN_LLM_EVALUATOR"] = "anthropic/claude-haiku-4-5";
     const roles = resolveModelRoles("anthropic/claude-sonnet-5");
     expect(roles.planner).toBe("anthropic/claude-haiku-4-5");
+  });
+
+  it("explicit overrides win over env/heuristic (live /triage-model, /judge-model)", () => {
+    process.env["OXAGEN_LLM_EVALUATOR"] = "env/triage";
+    process.env["OXAGEN_LLM_ADVISOR"] = "env/judge";
+    const roles = resolveModelRoles("anthropic/claude-sonnet-5", {
+      triage: "override/triage",
+      judge: "override/judge",
+    });
+    expect(roles.planner).toBe("override/triage");
+    expect(roles.judge).toBe("override/judge");
+  });
+});
+
+describe("persistRoleModel", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "oxagen-roles-"));
+    clearSettingsCache();
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+    clearSettingsCache();
+  });
+
+  const localDoc = () =>
+    JSON.parse(readFileSync(join(dir, ".oxagen", "settings.local.json"), "utf8")) as Record<
+      string,
+      unknown
+    >;
+
+  it("writes each role to its settings key in the local scope", () => {
+    persistRoleModel("worker", "vendor/worker", dir);
+    persistRoleModel("judge", "vendor/judge", dir);
+    persistRoleModel("triage", "vendor/triage", dir);
+    const doc = localDoc();
+    expect(doc["workerModel"]).toBe("vendor/worker");
+    expect(doc["judgeModel"]).toBe("vendor/judge");
+    expect(doc["triageModel"]).toBe("vendor/triage");
   });
 });

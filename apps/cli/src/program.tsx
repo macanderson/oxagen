@@ -76,7 +76,10 @@ export function buildProgram(): Command {
     .description("Agentic coding assistant — powered by the Oxagen context engine")
     .version(version)
     .argument("[prompt...]", "One-shot prompt (runs and exits)")
-    .option("-m, --model <slug>", "Gateway model slug (overrides config/default)")
+    .option("-m, --model <slug>", "Worker (executor) model slug (overrides config/default)")
+    .option("--worker-model <slug>", "Worker (executor) model slug — alias for --model")
+    .option("--judge-model <slug>", "Judge (completeness advisor) model slug")
+    .option("--triage-model <slug>", "Triage/coordinator (planner + evaluator) model slug")
     .option(
       "--effort <level>",
       "Reasoning effort for models that support it: low | medium | high | xhigh | max (omit = model default / adaptive)",
@@ -126,6 +129,9 @@ export function buildProgram(): Command {
         promptWords: string[],
         opts: {
           model?: string;
+          workerModel?: string;
+          judgeModel?: string;
+          triageModel?: string;
           effort?: string;
           readonly?: boolean;
           mode?: string;
@@ -202,7 +208,10 @@ export function buildProgram(): Command {
 
         const runOpts = {
           session,
-          model: opts.model,
+          // Worker: --worker-model is a synonym for -m/--model (the executor).
+          model: opts.workerModel ?? opts.model,
+          judgeModel: opts.judgeModel,
+          triageModel: opts.triageModel,
           effort: opts.effort,
           readOnly: opts.readonly,
           mode,

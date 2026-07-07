@@ -60,7 +60,12 @@ export interface OneShotOptions {
   /** Authenticated platform session (token, org, workspace). */
   session: Session;
   readOnly?: boolean;
+  /** Worker (executor) model. */
   model?: string;
+  /** Judge (completeness advisor) model. Undefined ⇒ engine default advisor tier. */
+  judgeModel?: string;
+  /** Triage/coordinator (planner + evaluator) model. Undefined ⇒ engine default. */
+  triageModel?: string;
   /** Reasoning effort for models that support it (low|medium|high|xhigh|max). */
   effort?: string;
   /**
@@ -335,6 +340,8 @@ export async function runOneShot(
       readOnly,
       profile: promptProfile,
       model: options.model,
+      judgeModels: options.judgeModel ? [options.judgeModel] : undefined,
+      triageModel: options.triageModel,
       bare: options.bare,
       verbose,
       maxSteps: options.maxSteps,

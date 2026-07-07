@@ -15,6 +15,7 @@ export {
 export { breakerEnvConfig, type BreakerThresholds } from "./breaker-config";
 export { neo4jBreaker, stripeBreaker } from "./breaker-clients";
 export { migrate as migrateClickhouse } from "./migrate";
+export { isDirectRunEntry } from "./is-direct-run";
 export * from "./security";
 export * from "./retry";
 export * from "./skill-telemetry";

@@ -74,6 +74,7 @@ import {
   AgentSidebar,
   AgentFocusView,
   panelNavTargets,
+  hasFleetActivity,
   stepPanelFocus,
   SIDEBAR_MIN_COLS,
   type PanelMode,
@@ -100,6 +101,8 @@ import {
   ThinkingIndicator,
   type Message,
 } from "./components.js";
+import { ScopeReview } from "./scope-review.js";
+import type { ScopeReviewInfo, ScopeReviewDecision } from "../agent/trace.js";
 import { HudPanel } from "./hud.js";
 import { ConfigPanel } from "./config-panel.js";
 import { LoginPanel } from "./login-panel.js";
@@ -120,7 +123,7 @@ import {
 } from "./scroll.js";
 import { createRenderThrottle, type RenderThrottle } from "./render-throttle.js";
 import { telemetryReducer, INITIAL_TELEMETRY_STATE } from "./telemetry.js";
-import { resolveModelRoles } from "./model-roles.js";
+import { resolveModelRoles, persistRoleModel, type ModelRole } from "./model-roles.js";
 import { borderPhaseFor, promptBorderColorFor, RAINBOW_FLASH_INTERVAL_MS } from "./border-phase.js";
 import { inputContentRow } from "./mouse-select.js";
 import { HeaderBar, TranscriptViewport, TelemetryDock, formatElapsed } from "./fullscreen-chrome.js";
@@ -175,7 +178,12 @@ const TERMINAL_FOLD_DELAY_MS = 6000;
 export interface ReplOptions {
   /** Authenticated platform session (token, org, workspace). */
   session: Session;
+  /** Initial WORKER (executor) model — the tool loop. Set via `/worker-model` / `/model`. */
   model?: string;
+  /** Initial JUDGE (advisor) model. Set via `/judge-model`. Undefined ⇒ engine default. */
+  judgeModel?: string;
+  /** Initial TRIAGE/coordinator (planner + evaluator) model. Set via `/triage-model`. */
+  triageModel?: string;
   /** Initial reasoning effort for models that support it (low|medium|high). */
   effort?: string;
   readOnly?: boolean;
@@ -272,6 +280,11 @@ export function ReplApp({
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [model, setModel] = useState<string>(resolveModelId(options.model));
+  // Per-function model overrides (undefined ⇒ the engine's own default for that
+  // role: advisor tier for judge, local heuristic / OXAGEN_LLM_EVALUATOR for
+  // triage). Driven by /judge-model and /triage-model; threaded per turn.
+  const [judgeModel, setJudgeModel] = useState<string | undefined>(options.judgeModel);
+  const [triageModel, setTriageModel] = useState<string | undefined>(options.triageModel);
   // Reasoning effort for models that support a thinking mode (undefined = let
   // the model/server default decide). Driven by /effort; forwarded per turn.
   const [effort, setEffort] = useState<ReasoningEffort | undefined>(
@@ -482,6 +495,10 @@ export function ReplApp({
   const streamingRef = useRef(false);
   const modelRef = useRef(model);
   modelRef.current = model;
+  const judgeModelRef = useRef(judgeModel);
+  judgeModelRef.current = judgeModel;
+  const triageModelRef = useRef(triageModel);
+  triageModelRef.current = triageModel;
   const effortRef = useRef(effort);
   effortRef.current = effort;
   const budgetRef = useRef(budgetPolicy);
@@ -507,6 +524,41 @@ export function ReplApp({
     setBudgetPause(null);
     cur?.resolve(response.decision === "allow");
   }, []);
+
+  // The pre-execution scope-review gate (the `confirmScope` setting). When the
+  // engine reaches ROUTE and the setting is on, it awaits `confirmScope`, which
+  // parks the promise resolver here and surfaces the ScopeReview overlay (same
+  // takeover pattern as the permission/budget prompts). The overlay owns the
+  // keyboard via its own useInput; `resolveScopeReview` is what it calls with
+  // the user's Run / Edit / Cancel decision, closing the overlay and settling
+  // the engine's awaited promise so EXECUTE proceeds, runs an edited prompt, or
+  // cancels before any work. Null when no gate is pending.
+  const [scopeReview, setScopeReview] = useState<{
+    info: ScopeReviewInfo;
+    resolve: (decision: ScopeReviewDecision) => void;
+  } | null>(null);
+  const scopeReviewRef = useRef(scopeReview);
+  scopeReviewRef.current = scopeReview;
+  const resolveScopeReview = useCallback((decision: ScopeReviewDecision) => {
+    const cur = scopeReviewRef.current;
+    setScopeReview(null);
+    cur?.resolve(decision);
+  }, []);
+
+  // Verbose/expanded ("Ctrl-O") mode: render long prompts, the enhanced-prompt
+  // scope card, and reasoning in FULL rather than a truncated preview. A ref
+  // mirrors the state so the synchronous key handler flips it without a stale
+  // closure; the state drives the re-render of the live frame.
+  const [detailExpanded, setDetailExpanded] = useState(false);
+  const detailExpandedRef = useRef(detailExpanded);
+  detailExpandedRef.current = detailExpanded;
+
+  // Short label of what the turn is doing RIGHT NOW (the in-flight stage or
+  // tool), fed to the ThinkingIndicator's sub-10s heartbeat so a silent step
+  // still tells the user what it's working on. A ref (not state) so updating it
+  // on every stage/tool never thrashes React — the indicator polls it on its
+  // own 100ms tick.
+  const lastActivityRef = useRef<string | null>(null);
 
   // Whether we are showing the "reset conversation?" confirmation prompt.
   // The ref is the synchronous source of truth; the state drives the render.
@@ -615,7 +667,13 @@ export function ReplApp({
   const [telemetry, dispatchTelemetry] = useReducer(
     telemetryReducer,
     INITIAL_TELEMETRY_STATE,
-    (initial) => ({ ...initial, models: resolveModelRoles(resolveModelId(options.model)) }),
+    (initial) => ({
+      ...initial,
+      models: resolveModelRoles(resolveModelId(options.model), {
+        triage: options.triageModel,
+        judge: options.judgeModel,
+      }),
+    }),
   );
   // Prompt-input border color, animated through the turn lifecycle (see
   // border-phase.ts): derived from the SAME telemetry.turn.phase the TURN
@@ -864,6 +922,10 @@ export function ReplApp({
     // Release any pending permission prompt as a denial so the tool unblocks.
     approvalRef.current?.resolve({ decision: "deny" });
     setApproval(null);
+    // Release a pending scope-review gate as a cancel so the engine's awaited
+    // confirmScope promise settles and the turn unwinds cleanly.
+    scopeReviewRef.current?.resolve({ proceed: false });
+    setScopeReview(null);
     // Abort the turn signal. The engine throws on an aborted signal the moment
     // the current stream ends, and the stream callbacks below no-op once
     // aborted, so no late text renders.
@@ -1075,11 +1137,19 @@ export function ReplApp({
     [],
   );
 
-  // Only move focus into the dock when it is actually docked (terminal wide
-  // enough) AND has a row to land on — never strand the highlight off-screen.
+  // Only move focus into the dock when it is actually ON SCREEN (terminal wide
+  // enough, not hidden by mode/auto) AND has a row to land on — never strand the
+  // highlight off-screen. Mirrors AgentSidebar's own visibility test so Down can
+  // never open (or fail to reach) a dock the render just decided to hide: with
+  // `auto`, that means the dock must have real fleet activity (hasFleetActivity);
+  // `/panel on` pins it reachable, `/panel off` makes it unreachable.
   const panelReachable = useCallback((): boolean => {
     const cols = process.stdout.columns ?? 80;
-    return cols >= SIDEBAR_MIN_COLS && navTargets().length > 0;
+    if (cols < SIDEBAR_MIN_COLS || navTargets().length === 0) return false;
+    const mode = panelModeRef.current;
+    if (mode === "off") return false;
+    if (mode === "on") return true;
+    return hasFleetActivity(agentRegistry.snapshot(), taskRegistry.snapshot());
   }, [navTargets]);
 
   const setInputFocus = useCallback((): void => {
@@ -1203,6 +1273,9 @@ export function ReplApp({
     if (approvalRef.current) return;
     // Same for a budget-pause confirmation (see budgetPause above).
     if (budgetPauseRef.current) return;
+    // Same for the pre-execution scope-review gate (its ScopeReview overlay owns
+    // Run / Edit / Cancel via its own useInput).
+    if (scopeReviewRef.current) return;
     // While the /config panel is open it owns the keyboard (its own useInput
     // handles ↑/↓/e/x/Esc) — swallow everything here so those keys never
     // double-fire into panel-nav, transcript scroll, or the prompt bar.
@@ -1210,10 +1283,14 @@ export function ReplApp({
     // Same for the /login panel (its own useInput handles Esc/any-key).
     if (loginOpenRef.current) return;
 
-    // Ctrl-O expands/collapses the most recent folded `!command` accordion. Bound
-    // before the focus-zone gate so it works whether focus is on the input or a
-    // dock row.
+    // Ctrl-O is the global "reveal detail" gesture (Claude Code style): it
+    // flips verbose/expanded mode — long prompts, the enhanced-prompt scope
+    // card, and reasoning render in FULL instead of a truncated preview — AND
+    // expands/collapses the most recent folded `!command` accordion, so one key
+    // reveals everything on screen. Bound before the focus-zone gate so it works
+    // whether focus is on the input or a dock row.
     if (key.ctrl && input === "o") {
+      setDetailExpanded((v) => !v);
       toggleLatestTerminal();
       return;
     }
@@ -1555,23 +1632,61 @@ export function ReplApp({
         );
         return;
       }
-      if (text.startsWith("/model")) {
-        const slug = text.slice("/model".length).trim();
-        if (slug) {
-          // Any gateway/Vercel-SDK model slug that supports text I/O is accepted
-          // — there is no allowlist. If the gateway rejects the slug the next
-          // turn surfaces a clear 4xx; switch with /model <vendor/model>.
-          setModel(slug);
-          // The judge is chosen to differ from the worker, so a worker switch
-          // can change it — refresh the MODELS readout to what will now run.
-          dispatchTelemetry({ type: "seed-models", models: resolveModelRoles(slug) });
-          pushAssistant(
-            `Model set to ${slug}. (Any valid text model slug is accepted; ` +
-              `the gateway resolves it at request time.)`,
-          );
-        } else {
-          pushAssistant(`Current model: ${modelRef.current}`);
+      // Shared applier for the per-function model commands: update session
+      // state, persist to the LOCAL settings scope (durable across sessions),
+      // refresh the MODELS readout to what will now run, and confirm. Any
+      // gateway/Vercel-SDK text model slug is accepted — no allowlist; a bad
+      // slug surfaces as a clear 4xx on the next turn.
+      const applyRoleModel = (role: ModelRole, slug: string): void => {
+        if (role === "worker") setModel(slug);
+        else if (role === "judge") setJudgeModel(slug);
+        else setTriageModel(slug);
+        let saved = false;
+        try {
+          persistRoleModel(role, slug);
+          saved = true;
+        } catch {
+          // Persistence is best-effort — the in-session change still applies.
         }
+        // Compute the readout with the just-changed role plus the current others.
+        const worker = role === "worker" ? slug : modelRef.current;
+        const triage = role === "triage" ? slug : triageModelRef.current;
+        const judge = role === "judge" ? slug : judgeModelRef.current;
+        dispatchTelemetry({ type: "seed-models", models: resolveModelRoles(worker, { triage, judge }) });
+        pushAssistant(
+          `${role[0]!.toUpperCase()}${role.slice(1)} model set to ${slug}` +
+            (saved ? " (saved to .oxagen/settings.local.json)." : "."),
+        );
+      };
+      if (text.startsWith("/worker-model")) {
+        const slug = text.slice("/worker-model".length).trim();
+        if (slug) applyRoleModel("worker", slug);
+        else pushAssistant(`Current worker model: ${modelRef.current}`);
+        return;
+      }
+      if (text.startsWith("/judge-model")) {
+        const slug = text.slice("/judge-model".length).trim();
+        if (slug) applyRoleModel("judge", slug);
+        else
+          pushAssistant(
+            `Current judge model: ${judgeModelRef.current ?? "(engine default — advisor tier, distinct from worker)"}`,
+          );
+        return;
+      }
+      if (text.startsWith("/triage-model")) {
+        const slug = text.slice("/triage-model".length).trim();
+        if (slug) applyRoleModel("triage", slug);
+        else
+          pushAssistant(
+            `Current triage model: ${triageModelRef.current ?? "(engine default — local heuristic / OXAGEN_LLM_EVALUATOR)"}`,
+          );
+        return;
+      }
+      if (text.startsWith("/model")) {
+        // Alias for /worker-model — sets and persists the executor model.
+        const slug = text.slice("/model".length).trim();
+        if (slug) applyRoleModel("worker", slug);
+        else pushAssistant(`Current model: ${modelRef.current}`);
         return;
       }
       if (text.startsWith("/coordinator")) {
@@ -2204,6 +2319,7 @@ export function ReplApp({
         const goalText = paste?.expandedText ?? submission;
         const pushStage = (stage: StageEvent): void => {
           closeStreamingBlocks();
+          lastActivityRef.current = stage.detail ?? stage.label;
           turn.push({ role: "stage", stage, content: stage.label, timestamp: Date.now() });
           dispatchTelemetry({ type: "stage", stage });
           render();
@@ -2230,6 +2346,8 @@ export function ReplApp({
             goal: goalText,
             history: historyRef.current,
             ai: activeAiRef.current,
+            // The planner is a coordinator stage — run it on the triage model.
+            model: triageModelRef.current,
             codeGraph: codeGraphRef.current,
             memory: turnMemory,
             agents: [...agentsRef.current.values()],
@@ -2420,6 +2538,10 @@ export function ReplApp({
           ),
           ai: activeAiRef.current,
           model: modelRef.current,
+          // Per-function overrides (undefined ⇒ engine default for that role).
+          // Judge takes a panel-shaped list; a single slug is a one-judge panel.
+          judgeModels: judgeModelRef.current ? [judgeModelRef.current] : undefined,
+          triageModel: triageModelRef.current,
           effort: effortRef.current,
           readOnly: modeRef.current === "readonly",
           bare: bareRef.current,
@@ -2433,9 +2555,40 @@ export function ReplApp({
           trace: traceStoreRef.current,
           graphSync: graphSyncRef.current,
           signal: turnController.signal,
+          // Always surface the pre-execution snapshot as a scope card in the
+          // transcript, so the user ALWAYS sees both their original prompt and
+          // the enhanced version the agent will run, plus the routed model and
+          // an estimated cost — no setting required (feature 2). Long prompts
+          // render truncated; Ctrl-O expands them (see ScopeCard).
+          onScopeReview: (info) => {
+            if (turnController.signal.aborted) return;
+            noteProgress();
+            closeStreamingBlocks();
+            turn.push({ role: "scope", scope: info, content: "", timestamp: Date.now() });
+            render();
+          },
+          // The "confirm scope & cost" gate (feature 3/4): only when the
+          // `confirmScope` setting is on, pause AFTER route / BEFORE execute and
+          // hand the user the ScopeReview overlay to Run / Edit the enhanced
+          // prompt / Cancel. Reads the setting fresh per turn (loadSettings is
+          // process-cached) so toggling it in /config takes effect next turn.
+          // Undefined when off ⇒ the engine runs with no gate at all.
+          ...(loadSettings({ cwd }).settings.confirmScope === true
+            ? {
+                confirmScope: (info: ScopeReviewInfo) =>
+                  new Promise<ScopeReviewDecision>((resolve) => {
+                    // The overlay's own useInput drives the answer; releasing it
+                    // on abort is handled by cancelTurn (see resolveScopeReview).
+                    setScopeReview({ info, resolve });
+                  }),
+              }
+            : {}),
           onStage: (stage) => {
             if (turnController.signal.aborted) return;
             noteProgress();
+            // Heartbeat: name what's happening now so a silent step still tells
+            // the user what it's doing (feature 1).
+            lastActivityRef.current = stage.detail ?? stage.label;
             void debugLog("turn", "turn.stage", { label: stage.label, detail: stage.detail });
             // Keep the HUD's live detail on the current stage.
             hudHandle?.update({ detail: stage.detail ?? stage.label });
@@ -2460,6 +2613,9 @@ export function ReplApp({
             inFlightTools++;
             ciProbe.noteToolCall(name, input);
             noteProgress();
+            // Heartbeat: an executing tool is the classic silent stretch — name
+            // it (e.g. "bash · pnpm test") so the indicator shows what's running.
+            lastActivityRef.current = summarizeInput(name, input);
             void debugLog("turn", "turn.tool-call", { name, input });
             // Full-screen TURN/TOOLS dock — step count (a live proxy for the
             // engine's own step counter) and per-tool call tallies.
@@ -2699,6 +2855,7 @@ export function ReplApp({
           metricsBusRef.current.flush();
           dispatchTelemetry({ type: "turn-end" });
           lastProgressRef.current = null;
+          lastActivityRef.current = null;
           abortRef.current = null;
           streamingRef.current = false;
           setIsStreaming(false);
@@ -2993,6 +3150,13 @@ export function ReplApp({
             <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
           ) : budgetPause ? (
             <ApprovalPrompt req={budgetPause.req} onResolve={resolveBudgetPause} />
+          ) : scopeReview ? (
+            <ScopeReview
+              info={scopeReview.info}
+              onDecision={resolveScopeReview}
+              width={Math.min(cols - 2, 100)}
+              expanded={detailExpanded}
+            />
           ) : configOpen ? (
             <ConfigPanel cwd={cwd} onClose={closeConfigPanel} width={Math.min(cols - 2, 100)} />
           ) : loginOpen ? (
@@ -3049,7 +3213,7 @@ export function ReplApp({
           item === "banner" ? (
             <Banner key="banner" />
           ) : (
-            <MessageView key={i} msg={item} diffTheme={diffThemeRef.current} />
+            <MessageView key={i} msg={item} diffTheme={diffThemeRef.current} expanded={detailExpanded} />
           )
         }
       </Static>
@@ -3092,7 +3256,7 @@ export function ReplApp({
 
             {/* The one message still being streamed into, if any. */}
             {liveMessage && (
-              <MessageView msg={liveMessage} diffTheme={diffThemeRef.current} />
+              <MessageView msg={liveMessage} diffTheme={diffThemeRef.current} expanded={detailExpanded} />
             )}
           </Box>
 
@@ -3132,6 +3296,7 @@ export function ReplApp({
           startedAt={turnStartedAt}
           getTokens={() => Math.round(streamCharsRef.current / 4)}
           getLastProgressAt={() => lastProgressRef.current}
+          getActivity={() => lastActivityRef.current}
         />
       )}
 
@@ -3176,6 +3341,13 @@ export function ReplApp({
           <ApprovalPrompt req={approval.req} onResolve={resolveApproval} />
         ) : budgetPause ? (
           <ApprovalPrompt req={budgetPause.req} onResolve={resolveBudgetPause} />
+        ) : scopeReview ? (
+          <ScopeReview
+            info={scopeReview.info}
+            onDecision={resolveScopeReview}
+            width={Math.min((cols || 80) - 2, 100)}
+            expanded={detailExpanded}
+          />
         ) : configOpen ? (
           <ConfigPanel cwd={cwd} onClose={closeConfigPanel} />
         ) : loginOpen ? (

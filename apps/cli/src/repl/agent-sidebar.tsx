@@ -60,6 +60,26 @@ const MIN_TERMINAL_COLS = PANEL_WIDTH + 48;
 export const SIDEBAR_MIN_COLS = MIN_TERMINAL_COLS;
 
 /**
+ * Whether the dock has genuine FLEET activity worth showing — the single source
+ * of truth shared by the sidebar's own `auto` visibility gate AND the REPL's
+ * "can Down enter the dock?" check, so the two never disagree (a Down that
+ * entered an auto-hidden dock would strand the highlight on an invisible row).
+ *
+ * A plain single-agent, single-task turn registers exactly one `kind: "turn"`
+ * lead agent and one task — that is NOT fleet activity and stays hidden. The
+ * dock reveals only when work fans out: a multi-task plan, or ANY delegated
+ * worker (a dispatched subagent / fleet / monitor — anything that isn't the
+ * lead turn agent).
+ */
+export function hasFleetActivity(
+  agents: RunningAgent[],
+  tasks: TrackedTask[],
+): boolean {
+  const workerAgents = agents.filter((a) => a.kind !== "turn").length;
+  return tasks.length > 1 || workerAgents > 0;
+}
+
+/**
  * The flat, ordered list of navigable panel items — every Agent Team row (in
  * roster order) followed by every Task Progress row (in plan order). This is the
  * single source of truth for arrow-key traversal: the REPL walks this list so
@@ -307,10 +327,11 @@ export function AgentSidebar({
   if (mode === "off") return null;
   // A narrow terminal can't spare the columns — never crush the chat.
   if (width() < MIN_TERMINAL_COLS) return null;
-  const hasActivity = agents.length > 0 || tasks.length > 0;
+  // The dock is a FLEET instrument, not a per-turn one — `auto` reveals it only
+  // once work fans out (see hasFleetActivity). `/panel on` still pins it open.
   // `active` (the user has navigated into the dock) forces it visible even when
-  // auto would hide an idle dock, so the highlight never lands on a hidden list.
-  if (mode === "auto" && !hasActivity && !active) return null;
+  // auto would hide it, so the highlight never lands on a hidden list.
+  if (mode === "auto" && !hasFleetActivity(agents, tasks) && !active) return null;
 
   const at = now();
   const runningAgents = agents.filter((a) => a.status === "running").length;

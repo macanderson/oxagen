@@ -293,7 +293,7 @@ export function TelemetryDock({
     <Box flexDirection="row" gap={gap}>
       <DockPanel title="MODELS" accent={theme.violet} width={panelWidth}>
         <Text wrap="truncate-end">
-          {label("planner", 8)}
+          {label("triage", 8)}
           <Text dimColor>{models.planner ?? "—"}</Text>
         </Text>
         <Text wrap="truncate-end">
