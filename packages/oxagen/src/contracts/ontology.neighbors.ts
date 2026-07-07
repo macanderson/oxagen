@@ -50,6 +50,9 @@ export const ontologyNeighbors = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
   },
+  // Accountability chain: a graph read acts on a specific node — record it on
+  // the audit row so "who has read node N" is queryable (target_kind/target_id).
+  audit: { targetKind: "graph.node", targetIdField: "nodeId" },
   input: z.object({
     nodeId: z.string().describe("publicId of the node whose neighbors to fetch"),
     edgeTypes: z
