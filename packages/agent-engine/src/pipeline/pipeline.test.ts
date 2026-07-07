@@ -11,6 +11,7 @@ import { describe, it, expect, vi } from "vitest";
 import { MemoryWorkspace } from "../workspaces/memory";
 import { runTurn } from "./index";
 import { DEFAULT_AGENT_MODEL } from "../engine";
+import { classifyTier, modelForTier } from "../router/model-router";
 import type { AgentAi, GraphSyncProvider, ModelRunArgs } from "../ports";
 
 // ── Minimal AgentAi that optionally edits a file, then returns. ──────────────
@@ -183,17 +184,21 @@ describe("runTurn — bare mode model accounting", () => {
       generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
     };
 
+    const prompt = "do something";
     const result = await runTurn({
       prompt: "fix the authentication bug in the login flow",
       workspace: ws,
       ai,
       bare: true,
-      // No `model` passed — both the label and the actual execution must
-      // resolve to the SAME default.
+      // No `model` passed — the label AND the actual execution must both
+      // resolve to the router's tier for this prompt (never diverge).
     });
 
-    expect(modelUsed).toBe(DEFAULT_AGENT_MODEL);
-    expect(result.trace.selectedModel).toBe(DEFAULT_AGENT_MODEL);
+    const expected = modelForTier(classifyTier({ text: prompt }).tier);
+    expect(modelUsed).toBe(expected);
+    expect(result.trace.selectedModel).toBe(expected);
+    // The whole point: label == execution.
+    expect(result.trace.selectedModel).toBe(modelUsed);
   });
 
   it("routes an unpinned, trivial bare run through the classifyTier floor (Perf #8), matching what actually executes", async () => {
