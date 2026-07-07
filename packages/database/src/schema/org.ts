@@ -10,6 +10,13 @@ export const organizations = orgSchema.table(
     ...auditMixin(),
     name: text("name").notNull(),
     slug: citext("slug").notNull(),
+    // Immutable, globally-unique handle (like a Linear team key). SEPARATE from
+    // slug on purpose: slugs are renameable (org_slug_history), namespaces never
+    // change once set (enforced by the organizations_namespace_immutable
+    // trigger). It anchors the agentKey org_ns.workspace_ns.agent_slug, whose
+    // 32-char budget is 6 (org) + 1 + 6 (workspace) + 1 + 18 (agent slug).
+    // Derived from the slug at creation via deriveNamespace().
+    namespace: citext("namespace").notNull(),
     // Org avatar/logo. Nullable: orgs render initials until a logo is uploaded.
     // Stores the public blob URL returned by the storage adapter (Vercel Blob).
     avatarUrl: text("avatar_url"),
@@ -28,6 +35,14 @@ export const organizations = orgSchema.table(
   },
   (t) => ({
     slugIdx: uniqueIndex("organizations_slug_idx").on(t.slug),
+    // Namespace is globally unique + immutable. The immutability itself is
+    // enforced by a BEFORE UPDATE trigger (see migration
+    // 20260709120000_namespace_identity), not expressible in Drizzle DDL.
+    namespaceIdx: uniqueIndex("organizations_namespace_idx").on(t.namespace),
+    namespaceCheck: check(
+      "organizations_namespace_check",
+      sql`${t.namespace} ~ '^[a-z0-9]{2,6}$'`,
+    ),
     statusIdx: index("organizations_status_idx").on(t.status),
     typeCheck: check(
       "organizations_type_check",

@@ -15,3 +15,10 @@ export {
 export { makeWithTenantDbMock, makeWithSystemDbMock } from "./tenant.mock";
 export { recordIfUnscoped, __unscopedCountForTests } from "./unscoped-meter";
 export { isUniqueViolation } from "./errors";
+export {
+  deriveNamespace,
+  normalizeNamespaceSeed,
+  NAMESPACE_PATTERN,
+  NAMESPACE_MIN_LENGTH,
+  NAMESPACE_MAX_LENGTH,
+} from "./namespace";
