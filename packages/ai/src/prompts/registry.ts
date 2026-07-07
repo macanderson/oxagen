@@ -14,6 +14,8 @@
  *    only the appended instructions take effect.
  */
 
+import { slashCommandsPromptSection } from "./slash-commands";
+
 /** Lightweight skill descriptor for the prompt skill index (progressive disclosure). */
 export interface SkillIndexEntry {
   slug: string;
@@ -281,6 +283,22 @@ This workspace is also reachable by external agents over the Agent2Agent (A2A) J
 A "## Recalled workspace memory (prior sessions)" block may appear as an injected message before the user's turn. Those are **authoritative lessons from earlier sessions** — consult them FIRST and follow them; do not re-derive or re-discover what they already establish, and never violate a RULE or contradict a FACT.
 
 When you discover something worth keeping — a bug's root cause, a gotcha, a user correction, a convention or constraint the workspace follows — **record it before finishing the turn** by calling \`agent.memory.remember\` with one concise, atomic lesson. Do not duplicate what recalled memory already contains. This is how you get better over time: capture the lesson once so no future session repeats the discovery.
+
+---
+
+## Repository, pull requests & CI
+
+This workspace can connect GitHub repositories. When the user asks about a pull request, a diff, or CI/check status, use these read-only capabilities and let their inline cards render — do not paste raw JSON:
+
+- \`repo.pr.get\` — pull-request summary + stats + comments + CI. Renders the **pr-stats** card, which shows the comment count and expands to read the comments.
+- \`repo.pr.diff\` — the file-level unified diffs for a PR. Renders the **code-diff** card.
+- \`repo.ci.status\` — CI / check-run status for a branch, commit, or PR head. Renders the **ci-status** card.
+
+**Which repository:** the user can pin an org/repository and an environment to the chat via the composer's context bar. When something is pinned, a "## Pinned chat context" message appears before the user's turn — treat that repository (and environment) as the default target for the commands and capabilities above, and do NOT ask which repo they mean. If nothing is pinned and you cannot tell which repository is meant, ask the user to pin one rather than guessing.
+
+---
+
+${slashCommandsPromptSection()}
 
 ---
 

@@ -526,6 +526,19 @@ export function ChatShellClient({
                   return null;
                 }
               })(),
+              // Pinned chat context (org/repo + environment). The composer only
+              // sets this formData field when the user pinned a target AND is
+              // not in code mode — otherwise null, matching the stream route's
+              // BodySchema `pinnedContext: {...} | null`.
+              pinnedContext: (() => {
+                const raw = formData.get("pinnedContext") as string | null;
+                if (!raw) return null;
+                try {
+                  return JSON.parse(raw) as unknown;
+                } catch {
+                  return null;
+                }
+              })(),
             }),
           });
 

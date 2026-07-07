@@ -131,6 +131,9 @@ export {
   loadWorkspacePromptConfigSafe,
   normalizePromptConfig,
   enhancePromptIfInsufficient,
+  SLASH_COMMANDS,
+  matchSlashCommands,
+  slashCommandsPromptSection,
 } from "./prompts";
 export type {
   PromptKey,
@@ -140,6 +143,7 @@ export type {
   SkillIndexEntry,
   EnhancePromptArgs,
   EnhancePromptResult,
+  SlashCommand,
 } from "./prompts";
 
 // Tool descriptor builder, JSON-Schema tool input helper, and core message

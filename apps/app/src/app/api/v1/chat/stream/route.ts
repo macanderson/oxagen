@@ -199,6 +199,34 @@ const BodySchema = z.object({
     })
     .nullable()
     .default(null),
+  // Pinned chat context (org/repo + environment) the user stuck to this
+  // conversation via the composer's context bar. Unlike `code` this is
+  // LIGHTWEIGHT — no sandbox — it just tells the agent which repository /
+  // environment the user means so it doesn't have to ask. Rides as a per-turn
+  // user context message (ADR-021 §2), never the cached system prompt. The
+  // composer only sends it when pinned AND not in code mode (code already
+  // conveys the same target), so the two never double up.
+  pinnedContext: z
+    .object({
+      repo: z
+        .object({
+          connectionId: z.string().min(1),
+          owner: z.string().min(1).max(256),
+          name: z.string().min(1).max(256),
+          defaultBranch: z.string().min(1).max(256).nullable().default(null),
+        })
+        .nullable()
+        .default(null),
+      environment: z
+        .object({
+          id: z.string().min(1),
+          name: z.string().min(1).max(256),
+        })
+        .nullable()
+        .default(null),
+    })
+    .nullable()
+    .default(null),
 });
 
 // Maximum number of prior messages to include in the context window. Keeps
@@ -280,6 +308,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     attachments,
     budget: requestBudget,
     code: codeMode,
+    pinnedContext,
   } = parsed.data;
 
   let tenant: Awaited<ReturnType<typeof resolveOrg>>;
@@ -1103,6 +1132,32 @@ export async function POST(request: NextRequest): Promise<Response> {
           }
         }
 
+        // Pinned chat context — the lightweight (no-sandbox) sibling of code
+        // mode. Only present when the user pinned a repo/env AND is not in code
+        // mode (the composer enforces that), so it never duplicates the
+        // code-mode message. Rides as a per-turn USER message (ADR-021 §2).
+        let pinnedContextMessage: ModelMessage | undefined;
+        if (
+          !codeMode &&
+          pinnedContext &&
+          (pinnedContext.repo || pinnedContext.environment)
+        ) {
+          const lines: string[] = ["## Pinned chat context"];
+          if (pinnedContext.repo) {
+            const branch = pinnedContext.repo.defaultBranch ?? "the default branch";
+            lines.push(
+              `Repository: ${pinnedContext.repo.owner}/${pinnedContext.repo.name} (default branch ${branch})`,
+            );
+          }
+          if (pinnedContext.environment) {
+            lines.push(`Environment: ${pinnedContext.environment.name}`);
+          }
+          lines.push(
+            "The user pinned this to the conversation — treat it as the repository/environment they mean for repository, pull-request, diff, and CI requests unless they say otherwise. Do not ask which repository they mean.",
+          );
+          pinnedContextMessage = { role: "user", content: lines.join("\n") };
+        }
+
         const result = await runCodingAgent({
           ai,
           instruction: content,
@@ -1118,9 +1173,15 @@ export async function POST(request: NextRequest): Promise<Response> {
           // path (otherwise videos arrive as keyframe images above). Passed as
           // AI-SDK file parts by the engine.
           ...(videoAttachments.length > 0 ? { videos: videoAttachments } : {}),
-          history: codeContextMessage
-            ? [...historyForEngine, codeContextMessage]
-            : historyForEngine,
+          history:
+            codeContextMessage || pinnedContextMessage
+              ? [
+                  ...historyForEngine,
+                  ...([codeContextMessage, pinnedContextMessage].filter(
+                    Boolean,
+                  ) as ModelMessage[]),
+                ]
+              : historyForEngine,
           system: resolvePrompt({
             key: "chat.system",
             baseline:

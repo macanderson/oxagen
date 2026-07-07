@@ -30,6 +30,14 @@ interface RepoSelectorProps {
   selectedKey: string | null;
   onSelectRepo: (repo: RepoOption) => void;
   isLoading?: boolean;
+  /**
+   * Accessible label for the trigger. Defaults to "Select repository". The
+   * pin context bar overrides it ("Pinned repository") so the always-visible
+   * pin selector doesn't collide with the code-mode toolbar's selector in
+   * tests / a11y trees when both can appear.
+   */
+  ariaLabel?: string;
+  placeholder?: string;
 }
 
 export function RepoSelector({
@@ -37,6 +45,8 @@ export function RepoSelector({
   selectedKey,
   onSelectRepo,
   isLoading = false,
+  ariaLabel = "Select repository",
+  placeholder = "Select repository",
 }: RepoSelectorProps) {
   return (
     <div className="flex items-center gap-2">
@@ -49,8 +59,8 @@ export function RepoSelector({
         }}
         disabled={isLoading || repositories.length === 0}
       >
-        <SelectTrigger className="w-48" aria-label="Select repository">
-          <SelectValue placeholder="Select repository" />
+        <SelectTrigger className="w-48" aria-label={ariaLabel}>
+          <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectPopup>
           {repositories.map((repo) => (
