@@ -90,6 +90,33 @@ describe("agent.definition.update handler", () => {
     expect(out.version).toBe(2);
   });
 
+  it("persists a custom→coding agentType change on the identity row", async () => {
+    fake.enqueue(
+      [AGENT_ROW],
+      [{ version: 1 }],
+      [{ version: 2, isPublished: false }],
+      [], // update agents (awaited, no returning)
+    );
+    const out = await agentDefinitionUpdateHandler(
+      { agentId: "agt_1", agentType: "coding", config: CONFIG },
+      CTX,
+    );
+    expect(out.version).toBe(2);
+    // The identity-row update fired (name/description absent, agentType present).
+    expect(fake.mutations.update).toBe(1);
+  });
+
+  it("rejects promoting an agent into a reserved managed agentType before any write", async () => {
+    fake.enqueue([AGENT_ROW]); // resolveAgent only — guard fires before the insert
+    await expect(
+      agentDefinitionUpdateHandler(
+        { agentId: "agt_1", agentType: "interactive_chat", config: CONFIG },
+        CTX,
+      ),
+    ).rejects.toThrow(/reserved for managed agents/);
+    expect(fake.mutations).toEqual({ insert: 0, update: 0, delete: 0 });
+  });
+
   it("throws AgentManagedReadOnlyError for a managed agent and performs no mutation", async () => {
     fake.enqueue([MANAGED_AGENT_ROW]); // resolveAgent → managed agent
     const err = await agentDefinitionUpdateHandler(

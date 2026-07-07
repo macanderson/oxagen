@@ -1,0 +1,895 @@
+"use client";
+/**
+ * agent-builder.tsx — the interactive Agent Builder (Studio → Agents → new /
+ * [agentId]).
+ *
+ * A useState-driven wizard (there is no Stepper primitive) that walks the
+ * builder through the six stages of defining an interactive agent:
+ *
+ *   1. Identity  — name, slug, description, and the "code features" switch
+ *                  (persisted as agentType "coding" | "custom").
+ *   2. Prompt    — the inline system prompt / instructions.
+ *   3. Equip     — the uniform agentTools[] picker (skills/tools/MCP/subagents).
+ *   4. Ground    — GraphAccess: ontology binding, mode, retrieval, budget.
+ *   5. Triggers  — manual (default) plus optional schedule / event triggers.
+ *   6. Review    — summary + Save draft / Publish / Publish & Deploy.
+ *
+ * All persistence flows through the server actions in ./actions.ts, which gate
+ * every mutation on workspace Owner/Admin. A `readOnly` builder (managed agent
+ * or a non-manager viewer) renders for inspection with every control disabled.
+ */
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CircleDot,
+  Rocket,
+  Save,
+  Send,
+} from "lucide-react";
+import type {
+  AgentDefinitionConfig,
+  AgentTool,
+  AgentTrigger,
+  GraphAccess,
+  GraphAccessMode,
+  GraphRetrievalStrategy,
+} from "@oxagen/oxagen/agent-schema";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectPopup,
+  SelectItem,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/toast";
+import { workspace } from "@/lib/routes";
+import type { ScopeContext } from "@/lib/scope";
+import { EquipPicker, type EquipSources } from "./equip-picker";
+import {
+  createAgentAction,
+  updateAgentAction,
+  publishAgentAction,
+  deployAgentAction,
+} from "./actions";
+
+/**
+ * Client-safe mirror of CODING_AGENT_TYPE / DEFAULT_AGENT_TYPE from
+ * lib/studio/agents.ts. That module is server-only (it imports the handler
+ * kernel), so the two literal discriminators are duplicated here rather than
+ * dragging server code into the client bundle. Keep in sync with agents.ts.
+ */
+const CODING_AGENT_TYPE = "code";
+const DEFAULT_AGENT_TYPE = "custom";
+
+// ── Props ─────────────────────────────────────────────────────────────────────
+
+export interface InitialAgent {
+  publicId: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  agentType: string;
+  status: "draft" | "active" | "archived";
+  deploymentStatus: "inactive" | "active";
+  version: number | null;
+  isPublished: boolean;
+  config: AgentDefinitionConfig;
+}
+
+export interface AgentBuilderProps {
+  mode: "create" | "edit";
+  orgSlug: string;
+  workspaceSlug: string;
+  canManage: boolean;
+  readOnly: boolean;
+  sources: EquipSources;
+  initialAgent?: InitialAgent;
+}
+
+// ── Steps ─────────────────────────────────────────────────────────────────────
+
+const STEPS = [
+  { key: "identity", label: "Identity" },
+  { key: "prompt", label: "Prompt" },
+  { key: "equip", label: "Equip" },
+  { key: "ground", label: "Ground" },
+  { key: "triggers", label: "Triggers" },
+  { key: "review", label: "Review" },
+] as const;
+
+const RETRIEVAL_STRATEGIES: GraphRetrievalStrategy[] = [
+  "hybrid",
+  "semantic",
+  "lexical",
+  "explicit",
+];
+
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export function AgentBuilder({
+  mode,
+  orgSlug,
+  workspaceSlug,
+  canManage,
+  readOnly,
+  sources,
+  initialAgent,
+}: AgentBuilderProps) {
+  const router = useRouter();
+  const { add } = useToast();
+  const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
+
+  const initialGraph = initialAgent?.config.graph;
+  const initialTriggers = initialAgent?.config.triggers ?? [];
+  const initialSchedule = initialTriggers.find((t) => t.type === "schedule");
+  const initialEvent = initialTriggers.find((t) => t.type === "event");
+
+  // Identity
+  const [name, setName] = React.useState(initialAgent?.name ?? "");
+  const [slug, setSlug] = React.useState(initialAgent?.slug ?? "");
+  const [slugEdited, setSlugEdited] = React.useState(mode === "edit");
+  const [description, setDescription] = React.useState(
+    initialAgent?.description ?? "",
+  );
+  const [codeFeatures, setCodeFeatures] = React.useState(
+    (initialAgent?.agentType ?? DEFAULT_AGENT_TYPE) === CODING_AGENT_TYPE,
+  );
+
+  // Prompt
+  const [instructions, setInstructions] = React.useState(
+    initialAgent?.config.instructions ?? "",
+  );
+
+  // Equip
+  const [agentTools, setAgentTools] = React.useState<AgentTool[]>(
+    initialAgent?.config.agentTools ?? [],
+  );
+
+  // Ground (GraphAccess)
+  const [ontologyId, setOntologyId] = React.useState(
+    initialGraph?.ontologyId ?? "",
+  );
+  const [graphMode, setGraphMode] = React.useState<GraphAccessMode>(
+    initialGraph?.mode ?? "read",
+  );
+  const [strategy, setStrategy] = React.useState<GraphRetrievalStrategy>(
+    initialGraph?.retrieval.strategy ?? "hybrid",
+  );
+  const [maxHops, setMaxHops] = React.useState(
+    initialGraph?.budget.maxHops ?? 2,
+  );
+  const [maxNodes, setMaxNodes] = React.useState(
+    initialGraph?.budget.maxNodes ?? 40,
+  );
+
+  // Triggers
+  const [manualEnabled, setManualEnabled] = React.useState(
+    initialTriggers.length === 0
+      ? true
+      : initialTriggers.some((t) => t.type === "manual"),
+  );
+  const [scheduleCron, setScheduleCron] = React.useState(
+    initialSchedule?.schedule ?? "",
+  );
+  const [eventSource, setEventSource] = React.useState(
+    initialEvent?.eventSource ?? "",
+  );
+  const [eventType, setEventType] = React.useState(
+    initialEvent?.eventType ?? "",
+  );
+  const [eventConnection, setEventConnection] = React.useState(
+    initialEvent?.connectionId ?? "",
+  );
+
+  // Flow
+  const [stepIdx, setStepIdx] = React.useState(0);
+  const [busy, setBusy] = React.useState(false);
+  // The live agent id once created; drives whether Save issues create vs update.
+  const [agentId, setAgentId] = React.useState<string | null>(
+    initialAgent?.publicId ?? null,
+  );
+  const [deployed, setDeployed] = React.useState(
+    initialAgent?.deploymentStatus === "active",
+  );
+
+  const step = STEPS[stepIdx]!;
+  const disabled = readOnly || busy;
+
+  function onNameChange(value: string) {
+    setName(value);
+    if (!slugEdited) setSlug(slugify(value));
+  }
+
+  function buildConfig(): AgentDefinitionConfig {
+    const triggers: AgentTrigger[] = [];
+    if (manualEnabled) triggers.push({ type: "manual", enabled: true });
+    if (scheduleCron.trim()) {
+      triggers.push({
+        type: "schedule",
+        schedule: scheduleCron.trim(),
+        enabled: true,
+      });
+    }
+    if (eventSource.trim() && eventType.trim()) {
+      triggers.push({
+        type: "event",
+        eventSource: eventSource.trim(),
+        eventType: eventType.trim(),
+        connectionId: eventConnection.trim() || undefined,
+        enabled: true,
+      });
+    }
+    const graph: GraphAccess = {
+      ontologyId: ontologyId.trim(),
+      mode: graphMode,
+      retrieval: { strategy },
+      budget: { maxHops, maxNodes },
+    };
+    return {
+      graph,
+      agentTools,
+      triggers,
+      instructions: instructions.trim() || undefined,
+    };
+  }
+
+  function agentType(): string {
+    return codeFeatures ? CODING_AGENT_TYPE : DEFAULT_AGENT_TYPE;
+  }
+
+  /**
+   * Persist the draft: create on first save, update thereafter. Returns the
+   * live agent public id, or null on failure (a toast is raised either way).
+   */
+  async function persistDraft(): Promise<string | null> {
+    const config = buildConfig();
+    if (agentId) {
+      const res = await updateAgentAction({
+        orgSlug,
+        workspaceSlug,
+        agentId,
+        name: name.trim(),
+        description: description.trim() || undefined,
+        agentType: agentType(),
+        config,
+      });
+      if (!res.ok) {
+        add({ title: "Save failed", description: res.error, type: "error" });
+        return null;
+      }
+      return agentId;
+    }
+    const res = await createAgentAction({
+      orgSlug,
+      workspaceSlug,
+      slug: slug.trim(),
+      name: name.trim(),
+      description: description.trim() || undefined,
+      agentType: agentType(),
+      config,
+    });
+    if (!res.ok) {
+      add({ title: "Create failed", description: res.error, type: "error" });
+      return null;
+    }
+    setAgentId(res.publicId);
+    // Move the URL to the durable edit route so a refresh lands on the agent.
+    router.replace(workspace.studio.agent(routeCtx, res.publicId));
+    return res.publicId;
+  }
+
+  async function onSaveDraft() {
+    setBusy(true);
+    try {
+      const id = await persistDraft();
+      if (id) {
+        add({
+          title: "Draft saved",
+          description: `${name.trim() || "Agent"} saved as a draft.`,
+          type: "success",
+        });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onPublish() {
+    setBusy(true);
+    try {
+      const id = await persistDraft();
+      if (!id) return;
+      const res = await publishAgentAction({
+        orgSlug,
+        workspaceSlug,
+        agentId: id,
+      });
+      if (!res.ok) {
+        add({ title: "Publish failed", description: res.error, type: "error" });
+        return;
+      }
+      add({
+        title: "Published",
+        description: `Version ${res.version} is published.`,
+        type: "success",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onPublishDeploy() {
+    setBusy(true);
+    try {
+      const id = await persistDraft();
+      if (!id) return;
+      const pub = await publishAgentAction({
+        orgSlug,
+        workspaceSlug,
+        agentId: id,
+      });
+      if (!pub.ok) {
+        add({ title: "Publish failed", description: pub.error, type: "error" });
+        return;
+      }
+      const dep = await deployAgentAction({
+        orgSlug,
+        workspaceSlug,
+        agentId: id,
+        deploymentStatus: "active",
+      });
+      if (!dep.ok) {
+        add({ title: "Deploy failed", description: dep.error, type: "error" });
+        return;
+      }
+      setDeployed(true);
+      add({
+        title: "Published & deployed",
+        description: "Triggers are live. Launch it from the Ask surface.",
+        type: "success",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const canSaveIdentity =
+    name.trim().length > 0 && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug.trim());
+
+  return (
+    <div className="flex flex-col gap-6 lg:flex-row">
+      {/* Step rail */}
+      <nav
+        className="flex flex-row gap-1 overflow-x-auto lg:w-48 lg:flex-col lg:gap-0.5"
+        aria-label="Builder steps"
+      >
+        {STEPS.map((s, i) => {
+          const active = i === stepIdx;
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setStepIdx(i)}
+              className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
+                active
+                  ? "bg-muted font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-muted/40"
+              }`}
+              aria-current={active ? "step" : undefined}
+              data-testid={`builder-step-${s.key}`}
+            >
+              <CircleDot
+                className={`h-3.5 w-3.5 flex-shrink-0 ${active ? "opacity-100" : "opacity-40"}`}
+                aria-hidden="true"
+              />
+              <span className="whitespace-nowrap">
+                {i + 1}. {s.label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Step content */}
+      <div className="flex-1 min-w-0">
+        {readOnly ? (
+          <div
+            className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground"
+            role="status"
+          >
+            {initialAgent?.status === "archived"
+              ? "This agent is archived."
+              : "This agent is read-only — managed agents and non-admins can view but not change it."}
+          </div>
+        ) : null}
+
+        <div className="rounded-lg border bg-card p-6">
+          {/* ── Identity ─────────────────────────────────────────────────── */}
+          {step.key === "identity" ? (
+            <div className="flex flex-col gap-5" data-testid="step-identity">
+              <div className="space-y-1">
+                <Label htmlFor="agent-name">Name</Label>
+                <Input
+                  id="agent-name"
+                  value={name}
+                  disabled={disabled}
+                  placeholder="Release Notes Writer"
+                  onChange={(e) => onNameChange(e.target.value)}
+                  data-testid="agent-name-input"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="agent-slug">Slug</Label>
+                <Input
+                  id="agent-slug"
+                  value={slug}
+                  // Slug is immutable after creation (the update contract does not
+                  // accept it); lock it in edit mode.
+                  disabled={disabled || mode === "edit"}
+                  placeholder="release-notes-writer"
+                  onChange={(e) => {
+                    setSlugEdited(true);
+                    setSlug(slugify(e.target.value));
+                  }}
+                  className="font-mono"
+                  data-testid="agent-slug-input"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Lowercase kebab-case. Used in URLs and A2A routing.
+                </p>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="agent-description">Description</Label>
+                <Textarea
+                  id="agent-description"
+                  value={description}
+                  disabled={disabled}
+                  rows={2}
+                  placeholder="What does this agent do? Drives routing and subagent selection."
+                  onChange={(e) => setDescription(e.target.value)}
+                  data-testid="agent-description-input"
+                />
+              </div>
+              <div className="flex items-start justify-between gap-3 rounded-md border bg-muted/20 px-3 py-3">
+                <div>
+                  <Label htmlFor="agent-code-features" className="text-sm font-medium">
+                    Code features
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Enables the sandboxed coding path (file edits, terminal, repo
+                    tools). Off is a plain conversational / tool agent.
+                  </p>
+                </div>
+                <Switch
+                  id="agent-code-features"
+                  checked={codeFeatures}
+                  disabled={disabled}
+                  onCheckedChange={setCodeFeatures}
+                  data-testid="agent-code-features-switch"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                The model is resolved by the platform gateway at run time — no
+                per-agent model pin in Phase 1.
+              </p>
+            </div>
+          ) : null}
+
+          {/* ── Prompt ───────────────────────────────────────────────────── */}
+          {step.key === "prompt" ? (
+            <div className="flex flex-col gap-3" data-testid="step-prompt">
+              <div className="space-y-1">
+                <Label htmlFor="agent-instructions">System prompt</Label>
+                <Textarea
+                  id="agent-instructions"
+                  value={instructions}
+                  disabled={disabled}
+                  rows={12}
+                  placeholder="You are a precise, citation-grounded agent. Ground every claim in the workspace knowledge graph…"
+                  onChange={(e) => setInstructions(e.target.value)}
+                  data-testid="agent-instructions-input"
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Baked into the agent definition. Optional — leave blank to use
+                  the platform default.
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          {/* ── Equip ────────────────────────────────────────────────────── */}
+          {step.key === "equip" ? (
+            <div className="flex flex-col gap-3" data-testid="step-equip">
+              <p className="text-sm text-muted-foreground">
+                Everything this agent loads — skills, tools, MCP servers, and
+                subagents — as one uniform list.
+              </p>
+              <EquipPicker
+                sources={sources}
+                value={agentTools}
+                onChange={setAgentTools}
+                disabled={disabled}
+              />
+            </div>
+          ) : null}
+
+          {/* ── Ground ───────────────────────────────────────────────────── */}
+          {step.key === "ground" ? (
+            <div className="flex flex-col gap-5" data-testid="step-ground">
+              <p className="text-sm text-muted-foreground">
+                Bind the agent to an ontology and bound its graph pulls. Defaults
+                are safe — you can skip this.
+              </p>
+              <div className="space-y-1">
+                <Label htmlFor="agent-ontology">Ontology id</Label>
+                <Input
+                  id="agent-ontology"
+                  value={ontologyId}
+                  disabled={disabled}
+                  placeholder="ont_… (leave blank to bind later)"
+                  onChange={(e) => setOntologyId(e.target.value)}
+                  className="font-mono"
+                  data-testid="agent-ontology-input"
+                />
+              </div>
+              <fieldset className="space-y-2" disabled={disabled}>
+                <legend className="text-sm font-medium">Access mode</legend>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="agent-graph-mode"
+                    className="mt-1"
+                    checked={graphMode === "read"}
+                    onChange={() => setGraphMode("read")}
+                    disabled={disabled}
+                  />
+                  <span>
+                    <span className="font-medium text-foreground">Read</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Query-only. The agent never proposes new nodes or edges.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="agent-graph-mode"
+                    className="mt-1"
+                    checked={graphMode === "extend"}
+                    onChange={() => setGraphMode("extend")}
+                    disabled={disabled}
+                  />
+                  <span>
+                    <span className="font-medium text-foreground">Extend</span>
+                    <span className="block text-xs text-muted-foreground">
+                      May propose new nodes and edges into the ontology.
+                    </span>
+                  </span>
+                </label>
+              </fieldset>
+              <div className="space-y-1">
+                <Label>Retrieval strategy</Label>
+                <Select
+                  value={strategy}
+                  onValueChange={(v) => setStrategy(v as GraphRetrievalStrategy)}
+                >
+                  <SelectTrigger size="sm" className="w-full" disabled={disabled}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    {RETRIEVAL_STRATEGIES.map((s) => (
+                      <SelectItem key={s} value={s} className="capitalize">
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label htmlFor="agent-max-hops">Max hops</Label>
+                  <Input
+                    id="agent-max-hops"
+                    type="number"
+                    min={0}
+                    step={1}
+                    size="sm"
+                    disabled={disabled}
+                    value={maxHops}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setMaxHops(Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0);
+                    }}
+                    data-testid="agent-max-hops-input"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="agent-max-nodes">Max nodes</Label>
+                  <Input
+                    id="agent-max-nodes"
+                    type="number"
+                    min={1}
+                    step={1}
+                    size="sm"
+                    disabled={disabled}
+                    value={maxNodes}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setMaxNodes(Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1);
+                    }}
+                    data-testid="agent-max-nodes-input"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {/* ── Triggers ─────────────────────────────────────────────────── */}
+          {step.key === "triggers" ? (
+            <div className="flex flex-col gap-5" data-testid="step-triggers">
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="agent-trigger-manual"
+                  checked={manualEnabled}
+                  disabled={disabled}
+                  onCheckedChange={(v) => setManualEnabled(v === true)}
+                  data-testid="agent-trigger-manual"
+                />
+                <div>
+                  <Label htmlFor="agent-trigger-manual">Manual</Label>
+                  <p className="text-xs text-muted-foreground">
+                    A person runs the agent on demand. Recommended default.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-1 border-t pt-4">
+                <Label htmlFor="agent-trigger-cron">Schedule (cron)</Label>
+                <Input
+                  id="agent-trigger-cron"
+                  value={scheduleCron}
+                  disabled={disabled}
+                  placeholder="0 9 * * 1  (optional — leave blank for none)"
+                  onChange={(e) => setScheduleCron(e.target.value)}
+                  className="font-mono"
+                  data-testid="agent-trigger-cron-input"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Runs the agent on a recurring cadence when deployed.
+                </p>
+              </div>
+
+              <fieldset
+                className="space-y-3 border-t pt-4"
+                disabled={disabled}
+              >
+                <legend className="text-sm font-medium">Event trigger</legend>
+                <p className="text-xs text-muted-foreground">
+                  Fires when something happens in a connected source. Both source
+                  and type are required, or the event trigger is dropped.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="agent-event-source">Event source</Label>
+                    <Input
+                      id="agent-event-source"
+                      value={eventSource}
+                      disabled={disabled}
+                      placeholder="github_repo"
+                      onChange={(e) => setEventSource(e.target.value)}
+                      data-testid="agent-event-source-input"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="agent-event-type">Event type</Label>
+                    <Input
+                      id="agent-event-type"
+                      value={eventType}
+                      disabled={disabled}
+                      placeholder="push"
+                      onChange={(e) => setEventType(e.target.value)}
+                      data-testid="agent-event-type-input"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="agent-event-connection">
+                    Connection id (optional)
+                  </Label>
+                  <Input
+                    id="agent-event-connection"
+                    value={eventConnection}
+                    disabled={disabled}
+                    placeholder="conn_…"
+                    onChange={(e) => setEventConnection(e.target.value)}
+                    className="font-mono"
+                    data-testid="agent-event-connection-input"
+                  />
+                </div>
+              </fieldset>
+            </div>
+          ) : null}
+
+          {/* ── Review ───────────────────────────────────────────────────── */}
+          {step.key === "review" ? (
+            <div className="flex flex-col gap-5" data-testid="step-review">
+              <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                <SummaryItem label="Name" value={name.trim() || "—"} />
+                <SummaryItem label="Slug" value={slug.trim() || "—"} mono />
+                <SummaryItem
+                  label="Code features"
+                  value={codeFeatures ? "On (coding)" : "Off (custom)"}
+                />
+                <SummaryItem
+                  label="Instructions"
+                  value={instructions.trim() ? "Set" : "Platform default"}
+                />
+                <SummaryItem
+                  label="Equipped"
+                  value={`${agentTools.length} item${agentTools.length !== 1 ? "s" : ""}`}
+                />
+                <SummaryItem
+                  label="Ontology"
+                  value={ontologyId.trim() || "Not bound"}
+                  mono
+                />
+                <SummaryItem
+                  label="Graph"
+                  value={`${graphMode} · ${strategy} · ${maxHops} hops / ${maxNodes} nodes`}
+                />
+                <SummaryItem
+                  label="Triggers"
+                  value={
+                    [
+                      manualEnabled ? "manual" : null,
+                      scheduleCron.trim() ? "schedule" : null,
+                      eventSource.trim() && eventType.trim() ? "event" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(", ") || "none"
+                  }
+                />
+              </dl>
+
+              {agentTools.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {agentTools.map((t) => (
+                    <Badge
+                      key={`${t.type}:${t.ref}`}
+                      variant="secondary"
+                      className="text-[10px]"
+                    >
+                      {t.type}: {t.ref}
+                    </Badge>
+                  ))}
+                </div>
+              ) : null}
+
+              {!readOnly ? (
+                <div className="flex flex-wrap items-center gap-3 border-t pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={disabled || !canSaveIdentity}
+                    onClick={onSaveDraft}
+                    startIcon={<Save className="h-3.5 w-3.5" aria-hidden="true" />}
+                    data-testid="agent-save-draft"
+                  >
+                    Save draft
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={disabled || !canSaveIdentity}
+                    onClick={onPublish}
+                    startIcon={<Send className="h-3.5 w-3.5" aria-hidden="true" />}
+                    data-testid="agent-publish"
+                  >
+                    Publish
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="gradient"
+                    size="sm"
+                    disabled={disabled || !canSaveIdentity}
+                    onClick={onPublishDeploy}
+                    startIcon={<Rocket className="h-3.5 w-3.5" aria-hidden="true" />}
+                    data-testid="agent-publish-deploy"
+                  >
+                    Publish & deploy
+                  </Button>
+                  {deployed && agentId ? (
+                    <a
+                      href={`${workspace.ask(routeCtx)}?agent=${encodeURIComponent(agentId)}`}
+                      className="inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline"
+                      data-testid="agent-launch-link"
+                    >
+                      Launch <Rocket className="h-3.5 w-3.5" aria-hidden="true" />
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
+              {!canSaveIdentity && !readOnly ? (
+                <p className="text-xs text-destructive">
+                  A name and a valid kebab-case slug are required before saving.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        {/* Step nav */}
+        <div className="mt-4 flex items-center justify-between">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={stepIdx === 0}
+            onClick={() => setStepIdx((i) => Math.max(0, i - 1))}
+            startIcon={<ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />}
+            data-testid="builder-prev"
+          >
+            Back
+          </Button>
+          {stepIdx < STEPS.length - 1 ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setStepIdx((i) => Math.min(STEPS.length - 1, i + 1))}
+              endIcon={<ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />}
+              data-testid="builder-next"
+            >
+              Next
+            </Button>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {mode === "edit" && initialAgent
+                ? `Editing ${initialAgent.slug} · v${initialAgent.version ?? "—"}`
+                : "New agent"}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryItem({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className={`text-foreground ${mono ? "font-mono text-xs" : ""}`}>
+        {value}
+      </dd>
+    </div>
+  );
+}

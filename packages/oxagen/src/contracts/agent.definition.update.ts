@@ -33,6 +33,10 @@ export const agentDefinitionUpdate = registerCapability({
     agentId: z.string().describe("Agent public id (agt_…) or UUID"),
     name: z.string().min(1).optional(),
     description: z.string().optional(),
+    // Optional identity-row change. Studio persists the "code features" toggle
+    // as agentType ("coding" on / "custom" off), so editing an existing agent
+    // must be able to flip it. Omitted → the agentType is left unchanged.
+    agentType: z.string().optional(),
     config: definitionConfigInput,
   }),
   output: z.object({
