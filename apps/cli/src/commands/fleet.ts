@@ -506,10 +506,7 @@ export async function handleFleetAttach(
     applyFateExit(fate);
     return;
   }
-  writer.write(
-    `Focusing ${shortSid(resolved)} — mission control TUI lands with the next commit on this branch.`,
-  );
-  writer.write(`Meanwhile: oxagen fleet attach ${shortSid(resolved)} --json`);
+  await launchMissionControlFor(opts.cwd, resolved);
 }
 
 // ── send ─────────────────────────────────────────────────────────────────────
@@ -811,9 +808,7 @@ export interface FleetRootOptions extends CommonOptions {
 
 /**
  * `oxagen fleet` — Mission Control in a terminal; piped or `--json`, an alias of
- * `fleet watch --json` over the whole fleet. The interactive TUI lands with the
- * next commit on this branch; until then a real terminal gets the roster plus a
- * pointer to the headless surfaces.
+ * `fleet watch --json` over the whole fleet.
  */
 export async function handleFleetRoot(
   opts: FleetRootOptions = {},
@@ -845,9 +840,25 @@ export async function handleFleetRoot(
     return;
   }
 
-  const sessions = await openStore(opts.cwd).listSessions();
-  writer.write(renderLsTable(sessions));
-  writer.write("");
-  writer.write("Mission Control TUI lands with the next commit on this branch.");
-  writer.write("Headless now: oxagen fleet watch --json · oxagen fleet ls · oxagen fleet logs <sid>");
+  await launchMissionControlFor(opts.cwd);
+}
+
+/**
+ * Boot Mission Control over this project's fleet. The manager (and through it
+ * the engine) loads lazily — headless verbs never pay for Ink or the runner.
+ */
+async function launchMissionControlFor(cwd: string | undefined, focusSid?: string): Promise<void> {
+  const projectCwd = cwd ?? process.cwd();
+  const store = openStore(cwd);
+  const [{ FleetSessionManager }, { launchMissionControl }] = await Promise.all([
+    import("../sessions/manager.js"),
+    import("../tui/mission-control/index.js"),
+  ]);
+  const manager = new FleetSessionManager({ store, cwd: projectCwd });
+  await launchMissionControl({
+    store,
+    manager,
+    cwd: projectCwd,
+    ...(focusSid !== undefined ? { focusSid } : {}),
+  });
 }

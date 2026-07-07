@@ -1832,15 +1832,26 @@ export function buildProgram(): Command {
 
   // ── fleet: the session fleet (ADR-023) ──────────────────────────────────────
 
+  // Shared output flags live ONLY on this parent: Commander's non-positional
+  // parsing lets the parent claim `--json`/`--quiet` wherever they appear in a
+  // `fleet …` invocation (even after the subcommand), so re-declaring them on
+  // subcommands would shadow the parsed value with a default-false copy — the
+  // parent wins the parse, the child's default wins the read, and the flag is
+  // silently lost. Every fleet action therefore reads
+  // `command.optsWithGlobals()` (the `pr fix`/`cost` pattern), which also
+  // surfaces the program-wide `--verbose`. Subcommands declare only their OWN
+  // flags, which no ancestor duplicates.
   const fleet = program
     .command("fleet")
-    .description("Mission Control for many agent sessions (piped: streams the fleet as JSON)")
-    .option("--json", "Headless: stream the fleet's NDJSON envelope instead of the live view", false)
+    .description(
+      "Mission Control for many agent sessions (piped: streams the fleet as NDJSON). " +
+        "--json and --quiet here apply to every fleet subcommand.",
+    )
+    .option("--json", "Machine output for any fleet subcommand (NDJSON for streams)", false)
     .option("--quiet", "Suppress progress chrome (stderr); data still emits", false)
-    .option("--verbose", "Include token deltas / every stage in the aggregate stream", false)
-    .action(async (opts: { json?: boolean; quiet?: boolean; verbose?: boolean }) => {
+    .action(async (_opts: unknown, command: Command) => {
       const { handleFleetRoot } = await import("./commands/fleet.js");
-      await handleFleetRoot(opts);
+      await handleFleetRoot(command.optsWithGlobals());
     });
 
   fleet
@@ -1851,92 +1862,59 @@ export function buildProgram(): Command {
     .option("--agent <name>", "Run the session as a named agent definition")
     .option("--once", "End after the first turn (default: a conversation session)", false)
     .option("--follow", "Stream the session's events to completion; exit code is its fate", false)
-    .option("--json", "Machine output: the sid as JSON, or NDJSON envelope with --follow", false)
-    .option("--quiet", "Suppress progress chrome (stderr)", false)
-    .action(
-      async (
-        promptWords: string[],
-        opts: {
-          model?: string;
-          agent?: string;
-          once?: boolean;
-          follow?: boolean;
-          json?: boolean;
-          quiet?: boolean;
-          verbose?: boolean;
-        },
-      ) => {
-        // The worker this spawns runs the engine — gate on an account (BYOK
-        // auto-applies), exactly like the root one-shot action.
-        const { requireSession } = await import("./lib/session.js");
-        requireSession();
-        const { handleFleetDispatch } = await import("./commands/fleet.js");
-        await handleFleetDispatch(promptWords, opts);
-      },
-    );
+    .action(async (promptWords: string[], _opts: unknown, command: Command) => {
+      // The worker this spawns runs the engine — gate on an account (BYOK
+      // auto-applies), exactly like the root one-shot action.
+      const { requireSession } = await import("./lib/session.js");
+      requireSession();
+      const { handleFleetDispatch } = await import("./commands/fleet.js");
+      await handleFleetDispatch(promptWords, command.optsWithGlobals());
+    });
 
   fleet
     .command("ls")
     .description("List sessions from their meta.json snapshots")
-    .option("--json", "Output one JSON array of session snapshots", false)
-    .option("--quiet", "Suppress progress chrome (stderr)", false)
-    .action(async (opts: { json?: boolean; quiet?: boolean }) => {
+    .action(async (_opts: unknown, command: Command) => {
       const { handleFleetLs } = await import("./commands/fleet.js");
-      await handleFleetLs(opts);
+      await handleFleetLs(command.optsWithGlobals());
     });
 
   fleet
     .command("watch")
     .description("Merged live stream; no sids means all non-terminal sessions")
     .argument("[sids...]", "Sessions to watch; omit for all active sessions")
-    .option("--json", "Stream the raw NDJSON envelope instead of pretty lines", false)
-    .option("--quiet", "Suppress progress chrome (stderr)", false)
-    .option("--verbose", "Include token deltas / every stage", false)
-    .action(
-      async (sids: string[], opts: { json?: boolean; quiet?: boolean; verbose?: boolean }) => {
-        const { handleFleetWatch } = await import("./commands/fleet.js");
-        await handleFleetWatch(sids, opts);
-      },
-    );
+    .action(async (sids: string[], _opts: unknown, command: Command) => {
+      const { handleFleetWatch } = await import("./commands/fleet.js");
+      await handleFleetWatch(sids, command.optsWithGlobals());
+    });
 
   fleet
     .command("attach")
     .description("Mission Control focused on one session (TTY), or its NDJSON from the start plus live follow")
     .argument("<sid>", "Session id (full, short tail, or unique prefix)")
-    .option("--json", "Replay from the start then follow as NDJSON; exit with the session's fate", false)
-    .option("--quiet", "Suppress progress chrome (stderr)", false)
-    .option("--verbose", "Include token deltas / every stage", false)
-    .action(
-      async (sid: string, opts: { json?: boolean; quiet?: boolean; verbose?: boolean }) => {
-        const { handleFleetAttach } = await import("./commands/fleet.js");
-        await handleFleetAttach(sid, opts);
-      },
-    );
+    .action(async (sid: string, _opts: unknown, command: Command) => {
+      const { handleFleetAttach } = await import("./commands/fleet.js");
+      await handleFleetAttach(sid, command.optsWithGlobals());
+    });
 
   fleet
     .command("send")
     .description("Append a follow-up message to a session's inbox")
     .argument("<sid>", "Session id (full, short tail, or unique prefix)")
     .argument("<message...>", 'The follow-up turn ("-" reads from stdin)')
-    .option("--json", "Output the result as JSON", false)
-    .option("--quiet", "Suppress progress chrome (stderr)", false)
-    .action(
-      async (sid: string, messageWords: string[], opts: { json?: boolean; quiet?: boolean }) => {
-        const { handleFleetSend } = await import("./commands/fleet.js");
-        await handleFleetSend(sid, messageWords, opts);
-      },
-    );
+    .action(async (sid: string, messageWords: string[], _opts: unknown, command: Command) => {
+      const { handleFleetSend } = await import("./commands/fleet.js");
+      await handleFleetSend(sid, messageWords, command.optsWithGlobals());
+    });
 
   fleet
     .command("cancel")
     .description("Cancel a session, or all of them")
     .argument("[sid]", "Session id to cancel; omit with --all")
     .option("--all", "Cancel every non-terminal session", false)
-    .option("--json", "Output the per-session result as JSON", false)
-    .option("--quiet", "Suppress progress chrome (stderr)", false)
-    .action(async (sid: string | undefined, opts: { all?: boolean; json?: boolean; quiet?: boolean }) => {
+    .action(async (sid: string | undefined, _opts: unknown, command: Command) => {
       const { handleFleetCancel } = await import("./commands/fleet.js");
-      await handleFleetCancel(sid, opts);
+      await handleFleetCancel(sid, command.optsWithGlobals());
     });
 
   fleet
@@ -1945,28 +1923,19 @@ export function buildProgram(): Command {
     .argument("<sid>", "Session id (full, short tail, or unique prefix)")
     .option("--from-seq <n>", "Resume the replay at this sequence number")
     .option("--follow", "Keep tailing after the replay", false)
-    .option("--json", "Output the raw NDJSON envelope (default when piped)", false)
-    .option("--quiet", "Suppress progress chrome (stderr)", false)
-    .action(
-      async (
-        sid: string,
-        opts: { fromSeq?: string; follow?: boolean; json?: boolean; quiet?: boolean },
-      ) => {
-        const { handleFleetLogs } = await import("./commands/fleet.js");
-        await handleFleetLogs(sid, opts);
-      },
-    );
+    .action(async (sid: string, _opts: unknown, command: Command) => {
+      const { handleFleetLogs } = await import("./commands/fleet.js");
+      await handleFleetLogs(sid, command.optsWithGlobals());
+    });
 
   fleet
     .command("clean")
     .description("Prune terminal sessions")
     .option("--older-than <age>", "Age cutoff: days (7) or a duration (1d, 12h) — default 7", "7")
     .option("--all", "Prune every terminal session regardless of age", false)
-    .option("--json", "Output the pruned sids as JSON", false)
-    .option("--quiet", "Suppress progress chrome (stderr)", false)
-    .action(async (opts: { olderThan?: string; all?: boolean; json?: boolean; quiet?: boolean }) => {
+    .action(async (_opts: unknown, command: Command) => {
       const { handleFleetClean } = await import("./commands/fleet.js");
-      await handleFleetClean(opts);
+      await handleFleetClean(command.optsWithGlobals());
     });
 
   fleet
