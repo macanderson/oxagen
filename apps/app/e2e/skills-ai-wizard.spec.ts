@@ -18,6 +18,7 @@
 
 import { test, expect } from "@playwright/test";
 import { signUpFreshUser } from "./helpers/signup";
+import { gotoStable } from "./helpers/nav";
 import { rm, mkdir } from "node:fs/promises";
 import path from "node:path";
 
@@ -37,7 +38,7 @@ test.describe("skills AI-assisted setup wizard", () => {
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "skill-wiz" });
 
     // ── 2. Open Studio → Skills and launch the wizard ───────────────────────
-    await page.goto(`/${orgSlug}/default/studio/skills`);
+    await gotoStable(page, `/${orgSlug}/default/studio/skills`);
     await expect(page).not.toHaveURL(/\/login/);
 
     const newSkillBtn = page.getByTestId("new-skill-btn");
@@ -95,7 +96,7 @@ test.describe("skills AI-assisted setup wizard", () => {
 
     const { orgSlug } = await signUpFreshUser(page, { orgPrefix: "skill-wiz-back" });
 
-    await page.goto(`/${orgSlug}/default/studio/skills`);
+    await gotoStable(page, `/${orgSlug}/default/studio/skills`);
     await page.getByTestId("new-skill-btn").click();
 
     const promptText = "Teach the agent our code review checklist and when to apply it.";
