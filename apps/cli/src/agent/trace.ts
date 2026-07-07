@@ -31,4 +31,11 @@ export type {
   ToolEvent,
   JudgeVerdict,
   TurnTrace,
+  // Pre-execution scope-review snapshot + the caller's gate decision — the
+  // engine surfaces these after ROUTE / before EXECUTE (see runTurn's
+  // `onScopeReview` / `confirmScope`). Re-exported here so the REPL renderer and
+  // the /review overlay import them through the same barrel as every other
+  // trace type.
+  ScopeReviewInfo,
+  ScopeReviewDecision,
 } from "@oxagen/agent-engine";

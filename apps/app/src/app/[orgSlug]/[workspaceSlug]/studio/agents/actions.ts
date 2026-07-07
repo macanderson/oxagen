@@ -1,0 +1,220 @@
+"use server";
+/**
+ * studio/agents/actions.ts — server actions for the Agent Builder.
+ *
+ * create / update / publish / deploy an agent definition. Every action:
+ *   1. zod safeParse's the client payload (never trust the client),
+ *   2. resolves the Studio scope + IAM via resolveStudioScope,
+ *   3. gates the mutation on `canManage` (workspace Owner/Admin) — apps/app does
+ *      NOT bootstrap IAM through invoke(), so this is THE authorization gate,
+ *   4. calls the corresponding lib/studio/agents helper,
+ *   5. revalidates the Studio Agents surface,
+ *   6. returns a discriminated union { ok: true, … } | { ok: false, error }.
+ *
+ * The house form pattern: plain payload in, union out — no useActionState.
+ */
+import "@oxagen/handlers/register";
+import { z } from "zod";
+import { revalidatePath } from "next/cache";
+import {
+  graphAccessSchema,
+  agentToolSchema,
+  agentTriggerSchema,
+} from "@oxagen/oxagen/agent-schema";
+import { workspace } from "@/lib/routes";
+import type { ScopeContext } from "@/lib/scope";
+import { resolveStudioScope } from "@/lib/studio/scope";
+import {
+  createAgent,
+  updateAgent,
+  publishAgent,
+  deployAgent,
+} from "@/lib/studio/agents";
+
+// ── Shared shapes ─────────────────────────────────────────────────────────────
+
+const scopeShape = {
+  orgSlug: z.string().min(1),
+  workspaceSlug: z.string().min(1),
+};
+
+// The versioned config body. Mirrors agentDefinitionConfigSchema; agentTools /
+// triggers default to [] so a minimal agent (identity + graph) is valid.
+const configSchema = z.object({
+  graph: graphAccessSchema,
+  agentTools: z.array(agentToolSchema).default([]),
+  triggers: z.array(agentTriggerSchema).default([]),
+  instructions: z.string().optional(),
+});
+
+const createSchema = z.object({
+  ...scopeShape,
+  slug: z
+    .string()
+    .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Slug must be lowercase kebab-case"),
+  name: z.string().min(1, "Name is required"),
+  description: z.string().optional(),
+  agentType: z.string().min(1),
+  config: configSchema,
+});
+
+const updateSchema = z.object({
+  ...scopeShape,
+  agentId: z.string().min(1),
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+  agentType: z.string().min(1).optional(),
+  config: configSchema,
+});
+
+const publishSchema = z.object({
+  ...scopeShape,
+  agentId: z.string().min(1),
+  version: z.number().int().positive().optional(),
+});
+
+const deploySchema = z.object({
+  ...scopeShape,
+  agentId: z.string().min(1),
+  deploymentStatus: z.enum(["inactive", "active"]),
+});
+
+export type CreateAgentActionInput = z.input<typeof createSchema>;
+export type UpdateAgentActionInput = z.input<typeof updateSchema>;
+export type PublishAgentActionInput = z.input<typeof publishSchema>;
+export type DeployAgentActionInput = z.input<typeof deploySchema>;
+
+export type AgentActionResult<T = Record<string, never>> =
+  | ({ ok: true } & T)
+  | { ok: false; error: string };
+
+const MANAGE_DENIED =
+  "Only workspace owners and admins can build or change agents.";
+
+function revalidateAgents(orgSlug: string, workspaceSlug: string): void {
+  const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
+  revalidatePath(workspace.studio.agents(routeCtx));
+}
+
+// ── Create ────────────────────────────────────────────────────────────────────
+
+export async function createAgentAction(
+  input: CreateAgentActionInput,
+): Promise<AgentActionResult<{ agentId: string; publicId: string; slug: string }>> {
+  const parsed = createSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const { orgSlug, workspaceSlug, slug, name, description, agentType, config } =
+    parsed.data;
+
+  const { ctx, canManage } = await resolveStudioScope(orgSlug, workspaceSlug);
+  if (!canManage) return { ok: false, error: MANAGE_DENIED };
+
+  try {
+    const out = await createAgent(ctx, {
+      slug,
+      name,
+      description,
+      agentType,
+      config,
+    });
+    revalidateAgents(orgSlug, workspaceSlug);
+    return {
+      ok: true,
+      agentId: out.publicId,
+      publicId: out.publicId,
+      slug: out.slug,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to create the agent.",
+    };
+  }
+}
+
+// ── Update ────────────────────────────────────────────────────────────────────
+
+export async function updateAgentAction(
+  input: UpdateAgentActionInput,
+): Promise<AgentActionResult<{ version: number; isPublished: boolean }>> {
+  const parsed = updateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const { orgSlug, workspaceSlug, agentId, name, description, agentType, config } =
+    parsed.data;
+
+  const { ctx, canManage } = await resolveStudioScope(orgSlug, workspaceSlug);
+  if (!canManage) return { ok: false, error: MANAGE_DENIED };
+
+  try {
+    const out = await updateAgent(ctx, {
+      agentId,
+      name,
+      description,
+      agentType,
+      config,
+    });
+    revalidateAgents(orgSlug, workspaceSlug);
+    return { ok: true, version: out.version, isPublished: out.isPublished };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to update the agent.",
+    };
+  }
+}
+
+// ── Publish ───────────────────────────────────────────────────────────────────
+
+export async function publishAgentAction(
+  input: PublishAgentActionInput,
+): Promise<AgentActionResult<{ version: number }>> {
+  const parsed = publishSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const { orgSlug, workspaceSlug, agentId, version } = parsed.data;
+
+  const { ctx, canManage } = await resolveStudioScope(orgSlug, workspaceSlug);
+  if (!canManage) return { ok: false, error: MANAGE_DENIED };
+
+  try {
+    const out = await publishAgent(ctx, agentId, version);
+    revalidateAgents(orgSlug, workspaceSlug);
+    return { ok: true, version: out.version };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to publish the agent.",
+    };
+  }
+}
+
+// ── Deploy ────────────────────────────────────────────────────────────────────
+
+export async function deployAgentAction(
+  input: DeployAgentActionInput,
+): Promise<AgentActionResult<{ deploymentStatus: "inactive" | "active" }>> {
+  const parsed = deploySchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const { orgSlug, workspaceSlug, agentId, deploymentStatus } = parsed.data;
+
+  const { ctx, canManage } = await resolveStudioScope(orgSlug, workspaceSlug);
+  if (!canManage) return { ok: false, error: MANAGE_DENIED };
+
+  try {
+    const out = await deployAgent(ctx, agentId, deploymentStatus);
+    revalidateAgents(orgSlug, workspaceSlug);
+    return { ok: true, deploymentStatus: out.deploymentStatus };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to deploy the agent.",
+    };
+  }
+}

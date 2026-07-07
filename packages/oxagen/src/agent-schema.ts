@@ -170,6 +170,25 @@ export type AgentDeploymentStatus = z.infer<
   typeof agentDeploymentStatusSchema
 >;
 
+/**
+ * The canonical `agentType` value that marks an agent as a CODE agent — one
+ * that reasons over a repository. It's the "create prop": set `agentType:
+ * "code"` on `agent.definition.create` and every surface (the chat stream
+ * route, the app's new-session agent selector) treats the agent as code-capable
+ * — binding the sandbox workspace + code-graph tools and revealing the repo/env
+ * UI. Any other `agentType` (`custom`, `interactive_chat`, …) is a plain chat
+ * agent with no repo tooling. `agentType` stays a free-form string (it also
+ * carries the managed-vs-custom distinction, see isManagedAgentType); this is
+ * simply the one value the code path keys on, centralized here so the app,
+ * contracts, and handlers can never disagree on the spelling.
+ */
+export const CODE_AGENT_TYPE = "code";
+
+/** Whether `agentType` identifies a code agent (repo/code tools + UI). */
+export function isCodeAgentType(agentType: string | null | undefined): boolean {
+  return agentType === CODE_AGENT_TYPE;
+}
+
 export const agentDefinitionSchema = z.object({
   /** Stable id. Slugged public_id + UUID under the hood, per Oxagen convention. */
   id: z.string(),

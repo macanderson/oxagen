@@ -1001,6 +1001,31 @@ export function buildProgram(): Command {
       },
     );
 
+  // ── conversation: export & inspect chat conversations ───────────────────────
+
+  const conversation = program
+    .command("conversation")
+    .description("Export and inspect chat conversations");
+
+  conversation
+    .command("export <id>")
+    .description(
+      "Export a conversation's active branch as Markdown (stdout/file) or a " +
+        "formatted PDF (stored privately; prints the serve URL).",
+    )
+    .option("--format <format>", "Export format: md|markdown|pdf (default md)")
+    .option("-o, --output <file>", "Write markdown output to a file instead of stdout")
+    .option("--json", "Emit raw JSON output")
+    .action(
+      async (
+        id: string,
+        opts: { format?: string; output?: string; json?: boolean },
+      ) => {
+        const { handleConversationExport } = await import("./commands/conversation.js");
+        await handleConversationExport(id, opts);
+      },
+    );
+
   // ── sandbox: durable code-agent sandbox utilities ───────────────────────────
 
   const sandbox = program
@@ -1022,6 +1047,24 @@ export function buildProgram(): Command {
       ) => {
         const { handleSandboxFiles } = await import("./commands/sandbox.js");
         await handleSandboxFiles(sessionId, opts);
+      },
+    );
+
+  sandbox
+    .command("cat <session-id> <path>")
+    .description(
+      "Print one file's contents from a durable sandbox session's workspace",
+    )
+    .option("--max-bytes <n>", "Max bytes to read (default 256 KiB, cap 1 MiB)")
+    .option("--json", "Emit raw JSON output (includes base64 for binary files)")
+    .action(
+      async (
+        sessionId: string,
+        path: string,
+        opts: { maxBytes?: string; json?: boolean },
+      ) => {
+        const { handleSandboxCat } = await import("./commands/sandbox.js");
+        await handleSandboxCat(sessionId, path, opts);
       },
     );
 

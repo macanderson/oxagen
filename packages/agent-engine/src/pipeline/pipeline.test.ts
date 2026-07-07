@@ -156,14 +156,17 @@ describe("runTurn — GraphSyncProvider", () => {
 });
 
 describe("runTurn — bare mode model accounting", () => {
-  it("routes an unpinned bare run through classifyTier, with the label matching what executes", async () => {
-    // Perf #8 + label-integrity regression: an unpinned bare run must NOT
-    // hard-default to the frontier tier (DEFAULT_AGENT_MODEL) — runBare now
-    // routes it through the deterministic classifyTier floor. The load-bearing
-    // invariant is still that the label CANNOT diverge from what ran: assert the
-    // model the stream() call actually received, the trace label, and the
-    // router-derived expectation all agree (computed via the same functions so
-    // it tracks tier config, not a hard-coded slug).
+  it("labels/accounts an unpinned, high-stakes bare run with DEFAULT_AGENT_MODEL, matching what actually executes", async () => {
+    // Regression test: runBare's accounting used to compute the label via
+    // modelForTier("balanced") (Sonnet) while the actual execution call below
+    // it passed `opts.model` through as-is — undefined when unpinned, which
+    // fell through to runCodingAgent's OWN internal default
+    // (DEFAULT_AGENT_MODEL, Fable 5). The label silently diverged from what
+    // ran. Assert BOTH sides agree: the model the stream() call actually
+    // received, and the label recorded on the trace. A prompt that matches
+    // PRECISE_DOMAINS (auth) still floors to the frontier tier — same slug as
+    // DEFAULT_AGENT_MODEL — so this also covers the classifyTier escalation
+    // path (Perf #8), not just the old hard-default.
     const ws = new MemoryWorkspace({ "a.ts": "x" });
     let modelUsed: string | undefined;
     const ai: AgentAi = {
@@ -183,7 +186,7 @@ describe("runTurn — bare mode model accounting", () => {
 
     const prompt = "do something";
     const result = await runTurn({
-      prompt,
+      prompt: "fix the authentication bug in the login flow",
       workspace: ws,
       ai,
       bare: true,
@@ -195,6 +198,42 @@ describe("runTurn — bare mode model accounting", () => {
     expect(modelUsed).toBe(expected);
     expect(result.trace.selectedModel).toBe(expected);
     // The whole point: label == execution.
+    expect(result.trace.selectedModel).toBe(modelUsed);
+  });
+
+  it("routes an unpinned, trivial bare run through the classifyTier floor (Perf #8), matching what actually executes", async () => {
+    // Perf #8: an unpinned bare turn no longer hard-defaults to the frontier
+    // tier — a trivial, short, single-file-scoped ask routes through the same
+    // deterministic classifyTier floor the full pipeline uses, so it runs on
+    // the cheap tier. Assert the label and the actual execution still agree
+    // (no divergence), and that it is NOT the frontier default.
+    const ws = new MemoryWorkspace({ "a.ts": "x" });
+    let modelUsed: string | undefined;
+    const ai: AgentAi = {
+      stream(args: ModelRunArgs) {
+        modelUsed = args.model;
+        return {
+          fullStream: (async function* () {
+            yield { type: "text-delta", text: "done" };
+          })(),
+          steps: Promise.resolve([{}]),
+          usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+          response: Promise.resolve({ messages: [] }),
+        } as unknown as ReturnType<AgentAi["stream"]>;
+      },
+      generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+    };
+
+    const result = await runTurn({
+      prompt: "do something",
+      workspace: ws,
+      ai,
+      bare: true,
+      // No `model` passed — both the label and the actual execution must
+      // resolve to the SAME classifyTier-derived default.
+    });
+
+    expect(modelUsed).not.toBe(DEFAULT_AGENT_MODEL);
     expect(result.trace.selectedModel).toBe(modelUsed);
   });
 

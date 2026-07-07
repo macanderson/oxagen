@@ -1,0 +1,326 @@
+<title>Oxagen — Primary Page Mockups (low-fi)</title>
+<style>
+  :root{
+    --ink:#1a1a1a;--line:#2b2b2b;--soft:#8a8a8a;--fill:#eee;--bg:#faf9f7;--paper:#fff;
+    --accent:#c2410c;--new:#0d6b58;--blue:#3b4fb0;
+    --mono:"SFMono-Regular",Consolas,Menlo,monospace;--sans:"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.45}
+  .wrap{max-width:1180px;margin:0 auto;padding:34px 22px 90px}
+  h1{font-size:24px;margin:0 0 4px}
+  .lead{color:var(--soft);font-size:14px;margin-bottom:26px}
+  h2.sec{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);
+    margin:40px 0 4px;border-top:2px solid var(--line);padding-top:14px}
+  .note{font-size:12.5px;color:var(--soft);margin:2px 0 12px}
+  .frame{border:2px solid var(--line);background:var(--paper);box-shadow:5px 5px 0 var(--line);margin-bottom:10px}
+  .tb{display:flex;align-items:center;gap:8px;border-bottom:1.5px solid var(--line);background:var(--fill);
+    padding:7px 12px;font-family:var(--mono);font-size:11.5px}
+  .tb .g{flex:1}
+  .chip{border:1.5px solid var(--line);background:var(--paper);border-radius:3px;padding:1px 7px;font-size:10.5px}
+  .chip.a{border-color:var(--accent);color:var(--accent)}
+  .chip.n{border-color:var(--new);color:var(--new)}
+  .badge{background:var(--accent);color:#fff;border-radius:9px;padding:0 6px;font-size:10px}
+  .cols{display:flex;min-height:150px}
+  .c{padding:10px 12px;font-size:12px}
+  .c+.c{border-left:1.5px solid var(--line)}
+  .cL{width:190px;background:#fbfbfa}
+  .cR{width:200px;background:#fbfbfa}
+  .hd{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--soft);text-transform:uppercase;margin-bottom:7px}
+  .li{padding:4px 6px;border:1px solid transparent;font-size:12px}
+  .li.on{background:var(--fill);border-color:var(--line);border-radius:3px}
+  .li small{color:var(--soft)}
+  .ph{border:1.5px dashed var(--soft);border-radius:3px;color:var(--soft);font-family:var(--mono);font-size:11px;
+    padding:8px;text-align:center;margin:6px 0}
+  .box{border:1.5px solid var(--line);background:var(--paper);padding:7px 9px;font-size:12px;margin:6px 0}
+  .row{display:flex;gap:7px;align-items:center;font-size:12px;padding:5px 0;border-bottom:1px dotted #ccc}
+  .row .g{flex:1}
+  .tag{font-family:var(--mono);font-size:10px;border:1.5px solid var(--line);padding:0 6px;border-radius:2px}
+  .tag.skill{color:var(--new);border-color:var(--new)}.tag.tool{color:#555}
+  .tag.mcp{color:var(--accent);border-color:var(--accent)}.tag.agent{color:var(--blue);border-color:var(--blue)}
+  .warn{color:var(--accent);font-family:var(--mono);font-size:10.5px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .kv{font-family:var(--mono);font-size:11px;color:var(--soft)}
+  .btn{display:inline-block;border:1.5px solid var(--line);border-radius:3px;padding:3px 10px;font-size:11.5px;background:var(--paper)}
+  .btn.p{background:var(--line);color:#fff}
+  .tabs{display:flex;gap:0;font-family:var(--mono);font-size:11.5px}
+  .tabs span{padding:5px 12px;border:1.5px solid var(--line);border-bottom:0;background:#f0efec}
+  .tabs span.on{background:var(--paper);font-weight:600}
+  .stack{border:1.5px solid var(--line)}
+  .stack div{padding:7px 10px;font-size:12px;border-bottom:1.5px solid var(--line)}
+  .stack div:last-child{border-bottom:0}
+  .stack .lock{background:#f3f3f3;color:#555}
+  .stack .code{background:#fdf1ea}
+  .stack .cust{background:#eef6f3}
+  .stack .sk{background:#fff}
+  .toggle{font-family:var(--mono);font-size:11px;border:1.5px solid var(--new);color:var(--new);border-radius:12px;padding:1px 9px}
+  code{font-family:var(--mono);font-size:11px;background:#f0efec;padding:1px 4px;border-radius:2px}
+  .cap{font-family:var(--mono);font-size:10px;color:var(--new)}
+  .editor{display:flex;min-height:150px;font-family:var(--mono);font-size:11px}
+  .editor .tree{width:130px;border-right:1.5px solid var(--line);padding:8px;color:#555}
+  .editor .code2{flex:1;padding:8px;background:#fbfbfa;color:#333}
+  .editor .side{width:210px;border-left:1.5px solid var(--line);padding:8px}
+  .term{border-top:1.5px solid var(--line);background:#f7f6f4;padding:6px 9px;font-family:var(--mono);font-size:11px;color:#555}
+  @media(max-width:760px){.cols{flex-wrap:wrap}.cL,.cR{width:100%}.grid2,.grid3{grid-template-columns:1fr}.editor{flex-wrap:wrap}.editor .tree,.editor .side{width:100%}}
+  @media (prefers-color-scheme:dark){
+    :root{--ink:#e8e6e2;--line:#4a4a4a;--soft:#8a8a8a;--fill:#242424;--bg:#141414;--paper:#1c1c1c;--accent:#f97316;--new:#34d399;--blue:#8ab4f8}
+    .cL,.cR,.editor .code2{background:#181818}.tabs span{background:#222}.stack .lock{background:#242424;color:#aaa}
+    .stack .code{background:#2a1a12}.stack .cust{background:#12251f}.term{background:#181818}code,.tag{background:transparent}
+  }
+</style>
+<div class="wrap">
+<h1>Oxagen — Primary Page Mockups</h1>
+<div class="lead">Low-fidelity, placement-first. Every screen shows where things go, not final styling. New in this pass:
+chat sessions bound to an agent, the code-features toggle, prompt composition, interactive coding mode, and the
+three invocation surfaces (chat / API / triggers). Companion to 02-information-architecture and 03-wireframes.</div>
+
+<!-- ============ THE MODEL ============ -->
+<h2 class="sec">Core model — how a session, an agent, and the prompt fit together</h2>
+<div class="note">Read this first; it drives the Ask and Agent Builder screens below.</div>
+<div class="grid2">
+  <div class="frame"><div class="tb"><b>Session ↔ Agent binding</b></div>
+    <div class="c" style="font-size:12.5px">
+      <div class="box">A <b>chat session</b> is always bound to exactly one <b>agent</b>. Switching agent starts a new session.
+      The agent decides the tools, skills, prompt, code-mode, and who can run it.</div>
+      <div class="kv">session.agentId → agent.definition (published version)</div>
+      <div class="kv">one agent → many sessions · one session → one agent</div>
+    </div>
+  </div>
+  <div class="frame"><div class="tb"><b>Effective system prompt (composed at run time)</b> <span class="g"></span><span class="toggle">Code: ON</span></div>
+    <div class="c">
+      <div class="stack">
+        <div class="lock">1 · Oxagen base orchestration <span class="kv">(locked, never editable)</span></div>
+        <div class="code">2 · + Coding prompt <span class="kv">(injected only when Code = ON)</span></div>
+        <div class="cust">3 · + Your prompt <span class="kv">(customer: selected Prompt template or inline)</span></div>
+        <div class="sk">4 · + Equipped skill instructions <span class="kv">(each skill appends)</span></div>
+      </div>
+      <div class="note" style="margin-top:8px">The coding layer sits <b>above</b> the customer layer, so turning Code on augments
+      whatever the customer configured. It never replaces it.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ASK ============ -->
+<h2 class="sec">Ask — agent-bound chat sessions</h2>
+<div class="note">Left: sessions grouped by the agent they belong to. Center: the conversation. The agent selector at top binds the session.</div>
+<div class="frame">
+  <div class="tb"><b>OXAGEN</b> · acme / research-ws <span class="g"></span>
+    <span class="chip">Agent: Auditor ▾</span><span class="chip">⌘K</span><span class="chip a">$12.40</span></div>
+  <div class="cols">
+    <div class="c cL">
+      <div class="hd">Sessions · by agent</div>
+      <div class="li"><b>Auditor</b> <small>· coding off</small></div>
+      <div class="li on">↳ audit oxagen.sh <small>2m</small></div>
+      <div class="li">↳ check pricing page <small>1h</small></div>
+      <div class="li"><b>Repo Fixer</b> <small>· coding ON</small></div>
+      <div class="li">↳ fix broken links PR <small>3h</small></div>
+      <div class="ph">+ New session<br>(pick an agent)</div>
+    </div>
+    <div class="c" style="flex:1">
+      <div class="hd">Conversation · session bound to “Auditor”</div>
+      <div class="box">You: audit oxagen.sh for broken links and weak SEO</div>
+      <div class="box">Auditor ▸ plan: crawl · check links · score SEO &nbsp; <span class="btn">Approve plan</span> <span class="cap">agent.plan.approve</span></div>
+      <div class="row"><span class="tag tool">tool</span><span class="g">web.fetch oxagen.sh</span><span>✓ 120ms $0.001</span></div>
+      <div class="row"><span class="tag tool">tool</span><span class="g">browser.read /pricing</span><span>⧖</span></div>
+      <div class="box">grounded in: ◈ Pricing Page, ◈ SEO Policy <span class="cap">NodeRef · cited by label</span></div>
+      <div class="ph">Composer: type, or run /audit &lt;domain&gt; &nbsp;·&nbsp; slash list: /audit /triage /summarize &nbsp; [ Send ▸ ]</div>
+    </div>
+    <div class="c cR">
+      <div class="hd">This agent</div>
+      <div class="box">Auditor · precise·5<br>7 tools · 2 skills<br>code: off<br>graph: read<br>risk: med</div>
+      <div class="btn">Open in Studio ▸</div>
+      <div class="hd" style="margin-top:12px">Run cost</div>
+      <div class="box">this session $4.10<br><span class="kv">metered</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ INTERACTIVE MODE ============ -->
+<h2 class="sec">Interactive mode — launch an agent that writes code (Code = ON)</h2>
+<div class="note">When an agent has Code features on, its session opens the working surface: file tree, editor/diff, terminal, and the chat driving it. Same session model, richer canvas.</div>
+<div class="frame">
+  <div class="tb"><b>Repo Fixer</b> · session · <span class="toggle">Code: ON</span> <span class="g"></span>
+    <span class="chip">sandbox ● ready</span><span class="chip">acme/site ▾</span><span class="chip a">$1.20</span></div>
+  <div class="editor">
+    <div class="tree"><div class="hd">Files</div>src/<br>&nbsp;&nbsp;pages/<br>&nbsp;&nbsp;&nbsp;pricing.tsx *<br>&nbsp;&nbsp;lib/<br>&nbsp;&nbsp;&nbsp;links.ts *<br><span class="cap">agent.sandbox.files</span></div>
+    <div class="code2"><div class="hd">Diff · links.ts</div>- const base = "http://oxagen.sh"<br>+ const base = "https://oxagen.sh"<br><br><span style="color:#888">// agent proposes edit → approval if repo.pr.open</span></div>
+    <div class="side"><div class="hd">Chat / steps</div>You: fix the 12 broken links<br><br>Agent ▸ editing links.ts…<br><span class="warn">⚑ repo.pr.open — approve</span><br><span class="btn">✓</span> <span class="btn">✕</span><br><br><span class="cap">agent.code.execute</span></div>
+  </div>
+  <div class="term">$ pnpm test links.test.ts &nbsp;→&nbsp; ✓ 4 passed &nbsp;·&nbsp; terminal + test output stream inline</div>
+</div>
+
+<!-- ============ AGENT BUILDER ============ -->
+<h2 class="sec">Agent Builder — the definition (identity, model, code toggle)</h2>
+<div class="note">Left step rail, center form, right live preview. Step ① sets identity, model, and the Code-features switch that controls everything downstream.</div>
+<div class="frame">
+  <div class="tb">‹ Agents · <b>Repo Fixer</b> · draft v2 <span class="g"></span><span class="btn">Save draft</span><span class="btn p">Publish v2 ▸</span></div>
+  <div class="cols">
+    <div class="c cL"><div class="hd">Steps</div>
+      <div class="li on">① Identity</div><div class="li">② Prompt</div><div class="li">③ Equip</div>
+      <div class="li">④ Ground</div><div class="li">⑤ Invocation</div><div class="li">⑥ Govern</div><div class="li">⑦ Review</div>
+    </div>
+    <div class="c" style="flex:1"><div class="hd">Identity &amp; runtime</div>
+      <div class="box">Name [ Repo Fixer ]</div>
+      <div class="box">Description [ Fixes links + opens PRs ]</div>
+      <div class="box">Model ▾ [ precise · sonnet-5 ] <span class="cap">workspace.model.settings</span></div>
+      <div class="box" style="border-color:var(--new)"><b>Code features</b> &nbsp; <span class="toggle">ON</span> &nbsp;
+        <span class="kv">enables sandbox, file tools, code.execute, and injects the coding prompt</span></div>
+      <div class="kv">agentType: coding · deploymentStatus: draft</div>
+    </div>
+    <div class="c cR"><div class="hd">Live preview</div>
+      <div class="box">Repo Fixer<br>sonnet-5<br>code: ON<br>? tools · ? skills<br>graph: —<br>triggers: —</div>
+      <div class="box">Est. $/run<br><b>~ $0.6–1.2</b></div>
+    </div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="frame"><div class="tb"><b>② Prompt</b> — compose <span class="g"></span><span class="cap">AgentDefinition.instructions</span></div>
+    <div class="c">
+      <div class="box">Your prompt: (•) Use saved ▾ [ Fix-and-PR ]  ( ) Write inline</div>
+      <div class="hd">Effective prompt preview</div>
+      <div class="stack">
+        <div class="lock">base orchestration (locked)</div>
+        <div class="code">+ coding prompt (Code ON)</div>
+        <div class="cust">+ Fix-and-PR (your prompt)</div>
+        <div class="sk">+ SEO Audit skill</div>
+      </div>
+    </div></div>
+  <div class="frame"><div class="tb"><b>③ Equip</b> — one picker, four types <span class="g"></span><span class="cap">agentTools[]</span></div>
+    <div class="c">
+      <div style="margin-bottom:6px"><span class="tag">Skills</span> <span class="tag">Tools</span> <span class="tag">MCP</span> <span class="tag">Subagents</span> <span class="kv">search…</span></div>
+      <div class="row"><span class="tag skill">skill</span><span class="g">SEO Audit v3</span><span class="kv">✕</span></div>
+      <div class="row"><span class="tag tool">tool</span><span class="g">repo.file.put</span><span class="warn">⚑</span><span class="kv">✕</span></div>
+      <div class="row"><span class="tag tool">tool</span><span class="g">repo.pr.open</span><span class="warn">⚑ approve</span><span class="kv">✕</span></div>
+      <div class="row"><span class="tag mcp">mcp</span><span class="g">Ahrefs</span><span class="warn">⚑ consent</span><span class="kv">✕</span></div>
+      <div class="row"><span class="tag agent">agent</span><span class="g">Link Checker (subagent)</span><span class="kv">✕</span></div>
+      <div class="ph">Available ▸ browse marketplace · subagents = other published agents selectable here</div>
+    </div></div>
+</div>
+
+<!-- ============ INVOCATION ============ -->
+<h2 class="sec">Agent Builder ⑤ — Invocation (one agent, three entry points)</h2>
+<div class="note">The same published agent is reachable by interactive chat, by API endpoint, and (soon) by graph triggers / schedules. All configured here.</div>
+<div class="frame"><div class="tb"><b>⑤ Invocation</b> <span class="g"></span><span class="cap">agent_triggers + deploy</span></div>
+  <div class="c"><div class="grid3">
+    <div class="box"><b>◇ Interactive chat</b><br><span class="kv">[x] enabled</span><br>Runs in Ask, session-bound.<br>Slash command: /fixlinks ▾</div>
+    <div class="box" style="border-color:var(--blue)"><b>◇ API endpoint</b><br><span class="kv">[x] enabled</span><br><code>POST /v1/agents/repo-fixer/run</code><br>auth: workspace API key<br><span class="btn">Copy curl</span> <span class="btn">Keys ▸</span></div>
+    <div class="box" style="border-color:var(--soft)"><b>◇ Triggers / schedule</b> <span class="chip">soon</span><br><span class="kv">( ) schedule (cron)</span><br><span class="kv">( ) graph event ▾ (node/edge change)</span><br><span class="kv">( ) connection event ▾</span></div>
+  </div>
+  <div class="note">Deploy toggle publishes the endpoint + activates triggers. <span class="cap">agent.deploy</span></div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="frame"><div class="tb"><b>④ Ground</b> <span class="g"></span><span class="cap">graph: GraphAccess</span></div>
+    <div class="c"><div class="box">Ontology ▾ acme-web</div><div class="box">Mode (•) read ( ) read+extend</div>
+      <div class="box">Retrieval ▾ hybrid · scope: Page, Link, Metric</div><div class="box">Budget: hops 2 · nodes 40 · min-rel 0.6</div></div></div>
+  <div class="frame"><div class="tb"><b>⑥ Govern</b> · <b>⑦ Review</b> <span class="g"></span><span class="cap">role_grants · agent.publish</span></div>
+    <div class="c"><div class="box">Who can run: [Owner][Admin][Member] +</div>
+      <div class="box">Approvals: (•) inherit tool risk ( ) all ( ) never</div>
+      <div class="box">Review: v2 diff — +repo.pr.open, +Ahrefs, code ON. <span class="btn p">Publish v2</span> <span class="btn">Publish + Deploy</span></div></div></div>
+</div>
+
+<!-- ============ AGENTS LIST ============ -->
+<h2 class="sec">Studio · Agents (list)</h2>
+<div class="frame"><div class="tb"><b>Studio · Agents</b> <span class="g"></span><span class="btn p">+ New agent</span></div>
+  <div class="c">
+    <div class="row"><span class="g"><b>Name</b></span><span style="width:90px">Model</span><span style="width:70px">Code</span><span style="width:70px">Tools</span><span style="width:80px">Status</span><span style="width:70px">Deploy</span><span style="width:50px">$</span></div>
+    <div class="row"><span class="g">Auditor</span><span style="width:90px">precise·5</span><span style="width:70px">off</span><span style="width:70px">7</span><span style="width:80px">● active</span><span style="width:70px">◉ on</span><span style="width:50px">$4.1</span></div>
+    <div class="row"><span class="g">Repo Fixer</span><span style="width:90px">sonnet-5</span><span style="width:70px"><b style="color:var(--new)">ON</b></span><span style="width:70px">5</span><span style="width:80px">● active</span><span style="width:70px">◉ on</span><span style="width:50px">$1.2</span></div>
+    <div class="row"><span class="g">Triage Bot</span><span style="width:90px">fast·haiku</span><span style="width:70px">off</span><span style="width:70px">3</span><span style="width:80px">○ draft</span><span style="width:70px">○ off</span><span style="width:50px">—</span></div>
+  </div></div>
+
+<!-- ============ OPERATE: RUNS / FLEETS / APPROVALS ============ -->
+<h2 class="sec">Operate — Runs · Fleets · Approvals</h2>
+<div class="grid3">
+  <div class="frame"><div class="tb"><b>Runs</b></div><div class="c">
+    <div class="row"><span class="g">Auditor /audit</span><span>$4.1</span></div>
+    <div class="row"><span class="g">Repo Fixer chat</span><span>$1.2</span></div>
+    <div class="row"><span class="g">Triage event</span><span>$0.02</span></div>
+    <div class="ph">row → trace: span tree, cost/step, grounded-in chips, replay <span class="cap">agent.trace.get</span></div></div></div>
+  <div class="frame"><div class="tb"><b>Fleets</b></div><div class="c">
+    <div class="box">Site Audit · 5 agents · $6.20</div>
+    <div class="ph">root → subagents<br>tokens · cost · cited nodes per branch <span class="cap">subagent.fanout.get</span></div></div></div>
+  <div class="frame"><div class="tb"><b>Approvals</b> <span class="badge">3</span></div><div class="c">
+    <div class="row"><span class="warn">⚑HIGH</span><span class="g">repo.pr.open</span><span class="btn">✓</span></div>
+    <div class="row"><span class="warn">⚑MED</span><span class="g">screenshot /admin</span><span class="btn">✓</span></div>
+    <div class="row"><span class="cap">◈EDGE</span><span class="g">inferred LINKS_TO</span><span class="btn">✓</span></div>
+    <div class="note">one inbox: tool · plan · MCP consent · edge</div></div></div>
+</div>
+
+<!-- ============ STUDIO REST: SKILLS/PROMPTS/COMMANDS/TOOLS ============ -->
+<h2 class="sec">Studio — Skills · Prompts · Commands · Tools</h2>
+<div class="grid2">
+  <div class="frame"><div class="tb"><b>Skills</b> <span class="g"></span><span class="btn">+ New</span></div><div class="c">
+    <div class="row"><span class="tag skill">tenant</span><span class="g">Brand Voice v1</span><span>● on</span></div>
+    <div class="row"><span class="tag skill">tenant</span><span class="g">SEO Audit v3</span><span>● on</span></div>
+    <div class="ph">New: name · slug · weight · body (.skill.md ≤32k) · refs · activate <span class="cap">skill.create</span></div></div></div>
+  <div class="frame"><div class="tb"><b>Prompts</b> <span class="g"></span><span class="btn">+ New</span></div><div class="c">
+    <div class="row"><span class="g">Website Audit v2</span><span class="kv">investigate</span></div>
+    <div class="row"><span class="g">Fix-and-PR v1</span><span class="kv">create</span></div>
+    <div class="ph">editor: mustache {{domain}} · typed vars · versions · “used by” <span class="cap">prompt.template.*</span></div></div></div>
+  <div class="frame"><div class="tb"><b>Commands</b> <span class="g"></span><span class="btn">+ New</span></div><div class="c">
+    <div class="row"><span class="g">/audit</span><span class="kv">Auditor · Website Audit</span></div>
+    <div class="row"><span class="g">/fixlinks</span><span class="kv">Repo Fixer · Fix-and-PR</span></div>
+    <div class="ph">trigger · agent · prompt · $1→{{var}} · model override · scope <span class="cap">command.*</span></div></div></div>
+  <div class="frame"><div class="tb"><b>Tools</b> (catalog) <span class="g"></span><span class="kv">agent.tool.list</span></div><div class="c">
+    <div class="row"><span class="g">web.fetch</span><span class="kv">web · low</span></div>
+    <div class="row"><span class="g">repo.pr.open</span><span class="warn">high ⚑</span></div>
+    <div class="row"><span class="g">graph.search</span><span class="kv">graph · low</span></div>
+    <div class="ph">row → schema, risk, defaultRoles, which plugin ships it, which agents equip it</div></div></div>
+</div>
+
+<!-- ============ KNOWLEDGE ============ -->
+<h2 class="sec">Knowledge — Graph &amp; Connections</h2>
+<div class="grid2">
+  <div class="frame"><div class="tb"><b>Graph</b> (explore)</div><div class="c">
+    <div class="ph" style="min-height:90px">◈ Pricing Page ──LINKS_TO──▸ ◈ Signup<br>◈ SEO Policy ┄suggested┄▸ ◈ Home<br><br>node click → property popover + copyable id</div>
+    <div class="note">dashed = suggested edge → resolve in Approvals <span class="cap">semantic.edge.suggest</span></div></div></div>
+  <div class="frame"><div class="tb"><b>Connections</b> <span class="g"></span><span class="btn">+ New</span></div><div class="c">
+    <div class="row"><span class="g">acme/site (GitHub)</span><span>● ok · 1,204</span></div>
+    <div class="row"><span class="g">Notion docs</span><span>● ok · 420</span></div>
+    <div class="row"><span class="g">Ahrefs</span><span class="warn">⚠ reauth</span></div>
+    <div class="note">dual-write shown: Postgres (cursor/health) + Neo4j (entities/edges) <span class="cap">connection.* · repo.*</span></div></div></div>
+</div>
+
+<!-- ============ EVALS / MARKETPLACE ============ -->
+<h2 class="sec">Improve &amp; Extend — Evals · Marketplace</h2>
+<div class="grid2">
+  <div class="frame"><div class="tb"><b>Evals</b></div><div class="c">
+    <div class="row"><span class="g">Audit quality set</span><span>score 0.82</span></div>
+    <div class="ph">datasets from run traces · LLM-as-judge · runs → item results <span class="cap">eval.*</span></div></div></div>
+  <div class="frame"><div class="tb"><b>Marketplace</b> <span class="g"></span><span class="tabs"><span class="on">Browse</span><span>MCP</span><span>Installed</span><span>Registries</span></span></div><div class="c">
+    <div class="grid2">
+      <div class="box">▣ Media<br>free·ga<br><span class="btn">Install</span></div>
+      <div class="box">▣ SEO Pack<br>premium·beta<br><span class="btn">Install</span></div>
+      <div class="box">▣ Ahrefs MCP<br>custom<br><span class="btn">Connect</span></div>
+      <div class="box">▣ Documents<br>installed<br><span class="kv">3 tools</span></div>
+    </div>
+    <div class="note">install detail: contracts claimed · tier/plan gate · scopes · tool risk <span class="cap">plugin.* · agent.mcp.*</span></div></div></div>
+</div>
+
+<!-- ============ GOVERN / METER ============ -->
+<h2 class="sec">Govern &amp; Meter — Access/Roles · Reseller billing</h2>
+<div class="grid2">
+  <div class="frame"><div class="tb"><b>Access</b> <span class="g"></span><span class="tabs"><span>People</span><span class="on">Roles</span><span>Requests</span><span>Sessions</span></span></div>
+    <div class="cols"><div class="c cL"><div class="hd">Roles</div>
+      <div class="li">Owner</div><div class="li">Admin</div><div class="li on">Auditor Op ◂</div><div class="li">Analyst</div></div>
+      <div class="c" style="flex:1"><div class="hd">Grant matrix — search 287 caps</div>
+        <div class="row"><span class="g">agent.definition.run</span><span class="kv">allow ● deny ○ approve ○</span></div>
+        <div class="row"><span class="g">repo.pr.open</span><span class="kv">allow ○ deny ○ approve ●⚑</span></div>
+        <div class="row"><span class="g">secret.reveal</span><span class="kv">allow ○ deny ● approve ○</span></div>
+        <div class="note">effect = allow / deny / require-approval <span class="cap">role_grants.effect</span></div></div></div></div>
+  <div class="frame"><div class="tb"><b>Billing · Reseller</b> <span class="chip n">wedge</span></div><div class="c">
+    <div class="row"><span class="g">Northwind</span><span class="kv">48k tok · 1.2k runs</span><span>$312</span></div>
+    <div class="row"><span class="g">Contoso</span><span class="kv">210k tok</span><span>$1,940</span></div>
+    <div class="ph">meters you resell: [tokens ×1.4] [runs $0.02] [repo.pr $0.50] → Stripe prices <span class="cap">ClickHouse→Stripe</span></div>
+    <div class="btn">Sync to Stripe</div> <div class="btn">Preview invoice</div></div></div>
+</div>
+
+<div class="note" style="margin-top:34px;border-top:1.5px dashed var(--soft);padding-top:12px">
+  Every screen binds to an existing typed contract (shown in <span class="cap">green mono</span>). New persistence needed only for
+  Prompt templates and Commands. Code toggle + prompt composition + the 3 invocation surfaces are the additions from this pass.
+</div>
+</div>

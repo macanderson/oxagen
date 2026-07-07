@@ -95,6 +95,7 @@ const EXT_BY_MIME: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/webp": "webp",
   "image/gif": "gif",
+  "image/svg+xml": "svg",
   "video/mp4": "mp4",
   "video/webm": "webm",
   // document kinds
@@ -107,6 +108,9 @@ const EXT_BY_MIME: Record<string, string> = {
   "application/zip": "zip",
   "text/markdown": "md",
   "text/plain": "txt",
+  // Mermaid diagram source (mermaid.generate persists the .mmd source — the
+  // rendered SVG only ever exists client-side).
+  "text/vnd.mermaid": "mmd",
 };
 
 function extFor(mimeType: string): string {

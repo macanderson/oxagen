@@ -1,13 +1,21 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, Download } from "lucide-react";
 
 export interface SvgPreviewProps {
   /** Sanitized inline SVG markup string. */
   svg: string;
   /** Human-readable title shown above the graphic. */
   title: string;
+  /**
+   * Access-controlled serving URL (/api/v1/assets/gen_…) of the persisted SVG
+   * conversation file. Present when the handler persisted the asset; enables
+   * the Download affordance.
+   */
+  serveUrl?: string;
+  /** Public id of the persisted generated_assets row (provenance, unused for render). */
+  assetPublicId?: string;
 }
 
 /**
@@ -18,10 +26,14 @@ export interface SvgPreviewProps {
  * is parsed by the image decoder, not the HTML parser, so no script or
  * event handler in the SVG markup can run. No dangerouslySetInnerHTML is used.
  *
+ * The Download button links to the access-controlled serving route with the
+ * HTML `download` attribute, so mobile browsers save the file instead of
+ * attempting (and failing) to navigate to an attachment-disposition SVG.
+ *
  * The SVG should use currentColor and CSS custom properties so it adapts
  * automatically to the user's light/dark mode preference.
  */
-export default function SvgPreview({ svg, title }: SvgPreviewProps) {
+export default function SvgPreview({ svg, title, serveUrl }: SvgPreviewProps) {
   const [copied, setCopied] = useState(false);
 
   // Encode the SVG as a data URI using encodeURIComponent so it is safe to
@@ -45,23 +57,37 @@ export default function SvgPreview({ svg, title }: SvgPreviewProps) {
       aria-label={title}
     >
       {/* Header row */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+      <div className="flex items-center justify-between gap-1 px-4 py-2 border-b border-border">
         <span className="text-sm font-medium text-foreground truncate pr-2">
           {title}
         </span>
-        <button
-          type="button"
-          onClick={handleCopy}
-          aria-label={copied ? "SVG markup copied" : "Copy SVG markup"}
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {copied ? (
-            <Check className="size-3.5 text-foreground" aria-hidden="true" />
-          ) : (
-            <Copy className="size-3.5" aria-hidden="true" />
-          )}
-          <span>{copied ? "Copied" : "Copy SVG"}</span>
-        </button>
+        <div className="flex shrink-0 items-center gap-0.5">
+          {serveUrl ? (
+            <a
+              href={serveUrl}
+              download={`${title}.svg`}
+              aria-label={`Download ${title} as SVG file`}
+              // min-h/w-11 keeps a ≥44px touch target on mobile.
+              className="flex min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Download className="size-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Download</span>
+            </a>
+          ) : null}
+          <button
+            type="button"
+            onClick={handleCopy}
+            aria-label={copied ? "SVG markup copied" : "Copy SVG markup"}
+            className="flex min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {copied ? (
+              <Check className="size-3.5 text-foreground" aria-hidden="true" />
+            ) : (
+              <Copy className="size-3.5" aria-hidden="true" />
+            )}
+            <span className="hidden sm:inline">{copied ? "Copied" : "Copy SVG"}</span>
+          </button>
+        </div>
       </div>
 
       {/* SVG rendered via <img> — safe against XSS, adapts via CSS filters */}

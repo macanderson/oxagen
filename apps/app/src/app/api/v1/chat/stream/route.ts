@@ -39,7 +39,7 @@ import { resolveGitHubToken } from "@oxagen/handlers/lib/github-token";
 import { runCodingAgent } from "@oxagen/agent-engine";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { invoke } from "@oxagen/oxagen";
+import { invoke, isCodeAgentType } from "@oxagen/oxagen";
 import { formFill } from "@oxagen/oxagen/contracts/form.fill";
 import { fieldDescriptorSchema } from "@oxagen/oxagen/contracts/form.fill";
 import { randomUUID } from "node:crypto";
@@ -60,6 +60,10 @@ import {
   resolveGroundingCitations,
 } from "./recall-context";
 import { createChatMemoryProvider } from "./engine-memory";
+import {
+  applyAgentBinding,
+  type AgentBindingDefinition,
+} from "@/lib/chat/apply-agent-binding";
 // Per-turn dollar budget (OXA — turn-budget). The gate itself (policy shape,
 // modes, the pure evaluator, createTurnBudgetGuard) lives in @oxagen/billing —
 // this route only resolves the effective policy and wires the three hooks to
@@ -202,6 +206,18 @@ const BodySchema = z.object({
     })
     .nullable()
     .default(null),
+  // Selected/bound agent (OXA app-agent-selector + Studio chat↔agent binding) —
+  // the publicId (`agt_…`) of the agent chosen in the composer (or threaded
+  // from the Ask page's `?agent=<publicId>` URL param), or null/omitted for the
+  // default (generic chat) agent. When present, this turn is BOUND to that
+  // agent: its instructions ride the system prompt, its equipped skills + MCP
+  // servers extend the toolset, and a code agent (agentType === "code") forces
+  // code mode ON. A code agent is also the AUTHORITATIVE gate for code mode:
+  // only a code agent may bind the sandbox + code tools, so a `code` payload
+  // sent alongside a non-code agent is ignored server-side (see the code-mode
+  // branch below). Absent `agentId`, every downstream value is untouched
+  // (byte-for-byte the pre-binding behavior).
+  agentId: z.string().min(1).max(64).nullable().default(null),
   // Pinned chat context (org/repo + environment) the user stuck to this
   // conversation via the composer's context bar. Unlike `code` this is
   // LIGHTWEIGHT — no sandbox — it just tells the agent which repository /
@@ -307,10 +323,11 @@ export async function POST(request: NextRequest): Promise<Response> {
     newConversation,
     activeServerIds,
     skills: pinnedSkillSlugs,
+    agentId,
     pageContext,
     attachments,
     budget: requestBudget,
-    code: codeMode,
+    code: codeModeRaw,
     pinnedContext,
   } = parsed.data;
 
@@ -721,6 +738,66 @@ export async function POST(request: NextRequest): Promise<Response> {
           clientIp,
         };
 
+        // ── Optional agent binding (launch a published agent into this session) ─
+        // When the request carries an `agentId`, load that agent's definition ONCE
+        // and merge its config into THIS turn BEFORE tools + prompt are assembled:
+        //   • instructions → appended to the system-prompt baseline (below),
+        //   • skill agentTools → unioned into the pinned-skill slugs,
+        //   • mcp_server agentTools → unioned into the MCP server allowlist,
+        //   • agentType "code"/"coding" → forces code mode ON for the turn
+        //     (`useCodeModePrompt`, system-prompt flavor only), AND is the
+        //     AUTHORITATIVE gate that can force code mode OFF: a `code` payload
+        //     paired with a non-code agent is dropped (see `codeMode` below,
+        //     computed from `agentIsCode`) regardless of what the client sent.
+        // Absent `agentId`, every effective value is exactly the request value,
+        // so the whole turn is byte-identical to before this feature.
+        //
+        // FAIL-OPEN: a failed/denied agent.definition.get must NEVER break the
+        // turn — log and fall through to the normal (unbound) behavior, exactly
+        // like the budget-governance read below. Runs in a tenant scope because
+        // the handler reads through withTenantDb. { surface: "agent" } — the
+        // contract's `surfaces` list is ["api","mcp","agent"], not "app".
+        let boundInstructions = "";
+        let effectiveSkillSlugs = pinnedSkillSlugs;
+        let effectiveServerIds = activeServerIds;
+        let agentIsCode = false;
+        // `useCodeModePrompt` drives the code-mode SYSTEM PROMPT; the sandbox is
+        // still only bound when `codeMode` (the authoritative, agent-gated value
+        // computed below) carried a repo/env. A coding agent with no repo
+        // therefore degrades to the code-mode prompt with no filesystem tools
+        // (see the code-mode block further below).
+        let useCodeModePrompt = Boolean(codeModeRaw);
+        if (agentId) {
+          try {
+            const def = await runInTenantScope(
+              { orgId: tenant.id, workspaceId: workspace.id },
+              () =>
+                invoke(
+                  "agent.definition.get",
+                  { agentId },
+                  capCtx,
+                  { surface: "agent" },
+                ),
+            );
+            agentIsCode = isCodeAgentType((def as AgentBindingDefinition).agentType);
+            const binding = applyAgentBinding({
+              def: def as AgentBindingDefinition,
+              skills: pinnedSkillSlugs,
+              serverAllowlist: activeServerIds,
+              codeMode: Boolean(codeModeRaw),
+            });
+            boundInstructions = binding.instructions;
+            effectiveSkillSlugs = binding.skills;
+            effectiveServerIds = binding.serverAllowlist;
+            useCodeModePrompt = binding.codeMode;
+          } catch (err) {
+            logger.warn(
+              { err, agentId, requestId },
+              "[chat/stream] agent binding failed — running unbound turn",
+            );
+          }
+        }
+
         const [
           { tools: agentTools, nameMap: toolNameMap },
           promptConfig,
@@ -734,9 +811,11 @@ export async function POST(request: NextRequest): Promise<Response> {
           () =>
             Promise.all([
               materializeTools(capCtx, {
+                // Effective allowlist = request activeServerIds ∪ any mcp_server
+                // refs from the bound agent (unchanged when no agent is bound).
                 serverAllowlist:
-                  activeServerIds.length > 0
-                    ? new Set(activeServerIds)
+                  effectiveServerIds.length > 0
+                    ? new Set(effectiveServerIds)
                     : undefined,
                 onApprovalRequired: (approvalEvent) => {
                   emit({
@@ -776,8 +855,10 @@ export async function POST(request: NextRequest): Promise<Response> {
                 )
                 .catch((): SkillIndexEntry[] => []),
               // Session-level pinned skills: resolve bodies for requested slugs.
-              // Only loads enabled, non-deleted skills the user explicitly pinned.
-              pinnedSkillSlugs.length > 0
+              // Only loads enabled, non-deleted skills the user explicitly pinned
+              // (plus any skill refs contributed by the bound agent — union
+              // computed above; identical to pinnedSkillSlugs when unbound).
+              effectiveSkillSlugs.length > 0
                 ? withTenantDb((tx) =>
                     tx
                       .select({
@@ -798,7 +879,7 @@ export async function POST(request: NextRequest): Promise<Response> {
                           eq(schema.skills.workspaceId, workspace.id),
                           eq(schema.skills.enabled, true),
                           isNull(schema.skills.deletedAt),
-                          sql`${schema.skills.slug} = ANY(${pinnedSkillSlugs})`,
+                          sql`${schema.skills.slug} = ANY(${effectiveSkillSlugs})`,
                         ),
                       ),
                   )
@@ -1101,6 +1182,14 @@ export async function POST(request: NextRequest): Promise<Response> {
         // When the composer selected a repo + environment, run the coding engine
         // against a sandbox with the repo cloned. The per-turn repo/env context
         // rides as a USER message (ADR-021 §2), never the cached system prompt.
+        // `agentIsCode` was already resolved in the agent-binding block above
+        // (one `agent.definition.get` load, not two) — this is just the
+        // AUTHORITATIVE gate on top of it: only a code agent may bind the
+        // sandbox + code tools, so a `code` payload paired with a non-code agent
+        // is dropped here regardless of what the client sent; with no agent
+        // selected the client's payload stands (unchanged legacy behavior).
+        const codeMode = agentId && !agentIsCode ? null : codeModeRaw;
+
         let codeGraphForTurn:
           | ReturnType<typeof createNeo4jCodeGraphProvider>
           | undefined;
@@ -1186,10 +1275,17 @@ export async function POST(request: NextRequest): Promise<Response> {
                   ) as ModelMessage[]),
                 ]
               : historyForEngine,
+          // Prompt layering: base (chat OR coding) → bound agent instructions →
+          // page context suffix. The coding CONTRACT (codeModeSystemPrompt) must
+          // always sit ABOVE the customer's agent instructions, so the bound
+          // instructions are appended AFTER the base prompt, never merged into
+          // it. `boundInstructions` is "" for an unbound turn ⇒ byte-identical
+          // baseline. `useCodeModePrompt` is true when the request enabled code
+          // mode OR the bound agent is a coding agent.
           system: resolvePrompt({
             key: "chat.system",
             baseline:
-              (codeMode
+              (useCodeModePrompt
                 ? codeModeSystemPrompt({
                     orgSlug,
                     workspaceSlug,
@@ -1205,7 +1301,16 @@ export async function POST(request: NextRequest): Promise<Response> {
                     workspaceName: workspace.name,
                     skillIndex,
                     pinnedSkillBodies,
-                  })) + pageContextSystemSuffix,
+                  })) +
+              // Fold the bound agent's own instructions into the system prompt
+              // so selecting an agent actually shapes its behavior, not just
+              // the UI. `boundInstructions` is "" for an unbound turn ⇒
+              // byte-identical baseline. Appended last so it can refine the
+              // baseline.
+              (boundInstructions
+                ? `\n\n---\n\n## Agent instructions\n\n${boundInstructions}`
+                : "") +
+              pageContextSystemSuffix,
             config: promptConfig,
           }),
           model: modelId,

@@ -41,6 +41,37 @@ export interface StageEvent {
 }
 
 /**
+ * A pre-execution snapshot of the work about to run — surfaced after ROUTE and
+ * before EXECUTE so a caller can show the user the enhanced prompt + estimated
+ * cost, and optionally gate execution behind a confirmation.
+ */
+export interface ScopeReviewInfo {
+  /** The user's original prompt, verbatim. */
+  originalPrompt: string;
+  /** The evaluator's noise-removed rewrite (equals originalPrompt when no refine happened). */
+  refinedPrompt: string;
+  /** The final prompt handed to the executor (refined + injected context). */
+  enhancedPrompt: string;
+  /** The injected context block alone (empty when nothing was retrieved). */
+  context: string;
+  /** The routed executor model slug. */
+  model: string;
+  /** The routed model tier. */
+  tier: ModelTier;
+  /** Rough pre-flight input-token estimate (heuristic). */
+  estimatedInputTokens: number;
+  /** Rough pre-flight output-token estimate (heuristic). */
+  estimatedOutputTokens: number;
+  /** Rough pre-flight dollar estimate from the rate card (heuristic). */
+  estimatedCostUsd: number;
+}
+
+/** A caller's decision at the scope-review gate. */
+export type ScopeReviewDecision =
+  | { proceed: true; prompt?: string } // run; optional edited prompt replaces the enhanced prompt
+  | { proceed: false }; // cancel before any execution
+
+/**
  * The cheap model's read of the user's prompt: how complete and how complex it
  * is, what context to pull, and a noise-removed rewrite.
  */

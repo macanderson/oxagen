@@ -19,6 +19,14 @@ providing a second layer of XSS defence.
 Returns the sanitized SVG markup, a title, and a render directive so the
 output renders inline in chat via the `svg-preview` component.
 
+The sanitized SVG is also persisted as a conversation file: an org-visible
+`generated_assets` row (kind `image`, `image/svg+xml`) uploaded to blob
+storage via `persistGeneratedAsset`, with conversation linkage resolved from
+the chat turn's `messageId`, so it appears in the Conversation Files panel.
+Persistence is strictly non-fatal — when it is skipped (generation failed /
+no user identity) or fails, the inline result still returns and the output
+carries a `persistWarning`. The failure-placeholder SVG is never persisted.
+
 ## Input
 
 | Field    | Type                 | Notes                                                                   |
@@ -30,11 +38,14 @@ output renders inline in chat via the `svg-preview` component.
 
 ## Output
 
-| Field    | Type                 | Notes                                                                    |
-| -------- | -------------------- | ------------------------------------------------------------------------ |
-| `svg`    | `string` (min 1)     | Sanitized inline SVG markup, ready for display in the `svg-preview` component. |
-| `title`  | `string` (min 1)     | Human-readable title for the graphic.                                   |
-| `render` | `RenderDirective`    | `{ componentId: "svg-preview", props: { svg, title } }` — wires the chat render pipeline. |
+| Field           | Type                 | Notes                                                                    |
+| --------------- | -------------------- | ------------------------------------------------------------------------ |
+| `svg`           | `string` (min 1)     | Sanitized inline SVG markup, ready for display in the `svg-preview` component. |
+| `title`         | `string` (min 1)     | Human-readable title for the graphic.                                   |
+| `assetPublicId` | `string` (optional)  | `gen_…` id of the persisted SVG asset. Absent when persistence was skipped or failed. |
+| `serveUrl`      | `string` (optional)  | Access-controlled serving URL (`/api/v1/assets/{publicId}`) for the persisted SVG file. |
+| `persistWarning`| `string` (optional)  | Present when the SVG could not be saved to conversation files (inline result unaffected). |
+| `render`        | `RenderDirective`    | `{ componentId: "svg-preview", props: { svg, title, serveUrl?, assetPublicId? } }` — wires the chat render pipeline. |
 
 ## Sanitisation
 
@@ -51,6 +62,20 @@ Two passes:
 
 - ClickHouse: emits one `token_usage` row per call via `generateObjectFor`.
 - Billing: debits org credits at the solved meter rate.
+- Blob storage + Postgres: one `generated_assets` row (`image` kind,
+  `image/svg+xml`, org access policy) holding the sanitized markup, linked to
+  the conversation, and mirrored to the knowledge graph as a `:GeneratedFile`
+  node (best-effort).
+
+## Serving & display security
+
+The asset serving route forces `Content-Disposition: attachment` for
+`image/svg+xml` — inline SVG served from our own origin is a stored-XSS
+vector. UI surfaces (the `svg-preview` chat card and the Conversation Files
+panel) therefore display persisted SVGs exclusively through `<img>` elements,
+which ignore Content-Disposition and never execute scripts; downloads use the
+HTML `download` attribute. Never render stored SVG markup with
+`dangerouslySetInnerHTML`.
 
 ## Errors
 

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "@clickhouse/client";
 import { requireEnv } from "@oxagen/config/env";
 import { clickhouse, closeClickhouse } from "./clickhouse";
+import { isDirectRunEntry } from "./is-direct-run";
 
 /** Sleep helper for the cold-start retry loop. */
 function delay(ms: number): Promise<void> {
@@ -103,8 +104,11 @@ export async function migrate(): Promise<void> {
   }
 }
 
-const isDirectRun = import.meta.url === `file://${process.argv[1]}`;
-if (isDirectRun) {
+// Bundle-safe direct-run guard (see is-direct-run.ts): the bare
+// import.meta.url === file://argv[1] equality misfires inside the standalone
+// `oxagen` bundle and would run this ClickHouse migration → process.exit(1) on
+// every CLI boot, crashing any run without CLICKHOUSE_* env.
+if (isDirectRunEntry(import.meta.url, process.argv[1], "migrate")) {
   migrate()
     .then(() => closeClickhouse())
     .then(() => {
