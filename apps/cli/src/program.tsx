@@ -616,6 +616,8 @@ export function buildProgram(): Command {
     .option("-n, --limit <n>", "Maximum number of results (1–50)", "10")
     .option("--system", "Only return product-owned (system) nodes")
     .option("--no-system", "Only return customer nodes (exclude system nodes)")
+    .option("--json", "One machine JSON line (also the default when stdout is piped)", false)
+    .option("--quiet", "Suppress progress chrome (stderr)", false)
     .action(
       async (opts: {
         query: string;
