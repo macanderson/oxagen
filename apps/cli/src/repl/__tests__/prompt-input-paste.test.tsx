@@ -1,16 +1,16 @@
 /**
  * PromptInput paste UX — proves the whole loop end to end through real ink
- * stdin: bracketed-paste TEXT collapsing to `[Text #N]` above the threshold
- * (small pastes insert inline), Ctrl-V IMAGE paste via the injectable
- * `readClipboardImage` prop collapsing to `[Image #N]`, atomic token
- * deletion, per-prompt counter reset, and — the whole point — that
- * submitting expands every placeholder back to full content for the model
- * while the bar itself only ever showed the compact token.
+ * stdin: a single-line bracketed paste inserts inline in full; a MULTI-LINE
+ * paste collapses to a `[first 12…N Lines…last 12]` preview chip; Ctrl-V IMAGE
+ * paste via the injectable `readClipboardImage` prop collapses to `[Image #N]`;
+ * atomic token deletion; per-prompt registry reset; and — the whole point —
+ * that submitting expands every placeholder back to full content for the model
+ * while the bar itself only ever showed the compact chip.
  */
 import { describe, it, expect } from "vitest";
 import { render } from "ink-testing-library";
 import { PromptInput } from "../components.js";
-import type { PasteSubmission } from "../paste.js";
+import { textChip, type PasteSubmission } from "../paste.js";
 import type { PastedImageAttachment } from "../../lib/clipboard-image.js";
 
 /** Ink delivers stdin to useInput/usePaste asynchronously; give state a beat to settle. */
@@ -27,7 +27,7 @@ const PASTE_END = `${ESC}[201~`;
 /** Wrap `text` as a single bracketed-paste stdin chunk, exactly like a real terminal. */
 const bracketedPaste = (text: string): string => `${PASTE_START}${text}${PASTE_END}`;
 
-/** A pasted blob comfortably over both collapse thresholds (chars AND lines). */
+/** A multi-line pasted blob (collapses to a preview chip). */
 const bigPaste = (label: string): string =>
   Array.from({ length: 10 }, (_, i) => `${label} line ${i} ${"x".repeat(50)}`).join("\n");
 
@@ -45,37 +45,41 @@ function captureSubmits(): {
 }
 
 describe("PromptInput — text paste (bracketed paste → usePaste)", () => {
-  it("inserts a small paste inline, unchanged", async () => {
+  it("inserts a single-line paste inline, unchanged, however long", async () => {
     const { lastFrame, stdin } = render(<PromptInput onSubmit={() => {}} busy={false} />);
-    stdin.write(bracketedPaste("short paste"));
+    stdin.write(bracketedPaste("a single long line without any newline"));
     await tick();
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("short paste");
-    expect(frame).not.toContain("[Text #");
+    expect(frame).toContain("a single long line without any newline");
+    expect(frame).not.toContain("Lines...");
   });
 
-  it("collapses a paste over the threshold to [Text #1]", async () => {
+  it("collapses a multi-line paste to its preview chip", async () => {
     const { lastFrame, stdin } = render(<PromptInput onSubmit={() => {}} busy={false} />);
     const big = bigPaste("A");
     stdin.write(bracketedPaste(big));
     await tick();
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("[Text #1]");
+    expect(frame).toContain(textChip(big));
+    expect(frame).toContain("10 Lines...");
     expect(frame).not.toContain(big);
   });
 
-  it("numbers a second large paste in the same prompt [Text #2]", async () => {
+  it("shows a distinct preview chip for a second multi-line paste in the same prompt", async () => {
     const { lastFrame, stdin } = render(<PromptInput onSubmit={() => {}} busy={false} />);
-    stdin.write(bracketedPaste(bigPaste("A")));
+    const a = bigPaste("A");
+    const b = bigPaste("B");
+    stdin.write(bracketedPaste(a));
     await tick();
     stdin.write(" and "); // plain typing between the two pastes
     await tick();
-    stdin.write(bracketedPaste(bigPaste("B")));
+    stdin.write(bracketedPaste(b));
     await tick();
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("[Text #1]");
+    expect(frame).toContain(textChip(a));
     expect(frame).toContain("and");
-    expect(frame).toContain("[Text #2]");
+    expect(frame).toContain(textChip(b));
+    expect(textChip(a)).not.toBe(textChip(b));
   });
 
   it("expands every placeholder back to full content, in order, on submit", async () => {
@@ -94,7 +98,7 @@ describe("PromptInput — text paste (bracketed paste → usePaste)", () => {
 
     expect(captured.calls).toHaveLength(1);
     const submission = captured.calls[0]!;
-    expect(submission.text).toBe("[Text #1] and [Text #2]");
+    expect(submission.text).toBe(`${textChip(a)} and ${textChip(b)}`);
     expect(submission.paste).toBeDefined();
     expect(submission.paste!.expandedText).toBe(`${a} and ${b}`);
     expect(submission.paste!.images).toEqual([]);
@@ -110,28 +114,34 @@ describe("PromptInput — text paste (bracketed paste → usePaste)", () => {
     expect(captured.calls).toEqual([{ text: "just a normal short prompt", paste: undefined }]);
   });
 
-  it("resets the counter to 1 for the next prompt after submit", async () => {
+  it("re-registers pastes fresh after submit (no stale registry across prompts)", async () => {
     const captured = captureSubmits();
-    const { lastFrame, stdin } = render(<PromptInput onSubmit={captured.onSubmit} busy={false} />);
-    stdin.write(bracketedPaste(bigPaste("A")));
+    const { stdin } = render(<PromptInput onSubmit={captured.onSubmit} busy={false} />);
+    const a = bigPaste("A");
+    stdin.write(bracketedPaste(a));
     await tick();
     stdin.write("\r");
     await tick();
 
-    // Second prompt, fresh paste — numbering must restart at 1, not continue to 2.
-    stdin.write(bracketedPaste(bigPaste("B")));
+    // Second prompt, same content pasted again — must expand on its own, proving
+    // the registry was reset AND freshly re-populated (not left stale or empty).
+    stdin.write(bracketedPaste(a));
     await tick();
-    const frame = lastFrame() ?? "";
-    expect(frame).toContain("[Text #1]");
-    expect(frame).not.toContain("[Text #2]");
+    stdin.write("\r");
+    await tick();
+
+    expect(captured.calls).toHaveLength(2);
+    expect(captured.calls[1]!.paste!.expandedText).toBe(a);
   });
 
-  it("clearing counters via inject (e.g. queue recall) restarts numbering at 1", async () => {
+  it("clearing the registry via inject (e.g. queue recall) drops the old chip", async () => {
     const captured = captureSubmits();
+    const a = bigPaste("A");
+    const b = bigPaste("B");
     const { lastFrame, stdin, rerender } = render(
       <PromptInput onSubmit={captured.onSubmit} busy={false} inject={{ text: "", nonce: 0 }} />,
     );
-    stdin.write(bracketedPaste(bigPaste("A")));
+    stdin.write(bracketedPaste(a));
     await tick();
 
     // Parent wholesale-replaces the buffer (recall/task-edit/clear) WITHOUT a submit.
@@ -140,46 +150,50 @@ describe("PromptInput — text paste (bracketed paste → usePaste)", () => {
     );
     await tick();
 
-    stdin.write(bracketedPaste(bigPaste("B")));
+    stdin.write(bracketedPaste(b));
     await tick();
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("[Text #1]"); // not [Text #2] — the old registry was reset
+    expect(frame).toContain(textChip(b));
+    expect(frame).not.toContain(textChip(a)); // the old registry entry was reset
   });
 });
 
 describe("PromptInput — atomic token deletion", () => {
-  it("backspacing right after a token deletes the WHOLE token in one keystroke", async () => {
+  it("backspacing right after a chip deletes the WHOLE chip in one keystroke", async () => {
     const { lastFrame, stdin } = render(<PromptInput onSubmit={() => {}} busy={false} />);
-    stdin.write(bracketedPaste(bigPaste("A")));
+    const big = bigPaste("A");
+    stdin.write(bracketedPaste(big));
     await tick();
-    expect(lastFrame() ?? "").toContain("[Text #1]");
+    expect(lastFrame() ?? "").toContain(textChip(big));
 
     stdin.write(BACKSPACE);
     await tick();
     const frame = lastFrame() ?? "";
-    expect(frame).not.toContain("[Text #1]");
-    expect(frame).not.toContain("Text #"); // no partial "[Text #" left dangling
+    expect(frame).not.toContain(textChip(big));
+    expect(frame).not.toContain("Lines..."); // no partial chip left dangling
   });
 
-  it("dropping a token's registry entry means retyping the same text by hand is NOT expanded", async () => {
+  it("dropping a chip's registry entry means retyping the same chip by hand is NOT expanded", async () => {
     const captured = captureSubmits();
     const { stdin } = render(<PromptInput onSubmit={captured.onSubmit} busy={false} />);
-    stdin.write(bracketedPaste(bigPaste("SECRET")));
+    const big = bigPaste("SECRET");
+    const chip = textChip(big);
+    stdin.write(bracketedPaste(big));
     await tick();
-    stdin.write(BACKSPACE); // atomic backspace removes the token AND its registry entry
+    stdin.write(BACKSPACE); // atomic backspace removes the chip AND its registry entry
     await tick();
 
-    // Hand-type a string that LOOKS like the token that was just deleted.
-    stdin.write("[Text #1]");
+    // Hand-type a string that LOOKS like the chip that was just deleted.
+    stdin.write(chip);
     await tick();
     stdin.write("\r");
     await tick();
 
     const submission = captured.calls[0]!;
-    // No live registry entry for id 1 anymore, so it is NOT expanded — proving
-    // the deletion actually dropped the stored content, not just hid it.
+    // No live registry entry anymore, so it is NOT expanded — proving the
+    // deletion actually dropped the stored content, not just hid it.
     expect(submission.paste).toBeUndefined();
-    expect(submission.text).toBe("[Text #1]");
+    expect(submission.text).toBe(chip);
   });
 });
 
@@ -217,16 +231,17 @@ describe("PromptInput — image paste (Ctrl-V + injectable clipboard reader)", (
     expect(submission.paste!.expandedText).toBe("check this out: (attached image)");
   });
 
-  it("numbers image tokens independently from text tokens", async () => {
+  it("numbers image tokens independently from text pastes", async () => {
     const { lastFrame, stdin } = render(
       <PromptInput onSubmit={() => {}} busy={false} readClipboardImage={async () => fakeAttachment} />,
     );
-    stdin.write(bracketedPaste(bigPaste("A"))); // [Text #1]
+    const big = bigPaste("A");
+    stdin.write(bracketedPaste(big)); // preview chip
     await tick();
     stdin.write(CTRL_V); // [Image #1] — independent counter
     await tick(50);
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("[Text #1]");
+    expect(frame).toContain(textChip(big));
     expect(frame).toContain("[Image #1]");
   });
 

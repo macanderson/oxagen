@@ -510,7 +510,7 @@ export function PromptInput({
         // A paste placeholder is an atomic unit: backspacing right after one
         // deletes the WHOLE token (and its registry entry) in one keystroke,
         // instead of eroding it character by character.
-        const span = tokenEndingAt(value, cursorPos);
+        const span = tokenEndingAt(pasteRegistryRef.current, value, cursorPos);
         const deleteFrom = span ? span.start : cursorPos - 1;
         if (span) dropTokenAt(pasteRegistryRef.current, value, span);
         setValue((v) => v.slice(0, deleteFrom) + v.slice(cursorPos));
@@ -533,7 +533,7 @@ export function PromptInput({
       }
       // Symmetric with backspace: forward-delete removes a whole token when
       // the cursor sits at its start.
-      const span = tokenStartingAt(value, cursorPos);
+      const span = tokenStartingAt(pasteRegistryRef.current, value, cursorPos);
       const deleteTo = span ? span.end : cursorPos + 1;
       if (span) dropTokenAt(pasteRegistryRef.current, value, span);
       setValue((v) => v.slice(0, cursorPos) + v.slice(deleteTo));
@@ -549,10 +549,12 @@ export function PromptInput({
   // Bracketed-paste TEXT arrives here as one string, on its own channel —
   // ink auto-enables bracketed paste mode and never forwards paste content to
   // `useInput` once a `usePaste` listener is registered, so this and the
-  // keystroke handler above never race over the same paste. A small paste
-  // inserts inline unchanged; a large one collapses to a `[Text #N]`
-  // placeholder (see paste.ts) so the bar shows a compact reference instead
-  // of a wall of text.
+  // keystroke handler above never race over the same paste. Bracketed paste is
+  // ALSO why pasted text is never garbled: the whole clipboard payload lands
+  // here as one clean string instead of being re-parsed keystroke-by-keystroke.
+  // A single-line paste inserts inline in full; a multi-line one collapses to a
+  // `[first 12…N Lines…last 12]` preview chip (see paste.ts) so the bar shows a
+  // compact, recognizable reference instead of a wall of text.
   usePaste((text) => {
     if (!focused) return;
     const token = shouldCollapseText(text) ? registerPastedText(pasteRegistryRef.current, text) : null;

@@ -68,9 +68,10 @@ export function enterFullscreen(stream: NodeJS.WriteStream): FullscreenHandle {
 
 /**
  * Arms SGR mouse-wheel reporting. A REACT-level concern (not part of
- * {@link enterFullscreen}) because it's user-toggleable at runtime (`/mouse
- * on|off`, `OXAGEN_CLI_MOUSE=0`) independent of full-screen mode itself — see
- * use-mouse-wheel.ts, which pairs this with a raw stdin listener.
+ * {@link enterFullscreen}) because it's opt-in and user-toggleable at runtime
+ * (`/mouse`, or `OXAGEN_CLI_MOUSE=1` at launch — it defaults OFF so native
+ * terminal text selection/copy keeps working) independent of full-screen mode
+ * itself — see use-mouse-wheel.ts, which pairs this with a raw stdin listener.
  *
  * Mouse tracking can interfere with a terminal emulator's native text
  * selection (click-drag no longer selects text once the app owns clicks) —

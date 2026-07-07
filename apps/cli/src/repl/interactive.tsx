@@ -645,12 +645,17 @@ export function ReplApp({
   // transcript-scroll (bar empty) and their normal recall-queue / panel-entry
   // / cursor meaning (bar has text). Mirrored from PromptInput's onEmptyChange.
   const inputEmptyRef = useRef(true);
-  // Mouse-wheel transcript scroll, default from OXAGEN_CLI_MOUSE (mirrors the
-  // OXAGEN_CLI_FUN convention below), toggleable at runtime with /mouse.
-  // Keyboard scroll always works regardless — this only gates the SGR mouse
-  // listener, which can fight a terminal emulator's native text-selection
-  // (click-drag) in some setups — see use-mouse-wheel.ts.
-  const [mouseOn, setMouseOn] = useState(process.env.OXAGEN_CLI_MOUSE !== "0");
+  // Mouse-wheel transcript scroll — default OFF, opt in with /mouse (or
+  // OXAGEN_CLI_MOUSE=1). It stays off by default on purpose: arming SGR mouse
+  // reporting makes the terminal stream click/drag/wheel escape sequences to
+  // this app, which DISABLES the emulator's own text selection and can leak
+  // those escape bytes into a copied selection (the "garbled copy/paste" bug).
+  // Leaving it off means drag-to-select + Cmd/Ctrl-C just work natively and
+  // copies come out clean; keyboard scroll (PageUp/PageDown, Ctrl-U/Ctrl-D,
+  // Up/Down/Home/End on an empty bar) covers scrolling without the wheel. Turn
+  // it on only if you specifically want wheel/trackpad scroll and accept losing
+  // native selection while it's armed — see use-mouse-wheel.ts.
+  const [mouseOn, setMouseOn] = useState(process.env.OXAGEN_CLI_MOUSE === "1");
   // `/mouse` is handled inside `handleSubmit`, a `useCallback` whose deps don't
   // include `mouseOn` — reading the state directly there would close over
   // whatever `mouseOn` was when that callback was last memoized, so `!mouseOn`
@@ -1488,8 +1493,8 @@ export function ReplApp({
         setMouseOn(next);
         pushAssistant(
           next
-            ? "Mouse-wheel scroll ON — the transcript viewport (full-screen mode) now responds to wheel/trackpad scroll. /mouse to turn it off if it interferes with your terminal's text selection."
-            : "Mouse-wheel scroll OFF. Keyboard scroll (PageUp/PageDown, Ctrl-U/Ctrl-D, Up/Down/Home/End on an empty bar) always works regardless. /mouse to turn it back on.",
+            ? "Mouse-wheel scroll ON — the transcript viewport now responds to wheel/trackpad scroll. Heads up: while it's on, your terminal's native text selection is disabled and a copied selection can pick up stray escape codes. Use keyboard scroll instead if you want to select/copy text. /mouse to turn it back off."
+            : "Mouse-wheel scroll OFF (the default). Native text selection + copy now work — just drag and Cmd/Ctrl-C. Scroll with the keyboard: PageUp/PageDown (page), Ctrl-U/Ctrl-D (half-page), Up/Down (line) and Home/End (top/bottom) on an empty bar. /mouse to turn wheel scroll back on.",
         );
         return;
       }
