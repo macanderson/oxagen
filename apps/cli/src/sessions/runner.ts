@@ -64,6 +64,7 @@ import { buildTurnExtras, type TurnExtras } from "../agent/turn-extras.js";
 import { loadProjectContext } from "../agent/project-context.js";
 import { openSessionMemory, type SessionMemory } from "../agent/memory.js";
 import { openFleetMemory, type FleetMemory } from "../agent/fleet/memory.js";
+import { createLocalFileLockProvider } from "../agent/fleet/local-file-lock.js";
 import { accumulateUsage } from "../agent/model-router.js";
 import { resolveModelId } from "../agent/model.js";
 import {
@@ -268,6 +269,11 @@ export async function runSession(
   const workspace = createCwdWorkspace(cwd);
   const projectContext = loadProjectContext(cwd);
   const codeGraph = createCodeGraphProvider((op, q, l) => queryCodeGraph(cwd, op, q, l));
+  // Cross-process write guard (ADR-021 §5 / ADR-023 §7): N sessions — including
+  // detached worker PROCESSES — share this one tree, so file writes serialize on
+  // on-disk lease files under <cwd>/.oxagen/locks/ (TTL + fencing). Built ONCE
+  // per session and handed to every turn; runTurn mints its own per-turn holder.
+  const fileLock = createLocalFileLockProvider({ root: cwd });
 
   let extras: TurnExtras | null = null;
   // Project rules/hooks folded into what the model sees as project context;
@@ -437,6 +443,7 @@ export async function runSession(
           recallQuery: prompt,
         }),
         codeGraph,
+        fileLock,
         signal: turnController.signal,
         onStage: (stage) => {
           stall.reset();

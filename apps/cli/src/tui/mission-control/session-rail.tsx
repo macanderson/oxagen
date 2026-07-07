@@ -35,28 +35,35 @@ function RailRow({
       ? formatUsd(session.usage.costUsd)
       : "";
 
+  // Every fixed-width cell pins flexShrink={0}: Ink boxes shrink by default
+  // when a row is tight, which wraps their text mid-glyph ("docs" → "doc"/"s")
+  // instead of truncating the one cell built to truncate — the title.
   return (
     <Box>
-      <Box width={1}>
+      <Box width={1} flexShrink={0}>
         <Text color={theme.cyan} bold>
           {selected ? "❯" : " "}
         </Text>
       </Box>
-      <Box width={2}>
+      <Box width={2} flexShrink={0}>
         <Text color={glyph.color} bold>
           {glyph.ch}
         </Text>
       </Box>
-      <Box width={5}>
-        <Text color={colorForSid(session.sid)}>{shortSid(session.sid)}</Text>
+      <Box width={5} flexShrink={0}>
+        <Text color={colorForSid(session.sid)} wrap="truncate">
+          {shortSid(session.sid)}
+        </Text>
       </Box>
       <Box flexGrow={1} minWidth={0}>
         <Text color={selected ? "white" : undefined} bold={selected} dimColor={!selected} wrap="truncate">
           {session.title || "untitled"}
         </Text>
       </Box>
-      <Box width={7} justifyContent="flex-end">
-        <Text dimColor>{meta}</Text>
+      <Box width={5} flexShrink={0} justifyContent="flex-end">
+        <Text dimColor wrap="truncate">
+          {meta}
+        </Text>
       </Box>
     </Box>
   );

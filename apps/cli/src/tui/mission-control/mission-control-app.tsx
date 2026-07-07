@@ -119,6 +119,18 @@ export function MissionControlApp({
   const [draining, setDraining] = useState(false);
   const [cancelArmed, setCancelArmed] = useState<string | null>(null);
 
+  // The composer buffer's SYNCHRONOUS truth. Keystrokes can outpace renders
+  // (a fast typist, a paste, a test), and the useInput closure only sees the
+  // last-rendered `line` — so the "empty composer" letter-command check and
+  // submit() must read this ref, or a mid-word character can be misread as a
+  // view command (e.g. the 'c' of "@docs" arming cancel).
+  const lineRef = useRef<LineState>(line);
+  const applyLine = (next: LineState | ((l: LineState) => LineState)): void => {
+    const resolved = typeof next === "function" ? next(lineRef.current) : next;
+    lineRef.current = resolved;
+    setLine(resolved);
+  };
+
   // Event-flood state lives in refs (mutated synchronously per bus event) and
   // is committed through the throttle; see the module doc.
   const linesRef = useRef<RenderableLine[]>([]);
@@ -238,7 +250,7 @@ export function MissionControlApp({
   };
 
   const submit = (): void => {
-    const raw = line.value.trim();
+    const raw = lineRef.current.value.trim();
     if (raw === "") return;
     const at = parseAtRef(raw);
     if (at) {
@@ -248,7 +260,7 @@ export function MissionControlApp({
     } else {
       dispatchNew(raw);
     }
-    setLine(emptyLine());
+    applyLine(emptyLine());
     setCancelArmed(null);
   };
 
@@ -304,16 +316,17 @@ export function MissionControlApp({
       return;
     }
     // Line editing (always operates on the buffer).
-    if (key.leftArrow) return void setLine((l) => editLine(l, { t: "left" }));
-    if (key.rightArrow) return void setLine((l) => editLine(l, { t: "right" }));
-    if (key.backspace) return void setLine((l) => editLine(l, { t: "backspace" }));
-    if (key.delete) return void setLine((l) => editLine(l, { t: "delete" }));
-    if (key.ctrl && input === "a") return void setLine((l) => editLine(l, { t: "home" }));
-    if (key.ctrl && input === "e") return void setLine((l) => editLine(l, { t: "end" }));
-    if (key.ctrl && input === "u") return void setLine(() => emptyLine());
+    if (key.leftArrow) return void applyLine((l) => editLine(l, { t: "left" }));
+    if (key.rightArrow) return void applyLine((l) => editLine(l, { t: "right" }));
+    if (key.backspace) return void applyLine((l) => editLine(l, { t: "backspace" }));
+    if (key.delete) return void applyLine((l) => editLine(l, { t: "delete" }));
+    if (key.ctrl && input === "a") return void applyLine((l) => editLine(l, { t: "home" }));
+    if (key.ctrl && input === "e") return void applyLine((l) => editLine(l, { t: "end" }));
+    if (key.ctrl && input === "u") return void applyLine(emptyLine());
 
     // Bare-letter view commands — only on an EMPTY composer (see module doc).
-    if (line.value === "" && !key.ctrl && !key.meta) {
+    // Read the ref, not the render-captured state: see lineRef above.
+    if (lineRef.current.value === "" && !key.ctrl && !key.meta) {
       switch (input) {
         case "a":
           return void setMode("aggregate");
@@ -336,7 +349,7 @@ export function MissionControlApp({
 
     // Everything else printable → the composer.
     if (input && !key.ctrl && !key.meta) {
-      setLine((l) => editLine(l, { t: "insert", ch: input }));
+      applyLine((l) => editLine(l, { t: "insert", ch: input }));
       if (cancelArmed) setCancelArmed(null);
     }
   });

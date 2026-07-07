@@ -21,7 +21,6 @@
  * its events are emitted exactly once (`ownSids` gates the tail).
  */
 import { EventEmitter } from "node:events";
-import { spawn } from "node:child_process";
 import type { AgentAi } from "@oxagen/agent-engine";
 import { emptyTurnUsage, type SessionEvent } from "./events.js";
 import { newSessionId } from "./ids.js";
@@ -32,6 +31,7 @@ import {
   type SessionStore,
   type TailHandle,
 } from "./store.js";
+import { dispatchDetachedSession, titleFromPrompt, type DispatchDetachedOptions } from "./dispatch.js";
 import { runSession, type SessionFate } from "./runner.js";
 import { debugLog } from "../lib/debug-log.js";
 
@@ -50,10 +50,10 @@ export interface FleetSessionManagerOptions {
   /** Max in-process runners at once (default 4); excess sessions queue FIFO. */
   concurrency?: number;
   /**
-   * Spawn a detached worker for `dispatchDetached`. Injectable for tests. The
-   * default spawns `node <cli> fleet worker <sid>` detached + unref'd.
+   * Detached-worker spawner, forwarded to {@link dispatchDetachedSession}.
+   * Injectable for tests; omitted ⇒ the real `child_process.spawn` re-exec.
    */
-  spawnWorker?: (sid: string) => void;
+  spawnImpl?: DispatchDetachedOptions["spawnImpl"];
   /** Inject a fake `runSession` in tests; defaults to the real runner. */
   runSessionImpl?: typeof runSession;
   /**
@@ -77,7 +77,7 @@ export class FleetSessionManager {
   private readonly store: SessionStore;
   private readonly cwd: string;
   private readonly concurrency: number;
-  private readonly spawnWorker: (sid: string) => void;
+  private readonly spawnImpl: DispatchDetachedOptions["spawnImpl"];
   private readonly runSessionImpl: typeof runSession;
   private readonly ai: AgentAi | undefined;
   private readonly now: () => number;
@@ -109,7 +109,7 @@ export class FleetSessionManager {
     this.runSessionImpl = opts.runSessionImpl ?? runSession;
     this.ai = opts.ai;
     this.now = opts.now ?? Date.now;
-    this.spawnWorker = opts.spawnWorker ?? ((sid) => this.defaultSpawnWorker(sid));
+    this.spawnImpl = opts.spawnImpl;
     // Foreign fleets can be large; lift the default listener cap so a busy
     // aggregate view (one listener per surface) never trips a spurious warning.
     this.emitter.setMaxListeners(0);
@@ -148,33 +148,29 @@ export class FleetSessionManager {
   }
 
   /**
-   * Dispatch new work as a DETACHED worker (`fleet worker <sid>`) so the caller
-   * can exit. Conversational by default (ADR-023 decision 5 / spec §3: sessions
-   * are conversational unless `--once`), so another terminal can follow up via
-   * `fleet send`. Returns the sid once the session exists on disk.
+   * Dispatch new work as a DETACHED worker so the caller can exit. Delegates to
+   * the shared {@link dispatchDetachedSession} — the ONE path that owns session
+   * creation (owner "worker", pid 0) and the detached re-exec — passing this
+   * manager's store + cwd through and forwarding the injectable `spawnImpl`.
+   * Conversational by default (ADR-023 decision 5 / spec §3). Returns the sid.
    */
   async dispatchDetached(opts: DispatchOptions): Promise<string> {
-    const sid = newSessionId(this.now());
-    await this.store.createSession({
-      sid,
-      title: titleFor(opts.prompt),
-      prompt: opts.prompt,
-      owner: "worker",
-      pid: 0,
+    const { sid } = await dispatchDetachedSession({
       cwd: this.cwd,
-      mode: opts.mode ?? "conversation",
+      prompt: opts.prompt,
       model: opts.model,
       agent: opts.agent,
-      state: "queued",
+      mode: opts.mode,
+      store: this.store,
+      spawnImpl: this.spawnImpl,
     });
-    this.spawnWorker(sid);
     return sid;
   }
 
   private async initInProcess(sid: string, opts: DispatchOptions): Promise<void> {
     const meta = await this.store.createSession({
       sid,
-      title: titleFor(opts.prompt),
+      title: titleFromPrompt(opts.prompt),
       prompt: opts.prompt,
       owner: "tui",
       pid: process.pid,
@@ -344,24 +340,4 @@ export class FleetSessionManager {
   rosterSnapshot(): SessionMetaView[] {
     return [...this.roster.values()].sort((a, b) => b.createdAt - a.createdAt);
   }
-
-  private defaultSpawnWorker(sid: string): void {
-    const entry = process.argv[1];
-    if (entry === undefined) {
-      void debugLog("error", "fleet.spawn-no-entry", { sid });
-      return;
-    }
-    const child = spawn(
-      process.execPath,
-      [...process.execArgv, entry, "fleet", "worker", sid],
-      { detached: true, stdio: "ignore" },
-    );
-    child.unref();
-  }
-}
-
-/** The roster title for a prompt: its first 64 characters, whitespace-collapsed. */
-function titleFor(prompt: string): string {
-  const oneLine = prompt.replace(/\s+/g, " ").trim();
-  return oneLine.length > 64 ? oneLine.slice(0, 64) : oneLine;
 }

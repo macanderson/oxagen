@@ -17,15 +17,6 @@ import { EVENT_SCHEMA_VERSION, type SessionEvent } from "../events.js";
 import type { InboxMessage, SessionMetaView } from "../store.js";
 import type { FleetSessionManagerOptions } from "../manager.js";
 
-// Mock the worker spawn so the default `dispatchDetached` path can be exercised
-// without launching a real `node ... fleet worker` subprocess. Only the manager's
-// default spawn uses this; every other test injects its own `spawnWorker`.
-const spawnMock = vi.hoisted(() => vi.fn(() => ({ unref: vi.fn() })));
-vi.mock("node:child_process", async (importActual) => {
-  const actual = await importActual<typeof import("node:child_process")>();
-  return { ...actual, spawn: spawnMock };
-});
-
 const { SessionStore } = await import("../store.js");
 const { newSessionId } = await import("../ids.js");
 const { FleetSessionManager } = await import("../manager.js");
@@ -237,36 +228,30 @@ describe("FleetSessionManager — control channel", () => {
 });
 
 describe("FleetSessionManager — detached dispatch", () => {
-  it("dispatchDetached spawns a worker with the sid and records a worker session", async () => {
-    const spawned: string[] = [];
-    manager = new FleetSessionManager({ store, cwd, spawnWorker: (sid) => spawned.push(sid) });
+  it("delegates to dispatchDetachedSession, spawning a worker with the sid", async () => {
+    const spawnCalls: Array<[string, string[], unknown]> = [];
+    const spawnImpl: FleetSessionManagerOptions["spawnImpl"] = (command, args, options) => {
+      spawnCalls.push([command, args, options]);
+      return { unref: () => {} };
+    };
+    manager = new FleetSessionManager({ store, cwd, spawnImpl });
 
     const sid = await manager.dispatchDetached({ prompt: "detached work" });
 
-    expect(spawned).toEqual([sid]);
-    const meta = await store.readMeta(sid);
-    expect(meta?.owner).toBe("worker");
-    expect(meta?.pid).toBe(0);
-    expect(meta?.mode).toBe("conversation"); // conversational by default (ADR-023 §5, spec §3)
-  });
-
-  it("uses the default node worker spawn when none is injected", async () => {
-    spawnMock.mockClear();
-    manager = new FleetSessionManager({ store, cwd });
-
-    const sid = await manager.dispatchDetached({ prompt: "detached default" });
-
-    expect(spawnMock).toHaveBeenCalledTimes(1);
-    const [bin, args, opts] = spawnMock.mock.calls[0] as unknown as [
-      string,
-      string[],
-      Record<string, unknown>,
-    ];
+    // The shared dispatch path re-execs `node <cli> fleet worker <sid>`.
+    expect(spawnCalls).toHaveLength(1);
+    const [bin, args, options] = spawnCalls[0] as [string, string[], unknown];
     expect(bin).toBe(process.execPath);
     expect(args).toContain("fleet");
     expect(args).toContain("worker");
     expect(args).toContain(sid);
-    expect(opts).toMatchObject({ detached: true, stdio: "ignore" });
+    expect(options).toMatchObject({ cwd, detached: true, stdio: "ignore" });
+
+    // The session it created is a conversational worker (owner worker, pid 0).
+    const meta = await store.readMeta(sid);
+    expect(meta?.owner).toBe("worker");
+    expect(meta?.pid).toBe(0);
+    expect(meta?.mode).toBe("conversation"); // conversational by default (ADR-023 §5, spec §3)
   });
 });
 
