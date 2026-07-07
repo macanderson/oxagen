@@ -72,6 +72,7 @@ describe("handleReplay", () => {
   it("errors to stderr with a non-zero exit when the turn is not found", async () => {
     storeWith({ resolve: () => undefined });
     await handleReplay("99", {});
+    expect(err).toMatch(/^✗ /); // uniform error discipline
     expect(err).toContain('No turn matches "99"');
     expect(process.exitCode).toBe(1);
   });
