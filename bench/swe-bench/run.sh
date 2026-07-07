@@ -11,6 +11,8 @@
 #   DATASET=swe-bench/swe-smith ./run.sh      # a different Harbor dataset slug
 #   TASK_IDS="django__django-11099" ./run.sh  # smoke-test one instance
 #   OXAGEN_PREWARMED=1 ./run.sh               # run pre-baked task images (see PREWARM.md)
+#   OXAGEN_DIFFERENTIATED=1 ./run.sh          # full recommended recipe: best-of-N cross-family
+#                                             # + full pipeline + auto-verify (see step 2c)
 #   HARBOR_EXTRA="--include-task-name *django__django-11099" N_CONCURRENT=1 ./run.sh
 #   JOB_NAME=my-run ./run.sh                  # pin the results subdirectory name
 #
@@ -78,6 +80,43 @@ export OXAGEN_ALLOW_NO_SESSION=1
 #     depth for hard agentic coding (and Claude Code's default). Lingxi V2.0's
 #     81.2% used "High Reasoning". Default to xhigh; override per run.
 export OXAGEN_EFFORT="${OXAGEN_EFFORT:-xhigh}"
+
+# 2c) Full differentiated config — the recommended maximum-accuracy recipe,
+#     ported from bench/terminal-bench/run.sh so SWE-bench runs support it
+#     natively. One flag turns on: persisted code graph + embeddings
+#     (OXAGEN_INSTALL_DUCKDB=1), best-of-N cross-family candidates via
+#     `oxagen solve` (3x anthropic/claude-fable-5 + 2x openai/gpt-5.5-pro by
+#     default), the full evaluate→enhance→route→execute→judge→revise pipeline
+#     per candidate, executed-evidence auto-verify before selection, a real
+#     cross-vendor evaluator/advisor pair, deepest reasoning effort, and two
+#     judge→revise rounds per candidate. Each knob keeps its ${VAR:-default}
+#     form so any single piece can be overridden alongside
+#     OXAGEN_DIFFERENTIATED=1 (e.g. OXAGEN_BEST_OF_N_CANDIDATES=3 to scale
+#     cost down). See bench/terminal-bench/run.sh and oxagen_agent.py for the
+#     full rationale of each knob.
+if [ "${OXAGEN_DIFFERENTIATED:-}" = "1" ] && [ "$AGENT" = "oxagen" ]; then
+  # Warn (don't silently unset) if any recipe knob is already exported — a
+  # stale ambient override would silently win over the recipe default below,
+  # making the run non-reproducible.
+  for _diff_var in OXAGEN_LLM_FAST OXAGEN_LLM_BALANCED OXAGEN_LLM_PRECISE \
+    OXAGEN_LLM_EVALUATOR OXAGEN_LLM_ADVISOR OXAGEN_MAX_REVISE_ROUNDS \
+    OXAGEN_BEST_OF_N_CANDIDATES OXAGEN_BEST_OF_N_MODELS OXAGEN_BEST_OF_N_VERIFY; do
+    if [ -n "${!_diff_var:-}" ]; then
+      echo "==> WARNING: ${_diff_var}=${!_diff_var} is already set in your shell — OXAGEN_DIFFERENTIATED=1 will use it as-is rather than its own default. Run 'env -u ${_diff_var} ...' first if that's stale, not intentional." >&2
+    fi
+  done
+  export OXAGEN_INSTALL_DUCKDB="${OXAGEN_INSTALL_DUCKDB:-1}"
+  export OXAGEN_BEST_OF_N="${OXAGEN_BEST_OF_N:-1}"
+  export OXAGEN_BEST_OF_N_CANDIDATES="${OXAGEN_BEST_OF_N_CANDIDATES:-5}"
+  export OXAGEN_BEST_OF_N_MODELS="${OXAGEN_BEST_OF_N_MODELS:-anthropic/claude-fable-5,anthropic/claude-fable-5,anthropic/claude-fable-5,openai/gpt-5.5-pro,openai/gpt-5.5-pro}"
+  export OXAGEN_BEST_OF_N_PIPELINE="${OXAGEN_BEST_OF_N_PIPELINE:-1}"
+  export OXAGEN_BEST_OF_N_VERIFY="${OXAGEN_BEST_OF_N_VERIFY:-1}"
+  export OXAGEN_LLM_FAST="${OXAGEN_LLM_FAST:-anthropic/claude-haiku-4-5}"
+  export OXAGEN_LLM_EVALUATOR="${OXAGEN_LLM_EVALUATOR:-anthropic/claude-sonnet-5}"
+  export OXAGEN_LLM_ADVISOR="${OXAGEN_LLM_ADVISOR:-openai/gpt-5.5-pro}"
+  export OXAGEN_MAX_REVISE_ROUNDS="${OXAGEN_MAX_REVISE_ROUNDS:-2}"
+  echo "==> OXAGEN_DIFFERENTIATED=1 — persisted code graph + embeddings, fast coordinator (${OXAGEN_LLM_FAST}), full pipeline per candidate (evaluator=${OXAGEN_LLM_EVALUATOR}, advisor=${OXAGEN_LLM_ADVISOR}, effort=${OXAGEN_EFFORT}, max-revise=${OXAGEN_MAX_REVISE_ROUNDS}), best-of-${OXAGEN_BEST_OF_N_CANDIDATES} (${OXAGEN_BEST_OF_N_MODELS}), verify-auto=${OXAGEN_BEST_OF_N_VERIFY}."
+fi
 
 # 3) Build the oxagen bundle only when actually benchmarking oxagen —
 #    competitors don't need it.
