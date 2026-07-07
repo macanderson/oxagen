@@ -2,27 +2,36 @@
 /**
  * marketplace-modal.test.tsx — render tests for MarketplaceModal.
  *
+ * The modal is the Agent Tools Marketplace. It exposes exactly THREE tabs, in
+ * order: Skills (agent_skill), MCP Servers (mcp_server), Capabilities
+ * (agent_capability). The default/active tab on open is agent_skill. The
+ * Integrations and Knowledge Sources tabs were removed from this modal —
+ * integrations now live on the standalone Marketplace → Integrations page — so
+ * those tabs must be absent from the DOM.
+ *
  * Covers:
  *   - Closed state: dialog not in DOM
- *   - Open state: renders "Plugin Marketplace" title
- *   - Open state: renders all five tabs (MCP Servers, Integrations, Agent Capabilities, Agent Skills, Knowledge Sources)
+ *   - Open state: renders "Agent Tools Marketplace" title
+ *   - Open state: renders exactly the three agent-tool tabs (Skills, MCP Servers, Capabilities)
+ *   - Open state: Integrations / Knowledge Sources tabs are ABSENT
  *   - Open state: renders search input
- *   - Open state: renders auth filter chips (All, oauth, secret, none) on mcp_server tab
- *   - Open state: auth filter chips hidden on agent_capability / agent_skill / knowledge_source tabs
+ *   - Open state: auth filter chips (All, oauth, secret, none) are hidden on the
+ *     default agent_skill tab and appear only after switching to the mcp_server tab
+ *   - Open state: auth filter chips hidden on agent_capability / agent_skill tabs
  *   - Open state: "Select plugins to bulk-install" placeholder shown
  *   - Open state: Cancel button rendered in footer
  *   - Open state: Install selected button is disabled when nothing selected
  *   - Shows server cards when fetch succeeds
  *   - Renders error message when fetch fails
- *   - fetchServers calls GET (not POST) with URLSearchParams
+ *   - fetchServers calls GET (not POST) with URLSearchParams; initial pluginType=agent_skill
  *   - Tab switching changes activeTab, clears selection, and clears server list
- *   - Switching to agent_capability tab sends pluginType=agent_capability
- *   - Auth filter chip click triggers refetch
+ *   - Switching to mcp_server / agent_capability tab sends the matching pluginType
+ *   - Auth filter chip click triggers refetch (on mcp_server tab)
  *   - Search input triggers debounced fetchServers
  *   - Selecting a server enables bulk install button and shows selected count
  *   - Bulk install sends srv.name (not srv.id) as catalogServerId — the bulk-install fix
  *   - Bulk install error displays error message
- *   - agent_skill bulk install resolves UUID id → slug name as catalogServerId
+ *   - agent_capability / agent_skill bulk install resolves UUID id → slug name as catalogServerId
  *   - Clicking server card opens detail panel
  *   - Load more button triggers paginated fetch
  *   - Server with icon renders img element
@@ -110,14 +119,20 @@ afterEach(() => {
 describe("MarketplaceModal — closed", () => {
   it("does not render dialog content when closed", () => {
     render(<MarketplaceModal {...defaultProps} />);
-    expect(screen.queryByText("Plugin Marketplace")).not.toBeInTheDocument();
+    expect(screen.queryByText("Agent Tools Marketplace")).not.toBeInTheDocument();
   });
 });
 
 describe("MarketplaceModal — open", () => {
-  it("renders 'Plugin Marketplace' title when open", () => {
+  it("renders 'Agent Tools Marketplace' title when open", () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    expect(screen.getByText("Plugin Marketplace")).toBeInTheDocument();
+    expect(screen.getByText("Agent Tools Marketplace")).toBeInTheDocument();
+  });
+
+  it("renders Skills tab (the default active tab)", () => {
+    render(<MarketplaceModal {...defaultProps} open />);
+    expect(screen.getByText("Skills")).toBeInTheDocument();
+    expect(screen.getByTestId("marketplace-tab-agent_skill")).toBeInTheDocument();
   });
 
   it("renders MCP Servers tab", () => {
@@ -126,28 +141,22 @@ describe("MarketplaceModal — open", () => {
     expect(screen.getByTestId("marketplace-tab-mcp_server")).toBeInTheDocument();
   });
 
-  it("renders Integrations tab", () => {
+  it("renders Capabilities tab", () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    expect(screen.getByText("Integrations")).toBeInTheDocument();
-    expect(screen.getByTestId("marketplace-tab-integration")).toBeInTheDocument();
-  });
-
-  it("renders Agent Capabilities tab", () => {
-    render(<MarketplaceModal {...defaultProps} open />);
-    expect(screen.getByText("Agent Capabilities")).toBeInTheDocument();
+    expect(screen.getByText("Capabilities")).toBeInTheDocument();
     expect(screen.getByTestId("marketplace-tab-agent_capability")).toBeInTheDocument();
   });
 
-  it("renders Agent Skills tab", () => {
+  it("does NOT render the Integrations tab (moved to the Integrations marketplace page)", () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    expect(screen.getByText("Agent Skills")).toBeInTheDocument();
-    expect(screen.getByTestId("marketplace-tab-agent_skill")).toBeInTheDocument();
+    expect(screen.queryByText("Integrations")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("marketplace-tab-integration")).not.toBeInTheDocument();
   });
 
-  it("renders Knowledge Sources tab", () => {
+  it("does NOT render the Knowledge Sources tab", () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    expect(screen.getByText("Knowledge Sources")).toBeInTheDocument();
-    expect(screen.getByTestId("marketplace-tab-knowledge_source")).toBeInTheDocument();
+    expect(screen.queryByText("Knowledge Sources")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("marketplace-tab-knowledge_source")).not.toBeInTheDocument();
   });
 
   it("does NOT render Content Tools tab", () => {
@@ -166,9 +175,16 @@ describe("MarketplaceModal — open", () => {
     expect(screen.getByPlaceholderText("Search…")).toBeInTheDocument();
   });
 
-  it("renders auth filter chips on mcp_server tab (default)", () => {
+  it("hides auth filter chips on the default agent_skill tab, shows them after switching to mcp_server", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    expect(screen.getByTestId("marketplace-filter-auth-all")).toBeInTheDocument();
+    // Default tab is agent_skill: auth chips are not applicable and must be hidden.
+    expect(screen.queryByTestId("marketplace-filter-auth-all")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId("marketplace-tab-mcp_server"));
+    await waitFor(
+      () => expect(screen.getByTestId("marketplace-filter-auth-all")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
     expect(screen.getByTestId("marketplace-filter-auth-oauth")).toBeInTheDocument();
     expect(screen.getByTestId("marketplace-filter-auth-secret")).toBeInTheDocument();
     expect(screen.getByTestId("marketplace-filter-auth-none")).toBeInTheDocument();
@@ -243,13 +259,13 @@ describe("MarketplaceModal — server cards", () => {
 });
 
 describe("MarketplaceModal — fetch method", () => {
-  it("calls GET (not POST) with URLSearchParams including pluginType", async () => {
+  it("calls GET (not POST) with URLSearchParams including pluginType=agent_skill by default", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
     const firstCall = mockFetch.mock.calls[0];
     const url = firstCall?.[0] as string;
     expect(url).toMatch(/^\/api\/v1\/plugin\/catalog\/browse\?/);
-    expect(url).toContain("pluginType=mcp_server");
+    expect(url).toContain("pluginType=agent_skill");
     expect(url).not.toMatch(/undefined/);
     // Verify no second argument (no POST body)
     expect(firstCall?.[1]).toBeUndefined();
@@ -284,9 +300,16 @@ describe("MarketplaceModal — fetch method", () => {
     );
   });
 
-  it("includes authKind param when auth filter is set", async () => {
+  it("includes authKind param when auth filter is set (on mcp_server tab)", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+
+    // Auth chips only exist on the mcp_server tab; switch there first.
+    await userEvent.click(screen.getByTestId("marketplace-tab-mcp_server"));
+    await waitFor(
+      () => expect(screen.getByTestId("marketplace-filter-auth-oauth")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
 
     await userEvent.click(screen.getByTestId("marketplace-filter-auth-oauth"));
     await waitFor(
@@ -300,21 +323,21 @@ describe("MarketplaceModal — fetch method", () => {
 });
 
 describe("MarketplaceModal — tab switching", () => {
-  it("switches to Integrations tab on click", async () => {
+  it("switches to MCP Servers tab on click", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
 
-    await userEvent.click(screen.getByTestId("marketplace-tab-integration"));
+    await userEvent.click(screen.getByTestId("marketplace-tab-mcp_server"));
     await waitFor(
       () => {
         const calls = mockFetch.mock.calls.map((c) => c[0] as string);
-        expect(calls.some((url) => url.includes("pluginType=integration"))).toBe(true);
+        expect(calls.some((url) => url.includes("pluginType=mcp_server"))).toBe(true);
       },
       { timeout: 3000 },
     );
   });
 
-  it("switches to Agent Capabilities tab on click", async () => {
+  it("switches to Capabilities tab on click", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
 
@@ -328,29 +351,28 @@ describe("MarketplaceModal — tab switching", () => {
     );
   });
 
-  it("switches to Agent Skills tab on click", async () => {
+  it("returns to the Skills tab and re-fetches pluginType=agent_skill", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
 
-    await userEvent.click(screen.getByTestId("marketplace-tab-agent_skill"));
+    // Leave the default agent_skill tab, then come back to it.
+    await userEvent.click(screen.getByTestId("marketplace-tab-mcp_server"));
     await waitFor(
       () => {
         const calls = mockFetch.mock.calls.map((c) => c[0] as string);
-        expect(calls.some((url) => url.includes("pluginType=agent_skill"))).toBe(true);
+        expect(calls.some((url) => url.includes("pluginType=mcp_server"))).toBe(true);
       },
       { timeout: 3000 },
     );
-  });
 
-  it("switches to Knowledge Sources tab on click", async () => {
-    render(<MarketplaceModal {...defaultProps} open />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
-
-    await userEvent.click(screen.getByTestId("marketplace-tab-knowledge_source"));
+    const callsBefore = mockFetch.mock.calls.length;
+    await userEvent.click(screen.getByTestId("marketplace-tab-agent_skill"));
     await waitFor(
       () => {
-        const calls = mockFetch.mock.calls.map((c) => c[0] as string);
-        expect(calls.some((url) => url.includes("pluginType=knowledge_source"))).toBe(true);
+        const laterCalls = mockFetch.mock.calls
+          .slice(callsBefore)
+          .map((c) => c[0] as string);
+        expect(laterCalls.some((url) => url.includes("pluginType=agent_skill"))).toBe(true);
       },
       { timeout: 3000 },
     );
@@ -358,16 +380,16 @@ describe("MarketplaceModal — tab switching", () => {
 });
 
 describe("MarketplaceModal — auth filter visibility", () => {
-  it("auth filter chips are visible on mcp_server tab (default)", () => {
+  it("auth filter chips are hidden on the default agent_skill tab", () => {
     render(<MarketplaceModal {...defaultProps} open />);
-    expect(screen.getByTestId("marketplace-filter-auth-all")).toBeInTheDocument();
+    expect(screen.queryByTestId("marketplace-filter-auth-all")).not.toBeInTheDocument();
   });
 
-  it("auth filter chips are visible on integration tab", async () => {
+  it("auth filter chips are visible after switching to the mcp_server tab", async () => {
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
 
-    await userEvent.click(screen.getByTestId("marketplace-tab-integration"));
+    await userEvent.click(screen.getByTestId("marketplace-tab-mcp_server"));
     await waitFor(
       () => expect(screen.getByTestId("marketplace-filter-auth-all")).toBeInTheDocument(),
       { timeout: 3000 },
@@ -378,7 +400,12 @@ describe("MarketplaceModal — auth filter visibility", () => {
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
 
-    expect(screen.getByTestId("marketplace-filter-auth-all")).toBeInTheDocument();
+    // Show them first (mcp_server), then confirm they disappear on agent_capability.
+    await userEvent.click(screen.getByTestId("marketplace-tab-mcp_server"));
+    await waitFor(
+      () => expect(screen.getByTestId("marketplace-filter-auth-all")).toBeInTheDocument(),
+      { timeout: 3000 },
+    );
 
     await userEvent.click(screen.getByTestId("marketplace-tab-agent_capability"));
     await waitFor(
@@ -391,18 +418,14 @@ describe("MarketplaceModal — auth filter visibility", () => {
     render(<MarketplaceModal {...defaultProps} open />);
     await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
 
-    await userEvent.click(screen.getByTestId("marketplace-tab-agent_skill"));
+    // Show them first (mcp_server), then confirm they disappear back on agent_skill.
+    await userEvent.click(screen.getByTestId("marketplace-tab-mcp_server"));
     await waitFor(
-      () => expect(screen.queryByTestId("marketplace-filter-auth-all")).not.toBeInTheDocument(),
+      () => expect(screen.getByTestId("marketplace-filter-auth-all")).toBeInTheDocument(),
       { timeout: 3000 },
     );
-  });
 
-  it("auth filter chips are hidden on knowledge_source tab", async () => {
-    render(<MarketplaceModal {...defaultProps} open />);
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
-
-    await userEvent.click(screen.getByTestId("marketplace-tab-knowledge_source"));
+    await userEvent.click(screen.getByTestId("marketplace-tab-agent_skill"));
     await waitFor(
       () => expect(screen.queryByTestId("marketplace-filter-auth-all")).not.toBeInTheDocument(),
       { timeout: 3000 },
@@ -469,6 +492,8 @@ describe("MarketplaceModal — selection and bulk install", () => {
   it("bulk install resolves compound id to srv.name — sends name not id as catalogServerId", async () => {
     // This is the bulk-install fix: id="reg-uuid:tool-a:1.0", name="tool-a".
     // installBulkAction must receive catalogServerId="tool-a", NOT "reg-uuid:tool-a:1.0".
+    // The fixture is an mcp_server entry, so switch to the mcp_server tab first so
+    // the bulk-install call carries pluginType="mcp_server".
     mockFetch.mockResolvedValue(serverResponse);
     const onOpenChange = vi.fn();
     const bulkAction = vi.fn().mockResolvedValue({ ok: true });
@@ -480,6 +505,9 @@ describe("MarketplaceModal — selection and bulk install", () => {
         installBulkAction={bulkAction}
       />,
     );
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
+
+    await userEvent.click(screen.getByTestId("marketplace-tab-mcp_server"));
     await waitFor(
       () => expect(screen.getByTestId("marketplace-server-card-reg-uuid:tool-a:1.0")).toBeInTheDocument(),
       { timeout: 3000 },
@@ -606,9 +634,8 @@ describe("MarketplaceModal — selection and bulk install", () => {
     render(
       <MarketplaceModal {...defaultProps} open installBulkAction={bulkAction} />,
     );
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled(), { timeout: 3000 });
-
-    await userEvent.click(screen.getByTestId("marketplace-tab-agent_skill"));
+    // agent_skill is the default tab, so the initial fetch already returns the
+    // skill fixture — no tab switch needed before selecting.
     await waitFor(
       () => expect(screen.getByTestId("marketplace-server-card-a1b2c3d4-e5f6-7890-abcd-ef1234567890")).toBeInTheDocument(),
       { timeout: 3000 },
