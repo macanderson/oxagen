@@ -1821,5 +1821,156 @@ export function buildProgram(): Command {
       await handleSecretExport(opts);
     });
 
+  // ── fleet: the session fleet (ADR-023) ──────────────────────────────────────
+
+  const fleet = program
+    .command("fleet")
+    .description("Mission Control for many agent sessions (piped: streams the fleet as JSON)")
+    .option("--json", "Headless: stream the fleet's NDJSON envelope instead of the live view", false)
+    .option("--quiet", "Suppress progress chrome (stderr); data still emits", false)
+    .option("--verbose", "Include token deltas / every stage in the aggregate stream", false)
+    .action(async (opts: { json?: boolean; quiet?: boolean; verbose?: boolean }) => {
+      const { handleFleetRoot } = await import("./commands/fleet.js");
+      await handleFleetRoot(opts);
+    });
+
+  fleet
+    .command("dispatch")
+    .description("Start a detached session, print its sid, exit")
+    .argument("[prompt...]", 'The task ("-" or empty with piped stdin reads the prompt from stdin)')
+    .option("-m, --model <slug>", "Gateway model slug for the session")
+    .option("--agent <name>", "Run the session as a named agent definition")
+    .option("--once", "End after the first turn (default: a conversation session)", false)
+    .option("--follow", "Stream the session's events to completion; exit code is its fate", false)
+    .option("--json", "Machine output: the sid as JSON, or NDJSON envelope with --follow", false)
+    .option("--quiet", "Suppress progress chrome (stderr)", false)
+    .action(
+      async (
+        promptWords: string[],
+        opts: {
+          model?: string;
+          agent?: string;
+          once?: boolean;
+          follow?: boolean;
+          json?: boolean;
+          quiet?: boolean;
+          verbose?: boolean;
+        },
+      ) => {
+        // The worker this spawns runs the engine — gate on an account (BYOK
+        // auto-applies), exactly like the root one-shot action.
+        const { requireSession } = await import("./lib/session.js");
+        requireSession();
+        const { handleFleetDispatch } = await import("./commands/fleet.js");
+        await handleFleetDispatch(promptWords, opts);
+      },
+    );
+
+  fleet
+    .command("ls")
+    .description("List sessions from their meta.json snapshots")
+    .option("--json", "Output one JSON array of session snapshots", false)
+    .option("--quiet", "Suppress progress chrome (stderr)", false)
+    .action(async (opts: { json?: boolean; quiet?: boolean }) => {
+      const { handleFleetLs } = await import("./commands/fleet.js");
+      await handleFleetLs(opts);
+    });
+
+  fleet
+    .command("watch")
+    .description("Merged live stream; no sids means all non-terminal sessions")
+    .argument("[sids...]", "Sessions to watch; omit for all active sessions")
+    .option("--json", "Stream the raw NDJSON envelope instead of pretty lines", false)
+    .option("--quiet", "Suppress progress chrome (stderr)", false)
+    .option("--verbose", "Include token deltas / every stage", false)
+    .action(
+      async (sids: string[], opts: { json?: boolean; quiet?: boolean; verbose?: boolean }) => {
+        const { handleFleetWatch } = await import("./commands/fleet.js");
+        await handleFleetWatch(sids, opts);
+      },
+    );
+
+  fleet
+    .command("attach")
+    .description("Mission Control focused on one session (TTY), or its NDJSON from the start plus live follow")
+    .argument("<sid>", "Session id (full, short tail, or unique prefix)")
+    .option("--json", "Replay from the start then follow as NDJSON; exit with the session's fate", false)
+    .option("--quiet", "Suppress progress chrome (stderr)", false)
+    .option("--verbose", "Include token deltas / every stage", false)
+    .action(
+      async (sid: string, opts: { json?: boolean; quiet?: boolean; verbose?: boolean }) => {
+        const { handleFleetAttach } = await import("./commands/fleet.js");
+        await handleFleetAttach(sid, opts);
+      },
+    );
+
+  fleet
+    .command("send")
+    .description("Append a follow-up message to a session's inbox")
+    .argument("<sid>", "Session id (full, short tail, or unique prefix)")
+    .argument("<message...>", 'The follow-up turn ("-" reads from stdin)')
+    .option("--json", "Output the result as JSON", false)
+    .option("--quiet", "Suppress progress chrome (stderr)", false)
+    .action(
+      async (sid: string, messageWords: string[], opts: { json?: boolean; quiet?: boolean }) => {
+        const { handleFleetSend } = await import("./commands/fleet.js");
+        await handleFleetSend(sid, messageWords, opts);
+      },
+    );
+
+  fleet
+    .command("cancel")
+    .description("Cancel a session, or all of them")
+    .argument("[sid]", "Session id to cancel; omit with --all")
+    .option("--all", "Cancel every non-terminal session", false)
+    .option("--json", "Output the per-session result as JSON", false)
+    .option("--quiet", "Suppress progress chrome (stderr)", false)
+    .action(async (sid: string | undefined, opts: { all?: boolean; json?: boolean; quiet?: boolean }) => {
+      const { handleFleetCancel } = await import("./commands/fleet.js");
+      await handleFleetCancel(sid, opts);
+    });
+
+  fleet
+    .command("logs")
+    .description("Dump a session's raw events.ndjson")
+    .argument("<sid>", "Session id (full, short tail, or unique prefix)")
+    .option("--from-seq <n>", "Resume the replay at this sequence number")
+    .option("--follow", "Keep tailing after the replay", false)
+    .option("--json", "Output the raw NDJSON envelope (default when piped)", false)
+    .option("--quiet", "Suppress progress chrome (stderr)", false)
+    .action(
+      async (
+        sid: string,
+        opts: { fromSeq?: string; follow?: boolean; json?: boolean; quiet?: boolean },
+      ) => {
+        const { handleFleetLogs } = await import("./commands/fleet.js");
+        await handleFleetLogs(sid, opts);
+      },
+    );
+
+  fleet
+    .command("clean")
+    .description("Prune terminal sessions")
+    .option("--older-than <age>", "Age cutoff: days (7) or a duration (1d, 12h) — default 7", "7")
+    .option("--all", "Prune every terminal session regardless of age", false)
+    .option("--json", "Output the pruned sids as JSON", false)
+    .option("--quiet", "Suppress progress chrome (stderr)", false)
+    .action(async (opts: { olderThan?: string; all?: boolean; json?: boolean; quiet?: boolean }) => {
+      const { handleFleetClean } = await import("./commands/fleet.js");
+      await handleFleetClean(opts);
+    });
+
+  fleet
+    .command("worker <sid>", { hidden: true })
+    .description("[internal] Run a detached session worker (spawned by dispatch)")
+    .action(async (sid: string) => {
+      // The worker is what actually needs credentials — gate it like dispatch.
+      const { requireSession } = await import("./lib/session.js");
+      requireSession();
+      const { handleFleetWorker } = await import("./commands/fleet.js");
+      const { code } = await handleFleetWorker(sid);
+      process.exit(code);
+    });
+
   return program;
 }
