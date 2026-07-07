@@ -11,11 +11,14 @@
  * but a task the router flags as high-stakes (auth/billing/security/migration) is
  * always escalated, never under-spent.
  */
-import { generateObject } from "ai";
 import { z } from "zod";
+import type { AgentAi } from "@oxagen/agent-engine";
 import { enhancePrompt } from "./prompt-enhancer.js";
 import { classifyTier, modelForTier } from "./model-router.js";
 import { resolveAiCredential, MissingAiKeyError } from "./env.js";
+import { createGatewayAgentAi } from "./adapters/index.js";
+import { createMeteredAi } from "./metered-ai.js";
+import { debugLog } from "../lib/debug-log.js";
 import {
   AgentTimeoutError,
   DEFAULT_TIMEOUTS,
@@ -87,6 +90,16 @@ export interface PlanOptions {
   memory?: FleetMemory | null;
   /** Roster of named agents the planner may assign tasks to. */
   agents?: AgentDefinition[];
+  /**
+   * AI port the planner's structured-output call goes through — the engine's
+   * {@link AgentAi} seam, NOT `generateObject` from `ai` directly (the
+   * all-LLM-calls-through-a-metered-seam law: raw `ai` calls skip metering,
+   * duration tracking, and prompt hashing). When omitted, a BYOK gateway-direct
+   * port is built from `cwd` — the historical unmetered CLI default. An
+   * authenticated caller (e.g. a REPL session) passes its own platform-metered
+   * port so planning usage lands in the session's metrics.
+   */
+  ai?: AgentAi;
   signal?: AbortSignal;
 }
 
@@ -164,13 +177,22 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
       : "";
 
   const model = opts.model ?? modelForTier("balanced");
+  // Route the structured-output call through the engine AI port (metered on the
+  // platform, BYOK/unmetered in the CLI) rather than `generateObject` from `ai`.
+  // Default to the gateway-direct BYOK port built from cwd — same construction
+  // the fleet's engine runner uses — when the caller didn't inject one.
+  const ai =
+    opts.ai ??
+    createMeteredAi(createGatewayAgentAi({ cwd }), {
+      onLog: (line) => void debugLog("timeout", line),
+    });
   // The planner's model call is bounded per-call (perModelCallMs) and retried on
   // timeout — the timeout lives on the call, not on a turn/phase clock. The
   // per-attempt signal aborts the in-flight request; the outer planSignal
   // (user cancel) propagates without a retry.
   const { object } = await callModelWithTimeout(
     (signal) =>
-      generateObject({
+      ai.generateObject({
         model,
         schema: planSchema,
         system: PLANNER_SYSTEM,
