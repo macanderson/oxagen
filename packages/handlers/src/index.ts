@@ -4,7 +4,7 @@ export { archiveCreateHandler } from "./archive.create";
 export { apiKeyCreateHandler } from "./api.key.create";
 export { apiKeyRevokeHandler } from "./api.key.revoke";
 export { generateApiKey, actorCanManageApiKeys } from "./lib/api-key-authz";
-export { organizationCreateHandler } from "./organization.create";
+export { organizationCreateHandler } from "./org.create";
 export { bootstrapOrgIAM, provisionMemberPrincipal } from "./iam-provision";
 export type {
   BootstrapOrgIAMArgs,
@@ -12,11 +12,11 @@ export type {
 } from "./iam-provision";
 export { workspaceCreateHandler } from "./workspace.create";
 export { billingSubscriptionReadHandler } from "./billing.subscription.read";
-export { billingSubscriptionUpgradeStartHandler } from "./billing.subscription.upgrade.start";
+export { billingSubscriptionUpgradeStartHandler } from "./billing.subscription_upgrade.start";
 export { chatMessageSendHandler } from "./chat.message.send";
 export { formFillHandler } from "./form.fill";
-export { documentsGenerateHandler } from "./documents.generate";
-export { documentsPdfCreateHandler } from "./documents.pdf.create";
+export { documentsGenerateHandler } from "./document.generate";
+export { documentsPdfCreateHandler } from "./document.pdf.create";
 export { videoGenerateHandler } from "./video.generate";
 export { svgGenerateHandler } from "./svg.generate";
 export { imageGenerateHandler } from "./image.generate";
@@ -25,8 +25,8 @@ export { imageListHandler } from "./image.list";
 export { imageAnalyzeHandler } from "./image.analyze";
 export { systemInstallInstructionsHandler } from "./system.install.instructions";
 export { orgMemberAddHandler } from "./org.member.add";
-export { orgMemberInviteAcceptHandler } from "./org.member.invite.accept";
-export { orgMemberInviteDeclineHandler } from "./org.member.invite.decline";
+export { orgMemberInviteAcceptHandler } from "./org.member_invite.accept";
+export { orgMemberInviteDeclineHandler } from "./org.member_invite.decline";
 export {
   persistGeneratedAsset,
   createPendingGeneratedAsset,

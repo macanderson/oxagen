@@ -6,10 +6,10 @@ import { invoke } from "@oxagen/oxagen";
 // "No handler registered" (the type system can't catch a missing side-effect
 // import). Mirrors conversation-actions.ts pattern.
 import "@oxagen/handlers/register";
-import { notificationsList } from "@oxagen/oxagen/contracts/notifications.list";
-import { notificationsMark } from "@oxagen/oxagen/contracts/notifications.mark";
-import type { NotificationsListOutput } from "@oxagen/oxagen/contracts/notifications.list";
-import type { NotificationsMarkOutput } from "@oxagen/oxagen/contracts/notifications.mark";
+import { notificationsList } from "@oxagen/oxagen/contracts/notification.list";
+import { notificationsMark } from "@oxagen/oxagen/contracts/notification.mark";
+import type { NotificationsListOutput } from "@oxagen/oxagen/contracts/notification.list";
+import type { NotificationsMarkOutput } from "@oxagen/oxagen/contracts/notification.mark";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 

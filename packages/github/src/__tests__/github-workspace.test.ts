@@ -16,6 +16,10 @@ function makeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
     getAuthenticatedUser: vi.fn(),
     getFileContent: vi.fn(),
     getTree: vi.fn(),
+    getPullRequest: vi.fn(),
+    listPullRequestComments: vi.fn(),
+    listCiChecks: vi.fn(),
+    listPullRequestFiles: vi.fn(),
     ...overrides,
   };
 }

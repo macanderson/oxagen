@@ -150,11 +150,11 @@ function contractNameToPathSegment(name: string): string {
     "graph.node.list": "graph/nodes",
     // Subagent fan-out read side: list is mounted at the plural collection,
     // get at the singular resource with an :fanoutId param.
-    "agent.subagent.fanout.list": "agent/subagent/fanouts",
-    "agent.subagent.fanout.get": "agent/subagent/fanout",
+    "agent.subagent_fanout.list": "agent/subagent/fanouts",
+    "agent.subagent_fanout.get": "agent/subagent/fanout",
     // Subagent result read side: mounted at the singular resource with a
     // :runId param (GET /agent/subagent/result/:runId).
-    "agent.subagent.result.get": "agent/subagent/result",
+    "agent.subagent_result.get": "agent/subagent/result",
     // Vault routes use kebab-case for underscore-containing action names.
     "environment.set_default": "environment/set-default",
     "secret.import_env": "secret/import-env",
@@ -163,7 +163,7 @@ function contractNameToPathSegment(name: string): string {
     "agent.trace": "agent/trace",
     // agent.sandbox.files.list is mounted at the plural collection
     // (GET /agent/sandbox/files), not /agent/sandbox/files/list.
-    "agent.sandbox.files.list": "agent/sandbox/files",
+    "agent.sandbox_file.list": "agent/sandbox/files",
     // eval.dataset.* — create/list share the plural collection path
     // (differentiated by HTTP method); get/item.add/from_traces are
     // sub-resources of that same collection, so the shared prefix covers

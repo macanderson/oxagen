@@ -1,0 +1,245 @@
+"use server";
+/**
+ * skill-actions.ts — server actions for Workspace → Studio → Skills.
+ *
+ * All operations delegate to skill lifecycle contracts (skill.create,
+ * skill.workspace.*, skill.version.*, skill.export, skill.metrics.read).
+ * Auth/scope resolution goes through `resolveStudioScope` — apps/app does
+ * not bootstrap the IAM kernel (see CLAUDE.md gotcha), so every server
+ * surface must gate explicitly.
+ *
+ * Adapted from settings/skills/skill-actions.ts (same contracts, same
+ * shapes) — the only changes are the route target (studio, not settings)
+ * and the shared `resolveStudioScope` helper, plus the new `createSkillAction`.
+ */
+import { z } from "zod";
+import { revalidatePath } from "next/cache";
+import { invoke } from "@oxagen/oxagen";
+import "@oxagen/handlers/register";
+import { workspace } from "@/lib/routes";
+import type { ScopeContext } from "@/lib/scope";
+import { resolveStudioScope } from "@/lib/studio/scope";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const NOT_AUTHORIZED = "Only workspace owners and admins can manage skills.";
+
+function skillsPath(ctx: Required<ScopeContext>): string {
+  return workspace.studio.skills(ctx);
+}
+
+// ── installSkill ──────────────────────────────────────────────────────────────
+
+const InstallSkillSchema = z.object({
+  orgSlug: z.string().min(1),
+  workspaceSlug: z.string().min(1),
+  skillSlug: z.string().min(1),
+});
+
+export async function installSkill(
+  input: z.infer<typeof InstallSkillSchema>,
+): Promise<{ ok: boolean; error?: string }> {
+  const parsed = InstallSkillSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid input" };
+
+  const { orgSlug, workspaceSlug } = parsed.data;
+  const { canManage, ctx } = await resolveStudioScope(orgSlug, workspaceSlug);
+  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
+
+  try {
+    await invoke("skill.workspace.install", { skillSlug: parsed.data.skillSlug }, ctx, {
+      surface: "agent",
+    });
+    const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
+    revalidatePath(skillsPath(routeCtx));
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Install failed" };
+  }
+}
+
+// ── editSkill (create new version from content) ───────────────────────────────
+
+const EditSkillSchema = z.object({
+  orgSlug: z.string().min(1),
+  workspaceSlug: z.string().min(1),
+  skillSlug: z.string().min(1),
+  content: z.string().min(1).max(500_000),
+  commitMessage: z.string().max(500).optional(),
+});
+
+export async function editSkill(
+  input: z.infer<typeof EditSkillSchema>,
+): Promise<{ ok: boolean; versionId?: string; version?: string; error?: string }> {
+  const parsed = EditSkillSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid input" };
+
+  const { orgSlug, workspaceSlug } = parsed.data;
+  const { canManage, ctx } = await resolveStudioScope(orgSlug, workspaceSlug);
+  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
+
+  try {
+    const out = await invoke(
+      "skill.version.upload",
+      {
+        skillSlug: parsed.data.skillSlug,
+        content: parsed.data.content,
+        commitMessage: parsed.data.commitMessage,
+      },
+      ctx,
+      { surface: "agent" },
+    );
+    const typed = out as { versionId: string; version: string };
+    const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
+    revalidatePath(skillsPath(routeCtx));
+    return { ok: true, versionId: typed.versionId, version: typed.version };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Edit failed" };
+  }
+}
+
+// ── activateVersion ───────────────────────────────────────────────────────────
+
+const ActivateVersionSchema = z.object({
+  orgSlug: z.string().min(1),
+  workspaceSlug: z.string().min(1),
+  skillSlug: z.string().min(1),
+  versionId: z.string().min(1),
+});
+
+export async function activateVersion(
+  input: z.infer<typeof ActivateVersionSchema>,
+): Promise<{ ok: boolean; error?: string }> {
+  const parsed = ActivateVersionSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid input" };
+
+  const { orgSlug, workspaceSlug } = parsed.data;
+  const { canManage, ctx } = await resolveStudioScope(orgSlug, workspaceSlug);
+  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
+
+  try {
+    await invoke(
+      "skill.version.activate",
+      { skillSlug: parsed.data.skillSlug, versionId: parsed.data.versionId },
+      ctx,
+      { surface: "agent" },
+    );
+    const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
+    revalidatePath(skillsPath(routeCtx));
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Activate failed" };
+  }
+}
+
+// ── exportSkill ───────────────────────────────────────────────────────────────
+
+const ExportSkillSchema = z.object({
+  orgSlug: z.string().min(1),
+  workspaceSlug: z.string().min(1),
+  skillSlug: z.string().min(1),
+  versionId: z.string().optional(),
+});
+
+export async function exportSkill(
+  input: z.infer<typeof ExportSkillSchema>,
+): Promise<{ ok: boolean; content?: string; filename?: string; error?: string }> {
+  const parsed = ExportSkillSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid input" };
+
+  const { orgSlug, workspaceSlug } = parsed.data;
+  const { ctx } = await resolveStudioScope(orgSlug, workspaceSlug);
+  // Read is allowed for all workspace members — no canManage check here.
+
+  try {
+    const out = await invoke(
+      "skill.export",
+      { skillSlug: parsed.data.skillSlug, versionId: parsed.data.versionId },
+      ctx,
+      { surface: "agent" },
+    );
+    const typed = out as { content: string; filename: string };
+    return { ok: true, content: typed.content, filename: typed.filename };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Export failed" };
+  }
+}
+
+// ── createSkillAction ─────────────────────────────────────────────────────────
+//
+// Composes the YAML frontmatter that the skill loader expects (see
+// packages/skills/src/types.ts skillFrontmatterSchema — name/description
+// required, metadata.weight optional low|high|critical) around the user's
+// markdown body, then calls skill.create. skill.create itself stores `body`
+// verbatim (no server-side frontmatter validation — see
+// packages/handlers/src/skill.create.ts) so composing here is the only place
+// this shape gets applied.
+
+const CreateSkillSchema = z.object({
+  orgSlug: z.string().min(1),
+  workspaceSlug: z.string().min(1),
+  name: z.string().min(1).max(100),
+  slug: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9-]+$/, "Slug must be kebab-case (a-z, 0-9, hyphens)"),
+  description: z.string().min(1).max(500),
+  weight: z.enum(["low", "high", "critical"]),
+  body: z.string().min(1).max(32_000),
+  activate: z.boolean(),
+});
+
+const MAX_SKILL_MD_LENGTH = 32_000;
+
+/** YAML-safe double-quoted scalar (JSON strings are valid YAML strings). */
+function yamlQuote(value: string): string {
+  return JSON.stringify(value);
+}
+
+export async function createSkillAction(
+  input: z.infer<typeof CreateSkillSchema>,
+): Promise<{ ok: true; slug: string } | { ok: false; error: string }> {
+  const parsed = CreateSkillSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+
+  const { orgSlug, workspaceSlug, name, slug, description, weight, body, activate } = parsed.data;
+  const { canManage, ctx } = await resolveStudioScope(orgSlug, workspaceSlug);
+  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
+
+  const frontmatter = [
+    "---",
+    `name: ${yamlQuote(slug)}`,
+    `description: ${yamlQuote(description)}`,
+    "metadata:",
+    `  weight: ${weight}`,
+    "---",
+    "",
+  ].join("\n");
+  const fullBody = `${frontmatter}\n${body}`;
+
+  if (fullBody.length > MAX_SKILL_MD_LENGTH) {
+    return {
+      ok: false,
+      error: `Skill content is too long (${fullBody.length} chars incl. frontmatter; max ${MAX_SKILL_MD_LENGTH}).`,
+    };
+  }
+
+  try {
+    const out = await invoke(
+      "skill.create",
+      { name, slug, description, body: fullBody, activate },
+      ctx,
+      { surface: "agent" },
+    );
+    const typed = out as { slug: string; created: boolean };
+    const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
+    revalidatePath(skillsPath(routeCtx));
+    revalidatePath(workspace.studio.skill(routeCtx, typed.slug));
+    return { ok: true, slug: typed.slug };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Create failed" };
+  }
+}

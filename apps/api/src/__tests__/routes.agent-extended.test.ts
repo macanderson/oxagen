@@ -236,10 +236,10 @@ describe("agent.mcp.consent.list route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.mcp.consent.list' and surface 'api'", async () => {
+  it("calls invoke with 'agent.mcp_consent.list' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.mcp.consent.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.mcp_consent.list");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -265,10 +265,10 @@ describe("agent.mcp.consent.resolve route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.mcp.consent.resolve' and surface 'api'", async () => {
+  it("calls invoke with 'agent.mcp_consent.resolve' and surface 'api'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.mcp.consent.resolve");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.mcp_consent.resolve");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -439,10 +439,10 @@ describe("agent.memory.policy.read route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.memory.policy.read' and surface 'api'", async () => {
+  it("calls invoke with 'agent.memory_policy.read' and surface 'api'", async () => {
     await app.fetch(get(PATH));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.memory.policy.read");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.memory_policy.read");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 
@@ -466,10 +466,10 @@ describe("agent.memory.policy.write route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.memory.policy.write' and surface 'api'", async () => {
+  it("calls invoke with 'agent.memory_policy.write' and surface 'api'", async () => {
     await app.fetch(post(PATH, { halfLifeHighDays: 60 }));
     expect(mocks.invoke).toHaveBeenCalledOnce();
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.memory.policy.write");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.memory_policy.write");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
   });
 

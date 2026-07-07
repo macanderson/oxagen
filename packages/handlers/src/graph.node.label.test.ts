@@ -18,9 +18,9 @@ vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: async (_scope: unknown, fn: () => Promise<void>) => fn(),
 }));
 
-import { graphNodeLabelAddHandler } from "./graph.node.label.add";
-import { graphNodeLabelRemoveHandler } from "./graph.node.label.remove";
-import { graphNodeLabelsGetHandler } from "./graph.node.labels.get";
+import { graphNodeLabelAddHandler } from "./graph.node_label.add";
+import { graphNodeLabelRemoveHandler } from "./graph.node_label.remove";
+import { graphNodeLabelsGetHandler } from "./graph.node_label.get";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 function rec(fields: Record<string, unknown>) {

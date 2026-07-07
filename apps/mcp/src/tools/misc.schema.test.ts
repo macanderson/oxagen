@@ -176,7 +176,7 @@ describe("user.preferences.write schema", () => {
 
 // ── workspace.model.settings.write ───────────────────────────────────────────
 
-import { schema as workspaceModelSettingsWriteSchema } from "./workspace.model.settings.write";
+import { schema as workspaceModelSettingsWriteSchema } from "./workspace.model_settings.write";
 
 describe("workspace.model.settings.write schema", () => {
   const Schema = obj(workspaceModelSettingsWriteSchema);

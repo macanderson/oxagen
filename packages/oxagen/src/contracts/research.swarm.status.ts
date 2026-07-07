@@ -22,7 +22,7 @@ export const researchSwarmStatus = registerCapability({
   // extraction. graph.ingest is the natural next step.
   produces: ["search.results"],
   consumes: ["swarm.id"],
-  chainHints: ["graph.ingest", "documents.generate"],
+  chainHints: ["graph.ingest", "document.generate"],
   render: { componentId: "research-swarm-card" },
   input: z.object({
     swarmId: z.string().describe("Swarm ID returned by research.swarm.start"),

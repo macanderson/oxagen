@@ -34,7 +34,7 @@ import type { ChatMessage } from "@/components/chat/chat-shell";
 import { walkActiveBranch } from "./[workspaceSlug]/_shared/walk-active-branch";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
-import { agentMcpConsentResolve } from "@oxagen/oxagen/contracts/agent.mcp.consent.resolve";
+import { agentMcpConsentResolve } from "@oxagen/oxagen/contracts/agent.mcp_consent.resolve";
 import { agentPlanApprove } from "@oxagen/oxagen/contracts/agent.plan.approve";
 import { invoke } from "@oxagen/oxagen";
 import { logger } from "@oxagen/handlers/logger";
@@ -454,7 +454,7 @@ export async function wandResolveConsentAction(
 
   try {
     await invoke(
-      "agent.mcp.consent.resolve",
+      "agent.mcp_consent.resolve",
       parsed.data,
       buildCapabilityContext({ orgId, workspaceId, userId: session.user.id }),
       { surface: "agent" },

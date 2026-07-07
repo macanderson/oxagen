@@ -63,9 +63,9 @@ vi.mock("inngest", () => ({
   })),
 }));
 
-import { agentTaskBackgroundStartHandler } from "./agent.task.background.start";
-import { agentTaskBackgroundReadHandler } from "./agent.task.background.read";
-import { agentTaskBackgroundCancelHandler } from "./agent.task.background.cancel";
+import { agentTaskBackgroundStartHandler } from "./agent.background_task.start";
+import { agentTaskBackgroundReadHandler } from "./agent.background_task.read";
+import { agentTaskBackgroundCancelHandler } from "./agent.background_task.cancel";
 
 // ─────────────────────────────────────────────────────────────────────────────
 

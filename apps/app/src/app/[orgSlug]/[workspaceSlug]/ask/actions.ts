@@ -13,10 +13,10 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import type { DbMessageRow, ConversationRow } from "@oxagen/database";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
-import { agentMcpConsentResolve } from "@oxagen/oxagen/contracts/agent.mcp.consent.resolve";
+import { agentMcpConsentResolve } from "@oxagen/oxagen/contracts/agent.mcp_consent.resolve";
 import { agentPlanApprove } from "@oxagen/oxagen/contracts/agent.plan.approve";
-import { agentTaskBackgroundCancel } from "@oxagen/oxagen/contracts/agent.task.background.cancel";
-import { agentTaskBackgroundRead } from "@oxagen/oxagen/contracts/agent.task.background.read";
+import { agentTaskBackgroundCancel } from "@oxagen/oxagen/contracts/agent.background_task.cancel";
+import { agentTaskBackgroundRead } from "@oxagen/oxagen/contracts/agent.background_task.read";
 import { invoke } from "@oxagen/oxagen";
 import type { PlanStep } from "@/components/chat/stream-event-types";
 import type { BackgroundTaskSnapshot } from "@/components/chat/background-task-tray";
@@ -255,7 +255,7 @@ export async function resolveConsentAction(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     await invoke(
-      "agent.mcp.consent.resolve",
+      "agent.mcp_consent.resolve",
       parsed.data,
       capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
       { surface: "agent" },
@@ -320,7 +320,7 @@ export async function cancelBackgroundTaskAction(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   try {
     await invoke(
-      "agent.task.background.cancel",
+      "agent.background_task.cancel",
       parsed.data,
       capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
       { surface: "agent" },
@@ -344,11 +344,11 @@ export async function readBackgroundTaskAction(
       throw new Error(parsed.error.issues[0]?.message ?? "Invalid task id");
     }
     const out = await invoke(
-      "agent.task.background.read",
+      "agent.background_task.read",
       parsed.data,
       capabilityContext({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: session.user.id }),
       { surface: "agent" },
-    ) as import("@oxagen/oxagen/contracts/agent.task.background.read").AgentTaskBackgroundReadOutput;
+    ) as import("@oxagen/oxagen/contracts/agent.background_task.read").AgentTaskBackgroundReadOutput;
     return {
       taskId: out.taskId,
       kind: out.kind,

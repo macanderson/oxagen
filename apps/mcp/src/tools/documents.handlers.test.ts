@@ -137,12 +137,12 @@ describe("asset.upload handler", () => {
 import handler_documentsGenerate, {
   schema as documentsGenerateSchema,
   metadata as documentsGenerateMetadata,
-} from "./documents.generate";
+} from "./document.generate";
 
 describe("documents.generate handler", () => {
   it("exports schema and metadata", () => {
     expect(documentsGenerateSchema).toBeDefined();
-    expect(documentsGenerateMetadata.name).toBe("documents.generate");
+    expect(documentsGenerateMetadata.name).toBe("document.generate");
   });
 
   it("calls invoke with document generation args", async () => {
@@ -188,7 +188,7 @@ describe("documents.generate handler", () => {
     await handler_documentsGenerate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "documents.generate",
+      "document.generate",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -201,12 +201,12 @@ describe("documents.generate handler", () => {
 import handler_documentsPdfCreate, {
   schema as documentsPdfCreateSchema,
   metadata as documentsPdfCreateMetadata,
-} from "./documents.pdf.create";
+} from "./document.pdf.create";
 
 describe("documents.pdf.create handler", () => {
   it("exports schema and metadata", () => {
     expect(documentsPdfCreateSchema).toBeDefined();
-    expect(documentsPdfCreateMetadata.name).toBe("documents.pdf.create");
+    expect(documentsPdfCreateMetadata.name).toBe("document.pdf.create");
   });
 
   it("calls invoke with PDF creation args", async () => {
@@ -246,7 +246,7 @@ describe("documents.pdf.create handler", () => {
     await handler_documentsPdfCreate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "documents.pdf.create",
+      "document.pdf.create",
       args,
       fakeCtx,
       { surface: "mcp" },

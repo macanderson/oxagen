@@ -178,7 +178,15 @@ export async function planTasks(opts: PlanOptions): Promise<Plan> {
         opts.agents.map((a) => `- ${a.name}: ${a.description}`).join("\n")
       : "";
 
-  const model = opts.model ?? modelForTier("balanced");
+  // Perf #9: decomposing a goal into a handful of tasks is a bounded structured-
+  // output job the fast tier handles well — default to it, escalating only when
+  // the goal itself hits a high-stakes domain (auth/billing/security/migration/
+  // architecture) where a mis-decomposition is costly. An explicit triage model
+  // (`opts.model`, the `/triage-model` slug) always wins over this default. Note
+  // per-task tiers are still reconciled up by `classifyTier` below, so a fast
+  // planner never under-tiers the WORKERS — only its own decomposition call.
+  const plannerTier = classifyTier({ text: opts.goal }).tier;
+  const model = opts.model ?? modelForTier(plannerTier === "precise" ? "precise" : "fast");
   const { object } = await opts.ai.generateObject({
     model,
     schema: planSchema,

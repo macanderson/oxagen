@@ -9,6 +9,9 @@ import { repoFilePut } from "@oxagen/oxagen/contracts/repo.file.put";
 import { repoFork } from "@oxagen/oxagen/contracts/repo.fork";
 import { repoBranchCreate } from "@oxagen/oxagen/contracts/repo.branch.create";
 import { repoPrOpen } from "@oxagen/oxagen/contracts/repo.pr.open";
+import { repoPrGet } from "@oxagen/oxagen/contracts/repo.pr.get";
+import { repoPrDiff } from "@oxagen/oxagen/contracts/repo.pr.diff";
+import { repoCiStatus } from "@oxagen/oxagen/contracts/repo.ci.status";
 import { agentRepoEdit } from "@oxagen/oxagen/contracts/agent.repo.edit";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
@@ -100,6 +103,42 @@ repoRoute.post("/pulls", async (c) => {
   const ctx = capabilityContext(c);
   const out = await invoke(repoPrOpen.name, body, ctx, { surface: "api" });
   return c.json(out, 201);
+});
+
+// GET /repos/ci/status — read CI check-run + commit-status results for a ref
+repoRoute.get("/ci/status", async (c) => {
+  const body = repoCiStatus.input.parse({
+    owner: c.req.query("owner"),
+    repo: c.req.query("repo"),
+    ref: c.req.query("ref"),
+  });
+  const ctx = capabilityContext(c);
+  const out = await invoke(repoCiStatus.name, body, ctx, { surface: "api" });
+  return c.json(out);
+});
+
+// GET /repos/pulls/:number — PR summary, stats, comments, and CI status
+repoRoute.get("/pulls/:number", async (c) => {
+  const body = repoPrGet.input.parse({
+    owner: c.req.query("owner"),
+    repo: c.req.query("repo"),
+    number: Number(c.req.param("number")),
+  });
+  const ctx = capabilityContext(c);
+  const out = await invoke(repoPrGet.name, body, ctx, { surface: "api" });
+  return c.json(out);
+});
+
+// GET /repos/pulls/:number/diff — per-file unified-diff patches for a PR
+repoRoute.get("/pulls/:number/diff", async (c) => {
+  const body = repoPrDiff.input.parse({
+    owner: c.req.query("owner"),
+    repo: c.req.query("repo"),
+    number: Number(c.req.param("number")),
+  });
+  const ctx = capabilityContext(c);
+  const out = await invoke(repoPrDiff.name, body, ctx, { surface: "api" });
+  return c.json(out);
 });
 
 // POST /repos/agent/edit — run the coding agent against a repo and open a PR

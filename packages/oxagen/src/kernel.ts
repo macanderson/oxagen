@@ -493,9 +493,15 @@ async function _invokeCore(
 ): Promise<unknown> {
   const startMs = Date.now();
   const cap = getCapability(name);
+  // The canonical identity for this invocation (ADR-022). getCapability resolves
+  // a legacy alias to its live contract, so a call made under an old name is
+  // dispatched, gated, and metered under the canonical name. For an unknown
+  // name (cap === undefined) canonical falls back to the raw name so the
+  // "unknown capability" telemetry still records what was actually called.
+  const canonical = cap?.name ?? name;
   if (!cap) {
     emitSecurityEvent({
-      capability: name,
+      capability: canonical,
       outcome: "deny",
       surface: ctx.surface,
       orgId: ctx.orgId,
@@ -510,7 +516,7 @@ async function _invokeCore(
 
   if (opts.surface && !getSurfaces(cap).includes(opts.surface)) {
     emitSecurityEvent({
-      capability: name,
+      capability: canonical,
       outcome: "deny",
       surface: opts.surface,
       orgId: ctx.orgId,
@@ -530,7 +536,7 @@ async function _invokeCore(
   const inputResult = cap.input.safeParse(rawInput);
   if (!inputResult.success) {
     emitSecurityEvent({
-      capability: name,
+      capability: canonical,
       outcome: "error",
       surface: ctx.surface,
       orgId: ctx.orgId,
@@ -541,7 +547,7 @@ async function _invokeCore(
       durationMs: Date.now() - startMs,
     });
     emitTraceEvent({
-      capability: name,
+      capability: canonical,
       status: "error",
       surface: opts.surface ?? ctx.surface,
       orgId: ctx.orgId,
@@ -611,7 +617,7 @@ async function _invokeCore(
         // Fire-and-forget: checkFn internally emits the ClickHouse audit event.
         let iamCheckThrew = false;
         const iamResult = await checkFn({
-          capability: name,
+          capability: canonical,
           ctx,
           defaultEffect,
           rawInputJson,
@@ -635,7 +641,7 @@ async function _invokeCore(
         // _iamEnforced. See OXA-2056.
         if (iamCheckThrew) {
           emitSecurityEvent({
-            capability: name,
+            capability: canonical,
             outcome: "deny",
             surface: ctx.surface,
             orgId: ctx.orgId,
@@ -656,7 +662,7 @@ async function _invokeCore(
           if (_iamEnforced) {
             // Enforcement on: block the call.
             emitSecurityEvent({
-              capability: name,
+              capability: canonical,
               outcome: "deny",
               surface: ctx.surface,
               orgId: ctx.orgId,
@@ -716,7 +722,7 @@ async function _invokeCore(
       //      avoid locking out platform-internal work).
       // The gate throws CapabilityError(code="capability_not_installed") to
       // refuse. Use capabilityNotInstalledError() for the canonical shape.
-      const claimingPlugin = pluginForContract(name);
+      const claimingPlugin = pluginForContract(canonical);
       if (
         claimingPlugin !== undefined &&
         _entitlementGate !== null &&
@@ -725,11 +731,11 @@ async function _invokeCore(
       ) {
         // Entitlement is workspace-scoped: a capability pack installed in one
         // workspace does not entitle sibling workspaces in the same org.
-        await _entitlementGate(name, ctx.orgId, ctx.workspaceId);
+        await _entitlementGate(canonical, ctx.orgId, ctx.workspaceId);
       }
       // ── End capability entitlement gate ─────────────────────────────────────
 
-      const handler = await resolveHandler(name);
+      const handler = await resolveHandler(canonical);
       return handler(inputResult.data, ctx);
     });
   } catch (err) {
@@ -743,7 +749,7 @@ async function _invokeCore(
         ? "no_tenant_scope"
         : null;
     emitSecurityEvent({
-      capability: name,
+      capability: canonical,
       outcome:
         (isCapErr && err.code === "no_handler") || scopeCode ? "deny" : "error",
       surface: ctx.surface,
@@ -755,7 +761,7 @@ async function _invokeCore(
       durationMs: Date.now() - startMs,
     });
     emitTraceEvent({
-      capability: name,
+      capability: canonical,
       status: "error",
       surface: opts.surface ?? ctx.surface,
       orgId: ctx.orgId,
@@ -773,7 +779,7 @@ async function _invokeCore(
   const outputResult = cap.output.safeParse(output);
   if (!outputResult.success) {
     emitSecurityEvent({
-      capability: name,
+      capability: canonical,
       outcome: "error",
       surface: ctx.surface,
       orgId: ctx.orgId,
@@ -784,7 +790,7 @@ async function _invokeCore(
       durationMs: Date.now() - startMs,
     });
     emitTraceEvent({
-      capability: name,
+      capability: canonical,
       status: "error",
       surface: opts.surface ?? ctx.surface,
       orgId: ctx.orgId,
@@ -806,7 +812,7 @@ async function _invokeCore(
 
   // Successful invocation.
   emitSecurityEvent({
-    capability: name,
+    capability: canonical,
     outcome: "allow",
     surface: ctx.surface,
     orgId: ctx.orgId,
@@ -817,7 +823,7 @@ async function _invokeCore(
     durationMs: Date.now() - startMs,
   });
   emitTraceEvent({
-    capability: name,
+    capability: canonical,
     status: "ok",
     surface: opts.surface ?? ctx.surface,
     orgId: ctx.orgId,
@@ -892,6 +898,11 @@ export async function authorizeExternalCapability(
 ): Promise<AuthorizeExternalCapabilityResult> {
   const startMs = Date.now();
   const checkFn = _iamCheckFn;
+  // Synthetic external ids (mcp.<server>.<tool>) are never registered, so there
+  // is no canonical form to resolve — the raw name IS the identity. Aliasing
+  // `canonical` to `name` keeps this function's telemetry blocks identical in
+  // shape to kernel.invoke()'s (ADR-022).
+  const canonical = name;
 
   if (checkFn === null) {
     // No IAM runtime registered — unconditionally allow (mirrors kernel.invoke()).
@@ -900,7 +911,7 @@ export async function authorizeExternalCapability(
 
   let iamCheckThrew = false;
   const iamResult = await checkFn({
-    capability: name,
+    capability: canonical,
     ctx,
     defaultEffect,
     rawInputJson: "null",
@@ -920,7 +931,7 @@ export async function authorizeExternalCapability(
   // the resolver was erroring).
   if (iamCheckThrew) {
     emitSecurityEvent({
-      capability: name,
+      capability: canonical,
       outcome: "deny",
       surface: ctx.surface,
       orgId: ctx.orgId,
@@ -938,7 +949,7 @@ export async function authorizeExternalCapability(
   const isDenied = outcome !== "allow";
 
   emitSecurityEvent({
-    capability: name,
+    capability: canonical,
     outcome: isDenied ? "deny" : "allow",
     surface: ctx.surface,
     orgId: ctx.orgId,

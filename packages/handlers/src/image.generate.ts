@@ -3,6 +3,7 @@ import { requireEnv } from "@oxagen/config/env";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { imageGenerate } from "@oxagen/oxagen/contracts/image.generate";
 import { logger } from "./logger";
+import { persistGeneratedAsset } from "./generated-asset.persist";
 
 // ── Handler ───────────────────────────────────────────────────────────────
 //
@@ -77,13 +78,67 @@ export const imageGenerateHandler: CapabilityHandler<typeof imageGenerate> = asy
       ? `data:image/png;base64,${base64}`
       : undefined;
 
+    // ── Persist as a conversation file ────────────────────────────────────
+    // Every generated artifact must land in the Conversation Files panel, so
+    // the image bytes go through the shared persistGeneratedAsset seam
+    // (conversation linkage resolves from ctx.messageId inside the seam).
+    // Strictly non-fatal: the inline data URI result is always returned, and
+    // any failure only surfaces as `persistWarning` in the output.
+    let assetPublicId: string | undefined;
+    let serveUrl: string | undefined;
+    let persistWarning: string | undefined;
+
+    if (base64) {
+      if (!ctx.userId) {
+        persistWarning =
+          "Image was not saved to conversation files: no user identity in the request context.";
+      } else {
+        try {
+          const asset = await persistGeneratedAsset({
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+            userId: ctx.userId,
+            kind: "image",
+            accessPolicy: "org",
+            bytes: Buffer.from(base64, "base64"),
+            mimeType: "image/png",
+            prompt: input.prompt,
+            // Record the resolved gateway model id (never a hard-coded slug —
+            // AI Gateway slug-drift gotcha). AI SDK v6's `ImageModel` is
+            // `string | ImageModelV3`, so narrow before touching `.modelId`.
+            model: typeof imageModel === "string" ? imageModel : imageModel.modelId,
+            messageId: ctx.messageId ?? undefined,
+          });
+          assetPublicId = asset.publicId;
+          serveUrl = asset.serveUrl;
+        } catch (persistErr) {
+          logger.warn(
+            { err: persistErr, orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+            "image.generate: asset persistence failed (non-fatal) — returning inline result only",
+          );
+          persistWarning =
+            "Image was generated but could not be saved to conversation files.";
+        }
+      }
+    }
+
     return {
       dataUri,
       alt,
       placeholder: false,
+      ...(assetPublicId !== undefined ? { assetPublicId } : {}),
+      ...(serveUrl !== undefined ? { serveUrl } : {}),
+      ...(persistWarning !== undefined ? { persistWarning } : {}),
       render: {
         componentId: "image-preview",
-        props: { dataUri, alt, placeholder: false },
+        // image-preview prefers the access-controlled serving URL over the
+        // inline data URI when the asset persisted.
+        props: {
+          dataUri,
+          alt,
+          placeholder: false,
+          ...(serveUrl !== undefined ? { url: serveUrl } : {}),
+        },
       },
     };
   } catch (err) {

@@ -65,11 +65,11 @@ vi.mock("@oxagen/oxagen/plugins", () => ({
   pluginForContract: (name: string) => {
     if (name === "svg.generate")
       return { id: "oxagen/media-svg", name: "SVG Generation", contracts: ["svg.generate"] };
-    if (name === "documents.generate")
+    if (name === "document.generate")
       return {
         id: "oxagen/documents",
         name: "Documents",
-        contracts: ["documents.generate"],
+        contracts: ["document.generate"],
       };
     return undefined; // builtin (unclaimed)
   },

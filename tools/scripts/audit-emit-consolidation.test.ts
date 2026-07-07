@@ -101,8 +101,9 @@ describe("audit emit consolidation (OXA-N1)", () => {
     const callSites = [
       "packages/handlers/src/org.member.add.ts",
       "packages/handlers/src/org.member.remove.ts",
-      "packages/handlers/src/org.member.role.change.ts",
-      "packages/handlers/src/org.member.invite.accept.ts",
+      // ADR-022 subject rename: member.role → member_role, member.invite → member_invite.
+      "packages/handlers/src/org.member_role.change.ts",
+      "packages/handlers/src/org.member_invite.accept.ts",
       "packages/billing/src/subscriptions.ts",
     ];
     for (const rel of callSites) {

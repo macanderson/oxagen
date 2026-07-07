@@ -233,6 +233,14 @@ export interface RunTurnOptions {
    * on incomplete work; worth it for a bench push.
    */
   judgeModels?: string[];
+  /**
+   * TRIAGE / coordinator model — drives the pre-execution EVALUATE stage
+   * (`evaluatePrompt`). Set via `/triage-model`. When set, the evaluator runs
+   * this model instead of the free local heuristic; undefined ⇒ `OXAGEN_LLM_EVALUATOR`
+   * env, else the local heuristic. The CLI planner (a separate coordinator stage
+   * that lives outside the engine) reads the same triage slug directly.
+   */
+  triageModel?: string;
   /** Skip the eval/enhance/judge pipeline and run the bare agent. */
   bare?: boolean;
   /**
@@ -414,7 +422,10 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
 
   // ── 1. EVALUATE ──
   const evalStart = Date.now();
-  const evaluation = await evaluatePrompt({ prompt: opts.prompt, signal: opts.signal }, opts.ai);
+  const evaluation = await evaluatePrompt(
+    { prompt: opts.prompt, model: opts.triageModel, signal: opts.signal },
+    opts.ai,
+  );
   phases.push(phaseStat("evaluate", 0, evalStart, evaluation.model, evaluation.usage));
   usage = mergeUsage(usage, evaluation.usage);
   opts.onStage?.({
@@ -724,7 +735,15 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
           label: "spec gate: no failing repro yet — skipping mid-judge, injecting repro instruction",
         });
         prompt = specGateInstruction();
-      } else if (!opts.signal?.aborted) {
+      } else if (
+        !opts.signal?.aborted &&
+        // Perf: only spend a mid-session judge when phase A produced something to
+        // verify. If the agent spent the first half purely exploring (no files
+        // written, no commands run), the judge has no executed evidence to grade
+        // — the call would burn tokens+latency to conclude "nothing yet". Skip it
+        // and let phase B keep working. Mirrors the read-only / spec-gate skips.
+        (phaseAResult.changedFiles.length > 0 || roundCommandOutputs.length > 0)
+      ) {
         opts.onStage?.({ kind: "judge", label: "mid-session check · verifying completeness so far" });
         const midJudgeStart = Date.now();
         const midVerdict = await judgeCompleteness(
@@ -965,7 +984,20 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         !!process.env["OXAGEN_JUDGE_PANEL"];
       verdict = usePanel
         ? await judgePanel(judgeInput, opts.ai, opts.judgeModels)
-        : await judgeCompleteness(judgeInput, opts.ai);
+        : await judgeCompleteness(
+            {
+              ...judgeInput,
+              // Perf #5: default a low-complexity, small-diff turn to a fast judge.
+              // undefined ⇒ judgeCompleteness uses pickAdvisorModel (balanced default),
+              // and an explicit OXAGEN_LLM_ADVISOR always overrides this.
+              advisorModel: pickTieredAdvisor(
+                routed.model,
+                evaluation.complexity,
+                diffChangedLines(result.diff),
+              ),
+            },
+            opts.ai,
+          );
       opts.onStage?.({
         kind: "judge",
         label: verdict.complete
@@ -979,11 +1011,19 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     usage = mergeUsage(usage, verdict.usage);
     judgeRounds.push(verdict);
 
+    // Perf #10: don't spend a full execute+judge round on a low-confidence
+    // "incomplete" verdict. `confidence` is the judge's confidence IN its
+    // verdict, so a low value on an "incomplete" call is a coin-flip that leans
+    // complete — revising it doubles turn cost for marginal expected gain.
+    // Confident-incomplete verdicts still revise. Tune/disable via
+    // OXAGEN_REVISE_MIN_CONFIDENCE (default 40; 0 restores always-revise).
+    const reviseMinConfidence = Number(process.env["OXAGEN_REVISE_MIN_CONFIDENCE"] ?? 40);
     const canRevise =
       !verdict.complete &&
       round < maxRounds &&
       !opts.readOnly &&
-      !opts.signal?.aborted;
+      !opts.signal?.aborted &&
+      verdict.confidence >= reviseMinConfidence;
     if (!canRevise) break;
     prompt = buildRevisionPrompt(verdict);
   }
@@ -1124,6 +1164,49 @@ function selectModel(override: string | undefined, evaluation: PromptEvaluation)
   return { model: modelForTier(tier), tier, rationale };
 }
 
+/** Count real changed lines in a unified diff (ignores +++/--- file headers). Exported for tests. */
+export function diffChangedLines(diff: string): number {
+  let n = 0;
+  for (const line of diff.split("\n")) {
+    if (
+      (line.startsWith("+") || line.startsWith("-")) &&
+      !line.startsWith("+++") &&
+      !line.startsWith("---")
+    ) {
+      n++;
+    }
+  }
+  return n;
+}
+
+/**
+ * Perf: complexity-tier the completeness judge. An explicitly configured judge
+ * model (`OXAGEN_LLM_ADVISOR`, or a panel via `judgeModels`/`OXAGEN_JUDGE_PANEL`)
+ * ALWAYS wins — this only fills the DEFAULT judge for a single-judge turn. A
+ * low-complexity, small-diff turn is a bounded check that the fast tier clears,
+ * so reserve the balanced/precise default for higher blast-radius work. Returns
+ * an `advisorModel` to pass through, or `undefined` to fall through to
+ * `pickAdvisorModel` (the balanced default). Never returns the executor's own
+ * model (that would be self-grading). Opt out by setting the complexity ceiling
+ * to 0 via `OXAGEN_JUDGE_FAST_COMPLEXITY_MAX=0`.
+ */
+export function pickTieredAdvisor(
+  executorModel: string,
+  complexity: number,
+  diffLines: number,
+): string | undefined {
+  if (process.env["OXAGEN_LLM_ADVISOR"]) return undefined; // explicit judge model wins
+  const complexityCeiling = Number(process.env["OXAGEN_JUDGE_FAST_COMPLEXITY_MAX"] ?? 35);
+  const diffCeiling = Number(process.env["OXAGEN_DIFF_BUDGET"] ?? 120);
+  // A non-positive ceiling opts out entirely (a complexity of exactly 0 would
+  // otherwise still satisfy `0 <= 0`).
+  if (complexityCeiling > 0 && complexity <= complexityCeiling && diffLines <= diffCeiling) {
+    const fast = modelForTier("fast");
+    if (fast !== executorModel) return fast;
+  }
+  return undefined;
+}
+
 interface AssembleArgs {
   cwd: string;
   originalPrompt: string;
@@ -1198,16 +1281,16 @@ async function runBare(
   toolEvents: ToolEvent[],
   thinkingLog: Array<{ round: number; text: string }>,
 ): Promise<RunTurnResult> {
-  // Bare mode has no router — this `model` value is used for accounting/
-  // labeling only (usage tracking, trace.selectedModel below); the execution
-  // call just below passes `opts.model` through as-is, and runCodingAgent
-  // applies its OWN internal default (DEFAULT_AGENT_MODEL) when that's
-  // undefined. Both must resolve to the SAME model in the unpinned case, or
-  // this label silently diverges from what actually ran — so this reuses
-  // DEFAULT_AGENT_MODEL rather than a different literal (previously
-  // modelForTier("balanced"), which mislabeled unpinned bare runs as Sonnet
-  // when they actually executed on Fable 5).
-  const model = opts.model ?? DEFAULT_AGENT_MODEL;
+  // Bare mode has no full router, but an unpinned bare turn should still not
+  // hard-default to the frontier tier (DEFAULT_AGENT_MODEL) — a trivial "explain
+  // this file" would pay Fable pricing for nothing. Perf #8: route the unpinned
+  // case through the deterministic `classifyTier` floor (the same cheap,
+  // model-free classifier the full pipeline uses), so trivial bare turns run
+  // cheap while auth/billing/architecture prompts still escalate to precise. A
+  // pin (`opts.model`) always wins. This value BOTH labels the run (usage,
+  // trace.selectedModel) AND is passed to runCodingAgent below, so the label can
+  // never diverge from what actually executes.
+  const model = opts.model ?? modelForTier(classifyTier({ text: opts.prompt }).tier);
   opts.onStage?.({ kind: "execute", label: "executing (pipeline off)" });
   const execStart = Date.now();
   let bareReasoning = "";
@@ -1221,7 +1304,10 @@ async function runBare(
     ai: opts.ai,
     instruction: opts.prompt,
     images: opts.images,
-    model: opts.model,
+    // Routed above (pin wins, else classifyTier floor) — pass it explicitly so
+    // execution matches the labeled model instead of falling to runCodingAgent's
+    // frontier DEFAULT_AGENT_MODEL.
+    model,
     effort: opts.effort,
     system: composeAgentSystem(opts, cwd),
     history: opts.history,

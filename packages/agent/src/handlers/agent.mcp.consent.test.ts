@@ -45,8 +45,8 @@ vi.mock("../runtime/consent", () => ({
   CONSENT_WILDCARD: "*",
 }));
 
-import { agentMcpConsentResolveHandler } from "./agent.mcp.consent.resolve";
-import { agentMcpConsentListHandler } from "./agent.mcp.consent.list";
+import { agentMcpConsentResolveHandler } from "./agent.mcp_consent.resolve";
+import { agentMcpConsentListHandler } from "./agent.mcp_consent.list";
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
 describe("agent.mcp.consent.resolve handler", () => {

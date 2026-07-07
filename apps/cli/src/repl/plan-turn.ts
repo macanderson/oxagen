@@ -58,6 +58,11 @@ export interface PlanReplTurnOptions {
   planFn?: PlanFn;
   /** Planner wall-clock bound in ms; 0 disables. Default 60s (env-overridable). */
   timeoutMs?: number;
+  /**
+   * TRIAGE/coordinator model for the planner call (the `/triage-model` slug).
+   * Undefined ⇒ the engine planner picks its own cheap default tier.
+   */
+  model?: string;
 }
 
 /** Extract the readable text of one ModelMessage (string or parts array). */
@@ -124,6 +129,10 @@ export function fallbackPlan(goal: string): Plan {
  * (aborted signal) is re-thrown so the turn cancels instead of "planning".
  */
 export async function planReplTurn(opts: PlanReplTurnOptions): Promise<Plan> {
+  // Note: the single-deliverable fast path (skip the planner LLM call + its
+  // enhance for a trivially one-task goal) lives INSIDE the engine planner
+  // (planner/index.ts, ADR-021 §1) so every surface shares one heuristic — we
+  // deliberately do NOT re-implement it here to avoid a second divergent gate.
   const digest = historyDigest(opts.history);
   const goal = digest
     ? `Conversation so far (for reference resolution):\n${digest}\n\nCurrent request:\n${opts.goal}`
@@ -138,6 +147,7 @@ export async function planReplTurn(opts: PlanReplTurnOptions): Promise<Plan> {
     const plan = opts.planFn ?? enginePlanTasks;
     const planCall = plan({
       goal,
+      model: opts.model,
       ai: opts.ai,
       codeGraph: opts.codeGraph ?? null,
       memory: opts.memory ?? null,

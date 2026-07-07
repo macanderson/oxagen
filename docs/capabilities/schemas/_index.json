@@ -170,7 +170,7 @@
       "consumes": []
     },
     {
-      "name": "agent.subagent.fanout.get",
+      "name": "agent.subagent_fanout.get",
       "domain": "agent",
       "surfaces": ["api", "mcp", "agent"],
       "component": null,
@@ -178,7 +178,7 @@
       "consumes": []
     },
     {
-      "name": "agent.subagent.fanout.list",
+      "name": "agent.subagent_fanout.list",
       "domain": "agent",
       "surfaces": ["api", "mcp", "agent"],
       "component": null,
@@ -194,7 +194,7 @@
       "consumes": ["swarm.id"]
     },
     {
-      "name": "agent.task.background.cancel",
+      "name": "agent.background_task.cancel",
       "domain": "agent",
       "surfaces": ["api", "mcp", "agent"],
       "component": null,
@@ -202,7 +202,7 @@
       "consumes": []
     },
     {
-      "name": "agent.task.background.read",
+      "name": "agent.background_task.read",
       "domain": "agent",
       "surfaces": ["api", "mcp", "agent"],
       "component": null,
@@ -210,7 +210,7 @@
       "consumes": []
     },
     {
-      "name": "agent.task.background.start",
+      "name": "agent.background_task.start",
       "domain": "agent",
       "surfaces": ["api", "mcp", "agent"],
       "component": null,
@@ -378,7 +378,7 @@
       "consumes": []
     },
     {
-      "name": "billing.subscription.upgrade.start",
+      "name": "billing.subscription_upgrade.start",
       "domain": "billing",
       "surfaces": ["api", "mcp", "agent"],
       "component": null,
@@ -554,7 +554,7 @@
       "consumes": []
     },
     {
-      "name": "documents.generate",
+      "name": "document.generate",
       "domain": "documents",
       "surfaces": ["api", "mcp", "agent"],
       "component": null,
@@ -562,7 +562,7 @@
       "consumes": ["document.text"]
     },
     {
-      "name": "documents.pdf.create",
+      "name": "document.pdf.create",
       "domain": "documents",
       "surfaces": ["api", "mcp", "agent"],
       "component": null,
@@ -746,7 +746,7 @@
       "consumes": []
     },
     {
-      "name": "notifications.list",
+      "name": "notification.list",
       "domain": "notifications",
       "surfaces": ["api", "mcp", "agent"],
       "component": null,
@@ -754,7 +754,7 @@
       "consumes": []
     },
     {
-      "name": "notifications.mark",
+      "name": "notification.mark",
       "domain": "notifications",
       "surfaces": ["api", "mcp", "agent"],
       "component": null,
@@ -786,7 +786,7 @@
       "consumes": []
     },
     {
-      "name": "org.member.invite.accept",
+      "name": "org.member_invite.accept",
       "domain": "organization",
       "surfaces": ["api", "mcp", "agent"],
       "component": null,
@@ -794,7 +794,7 @@
       "consumes": []
     },
     {
-      "name": "org.member.invite.decline",
+      "name": "org.member_invite.decline",
       "domain": "organization",
       "surfaces": ["api", "mcp", "agent"],
       "component": null,
@@ -810,7 +810,7 @@
       "consumes": []
     },
     {
-      "name": "org.member.role.change",
+      "name": "org.member_role.change",
       "domain": "organization",
       "surfaces": ["api", "mcp", "agent"],
       "component": null,
@@ -834,7 +834,7 @@
       "consumes": []
     },
     {
-      "name": "organization.create",
+      "name": "org.create",
       "domain": "organization",
       "surfaces": ["api", "mcp", "agent"],
       "component": null,
@@ -1210,7 +1210,7 @@
       "consumes": []
     },
     {
-      "name": "workspace.model.settings.read",
+      "name": "workspace.model_settings.read",
       "domain": "workspace",
       "surfaces": ["api", "mcp", "agent"],
       "component": null,
@@ -1218,7 +1218,7 @@
       "consumes": []
     },
     {
-      "name": "workspace.model.settings.write",
+      "name": "workspace.model_settings.write",
       "domain": "workspace",
       "surfaces": ["api", "mcp", "agent"],
       "component": null,
