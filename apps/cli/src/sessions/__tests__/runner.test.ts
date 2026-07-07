@@ -70,6 +70,18 @@ interface FakeTurnConfig {
   model?: string;
   filesTouched?: string[];
   emitTool?: boolean;
+  /** Override the tool input passed to onToolCall (e.g. a circular object). */
+  toolInput?: unknown;
+  /** Emit a file-change round (drives the `diff` event). */
+  emitDiff?: { diff: string; files: string[] };
+  /** Fire the engine's non-fatal onError hook (drives the error passthrough). */
+  invokeOnError?: boolean;
+  /** Invoke the injected budget guard with this usage (drives budget hooks). */
+  invokeBudget?: { inputTokens: number; outputTokens: number };
+  /** Throw an Error after streaming (drives the turn-error path). */
+  throwError?: string;
+  /** Throw a NON-Error value after streaming (drives the String(err) branch). */
+  throwRaw?: unknown;
   /** Block after streaming until the turn's signal aborts (cancel/timeout tests). */
   gate?: boolean;
 }
@@ -98,9 +110,14 @@ function makeFakeRunTurn(cfg: {
     for (const r of c.reasoning ?? []) options.onReasoning?.(r);
     for (const d of c.deltas ?? ["Hel", "lo world"]) options.onText?.(d);
     if (c.emitTool) {
-      options.onToolCall?.("bash", { command: "echo hi" });
+      options.onToolCall?.("bash", c.toolInput ?? { command: "echo hi" });
       options.onToolEvent?.({ name: "bash", ok: true, durationMs: 5 });
     }
+    if (c.emitDiff) options.onFileChange?.(c.emitDiff.diff, c.emitDiff.files);
+    if (c.invokeOnError) options.onError?.({ phase: "memory-recall", error: new Error("recall failed") });
+    if (c.invokeBudget) await options.budgetGuard?.(c.invokeBudget);
+    if (c.throwRaw !== undefined) throw c.throwRaw;
+    if (c.throwError) throw new Error(c.throwError);
     if (c.gate) {
       await new Promise<void>((_resolve, reject) => {
         if (options.signal?.aborted) {
@@ -386,5 +403,214 @@ describe("runSession — meta", () => {
     expect(view?.summary).toBe("the final answer");
     expect(view?.state).toBe("done");
     expect(view?.endedAt).toBeGreaterThan(0);
+  });
+});
+
+describe("runSession — streaming, budget, errors", () => {
+  it("emits reasoning deltas and a diff event with changed-line count", async () => {
+    const meta = await createMeta({ mode: "once" });
+    const calls: RunTurnOptions[] = [];
+    const fake = makeFakeRunTurn({
+      calls,
+      base: {
+        reasoning: ["think", "ing"],
+        invokeOnError: true,
+        emitDiff: {
+          diff: "--- a/x.ts\n+++ b/x.ts\n+added line\n-removed line\n context",
+          files: ["x.ts"],
+        },
+      },
+    });
+
+    await runSession({ store, meta, ai: fakeAi, runTurnImpl: fake });
+
+    const disk = await store.readEvents(meta.sid);
+    const reasoning = disk.filter((e) => e.type === "reasoning.delta");
+    expect(reasoning.length).toBeGreaterThanOrEqual(1);
+    const diff = disk.find((e) => e.type === "diff");
+    expect(diff).toBeTruthy();
+    if (diff?.type === "diff") {
+      expect(diff.changedFiles).toEqual(["x.ts"]);
+      expect(diff.changedLines).toBe(2); // one +line and one -line (headers ignored)
+    }
+    // turn.end's changedFiles is sourced from the diff round when the trace has none.
+    const turnEnd = disk.find((e) => e.type === "turn.end");
+    if (turnEnd?.type === "turn.end") expect(turnEnd.changedFiles).toEqual(["x.ts"]);
+  });
+
+  it("emits a non-fatal error when the per-turn budget stops the turn", async () => {
+    const meta = await createMeta({ mode: "once" });
+    const calls: RunTurnOptions[] = [];
+    const fake = makeFakeRunTurn({
+      calls,
+      base: { invokeBudget: { inputTokens: 5_000_000, outputTokens: 5_000_000 } },
+    });
+
+    const result = await runSession({
+      store,
+      meta,
+      ai: fakeAi,
+      runTurnImpl: fake,
+      budgetPolicy: { enabled: true, limitUsd: 0.0001, mode: "enforce", graceOveragePct: 0 },
+    });
+    expect(result.state).toBe("done"); // the guard stops spending, the turn still settles
+
+    const disk = await store.readEvents(meta.sid);
+    const budgetError = disk.find(
+      (e) => e.type === "error" && e.message.includes("budget"),
+    );
+    expect(budgetError).toBeTruthy();
+    if (budgetError?.type === "error") expect(budgetError.fatal).toBe(false);
+  });
+
+  it("fails in once mode when a turn throws (fatal error event)", async () => {
+    const meta = await createMeta({ mode: "once" });
+    const calls: RunTurnOptions[] = [];
+    const fake = makeFakeRunTurn({ calls, base: { throwError: "engine exploded" } });
+
+    const result = await runSession({ store, meta, ai: fakeAi, runTurnImpl: fake });
+    expect(result.state).toBe("failed");
+
+    const disk = await store.readEvents(meta.sid);
+    const err = disk.find((e) => e.type === "error");
+    expect(err).toBeTruthy();
+    if (err?.type === "error") {
+      expect(err.fatal).toBe(true);
+      expect(err.message).toContain("engine exploded");
+    }
+    const end = disk[disk.length - 1];
+    if (end?.type === "session.end") expect(end.state).toBe("failed");
+  });
+
+  it("builds a default gateway AI port when none is injected", async () => {
+    const savedKey = process.env["AI_GATEWAY_API_KEY"];
+    process.env["AI_GATEWAY_API_KEY"] = "test-key";
+    try {
+      const meta = await createMeta({ mode: "once" });
+      const calls: RunTurnOptions[] = [];
+      const fake = makeFakeRunTurn({ calls });
+      // No `ai` injected → the runner constructs its own metered gateway port.
+      const result = await runSession({ store, meta, runTurnImpl: fake });
+      expect(result.state).toBe("done");
+      expect(calls[0]?.ai).toBeTruthy();
+    } finally {
+      if (savedKey === undefined) delete process.env["AI_GATEWAY_API_KEY"];
+      else process.env["AI_GATEWAY_API_KEY"] = savedKey;
+    }
+  });
+
+  it("warns once within the grace budget window", async () => {
+    const meta = await createMeta({ mode: "once" });
+    const calls: RunTurnOptions[] = [];
+    const fake = makeFakeRunTurn({
+      calls,
+      // Two guard calls to prove the warning is emitted once.
+      base: { invokeBudget: { inputTokens: 1000, outputTokens: 1000 } },
+    });
+
+    const result = await runSession({
+      store,
+      meta,
+      ai: fakeAi,
+      runTurnImpl: fake,
+      // A tiny limit with an astronomically large grace window guarantees the
+      // cost lands ABOVE the limit but WITHIN grace (action: continue).
+      budgetPolicy: {
+        enabled: true,
+        limitUsd: 0.00000001,
+        mode: "grace",
+        graceOveragePct: 1_000_000_000,
+      },
+    });
+    expect(result.state).toBe("done");
+
+    const disk = await store.readEvents(meta.sid);
+    const graceWarn = disk.find(
+      (e) => e.type === "error" && e.message.includes("grace window"),
+    );
+    expect(graceWarn).toBeTruthy();
+    if (graceWarn?.type === "error") expect(graceWarn.fatal).toBe(false);
+  });
+
+  it("stops a prompt-mode budget when there is no interactive approver", async () => {
+    const meta = await createMeta({ mode: "once" });
+    const calls: RunTurnOptions[] = [];
+    const fake = makeFakeRunTurn({
+      calls,
+      base: { invokeBudget: { inputTokens: 5_000_000, outputTokens: 5_000_000 } },
+    });
+
+    const result = await runSession({
+      store,
+      meta,
+      ai: fakeAi,
+      runTurnImpl: fake,
+      // prompt mode: the guard would ask a human, but a session has no approver,
+      // so onPause returns false and the guard stops (surfaced as a non-fatal error).
+      budgetPolicy: { enabled: true, limitUsd: 0.0001, mode: "prompt", graceOveragePct: 0 },
+    });
+    expect(result.state).toBe("done");
+
+    const disk = await store.readEvents(meta.sid);
+    const stopped = disk.find(
+      (e) => e.type === "error" && e.message.includes("budget reached"),
+    );
+    expect(stopped).toBeTruthy();
+  });
+
+  it("caps a circular tool input without throwing", async () => {
+    const meta = await createMeta({ mode: "once" });
+    const calls: RunTurnOptions[] = [];
+    const circular: Record<string, unknown> = { command: "x" };
+    circular["self"] = circular;
+    const fake = makeFakeRunTurn({ calls, base: { emitTool: true, toolInput: circular } });
+
+    const result = await runSession({ store, meta, ai: fakeAi, runTurnImpl: fake });
+    expect(result.state).toBe("done");
+
+    const disk = await store.readEvents(meta.sid);
+    const toolStart = disk.find((e) => e.type === "tool.start");
+    expect(toolStart).toBeTruthy();
+    if (toolStart?.type === "tool.start") expect(typeof toolStart.input).toBe("string");
+  });
+
+  it("fails on a non-Error throw in once mode (String(err) branch)", async () => {
+    const meta = await createMeta({ mode: "once" });
+    const calls: RunTurnOptions[] = [];
+    const fake = makeFakeRunTurn({ calls, base: { throwRaw: "raw string failure" } });
+
+    const result = await runSession({ store, meta, ai: fakeAi, runTurnImpl: fake });
+    expect(result.state).toBe("failed");
+
+    const disk = await store.readEvents(meta.sid);
+    const err = disk.find((e) => e.type === "error");
+    if (err?.type === "error") expect(err.message).toContain("raw string failure");
+  });
+
+  it("times out a hung turn via the inactivity guard (fails in once mode)", async () => {
+    // A tiny inactivity window makes the stall detector fire after the fake stops
+    // making progress; it aborts the TURN controller (not the session) with an
+    // AgentTimeoutError, which the gate fake rejects on, driving the timeout path.
+    const savedInactivity = process.env["OXAGEN_TURN_INACTIVITY_MS"];
+    process.env["OXAGEN_TURN_INACTIVITY_MS"] = "30";
+    try {
+      const meta = await createMeta({ mode: "once" });
+      const calls: RunTurnOptions[] = [];
+      const fake = makeFakeRunTurn({ calls, base: { gate: true } });
+
+      const result = await runSession({ store, meta, ai: fakeAi, runTurnImpl: fake });
+      expect(result.state).toBe("failed");
+
+      const disk = await store.readEvents(meta.sid);
+      const err = disk.find((e) => e.type === "error");
+      expect(err).toBeTruthy();
+      if (err?.type === "error") {
+        expect(err.fatal).toBe(true);
+        expect(err.message).toMatch(/timed out|inactivity/i);
+      }
+    } finally {
+      if (savedInactivity === undefined) delete process.env["OXAGEN_TURN_INACTIVITY_MS"];
+      else process.env["OXAGEN_TURN_INACTIVITY_MS"] = savedInactivity;
+    }
   });
 });

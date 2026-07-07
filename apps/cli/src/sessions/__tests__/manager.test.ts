@@ -17,6 +17,15 @@ import { EVENT_SCHEMA_VERSION, type SessionEvent } from "../events.js";
 import type { InboxMessage, SessionMetaView } from "../store.js";
 import type { FleetSessionManagerOptions } from "../manager.js";
 
+// Mock the worker spawn so the default `dispatchDetached` path can be exercised
+// without launching a real `node ... fleet worker` subprocess. Only the manager's
+// default spawn uses this; every other test injects its own `spawnWorker`.
+const spawnMock = vi.hoisted(() => vi.fn(() => ({ unref: vi.fn() })));
+vi.mock("node:child_process", async (importActual) => {
+  const actual = await importActual<typeof import("node:child_process")>();
+  return { ...actual, spawn: spawnMock };
+});
+
 const { SessionStore } = await import("../store.js");
 const { newSessionId } = await import("../ids.js");
 const { FleetSessionManager } = await import("../manager.js");
@@ -194,6 +203,37 @@ describe("FleetSessionManager — control channel", () => {
     expect(sigterms).toHaveLength(0);
     tail.stop();
   });
+
+  it("cancel also SIGTERMs a foreign, alive worker", async () => {
+    // Intercept SIGTERM so we never actually signal the test runner; delegate the
+    // signal-0 liveness probe to the real implementation so the pid reads alive.
+    const realKill = process.kill.bind(process);
+    const killSpy = vi
+      .spyOn(process, "kill")
+      .mockImplementation((pid: number, signal?: string | number) => {
+        if (signal === "SIGTERM") return true; // recorded, but not delivered
+        return realKill(pid, signal as NodeJS.Signals | number);
+      });
+
+    manager = new FleetSessionManager({ store, cwd });
+    // A foreign worker owned by an ALIVE pid (this process) — not in ownSids.
+    const meta = await store.createSession({
+      sid: newSessionId(),
+      title: "foreign worker",
+      prompt: "p",
+      owner: "worker",
+      pid: process.pid,
+      cwd,
+      mode: "once",
+      state: "running",
+    });
+
+    await manager.cancel(meta.sid);
+
+    const sigterms = killSpy.mock.calls.filter((call) => call[1] === "SIGTERM");
+    expect(sigterms).toHaveLength(1);
+    expect(sigterms[0]?.[0]).toBe(process.pid);
+  });
 });
 
 describe("FleetSessionManager — detached dispatch", () => {
@@ -208,6 +248,25 @@ describe("FleetSessionManager — detached dispatch", () => {
     expect(meta?.owner).toBe("worker");
     expect(meta?.pid).toBe(0);
     expect(meta?.mode).toBe("once"); // detached defaults to fire-and-forget
+  });
+
+  it("uses the default node worker spawn when none is injected", async () => {
+    spawnMock.mockClear();
+    manager = new FleetSessionManager({ store, cwd });
+
+    const sid = await manager.dispatchDetached({ prompt: "detached default" });
+
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    const [bin, args, opts] = spawnMock.mock.calls[0] as unknown as [
+      string,
+      string[],
+      Record<string, unknown>,
+    ];
+    expect(bin).toBe(process.execPath);
+    expect(args).toContain("fleet");
+    expect(args).toContain("worker");
+    expect(args).toContain(sid);
+    expect(opts).toMatchObject({ detached: true, stdio: "ignore" });
   });
 });
 
