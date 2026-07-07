@@ -12,6 +12,14 @@ export const workspaces = workspaceSchema.table(
     orgId: uuid("org_id").notNull(),
     name: text("name").notNull(),
     slug: citext("slug").notNull(),
+    // Immutable handle, unique WITHIN the org (like slug). SEPARATE from slug on
+    // purpose: slugs are renameable (workspace_slug_history), namespaces never
+    // change once set (enforced by the workspaces_namespace_immutable trigger).
+    // It is the middle segment of the agentKey org_ns.workspace_ns.agent_slug,
+    // whose 32-char budget is 6 (org) + 1 + 6 (workspace) + 1 + 18 (agent slug).
+    // Derived from the slug at creation via deriveNamespace() over the org's
+    // existing workspace namespaces.
+    namespace: citext("namespace").notNull(),
     settings: jsonb("settings").notNull().default(sql`'{}'::jsonb`),
     // Workspace-level model defaults. NULL means the workspace sets no default
     // for that dimension and the user's own preference (or the system default)
@@ -24,6 +32,14 @@ export const workspaces = workspaceSchema.table(
   },
   (t) => ({
     orgSlugIdx: uniqueIndex("workspaces_org_slug_idx").on(t.orgId, t.slug),
+    // Namespace unique per org + immutable. Immutability is enforced by a
+    // BEFORE UPDATE trigger (migration 20260709120000_namespace_identity), not
+    // expressible in Drizzle DDL.
+    orgNamespaceIdx: uniqueIndex("workspaces_org_namespace_idx").on(t.orgId, t.namespace),
+    namespaceCheck: check(
+      "workspaces_namespace_check",
+      sql`${t.namespace} ~ '^[a-z0-9]{2,6}$'`,
+    ),
     orgIdx: index("workspaces_org_idx").on(t.orgId),
   }),
 );

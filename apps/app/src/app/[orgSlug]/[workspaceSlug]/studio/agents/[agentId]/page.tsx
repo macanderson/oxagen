@@ -50,6 +50,7 @@ export default async function EditAgentPage({ params }: PageProps) {
       initialAgent={{
         publicId: agent.publicId,
         slug: agent.slug,
+        agentKey: agent.agentKey,
         name: agent.name,
         description: agent.description,
         agentType: agent.agentType,

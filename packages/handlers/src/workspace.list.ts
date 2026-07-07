@@ -57,7 +57,7 @@ export const workspaceListHandler: CapabilityHandler<typeof workspaceList> = asy
         eq(schema.organizations.slug, input.orgSlug),
         ne(schema.organizations.status, "deleted"),
       ),
-      columns: { id: true, publicId: true, slug: true, name: true },
+      columns: { id: true, publicId: true, slug: true, namespace: true, name: true },
     });
     if (!org) {
       throw new Error(`Organization "${input.orgSlug}" not found`);
@@ -78,6 +78,7 @@ export const workspaceListHandler: CapabilityHandler<typeof workspaceList> = asy
         id: schema.workspaces.id,
         publicId: schema.workspaces.publicId,
         slug: schema.workspaces.slug,
+        namespace: schema.workspaces.namespace,
         name: schema.workspaces.name,
         role: schema.workspaceUsers.role,
       })
@@ -95,12 +96,14 @@ export const workspaceListHandler: CapabilityHandler<typeof workspaceList> = asy
         id: org.id,
         publicId: org.publicId,
         slug: org.slug,
+        namespace: org.namespace,
         name: org.name,
       },
       workspaces: rows.map((r) => ({
         id: r.id,
         publicId: r.publicId,
         slug: r.slug,
+        namespace: r.namespace,
         name: r.name,
         role: r.role ?? null,
       })),

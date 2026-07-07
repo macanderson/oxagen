@@ -42,6 +42,57 @@ export function assertAgentMutable(
 // Re-export so callers can import everything from one place.
 export { isManagedAgentType };
 
+// ─── Agent key (org_ns.workspace_ns.agent_slug) ──────────────────────────────
+
+/**
+ * Resolve the org + workspace namespaces for the current tenant scope in ONE
+ * query (never per-agent — list must not N+1). Joins the workspace to its org
+ * so both immutable namespaces come back together. Returns nulls only for a
+ * scope whose rows predate the namespace backfill (defensive; post-migration
+ * every org/workspace has a namespace).
+ */
+export async function resolveNamespacePrefix(
+  tx: Tx,
+  orgId: string,
+  workspaceId: string,
+): Promise<{ orgNamespace: string | null; workspaceNamespace: string | null }> {
+  const [row] = await tx
+    .select({
+      orgNamespace: schema.organizations.namespace,
+      workspaceNamespace: schema.workspaces.namespace,
+    })
+    .from(schema.workspaces)
+    .innerJoin(
+      schema.organizations,
+      eq(schema.organizations.id, schema.workspaces.orgId),
+    )
+    .where(
+      and(
+        eq(schema.workspaces.id, workspaceId),
+        eq(schema.workspaces.orgId, orgId),
+      ),
+    )
+    .limit(1);
+  return {
+    orgNamespace: row?.orgNamespace ?? null,
+    workspaceNamespace: row?.workspaceNamespace ?? null,
+  };
+}
+
+/**
+ * Compose the immutable global agent key `org_ns.workspace_ns.agent_slug`.
+ * Returns null when either namespace is missing so the caller surfaces a
+ * null agentKey rather than a malformed `..slug` string.
+ */
+export function composeAgentKey(
+  orgNamespace: string | null,
+  workspaceNamespace: string | null,
+  slug: string,
+): string | null {
+  if (!orgNamespace || !workspaceNamespace) return null;
+  return `${orgNamespace}.${workspaceNamespace}.${slug}`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** A UUID v4/v7 in canonical hyphenated form. */

@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { isDirectRunEntry } from "@oxagen/telemetry";
 import { closeDatabase } from "./client";
 import { withSystemDb } from "./tenant";
+import { deriveNamespace } from "./namespace";
 import {
   plans,
   organizations,
@@ -81,7 +82,14 @@ export async function seedDev(): Promise<void> {
     const orgSlug = "oxagen-dev";
     await tx
       .insert(organizations)
-      .values({ name: "Oxagen Dev", slug: orgSlug, planType: "free", status: "active" })
+      .values({
+        name: "Oxagen Dev",
+        slug: orgSlug,
+        // Immutable namespace derived from the slug (fixed seed → no collision).
+        namespace: deriveNamespace(orgSlug, new Set()),
+        planType: "free",
+        status: "active",
+      })
       .onConflictDoNothing({ target: organizations.slug });
     const orgRow = (
       await tx.select().from(organizations).where(eq(organizations.slug, orgSlug)).limit(1)
@@ -101,7 +109,13 @@ export async function seedDev(): Promise<void> {
     const workspaceSlug = "playground";
     await tx
       .insert(workspaces)
-      .values({ orgId: orgRow.id, name: "Playground", slug: workspaceSlug })
+      .values({
+        orgId: orgRow.id,
+        name: "Playground",
+        slug: workspaceSlug,
+        // Immutable namespace, unique within the org (fixed seed → no collision).
+        namespace: deriveNamespace(workspaceSlug, new Set()),
+      })
       .onConflictDoNothing({ target: [workspaces.orgId, workspaces.slug] });
     const workspaceRow = (
       await tx

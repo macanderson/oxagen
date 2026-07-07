@@ -29,6 +29,9 @@ import {
   updateAgent,
   publishAgent,
   deployAgent,
+  suggestAgentDefinition,
+  type AgentSuggestion,
+  type AgentRecommendation,
 } from "@/lib/studio/agents";
 
 // ── Shared shapes ─────────────────────────────────────────────────────────────
@@ -79,10 +82,24 @@ const deploySchema = z.object({
   deploymentStatus: z.enum(["inactive", "active"]),
 });
 
+// AI-assisted setup. Mirrors agent.definition.suggest's input: a plain-language
+// description plus an optional preferred slug. Nothing is persisted here, so no
+// canManage-gated write follows — but the gate still applies, since generating a
+// suggestion reads workspace skills/ontologies and spends model budget.
+const suggestSchema = z.object({
+  ...scopeShape,
+  description: z.string().min(10, "Describe the agent in at least 10 characters").max(4000),
+  nameHint: z
+    .string()
+    .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Slug hint must be lowercase kebab-case")
+    .optional(),
+});
+
 export type CreateAgentActionInput = z.input<typeof createSchema>;
 export type UpdateAgentActionInput = z.input<typeof updateSchema>;
 export type PublishAgentActionInput = z.input<typeof publishSchema>;
 export type DeployAgentActionInput = z.input<typeof deploySchema>;
+export type SuggestAgentActionInput = z.input<typeof suggestSchema>;
 
 export type AgentActionResult<T = Record<string, never>> =
   | ({ ok: true } & T)
@@ -215,6 +232,48 @@ export async function deployAgentAction(
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to deploy the agent.",
+    };
+  }
+}
+
+// ── Suggest (AI-assisted setup) ─────────────────────────────────────────────────
+
+export async function suggestAgentAction(
+  input: SuggestAgentActionInput,
+): Promise<
+  AgentActionResult<{
+    suggestion: AgentSuggestion;
+    rationale: string;
+    warnings: string[];
+    // Tools the agent SHOULD have that are not yet available in the workspace
+    // (catalog MCP servers, disabled skills). Never in suggestion.config
+    // .agentTools — the caller connects/enables these first, then equips them.
+    recommendations: AgentRecommendation[];
+  }>
+> {
+  const parsed = suggestSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const { orgSlug, workspaceSlug, description, nameHint } = parsed.data;
+
+  const { ctx, canManage } = await resolveStudioScope(orgSlug, workspaceSlug);
+  if (!canManage) return { ok: false, error: MANAGE_DENIED };
+
+  try {
+    const out = await suggestAgentDefinition(ctx, { description, nameHint });
+    return {
+      ok: true,
+      suggestion: out.suggestion,
+      rationale: out.rationale,
+      warnings: out.warnings,
+      recommendations: out.recommendations,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error ? err.message : "Failed to generate a suggestion.",
     };
   }
 }
