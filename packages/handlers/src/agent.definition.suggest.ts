@@ -504,5 +504,7 @@ export const agentDefinitionSuggestHandler: CapabilityHandler<
     },
     rationale: object.rationale,
     warnings,
+    // Catalog-aware (not-yet-connected) recommendations land in the follow-up wiring.
+    recommendations: [],
   };
 };

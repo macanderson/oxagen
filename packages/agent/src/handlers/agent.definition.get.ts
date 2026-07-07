@@ -70,6 +70,8 @@ export async function agentDefinitionGetHandler(
       agentId: agent.publicId,
       publicId: agent.publicId,
       slug: agent.slug,
+      // Real org_ns.workspace_ns.slug computation lands with the namespace migration.
+      agentKey: null,
       name: agent.name,
       description: agent.description,
       agentType: agent.agentType,

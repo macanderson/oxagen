@@ -60,6 +60,10 @@ export const agentDefinitionSuggest = registerCapability({
       .object({
         slug: z
           .string()
+          .max(
+            18,
+            "agent slugs are capped at 18 chars so the global agent key (org_ns.workspace_ns.slug) never exceeds 32",
+          )
           .regex(
             /^[a-z0-9]+(-[a-z0-9]+)*$/,
             "slug must be lowercase kebab-case",
@@ -82,6 +86,31 @@ export const agentDefinitionSuggest = registerCapability({
       .default([])
       .describe(
         "Non-fatal adjustments made during validation, e.g. a suggested tool ref that does not exist in the workspace and was removed.",
+      ),
+    recommendations: z
+      .array(
+        z.object({
+          kind: z
+            .enum(["mcp_server", "skill"])
+            .describe(
+              "What kind of thing to connect: an MCP server from the synced registry catalog, or a workspace skill that exists but is disabled.",
+            ),
+          ref: z
+            .string()
+            .describe(
+              "Catalog identity for an mcp_server (registry server name, e.g. 'github/github-mcp-server') or the skill slug for a skill.",
+            ),
+          name: z.string().describe("Human-readable display name."),
+          reason: z
+            .string()
+            .describe(
+              "Why this agent needs it, phrased against the user's description (e.g. 'watches PRs for schema changes — needs GitHub access').",
+            ),
+        }),
+      )
+      .default([])
+      .describe(
+        "Tools the agent SHOULD have that are not yet available in the workspace — MCP servers from the catalog that are not registered, or disabled skills. Never included in suggestion.config.agentTools (which only carries refs that exist right now); the caller connects/enables these first, then equips them. A seam for suggested IAM roles will join this once agent RBAC ships (docs/specs/agent-rbac).",
       ),
   }),
 });
