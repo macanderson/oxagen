@@ -1,11 +1,7 @@
 import { notFound } from "next/navigation";
 import { resolveStudioScope } from "@/lib/studio/scope";
-import { getAgent, listAgents } from "@/lib/studio/agents";
-import { listAgentTools } from "@/lib/studio/tools";
-import {
-  listWorkspaceSkills,
-  listInstalledMcpServers,
-} from "@/lib/studio/equip-sources";
+import { getAgent } from "@/lib/studio/agents";
+import { loadEquipSources } from "@/lib/studio/equip-sources";
 import { AgentBuilder } from "../agent-builder";
 
 export const dynamic = "force-dynamic";
@@ -39,12 +35,8 @@ export default async function EditAgentPage({ params }: PageProps) {
     notFound();
   }
 
-  const [skills, tools, subagents, mcp] = await Promise.all([
-    listWorkspaceSkills(ctx),
-    listAgentTools(ctx),
-    listAgents(ctx),
-    listInstalledMcpServers(ctx, org.id, ws.id),
-  ]);
+  // Timeout-guarded so a slow/hanging equip source never blocks the builder.
+  const sources = await loadEquipSources(ctx, org.id, ws.id);
 
   const readOnly = agent.managed || !canManage;
 
@@ -68,13 +60,9 @@ export default async function EditAgentPage({ params }: PageProps) {
         config: agent.config,
       }}
       sources={{
-        skills,
-        tools,
+        ...sources,
         // A subagent may not load itself; exclude the current agent from the pool.
-        subagents: subagents
-          .filter((a) => a.publicId !== agent.publicId)
-          .map((a) => ({ ref: a.publicId, name: a.name, slug: a.slug })),
-        mcp,
+        subagents: sources.subagents.filter((a) => a.ref !== agent.publicId),
       }}
     />
   );
