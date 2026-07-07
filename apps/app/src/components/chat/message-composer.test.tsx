@@ -2250,6 +2250,7 @@ describe("MessageComposer — code mode", () => {
       name: string;
       defaultBranch: string | null;
       environmentId: string;
+      environmentName: string | null;
       sandboxSessionId: string | null;
     };
     expect(code).toEqual({
@@ -2258,6 +2259,7 @@ describe("MessageComposer — code mode", () => {
       name: "widgets",
       defaultBranch: "main",
       environmentId: "env_default",
+      environmentName: "Default",
       sandboxSessionId: null,
     });
   });

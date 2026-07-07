@@ -195,6 +195,9 @@ const BodySchema = z.object({
       name: z.string().min(1).max(256),
       defaultBranch: z.string().min(1).max(256).nullable().default(null),
       environmentId: z.string().min(1),
+      // Human label for the environment so the agent context shows the name,
+      // not the opaque env_… id. Optional/nullable for older clients.
+      environmentName: z.string().max(256).nullable().default(null),
       sandboxSessionId: z.string().min(1).nullable().default(null),
     })
     .nullable()
@@ -1110,7 +1113,8 @@ export async function POST(request: NextRequest): Promise<Response> {
             content:
               "## Code mode context\n" +
               `Repository: ${codeMode.owner}/${codeMode.name} (branch ${branch})\n` +
-              `Environment: ${codeMode.environmentId}\n` +
+              // Show the human environment label, not the opaque env_… id.
+              `Environment: ${codeMode.environmentName ?? codeMode.environmentId}\n` +
               (sandboxOn
                 ? "A sandbox with this repository checked out is bound to this turn — use the file and bash tools to read, edit, build, and test."
                 : "No code sandbox is configured on this deployment, so repository tools are unavailable this turn — give read-only guidance and say so."),

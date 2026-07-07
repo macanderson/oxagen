@@ -130,6 +130,9 @@ export interface CodeModePayload {
   name: string;
   defaultBranch: string | null;
   environmentId: string;
+  /** Human label for the environment, so the agent context shows the name, not
+   * the opaque `env_…` id. Null when the id couldn't be resolved to an option. */
+  environmentName: string | null;
   sandboxSessionId: string | null;
 }
 
@@ -142,15 +145,16 @@ export interface CodeModePayload {
 function codePayload(
   codeMode: boolean,
   repo: RepoOption | null,
-  environmentId: string | null,
+  environment: EnvironmentOption | null,
 ): CodeModePayload | null {
-  if (!codeMode || !repo || !environmentId) return null;
+  if (!codeMode || !repo || !environment) return null;
   return {
     connectionId: repo.connectionId,
     owner: repo.owner,
     name: repo.name,
     defaultBranch: repo.defaultBranch,
-    environmentId,
+    environmentId: environment.id,
+    environmentName: environment.name,
     sandboxSessionId: null,
   };
 }
@@ -319,14 +323,13 @@ export function MessageComposer({
     } else {
       setIsPinned(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-hydrate only when the pin key (conversation) changes; state setters are stable
   }, [pinKey]);
 
   // Toggle the pin, persisting a snapshot of the current selection (pin) or
   // clearing it (unpin). Writes happen here and in the selector handlers below,
   // never in a pinKey-keyed effect, so switching conversations can never write
   // the previous chat's selection under the new key.
-  const togglePin = () => {
+  const togglePin = React.useCallback(() => {
     if (isPinned) {
       setIsPinned(false);
       writeStoredPins(pinKey, null);
@@ -334,7 +337,7 @@ export function MessageComposer({
       setIsPinned(true);
       writeStoredPins(pinKey, { repoKey: selectedRepoKey, envId: selectedEnvId });
     }
-  };
+  }, [isPinned, pinKey, selectedRepoKey, selectedEnvId]);
   const handleSelectRepoKey = (key: string) => {
     setSelectedRepoKey(key);
     if (isPinned) writeStoredPins(pinKey, { repoKey: key, envId: selectedEnvId });
@@ -435,9 +438,6 @@ export function MessageComposer({
         }
       }
     },
-    // togglePin is a fresh closure each render (reads current pin state); depend
-    // on it so the applied command pins the up-to-date selection.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [togglePin],
   );
 
@@ -772,7 +772,7 @@ export function MessageComposer({
       fd.set("activeServerIds", JSON.stringify([...activeServerIds]));
     }
     fd.set("budget", JSON.stringify(budgetPayload(modelSnapshot)));
-    const code = codePayload(codeMode, selectedRepo, selectedEnvId);
+    const code = codePayload(codeMode, selectedRepo, selectedEnv);
     if (code) fd.set("code", JSON.stringify(code));
     // Pinned chat context — only when pinned and NOT in code mode (code mode
     // already conveys the repo/env via `code`, so the two never double up).
@@ -905,7 +905,7 @@ export function MessageComposer({
       }
       fd.set("budget", JSON.stringify(budgetPayload(ms)));
       const currentCode = codeStateRef.current;
-      const code = codePayload(currentCode.codeMode, currentCode.selectedRepo, currentCode.selectedEnvId);
+      const code = codePayload(currentCode.codeMode, currentCode.selectedRepo, currentCode.selectedEnv);
       if (code) fd.set("code", JSON.stringify(code));
       if (currentCode.isPinned && !currentCode.codeMode) {
         const pinned = buildPinnedContext(currentCode.selectedRepo, currentCode.selectedEnv);
