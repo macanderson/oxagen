@@ -1,6 +1,6 @@
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
-import { workspaceBudgetPolicyRead } from "@oxagen/oxagen/contracts/workspace.budget.policy.read";
+import { workspaceBudgetPolicyRead } from "@oxagen/oxagen/contracts/workspace.budget_policy.read";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 

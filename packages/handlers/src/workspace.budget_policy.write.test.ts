@@ -27,7 +27,7 @@ vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
-import { workspaceBudgetPolicyWriteHandler } from "./workspace.budget.policy.write";
+import { workspaceBudgetPolicyWriteHandler } from "./workspace.budget_policy.write";
 import { TEST_CTX, makeCTX } from "./test-utils/fixtures";
 
 // ── tx builders ───────────────────────────────────────────────────────────────

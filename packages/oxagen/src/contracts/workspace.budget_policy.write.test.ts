@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { workspaceBudgetPolicyWrite } from "./workspace.budget.policy.write";
+import { workspaceBudgetPolicyWrite } from "./workspace.budget_policy.write";
 import { getCapability } from "../registry";
 
 describe("workspace.budget.policy.write capability", () => {
   it("is registered under its name", () => {
-    expect(getCapability("workspace.budget.policy.write")).toBe(workspaceBudgetPolicyWrite);
+    expect(getCapability("workspace.budget_policy.write")).toBe(workspaceBudgetPolicyWrite);
   });
 
   it("is workspace-scoped, medium-risk, writable by Owner/Admin only", () => {

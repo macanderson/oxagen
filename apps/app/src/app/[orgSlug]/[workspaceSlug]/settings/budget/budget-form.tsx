@@ -27,7 +27,7 @@ import {
 // would drag that server-only surface into the client bundle. The mode
 // label/description copy is therefore mirrored as a literal below.
 import type { TurnBudgetMode } from "@oxagen/billing";
-import type { WorkspaceBudgetPolicyReadOutput } from "@oxagen/oxagen/contracts/workspace.budget.policy.read";
+import type { WorkspaceBudgetPolicyReadOutput } from "@oxagen/oxagen/contracts/workspace.budget_policy.read";
 import {
   updateWorkspaceBudgetAction,
   type WorkspaceBudgetActionResult,

@@ -17,7 +17,7 @@ vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
-import { workspaceBudgetPolicyReadHandler } from "./workspace.budget.policy.read";
+import { workspaceBudgetPolicyReadHandler } from "./workspace.budget_policy.read";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { TEST_CTX, makeCTX } from "./test-utils/fixtures";
 

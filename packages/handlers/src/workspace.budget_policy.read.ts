@@ -1,5 +1,5 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import { workspaceBudgetPolicyRead } from "@oxagen/oxagen/contracts/workspace.budget.policy.read";
+import { workspaceBudgetPolicyRead } from "@oxagen/oxagen/contracts/workspace.budget_policy.read";
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";

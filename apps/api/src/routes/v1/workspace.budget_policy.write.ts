@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { workspaceBudgetPolicyWrite } from "@oxagen/oxagen/contracts/workspace.budget.policy.write";
+import { workspaceBudgetPolicyWrite } from "@oxagen/oxagen/contracts/workspace.budget_policy.write";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
