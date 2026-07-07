@@ -28,7 +28,7 @@
  * It also does NOT check for a gateway key — that is the caller's responsibility.
  */
 import type { ModelMessage, ToolSet } from "ai";
-import { runCodingAgent, DEFAULT_AGENT_MODEL } from "../engine";
+import { runCodingAgent } from "../engine";
 import { estimateMessageTokens } from "../loop-driver";
 import { buildSystemPrompt } from "../prompt/system-prompt";
 import { evaluatePrompt } from "../evaluate/evaluator";
