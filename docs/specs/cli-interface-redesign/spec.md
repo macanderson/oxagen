@@ -174,6 +174,12 @@ redesign is pure CLI-side composition.
   `gatePermissions: true` — no interactive permission broker inside fleet
   sessions v1), `createMeteredAi(createGatewayAgentAi)` or platform port,
   memory recall as in `engine-runner.ts`.
+- **File locking is mandatory:** every session's `runTurn` receives
+  `fileLock: createLocalFileLockProvider({ root: meta.cwd })`. The provider's
+  on-disk lease files (`<cwd>/.oxagen/locks/`, TTL + fencing) are what keep N
+  concurrently-writing sessions — including DETACHED WORKER PROCESSES — from
+  clobbering one file on the shared tree. Worktree-per-session isolation is a
+  v2 follow-up; locks are the v1 floor.
 - Conversation loop: after `turn.end`, state → `waiting`, tail inbox; a
   `message` starts the next turn with threaded `history` (from
   `RunTurnResult.messages`). `cancel` → abort + `session.end(cancelled)`.
