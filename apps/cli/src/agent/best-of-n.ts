@@ -732,16 +732,59 @@ async function runIndependentMode(opts: BestOfNOptions): Promise<BestOfNResult> 
       }
     }
 
-    // Comparative selection.
+    // Comparative selection. Perf #6: reuse the deterministic decideSelection
+    // heuristic (same one fork mode uses) before spending the LLM selector. When
+    // the executed evidence already settles a winner — a consensus, exactly one
+    // passing candidate, or no passers at all (best-effort) — the comparative
+    // model call over N full diffs is pure waste. Only a genuine tie among
+    // multiple passing candidates (selector-needed) warrants it.
     const viable = candidates.filter((c) => !c.failed && (c.diff.trim() || c.testOutput));
     emit({ type: "select-start", viable: viable.length });
-    const selection = await selectBestCandidate({
-      request: opts.prompt,
-      candidates,
-      ai: opts.ai,
-      selectorModel: opts.selectorModel,
-      signal: opts.signal,
-    });
+
+    const evidence: CandidateEvidence[] = candidates.map((c) => ({
+      index: candidates.indexOf(c),
+      diff: c.diff,
+      testsPassed: c.testsPassed ?? null,
+      evidenceScore: c.testsPassed === true ? 100 : c.testOutput ? 40 : 0,
+    }));
+    const decision = decideSelection(evidence);
+
+    let selection: SelectionResult;
+    if (
+      decision.method === "consensus" ||
+      decision.method === "single-passing" ||
+      decision.method === "best-effort"
+    ) {
+      const winnerId = candidates[decision.winner]!.id;
+      const ranking = candidates.map((c, idx) => ({
+        id: c.id,
+        score: idx === decision.winner ? 100 : 0,
+        note: idx === decision.winner ? decision.method : "not selected",
+      }));
+      selection = {
+        winnerId,
+        reasoning: `Best-of-N heuristic: ${decision.method} (selector skipped)`,
+        ranking,
+        model: "heuristic",
+        fallback: true,
+        usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      };
+    } else if (decision.method === "selector-needed") {
+      // Genuine tie — compare only the passing candidates with the LLM selector.
+      const passingCandidates = candidates.filter((c) =>
+        decision.candidates.includes(candidates.indexOf(c)),
+      );
+      selection = await selectBestCandidate({
+        request: opts.prompt,
+        candidates: passingCandidates,
+        ai: opts.ai,
+        selectorModel: opts.selectorModel,
+        signal: opts.signal,
+      });
+    } else {
+      const unreachable: never = decision;
+      throw new Error(`Unreachable decideSelection method: ${unreachable}`);
+    }
     emit({
       type: "select-done",
       winnerId: selection.winnerId,

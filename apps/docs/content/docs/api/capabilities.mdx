@@ -17,6 +17,38 @@ The contract registry is the single source of truth. Every API route and every M
 
 Capability parity is verified automatically at build time; any gap is reported as a warning.
 
+## Capability naming and aliases
+
+Every capability's canonical name follows one standard, `domain.subject.action`
+(ADR-022):
+
+- **domain** — the top-level area (`agent`, `graph`, `billing`, `org`, …). One
+  domain per area, no synonyms.
+- **subject** — the entity the action operates on, singular (`connection`,
+  never `connections`), with a multi-word concept written as a single
+  snake_case segment (`file_lock`, never a fourth dotted segment).
+- **action** — a verb from a closed vocabulary (`list`, `get`, `create`,
+  `update`, `delete`, `acquire`, `release`, …).
+
+A two-segment `domain.action` name is legal when the action implies the
+domain's root entity (`connection.list` = "list connections") or reads as an
+implied `get` (`workflow.status` = "get the workflow's status").
+
+The **model-facing** tool name a coding agent sees is the same canonical
+string with dots replaced by underscores (`agent.file_lock.acquire` →
+`agent_file_lock_acquire`), except for the engine's primitive tools
+(`read_file`, `bash`, `code_graph`, …), which predate this standard and keep
+their established names.
+
+**Renaming never breaks an existing integration.** When a capability is
+renamed to conform to the standard, the old name becomes a permanent alias:
+the registry resolves it to the canonical capability, the kernel meters and
+audits the call under the canonical name, and IAM matches grants keyed by
+either name. REST paths and MCP tool names for a capability you already
+integrate against do not change on a rename — only the contract's internal
+identity moves. For example, `agent.file.lock.acquire` (pre-standard) still
+resolves; its canonical name is now `agent.file_lock.acquire`.
+
 ## Capability list
 
 The following capabilities are available in the current release, grouped by domain.

@@ -21,6 +21,14 @@ Every action is shown as it happens — tool calls, the agent's streaming answer
 
 Useful in-session slash commands work like `/name` (see [custom slash commands](/docs/cli/configuration#slash-commands)). Press `Ctrl-C` to interrupt a turn, and again to exit.
 
+A simple lookup question ("what's the flag to enable verbose mode?") answers directly, skipping the planner and completeness-judge steps a genuine coding task pays for — the REPL classifies the prompt's intent for free before choosing a path, so a factual question gets a fast answer without losing grounding (the agent still reads relevant files and your knowledge graph).
+
+### Copy, paste, and scroll
+
+The REPL uses your terminal's native text selection by default: drag to select, `Cmd`/`Ctrl-C` to copy, and it copies clean text — no escape sequences. Keyboard scrolling always works (`PageUp`/`PageDown`, `Ctrl-U`/`Ctrl-D`, or `Up`/`Down`/`Home`/`End` on an empty input). If you want the CLI's own mouse handling instead (click-to-position, wheel scroll through the emulator) — which takes over native selection — opt in with `/mouse` or `OXAGEN_CLI_MOUSE=1`.
+
+Pasting a single line inserts it in full at any length. Pasting multiple lines collapses to a preview chip (first and last few lines, with a line count) that still sends the full pasted text on submit — so a long paste doesn't flood the input, but nothing is lost.
+
 ## One-shot runs
 
 Pass a prompt as an argument to run a single task and exit — ideal for scripts, git hooks, and CI:

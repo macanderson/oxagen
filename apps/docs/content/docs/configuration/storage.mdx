@@ -1,0 +1,62 @@
+---
+title: Storage driver
+description: STORAGE_DRIVER and the filesystem driver — running Oxagen's blob storage without a Vercel Blob token.
+---
+
+## Overview
+
+Binary assets (avatars, generated images/video/documents, uploaded workspace
+files) go through `@oxagen/storage`, a single adapter interface with two
+drivers selected by one environment variable:
+
+```bash
+STORAGE_DRIVER=vercel-blob   # default — requires BLOB_READ_WRITE_TOKEN
+STORAGE_DRIVER=fs            # local filesystem — no token required
+```
+
+Whichever row (URL + metadata) references the stored object still lives in
+Postgres — only the bytes move between drivers.
+
+## `vercel-blob` (default)
+
+The production driver, backed by Vercel Blob. Requires `BLOB_READ_WRITE_TOKEN`;
+storage calls throw a clear error at startup if the token is missing while
+this driver is selected.
+
+## `fs` — the filesystem driver
+
+Stores bytes on local disk instead of Vercel Blob — no credential required.
+Use it for local development or a CI/e2e container where no Blob token
+exists.
+
+```bash
+STORAGE_DRIVER=fs
+STORAGE_FS_ROOT=/tmp/oxagen-storage   # optional — see default below
+```
+
+| Variable | Required | Default |
+|---|---|---|
+| `STORAGE_DRIVER` | No | `vercel-blob` |
+| `STORAGE_FS_ROOT` | No | An OS-tmp-scoped absolute path (`<tmpdir>/oxagen-storage`) |
+
+**Why the default root is an absolute OS-tmp path, not a `cwd`-relative one:**
+the app (`next start`, cwd = `apps/app`) and the API (`tsx`, cwd = repo root)
+run as separate processes with different working directories. Both must
+resolve to the SAME directory or an object written by one process is
+invisible to the other — an absolute path guarantees that, and it's always
+writable inside the CI e2e container. A relative `STORAGE_FS_ROOT` is
+supported but resolved against `process.cwd()`, so it's discouraged for
+anything beyond a single-process script.
+
+**Path safety.** Every object key is confined to the storage root: an
+absolute key, a key containing `..` traversal, or a null byte is rejected
+before any file operation runs. A key can never read or write outside
+`STORAGE_FS_ROOT`.
+
+## Adding a driver
+
+To add a third storage driver: implement the `StorageAdapter` interface, add
+the driver name to the `STORAGE_DRIVER` enum in `packages/config/src/env.ts`,
+and add a case in `packages/storage/src/client.ts` that reads that driver's
+own environment variables — driver credentials stay isolated so adding one
+never touches another's configuration.
