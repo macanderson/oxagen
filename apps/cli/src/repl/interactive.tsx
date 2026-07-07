@@ -65,6 +65,7 @@ import { openFleetMemory } from "../agent/fleet/memory.js";
 import { openPlanStore } from "../agent/fleet/store.js";
 import { loadAgents } from "../agents/loader.js";
 import { planReplTurn, fallbackPlan } from "./plan-turn.js";
+import { classifyPromptIntent } from "./prompt-intent.js";
 import { runFleetTurn } from "./fleet-turn.js";
 import { agentRegistry, type AgentHandle } from "../agent/agent-registry.js";
 import { taskRegistry } from "../agent/task-registry.js";
@@ -2175,9 +2176,22 @@ export function ReplApp({
           dispatchTelemetry({ type: "stage", stage });
           render();
         };
+        // Fast path: a conversational/lookup turn ("what's the command to add
+        // an MCP server?") gets grounded retrieval + a single answer, NOT a
+        // dedicated planner model call up front (skipped here) or a frontier
+        // completeness judge on the back (skipped in the engine via `fastPath`
+        // below, guarded on a zero diff). Classification is a zero-cost text
+        // heuristic; a false "task" only loses the fast path, a false "simple"
+        // is self-corrected by the engine's zero-diff judge guard.
+        const fastPath = !bareRef.current && classifyPromptIntent(goalText) === "simple";
         let plan;
         if (bareRef.current) {
           plan = fallbackPlan(goalText);
+        } else if (fastPath) {
+          // Router-derived single-task plan — genuine, no planner LLM round-trip.
+          pushStage({ kind: "plan", label: "Fast path — answering directly", detail: "lookup: skipping planner + judge" });
+          plan = fallbackPlan(goalText);
+          noteProgress();
         } else {
           pushStage({ kind: "plan", label: "Planning the work" });
           plan = await planReplTurn({
@@ -2377,6 +2391,7 @@ export function ReplApp({
           effort: effortRef.current,
           readOnly: modeRef.current === "readonly",
           bare: bareRef.current,
+          fastPath,
           verbose: verboseRef.current,
           budgetGuard,
           enhanceTimeoutMs,

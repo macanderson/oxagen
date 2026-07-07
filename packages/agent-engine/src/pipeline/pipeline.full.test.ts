@@ -297,6 +297,49 @@ describe("runTurn — full pipeline path", () => {
     expect(result.trace.finalComplete).toBe(true);
   });
 
+  it("fastPath skips the judge on a non-readOnly turn that changed nothing", async () => {
+    const ws = new MemoryWorkspace({ "src/a.ts": "before" });
+    // judgeVerdicts would say incomplete IF the judge ran — it must not.
+    const { ai, generateObject } = makeAi({
+      judgeVerdicts: [{ complete: false }],
+      stream: () => ({ reasoning: "conversational answer" }), // no file edit ⇒ empty diff
+    });
+
+    // A lookup turn: NOT readOnly (so the ADR-021 read-only skip does not apply),
+    // but fastPath opts into skipping the judge on a zero diff.
+    const result = await runTurn({ prompt: "what's the command to add an MCP server?", workspace: ws, ai, fastPath: true });
+
+    const judgeCalls = generateObject.mock.calls.filter(([a]) =>
+      (a as { system?: string }).system?.includes("completeness judge"),
+    );
+    expect(judgeCalls).toHaveLength(0);
+    expect(result.trace.judgeRounds).toHaveLength(1);
+    expect(result.trace.judgeRounds[0]!.model).toBe("deterministic/fast-path");
+    expect(result.trace.finalComplete).toBe(true);
+  });
+
+  it("fastPath still judges when the turn unexpectedly edits files (zero-diff guard)", async () => {
+    const ws = new MemoryWorkspace({ "src/a.ts": "before" });
+    // A misclassified fast-path turn that DOES edit: the fast-path skip must NOT
+    // fire (it is guarded on a zero diff), so the safety net is not lost —
+    // classification accuracy only gates the cheap planner skip, never the judge.
+    const { ai } = makeAi({ judgeVerdicts: [{ complete: true }] });
+
+    // Opt out of the orthogonal ladder skip so the real judge runs and we can
+    // prove the fast-path deterministic skip did not swallow it on a diff turn.
+    process.env["OXAGEN_LADDER"] = "0";
+    try {
+      const result = await runTurn({ prompt: "add a filesystem MCP", workspace: ws, ai, fastPath: true });
+      // The real judge ran — the verdict carries an advisor model slug, NOT the
+      // fast-path deterministic marker (which only fires on a zero diff).
+      expect(result.trace.judgeRounds).toHaveLength(1);
+      expect(result.trace.judgeRounds[0]!.model).not.toBe("deterministic/fast-path");
+      expect(result.trace.judgeRounds[0]!.model).toContain("/");
+    } finally {
+      delete process.env["OXAGEN_LADDER"];
+    }
+  });
+
   it("honours a pinned model and skips auto-routing", async () => {
     const ws = new MemoryWorkspace({ "src/a.ts": "before" });
     const { ai } = makeAi();
