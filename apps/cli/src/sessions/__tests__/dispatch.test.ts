@@ -8,7 +8,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { dispatchDetachedSession, titleFromPrompt } from "../dispatch.js";
+import {
+  dispatchDetachedSession,
+  parseAmpersandDispatch,
+  titleFromPrompt,
+} from "../dispatch.js";
 import { SessionStore } from "../store.js";
 
 let root: string;
@@ -32,6 +36,24 @@ describe("titleFromPrompt", () => {
     const title = titleFromPrompt("x".repeat(100));
     expect(title.length).toBe(62);
     expect(title.endsWith("…")).toBe(true);
+  });
+});
+
+describe("parseAmpersandDispatch (REPL trailing-& idiom)", () => {
+  it("strips the marker and returns the prompt", () => {
+    expect(parseAmpersandDispatch("fix the login bug &")).toBe("fix the login bug");
+    expect(parseAmpersandDispatch("fix it\t&")).toBe("fix it");
+  });
+
+  it("requires whitespace before the ampersand (mid-word & is prose)", () => {
+    expect(parseAmpersandDispatch("audit auth&billing")).toBeNull();
+    expect(parseAmpersandDispatch("audit auth & billing")).toBeNull();
+  });
+
+  it("never backgrounds slash or shell commands, or an empty prompt", () => {
+    expect(parseAmpersandDispatch("/fleet &")).toBeNull();
+    expect(parseAmpersandDispatch("!ls &")).toBeNull();
+    expect(parseAmpersandDispatch(" &")).toBeNull();
   });
 });
 

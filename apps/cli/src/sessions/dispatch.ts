@@ -46,6 +46,20 @@ export function titleFromPrompt(prompt: string): string {
 }
 
 /**
+ * The REPL's shell-familiar backgrounding idiom: a prompt ending in ` &`
+ * dispatches to the fleet instead of running inline. Returns the prompt with
+ * the marker stripped, or null when the text is not a background dispatch
+ * (no marker, slash/shell command, or nothing left once stripped —
+ * plain "&" should reach the model, not spawn an empty session).
+ */
+export function parseAmpersandDispatch(text: string): string | null {
+  if (text.startsWith("/") || text.startsWith("!")) return null;
+  if (!/\s&$/.test(text)) return null;
+  const prompt = text.replace(/\s*&$/, "").trim();
+  return prompt === "" ? null : prompt;
+}
+
+/**
  * Create the session and launch its detached worker. Returns as soon as the
  * worker is spawned — typically well under 50 ms; the session streams into
  * the store from there.
