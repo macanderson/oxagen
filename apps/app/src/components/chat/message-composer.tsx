@@ -29,6 +29,7 @@ import { BudgetControl } from "./budget-control";
 import { ChatAgentToolbar } from "./chat-agent-toolbar";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
+import { AgentSelector, type AgentOption } from "./agent-selector";
 import { MessageQueue } from "./message-queue";
 import { AttachmentChip, hasInFlightUploads, type PendingAttachment } from "./attachment-chip";
 import { extractVideoFrames } from "./extract-video-frames";
@@ -191,6 +192,7 @@ export function MessageComposer({
   availableMcpServers,
   availableRepos,
   availableEnvironments,
+  availableAgents,
   workspaceBudgetGovernance,
   onInputHasContentChange,
   orgSlug,
@@ -227,6 +229,8 @@ export function MessageComposer({
   availableRepos?: RepoOption[];
   /** Workspace environments usable as the code-mode target. */
   availableEnvironments?: EnvironmentOption[];
+  /** Selectable agents for the agent picker; a code agent governs code mode. */
+  availableAgents?: AgentOption[];
   /**
    * Workspace-level per-turn budget governance (OXA-2081), resolved
    * server-side via `workspace.budget.policy.read`. Null/omitted ⇒ no
@@ -258,10 +262,22 @@ export function MessageComposer({
   // When on, a coding turn runs in a sandbox against a selected repo +
   // environment — both are REQUIRED before the send gate opens (see
   // `codeGateBlocked` below).
-  const [codeMode, setCodeMode] = React.useState(false);
+  const [manualCodeMode, setManualCodeMode] = React.useState(false);
   const [selectedRepoKey, setSelectedRepoKey] = React.useState<string | null>(null);
   const [selectedEnvId, setSelectedEnvId] = React.useState<string | null>(null);
   const selectedRepo = availableRepos?.find((r) => r.key === selectedRepoKey) ?? null;
+
+  // ── Agent selection (OXA app-agent-selector) ──────────────────────────────
+  // The selected agent GOVERNS code mode: a code agent (isCode) forces it on
+  // and reveals the repo/code tooling + UI; a chat agent forces it off and
+  // hides that UI. With no agent selected (the "Default chat" option, or a
+  // workspace that never created an agent) the manual Code2 toggle owns code
+  // mode, so agent-less workspaces behave exactly as they did before.
+  const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
+  const selectedAgent =
+    availableAgents?.find((a) => a.agentId === selectedAgentId) ?? null;
+  const agentGovernsCode = selectedAgent !== null;
+  const codeMode = agentGovernsCode ? selectedAgent.isCode : manualCodeMode;
 
   // Default the environment picker to the workspace default (isDefault) the
   // first time code mode is turned on with no environment chosen yet.
@@ -277,10 +293,10 @@ export function MessageComposer({
   // Ref mirror of the code-mode selection so dispatchQueued (queue-drain path)
   // reads the CURRENT selection at drain time, same pattern as
   // activeServerIdsRef/parentMessageIdRef below.
-  const codeStateRef = React.useRef({ codeMode, selectedRepo, selectedEnvId });
+  const codeStateRef = React.useRef({ codeMode, selectedRepo, selectedEnvId, selectedAgentId });
   React.useEffect(() => {
-    codeStateRef.current = { codeMode, selectedRepo, selectedEnvId };
-  }, [codeMode, selectedRepo, selectedEnvId]);
+    codeStateRef.current = { codeMode, selectedRepo, selectedEnvId, selectedAgentId };
+  }, [codeMode, selectedRepo, selectedEnvId, selectedAgentId]);
 
   const formRef = React.useRef<HTMLFormElement>(null);
 
@@ -638,6 +654,7 @@ export function MessageComposer({
     fd.set("budget", JSON.stringify(budgetPayload(modelSnapshot)));
     const code = codePayload(codeMode, selectedRepo, selectedEnvId);
     if (code) fd.set("code", JSON.stringify(code));
+    if (selectedAgentId) fd.set("agentId", selectedAgentId);
     return fd;
   }
 
@@ -765,6 +782,7 @@ export function MessageComposer({
       const currentCode = codeStateRef.current;
       const code = codePayload(currentCode.codeMode, currentCode.selectedRepo, currentCode.selectedEnvId);
       if (code) fd.set("code", JSON.stringify(code));
+      if (currentCode.selectedAgentId) fd.set("agentId", currentCode.selectedAgentId);
       // Defer the dispatch out of the caller (effect / event handler) so the
       // queue-drain doesn't cascade synchronously within a React effect
       // (satisfies react-hooks/set-state-in-effect) and so send-now doesn't
@@ -979,6 +997,16 @@ export function MessageComposer({
         {/* Model picker */}
         <ModelPicker value={model} onChange={setModel} modelConfig={modelConfig} />
 
+        {/* Agent picker — selecting a code agent reveals the repo/code tooling
+            + UI (and runs the turn in the sandbox); a chat agent / the default
+            keeps the plain composer. Renders nothing when the workspace has no
+            agents, so agent-less workspaces are unaffected. */}
+        <AgentSelector
+          agents={availableAgents ?? []}
+          value={selectedAgentId}
+          onChange={setSelectedAgentId}
+        />
+
         {/* Reasoning effort — only when the resolved model supports it */}
         {showEffortControl && (
           <Select
@@ -1051,23 +1079,28 @@ export function MessageComposer({
 
         {/* Code mode toggle — routes the turn to a sandboxed coding agent
             against the selected repo + environment (see ChatAgentToolbar
-            above). Requires both selections before send unblocks. */}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          aria-label="Toggle code mode"
-          aria-pressed={codeMode}
-          disabled={!hasRepos && !codeMode}
-          title={!hasRepos && !codeMode ? "Connect a GitHub repository to use code mode" : undefined}
-          onClick={() => setCodeMode((v) => !v)}
-          className={cn(
-            "h-8 w-8 p-0",
-            codeMode && "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
-          )}
-        >
-          <Code2 className="h-4 w-4" />
-        </Button>
+            above). Requires both selections before send unblocks. Hidden when a
+            selected agent governs code mode (its identity — code vs chat —
+            decides, so a manual toggle would contradict it); the manual toggle
+            only owns code mode for the default (no-agent) path. */}
+        {!agentGovernsCode && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label="Toggle code mode"
+            aria-pressed={codeMode}
+            disabled={!hasRepos && !codeMode}
+            title={!hasRepos && !codeMode ? "Connect a GitHub repository to use code mode" : undefined}
+            onClick={() => setManualCodeMode((v) => !v)}
+            className={cn(
+              "h-8 w-8 p-0",
+              codeMode && "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
+            )}
+          >
+            <Code2 className="h-4 w-4" />
+          </Button>
+        )}
 
         {/* MCP server activation picker — only shown when servers are available */}
         {(availableMcpServers?.length ?? 0) > 0 && (
