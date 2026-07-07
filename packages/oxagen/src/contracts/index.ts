@@ -19,6 +19,7 @@ import { agentSandboxExec } from "./agent.sandbox.exec";
 import { agentSandboxSnapshot } from "./agent.sandbox.snapshot";
 import { agentSandboxStop } from "./agent.sandbox.stop";
 import { agentSandboxFilesList } from "./agent.sandbox_file.list";
+import { agentSandboxFileRead } from "./agent.sandbox_file.read";
 import { browserNavigate } from "./browser.navigate";
 import { browserScreenshot } from "./browser.screenshot";
 import { browserFill } from "./browser.fill";
@@ -101,6 +102,7 @@ import { conversationList } from "./conversation.list";
 import { conversationPurge } from "./conversation.purge";
 import { conversationRename } from "./conversation.rename";
 import { conversationFilesList } from "./conversation.files.list";
+import { conversationExport } from "./conversation.export";
 import { conversationAttachmentAdd } from "./conversation.attachment.add";
 import { formFill } from "./form.fill";
 import { organizationCreate } from "./org.create";
@@ -385,6 +387,7 @@ export {
   agentSandboxSnapshot,
   agentSandboxStop,
   agentSandboxFilesList,
+  agentSandboxFileRead,
   browserNavigate,
   browserScreenshot,
   browserFill,
@@ -464,6 +467,7 @@ export {
   conversationPurge,
   conversationRename,
   conversationFilesList,
+  conversationExport,
   conversationAttachmentAdd,
   formFill,
   organizationCreate,
@@ -682,6 +686,7 @@ export const contracts = [
   agentSandboxSnapshot,
   agentSandboxStop,
   agentSandboxFilesList,
+  agentSandboxFileRead,
   browserNavigate,
   browserScreenshot,
   browserFill,
@@ -759,6 +764,7 @@ export const contracts = [
   conversationPurge,
   conversationRename,
   conversationFilesList,
+  conversationExport,
   conversationAttachmentAdd,
   formFill,
   organizationCreate,
