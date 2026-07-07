@@ -351,6 +351,34 @@ describe("runSession — conversation loop", () => {
     if (end?.type === "session.end") expect(end.state).toBe("cancelled");
   });
 
+  it("creates one file lock per session and passes it to every turn", async () => {
+    const meta = await createMeta({ mode: "conversation" });
+    const bus: SessionEvent[] = [];
+    const calls: RunTurnOptions[] = [];
+    const fake = makeFakeRunTurn({ calls });
+
+    const runPromise = runSession({
+      store,
+      meta,
+      ai: fakeAi,
+      runTurnImpl: fake,
+      idleTimeoutMs: 5000,
+      onLocalEvent: (e) => bus.push(e),
+    });
+
+    await until(() => bus.some((e) => e.type === "session.state" && e.state === "waiting"));
+    // Every turn gets a non-null cross-process file lock (ADR-021 §5).
+    expect(calls[0]?.fileLock).toBeTruthy();
+
+    await store.appendInbox(meta.sid, { type: "message", text: "again", ts: Date.now() });
+    await until(() => calls.length === 2);
+    // The SAME lock instance is reused — built once per session, not per turn.
+    expect(calls[1]?.fileLock).toBe(calls[0]?.fileLock);
+
+    await store.appendInbox(meta.sid, { type: "cancel", ts: Date.now() });
+    await runPromise;
+  });
+
   it("ends 'done' after one turn in once mode (no waiting)", async () => {
     const meta = await createMeta({ mode: "once" });
     const calls: RunTurnOptions[] = [];
