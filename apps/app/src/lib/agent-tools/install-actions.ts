@@ -1,70 +1,28 @@
 "use server";
 /**
- * plugin-actions.ts — server actions for Workspace → Settings → Plugins.
+ * install-actions.ts — the single install choke point for agent tools.
  *
  * Workspace-scoped plugin management: install from marketplace, toggle enabled
  * state, uninstall, and manage registries. All operations delegate to workspace-
- * scoped contracts (plugin.registry.*, plugin.workspace.*).
+ * scoped contracts (plugin.org.*, plugin.workspace.*, plugin.registry.*,
+ * skill.workspace.install). Every UI install path — Marketplace browse, the
+ * marketplace modal, the Agent Builder's Equip step, MCP connect — calls
+ * through this module, and authorization is decided exclusively by
+ * resolveAgentToolsManager (see ./authz.ts for the future-RBAC seam).
  */
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
-import { getSessionOrRedirect } from "@/lib/session";
-import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
-import { eq, and } from "drizzle-orm";
+import { resolveAgentToolsManager } from "./authz";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const NOT_AUTHORIZED = "Only workspace owners and admins can manage plugins.";
-
-function buildCtx(opts: { orgId: string; workspaceId: string; userId: string }) {
-  return {
-    orgId: opts.orgId,
-    workspaceId: opts.workspaceId,
-    userId: opts.userId,
-    apiKeyId: null as string | null,
-    requestId: crypto.randomUUID(),
-    surface: "app" as const,
-    messageId: null as string | null,
-  };
-}
-
-async function resolveAndAuthWorkspace(orgSlug: string, workspaceSlug: string) {
-  const session = await getSessionOrRedirect();
-  const org = await resolveOrg(orgSlug);
-  const ws = await resolveWorkspace(org.id, workspaceSlug);
-  await assertOrgMember(org.id, session.user.id);
-
-  const wsRoleRows = await runInTenantScope(
-    { orgId: org.id, workspaceId: ws.id },
-    () =>
-      withTenantDb((tx) =>
-        tx
-          .select({ role: schema.workspaceUsers.role })
-          .from(schema.workspaceUsers)
-          .where(
-            and(
-              eq(schema.workspaceUsers.workspaceId, ws.id),
-              eq(schema.workspaceUsers.userId, session.user.id),
-            ),
-          )
-          .limit(1),
-      ),
-  );
-
-  const wsRole = wsRoleRows[0]?.role ?? "";
-  const canManage = ["owner", "admin"].includes(wsRole.toLowerCase());
-
-  return { session, org, ws, canManage };
-}
-
-function pluginsPath(ctx: Required<ScopeContext>): string {
-  return workspace.settings.plugins(ctx);
+function capabilitiesPath(ctx: Required<ScopeContext>): string {
+  return workspace.studio.tools.capabilities(ctx);
 }
 
 // ── installPlugin ─────────────────────────────────────────────────────────────
@@ -91,10 +49,9 @@ export async function installPlugin(
 
   if (!workspaceSlug) return { ok: false, error: "workspaceSlug is required" };
 
-  const { canManage, org, ws, session } = await resolveAndAuthWorkspace(orgSlug, workspaceSlug);
-  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
-
-  const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
+  const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { org, ws, ctx } = auth.scope;
 
   try {
     // Map browse-row fields to plugin.org.install input.
@@ -122,7 +79,7 @@ export async function installPlugin(
         invoke("skill.workspace.install", { slug, workspace_id: ws.id }, ctx, { surface: "agent" }),
       );
       const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-      revalidatePath(pluginsPath(routeCtx));
+      revalidatePath(capabilitiesPath(routeCtx));
       return { ok: true };
     } else if (pluginType === "agent_capability") {
       installInput = { pluginType, pluginId: parsed.data.pluginId ?? parsed.data.catalogServerId };
@@ -142,7 +99,7 @@ export async function installPlugin(
       invoke("plugin.org.install", installInput, ctx, { surface: "agent" }),
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-    revalidatePath(pluginsPath(routeCtx));
+    revalidatePath(capabilitiesPath(routeCtx));
 
     const typed = out as { orgListingId: string };
     return { ok: true, orgListingId: typed.orgListingId };
@@ -182,10 +139,9 @@ export async function installBulkPlugin(
 
   if (!workspaceSlug) return { ok: false, error: "workspaceSlug is required" };
 
-  const { canManage, org, ws, session } = await resolveAndAuthWorkspace(orgSlug, workspaceSlug);
-  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
-
-  const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
+  const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { org, ws, ctx } = auth.scope;
 
   try {
     // The marketplace sends each selected row as { catalogServerId, pluginType }
@@ -266,7 +222,7 @@ export async function installBulkPlugin(
     }
 
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-    revalidatePath(pluginsPath(routeCtx));
+    revalidatePath(capabilitiesPath(routeCtx));
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Bulk install failed" };
@@ -289,10 +245,9 @@ export async function togglePlugin(
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
   const { orgSlug, workspaceSlug, orgListingId, enabled } = parsed.data;
-  const { canManage, org, ws, session } = await resolveAndAuthWorkspace(orgSlug, workspaceSlug);
-  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
-
-  const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
+  const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { org, ws, ctx } = auth.scope;
 
   try {
     await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
@@ -301,7 +256,7 @@ export async function togglePlugin(
       }),
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-    revalidatePath(pluginsPath(routeCtx));
+    revalidatePath(capabilitiesPath(routeCtx));
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Update failed" };
@@ -323,17 +278,16 @@ export async function uninstallPlugin(
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
   const { orgSlug, workspaceSlug, orgListingId } = parsed.data;
-  const { canManage, org, ws, session } = await resolveAndAuthWorkspace(orgSlug, workspaceSlug);
-  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
-
-  const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
+  const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { org, ws, ctx } = auth.scope;
 
   try {
     await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
       invoke("plugin.org.uninstall", { orgListingId }, ctx, { surface: "agent" }),
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-    revalidatePath(pluginsPath(routeCtx));
+    revalidatePath(capabilitiesPath(routeCtx));
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Uninstall failed" };
@@ -356,10 +310,9 @@ export async function addRegistry(
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
   const { orgSlug, workspaceSlug } = parsed.data;
-  const { canManage, org, ws, session } = await resolveAndAuthWorkspace(orgSlug, workspaceSlug);
-  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
-
-  const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
+  const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { ctx } = auth.scope;
 
   try {
     const out = await invoke(
@@ -369,7 +322,7 @@ export async function addRegistry(
       { surface: "agent" },
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-    revalidatePath(pluginsPath(routeCtx));
+    revalidatePath(capabilitiesPath(routeCtx));
     const typed = out as { registryId: string; isDefault: boolean };
     return { ok: true, registryId: typed.registryId, isDefault: typed.isDefault };
   } catch (err) {
@@ -392,10 +345,9 @@ export async function removeRegistry(
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
   const { orgSlug, workspaceSlug } = parsed.data;
-  const { canManage, org, ws, session } = await resolveAndAuthWorkspace(orgSlug, workspaceSlug);
-  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
-
-  const ctx = buildCtx({ orgId: org.id, workspaceId: ws.id, userId: session.user.id });
+  const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { ctx } = auth.scope;
 
   try {
     const out = await invoke(
@@ -405,7 +357,7 @@ export async function removeRegistry(
       { surface: "agent" },
     );
     const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
-    revalidatePath(pluginsPath(routeCtx));
+    revalidatePath(capabilitiesPath(routeCtx));
     const typed = out as { ok: boolean; promotedId: string | null };
     return { ok: true, promotedId: typed.promotedId };
   } catch (err) {

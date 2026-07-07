@@ -20,9 +20,7 @@ import { invoke } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
 import "@oxagen/handlers/register";
 import { workspace } from "@/lib/routes";
-import { resolveStudioScope } from "@/lib/studio/scope";
-
-const NOT_AUTHORIZED = "Only workspace owners and admins can manage plugins.";
+import { resolveAgentToolsManager } from "./authz";
 
 const ConnectCustomMcpSchema = z.object({
   orgSlug: z.string().min(1),
@@ -40,8 +38,9 @@ export async function connectCustomMcpServer(
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
   const { orgSlug, workspaceSlug, name, endpointUrl, transport, authKind } = parsed.data;
-  const { org, ws, ctx, canManage } = await resolveStudioScope(orgSlug, workspaceSlug);
-  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
+  const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { org, ws, ctx } = auth.scope;
 
   try {
     const out = await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>

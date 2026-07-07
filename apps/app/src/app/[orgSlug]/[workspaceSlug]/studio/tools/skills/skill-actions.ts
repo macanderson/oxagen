@@ -19,10 +19,9 @@ import "@oxagen/handlers/register";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { resolveStudioScope } from "@/lib/studio/scope";
+import { resolveAgentToolsManager } from "@/lib/agent-tools/authz";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-const NOT_AUTHORIZED = "Only workspace owners and admins can manage skills.";
 
 function skillsPath(ctx: Required<ScopeContext>): string {
   return workspace.studio.tools.skills(ctx);
@@ -43,8 +42,9 @@ export async function installSkill(
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
   const { orgSlug, workspaceSlug } = parsed.data;
-  const { canManage, ctx } = await resolveStudioScope(orgSlug, workspaceSlug);
-  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
+  const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { ctx } = auth.scope;
 
   try {
     await invoke("skill.workspace.install", { skillSlug: parsed.data.skillSlug }, ctx, {
@@ -75,8 +75,9 @@ export async function editSkill(
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
   const { orgSlug, workspaceSlug } = parsed.data;
-  const { canManage, ctx } = await resolveStudioScope(orgSlug, workspaceSlug);
-  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
+  const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { ctx } = auth.scope;
 
   try {
     const out = await invoke(
@@ -114,8 +115,9 @@ export async function activateVersion(
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
   const { orgSlug, workspaceSlug } = parsed.data;
-  const { canManage, ctx } = await resolveStudioScope(orgSlug, workspaceSlug);
-  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
+  const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { ctx } = auth.scope;
 
   try {
     await invoke(
@@ -197,8 +199,9 @@ export async function draftSkillAction(
   }
 
   const { orgSlug, workspaceSlug, prompt } = parsed.data;
-  const { canManage, ctx } = await resolveStudioScope(orgSlug, workspaceSlug);
-  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
+  const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { ctx } = auth.scope;
 
   try {
     const out = await invoke("skill.draft", { prompt }, ctx, { surface: "agent" });
@@ -250,8 +253,9 @@ export async function createSkillAction(
   }
 
   const { orgSlug, workspaceSlug, name, slug, description, weight, body, activate } = parsed.data;
-  const { canManage, ctx } = await resolveStudioScope(orgSlug, workspaceSlug);
-  if (!canManage) return { ok: false, error: NOT_AUTHORIZED };
+  const auth = await resolveAgentToolsManager(orgSlug, workspaceSlug);
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const { ctx } = auth.scope;
 
   const frontmatter = [
     "---",
