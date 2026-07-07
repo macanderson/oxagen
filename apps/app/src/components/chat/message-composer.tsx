@@ -1,6 +1,8 @@
 "use client";
 import * as React from "react";
+import { Badge } from "@/components/ui/badge";
 import {
+  Bot,
   Brain,
   ChevronDown,
   ChevronUp,
@@ -246,6 +248,7 @@ export function MessageComposer({
   onInputHasContentChange,
   orgSlug,
   workspaceSlug,
+  boundAgentName,
 }: {
   conversationId: string | null;
   parentMessageId: string | null;
@@ -290,6 +293,13 @@ export function MessageComposer({
    * `false` → input is empty / cleared (show suggested prompts).
    */
   onInputHasContentChange?: (hasContent: boolean) => void;
+  /**
+   * Human name of the published agent this session is bound to (Ask page
+   * ?agent=…). When set, the composer shows a "Session bound to: <name>"
+   * indicator so the user knows the agent's instructions/tools are applied to
+   * every turn. Null/omitted ⇒ normal unbound chat (no indicator).
+   */
+  boundAgentName?: string | null;
 }) {
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
@@ -1213,6 +1223,18 @@ export function MessageComposer({
 
   return (
     <div className="flex flex-col">
+      {/* Bound-agent indicator: when the session is launched from a published
+          agent (Ask page ?agent=…), show which agent's instructions + equipped
+          tools are applied to every turn. Purely informational — the binding
+          itself is carried in the request body's agentId. */}
+      {boundAgentName ? (
+        <div className="mb-2 flex items-center gap-2" data-testid="bound-agent-indicator">
+          <Badge variant="outline" size="sm" className="gap-1">
+            <Bot className="h-3 w-3" aria-hidden="true" />
+            Session bound to: {boundAgentName}
+          </Badge>
+        </div>
+      ) : null}
       {/* Code-mode agent toolbar (sandbox coding turn) OR the persistent pin
           context bar. Both drive the same selection state and render mutually
           exclusively so there's never a duplicate repo/env selector. Hidden

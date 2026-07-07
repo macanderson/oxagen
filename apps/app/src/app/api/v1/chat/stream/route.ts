@@ -60,6 +60,10 @@ import {
   resolveGroundingCitations,
 } from "./recall-context";
 import { createChatMemoryProvider } from "./engine-memory";
+import {
+  applyAgentBinding,
+  type AgentBindingDefinition,
+} from "@/lib/chat/apply-agent-binding";
 // Per-turn dollar budget (OXA — turn-budget). The gate itself (policy shape,
 // modes, the pure evaluator, createTurnBudgetGuard) lives in @oxagen/billing —
 // this route only resolves the effective policy and wires the three hooks to
@@ -127,6 +131,13 @@ const BodySchema = z.object({
   // Pinned skills are injected directly (no tool call needed), so the model
   // applies them from the first turn. Capped at 5 to bound prompt bloat.
   skills: z.array(z.string().min(1).max(64)).max(5).optional().default([]),
+  // OPTIONAL agent binding: when the request carries a published agent's public
+  // id (agt_…), this turn is BOUND to that agent — its instructions ride the
+  // system prompt, its equipped skills + MCP servers extend the toolset, and a
+  // `coding` agent forces code mode. Absent `agentId`, every downstream value is
+  // untouched (byte-for-byte the pre-binding behavior). Threaded from the Ask
+  // page's `?agent=<publicId>` URL param via the chat client's request body.
+  agentId: z.string().optional(),
   // Attachments for this turn — IDS ONLY (never base64/bytes through this
   // 32 KiB body). Each publicId is re-resolved server-side below (ownership +
   // status='ready' + kind ∈ {image,video} allowlist) before its bytes are
@@ -307,6 +318,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     newConversation,
     activeServerIds,
     skills: pinnedSkillSlugs,
+    agentId,
     pageContext,
     attachments,
     budget: requestBudget,
@@ -721,6 +733,59 @@ export async function POST(request: NextRequest): Promise<Response> {
           clientIp,
         };
 
+        // ── Optional agent binding (launch a published agent into this session) ─
+        // When the request carries an `agentId`, load that agent's definition and
+        // merge its config into THIS turn BEFORE tools + prompt are assembled:
+        //   • instructions → appended to the system-prompt baseline (below),
+        //   • skill agentTools → unioned into the pinned-skill slugs,
+        //   • mcp_server agentTools → unioned into the MCP server allowlist,
+        //   • agentType "coding" → forces code mode on for the turn.
+        // Absent `agentId`, these three effective values are exactly the request
+        // values, so the whole turn is byte-identical to before this feature.
+        //
+        // FAIL-OPEN: a failed/denied agent.definition.get must NEVER break the
+        // turn — log and fall through to the normal (unbound) behavior, exactly
+        // like the budget-governance read below. Runs in a tenant scope because
+        // the handler reads through withTenantDb. { surface: "agent" } — the
+        // contract's `surfaces` list is ["api","mcp","agent"], not "app".
+        let boundInstructions = "";
+        let effectiveSkillSlugs = pinnedSkillSlugs;
+        let effectiveServerIds = activeServerIds;
+        // `useCodeModePrompt` drives the code-mode SYSTEM PROMPT; the sandbox is
+        // still only bound when `codeMode` (body.code) carried a repo/env. A
+        // coding agent with no repo therefore degrades to the code-mode prompt
+        // with no filesystem tools (see the code-mode block further below).
+        let useCodeModePrompt = Boolean(codeMode);
+        if (agentId) {
+          try {
+            const def = await runInTenantScope(
+              { orgId: tenant.id, workspaceId: workspace.id },
+              () =>
+                invoke(
+                  "agent.definition.get",
+                  { agentId },
+                  capCtx,
+                  { surface: "agent" },
+                ),
+            );
+            const binding = applyAgentBinding({
+              def: def as AgentBindingDefinition,
+              skills: pinnedSkillSlugs,
+              serverAllowlist: activeServerIds,
+              codeMode: Boolean(codeMode),
+            });
+            boundInstructions = binding.instructions;
+            effectiveSkillSlugs = binding.skills;
+            effectiveServerIds = binding.serverAllowlist;
+            useCodeModePrompt = binding.codeMode;
+          } catch (err) {
+            logger.warn(
+              { err, agentId, requestId },
+              "[chat/stream] agent binding failed — running unbound turn",
+            );
+          }
+        }
+
         const [
           { tools: agentTools, nameMap: toolNameMap },
           promptConfig,
@@ -734,9 +799,11 @@ export async function POST(request: NextRequest): Promise<Response> {
           () =>
             Promise.all([
               materializeTools(capCtx, {
+                // Effective allowlist = request activeServerIds ∪ any mcp_server
+                // refs from the bound agent (unchanged when no agent is bound).
                 serverAllowlist:
-                  activeServerIds.length > 0
-                    ? new Set(activeServerIds)
+                  effectiveServerIds.length > 0
+                    ? new Set(effectiveServerIds)
                     : undefined,
                 onApprovalRequired: (approvalEvent) => {
                   emit({
@@ -776,8 +843,10 @@ export async function POST(request: NextRequest): Promise<Response> {
                 )
                 .catch((): SkillIndexEntry[] => []),
               // Session-level pinned skills: resolve bodies for requested slugs.
-              // Only loads enabled, non-deleted skills the user explicitly pinned.
-              pinnedSkillSlugs.length > 0
+              // Only loads enabled, non-deleted skills the user explicitly pinned
+              // (plus any skill refs contributed by the bound agent — union
+              // computed above; identical to pinnedSkillSlugs when unbound).
+              effectiveSkillSlugs.length > 0
                 ? withTenantDb((tx) =>
                     tx
                       .select({
@@ -798,7 +867,7 @@ export async function POST(request: NextRequest): Promise<Response> {
                           eq(schema.skills.workspaceId, workspace.id),
                           eq(schema.skills.enabled, true),
                           isNull(schema.skills.deletedAt),
-                          sql`${schema.skills.slug} = ANY(${pinnedSkillSlugs})`,
+                          sql`${schema.skills.slug} = ANY(${effectiveSkillSlugs})`,
                         ),
                       ),
                   )
@@ -1186,10 +1255,17 @@ export async function POST(request: NextRequest): Promise<Response> {
                   ) as ModelMessage[]),
                 ]
               : historyForEngine,
+          // Prompt layering: base (chat OR coding) → bound agent instructions →
+          // page context suffix. The coding CONTRACT (codeModeSystemPrompt) must
+          // always sit ABOVE the customer's agent instructions, so the bound
+          // instructions are appended AFTER the base prompt, never merged into
+          // it. `boundInstructions` is "" for an unbound turn ⇒ byte-identical
+          // baseline. `useCodeModePrompt` is true when the request enabled code
+          // mode OR the bound agent is a coding agent.
           system: resolvePrompt({
             key: "chat.system",
             baseline:
-              (codeMode
+              (useCodeModePrompt
                 ? codeModeSystemPrompt({
                     orgSlug,
                     workspaceSlug,
@@ -1205,7 +1281,11 @@ export async function POST(request: NextRequest): Promise<Response> {
                     workspaceName: workspace.name,
                     skillIndex,
                     pinnedSkillBodies,
-                  })) + pageContextSystemSuffix,
+                  })) +
+              (boundInstructions
+                ? `\n\n---\n\n## Agent instructions\n\n${boundInstructions}`
+                : "") +
+              pageContextSystemSuffix,
             config: promptConfig,
           }),
           model: modelId,

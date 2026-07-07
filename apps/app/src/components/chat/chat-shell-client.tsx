@@ -107,6 +107,8 @@ export function ChatShellClient({
   availableRepos,
   availableEnvironments,
   workspaceBudgetGovernance,
+  agentId,
+  boundAgentName,
   pageContext,
   onFormFillStart,
   onFormFillEnd,
@@ -142,6 +144,12 @@ export function ChatShellClient({
   /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
    * no governance active for this workspace. */
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
+  /** Bound published agent's public id (Ask page ?agent=…). Sent as `agentId`
+   * in each stream request so the route applies the agent's config. Null ⇒
+   * unbound. */
+  agentId?: string | null;
+  /** Human name of the bound agent — shown as the composer's bound indicator. */
+  boundAgentName?: string | null;
   /**
    * Page context forwarded from the current page. When a fillable form is
    * registered (e.g. in AskDrawer/WandPanel wrappers), this is passed to the
@@ -325,6 +333,10 @@ export function ChatShellClient({
   const consentSignalRef = useLatestRef(signalConsentResolved);
   const orgSlugRef = useLatestRef(orgSlug);
   const workspaceSlugRef = useLatestRef(workspaceSlug);
+  // Bound-agent id read at send-time (stable ref, like the slug refs) so the
+  // request body carries the CURRENT ?agent binding without re-creating the
+  // send callback on every navigation.
+  const agentIdRef = useLatestRef(agentId ?? null);
   const setIsStreamingRef = useLatestRef(setIsStreaming);
   // Page-form-fill callback refs — stable so wrappedSendAction deps don't change.
   const pageContextRef = useLatestRef(pageContext ?? null);
@@ -460,6 +472,11 @@ export function ChatShellClient({
               newConversation: wasNewConversation,
               orgSlug: orgSlugRef.current,
               workspaceSlug: workspaceSlugRef.current,
+              // Optional agent binding — the route loads this agent's definition
+              // and applies its instructions/skills/servers/code-mode. Omitted
+              // (undefined) when unbound, so the request is byte-identical to
+              // before this feature for a normal chat.
+              ...(agentIdRef.current ? { agentId: agentIdRef.current } : {}),
               tier: (formData.get("tier") as string) || null,
               model: (formData.get("model") as string) || null,
               effort: (formData.get("effort") as string) || null,
@@ -1120,6 +1137,7 @@ export function ChatShellClient({
         workspaceBudgetGovernance={workspaceBudgetGovernance}
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
+        boundAgentName={boundAgentName ?? null}
       />
     </div>
   );
