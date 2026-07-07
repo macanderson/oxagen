@@ -39,7 +39,8 @@ import { resolveGitHubToken } from "@oxagen/handlers/lib/github-token";
 import { runCodingAgent } from "@oxagen/agent-engine";
 import { withTenantDb, schema } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { invoke } from "@oxagen/oxagen";
+import { invoke, isCodeAgentType } from "@oxagen/oxagen";
+import { agentDefinitionGetHandler } from "@oxagen/agent/handlers/agent.definition.get";
 import { formFill } from "@oxagen/oxagen/contracts/form.fill";
 import { fieldDescriptorSchema } from "@oxagen/oxagen/contracts/form.fill";
 import { randomUUID } from "node:crypto";
@@ -213,6 +214,14 @@ const BodySchema = z.object({
     })
     .nullable()
     .default(null),
+  // Selected agent (OXA app-agent-selector) — the publicId (`agt_…`) of the
+  // agent chosen in the composer, or null/omitted for the default (generic
+  // chat) agent. A code agent (agentType === "code") is the AUTHORITATIVE gate
+  // for code mode: only a code agent may bind the sandbox + code tools, so a
+  // `code` payload sent alongside a non-code agent is ignored server-side (see
+  // the code-mode branch below). The agent's own instructions are also folded
+  // into the system prompt.
+  agentId: z.string().min(1).max(64).nullable().default(null),
   // Pinned chat context (org/repo + environment) the user stuck to this
   // conversation via the composer's context bar. Unlike `code` this is
   // LIGHTWEIGHT — no sandbox — it just tells the agent which repository /
@@ -322,7 +331,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     pageContext,
     attachments,
     budget: requestBudget,
-    code: codeMode,
+    code: codeModeRaw,
+    agentId,
     pinnedContext,
   } = parsed.data;
 
@@ -1170,6 +1180,30 @@ export async function POST(request: NextRequest): Promise<Response> {
         // When the composer selected a repo + environment, run the coding engine
         // against a sandbox with the repo cloned. The per-turn repo/env context
         // rides as a USER message (ADR-021 §2), never the cached system prompt.
+        // Resolve the selected agent (OXA app-agent-selector). Its identity is
+        // the AUTHORITATIVE code-mode gate: only a code agent (agentType ===
+        // "code") may bind the sandbox + code tools, so a `code` payload paired
+        // with a non-code agent is dropped here regardless of what the client
+        // sent. The agent's own instructions are folded into the system prompt.
+        // Best-effort: a failed/absent lookup degrades to the default (no agent,
+        // no code) rather than failing the turn.
+        let agentIsCode = false;
+        let selectedAgentInstructions: string | undefined;
+        if (agentId) {
+          const agentDef = await runInTenantScope(
+            { orgId: tenant.id, workspaceId: workspace.id },
+            () => agentDefinitionGetHandler({ agentId }, capCtx),
+          ).catch(() => null);
+          if (agentDef) {
+            agentIsCode = isCodeAgentType(agentDef.agentType);
+            selectedAgentInstructions = agentDef.config.instructions?.trim() || undefined;
+          }
+        }
+        // The authoritative gate: a non-code agent never enters code mode even if
+        // a code payload arrived; with no agent selected the client's payload
+        // stands (unchanged legacy behavior).
+        const codeMode = agentId && !agentIsCode ? null : codeModeRaw;
+
         let codeGraphForTurn:
           | ReturnType<typeof createNeo4jCodeGraphProvider>
           | undefined;
@@ -1282,6 +1316,13 @@ export async function POST(request: NextRequest): Promise<Response> {
                     skillIndex,
                     pinnedSkillBodies,
                   })) +
+              pageContextSystemSuffix +
+              // Fold the selected agent's own instructions into the system
+              // prompt so choosing an agent actually shapes its behavior, not
+              // just the UI. Appended last so it can refine the baseline.
+              (selectedAgentInstructions
+                ? `\n\n## Agent instructions\n${selectedAgentInstructions}`
+                : ""),
               (boundInstructions
                 ? `\n\n---\n\n## Agent instructions\n\n${boundInstructions}`
                 : "") +

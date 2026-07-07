@@ -15,6 +15,7 @@ import { buildSeededModelState } from "@/components/chat/model-state";
 import type { WorkspaceBudgetGovernance } from "@/components/chat/model-state";
 import type { McpServerSummary } from "@/components/chat/mcp-types";
 import { loadCodeModeOptions } from "./code-mode-data";
+import { loadAgentOptions } from "./agent-options-data";
 import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
 import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
 import { conversationListHandler } from "@oxagen/handlers/conversation.list";
@@ -216,6 +217,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
     budgetDefault,
     codeModeOptions,
     workspaceBudgetGovernance,
+    availableAgents,
   ] =
     await Promise.all([
       Promise.resolve(
@@ -338,6 +340,9 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
             enforcement: "ceiling" as const,
           }),
         ),
+      // Selectable agents for the composer's agent picker. loadAgentOptions
+      // never throws (degrades to an empty list internally), so no .catch here.
+      loadAgentOptions(tenant.id, workspace.id, userCtx),
     ]);
 
   // Bind the workspace scope into the nav's server actions so the client only
@@ -408,6 +413,7 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
             availableMcpServers={availableMcpServers}
             availableRepos={codeModeOptions.repos}
             availableEnvironments={codeModeOptions.environments}
+            availableAgents={availableAgents}
             workspaceBudgetGovernance={workspaceBudgetGovernance}
             agentId={boundAgentId ?? null}
             boundAgentName={boundAgentName}

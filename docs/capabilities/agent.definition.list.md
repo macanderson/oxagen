@@ -26,6 +26,7 @@ List the agent definitions in the current workspace with their identity, lifecyc
 | `agents[].slug` | `string` | Agent slug. |
 | `agents[].name` | `string` | Human-readable name. |
 | `agents[].description` | `string \| null` | Description or null. |
+| `agents[].agentType` | `string` | Type discriminator (`custom`, `interactive_chat`, `code`, …). `code` marks a code agent (repo/code tools + UI); see `isCodeAgentType`. |
 | `agents[].status` | `"draft" \| "active" \| "archived"` | Lifecycle status. |
 | `agents[].deploymentStatus` | `"inactive" \| "active"` | Deployment posture. |
 | `agents[].latestVersion` | `number \| null` | Highest version number, or null when none. |

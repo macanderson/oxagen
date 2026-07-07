@@ -26,6 +26,7 @@ import type { ComposerModelState, WorkspaceBudgetGovernance } from "./model-pick
 import type { McpServerSummary } from "./mcp-types";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
+import type { AgentOption } from "./agent-selector";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import { ConversationFiles } from "./conversation-files";
 import { ConversationExportMenu } from "./conversation-export-menu";
@@ -106,6 +107,7 @@ export function ChatShellClient({
   availableMcpServers,
   availableRepos,
   availableEnvironments,
+  availableAgents,
   workspaceBudgetGovernance,
   agentId,
   boundAgentName,
@@ -141,6 +143,8 @@ export function ChatShellClient({
   availableRepos?: RepoOption[];
   /** Workspace environments usable as the code-mode target. */
   availableEnvironments?: EnvironmentOption[];
+  /** Selectable agents for the composer's agent picker. */
+  availableAgents?: AgentOption[];
   /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
    * no governance active for this workspace. */
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
@@ -544,6 +548,12 @@ export function ChatShellClient({
                   return null;
                 }
               })(),
+              // Selected agent (OXA app-agent-selector). The composer sets this
+              // to the chosen agent's publicId, or omits it for the default
+              // (generic chat) agent — matching the stream route's BodySchema
+              // `agentId: string | null`. A code agent (agentType==="code")
+              // drives the server's code-mode branch (sandbox + code tools).
+              agentId: (formData.get("agentId") as string) || null,
               // Pinned chat context (org/repo + environment). The composer only
               // sets this formData field when the user pinned a target AND is
               // not in code mode — otherwise null, matching the stream route's
@@ -1134,6 +1144,7 @@ export function ChatShellClient({
         availableMcpServers={availableMcpServers}
         availableRepos={availableRepos}
         availableEnvironments={availableEnvironments}
+        availableAgents={availableAgents}
         workspaceBudgetGovernance={workspaceBudgetGovernance}
         orgSlug={orgSlug}
         workspaceSlug={workspaceSlug}
