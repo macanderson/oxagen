@@ -12,8 +12,15 @@
  *
  * Recovery is non-destructive: it prints the exact `git worktree add` command
  * rather than mutating your current tree.
+ *
+ * Output discipline (ADR-023 §4): `--json` emits one single-line JSON value on
+ * stdout (a list is a JSON array; a single entry gains `commitExists`); pretty
+ * mode renders the human view on stdout; a missing hash is a uniform stderr
+ * error line with exit code 1.
  */
 import { readLedger, commitExists, type CommitLedgerEntry } from "../lib/commit-ledger.js";
+import { createOutput } from "../lib/output.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
 export interface RecoverOptions {
   all?: boolean;
@@ -21,35 +28,25 @@ export interface RecoverOptions {
   limit?: number;
 }
 
-const out = (s: string): void => void process.stdout.write(s + "\n");
-const err = (s: string): void => void process.stderr.write(s + "\n");
-
-export async function handleRecover(hash: string | undefined, opts: RecoverOptions): Promise<void> {
+export async function handleRecover(
+  hash: string | undefined,
+  opts: RecoverOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
   const cwd = process.cwd();
 
   if (hash) {
     const entry = readLedger().find((e) => e.hash === hash || e.hash.startsWith(hash));
     if (!entry) {
-      err(`No ledger entry for commit ${hash}. Run \`oxagen recover\` to list what's recorded.`);
-      process.exitCode = 1;
+      out.error(
+        `No ledger entry for commit ${hash}. Run \`oxagen recover\` to list what's recorded.`,
+        "not_found",
+      );
       return;
     }
     const exists = commitExists(entry.hash, entry.cwd);
-    if (opts.json) {
-      out(JSON.stringify({ ...entry, commitExists: exists }, null, 2));
-      return;
-    }
-    out(`commit ${entry.hash}${exists ? "" : "  (⚠ object not found in repo — may have been gc'd)"}`);
-    out(`  when:    ${entry.at}`);
-    out(`  branch:  ${entry.branch || "(detached)"}`);
-    out(`  repo:    ${entry.cwd}`);
-    if (entry.taskId) out(`  task:    ${entry.taskId}`);
-    if (entry.traceId) out(`  trace:   ${entry.traceId}`);
-    out(`  message: ${entry.message}`);
-    out(`  files:   ${entry.files.length ? entry.files.join(", ") : "(none recorded)"}`);
-    out("");
-    out("Restore into a fresh worktree (non-destructive):");
-    out(`  git -C ${entry.cwd} worktree add ../recovered-${entry.hash.slice(0, 8)} ${entry.hash}`);
+    out.data({ ...entry, commitExists: exists }, () => prettyEntry(entry, exists));
     return;
   }
 
@@ -57,26 +54,38 @@ export async function handleRecover(hash: string | undefined, opts: RecoverOptio
     ...(opts.all ? {} : { cwd }),
     limit: opts.limit ?? 30,
   });
+  out.data(entries, () => prettyList(entries, opts.all ?? false, cwd));
+}
 
-  if (opts.json) {
-    out(JSON.stringify(entries, null, 2));
-    return;
-  }
+function prettyEntry(entry: CommitLedgerEntry, exists: boolean): string {
+  const lines = [
+    `commit ${entry.hash}${exists ? "" : "  (⚠ object not found in repo — may have been gc'd)"}`,
+    `  when:    ${entry.at}`,
+    `  branch:  ${entry.branch || "(detached)"}`,
+    `  repo:    ${entry.cwd}`,
+  ];
+  if (entry.taskId) lines.push(`  task:    ${entry.taskId}`);
+  if (entry.traceId) lines.push(`  trace:   ${entry.traceId}`);
+  lines.push(`  message: ${entry.message}`);
+  lines.push(`  files:   ${entry.files.length ? entry.files.join(", ") : "(none recorded)"}`);
+  lines.push("");
+  lines.push("Restore into a fresh worktree (non-destructive):");
+  lines.push(`  git -C ${entry.cwd} worktree add ../recovered-${entry.hash.slice(0, 8)} ${entry.hash}`);
+  return lines.join("\n");
+}
 
+function prettyList(entries: CommitLedgerEntry[], all: boolean, cwd: string): string {
   if (entries.length === 0) {
-    out(
-      opts.all
-        ? "Commit ledger is empty. Agent commits will be recorded here as they happen."
-        : `No recorded commits for this repo (${cwd}). Use --all to see every repo.`,
-    );
-    return;
+    return all
+      ? "Commit ledger is empty. Agent commits will be recorded here as they happen."
+      : `No recorded commits for this repo (${cwd}). Use --all to see every repo.`;
   }
-
-  out(`Recorded agent commits${opts.all ? " (all repos)" : ""} — newest first:\n`);
-  for (const e of entries) {
-    out(formatRow(e, opts.all ?? false));
-  }
-  out(`\nRun \`oxagen recover <hash>\` for restore instructions.`);
+  return [
+    `Recorded agent commits${all ? " (all repos)" : ""} — newest first:`,
+    ...entries.map((e) => formatRow(e, all)),
+    "",
+    "Run `oxagen recover <hash>` for restore instructions.",
+  ].join("\n");
 }
 
 function formatRow(e: CommitLedgerEntry, showRepo: boolean): string {
