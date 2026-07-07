@@ -121,6 +121,27 @@ describe("projectCost", () => {
     expect(p.fallback).toBe(false);
   });
 
+  it("prices gpt-5.5-pro at its own pro rate, not the generic gpt-5 prefix", () => {
+    const p = projectCost("openai/gpt-5.5-pro", { inputTokens: 1_000_000, outputTokens: 1_000_000 });
+    expect(p.family).toBe("gpt-5.5-pro");
+    expect(p.inputCostUsd).toBeCloseTo(30, 5);
+    expect(p.outputCostUsd).toBeCloseTo(180, 5);
+  });
+
+  it("prices gpt-5.5 (non-pro) at its own rate", () => {
+    const p = projectCost("openai/gpt-5.5", { inputTokens: 1_000_000, outputTokens: 1_000_000 });
+    expect(p.family).toBe("gpt-5.5");
+    expect(p.inputCostUsd).toBeCloseTo(5, 5);
+    expect(p.outputCostUsd).toBeCloseTo(30, 5);
+  });
+
+  it("prices gemini-3-pro above the generic gemini row", () => {
+    const p = projectCost("google/gemini-3-pro-preview", { inputTokens: 1_000_000, outputTokens: 1_000_000 });
+    expect(p.family).toBe("gemini-3-pro");
+    expect(p.inputCostUsd).toBeCloseTo(2, 5);
+    expect(p.outputCostUsd).toBeCloseTo(12, 5);
+  });
+
   it("marks a fallback projection and derives display fields from the slug", () => {
     const p = projectCost("mistral/mistral-large", { inputTokens: 1_000_000 });
     expect(p.fallback).toBe(true);
