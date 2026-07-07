@@ -11,6 +11,7 @@ import { describe, it, expect, vi } from "vitest";
 import { MemoryWorkspace } from "../workspaces/memory";
 import { runTurn } from "./index";
 import { DEFAULT_AGENT_MODEL } from "../engine";
+import { classifyTier, modelForTier } from "../router/model-router";
 import type { AgentAi, GraphSyncProvider, ModelRunArgs } from "../ports";
 
 // ── Minimal AgentAi that optionally edits a file, then returns. ──────────────
@@ -155,14 +156,14 @@ describe("runTurn — GraphSyncProvider", () => {
 });
 
 describe("runTurn — bare mode model accounting", () => {
-  it("labels/accounts an unpinned bare run with DEFAULT_AGENT_MODEL, matching what actually executes", async () => {
-    // Regression test: runBare's accounting used to compute the label via
-    // modelForTier("balanced") (Sonnet) while the actual execution call below
-    // it passed `opts.model` through as-is — undefined when unpinned, which
-    // falls through to runCodingAgent's OWN internal default
-    // (DEFAULT_AGENT_MODEL, Fable 5). The label silently diverged from what
-    // ran. Assert BOTH sides agree: the model the stream() call actually
-    // received, and the label recorded on the trace.
+  it("routes an unpinned bare run through classifyTier, with the label matching what executes", async () => {
+    // Perf #8 + label-integrity regression: an unpinned bare run must NOT
+    // hard-default to the frontier tier (DEFAULT_AGENT_MODEL) — runBare now
+    // routes it through the deterministic classifyTier floor. The load-bearing
+    // invariant is still that the label CANNOT diverge from what ran: assert the
+    // model the stream() call actually received, the trace label, and the
+    // router-derived expectation all agree (computed via the same functions so
+    // it tracks tier config, not a hard-coded slug).
     const ws = new MemoryWorkspace({ "a.ts": "x" });
     let modelUsed: string | undefined;
     const ai: AgentAi = {
@@ -180,17 +181,21 @@ describe("runTurn — bare mode model accounting", () => {
       generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
     };
 
+    const prompt = "do something";
     const result = await runTurn({
-      prompt: "do something",
+      prompt,
       workspace: ws,
       ai,
       bare: true,
-      // No `model` passed — both the label and the actual execution must
-      // resolve to the SAME default.
+      // No `model` passed — the label AND the actual execution must both
+      // resolve to the router's tier for this prompt (never diverge).
     });
 
-    expect(modelUsed).toBe(DEFAULT_AGENT_MODEL);
-    expect(result.trace.selectedModel).toBe(DEFAULT_AGENT_MODEL);
+    const expected = modelForTier(classifyTier({ text: prompt }).tier);
+    expect(modelUsed).toBe(expected);
+    expect(result.trace.selectedModel).toBe(expected);
+    // The whole point: label == execution.
+    expect(result.trace.selectedModel).toBe(modelUsed);
   });
 
   it("still labels/accounts a pinned bare run with the pinned model", async () => {
