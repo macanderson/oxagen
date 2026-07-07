@@ -90,6 +90,9 @@ export const baseEnvSchema = z.object({
   // falls through to the OAuth-connection fallback.
   GITHUB_APP_ID: z.string().optional(),
   GITHUB_APP_PRIVATE_KEY: z.string().optional(),
+  // LOCAL/DEMO-ONLY fallback PAT for GitHub write capabilities; must never be
+  // set in production (bypasses per-workspace scoping — see resolveGitHubToken).
+  GITHUB_PERSONAL_ACCESS_TOKEN: z.string().optional(),
 
   // Per-provider OAuth DATA client credentials for token refresh (ingestion cron).
   // All are optional in the base schema — the ingestion.oauth-refresh function
@@ -158,6 +161,9 @@ export const baseEnvSchema = z.object({
   // flagship Anthropic model (Fable 5) when unset — see select.ts's
   // DEFAULT_SELECTOR_MODEL.
   OXAGEN_LLM_SELECTOR: z.string().optional(),
+  // "1" makes buildWorkspaceTools structurally deny edit_file/write_file on
+  // test-shaped paths (SWE-bench-style anti-reward-hacking guard).
+  OXAGEN_FORBID_TEST_EDITS: z.string().optional(),
 
   // Media-generation tiers. Image and video each expose a "basic" (default,
   // cheaper) and "advanced" tier that resolve to concrete gateway model ids,
@@ -285,6 +291,9 @@ export const baseEnvSchema = z.object({
   INGESTION_CRYPTO_PROVIDER: z.enum(["env", "kms"]).default("env").optional(),
   AWS_KMS_INGESTION_KEY_ARN: z.string().min(1).optional(),
   INGESTION_ENCRYPTION_KEY: z.string().min(1).optional(),
+  // "1" routes GitHub feature inference through the Anthropic Message Batches
+  // API (async, half price); unset = synchronous per-file calls.
+  INGESTION_FEATURE_BATCH: z.string().optional(),
 
   // Audit-export download-URL signing (HMAC). Optional dedicated secret; the
   // route falls back to BETTER_AUTH_SECRET. Must be >= 16 bytes when set
