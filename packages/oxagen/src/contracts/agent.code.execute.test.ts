@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { agentCodeExecute } from "./agent.code.execute";
+import {
+  agentCodeExecute,
+  sanitizeSandboxEnv,
+  isReservedEnvKey,
+} from "./agent.code.execute";
 import { getCapability } from "../registry";
 
 describe("agent.code.execute capability", () => {
@@ -139,46 +143,56 @@ describe("agent.code.execute capability", () => {
     expect(parsed.env).toEqual({ FOO: "bar" });
   });
 
-  // ── input: env trust boundary (sanitizeSandboxEnv) ────────────────────────
+  // ── input: env is forwarded verbatim; sanitization lives in the handler ───
+  // PR #637 deliberately moved env sanitization OUT of the contract input schema
+  // and INTO the handler (packages/agent/src/handlers/agent.code.execute.ts via
+  // sanitizeSandboxEnv + _environment-env.ts). That lets vault secrets resolved
+  // from `environmentId` be merged BELOW the caller env WITHOUT the reserved-key
+  // denylist stripping them, and lets stripped keys be reported in
+  // output.warnings. So the contract validates SHAPE ONLY (record<string,string>)
+  // and forwards every key verbatim; parse must never mutate env. The actual
+  // strip / POSIX-name / 32-key-cap / all-unsafe-collapse behaviour is owned and
+  // tested at the handler seam — see
+  // packages/agent/src/handlers/agent.code.execute.test.ts ("strips reserved/host
+  // env keys before reaching the sandbox", "surfaces stripped reserved env keys
+  // as a run warning") and _environment-env.test.ts. Do NOT re-add sanitization
+  // here.
 
-  it("strips reserved env keys and prefixes, keeps safe ones", () => {
-    const parsed = agentCodeExecute.input.parse({
-      language: "node",
-      code: "x",
-      env: {
-        SAFE: "ok",
-        PATH: "/evil",
-        LD_PRELOAD: "/x.so",
-        MODAL_TOKEN: "secret",
-        DATABASE_URL: "postgres://...",
-      },
-    });
-    expect(parsed.env).toEqual({ SAFE: "ok" });
+  it("forwards reserved env keys verbatim at the contract seam (handler strips them)", () => {
+    const env = {
+      SAFE: "ok",
+      PATH: "/evil",
+      LD_PRELOAD: "/x.so",
+      MODAL_TOKEN: "secret",
+      DATABASE_URL: "postgres://...",
+    };
+    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x", env });
+    expect(parsed.env).toEqual(env);
   });
 
-  it("drops env keys that are not POSIX-shaped names", () => {
-    const parsed = agentCodeExecute.input.parse({
-      language: "node",
-      code: "x",
-      env: { "bad-key": "v", "1leading": "v", GOOD_KEY: "v" },
-    });
-    expect(parsed.env).toEqual({ GOOD_KEY: "v" });
+  it("forwards non-POSIX-shaped env names verbatim (handler drops them)", () => {
+    const env = { "bad-key": "v", "1leading": "v", GOOD_KEY: "v" };
+    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x", env });
+    expect(parsed.env).toEqual(env);
   });
 
-  it("collapses an all-unsafe env to undefined", () => {
-    const parsed = agentCodeExecute.input.parse({
-      language: "node",
-      code: "x",
-      env: { PATH: "/x", "bad key": "v" },
-    });
-    expect(parsed.env).toBeUndefined();
+  it("keeps an all-unsafe env as-is at the contract seam (handler collapses it to undefined)", () => {
+    const env = { PATH: "/x", "bad key": "v" };
+    const parsed = agentCodeExecute.input.parse({ language: "node", code: "x", env });
+    expect(parsed.env).toEqual(env);
   });
 
-  it("caps the env at 32 keys", () => {
+  it("does not cap env key count at the contract seam (handler enforces the 32-key cap)", () => {
     const env: Record<string, string> = {};
     for (let i = 0; i < 40; i++) env[`K${i}`] = "v";
     const parsed = agentCodeExecute.input.parse({ language: "node", code: "x", env });
-    expect(Object.keys(parsed.env ?? {})).toHaveLength(32);
+    expect(Object.keys(parsed.env ?? {})).toHaveLength(40);
+  });
+
+  it("rejects a non-string env value (schema shape enforcement)", () => {
+    expect(() =>
+      agentCodeExecute.input.parse({ language: "node", code: "x", env: { FOO: 1 } }),
+    ).toThrow();
   });
 
   // ── input: workspace files map ────────────────────────────────────────────
@@ -314,5 +328,75 @@ describe("agent.code.execute capability", () => {
 
   it("is registered in the capability registry", () => {
     expect(getCapability("agent.code.execute")).toBe(agentCodeExecute);
+  });
+});
+
+// The strip/cap/collapse behaviour now lives in the exported sanitizer (the
+// contract input forwards env verbatim — see the "env is forwarded verbatim"
+// block above). The handler (packages/agent/.../agent.code.execute.ts,
+// _environment-env.ts) and the agent.sandbox.exec contract (.transform) both
+// apply it; test it directly here at its definition so every branch stays
+// covered within @oxagen/oxagen regardless of which caller exercises it.
+describe("sanitizeSandboxEnv", () => {
+  it("keeps POSIX-shaped, non-reserved keys unchanged", () => {
+    expect(sanitizeSandboxEnv({ SAFE: "ok", ALSO_OK: "1" })).toEqual({
+      SAFE: "ok",
+      ALSO_OK: "1",
+    });
+  });
+
+  it("returns undefined for undefined input", () => {
+    expect(sanitizeSandboxEnv(undefined)).toBeUndefined();
+  });
+
+  it("strips reserved names and reserved prefixes, keeps the rest", () => {
+    expect(
+      sanitizeSandboxEnv({
+        SAFE: "ok",
+        PATH: "/evil",
+        LD_PRELOAD: "/x.so",
+        MODAL_TOKEN: "secret",
+        DATABASE_URL: "postgres://...",
+      }),
+    ).toEqual({ SAFE: "ok" });
+  });
+
+  it("drops keys that are not POSIX-shaped names", () => {
+    expect(
+      sanitizeSandboxEnv({ "bad-key": "v", "1leading": "v", GOOD_KEY: "v" }),
+    ).toEqual({ GOOD_KEY: "v" });
+  });
+
+  it("collapses to undefined when nothing safe remains", () => {
+    expect(sanitizeSandboxEnv({ PATH: "/x", "bad key": "v" })).toBeUndefined();
+  });
+
+  it("caps the surviving env at 32 keys", () => {
+    const env: Record<string, string> = {};
+    for (let i = 0; i < 40; i++) env[`K${i}`] = "v";
+    expect(Object.keys(sanitizeSandboxEnv(env) ?? {})).toHaveLength(32);
+  });
+
+  it("drops entries that would exceed the 8KB byte budget", () => {
+    const big = "x".repeat(5000);
+    // Two 5KB values overflow the 8KB cap — the first fits, the second is dropped.
+    const result = sanitizeSandboxEnv({ FIRST: big, SECOND: big });
+    expect(result).toEqual({ FIRST: big });
+  });
+});
+
+describe("isReservedEnvKey", () => {
+  it("flags exact reserved names", () => {
+    expect(isReservedEnvKey("PATH")).toBe(true);
+    expect(isReservedEnvKey("NODE_OPTIONS")).toBe(true);
+  });
+
+  it("flags reserved prefixes", () => {
+    expect(isReservedEnvKey("MODAL_TOKEN")).toBe(true);
+    expect(isReservedEnvKey("DATABASE_URL")).toBe(true);
+  });
+
+  it("allows an ordinary key", () => {
+    expect(isReservedEnvKey("MY_VAR")).toBe(false);
   });
 });

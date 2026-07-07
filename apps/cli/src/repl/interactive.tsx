@@ -53,6 +53,12 @@ import { loadProjectContext } from "../agent/project-context.js";
 import { loadAndExpand, parseInvocation } from "../slash/expand.js";
 import { buildSlashCatalog, type SlashCatalogEntry } from "../slash/catalog.js";
 import { buildProgram, describeCliCommands } from "../program.js";
+import {
+  isExternalOnlyCliCommand,
+  isInlineDispatchableCliCommand,
+  runInlineCliCommand,
+  toShellCommand,
+} from "./cli-bridge.js";
 import { isProjectInitialized, initializeProject } from "../project/init.js";
 import { openSessionMemory, type SessionMemory } from "../agent/memory.js";
 import { openFleetMemory } from "../agent/fleet/memory.js";
@@ -95,6 +101,8 @@ import {
 } from "./components.js";
 import { HudPanel } from "./hud.js";
 import { ConfigPanel } from "./config-panel.js";
+import { LoginPanel } from "./login-panel.js";
+import type { InteractiveLoginResult } from "../commands/auth.js";
 import type { PasteSubmission } from "./paste.js";
 import { resolveEscapeAction } from "./escape-action.js";
 import { TerminalPanel, type TerminalRun } from "./terminal-panel.js";
@@ -352,6 +360,20 @@ export function ReplApp({
     resolve: (r: ApprovalResponse) => void;
   } | null>(null);
 
+  // The active auth session — starts as the launch-time `options.session`
+  // (synthetic bench/BYOK, or a real logged-in account) but a successful
+  // inline `/login` (see the LoginPanel wiring + handleLoggedIn below)
+  // replaces it, so a session that started synthetic/BYOK can pick up a real
+  // Oxagen account without restarting the REPL. Read live wherever the
+  // current org/workspace/token needs to be displayed (the header scope
+  // chip); `aiRef`/`graphSyncRef`/`serverMemoryRef` below are one-time
+  // `useRef` initializers keyed off the ORIGINAL `options.session` (mirroring
+  // `/coordinator local`'s pattern), so `handleLoggedIn` additionally
+  // reassigns `aiRef.current`/`activeAiRef.current` directly — reassigning a
+  // ref's `.current` takes effect on the very next turn with no
+  // re-initialization, exactly like the existing `/coordinator` swap.
+  const [session, setSession] = useState<Session>(options.session);
+
   const cwd = process.cwd();
   // Current git branch for the status line (read once from .git/HEAD — or, in
   // a worktree, from the gitdir its `.git` pointer file names; see
@@ -503,6 +525,16 @@ export function ReplApp({
   const closeConfigPanel = useCallback((): void => {
     configOpenRef.current = false;
     setConfigOpen(false);
+  }, []);
+  // The Ink-native `/login` panel (PR C item 12) — same takeover pattern as
+  // the /config panel above. `handleLoggedIn` (defined below, once the AI
+  // port refs exist) is declared separately so this block stays adjacent to
+  // its /config sibling.
+  const [loginOpen, setLoginOpen] = useState(false);
+  const loginOpenRef = useRef(false);
+  const closeLoginPanel = useCallback((): void => {
+    loginOpenRef.current = false;
+    setLoginOpen(false);
   }, []);
   // Visibility of the right-hand Agent Team / Task Progress dock. "auto" shows it
   // only while a turn is monitoring work; /panel pins it "on" or hides it "off".
@@ -771,6 +803,47 @@ export function ReplApp({
       ]);
     },
     [commit],
+  );
+
+  // Called once by the LoginPanel (see the /login handler below) on a
+  // successful inline login. The session is already persisted to
+  // ~/.config/oxagen/config.json by `runBrowserLogin` at that point — this
+  // just updates what's live in THIS running REPL process: the header scope
+  // chip (`session` state) and, if the coordinator hasn't been switched to
+  // on-device (`/coordinator local`), the AI port turns actually run on.
+  // Reassigning `.current` takes effect starting the very next turn with no
+  // workspace re-creation — the exact same mechanism `/coordinator` uses.
+  // NOTE: graph sync (`graphSyncRef`) and platform memory (`serverMemoryRef`)
+  // are NOT hot-swapped here — both are one-time `useRef` initializers with
+  // more involved setup (an Inngest-backed sync provider, a recall/mirror
+  // adapter keyed by executionRef) than a plain AI port swap, so they still
+  // pick up a freshly-logged-in session only on the next `oxagen` launch.
+  // That's a real, intentional limitation of this pass — the AI port swap
+  // covers what a user doing `/login` mid-session cares about most (running
+  // turns against their real account), and is called out in the PR.
+  const handleLoggedIn = useCallback(
+    (result: InteractiveLoginResult): void => {
+      const nextSession: Session = {
+        token: result.token,
+        orgSlug: result.orgSlug,
+        workspaceSlug: result.workspaceSlug,
+        apiUrl: options.session.apiUrl,
+      };
+      setSession(nextSession);
+      const platformAi = createMeteredAi(createPlatformAgentAi(nextSession), {
+        onMetrics: (ev) => metricsBusRef.current.record(ev),
+        onLog: (line) => void debugLog("timeout", line),
+      });
+      aiRef.current = platformAi;
+      if (coordinatorLocRef.current === "remote") {
+        activeAiRef.current = platformAi;
+      }
+      pushAssistant(
+        "✓ Logged in — this session now runs turns against your Oxagen account. " +
+          "Graph sync and platform memory pick up on the next `oxagen` launch.",
+      );
+    },
+    [options.session.apiUrl, pushAssistant],
   );
 
   const cancelTurn = useCallback(() => {
@@ -1124,6 +1197,8 @@ export function ReplApp({
     // handles ↑/↓/e/x/Esc) — swallow everything here so those keys never
     // double-fire into panel-nav, transcript scroll, or the prompt bar.
     if (configOpenRef.current) return;
+    // Same for the /login panel (its own useInput handles Esc/any-key).
+    if (loginOpenRef.current) return;
 
     // Ctrl-O expands/collapses the most recent folded `!command` accordion. Bound
     // before the focus-zone gate so it works whether focus is on the input or a
@@ -1722,9 +1797,11 @@ export function ReplApp({
         return;
       }
       if (text === "/login" || text.startsWith("/login ")) {
-        // The interactive picker needs readline which Ink owns — so we can't
-        // run the full flow from inside the REPL. Show the current session
-        // when already logged in; otherwise instruct the user to use the shell.
+        // Already logged in: just report the session (fast path, no need to
+        // open the picker at all). Not logged in: open the Ink-native
+        // LoginPanel below — it drives the same browser-based PKCE flow
+        // `oxagen login` uses, with NO readline (see login-panel.tsx's
+        // header for why that matters inside an Ink-mounted REPL).
         try {
           const { getToken, readConfig } = await import("../lib/config.js");
           const token = getToken();
@@ -1736,13 +1813,11 @@ export function ReplApp({
                 `  token:     ${masked}\n` +
                 `  org:       ${config.orgSlug}\n` +
                 `  workspace: ${config.workspaceSlug}\n` +
-                `\nRun \`oxagen logout\` in your shell to clear the session.`,
+                `\nRun \`oxagen logout\` (or /logout) to clear the session.`,
             );
           } else {
-            pushAssistant(
-              `Not logged in. The interactive login picker requires a shell TTY.\n` +
-                `Run \`oxagen login\` in your terminal to authenticate.`,
-            );
+            loginOpenRef.current = true;
+            setLoginOpen(true);
           }
         } catch (err) {
           pushAssistant(err instanceof Error ? err.message : String(err));
@@ -1848,17 +1923,40 @@ export function ReplApp({
         if (expanded) {
           submission = expanded.prompt;
         } else {
-          // Not a built-in and not a custom .md command. If it's one of the
-          // productized `oxagen --help` commands surfaced in the menu, point the
-          // user at the shell rather than failing — those run outside the REPL.
-          const name = parseInvocation(text)?.name ?? text.split(/\s+/)[0]!.slice(1);
+          // Not a built-in and not a custom .md command. The catalog's "cli"
+          // tier (see slash/catalog.ts + repl/cli-bridge.ts) splits three ways:
+          //   1. Safe/read-only commands run INLINE through the capture
+          //      seam — their output becomes this turn's assistant message,
+          //      instead of the old "run it from your shell" dead-end.
+          //   2. Long-running/interactive commands (they own the terminal or
+          //      run indefinitely) get an honest "opens outside the REPL"
+          //      message — never silently dead-ended, never run inline.
+          //   3. Everything else not yet ported to the seam keeps a shell-out
+          //      hint (now worded as "not yet available inline", which is
+          //      true — distinct from bucket 2's "this genuinely can't run
+          //      here").
+          const invocation = parseInvocation(text);
+          const name = invocation?.name ?? text.split(/\s+/)[0]!.slice(1);
           const entry = catalogRef.current?.find((c) => c.name === name);
           if (entry && entry.source === "cli") {
-            const hint = entry.argumentHint ? ` ${entry.argumentHint}` : "";
-            pushAssistant(
-              `📦 oxagen ${entry.name}${hint} — ${entry.description}\n` +
-                `This is an oxagen CLI command — run it from your shell: oxagen ${entry.name}`,
-            );
+            const shellCmd = toShellCommand(entry.name);
+            if (isExternalOnlyCliCommand(entry.name)) {
+              pushAssistant(
+                `⧉ oxagen ${shellCmd} opens outside the REPL — run it from a separate shell: ` +
+                  `oxagen ${shellCmd}`,
+              );
+            } else if (isInlineDispatchableCliCommand(entry.name)) {
+              const result = await runInlineCliCommand(entry.name, invocation?.args ?? "");
+              pushAssistant(
+                `📦 oxagen ${shellCmd}\n\n${result.ok ? result.output : `✗ ${result.output}`}`,
+              );
+            } else {
+              const hint = entry.argumentHint ? ` ${entry.argumentHint}` : "";
+              pushAssistant(
+                `📦 oxagen ${shellCmd}${hint} — ${entry.description}\n` +
+                  `Not yet available inline in the REPL — run it from your shell: oxagen ${shellCmd}`,
+              );
+            }
           } else {
             pushAssistant(
               `Unknown command: /${name}. Type /help for built-ins, or / to browse the menu.`,
@@ -2761,7 +2859,7 @@ export function ReplApp({
             <HeaderBar
               model={model}
               version={pkg.version}
-              scope={`${options.session.orgSlug}/${options.session.workspaceSlug}`}
+              scope={`${session.orgSlug}/${session.workspaceSlug}`}
               branch={repoInfo.branch}
               sessionLabel={repoInfo.root.split("/").pop() || "session"}
               sessionCostUsd={metrics.sessionCostUsd}
@@ -2850,6 +2948,12 @@ export function ReplApp({
             <ApprovalPrompt req={budgetPause.req} onResolve={resolveBudgetPause} />
           ) : configOpen ? (
             <ConfigPanel cwd={cwd} onClose={closeConfigPanel} width={Math.min(cols - 2, 100)} />
+          ) : loginOpen ? (
+            <LoginPanel
+              onClose={closeLoginPanel}
+              onLoggedIn={handleLoggedIn}
+              width={Math.min(cols - 2, 100)}
+            />
           ) : (
             <PromptInput
               onSubmit={handleUserSubmit}
@@ -3027,6 +3131,8 @@ export function ReplApp({
           <ApprovalPrompt req={budgetPause.req} onResolve={resolveBudgetPause} />
         ) : configOpen ? (
           <ConfigPanel cwd={cwd} onClose={closeConfigPanel} />
+        ) : loginOpen ? (
+          <LoginPanel onClose={closeLoginPanel} onLoggedIn={handleLoggedIn} />
         ) : (
           <PromptInput
             onSubmit={handleUserSubmit}

@@ -26,6 +26,7 @@ import {
   type OxagenSettings,
   type ResolveSettingsOptions,
 } from "../settings/index.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
 const SCOPES: SettingsScope[] = ["user", "project", "local"];
 
@@ -46,38 +47,48 @@ function getByPath(settings: OxagenSettings, key: string): unknown {
   return cur;
 }
 
-export function settingsShow(ctx: SettingsCtx = {}): void {
+export function settingsShow(
+  ctx: SettingsCtx = {},
+  writer: CommandWriter = stdoutWriter,
+): void {
   const { settings, scopes } = loadSettings({ ...ctx, noCache: true });
-  console.log("Effective settings (merged user → project → local):\n");
-  console.log(JSON.stringify(settings, null, 2));
+  writer.write("Effective settings (merged user → project → local):\n");
+  writer.write(JSON.stringify(settings, null, 2));
   const present = scopes.filter((s) => s.settings || s.error);
-  console.log("\nScopes:");
+  writer.write("\nScopes:");
   if (present.length === 0) {
-    console.log("  (no settings files found — run `oxagen settings init`)");
+    writer.write("  (no settings files found — run `oxagen settings init`)");
   }
   for (const s of present) {
     const status = s.error ? `⚠ ${s.error}` : "ok";
-    console.log(`  ${s.scope.padEnd(8)} ${s.path}  [${status}]`);
+    writer.write(`  ${s.scope.padEnd(8)} ${s.path}  [${status}]`);
   }
 }
 
-export function settingsPath(ctx: SettingsCtx = {}): void {
+export function settingsPath(
+  ctx: SettingsCtx = {},
+  writer: CommandWriter = stdoutWriter,
+): void {
   const paths = getScopePaths(ctx);
-  console.log("Settings scope files (lowest → highest precedence):\n");
+  writer.write("Settings scope files (lowest → highest precedence):\n");
   for (const scope of SCOPES) {
     const path = paths[scope];
-    console.log(`  ${scope.padEnd(8)} ${path}  ${existsSync(path) ? "(exists)" : "(absent)"}`);
+    writer.write(`  ${scope.padEnd(8)} ${path}  ${existsSync(path) ? "(exists)" : "(absent)"}`);
   }
 }
 
-export function settingsGet(key: string, ctx: SettingsCtx = {}): void {
+export function settingsGet(
+  key: string,
+  ctx: SettingsCtx = {},
+  writer: CommandWriter = stdoutWriter,
+): void {
   const { settings } = loadSettings({ ...ctx, noCache: true });
   const value = getByPath(settings, key);
   if (value === undefined) {
-    console.log(`${key}: (not set)`);
+    writer.write(`${key}: (not set)`);
     return;
   }
-  console.log(`${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`);
+  writer.write(`${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`);
 }
 
 export function settingsSet(
@@ -85,30 +96,34 @@ export function settingsSet(
   value: string,
   scopeArg?: string,
   ctx: SettingsCtx = {},
+  writer: CommandWriter = stdoutWriter,
 ): void {
   const scope = scopeArg ?? "project";
   if (!isScope(scope)) {
-    console.error(`Unknown scope "${scope}". Use one of: ${SCOPES.join(", ")}`);
+    writer.writeErr(`Unknown scope "${scope}". Use one of: ${SCOPES.join(", ")}`);
     process.exitCode = 1;
     return;
   }
   try {
     const path = writeSettingsValue({ ...ctx, scope, key, value });
-    console.log(`✓ ${key} = ${value}  (${scope}: ${path})`);
+    writer.write(`✓ ${key} = ${value}  (${scope}: ${path})`);
     if (shellShadowsSettingsKey(key)) {
       const envVar = envVarForSettingsKey(key);
-      console.log(
+      writer.write(
         `  Note: shell value wins until you unset ${envVar} — it is already exported in this shell, ` +
           `and shell env always beats settings.json (see runtime.ts's projection gate).`,
       );
     }
   } catch (err) {
-    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    writer.writeErr(`Error: ${err instanceof Error ? err.message : String(err)}`);
     process.exitCode = 1;
   }
 }
 
-export function settingsValidate(ctx: SettingsCtx = {}): void {
+export function settingsValidate(
+  ctx: SettingsCtx = {},
+  writer: CommandWriter = stdoutWriter,
+): void {
   const { scopes } = loadSettings({ ...ctx, noCache: true });
   let ok = true;
   let checked = 0;
@@ -117,27 +132,31 @@ export function settingsValidate(ctx: SettingsCtx = {}): void {
     checked++;
     if (s.error) {
       ok = false;
-      console.error(`✗ ${s.scope} (${s.path}): ${s.error}`);
+      writer.writeErr(`✗ ${s.scope} (${s.path}): ${s.error}`);
     } else {
-      console.log(`✓ ${s.scope} (${s.path})`);
+      writer.write(`✓ ${s.scope} (${s.path})`);
     }
   }
-  if (checked === 0) console.log("No settings files found.");
+  if (checked === 0) writer.write("No settings files found.");
   if (!ok) process.exitCode = 1;
 }
 
-export function settingsInit(scopeArg?: string, ctx: SettingsCtx = {}): void {
+export function settingsInit(
+  scopeArg?: string,
+  ctx: SettingsCtx = {},
+  writer: CommandWriter = stdoutWriter,
+): void {
   const scope = scopeArg ?? "project";
   if (!isScope(scope)) {
-    console.error(`Unknown scope "${scope}". Use one of: ${SCOPES.join(", ")}`);
+    writer.writeErr(`Unknown scope "${scope}". Use one of: ${SCOPES.join(", ")}`);
     process.exitCode = 1;
     return;
   }
   const { path, created } = writeStarterSettings({ ...ctx, scope });
   if (created) {
-    console.log(`✓ Wrote starter settings to ${path}`);
-    console.log("  Edit it to add permissions, hooks, env, and MCP servers.");
+    writer.write(`✓ Wrote starter settings to ${path}`);
+    writer.write("  Edit it to add permissions, hooks, env, and MCP servers.");
   } else {
-    console.log(`${path} already exists — left untouched.`);
+    writer.write(`${path} already exists — left untouched.`);
   }
 }

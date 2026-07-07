@@ -27,8 +27,14 @@ afterEach(() => {
 
 describe("resolveModelRoles", () => {
   it("resolves all three roles from defaults so the TUI shows them before any prompt", () => {
-    const roles = resolveModelRoles("anthropic/claude-sonnet-5");
-    expect(roles.worker).toBe("anthropic/claude-sonnet-5");
+    // The worker must be a slug distinct from DEFAULT_ADVISOR_MODEL (the balanced
+    // tier, currently Sonnet) so the judge resolves to the default advisor rather
+    // than diverging. If the worker equals the default advisor, pickAdvisorModel
+    // intentionally picks a different model so work is never graded by itself —
+    // that divergence path is covered by the next test.
+    const worker = "anthropic/claude-fable-5";
+    const roles = resolveModelRoles(worker);
+    expect(roles.worker).toBe(worker);
     expect(roles.judge).toBe(DEFAULT_ADVISOR_MODEL);
     expect(roles.planner).toBe("local");
   });

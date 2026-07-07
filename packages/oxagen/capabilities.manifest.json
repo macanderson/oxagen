@@ -4782,6 +4782,24 @@
       }
     },
     {
+      "name": "telemetry.error.cluster",
+      "file": "telemetry.error.cluster.ts",
+      "domain": "telemetry",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "user.preferences.read",
       "file": "user.preferences.read.ts",
       "domain": "user",

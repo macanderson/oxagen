@@ -125,6 +125,19 @@ vi.mock("@oxagen/agent-engine", () => ({
   runTurn: mocks.runTurnFn,
 }));
 
+// PR #637 (modal-sandbox-workspace) rerouted the handler through a durable
+// ModalSandboxWorkspace whenever a sandbox driver is configured — and in the
+// test/CI environment isSandboxAvailable() reports true, so the handler took the
+// sandbox path and its getChangedFiles() entered a real tenant scope with the
+// (non-UUID) fixture orgId, throwing TenantScopeError before any assertion ran.
+// These tests exercise the GitHub-API fallback (they mock GitHubWorkspace's
+// changedFiles), so pin the driver OFF to force that deterministic path. The
+// sandbox path is a distinct concern with its own collaborators to mock.
+vi.mock("@oxagen/sandbox", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@oxagen/sandbox")>();
+  return { ...actual, isSandboxAvailable: vi.fn().mockReturnValue(false) };
+});
+
 // createPlatformAgentAi moved into @oxagen/agent/adapters (shared with the
 // in-app chat route). Partial-mock the module so the other adapters resolve to
 // their real (construction-only, no-network) implementations while the AI port
@@ -356,15 +369,22 @@ describe("agentRepoEditHandler — happy path", () => {
     });
   });
 
-  it("returns { prNumber, prUrl, branch, changedFiles, summary }", async () => {
+  it("returns { prNumber, prUrl, branch, changedFiles, summary, execBackend, warnings }", async () => {
     const result = await agentRepoEditHandler(BASE_INPUT, ctx);
 
+    // On the GitHub-API fallback path (no sandbox driver) PR #637 adds
+    // execBackend: "github-api" plus a warning that shell execution was
+    // unavailable — the sandbox path returns execBackend: "sandbox" and no warning.
     expect(result).toEqual({
       prNumber: 42,
       prUrl: "https://github.com/myorg/myrepo/pull/42",
       branch: "oxagen-agent-12345678",
       changedFiles: ["src/a.ts"],
       summary: "Refactored src/a.ts as requested.",
+      execBackend: "github-api",
+      warnings: [
+        expect.stringContaining("Shell execution was unavailable"),
+      ],
     });
   });
 

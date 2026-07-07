@@ -1,79 +1,37 @@
 /**
- * Shared domain types for the agent fleet — task planning, the subagent army,
- * and the agents screen.
+ * Shared domain types for the agent fleet — re-exported from
+ * `@oxagen/agent-engine`.
  *
  * A *plan* decomposes a goal into *tasks*. A task is assigned to a subagent,
- * which runs the ONE engine loop ({@link runTurn}) against the working tree.
- * The fleet orchestrates many of these at once under a concurrency cap, records
- * what each one built/fixed as memory, and feeds the agents screen its live
- * roster.
+ * which runs the ONE engine loop against the working tree. The fleet
+ * orchestrates many of these at once under a concurrency cap, records what each
+ * one built/fixed as memory, and feeds the agents screen its live roster.
  *
- * These types are deliberately framework-free (no Ink, no AI SDK) so the engine
- * and its tests never import a renderer or hit the gateway.
+ * The task/plan/snapshot/usage shapes USED to be a second, hand-maintained copy
+ * living here. They are now the engine's single source of truth (the engine's
+ * own `Fleet` orchestrator and this CLI both build the same `Task`/`Plan`
+ * objects, so a drift between the two copies was a latent structural-mismatch
+ * bug). This module re-exports them so every existing `fleet/types.js` import in
+ * the CLI keeps resolving unchanged.
+ *
+ * Two things stay CLI-local, on purpose:
+ *   - `AgentDefinition` is NOT re-exported from the engine here — the CLI has
+ *     its own richer definition at `apps/cli/src/agents/types.ts`; pulling the
+ *     engine's in would shadow it. Import that one directly where needed.
+ *   - `MemoryRecord` below is CLI-owned — the engine models memory through its
+ *     `MemoryProvider` port, not a flat record, so there is no engine type to
+ *     forward to.
  */
-
-/** Cost/capability tier. Maps to a concrete gateway model via the model router. */
-export type ModelTier = "fast" | "balanced" | "precise";
-
-/** Lifecycle of a single planned task. */
-export type TaskStatus =
-  | "queued" // accepted, waiting for a free agent slot / its dependencies
-  | "blocked" // a dependency failed, so this can never run
-  | "running" // an agent is actively working on it
-  | "done" // completed successfully
-  | "failed" // the agent errored or the gateway rejected the call
-  | "cancelled"; // the user aborted it before/while running
-
-/** Token + cost accounting for one task or the whole fleet. */
-export interface UsageTotals {
-  inputTokens: number;
-  outputTokens: number;
-  /** Estimated provider cost in USD, from the vendored rate card. */
-  costUsd: number;
-}
-
-export function emptyUsage(): UsageTotals {
-  return { inputTokens: 0, outputTokens: 0, costUsd: 0 };
-}
-
-/** A unit of work the fleet can assign to one subagent. */
-export interface Task {
-  id: string;
-  title: string;
-  /** The full instruction handed to the subagent (already prompt-enhanced). */
-  description: string;
-  status: TaskStatus;
-  /** Task ids that must reach `done` before this one may start. */
-  dependsOn: string[];
-  /**
-   * Files this task is expected to touch (relative paths). Used to serialize
-   * tasks with overlapping file ownership so two agents never fight over a file.
-   */
-  files: string[];
-  /** Tier the planner/router chose for this task. */
-  tier: ModelTier;
-  /** Concrete gateway model slug resolved from the tier. */
-  model: string;
-  /** Named agent definition the planner assigned this task to (if any). */
-  agent?: string;
-  createdAt: number;
-  startedAt?: number;
-  finishedAt?: number;
-  /** Short summary the agent produced on completion. */
-  summary?: string;
-  /** Clean error message when `status === "failed"`. */
-  error?: string;
-  usage: UsageTotals;
-}
-
-/** A decomposed goal: an ordered set of tasks the fleet can execute. */
-export interface Plan {
-  id: string;
-  goal: string;
-  createdAt: number;
-  tasks: Task[];
-  status: "draft" | "executing" | "completed" | "failed";
-}
+export type {
+  ModelTier,
+  UsageTotals,
+  TaskStatus,
+  Task,
+  Plan,
+  AgentSnapshot,
+  FleetSnapshot,
+} from "@oxagen/agent-engine";
+export { emptyUsage, mergeUsage } from "@oxagen/agent-engine";
 
 /** A two-axis lesson recorded as the fleet builds/fixes code. */
 export interface MemoryRecord {
@@ -97,34 +55,4 @@ export interface MemoryRecord {
   /** Task that produced it, if any. */
   taskId?: string;
   outcome: "success" | "failure";
-}
-
-/** Live, render-friendly snapshot of one working subagent. */
-export interface AgentSnapshot {
-  taskId: string;
-  title: string;
-  tier: ModelTier;
-  model: string;
-  status: TaskStatus;
-  /** Tool-loop steps taken so far. */
-  steps: number;
-  /** Last tool the agent invoked, for the activity column. */
-  lastTool?: string;
-  usage: UsageTotals;
-  startedAt?: number;
-  finishedAt?: number;
-  /** Tail of the agent's streamed reasoning/output, for the detail view. */
-  logTail: string;
-  error?: string;
-}
-
-/** Whole-fleet snapshot the agents screen renders each tick. */
-export interface FleetSnapshot {
-  agents: AgentSnapshot[];
-  queuedCount: number;
-  runningCount: number;
-  doneCount: number;
-  failedCount: number;
-  totals: UsageTotals;
-  concurrency: number;
 }

@@ -16,6 +16,13 @@
  * - The server only binds to 127.0.0.1 (loopback) — never 0.0.0.0.
  * - A 5-minute timeout closes the server and rejects the promise if the user
  *   doesn't complete the flow.
+ *
+ * UI-agnostic by design: status lines go through the optional `onStatus`
+ * callback instead of a hardcoded `process.stdout.write` (default preserves
+ * the original one-shot CLI behavior exactly), and the wait can be cancelled
+ * early via an optional `signal` — both are what let the REPL's Ink-native
+ * `/login` panel (see repl/login-panel.tsx) drive this exact flow without
+ * ever touching the real terminal or readline while Ink owns raw mode.
  */
 import * as http from "node:http";
 import * as os from "node:os";
@@ -80,14 +87,23 @@ function makeErrorHtml(message: string): string {
  *   - authorization error from the provider
  *   - non-200 from the token-exchange endpoint
  *   - 5-minute idle timeout
+ *   - `signal` aborted (caller cancelled — e.g. the user pressed Esc in the
+ *     REPL's `/login` panel)
  */
 export async function browserLogin({
   apiUrl,
   appUrl,
+  onStatus,
+  signal,
 }: {
   apiUrl: string;
   appUrl: string;
+  /** Status-line sink. Defaults to the real stdout (one-shot CLI behavior). */
+  onStatus?: (line: string) => void;
+  /** Abort the in-flight wait early (closes the loopback server, rejects). */
+  signal?: AbortSignal;
 }): Promise<{ token: string; orgSlug: string; workspaceSlug: string }> {
+  const emit = onStatus ?? ((line: string) => void process.stdout.write(`${line}\n`));
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = codeChallengeS256(codeVerifier);
   const state = generateState();
@@ -116,9 +132,9 @@ export async function browserLogin({
   });
   const authorizeUrl = `${appUrl}/cli/authorize?${params.toString()}`;
 
-  // Always print the URL so the user can paste it if the browser fails to open.
-  process.stdout.write(`\nOpening browser for authentication...\n`);
-  process.stdout.write(`If your browser didn't open, paste this URL:\n  ${authorizeUrl}\n\n`);
+  // Always surface the URL so the user can paste it if the browser fails to open.
+  emit("Opening browser for authentication...");
+  emit(`If your browser didn't open, paste this URL:\n  ${authorizeUrl}`);
   openBrowser(authorizeUrl);
 
   return new Promise<{ token: string; orgSlug: string; workspaceSlug: string }>(
@@ -128,6 +144,7 @@ export async function browserLogin({
       const timeoutId = setTimeout(() => {
         if (!settled) {
           settled = true;
+          signal?.removeEventListener("abort", onAbort);
           server.close();
           reject(
             new Error(
@@ -137,11 +154,21 @@ export async function browserLogin({
         }
       }, LOGIN_TIMEOUT_MS);
 
+      const onAbort = (): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        server.close();
+        reject(new Error("Login cancelled."));
+      };
+      signal?.addEventListener("abort", onAbort);
+
       /** Mark the flow complete, stop the server, and call `action`. */
       const closeAndSettle = (action: () => void): void => {
         if (settled) return;
         settled = true;
         clearTimeout(timeoutId);
+        signal?.removeEventListener("abort", onAbort);
         server.close();
         action();
       };

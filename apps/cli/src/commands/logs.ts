@@ -16,6 +16,7 @@ import {
   type DebugCategory,
   type DebugLogEntry,
 } from "../lib/debug-log.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
 export interface LogsOptions {
   /** Print only the log file path and exit. */
@@ -51,25 +52,28 @@ function matchesCategory(entry: DebugLogEntry, category?: string): boolean {
   return !category || entry.category === (category as DebugCategory);
 }
 
-export async function handleLogs(opts: LogsOptions): Promise<void> {
+export async function handleLogs(
+  opts: LogsOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
   const file = debugLogFile();
 
   if (opts.path) {
-    process.stdout.write(`${file}\n`);
+    writer.write(file);
     return;
   }
 
   if (opts.clear) {
     await clearDebugLog();
-    process.stdout.write(`Cleared ${file}\n`);
+    writer.write(`Cleared ${file}`);
     return;
   }
 
   if (!isDebugEnabled()) {
-    process.stderr.write(
+    writer.writeErr(
       `Debug logging is off. Enable it with ${DEBUG_ENV}=1 (export it, or set it ` +
         `in settings.json "env"), then re-run the command you want to trace.\n` +
-        `Log file: ${file}\n`,
+        `Log file: ${file}`,
     );
     // Still show whatever was captured on a previous run, if anything.
   }
@@ -79,14 +83,18 @@ export async function handleLogs(opts: LogsOptions): Promise<void> {
   const shown = entries.slice(-limit);
 
   if (opts.json) {
-    for (const e of shown) process.stdout.write(`${JSON.stringify(e)}\n`);
+    for (const e of shown) writer.write(JSON.stringify(e));
   } else if (shown.length === 0) {
-    process.stdout.write(`No log entries yet at ${file}\n`);
+    writer.write(`No log entries yet at ${file}`);
   } else {
-    for (const e of shown) process.stdout.write(`${formatEntry(e)}\n`);
+    for (const e of shown) writer.write(formatEntry(e));
   }
 
-  if (!opts.follow) return;
+  // Follow mode redraws the terminal live (tail -f) — only meaningful against
+  // a real TTY. The REPL's inline capture-execution seam never passes
+  // --follow through (see repl/cli-bridge.ts); guard here too so a stray
+  // capture-mode call can't block forever on a `watch()` no one can Ctrl-C.
+  if (!opts.follow || writer !== stdoutWriter) return;
 
   // Follow mode: re-read on every change to the file and print anything new.
   // Cheap and correct for an append-only JSONL log at CLI cadence.

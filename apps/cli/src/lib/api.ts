@@ -13,6 +13,7 @@
  */
 import { getApiUrl, getToken, getOrgId, getWorkspaceId } from "./config.js";
 import { debugLog, type DebugCategory } from "./debug-log.js";
+import { stdoutWriter, type CommandWriter } from "./capture-writer.js";
 
 /**
  * Route a request to its debug-log category so a `graph push` (the code-graph
@@ -181,11 +182,21 @@ export function resolveApiContext(): ApiContext | null {
   return { apiUrl: getApiUrl(), token, org, ws };
 }
 
-function requireApiContext(): ApiContext {
+/**
+ * Resolve scope or fail loudly. `writer` controls the failure contract: the
+ * default (real stdout/stderr) means "one-shot CLI" and exits the process —
+ * the historical contract for `oxagen <cmd>`. Any other writer (the REPL's
+ * capture accumulator) means we're running *inside* the Ink-mounted REPL,
+ * where `process.exit` would tear down the whole session — so it throws
+ * `ApiError` instead, which the REPL's capture-execution seam always wraps in
+ * a try/catch and renders as an assistant message.
+ */
+function requireApiContext(writer: CommandWriter = stdoutWriter): ApiContext {
   const ctx = resolveApiContext();
   if (!ctx) {
-    process.stderr.write(`${NOT_LOGGED_IN}\n`);
-    process.exit(1);
+    writer.writeErr(NOT_LOGGED_IN);
+    if (writer === stdoutWriter) process.exit(1);
+    throw new ApiError(NOT_LOGGED_IN);
   }
   return ctx;
 }
@@ -314,26 +325,43 @@ export async function apiPostOrThrow<T>(path: string, body: unknown): Promise<T>
   return json;
 }
 
-/** POST an org-scoped capability and return the parsed JSON, or exit(1) on error. */
-export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+/**
+ * POST an org-scoped capability and return the parsed JSON, or exit(1) on
+ * error — UNLESS `writer` is a non-default (capture) writer, in which case it
+ * throws `ApiError` instead so the REPL's inline capture-execution seam can
+ * catch it and render an assistant message instead of killing the session.
+ * Default (`stdoutWriter`) preserves the original one-shot CLI contract
+ * exactly — every existing `apiPost(path, body)` call site is unaffected.
+ */
+export async function apiPost<T>(
+  path: string,
+  body: unknown,
+  writer: CommandWriter = stdoutWriter,
+): Promise<T> {
   // Keep the exit-on-error contract for the env/secret subcommands by resolving
   // scope eagerly (exits with the standard message) then delegating to the core.
-  requireApiContext();
+  requireApiContext(writer);
   try {
     return await apiPostOrThrow<T>(path, body);
   } catch (err) {
-    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
-    process.exit(1);
+    const message = err instanceof Error ? err.message : String(err);
+    writer.writeErr(message);
+    if (writer === stdoutWriter) process.exit(1);
+    throw err instanceof ApiError ? err : new ApiError(message);
   }
 }
 
 /** Print rows as an aligned text table (human mode). */
-export function printTable(headers: string[], rows: string[][]): void {
+export function printTable(
+  headers: string[],
+  rows: string[][],
+  writer: CommandWriter = stdoutWriter,
+): void {
   const widths = headers.map((h, i) =>
     Math.max(h.length, ...rows.map((r) => (r[i] ?? "").length)),
   );
   const fmt = (cells: string[]) =>
     cells.map((c, i) => (c ?? "").padEnd(widths[i]!)).join("  ");
-  process.stdout.write(fmt(headers) + "\n");
-  for (const r of rows) process.stdout.write(fmt(r) + "\n");
+  writer.write(fmt(headers));
+  for (const r of rows) writer.write(fmt(r));
 }

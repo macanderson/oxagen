@@ -223,7 +223,7 @@ function isLikelyTestCommand(cmd: string): boolean {
   return TEST_COMMAND_RE.test(cmd.trim());
 }
 
-/** Dedup a list of strings, preserving first-seen order. */
+/** Dedupe a list of strings, preserving first-seen order. */
 function dedupe(items: string[]): string[] {
   const seen = new Set<string>();
   return items.filter((s) => !seen.has(s) && seen.add(s));
