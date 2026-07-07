@@ -64,6 +64,8 @@ const EMPTY: BillingUsageBreakdownOutput = {
   byModel: [],
   bySurface: [],
   byWorkspace: [],
+  byCapability: [],
+  byPrincipal: [],
 };
 
 export default async function BillingUsagePage({
