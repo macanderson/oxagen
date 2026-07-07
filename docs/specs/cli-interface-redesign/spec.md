@@ -139,8 +139,9 @@ Layout (full-screen, alt-screen like the REPL):
 ```
 
 - **Aggregate** (default when >1 session): merged, per-session-colored salient
-  lines — stages, tool.end (name + duration), file.edit, command.run,
-  message.end (first 120 chars), session.state, errors. Text deltas are NOT
+  lines — the authoritative rules live in `tui/mission-control/aggregate-line.ts`
+  (stages at phase shifts, tool.end with duration, diff summaries,
+  message.end first line, waiting/end states, errors). Text deltas are NOT
   interleaved (noise); a one-line live tail per running session sits pinned
   under the timeline. `v` toggles verbose (include deltas).
 - **Focus**: one session's full transcript (markdown via existing

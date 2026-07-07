@@ -2,12 +2,7 @@ import { redirect } from "next/navigation";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { resolveStudioScope } from "@/lib/studio/scope";
-import { listAgents } from "@/lib/studio/agents";
-import { listAgentTools } from "@/lib/studio/tools";
-import {
-  listWorkspaceSkills,
-  listInstalledMcpServers,
-} from "@/lib/studio/equip-sources";
+import { loadEquipSources } from "@/lib/studio/equip-sources";
 import { AgentBuilder } from "../agent-builder";
 
 export const dynamic = "force-dynamic";
@@ -31,12 +26,8 @@ export default async function NewAgentPage({ params }: PageProps) {
   );
   if (!canManage) redirect(workspace.studio.agents(routeCtx));
 
-  const [skills, tools, subagents, mcp] = await Promise.all([
-    listWorkspaceSkills(ctx),
-    listAgentTools(ctx),
-    listAgents(ctx),
-    listInstalledMcpServers(ctx, org.id, ws.id),
-  ]);
+  // Timeout-guarded so a slow/hanging equip source never blocks the builder.
+  const sources = await loadEquipSources(ctx, org.id, ws.id);
 
   return (
     <AgentBuilder
@@ -45,16 +36,7 @@ export default async function NewAgentPage({ params }: PageProps) {
       workspaceSlug={workspaceSlug}
       canManage={canManage}
       readOnly={false}
-      sources={{
-        skills,
-        tools,
-        subagents: subagents.map((a) => ({
-          ref: a.publicId,
-          name: a.name,
-          slug: a.slug,
-        })),
-        mcp,
-      }}
+      sources={sources}
     />
   );
 }
