@@ -23,12 +23,14 @@ List the workspaces inside an organization the authenticated user belongs to. Ba
 | `organization` | `object` | The resolved organization. |
 | `organization.id` | `string` | Internal UUID. |
 | `organization.publicId` | `string` | Prefixed public identifier. |
-| `organization.slug` | `string` | Org slug. |
+| `organization.slug` | `string` | Org slug (renameable). |
+| `organization.namespace` | `string` | Immutable, globally-unique org handle (first `agentKey` segment). |
 | `organization.name` | `string` | Org display name. |
 | `workspaces` | `WorkspaceListItem[]` | The org's workspaces the caller can use. |
 | `workspaces[].id` | `string` | Internal UUID. |
 | `workspaces[].publicId` | `string` | Prefixed public identifier. |
-| `workspaces[].slug` | `string` | Workspace slug. |
+| `workspaces[].slug` | `string` | Workspace slug (renameable). |
+| `workspaces[].namespace` | `string` | Immutable handle, unique within the org (middle `agentKey` segment). |
 | `workspaces[].name` | `string` | Workspace display name. |
 | `workspaces[].role` | `string \| null` | The caller's workspace role, or null when they are an org admin without a direct workspace membership. |
 
