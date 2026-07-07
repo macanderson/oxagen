@@ -59,6 +59,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
+import { CopyableId } from "@/components/knowledge/graph-explorer/copyable-id";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
 import { EquipPicker, type EquipSources } from "./equip-picker";
@@ -72,7 +73,9 @@ import {
 import {
   mapSuggestionToPrefill,
   type BuilderPrefill,
+  type AgentRecommendation,
 } from "./suggestion-mapping";
+import { RecommendedConnections } from "./recommended-connections";
 
 /**
  * Client-safe mirror of CODING_AGENT_TYPE / DEFAULT_AGENT_TYPE from
@@ -88,6 +91,11 @@ const DEFAULT_AGENT_TYPE = "custom";
 export interface InitialAgent {
   publicId: string;
   slug: string;
+  /**
+   * Globally-unique, immutable agent key (org_ns.workspace_ns.slug). Null only
+   * pre-backfill; shown as a copyable identifier in the edit-mode header.
+   */
+  agentKey?: string | null;
   name: string;
   description: string | null;
   agentType: string;
@@ -240,6 +248,16 @@ export function AgentBuilder({
   } | null>(null);
   const [bannerDismissed, setBannerDismissed] = React.useState(false);
   const [rationaleOpen, setRationaleOpen] = React.useState(false);
+  // "Connect this next" recommendations from the last suggestion — tools the
+  // agent SHOULD have but that aren't available in the workspace yet, so they
+  // are NOT prefilled into agentTools. Component state, never persisted.
+  const [recommendations, setRecommendations] = React.useState<
+    AgentRecommendation[]
+  >([]);
+
+  // The persisted, immutable agent key (edit mode). Null pre-backfill or in
+  // create mode until the agent is saved and the namespaces are prepended.
+  const agentKey = initialAgent?.agentKey ?? null;
 
   // Flow
   const [stepIdx, setStepIdx] = React.useState(0);
@@ -305,6 +323,7 @@ export function AgentBuilder({
       }
       applyPrefill(mapSuggestionToPrefill(res.suggestion));
       setPrefillMeta({ rationale: res.rationale, warnings: res.warnings });
+      setRecommendations(res.recommendations);
       setBannerDismissed(false);
       setRationaleOpen(false);
       // Land on Identity so the user reviews the generated config top-to-bottom.
@@ -511,6 +530,21 @@ export function AgentBuilder({
 
       {/* Step content */}
       <div className="flex-1 min-w-0">
+        {/* Immutable agent key — the globally-unique, human-readable identity.
+            Shown once the agent exists (edit mode) and its namespaces are
+            backfilled; copyable for API calls and A2A routing. */}
+        {mode === "edit" && agentKey ? (
+          <div
+            className="mb-4 flex flex-wrap items-center gap-2"
+            data-testid="agent-key-header"
+          >
+            <span className="text-xs font-medium text-muted-foreground">
+              Agent key
+            </span>
+            <CopyableId value={agentKey} label="key" max={64} />
+          </div>
+        ) : null}
+
         {readOnly ? (
           <div
             className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground"
@@ -576,6 +610,11 @@ export function AgentBuilder({
                     ))}
                   </ul>
                 ) : null}
+                <RecommendedConnections
+                  recommendations={recommendations}
+                  orgSlug={orgSlug}
+                  workspaceSlug={workspaceSlug}
+                />
               </div>
               <button
                 type="button"
@@ -759,6 +798,15 @@ export function AgentBuilder({
                 value={agentTools}
                 onChange={setAgentTools}
                 disabled={disabled}
+              />
+              {/* Suggested tools the workspace doesn't have yet — surfaced here
+                  (not only in the dismissable banner) so they stay in view while
+                  the user equips. Connect them, then re-generate or add them
+                  above once available. */}
+              <RecommendedConnections
+                recommendations={recommendations}
+                orgSlug={orgSlug}
+                workspaceSlug={workspaceSlug}
               />
             </div>
           ) : null}
@@ -1000,6 +1048,35 @@ export function AgentBuilder({
                   }
                 />
               </dl>
+
+              {/* Agent key — persisted & copyable in edit mode; a slug-only
+                  preview in create mode (the org/workspace namespaces are
+                  prepended server-side and the full key is assigned on save). */}
+              <div
+                className="rounded-md border bg-muted/20 px-3 py-2"
+                data-testid="agent-key-review"
+              >
+                <div className="mb-1 text-xs text-muted-foreground">
+                  Agent key
+                </div>
+                {mode === "edit" && agentKey ? (
+                  <CopyableId value={agentKey} label="key" max={64} />
+                ) : (
+                  <>
+                    <div className="font-mono text-xs text-foreground">
+                      <span className="text-muted-foreground/60">
+                        org.workspace.
+                      </span>
+                      {slug.trim() || "<slug>"}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      The full globally-unique key — your org and workspace
+                      namespaces prepended to the slug — is assigned when the
+                      agent is saved.
+                    </p>
+                  </>
+                )}
+              </div>
 
               {agentTools.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">

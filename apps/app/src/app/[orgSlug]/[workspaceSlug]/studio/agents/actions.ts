@@ -31,6 +31,7 @@ import {
   deployAgent,
   suggestAgentDefinition,
   type AgentSuggestion,
+  type AgentRecommendation,
 } from "@/lib/studio/agents";
 
 // ── Shared shapes ─────────────────────────────────────────────────────────────
@@ -244,6 +245,10 @@ export async function suggestAgentAction(
     suggestion: AgentSuggestion;
     rationale: string;
     warnings: string[];
+    // Tools the agent SHOULD have that are not yet available in the workspace
+    // (catalog MCP servers, disabled skills). Never in suggestion.config
+    // .agentTools — the caller connects/enables these first, then equips them.
+    recommendations: AgentRecommendation[];
   }>
 > {
   const parsed = suggestSchema.safeParse(input);
@@ -262,6 +267,7 @@ export async function suggestAgentAction(
       suggestion: out.suggestion,
       rationale: out.rationale,
       warnings: out.warnings,
+      recommendations: out.recommendations,
     };
   } catch (err) {
     return {

@@ -14,6 +14,13 @@
  * suggestion-mapping.test.ts; here we prove the surrounding UI and the shared
  * create path end-to-end.
  *
+ * The "Recommended connections" panel is driven by the same un-stubbable suggest
+ * action (its `recommendations[]`), so it likewise can't be exercised through
+ * this page flow — it's covered directly in recommended-connections.test.tsx
+ * (name + reason + kind badge + Connect link), and the action passthrough in
+ * actions.test.ts. What IS reachable without stubbing — the create-mode agent
+ * key preview on Review — is asserted below.
+ *
  * Screenshots go to apps/app/e2e/screenshots/ (gitignored).
  */
 import { test, expect } from "@playwright/test";
@@ -63,6 +70,14 @@ test("Describe step: skip reaches Identity and manual setup saves a draft", asyn
   // Jump to Review via the step rail and save the draft.
   await page.getByTestId("builder-step-review").click();
   await expect(page.getByTestId("step-review")).toBeVisible();
+
+  // Create-mode agent key preview: the org/workspace namespaces are assigned
+  // server-side on save, so Review shows a slug-only preview honestly.
+  const keyPreview = page.getByTestId("agent-key-review");
+  await expect(keyPreview).toBeVisible();
+  await expect(keyPreview).toContainText(slug);
+  await expect(keyPreview).toContainText(/assigned when the agent is saved/i);
+
   await page.getByTestId("agent-save-draft").click();
 
   await expect(page.getByText(/draft saved/i)).toBeVisible({ timeout: 20_000 });

@@ -10,7 +10,18 @@
  */
 import type {
   AgentSuggestion,
+  AgentRecommendation,
 } from "@/lib/studio/agents";
+
+/**
+ * Re-exported through this client-safe module so the "use client" wizard imports
+ * the recommendation shape without reaching into the server-only agents.ts. A
+ * recommendation is NOT wizard state — it never becomes a prefill field (the
+ * agent can't equip what isn't available yet); the builder holds it in
+ * component state next to the rationale/warnings and renders it as a
+ * "connect this next" panel.
+ */
+export type { AgentRecommendation };
 
 // Client-safe mirror of CODING_AGENT_TYPE from lib/studio/agents.ts (server-only).
 // Keep in sync with agent-builder.tsx.

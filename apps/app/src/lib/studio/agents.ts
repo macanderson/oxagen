@@ -21,10 +21,22 @@ import type { StudioCtx } from "./scope";
 // agent.definition.create input. Re-exported from the contract so the action
 // and the client mapping speak the same type.
 export type AgentSuggestion = AgentDefinitionSuggestOutput["suggestion"];
+
+/**
+ * A single "connect this next" recommendation — an MCP server from the synced
+ * registry catalog or a disabled workspace skill the agent should have but that
+ * is NOT yet available (so it is never in suggestion.config.agentTools). The
+ * caller connects/enables it, then equips it. Contract-derived so the action,
+ * the builder, and the panel all speak the same shape.
+ */
+export type AgentRecommendation =
+  AgentDefinitionSuggestOutput["recommendations"][number];
+
 export type SuggestAgentResult = {
   suggestion: AgentSuggestion;
   rationale: string;
   warnings: string[];
+  recommendations: AgentRecommendation[];
 };
 
 // ── Types mirrored from the agent.definition.* contract outputs ───────────────
@@ -33,6 +45,11 @@ export type AgentListRow = {
   agentId: string;
   publicId: string;
   slug: string;
+  /**
+   * Globally-unique, immutable, human-readable agent identifier
+   * (org_namespace.workspace_namespace.agent_slug). Null only pre-backfill.
+   */
+  agentKey: string | null;
   name: string;
   description: string | null;
   status: "draft" | "active" | "archived";
@@ -45,6 +62,11 @@ export type AgentDetail = {
   agentId: string;
   publicId: string;
   slug: string;
+  /**
+   * Globally-unique, immutable, human-readable agent identifier
+   * (org_namespace.workspace_namespace.agent_slug). Null only pre-backfill.
+   */
+  agentKey: string | null;
   name: string;
   description: string | null;
   agentType: string;

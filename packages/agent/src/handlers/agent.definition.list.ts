@@ -5,7 +5,11 @@ import type {
   AgentDefinitionListOutput,
 } from "@oxagen/oxagen/contracts/agent.definition.list";
 import type { CapabilityContext } from "../types";
-import { isManagedAgentType } from "./_agent-definition";
+import {
+  isManagedAgentType,
+  resolveNamespacePrefix,
+  composeAgentKey,
+} from "./_agent-definition";
 
 export type { AgentDefinitionListInput, AgentDefinitionListOutput };
 
@@ -17,8 +21,8 @@ export async function agentDefinitionListHandler(
   input: AgentDefinitionListInput,
   ctx: CapabilityContext,
 ): Promise<AgentDefinitionListOutput> {
-  const rows = await withTenantDb((tx) =>
-    tx
+  const { rows, orgNamespace, workspaceNamespace } = await withTenantDb(async (tx) => {
+    const rows = await tx
       .select({
         id: schema.agents.id,
         publicId: schema.agents.publicId,
@@ -51,16 +55,23 @@ export async function agentDefinitionListHandler(
         schema.agents.agentType,
         schema.agents.status,
         schema.agents.deploymentStatus,
-      ),
-  );
+      );
+
+    // Resolve both immutable namespaces ONCE for the whole list (never per row).
+    const { orgNamespace, workspaceNamespace } = await resolveNamespacePrefix(
+      tx,
+      ctx.orgId,
+      ctx.workspaceId,
+    );
+    return { rows, orgNamespace, workspaceNamespace };
+  });
 
   return {
     agents: rows.map((r) => ({
       agentId: r.publicId,
       publicId: r.publicId,
       slug: r.slug,
-      // Real org_ns.workspace_ns.slug computation lands with the namespace migration.
-      agentKey: null,
+      agentKey: composeAgentKey(orgNamespace, workspaceNamespace, r.slug),
       name: r.name,
       description: r.description,
       agentType: r.agentType,

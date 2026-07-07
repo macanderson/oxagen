@@ -96,4 +96,24 @@ describe("agent.definition.get handler", () => {
       agentDefinitionGetHandler({ agentId: "missing" }, CTX),
     ).rejects.toThrow(/not found/);
   });
+
+  it("composes agentKey as org_ns.workspace_ns.slug", async () => {
+    fake.enqueue(
+      [ACTIVE_AGENT], // resolveAgent
+      [{ version: 1, isPublished: true, config: CONFIG }], // active version
+      [{ orgNamespace: "acme", workspaceNamespace: "core" }], // resolveNamespacePrefix
+    );
+    const out = await agentDefinitionGetHandler({ agentId: "agt_1" }, CTX);
+    expect(out.agentKey).toBe("acme.core.qa-chat");
+  });
+
+  it("returns null agentKey when a namespace is missing (pre-backfill safety)", async () => {
+    fake.enqueue(
+      [ACTIVE_AGENT],
+      [{ version: 1, isPublished: true, config: CONFIG }],
+      [{ orgNamespace: null, workspaceNamespace: "core" }],
+    );
+    const out = await agentDefinitionGetHandler({ agentId: "agt_1" }, CTX);
+    expect(out.agentKey).toBeNull();
+  });
 });

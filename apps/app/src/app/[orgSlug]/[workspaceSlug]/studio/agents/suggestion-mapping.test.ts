@@ -83,4 +83,16 @@ describe("mapSuggestionToPrefill", () => {
     expect(p.scheduleCron).toBe("");
     expect(p.eventSource).toBe("");
   });
+
+  it("never carries recommendations into the wizard's persisted prefill state", () => {
+    // Recommendations are catalog "connect this next" hints, not agent config —
+    // the builder holds them in component state and renders them as a panel,
+    // never as prefill (they'd be un-equippable). The prefill shape must stay
+    // free of them so a saved draft never accidentally references a tool the
+    // workspace doesn't have.
+    const p = mapSuggestionToPrefill(suggestion());
+    expect(Object.keys(p)).not.toContain("recommendations");
+    // The only tools in prefill are the ones already available (config.agentTools).
+    expect(p.agentTools).toEqual([{ type: "skill", ref: "changelog" }]);
+  });
 });

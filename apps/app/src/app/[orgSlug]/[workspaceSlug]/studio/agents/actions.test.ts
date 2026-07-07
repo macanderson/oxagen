@@ -206,11 +206,27 @@ describe("suggestAgentAction", () => {
     expect(suggestAgentDefinition).not.toHaveBeenCalled();
   });
 
-  it("returns the suggestion, rationale and warnings for a manager", async () => {
+  const RECOMMENDATIONS = [
+    {
+      kind: "mcp_server" as const,
+      ref: "github/github-mcp-server",
+      name: "GitHub",
+      reason: "Watches merged PRs — needs GitHub access.",
+    },
+    {
+      kind: "skill" as const,
+      ref: "changelog-formatter",
+      name: "Changelog Formatter",
+      reason: "Formats the drafted notes; currently disabled.",
+    },
+  ];
+
+  it("returns the suggestion, rationale, warnings and recommendations for a manager", async () => {
     suggestAgentDefinition.mockResolvedValue({
       suggestion: SUGGESTION,
       rationale: "Manual trigger keeps it human-in-the-loop.",
       warnings: ["dropped an unknown tool ref"],
+      recommendations: RECOMMENDATIONS,
     });
     const res = await suggestAgentAction({
       ...SCOPE,
@@ -221,6 +237,10 @@ describe("suggestAgentAction", () => {
       expect(res.suggestion.slug).toBe("release-notes-writer");
       expect(res.rationale).toMatch(/human-in-the-loop/);
       expect(res.warnings).toEqual(["dropped an unknown tool ref"]);
+      // Catalog recommendations pass straight through — never merged into
+      // suggestion.config.agentTools (which only carries available refs).
+      expect(res.recommendations).toEqual(RECOMMENDATIONS);
+      expect(res.suggestion.config.agentTools).toEqual([]);
     }
     // description flows through to the helper.
     expect(suggestAgentDefinition).toHaveBeenCalledWith(
@@ -229,6 +249,21 @@ describe("suggestAgentAction", () => {
         description: "A release-notes writer grounded in the engineering ontology.",
       }),
     );
+  });
+
+  it("passes an empty recommendations list straight through", async () => {
+    suggestAgentDefinition.mockResolvedValue({
+      suggestion: SUGGESTION,
+      rationale: "No extra connections needed.",
+      warnings: [],
+      recommendations: [],
+    });
+    const res = await suggestAgentAction({
+      ...SCOPE,
+      description: "A perfectly valid, sufficiently long description.",
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.recommendations).toEqual([]);
   });
 
   it("surfaces a helper failure as { ok: false }", async () => {
