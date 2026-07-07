@@ -41,6 +41,7 @@
     "@oxagen/handlers": "workspace:*",
     "@oxagen/iam": "workspace:*",
     "@oxagen/inngest-functions": "workspace:*",
+    "@oxagen/ingestion": "workspace:*",
     "@oxagen/notifications": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",

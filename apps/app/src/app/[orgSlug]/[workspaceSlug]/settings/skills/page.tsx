@@ -14,5 +14,5 @@ interface PageProps {
 
 export default async function WorkspaceSkillsRedirectPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
-  redirect(workspace.studio.skills({ orgSlug, workspaceSlug }));
+  redirect(workspace.studio.tools.skills({ orgSlug, workspaceSlug }));
 }

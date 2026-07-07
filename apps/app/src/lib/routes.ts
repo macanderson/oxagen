@@ -95,8 +95,9 @@ export const workspace = {
   // Ask — the front door (full-page ask/chat surface).
   ask: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/ask`,
 
-  // Studio — build interactive agents (agents, skills, tools). The Agent
-  // Builder is the centerpiece; skills/tools feed its Equip step.
+  // Studio — build interactive agents. Two surfaces: Agents (the builder)
+  // and Agent Tools — the single home for everything an agent can be
+  // equipped with (skills, MCP servers, capabilities).
   studio: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/studio`,
     agents: (ctx: Required<ScopeContext>): string =>
@@ -105,24 +106,38 @@ export const workspace = {
       `${wsBase(ctx)}/studio/agents/new`,
     agent: (ctx: Required<ScopeContext>, agentId: string): string =>
       `${wsBase(ctx)}/studio/agents/${encodeURIComponent(agentId)}`,
-    skills: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/studio/skills`,
-    skill: (ctx: Required<ScopeContext>, skillSlug: string): string =>
-      `${wsBase(ctx)}/studio/skills/${encodeURIComponent(skillSlug)}`,
-    tools: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/studio/tools`,
+    // Agent Tools hub — All Tools / Skills / MCP Servers / Capabilities.
+    tools: {
+      root: (ctx: Required<ScopeContext>): string =>
+        `${wsBase(ctx)}/studio/tools`,
+      skills: (ctx: Required<ScopeContext>): string =>
+        `${wsBase(ctx)}/studio/tools/skills`,
+      skill: (ctx: Required<ScopeContext>, skillSlug: string): string =>
+        `${wsBase(ctx)}/studio/tools/skills/${encodeURIComponent(skillSlug)}`,
+      mcp: (ctx: Required<ScopeContext>): string =>
+        `${wsBase(ctx)}/studio/tools/mcp`,
+      capabilities: (ctx: Required<ScopeContext>): string =>
+        `${wsBase(ctx)}/studio/tools/capabilities`,
+    },
   },
 
-  // Marketplace — browse + install plugins and connect MCP servers. Promoted
-  // out of settings so it is a first-class Extend surface.
+  // Marketplace — discover + install, two sides: Agent Tools (skills, MCP
+  // servers, capabilities) and Integrations (data connectors). Managing what
+  // is already installed lives in Studio → Agent Tools, not here.
   marketplace: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/marketplace`,
+    agentTools: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/marketplace/agent-tools`,
+    integrations: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/marketplace/integrations`,
+    // Legacy tabs — browse became the Agent Tools side; installed/mcp moved
+    // into Studio → Agent Tools. Builders retarget so old callers keep working.
     browse: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/marketplace/browse`,
+      `${wsBase(ctx)}/marketplace/agent-tools`,
     installed: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/marketplace/installed`,
+      `${wsBase(ctx)}/studio/tools/capabilities`,
     mcp: (ctx: Required<ScopeContext>): string =>
-      `${wsBase(ctx)}/marketplace/mcp`,
+      `${wsBase(ctx)}/studio/tools/mcp`,
   },
 
   // Activity — recent agent runs + per-run span-tree trace viewer.
@@ -201,7 +216,7 @@ export const defaultTab: Record<string, string> = {
   knowledge: "repos",
   settings: "general",
   studio: "agents",
-  marketplace: "browse",
+  marketplace: "agent-tools",
 
   // Org-scope parents
   access: "sessions",

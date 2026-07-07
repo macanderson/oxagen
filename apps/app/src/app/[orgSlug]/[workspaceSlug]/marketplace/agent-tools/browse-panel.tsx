@@ -1,11 +1,12 @@
 "use client";
 /**
- * browse-panel.tsx — Marketplace → Browse: the full-page plugin catalog.
+ * browse-panel.tsx — Marketplace → Agent Tools: the installable agent-tool
+ * catalog (skills, MCP servers, capabilities).
  *
  * Card-based grid over the same data source as the legacy marketplace
  * modal (GET /api/v1/plugin/catalog/browse → plugin.catalog.browse), install
  * via the same server actions (installPlugin / installBulkPlugin from
- * settings/plugins/plugin-actions.ts) so there is exactly one install path.
+ * @/lib/agent-tools/install-actions) so there is exactly one install path.
  */
 import * as React from "react";
 import Image from "next/image";
@@ -74,12 +75,13 @@ interface BrowsePanelProps {
   }) => Promise<{ ok: boolean; error?: string }>;
 }
 
+// The Agent Tools side of the Marketplace: skills, MCP servers, and
+// capabilities. Data connectors live on the Integrations side (see
+// ../integrations), not here.
 const PLUGIN_TABS = [
+  { value: "agent_skill" as PluginTypeValue, label: "Skills" },
   { value: "mcp_server" as PluginTypeValue, label: "MCP Servers" },
-  { value: "integration" as PluginTypeValue, label: "Integrations" },
-  { value: "agent_capability" as PluginTypeValue, label: "Agent Capabilities" },
-  { value: "agent_skill" as PluginTypeValue, label: "Agent Skills" },
-  { value: "knowledge_source" as PluginTypeValue, label: "Knowledge Sources" },
+  { value: "agent_capability" as PluginTypeValue, label: "Capabilities" },
 ] as const satisfies ReadonlyArray<{ value: PluginTypeValue; label: string }>;
 
 // ── ServerIcon ────────────────────────────────────────────────────────────────
@@ -136,7 +138,7 @@ export function BrowsePanel({
 
   const toast = useToast();
   const { workspaceId } = useTenant();
-  const [activeTab, setActiveTab] = React.useState<PluginTypeValue>("mcp_server");
+  const [activeTab, setActiveTab] = React.useState<PluginTypeValue>("agent_skill");
   const [search, setSearch] = React.useState("");
   const [servers, setServers] = React.useState<CatalogServer[]>([]);
   const [total, setTotal] = React.useState(0);

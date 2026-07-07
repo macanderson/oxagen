@@ -278,7 +278,7 @@ export function NewSkillDialog({
         const routeCtx: Required<ScopeContext> = { orgSlug, workspaceSlug };
         onOpenChange(false);
         reset();
-        router.push(workspace.studio.skill(routeCtx, result.slug));
+        router.push(workspace.studio.tools.skill(routeCtx, result.slug));
         router.refresh();
       } else {
         setError(result.error);

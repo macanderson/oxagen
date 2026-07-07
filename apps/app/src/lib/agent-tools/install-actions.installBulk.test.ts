@@ -85,7 +85,7 @@ vi.mock("@/lib/routes", () => ({
   },
 }));
 
-import { installBulkPlugin } from "./plugin-actions";
+import { installBulkPlugin } from "./install-actions";
 
 // ---------------------------------------------------------------------------
 // Fixtures

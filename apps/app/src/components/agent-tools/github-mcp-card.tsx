@@ -15,7 +15,7 @@ import * as React from "react";
 import { ExternalLink, GitBranch, Github } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { installGithubMcp } from "./github-mcp-actions";
+import type { installGithubMcp } from "@/lib/agent-tools/github-mcp-actions";
 
 // Inline first-party descriptor constants (avoids @oxagen/plugins in client bundle).
 const GITHUB_MCP_TITLE = "GitHub MCP";

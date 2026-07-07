@@ -24,7 +24,6 @@ import {
   ShieldCheck,
   ShoppingBag,
   SlidersHorizontal,
-  Sparkles,
   Terminal,
   User,
   Users,
@@ -114,7 +113,8 @@ const workspaceConfig: SidebarConfig = {
       group: "primary",
     },
     // Studio group — build interactive agents. The Agent Builder is the
-    // centerpiece; Skills and Tools feed its Equip step.
+    // centerpiece; Agent Tools is the single home for everything an agent
+    // can be equipped with (skills, MCP servers, capabilities).
     {
       id: "agents",
       label: "Agents",
@@ -126,22 +126,12 @@ const workspaceConfig: SidebarConfig = {
       group: "tools",
     },
     {
-      id: "skills",
-      label: "Skills",
-      icon: Sparkles,
-      href: (ctx) =>
-        ctx.workspaceSlug
-          ? workspace.studio.skills(ctx as Required<ScopeContext>)
-          : `/${ctx.orgSlug}`,
-      group: "tools",
-    },
-    {
-      id: "tools",
-      label: "Tools",
+      id: "agent-tools",
+      label: "Agent Tools",
       icon: Wrench,
       href: (ctx) =>
         ctx.workspaceSlug
-          ? workspace.studio.tools(ctx as Required<ScopeContext>)
+          ? workspace.studio.tools.root(ctx as Required<ScopeContext>)
           : `/${ctx.orgSlug}`,
       group: "tools",
     },
@@ -149,8 +139,8 @@ const workspaceConfig: SidebarConfig = {
       id: "marketplace",
       label: "Marketplace",
       icon: ShoppingBag,
-      // Promoted out of settings into a first-class Extend surface: browse +
-      // install plugins and connect MCP servers.
+      // Discovery + install surface, two sides: Agent Tools and Integrations.
+      // Managing what is installed lives in Studio → Agent Tools.
       href: (ctx) =>
         ctx.workspaceSlug
           ? workspace.marketplace.root(ctx as Required<ScopeContext>)
