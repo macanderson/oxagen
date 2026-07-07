@@ -232,6 +232,18 @@ export interface RunTurnOptions {
   /** Skip the eval/enhance/judge pipeline and run the bare agent. */
   bare?: boolean;
   /**
+   * Fast path for conversational / lookup turns (e.g. "what's the command to
+   * add an MCP server?"). Keeps the grounding stages that make an answer
+   * accurate (evaluate + enhance/code-graph + docs) but skips the frontier
+   * completeness judge and its revise loop when the turn produced NO file
+   * changes — a pure Q&A answer has no executed evidence to verify, so the judge
+   * call is waste. The zero-diff guard makes this safe even if the caller's
+   * intent classifier is wrong: a fast-path turn that unexpectedly edits files
+   * still gets judged. The caller is responsible for also skipping its own
+   * up-front planner call for these turns. Independent of `OXAGEN_LADDER`.
+   */
+  fastPath?: boolean;
+  /**
    * Capture full per-phase telemetry (timing, per-model token/cost breakdown,
    * tool calls + results, the injected context) onto the trace, for `/verbose`.
    */
@@ -753,7 +765,30 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     // falsey OXAGEN_LADDER). Never spend a frontier completeness judge where
     // executed evidence already settles the outcome.
     let verdict: typeof judgeRounds[0] | undefined;
-    if (judgeSkipEnabled) {
+    // Fast-path conversational turn that changed nothing: the caller classified
+    // this as a lookup/Q&A and no files were touched, so there is no executed
+    // evidence for a frontier completeness judge (and its revise loop) to
+    // verify — pure waste. Guarded on zero files touched so a MISCLASSIFIED turn
+    // that DID edit files still gets judged; classification accuracy only gates
+    // the caller's up-front planner skip, never this safety net. Independent of
+    // OXAGEN_LADDER — this is a caller opt-in, not a ladder rung.
+    if (opts.fastPath && filesTouched.size === 0) {
+      verdict = {
+        complete: true,
+        confidence: 100,
+        findings: [],
+        remainingWork: [],
+        model: "deterministic/fast-path",
+        usage: emptyUsage(),
+        fallback: false,
+        reasoning: "Fast-path conversational turn with no file changes — nothing to verify; judge skipped.",
+      };
+      opts.onStage?.({
+        kind: "judge",
+        label: "fast path: skipped judge",
+        detail: "no file changes to verify",
+      });
+    } else if (judgeSkipEnabled) {
       // (1) Read-only turn that changed nothing: the judge can never trigger a
       // revise (canRevise gates on !readOnly) and there is no diff to verify, so
       // a judge call here is pure waste. Settle it deterministically.

@@ -11,6 +11,7 @@ import {
   queryCodeGraph,
   codeGraphStats,
   clearCodeGraphCache,
+  warmCodeGraph,
 } from "../code-graph.js";
 import type { EmbeddingClient } from "../context/embedding.js";
 
@@ -107,6 +108,20 @@ describe("code-graph retrieval", () => {
     // computeAlpha, AlphaShape, BetaEngine, runBeta, GammaKind
     expect(stats.symbols).toBeGreaterThanOrEqual(5);
     expect(stats.edges).toBeGreaterThan(0);
+  });
+
+  it("warmCodeGraph primes the cache so the first query hits a built graph", async () => {
+    clearCodeGraphCache();
+    // Fire-and-forget warm-up returns synchronously (void) — it must not throw.
+    expect(() => warmCodeGraph(root)).not.toThrow();
+    // The subsequent real query resolves against the warmed graph.
+    const out = await queryCodeGraph(root, "search", "computeAlpha", 5);
+    expect(out).toContain("computeAlpha");
+  });
+
+  it("warmCodeGraph swallows errors for an unbuildable path (fire-and-forget)", () => {
+    // A path that cannot be indexed must not surface an unhandled rejection.
+    expect(() => warmCodeGraph("/nonexistent/oxagen-warm-test-path")).not.toThrow();
   });
 });
 
