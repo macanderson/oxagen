@@ -20,6 +20,38 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNull } from "drizzle-orm";
 import { logger } from "@oxagen/handlers/logger";
 import type { StudioCtx } from "./scope";
+import { listAgentTools, type AgentToolRow } from "./tools";
+import { listAgents } from "./agents";
+
+/**
+ * A single equip source must never block the builder from rendering. The catch
+ * blocks below cover a source that *rejects*; withTimeout covers a source that
+ * *hangs* (never settles) — e.g. a cold, expensive capability materialization.
+ * Either way the pool degrades to empty and the wizard still opens.
+ */
+const SOURCE_TIMEOUT_MS = 8000;
+
+async function withTimeout<T>(
+  work: Promise<T>,
+  fallback: T,
+  label: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((resolve) => {
+    timer = setTimeout(() => {
+      logger.warn(
+        { label, timeoutMs: SOURCE_TIMEOUT_MS },
+        "equip-sources: source timed out — degrading to empty pool",
+      );
+      resolve(fallback);
+    }, SOURCE_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([work, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 // ── Skills ──────────────────────────────────────────────────────────────────
 
@@ -132,4 +164,48 @@ export async function listInstalledMcpServers(
     );
     return [];
   }
+}
+
+// ── Combined, timeout-guarded loader ──────────────────────────────────────────
+
+export type EquipSubagentRow = { ref: string; name: string; slug: string };
+
+export type EquipSources = {
+  skills: WorkspaceSkillRow[];
+  tools: AgentToolRow[];
+  subagents: EquipSubagentRow[];
+  mcp: InstalledMcpServerRow[];
+};
+
+/**
+ * Load all four Equip pools in parallel, each guarded by a timeout so a slow or
+ * hanging source (e.g. cold capability materialization behind agent.tool.list)
+ * can never block the Agent Builder from rendering. Used by the new and edit
+ * builder pages so both stay resilient.
+ */
+export async function loadEquipSources(
+  ctx: StudioCtx,
+  orgId: string,
+  workspaceId: string,
+): Promise<EquipSources> {
+  const [skills, tools, agents, mcp] = await Promise.all([
+    withTimeout(listWorkspaceSkills(ctx), [] as WorkspaceSkillRow[], "skills"),
+    withTimeout(listAgentTools(ctx), [] as AgentToolRow[], "tools"),
+    withTimeout(listAgents(ctx), [], "subagents"),
+    withTimeout(
+      listInstalledMcpServers(ctx, orgId, workspaceId),
+      [] as InstalledMcpServerRow[],
+      "mcp",
+    ),
+  ]);
+  return {
+    skills,
+    tools,
+    subagents: agents.map((a) => ({
+      ref: a.publicId,
+      name: a.name,
+      slug: a.slug,
+    })),
+    mcp,
+  };
 }
