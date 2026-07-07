@@ -13,6 +13,7 @@ import {
   Activity,
   ArrowLeft,
   BookOpen,
+  Bot,
   Building2,
   CreditCard,
   KeyRound,
@@ -23,9 +24,11 @@ import {
   ShieldCheck,
   ShoppingBag,
   SlidersHorizontal,
+  Sparkles,
   Terminal,
   User,
   Users,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 
@@ -74,6 +77,7 @@ export type SidebarConfig = {
 const workspaceConfig: SidebarConfig = {
   mode: "workspace",
   groupLabel: "Workspace",
+  toolsLabel: "Studio",
   items: [
     {
       id: "ask",
@@ -109,16 +113,47 @@ const workspaceConfig: SidebarConfig = {
           : `/${ctx.orgSlug}`,
       group: "primary",
     },
+    // Studio group — build interactive agents. The Agent Builder is the
+    // centerpiece; Skills and Tools feed its Equip step.
+    {
+      id: "agents",
+      label: "Agents",
+      icon: Bot,
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.studio.agents(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "tools",
+    },
+    {
+      id: "skills",
+      label: "Skills",
+      icon: Sparkles,
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.studio.skills(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "tools",
+    },
+    {
+      id: "tools",
+      label: "Tools",
+      icon: Wrench,
+      href: (ctx) =>
+        ctx.workspaceSlug
+          ? workspace.studio.tools(ctx as Required<ScopeContext>)
+          : `/${ctx.orgSlug}`,
+      group: "tools",
+    },
     {
       id: "marketplace",
       label: "Marketplace",
       icon: ShoppingBag,
-      // The plugin marketplace now lives at the workspace settings → plugins route.
-      // When workspaceSlug is available we link to the workspace-scoped page;
-      // otherwise fall back to the org root (shouldn't happen in ws-mode).
+      // Promoted out of settings into a first-class Extend surface: browse +
+      // install plugins and connect MCP servers.
       href: (ctx) =>
         ctx.workspaceSlug
-          ? workspace.settings.plugins(ctx as Required<ScopeContext>)
+          ? workspace.marketplace.root(ctx as Required<ScopeContext>)
           : org.settings.plugins(ctx),
       group: "footer",
     },

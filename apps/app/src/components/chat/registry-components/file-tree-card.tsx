@@ -1,16 +1,27 @@
 "use client";
 
-import { useState, type ReactElement } from "react";
-import { ChevronRight, File, Folder, GitCompare } from "lucide-react";
+import { useEffect, useState, type ReactElement, type ReactNode } from "react";
+import { ChevronRight, File, Folder, GitCompare, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { diffAnchorId } from "./diff-anchor";
 
 /**
  * file-tree-card — collapsible directory tree for coding-agent workspace or
- * repository listings (e.g. `agent.sandbox.files.list`). Entries with
+ * repository listings (e.g. `agent.sandbox_file.list`). Entries with
  * `changed: true` link to their corresponding section in a `code-diff-card`
  * rendered earlier in the same turn, via the shared `diffAnchorId` anchor
  * convention (both cards may appear in the same scroll container).
+ *
+ * Interactive mode (all optional, purely additive):
+ * - `onFileSelect` makes file rows tappable (opens the panel's file viewer).
+ * - `onDirExpand` fires when a directory opens, letting the owning panel
+ *   lazily fetch deeper listings; `loadingDirs` shows a spinner on dirs with
+ *   an in-flight fetch.
+ * - `actions` renders a right-aligned header slot (sandbox status strip).
+ *
+ * Mobile: rows are ≥44px touch targets below `md`, indentation is compact
+ * (0.75rem/level) and long names truncate in the middle so deep paths fit
+ * narrow screens.
  *
  * componentId: "file-tree"
  */
@@ -27,6 +38,14 @@ export interface FileTreeEntry {
 export interface FileTreeCardProps {
   entries: FileTreeEntry[];
   title?: string;
+  /** Right-aligned header slot (e.g. the sandbox status strip). */
+  actions?: ReactNode;
+  /** Makes file rows tappable; receives the entry's full relative path. */
+  onFileSelect?: (path: string) => void;
+  /** Fires when a directory row opens (for lazy deeper-listing fetches). */
+  onDirExpand?: (path: string) => void;
+  /** Directories with an in-flight lazy fetch — shown with a spinner. */
+  loadingDirs?: ReadonlySet<string>;
 }
 
 interface TreeNode {
@@ -36,6 +55,13 @@ interface TreeNode {
   sizeBytes: number | null;
   changed: boolean;
   children: TreeNode[];
+}
+
+/** Interaction context threaded through the recursive rows. */
+interface TreeInteractions {
+  onFileSelect?: (path: string) => void;
+  onDirExpand?: (path: string) => void;
+  loadingDirs?: ReadonlySet<string>;
 }
 
 /**
@@ -105,8 +131,46 @@ export function formatBytes(bytes: number | null | undefined): string | null {
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
-function DirRow({ node, depth }: { node: TreeNode; depth: number }) {
+/**
+ * Truncate the MIDDLE of a long file/dir name so both the meaningful prefix
+ * and the extension survive on narrow screens ("very-long-component-name.tsx"
+ * → "very-long-co…name.tsx"). Full path stays available via `title`.
+ */
+export function truncateMiddle(name: string, max = 28): string {
+  if (name.length <= max) return name;
+  const head = Math.ceil((max - 1) * 0.6);
+  const tail = max - 1 - head;
+  return `${name.slice(0, head)}…${name.slice(name.length - tail)}`;
+}
+
+// Compact indentation so deep paths fit phone-width screens; ≥44px touch
+// targets below `md` (Tailwind min-h-11 = 2.75rem = 44px).
+const ROW_CLASS =
+  "flex w-full min-h-11 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-sm md:min-h-0";
+const indent = (depth: number, extra = 0.375): { paddingLeft: string } => ({
+  paddingLeft: `${depth * 0.75 + extra}rem`,
+});
+
+function DirRow({
+  node,
+  depth,
+  interactions,
+}: {
+  node: TreeNode;
+  depth: number;
+  interactions: TreeInteractions;
+}) {
   const [open, setOpen] = useState(depth < 1);
+  const { onDirExpand, loadingDirs } = interactions;
+
+  // Notify the owning panel whenever this directory is (or becomes) open so
+  // it can lazily fetch children beyond the already-listed depth. The panel
+  // dedupes via its loaded/in-flight sets, so refires are cheap no-ops.
+  useEffect(() => {
+    if (open) onDirExpand?.(node.path);
+  }, [open, node.path, onDirExpand]);
+
+  const loading = loadingDirs?.has(node.path) === true;
 
   return (
     <li>
@@ -114,20 +178,31 @@ function DirRow({ node, depth }: { node: TreeNode; depth: number }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-sm hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        style={{ paddingLeft: `${depth * 1.1 + 0.375}rem` }}
+        className={cn(
+          ROW_CLASS,
+          "hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        )}
+        style={indent(depth)}
       >
         <ChevronRight
           className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")}
           aria-hidden="true"
         />
         <Folder className="size-4 shrink-0 text-info" aria-hidden="true" />
-        <span className="truncate">{node.name}</span>
+        <span className="truncate" title={node.path}>
+          {truncateMiddle(node.name)}
+        </span>
+        {loading ? (
+          <Loader2
+            className="size-3.5 shrink-0 animate-spin text-muted-foreground"
+            aria-label={`Loading ${node.path}`}
+          />
+        ) : null}
       </button>
       {open ? (
         <ul>
           {node.children.map((child) => (
-            <TreeRow key={child.path} node={child} depth={depth + 1} />
+            <TreeRow key={child.path} node={child} depth={depth + 1} interactions={interactions} />
           ))}
         </ul>
       ) : null}
@@ -135,18 +210,46 @@ function DirRow({ node, depth }: { node: TreeNode; depth: number }) {
   );
 }
 
-function FileRow({ node, depth }: { node: TreeNode; depth: number }) {
+function FileRow({
+  node,
+  depth,
+  interactions,
+}: {
+  node: TreeNode;
+  depth: number;
+  interactions: TreeInteractions;
+}) {
   const size = formatBytes(node.sizeBytes);
-  return (
-    <li
-      className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm"
-      style={{ paddingLeft: `${depth * 1.1 + 1.6}rem` }}
-      data-changed={node.changed || undefined}
-    >
+  const { onFileSelect } = interactions;
+
+  const name = (
+    <>
       <File className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       <span className="min-w-0 flex-1 truncate" title={node.path}>
-        {node.name}
+        {truncateMiddle(node.name)}
       </span>
+    </>
+  );
+
+  return (
+    <li
+      className={cn(ROW_CLASS, onFileSelect && "px-0 py-0")}
+      style={onFileSelect ? undefined : indent(depth, 1.6)}
+      data-changed={node.changed || undefined}
+    >
+      {onFileSelect ? (
+        <button
+          type="button"
+          onClick={() => onFileSelect(node.path)}
+          aria-label={`View ${node.path}`}
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-1 text-left hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0"
+          style={indent(depth, 1.6)}
+        >
+          {name}
+        </button>
+      ) : (
+        name
+      )}
       {size ? <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{size}</span> : null}
       {node.changed ? (
         <a
@@ -162,14 +265,34 @@ function FileRow({ node, depth }: { node: TreeNode; depth: number }) {
   );
 }
 
-function TreeRow({ node, depth }: { node: TreeNode; depth: number }) {
-  return node.kind === "dir" ? <DirRow node={node} depth={depth} /> : <FileRow node={node} depth={depth} />;
+function TreeRow({
+  node,
+  depth,
+  interactions,
+}: {
+  node: TreeNode;
+  depth: number;
+  interactions: TreeInteractions;
+}) {
+  return node.kind === "dir" ? (
+    <DirRow node={node} depth={depth} interactions={interactions} />
+  ) : (
+    <FileRow node={node} depth={depth} interactions={interactions} />
+  );
 }
 
-export default function FileTreeCard({ entries, title }: FileTreeCardProps): ReactElement {
+export default function FileTreeCard({
+  entries,
+  title,
+  actions,
+  onFileSelect,
+  onDirExpand,
+  loadingDirs,
+}: FileTreeCardProps): ReactElement {
   const tree = buildFileTree(entries);
+  const interactions: TreeInteractions = { onFileSelect, onDirExpand, loadingDirs };
 
-  if (entries.length === 0) {
+  if (entries.length === 0 && !actions) {
     return (
       <div
         className="my-2 rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground"
@@ -185,16 +308,21 @@ export default function FileTreeCard({ entries, title }: FileTreeCardProps): Rea
       className="my-2 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm"
       data-component="file-tree-card"
     >
-      <div className="border-b border-border/60 px-4 py-2.5">
-        <span className="text-sm font-semibold">{title ?? "Files"}</span>
+      <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-2.5">
+        <span className="truncate text-sm font-semibold">{title ?? "Files"}</span>
+        {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
       </div>
-      <div className="max-h-96 overflow-y-auto overflow-x-auto px-2 py-2">
-        <ul>
-          {tree.map((node) => (
-            <TreeRow key={node.path} node={node} depth={0} />
-          ))}
-        </ul>
-      </div>
+      {entries.length === 0 ? (
+        <div className="px-4 py-3 text-sm text-muted-foreground">No files.</div>
+      ) : (
+        <div className="max-h-96 overflow-y-auto overflow-x-auto px-2 py-2">
+          <ul>
+            {tree.map((node) => (
+              <TreeRow key={node.path} node={node} depth={0} interactions={interactions} />
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

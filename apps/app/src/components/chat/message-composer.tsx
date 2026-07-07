@@ -1,6 +1,18 @@
 "use client";
 import * as React from "react";
-import { Brain, Code2, ImageIcon, Paperclip, Send, Video } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Bot,
+  Brain,
+  ChevronDown,
+  ChevronUp,
+  Code2,
+  ImageIcon,
+  Paperclip,
+  Send,
+  SlidersHorizontal,
+  Video,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -10,7 +22,16 @@ import {
   SelectPopup,
   SelectItem,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetPopup,
+  SheetHeader,
+  SheetPanel,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-media-query";
 import {
   supportsReasoning,
   getModel,
@@ -27,9 +48,22 @@ import type { McpServerSummary } from "./mcp-types";
 import { McpServerPicker } from "./mcp-server-picker";
 import { BudgetControl } from "./budget-control";
 import { ChatAgentToolbar } from "./chat-agent-toolbar";
+import { ChatContextBar } from "./chat-context-bar";
+import { SlashCommandMenu } from "./slash-command-menu";
+// Import from the client-safe subpath, NOT the @oxagen/ai barrel: the barrel
+// pulls telemetry/clickhouse/opentelemetry (async_hooks) into the client bundle
+// and breaks the build. slash-commands.ts is dependency-free.
+import { matchSlashCommands, type SlashCommand } from "@oxagen/ai/slash-commands";
 import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
 import { AgentSelector, type AgentOption } from "./agent-selector";
+import {
+  pinStorageKey,
+  readStoredPins,
+  writeStoredPins,
+  buildPinnedContext,
+  DRAFT_PREFIX,
+} from "./pinned-context";
 import { MessageQueue } from "./message-queue";
 import { AttachmentChip, hasInFlightUploads, type PendingAttachment } from "./attachment-chip";
 import { extractVideoFrames } from "./extract-video-frames";
@@ -118,6 +152,9 @@ export interface CodeModePayload {
   name: string;
   defaultBranch: string | null;
   environmentId: string;
+  /** Human label for the environment, so the agent context shows the name, not
+   * the opaque `env_…` id. Null when the id couldn't be resolved to an option. */
+  environmentName: string | null;
   sandboxSessionId: string | null;
 }
 
@@ -130,15 +167,16 @@ export interface CodeModePayload {
 function codePayload(
   codeMode: boolean,
   repo: RepoOption | null,
-  environmentId: string | null,
+  environment: EnvironmentOption | null,
 ): CodeModePayload | null {
-  if (!codeMode || !repo || !environmentId) return null;
+  if (!codeMode || !repo || !environment) return null;
   return {
     connectionId: repo.connectionId,
     owner: repo.owner,
     name: repo.name,
     defaultBranch: repo.defaultBranch,
-    environmentId,
+    environmentId: environment.id,
+    environmentName: environment.name,
     sandboxSessionId: null,
   };
 }
@@ -177,6 +215,21 @@ function nextQueueId(): string {
   return `q-${queueIdCounter}`;
 }
 
+/**
+ * localStorage key for the collapsed-composer preference. Collapsing the
+ * composer maximises vertical chat scroll height (especially on phones), so
+ * the choice persists across visits.
+ */
+export const COMPOSER_COLLAPSED_STORAGE_KEY = "oxagen.chat.composerCollapsed";
+
+function persistComposerCollapsed(collapsed: boolean) {
+  try {
+    window.localStorage.setItem(COMPOSER_COLLAPSED_STORAGE_KEY, collapsed ? "1" : "0");
+  } catch {
+    // Private mode / storage quota — the preference just doesn't persist.
+  }
+}
+
 export function MessageComposer({
   conversationId,
   parentMessageId,
@@ -197,6 +250,7 @@ export function MessageComposer({
   onInputHasContentChange,
   orgSlug,
   workspaceSlug,
+  boundAgentName,
 }: {
   conversationId: string | null;
   parentMessageId: string | null;
@@ -243,6 +297,13 @@ export function MessageComposer({
    * `false` → input is empty / cleared (show suggested prompts).
    */
   onInputHasContentChange?: (hasContent: boolean) => void;
+  /**
+   * Human name of the published agent this session is bound to (Ask page
+   * ?agent=…). When set, the composer shows a "Session bound to: <name>"
+   * indicator so the user knows the agent's instructions/tools are applied to
+   * every turn. Null/omitted ⇒ normal unbound chat (no indicator).
+   */
+  boundAgentName?: string | null;
 }) {
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
@@ -266,6 +327,7 @@ export function MessageComposer({
   const [selectedRepoKey, setSelectedRepoKey] = React.useState<string | null>(null);
   const [selectedEnvId, setSelectedEnvId] = React.useState<string | null>(null);
   const selectedRepo = availableRepos?.find((r) => r.key === selectedRepoKey) ?? null;
+  const selectedEnv = availableEnvironments?.find((e) => e.id === selectedEnvId) ?? null;
 
   // ── Agent selection (OXA app-agent-selector) ──────────────────────────────
   // The selected agent GOVERNS code mode: a code agent (isCode) forces it on
@@ -297,8 +359,152 @@ export function MessageComposer({
   React.useEffect(() => {
     codeStateRef.current = { codeMode, selectedRepo, selectedEnvId, selectedAgentId };
   }, [codeMode, selectedRepo, selectedEnvId, selectedAgentId]);
-
   const formRef = React.useRef<HTMLFormElement>(null);
+
+  // Collapsed state of the CODE-MODE agent toolbar (repo/env pickers) — wired
+  // through to ChatAgentToolbar so the pickers can fold away once selected.
+  const [agentToolbarCollapsed, setAgentToolbarCollapsed] = React.useState(false);
+
+  // ── Responsive layout (mobile ≤767px) ──────────────────────────────────────
+  const isMobile = useIsMobile();
+  // Bottom sheet holding the overflow toolbar controls on phones.
+  const [overflowOpen, setOverflowOpen] = React.useState(false);
+
+  // ── Collapsible composer ───────────────────────────────────────────────────
+  // Collapsed: textarea + attachment strip + agent toolbar hidden; only a slim
+  // row (tap-to-expand affordance + send) remains, maximising chat height.
+  // Hydration-safe: SSR + first paint render expanded, then the persisted
+  // preference is applied after mount.
+  const [composerCollapsed, setComposerCollapsed] = React.useState(false);
+  React.useEffect(() => {
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(COMPOSER_COLLAPSED_STORAGE_KEY);
+    } catch {
+      // Storage unavailable — stay expanded.
+    }
+    if (stored === "1") setComposerCollapsed(true);
+  }, []);
+
+  const expandComposer = React.useCallback(() => {
+    setComposerCollapsed(false);
+    persistComposerCollapsed(false);
+    // The textarea is CSS-hidden while collapsed (so drafts survive) — focus
+    // it on the frame after the expanded layout commits.
+    requestAnimationFrame(() => {
+      (formRef.current?.elements.namedItem("content") as HTMLTextAreaElement | null)?.focus();
+    });
+  }, []);
+
+  const collapseComposer = React.useCallback(() => {
+    setComposerCollapsed(true);
+    persistComposerCollapsed(true);
+  }, []);
+
+  // Auto-expand when the user starts typing while collapsed: a printable key
+  // pressed with focus outside any editable control re-opens the composer and
+  // focuses the textarea (synchronously, so the keystroke lands in it).
+  React.useEffect(() => {
+    if (!composerCollapsed) return;
+    function onDocumentKeyDown(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key.length !== 1) return; // printable characters only
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      expandComposer();
+    }
+    document.addEventListener("keydown", onDocumentKeyDown);
+    return () => document.removeEventListener("keydown", onDocumentKeyDown);
+  }, [composerCollapsed, expandComposer]);
+
+  // ── Pinned chat context (org/repo + environment) ──────────────────────────
+  // A pin sticks the current repo/environment selection to THIS conversation so
+  // the assistant knows which repo the user means on every future turn (see
+  // pinned-context.ts). Optional; repo/env are independent. Persistence is
+  // keyed per-conversation, with a workspace-scoped draft key for a new chat
+  // that migrates onto the real conversation key on first send.
+  const [isPinned, setIsPinned] = React.useState(false);
+  const pinKey = pinStorageKey(workspaceSlug, conversationId);
+  const prevPinKeyRef = React.useRef(pinKey);
+  React.useEffect(() => {
+    const prevKey = prevPinKeyRef.current;
+    prevPinKeyRef.current = pinKey;
+    let stored = readStoredPins(pinKey);
+    // Carry a draft pin onto the real conversation key the first time a new
+    // chat gets an id (draft -> conv). Never migrate conv -> conv: switching
+    // conversations must not leak one chat's pin into another.
+    if (!stored && prevKey !== pinKey && prevKey.startsWith(DRAFT_PREFIX)) {
+      const carried = readStoredPins(prevKey);
+      if (carried) {
+        writeStoredPins(pinKey, carried);
+        writeStoredPins(prevKey, null);
+        stored = carried;
+      }
+    }
+    if (stored) {
+      if (stored.repoKey) setSelectedRepoKey(stored.repoKey);
+      if (stored.envId) setSelectedEnvId(stored.envId);
+      setIsPinned(true);
+    } else {
+      setIsPinned(false);
+    }
+  }, [pinKey]);
+
+  // Toggle the pin, persisting a snapshot of the current selection (pin) or
+  // clearing it (unpin). Writes happen here and in the selector handlers below,
+  // never in a pinKey-keyed effect, so switching conversations can never write
+  // the previous chat's selection under the new key.
+  const togglePin = React.useCallback(() => {
+    if (isPinned) {
+      setIsPinned(false);
+      writeStoredPins(pinKey, null);
+    } else {
+      setIsPinned(true);
+      writeStoredPins(pinKey, { repoKey: selectedRepoKey, envId: selectedEnvId });
+    }
+  }, [isPinned, pinKey, selectedRepoKey, selectedEnvId]);
+  const handleSelectRepoKey = (key: string) => {
+    setSelectedRepoKey(key);
+    if (isPinned) writeStoredPins(pinKey, { repoKey: key, envId: selectedEnvId });
+  };
+  const handleSelectEnvId = (id: string) => {
+    setSelectedEnvId(id);
+    if (isPinned) writeStoredPins(pinKey, { repoKey: selectedRepoKey, envId: id });
+  };
+
+  // ── Slash commands ────────────────────────────────────────────────────────
+  // `slashQuery` is the text after a lone leading slash ("/ci" -> "ci"), or
+  // null when the input isn't a slash command. The menu is an autocomplete
+  // affordance; the literal text is what gets sent, and the agent interprets it
+  // (its system prompt documents the commands — see @oxagen/ai slash-commands).
+  const [slashQuery, setSlashQuery] = React.useState<string | null>(null);
+  const [slashActiveIndex, setSlashActiveIndex] = React.useState(0);
+  const slashCommands = React.useMemo(
+    () => (slashQuery === null ? [] : matchSlashCommands(slashQuery)),
+    [slashQuery],
+  );
+  const slashOpen = slashQuery !== null && slashCommands.length > 0;
+
+  // Ref mirror of the code-mode + pin selection so dispatchQueued (queue-drain
+  // path) reads the CURRENT selection at drain time, same pattern as
+  // activeServerIdsRef/parentMessageIdRef below.
+  const codeStateRef = React.useRef({
+    codeMode,
+    selectedRepo,
+    selectedEnvId,
+    isPinned,
+    selectedEnv,
+  });
+  React.useEffect(() => {
+    codeStateRef.current = { codeMode, selectedRepo, selectedEnvId, isPinned, selectedEnv };
+  }, [codeMode, selectedRepo, selectedEnvId, isPinned, selectedEnv]);
 
   // Stable ref for the callback so the textarea onChange handler never
   // captures a stale closure — the identity of the ref never changes.
@@ -312,13 +518,57 @@ export function MessageComposer({
   const inputHasContentRef = React.useRef(false);
   const handleTextareaChange = React.useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const hasContent = e.target.value.length > 0;
+      const value = e.target.value;
+      const hasContent = value.length > 0;
       if (hasContent !== inputHasContentRef.current) {
         inputHasContentRef.current = hasContent;
         onInputHasContentChangeRef.current?.(hasContent);
       }
+      // Open the slash-command menu only while the whole input is a lone slash
+      // token ("/", "/ci", …) — never mid-message — so it can't shadow normal
+      // typing that happens to contain a slash.
+      const slashMatch = /^\/([a-zA-Z]*)$/.exec(value);
+      if (slashMatch) {
+        setSlashQuery(slashMatch[1] ?? "");
+        setSlashActiveIndex(0);
+      } else if (slashQuery !== null) {
+        setSlashQuery(null);
+      }
     },
-    [],
+    [slashQuery],
+  );
+
+  // Apply a chosen slash command. Client-action commands (e.g. /pin) run
+  // locally and clear the input; the rest insert "/<name> " so the user can
+  // type args, then submit — the agent interprets the literal command.
+  const applySlashCommand = React.useCallback(
+    (command: SlashCommand) => {
+      setSlashQuery(null);
+      const ta = formRef.current?.elements.namedItem("content") as
+        | HTMLTextAreaElement
+        | null;
+      if (command.clientAction === "pin") {
+        if (ta) {
+          ta.value = "";
+          if (inputHasContentRef.current) {
+            inputHasContentRef.current = false;
+            onInputHasContentChangeRef.current?.(false);
+          }
+        }
+        togglePin();
+        return;
+      }
+      if (ta) {
+        ta.value = `/${command.name} `;
+        ta.focus();
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+        if (!inputHasContentRef.current) {
+          inputHasContentRef.current = true;
+          onInputHasContentChangeRef.current?.(true);
+        }
+      }
+    },
+    [togglePin],
   );
 
   // Refs that always reflect the latest prop values so the queue-drain effect
@@ -652,9 +902,15 @@ export function MessageComposer({
       fd.set("activeServerIds", JSON.stringify([...activeServerIds]));
     }
     fd.set("budget", JSON.stringify(budgetPayload(modelSnapshot)));
-    const code = codePayload(codeMode, selectedRepo, selectedEnvId);
+    const code = codePayload(codeMode, selectedRepo, selectedEnv);
     if (code) fd.set("code", JSON.stringify(code));
     if (selectedAgentId) fd.set("agentId", selectedAgentId);
+    // Pinned chat context — only when pinned and NOT in code mode (code mode
+    // already conveys the repo/env via `code`, so the two never double up).
+    if (isPinned && !codeMode) {
+      const pinned = buildPinnedContext(selectedRepo, selectedEnv);
+      if (pinned) fd.set("pinnedContext", JSON.stringify(pinned));
+    }
     return fd;
   }
 
@@ -780,9 +1036,13 @@ export function MessageComposer({
       }
       fd.set("budget", JSON.stringify(budgetPayload(ms)));
       const currentCode = codeStateRef.current;
-      const code = codePayload(currentCode.codeMode, currentCode.selectedRepo, currentCode.selectedEnvId);
+      const code = codePayload(currentCode.codeMode, currentCode.selectedRepo, currentCode.selectedEnv);
       if (code) fd.set("code", JSON.stringify(code));
       if (currentCode.selectedAgentId) fd.set("agentId", currentCode.selectedAgentId);
+      if (currentCode.isPinned && !currentCode.codeMode) {
+        const pinned = buildPinnedContext(currentCode.selectedRepo, currentCode.selectedEnv);
+        if (pinned) fd.set("pinnedContext", JSON.stringify(pinned));
+      }
       // Defer the dispatch out of the caller (effect / event handler) so the
       // queue-drain doesn't cascade synchronously within a React effect
       // (satisfies react-hooks/set-state-in-effect) and so send-now doesn't
@@ -871,6 +1131,32 @@ export function MessageComposer({
     // IME composition guard — never submit during composition.
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
 
+    // Slash-command menu navigation takes precedence while it's open — Enter
+    // selects the highlighted command instead of submitting the form.
+    if (slashOpen) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSlashActiveIndex((i) => (i + 1) % slashCommands.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSlashActiveIndex((i) => (i - 1 + slashCommands.length) % slashCommands.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        const cmd = slashCommands[slashActiveIndex] ?? slashCommands[0];
+        if (cmd) applySlashCommand(cmd);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setSlashQuery(null);
+        return;
+      }
+    }
+
     const isEnter = e.key === "Enter";
     if (!isEnter) return;
 
@@ -910,21 +1196,99 @@ export function MessageComposer({
   // with a malformed request.
   const canAttach = Boolean(orgSlug) && Boolean(workspaceSlug);
   const hasRepos = (availableRepos?.length ?? 0) > 0;
+  const hasEnvironments = (availableEnvironments?.length ?? 0) > 0;
+  // The persistent pin context bar shows whenever there's something to pin and
+  // code mode isn't taking over the selectors (the two share selection state
+  // and render mutually exclusively).
+  const showContextBar = !codeMode && (hasRepos || hasEnvironments);
+
+  // Shared between the desktop toolbar row and the mobile overflow sheet —
+  // exactly one of the two renders at a time (see `isMobile` branches below).
+  const effortSelect = (
+    <Select
+      value={model.effort ?? "medium"}
+      onValueChange={(v) => setModel((s) => ({ ...s, effort: v as EffortLevel }))}
+    >
+      <SelectTrigger
+        size="sm"
+        className={cn(
+          "w-auto gap-1.5 border-0 bg-transparent px-2 text-xs font-medium shadow-none hover:bg-muted focus:ring-0",
+          isMobile ? "min-h-11" : "h-8",
+        )}
+        aria-label={`Reasoning effort: ${model.effort ?? "medium"}`}
+      >
+        <Brain className="h-3.5 w-3.5 text-muted-foreground" />
+        <SelectValue />
+      </SelectTrigger>
+      <SelectPopup>
+        <SelectItem value="low">Low effort</SelectItem>
+        <SelectItem value="medium">Medium effort</SelectItem>
+        <SelectItem value="high">High effort</SelectItem>
+      </SelectPopup>
+    </Select>
+  );
+
+  const budgetControl = (
+    <BudgetControl
+      budgetEnabled={model.budgetEnabled}
+      budgetUsd={model.budgetUsd}
+      budgetMode={model.budgetMode}
+      budgetGracePct={model.budgetGracePct}
+      governance={workspaceBudgetGovernance}
+      onChange={(patch) =>
+        setModel((s) =>
+          applyWorkspaceBudgetGovernance(
+            { ...s, ...patch },
+            workspaceBudgetGovernance ?? null,
+          ),
+        )
+      }
+    />
+  );
 
   return (
     <div className="flex flex-col">
-      {/* Code-mode agent toolbar: repo + environment pickers. Shown only while
-          code mode is on — the toggle button below turns it on/off. */}
-      {codeMode && (
-        <ChatAgentToolbar
-          repositories={availableRepos ?? []}
-          environments={availableEnvironments ?? []}
-          selectedRepoKey={selectedRepoKey}
-          selectedEnvId={selectedEnvId}
-          onSelectRepo={(repo) => setSelectedRepoKey(repo.key)}
-          onSelectEnv={setSelectedEnvId}
-        />
-      )}
+      {/* Bound-agent indicator: when the session is launched from a published
+          agent (Ask page ?agent=…), show which agent's instructions + equipped
+          tools are applied to every turn. Purely informational — the binding
+          itself is carried in the request body's agentId. */}
+      {boundAgentName ? (
+        <div className="mb-2 flex items-center gap-2" data-testid="bound-agent-indicator">
+          <Badge variant="outline" size="sm" className="gap-1">
+            <Bot className="h-3 w-3" aria-hidden="true" />
+            Session bound to: {boundAgentName}
+          </Badge>
+        </div>
+      ) : null}
+      {/* Code-mode agent toolbar (sandbox coding turn) OR the persistent pin
+          context bar. Both drive the same selection state and render mutually
+          exclusively so there's never a duplicate repo/env selector. Hidden
+          entirely while the composer is collapsed. */}
+      {!composerCollapsed &&
+        (codeMode ? (
+          <ChatAgentToolbar
+            repositories={availableRepos ?? []}
+            environments={availableEnvironments ?? []}
+            selectedRepoKey={selectedRepoKey}
+            selectedEnvId={selectedEnvId}
+            onSelectRepo={(repo) => handleSelectRepoKey(repo.key)}
+            onSelectEnv={handleSelectEnvId}
+            isCollapsed={agentToolbarCollapsed}
+            onToggleCollapse={setAgentToolbarCollapsed}
+          />
+        ) : showContextBar ? (
+          <ChatContextBar
+            repositories={availableRepos ?? []}
+            environments={availableEnvironments ?? []}
+            selectedRepoKey={selectedRepoKey}
+            selectedEnvId={selectedEnvId}
+            onSelectRepo={(repo) => handleSelectRepoKey(repo.key)}
+            onSelectEnv={handleSelectEnvId}
+            isPinned={isPinned}
+            onTogglePin={togglePin}
+            disabled={pending || disabled}
+          />
+        ) : null)}
       <form
         ref={formRef}
         onSubmit={onSubmit}
@@ -933,7 +1297,8 @@ export function MessageComposer({
         onDrop={canAttach ? handleDrop : undefined}
         className={cn(
           "flex flex-col gap-2 rounded-2xl border border-border bg-card p-3 text-card-foreground shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring",
-          codeMode && "rounded-t-none",
+          (codeMode || showContextBar) && !composerCollapsed && "rounded-t-none",
+          composerCollapsed && "gap-0 py-1.5",
           isDragOver && "ring-2 ring-primary",
         )}
       >
@@ -952,20 +1317,36 @@ export function MessageComposer({
           tabIndex={-1}
         />
       ) : null}
-      <Textarea
-        name="content"
-        required
-        placeholder={placeholder}
-        rows={3}
-        disabled={pending || disabled}
-        onKeyDown={onKeyDown}
-        onChange={handleTextareaChange}
-        onPaste={canAttach ? handlePaste : undefined}
-        className="border-none bg-transparent shadow-none focus-visible:ring-0"
-      />
+      {/* CSS-hidden (not unmounted) while collapsed so the draft text and the
+          form's `content` field survive collapse/expand round-trips. */}
+      <div className="relative">
+        {slashOpen ? (
+          <SlashCommandMenu
+            commands={slashCommands}
+            activeIndex={slashActiveIndex}
+            onSelect={applySlashCommand}
+            onHoverIndex={setSlashActiveIndex}
+          />
+        ) : null}
+        <Textarea
+          name="content"
+          required
+          placeholder={placeholder}
+          rows={isMobile ? 2 : 3}
+          disabled={pending || disabled}
+          onKeyDown={onKeyDown}
+          onChange={handleTextareaChange}
+          onBlur={() => setSlashQuery(null)}
+          onPaste={canAttach ? handlePaste : undefined}
+          className={cn(
+            "border-none bg-transparent shadow-none focus-visible:ring-0",
+            composerCollapsed && "hidden",
+          )}
+        />
+      </div>
       {/* Pending attachment strip — thumbnails with upload progress/remove.
           Hidden video keyframes are excluded (they ride with their video). */}
-      {visibleAttachments.length > 0 ? (
+      {visibleAttachments.length > 0 && !composerCollapsed ? (
         <div className="flex flex-wrap gap-2" data-testid="attachment-strip">
           {visibleAttachments.map((a) => (
             <AttachmentChip key={a.id} attachment={a} onRemove={removeAttachment} />
@@ -974,19 +1355,21 @@ export function MessageComposer({
       ) : null}
       {/* Queued messages (queue mode): ordered list with reorder / edit /
           remove / send-now controls. */}
-      <MessageQueue
-        items={queue.map((q) => ({ id: q.id, content: q.content }))}
-        isStreaming={isStreaming}
-        onRemove={removeQueued}
-        onReorder={reorderQueued}
-        onEdit={editQueued}
-        onSendNow={sendQueuedNow}
-      />
+      {!composerCollapsed && (
+        <MessageQueue
+          items={queue.map((q) => ({ id: q.id, content: q.content }))}
+          isStreaming={isStreaming}
+          onRemove={removeQueued}
+          onReorder={reorderQueued}
+          onEdit={editQueued}
+          onSendNow={sendQueuedNow}
+        />
+      )}
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
       {disabled && disabledReason ? (
         <p className="text-xs text-muted-foreground">{disabledReason}</p>
       ) : null}
-      {codeGateBlocked ? (
+      {codeGateBlocked && !composerCollapsed ? (
         <p className="text-xs text-muted-foreground" data-testid="code-mode-gate-hint">
           Select a repository and environment to start coding.
         </p>
@@ -1012,11 +1395,101 @@ export function MessageComposer({
           <Select
             value={model.effort ?? "medium"}
             onValueChange={(v) => setModel((s) => ({ ...s, effort: v as EffortLevel }))}
+      {/* Toolbar. Collapsed: a slim single row (~40px) with a tap-to-expand
+          affordance, the send button, and the expand chevron. Expanded on
+          desktop: the full control row (flex-wrap as an overflow safety net).
+          Expanded on mobile: only the essentials inline (attach, code mode,
+          send) — everything else lives in the bottom overflow sheet. */}
+      <div className={cn("flex items-center gap-1", !composerCollapsed && "flex-wrap")}>
+        {composerCollapsed ? (
+          <button
+            type="button"
+            data-testid="composer-expand-affordance"
+            onClick={expandComposer}
+            className="h-10 min-w-0 flex-1 truncate rounded-md px-2 text-left text-sm text-muted-foreground hover:bg-muted"
           >
-            <SelectTrigger
+            {placeholder}
+          </button>
+        ) : (
+          <>
+            {/* Model picker + reasoning effort — inline on desktop, in the
+                overflow sheet on mobile. */}
+            {!isMobile && (
+              <>
+                <ModelPicker value={model} onChange={setModel} modelConfig={modelConfig} />
+                {showEffortControl && effortSelect}
+              </>
+            )}
+
+            {/* Attach image or video — opens the native file picker;
+                paste/drag-drop also work. Essential — always inline. */}
+            {canAttach ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label="Attach image or video"
+                disabled={pending || disabled || visibleAttachments.length >= MAX_ATTACHMENTS}
+                onClick={() => fileInputRef.current?.click()}
+                className={cn("p-0", isMobile ? "h-11 w-11" : "h-8 w-8")}
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+            ) : null}
+
+            {/* Image / video generation toggles — inline on desktop, in the
+                overflow sheet on mobile. */}
+            {!isMobile && (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Generate image"
+                  aria-pressed={model.generate === "image"}
+                  onClick={() => toggleGenerate("image")}
+                  className={cn(
+                    "h-8 w-8 p-0",
+                    model.generate === "image" && "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
+                  )}
+                >
+                  <ImageIcon className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Generate video"
+                  aria-pressed={model.generate === "video"}
+                  onClick={() => toggleGenerate("video")}
+                  className={cn(
+                    "h-8 w-8 p-0",
+                    model.generate === "video" && "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
+                  )}
+                >
+                  <Video className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+
+            {/* Code mode toggle — routes the turn to a sandboxed coding agent
+                against the selected repo + environment (see ChatAgentToolbar
+                above). Requires both selections before send unblocks.
+                Essential — always inline. */}
+            <Button
+              type="button"
+              variant="ghost"
               size="sm"
-              className="h-8 w-auto gap-1.5 border-0 bg-transparent px-2 text-xs font-medium shadow-none hover:bg-muted focus:ring-0"
-              aria-label={`Reasoning effort: ${model.effort ?? "medium"}`}
+              aria-label="Toggle code mode"
+              aria-pressed={codeMode}
+              disabled={!hasRepos && !codeMode}
+              title={!hasRepos && !codeMode ? "Connect a GitHub repository to use code mode" : undefined}
+              onClick={() => setCodeMode((v) => !v)}
+              className={cn(
+                "p-0",
+                isMobile ? "h-11 w-11" : "h-8 w-8",
+                codeMode && "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
+              )}
             >
               <Brain className="h-3.5 w-3.5 text-muted-foreground" />
               <SelectValue />
@@ -1109,26 +1582,45 @@ export function MessageComposer({
             activeServerIds={activeServerIds}
             onActiveServerIdsChange={setActiveServerIds}
           />
-        )}
+              <Code2 className="h-4 w-4" />
+            </Button>
 
-        {/* Per-turn dollar budget — off by default. Every change is re-clamped
-            against workspace governance (OXA-2081) so a "ceiling" can never be
-            exceeded, even transiently, by a member's own edit. */}
-        <BudgetControl
-          budgetEnabled={model.budgetEnabled}
-          budgetUsd={model.budgetUsd}
-          budgetMode={model.budgetMode}
-          budgetGracePct={model.budgetGracePct}
-          governance={workspaceBudgetGovernance}
-          onChange={(patch) =>
-            setModel((s) =>
-              applyWorkspaceBudgetGovernance(
-                { ...s, ...patch },
-                workspaceBudgetGovernance ?? null,
-              ),
-            )
-          }
-        />
+            {!isMobile && (
+              <>
+                {/* MCP server activation picker — only when servers are available */}
+                {(availableMcpServers?.length ?? 0) > 0 && (
+                  <McpServerPicker
+                    servers={availableMcpServers!}
+                    activeServerIds={activeServerIds}
+                    onActiveServerIdsChange={setActiveServerIds}
+                  />
+                )}
+
+                {/* Per-turn dollar budget — off by default. Every change is
+                    re-clamped against workspace governance (OXA-2081) so a
+                    "ceiling" can never be exceeded, even transiently, by a
+                    member's own edit. */}
+                {budgetControl}
+              </>
+            )}
+
+            {/* Mobile: overflow controls live in a bottom sheet. */}
+            {isMobile && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label="More composer options"
+                aria-expanded={overflowOpen}
+                data-testid="composer-overflow-btn"
+                onClick={() => setOverflowOpen(true)}
+                className="h-11 w-11 p-0"
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+              </Button>
+            )}
+          </>
+        )}
 
         <div className="ml-auto flex items-center gap-1.5">
           {isStreaming && queue.length > 0 ? (
@@ -1151,6 +1643,7 @@ export function MessageComposer({
                   ? "Queue message"
                   : "Send message"
             }
+            className={cn(isMobile && !composerCollapsed && "h-11")}
             style={
               !pending && !disabled && !uploadsInFlight && !codeGateBlocked
                 ? {
@@ -1170,9 +1663,102 @@ export function MessageComposer({
                   ? "Interrupt"
                   : "Send"}
           </Button>
+
+          {/* Collapse / expand the whole composer — persists to localStorage. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={composerCollapsed ? "Expand composer" : "Collapse composer"}
+            aria-expanded={!composerCollapsed}
+            data-testid="composer-collapse-toggle"
+            onClick={composerCollapsed ? expandComposer : collapseComposer}
+            className={cn("p-0", isMobile && !composerCollapsed ? "h-11 w-11" : "h-8 w-8")}
+          >
+            {composerCollapsed ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </Button>
         </div>
       </div>
     </form>
+
+    {/* Mobile overflow sheet: the non-essential toolbar controls as
+        thumb-friendly full-width rows (≥44px tall). Portaled to the body, so
+        interactive children here are OUTSIDE the form — every control is a
+        type="button"/stateful picker, never a submit. */}
+    {isMobile && !composerCollapsed ? (
+      <Sheet open={overflowOpen} onOpenChange={setOverflowOpen}>
+        <SheetPopup
+          side="bottom"
+          data-testid="composer-overflow-sheet"
+          className="max-h-[70vh] rounded-t-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+        >
+          <SheetHeader className="mb-2">
+            <SheetTitle className="text-sm">Composer options</SheetTitle>
+            <SheetDescription className="sr-only">
+              Model, generation, MCP server, and budget controls for this turn.
+            </SheetDescription>
+          </SheetHeader>
+          <SheetPanel className="gap-1">
+            <div className="flex min-h-11 items-center justify-between gap-2">
+              <span className="text-sm">Model</span>
+              <ModelPicker value={model} onChange={setModel} modelConfig={modelConfig} />
+            </div>
+            {showEffortControl && (
+              <div className="flex min-h-11 items-center justify-between gap-2">
+                <span className="text-sm">Reasoning effort</span>
+                {effortSelect}
+              </div>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label="Generate image"
+              aria-pressed={model.generate === "image"}
+              onClick={() => toggleGenerate("image")}
+              className={cn(
+                "h-11 w-full justify-start gap-2 px-2 text-sm",
+                model.generate === "image" && "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
+              )}
+            >
+              <ImageIcon className="h-4 w-4" />
+              Generate image
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label="Generate video"
+              aria-pressed={model.generate === "video"}
+              onClick={() => toggleGenerate("video")}
+              className={cn(
+                "h-11 w-full justify-start gap-2 px-2 text-sm",
+                model.generate === "video" && "bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary",
+              )}
+            >
+              <Video className="h-4 w-4" />
+              Generate video
+            </Button>
+            {(availableMcpServers?.length ?? 0) > 0 && (
+              <div className="flex min-h-11 items-center justify-between gap-2">
+                <span className="text-sm">MCP servers</span>
+                <McpServerPicker
+                  servers={availableMcpServers!}
+                  activeServerIds={activeServerIds}
+                  onActiveServerIdsChange={setActiveServerIds}
+                />
+              </div>
+            )}
+            <div className="flex min-h-11 items-center justify-between gap-2">
+              <span className="text-sm">Per-turn budget</span>
+              {budgetControl}
+            </div>
+          </SheetPanel>
+        </SheetPopup>
+      </Sheet>
+    ) : null}
     </div>
   );
 }

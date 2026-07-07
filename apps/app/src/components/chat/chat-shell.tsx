@@ -61,6 +61,13 @@ export interface ChatShellProps {
   /** Workspace-level per-turn budget governance (OXA-2081). Null/omitted ⇒
    * no governance active for this workspace. */
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
+  /** Bound published agent's public id (from the Ask page's ?agent=… param).
+   * Forwarded verbatim in each /api/v1/chat/stream request body as `agentId`.
+   * Null/omitted ⇒ normal unbound chat. */
+  agentId?: string | null;
+  /** Human name of the bound agent, resolved server-side — shown as the
+   * "Session bound to: <name>" indicator. Null when unbound or unresolved. */
+  boundAgentName?: string | null;
 }
 
 // RSC streaming: the messages promise resolves inside a Suspense boundary
@@ -90,6 +97,8 @@ export function ChatShell({
   availableEnvironments,
   availableAgents,
   workspaceBudgetGovernance,
+  agentId,
+  boundAgentName,
 }: ChatShellProps) {
   return (
     <>
@@ -114,6 +123,8 @@ export function ChatShell({
           availableEnvironments={availableEnvironments}
           availableAgents={availableAgents}
           workspaceBudgetGovernance={workspaceBudgetGovernance}
+          agentId={agentId}
+          boundAgentName={boundAgentName}
         />
       </Suspense>
       <BackgroundTaskTray
@@ -145,6 +156,8 @@ async function AsyncShell({
   availableEnvironments,
   availableAgents,
   workspaceBudgetGovernance,
+  agentId,
+  boundAgentName,
 }: {
   promise: Promise<ChatMessage[]>;
   conversationId: string | null;
@@ -165,6 +178,8 @@ async function AsyncShell({
   availableEnvironments?: EnvironmentOption[];
   availableAgents?: AgentOption[];
   workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
+  agentId?: string | null;
+  boundAgentName?: string | null;
 }) {
   const messages = await promise;
   const modelConfig = resolvedTierCatalog();
@@ -190,6 +205,8 @@ async function AsyncShell({
       availableEnvironments={availableEnvironments}
       availableAgents={availableAgents}
       workspaceBudgetGovernance={workspaceBudgetGovernance}
+      agentId={agentId}
+      boundAgentName={boundAgentName}
     />
   );
 }

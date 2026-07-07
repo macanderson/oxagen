@@ -104,13 +104,15 @@ export function GraphTableView({ tenant, visibleLabels, selectedNodeId, onSelect
         </span>
       </div>
 
-      <div className="relative min-h-0 flex-1 overflow-auto">
+      {/* overflow-auto contains horizontal scrolling here (min-w on the table
+          keeps columns readable on phones) instead of overflowing the page. */}
+      <div className="relative min-h-0 flex-1 overflow-auto overscroll-x-contain">
         {state.status === "loading" && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
             <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden="true" />
           </div>
         )}
-        <table className="w-full border-collapse text-sm">
+        <table className="w-full min-w-[36rem] border-collapse text-sm">
           <thead className="sticky top-0 z-[1] bg-muted/60 backdrop-blur">
             <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
               <th className="px-4 py-2 font-medium">Name</th>

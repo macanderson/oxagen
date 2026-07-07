@@ -14,6 +14,9 @@ export const imageGenerate = registerCapability({
     "(via the Vercel AI Gateway, default model openai/gpt-image-1). " +
     "When AI_GATEWAY_API_KEY is not configured, returns a typed placeholder result with a render " +
     "directive that shows an empty-state in chat — never throws. " +
+    "Successful generations are also persisted as a conversation file (generated_assets row + " +
+    "blob storage) so they appear in the Conversation Files panel; persistence failures never " +
+    "fail the generation. " +
     "Returns the image URL or data URI, alt text, and a render directive for the image-preview " +
     "chat component.",
   mode: "sync",
@@ -58,6 +61,24 @@ export const imageGenerate = registerCapability({
      * The render directive will show an empty-state component.
      */
     placeholder: z.boolean(),
+    /**
+     * Public id ("gen_…") of the persisted generated_assets row. Absent when
+     * generation produced no image, there was no user identity to own the
+     * asset, or persistence failed.
+     */
+    assetPublicId: z.string().optional(),
+    /**
+     * Access-controlled serving URL (/api/v1/assets/{publicId}) for the
+     * persisted image. Preferred over `dataUri` for display. Absent when
+     * persistence was skipped or failed.
+     */
+    serveUrl: z.string().optional(),
+    /**
+     * Present when the image could not be persisted as a conversation file.
+     * The inline data URI is still fully usable — this only means the file
+     * will not appear in the Conversation Files panel.
+     */
+    persistWarning: z.string().optional(),
     /** Render directive instructing the chat UI to show image-preview. */
     render: renderDirectiveSchema,
   }),

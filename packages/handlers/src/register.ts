@@ -318,6 +318,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .conversationFilesListHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "conversation.export",
+    async () =>
+      (await import("./conversation.export"))
+        .conversationExportHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "conversation.attachment.add",
     async () =>
       (await import("./conversation.attachment.add"))
@@ -795,6 +801,22 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "repo.pr.open",
     async () =>
       (await import("./repo.pr.open")).repoPrOpenHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "repo.pr.get",
+    async () =>
+      (await import("./repo.pr.get")).repoPrGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "repo.pr.diff",
+    async () =>
+      (await import("./repo.pr.diff")).repoPrDiffHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "repo.ci.status",
+    async () =>
+      (await import("./repo.ci.status"))
+        .repoCiStatusHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "repo.sync",

@@ -95,6 +95,36 @@ export const workspace = {
   // Ask — the front door (full-page ask/chat surface).
   ask: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/ask`,
 
+  // Studio — build interactive agents (agents, skills, tools). The Agent
+  // Builder is the centerpiece; skills/tools feed its Equip step.
+  studio: {
+    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/studio`,
+    agents: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/studio/agents`,
+    agentNew: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/studio/agents/new`,
+    agent: (ctx: Required<ScopeContext>, agentId: string): string =>
+      `${wsBase(ctx)}/studio/agents/${encodeURIComponent(agentId)}`,
+    skills: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/studio/skills`,
+    skill: (ctx: Required<ScopeContext>, skillSlug: string): string =>
+      `${wsBase(ctx)}/studio/skills/${encodeURIComponent(skillSlug)}`,
+    tools: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/studio/tools`,
+  },
+
+  // Marketplace — browse + install plugins and connect MCP servers. Promoted
+  // out of settings so it is a first-class Extend surface.
+  marketplace: {
+    root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/marketplace`,
+    browse: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/marketplace/browse`,
+    installed: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/marketplace/installed`,
+    mcp: (ctx: Required<ScopeContext>): string =>
+      `${wsBase(ctx)}/marketplace/mcp`,
+  },
+
   // Activity — recent agent runs + per-run span-tree trace viewer.
   activity: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/activity`,
@@ -170,6 +200,8 @@ export const defaultTab: Record<string, string> = {
   // Workspace-scope parents
   knowledge: "repos",
   settings: "general",
+  studio: "agents",
+  marketplace: "browse",
 
   // Org-scope parents
   access: "sessions",

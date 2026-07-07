@@ -35,6 +35,37 @@ vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
 }));
 
+// Controllable viewport: false = desktop (jsdom default), true = phone width.
+const { mockViewport } = vi.hoisted(() => ({ mockViewport: { isMobile: false } }));
+vi.mock("@/hooks/use-media-query", () => ({
+  useIsMobile: () => mockViewport.isMobile,
+  useMediaQuery: () => mockViewport.isMobile,
+}));
+
+// Sheet shim — renders children inline when open (the real component portals
+// a Base UI dialog; these tests assert the composer's own composition).
+vi.mock("@/components/ui/sheet", () => ({
+  Sheet: ({ children, open }: { children: React.ReactNode; open?: boolean }) =>
+    open ? <div data-testid="sheet-root">{children}</div> : null,
+  SheetPopup: ({
+    children,
+    "data-testid": testId,
+  }: {
+    children: React.ReactNode;
+    side?: string;
+    "data-testid"?: string;
+  }) => <div data-testid={testId ?? "sheet-popup"}>{children}</div>,
+  SheetHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SheetPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SheetTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  SheetDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+}));
+
+afterEach(() => {
+  mockViewport.isMobile = false;
+  window.localStorage.clear();
+});
+
 const mockSupportsReasoning = vi.fn((_model: unknown) => false);
 const mockGetModel = vi.fn((_id: unknown) => undefined);
 
@@ -2333,6 +2364,12 @@ describe("MessageComposer — agent selection gating", () => {
   };
 
   it("shows the manual code toggle and no agent selector when no agents exist", async () => {
+// ── collapsible composer (OXA mobile-agent-ux) ─────────────────────────────────
+
+const COLLAPSED_KEY = "oxagen.chat.composerCollapsed";
+
+describe("MessageComposer — collapsible composer", () => {
+  it("starts expanded and collapses via the toggle, persisting the preference", async () => {
     const { MessageComposer } = await import("./message-composer");
     render(
       <MessageComposer
@@ -2348,6 +2385,22 @@ describe("MessageComposer — agent selection gating", () => {
   });
 
   it("renders the agent selector and keeps the manual toggle at the default (no agent governs)", async () => {
+      />,
+    );
+    const ta = screen.getByRole("textbox");
+    expect(ta.className).not.toContain("hidden");
+    expect(screen.queryByTestId("composer-expand-affordance")).toBeNull();
+
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+
+    expect(ta.className).toContain("hidden");
+    expect(screen.getByTestId("composer-expand-affordance")).toBeInTheDocument();
+    expect(window.localStorage.getItem(COLLAPSED_KEY)).toBe("1");
+    // Send stays reachable in the slim row.
+    expect(screen.getByRole("button", { name: "Send message" })).toBeInTheDocument();
+  });
+
+  it("expands via the affordance, restores the textarea, and focuses it", async () => {
     const { MessageComposer } = await import("./message-composer");
     render(
       <MessageComposer
@@ -2363,6 +2416,20 @@ describe("MessageComposer — agent selection gating", () => {
   });
 
   it("hides the manual toggle once a code agent governs code mode", async () => {
+      />,
+    );
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+    await userEvent.click(screen.getByTestId("composer-expand-affordance"));
+
+    const ta = screen.getByRole("textbox");
+    expect(ta.className).not.toContain("hidden");
+    expect(window.localStorage.getItem(COLLAPSED_KEY)).toBe("0");
+    // Focus lands on the frame after the expanded layout commits (rAF).
+    await waitFor(() => expect(ta).toHaveFocus());
+  });
+
+  it("restores the persisted collapsed state on mount (hydration-safe)", async () => {
+    window.localStorage.setItem(COLLAPSED_KEY, "1");
     const { MessageComposer } = await import("./message-composer");
     render(
       <MessageComposer
@@ -2378,6 +2445,37 @@ describe("MessageComposer — agent selection gating", () => {
   });
 
   it("also hides the manual toggle for a chat agent (its identity governs)", async () => {
+      />,
+    );
+    expect(screen.getByTestId("composer-expand-affordance")).toBeInTheDocument();
+    expect(screen.getByRole("textbox").className).toContain("hidden");
+  });
+
+  it("exports the storage key used for persistence", async () => {
+    const { COMPOSER_COLLAPSED_STORAGE_KEY } = await import("./message-composer");
+    expect(COMPOSER_COLLAPSED_STORAGE_KEY).toBe(COLLAPSED_KEY);
+  });
+
+  it("keeps the draft and submits it while collapsed", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "draft survives collapse");
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    expect(fd.get("content")).toBe("draft survives collapse");
+  });
+
+  it("auto-expands when a printable key is pressed outside editable controls", async () => {
     const { MessageComposer } = await import("./message-composer");
     render(
       <MessageComposer
@@ -2393,6 +2491,20 @@ describe("MessageComposer — agent selection gating", () => {
   });
 
   it("restores the manual toggle when the default (no agent) is re-selected", async () => {
+      />,
+    );
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+    expect(screen.getByTestId("composer-expand-affordance")).toBeInTheDocument();
+
+    fireEvent.keyDown(document.body, { key: "a" });
+
+    await waitFor(() =>
+      expect(screen.queryByTestId("composer-expand-affordance")).toBeNull(),
+    );
+    expect(window.localStorage.getItem(COLLAPSED_KEY)).toBe("0");
+  });
+
+  it("does NOT auto-expand on modifier combos or non-printable keys", async () => {
     const { MessageComposer } = await import("./message-composer");
     render(
       <MessageComposer
@@ -2409,6 +2521,303 @@ describe("MessageComposer — agent selection gating", () => {
   });
 
   it("forwards the selected agentId in the submit payload", async () => {
+      />,
+    );
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    fireEvent.keyDown(document.body, { key: "a", ctrlKey: true });
+    fireEvent.keyDown(document.body, { key: "c", metaKey: true });
+
+    expect(screen.getByTestId("composer-expand-affordance")).toBeInTheDocument();
+  });
+
+  it("hides the code-mode agent toolbar and gate hint while collapsed", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
+    expect(container.querySelector('[aria-label="Select repository"]')).not.toBeNull();
+    expect(screen.getByTestId("code-mode-gate-hint")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId("composer-collapse-toggle"));
+    expect(container.querySelector('[aria-label="Select repository"]')).toBeNull();
+    expect(screen.queryByTestId("code-mode-gate-hint")).toBeNull();
+  });
+});
+
+describe("MessageComposer — agent toolbar collapse wiring", () => {
+  it("collapses the repo/env picker row via the toolbar's own toggle", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
+    const repoTrigger = container.querySelector('[aria-label="Select repository"]')!;
+    expect(repoTrigger).not.toBeNull();
+    // Expanded: the picker row is visible (no hidden class on its ancestor).
+    expect(repoTrigger.closest("div[class*='hidden']")).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Hide code mode toolbar" }));
+    // Collapsed: the picker row is CSS-hidden and the toggle flips its label.
+    expect(screen.getByRole("button", { name: "Show code mode toolbar" })).toBeInTheDocument();
+    expect(repoTrigger.closest("div[class*='hidden']")).not.toBeNull();
+  });
+});
+
+// ── mobile toolbar (OXA mobile-agent-ux) ───────────────────────────────────────
+
+describe("MessageComposer — mobile toolbar", () => {
+  beforeEach(() => {
+    mockViewport.isMobile = true;
+  });
+  afterEach(() => {
+    mockViewport.isMobile = false;
+  });
+
+  it("keeps only the essentials inline and moves the rest behind the overflow button", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableMcpServers={[makeMcpServer()]}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+    // Essentials inline:
+    expect(screen.getByRole("button", { name: "Attach image or video" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Toggle code mode" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send message" })).toBeInTheDocument();
+    expect(screen.getByTestId("composer-overflow-btn")).toBeInTheDocument();
+    // Overflow controls NOT inline (sheet is closed):
+    expect(screen.queryByTestId("model-picker")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Generate image" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Generate video" })).toBeNull();
+    expect(screen.queryByTestId("mcp-server-picker")).toBeNull();
+    expect(screen.queryByTestId("budget-control")).toBeNull();
+  });
+
+  it("opens the bottom sheet with the overflow controls", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableMcpServers={[makeMcpServer()]}
+      />,
+    );
+    expect(screen.queryByTestId("composer-overflow-sheet")).toBeNull();
+    await userEvent.click(screen.getByTestId("composer-overflow-btn"));
+    expect(screen.getByTestId("composer-overflow-sheet")).toBeInTheDocument();
+    expect(screen.getByTestId("model-picker")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate image" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate video" })).toBeInTheDocument();
+    expect(screen.getByTestId("mcp-server-picker")).toBeInTheDocument();
+    expect(screen.getByTestId("budget-control")).toBeInTheDocument();
+  });
+
+  it("toggling image generation from the sheet switches the composer to image mode", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.click(screen.getByTestId("composer-overflow-btn"));
+    await userEvent.click(screen.getByRole("button", { name: "Generate image" }));
+    expect(screen.getByPlaceholderText("Describe the image you want…")).toBeInTheDocument();
+  });
+
+  it("uses a 2-row textarea and 44px inline touch targets on mobile", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        orgSlug="acme"
+        workspaceSlug="main"
+      />,
+    );
+    expect(screen.getByRole("textbox")).toHaveAttribute("rows", "2");
+    expect(
+      screen.getByRole("button", { name: "Attach image or video" }).className,
+    ).toContain("h-11");
+    expect(screen.getByRole("button", { name: "Toggle code mode" }).className).toContain(
+      "h-11",
+    );
+  });
+
+  it("keeps a 3-row textarea and the full inline control row on desktop", async () => {
+    mockViewport.isMobile = false;
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableMcpServers={[makeMcpServer()]}
+      />,
+    );
+    expect(screen.getByRole("textbox")).toHaveAttribute("rows", "3");
+    expect(screen.getByTestId("model-picker")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate image" })).toBeInTheDocument();
+    expect(screen.getByTestId("mcp-server-picker")).toBeInTheDocument();
+    expect(screen.getByTestId("budget-control")).toBeInTheDocument();
+    expect(screen.queryByTestId("composer-overflow-btn")).toBeNull();
+  });
+});
+
+describe("MessageComposer — pin context & slash commands", () => {
+  // Pin persistence writes to localStorage keyed by a workspace-scoped draft
+  // key. Clear it between tests so a pin written by one test can't rehydrate
+  // (and auto-select/auto-pin) in the next.
+  beforeEach(() => {
+    try {
+      window.localStorage.clear();
+    } catch {
+      // jsdom without a real localStorage — pinning degrades to in-memory,
+      // which is exactly what these single-render assertions exercise.
+    }
+  });
+
+  it("renders the chat context bar when NOT in code mode and repos are available", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    expect(screen.getByTestId("chat-context-bar")).toBeInTheDocument();
+    // The context bar's selectors use the "Pinned …" labels; the code-mode
+    // toolbar's "Select repository" selector must NOT be present yet.
+    expect(container.querySelector('[aria-label="Pinned repository"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Select repository"]')).toBeNull();
+  });
+
+  it("swaps the context bar for the code-mode toolbar once code mode is on", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    const { container } = render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    expect(screen.getByTestId("chat-context-bar")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Toggle code mode" }));
+
+    // Code mode replaces the pin bar with the sandbox toolbar (its selector
+    // uses the default "Select repository" label).
+    expect(container.querySelector('[aria-label="Select repository"]')).not.toBeNull();
+    expect(screen.queryByTestId("chat-context-bar")).not.toBeInTheDocument();
+  });
+
+  it("opens the slash-command menu when the input is a lone slash token", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "/");
+    expect(await screen.findByTestId("slash-command-menu")).toBeInTheDocument();
+  });
+
+  it("filters the slash menu to the matching command as the query narrows", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    await userEvent.type(screen.getByRole("textbox"), "/ci");
+    const options = await screen.findAllByRole("option");
+    expect(options).toHaveLength(1);
+    expect(options[0]).toHaveTextContent("/ci");
+  });
+
+  it("closes the slash menu when the input is no longer a lone slash token", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    const textbox = screen.getByRole("textbox");
+    await userEvent.type(textbox, "/");
+    expect(screen.getByTestId("slash-command-menu")).toBeInTheDocument();
+    // Typing normal text after the slash (a space breaks the lone-slash token).
+    await userEvent.type(textbox, " deploy the app");
+    await waitFor(() =>
+      expect(screen.queryByTestId("slash-command-menu")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("closes the slash menu when Escape is pressed", async () => {
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={makeAction()}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+      />,
+    );
+    const textbox = screen.getByRole("textbox");
+    await userEvent.type(textbox, "/");
+    expect(screen.getByTestId("slash-command-menu")).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(screen.queryByTestId("slash-command-menu")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("encodes pinnedContext in FormData when a repo is pinned (not code mode)", async () => {
     const action = makeAction();
     const { MessageComposer } = await import("./message-composer");
     render(
@@ -2428,5 +2837,62 @@ describe("MessageComposer — agent selection gating", () => {
     const fd = action.mock.calls[0][0] as FormData;
     expect(fd.get("agentId")).toBe("agt_chat");
     expect(fd.get("code")).toBeNull();
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    // Select the repo via the context bar's repo selector (the first Select;
+    // the shared Select mock fires onValueChange("high") === CODE_REPO.key).
+    const repoSelect = screen.getAllByTestId("select")[0];
+    expect(repoSelect).toBeDefined();
+    await userEvent.click(repoSelect!);
+
+    // Pin the selection — enabled now that a repo is chosen.
+    const pinButton = screen.getByTestId("pin-to-chat");
+    await waitFor(() => expect(pinButton).not.toBeDisabled());
+    await userEvent.click(pinButton);
+
+    await userEvent.type(screen.getByRole("textbox"), "look at this repo");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    const pinned = JSON.parse(fd.get("pinnedContext") as string) as {
+      repo: { connectionId: string; owner: string; name: string; defaultBranch: string | null } | null;
+      environment: { id: string; name: string } | null;
+    };
+    expect(pinned.repo).toEqual({
+      connectionId: "con_1",
+      owner: "acme",
+      name: "widgets",
+      defaultBranch: "main",
+    });
+  });
+
+  it("does NOT encode pinnedContext when nothing is pinned", async () => {
+    const action = makeAction();
+    const { MessageComposer } = await import("./message-composer");
+    render(
+      <MessageComposer
+        conversationId={null}
+        parentMessageId={null}
+        action={action}
+        modelConfig={DEFAULT_MODEL_CONFIG}
+        availableRepos={[CODE_REPO]}
+        availableEnvironments={[CODE_ENV_DEFAULT]}
+      />,
+    );
+    // Select a repo but leave it unpinned — pinnedContext only rides along when
+    // the selection is explicitly pinned.
+    const repoSelect = screen.getAllByTestId("select")[0];
+    expect(repoSelect).toBeDefined();
+    await userEvent.click(repoSelect!);
+
+    await userEvent.type(screen.getByRole("textbox"), "hello");
+    await userEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
+    const fd = action.mock.calls[0][0] as FormData;
+    expect(fd.get("pinnedContext")).toBeNull();
   });
 });
