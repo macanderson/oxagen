@@ -1,6 +1,6 @@
 /**
  * sources-section.tsx — Async server component that fetches connection data
- * and renders KnowledgeSourcesClient.
+ * and renders KnowledgeConnectionsClient.
  *
  * Rendered inside a <Suspense> boundary in page.tsx so the static header
  * is shown immediately while this component streams in.
@@ -9,9 +9,9 @@ import { invoke } from "@oxagen/oxagen";
 import "@oxagen/handlers/register";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type { ConnectionListOutput } from "@oxagen/oxagen/contracts/connection.list";
-import { KnowledgeSourcesClient } from "@/components/knowledge/sources/knowledge-sources-client";
+import { KnowledgeConnectionsClient } from "@/components/knowledge/connections/knowledge-connections-client";
 
-interface SourcesSectionProps {
+interface ConnectionsSectionProps {
   orgId: string;
   workspaceId: string;
   userId: string;
@@ -21,7 +21,7 @@ interface SourcesSectionProps {
   setupConnectionId: string | undefined;
 }
 
-export async function SourcesSection({
+export async function ConnectionsSection({
   orgId,
   workspaceId,
   userId,
@@ -29,7 +29,7 @@ export async function SourcesSection({
   workspaceSlug,
   setupConnector,
   setupConnectionId,
-}: SourcesSectionProps) {
+}: ConnectionsSectionProps) {
   const ctx = {
     orgId,
     workspaceId,
@@ -52,7 +52,7 @@ export async function SourcesSection({
   }
 
   return (
-    <KnowledgeSourcesClient
+    <KnowledgeConnectionsClient
       connections={connections}
       orgSlug={orgSlug}
       workspaceSlug={workspaceSlug}

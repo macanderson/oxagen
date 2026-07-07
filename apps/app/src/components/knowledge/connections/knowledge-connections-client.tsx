@@ -287,7 +287,7 @@ function EmptyState({ onConnect }: EmptyStateProps) {
 
 // ── Main client component ──────────────────────────────────────────────────────
 
-export interface KnowledgeSourcesClientProps {
+export interface KnowledgeConnectionsClientProps {
   connections: ConnectionListOutput["connections"];
   orgSlug: string;
   workspaceSlug: string;
@@ -297,13 +297,13 @@ export interface KnowledgeSourcesClientProps {
   setupConnectionId?: string;
 }
 
-export function KnowledgeSourcesClient({
+export function KnowledgeConnectionsClient({
   connections,
   orgSlug,
   workspaceSlug,
   setupConnector,
   setupConnectionId,
-}: KnowledgeSourcesClientProps) {
+}: KnowledgeConnectionsClientProps) {
   const [wizardOpen, setWizardOpen] = React.useState(
     setupConnector === "github",
   );

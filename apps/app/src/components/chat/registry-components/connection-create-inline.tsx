@@ -4,7 +4,7 @@ import * as React from "react";
 import { GithubIcon, Link as LinkIcon } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { GitHubConnectionWizard } from "@/components/knowledge/sources/github-connection-wizard";
+import { GitHubConnectionWizard } from "@/components/knowledge/connections/github-connection-wizard";
 import { cn } from "@/lib/utils";
 
 export interface ConnectionCreateInlineProps {

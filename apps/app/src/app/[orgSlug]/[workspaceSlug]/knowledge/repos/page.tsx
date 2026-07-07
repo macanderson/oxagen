@@ -11,7 +11,7 @@ import { Database } from "lucide-react";
 import { getSessionOrRedirect } from "@/lib/session";
 import { resolveOrg, resolveWorkspace, assertOrgMember } from "@/lib/resolve-org";
 import { TableSkeleton } from "@/components/loading";
-import { SourcesSection } from "./sources-section";
+import { ConnectionsSection } from "./connections-section";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function KnowledgeSourcesPage({ params, searchParams }: PageProps) {
+export default async function KnowledgeReposPage({ params, searchParams }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
   const sp = await searchParams;
   const session = await getSessionOrRedirect();
@@ -51,12 +51,12 @@ export default async function KnowledgeSourcesPage({ params, searchParams }: Pag
             </p>
           </div>
         </div>
-        {/* "Connect source" button is client-side — delegates to KnowledgeSourcesClient */}
+        {/* "Connect source" button is client-side — delegates to KnowledgeConnectionsClient */}
       </div>
 
       {/* Connection list streams in behind a Suspense boundary */}
       <Suspense fallback={<TableSkeleton rows={4} cols={3} />}>
-        <SourcesSection
+        <ConnectionsSection
           orgId={org.id}
           workspaceId={ws.id}
           userId={session.user.id}

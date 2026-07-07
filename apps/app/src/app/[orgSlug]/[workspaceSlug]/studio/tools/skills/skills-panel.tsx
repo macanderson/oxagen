@@ -194,7 +194,7 @@ export function SkillsPanel({
                       data-testid={`skill-detail-link-${skill.slug}`}
                       render={
                         <Link
-                          href={`/${orgSlug}/${workspaceSlug}/studio/skills/${encodeURIComponent(skill.slug)}`}
+                          href={`/${orgSlug}/${workspaceSlug}/studio/tools/skills/${encodeURIComponent(skill.slug)}`}
                         />
                       }
                     >

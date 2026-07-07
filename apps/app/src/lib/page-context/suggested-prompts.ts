@@ -341,7 +341,7 @@ export function deriveSuggestions(ctx: SuggestionCtx): SuggestedPrompt[] {
     case "knowledge":
       suggestions.push({
         label: "Explore Knowledge",
-        prompt: "What knowledge sources are connected to this workspace? Show me the most recently updated ones.",
+        prompt: "What integrations are connected to this workspace? Show me the most recently updated ones.",
       });
       suggestions.push({
         label: "Find Gaps",
