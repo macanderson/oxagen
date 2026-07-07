@@ -71,6 +71,7 @@ const GRANDFATHER = new Map([
   ["billing.usage.breakdown", "noun-terminal read → billing.usage.summarize or billing.usage_breakdown.get"],
   ["chat.message.execution", "noun-terminal read → chat.message.get_execution or chat.message_execution.get"],
   ["eval.run.status", "noun-terminal read (X.Y.status convention) → eval.run.get or eval.run_status.get"],
+  ["repo.ci.status", "noun-terminal read (X.Y.status convention) → repo.ci.get or repo.ci_status.get"],
   ["research.swarm.status", "noun-terminal read (X.Y.status convention) → research.swarm.get or research.swarm_status.get"],
   ["schema.reconcile.status", "noun-terminal read (X.Y.status convention) → schema.reconcile.get or schema.reconcile_status.get"],
   ["schema.registry.config", "noun-terminal read → schema.registry.get or schema.registry_config.get"],
