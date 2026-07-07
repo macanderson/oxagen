@@ -7,8 +7,14 @@
  * attachment (`source: "user_upload"`) linked to that conversation and servable
  * via the access-controlled /api/v1/assets/:publicId route — otherwise it is a
  * pure public-blob ingest with no DB row.
+ *
+ * Output discipline (ADR-023 §4): `--json` emits one single-line JSON value on
+ * stdout; pretty mode prints the upload summary on stdout; a bad `--kind` exits
+ * 2 (usage), an API failure exits 1 — both as uniform stderr error lines.
  */
-import { apiPost } from "../lib/api.js";
+import { apiPostOrThrow } from "../lib/api.js";
+import { createOutput } from "../lib/output.js";
+import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
 interface AssetUploadResponse {
   url: string;
@@ -25,13 +31,14 @@ const KINDS: AssetKind[] = ["avatar", "image", "document", "video"];
 export async function handleAssetUpload(
   url: string,
   opts: { kind?: string; filename?: string; conversation?: string; json?: boolean },
+  writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
   const kind = (opts.kind ?? "image") as AssetKind;
   if (!KINDS.includes(kind)) {
-    process.stderr.write(
-      `Invalid --kind "${opts.kind}". Use one of: ${KINDS.join(", ")}.\n`,
-    );
-    process.exit(1);
+    process.exitCode = 2;
+    out.error(`Invalid --kind "${opts.kind}". Use one of: ${KINDS.join(", ")}.`, "usage");
+    return;
   }
 
   const body: Record<string, unknown> = { sourceUrl: url, kind };
@@ -42,15 +49,23 @@ export async function handleAssetUpload(
     body.conversationId = opts.conversation;
   }
 
-  const res = await apiPost<AssetUploadResponse>("asset/upload", body);
-
-  if (opts.json) {
-    process.stdout.write(JSON.stringify(res, null, 2) + "\n");
+  let res: AssetUploadResponse;
+  try {
+    res = await apiPostOrThrow<AssetUploadResponse>("asset/upload", body);
+  } catch (err) {
+    out.error(err, "api");
     return;
   }
 
-  process.stdout.write(`Uploaded ${kind} (${res.bytes} bytes, ${res.contentType})\n`);
-  process.stdout.write(`  key: ${res.key}\n`);
-  process.stdout.write(`  url: ${res.url}\n`);
-  if (res.publicId) process.stdout.write(`  id:  ${res.publicId}\n`);
+  out.data(res, () => prettyAsset(kind, res));
+}
+
+function prettyAsset(kind: AssetKind, res: AssetUploadResponse): string {
+  const lines = [
+    `Uploaded ${kind} (${res.bytes} bytes, ${res.contentType})`,
+    `  key: ${res.key}`,
+    `  url: ${res.url}`,
+  ];
+  if (res.publicId) lines.push(`  id:  ${res.publicId}`);
+  return lines.join("\n");
 }
