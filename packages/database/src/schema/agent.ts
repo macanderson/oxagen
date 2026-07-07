@@ -32,9 +32,13 @@ export const agents = agentSchema.table(
     deploymentStatus: text("deployment_status").notNull().default("inactive"),
   },
   (t) => ({
+    // NON-partial on purpose: covers soft-deleted rows too, so a slug a
+    // workspace has ever used is PERMANENTLY reserved (never recycled), like an
+    // npm package name. Immutability of the live slug is enforced by the
+    // agents_slug_immutable trigger; this index reserves it past deletion.
+    // (ADR-024, migration 20260709130000_agent_slug_no_recycle.)
     workspaceSlugUniq: uniqueIndex("agents_workspace_slug_uniq")
-      .on(t.workspaceId, t.slug)
-      .where(sql`deleted_at IS NULL`),
+      .on(t.workspaceId, t.slug),
     orgIdx: index("agents_org_idx").on(t.orgId, t.workspaceId),
     deploymentStatusIdx: index("agents_deployment_status_idx").on(
       t.orgId,
