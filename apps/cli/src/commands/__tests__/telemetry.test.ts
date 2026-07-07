@@ -10,7 +10,30 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { vi } from "vitest";
 import type { CliConfig } from "../../lib/config.js";
-import { captureWriter } from "../../lib/capture-writer.js";
+import { captureWriter, type CommandWriter } from "../../lib/capture-writer.js";
+
+/**
+ * A CommandWriter that keeps stdout and stderr in SEPARATE buffers so the
+ * ADR-023 §4 discipline is provable — `status` data lands on stdout, `on`/`off`
+ * confirmations and errors land on stderr. The plain captureWriter merges the
+ * two, which cannot distinguish the streams.
+ */
+function splitWriter(): { writer: CommandWriter; out: () => string; err: () => string } {
+  const o: string[] = [];
+  const e: string[] = [];
+  return {
+    writer: {
+      write: (l) => {
+        o.push(l);
+      },
+      writeErr: (l) => {
+        e.push(l);
+      },
+    },
+    out: () => o.join("\n"),
+    err: () => e.join("\n"),
+  };
+}
 
 vi.mock("../../lib/config.js", () => ({
   getApiUrl: vi.fn(() => "https://api.oxagen.sh"),
@@ -121,9 +144,52 @@ describe("handleTelemetry — subcommand dispatch", () => {
     expect(logged()).toContain("Telemetry:");
   });
 
-  it("rejects an unknown subcommand with a non-zero exit code", () => {
+  it("rejects an unknown subcommand with a usage exit code (2)", () => {
     handleTelemetry("bogus", writer);
     expect(logged()).toContain("Unknown telemetry subcommand");
-    expect(process.exitCode).toBe(1);
+    // ADR-023 §4: a bad subcommand is a usage error → exit 2 (not a runtime 1).
+    expect(process.exitCode).toBe(2);
+  });
+});
+
+// The ADR-023 §4 contract for telemetry (which has no --json flag today):
+// `status` is a data payload on stdout; `on`/`off` are side-effects whose
+// confirmation goes to stderr; an unknown subcommand is a uniform stderr error
+// line with a usage (2) exit code.
+describe("telemetry output discipline (ADR-023 §4)", () => {
+  it("status writes its report to stdout and nothing to stderr", () => {
+    setConfigReturn({});
+    const sp = splitWriter();
+    telemetryStatus(sp.writer);
+    expect(sp.out()).toContain("Telemetry: enabled");
+    expect(sp.out()).toContain("https://api.oxagen.sh/v1/telemetry/usage");
+    expect(sp.err()).toBe("");
+  });
+
+  it("on routes its confirmation to stderr, keeping stdout clean", () => {
+    setConfigReturn({});
+    const sp = splitWriter();
+    telemetryOn(sp.writer);
+    expect(sp.out()).toBe("");
+    expect(sp.err()).toContain("✓ Telemetry enabled.");
+    expect(mockWriteConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ telemetry: expect.objectContaining({ enabled: true }) }),
+    );
+  });
+
+  it("off routes its confirmation to stderr, keeping stdout clean", () => {
+    setConfigReturn({});
+    const sp = splitWriter();
+    telemetryOff(sp.writer);
+    expect(sp.out()).toBe("");
+    expect(sp.err()).toContain("no usage data will be sent");
+  });
+
+  it("an unknown subcommand is a uniform stderr error line with nothing on stdout", () => {
+    const sp = splitWriter();
+    handleTelemetry("bogus", sp.writer);
+    expect(sp.out()).toBe("");
+    expect(sp.err()).toContain("Unknown telemetry subcommand");
+    expect(process.exitCode).toBe(2);
   });
 });
