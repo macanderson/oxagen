@@ -150,7 +150,7 @@ const DOMAIN_ICONS: Record<string, LucideIcon> = {
 const GENERIC_PREFIXES = new Set(["agent"]);
 
 function capitalize(text: string): string {
-  return text.length === 0 ? text : text[0].toUpperCase() + text.slice(1);
+  return text.length === 0 ? text : text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /**
@@ -164,12 +164,11 @@ export function deriveToolCallLabel(capability: string): string {
     .split(".")
     .map((s) => s.trim().replace(/_/g, " ").toLowerCase())
     .filter(Boolean);
-  if (segments.length === 0) return capability;
-  if (segments.length === 1) return capitalize(segments[0]);
+  const first = segments[0];
+  if (first === undefined) return capability;
+  if (segments.length === 1) return capitalize(first);
   const meaningful =
-    segments.length > 2 && GENERIC_PREFIXES.has(segments[0])
-      ? segments.slice(1)
-      : segments;
+    segments.length > 2 && GENERIC_PREFIXES.has(first) ? segments.slice(1) : segments;
   const verb = meaningful[meaningful.length - 1];
   const nounPhrase = meaningful.slice(0, -1).join(" ");
   return capitalize(`${verb} ${nounPhrase}`.trim());

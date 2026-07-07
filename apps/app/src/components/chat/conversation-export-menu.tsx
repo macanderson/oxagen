@@ -27,6 +27,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
+import { useIsMobile } from "@/hooks/use-media-query";
 
 export interface ConversationExportMenuProps {
   /** Public id ("cnv_…") of the conversation to export. */
@@ -47,22 +48,6 @@ interface ExportResponse {
   content: string | null;
   url: string | null;
   messageCount: number;
-}
-
-/**
- * Local matchMedia hook (no shared use-is-mobile hook exists yet — keep this
- * inline rather than minting a new shared file from a leaf component).
- */
-function useIsMobile(): boolean {
-  const [isMobile, setIsMobile] = React.useState(false);
-  React.useEffect(() => {
-    const mql = window.matchMedia("(max-width: 767px)");
-    const update = () => setIsMobile(mql.matches);
-    update();
-    mql.addEventListener("change", update);
-    return () => mql.removeEventListener("change", update);
-  }, []);
-  return isMobile;
 }
 
 /** Trigger a client-side download of `content` as a text/markdown file. */

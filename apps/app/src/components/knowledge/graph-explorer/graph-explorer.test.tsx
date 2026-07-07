@@ -19,6 +19,7 @@ import {
   fireEvent,
   act,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { ExplorerEdge, ExplorerNode } from "./types";
@@ -201,8 +202,12 @@ describe("GraphExplorer — desktop (≥lg, hover-capable)", () => {
     render(<GraphExplorer />);
     selectNode();
     expect(await screen.findByText("Ada Lovelace")).toBeInTheDocument();
-    // The detail aside is a complementary landmark; no sheet is mounted.
-    expect(screen.getByRole("complementary")).toBeInTheDocument();
+    // The detail renders inside a complementary landmark (the filter aside is
+    // one too, so scope by content); no sheet is mounted.
+    const asides = screen.getAllByRole("complementary");
+    expect(
+      asides.some((aside) => aside.textContent?.includes("Ada Lovelace")),
+    ).toBe(true);
     expect(screen.queryByTestId("sheet")).not.toBeInTheDocument();
   });
 
@@ -211,8 +216,9 @@ describe("GraphExplorer — desktop (≥lg, hover-capable)", () => {
     act(() =>
       canvas().onEdgeHover(EDGES[0] as ExplorerEdge, { x: 10, y: 10 }),
     );
-    expect(screen.getByRole("tooltip")).toBeInTheDocument();
-    expect(screen.getByText("WORKS_AT")).toBeInTheDocument();
+    const tooltip = screen.getByRole("tooltip");
+    // Scope to the tooltip — the type-filter panel lists "WORKS_AT" too.
+    expect(within(tooltip).getByText("WORKS_AT")).toBeInTheDocument();
   });
 
   it("keeps node dragging enabled by default", () => {
