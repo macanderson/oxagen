@@ -47,15 +47,19 @@ export type AgentDetail = {
 
 /**
  * Code features are not a first-class column on AgentDefinition. We persist the
- * flag on the identity row's agentType: "coding" enables the sandbox/coding
- * path at launch, "custom" is a plain conversational/tool agent. This keeps the
+ * flag on the identity row's agentType: "code" enables the sandbox/coding path
+ * at launch, "custom" is a plain conversational/tool agent. This keeps the
  * feature real with zero schema migration (see 04-build-plan-and-prompts.md).
+ *
+ * "code" is the platform convention (aligns with the chat composer's code-mode
+ * gate). isCodingAgent stays read-tolerant of the earlier "coding" spelling so
+ * agents created before the convention settled still enable the coding path.
  */
-export const CODING_AGENT_TYPE = "coding";
+export const CODING_AGENT_TYPE = "code";
 export const DEFAULT_AGENT_TYPE = "custom";
 
 export function isCodingAgent(agentType: string): boolean {
-  return agentType === CODING_AGENT_TYPE;
+  return agentType === CODING_AGENT_TYPE || agentType === "coding";
 }
 
 // ── Reads ─────────────────────────────────────────────────────────────────────

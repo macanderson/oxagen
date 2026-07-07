@@ -1,0 +1,104 @@
+// Pure config-application for launching a PUBLISHED agent into a chat session.
+//
+// When a chat turn carries an `agentId`, the stream route loads that agent's
+// definition (agent.definition.get) and merges its config into the turn: the
+// agent's instructions ride the system prompt, its equipped skills + MCP
+// servers extend what the model can reach, and a `coding` agent forces code
+// mode. This module is the SINGLE pure seam that computes the merged values so
+// it can be unit-tested in isolation — the route only does the async load, the
+// try/catch, and the wiring of these outputs into resolvePrompt/materializeTools.
+//
+// Every merge is ADDITIVE and idempotent: an unbound turn never calls this, and
+// a bound turn only ever widens (union) skills/servers and appends instructions.
+
+/**
+ * The slice of an `agent.definition.get` output this binding needs. Kept
+ * structurally minimal (not the full contract type) so the helper is trivially
+ * testable and never couples to fields it doesn't read.
+ */
+export interface AgentBindingDefinition {
+  /** Agent kind. `"coding"` forces code mode on for the turn. */
+  agentType: string;
+  config: {
+    /** Optional system prompt baked into the definition (may be null/empty). */
+    instructions?: string | null;
+    /** Everything the agent loads. Only `skill` + `mcp_server` entries are read
+     *  here (functions/subagents are materialized through the normal kernel). */
+    agentTools?: Array<{ type: string; ref: string }>;
+  };
+}
+
+export interface AgentBindingInput {
+  /** The bound agent definition. */
+  def: AgentBindingDefinition;
+  /** Skill slugs the request already pinned (body.skills). */
+  skills: string[];
+  /** Per-turn MCP server allowlist the request already set (activeServerIds). */
+  serverAllowlist: string[];
+  /** True when the request itself put the turn in code mode (body.code present). */
+  codeMode: boolean;
+}
+
+export interface AgentBindingResult {
+  /** Instructions to append to the system-prompt baseline. Empty when the
+   *  definition carries none. The route wraps this in a labelled section and
+   *  places it AFTER the base (chat/coding) prompt so the coding contract always
+   *  sits above the customer instructions. */
+  instructions: string;
+  /** Merged, de-duplicated, max-5-capped skill slugs (body ∪ agent skills). */
+  skills: string[];
+  /** Merged, de-duplicated MCP server allowlist (body ∪ agent mcp_servers). */
+  serverAllowlist: string[];
+  /** True when the turn should run in code mode (request code mode OR a coding
+   *  agent). The route still only attaches the sandbox when the request carried
+   *  the repo/env inputs — a forced coding agent with no repo degrades to the
+   *  code-mode PROMPT with no filesystem tools. */
+  codeMode: boolean;
+}
+
+/** Matches the stream route's BodySchema `skills` cap — bound prompt bloat. */
+const MAX_PINNED_SKILLS = 5;
+
+/** Union two string lists preserving first-seen order and dropping duplicates
+ *  and empty entries. `base` entries win their position over `extra`. */
+function unionOrdered(base: string[], extra: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of [...base, ...extra]) {
+    const v = value.trim();
+    if (v.length === 0 || seen.has(v)) continue;
+    seen.add(v);
+    out.push(v);
+  }
+  return out;
+}
+
+/**
+ * Merge a bound agent definition into the current turn's config. Pure: no I/O,
+ * no throw — the caller owns the async load and the fail-open try/catch.
+ */
+export function applyAgentBinding(input: AgentBindingInput): AgentBindingResult {
+  const { def, skills, serverAllowlist, codeMode } = input;
+  const agentTools = def.config.agentTools ?? [];
+
+  const skillRefs = agentTools
+    .filter((t) => t.type === "skill")
+    .map((t) => t.ref);
+  const serverRefs = agentTools
+    .filter((t) => t.type === "mcp_server")
+    .map((t) => t.ref);
+
+  const instructions = (def.config.instructions ?? "").trim();
+
+  return {
+    instructions,
+    // Body-pinned skills keep priority; the cap bounds prompt size exactly like
+    // the request schema does, so a skill-heavy agent can't blow the budget.
+    skills: unionOrdered(skills, skillRefs).slice(0, MAX_PINNED_SKILLS),
+    serverAllowlist: unionOrdered(serverAllowlist, serverRefs),
+    // A code agent forces code mode even if the request didn't ask for it.
+    // Read-tolerant of the earlier "coding" spelling; "code" is the convention.
+    codeMode:
+      codeMode || def.agentType === "code" || def.agentType === "coding",
+  };
+}

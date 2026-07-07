@@ -15,7 +15,9 @@ export default async function AskPage({
   searchParams,
 }: {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
-  searchParams: Promise<{ c?: string; new?: string }>;
+  // `?agent=<publicId>` binds this session to a published agent (see
+  // ConversationPage → ChatShell). Optional — absent ⇒ normal unbound chat.
+  searchParams: Promise<{ c?: string; new?: string; agent?: string }>;
 }) {
   const { orgSlug, workspaceSlug } = await params;
 

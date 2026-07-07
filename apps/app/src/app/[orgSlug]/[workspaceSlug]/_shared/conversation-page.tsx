@@ -24,6 +24,11 @@ import { logger } from "@oxagen/handlers/logger";
 // Without this the call silently throws "No handler registered" (see CLAUDE.md
 // gotcha) — caught below and treated as fail-open null governance regardless.
 import "@oxagen/handlers/register";
+// Side-effect import: bind the agent handlers so invoke("agent.definition.get")
+// below can resolve when the Ask page binds a published agent (?agent=…).
+// Idempotent (registerHandlersOnce); a lookup failure is caught + degrades to
+// showing no bound-agent name.
+import "@oxagen/agent/register";
 import { ConversationNav } from "@/components/conversations/conversation-nav";
 import type { ConversationNavActions } from "@/components/conversations/types";
 import {
@@ -89,17 +94,17 @@ export interface ConversationPageActions {
 
 interface ConversationPageProps {
   params: Promise<{ orgSlug: string; workspaceSlug: string }>;
-  searchParams: Promise<{ c?: string; new?: string }>;
+  searchParams: Promise<{ c?: string; new?: string; agent?: string }>;
   actions: ConversationPageActions;
 }
 
 
 export async function ConversationPage({ params, searchParams, actions }: ConversationPageProps) {
   const session = await getSessionOrRedirect();
-  const [{ orgSlug, workspaceSlug }, { c: conversationPublicId, new: forceNew }] = await Promise.all([
-    params,
-    searchParams,
-  ]);
+  const [
+    { orgSlug, workspaceSlug },
+    { c: conversationPublicId, new: forceNew, agent: boundAgentId },
+  ] = await Promise.all([params, searchParams]);
   const tenant = await resolveOrg(orgSlug);
   const workspace = await resolveWorkspace(tenant.id, workspaceSlug);
 
@@ -346,6 +351,23 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
     purge: purgeArchivedConversationsAction.bind(null, navCtx),
   };
 
+  // Bound-agent binding (?agent=<publicId>): resolve the agent's human name so
+  // the composer can show a "Session bound to: <name>" indicator. Best-effort +
+  // fail-open — a denied/missing/unregistered lookup degrades to showing the raw
+  // id (so the binding is still visibly active). The actual config application
+  // happens server-side in the chat stream route; here we only fetch the label.
+  let boundAgentName: string | null = null;
+  if (boundAgentId) {
+    boundAgentName = await runInTenantScope(
+      { orgId: tenant.id, workspaceId: workspace.id },
+      () => invoke("agent.definition.get", { agentId: boundAgentId }, userCtx, { surface: "agent" }),
+    )
+      .then((def) => (def as { name?: string }).name ?? boundAgentId)
+      .catch((err: unknown) =>
+        logAndFallback(err, "bound-agent name resolve", boundAgentId),
+      );
+  }
+
   const initialModelState = effectiveModelDefaults
     ? buildSeededModelState({
         textModel: effectiveModelDefaults.text.model,
@@ -387,6 +409,8 @@ export async function ConversationPage({ params, searchParams, actions }: Conver
             availableRepos={codeModeOptions.repos}
             availableEnvironments={codeModeOptions.environments}
             workspaceBudgetGovernance={workspaceBudgetGovernance}
+            agentId={boundAgentId ?? null}
+            boundAgentName={boundAgentName}
           />
         </div>
       </div>
