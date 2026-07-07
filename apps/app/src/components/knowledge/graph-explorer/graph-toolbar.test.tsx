@@ -5,15 +5,74 @@
  * Covers: search input submit calls onSearch with trimmed query, stats line
  * renders node/edge counts, view SegmentedControl switches call onViewChange,
  * canvas action buttons call their callbacks, canvas buttons are absent in
- * table view, reload button calls onReload.
+ * table view, reload button calls onReload, and the compact (<md) mode that
+ * collapses secondary actions into a "More actions" menu (matchMedia mocked).
  */
 
+import * as React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  within,
+} from "@testing-library/react";
 import { GraphToolbar, type GraphToolbarProps } from "./graph-toolbar";
 import type { ExplorerStats } from "./types";
 
-afterEach(cleanup);
+// The Base UI menu opens through portal/positioner machinery jsdom can't
+// exercise; a pass-through mock keeps the assertions about which actions the
+// toolbar routes into the menu.
+vi.mock("@/components/ui/menu", () => ({
+  Menu: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  MenuTrigger: ({
+    children,
+    render: renderEl,
+  }: {
+    children?: React.ReactNode;
+    render?: React.ReactElement<{ "aria-label"?: string }>;
+  }) => (
+    <button type="button" aria-label={renderEl?.props["aria-label"]}>
+      {children}
+    </button>
+  ),
+  MenuPopup: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="menu-popup">{children}</div>
+  ),
+  MenuItem: ({
+    children,
+    onClick,
+    disabled,
+  }: {
+    children?: React.ReactNode;
+    onClick?: () => void;
+    disabled?: boolean;
+  }) => (
+    <button type="button" role="menuitem" onClick={onClick} disabled={disabled}>
+      {children}
+    </button>
+  ),
+  MenuSeparator: () => <hr />,
+}));
+
+function setMatchMedia(matches: (query: string) => boolean) {
+  window.matchMedia = ((query: string) => ({
+    matches: matches(query),
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+}
+
+afterEach(() => {
+  cleanup();
+  delete (window as { matchMedia?: unknown }).matchMedia;
+});
 
 const noopStats: ExplorerStats = {
   nodeCount: 100,
@@ -229,6 +288,109 @@ describe("GraphToolbar — reload", () => {
     render(<GraphToolbar {...makeProps({ onReload })} />);
     fireEvent.click(screen.getByRole("button", { name: /reload graph/i }));
     expect(onReload).toHaveBeenCalledOnce();
+  });
+});
+
+describe("GraphToolbar — compact mode (<md)", () => {
+  beforeEach(() => {
+    setMatchMedia((q) => q === "(max-width: 767px)");
+  });
+
+  it("keeps search, fit-to-view, and the view switcher inline", () => {
+    render(<GraphToolbar {...makeProps({ view: "2d", canvasReady: true })} />);
+    expect(
+      screen.getByRole("textbox", { name: /search the graph/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /fit to view/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /2d graph/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /more actions/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("moves zoom, drag, screenshot, create, and reload actions into the menu", () => {
+    render(<GraphToolbar {...makeProps({ view: "2d", canvasReady: true })} />);
+    const popup = within(screen.getByTestId("menu-popup"));
+    expect(
+      popup.getByRole("menuitem", { name: /zoom in/i }),
+    ).toBeInTheDocument();
+    expect(
+      popup.getByRole("menuitem", { name: /zoom out/i }),
+    ).toBeInTheDocument();
+    expect(
+      popup.getByRole("menuitem", { name: /dragging/i }),
+    ).toBeInTheDocument();
+    expect(
+      popup.getByRole("menuitem", { name: /download screenshot/i }),
+    ).toBeInTheDocument();
+    expect(
+      popup.getByRole("menuitem", { name: /add node/i }),
+    ).toBeInTheDocument();
+    expect(
+      popup.getByRole("menuitem", { name: /add edge/i }),
+    ).toBeInTheDocument();
+    expect(
+      popup.getByRole("menuitem", { name: /reload graph/i }),
+    ).toBeInTheDocument();
+    // No standalone inline zoom button remains outside the menu.
+    expect(
+      screen.queryByRole("button", { name: /zoom in/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("menu actions invoke their callbacks", () => {
+    const onZoomIn = vi.fn();
+    const onCreateNode = vi.fn();
+    const onReload = vi.fn();
+    render(
+      <GraphToolbar
+        {...makeProps({
+          onZoomIn,
+          onCreateNode,
+          onReload,
+          view: "2d",
+          canvasReady: true,
+        })}
+      />,
+    );
+    const popup = within(screen.getByTestId("menu-popup"));
+    fireEvent.click(popup.getByRole("menuitem", { name: /zoom in/i }));
+    fireEvent.click(popup.getByRole("menuitem", { name: /add node/i }));
+    fireEvent.click(popup.getByRole("menuitem", { name: /reload graph/i }));
+    expect(onZoomIn).toHaveBeenCalledOnce();
+    expect(onCreateNode).toHaveBeenCalledOnce();
+    expect(onReload).toHaveBeenCalledOnce();
+  });
+
+  it("omits canvas-only menu items in table view but keeps create/reload", () => {
+    render(<GraphToolbar {...makeProps({ view: "table" })} />);
+    const popup = within(screen.getByTestId("menu-popup"));
+    expect(
+      popup.queryByRole("menuitem", { name: /zoom in/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      popup.queryByRole("menuitem", { name: /download screenshot/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      popup.getByRole("menuitem", { name: /add node/i }),
+    ).toBeInTheDocument();
+    expect(
+      popup.getByRole("menuitem", { name: /reload graph/i }),
+    ).toBeInTheDocument();
+    // Fit-to-view is canvas-only and stays hidden in table view.
+    expect(
+      screen.queryByRole("button", { name: /fit to view/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("search input uses a 16px font below md to prevent iOS zoom", () => {
+    render(<GraphToolbar {...makeProps({ view: "2d" })} />);
+    const input = screen.getByRole("textbox", { name: /search the graph/i });
+    expect(input.className).toContain("text-base");
   });
 });
 

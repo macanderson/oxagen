@@ -104,8 +104,9 @@ export const imageGenerateHandler: CapabilityHandler<typeof imageGenerate> = asy
             mimeType: "image/png",
             prompt: input.prompt,
             // Record the resolved gateway model id (never a hard-coded slug —
-            // AI Gateway slug-drift gotcha).
-            model: imageModel.modelId,
+            // AI Gateway slug-drift gotcha). AI SDK v6's `ImageModel` is
+            // `string | ImageModelV3`, so narrow before touching `.modelId`.
+            model: typeof imageModel === "string" ? imageModel : imageModel.modelId,
             messageId: ctx.messageId ?? undefined,
           });
           assetPublicId = asset.publicId;
