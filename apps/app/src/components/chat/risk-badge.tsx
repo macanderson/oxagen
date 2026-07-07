@@ -1,28 +1,27 @@
-import { cn } from "@/lib/utils";
+import { ShieldAlert } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import type { RiskLevel } from "./stream-event-types";
 
-// Token-driven risk color map (earthy status tokens):
-//   low = success · medium = warning · high = error
-const RISK_TOKEN: Record<RiskLevel, string> = {
-  low: "var(--success)",
-  medium: "var(--warning)",
-  high: "var(--error)",
-};
-
+/**
+ * RiskBadge — a deliberately calm risk indicator for tool calls.
+ *
+ * Low-risk calls render nothing: the absence of a chip is the signal that
+ * everything is routine. Medium/high risk render a small neutral outline
+ * badge with a shield icon — informative, not alarming. Full risk detail
+ * lives in the tool call's expanded body.
+ */
 export function RiskBadge({ risk }: { risk: RiskLevel }) {
-  const color = RISK_TOKEN[risk];
+  if (risk === "low") return null;
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
-      )}
-      style={{
-        color,
-        backgroundColor: `color-mix(in oklch, ${color} 12%, transparent)`,
-        border: `1px solid color-mix(in oklch, ${color} 20%, transparent)`,
-      }}
+    <Badge
+      variant="outline"
+      size="sm"
+      className="gap-1 font-normal text-muted-foreground"
+      data-testid="risk-badge"
+      data-risk={risk}
     >
-      {risk} risk
-    </span>
+      <ShieldAlert className="h-3 w-3" aria-hidden="true" />
+      {risk === "high" ? "High risk" : "Medium risk"}
+    </Badge>
   );
 }

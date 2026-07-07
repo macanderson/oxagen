@@ -769,9 +769,8 @@ export function ChatShellClient({
               stderr={tc.stderr}
               errorReason={tc.errorReason}
               durationMs={tc.durationMs}
-              // Auto-expand the in-flight call so the user watches the agent
-              // compose its arguments and stream output live.
-              defaultOpen={active}
+              // In-flight calls stay collapsed — the spinner in the compact
+              // row signals progress; the user can tap to watch live output.
             />
           ),
           tone,
