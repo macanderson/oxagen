@@ -29,6 +29,13 @@ interface EnvironmentSelectorProps {
   selectedEnvId: string | null;
   onSelectEnv: (envId: string) => void;
   isLoading?: boolean;
+  /**
+   * Accessible label for the trigger. Defaults to "Select environment". The
+   * pin context bar overrides it ("Pinned environment") so the always-visible
+   * pin selector doesn't collide with the code-mode toolbar's selector.
+   */
+  ariaLabel?: string;
+  placeholder?: string;
 }
 
 export function EnvironmentSelector({
@@ -36,6 +43,8 @@ export function EnvironmentSelector({
   selectedEnvId,
   onSelectEnv,
   isLoading = false,
+  ariaLabel = "Select environment",
+  placeholder = "Select environment",
 }: EnvironmentSelectorProps) {
   return (
     <div className="flex items-center gap-2">
@@ -47,8 +56,8 @@ export function EnvironmentSelector({
         }}
         disabled={isLoading || environments.length === 0}
       >
-        <SelectTrigger className="w-40" aria-label="Select environment">
-          <SelectValue placeholder="Select environment" />
+        <SelectTrigger className="w-40" aria-label={ariaLabel}>
+          <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectPopup>
           {environments.map((env) => (

@@ -1,3 +1,96 @@
+/** A pull request's core fields, normalised from the GitHub REST payload. */
+export interface GitHubPullRequest {
+  number: number;
+  title: string;
+  htmlUrl: string;
+  /** Raw GitHub state — merged is derived separately via `merged`. */
+  state: "open" | "closed";
+  draft: boolean;
+  merged: boolean;
+  authorLogin: string | null;
+  authorAvatarUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+  body: string | null;
+  baseRef: string;
+  headRef: string;
+  headSha: string | null;
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  commits: number;
+  /** True total of issue (conversation) comments. */
+  commentCount: number;
+  /** True total of inline review comments. */
+  reviewCommentCount: number;
+}
+
+/** A single PR comment, normalised across issue and review comment endpoints. */
+export interface GitHubPrComment {
+  id: string;
+  authorLogin: string | null;
+  authorAvatarUrl: string | null;
+  body: string;
+  createdAt: string;
+  htmlUrl: string | null;
+  /** File path for review comments; null for issue comments. */
+  path: string | null;
+}
+
+/** Both comment streams for a PR, kept separate so callers can tag `kind`. */
+export interface GitHubPrComments {
+  issue: GitHubPrComment[];
+  review: GitHubPrComment[];
+}
+
+/** A GitHub Checks API check run. */
+export interface GitHubCheckRun {
+  name: string;
+  status: "queued" | "in_progress" | "completed";
+  conclusion:
+    | "success"
+    | "failure"
+    | "neutral"
+    | "cancelled"
+    | "timed_out"
+    | "action_required"
+    | "skipped"
+    | "stale"
+    | null;
+  detailsUrl: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  appName: string | null;
+}
+
+/** A legacy commit-status context from the combined status endpoint. */
+export interface GitHubCommitStatus {
+  context: string;
+  /** GitHub statuses report state, not the richer check conclusion. */
+  state: "error" | "failure" | "pending" | "success";
+  targetUrl: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+/** Merged CI signal for a ref: resolved SHA plus both check streams. */
+export interface GitHubCiChecks {
+  sha: string | null;
+  checkRuns: GitHubCheckRun[];
+  statuses: GitHubCommitStatus[];
+}
+
+/** A single file entry from the PR files endpoint. */
+export interface GitHubPrFile {
+  path: string;
+  previousPath: string | null;
+  status: "added" | "modified" | "removed" | "renamed" | "copied" | "changed";
+  additions: number;
+  deletions: number;
+  changes: number;
+  patch: string | null;
+}
+
 /**
  * Vendor-neutral interface for GitHub write operations.
  * Backed by @octokit/rest; swap the backing by providing a different
@@ -93,6 +186,45 @@ export interface GitHubClient {
     repo: string;
     ref?: string;
   }): Promise<string[]>;
+
+  /**
+   * Fetch a single pull request's details (stats, refs, comment totals).
+   */
+  getPullRequest(args: {
+    owner: string;
+    repo: string;
+    number: number;
+  }): Promise<GitHubPullRequest>;
+
+  /**
+   * List a PR's issue (conversation) comments and inline review comments.
+   * Fetches up to 100 of each; callers cap and sort as needed.
+   */
+  listPullRequestComments(args: {
+    owner: string;
+    repo: string;
+    number: number;
+  }): Promise<GitHubPrComments>;
+
+  /**
+   * Fetch check runs and legacy combined statuses for a ref, resolving the ref
+   * to its commit SHA first. Both streams are returned for the caller to merge.
+   */
+  listCiChecks(args: {
+    owner: string;
+    repo: string;
+    ref: string;
+  }): Promise<GitHubCiChecks>;
+
+  /**
+   * List the files changed in a pull request with per-file patch and stats.
+   * Fetches up to 100 files (one page).
+   */
+  listPullRequestFiles(args: {
+    owner: string;
+    repo: string;
+    number: number;
+  }): Promise<GitHubPrFile[]>;
 }
 
 /** Options accepted by createGitHubClient. */
