@@ -211,6 +211,7 @@ describe("handleLogin — headless (--token/--org/--workspace flags)", () => {
       token: "tok_new",
       orgSlug: "acme",
       workspaceSlug: "main",
+      appUrl: "https://app.oxagen.sh",
     });
     expect(stdout).toContain("Logged in to Oxagen");
     expect(stdout).toContain("acme");
@@ -238,6 +239,7 @@ describe("handleLogin — headless (--token/--org/--workspace flags)", () => {
       token: "tok_real",
       orgSlug: "acme",
       workspaceSlug: "main",
+      appUrl: "https://app.oxagen.sh",
     });
     expect(stdout).toContain("Logged in to Oxagen");
     expect(stderr).toContain("403");
@@ -289,6 +291,7 @@ describe("handleLogin — headless (--token/--org/--workspace flags)", () => {
       token: "tok_valid",
       orgSlug: "picked-org",
       workspaceSlug: "picked-ws",
+      appUrl: "https://app.oxagen.sh",
     });
     expect(process.exitCode).toBeFalsy();
   });
@@ -340,6 +343,7 @@ describe("handleLogin — headless (--token/--org/--workspace flags)", () => {
       token: "tok_config",
       orgSlug: "picked-org",
       workspaceSlug: "picked-ws",
+      appUrl: "https://app.oxagen.sh",
     });
   });
 });
