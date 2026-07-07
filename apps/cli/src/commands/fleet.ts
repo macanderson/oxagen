@@ -460,7 +460,14 @@ export async function handleFleetAttach(
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   const out = createOutput(
-    { json: opts.json, quiet: opts.quiet, autoJson: true },
+    {
+      json: opts.json,
+      quiet: opts.quiet,
+      autoJson: true,
+      // One TTY truth: the injected override must steer autoJson AND the
+      // interactive branch below, or a test/caller can land in a mode split.
+      ...(opts.stdoutIsTTY !== undefined ? { stdoutIsTTY: opts.stdoutIsTTY } : {}),
+    },
     writer,
   );
   const store = openStore(opts.cwd);
@@ -815,7 +822,14 @@ export async function handleFleetRoot(
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   const out = createOutput(
-    { json: opts.json, quiet: opts.quiet, autoJson: true },
+    {
+      json: opts.json,
+      quiet: opts.quiet,
+      autoJson: true,
+      // One TTY truth: the injected override must steer autoJson AND the
+      // interactive branch below, or a test/caller can land in a mode split.
+      ...(opts.stdoutIsTTY !== undefined ? { stdoutIsTTY: opts.stdoutIsTTY } : {}),
+    },
     writer,
   );
   // Non-TTY or --json → the merged watch-all stream (the documented alias).
