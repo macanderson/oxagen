@@ -1,8 +1,14 @@
-import type { CapabilityContext, CapabilitySurface, CapabilityEffect, ResolvedPrincipal } from "./types";
+import type {
+  CapabilityContext,
+  CapabilitySurface,
+  CapabilityEffect,
+  CheckedContext,
+  ResolvedPrincipal,
+} from "./types";
 import { getSurfaces } from "./types";
 import { getCapability, listCapabilities } from "./registry";
 import { pluginForContract } from "./plugins/registry";
-import { runInTenantScope } from "@oxagen/tenancy";
+import { runInTenantScope, runWithPrincipal } from "@oxagen/tenancy";
 import { trace, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 
 // Matches runInTenantScope's own uuid guard: we only enter a tenant scope when
@@ -122,6 +128,13 @@ export type KernelIAMCheckFn = (args: {
   ctx: CapabilityContext;
   defaultEffect: CapabilityEffect;
   rawInputJson: string;
+  /**
+   * The object this invocation acts on, derived from the contract's
+   * declarative `audit` field (accountability chain). Threads into the IAM
+   * audit row's target_kind/target_id. Null when the contract declares no
+   * audit target or the input field is absent/non-string.
+   */
+  target?: { kind: string; id: string } | null;
 }) => Promise<KernelIAMCheckResult>;
 
 export type KernelAuditEmitFn = (args: {
@@ -170,7 +183,7 @@ export function clearKernelIAMRuntime(): void {
 
 export type CapabilityHandlerFn = (
   input: unknown,
-  ctx: CapabilityContext,
+  ctx: CheckedContext,
 ) => Promise<unknown>;
 
 export type HandlerLoader = () => Promise<CapabilityHandlerFn>;
@@ -590,11 +603,47 @@ async function _invokeCore(
   const withScope =
     isScoped || hasTenantIds
       ? <T>(fn: () => Promise<T>): Promise<T> =>
-          runInTenantScope({ orgId: ctx.orgId, workspaceId: ctx.workspaceId }, fn)
+          runInTenantScope(
+            {
+              orgId: ctx.orgId,
+              workspaceId: ctx.workspaceId,
+              // Principal spine (accountability chain): the originating user
+              // and the capability are known at scope entry; the IAM-resolved
+              // principal is layered on after the check via runWithPrincipal.
+              // Guarded by isUuid — runInTenantScope fail-closes on garbage,
+              // and userId can legitimately be null (machine-to-machine).
+              userId: ctx.userId !== null && isUuid(ctx.userId) ? ctx.userId : null,
+              capabilityName: canonical,
+            },
+            fn,
+          )
       : <T>(fn: () => Promise<T>): Promise<T> => fn();
+
+  // ── Audit target (accountability chain) ──────────────────────────────────
+  // Derived from the contract's declarative `audit` field: the input field
+  // that carries the acted-on object's id. String values only — anything
+  // else means the field is absent or the contract mis-declared it, and a
+  // null target is safer than a junk one.
+  const auditDecl = (
+    cap as { audit?: { targetKind: string; targetIdField: string } }
+  ).audit;
+  let auditTarget: { kind: string; id: string } | null = null;
+  if (auditDecl) {
+    const targetValue = (inputResult.data as Record<string, unknown>)[
+      auditDecl.targetIdField
+    ];
+    if (typeof targetValue === "string" && targetValue.length > 0) {
+      auditTarget = { kind: auditDecl.targetKind, id: targetValue };
+    }
+  }
 
   // ── IAM + billing + handler (all inside scope for scoped caps) ───────────
   let output: unknown;
+  // The IAM-resolved acting principal — threaded to the handler (CheckedContext)
+  // and into the ambient scope (runWithPrincipal) so telemetry writes carry
+  // attribution. Null when no IAM runtime is registered or the resolver did
+  // not resolve one (non-enterprise tier fast-path).
+  let resolvedPrincipal: ResolvedPrincipal | null = null;
   try {
     output = await withScope(async () => {
       // ── IAM check (OXA-1498) ───────────────────────────────────────────────
@@ -621,6 +670,7 @@ async function _invokeCore(
           ctx,
           defaultEffect,
           rawInputJson,
+          target: auditTarget,
         }).catch((err: unknown) => {
           // IAM check failure is a critical incident — the check could not be
           // evaluated at all (DB down, migration missing, resolver bug). This
@@ -657,6 +707,8 @@ async function _invokeCore(
             `IAM check errored for "${name}" — failing closed (unconditional; independent of IAM_ENFORCEMENT_ENABLED, OXA-2056).`,
           );
         }
+
+        resolvedPrincipal = iamResult?.principal ?? null;
 
         if (iamResult !== null && iamResult.outcome !== "allow") {
           if (_iamEnforced) {
@@ -736,7 +788,23 @@ async function _invokeCore(
       // ── End capability entitlement gate ─────────────────────────────────────
 
       const handler = await resolveHandler(canonical);
-      return handler(inputResult.data, ctx);
+      // Principal spine: hand the handler the resolved principal
+      // (CheckedContext) and enrich the ambient tenant scope so every
+      // data-layer write inside the handler — token_usage, tool_invocations,
+      // graph mutations — carries "who acted" without per-callsite threading.
+      // runWithPrincipal is a passthrough when no scope is active (unscoped
+      // capabilities). isUuid guards the fail-closed scope validation.
+      const checkedCtx: CheckedContext = { ...ctx, principal: resolvedPrincipal };
+      const attribution =
+        resolvedPrincipal !== null && isUuid(resolvedPrincipal.id)
+          ? {
+              principalId: resolvedPrincipal.id,
+              principalKind: resolvedPrincipal.kind,
+            }
+          : { principalId: null, principalKind: null };
+      return runWithPrincipal(attribution, () =>
+        handler(inputResult.data, checkedCtx),
+      );
     });
   } catch (err) {
     // Distinguish CapabilityError (handler not found → deny) from a

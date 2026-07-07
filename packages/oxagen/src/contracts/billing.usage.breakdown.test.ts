@@ -81,8 +81,15 @@ describe("billing.usage.breakdown capability", () => {
         { key: "api", provider: "", inputTokens: 100, outputTokens: 40, cachedTokens: 10, costMicros: 5000, executions: 3 },
       ],
       byWorkspace: [],
+      byCapability: [
+        { key: "ontology.query", provider: "", inputTokens: 60, outputTokens: 20, cachedTokens: 5, costMicros: 3000, executions: 2 },
+      ],
+      byPrincipal: [
+        { principalId: "00000000-0000-0000-0000-0000000000e5", principalKind: "agent", inputTokens: 60, outputTokens: 20, cachedTokens: 5, costMicros: 3000, executions: 2 },
+      ],
     });
     expect(parsed.byModel[0]?.provider).toBe("anthropic");
+    expect(parsed.byPrincipal[0]?.principalKind).toBe("agent");
   });
 
   it("rejects a negative token count in the output", () => {
@@ -94,6 +101,8 @@ describe("billing.usage.breakdown capability", () => {
         byModel: [],
         bySurface: [],
         byWorkspace: [],
+        byCapability: [],
+        byPrincipal: [],
       }),
     ).toThrow();
   });

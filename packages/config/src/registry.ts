@@ -1598,17 +1598,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
-  OXAGEN_FLEET_DIR: {
-    group: "CLI",
-    description:
-      "Override the fleet session-store root directory (default ~/.oxagen/fleet). " +
-      "Per-project session state is stored under <dir>/<project-hash>.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
   OXAGEN_NO_TUI: {
     group: "CLI",
     description:
@@ -2013,6 +2002,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "1",
+  },
+  OXAGEN_FLEET_DIR: {
+    group: "CLI",
+    description:
+      "Overrides the fleet store root (default `~/.oxagen/fleet`) that backs `oxagen fleet` " +
+      "session tracking (ADR-023). Used by tests and sandboxes to isolate the fleet store from " +
+      "a developer's real `~/.oxagen` directory; never set in deployed environments.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
   },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",

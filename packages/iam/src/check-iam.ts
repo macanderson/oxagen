@@ -43,6 +43,12 @@ export interface CheckIAMArgs {
   defaultEffect: CapabilityEffect;
   /** Serialized raw input for the audit payload hash. */
   rawInputJson: string;
+  /**
+   * The object this invocation acts on (accountability chain) — derived by
+   * the kernel from the contract's declarative `audit` field. Recorded on
+   * the audit row as target_kind/target_id.
+   */
+  target?: { kind: string; id: string } | null;
 }
 
 export interface CheckIAMResult {
@@ -65,7 +71,7 @@ export interface CheckIAMResult {
  * policies are enforced.
  */
 export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
-  const { capability, ctx, defaultEffect, rawInputJson } = args;
+  const { capability, ctx, defaultEffect, rawInputJson, target } = args;
 
   // ── Non-enterprise fast-path ────────────────────────────────────────────────
   // Non-enterprise orgs have no IAM policies to enforce. Skip the resolver
@@ -90,6 +96,7 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
       result: bypassResult,
       trace: bypassResult.trace,
       rawInputJson,
+      target: target ?? null,
     }).catch((err: unknown) => reportAuditEmissionFailure(capability, ctx, err));
     return { result: bypassResult, principal: null };
   }
@@ -145,6 +152,7 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
     result,
     trace: result.trace,
     rawInputJson,
+    target: target ?? null,
   }).catch((err: unknown) => reportAuditEmissionFailure(capability, ctx, err));
 
   return { result, principal };

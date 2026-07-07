@@ -532,3 +532,72 @@ describe("emitAudit()", () => {
     expect(mocks.insertAuditEvent).toHaveBeenCalledTimes(2);
   });
 });
+
+// ── Accountability chain: audit target + client IP (principal spine) ─────────
+
+describe("emitAudit() — audit target and client IP", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.insertAuditEvent.mockResolvedValue(undefined);
+    mocks.latestAuditChainHash.mockResolvedValue("prev_hash_abc");
+  });
+
+  it("records target_kind/target_id from the declarative audit target", async () => {
+    await emitAudit({
+      capability: "ontology.neighbors",
+      ctx: CTX,
+      principal: null,
+      result: ALLOW_RESULT,
+      trace: ALLOW_TRACE,
+      rawInputJson: '{"nodeId":"node-123"}',
+      target: { kind: "graph.node", id: "node-123" },
+    });
+
+    const row = mocks.insertAuditEvent.mock.calls[0]?.[0] as AuditEventRow;
+    expect(row.target_kind).toBe("graph.node");
+    expect(row.target_id).toBe("node-123");
+  });
+
+  it("keeps target columns null when no target is supplied", async () => {
+    await emitAudit({
+      capability: "chat.message.send",
+      ctx: CTX,
+      principal: null,
+      result: ALLOW_RESULT,
+      trace: ALLOW_TRACE,
+      rawInputJson: "{}",
+    });
+
+    const row = mocks.insertAuditEvent.mock.calls[0]?.[0] as AuditEventRow;
+    expect(row.target_kind).toBeNull();
+    expect(row.target_id).toBeNull();
+  });
+
+  it("records the surface-extracted client IP from ctx.clientIp", async () => {
+    await emitAudit({
+      capability: "chat.message.send",
+      ctx: { ...CTX, clientIp: "203.0.113.7" },
+      principal: null,
+      result: ALLOW_RESULT,
+      trace: ALLOW_TRACE,
+      rawInputJson: "{}",
+    });
+
+    const row = mocks.insertAuditEvent.mock.calls[0]?.[0] as AuditEventRow;
+    expect(row.ip).toBe("203.0.113.7");
+  });
+
+  it("keeps ip null when the surface extracted no client IP", async () => {
+    await emitAudit({
+      capability: "chat.message.send",
+      ctx: CTX,
+      principal: null,
+      result: ALLOW_RESULT,
+      trace: ALLOW_TRACE,
+      rawInputJson: "{}",
+    });
+
+    const row = mocks.insertAuditEvent.mock.calls[0]?.[0] as AuditEventRow;
+    expect(row.ip).toBeNull();
+  });
+});

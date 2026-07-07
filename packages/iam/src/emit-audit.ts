@@ -46,6 +46,12 @@ export interface EmitAuditArgs {
   trace: Trace;
   /** Serialized input for payload_hash — never store raw input, only its hash. */
   rawInputJson: string;
+  /**
+   * The object this invocation acts on (accountability chain) — recorded as
+   * target_kind/target_id so "who touched object X" is queryable. Null when
+   * the contract declares no audit target.
+   */
+  target?: { kind: string; id: string } | null;
 }
 
 /**
@@ -57,7 +63,7 @@ export interface EmitAuditArgs {
  * top of this file. Callers are expected to `.catch()` this and alert.
  */
 export async function emitAudit(args: EmitAuditArgs): Promise<void> {
-  const { capability, ctx, principal, result, trace, rawInputJson } = args;
+  const { capability, ctx, principal, result, trace, rawInputJson, target } = args;
   const now = new Date().toISOString();
   const eventId = globalThis.crypto.randomUUID();
 
@@ -131,11 +137,14 @@ export async function emitAudit(args: EmitAuditArgs): Promise<void> {
       actingPrincipalKind === "human" ? actingPrincipalId : null,
     outcome,
     decision_reason: decisionReason,
-    target_kind: null,
-    target_id: null,
+    // Accountability chain: what was acted on (from the contract's
+    // declarative audit target) and from where (surface-extracted client IP,
+    // already validated for IAM condition evaluation).
+    target_kind: target?.kind ?? null,
+    target_id: target?.id ?? null,
     payload_hash: payloadHash,
     chain_hash: chainHash,
-    ip: null,
+    ip: ctx.clientIp ?? null,
     ua: null,
     request_id: ctx.requestId,
     correlation_id: null,

@@ -199,6 +199,21 @@ export interface CapabilityDeclaration<
     workspace: Partial<Record<SystemWorkspaceRole, GrantEffect>>;
   };
   /**
+   * Declarative audit-target extraction (accountability chain). When set,
+   * the kernel reads `input[targetIdField]` (string values only) from the
+   * validated input and threads `{ kind: targetKind, id: value }` into the
+   * IAM audit row's `target_kind`/`target_id` — making "who touched object X"
+   * a queryable fact instead of a null column. Opt-in per contract because
+   * only the contract author knows which input field is the acted-on object
+   * (a heuristic would mislabel ids). Serializable — no functions.
+   */
+  audit?: {
+    /** What the target is, e.g. "graph.node", "skill", "repo". */
+    targetKind: string;
+    /** Input field carrying the target's id, e.g. "nodeId". */
+    targetIdField: string;
+  };
+  /**
    * Optional chat-render hint for this capability's OUTPUT. Absent → the chat
    * layer falls back to the generic `capability-result` component. Resolution
    * precedence lives in capability-meta.ts (resolveRenderDirective).
@@ -229,9 +244,15 @@ export function getSurfaces(
   return cap.surfaces ?? DEFAULT_SURFACES;
 }
 
+/**
+ * Handlers receive CheckedContext — CapabilityContext plus the IAM-resolved
+ * principal (null when the resolver did not run, e.g. the non-enterprise
+ * tier fast-path). Implementations that only need CapabilityContext remain
+ * assignable (param contravariance) — the principal is opt-in to read.
+ */
 export type CapabilityHandler<C extends CapabilityDeclaration> = (
   input: z.infer<C["input"]>,
-  ctx: CapabilityContext,
+  ctx: CheckedContext,
 ) => Promise<z.infer<C["output"]>>;
 
 /**
@@ -296,10 +317,14 @@ export interface ResolvedPrincipal {
  */
 export interface CheckedContext extends CapabilityContext {
   /**
-   * Resolved IAM principal for this invocation. Null when the IAM tables
-   * have not been applied yet (graceful degradation to defaultEffect).
+   * Resolved IAM principal for this invocation. Null when the resolver ran
+   * but found no principal (non-enterprise tier fast-path, IAM tables not
+   * applied — graceful degradation to defaultEffect). Optional so that a
+   * plain CapabilityContext remains assignable (absent ≡ null): the kernel
+   * ALWAYS supplies the field on the real invocation path; handlers read it
+   * as `ctx.principal ?? null` and must treat null/absent identically.
    */
-  principal: ResolvedPrincipal | null;
+  principal?: ResolvedPrincipal | null;
 }
 
 export interface CapabilityManifestEntry {

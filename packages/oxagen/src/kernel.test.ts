@@ -395,3 +395,199 @@ describe("invoke() IAM check throw — fail closed regardless of enforcement", (
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Principal-to-data spine (accountability chain, Epic 1)
+// ---------------------------------------------------------------------------
+
+describe("invoke() principal spine", () => {
+  const PRINCIPAL_ID = "00000000-0000-0000-0000-0000000000e5";
+  const USER_ID = "00000000-0000-0000-0000-0000000000f6";
+  const spineCtx: CapabilityContext = { ...ctx, userId: USER_ID };
+
+  const allowWithPrincipal: KernelIAMCheckFn = async () => ({
+    outcome: "allow",
+    principal: {
+      id: PRINCIPAL_ID,
+      kind: "agent",
+      orgId: spineCtx.orgId,
+      workspaceId: spineCtx.workspaceId,
+    },
+  });
+
+  afterEach(() => {
+    clearRegistryForTests();
+    clearHandlersForTests();
+    clearKernelIAMRuntime();
+    clearSecurityEventEmitter();
+  });
+
+  it("hands the handler a CheckedContext carrying the IAM-resolved principal", async () => {
+    setKernelIAMRuntime(allowWithPrincipal, true);
+    echoCap();
+    let seenPrincipal: unknown = "unset";
+    registerHandler("test.echo", async () => async (input, handlerCtx) => {
+      seenPrincipal = handlerCtx.principal ?? null;
+      return input;
+    });
+
+    await invoke("test.echo", { value: "hi" }, spineCtx);
+    expect(seenPrincipal).toEqual({
+      id: PRINCIPAL_ID,
+      kind: "agent",
+      orgId: spineCtx.orgId,
+      workspaceId: spineCtx.workspaceId,
+    });
+  });
+
+  it("enriches the ambient tenant scope so data-layer writes inherit attribution", async () => {
+    const { getPrincipalAttribution } = await import("@oxagen/tenancy");
+    setKernelIAMRuntime(allowWithPrincipal, true);
+    echoCap();
+    let seen: ReturnType<typeof getPrincipalAttribution> | null = null;
+    registerHandler("test.echo", async () => async (input) => {
+      seen = getPrincipalAttribution();
+      return input;
+    });
+
+    await invoke("test.echo", { value: "hi" }, spineCtx);
+    expect(seen).toEqual({
+      principalId: PRINCIPAL_ID,
+      principalKind: "agent",
+      userId: USER_ID,
+      capabilityName: "test.echo",
+    });
+  });
+
+  it("carries userId + capabilityName even when no IAM runtime is registered", async () => {
+    const { getPrincipalAttribution } = await import("@oxagen/tenancy");
+    echoCap();
+    let seen: ReturnType<typeof getPrincipalAttribution> | null = null;
+    registerHandler("test.echo", async () => async (input) => {
+      seen = getPrincipalAttribution();
+      return input;
+    });
+
+    await invoke("test.echo", { value: "hi" }, spineCtx);
+    expect(seen).toEqual({
+      principalId: null,
+      principalKind: null,
+      userId: USER_ID,
+      capabilityName: "test.echo",
+    });
+  });
+
+  it("drops a non-uuid userId instead of failing the scope entry", async () => {
+    const { getPrincipalAttribution } = await import("@oxagen/tenancy");
+    echoCap();
+    let seen: ReturnType<typeof getPrincipalAttribution> | null = null;
+    registerHandler("test.echo", async () => async (input) => {
+      seen = getPrincipalAttribution();
+      return input;
+    });
+
+    // `ctx` (module fixture) carries userId "u" — not a uuid. The kernel must
+    // treat it as unattributable rather than throwing TenantScopeError.
+    const out = await invoke("test.echo", { value: "hi" }, ctx);
+    expect(out).toEqual({ value: "hi" });
+    expect(seen).toMatchObject({ userId: null, capabilityName: "test.echo" });
+  });
+
+  it("derives the audit target from the contract's declarative audit field", async () => {
+    const targets: Array<{ kind: string; id: string } | null | undefined> = [];
+    const recordingCheck: KernelIAMCheckFn = async (args) => {
+      targets.push(args.target);
+      return { outcome: "allow", principal: null };
+    };
+    setKernelIAMRuntime(recordingCheck, true);
+    registerCapability({
+      name: "test.target",
+      domain: "test",
+      description: "audit target exemplar",
+      mode: "sync" as const,
+      surfaces: ["api"] as const,
+      layers: ["unit"] as const,
+      sensitivity: "low" as const,
+      defaultEffect: "deny" as const,
+      defaultRoles: { org: {}, workspace: {} },
+      audit: { targetKind: "graph.node", targetIdField: "nodeId" },
+      input: z.object({ nodeId: z.string() }),
+      output: z.object({ ok: z.boolean() }),
+    });
+    registerHandler("test.target", async () => async () => ({ ok: true }));
+
+    await invoke("test.target", { nodeId: "node-123" }, spineCtx);
+    expect(targets).toEqual([{ kind: "graph.node", id: "node-123" }]);
+  });
+
+  it("passes a null audit target when the declared input field is absent or empty", async () => {
+    const targets: Array<{ kind: string; id: string } | null | undefined> = [];
+    const recordingCheck: KernelIAMCheckFn = async (args) => {
+      targets.push(args.target);
+      return { outcome: "allow", principal: null };
+    };
+    setKernelIAMRuntime(recordingCheck, true);
+    registerCapability({
+      name: "test.target.optional",
+      domain: "test",
+      description: "audit target with optional id field",
+      mode: "sync" as const,
+      surfaces: ["api"] as const,
+      layers: ["unit"] as const,
+      sensitivity: "low" as const,
+      defaultEffect: "deny" as const,
+      defaultRoles: { org: {}, workspace: {} },
+      audit: { targetKind: "graph.node", targetIdField: "nodeId" },
+      input: z.object({ nodeId: z.string().optional() }),
+      output: z.object({ ok: z.boolean() }),
+    });
+    registerHandler("test.target.optional", async () => async () => ({ ok: true }));
+
+    // Field absent → the declared target must degrade to null, not throw or
+    // fabricate a junk id.
+    await invoke("test.target.optional", {}, spineCtx);
+    // Field present but empty → same null-target degradation (length guard).
+    await invoke("test.target.optional", { nodeId: "" }, spineCtx);
+    expect(targets).toEqual([null, null]);
+  });
+
+  it("drops attribution for a principal whose id is not a uuid (fail-safe, not fail-request)", async () => {
+    const { getPrincipalAttribution } = await import("@oxagen/tenancy");
+    const bogusPrincipalCheck: KernelIAMCheckFn = async () => ({
+      outcome: "allow",
+      principal: {
+        id: "not-a-uuid",
+        kind: "agent",
+        orgId: spineCtx.orgId,
+        workspaceId: spineCtx.workspaceId,
+      },
+    });
+    setKernelIAMRuntime(bogusPrincipalCheck, true);
+    echoCap();
+    let seen: ReturnType<typeof getPrincipalAttribution> | null = null;
+    registerHandler("test.echo", async () => async (input) => {
+      seen = getPrincipalAttribution();
+      return input;
+    });
+
+    // The call must SUCCEED (a malformed principal id must not 500 the
+    // request) while the scope stays unattributed rather than carrying garbage.
+    const out = await invoke("test.echo", { value: "hi" }, spineCtx);
+    expect(out).toEqual({ value: "hi" });
+    expect(seen).toMatchObject({ principalId: null, principalKind: null });
+  });
+
+  it("passes a null audit target when the contract declares none", async () => {
+    const targets: Array<{ kind: string; id: string } | null | undefined> = [];
+    const recordingCheck: KernelIAMCheckFn = async (args) => {
+      targets.push(args.target);
+      return { outcome: "allow", principal: null };
+    };
+    setKernelIAMRuntime(recordingCheck, true);
+    echoCap();
+    registerHandler("test.echo", async () => async (input) => input);
+
+    await invoke("test.echo", { value: "hi" }, spineCtx);
+    expect(targets).toEqual([null]);
+  });
+});
