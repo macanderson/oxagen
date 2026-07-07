@@ -112,7 +112,7 @@ vi.mock("@oxagen/handlers/workspace-environment-seed", () => ({
 // We need to mock the contracts so we can control safeParse.
 // The actual z.object schemas are statically defined — to avoid re-implementing
 // them, we mock the module and delegate to the real zod check via a wrapper.
-vi.mock("@oxagen/oxagen/contracts/organization.create", async () => {
+vi.mock("@oxagen/oxagen/contracts/org.create", async () => {
   const { z } = await import("zod");
   const realSchema = z.object({
     name: z.string().min(1),

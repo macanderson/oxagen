@@ -866,7 +866,7 @@ import { registerCapability } from "../registry";
  * Any org member may read their own notifications (Owner/Admin/Member/Viewer).
  */
 export const notificationsList = registerCapability({
-  name: "notifications.list",
+  name: "notification.list",
   domain: "notifications",
   description:
     "List in-app notifications for the calling user. Supports filtering to unread-only and pagination.",
@@ -910,11 +910,11 @@ export type NotificationsListOutput = z.output<typeof notificationsList.output>;
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { notificationsList } from "./notifications.list";
+import { notificationsList } from "./notification.list";
 
 describe("notifications.list contract", () => {
   it("has the correct name and domain", () => {
-    expect(notificationsList.name).toBe("notifications.list");
+    expect(notificationsList.name).toBe("notification.list");
     expect(notificationsList.domain).toBe("notifications");
   });
 
@@ -968,7 +968,7 @@ import { registerCapability } from "../registry";
  * Scoped to the acting user — users may only mark their own notifications.
  */
 export const notificationsMark = registerCapability({
-  name: "notifications.mark",
+  name: "notification.mark",
   domain: "notifications",
   description: "Mark a notification as read and/or archived for the calling user.",
   mode: "sync",
@@ -1000,11 +1000,11 @@ export type NotificationsMarkOutput = z.output<typeof notificationsMark.output>;
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { notificationsMark } from "./notifications.mark";
+import { notificationsMark } from "./notification.mark";
 
 describe("notifications.mark contract", () => {
   it("has the correct name and domain", () => {
-    expect(notificationsMark.name).toBe("notifications.mark");
+    expect(notificationsMark.name).toBe("notification.mark");
     expect(notificationsMark.domain).toBe("notifications");
   });
 
@@ -1228,7 +1228,7 @@ vi.mock("drizzle-orm", () => ({
   sql: (s: TemplateStringsArray, ..._args: unknown[]) => s[0],
 }));
 
-import { handler } from "./notifications.list";
+import { handler } from "./notification.list";
 
 describe("notifications.list handler", () => {
   it("returns notifications and unreadCount", async () => {
@@ -1313,7 +1313,7 @@ vi.mock("drizzle-orm", () => ({
   eq: (_col: unknown, _val: unknown) => "eq_sentinel",
 }));
 
-import { handler } from "./notifications.mark";
+import { handler } from "./notification.mark";
 
 const ctx = { orgId: "org-1", workspaceId: "ws-1", userId: "user-1", apiKeyId: null, requestId: "req-1", surface: "api" as const, messageId: null };
 
@@ -1358,12 +1358,12 @@ git commit -m "feat(handlers): notifications.list + notifications.mark handlers"
 
 ```ts
 registerHandler(
-  "notifications.list",
-  async () => (await import("./notifications.list")).handler as CapabilityHandlerFn,
+  "notification.list",
+  async () => (await import("./notification.list")).handler as CapabilityHandlerFn,
 );
 registerHandler(
-  "notifications.mark",
-  async () => (await import("./notifications.mark")).handler as CapabilityHandlerFn,
+  "notification.mark",
+  async () => (await import("./notification.mark")).handler as CapabilityHandlerFn,
 );
 ```
 
@@ -1373,7 +1373,7 @@ registerHandler(
 
 ```ts
 import { Hono } from "hono";
-import { notificationsList } from "@oxagen/oxagen/contracts/notifications.list";
+import { notificationsList } from "@oxagen/oxagen/contracts/notification.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
@@ -1395,7 +1395,7 @@ notificationsListRoute.get("/", async (c) => {
 
 ```ts
 import { Hono } from "hono";
-import { notificationsMark } from "@oxagen/oxagen/contracts/notifications.mark";
+import { notificationsMark } from "@oxagen/oxagen/contracts/notification.mark";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
@@ -1415,8 +1415,8 @@ notificationsMarkRoute.post("/", async (c) => {
 
 Imports to add after existing plugin imports:
 ```ts
-import { notificationsListRoute } from "./routes/v1/notifications.list";
-import { notificationsMarkRoute } from "./routes/v1/notifications.mark";
+import { notificationsListRoute } from "./routes/v1/notification.list";
+import { notificationsMarkRoute } from "./routes/v1/notification.mark";
 ```
 
 Routes to mount (inside `orgScoped.route(...)` block, before `app.route("/v1/:org_slug/:workspace_slug", orgScoped)`):
@@ -1432,7 +1432,7 @@ orgScoped.route("/notifications/mark", notificationsMarkRoute);
 ```ts
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
-import { notificationsList } from "@oxagen/oxagen/contracts/notifications.list";
+import { notificationsList } from "@oxagen/oxagen/contracts/notification.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
@@ -1464,7 +1464,7 @@ export default async function notificationsListTool(
 ```ts
 import { type InferSchema, type ToolMetadata } from "xmcp";
 import { headers } from "xmcp/headers";
-import { notificationsMark } from "@oxagen/oxagen/contracts/notifications.mark";
+import { notificationsMark } from "@oxagen/oxagen/contracts/notification.mark";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
@@ -1524,10 +1524,10 @@ git commit -m "feat(api,mcp): notifications.list + notifications.mark routes and
 "use server";
 
 import { invoke } from "@oxagen/oxagen/kernel";
-import { notificationsList } from "@oxagen/oxagen/contracts/notifications.list";
-import { notificationsMark } from "@oxagen/oxagen/contracts/notifications.mark";
-import type { NotificationsListOutput } from "@oxagen/oxagen/contracts/notifications.list";
-import type { NotificationsMarkOutput } from "@oxagen/oxagen/contracts/notifications.mark";
+import { notificationsList } from "@oxagen/oxagen/contracts/notification.list";
+import { notificationsMark } from "@oxagen/oxagen/contracts/notification.mark";
+import type { NotificationsListOutput } from "@oxagen/oxagen/contracts/notification.list";
+import type { NotificationsMarkOutput } from "@oxagen/oxagen/contracts/notification.mark";
 import { getServerSession } from "@/lib/auth/session";
 import { resolveOrg } from "@/lib/resolve-org";
 import type { CapabilityContext } from "@oxagen/oxagen/types";

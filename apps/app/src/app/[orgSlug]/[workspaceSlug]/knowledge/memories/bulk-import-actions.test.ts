@@ -120,7 +120,7 @@ describe("parseImportAction", () => {
     });
     expect(res.ok).toBe(true);
     const [cap, input, , opts] = mockInvoke.mock.calls[0] ?? [];
-    expect(cap).toBe("agent.memory.import.parse");
+    expect(cap).toBe("agent.memory_import.parse");
     expect(input).toEqual({
       documents: [{ filename: "a.md", content: "rule one" }],
       defaultNodeRef: "team:platform",
@@ -168,7 +168,7 @@ describe("commitImportAction", () => {
       imported: 1,
       failed: 0,
     });
-    expect(mockInvoke.mock.calls[0]?.[0]).toBe("agent.memory.import.commit");
+    expect(mockInvoke.mock.calls[0]?.[0]).toBe("agent.memory_import.commit");
     expect(mockRevalidatePath).toHaveBeenCalledWith("/oxagen/main/knowledge/memories");
   });
 

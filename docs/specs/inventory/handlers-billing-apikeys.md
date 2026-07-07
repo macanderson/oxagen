@@ -151,7 +151,7 @@ After successfully creating a Stripe Checkout session for a subscription upgrade
 
 #### Scenario: audit event emitted after successful checkout
 - **WHEN** createCheckoutSession returns successfully
-- **THEN** call emitSecurityEvent with eventType: "billing.checkout_initiated", actorUserId, orgId, workspaceId, capability: "billing.subscription.upgrade.start", outcome: "success"
+- **THEN** call emitSecurityEvent with eventType: "billing.checkout_initiated", actorUserId, orgId, workspaceId, capability: "billing.subscription_upgrade.start", outcome: "success"
 
 ---
 

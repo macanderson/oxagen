@@ -79,7 +79,7 @@ describe("audit.log.query capability", () => {
           occurredAt: "2024-01-03T18:42:10.000Z",
           actorUserId: "u_1",
           workspaceId: "ws_1",
-          capability: "billing.subscription.upgrade.start",
+          capability: "billing.subscription_upgrade.start",
           outcome: "success",
           requestId: "req_1",
           playbookRunId: null,

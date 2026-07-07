@@ -60,7 +60,7 @@ Admin-level. Default roles: org `Owner`/`Admin` and workspace `Owner`. Sensitivi
 POST /v1/audit/log/query
 Content-Type: application/json
 
-{ "source": "security", "capability": "billing.subscription.upgrade.start", "from": "2024-01-01T00:00:00Z", "limit": 20 }
+{ "source": "security", "capability": "billing.subscription_upgrade.start", "from": "2024-01-01T00:00:00Z", "limit": 20 }
 ```
 
 **Response:**
@@ -73,7 +73,7 @@ Content-Type: application/json
       "occurredAt": "2024-01-03T18:42:10.000Z",
       "actorUserId": "u_8f2",
       "workspaceId": "ws_1",
-      "capability": "billing.subscription.upgrade.start",
+      "capability": "billing.subscription_upgrade.start",
       "outcome": "success",
       "requestId": "req_abc",
       "playbookRunId": null,

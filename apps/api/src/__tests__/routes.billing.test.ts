@@ -140,9 +140,9 @@ describe("billing.subscription.upgrade.start route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'billing.subscription.upgrade.start'", async () => {
+  it("calls invoke with 'billing.subscription_upgrade.start'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("billing.subscription.upgrade.start");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("billing.subscription_upgrade.start");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.planSlug).toBe("build");
     expect(body.interval).toBe("month");

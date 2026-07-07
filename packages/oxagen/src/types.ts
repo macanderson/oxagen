@@ -142,7 +142,7 @@ export interface CapabilityDeclaration<
   /**
    * Retired names this capability was previously known by (ADR-022). The
    * registry indexes each alias to this canonical `name`, so a legacy call —
-   * `invoke("agent.file.lock.acquire", …)`, an existing `role_grants` row keyed
+   * `invoke("agent.file_lock.acquire", …)`, an existing `role_grants` row keyed
    * by the old string, or an MCP client pinned to the old tool name — still
    * resolves here. Metering, audit, and trace events always emit the canonical
    * `name`; aliases only widen the lookup. Serializable (string[]), so it

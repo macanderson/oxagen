@@ -23,7 +23,7 @@ const ORG_ID = "org_aaa";
 const WORKSPACE_ID = "ws_bbb";
 const PRINCIPAL_ID = "prn_ccc";
 const ROLE_ID = "rol_ddd";
-const CAPABILITY = "organization.create";
+const CAPABILITY = "org.create";
 
 const basePrincipal: TestPrincipal = {
   id: PRINCIPAL_ID,

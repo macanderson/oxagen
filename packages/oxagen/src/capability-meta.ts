@@ -345,7 +345,7 @@ export const CURATED_CHAIN_META: Readonly<
   "web.search": {
     produces: ["search.results"],
     consumes: ["query", "topic"],
-    chainHints: ["graph.node.upsert", "documents.generate"],
+    chainHints: ["graph.node.upsert", "document.generate"],
   },
   "web.fetch": {
     produces: ["document.text"],
@@ -360,7 +360,7 @@ export const CURATED_CHAIN_META: Readonly<
   "research.swarm.status": {
     produces: ["search.results", "swarm.id"],
     consumes: ["swarm.id"],
-    chainHints: ["graph.node.upsert", "graph.edge.upsert", "documents.generate"],
+    chainHints: ["graph.node.upsert", "graph.edge.upsert", "document.generate"],
   },
   "graph.node.upsert": {
     produces: ["graph.nodeId"],
@@ -387,12 +387,12 @@ export const CURATED_CHAIN_META: Readonly<
     consumes: [],
     chainHints: ["graph.node.get"],
   },
-  "documents.generate": {
+  "document.generate": {
     produces: ["asset.id"],
     consumes: ["document.text"],
     chainHints: ["archive.create"],
   },
-  "documents.pdf.create": {
+  "document.pdf.create": {
     produces: ["asset.id"],
     consumes: ["document.text"],
     chainHints: [],

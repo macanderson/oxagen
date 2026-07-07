@@ -29,17 +29,17 @@ vi.mock("@oxagen/oxagen", () => ({
 vi.mock("@oxagen/handlers/register", () => ({}));
 
 // Mock contracts with minimal parse that passes through the object
-vi.mock("@oxagen/oxagen/contracts/notifications.list", () => ({
+vi.mock("@oxagen/oxagen/contracts/notification.list", () => ({
   notificationsList: {
-    name: "notifications.list",
+    name: "notification.list",
     input: { parse: (v: unknown) => v },
     output: { parse: (v: unknown) => v },
   },
 }));
 
-vi.mock("@oxagen/oxagen/contracts/notifications.mark", () => ({
+vi.mock("@oxagen/oxagen/contracts/notification.mark", () => ({
   notificationsMark: {
-    name: "notifications.mark",
+    name: "notification.mark",
     input: { parse: (v: unknown) => v },
     output: { parse: (v: unknown) => v },
   },
@@ -73,7 +73,7 @@ describe("listNotificationsAction", () => {
     vi.mocked(invoke).mockResolvedValue({ notifications: [] });
     await listNotificationsAction("acme", "prod");
     const [capName] = vi.mocked(invoke).mock.calls[0]!;
-    expect(capName).toBe("notifications.list");
+    expect(capName).toBe("notification.list");
   });
 
   it("passes unreadOnly and limit to the capability", async () => {
@@ -133,7 +133,7 @@ describe("markNotificationAction", () => {
     vi.mocked(invoke).mockResolvedValue({ id: "notif-1", read: true });
     await markNotificationAction("acme", "prod", "notif-1", { read: true });
     const [capName] = vi.mocked(invoke).mock.calls[0]!;
-    expect(capName).toBe("notifications.mark");
+    expect(capName).toBe("notification.mark");
   });
 
   it("passes id and read flag to the capability input", async () => {

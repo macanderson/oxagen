@@ -351,7 +351,7 @@ export function createTurnTranslator(args: {
       // long-running Inngest job via agent.task.background.start, surface a live
       // BackgroundTaskCard and persist a terminal block so the task is visible
       // inline (and linked to the BackgroundTaskTray), not only after a refresh.
-      if (capabilityForResult === "agent.task.background.start") {
+      if (capabilityForResult === "agent.background_task.start") {
         const startOut = isRecord(rawResult) ? rawResult : null;
         const taskId =
           startOut !== null && typeof startOut.taskId === "string" ? startOut.taskId : null;

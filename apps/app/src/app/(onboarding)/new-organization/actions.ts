@@ -8,7 +8,7 @@ import { withSystemDb, schema, isUniqueViolation } from "@oxagen/database";
 import { grantFreeCredits } from "@oxagen/billing";
 import { logger } from "@oxagen/handlers/logger";
 import { ingestImageFromUrl, isIngestibleImageUrl } from "@oxagen/storage";
-import { organizationCreate } from "@oxagen/oxagen/contracts/organization.create";
+import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
 import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { getSessionOrRedirect } from "@/lib/session";
 import { bootstrapOrgIAM } from "@oxagen/handlers/iam-provision";

@@ -37,7 +37,7 @@ export const graphIngest = registerCapability({
   },
   consumes: ["document.text", "search.results"],
   produces: ["graph.nodeId", "graph.relationshipId"],
-  chainHints: ["graph.node.list", "documents.generate"],
+  chainHints: ["graph.node.list", "document.generate"],
   render: { componentId: "graph-ingest-card" },
   input: z.object({
     text: z

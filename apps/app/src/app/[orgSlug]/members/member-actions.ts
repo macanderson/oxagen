@@ -113,7 +113,7 @@ export async function changeMemberRoleAction(
   const ctx = buildCtx({ orgId: org.id, userId: session.user.id });
 
   try {
-    await invoke("org.member.role.change", { targetUserId, newRole }, ctx, { surface: "agent" });
+    await invoke("org.member_role.change", { targetUserId, newRole }, ctx, { surface: "agent" });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to change role";
     return { ok: false, error: message };

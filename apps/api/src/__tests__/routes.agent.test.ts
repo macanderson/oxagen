@@ -375,9 +375,9 @@ describe("agent.task.background.cancel route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.task.background.cancel'", async () => {
+  it("calls invoke with 'agent.background_task.cancel'", async () => {
     await app.fetch(post(PATH, { taskId: "task-1", reason: "user cancelled" }));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.task.background.cancel");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.background_task.cancel");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.taskId).toBe("task-1");
     expect(body.reason).toBe("user cancelled");
@@ -415,9 +415,9 @@ describe("agent.task.background.read route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.task.background.read' and taskId from path param", async () => {
+  it("calls invoke with 'agent.background_task.read' and taskId from path param", async () => {
     await app.fetch(get(PATH));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.task.background.read");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.background_task.read");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.taskId).toBe(taskId);
   });
@@ -438,9 +438,9 @@ describe("agent.task.background.start route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.task.background.start'", async () => {
+  it("calls invoke with 'agent.background_task.start'", async () => {
     await app.fetch(post(PATH, VALID_BODY));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.task.background.start");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.background_task.start");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.kind).toBe("research");
   });
@@ -752,9 +752,9 @@ describe("agent.subagent.fanout.list route", () => {
     expect(await res.json()).toEqual(invokeResult);
   });
 
-  it("calls invoke with 'agent.subagent.fanout.list' and default limit, surface api", async () => {
+  it("calls invoke with 'agent.subagent_fanout.list' and default limit, surface api", async () => {
     await app.fetch(get(PATH));
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.subagent.fanout.list");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.subagent_fanout.list");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.limit).toBe(50);
@@ -791,7 +791,7 @@ describe("agent.subagent.fanout.get route", () => {
     });
     const res = await app.fetch(get("/agent/subagent/fanout/fan_1"));
     expect(res.status).toBe(200);
-    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.subagent.fanout.get");
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("agent.subagent_fanout.get");
     expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.fanoutId).toBe("fan_1");

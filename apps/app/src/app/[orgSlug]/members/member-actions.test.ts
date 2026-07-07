@@ -128,7 +128,7 @@ describe("changeMemberRoleAction", () => {
     expect(res).toEqual({ ok: true });
     expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/members");
     expect(mockInvoke).toHaveBeenCalledWith(
-      "org.member.role.change",
+      "org.member_role.change",
       { targetUserId: "user-2", newRole: "admin" },
       expect.objectContaining({ orgId: ORG.id }),
       { surface: "agent" },
