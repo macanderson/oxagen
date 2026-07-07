@@ -27,12 +27,16 @@ vi.mock("@oxagen/ontology", () => ({
   sweepExpiredFileLocks: mocks.sweepExpiredFileLocks,
 }));
 
-vi.mock("drizzle-orm", () => ({
-  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({
+vi.mock("drizzle-orm", () => {
+  const sql = (strings: TemplateStringsArray, ...values: unknown[]) => ({
     text: strings.join("?"),
     values,
-  }),
-}));
+  });
+  // Real drizzle binds an array as ONE parameter via sql.param — mirror it so
+  // the ANY(${sql.param(ids)}::uuid[]) call sites work under the mock.
+  sql.param = (value: unknown) => ({ param: value });
+  return { sql };
+});
 
 vi.mock("@oxagen/telemetry", () => ({
   insertEvents: mocks.insertEvents,
