@@ -4,8 +4,12 @@
  * [agentId]).
  *
  * A useState-driven wizard (there is no Stepper primitive) that walks the
- * builder through the six stages of defining an interactive agent:
+ * builder through the stages of defining an interactive agent. Create mode
+ * leads with an AI-assisted "Describe" step (7 steps); edit mode omits it (6):
  *
+ *   0. Describe  — (create only) plain-language description → agent.definition
+ *                  .suggest generates a complete config, pre-filled into the
+ *                  editable steps below. Skippable — manual setup is always open.
  *   1. Identity  — name, slug, description, and the "code features" switch
  *                  (persisted as agentType "coding" | "custom").
  *   2. Prompt    — the inline system prompt / instructions.
@@ -23,10 +27,14 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
+  ChevronDown,
+  ChevronUp,
   CircleDot,
   Rocket,
   Save,
   Send,
+  Sparkles,
+  X,
 } from "lucide-react";
 import type {
   AgentDefinitionConfig,
@@ -59,7 +67,12 @@ import {
   updateAgentAction,
   publishAgentAction,
   deployAgentAction,
+  suggestAgentAction,
 } from "./actions";
+import {
+  mapSuggestionToPrefill,
+  type BuilderPrefill,
+} from "./suggestion-mapping";
 
 /**
  * Client-safe mirror of CODING_AGENT_TYPE / DEFAULT_AGENT_TYPE from
@@ -97,7 +110,11 @@ export interface AgentBuilderProps {
 
 // ── Steps ─────────────────────────────────────────────────────────────────────
 
-const STEPS = [
+/**
+ * The core wizard stages, shared by create and edit. Create mode prepends a
+ * "Describe" step (AI-assisted setup) as the first stage — see stepsFor().
+ */
+const CORE_STEPS = [
   { key: "identity", label: "Identity" },
   { key: "prompt", label: "Prompt" },
   { key: "equip", label: "Equip" },
@@ -105,6 +122,15 @@ const STEPS = [
   { key: "triggers", label: "Triggers" },
   { key: "review", label: "Review" },
 ] as const;
+
+const DESCRIBE_STEP = { key: "describe", label: "Describe" } as const;
+
+type BuilderStep = { key: string; label: string };
+
+/** 7 steps in create mode (Describe first), 6 in edit mode (Describe omitted). */
+function stepsFor(mode: "create" | "edit"): BuilderStep[] {
+  return mode === "create" ? [DESCRIBE_STEP, ...CORE_STEPS] : [...CORE_STEPS];
+}
 
 const RETRIEVAL_STRATEGIES: GraphRetrievalStrategy[] = [
   "hybrid",
@@ -198,6 +224,23 @@ export function AgentBuilder({
     initialEvent?.connectionId ?? "",
   );
 
+  // Steps: create mode leads with the AI-assisted "Describe" step.
+  const steps = React.useMemo(() => stepsFor(mode), [mode]);
+  // Index of the first editable stage — where Skip and a successful Generate land.
+  const identityIdx = steps.findIndex((s) => s.key === "identity");
+
+  // Describe (AI-assisted setup) — create mode only.
+  const [describeText, setDescribeText] = React.useState("");
+  const [suggesting, setSuggesting] = React.useState(false);
+  const [suggestError, setSuggestError] = React.useState<string | null>(null);
+  // Set once a suggestion is applied; drives the cross-step "generated" banner.
+  const [prefillMeta, setPrefillMeta] = React.useState<{
+    rationale: string;
+    warnings: string[];
+  } | null>(null);
+  const [bannerDismissed, setBannerDismissed] = React.useState(false);
+  const [rationaleOpen, setRationaleOpen] = React.useState(false);
+
   // Flow
   const [stepIdx, setStepIdx] = React.useState(0);
   const [busy, setBusy] = React.useState(false);
@@ -209,12 +252,71 @@ export function AgentBuilder({
     initialAgent?.deploymentStatus === "active",
   );
 
-  const step = STEPS[stepIdx]!;
+  const step = steps[stepIdx]!;
   const disabled = readOnly || busy;
 
   function onNameChange(value: string) {
     setName(value);
     if (!slugEdited) setSlug(slugify(value));
+  }
+
+  /**
+   * Fan a suggestion out across the wizard's flat state. Marks the slug as
+   * user-edited so the AI-chosen slug survives later name edits, and leaves
+   * every field fully editable in the normal steps.
+   */
+  function applyPrefill(p: BuilderPrefill) {
+    setName(p.name);
+    setSlug(p.slug);
+    setSlugEdited(true);
+    setDescription(p.description);
+    setCodeFeatures(p.codeFeatures);
+    setInstructions(p.instructions);
+    setAgentTools(p.agentTools);
+    setOntologyId(p.ontologyId);
+    setGraphMode(p.graphMode);
+    setStrategy(p.strategy);
+    setMaxHops(p.maxHops);
+    setMaxNodes(p.maxNodes);
+    setManualEnabled(p.manualEnabled);
+    setScheduleCron(p.scheduleCron);
+    setEventSource(p.eventSource);
+    setEventType(p.eventType);
+    setEventConnection(p.eventConnection);
+  }
+
+  async function onGenerate() {
+    const description = describeText.trim();
+    if (description.length < 10) {
+      setSuggestError("Describe the agent in at least 10 characters.");
+      return;
+    }
+    setSuggesting(true);
+    setSuggestError(null);
+    try {
+      const res = await suggestAgentAction({
+        orgSlug,
+        workspaceSlug,
+        description,
+      });
+      if (!res.ok) {
+        setSuggestError(res.error);
+        return;
+      }
+      applyPrefill(mapSuggestionToPrefill(res.suggestion));
+      setPrefillMeta({ rationale: res.rationale, warnings: res.warnings });
+      setBannerDismissed(false);
+      setRationaleOpen(false);
+      // Land on Identity so the user reviews the generated config top-to-bottom.
+      if (identityIdx >= 0) setStepIdx(identityIdx);
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  function onSkipDescribe() {
+    setSuggestError(null);
+    if (identityIdx >= 0) setStepIdx(identityIdx);
   }
 
   function buildConfig(): AgentDefinitionConfig {
@@ -380,7 +482,7 @@ export function AgentBuilder({
         className="flex flex-row gap-1 overflow-x-auto lg:w-48 lg:flex-col lg:gap-0.5"
         aria-label="Builder steps"
       >
-        {STEPS.map((s, i) => {
+        {steps.map((s, i) => {
           const active = i === stepIdx;
           return (
             <button
@@ -420,7 +522,137 @@ export function AgentBuilder({
           </div>
         ) : null}
 
+        {/* AI-prefill banner — shown across every step after a suggestion is
+            applied (but not on the Describe step itself, its source). */}
+        {prefillMeta && !bannerDismissed && step.key !== "describe" ? (
+          <div
+            className="mb-4 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3"
+            role="status"
+            data-testid="agent-prefill-banner"
+          >
+            <div className="flex items-start gap-3">
+              <Sparkles
+                className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary"
+                aria-hidden="true"
+              />
+              <div className="min-w-0 flex-1 space-y-2">
+                <p className="text-sm font-medium text-foreground">
+                  Configuration generated from your description — review and edit
+                  anything before saving.
+                </p>
+                {prefillMeta.rationale.trim() ? (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setRationaleOpen((o) => !o)}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                      aria-expanded={rationaleOpen}
+                      data-testid="agent-prefill-rationale-toggle"
+                    >
+                      {rationaleOpen ? (
+                        <ChevronUp className="h-3 w-3" aria-hidden="true" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3" aria-hidden="true" />
+                      )}
+                      Why this configuration
+                    </button>
+                    {rationaleOpen ? (
+                      <p
+                        className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground"
+                        data-testid="agent-prefill-rationale"
+                      >
+                        {prefillMeta.rationale}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+                {prefillMeta.warnings.length > 0 ? (
+                  <ul
+                    className="list-inside list-disc space-y-0.5 text-xs text-warning"
+                    data-testid="agent-prefill-warnings"
+                  >
+                    {prefillMeta.warnings.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setBannerDismissed(true)}
+                className="flex-shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                aria-label="Dismiss"
+                data-testid="agent-prefill-dismiss"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         <div className="rounded-lg border bg-card p-6">
+          {/* ── Describe (AI-assisted setup, create mode only) ───────────── */}
+          {step.key === "describe" ? (
+            <div className="flex flex-col gap-4" data-testid="step-describe">
+              <div className="space-y-1">
+                <Label htmlFor="agent-describe">
+                  Describe the agent in plain language
+                </Label>
+                <Textarea
+                  id="agent-describe"
+                  value={describeText}
+                  disabled={disabled}
+                  rows={6}
+                  placeholder="Describe what this agent should do — its job, what starts it, and what it may touch. Example: A release-notes writer that reads merged PRs from our GitHub repo each Friday and drafts a changelog grounded in the engineering ontology."
+                  onChange={(e) => setDescribeText(e.target.value)}
+                  data-testid="agent-describe-input"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Oxagen drafts a complete configuration — identity, prompt,
+                  tools, graph access, and triggers — grounded in this
+                  workspace&rsquo;s real skills and ontologies. You review and
+                  edit every field before anything is saved.
+                </p>
+              </div>
+
+              {suggestError ? (
+                <div
+                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  role="alert"
+                  data-testid="agent-describe-error"
+                >
+                  {suggestError}
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  variant="gradient"
+                  size="sm"
+                  disabled={disabled || suggesting || describeText.trim().length < 10}
+                  onClick={onGenerate}
+                  startIcon={
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                  }
+                  data-testid="agent-describe-generate"
+                >
+                  {suggesting ? "Generating…" : "Generate with AI"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={disabled || suggesting}
+                  onClick={onSkipDescribe}
+                  data-testid="agent-describe-skip"
+                >
+                  Skip — configure manually
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
           {/* ── Identity ─────────────────────────────────────────────────── */}
           {step.key === "identity" ? (
             <div className="flex flex-col gap-5" data-testid="step-identity">
@@ -851,12 +1083,12 @@ export function AgentBuilder({
           >
             Back
           </Button>
-          {stepIdx < STEPS.length - 1 ? (
+          {stepIdx < steps.length - 1 ? (
             <Button
               type="button"
               variant="secondary"
               size="sm"
-              onClick={() => setStepIdx((i) => Math.min(STEPS.length - 1, i + 1))}
+              onClick={() => setStepIdx((i) => Math.min(steps.length - 1, i + 1))}
               endIcon={<ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />}
               data-testid="builder-next"
             >
