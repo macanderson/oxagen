@@ -57,7 +57,16 @@ export function EnvironmentSelector({
         disabled={isLoading || environments.length === 0}
       >
         <SelectTrigger className="w-40" aria-label={ariaLabel}>
-          <SelectValue placeholder={placeholder} />
+          {/* Resolve the label from the value with a function child so a
+              programmatically-set value (e.g. a rehydrated pin) shows the
+              environment NAME, not the raw env_… id — the SelectItems live in
+              the popup and aren't mounted until it's first opened. */}
+          <SelectValue placeholder={placeholder}>
+            {(value: string | null) =>
+              (value ? environments.find((e) => e.id === value)?.name : null) ??
+              placeholder
+            }
+          </SelectValue>
         </SelectTrigger>
         <SelectPopup>
           {environments.map((env) => (

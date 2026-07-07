@@ -60,7 +60,15 @@ export function RepoSelector({
         disabled={isLoading || repositories.length === 0}
       >
         <SelectTrigger className="w-48" aria-label={ariaLabel}>
-          <SelectValue placeholder={placeholder} />
+          {/* Resolve the label with a function child so a programmatically-set
+              value (e.g. a rehydrated pin) shows owner/name, not the raw repo
+              key — the SelectItems aren't mounted until the popup first opens. */}
+          <SelectValue placeholder={placeholder}>
+            {(value: string | null) => {
+              const repo = value ? repositories.find((r) => r.key === value) : null;
+              return repo ? `${repo.owner}/${repo.name}` : placeholder;
+            }}
+          </SelectValue>
         </SelectTrigger>
         <SelectPopup>
           {repositories.map((repo) => (
