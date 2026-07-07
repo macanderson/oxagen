@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   requireEnv: vi.fn(),
   generateImageFor: vi.fn(),
   selectImageModel: vi.fn(),
+  persistGeneratedAsset: vi.fn(),
 }));
 
 vi.mock("@oxagen/config/env", () => ({
@@ -20,6 +21,16 @@ vi.mock("@oxagen/ai", () => ({
   selectImageModel: mocks.selectImageModel,
 }));
 
+// Persistence seam — successful generations are stored as conversation files
+// through persistGeneratedAsset (mocked; the seam has its own tests).
+vi.mock("./generated-asset.persist", () => ({
+  persistGeneratedAsset: mocks.persistGeneratedAsset,
+}));
+
+vi.mock("./logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
 // ── import under test ─────────────────────────────────────────────────────────
 
 import { imageGenerateHandler } from "./image.generate";
@@ -29,7 +40,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
-const fakeModel = { type: "image-model" } as const;
+const fakeModel = { type: "image-model", modelId: "openai/gpt-image-1" } as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -37,6 +48,17 @@ describe("imageGenerateHandler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.selectImageModel.mockReturnValue(fakeModel);
+    // Default: persistence succeeds.
+    mocks.persistGeneratedAsset.mockResolvedValue({
+      id: "uuid-1",
+      publicId: "gen_img1",
+      kind: "image",
+      mimeType: "image/png",
+      sizeBytes: 100,
+      key: "generated/images/org_1/x.png",
+      url: "blob://x",
+      serveUrl: "/api/v1/assets/gen_img1",
+    });
   });
 
   it("returns a placeholder when AI_GATEWAY_API_KEY is absent", async () => {
@@ -131,6 +153,90 @@ describe("imageGenerateHandler", () => {
     expect(result.placeholder).toBe(true);
     expect(result.render.componentId).toBe("image-preview");
     expect(result.render.props["placeholder"]).toBe(true);
+  });
+
+  // ── Conversation-file persistence ───────────────────────────────────────────
+
+  it("persists the generated image as an org-visible conversation file", async () => {
+    mocks.requireEnv.mockReturnValueOnce({ AI_GATEWAY_API_KEY: "vck_gateway" });
+    mocks.generateImageFor.mockResolvedValueOnce({
+      images: ["AAABBB"],
+      imageCount: 1,
+      durationMs: 123,
+    });
+
+    const result = await imageGenerateHandler(
+      { prompt: "A mountain" },
+      { ...CTX, messageId: "msg_7" },
+    );
+
+    expect(mocks.persistGeneratedAsset).toHaveBeenCalledTimes(1);
+    const args = mocks.persistGeneratedAsset.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(args["kind"]).toBe("image");
+    expect(args["mimeType"]).toBe("image/png");
+    expect(args["accessPolicy"]).toBe("org");
+    expect(args["userId"]).toBe("u_1");
+    expect(args["messageId"]).toBe("msg_7");
+    // Model id comes from the resolved gateway model, never a hard-coded slug.
+    expect(args["model"]).toBe("openai/gpt-image-1");
+    expect(Buffer.from(args["bytes"] as Uint8Array).toString("base64")).toBe("AAABBB");
+
+    expect(result.assetPublicId).toBe("gen_img1");
+    expect(result.serveUrl).toBe("/api/v1/assets/gen_img1");
+    // The render directive prefers the access-controlled serving URL.
+    expect(result.render.props["url"]).toBe("/api/v1/assets/gen_img1");
+    expect(result.render.props["dataUri"]).toBe("data:image/png;base64,AAABBB");
+  });
+
+  it("persistence failure is non-fatal: data URI returned with persistWarning", async () => {
+    mocks.requireEnv.mockReturnValueOnce({ AI_GATEWAY_API_KEY: "vck_gateway" });
+    mocks.generateImageFor.mockResolvedValueOnce({
+      images: ["AAABBB"],
+      imageCount: 1,
+      durationMs: 50,
+    });
+    mocks.persistGeneratedAsset.mockRejectedValueOnce(new Error("blob down"));
+
+    const result = await imageGenerateHandler({ prompt: "A city" }, CTX);
+
+    expect(result.placeholder).toBe(false);
+    expect(result.dataUri).toBe("data:image/png;base64,AAABBB");
+    expect(result.assetPublicId).toBeUndefined();
+    expect(result.serveUrl).toBeUndefined();
+    expect(result.persistWarning).toContain("could not be saved");
+    expect(result.render.props["url"]).toBeUndefined();
+  });
+
+  it("skips persistence with a warning when there is no user identity", async () => {
+    mocks.requireEnv.mockReturnValueOnce({ AI_GATEWAY_API_KEY: "vck_gateway" });
+    mocks.generateImageFor.mockResolvedValueOnce({
+      images: ["AAABBB"],
+      imageCount: 1,
+      durationMs: 50,
+    });
+
+    const result = await imageGenerateHandler(
+      { prompt: "test" },
+      { ...CTX, userId: null },
+    );
+
+    expect(mocks.persistGeneratedAsset).not.toHaveBeenCalled();
+    expect(result.persistWarning).toContain("no user identity");
+    expect(result.dataUri).toBe("data:image/png;base64,AAABBB");
+  });
+
+  it("does not attempt persistence when generation returned no image", async () => {
+    mocks.requireEnv.mockReturnValueOnce({ AI_GATEWAY_API_KEY: "vck_gateway" });
+    mocks.generateImageFor.mockResolvedValueOnce({
+      images: [undefined],
+      imageCount: 1,
+      durationMs: 80,
+    });
+
+    const result = await imageGenerateHandler({ prompt: "Abstract art" }, CTX);
+
+    expect(mocks.persistGeneratedAsset).not.toHaveBeenCalled();
+    expect(result.assetPublicId).toBeUndefined();
   });
 
   it("derives alt from the prompt when alt is not supplied", async () => {

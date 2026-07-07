@@ -222,14 +222,18 @@ function AssetRow({
 
   return (
     <div className="group flex min-h-11 items-start gap-3 rounded-lg px-3 py-3 sm:py-2.5 hover:bg-muted/60 transition-colors">
-      {/* Leading visual: inline thumbnail for images (including SVG), kind icon otherwise */}
+      {/* Leading visual: inline thumbnail for images (including SVG), kind icon
+          otherwise. The thumbnail duplicates the name link's action, so it is
+          hidden from the a11y tree and skipped in the tab order (decorative
+          duplicate-link pattern) — keyboard/AT users act through the name. */}
       {thumbnail ? (
         svg ? (
           <button
             type="button"
             onClick={() => onPreview(item)}
-            className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label={`Preview ${item.name}`}
+            className="shrink-0 rounded-md"
+            aria-hidden="true"
+            tabIndex={-1}
             title={`Preview ${item.name}`}
           >
             <RowThumbnail item={item} />
@@ -239,9 +243,10 @@ function AssetRow({
             href={item.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label={`Open ${item.name} in a new tab`}
+            className="shrink-0 rounded-md"
+            aria-hidden="true"
             tabIndex={-1}
+            title={`Open ${item.name} in a new tab`}
           >
             <RowThumbnail item={item} />
           </a>
