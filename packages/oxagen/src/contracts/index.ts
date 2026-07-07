@@ -33,6 +33,7 @@ import { codePatch } from "./code.patch";
 import { codeFormat } from "./code.format";
 import { codeMap } from "./code.map";
 import { agentDefinitionCreate } from "./agent.definition.create";
+import { agentDefinitionSuggest } from "./agent.definition.suggest";
 import { agentDefinitionUpdate } from "./agent.definition.update";
 import { agentDefinitionPublish } from "./agent.definition.publish";
 import { agentDefinitionGet } from "./agent.definition.get";
@@ -405,6 +406,7 @@ export {
   codeFormat,
   codeMap,
   agentDefinitionCreate,
+  agentDefinitionSuggest,
   agentDefinitionUpdate,
   agentDefinitionPublish,
   agentDefinitionGet,
@@ -708,6 +710,7 @@ export const contracts = [
   codeFormat,
   codeMap,
   agentDefinitionCreate,
+  agentDefinitionSuggest,
   agentDefinitionUpdate,
   agentDefinitionPublish,
   agentDefinitionGet,
