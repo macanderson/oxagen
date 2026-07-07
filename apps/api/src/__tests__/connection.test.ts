@@ -124,6 +124,20 @@ vi.mock("@oxagen/database", () => ({
       deploymentStatus: "deployment_status",
       activeVersionId: "active_version_id",
     },
+    // Required by packages/agent's _sandbox-session module-level SESSION_COLUMNS
+    // initializer, transitively reached via the agent.sandbox.* handlers
+    // registered through @oxagen/handlers (PR #637 sandbox workspace wiring).
+    sandboxSessions: {
+      id: "id",
+      publicId: "public_id",
+      sandboxId: "sandbox_id",
+      snapshotId: "snapshot_id",
+      image: "image",
+      status: "status",
+      metadata: "metadata",
+      workspaceId: "workspace_id",
+      sessionKey: "session_key",
+    },
   },
 }));
 

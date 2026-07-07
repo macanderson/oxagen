@@ -68,7 +68,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.a2a_tasks", policyClass: "standard" },
   // File-lock lease authority + fencing-token counter (ADR-021 §5;
   // orgScopeMixin + tenant_isolation RLS in
-  // 20260708120000_agent_file_locks.sql).
+  // 20260708130000_agent_file_locks.sql).
   { table: "agent.file_locks", policyClass: "standard" },
   { table: "agent.file_lock_fences", policyClass: "standard" },
 
