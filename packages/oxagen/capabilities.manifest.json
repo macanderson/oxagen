@@ -225,6 +225,24 @@
       }
     },
     {
+      "name": "agent.definition.suggest",
+      "file": "agent.definition.suggest.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "mcp": false,
+        "unit": false,
+        "docs": false
+      }
+    },
+    {
       "name": "agent.definition.update",
       "file": "agent.definition.update.ts",
       "domain": "agent",
