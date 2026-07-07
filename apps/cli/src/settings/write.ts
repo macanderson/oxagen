@@ -19,8 +19,8 @@ export const SETTABLE_KEYS = [
   "judgeModel",
   "triageModel",
   "apiUrl",
+  "confirmScope",
 ] as const;
-export const SETTABLE_KEYS = ["model", "apiUrl", "confirmScope"] as const;
 
 /**
  * Keys whose settings.json value is a JSON boolean rather than a string.
