@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDirectRunEntry } from "@oxagen/telemetry";
 import type { Session } from "neo4j-driver";
 import { closeDriver, session } from "./client";
 import { sanitizeLabel } from "./labels";
@@ -270,8 +271,8 @@ export async function migrate(): Promise<void> {
   }
 }
 
-const isDirectRun = import.meta.url === `file://${process.argv[1]}`;
-if (isDirectRun) {
+// Bundle-safe direct-run guard — see @oxagen/telemetry is-direct-run.ts.
+if (isDirectRunEntry(import.meta.url, process.argv[1], "migrate")) {
   migrate()
     .then(() => closeDriver())
     .then(() => {
