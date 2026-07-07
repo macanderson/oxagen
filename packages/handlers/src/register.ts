@@ -19,6 +19,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .agentComposeHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "agent.definition.suggest",
+    async () =>
+      (await import("./agent.definition.suggest"))
+        .agentDefinitionSuggestHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "agent.memory_policy.read",
     async () =>
       (await import("./agent.memory_policy.read"))
