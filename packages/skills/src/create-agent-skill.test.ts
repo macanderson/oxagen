@@ -19,8 +19,9 @@ describe("create-agent builtin skill", () => {
     const skill = parseSkill(raw, { source: "builtin" });
 
     expect(skill.slug).toBe("create-agent");
-    expect(skill.metadata.weight).toBe("high");
-    expect(skill.metadata.category).toBe("meta");
+    expect(skill.metadata).toBeDefined();
+    expect(skill.metadata?.weight).toBe("high");
+    expect(skill.metadata?.category).toBe("meta");
     expect(skill.description.length).toBeGreaterThan(10);
     expect(skill.body).toContain("agent.definition.suggest");
     // References agent-builder as the interactive deploy counterpart.
