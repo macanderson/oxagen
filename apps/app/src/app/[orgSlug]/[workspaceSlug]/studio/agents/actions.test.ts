@@ -2,16 +2,21 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // Heavy server deps are mocked so the action's pure validation + IAM-gate logic
 // can be exercised in isolation (no DB, no Next cache, no kernel registration).
+// vi.mock is hoisted above all declarations, so the mock fns it references must
+// be created with vi.hoisted() (a plain top-level const would be uninitialized
+// at mock time — "Cannot access before initialization").
+const { resolveStudioScope, createAgent, updateAgent, publishAgent, deployAgent } =
+  vi.hoisted(() => ({
+    resolveStudioScope: vi.fn(),
+    createAgent: vi.fn(),
+    updateAgent: vi.fn(),
+    publishAgent: vi.fn(),
+    deployAgent: vi.fn(),
+  }));
+
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-
-const resolveStudioScope = vi.fn();
 vi.mock("@/lib/studio/scope", () => ({ resolveStudioScope }));
-
-const createAgent = vi.fn();
-const updateAgent = vi.fn();
-const publishAgent = vi.fn();
-const deployAgent = vi.fn();
 vi.mock("@/lib/studio/agents", () => ({
   createAgent,
   updateAgent,
