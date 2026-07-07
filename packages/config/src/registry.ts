@@ -2003,6 +2003,18 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "1",
   },
+  OXAGEN_FLEET_DIR: {
+    group: "CLI",
+    description:
+      "Overrides the fleet store root (default `~/.oxagen/fleet`) that backs `oxagen fleet` " +
+      "session tracking (ADR-023). Used by tests and sandboxes to isolate the fleet store from " +
+      "a developer's real `~/.oxagen` directory; never set in deployed environments.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",
     description: "Credential encryption backend for ingestion: 'env' (AES-256-GCM via INGESTION_ENCRYPTION_KEY) or 'kms' (AWS KMS).",
