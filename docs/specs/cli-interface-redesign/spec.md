@@ -46,9 +46,8 @@ type SessionEvent = { v: 1; sid: string; seq: number; ts: number } & (
   | { type: "message.end"; text: string; turn: number }                // full assistant text
   | { type: "reasoning.delta"; text: string; turn: number }
   | { type: "tool.start"; name: string; input: string }                // input JSON capped 2 KB
-  | { type: "tool.end"; name: string; ok: boolean; durationMs: number; result: string } // capped 2 KB
-  | { type: "file.edit"; path: string; bytes: number }
-  | { type: "command.run"; command: string; exitCode: number }
+  | { type: "tool.end"; name: string; ok: boolean; durationMs: number }
+  | { type: "diff"; changedFiles: string[]; changedLines: number }     // per execution round
   | { type: "turn.end"; turn: number; steps: number; stopReason?: string;
       changedFiles: string[]; usage: TurnUsage }
   | { type: "usage"; cumulative: TurnUsage }                           // after each turn
@@ -160,13 +159,14 @@ Layout (full-screen, alt-screen like the REPL):
 - Rendering: reuse `repl/render-throttle.ts` pattern; timeline keeps last
   500 lines in state (older lines dropped — the disk log is the archive).
 
-## 6. Engine touch (additive only)
+## 6. Engine touch
 
-`RunTurnOptions.onEvent?: (e: CodingEvent) => void` — forward the engine's
-`CodingEvent`s (tool-result detail, file-edit, command, final-diff) verbatim
-from inside the pipeline's existing `onEvent` translation sites (3 call sites:
-main loop, revise loop, bare mode). Today's `onText`/`onToolCall` remain.
-Unit test in `packages/agent-engine` asserts forwarding.
+**None.** `runTurn` already exposes every hook the envelope needs: `onStage`,
+`onText`, `onReasoning`, `onToolCall`, `onToolEvent` ({name, ok, durationMs}),
+`onFileChange` (diff + changedFiles per round → the `diff` event via
+`diffChangedLines`), `onError`, plus `history` in / `messages` out for
+conversation threading and `profile: "headless"` for worker sessions. The
+redesign is pure CLI-side composition.
 
 ## 7. Session semantics
 
