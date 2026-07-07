@@ -138,7 +138,8 @@ function lineFromMessage(msg: string | undefined): number | null {
 
 /** Strip ANSI escapes and collapse whitespace runs in a reason string. */
 function cleanReason(msg: string): string {
-  // eslint-disable-next-line no-control-regex -- stripping raw ANSI SGR codes
+  // The CSI body (`[0;31m`) is matched without the leading ESC, so no control
+  // character appears in the pattern (hence no no-control-regex disable needed).
   return msg.replace(/\[[0-9;]*m/g, "").replace(/\s+/g, " ").trim();
 }
 
