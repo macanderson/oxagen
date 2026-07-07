@@ -6,14 +6,9 @@
  *     controlled results, or throw ApiError.
  *   - Capture stdout/stderr and process.exitCode to assert on output.
  *
- * Verified:
- *   - list: human table output, JSON output, empty-state message, query
- *     params forwarded, ApiError → exit(1) friendly message.
- *   - acquire: granted → success message + JSON, not-granted → exit(1) +
- *     conflict message, invalid --action / --ttl-ms rejected client-side,
- *     ApiError → exit(1).
- *   - release: released → success message, not released → idempotent
- *     message (no error), ApiError → exit(1).
+ * Output discipline (ADR-023 §4): success/data → stdout; a bad flag is a usage
+ * error (exit 2), an API failure is a uniform `✗ …` stderr line (exit 1); a
+ * denied lock is a real result printed to stdout with a non-zero exit.
  */
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
 
@@ -65,15 +60,10 @@ beforeEach(() => {
       err += String(s);
       return true;
     }) as never);
-  // fail() calls process.exit(1); make it throw so tests can assert on it.
-  const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
-    throw new Error(`process.exit:${code}`);
-  }) as never);
 
   restorers.push(
     () => outSpy.mockRestore(),
     () => errSpy.mockRestore(),
-    () => exitSpy.mockRestore(),
   );
 });
 
@@ -135,21 +125,24 @@ describe("handleFileLockList", () => {
     expect(out).toContain("No live file locks.");
   });
 
-  it("outputs JSON when --json is passed", async () => {
+  it("outputs a single-line JSON value when --json is passed", async () => {
     mockGet.mockResolvedValueOnce({ locks: [LOCK] });
 
     await handleFileLockList({ json: true });
 
+    expect(out.trim()).toBe(JSON.stringify({ locks: [LOCK] }));
     const parsed = JSON.parse(out) as { locks: unknown[] };
     expect(parsed.locks).toHaveLength(1);
   });
 
-  it("exits 1 with a friendly message on ApiError", async () => {
+  it("exits 1 with a uniform error line on ApiError", async () => {
     mockGet.mockRejectedValueOnce(new ApiError("Not logged in."));
 
-    await expect(handleFileLockList({})).rejects.toThrow("process.exit:1");
+    await handleFileLockList({});
 
+    expect(err).toMatch(/^✗ /);
     expect(err).toContain("Not logged in.");
+    expect(process.exitCode).toBe(1);
   });
 });
 
@@ -217,30 +210,31 @@ describe("handleFileLockAcquire", () => {
     expect(out).toContain("agent-b");
   });
 
-  it("rejects an invalid --action before calling the API", async () => {
-    await expect(
-      handleFileLockAcquire("src/foo.ts", { action: "delete" }),
-    ).rejects.toThrow("process.exit:1");
+  it("rejects an invalid --action before calling the API (usage exit 2)", async () => {
+    await handleFileLockAcquire("src/foo.ts", { action: "delete" });
 
     expect(err).toContain('Invalid --action "delete"');
+    expect(process.exitCode).toBe(2);
     expect(mockPost).not.toHaveBeenCalled();
   });
 
-  it("rejects a non-numeric --ttl-ms before calling the API", async () => {
-    await expect(
-      handleFileLockAcquire("src/foo.ts", { ttlMs: "soon" }),
-    ).rejects.toThrow("process.exit:1");
+  it("rejects a non-numeric --ttl-ms before calling the API (usage exit 2)", async () => {
+    await handleFileLockAcquire("src/foo.ts", { ttlMs: "soon" });
 
     expect(err).toContain('Invalid --ttl-ms "soon"');
+    expect(process.exitCode).toBe(2);
     expect(mockPost).not.toHaveBeenCalled();
   });
 
-  it("exits 1 with a friendly message on ApiError", async () => {
-    mockPost.mockRejectedValueOnce(new ApiError("Error 403 from agent/file/lock/acquire: forbidden", 403));
+  it("exits 1 with a uniform error line on ApiError", async () => {
+    mockPost.mockRejectedValueOnce(
+      new ApiError("Error 403 from agent/file/lock/acquire: forbidden", 403),
+    );
 
-    await expect(handleFileLockAcquire("src/foo.ts", {})).rejects.toThrow("process.exit:1");
+    await handleFileLockAcquire("src/foo.ts", {});
 
     expect(err).toContain("forbidden");
+    expect(process.exitCode).toBe(1);
   });
 });
 
@@ -276,11 +270,12 @@ describe("handleFileLockRelease", () => {
     expect(parsed.released).toBe(true);
   });
 
-  it("exits 1 with a friendly message on ApiError", async () => {
+  it("exits 1 with a uniform error line on ApiError", async () => {
     mockPost.mockRejectedValueOnce(new ApiError("Not logged in."));
 
-    await expect(handleFileLockRelease("lock-1", {})).rejects.toThrow("process.exit:1");
+    await handleFileLockRelease("lock-1", {});
 
     expect(err).toContain("Not logged in.");
+    expect(process.exitCode).toBe(1);
   });
 });
