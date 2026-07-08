@@ -8,7 +8,7 @@ export const skillDraft = registerCapability({
     "Draft a skill configuration from a natural-language description without persisting anything. The model synthesises the full skill shape — display name, kebab-case slug, matcher description, weight, optional category, and the markdown body — and returns it for human review. Feed the confirmed draft to skill.create (or skill.workspace.install with a custom body) to save it. This is the AI-assisted first step of the skill setup flow.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "skill" },
   sensitivity: "medium",

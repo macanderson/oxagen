@@ -8,7 +8,7 @@ export const skillVersionActivate = registerCapability({
     "Re-point a skill's active version to a chosen (possibly older) skill_versions row. Sets activated_by_user_id and activated_at on the skill row. Exactly one version is active at any time per skill.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "docs", "mcp"],
+  layers: ["schema", "api", "docs", "mcp", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "skill" },
   sensitivity: "low",

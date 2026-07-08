@@ -14,7 +14,7 @@ export const graphStats = registerCapability({
   description: "Workspace graph statistics: node count, edge count, inferred edge count, breakdown by type.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },
   sensitivity: "low",

@@ -26,7 +26,7 @@ export const graphIngest = registerCapability({
     "upsert resolves duplicates). The bridge from web-search / document text to the ontology.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   agent: { requiresApproval: false, riskLevel: "medium", category: "knowledge" },
   scoped: true,
   sensitivity: "medium",

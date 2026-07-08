@@ -9,7 +9,7 @@ export const evalRunGet = registerCapability({
     "Fetch an eval run's summary (from Postgres) together with its per-item results (from the ClickHouse metering pipe): each item's output, judge scores, pass/fail, tokens, latency, and cost.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },

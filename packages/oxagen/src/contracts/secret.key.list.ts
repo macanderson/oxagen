@@ -18,7 +18,7 @@ export const secretKeyList = registerCapability({
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: false, riskLevel: "low", category: "introspection" },
-  layers: ["api", "mcp", "unit", "docs"],
+  layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   sensitivity: "low",
   defaultEffect: "deny",

@@ -8,7 +8,7 @@ export const pluginRegistryList = registerCapability({
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: false, riskLevel: "low", category: "plugin" },
-  layers: ["api", "docs", "mcp", "unit"],
+  layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
   sensitivity: "low",
   defaultEffect: "deny",

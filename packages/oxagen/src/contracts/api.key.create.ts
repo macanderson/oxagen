@@ -20,7 +20,7 @@ export const apiKeyCreate = registerCapability({
     "Create a new API key for the org. Returns the raw key once — it is never recoverable after this call. Audited as api_key.created.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["api", "docs", "mcp", "unit"],
+  layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
   // API key management does not consume AI tokens — billing gate must not
   // block this for orgs with zero credit balance.

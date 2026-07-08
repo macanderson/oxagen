@@ -8,7 +8,7 @@ export const skillVersionList = registerCapability({
     "List the time-ordered version history for a workspace skill, including version number, active status, latest flag, author, and timestamp",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "docs", "mcp"],
+  layers: ["schema", "api", "docs", "mcp", "app"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "skill" },

@@ -14,7 +14,7 @@ export const apiKeyRotate = registerCapability({
     "Atomically issue a replacement API key and revoke the old one. The replacement inherits the old key's scope/workspace/expiry and is returned once — never recoverable after this call. Audited as api_key.created + api_key.revoked.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["api", "docs", "mcp", "unit"],
+  layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
   // API key management does not consume AI tokens — billing gate must not block.
   noBillingGate: true,

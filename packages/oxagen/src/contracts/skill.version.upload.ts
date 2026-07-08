@@ -8,7 +8,7 @@ export const skillVersionUpload = registerCapability({
     "Upload a new immutable skill version from raw .skill.md content. Creates a new version row, marks it as latest, and sets it as the skill's active version (unless activate=false).",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "docs", "mcp"],
+  layers: ["schema", "api", "docs", "mcp", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "medium", category: "skill" },
   sensitivity: "medium",

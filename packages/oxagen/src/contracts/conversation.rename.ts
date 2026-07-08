@@ -10,7 +10,7 @@ export const conversationRename = registerCapability({
   description: "Rename a conversation (set its title)",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "docs", "mcp", "unit"],
+  layers: ["schema", "api", "docs", "mcp", "unit", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "conversation" },
   sensitivity: "low",

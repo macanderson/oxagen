@@ -8,7 +8,7 @@ export const evalDatasetList = registerCapability({
     "List the workspace's eval datasets with their item counts, source (manual or traces), and timestamps.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },
