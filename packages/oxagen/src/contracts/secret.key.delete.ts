@@ -8,7 +8,7 @@ export const secretKeyDelete = registerCapability({
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: false, riskLevel: "high", category: "secret" },
-  layers: ["api", "mcp", "unit", "docs"],
+  layers: ["api", "mcp", "unit", "docs", "app"],
   scoped: true,
   sensitivity: "high",
   defaultEffect: "deny",

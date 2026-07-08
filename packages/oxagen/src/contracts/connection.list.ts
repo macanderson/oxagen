@@ -7,7 +7,7 @@ export const connectionList = registerCapability({
   description: "List all data source connections for a workspace.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },
   sensitivity: "medium",

@@ -8,7 +8,7 @@ export const workspaceModelSettingsRead = registerCapability({
   description: "Read the workspace-level model defaults (text tier/model, image model, video model)",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "docs", "mcp", "unit"],
+  layers: ["schema", "api", "docs", "mcp", "unit", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },
   sensitivity: "low",

@@ -13,7 +13,7 @@ export const videoGenerate = registerCapability({
     'immediately shows the video-result component (componentId "video-result").',
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: {
     requiresApproval: false,

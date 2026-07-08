@@ -9,8 +9,9 @@
  * agent already inferred, letting the user review, edit, and submit.
  *
  * The submit handler calls a "use server" action (videoGenerateAction) that
- * logs the request and returns a typed { queued: true } result — inert stub
- * until the video rendering pipeline is wired.
+ * invokes the real video.generate capability: it creates a pending
+ * generated_assets row and dispatches the async Inngest render worker
+ * (agent.video-render), returning a typed { queued: true, jobId } result.
  *
  * Note on RSC: the form uses a client component with a bound server action.
  * True streamUI/RSC streaming inside the live chat transport would require
@@ -135,12 +136,9 @@ export default function MakeVideoForm({
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">Video queued</p>
             <p className="truncate text-xs text-muted-foreground">
-              Job{jobId ? ` · ${jobId}` : ""} — generation will start when the pipeline is live
+              Job{jobId ? ` · ${jobId}` : ""} — rendering now, this can take a few minutes
             </p>
           </div>
-          <Badge variant="muted" className="ml-auto shrink-0">
-            Preview
-          </Badge>
         </div>
         <p className="text-xs text-muted-foreground italic">
           &ldquo;{prompt}&rdquo;

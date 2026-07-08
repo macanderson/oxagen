@@ -183,7 +183,8 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -657,7 +658,8 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -1278,7 +1280,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -1294,7 +1297,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -1310,7 +1314,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -1709,7 +1714,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -1850,7 +1856,8 @@
         "schema": true,
         "api": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -1922,7 +1929,8 @@
         "api": false,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -2048,7 +2056,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -2100,7 +2109,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -2155,7 +2165,8 @@
         "mcp": true,
         "unit": true,
         "e2e": false,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -2173,7 +2184,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -2191,7 +2203,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -2343,7 +2356,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -2449,7 +2463,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -2485,7 +2500,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -2631,7 +2647,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -2669,7 +2686,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -2823,7 +2841,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -3092,7 +3111,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -3109,7 +3129,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -3220,7 +3241,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -3275,7 +3297,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -3412,7 +3435,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -3429,7 +3453,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -3480,7 +3505,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -3514,7 +3540,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -3619,7 +3646,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -4422,7 +4450,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -4439,7 +4468,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -4703,8 +4733,9 @@
         "schema": true,
         "api": true,
         "mcp": true,
-        "unit": false,
-        "docs": true
+        "unit": true,
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -4754,7 +4785,8 @@
         "schema": true,
         "api": true,
         "docs": true,
-        "mcp": true
+        "mcp": true,
+        "app": true
       }
     },
     {
@@ -4770,7 +4802,8 @@
         "schema": true,
         "api": true,
         "docs": true,
-        "mcp": true
+        "mcp": true,
+        "app": true
       }
     },
     {
@@ -4786,7 +4819,8 @@
         "schema": true,
         "api": true,
         "docs": true,
-        "mcp": true
+        "mcp": true,
+        "app": true
       }
     },
     {
@@ -4802,7 +4836,8 @@
         "schema": true,
         "api": true,
         "docs": true,
-        "mcp": true
+        "mcp": true,
+        "app": true
       }
     },
     {
@@ -4818,7 +4853,8 @@
         "schema": true,
         "api": true,
         "docs": true,
-        "mcp": true
+        "mcp": true,
+        "app": true
       }
     },
     {
@@ -4834,7 +4870,8 @@
         "schema": true,
         "api": true,
         "docs": true,
-        "mcp": true
+        "mcp": true,
+        "app": true
       }
     },
     {
@@ -4850,7 +4887,8 @@
         "schema": true,
         "api": true,
         "docs": true,
-        "mcp": true
+        "mcp": true,
+        "app": true
       }
     },
     {
@@ -4866,7 +4904,8 @@
         "schema": true,
         "api": true,
         "docs": true,
-        "mcp": true
+        "mcp": true,
+        "app": true
       }
     },
     {
@@ -4956,7 +4995,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -4974,7 +5014,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -5084,7 +5125,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -5102,7 +5144,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -5189,7 +5232,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -5207,7 +5251,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {

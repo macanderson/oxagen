@@ -14,7 +14,7 @@ export const conversationArchive = registerCapability({
     "Archive or unarchive conversations (reversible — sets or clears archived_at, no data loss)",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "conversation" },
   // Reversible state change — not destructive despite being a write.

@@ -84,6 +84,12 @@ function layerSatisfied(layer, capName, capSurfaces) {
     const toolFile = join(ROOT, `apps/mcp/src/tools/${capName}.ts`);
     return existsSync(toolFile);
   }
+  // The "app" layer (human-operable UI in apps/app) is not a file-existence
+  // check — it is a route-binding + runtime-proof promise owned by a dedicated
+  // gate, tools/scripts/check_ui_parity.mjs. Treat it as satisfied here so the
+  // manifest doesn't report false "app missing" gaps; check:ui-parity is the
+  // authority for app-surface completeness.
+  if (layer === "app") return true;
   const candidates = {
     schema: [join(ROOT, "packages/database/src/schema")],
     api: [join(ROOT, `apps/api/src/routes/v1/${capName}.ts`)],

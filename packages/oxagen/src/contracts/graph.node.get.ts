@@ -7,7 +7,7 @@ export const graphNodeGet = registerCapability({
   description: "Retrieve a KnowledgeNode by its publicId.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"] as const,
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "graph" },
   sensitivity: "low",

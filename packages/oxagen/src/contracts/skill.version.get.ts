@@ -8,7 +8,7 @@ export const skillVersionGet = registerCapability({
     "Fetch a specific version of a workspace skill, returning the full body, parsed frontmatter, and version metadata",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "docs", "mcp"],
+  layers: ["schema", "api", "docs", "mcp", "app"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "skill" },
