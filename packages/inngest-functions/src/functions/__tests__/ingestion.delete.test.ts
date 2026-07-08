@@ -59,9 +59,16 @@ vi.mock("../../logger", () => ({
   logger: { info: mocks.loggerInfo, debug: vi.fn(), error: mocks.loggerError },
 }));
 
-vi.mock("@oxagen/telemetry", () => ({
-  insertEvents: mocks.insertEvents,
-}));
+// Spread the real module so transitive exports the @oxagen/ontology mock pulls
+// in via importOriginal (e.g. isDirectRunEntry, imported by ontology's
+// migrate.ts at module-load) stay defined; override only insertEvents.
+vi.mock("@oxagen/telemetry", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/telemetry")>();
+  return {
+    ...real,
+    insertEvents: mocks.insertEvents,
+  };
+});
 
 await import("../ingestion.delete");
 
