@@ -503,6 +503,7 @@ describe("agent.definition.get handler", () => {
       agentId: "agt_1",
       publicId: "agt_1",
       slug: "a",
+      agentKey: "org.ws.a",
       name: "A",
       description: null,
       agentType: "custom",
