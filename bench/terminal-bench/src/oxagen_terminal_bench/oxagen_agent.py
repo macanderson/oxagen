@@ -521,16 +521,42 @@ class OxagenAgent(BaseInstalledAgent):
         if not _is_truthy(os.environ.get("OXAGEN_SKIP_INIT")) and not _is_truthy(
             os.environ.get("OXAGEN_NO_PIPELINE")
         ):
+            # init is explicitly NON-FATAL (the script ends `|| echo "init
+            # failed (non-fatal)"`), but a Harbor exec *timeout* raises before
+            # that shell fallback runs — on large repos (django, astropy) the
+            # tree-sitter parse blew the old 300s cap and KILLED the whole
+            # trial in agent_setup, $0 spent, before a single LLM call
+            # (job single-shot-r8, 2026-07-07). Give it a generous budget AND
+            # swallow any failure here so a slow/failed pre-build degrades to
+            # a cold graph (built lazily at first use) instead of aborting the
+            # trial. Timeout overridable via OXAGEN_INIT_TIMEOUT_SEC.
+            init_timeout = 300
+            raw_init_timeout = os.environ.get("OXAGEN_INIT_TIMEOUT_SEC")
+            if raw_init_timeout:
+                try:
+                    init_timeout = max(1, int(raw_init_timeout.strip()))
+                except ValueError:
+                    pass
+            else:
+                init_timeout = 600
             # Pass env via the exec env= channel (same as the run() call
             # below), NOT inlined into the command string: Harbor logs every
             # command verbatim to trial.log, so an inline `env KEY=...` prefix
             # wrote the AI_GATEWAY_API_KEY secret into the log file.
-            await self.exec_as_agent(
-                environment,
-                command=_INIT_SCRIPT,
-                env=self._forwarded_env(),
-                timeout_sec=300,  # tree-sitter parse of a large repo can take 2–3 min
-            )
+            try:
+                await self.exec_as_agent(
+                    environment,
+                    command=_INIT_SCRIPT,
+                    env=self._forwarded_env(),
+                    timeout_sec=init_timeout,
+                )
+            except Exception as exc:  # noqa: BLE001 — init is best-effort by design
+                print(
+                    f"oxagen-adapter: `oxagen init` pre-build did not finish "
+                    f"({type(exc).__name__}: {exc}); continuing with a cold code "
+                    f"graph (built lazily at first use).",
+                    file=sys.stderr,
+                )
 
         # 6) Warm mode: upload prior-trial memory into the container so this
         #    trial starts with accumulated state from all preceding trials.
