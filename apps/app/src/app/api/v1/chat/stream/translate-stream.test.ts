@@ -479,6 +479,42 @@ describe("emitUsageEvent", () => {
     });
   });
 
+  it("forwards cachedTokens (prompt-cache reads) when present, clamped to the prompt", () => {
+    vi.mocked(meterCreditsForUsage).mockReturnValue(10n);
+    const events: StreamEvent[] = [];
+    emitUsageEvent(
+      (e) => events.push(e),
+      { inputTokens: 1000, outputTokens: 200, totalTokens: 1200, cachedInputTokens: 800 },
+      "anthropic/claude-sonnet-5",
+    );
+    const usage = events[0] as Extract<StreamEvent, { type: "usage" }>;
+    expect(usage.usage.cachedTokens).toBe(800);
+  });
+
+  it("clamps cachedTokens to the prompt size when the provider over-reports", () => {
+    vi.mocked(meterCreditsForUsage).mockReturnValue(10n);
+    const events: StreamEvent[] = [];
+    emitUsageEvent(
+      (e) => events.push(e),
+      { inputTokens: 500, outputTokens: 0, totalTokens: 500, cachedInputTokens: 900 },
+      "x/y",
+    );
+    const usage = events[0] as Extract<StreamEvent, { type: "usage" }>;
+    expect(usage.usage.cachedTokens).toBe(500);
+  });
+
+  it("omits cachedTokens entirely when there were no cache hits", () => {
+    vi.mocked(meterCreditsForUsage).mockReturnValue(10n);
+    const events: StreamEvent[] = [];
+    emitUsageEvent(
+      (e) => events.push(e),
+      { inputTokens: 100, outputTokens: 20, totalTokens: 120, cachedInputTokens: 0 },
+      "x/y",
+    );
+    const usage = events[0] as Extract<StreamEvent, { type: "usage" }>;
+    expect(usage.usage.cachedTokens).toBeUndefined();
+  });
+
   it("omits creditsCharged when the meter throws (unknown model)", () => {
     vi.mocked(meterCreditsForUsage).mockImplementation(() => {
       throw new Error("unknown model");
