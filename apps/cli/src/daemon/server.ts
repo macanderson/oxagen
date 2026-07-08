@@ -8,11 +8,35 @@
  */
 import * as net from "node:net";
 import * as fs from "node:fs";
+import {
+  startRssWatchdog,
+  resolveBoundBytes,
+  type BoundHandle,
+} from "@oxagen/agent-engine";
 import type { DaemonRequest, DaemonResponse, DaemonConfig } from "./protocol";
 import { DAEMON_ERRORS } from "./protocol";
 import type { CodeGraph, CodeEdgeType } from "./code-graph/types";
 import type { Session, TaskFrame } from "@oxagen/engram";
 import type { ContextWindow } from "@oxagen/engram";
+
+/**
+ * In-memory session registry cap. Sessions are recorded per `compile` call
+ * and the daemon can live for days — without a cap the Map grows without
+ * limit. Insertion order == recording order, so evicting the oldest entry is
+ * an LRU-by-creation policy; a forked/replayed session older than the window
+ * reports SESSION_NOT_FOUND, exactly as after a daemon restart.
+ */
+const MAX_RECORDED_SESSIONS = 200;
+
+/**
+ * Per-connection line-buffer cap. A client that streams bytes without a
+ * newline would otherwise grow `buffer` forever; 8 MB comfortably exceeds any
+ * legitimate single JSON-RPC request (compile taskFrames are KBs).
+ */
+const MAX_SOCKET_BUFFER_BYTES = 8 * 1024 * 1024;
+
+/** Default daemon RSS ceiling (2 GB); override via OXAGEN_DAEMON_MAX_RSS_MB. */
+const DEFAULT_DAEMON_MAX_RSS_BYTES = 2 * 1024 * 1024 * 1024;
 
 /**
  * RPC-level error carrying a JSON-RPC error code (see DAEMON_ERRORS). Thrown
@@ -40,9 +64,20 @@ export class ContextDaemon {
    * Session model — see session/fork.ts and session/replay.ts).
    */
   private readonly sessions = new Map<string, Session>();
+  private rssWatchdog: BoundHandle | null = null;
 
   constructor(config: DaemonConfig) {
     this.config = config;
+  }
+
+  /** Register a session, evicting the oldest once the registry is full. */
+  private recordSession(session: Session): void {
+    while (this.sessions.size >= MAX_RECORDED_SESSIONS) {
+      const oldest = this.sessions.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      this.sessions.delete(oldest);
+    }
+    this.sessions.set(session.id, session);
   }
 
   /**
@@ -72,6 +107,31 @@ export class ContextDaemon {
         this.shutdown();
       }
     }, 60000);
+
+    // RSS watchdog: the daemon is the CLI's one always-on process. Warn at
+    // 80% of the ceiling, shut down gracefully at 100% — a restart with cold
+    // caches beats an OOM-killed daemon holding the DuckDB write lock.
+    const maxRssBytes =
+      this.config.maxRssBytes ??
+      resolveBoundBytes("OXAGEN_DAEMON_MAX_RSS_MB", DEFAULT_DAEMON_MAX_RSS_BYTES);
+    this.rssWatchdog = startRssWatchdog({
+      maxRssBytes,
+      onWarn: (rss, max) => {
+        console.error(
+          `[oxagen-daemon] rss ${Math.round(rss / 1024 / 1024)} MB is above 80% of the ` +
+            `${Math.round(max / 1024 / 1024)} MB ceiling (OXAGEN_DAEMON_MAX_RSS_MB to raise).`,
+        );
+      },
+      onLimit: (rss, max) => {
+        console.error(
+          `[oxagen-daemon] rss ${Math.round(rss / 1024 / 1024)} MB reached the ` +
+            `${Math.round(max / 1024 / 1024)} MB ceiling — shutting down gracefully. ` +
+            `It restarts on the next CLI call; raise OXAGEN_DAEMON_MAX_RSS_MB if this recurs.`,
+        );
+        process.exitCode = 1;
+        void this.shutdown();
+      },
+    });
   }
 
   /**
@@ -79,6 +139,8 @@ export class ContextDaemon {
    */
   async shutdown(): Promise<void> {
     if (this.idleTimer) clearInterval(this.idleTimer);
+    this.rssWatchdog?.stop();
+    this.rssWatchdog = null;
     if (this.server) {
       this.server.close();
       this.server = null;
@@ -94,6 +156,31 @@ export class ContextDaemon {
 
     socket.on("data", (data) => {
       buffer += data.toString();
+      // A newline-free flood must not grow the buffer without limit: reject
+      // the oversized request and drop the connection (protocol violation).
+      if (buffer.length > MAX_SOCKET_BUFFER_BYTES) {
+        buffer = "";
+        // Stop reading first so continued flood bytes can't re-buffer, then
+        // flush the error and half-close; end() (unlike destroy()) lets the
+        // reply reach the client before the FIN.
+        socket.removeAllListeners("data");
+        socket.pause();
+        this.sendResponse(socket, {
+          id: "unknown",
+          error: {
+            code: DAEMON_ERRORS.PARSE_ERROR,
+            message: `Request exceeds ${MAX_SOCKET_BUFFER_BYTES} bytes without a newline`,
+          },
+        });
+        socket.end();
+        // Backstop: a client mid-flood can't complete the half-close (its
+        // queued writes never drain once we stop reading) — force-drop the
+        // connection shortly after the reply has had time to flush.
+        const killTimer = setTimeout(() => socket.destroy(), 500);
+        killTimer.unref?.();
+        socket.once("close", () => clearTimeout(killTimer));
+        return;
+      }
       // Process complete lines (newline-delimited JSON)
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
@@ -200,7 +287,7 @@ export class ContextDaemon {
     let session = this.sessions.get(sessionId);
     if (!session) {
       session = createSession(sessionId, taskFrame.namespace);
-      this.sessions.set(sessionId, session);
+      this.recordSession(session);
     }
     const turnId = crypto.randomUUID();
     appendEvent(session, "turn_start", turnId, { taskFrame });
@@ -232,7 +319,7 @@ export class ContextDaemon {
     const { forkSession } = await import("@oxagen/engram");
     const newSessionId = crypto.randomUUID();
     const forked = forkSession(parent, params.forkPoint, newSessionId);
-    this.sessions.set(forked.id, forked);
+    this.recordSession(forked);
     return {
       sessionId: forked.id,
       parentId: forked.parentId ?? null,
