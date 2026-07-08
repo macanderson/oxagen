@@ -361,6 +361,34 @@ describe("ChatShellClient — stream error banner on non-2xx SSE response", () =
     expect(screen.getByTestId("stream-error-banner")).toBeInTheDocument();
   });
 
+  it("surfaces the server's JSON error message on a 422 (attachment resolve failure)", async () => {
+    const serverMessage =
+      "One or more attachments could not be found, belong to another workspace, or are not ready yet. Please remove and re-attach the file, then try again.";
+    await renderAndSubmit(async () =>
+      new Response(JSON.stringify({ error: serverMessage }), {
+        status: 422,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const banner = screen.getByTestId("stream-error-banner");
+    expect(banner).toBeInTheDocument();
+    // The actionable server message is shown verbatim — NOT a bare "HTTP 422".
+    expect(banner).toHaveTextContent(serverMessage);
+    expect(banner).not.toHaveTextContent("HTTP 422");
+  });
+
+  it("falls back to the status message when a non-2xx body carries no error field", async () => {
+    await renderAndSubmit(async () =>
+      new Response(JSON.stringify({ notError: "x" }), {
+        status: 422,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const banner = screen.getByTestId("stream-error-banner");
+    expect(banner).toHaveTextContent("422");
+    expect(banner).toHaveTextContent("please try again");
+  });
+
   it("renders stream-error-banner when fetch throws a non-abort network error", async () => {
     await renderAndSubmit(async () => {
       throw new Error("ERR_CONNECTION_RESET");
