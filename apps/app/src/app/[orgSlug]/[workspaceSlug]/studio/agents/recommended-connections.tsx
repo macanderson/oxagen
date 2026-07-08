@@ -67,7 +67,7 @@ export function RecommendedConnections({
           const href =
             rec.kind === "mcp_server"
               ? org.developer.mcp({ orgSlug })
-              : workspace.studio.skills(routeCtx);
+              : workspace.studio.tools.skills(routeCtx);
           return (
             <li
               key={`${rec.kind}:${rec.ref}`}

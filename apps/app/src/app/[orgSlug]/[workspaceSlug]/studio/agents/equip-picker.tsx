@@ -10,7 +10,7 @@
  * its own; the builder owns the list.
  */
 import * as React from "react";
-import { Check, Plus, ShieldAlert } from "lucide-react";
+import { Check, Plus, ShieldAlert, ShoppingBag } from "lucide-react";
 import type { AgentTool, AgentToolType } from "@oxagen/oxagen/agent-schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,13 @@ export interface EquipPickerProps {
   value: AgentTool[];
   onChange: (next: AgentTool[]) => void;
   disabled?: boolean;
+  /**
+   * When set, renders an "Install more from Marketplace" affordance below the
+   * pools so new skills / MCP servers / capabilities can be installed without
+   * leaving the wizard. Callers gate this on manage rights — installs flow
+   * through the agent-tools choke point (lib/agent-tools/install-actions).
+   */
+  onBrowseMarketplace?: () => void;
 }
 
 function has(value: AgentTool[], type: AgentToolType, ref: string): boolean {
@@ -146,6 +153,7 @@ export function EquipPicker({
   value,
   onChange,
   disabled,
+  onBrowseMarketplace,
 }: EquipPickerProps) {
   const count = (type: AgentToolType) =>
     value.filter((t) => t.type === type).length;
@@ -270,6 +278,22 @@ export function EquipPicker({
           ))
         )}
       </TabsPanel>
+
+      {onBrowseMarketplace ? (
+        <div className="mt-4 flex justify-center border-t border-border/40 pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="max-lg:h-11 max-lg:w-full"
+            onClick={onBrowseMarketplace}
+            startIcon={<ShoppingBag className="h-3.5 w-3.5" aria-hidden="true" />}
+            data-testid="equip-browse-marketplace"
+          >
+            Install more from Marketplace
+          </Button>
+        </div>
+      ) : null}
     </Tabs>
   );
 }

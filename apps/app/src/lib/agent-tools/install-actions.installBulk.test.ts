@@ -78,9 +78,11 @@ vi.mock("@oxagen/oxagen", () => ({ invoke: mockInvoke }));
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@/lib/routes", () => ({
   workspace: {
-    settings: {
-      plugins: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
-        `/${orgSlug}/${workspaceSlug}/settings/plugins`,
+    studio: {
+      tools: {
+        capabilities: ({ orgSlug, workspaceSlug }: { orgSlug: string; workspaceSlug: string }) =>
+          `/${orgSlug}/${workspaceSlug}/studio/tools/capabilities`,
+      },
     },
   },
 }));
@@ -160,7 +162,7 @@ describe("installBulkPlugin server action", () => {
 
     expect(res.ok).toBe(true);
     expect(res.failures).toBeUndefined();
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/settings/plugins");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/acme/main/studio/tools/capabilities");
   });
 
   it("wraps the invoke call in runInTenantScope with the correct org and workspace ids", async () => {

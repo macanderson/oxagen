@@ -4,6 +4,7 @@ import type { ScopeContext } from "@/lib/scope";
 import { resolveStudioScope } from "@/lib/studio/scope";
 import { loadEquipSources } from "@/lib/studio/equip-sources";
 import { AgentBuilder } from "../agent-builder";
+import { installPlugin, installBulkPlugin } from "@/lib/agent-tools/install-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,8 @@ export default async function NewAgentPage({ params }: PageProps) {
       canManage={canManage}
       readOnly={false}
       sources={sources}
+      installAction={installPlugin}
+      installBulkAction={installBulkPlugin}
     />
   );
 }

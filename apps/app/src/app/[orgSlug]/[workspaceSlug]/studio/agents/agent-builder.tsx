@@ -62,6 +62,7 @@ import { useToast } from "@/components/ui/toast";
 import { CopyableId } from "@/components/knowledge/graph-explorer/copyable-id";
 import { workspace } from "@/lib/routes";
 import type { ScopeContext } from "@/lib/scope";
+import { MarketplaceModal } from "@/components/plugins/marketplace-modal";
 import { EquipPicker, type EquipSources } from "./equip-picker";
 import {
   createAgentAction,
@@ -114,7 +115,42 @@ export interface AgentBuilderProps {
   readOnly: boolean;
   sources: EquipSources;
   initialAgent?: InitialAgent;
+  /**
+   * Install actions from the agent-tools choke point
+   * (@/lib/agent-tools/install-actions) — power the Equip step's inline
+   * "Install more from Marketplace" flow. Gated on canManage. Same
+   * structural shape as WorkspacePluginsPanel's action props; the builder
+   * injects workspaceSlug before delegating (the modal only knows
+   * workspaceId).
+   */
+  installAction: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    workspaceId: string;
+    catalogServerId: string;
+    pluginType: EquipInstallPluginType;
+    pluginId?: string;
+  }) => Promise<{ ok: boolean; orgListingId?: string; error?: string }>;
+  installBulkAction: (input: {
+    orgSlug: string;
+    workspaceSlug: string;
+    workspaceId: string;
+    items: Array<{
+      catalogServerId?: string;
+      pluginType: EquipInstallPluginType;
+      pluginId?: string;
+    }>;
+  }) => Promise<{ ok: boolean; error?: string }>;
 }
+
+type EquipInstallPluginType =
+  | "mcp_server"
+  | "integration"
+  | "content_tool"
+  | "capability"
+  | "agent_skill"
+  | "agent_capability"
+  | "knowledge_source";
 
 // ── Steps ─────────────────────────────────────────────────────────────────────
 
@@ -165,6 +201,8 @@ export function AgentBuilder({
   readOnly,
   sources,
   initialAgent,
+  installAction,
+  installBulkAction,
 }: AgentBuilderProps) {
   const router = useRouter();
   const { add } = useToast();
@@ -261,6 +299,14 @@ export function AgentBuilder({
 
   // Flow
   const [stepIdx, setStepIdx] = React.useState(0);
+  // Inline marketplace install from the Equip step. Closing the modal
+  // refreshes the route so freshly-installed tools appear in the pools
+  // (equip sources are loaded server-side).
+  const [marketplaceOpen, setMarketplaceOpen] = React.useState(false);
+  const handleMarketplaceOpenChange = (open: boolean) => {
+    setMarketplaceOpen(open);
+    if (!open) router.refresh();
+  };
   const [busy, setBusy] = React.useState(false);
   // The live agent id once created; drives whether Save issues create vs update.
   const [agentId, setAgentId] = React.useState<string | null>(
@@ -496,9 +542,10 @@ export function AgentBuilder({
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
-      {/* Step rail */}
+      {/* Step rail — horizontal scroll strip on mobile (44px+ touch targets),
+          vertical rail on desktop. */}
       <nav
-        className="flex flex-row gap-1 overflow-x-auto lg:w-48 lg:flex-col lg:gap-0.5"
+        className="flex flex-row gap-1 overflow-x-auto max-lg:-mx-1 max-lg:px-1 lg:w-48 lg:flex-col lg:gap-0.5"
         aria-label="Builder steps"
       >
         {steps.map((s, i) => {
@@ -508,7 +555,7 @@ export function AgentBuilder({
               key={s.key}
               type="button"
               onClick={() => setStepIdx(i)}
-              className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
+              className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors max-lg:min-h-11 max-lg:flex-shrink-0 ${
                 active
                   ? "bg-muted font-medium text-foreground"
                   : "text-muted-foreground hover:bg-muted/40"
@@ -798,6 +845,21 @@ export function AgentBuilder({
                 value={agentTools}
                 onChange={setAgentTools}
                 disabled={disabled}
+                onBrowseMarketplace={
+                  canManage && !readOnly
+                    ? () => setMarketplaceOpen(true)
+                    : undefined
+                }
+              />
+              <MarketplaceModal
+                open={marketplaceOpen}
+                onOpenChange={handleMarketplaceOpenChange}
+                installAction={(input) =>
+                  installAction({ ...input, workspaceSlug })
+                }
+                installBulkAction={(input) =>
+                  installBulkAction({ ...input, workspaceSlug })
+                }
               />
               {/* Suggested tools the workspace doesn't have yet — surfaced here
                   (not only in the dismissable banner) so they stay in view while
@@ -1147,12 +1209,14 @@ export function AgentBuilder({
           ) : null}
         </div>
 
-        {/* Step nav */}
-        <div className="mt-4 flex items-center justify-between">
+        {/* Step nav — inline on desktop; on mobile a sticky thumb bar pinned
+            above the bottom nav (44px+ targets, safe-area aware). */}
+        <div className="mt-4 flex items-center justify-between gap-3 max-lg:sticky max-lg:bottom-[calc(var(--bottom-bar-h)+var(--bottom-bar-gap,0px)+env(safe-area-inset-bottom))] max-lg:z-10 max-lg:-mx-4 max-lg:border-t max-lg:border-border/60 max-lg:bg-background/95 max-lg:px-4 max-lg:py-3 max-lg:backdrop-blur">
           <Button
             type="button"
             variant="ghost"
             size="sm"
+            className="max-lg:h-11 max-lg:flex-1"
             disabled={stepIdx === 0}
             onClick={() => setStepIdx((i) => Math.max(0, i - 1))}
             startIcon={<ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />}
@@ -1160,11 +1224,18 @@ export function AgentBuilder({
           >
             Back
           </Button>
+          <span
+            className="text-xs tabular-nums text-muted-foreground lg:hidden"
+            aria-label={`Step ${stepIdx + 1} of ${steps.length}`}
+          >
+            {stepIdx + 1} / {steps.length}
+          </span>
           {stepIdx < steps.length - 1 ? (
             <Button
               type="button"
               variant="secondary"
               size="sm"
+              className="max-lg:h-11 max-lg:flex-1"
               onClick={() => setStepIdx((i) => Math.min(steps.length - 1, i + 1))}
               endIcon={<ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />}
               data-testid="builder-next"
@@ -1172,7 +1243,7 @@ export function AgentBuilder({
               Next
             </Button>
           ) : (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground max-lg:flex-1 max-lg:text-right">
               {mode === "edit" && initialAgent
                 ? `Editing ${initialAgent.slug} · v${initialAgent.version ?? "—"}`
                 : "New agent"}

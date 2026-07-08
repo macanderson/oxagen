@@ -89,7 +89,7 @@ describe("RecommendedConnections", () => {
     const connect = screen.getByTestId(
       "agent-recommendation-connect-changelog-formatter",
     );
-    expect(connect.getAttribute("href")).toContain("/studio/skills");
+    expect(connect.getAttribute("href")).toContain("/studio/tools/skills");
     expect(connect.getAttribute("target")).toBe("_blank");
   });
 });
