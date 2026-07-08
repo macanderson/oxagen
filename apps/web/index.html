@@ -445,6 +445,7 @@ button,input,textarea{font:inherit;color:inherit}
 .manual-points{margin:22px 0 30px;padding:0;list-style:none;display:grid;gap:10px}
 .manual-points li{display:flex;gap:11px;color:var(--ink-soft);font-size:15px;align-items:baseline}
 .manual-points li::before{content:"—";color:var(--ember-c);flex:none}
+.manual-cta{margin:-8px 0 26px}
 
 /* ============ forms ============ */
 .lead-form{display:grid;gap:14px;max-width:520px}
@@ -917,6 +918,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
           <li>What to measure so results are repeatable, not lucky</li>
         </ul>
 
+        <p class="manual-cta reveal reveal-d1">
+          <a class="btn btn-ghost btn-sm" href="/read">Prefer the full reader? Open the book <span class="arr">→</span></a>
+        </p>
+
         <form class="lead-form reveal reveal-d2" id="manualForm" data-source="field-manual" novalidate>
           <div class="f-row">
             <div class="field">
@@ -948,14 +953,10 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
           </div>
         </form>
 
-        <div class="unlocked reveal" id="manualUnlocked" hidden>
-          <div class="ok-line"><span class="ok-dot" aria-hidden="true">✓</span> You're in — enjoy the manual.</div>
-          <p>Read it right here in your browser, or take the EPUB with you. We'll only use
-          your email to follow up about Oxagen — no spam, ever.</p>
-          <div class="row">
-            <a class="btn btn-primary" href="/field-manual?unlocked=1">Read it in your browser <span class="arr">→</span></a>
-            <a class="btn btn-ghost" href="/field-manual/engineering-deterministic-ai-coding-agents.epub" download>Download the EPUB</a>
-          </div>
+        <div class="unlocked reveal" id="manualSuccess" hidden tabindex="-1">
+          <div class="ok-line"><span class="ok-dot" aria-hidden="true">✓</span> <span id="manualSuccessMsg">The link to the book has been sent to your email.</span></div>
+          <p>Check your inbox (and spam, just in case). We'll only use your email to follow
+          up about Oxagen — no spam, ever.</p>
         </div>
       </div>
     </div>
@@ -1090,8 +1091,19 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
     ? "http://localhost:4000"
     : "https://api.oxagen.sh";
   var LEADS_URL = API_BASE + "/v1/marketing/leads";
-  var UNLOCK_KEY = "ox_fm_unlocked";
+  var CMS_LEADS_URL = API_BASE + "/v1/cms/leads";
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function buildTrackingCode() {
+    var qs = new URLSearchParams(location.search);
+    var keys = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "tc", "tracking_code"];
+    var parts = [];
+    keys.forEach(function (k) {
+      var v = qs.get(k);
+      if (v) { parts.push(k + "=" + v); }
+    });
+    return parts.length ? parts.join("&") : undefined;
+  }
 
   /* ---------- nav scroll state ---------- */
   var nav = document.getElementById("nav");
@@ -1235,21 +1247,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
     status.classList.toggle("err", !!isErr);
   }
 
-  function markUnlocked() {
-    try { localStorage.setItem(UNLOCK_KEY, "1"); } catch (_) { /* private mode: fail open */ }
-    var form = document.getElementById("manualForm");
-    var unlocked = document.getElementById("manualUnlocked");
-    if (form && unlocked) {
-      form.hidden = true;
-      unlocked.hidden = false;
-      unlocked.classList.add("in-view");
-    }
-  }
-
-  try {
-    if (localStorage.getItem(UNLOCK_KEY) === "1") { markUnlocked(); }
-  } catch (_) { /* ignore */ }
-
+  /* demo form: unchanged — still posts to the public marketing/leads endpoint */
   function wireForm(form) {
     form.addEventListener("submit", function (ev) {
       ev.preventDefault();
@@ -1280,12 +1278,76 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
       }).then(function (res) {
         if (!res.ok && res.status !== 204) { throw new Error("status " + res.status); }
         form.reset();
-        if (source === "field-manual") {
+        setStatus(form, "Thanks — we got it. We'll be in touch shortly. ✓");
+        btn.disabled = false;
+      }).catch(function () {
+        btn.disabled = false;
+        setStatus(
+          form,
+          'Something went wrong. Try again, or email <a href="mailto:success@oxagen.ai">success@oxagen.ai</a>.',
+          true
+        );
+      });
+    });
+  }
+
+  /* field-manual gate form: posts to the CMS lead-gate endpoint. Success never reveals a
+     book link — the server emails a single-use /read link. */
+  function wireManualForm(form) {
+    var successPanel = document.getElementById("manualSuccess");
+    var successMsg = document.getElementById("manualSuccessMsg");
+    var trackingCode = buildTrackingCode();
+
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var btn = form.querySelector('button[type="submit"]');
+
+      if (!form.reportValidity()) { return; }
+
+      var fd = new FormData(form);
+      var fullName = String(fd.get("name") || "").trim();
+      var spaceIdx = fullName.indexOf(" ");
+      var firstName = spaceIdx === -1 ? fullName : fullName.slice(0, spaceIdx);
+      var lastName = spaceIdx === -1 ? "" : fullName.slice(spaceIdx + 1).trim();
+
+      var payload = {
+        firstName: firstName,
+        lastName: lastName || firstName,
+        email: String(fd.get("email") || "").trim().toLowerCase(),
+        source: "field-manual",
+        pagePath: location.pathname + location.search + location.hash,
+        website: String(fd.get("website") || "")
+      };
+      var role = String(fd.get("role") || "").trim();
+      var company = String(fd.get("company") || "").trim();
+      if (company) { payload.company = company; }
+      if (role) { payload.jobTitle = role; }
+      if (trackingCode) { payload.trackingCode = trackingCode; }
+
+      btn.disabled = true;
+      setStatus(form, "Sending…");
+
+      fetch(CMS_LEADS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }).then(function (res) {
+        return res.json().then(function (data) { return { status: res.status, data: data }; });
+      }).then(function (r) {
+        var data = r.data || {};
+        if (r.status >= 200 && r.status < 300 && data.ok) {
+          form.reset();
           setStatus(form, "");
-          markUnlocked();
+          form.hidden = true;
+          if (successMsg) { successMsg.textContent = data.message || "The link to the book has been sent to your email."; }
+          if (successPanel) { successPanel.hidden = false; successPanel.classList.add("in-view"); try { successPanel.focus(); } catch (_) { /* ignore */ } }
         } else {
-          setStatus(form, "Thanks — we got it. We'll be in touch shortly. ✓");
           btn.disabled = false;
+          setStatus(
+            form,
+            'Something went wrong. Try again, or email <a href="mailto:success@oxagen.ai">success@oxagen.ai</a>.',
+            true
+          );
         }
       }).catch(function () {
         btn.disabled = false;
@@ -1300,7 +1362,7 @@ footer{border-top:1px solid var(--line);background:var(--bg-raise);padding:64px 
 
   var manualForm = document.getElementById("manualForm");
   var demoForm = document.getElementById("demoForm");
-  if (manualForm) wireForm(manualForm);
+  if (manualForm) wireManualForm(manualForm);
   if (demoForm) wireForm(demoForm);
 }());
 </script>

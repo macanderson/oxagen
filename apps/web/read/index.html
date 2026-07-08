@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Engineering Deterministic AI Coding Agents — Oxagen</title>
+<meta name="description" content="A free 14-part field manual on building deterministic AI coding agents — systems that get the right answer the first time, from any model. By Mac Anderson.">
+<link rel="canonical" href="https://oxagen.sh/read">
+<meta name="theme-color" content="#090B11">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="book">
+<meta property="og:url" content="https://oxagen.sh/read">
+<meta property="og:site_name" content="Oxagen">
+<meta property="og:title" content="Engineering Deterministic AI Coding Agents — Oxagen">
+<meta property="og:description" content="A free 14-part field manual on building deterministic AI coding agents — systems that get the right answer the first time, from any model. By Mac Anderson.">
+<meta property="og:image" content="https://oxagen.sh/research-assets/book-og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@oxagenai">
+<meta name="twitter:title" content="Engineering Deterministic AI Coding Agents — Oxagen">
+<meta name="twitter:description" content="A free 14-part field manual on building deterministic AI coding agents — systems that get the right answer the first time, from any model. By Mac Anderson.">
+<meta name="twitter:image" content="https://oxagen.sh/research-assets/book-og.png">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/fonts/Aeonik-VF.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/AeonikMono-VF.woff2" as="font" type="font/woff2" crossorigin>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Book",
+  "name": "Engineering Deterministic AI Coding Agents",
+  "author": { "@type": "Person", "name": "Mac Anderson" },
+  "publisher": { "@type": "Organization", "name": "Oxagen, Inc." },
+  "url": "https://oxagen.sh/read",
+  "image": "https://oxagen.sh/research-assets/book-og.png",
+  "numberOfPages": 14,
+  "isAccessibleForFree": true
+}
+</script>
+<style>
+/* ============ tokens (matches apps/web/index.html) ============ */
+:root{
+  --bg:#090B11;
+  --bg-raise:#0C0F17;
+  --surface:#0F121A;
+  --card:#10141D;
+  --line:#292E37;
+  --line-strong:#323A48;
+  --ink:#F1EDEA;
+  --ink-soft:#D8D2CB;
+  --muted:#BCB2A9;
+  --faint:#6F7785;
+  --ember-a:#EB5C5E;
+  --ember-b:#F07650;
+  --ember-c:#FD9A4C;
+  --ember-soft:#261507;
+  --indigo:#9CA3E8;
+  --indigo-soft:#151A30;
+  --ok:#7BC98A;
+  --grad-ember:linear-gradient(92deg,var(--ember-a) 0%,var(--ember-b) 46%,var(--ember-c) 100%);
+  --radius:14px;
+  --ease-out:cubic-bezier(.22,1,.36,1);
+}
+@font-face{
+  font-family:"Aeonik";
+  src:url("/fonts/Aeonik-VF.woff2") format("woff2-variations"),
+      url("/fonts/Aeonik-VF.woff2") format("woff2");
+  font-weight:100 900;font-style:normal;font-display:swap;
+}
+@font-face{
+  font-family:"Aeonik Mono";
+  src:url("/fonts/AeonikMono-VF.woff2") format("woff2-variations"),
+      url("/fonts/AeonikMono-VF.woff2") format("woff2");
+  font-weight:100 900;font-style:normal;font-display:swap;
+}
+
+/* ============ base ============ */
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font:400 16px/1.6 "Aeonik",system-ui,-apple-system,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  min-height:100vh;display:flex;flex-direction:column;
+}
+::selection{background:var(--ember-b);color:#150803}
+h1,h2,h3{margin:0;font-weight:640;letter-spacing:-.02em;line-height:1.1;text-wrap:balance}
+p{margin:0}
+a{color:inherit;text-decoration:none}
+img,svg{display:block;max-width:100%}
+button,input,textarea,select{font:inherit;color:inherit}
+.mono{font-family:"Aeonik Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+:focus-visible{outline:2px solid var(--ember-c);outline-offset:3px;border-radius:4px}
+.skip{
+  position:fixed;left:12px;top:-64px;z-index:200;background:var(--ember-c);color:#150803;
+  padding:10px 16px;border-radius:10px;font-weight:600;transition:top .2s;
+}
+.skip:focus{top:12px}
+.grad-text{
+  background:var(--grad-ember);-webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+
+.eyebrow{
+  font-family:"Aeonik Mono",monospace;font-size:12px;font-weight:520;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--ember-c);display:inline-flex;align-items:center;gap:10px;
+}
+.eyebrow::before{content:"";width:22px;height:2px;background:var(--grad-ember);border-radius:2px}
+
+/* ============ buttons ============ */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  padding:13px 24px;border-radius:11px;font-weight:600;font-size:15.5px;
+  border:1px solid transparent;cursor:pointer;white-space:nowrap;
+  transition:transform .18s var(--ease-out),box-shadow .18s,border-color .18s,background-color .18s,filter .18s;
+}
+.btn svg{flex:none}
+.btn-primary{background:var(--grad-ember);color:#1A0D08;box-shadow:0 8px 28px -10px rgba(240,118,80,.55)}
+.btn-primary:hover{transform:translateY(-1px);filter:brightness(1.07);box-shadow:0 12px 34px -10px rgba(240,118,80,.7)}
+.btn-primary:active{transform:translateY(0)}
+.btn-ghost{border-color:var(--line-strong);color:var(--ink-soft);background:rgba(255,255,255,.02)}
+.btn-ghost:hover{border-color:var(--faint);color:var(--ink);transform:translateY(-1px)}
+.btn-sm{padding:9px 16px;font-size:14px;border-radius:9px}
+.btn[disabled]{opacity:.6;cursor:progress;transform:none}
+.btn .arr{transition:transform .18s var(--ease-out)}
+.btn:hover .arr{transform:translateX(3px)}
+.btn-full{width:100%}
+
+/* ============ header / footer ============ */
+.gate-header{padding:22px 0}
+.gate-header .wrap{width:min(680px,calc(100% - 40px));margin-inline:auto}
+.brand{display:inline-flex;align-items:center;gap:10px;font-weight:660;font-size:18px;letter-spacing:-.02em}
+.brand svg{width:26px;height:26px}
+.gate-footer{border-top:1px solid var(--line);padding:24px 0;margin-top:auto}
+.gate-footer .wrap{
+  width:min(680px,calc(100% - 40px));margin-inline:auto;display:flex;flex-wrap:wrap;gap:8px 16px;
+  justify-content:space-between;font-size:13px;color:var(--faint);
+}
+.gate-footer a{color:var(--indigo)}
+.gate-footer a:hover{color:var(--ink)}
+
+/* ============ shell ============ */
+main{flex:1;position:relative}
+.gate-shell{
+  position:relative;padding:28px 0 72px;display:flex;flex-direction:column;align-items:center;
+}
+.gate-glow{
+  position:absolute;left:50%;top:0;width:820px;height:520px;transform:translateX(-50%);
+  background:radial-gradient(closest-side,rgba(240,118,80,.13),transparent 70%);
+  filter:blur(10px);pointer-events:none;z-index:0;
+}
+
+/* ============ loading ============ */
+.loading-card{
+  position:relative;z-index:1;display:grid;place-items:center;gap:16px;padding:64px 20px;text-align:center;color:var(--muted);
+}
+.spinner{
+  width:34px;height:34px;border-radius:50%;
+  border:3px solid var(--line-strong);border-top-color:var(--ember-c);
+  animation:spin .85s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ============ gate card ============ */
+.gate-card{
+  position:relative;z-index:1;width:min(560px,calc(100% - 40px));
+  display:grid;gap:28px;opacity:0;transform:translateY(14px);
+  transition:opacity .6s var(--ease-out),transform .6s var(--ease-out);
+}
+.gate-card.in-view{opacity:1;transform:none}
+
+.gate-banner{
+  border-radius:10px;border:1px solid rgba(235,92,94,.35);background:rgba(235,92,94,.08);
+  color:var(--ink-soft);font-size:14px;padding:13px 16px;display:flex;gap:10px;align-items:flex-start;
+}
+.gate-banner .ic{flex:none;color:var(--ember-a);font-weight:700}
+
+/* book cover */
+.book-scene{perspective:1200px;display:grid;place-items:center;padding:4px 0}
+.book{
+  width:min(220px,58%);aspect-ratio:10/15;border-radius:10px;position:relative;
+  background:linear-gradient(160deg,#0D1018 0%,#090B11 60%,#0E0A0C 100%);
+  border:1px solid var(--line-strong);
+  box-shadow:18px 26px 56px -26px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.03) inset;
+  transform:rotateY(-9deg) rotateX(2deg);
+  transition:transform .5s var(--ease-out),box-shadow .5s;
+  padding:18px 16px;display:flex;flex-direction:column;margin-inline:auto;
+}
+.book-scene:hover .book{transform:rotateY(-3deg) rotateX(1deg) translateY(-4px)}
+.book::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:6px;border-radius:10px 0 0 10px;
+  background:linear-gradient(180deg,var(--ember-a),var(--ember-b),var(--ember-c));opacity:.85;
+}
+.book-kicker{font-family:"Aeonik Mono",monospace;font-size:8.5px;letter-spacing:.2em;color:var(--ember-c);text-transform:uppercase;margin-bottom:10px}
+.book-title{font-size:clamp(15px,3.6vw,17px);font-weight:680;letter-spacing:-.01em;line-height:1.16}
+.book-author{margin-top:auto;padding-top:10px;border-top:1px solid var(--line)}
+.book-author b{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:620}
+.book-author span{font-size:9.5px;color:var(--faint)}
+
+.gate-copy{text-align:center;display:grid;gap:12px;justify-items:center}
+.gate-copy h1{font-size:clamp(26px,5vw,34px)}
+.gate-copy p{color:var(--muted);font-size:15.5px;max-width:44ch}
+
+/* ============ forms ============ */
+.lead-form{display:grid;gap:14px}
+.f-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:520px){.f-row{grid-template-columns:1fr}}
+.field{display:grid;gap:6px}
+.field.full{grid-column:1/-1}
+.field label{font-size:13px;color:var(--ink-soft);font-weight:520}
+.field label .opt{color:var(--faint);font-weight:400}
+.field input,.field select,.field textarea{
+  background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;
+  padding:11px 14px;font-size:15px;color:var(--ink);width:100%;
+  transition:border-color .15s,box-shadow .15s;
+}
+.field select{appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236F7785' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;background-size:16px;padding-right:36px;
+}
+.field select:invalid{color:var(--faint)}
+.field input::placeholder,.field textarea::placeholder{color:var(--faint)}
+.field input:focus,.field select:focus,.field textarea:focus{
+  outline:none;border-color:var(--ember-b);box-shadow:0 0 0 3px rgba(240,118,80,.18);
+}
+.hp-wrap{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%)}
+.consent-copy{font-size:13px;color:var(--faint);line-height:1.55}
+.form-foot{display:grid;gap:12px}
+.form-status{font-size:14px;color:var(--muted);min-height:1.4em}
+.form-status.err{color:var(--ember-a)}
+.form-status a{color:var(--indigo);border-bottom:1px solid rgba(156,163,232,.4)}
+
+/* edition chooser */
+.edition-pick{border:0;padding:0;margin:0;display:grid;gap:10px}
+.edition-pick legend{font-size:13px;color:var(--ink-soft);font-weight:520;padding:0;margin-bottom:2px}
+.edition-opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:520px){.edition-opts{grid-template-columns:1fr}}
+.edition-opt{
+  position:relative;display:flex;flex-direction:column;gap:3px;padding:13px 15px;
+  border:1px solid var(--line-strong);border-radius:10px;background:var(--surface);cursor:pointer;
+  transition:border-color .15s,background-color .15s,box-shadow .15s;
+}
+.edition-opt input{position:absolute;opacity:0;width:1px;height:1px}
+.edition-opt.is-selected,.edition-opt:has(input:checked){
+  border-color:var(--ember-b);background:rgba(240,118,80,.08);box-shadow:0 0 0 1px rgba(240,118,80,.35) inset;
+}
+.edition-name{font-weight:600;font-size:14.5px;color:var(--ink)}
+.edition-desc{font-size:12px;color:var(--muted)}
+
+/* success panel */
+.success-panel{
+  display:grid;gap:14px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--radius);padding:26px;text-align:left;
+}
+.ok-line{display:flex;align-items:center;gap:10px;font-weight:620;font-size:17px}
+.ok-line .ok-dot{
+  width:24px;height:24px;border-radius:50%;background:rgba(123,201,138,.15);flex:none;
+  display:grid;place-items:center;color:var(--ok);font-size:13px;border:1px solid rgba(123,201,138,.4);
+}
+.success-panel p{color:var(--muted);font-size:14.5px}
+
+/* resend */
+.resend-wrap{text-align:center;display:grid;gap:14px;justify-items:center}
+.resend-toggle{
+  background:none;border:0;color:var(--indigo);font-size:14px;cursor:pointer;
+  border-bottom:1px solid rgba(156,163,232,.4);padding:4px 0;
+}
+.resend-toggle:hover{color:var(--ink)}
+.resend-panel{
+  width:100%;display:grid;gap:12px;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--radius);padding:18px;text-align:left;
+}
+.resend-panel .form-foot{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.resend-panel .form-status{flex:1;min-width:160px}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+  .gate-card{opacity:1;transform:none}
+  .book-scene:hover .book{transform:rotateY(-9deg) rotateX(2deg)}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="gate-header">
+  <div class="wrap">
+    <a class="brand" href="https://oxagen.sh" aria-label="Oxagen home">
+      <svg viewBox="7.775 4.325 36.343 37.216" aria-hidden="true"><defs><linearGradient gradientTransform="matrix(27.9194 19.5129 -21.9367 24.8347 12.2858 18.2731)" gradientUnits="userSpaceOnUse" id="lgR1" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#FD9A4B"/><stop offset="0.5" stop-color="#F07650"/><stop offset="1" stop-color="#EB5C5E"/></linearGradient><linearGradient gradientTransform="matrix(12.59 0 0 12.59 9.77471 32.9406)" gradientUnits="userSpaceOnUse" id="lgR2" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#FD9A4B"/><stop offset="0.5" stop-color="#F07650"/><stop offset="1" stop-color="#EB5C5E"/></linearGradient></defs><path d="M16.1893 6.32478L21.9857 9.3639L21.9857 15.4418L16.1893 18.4806L10.3929 15.4418L10.3929 9.3639L16.1893 6.32478Z" fill="none" stroke="#F1EEEA" stroke-width="1"/><path d="M29.2662 6.32478L35.0626 9.3639L35.0626 15.4418L29.2662 18.4806L23.4698 15.4418L23.4698 9.3639L29.2662 6.32478Z" fill="none" stroke="#F1EEEA" stroke-width="1"/><path d="M22.6376 16.5647L28.4341 19.6038L28.4341 25.6814L22.6376 28.7205L16.8412 25.6814L16.8412 19.6038L22.6376 16.5647Z" fill="none" stroke="#F1EEEA" stroke-width="1"/><path d="M35.8698 16.2903L42.1182 19.4993L42.1182 25.9165L35.8698 29.1255L29.6214 25.9165L29.6214 19.4993L35.8698 16.2903Z" fill="url(#lgR1)"/><path d="M16.0697 26.3399L22.3647 29.6401L22.3647 36.2408L16.0697 39.5413L9.77471 36.2408L9.77471 29.6401L16.0697 26.3399Z" fill="url(#lgR2)" opacity="0.55"/><path d="M29.2662 26.8043L35.0626 29.8431L35.0626 35.921L29.2662 38.9601L23.4698 35.921L23.4698 29.8431L29.2662 26.8043Z" fill="none" stroke="#F1EEEA" stroke-width="1"/></svg>
+      oxagen
+    </a>
+  </div>
+</header>
+
+<main id="main">
+  <div class="gate-shell">
+    <div class="gate-glow" aria-hidden="true"></div>
+
+    <p id="statusRegion" class="sr-only" role="status" aria-live="polite"></p>
+
+    <div class="loading-card" id="loadingState" hidden>
+      <div class="spinner" aria-hidden="true"></div>
+      <p>Preparing your reading link…</p>
+    </div>
+
+    <div class="gate-card" id="gateCard" hidden>
+      <div class="gate-banner" id="gateBanner" role="status" hidden>
+        <span class="ic" aria-hidden="true">!</span>
+        <span id="gateBannerText"></span>
+      </div>
+
+      <div class="book-scene" aria-hidden="true">
+        <div class="book">
+          <span class="book-kicker">A field manual in 14 parts</span>
+          <span class="book-title">Engineering <span class="grad-text">Deterministic</span> AI Coding Agents</span>
+          <span class="book-author"><b>Mac Anderson</b><span>Founder &amp; CEO, Oxagen</span></span>
+        </div>
+      </div>
+
+      <div class="gate-copy">
+        <p class="eyebrow">Free · read online</p>
+        <h1 id="gateHeading" tabindex="-1">Read the field manual</h1>
+        <p>Fourteen parts on building AI coding agents that get the right answer the
+        first time, from any model. Tell us where to send your single-use reading link.</p>
+      </div>
+
+      <form class="lead-form" id="gateForm" novalidate>
+        <div class="f-row">
+          <div class="field">
+            <label for="g-first">First name</label>
+            <input id="g-first" name="firstName" type="text" autocomplete="given-name" required maxlength="120" placeholder="Ada">
+          </div>
+          <div class="field">
+            <label for="g-last">Last name</label>
+            <input id="g-last" name="lastName" type="text" autocomplete="family-name" required maxlength="120" placeholder="Lovelace">
+          </div>
+        </div>
+        <div class="f-row">
+          <div class="field">
+            <label for="g-email">Work email</label>
+            <input id="g-email" name="email" type="email" autocomplete="email" required maxlength="320" placeholder="ada@company.com">
+          </div>
+          <div class="field">
+            <label for="g-jobtitle">Job title <span class="opt">(optional)</span></label>
+            <input id="g-jobtitle" name="jobTitle" type="text" autocomplete="organization-title" maxlength="120" placeholder="Engineering lead">
+          </div>
+        </div>
+        <div class="f-row">
+          <div class="field">
+            <label for="g-company">Company <span class="opt">(optional)</span></label>
+            <input id="g-company" name="company" type="text" autocomplete="organization" maxlength="200" placeholder="Analytical Engines Ltd">
+          </div>
+          <div class="field">
+            <label for="g-companysize">Company size <span class="opt">(optional)</span></label>
+            <select id="g-companysize" name="companySize">
+              <option value="" selected>Select one</option>
+              <option value="1-10">1–10 employees</option>
+              <option value="11-50">11–50 employees</option>
+              <option value="51-200">51–200 employees</option>
+              <option value="201-500">201–500 employees</option>
+              <option value="501-1000">501–1,000 employees</option>
+              <option value="1001-5000">1,001–5,000 employees</option>
+              <option value="5001-10000">5,001–10,000 employees</option>
+              <option value="10001+">10,001+ employees</option>
+            </select>
+          </div>
+        </div>
+        <div class="f-row">
+          <div class="field">
+            <label for="g-phone">Mobile phone <span class="opt">(optional)</span></label>
+            <input id="g-phone" name="mobilePhone" type="tel" autocomplete="tel" maxlength="40" placeholder="+1 555 010 0100">
+          </div>
+          <div class="field">
+            <label for="g-country">Country <span class="opt">(optional)</span></label>
+            <input id="g-country" name="country" type="text" autocomplete="country-name" maxlength="100" placeholder="United States">
+          </div>
+        </div>
+        <div class="f-row">
+          <div class="field">
+            <label for="g-state">State / Province <span class="opt">(optional)</span></label>
+            <input id="g-state" name="state" type="text" autocomplete="address-level1" maxlength="100" placeholder="California">
+          </div>
+          <div class="field">
+            <label for="g-city">City <span class="opt">(optional)</span></label>
+            <input id="g-city" name="city" type="text" autocomplete="address-level2" maxlength="100" placeholder="San Francisco">
+          </div>
+        </div>
+        <div class="f-row">
+          <div class="field">
+            <label for="g-addr1">Address line 1 <span class="opt">(optional)</span></label>
+            <input id="g-addr1" name="address1" type="text" autocomplete="address-line1" maxlength="200" placeholder="2261 Market Street">
+          </div>
+          <div class="field">
+            <label for="g-addr2">Address line 2 <span class="opt">(optional)</span></label>
+            <input id="g-addr2" name="address2" type="text" autocomplete="address-line2" maxlength="200" placeholder="STE 87168">
+          </div>
+        </div>
+        <div class="field full">
+          <label for="g-referral">How did you hear about us? <span class="opt">(optional)</span></label>
+          <select id="g-referral" name="referralSource">
+            <option value="" selected>Select one</option>
+            <option value="search_engine">Search engine</option>
+            <option value="social_media">Social media</option>
+            <option value="referral">Referral</option>
+            <option value="email">Email</option>
+            <option value="blog_or_content">Blog or content</option>
+            <option value="event_or_conference">Event or conference</option>
+            <option value="advertisement">Advertisement</option>
+            <option value="word_of_mouth">Word of mouth</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <fieldset class="edition-pick">
+          <legend>Which edition should we send?</legend>
+          <div class="edition-opts">
+            <label class="edition-opt is-selected">
+              <input type="radio" name="edition" value="page-flip-reader" checked>
+              <span class="edition-name">Page-flip reader</span>
+              <span class="edition-desc">The premium reading experience</span>
+            </label>
+            <label class="edition-opt">
+              <input type="radio" name="edition" value="field-manual">
+              <span class="edition-name">Field manual</span>
+              <span class="edition-desc">Linear scroll</span>
+            </label>
+          </div>
+        </fieldset>
+
+        <p class="consent-copy">We’ll only use your details to send the book and follow up about Oxagen — no spam.</p>
+
+        <div class="hp-wrap" aria-hidden="true">
+          <label for="g-website">Website</label>
+          <input id="g-website" name="website" type="text" tabindex="-1" autocomplete="off">
+        </div>
+
+        <div class="form-foot">
+          <button class="btn btn-primary btn-full" type="submit">Send me the book <span class="arr">→</span></button>
+          <p class="form-status" id="gateFormStatus" role="status" aria-live="polite"></p>
+        </div>
+      </form>
+
+      <div class="success-panel" id="successPanel" hidden tabindex="-1">
+        <div class="ok-line"><span class="ok-dot" aria-hidden="true">✓</span> <span id="successMessage">The link to the book has been sent to your email.</span></div>
+        <p>Check your inbox (and spam, just in case).</p>
+      </div>
+
+      <div class="resend-wrap">
+        <button type="button" class="resend-toggle" id="resendToggle" aria-expanded="false" aria-controls="resendPanel">
+          Already got access? Resend my link
+        </button>
+        <div class="resend-panel" id="resendPanel" hidden>
+          <form id="resendForm" novalidate>
+            <div class="field">
+              <label for="resend-email">Email</label>
+              <input id="resend-email" type="email" required autocomplete="email" maxlength="320" placeholder="you@company.com">
+            </div>
+            <div class="form-foot" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+              <button class="btn btn-ghost btn-sm" type="submit">Resend link</button>
+              <p class="form-status" id="resendFormStatus" role="status" aria-live="polite"></p>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="gate-footer">
+  <div class="wrap">
+    <span>© 2026 Oxagen, Inc.</span>
+    <span><a href="mailto:success@oxagen.ai">success@oxagen.ai</a></span>
+  </div>
+</footer>
+
+<noscript>
+  <div style="max-width:560px;margin:40px auto;padding:20px;text-align:center;color:#BCB2A9">
+    Please enable JavaScript to request the book, or email
+    <a href="mailto:success@oxagen.ai" style="color:#9CA3E8">success@oxagen.ai</a> and we'll send it to you.
+  </div>
+</noscript>
+
+<script>
+(function () {
+  "use strict";
+
+  /* Single place this page knows its API. oxagen.sh domain migration = update here. */
+  var API_BASE = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
+    ? "http://localhost:4000"
+    : "https://api.oxagen.sh";
+  var LEADS_URL = API_BASE + "/v1/cms/leads";
+  var REDEEM_URL = API_BASE + "/v1/cms/book/redeem";
+  var RESEND_URL = API_BASE + "/v1/cms/book/resend";
+  var EDITIONS = ["field-manual", "page-flip-reader"];
+  var DEFAULT_EDITION = "page-flip-reader";
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var qs = new URLSearchParams(location.search);
+  var urlEdition = qs.get("e") || qs.get("edition") || "";
+  var effectiveEdition = EDITIONS.indexOf(urlEdition) !== -1 ? urlEdition : DEFAULT_EDITION;
+  var code = qs.get("c") || qs.get("code") || "";
+
+  function buildTrackingCode() {
+    var keys = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "tc", "tracking_code"];
+    var parts = [];
+    keys.forEach(function (k) {
+      var v = qs.get(k);
+      if (v) { parts.push(k + "=" + v); }
+    });
+    return parts.length ? parts.join("&") : undefined;
+  }
+  var trackingCode = buildTrackingCode();
+
+  var loadingState = document.getElementById("loadingState");
+  var gateCard = document.getElementById("gateCard");
+  var gateBanner = document.getElementById("gateBanner");
+  var gateBannerText = document.getElementById("gateBannerText");
+  var gateHeading = document.getElementById("gateHeading");
+  var statusRegion = document.getElementById("statusRegion");
+
+  function announce(msg) { if (statusRegion) statusRegion.textContent = msg; }
+
+  function showLoading() {
+    if (loadingState) loadingState.hidden = false;
+    if (gateCard) gateCard.hidden = true;
+    announce("Preparing your reading link…");
+  }
+
+  function showGate(bannerText) {
+    if (loadingState) loadingState.hidden = true;
+    if (gateCard) gateCard.hidden = false;
+    if (bannerText) {
+      gateBannerText.textContent = bannerText;
+      gateBanner.hidden = false;
+      announce(bannerText);
+    } else {
+      gateBanner.hidden = true;
+    }
+    if (!reduceMotion) {
+      requestAnimationFrame(function () { gateCard.classList.add("in-view"); });
+    } else {
+      gateCard.classList.add("in-view");
+    }
+    if (gateHeading) { try { gateHeading.focus({ preventScroll: false }); } catch (_) { gateHeading.focus(); } }
+  }
+
+  function reasonMessage(reason) {
+    if (reason === "consumed") return "That link has already been used — links are single-use.";
+    if (reason === "expired") return "That link has expired.";
+    return "That link isn’t valid.";
+  }
+
+  function replaceDocumentWithBook(edition, newCode, html) {
+    try {
+      history.replaceState(null, "", "/read?e=" + encodeURIComponent(edition) + "&c=" + encodeURIComponent(newCode));
+    } catch (_) { /* history API unavailable — proceed anyway */ }
+    document.open();
+    document.write(html);
+    document.close();
+  }
+
+  if (code) {
+    showLoading();
+    fetch(REDEEM_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ edition: effectiveEdition, code: code })
+    }).then(function (res) {
+      return res.json().then(function (data) { return { status: res.status, data: data }; });
+    }).then(function (r) {
+      var data = r.data || {};
+      if (data.ok && data.html) {
+        replaceDocumentWithBook(effectiveEdition, data.newCode, data.html);
+        return;
+      }
+      showGate(reasonMessage(data.reason));
+    }).catch(function () {
+      showGate("We couldn’t verify that link — check your connection and try again.");
+    });
+  } else {
+    showGate(null);
+  }
+
+  /* ---------- edition chooser ---------- */
+  var editionInputs = Array.prototype.slice.call(document.querySelectorAll('input[name="edition"]'));
+  editionInputs.forEach(function (input) {
+    input.addEventListener("change", function () {
+      editionInputs.forEach(function (i) {
+        i.closest(".edition-opt").classList.toggle("is-selected", i.checked);
+      });
+    });
+  });
+
+  /* ---------- gate lead form ---------- */
+  var gateForm = document.getElementById("gateForm");
+  var successPanel = document.getElementById("successPanel");
+  var successMessage = document.getElementById("successMessage");
+
+  function setStatus(el, msg, isErr) {
+    el.innerHTML = msg;
+    el.classList.toggle("err", !!isErr);
+  }
+
+  if (gateForm) {
+    gateForm.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var btn = gateForm.querySelector('button[type="submit"]');
+      var statusEl = document.getElementById("gateFormStatus");
+
+      if (!gateForm.reportValidity()) { return; }
+
+      var fd = new FormData(gateForm);
+      var payload = {
+        firstName: String(fd.get("firstName") || "").trim(),
+        lastName: String(fd.get("lastName") || "").trim(),
+        email: String(fd.get("email") || "").trim().toLowerCase(),
+        edition: String(fd.get("edition") || DEFAULT_EDITION),
+        source: "ebook-gate",
+        pagePath: location.pathname + location.search,
+        website: String(fd.get("website") || "")
+      };
+      [
+        "jobTitle", "company", "companySize", "mobilePhone", "country",
+        "state", "city", "address1", "address2", "referralSource"
+      ].forEach(function (k) {
+        var v = String(fd.get(k) || "").trim();
+        if (v) { payload[k] = v; }
+      });
+      if (trackingCode) { payload.trackingCode = trackingCode; }
+
+      btn.disabled = true;
+      setStatus(statusEl, "Sending…");
+
+      fetch(LEADS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }).then(function (res) {
+        return res.json().then(function (data) { return { status: res.status, data: data }; });
+      }).then(function (r) {
+        var data = r.data || {};
+        if (r.status >= 200 && r.status < 300 && data.ok) {
+          setStatus(statusEl, "");
+          gateForm.hidden = true;
+          successMessage.textContent = data.message || "The link to the book has been sent to your email.";
+          successPanel.hidden = false;
+          announce(successMessage.textContent);
+          try { successPanel.focus(); } catch (_) { /* ignore */ }
+        } else {
+          btn.disabled = false;
+          setStatus(
+            statusEl,
+            'Something went wrong. Try again, or email <a href="mailto:success@oxagen.ai">success@oxagen.ai</a>.',
+            true
+          );
+        }
+      }).catch(function () {
+        btn.disabled = false;
+        setStatus(
+          statusEl,
+          'Something went wrong. Try again, or email <a href="mailto:success@oxagen.ai">success@oxagen.ai</a>.',
+          true
+        );
+      });
+    });
+  }
+
+  /* ---------- resend disclosure ---------- */
+  var resendToggle = document.getElementById("resendToggle");
+  var resendPanel = document.getElementById("resendPanel");
+  var resendForm = document.getElementById("resendForm");
+
+  if (resendToggle && resendPanel) {
+    resendToggle.addEventListener("click", function () {
+      var willOpen = resendPanel.hidden;
+      resendPanel.hidden = !willOpen;
+      resendToggle.setAttribute("aria-expanded", String(willOpen));
+      if (willOpen) {
+        var input = document.getElementById("resend-email");
+        if (input) { try { input.focus(); } catch (_) { /* ignore */ } }
+      }
+    });
+  }
+
+  if (resendForm) {
+    resendForm.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var btn = resendForm.querySelector('button[type="submit"]');
+      var statusEl = document.getElementById("resendFormStatus");
+      var emailInput = document.getElementById("resend-email");
+
+      if (!resendForm.reportValidity()) { return; }
+
+      var email = String(emailInput.value || "").trim().toLowerCase();
+      var selectedEdition = document.querySelector('input[name="edition"]:checked');
+      var edition = selectedEdition ? selectedEdition.value : DEFAULT_EDITION;
+
+      btn.disabled = true;
+      setStatus(statusEl, "Sending…");
+
+      fetch(RESEND_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email, edition: edition })
+      }).then(function (res) {
+        return res.json().then(function (data) { return { status: res.status, data: data }; });
+      }).then(function (r) {
+        var data = r.data || {};
+        btn.disabled = false;
+        if (r.status >= 200 && r.status < 300 && data.ok) {
+          setStatus(statusEl, data.message || (data.sent ? "The link to the book has been sent to your email." : "We couldn’t find that email. Please fill out the form to get the book."));
+          announce(statusEl.textContent);
+        } else {
+          setStatus(
+            statusEl,
+            'Something went wrong. Try again, or email <a href="mailto:success@oxagen.ai">success@oxagen.ai</a>.',
+            true
+          );
+        }
+      }).catch(function () {
+        btn.disabled = false;
+        setStatus(
+          statusEl,
+          'Something went wrong. Try again, or email <a href="mailto:success@oxagen.ai">success@oxagen.ai</a>.',
+          true
+        );
+      });
+    });
+  }
+}());
+</script>
+</body>
+</html>
