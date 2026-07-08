@@ -21,8 +21,7 @@ export const prCommentSchema = z.object({
 });
 
 export const repoPrGet = registerCapability({
-  name: "get_pr",
-  aliases: ["repo.pr.get"],
+  name: "repo.pr.get",
   domain: "repo",
   description: "Read a GitHub pull request's summary, diff stats, comments, and CI status.",
   mode: "sync",

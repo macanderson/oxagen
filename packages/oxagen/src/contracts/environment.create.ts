@@ -12,8 +12,7 @@ export const environmentSummarySchema = z.object({
 });
 
 export const environmentCreate = registerCapability({
-  name: "create_environment",
-  aliases: ["environment.create"],
+  name: "environment.create",
   domain: "environment",
   description: "Create a workspace environment (e.g. production, development, preview) for scoping secrets and sandbox config.",
   mode: "sync",

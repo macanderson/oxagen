@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const agentSkillList = registerCapability({
-  name: "list_agent_skills",
-  aliases: ["agent.skill.list"],
+  name: "agent.skill.list",
   domain: "agent",
   description: "List skills available in the active workspace — built-in filesystem skills plus tenant-defined skills",
   mode: "sync",

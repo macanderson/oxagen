@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const pluginRegistryList = registerCapability({
-  name: "list_plugin_registries",
-  aliases: ["plugin.registry.list"],
+  name: "plugin.registry.list",
   domain: "plugin",
   description: "List MCP registries for the workspace.",
   mode: "sync",

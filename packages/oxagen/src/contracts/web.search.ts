@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const webSearch = registerCapability({
-  name: "search_web",
-  aliases: ["web.search"],
+  name: "web.search",
   domain: "web",
   description:
     "Search the web using the Tavily API and return ranked results with title, URL, and content snippets.",

@@ -71,8 +71,7 @@ const suggestion = z.object({
 });
 
 export const commandMenuSuggest = registerCapability({
-  name: "suggest_commands",
-  aliases: ["command.menu.suggest"],
+  name: "command.menu.suggest",
   domain: "command",
   description:
     "Generate 3–5 context-aware 'Suggested for this page' prompts for the Command Menu " +

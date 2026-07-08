@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const connectionCreate = registerCapability({
-  name: "create_connection",
-  aliases: ["connection.create"],
+  name: "connection.create",
   domain: "connection",
   description:
     "Create a new data source connection for a workspace. Credentials are encrypted before storage.",

@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const skillVersionGet = registerCapability({
-  name: "get_skill_version",
-  aliases: ["skill.version.get"],
+  name: "skill.version.get",
   domain: "skill",
   description:
     "Fetch a specific version of a workspace skill, returning the full body, parsed frontmatter, and version metadata",

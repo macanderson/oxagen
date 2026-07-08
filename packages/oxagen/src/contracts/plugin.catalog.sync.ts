@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const pluginCatalogSync = registerCapability({
-  name: "sync_plugin_catalog",
-  aliases: ["plugin.catalog.sync"],
+  name: "plugin.catalog.sync",
   domain: "plugin",
   description: "Trigger an immediate sync of the MCP registry catalog for the workspace. Refreshes the locally-cached server listings from the upstream registry.",
   mode: "sync",

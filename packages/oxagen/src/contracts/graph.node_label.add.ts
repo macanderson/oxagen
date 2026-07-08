@@ -19,8 +19,8 @@ export { LABEL_PATTERN, assertSafeLabel } from "../lib/label-pattern";
  * is a free graph primitive; semantic governance happens elsewhere.
  */
 export const graphNodeLabelAdd = registerCapability({
-  name: "add_node_label",
-  aliases: ["graph.node_label.add", "graph.node.label.add"],
+  name: "graph.node_label.add",
+  aliases: ["graph.node.label.add"],
   domain: "graph",
   description: "Add one or more labels to a node (multi-label, idempotent, never removes existing labels).",
   mode: "sync",

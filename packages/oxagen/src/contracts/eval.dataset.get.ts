@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const evalDatasetGet = registerCapability({
-  name: "get_dataset",
-  aliases: ["eval.dataset.get"],
+  name: "eval.dataset.get",
   domain: "eval",
   description:
     "Fetch one eval dataset by public id along with a page of its items (input, expected output, metadata). Paginated via limit + cursor to avoid loading an unbounded item set.",

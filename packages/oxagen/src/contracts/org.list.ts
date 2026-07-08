@@ -24,8 +24,7 @@ export const orgListItemSchema = z.object({
 });
 
 export const orgList = registerCapability({
-  name: "list_orgs",
-  aliases: ["org.list"],
+  name: "org.list",
   domain: "org",
   description:
     "List the organizations (tenants) the authenticated user belongs to, with the caller's role in each. Backs the CLI tenant picker.",

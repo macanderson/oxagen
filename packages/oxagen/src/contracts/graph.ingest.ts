@@ -17,8 +17,7 @@ import { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
  */
 
 export const graphIngest = registerCapability({
-  name: "ingest_graph",
-  aliases: ["graph.ingest"],
+  name: "graph.ingest",
   domain: "graph",
   description:
     "Extract entities and relationships from text and commit them to the knowledge graph as " +

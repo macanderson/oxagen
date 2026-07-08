@@ -138,7 +138,7 @@ describe("markdown.generate capability", () => {
   // ── Capability metadata ──────────────────────────────────────────────────────
 
   it("has the correct capability name", () => {
-    expect(markdownGenerate.name).toBe("generate_markdown");
+    expect(markdownGenerate.name).toBe("markdown.generate");
   });
 
   it("surfaces include api, mcp, and agent", () => {

@@ -10,8 +10,7 @@ import { registerCapability } from "../registry";
 // the browser runs in the same sandbox as the app under test (localhost works).
 
 export const browserNavigate = registerCapability({
-  name: "navigate_page",
-  aliases: ["browser.navigate"],
+  name: "browser.navigate",
   domain: "browser",
   description:
     "Navigate the durable sandbox's browser to a URL and wait for load. Use to prove a feature renders (e.g. http://localhost:3000/...).",

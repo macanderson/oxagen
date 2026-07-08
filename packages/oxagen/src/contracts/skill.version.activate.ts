@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const skillVersionActivate = registerCapability({
-  name: "activate_skill_version",
-  aliases: ["skill.version.activate"],
+  name: "skill.version.activate",
   domain: "skill",
   description:
     "Re-point a skill's active version to a chosen (possibly older) skill_versions row. Sets activated_by_user_id and activated_at on the skill row. Exactly one version is active at any time per skill.",

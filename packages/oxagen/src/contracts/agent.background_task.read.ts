@@ -2,8 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const agentTaskBackgroundRead = registerCapability({
-  name: "get_background_task",
-  aliases: ["agent.background_task.read", "agent.task.background.read"],
+  name: "agent.background_task.read",
+  aliases: ["agent.task.background.read"],
   domain: "agent",
   description: "Read the status, progress, and result of a background task",
   mode: "sync",

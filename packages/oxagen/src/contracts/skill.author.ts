@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const skillAuthor = registerCapability({
-  name: "author_skill",
-  aliases: ["skill.author"],
+  name: "skill.author",
   domain: "skill",
   description:
     "Author a new skill from a natural-language prompt. The model synthesises a complete .skill.md document (YAML frontmatter + body), validates it, then installs it into the workspace via skill.workspace.install. Returns the installed skill's publicId, slug, active version number, the generated body, and whether this was a new install.",

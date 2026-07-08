@@ -8,8 +8,8 @@ import { memoryKindSchema } from "./agent.memory.model";
  * surface that always suggests the highest-signal 2-3 memories.
  */
 export const agentMemoryPromotionCandidates = registerCapability({
-  name: "list_memory_promotions",
-  aliases: ["agent.memory_promotion.list", "agent.memory.promotion.candidates"],
+  name: "agent.memory_promotion.list",
+  aliases: ["agent.memory.promotion.candidates"],
   domain: "agent",
   description:
     "List the top OBSERVATION memories by citation pressure that are candidates for promotion to RULE/FACT.",

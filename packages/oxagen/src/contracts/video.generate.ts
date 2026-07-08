@@ -4,8 +4,7 @@ import { registerCapability } from "../registry";
 // ── Contract ───────────────────────────────────────────────────────────────────
 
 export const videoGenerate = registerCapability({
-  name: "generate_video",
-  aliases: ["video.generate"],
+  name: "video.generate",
   domain: "video",
   description:
     "Generate a short video from a text prompt. Optionally accepts duration, aspect ratio, " +

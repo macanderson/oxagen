@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const workflowRun = registerCapability({
-  name: "run_workflow",
-  aliases: ["workflow.run"],
+  name: "workflow.run",
   domain: "workflow",
   description:
     "Decompose a large parallel goal into N sub-tasks, dispatch them concurrently via Inngest, and return a live progress component. Use for 10+ parallel data-gathering steps.",

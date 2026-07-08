@@ -73,7 +73,7 @@ describe("agent.tool.list handler", () => {
     const result = await agentToolListHandler({ includeExternal: false }, CTX);
 
     expect(result.tools).toHaveLength(1);
-    expect(result.tools[0]!.name).toBe("generate_document");
+    expect(result.tools[0]!.name).toBe("document.generate");
     expect(result.tools[0]!.external).toBe(false);
     expect(mocks.selectMock).not.toHaveBeenCalled();
   });
@@ -85,7 +85,7 @@ describe("agent.tool.list handler", () => {
     const result = await agentToolListHandler({ includeExternal: false }, CTX);
 
     expect(result.tools).toHaveLength(1);
-    expect(result.tools[0]!.name).toBe("generate_document");
+    expect(result.tools[0]!.name).toBe("document.generate");
   });
 
   it("appends external tools from mcp_servers when includeExternal is true", async () => {

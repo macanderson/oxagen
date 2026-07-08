@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const integrationMetrics = registerCapability({
-  name: "get_integration_metrics",
-  aliases: ["integration.metrics"],
+  name: "integration.metrics",
   domain: "integration",
   description: "Get sync statistics and metrics for a plugin instance.",
   mode: "sync",

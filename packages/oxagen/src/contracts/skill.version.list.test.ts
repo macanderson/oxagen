@@ -177,6 +177,6 @@ describe("skill.version.list capability", () => {
   });
 
   it("exposes name correctly", () => {
-    expect(skillVersionList.name).toBe("list_skill_versions");
+    expect(skillVersionList.name).toBe("skill.version.list");
   });
 });

@@ -47,8 +47,7 @@ const executionStepSchema = z.object({
 });
 
 export const agentExecutionRecord = registerCapability({
-  name: "record_execution",
-  aliases: ["agent.execution.record"],
+  name: "agent.execution.record",
   domain: "agent",
   description:
     "Persist a complete agent execution record including steps and tool calls for observability, billing, and audit",

@@ -6,7 +6,7 @@ describe("research.swarm.status contract", () => {
   // ── contract metadata ────────────────────────────────────────────────────
 
   it("registers with the correct name", () => {
-    expect(researchSwarmStatus.name).toBe("get_research_status");
+    expect(researchSwarmStatus.name).toBe("research.swarm.status");
   });
 
   it("belongs to the research domain", () => {

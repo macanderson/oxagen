@@ -46,7 +46,7 @@ import handler_billingCreditsPurchase, {
 describe("billing.credits.purchase handler", () => {
   it("exports schema and metadata", () => {
     expect(billingCreditsPurchaseSchema).toBeDefined();
-    expect(billingCreditsPurchaseMetadata.name).toBe("purchase_credits");
+    expect(billingCreditsPurchaseMetadata.name).toBe("billing.credits.purchase");
   });
 
   it("calls buildContext then invoke with correct args", async () => {
@@ -58,7 +58,7 @@ describe("billing.credits.purchase handler", () => {
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "purchase_credits",
+      "billing.credits.purchase",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -84,7 +84,7 @@ import handler_billingSubscriptionRead, {
 describe("billing.subscription.read handler", () => {
   it("exports schema and metadata", () => {
     expect(billingSubscriptionReadSchema).toBeDefined();
-    expect(billingSubscriptionReadMetadata.name).toBe("get_subscription");
+    expect(billingSubscriptionReadMetadata.name).toBe("billing.subscription.read");
   });
 
   it("calls invoke with empty args for read", async () => {
@@ -95,7 +95,7 @@ describe("billing.subscription.read handler", () => {
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "get_subscription",
+      "billing.subscription.read",
       {},
       fakeCtx,
       { surface: "mcp" },
@@ -113,7 +113,7 @@ import handler_billingSubscriptionUpgradeStart, {
 describe("billing.subscription.upgrade.start handler", () => {
   it("exports schema and metadata", () => {
     expect(billingSubscriptionUpgradeStartSchema).toBeDefined();
-    expect(billingSubscriptionUpgradeStartMetadata.name).toBe("start_subscription_upgrade");
+    expect(billingSubscriptionUpgradeStartMetadata.name).toBe("billing.subscription_upgrade.start");
   });
 
   it("calls invoke with upgrade args", async () => {
@@ -133,7 +133,7 @@ describe("billing.subscription.upgrade.start handler", () => {
     const result = await handler_billingSubscriptionUpgradeStart(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "start_subscription_upgrade",
+      "billing.subscription_upgrade.start",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -152,7 +152,7 @@ import handler_apiKeyCreate, {
 describe("api.key.create handler", () => {
   it("exports schema and metadata", () => {
     expect(apiKeyCreateSchema).toBeDefined();
-    expect(apiKeyCreateMetadata.name).toBe("create_api_key");
+    expect(apiKeyCreateMetadata.name).toBe("api.key.create");
   });
 
   it("calls invoke with key creation args", async () => {
@@ -171,7 +171,7 @@ describe("api.key.create handler", () => {
     await handler_apiKeyCreate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "create_api_key",
+      "api.key.create",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -189,7 +189,7 @@ import handler_apiKeyRevoke, {
 describe("api.key.revoke handler", () => {
   it("exports schema and metadata", () => {
     expect(apiKeyRevokeSchema).toBeDefined();
-    expect(apiKeyRevokeMetadata.name).toBe("revoke_api_key");
+    expect(apiKeyRevokeMetadata.name).toBe("api.key.revoke");
   });
 
   it("calls invoke with revoke args", async () => {
@@ -200,7 +200,7 @@ describe("api.key.revoke handler", () => {
     await handler_apiKeyRevoke(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "revoke_api_key",
+      "api.key.revoke",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -218,7 +218,7 @@ import handler_billingUsageBreakdown, {
 describe("billing.usage.breakdown handler", () => {
   it("exports schema and metadata", () => {
     expect(billingUsageBreakdownSchema).toBeDefined();
-    expect(billingUsageBreakdownMetadata.name).toBe("get_usage_breakdown");
+    expect(billingUsageBreakdownMetadata.name).toBe("billing.usage.breakdown");
     expect(billingUsageBreakdownMetadata.annotations?.readOnlyHint).toBe(true);
   });
 
@@ -244,7 +244,7 @@ describe("billing.usage.breakdown handler", () => {
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "get_usage_breakdown",
+      "billing.usage.breakdown",
       args,
       fakeCtx,
       { surface: "mcp" },

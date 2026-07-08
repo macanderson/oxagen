@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const pluginOrgUninstall = registerCapability({
-  name: "uninstall_plugin",
-  aliases: ["plugin.org.uninstall"],
+  name: "plugin.org.uninstall",
   domain: "plugin",
   description: "Soft-delete a plugin listing from this workspace and remove all dependent MCP server rows.",
   mode: "sync",

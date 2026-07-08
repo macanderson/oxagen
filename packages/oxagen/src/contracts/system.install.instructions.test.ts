@@ -70,7 +70,7 @@ describe("system.install.instructions capability", () => {
   });
 
   it("has the expected contract metadata", () => {
-    expect(systemInstallInstructions.name).toBe("get_install_instructions");
+    expect(systemInstallInstructions.name).toBe("system.install.instructions");
     expect(systemInstallInstructions.surfaces).toContain("api");
     expect(systemInstallInstructions.surfaces).toContain("mcp");
     expect(systemInstallInstructions.surfaces).toContain("agent");

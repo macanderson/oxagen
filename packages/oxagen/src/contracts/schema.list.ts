@@ -3,8 +3,7 @@ import { registerCapability } from "../registry";
 import { schemaSourceEnum } from "./schema.types";
 
 export const schemaList = registerCapability({
-  name: "list_schemas",
-  aliases: ["schema.list"],
+  name: "schema.list",
   domain: "schema",
   description: "List the workspace's schemas with per-schema enabled state.",
   mode: "sync",

@@ -83,7 +83,7 @@ describe("mermaid.generate capability", () => {
   });
 
   it("has the expected contract metadata", () => {
-    expect(mermaidGenerate.name).toBe("generate_mermaid");
+    expect(mermaidGenerate.name).toBe("mermaid.generate");
     expect(mermaidGenerate.surfaces).toContain("api");
     expect(mermaidGenerate.surfaces).toContain("mcp");
     expect(mermaidGenerate.surfaces).toContain("agent");

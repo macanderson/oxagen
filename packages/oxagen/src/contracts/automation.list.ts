@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const automationList = registerCapability({
-  name: "list_automations",
-  aliases: ["automation.list"],
+  name: "automation.list",
   domain: "automation",
   description: "List automations in a workspace",
   mode: "sync",

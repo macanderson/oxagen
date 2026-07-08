@@ -14,8 +14,7 @@ const renderDirectiveSchema = z.object({
 //
 // Authorization: org Owner or Admin only.
 export const apiKeyCreate = registerCapability({
-  name: "create_api_key",
-  aliases: ["api.key.create"],
+  name: "api.key.create",
   domain: "api_key",
   description:
     "Create a new API key for the org. Returns the raw key once — it is never recoverable after this call. Audited as api_key.created.",

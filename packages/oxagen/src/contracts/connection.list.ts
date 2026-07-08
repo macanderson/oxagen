@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const connectionList = registerCapability({
-  name: "list_connections",
-  aliases: ["connection.list"],
+  name: "connection.list",
   domain: "connection",
   description: "List all data source connections for a workspace.",
   mode: "sync",

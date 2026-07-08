@@ -45,7 +45,7 @@ import handler_archiveCreate, {
 describe("archive.create handler", () => {
   it("exports schema and metadata", () => {
     expect(archiveCreateSchema).toBeDefined();
-    expect(archiveCreateMetadata.name).toBe("create_archive");
+    expect(archiveCreateMetadata.name).toBe("archive.create");
   });
 
   it("calls buildContext then invoke with correct args", async () => {
@@ -77,7 +77,7 @@ describe("archive.create handler", () => {
     const result = await handler_archiveCreate(args);
 
     expect(mocks.buildContext).toHaveBeenCalledOnce();
-    expect(mocks.invoke).toHaveBeenCalledWith("create_archive", args, fakeCtx, {
+    expect(mocks.invoke).toHaveBeenCalledWith("archive.create", args, fakeCtx, {
       surface: "mcp",
     });
     expect(result).toMatchObject({ assetId: "gen_1" });
@@ -104,7 +104,7 @@ import handler_assetUpload, {
 describe("asset.upload handler", () => {
   it("exports schema and metadata", () => {
     expect(assetUploadSchema).toBeDefined();
-    expect(assetUploadMetadata.name).toBe("upload_asset");
+    expect(assetUploadMetadata.name).toBe("asset.upload");
   });
 
   it("calls invoke with upload args", async () => {
@@ -126,7 +126,7 @@ describe("asset.upload handler", () => {
     };
     await handler_assetUpload(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith("upload_asset", args, fakeCtx, {
+    expect(mocks.invoke).toHaveBeenCalledWith("asset.upload", args, fakeCtx, {
       surface: "mcp",
     });
   });
@@ -142,7 +142,7 @@ import handler_documentsGenerate, {
 describe("documents.generate handler", () => {
   it("exports schema and metadata", () => {
     expect(documentsGenerateSchema).toBeDefined();
-    expect(documentsGenerateMetadata.name).toBe("generate_document");
+    expect(documentsGenerateMetadata.name).toBe("document.generate");
   });
 
   it("calls invoke with document generation args", async () => {
@@ -188,7 +188,7 @@ describe("documents.generate handler", () => {
     await handler_documentsGenerate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "generate_document",
+      "document.generate",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -206,7 +206,7 @@ import handler_documentsPdfCreate, {
 describe("documents.pdf.create handler", () => {
   it("exports schema and metadata", () => {
     expect(documentsPdfCreateSchema).toBeDefined();
-    expect(documentsPdfCreateMetadata.name).toBe("create_pdf");
+    expect(documentsPdfCreateMetadata.name).toBe("document.pdf.create");
   });
 
   it("calls invoke with PDF creation args", async () => {
@@ -246,7 +246,7 @@ describe("documents.pdf.create handler", () => {
     await handler_documentsPdfCreate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "create_pdf",
+      "document.pdf.create",
       args,
       fakeCtx,
       { surface: "mcp" },
@@ -264,7 +264,7 @@ import handler_imageGenerate, {
 describe("image.generate handler", () => {
   it("exports schema and metadata", () => {
     expect(imageGenerateSchema).toBeDefined();
-    expect(imageGenerateMetadata.name).toBe("generate_image");
+    expect(imageGenerateMetadata.name).toBe("image.generate");
   });
 
   it("calls invoke with image generation args", async () => {
@@ -285,7 +285,7 @@ describe("image.generate handler", () => {
     };
     const result = await handler_imageGenerate(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith("generate_image", args, fakeCtx, {
+    expect(mocks.invoke).toHaveBeenCalledWith("image.generate", args, fakeCtx, {
       surface: "mcp",
     });
     expect(result).toMatchObject({
@@ -305,7 +305,7 @@ import handler_svgGenerate, {
 describe("svg.generate handler", () => {
   it("exports schema and metadata", () => {
     expect(svgGenerateSchema).toBeDefined();
-    expect(svgGenerateMetadata.name).toBe("generate_svg");
+    expect(svgGenerateMetadata.name).toBe("svg.generate");
   });
 
   it("calls invoke with svg generation args", async () => {
@@ -327,7 +327,7 @@ describe("svg.generate handler", () => {
     };
     await handler_svgGenerate(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith("generate_svg", args, fakeCtx, {
+    expect(mocks.invoke).toHaveBeenCalledWith("svg.generate", args, fakeCtx, {
       surface: "mcp",
     });
   });
@@ -343,7 +343,7 @@ import handler_videoGenerate, {
 describe("video.generate handler", () => {
   it("exports schema and metadata", () => {
     expect(videoGenerateSchema).toBeDefined();
-    expect(videoGenerateMetadata.name).toBe("generate_video");
+    expect(videoGenerateMetadata.name).toBe("video.generate");
   });
 
   it("calls invoke with video generation args", async () => {
@@ -370,7 +370,7 @@ describe("video.generate handler", () => {
     };
     await handler_videoGenerate(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith("generate_video", args, fakeCtx, {
+    expect(mocks.invoke).toHaveBeenCalledWith("video.generate", args, fakeCtx, {
       surface: "mcp",
     });
   });
@@ -386,7 +386,7 @@ import handler_formFill, {
 describe("form.fill handler", () => {
   it("exports schema and metadata", () => {
     expect(formFillSchema).toBeDefined();
-    expect(formFillMetadata.name).toBe("fill_form");
+    expect(formFillMetadata.name).toBe("form.fill");
   });
 
   it("calls invoke with form fill args", async () => {
@@ -414,7 +414,7 @@ describe("form.fill handler", () => {
     };
     await handler_formFill(args);
 
-    expect(mocks.invoke).toHaveBeenCalledWith("fill_form", args, fakeCtx, {
+    expect(mocks.invoke).toHaveBeenCalledWith("form.fill", args, fakeCtx, {
       surface: "mcp",
     });
   });

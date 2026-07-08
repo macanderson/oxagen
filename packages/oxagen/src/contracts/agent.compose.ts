@@ -47,8 +47,7 @@ const composeStepResult = z.object({
 });
 
 export const agentCompose = registerCapability({
-  name: "run_capability_chain",
-  aliases: ["agent.compose"],
+  name: "agent.compose",
   domain: "agent",
   description:
     "Plan and execute a chain of capabilities to accomplish a goal. An LLM planner reads the " +

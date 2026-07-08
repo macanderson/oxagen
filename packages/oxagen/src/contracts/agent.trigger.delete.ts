@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const agentTriggerDelete = registerCapability({
-  name: "delete_trigger",
-  aliases: ["agent.trigger.delete"],
+  name: "agent.trigger.delete",
   domain: "agent",
   description:
     "Soft-delete an agent trigger — marks deletedAt so the binding stops firing while preserving the audit record",

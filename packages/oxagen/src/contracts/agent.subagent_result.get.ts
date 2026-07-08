@@ -8,8 +8,8 @@ import { registerCapability } from "../registry";
 // output being relayed into the parent LLM context on every aggregate call
 // (docs/specs/graph-mediated-fanout).
 export const agentSubagentResultGet = registerCapability({
-  name: "get_subagent_result",
-  aliases: ["agent.subagent_result.get", "agent.subagent.result.get"],
+  name: "agent.subagent_result.get",
+  aliases: ["agent.subagent.result.get"],
   domain: "agent",
   description:
     "Fetch ONE subagent child run's full input + output payloads by runId (from agent.subagent.aggregate " +

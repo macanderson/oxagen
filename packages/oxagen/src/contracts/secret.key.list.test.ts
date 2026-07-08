@@ -12,7 +12,7 @@ const keySummary = {
 
 describe("secret.key.list contract", () => {
   it("registers with the correct name", () => {
-    expect(secretKeyList.name).toBe("list_secret_keys");
+    expect(secretKeyList.name).toBe("secret.key.list");
   });
   it("exposes the api, mcp, and agent surfaces", () => {
     expect(secretKeyList.surfaces).toEqual(["api", "mcp", "agent"]);

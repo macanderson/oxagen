@@ -3,8 +3,7 @@ import { registerCapability } from "../registry";
 import { environmentSummarySchema } from "./environment.create";
 
 export const environmentList = registerCapability({
-  name: "list_environments",
-  aliases: ["environment.list"],
+  name: "environment.list",
   domain: "environment",
   description: "List the environments configured in the active workspace.",
   mode: "sync",

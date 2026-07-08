@@ -61,7 +61,7 @@ describe("schema.registry.get MCP tool", () => {
   });
 
   it("metadata name is 'schema.registry.get'", () => {
-    expect(schemaRegistryGetMeta.name).toBe("get_schema_registry");
+    expect(schemaRegistryGetMeta.name).toBe("schema.registry.get");
   });
 
   it("calls buildContext and invoke with correct args", async () => {
@@ -99,7 +99,7 @@ describe("schema.list MCP tool", () => {
   });
 
   it("metadata name is 'schema.list'", () => {
-    expect(schemaListMeta.name).toBe("list_schemas");
+    expect(schemaListMeta.name).toBe("schema.list");
   });
 
   it("calls invoke with 'schema.list' and surface 'mcp'", async () => {
@@ -132,7 +132,7 @@ describe("schema.toggle MCP tool", () => {
   });
 
   it("metadata name is 'schema.toggle'", () => {
-    expect(schemaToggleMeta.name).toBe("toggle_schema");
+    expect(schemaToggleMeta.name).toBe("schema.toggle");
   });
 
   it("calls invoke with 'schema.toggle' + correct args", async () => {
@@ -159,7 +159,7 @@ describe("schema.label.upsert MCP tool", () => {
   });
 
   it("metadata name is 'schema.label.upsert'", () => {
-    expect(schemaLabelUpsertMeta.name).toBe("upsert_schema_label");
+    expect(schemaLabelUpsertMeta.name).toBe("schema.label.upsert");
   });
 
   it("calls invoke with correct args", async () => {
@@ -185,7 +185,7 @@ describe("schema.label.delete MCP tool", () => {
   });
 
   it("metadata name is 'schema.label.delete'", () => {
-    expect(schemaLabelDeleteMeta.name).toBe("delete_schema_label");
+    expect(schemaLabelDeleteMeta.name).toBe("schema.label.delete");
   });
 
   it("calls invoke with correct args", async () => {
@@ -210,7 +210,7 @@ describe("schema.relationship.upsert MCP tool", () => {
   });
 
   it("metadata name is 'schema.relationship.upsert'", () => {
-    expect(schemaRelationshipUpsertMeta.name).toBe("upsert_schema_relationship");
+    expect(schemaRelationshipUpsertMeta.name).toBe("schema.relationship.upsert");
   });
 
   it("calls invoke with correct args", async () => {
@@ -236,7 +236,7 @@ describe("schema.relationship.delete MCP tool", () => {
   });
 
   it("metadata name is 'schema.relationship.delete'", () => {
-    expect(schemaRelationshipDeleteMeta.name).toBe("delete_schema_relationship");
+    expect(schemaRelationshipDeleteMeta.name).toBe("schema.relationship.delete");
   });
 
   it("calls invoke with correct args", async () => {
@@ -261,7 +261,7 @@ describe("schema.property.upsert MCP tool", () => {
   });
 
   it("metadata name is 'schema.property.upsert'", () => {
-    expect(schemaPropertyUpsertMeta.name).toBe("upsert_schema_property");
+    expect(schemaPropertyUpsertMeta.name).toBe("schema.property.upsert");
   });
 
   it("calls invoke with correct args", async () => {
@@ -287,7 +287,7 @@ describe("schema.property.delete MCP tool", () => {
   });
 
   it("metadata name is 'schema.property.delete'", () => {
-    expect(schemaPropertyDeleteMeta.name).toBe("delete_schema_property");
+    expect(schemaPropertyDeleteMeta.name).toBe("schema.property.delete");
   });
 
   it("calls invoke with correct args", async () => {
@@ -312,7 +312,7 @@ describe("schema.version.list MCP tool", () => {
   });
 
   it("metadata name is 'schema.version.list'", () => {
-    expect(schemaVersionListMeta.name).toBe("list_schema_versions");
+    expect(schemaVersionListMeta.name).toBe("schema.version.list");
   });
 
   it("calls invoke with 'schema.version.list' and surface 'mcp'", async () => {
@@ -337,7 +337,7 @@ describe("schema.version.create MCP tool", () => {
   });
 
   it("metadata name is 'schema.version.create'", () => {
-    expect(schemaVersionCreateMeta.name).toBe("create_schema_version");
+    expect(schemaVersionCreateMeta.name).toBe("schema.version.create");
   });
 
   it("calls invoke with correct args", async () => {
@@ -363,7 +363,7 @@ describe("schema.validate.node MCP tool", () => {
   });
 
   it("metadata name is 'schema.validate.node'", () => {
-    expect(schemaValidateNodeMeta.name).toBe("validate_schema_node");
+    expect(schemaValidateNodeMeta.name).toBe("schema.validate.node");
   });
 
   it("calls invoke with correct args", async () => {
@@ -389,7 +389,7 @@ describe("schema.reconcile.dispatch MCP tool", () => {
   });
 
   it("metadata name is 'schema.reconcile.dispatch'", () => {
-    expect(schemaReconcileDispatchMeta.name).toBe("dispatch_schema_reconcile");
+    expect(schemaReconcileDispatchMeta.name).toBe("schema.reconcile.dispatch");
   });
 
   it("calls invoke with 'schema.reconcile.dispatch' + surface 'mcp'", async () => {
@@ -419,7 +419,7 @@ describe("schema.reconcile.status MCP tool", () => {
   });
 
   it("metadata name is 'schema.reconcile.status'", () => {
-    expect(schemaReconcileStatusMeta.name).toBe("get_reconcile_status");
+    expect(schemaReconcileStatusMeta.name).toBe("schema.reconcile.status");
   });
 
   it("calls invoke with correct args", async () => {
@@ -445,7 +445,7 @@ describe("graph.relationship.upsert MCP tool", () => {
   });
 
   it("metadata name is 'graph.relationship.upsert'", () => {
-    expect(graphRelationshipUpsertMeta.name).toBe("upsert_graph_relationship");
+    expect(graphRelationshipUpsertMeta.name).toBe("graph.relationship.upsert");
   });
 
   it("calls invoke with correct args", async () => {
@@ -475,7 +475,7 @@ describe("semantic.relationship.list MCP tool", () => {
   });
 
   it("metadata name is 'semantic.relationship.list'", () => {
-    expect(semanticRelationshipListMeta.name).toBe("list_semantic_relationships");
+    expect(semanticRelationshipListMeta.name).toBe("semantic.relationship.list");
   });
 
   it("calls invoke with 'semantic.relationship.list' and surface 'mcp'", async () => {
@@ -500,7 +500,7 @@ describe("semantic.relationship.approve MCP tool", () => {
   });
 
   it("metadata name is 'semantic.relationship.approve'", () => {
-    expect(semanticRelationshipApproveMeta.name).toBe("approve_semantic_relationship");
+    expect(semanticRelationshipApproveMeta.name).toBe("semantic.relationship.approve");
   });
 
   it("calls invoke with correct args", async () => {
@@ -526,7 +526,7 @@ describe("semantic.relationship.infer MCP tool", () => {
   });
 
   it("metadata name is 'semantic.relationship.infer'", () => {
-    expect(semanticRelationshipInferMeta.name).toBe("infer_semantic_relationships");
+    expect(semanticRelationshipInferMeta.name).toBe("semantic.relationship.infer");
   });
 
   it("calls invoke with correct args", async () => {
@@ -552,7 +552,7 @@ describe("semantic.relationship.suggest MCP tool", () => {
   });
 
   it("metadata name is 'semantic.relationship.suggest'", () => {
-    expect(semanticRelationshipSuggestMeta.name).toBe("suggest_semantic_relationships");
+    expect(semanticRelationshipSuggestMeta.name).toBe("semantic.relationship.suggest");
   });
 
   it("calls invoke with 'semantic.relationship.suggest' and surface 'mcp'", async () => {

@@ -3,7 +3,7 @@ import { pluginCatalogSync } from "./plugin.catalog.sync";
 
 describe("plugin.catalog.sync contract", () => {
   it("registers with api+mcp surfaces and org admin roles", () => {
-    expect(pluginCatalogSync.name).toBe("sync_plugin_catalog");
+    expect(pluginCatalogSync.name).toBe("plugin.catalog.sync");
     expect(pluginCatalogSync.surfaces).toContain("api");
     expect(pluginCatalogSync.surfaces).toContain("mcp");
     expect(pluginCatalogSync.defaultRoles.org.Owner).toBe("allow");

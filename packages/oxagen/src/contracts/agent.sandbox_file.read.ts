@@ -26,8 +26,8 @@ export const SANDBOX_FILE_READ_MAX_BYTES = 1024 * 1024;
 // with NUL bytes or invalid UTF-8 stays base64 with `encoding: "base64"` so
 // the payload survives JSON transport losslessly.
 export const agentSandboxFileRead = registerCapability({
-  name: "read_sandbox_file",
-  aliases: ["agent.sandbox_file.read", "agent.sandbox.files.read"],
+  name: "agent.sandbox_file.read",
+  aliases: ["agent.sandbox.files.read"],
   domain: "agent",
   description:
     "Read one file's contents from a durable sandbox session's workspace.",

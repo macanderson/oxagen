@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const skillVersionUpload = registerCapability({
-  name: "upload_skill_version",
-  aliases: ["skill.version.upload"],
+  name: "skill.version.upload",
   domain: "skill",
   description:
     "Upload a new immutable skill version from raw .skill.md content. Creates a new version row, marks it as latest, and sets it as the skill's active version (unless activate=false).",

@@ -2,8 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const schemaVersionCreate = registerCapability({
-  name: "create_schema_version",
-  aliases: ["schema.version.create"],
+  name: "schema.version.create",
   domain: "schema",
   description: "Freeze the current draft into an immutable published version and open a fresh draft.",
   mode: "sync",

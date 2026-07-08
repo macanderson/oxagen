@@ -521,7 +521,7 @@ describe("chat stream: execution recording (SOC 2 audit trail)", () => {
     const text = await res.text();
     expect(text).toContain("[DONE]");
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "get_message_execution",
+      "chat.message.execution",
       expect.objectContaining({ messageId: "asmsg-1" }),
       expect.anything(),
       expect.anything(),

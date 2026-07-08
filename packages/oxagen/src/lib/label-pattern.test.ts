@@ -31,9 +31,9 @@ describe("graph.node.label.* contracts", () => {
   });
 
   it("contracts register with the expected names and agent surface", () => {
-    expect(graphNodeLabelAdd.name).toBe("add_node_label");
-    expect(graphNodeLabelRemove.name).toBe("remove_node_label");
-    expect(graphNodeLabelsGet.name).toBe("get_node_labels");
+    expect(graphNodeLabelAdd.name).toBe("graph.node_label.add");
+    expect(graphNodeLabelRemove.name).toBe("graph.node_label.remove");
+    expect(graphNodeLabelsGet.name).toBe("graph.node_label.get");
     expect(graphNodeLabelAdd.surfaces).toContain("agent");
   });
 

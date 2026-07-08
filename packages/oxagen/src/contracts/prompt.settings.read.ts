@@ -12,8 +12,7 @@ const promptOverrides = z
   .partial();
 
 export const promptSettingsRead = registerCapability({
-  name: "get_prompt_settings",
-  aliases: ["prompt.settings.read"],
+  name: "prompt.settings.read",
   domain: "workspace",
   description:
     "Read the workspace prompt configuration: appended instructions, content-prompt overrides, and the auto-improve-prompts toggle.",

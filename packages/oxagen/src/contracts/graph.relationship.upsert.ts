@@ -8,8 +8,7 @@ import { observedAtField, supersedeField } from "../lib/temporal-query";
 export { RELATIONSHIP_TYPE_PATTERN } from "../lib/relationship-type-pattern";
 
 export const graphRelationshipUpsert = registerCapability({
-  name: "upsert_graph_relationship",
-  aliases: ["graph.relationship.upsert"],
+  name: "graph.relationship.upsert",
   domain: "graph",
   description: "MERGE a typed relationship between two KnowledgeNodes. Relationship type must match the RELATIONSHIP_TYPE_PATTERN lexical guard.",
   mode: "sync",

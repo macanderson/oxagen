@@ -60,7 +60,7 @@ describe("image.generate capability", () => {
   });
 
   it("has the expected contract metadata", () => {
-    expect(imageGenerate.name).toBe("generate_image");
+    expect(imageGenerate.name).toBe("image.generate");
     expect(imageGenerate.surfaces).toContain("api");
     expect(imageGenerate.surfaces).toContain("mcp");
     expect(imageGenerate.surfaces).toContain("agent");

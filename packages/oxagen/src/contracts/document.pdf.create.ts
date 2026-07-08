@@ -14,8 +14,8 @@ const fileRenderDirective = z.object({
 });
 
 export const documentsPdfCreate = registerCapability({
-  name: "create_pdf",
-  aliases: ["document.pdf.create", "documents.pdf.create"],
+  name: "document.pdf.create",
+  aliases: ["documents.pdf.create"],
   domain: "document",
   description:
     "Generate a PDF from a title and structured text content using pdf-lib. " +
