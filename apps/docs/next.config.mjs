@@ -19,6 +19,18 @@ const nextConfig = {
   async rewrites() {
     return [
       {
+        source: "/decks",
+        destination: "/decks/index.html",
+      },
+      {
+        source: "/decks/investor",
+        destination: "/decks/investor/index.html",
+      },
+      {
+        source: "/decks/roadmap",
+        destination: "/decks/roadmap/index.html",
+      },
+      {
         source: "/decks/first-call-enterprise",
         destination: "/decks/first-call-enterprise/index.html",
       },
