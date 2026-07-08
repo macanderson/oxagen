@@ -80,10 +80,16 @@ export async function loadSkillFile(
   return { ...skill, references: resolved };
 }
 
+// Fenced code blocks (``` … ```) are documentation, not content — a skill that
+// *explains* the References syntax (e.g. skill-builder) would otherwise have its
+// example paths mistaken for real references. Strip fences before scanning.
+const FENCED_BLOCK_RE = /^[ \t]*(`{3,}|~{3,})[^\n]*\n[\s\S]*?^[ \t]*\1[ \t]*$/gm;
+
 function collectReferencePaths(body: string): string[] {
-  const headingMatch = REFERENCES_HEADING_RE.exec(body);
+  const withoutFences = body.replace(FENCED_BLOCK_RE, "");
+  const headingMatch = REFERENCES_HEADING_RE.exec(withoutFences);
   if (!headingMatch) return [];
-  const after = body.slice(headingMatch.index + headingMatch[0].length);
+  const after = withoutFences.slice(headingMatch.index + headingMatch[0].length);
   // Stop at the next heading so we only capture the References block itself.
   const nextHeading = /\n#{1,6}\s+\S/.exec(after);
   const block = nextHeading ? after.slice(0, nextHeading.index) : after;

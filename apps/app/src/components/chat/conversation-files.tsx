@@ -449,7 +449,6 @@ export function ConversationFilesList({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- retryKey deliberately re-triggers the same fetch
   }, [active, conversationPublicId, retryKey]);
 
   const total = assets?.length ?? 0;

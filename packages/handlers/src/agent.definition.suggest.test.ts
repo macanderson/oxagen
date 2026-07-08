@@ -4,7 +4,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   generateObjectFor: vi.fn(),
   invoke: vi.fn(),
-  createSkillRegistry: vi.fn(),
+  createBuiltinSkillRegistry: vi.fn(),
   registryGet: vi.fn(),
   listCapabilities: vi.fn(),
   getSurfaces: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock("@oxagen/oxagen/kernel", () => ({
 }));
 
 vi.mock("@oxagen/skills", () => ({
-  createSkillRegistry: mocks.createSkillRegistry,
+  createBuiltinSkillRegistry: mocks.createBuiltinSkillRegistry,
 }));
 
 // Only the two runtime helpers the handler pulls from the barrel are stubbed;
@@ -144,7 +144,7 @@ function setupWorld(opts: { skillLoaded?: boolean; schemas?: unknown[] } = {}) {
   });
 
   mocks.registryGet.mockResolvedValue({ body: "# builtin create-agent body" });
-  mocks.createSkillRegistry.mockReturnValue({ get: mocks.registryGet });
+  mocks.createBuiltinSkillRegistry.mockReturnValue({ get: mocks.registryGet });
 
   // Agent-surface capability catalog: one usable function, plus the suggest
   // capability itself (which the handler must exclude from candidates).
@@ -552,13 +552,13 @@ describe("agentDefinitionSuggestHandler (@oxagen/handlers)", () => {
 
   // ── skill loading ───────────────────────────────────────────────────────────
 
-  it("falls back to the builtin filesystem skill when no tenant copy is loaded", async () => {
+  it("falls back to the embedded builtin skill when no tenant copy is loaded", async () => {
     setupWorld({ skillLoaded: false });
     mocks.generateObjectFor.mockResolvedValue({ object: baseSynthesis() });
 
     await agentDefinitionSuggestHandler(INPUT, TEST_CTX);
 
-    expect(mocks.createSkillRegistry).toHaveBeenCalledTimes(1);
+    expect(mocks.createBuiltinSkillRegistry).toHaveBeenCalledTimes(1);
     expect(mocks.registryGet).toHaveBeenCalledWith("create-agent");
     const call = mocks.generateObjectFor.mock.calls[0]![0] as { system: string };
     expect(call.system).toContain("builtin create-agent body");

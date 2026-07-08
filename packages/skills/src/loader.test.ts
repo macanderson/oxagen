@@ -71,6 +71,52 @@ Not a reference.
     const skill = parseSkill(VALID_RAW);
     expect(skill.references).toEqual([]);
   });
+
+  it("ignores a References block inside a fenced code block (documentation, not content)", () => {
+    // A skill that DOCUMENTS the References syntax (e.g. skill-builder) must not
+    // have its example paths mistaken for real references.
+    const raw = `---
+name: doc-skill
+description: Explains how references work.
+---
+
+# How to add references
+
+Add a section like this:
+
+\`\`\`markdown
+## References
+
+- ./style-guide.md
+- ./examples/good-pr.md
+\`\`\`
+
+That is all.
+`;
+    const skill = parseSkill(raw);
+    expect(skill.references).toEqual([]);
+  });
+
+  it("still extracts a real References block when the file also has fenced examples", () => {
+    const raw = `---
+name: mixed-skill
+description: Has both a code fence and a real references block.
+---
+
+# Example
+
+\`\`\`
+## References
+- ./not-a-real-ref.md
+\`\`\`
+
+## References
+
+- real/doc.md
+`;
+    const skill = parseSkill(raw);
+    expect(skill.references).toEqual([{ path: "real/doc.md", body: "" }]);
+  });
 });
 
 // ---------------------------------------------------------------------------

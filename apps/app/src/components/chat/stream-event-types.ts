@@ -34,6 +34,10 @@ export interface TurnUsage {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  /** Prompt-cache read tokens — the subset of `promptTokens` served from the
+   * provider's prompt cache. Drives the per-turn cache-hit visualization so the
+   * user can instrument cache drift. Absent/0 when the turn had no cache hits. */
+  cachedTokens?: number;
   /** Cost in credits (1 credit = 1¢ USD). Present when billing is wired. */
   creditsCharged?: number;
 }

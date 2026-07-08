@@ -1,4 +1,5 @@
 import {
+  Bot,
   Brain,
   Code2,
   FileText,
@@ -90,6 +91,7 @@ const CURATED: Record<string, { label: string; Icon?: LucideIcon }> = {
   "screenshot_page": { label: "Take screenshot" },
   "read_page": { label: "Read web page" },
   // Workflows + agents
+  "list_agent_defs": { label: "List agents", Icon: Bot },
   "run_workflow": { label: "Run workflow" },
   "cancel_workflow": { label: "Cancel workflow" },
   "get_workflow_status": { label: "Check workflow status" },

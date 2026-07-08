@@ -15,15 +15,13 @@
  * capabilities, and existing agents.
  */
 import { z } from "zod";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { generateObjectFor } from "@oxagen/ai";
 import type { CapabilityContext, CapabilityHandler } from "@oxagen/oxagen";
 import { listCapabilities, getSurfaces } from "@oxagen/oxagen";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { agentDefinitionConfigSchema } from "@oxagen/oxagen/agent-schema";
 import { agentDefinitionSuggest } from "@oxagen/oxagen/contracts/agent.definition.suggest";
-import { createSkillRegistry } from "@oxagen/skills";
+import { createBuiltinSkillRegistry } from "@oxagen/skills";
 import { logger } from "./logger";
 
 const CREATE_AGENT_SKILL_SLUG = "create-agent";
@@ -38,24 +36,13 @@ export class AgentSuggestError extends Error {
   }
 }
 
-// ── Builtin skill directory (lazy + guarded) ─────────────────────────────────
-// A module-scope `fileURLToPath(import.meta.url)` is undefined in the CJS API
-// bundle and crashes the whole function at load (FUNCTION_INVOCATION_FAILED —
-// postmortem 2026-06-12). Resolve lazily inside a try. Path mirrors
-// skill-workspace-seed.ts exactly (3 `..` → packages/skills/skills).
-function skillsDir(): string {
-  try {
-    return join(fileURLToPath(import.meta.url), "../../../skills/skills");
-  } catch {
-    return join(process.cwd(), "packages/skills/skills");
-  }
-}
-
 /**
  * Load the create-agent skill body for use as the system prompt. Prefers the
  * workspace's tenant copy (seeded into every new workspace), falling back to
- * the builtin on disk for workspaces that predate the skill and have not been
- * backfilled. Mirrors agent.skill.load's resolution order.
+ * the EMBEDDED builtin for workspaces that predate the skill and have not been
+ * backfilled. Mirrors agent.skill.load's resolution order. The builtin is
+ * embedded module data (not a filesystem read), so this fallback is always
+ * available in any bundle — it is what makes the create-agent path un-brickable.
  */
 async function loadCreateAgentSkillBody(ctx: CapabilityContext): Promise<string> {
   try {
@@ -72,12 +59,15 @@ async function loadCreateAgentSkillBody(ctx: CapabilityContext): Promise<string>
     );
   }
 
-  const registry = createSkillRegistry({ fsRoot: skillsDir() });
+  const registry = createBuiltinSkillRegistry();
   const builtin = await registry.get(CREATE_AGENT_SKILL_SLUG);
   if (builtin?.body?.trim()) return builtin.body;
 
+  // Unreachable in practice: create-agent is embedded module data that ships in
+  // every bundle. If this ever throws, the generated builtins module is missing
+  // the slug — a build/codegen defect, not a runtime/environment condition.
   throw new AgentSuggestError(
-    "The create-agent skill is unavailable (no tenant copy and no builtin on disk).",
+    "The create-agent skill is unavailable (embedded builtin missing — regenerate @oxagen/skills).",
   );
 }
 

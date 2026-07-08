@@ -32,6 +32,9 @@ export interface TurnUsage {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+  /** Prompt-cache read tokens — a subset of `inputTokens` served from cache.
+   * Surfaced to the client so the chat UX can show the turn's cache-hit rate. */
+  cachedInputTokens?: number;
 }
 
 /**
@@ -53,6 +56,9 @@ export function emitUsageEvent(
   const inputTokens = usage.inputTokens ?? 0;
   const outputTokens = usage.outputTokens ?? 0;
   const totalTokens = usage.totalTokens ?? 0;
+  // Clamp cache reads to [0, inputTokens] — cached tokens are a subset of the
+  // prompt, so they can never exceed it (guards against noisy provider counts).
+  const cachedTokens = Math.max(0, Math.min(usage.cachedInputTokens ?? 0, inputTokens));
   let creditsCharged: number | undefined;
   try {
     const credits = meterCreditsForUsage({ model: modelId, inputTokens, outputTokens });
@@ -66,6 +72,7 @@ export function emitUsageEvent(
       promptTokens: inputTokens,
       completionTokens: outputTokens,
       totalTokens,
+      ...(cachedTokens > 0 ? { cachedTokens } : {}),
       ...(creditsCharged !== undefined ? { creditsCharged } : {}),
     },
   });
