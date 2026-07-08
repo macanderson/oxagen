@@ -59,6 +59,51 @@ def _tool_calls_from_text(agent_txt: Path) -> list[dict]:
     return calls
 
 
+def _parse_debug_log(cli_output: Path) -> dict:
+    """Parse the OXAGEN_CLI_DEBUG JSONL log (agent/oxagen-debug/cli.output) into
+    structured per-LLM-call / per-tool / per-stage telemetry — the signal the
+    bypass TUI stream can't carry. Returns {} when the log is absent."""
+    if not cli_output.exists():
+        return {}
+    llm_calls, tool_events, stages, usages = [], [], [], []
+    for line in cli_output.read_text(errors="replace").splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            o = json.loads(line)
+        except Exception:
+            continue
+        d = o.get("data") or {}
+        ev = o.get("event")
+        if ev == "llm.stream.request":
+            llm_calls.append({"model": d.get("model"), "transport": d.get("transport"),
+                              "messageCount": d.get("messageCount"), "toolNames": d.get("toolNames")})
+        elif ev == "turn.tool-call":
+            tool_events.append({"name": d.get("name"), "input_preview": str(d.get("input"))[:160]})
+        elif ev == "turn.tool-result":
+            # align with the most recent call lacking a result
+            for te in reversed(tool_events):
+                if "ok" not in te:
+                    te["ok"] = d.get("ok"); te["durationMs"] = d.get("durationMs"); break
+        elif ev == "turn.stage":
+            stages.append({"label": d.get("label"), "detail": d.get("detail")})
+        elif ev in ("llm.object.response",):
+            if d.get("usage"):
+                usages.append(d["usage"])
+    models = sorted({c["model"] for c in llm_calls if c.get("model")})
+    return {
+        "debug_present": True,
+        "llm_call_count": len(llm_calls),
+        "llm_calls": llm_calls,
+        "models_used": models,
+        "tool_events": tool_events,             # name + ok + durationMs — richer than TUI regex
+        "tool_failures": [t for t in tool_events if t.get("ok") is False],
+        "stage_timeline": stages,
+        "object_usages": usages,
+    }
+
+
 def _reward(result: dict) -> float | None:
     vr = result.get("verifier_result") or {}
     r = vr.get("rewards") or {}
@@ -80,8 +125,15 @@ def build(job_dir: Path):
         md = ar.get("metadata") or {}
         events = _parse_events(t / "agent" / "oxagen.txt")
         tool_calls = _tool_calls_from_text(t / "agent" / "oxagen.txt")
-        for c in tool_calls:
-            tool_hist[c["tool"]] += 1
+        debug = _parse_debug_log(t / "agent" / "oxagen-debug" / "cli.output")
+        # Prefer the structured debug-log tool events for the histogram; fall
+        # back to the TUI-regex sequence when the debug log is absent.
+        if debug.get("tool_events"):
+            for te in debug["tool_events"]:
+                tool_hist[te.get("name") or "?"] += 1
+        else:
+            for c in tool_calls:
+                tool_hist[c["tool"]] += 1
 
         # Stage timeline + model routing from structured events.
         stages = [e for e in events if e.get("type") == "stage" or "label" in e and "·" in str(e.get("label", ""))]
@@ -110,10 +162,19 @@ def build(job_dir: Path):
             "wall_sec": md.get("oxagen_wall_sec"),
             "steps": md.get("oxagen_steps"),
             "models": models,
-            "tool_calls": tool_calls,                 # ordered — the SFT/RL signal
+            "tool_calls": tool_calls,                 # ordered TUI sequence
             "tool_histogram": dict(collections.Counter(c["tool"] for c in tool_calls)),
             "n_events": len(events),
             "stage_labels": [s.get("label") for s in stages][:40],
+            # Structured telemetry from the CLI debug log (when harvested):
+            "debug_present": debug.get("debug_present", False),
+            "llm_call_count": debug.get("llm_call_count"),
+            "llm_calls": debug.get("llm_calls"),
+            "models_used": debug.get("models_used"),
+            "tool_events": debug.get("tool_events"),       # name + ok + durationMs
+            "tool_failures": debug.get("tool_failures"),
+            "stage_timeline": debug.get("stage_timeline"),
+            "object_usages": debug.get("object_usages"),
         }
         records.append(rec)
         summary_rows.append({"task": task, "resolved": resolved, "cost": ar.get("cost_usd"),
