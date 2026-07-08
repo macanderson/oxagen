@@ -626,3 +626,68 @@ Traceback (most recent call last):
     }
   });
 });
+
+// ── localize: timeout budget ──────────────────────────────────────────────────
+
+describe("localize — timeout budget (ENHANCE races the stage budget)", () => {
+  it("returns within the budget when the graph hangs, instead of blocking the caller", async () => {
+    // A provider whose queries never resolve — the cold-store worst case.
+    const hung: CodeGraphProvider = { query: () => new Promise<string>(() => {}) };
+
+    const started = Date.now();
+    const result = await localize("fix `alpha` in the parser", hung, { timeoutMs: 30 });
+    const elapsed = Date.now() - started;
+
+    // Bounded: one 30 ms race, not an indefinite hang (generous CI cushion).
+    expect(elapsed).toBeLessThan(2_000);
+    expect(result.files).toEqual([]);
+    expect(result.renderedBlock).toBe("");
+  });
+
+  it("short-circuits remaining queries after the deadline without touching the provider", async () => {
+    const querySpy = vi.fn(() => new Promise<string>(() => {}));
+    const graph: CodeGraphProvider = { query: querySpy };
+
+    // Four backticked symbols → four symbol-path lookups. Queries run
+    // sequentially, so the first one consumes the whole 25 ms budget and the
+    // remaining three must be skipped before ever reaching the provider.
+    await localize("wire `alpha` `beta` `gamma` `delta`", graph, { timeoutMs: 25 });
+
+    expect(querySpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats an over-max-timer budget (e.g. MAX_SAFE_INTEGER from an unbounded ENHANCE) as no deadline", async () => {
+    const graph: CodeGraphProvider = {
+      query: vi.fn(async (op: string, q: string) =>
+        op === "search" && q === "alpha"
+          ? "function alpha — src/alpha.ts:3  export function alpha()"
+          : "",
+      ),
+    };
+
+    const result = await localize("fix `alpha`", graph, {
+      timeoutMs: Number.MAX_SAFE_INTEGER,
+    });
+
+    expect(result.files.map((f) => f.path)).toContain("src/alpha.ts");
+  });
+
+  it("still never throws when the deadline expires mid-pass", async () => {
+    let call = 0;
+    const graph: CodeGraphProvider = {
+      query: () => {
+        call += 1;
+        // First query resolves fast with a hit; second hangs past the deadline.
+        if (call === 1) {
+          return Promise.resolve("function beta — src/beta.ts:7  export function beta()");
+        }
+        return new Promise<string>(() => {});
+      },
+    };
+
+    const result = await localize("fix `beta` and `gamma`", graph, { timeoutMs: 40 });
+
+    // The pre-deadline hit is kept — partial results beat an empty map.
+    expect(result.files.map((f) => f.path)).toContain("src/beta.ts");
+  });
+});

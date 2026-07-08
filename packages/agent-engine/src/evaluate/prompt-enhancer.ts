@@ -205,6 +205,16 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
   let hasRepoPrior = false;
   let filteredRecall = false;
 
+  // ── Deadline for every graph-backed pass in this stage (Infinity when
+  // unbounded). Computed BEFORE F1 so localization and the code-graph
+  // retrieval below share ONE budget — localization races the existing
+  // enhance budget, it never extends it.
+
+  const deadline =
+    opts.timeoutMs && opts.timeoutMs > 0 ? startedAt + opts.timeoutMs : Infinity;
+  const remaining = (): number =>
+    deadline === Infinity ? Number.MAX_SAFE_INTEGER : deadline - Date.now();
+
   // ── F1: Deterministic localization ─────────────────────────────────────────
 
   // Flag semantics: localization runs UNLESS process.env.OXAGEN_LOCALIZE === "0".
@@ -218,7 +228,12 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
       // retrieval below owns the "resolved enough / go semantic" decision with
       // its own gate. Running a second, differently-thresholded semantic query
       // here would surface files the enhancer deliberately withheld.
-      const locMap = await localize(prompt, codeGraph, { semanticFallback: false });
+      // timeoutMs: what is left of the stage budget (MAX_SAFE_INTEGER when
+      // unbounded — the localizer treats over-max-timer values as no deadline).
+      const locMap = await localize(prompt, codeGraph, {
+        semanticFallback: false,
+        timeoutMs: remaining(),
+      });
       if (locMap.renderedBlock.length > 0) {
         sections.push(locMap.renderedBlock);
         hasLocalization = true;
@@ -287,13 +302,6 @@ export async function enhancePrompt(opts: EnhanceOptions): Promise<EnhanceResult
       /* filtering is optional; fall back to raw memory */
     }
   }
-
-  // ── Deadline for the code-graph pass (Infinity when unbounded) ────────────
-
-  const deadline =
-    opts.timeoutMs && opts.timeoutMs > 0 ? startedAt + opts.timeoutMs : Infinity;
-  const remaining = (): number =>
-    deadline === Infinity ? Number.MAX_SAFE_INTEGER : deadline - Date.now();
 
   if (codeGraph) {
     try {
