@@ -33,6 +33,7 @@
   },
   "license": "UNLICENSED",
   "scripts": {
+    "gen:skills": "tsx scripts/embed-skills.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings 0",
     "test:unit": "vitest run",
