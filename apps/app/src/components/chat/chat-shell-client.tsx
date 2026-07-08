@@ -30,6 +30,8 @@ import type { AgentOption } from "./agent-selector";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
 import { ConversationFiles } from "./conversation-files";
 import { ConversationExportMenu } from "./conversation-export-menu";
+import { CodingTracePanel } from "./coding-trace-panel";
+import { WorkspaceContextPanel } from "./workspace-context-panel";
 import { useLatestRef } from "@/lib/use-latest-ref";
 import type { FieldDescriptor } from "@/lib/ask/fill-types";
 import { interceptFormFillEvents } from "./intercept-form-fill";
@@ -1008,7 +1010,8 @@ export function ChatShellClient({
     );
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4">
+    <div className="flex h-full w-full gap-4">
+      <div className="mx-auto flex h-full min-w-0 max-w-3xl flex-1 flex-col gap-4">
       {/* Toolbar row: export + files panel triggers (right-aligned). Hidden in
           the floating in-app panel (showFiles=false) — conversation files live
           on the full /ask page, reachable via "Open in conversations". */}
@@ -1079,6 +1082,10 @@ export function ChatShellClient({
                   {timelineEntries.map((entry, i) => (
                     <TimelineItem
                       key={entry.key}
+                      // Anchor id for the coding-trace-panel rail's deep links
+                      // (`#turn-entry-<key>`) — see chat-component-registry's
+                      // sibling `coding-trace-panel.tsx`.
+                      id={`turn-entry-${entry.key}`}
                       tone={entry.rendered.tone}
                       // The pulsing ring only animates an in-flight node while the
                       // turn is actually streaming.
@@ -1092,14 +1099,16 @@ export function ChatShellClient({
                   ))}
                 </ActivityTimeline>
                 {turnUsage !== undefined ? (
-                  <MessageFooter
-                    text={Object.values(textSegments)
-                      .map((s) => s.text)
-                      .join("")}
-                    usage={turnUsage}
-                    orgSlug={orgSlug}
-                    workspaceSlug={workspaceSlug}
-                  />
+                  <div id="turn-result">
+                    <MessageFooter
+                      text={Object.values(textSegments)
+                        .map((s) => s.text)
+                        .join("")}
+                      usage={turnUsage}
+                      orgSlug={orgSlug}
+                      workspaceSlug={workspaceSlug}
+                    />
+                  </div>
                 ) : null}
               </div>
             ) : null}
@@ -1150,6 +1159,31 @@ export function ChatShellClient({
         workspaceSlug={workspaceSlug}
         boundAgentName={boundAgentName ?? null}
       />
+    </div>
+      {/* Right rail: turn-trace stage rail + files/workspace tabbed panel.
+          Hidden in the floating in-app panel (showFiles=false, same gate the
+          toolbar's ConversationFiles/export triggers use) and on narrow
+          viewports — the rail needs real width to be legible. */}
+      {showFiles ? (
+        <aside className="hidden w-64 shrink-0 flex-col gap-3 overflow-y-auto py-1 lg:flex">
+          <CodingTracePanel
+            order={order}
+            plans={plans}
+            toolCalls={toolCalls}
+            activeFanouts={activeFanouts}
+            turnUsage={turnUsage}
+            isStreaming={isStreaming}
+            className="w-full"
+          />
+          <WorkspaceContextPanel
+            conversationPublicId={conversationPublicId}
+            orgSlug={orgSlug}
+            workspaceSlug={workspaceSlug}
+            toolCalls={toolCalls}
+            className="min-h-64 flex-1"
+          />
+        </aside>
+      ) : null}
     </div>
   );
 }
