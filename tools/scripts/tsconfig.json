@@ -3,7 +3,8 @@
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "noEmit": true
+    "noEmit": true,
+    "allowJs": true
   },
   "include": ["*.ts", "*.mjs", "lib/**/*.ts"]
 }
