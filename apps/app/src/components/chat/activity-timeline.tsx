@@ -40,6 +40,12 @@ export interface TimelineItemProps {
   isLast?: boolean;
   /** optional status tint for the node dot */
   tone?: "thinking" | "running" | "done" | "failed" | "idle";
+  /**
+   * Optional DOM id stamped on the outer node, so other UI (e.g. the
+   * coding-trace-panel rail) can deep-link to this exact card via
+   * `<a href="#id">` / native fragment scroll.
+   */
+  id?: string;
 }
 
 export function TimelineItem({
@@ -47,6 +53,7 @@ export function TimelineItem({
   isActive = false,
   isLast = false,
   tone = "idle",
+  id,
 }: TimelineItemProps) {
   const reducedMotion = useReducedMotion();
 
@@ -55,7 +62,8 @@ export function TimelineItem({
 
   return (
     <motion.div
-      className="flex gap-0 items-stretch"
+      id={id}
+      className="flex gap-0 items-stretch scroll-mt-4"
       variants={fadeInUp}
       data-component="timeline-item"
       data-tone={tone}

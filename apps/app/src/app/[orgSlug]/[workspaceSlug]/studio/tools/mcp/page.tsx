@@ -7,11 +7,6 @@ import "@oxagen/handlers/register";
 import { resolveStudioScope } from "@/lib/studio/scope";
 import { togglePlugin, uninstallPlugin } from "@/lib/agent-tools/install-actions";
 import { connectCustomMcpServer } from "@/lib/agent-tools/mcp-actions";
-import { GithubMcpCard } from "@/components/agent-tools/github-mcp-card";
-import {
-  installGithubMcp,
-  getGithubMcpInstallStatus,
-} from "@/lib/agent-tools/github-mcp-actions";
 import { ConnectMcpForm } from "./connect-mcp-form";
 import { McpServerList, type McpServerRow } from "./mcp-server-list";
 // McpInstallTabs is the presentational client component that renders the
@@ -106,20 +101,6 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
   const { orgSlug, workspaceSlug } = await params;
   const { org, ws } = await resolveStudioScope(orgSlug, workspaceSlug);
 
-  // Featured first-party server: GitHub MCP (non-fatal: card degrades to
-  // not-installed, with the failure logged).
-  const githubMcpStatus = await getGithubMcpInstallStatus({ orgSlug, workspaceSlug }).catch(
-    (e: unknown) => {
-      console.error("GitHub MCP status lookup failed:", e);
-      return {
-        installed: false,
-        orgListingId: null,
-        connected: false,
-        healthStatus: null,
-      };
-    },
-  );
-
   // (b) Installed mcp_server plugins for this workspace.
   const rows = await runInTenantScope({ orgId: org.id, workspaceId: ws.id }, () =>
     withTenantDb((tx) =>
@@ -185,24 +166,6 @@ export default async function AgentToolsMcpPage({ params }: PageProps) {
 
   return (
     <div className="flex flex-col gap-8">
-      {/* ── Featured servers ─────────────────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-          Featured Servers
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <GithubMcpCard
-            orgSlug={orgSlug}
-            workspaceSlug={workspaceSlug}
-            installed={githubMcpStatus.installed}
-            orgListingId={githubMcpStatus.orgListingId}
-            connected={githubMcpStatus.connected}
-            healthStatus={githubMcpStatus.healthStatus}
-            installAction={installGithubMcp}
-          />
-        </div>
-      </section>
-
       {/* ── Connect a custom MCP server ─────────────────────────────────────── */}
       <div className="rounded-xl border border-border/60 bg-card p-6">
         <div className="mb-4">
