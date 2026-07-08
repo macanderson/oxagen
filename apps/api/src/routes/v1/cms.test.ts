@@ -55,7 +55,7 @@ function freshIp(): string {
   return `203.0.113.${ipCounter}`;
 }
 
-function post(path: string, body: unknown): Promise<Response> {
+async function post(path: string, body: unknown): Promise<Response> {
   return cmsRoute.request(
     new Request(`http://localhost${path}`, {
       method: "POST",

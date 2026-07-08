@@ -11,11 +11,26 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, within } from "@testing-library/react";
-import CodeDiffCard, { countDiffStats, parseUnifiedDiff } from "./code-diff-card";
+import { render, screen, cleanup, within, waitFor } from "@testing-library/react";
+import CodeDiffCard, {
+  countDiffStats,
+  parseTokenStyle,
+  parseUnifiedDiff,
+} from "./code-diff-card";
 import { diffAnchorId } from "./diff-anchor";
 
 afterEach(cleanup);
+
+// Deterministic, synchronous syntax-highlight stub: the real Shiki highlighter
+// needs WASM and is exercised in diff-syntax.test.ts. Here we assert the card
+// WIRES tokens into `.diff-token` spans carrying the dual-theme style.
+vi.mock("./diff-syntax", () => ({
+  inferLang: (path: string) => (path.endsWith(".ts") ? "typescript" : "plaintext"),
+  highlightLine: async (line: string, lang: string) =>
+    lang === "plaintext" || line.length === 0
+      ? [{ content: line }]
+      : [{ content: line, style: "color:#111;--shiki-dark:#eee" }],
+}));
 
 vi.mock("@/components/ui/badge", () => ({
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
@@ -186,5 +201,47 @@ describe("CodeDiffCard", () => {
     render(<CodeDiffCard files={[{ path: "a.ts", patch: SAMPLE_PATCH }]} />);
     const section = document.getElementById(diffAnchorId("a.ts")) as HTMLElement;
     expect(within(section).getByText("@@ -1,3 +1,4 @@")).toBeInTheDocument();
+  });
+
+  it("upgrades code lines to syntax-highlighted dual-theme tokens", async () => {
+    render(<CodeDiffCard files={[{ path: "src/a.ts", patch: SAMPLE_PATCH }]} />);
+    const section = document.getElementById(diffAnchorId("src/a.ts")) as HTMLElement;
+    // Highlighting resolves in an effect, so wait for the .diff-token spans.
+    await waitFor(() => {
+      expect(section.querySelectorAll(".diff-token").length).toBeGreaterThan(0);
+    });
+    const token = section.querySelector(".diff-token") as HTMLElement;
+    // Light colour applied inline; dark colour carried as the --shiki-dark var
+    // that diff-token.css swaps under `.dark`.
+    expect(token.style.color).toBe("rgb(17, 17, 17)");
+    expect(token.style.getPropertyValue("--shiki-dark")).toBe("#eee");
+  });
+
+  it("renders plain (uncoloured) lines for unknown languages, never .diff-token", async () => {
+    render(<CodeDiffCard files={[{ path: "notes.txt", patch: SAMPLE_PATCH }]} />);
+    const section = document.getElementById(diffAnchorId("notes.txt")) as HTMLElement;
+    // Give the effect a tick; plaintext short-circuits to no highlight.
+    await waitFor(() => {
+      expect(within(section).getByText("@@ -1,3 +1,4 @@")).toBeInTheDocument();
+    });
+    expect(section.querySelectorAll(".diff-token").length).toBe(0);
+  });
+});
+
+describe("parseTokenStyle", () => {
+  it("returns undefined for an absent style", () => {
+    expect(parseTokenStyle(undefined)).toBeUndefined();
+  });
+
+  it("camelCases standard props and preserves custom --shiki-* properties", () => {
+    expect(parseTokenStyle("color:#111;font-weight:bold;--shiki-dark:#eee")).toEqual({
+      color: "#111",
+      fontWeight: "bold",
+      "--shiki-dark": "#eee",
+    });
+  });
+
+  it("ignores malformed declarations", () => {
+    expect(parseTokenStyle("color:#111;;garbage;:novalue;key:")).toEqual({ color: "#111" });
   });
 });
