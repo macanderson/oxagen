@@ -7,11 +7,15 @@
     "quickstart",
     "---",
     "commands",
+    "repl-commands",
+    "agent-engine",
+    "custom-commands",
     "fleet",
     "scripting",
     "configuration",
     "models",
     "budget",
+    "memory",
     "knowledge-graph"
   ]
 }

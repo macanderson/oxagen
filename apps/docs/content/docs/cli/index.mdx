@@ -19,8 +19,9 @@ These docs are written for **developers**. You should be comfortable with a term
 - **Dispatch a fleet.** `oxagen agents "migrate the billing module to the new schema"` plans a goal into tasks and runs several agents in parallel, optionally each in its own git worktree.
 - **Run models on-device.** The agent's coordinator can run entirely on a local open-source code model — auto-provisioned and fit to your hardware — for a private, offline loop with no API key. `oxagen models` manages it; see [On-device models](/docs/cli/models).
 - **Ground it in your graph.** `oxagen graph pull` downloads an incremental snapshot of your workspace knowledge graph into a local replica; the agent uses it for context, and `oxagen graph search` lets you query it directly.
+- **Let it learn.** The agent recalls [workspace memory](/docs/cli/memory) — lessons, conventions, and gotchas — before it acts, and records new ones as it works, so it gets better in your codebase over time.
 - **Manage your workspace.** Inspect environments (`oxagen env`) and the encrypted credential vault (`oxagen secret`) without leaving the shell.
-- **Extend it.** Define custom agents, slash commands, and hard-enforced rules as Markdown files in your repo, and connect external MCP servers to the loop.
+- **Extend it.** Define [custom agents, slash commands, and hard-enforced rules](/docs/cli/custom-commands) as Markdown files in your repo, and connect external MCP servers to the loop.
 
 ## Two credentials, two jobs
 
@@ -38,4 +39,5 @@ You can use the coding agent with **just** a gateway key — no Oxagen account r
 - [Installation](/docs/cli/installation) — get the `oxagen` binary onto your machine.
 - [Account setup](/docs/cli/account-setup) — create an Oxagen account and authenticate the CLI.
 - [Quickstart](/docs/cli/quickstart) — your first agentic coding session.
-- [Command reference](/docs/cli/commands) — every command, flag, and option.
+- [The agent engine](/docs/cli/agent-engine) — how a turn is planned, executed, and verified.
+- [Command reference](/docs/cli/commands) and [in-REPL slash commands](/docs/cli/repl-commands) — every command, both surfaces.
