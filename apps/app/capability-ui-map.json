@@ -1,0 +1,13 @@
+{
+  "$doc": "UI Capability Parity registry — the single source of truth binding every capability that is operable in the Next.js app (apps/app) to the concrete UI that invokes it. Law: a capability that declares the \"app\" layer in its contract MUST have a binding here whose `page` exists and renders without an error page; and any capability the app actually invokes MUST be declared + bound here. Enforced by `pnpm check:ui-parity` (tools/scripts/check_ui_parity.mjs). Do NOT hand-wave an entry — every binding must carry a runtime proof (screenshot committed under verifications/<session>/, or an e2e spec) captured against a working page.",
+  "$binding_shape": {
+    "route": "URL path pattern the human navigates to, e.g. /[orgSlug]/[workspaceSlug]/studio/tools/mcp",
+    "page": "repo-relative page.tsx (or route.ts) that renders/handles the surface",
+    "entry": "the concrete UI affordance that invokes the capability (form submit, button, toggle) — human-readable",
+    "testid": "optional data-testid on the entry-point element, for e2e assertion",
+    "proof": "path to the runtime proof: verifications/<session>/<name>.png OR an apps/app/e2e/<slug>.spec.ts",
+    "verifiedAt": "YYYY-MM-DD the proof was captured against a working page",
+    "verifiedBy": "session id / agent that captured the proof"
+  },
+  "bindings": {}
+}
