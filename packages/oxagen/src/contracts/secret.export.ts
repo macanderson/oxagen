@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 // Like secret.reveal, deliberately not exposed to the in-chat agent. Every
 // export is recorded in environments.secret_access_log (Spec §7.3).
 export const secretExport = registerCapability({
-  name: "secret.export",
+  name: "export_secrets",
+  aliases: ["secret.export"],
   domain: "secret",
   description: "Export the resolved secret set for an environment as decrypted key/value pairs and rendered .env text. Owner/Admin only; every export is recorded in the access log.",
   mode: "sync",

@@ -7,8 +7,8 @@ import { registerCapability } from "../registry";
  * Any org member may read their own notifications (Owner/Admin/Member/Viewer).
  */
 export const notificationsList = registerCapability({
-  name: "notification.list",
-  aliases: ["notifications.list"],
+  name: "list_notifications",
+  aliases: ["notification.list", "notifications.list"],
   domain: "notification",
   description:
     "List in-app notifications for the calling user. Supports filtering to unread-only and pagination.",

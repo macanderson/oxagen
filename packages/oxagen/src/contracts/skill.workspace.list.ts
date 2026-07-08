@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const skillWorkspaceList = registerCapability({
-  name: "skill.workspace.list",
+  name: "list_workspace_skills",
+  aliases: ["skill.workspace.list"],
   domain: "skill",
   description: "List skills available in the workspace",
   mode: "sync",

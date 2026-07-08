@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const skillCreate = registerCapability({
-  name: "skill.create",
+  name: "create_skill",
+  aliases: ["skill.create"],
   domain: "skill",
   description:
     "Create a new tenant-authored skill in the workspace. Inserts a skills row with source='tenant' and an initial version (v1). Returns the skill public ID, slug, and version. Idempotent on slug — if a skill with the same slug already exists, returns it unchanged.",

@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const graphNodeGet = registerCapability({
-  name: "graph.node.get",
+  name: "get_node",
+  aliases: ["graph.node.get"],
   domain: "graph",
   description: "Retrieve a KnowledgeNode by its publicId.",
   mode: "sync",

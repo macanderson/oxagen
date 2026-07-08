@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const documentList = registerCapability({
-  name: "document.list",
+  name: "list_documents",
+  aliases: ["document.list"],
   domain: "document",
   description: "List documents in the workspace",
   mode: "sync",

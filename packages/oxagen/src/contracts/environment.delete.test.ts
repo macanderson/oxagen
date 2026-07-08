@@ -3,7 +3,7 @@ import { environmentDelete } from "./environment.delete";
 
 describe("environment.delete contract", () => {
   it("registers with the correct name", () => {
-    expect(environmentDelete.name).toBe("environment.delete");
+    expect(environmentDelete.name).toBe("delete_environment");
   });
   it("exposes the api, mcp, and agent surfaces", () => {
     expect(environmentDelete.surfaces).toEqual(["api", "mcp", "agent"]);

@@ -12,7 +12,8 @@ import { influenceEnum } from "./agent.memory.model";
  * threshold.
  */
 export const agentMemoryCite = registerCapability({
-  name: "agent.memory.cite",
+  name: "cite_memory",
+  aliases: ["agent.memory.cite"],
   domain: "agent",
   description:
     "Record citations of memories within an agent execution — influence and rule-compliance — and update citation/influence/violation counters.",

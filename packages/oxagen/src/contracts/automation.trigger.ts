@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const automationTrigger = registerCapability({
-  name: "automation.trigger",
+  name: "trigger_automation",
+  aliases: ["automation.trigger"],
   domain: "automation",
   description: "Trigger an automation by ID with an optional payload",
   mode: "sync",

@@ -5,7 +5,8 @@ import { registerCapability } from "../registry";
 // element) for assertions — e.g. confirm a success banner's copy appeared.
 
 export const browserRead = registerCapability({
-  name: "browser.read",
+  name: "read_page",
+  aliases: ["browser.read"],
   domain: "browser",
   description:
     "Read visible text from the durable sandbox browser's current page (whole page, or a CSS-selected element) for assertions.",

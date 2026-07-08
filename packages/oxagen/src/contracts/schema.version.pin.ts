@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const schemaVersionPin = registerCapability({
-  name: "schema.version.pin",
+  name: "pin_schema_version",
+  aliases: ["schema.version.pin"],
   domain: "schema",
   description: "Point the workspace at a published version; returns whether a pin downgrade occurred.",
   mode: "sync",

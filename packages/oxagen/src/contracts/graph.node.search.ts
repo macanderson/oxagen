@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const graphNodeSearch = registerCapability({
-  name: "graph.node.search",
+  name: "search_nodes",
+  aliases: ["graph.node.search"],
   domain: "graph",
   description: "Fuzzy search KnowledgeNodes by text match on displayName and description, optionally filtered by label.",
   mode: "sync",

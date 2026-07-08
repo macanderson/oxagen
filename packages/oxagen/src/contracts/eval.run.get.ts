@@ -3,7 +3,8 @@ import { registerCapability } from "../registry";
 import { evalRunStatusSchema, evalTargetSchema } from "./eval-schema";
 
 export const evalRunGet = registerCapability({
-  name: "eval.run.get",
+  name: "get_eval_run",
+  aliases: ["eval.run.get"],
   domain: "eval",
   description:
     "Fetch an eval run's summary (from Postgres) together with its per-item results (from the ClickHouse metering pipe): each item's output, judge scores, pass/fail, tokens, latency, and cost.",

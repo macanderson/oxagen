@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const semanticEdgeInfer = registerCapability({
-  name: "semantic.edge.infer",
+  name: "infer_semantic_edges",
+  aliases: ["semantic.edge.infer"],
   domain: "semantic",
   description:
     "Run LLM inference to discover and link nodes across sources with confidence scores. Triggers an async job; edges above the confidenceThreshold are auto-accepted, edges below it are staged for UI review via semantic.edge.suggest.",

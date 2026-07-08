@@ -71,7 +71,7 @@ describe("requestOrgDataEraseAction", () => {
     await requestOrgDataEraseAction("acme");
     expect(mockAssertSecurityManager).toHaveBeenCalledWith("org-1", "user-1");
     expect(mockInvoke).toHaveBeenCalledWith(
-      "privacy.data.erase",
+      "erase_data",
       expect.objectContaining({ scope: "org", orgId: "org-1", confirm: true }),
       expect.anything(),
       expect.anything(),

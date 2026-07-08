@@ -4,7 +4,8 @@ import { registerCapability } from "../registry";
 // Reload the durable sandbox browser's current page.
 
 export const browserRefresh = registerCapability({
-  name: "browser.refresh",
+  name: "refresh_page",
+  aliases: ["browser.refresh"],
   domain: "browser",
   description:
     "Reload the durable sandbox browser's current page and wait for load. Useful after a rebuild/HMR to re-check a feature.",

@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const secretValueSet = registerCapability({
-  name: "secret.value.set",
+  name: "set_secret_value",
+  aliases: ["secret.value.set"],
   domain: "secret",
   description: "Set a secret's value override for a specific environment. Encrypted or plaintext per the key's sensitive flag.",
   mode: "sync",

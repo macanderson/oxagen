@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const conversationChat = registerCapability({
-  name: "conversation.chat",
+  name: "post_conversation_message",
+  aliases: ["conversation.chat"],
   domain: "conversation",
   description: "Post a message to a conversation",
   mode: "sync",

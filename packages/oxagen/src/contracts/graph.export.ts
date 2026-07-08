@@ -13,7 +13,8 @@ import { registerCapability } from "../registry";
  * is a refreshable read-replica.
  */
 export const graphExport = registerCapability({
-  name: "graph.export",
+  name: "export_graph",
+  aliases: ["graph.export"],
   domain: "graph",
   description:
     "Export a workspace subgraph (nodes + edges) for a local projection. Cursor-aware " +

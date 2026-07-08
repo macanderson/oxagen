@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const schemaRelationshipDelete = registerCapability({
-  name: "schema.relationship.delete",
+  name: "delete_schema_relationship",
+  aliases: ["schema.relationship.delete"],
   domain: "schema",
   description: "Remove a relationship type from the draft.",
   mode: "sync",

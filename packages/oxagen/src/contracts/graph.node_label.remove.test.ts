@@ -3,7 +3,7 @@ import { graphNodeLabelRemove } from "./graph.node_label.remove";
 
 describe("graph.node.label.remove contract", () => {
   it("is an agent-only graph primitive requiring approval", () => {
-    expect(graphNodeLabelRemove.name).toBe("graph.node_label.remove");
+    expect(graphNodeLabelRemove.name).toBe("remove_node_label");
     expect(graphNodeLabelRemove.surfaces).toContain("agent");
     expect(graphNodeLabelRemove.surfaces).not.toContain("api");
     expect(graphNodeLabelRemove.agent?.requiresApproval).toBe(true);

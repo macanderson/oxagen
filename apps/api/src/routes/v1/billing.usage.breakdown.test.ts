@@ -56,7 +56,7 @@ describe("GET billing/usage/breakdown", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(OUTPUT);
     expect(mocks.invoke).toHaveBeenCalledWith(
-      "billing.usage.breakdown",
+      "get_usage_breakdown",
       { start: "2026-06-01T00:00:00.000Z", end: "2026-07-01T00:00:00.000Z", workspaceId: undefined },
       fakeCtx,
       { surface: "api" },

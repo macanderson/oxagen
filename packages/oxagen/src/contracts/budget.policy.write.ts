@@ -6,7 +6,8 @@ import { registerCapability } from "../registry";
 const budgetMode = z.enum(["grace", "prompt", "enforce"]);
 
 export const budgetPolicyWrite = registerCapability({
-  name: "budget.policy.write",
+  name: "update_user_budget",
+  aliases: ["budget.policy.write"],
   domain: "user",
   description:
     "Update the calling user's saved per-turn budget (partial update — only provided fields change). Turn the per-turn dollar ceiling on/off, set the limit in USD, choose the enforcement mode (grace = allow overage within a grace window, then stop; prompt = pause and ask to continue; enforce = hard stop the instant the limit is crossed), and set the grace-window cushion.",

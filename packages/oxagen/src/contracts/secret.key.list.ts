@@ -12,7 +12,8 @@ export const secretKeySummarySchema = z.object({
 });
 
 export const secretKeyList = registerCapability({
-  name: "secret.key.list",
+  name: "list_secret_keys",
+  aliases: ["secret.key.list"],
   domain: "secret",
   description: "List vault secret keys for the workspace with masked metadata (which environments override each key). Never returns plaintext values.",
   mode: "sync",

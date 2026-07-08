@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const evalDatasetFromTraces = registerCapability({
-  name: "eval.dataset.from_traces",
+  name: "create_trace_dataset",
+  aliases: ["eval.dataset.from_traces"],
   domain: "eval",
   description:
     "Create an eval dataset from the workspace's real, already-metered run traces — samples recent user messages that produced billed activity and captures them as dataset items. This is the wedge: score what actually ran, not synthetic prompts.",

@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const skillEdit = registerCapability({
-  name: "skill.edit",
+  name: "edit_skill",
+  aliases: ["skill.edit"],
   domain: "skill",
   description:
     "Save an edited skill body as a new immutable version. Thin wrapper over the shared createNewSkillVersion helper — equivalent to skill.version.upload but accepts a skill_id and body directly from an inline editor.",

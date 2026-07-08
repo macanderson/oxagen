@@ -14,7 +14,8 @@ import { registerCapability } from "../registry";
 // when the in-flight code-graph ingestion tasks have not yet landed them.
 
 export const codeMap = registerCapability({
-  name: "code.map",
+  name: "get_code_map",
+  aliases: ["code.map"],
   domain: "code",
   description:
     "Return a structured code-map bundle for a natural-language concept query: " +
