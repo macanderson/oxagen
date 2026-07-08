@@ -169,6 +169,52 @@ describe("F1: Localization", () => {
     expect(result.hasLocalization).toBe(false);
     mockLocalize.mockRestore();
   });
+
+  it("forwards the remaining stage budget to localize (races the budget, never extends it)", async () => {
+    const graph = makeCodeGraphProvider();
+
+    const mockLocalize = vi.spyOn(await import("../localize"), "localize");
+    mockLocalize.mockResolvedValue({
+      files: [],
+      testHints: [],
+      tracebackParsed: false,
+      renderedBlock: "",
+    });
+
+    await enhancePrompt({
+      prompt: "fix the login bug",
+      codeGraph: graph,
+      timeoutMs: 5_000,
+    });
+
+    expect(mockLocalize).toHaveBeenCalledTimes(1);
+    const [, , locOpts] = mockLocalize.mock.calls[0]!;
+    expect(locOpts?.semanticFallback).toBe(false);
+    // The forwarded budget is the REMAINING slice of the 5 s stage budget —
+    // positive, and never more than the stage budget itself.
+    expect(locOpts?.timeoutMs).toBeGreaterThan(0);
+    expect(locOpts?.timeoutMs).toBeLessThanOrEqual(5_000);
+    mockLocalize.mockRestore();
+  });
+
+  it("passes an effectively-unbounded budget to localize when ENHANCE has no timeout", async () => {
+    const graph = makeCodeGraphProvider();
+
+    const mockLocalize = vi.spyOn(await import("../localize"), "localize");
+    mockLocalize.mockResolvedValue({
+      files: [],
+      testHints: [],
+      tracebackParsed: false,
+      renderedBlock: "",
+    });
+
+    await enhancePrompt({ prompt: "fix the login bug", codeGraph: graph });
+
+    const [, , locOpts] = mockLocalize.mock.calls[0]!;
+    // MAX_SAFE_INTEGER — the localizer treats over-max-timer values as no deadline.
+    expect(locOpts?.timeoutMs).toBe(Number.MAX_SAFE_INTEGER);
+    mockLocalize.mockRestore();
+  });
 });
 
 // ── F8 Repo Prior Injection ──────────────────────────────────────────────────

@@ -201,6 +201,11 @@ function tailNdjson(
     stopped = true;
     clearInterval(timer);
     watcher?.close();
+    // Detach from the signal too: one long-lived signal (a REPL-session
+    // controller) can outlive thousands of tails, and a `{ once: true }`
+    // listener is only auto-removed when the signal FIRES — manual stop()
+    // must not leave it accumulating.
+    opts.signal?.removeEventListener("abort", stop);
   };
   opts.signal?.addEventListener("abort", stop, { once: true });
   return { stop };
@@ -481,6 +486,9 @@ export class SessionStore {
       stopped = true;
       clearInterval(timer);
       watcher?.close();
+      // Same signal hygiene as tailNdjson: manual stop must detach the
+      // abort listener or repeated watches against one signal accumulate.
+      opts.signal?.removeEventListener("abort", stop);
     };
     opts.signal?.addEventListener("abort", stop, { once: true });
     return { stop };

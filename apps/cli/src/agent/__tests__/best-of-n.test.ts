@@ -427,6 +427,131 @@ describe("runBestOfN", () => {
     expect(result.candidates.every((c) => c.testOutput?.includes("PASS"))).toBe(true);
   });
 
+  it("verifyAuto rewrites recorded repo-root paths (cd /repo && …) so re-runs stay inside each candidate's worktree", async () => {
+    // Regression test (SWE-bench bo3-headtohead-r4): candidates in containers
+    // record commands like `cd /testbed && pytest`. Replaying that verbatim
+    // with the worktree as cwd escapes back to the UNPATCHED trunk — every
+    // candidate "verified" against unmodified code and testsPassed degraded
+    // to a meaningless uniform signal. The union re-run must rewrite the
+    // repo-root prefix to each candidate's own worktree path.
+    runTurnMock.mockImplementation(
+      async (o: {
+        onFileChange?: (d: string, f: string[]) => void;
+        onToolCall?: (name: string, input: unknown) => void;
+      }) => {
+        o.onToolCall?.("bash", { command: "cd /repo && pytest -q" });
+        o.onFileChange?.("--- a/x\n+++ b/x\n+same", ["x"]);
+        return { text: "ok", steps: 1, messages: [], usage: {}, trace: {} };
+      },
+    );
+    verifyMock.mockResolvedValue({ exitCode: 0, stdout: "1 passed", stderr: "", timedOut: false });
+
+    await runBestOfN({ prompt: "fix", cwd: "/repo", candidates: 2, ai, verifyAuto: true });
+
+    // One unioned command x 2 worktrees, each rewritten to ITS worktree.
+    expect(verifyMock).toHaveBeenCalledTimes(2);
+    const calls = verifyMock.mock.calls as Array<[{ command: string; cwd: string }]>;
+    const byCwd = new Map(calls.map(([c]) => [c.cwd, c.command]));
+    expect(byCwd.get("/tmp/bestof-xyz/candidate-1")).toBe("cd /tmp/bestof-xyz/candidate-1 && pytest -q");
+    expect(byCwd.get("/tmp/bestof-xyz/candidate-2")).toBe("cd /tmp/bestof-xyz/candidate-2 && pytest -q");
+    // The raw repo-root form must never have been replayed.
+    expect(calls.some(([c]) => c.command.includes("cd /repo"))).toBe(false);
+  });
+
+  it("verifyAuto skips storage-truncated commands (the 120-char `…` cap) instead of executing a cut-off string", async () => {
+    runTurnMock.mockImplementation(
+      async (o: {
+        onFileChange?: (d: string, f: string[]) => void;
+        onToolCall?: (name: string, input: unknown) => void;
+      }) => {
+        // Looks like a pytest invocation but carries the engine's truncation
+        // marker — replaying it would execute a command cut mid-argument.
+        o.onToolCall?.("bash", { command: `python -m pytest ${"tests/a/".repeat(12)}…` });
+        o.onFileChange?.("--- a/x\n+++ b/x\n+z", ["x"]);
+        return { text: "ok", steps: 1, messages: [], usage: {}, trace: {} };
+      },
+    );
+
+    await runBestOfN({ prompt: "fix", cwd: "/repo", candidates: 1, ai, verifyAuto: true });
+
+    expect(verifyMock).not.toHaveBeenCalled();
+  });
+
+  it("routes to the comparative selector (with a warning) when verify-auto was on but produced no evidence for anyone", async () => {
+    // Regression test: with verifyAuto enabled but zero executed evidence
+    // (here: no candidate ran a recognizable test command), selection used to
+    // silently degrade to the best-effort heuristic — "selector skipped" —
+    // and pick on diff size alone. It must spend the LLM selector instead.
+    let call = 0;
+    runTurnMock.mockImplementation(async (o: { onFileChange?: (d: string, f: string[]) => void }) => {
+      call++;
+      o.onFileChange?.(`--- a/x\n+++ b/x\n+c${call}`, ["x"]);
+      return { text: `candidate ${call}`, steps: 1, messages: [], usage: {}, trace: {} };
+    });
+    selectMock.mockResolvedValue({
+      winnerId: "candidate-2",
+      reasoning: "candidate-2's diff actually implements the request",
+      ranking: [
+        { id: "candidate-2", score: 80, note: "on target" },
+        { id: "candidate-1", score: 40, note: "off target" },
+      ],
+      model: "m",
+      fallback: false,
+      usage: {},
+    });
+
+    const events: BestOfNEvent[] = [];
+    const result = await runBestOfN({
+      prompt: "fix",
+      cwd: "/repo",
+      candidates: 2,
+      ai,
+      verifyAuto: true,
+      onEvent: (e) => events.push(e),
+    });
+
+    expect(verifyMock).not.toHaveBeenCalled(); // no evidence was ever produced
+    expect(selectMock).toHaveBeenCalledTimes(1); // …so the selector must run
+    const selectorCandidates = (selectMock.mock.calls[0]![0] as { candidates: Array<{ id: string }> }).candidates;
+    expect(selectorCandidates.map((c) => c.id)).toEqual(["candidate-1", "candidate-2"]);
+    expect(result.selection.winnerId).toBe("candidate-2");
+    // The degradation is visible, not silent.
+    const warning = events.find((e) => e.type === "warning");
+    expect(warning).toMatchObject({ message: expect.stringMatching(/no executed test evidence/i) });
+  });
+
+  it("keeps the best-effort heuristic (selector skipped) when verify-auto evidence says every candidate genuinely fails", async () => {
+    let call = 0;
+    runTurnMock.mockImplementation(
+      async (o: {
+        onFileChange?: (d: string, f: string[]) => void;
+        onToolCall?: (name: string, input: unknown) => void;
+      }) => {
+        call++;
+        o.onToolCall?.("bash", { command: "pytest -q" });
+        o.onFileChange?.(`--- a/x\n+++ b/x\n+c${call}`, ["x"]);
+        return { text: `candidate ${call}`, steps: 1, messages: [], usage: {}, trace: {} };
+      },
+    );
+    verifyMock.mockResolvedValue({ exitCode: 1, stdout: "1 failed", stderr: "", timedOut: false });
+
+    const events: BestOfNEvent[] = [];
+    const result = await runBestOfN({
+      prompt: "fix",
+      cwd: "/repo",
+      candidates: 2,
+      ai,
+      verifyAuto: true,
+      onEvent: (e) => events.push(e),
+    });
+
+    // Evidence exists (all-false) — best-effort is the CORRECT outcome here.
+    expect(selectMock).not.toHaveBeenCalled();
+    expect(result.selection.model).toBe("heuristic");
+    expect(events.some((e) => e.type === "warning")).toBe(false);
+    expect(result.candidates.every((c) => c.testsPassed === false)).toBe(true);
+  });
+
   it("verifyAuto ignores non-test commands (e.g. an install or an rm) — never replays them across worktrees", async () => {
     runTurnMock.mockImplementation(
       async (o: {

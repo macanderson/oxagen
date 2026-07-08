@@ -77,6 +77,14 @@ export interface SystemPromptOptions {
    * the whole context-gathering habit.
    */
   hasCodeMap?: boolean;
+  /**
+   * Whether this turn's ENHANCE stage injected an F1 deterministic-localization
+   * block (`## Candidate locations (deterministic)`) into the prompt. Adds the
+   * spec's one-line rule telling the model to verify the candidates with one
+   * read instead of re-deriving them. Off by default so the system prompt stays
+   * byte-stable (cache-warm) for every run without a localization map.
+   */
+  hasLocalization?: boolean;
   profile?: "interactive" | "headless";
 
 }
@@ -144,6 +152,16 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
           "  handling'), call `code_map` BEFORE `grep` or `bash`. It returns semantically matched",
           "  files, symbols, call edges, and recent commits in one structured bundle — far faster",
           "  than grepping.",
+        ]
+      : []),
+    // F1 deterministic localization (docs/specs/swe-rank1-scalpel.md §F1): the
+    // one-line trust-but-verify rule, present ONLY when a candidate-locations
+    // block was actually injected this turn — a rule about a block the model
+    // never received would be pure noise.
+    ...(opts.hasLocalization
+      ? [
+          "- Candidate locations were computed from the code graph. Verify with one read before",
+          "  trusting; do not re-derive them.",
         ]
       : []),
     "- Act, don't narrate intentions at length. Read before you edit, and edit precisely.",

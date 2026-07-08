@@ -14,6 +14,7 @@
 import { requireSession } from "../lib/session.js";
 import { createGatewayAgentAi, createPlatformAgentAi } from "../agent/adapters/index.js";
 import { createMeteredAi } from "../agent/metered-ai.js";
+import { createSolveUsageAccumulator } from "../agent/solve-usage.js";
 import { loadProjectContext } from "../agent/project-context.js";
 import { launchBestOfN } from "../tui/best-of-n-view/index.js";
 import { debugLog } from "../lib/debug-log.js";
@@ -95,7 +96,15 @@ export async function handleSolve(prompt: string, opts: SolveOptions): Promise<v
         orgSlug: session.orgSlug,
         workspaceSlug: session.workspaceSlug,
       });
-  const ai = createMeteredAi(baseAi, { onLog: (line) => void debugLog("timeout", line) });
+  // Every model call the race makes — candidate turns, pipeline judges, the
+  // comparative selector — flows through this one metered port; fold each
+  // priced call into the run's cost/token totals so solve reports real usage
+  // (the one-shot path's `--verbose` roll-up had no best-of-N equivalent).
+  const usage = createSolveUsageAccumulator();
+  const ai = createMeteredAi(baseAi, {
+    onLog: (line) => void debugLog("timeout", line),
+    onMetrics: (ev) => usage.record(ev),
+  });
 
   const models = opts.models
     ? opts.models.split(",").map((s) => s.trim()).filter(Boolean)
@@ -122,6 +131,7 @@ export async function handleSolve(prompt: string, opts: SolveOptions): Promise<v
     headless: opts.json,
     fullPipeline,
     verifyAuto,
+    usageTotals: usage.totals,
   });
 
   // Exit non-zero when nothing viable was produced, so scripts can branch on it.

@@ -14,7 +14,7 @@
  * operating rules are present and that project rules are COMPOSED with them, not
  * substituted for them.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { MemoryWorkspace } from "../workspaces/memory";
 import { runTurn } from "./index";
 import type { AgentAi, ModelRunArgs } from "../ports";
@@ -33,7 +33,19 @@ function makeCapturingAi(capture: (system: string) => void): AgentAi {
         response: Promise.resolve({ messages: [] }),
       } as unknown as ReturnType<AgentAi["stream"]>;
     },
-    generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
+    // Serves the judge on the full-pipeline path (the evaluator defaults to the
+    // local heuristic and makes no model call): a complete verdict so the turn
+    // ends after one round with a well-formed trace.
+    generateObject: async () => ({
+      object: {
+        complete: true,
+        findings: [],
+        remainingWork: [],
+        confidence: 95,
+        reasoning: "done",
+      } as never,
+      usage: { totalTokens: 0 },
+    }),
   };
 }
 
@@ -108,5 +120,38 @@ describe("runTurn — system prompt wiring", () => {
     // …AND the project rules are appended, not substituted for the rules.
     expect(captured).toContain("SENTINEL_PROJECT_RULE_XYZ");
     expect(captured).toContain("Project rules (from CLAUDE.md)");
+  });
+
+  it("adds the F1 trust-but-verify rule ONLY when ENHANCE produced a localization map (full pipeline)", async () => {
+    // Positive: a code graph that resolves the backticked symbol → the F1
+    // localizer renders a candidate-locations block during ENHANCE → the
+    // executor's system prompt must carry the spec's one-line rule.
+    let withGraph = "";
+    const codeGraph = {
+      query: vi
+        .fn()
+        .mockResolvedValue(
+          "function parseThing — src/parse.ts:10  export function parseThing()",
+        ),
+    };
+    await runTurn({
+      prompt: "fix `parseThing` returning null on empty input",
+      workspace: new MemoryWorkspace({ "src/parse.ts": "x" }),
+      ai: makeCapturingAi((s) => (withGraph = s)),
+      codeGraph,
+    });
+    expect(withGraph).toContain("Candidate locations were computed from the code graph.");
+    expect(withGraph).toContain("do not re-derive them.");
+
+    // Negative: the same pipeline without a graph cannot localize, so the
+    // rule must be absent — no rule about a block the model never received.
+    let withoutGraph = "";
+    await runTurn({
+      prompt: "fix `parseThing` returning null on empty input",
+      workspace: new MemoryWorkspace({ "src/parse.ts": "x" }),
+      ai: makeCapturingAi((s) => (withoutGraph = s)),
+    });
+    expect(withoutGraph).toContain("Operating rules:");
+    expect(withoutGraph).not.toContain("do not re-derive them.");
   });
 });

@@ -14,37 +14,43 @@ import {
   type BestOfNResult,
   type BestOfNEvent,
 } from "../../agent/best-of-n.js";
+import {
+  buildSolveUsageSummary,
+  formatSolveRollup,
+  type SolveUsageTotals,
+} from "../../agent/solve-usage.js";
+import { resultEnvelope } from "./envelope.js";
 import { BestOfNApp } from "./app.js";
 
 export interface LaunchBestOfNOptions extends Omit<BestOfNOptions, "onEvent"> {
   /** Force the headless JSONL stream regardless of TTY. */
   headless?: boolean;
-}
-
-function resultEnvelope(result: BestOfNResult): Record<string, unknown> {
-  return {
-    type: "result",
-    winnerId: result.selection.winnerId,
-    reasoning: result.selection.reasoning,
-    ranking: result.selection.ranking,
-    winnerFiles: result.winner?.changedFiles ?? [],
-    candidates: result.candidates.map((c) => ({
-      id: c.id,
-      model: c.model,
-      changedFiles: c.changedFiles,
-      steps: c.steps,
-      failed: c.failed ?? false,
-    })),
-  };
+  /**
+   * Snapshot of the aggregated model-call usage for this run — read once the
+   * race settles (all candidate turns, pipeline judges, and the selector have
+   * completed by then). Feeds the `usage` block on the result envelope and
+   * the one-shot-format roll-up line, so solve runs report cost/tokens
+   * instead of null. Wire it to a `createSolveUsageAccumulator` fed by
+   * `createMeteredAi`'s `onMetrics` (see `commands/solve.ts`).
+   */
+  usageTotals?: () => SolveUsageTotals;
 }
 
 export async function launchBestOfN(opts: LaunchBestOfNOptions): Promise<BestOfNResult> {
   const headless = opts.headless || !process.stdout.isTTY;
+  const startedAt = Date.now();
 
   if (headless) {
     const emit = (o: unknown): void => void process.stdout.write(JSON.stringify(o) + "\n");
     const result = await runBestOfN({ ...opts, onEvent: (e: BestOfNEvent) => emit(e) });
-    emit(resultEnvelope(result));
+    const usage = opts.usageTotals
+      ? buildSolveUsageSummary(opts.usageTotals(), result, Date.now() - startedAt)
+      : undefined;
+    emit(resultEnvelope(result, usage));
+    // Human-readable roll-up in the one-shot `--verbose` format, AFTER the
+    // envelope so strict JSONL consumers that stop at the result line are
+    // unaffected (the bench adapter skips non-JSON lines either way).
+    if (usage) process.stdout.write(formatSolveRollup(usage) + "\n");
     return result;
   }
 
@@ -69,5 +75,12 @@ export async function launchBestOfN(opts: LaunchBestOfNOptions): Promise<BestOfN
   });
 
   await waitUntilExit();
+
+  // Same cost roll-up the headless stream gets, printed once the live view has
+  // torn down so it lands cleanly below the final frame.
+  if (opts.usageTotals) {
+    const usage = buildSolveUsageSummary(opts.usageTotals(), result, Date.now() - startedAt);
+    process.stdout.write("\n" + formatSolveRollup(usage) + "\n");
+  }
   return result;
 }

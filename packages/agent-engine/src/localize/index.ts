@@ -374,7 +374,21 @@ export interface LocalizeOptions {
    * enhancer deliberately withheld.
    */
   semanticFallback?: boolean;
+  /**
+   * Wall-clock budget (ms) for the whole localization pass. On a cold store
+   * the first graph query can trigger a full repo index build — far longer
+   * than the map is worth. When the budget expires, whatever scored so far is
+   * ranked and returned, and every remaining query is skipped without touching
+   * the provider (the abandoned in-flight query keeps warming the provider's
+   * cache). Undefined / non-positive / larger than the max 32-bit timer ⇒
+   * unbounded. ENHANCE passes its remaining `enhanceTimeoutMs` budget here so
+   * localization can never extend the stage budget.
+   */
+  timeoutMs?: number;
 }
+
+/** setTimeout overflows past 2^31−1 ms and would fire immediately. */
+const MAX_TIMER_MS = 2_147_483_647;
 
 export async function localize(
   issue: string,
@@ -383,8 +397,13 @@ export async function localize(
 ): Promise<LocalizationMap> {
   if (!graph) return EMPTY_MAP;
 
+  const deadline =
+    opts.timeoutMs && opts.timeoutMs > 0 && opts.timeoutMs <= MAX_TIMER_MS
+      ? Date.now() + opts.timeoutMs
+      : Infinity;
+
   try {
-    return await _localize(issue, graph, opts.semanticFallback ?? true);
+    return await _localize(issue, graph, opts.semanticFallback ?? true, deadline);
   } catch {
     return EMPTY_MAP;
   }
@@ -394,6 +413,7 @@ async function _localize(
   issue: string,
   graph: CodeGraphProvider,
   semanticFallback: boolean,
+  deadline: number,
 ): Promise<LocalizationMap> {
   const scoreMap = new Map<string, FileScore>();
 
@@ -421,7 +441,7 @@ async function _localize(
 
   for (const frame of frames) {
     // Try to resolve via graph search (symbol name)
-    const searchResult = await safeQuery(graph, "search", frame.symbol, 4);
+    const searchResult = await safeQuery(graph, "search", frame.symbol, 4, deadline);
     if (isHit(searchResult)) {
       for (const p of parseGraphPaths(searchResult)) {
         const e = touch(p);
@@ -432,7 +452,7 @@ async function _localize(
     }
 
     // Also try file_symbols on the frame's file path (resolves relative paths)
-    const fileResult = await safeQuery(graph, "file_symbols", frame.file, 8);
+    const fileResult = await safeQuery(graph, "file_symbols", frame.file, 8, deadline);
     if (isHit(fileResult)) {
       // The file path itself or the paths returned
       const resolved = parseGraphPaths(fileResult);
@@ -450,7 +470,7 @@ async function _localize(
       (p) => (scoreMap.get(p)?.tracebackScore ?? 0) > 0,
     );
     for (const p of tracebackFiles) {
-      const depsResult = await safeQuery(graph, "dependents", p, 5);
+      const depsResult = await safeQuery(graph, "dependents", p, 5, deadline);
       if (isHit(depsResult)) {
         for (const dp of parseGraphPaths(depsResult)) {
           const e = touch(dp);
@@ -458,7 +478,7 @@ async function _localize(
           e.reasons.add(`dependent of traceback file ${p}`);
         }
       }
-      const importsResult = await safeQuery(graph, "imports", p, 5);
+      const importsResult = await safeQuery(graph, "imports", p, 5, deadline);
       if (isHit(importsResult)) {
         for (const ip of parseGraphPaths(importsResult)) {
           const e = touch(ip);
@@ -474,7 +494,7 @@ async function _localize(
   const { symbols, paths } = extractCandidates(issue);
 
   for (const sym of symbols.slice(0, 8)) {
-    const res = await safeQuery(graph, "search", sym, 4);
+    const res = await safeQuery(graph, "search", sym, 4, deadline);
     if (isHit(res)) {
       for (const p of parseGraphPaths(res)) {
         const e = touch(p);
@@ -486,7 +506,7 @@ async function _localize(
   }
 
   for (const path of paths.slice(0, 6)) {
-    const res = await safeQuery(graph, "file_symbols", path, 8);
+    const res = await safeQuery(graph, "file_symbols", path, 8, deadline);
     if (isHit(res)) {
       const resolved = parseGraphPaths(res);
       const targets = resolved.length > 0 ? resolved : [path];
@@ -503,7 +523,7 @@ async function _localize(
 
   const distinctFiles = scoreMap.size;
   if (semanticFallback && distinctFiles < SEMANTIC_FALLBACK_THRESHOLD) {
-    const semResult = await safeQuery(graph, "semantic_search", issue, 5);
+    const semResult = await safeQuery(graph, "semantic_search", issue, 5, deadline);
     if (isHit(semResult)) {
       for (const p of parseGraphPaths(semResult)) {
         const e = touch(p);
@@ -542,15 +562,36 @@ async function _localize(
  * Wrap a graph query so that any thrown error returns "" (a miss).
  * localize() must never throw, and individual query failures must not abort
  * the whole localization pass.
+ *
+ * Deadline-aware: once the pass's deadline is hit, the query is skipped
+ * without touching the provider, and an in-flight query is raced against the
+ * remaining budget (the abandoned promise keeps running in the provider,
+ * warming its cache — only this pass stops waiting). Mirrors the ENHANCE
+ * stage's `queryWithin` so localization can never extend the stage budget.
  */
 async function safeQuery(
   graph: CodeGraphProvider,
   operation: "search" | "file_symbols" | "dependents" | "imports" | "semantic_search",
   query: string,
-  limit?: number,
+  limit: number | undefined,
+  deadline: number,
 ): Promise<string> {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) return "";
   try {
-    return await graph.query(operation, query, limit);
+    const q = graph.query(operation, query, limit).catch(() => "");
+    // Unbounded budget (Infinity deadline): no timer needed.
+    if (remaining > MAX_TIMER_MS) return await q;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<string>((resolve) => {
+      timer = setTimeout(() => resolve(""), remaining);
+      timer.unref?.();
+    });
+    try {
+      return await Promise.race([q, timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
   } catch {
     return "";
   }

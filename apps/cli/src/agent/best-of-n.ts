@@ -43,6 +43,7 @@ import {
   type AgentAi,
   type Candidate,
   type SelectionResult,
+  type SelectionDecision,
   type ProjectContext,
   type CandidateEvidence,
 } from "@oxagen/agent-engine";
@@ -81,7 +82,11 @@ export type BestOfNEvent =
   | { type: "select-start"; viable: number }
   | { type: "select-done"; winnerId: string | null; reasoning: string; ranking: Array<{ id: string; score: number; note: string }> }
   | { type: "applied"; winnerId: string; changedFiles: string[] }
-  | { type: "apply-failed"; winnerId: string; error: string };
+  | { type: "apply-failed"; winnerId: string; error: string }
+  // A degraded-but-recoverable condition worth surfacing (e.g. verify-auto was
+  // enabled but produced no executed test evidence, so selection fell back to
+  // the comparative LLM selector instead of a verified signal).
+  | { type: "warning"; message: string };
 
 export interface BestOfNOptions {
   prompt: string;
@@ -229,6 +234,151 @@ function dedupe(items: string[]): string[] {
   return items.filter((s) => !seen.has(s) && seen.add(s));
 }
 
+/**
+ * Rewrite references to the primary repo root inside a recorded shell command
+ * so the command targets a candidate's worktree instead.
+ *
+ * Why this exists: candidates record commands like `cd /testbed && python -m
+ * pytest …` (absolute paths into the REAL repo). Replaying that string with a
+ * candidate worktree as the process cwd silently escapes the worktree — the
+ * embedded `cd /testbed` jumps back to the unmodified trunk, so every
+ * candidate's "verification" runs against unpatched code and the whole
+ * verify-auto signal degrades to null (observed on SWE-bench, where the
+ * container repo is `/testbed`). Rewriting `<repoRoot>` → `<worktree>` keeps
+ * the replay inside the candidate's own patched checkout.
+ *
+ * Matching is path-token aware: `<repoRoot>` only matches where it stands as a
+ * complete path prefix — preceded by start-of-string or a non-path character
+ * (space, quote, `=`, …) and followed by end, a path separator, or another
+ * non-path-segment character. So `/testbed/sub` rewrites (continues INTO the
+ * repo) but `/testbed2`, `/testbed.bak`, and `/opt/testbed` do not, and
+ * out-of-repo paths like `/tmp/x` are never touched.
+ */
+export function rewriteCommandForWorktree(command: string, repoRoot: string, worktree: string): string {
+  const root = repoRoot.replace(/\/+$/, "");
+  if (!root || root === "/" || !command.includes(root)) return command;
+  const escaped = root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Char before must not extend a path token (`/opt/testbed` stays); char
+  // after must not extend the final segment (`/testbed2`, `/testbed.bak`,
+  // `/testbed-old` stay) — a following `/` is allowed and rewrites.
+  const re = new RegExp(`(^|[^A-Za-z0-9_.~/-])${escaped}(?=$|[^A-Za-z0-9_.-])`, "g");
+  return command.replace(re, (_match, prefix: string) => `${prefix}${worktree}`);
+}
+
+/**
+ * True when `cmd` looks like a storage-truncated command. The engine's
+ * `trace.commandsRun` caps entries at 120 chars and appends `…` (see
+ * `collectActivity` in `packages/agent-engine/src/pipeline/index.ts`);
+ * replaying such a string would execute a command cut mid-argument. The verify
+ * union is built from the FULL commands captured off `tool-call` events (see
+ * {@link CandidateRun.testCommands}), so this guard only fires if a capped
+ * trace entry ever leaks into the union — defense in depth, not the fix.
+ */
+export function looksTruncatedCommand(cmd: string): boolean {
+  return cmd.endsWith("…");
+}
+
+/** The distinct, replay-safe test commands across every candidate's turn. */
+function buildVerifyUnion(runs: CandidateRun[]): string[] {
+  return dedupe(
+    runs.flatMap((r) => r.testCommands.filter((c) => isLikelyTestCommand(c) && !looksTruncatedCommand(c))),
+  );
+}
+
+/**
+ * verifyAuto's cross-candidate re-run: execute the whole test-command union in
+ * EVERY surviving candidate's worktree (commands rewritten so absolute repo
+ * paths stay inside each worktree — see {@link rewriteCommandForWorktree}),
+ * folding the combined pass/fail into each candidate's decisive `testsPassed`.
+ * Shared by independent and fork modes, which previously carried two copies.
+ */
+async function runVerifyAutoUnion(
+  runs: CandidateRun[],
+  opts: BestOfNOptions,
+  emit: (e: BestOfNEvent) => void,
+): Promise<void> {
+  const union = buildVerifyUnion(runs);
+  if (union.length === 0) return;
+  await Promise.all(
+    runs.map(async (r) => {
+      if (r.candidate.failed || opts.signal?.aborted) return;
+      const outputs: string[] = [];
+      let allPassed = true;
+      for (const cmd of union) {
+        if (opts.signal?.aborted) break;
+        const rewritten = rewriteCommandForWorktree(cmd, opts.cwd, r.worktree);
+        emit({ type: "candidate-verify", id: r.candidate.id, command: rewritten });
+        const v = await runShellCommandBuffered({
+          command: rewritten,
+          cwd: r.worktree,
+          timeoutMs: 300_000,
+          signal: opts.signal,
+        });
+        const out = [v.stdout, v.stderr].filter(Boolean).join("\n").trim();
+        const passed = v.exitCode === 0 && looksPassing(out);
+        allPassed = allPassed && passed;
+        outputs.push(`$ ${rewritten}\n→ ${passed ? "PASS" : "FAIL"} (exit ${v.exitCode})\n${out}`);
+      }
+      if (outputs.length === 0) return;
+      // Append to (don't replace) any verifyCommand output already captured,
+      // and let the union's combined pass/fail be decisive — it's the
+      // broader, cross-candidate signal.
+      r.candidate.testOutput = [r.candidate.testOutput, ...outputs].filter(Boolean).join("\n\n");
+      r.candidate.testsPassed = allPassed;
+    }),
+  );
+}
+
+/** How selection should proceed after the deterministic decideSelection pass. */
+export interface SelectionRoute {
+  /** True ⇒ spend the comparative LLM selector on `pool`. */
+  useSelector: boolean;
+  /** The candidates to hand the selector (empty when `useSelector` is false). */
+  pool: Candidate[];
+  /** Set when routing degraded in a way the user should see (emitted as a `warning` event). */
+  warning?: string;
+}
+
+/**
+ * Route the selection decision, with one correction on top of decideSelection:
+ * when verify-auto was ENABLED but produced no executed evidence for ANY
+ * candidate (every `testsPassed` is null — e.g. no candidate ran a
+ * recognizable test command, or every re-run was skipped), the "best-effort"
+ * heuristic would pick on diff size alone with zero signal. That silent
+ * degradation picked wrong winners on SWE-bench. Instead, route to the LLM
+ * comparative selector across all non-empty candidates and surface a warning.
+ *
+ * Evidence that genuinely exists is untouched: all-false (every candidate's
+ * tests verifiably fail) still resolves via best-effort, and a genuine tie
+ * among passing candidates still routes to the selector as before.
+ */
+export function routeSelection(
+  decision: SelectionDecision,
+  candidates: Candidate[],
+  verifyAuto: boolean,
+): SelectionRoute {
+  if (decision.method === "selector-needed") {
+    return {
+      useSelector: true,
+      pool: candidates.filter((c) => decision.candidates.includes(candidates.indexOf(c))),
+    };
+  }
+  const noEvidence = verifyAuto && candidates.every((c) => c.testsPassed == null);
+  if (noEvidence) {
+    const comparable = candidates.filter((c) => !c.failed && c.diff.trim().length > 0);
+    if (comparable.length >= 2) {
+      return {
+        useSelector: true,
+        pool: comparable,
+        warning:
+          "verify-auto was enabled but produced no executed test evidence for any candidate; " +
+          "routing to the comparative selector instead of the best-effort heuristic",
+      };
+    }
+  }
+  return { useSelector: false, pool: [] };
+}
+
 /** Run one candidate in its own worktree; returns its Candidate summary plus
  * the worktree/commands `runBestOfN` needs for `verifyAuto` + deferred
  * cleanup (this function itself does NOT remove the worktree — see
@@ -315,8 +465,12 @@ async function runCandidate(
     let testOutput: string | undefined;
     let testsPassed: boolean | null = null;
     if (opts.verifyCommand && !opts.signal?.aborted) {
-      emit({ type: "candidate-verify", id, command: opts.verifyCommand });
-      const v = await runShellCommandBuffered({ command: opts.verifyCommand, cwd: wt, timeoutMs: 300_000 });
+      // Same repo-root flaw as verifyAuto: a fixed command containing an
+      // absolute path into the real repo (`cd /testbed && …`) would escape
+      // the worktree — rewrite it to stay inside this candidate's checkout.
+      const verifyCmd = rewriteCommandForWorktree(opts.verifyCommand, opts.cwd, wt);
+      emit({ type: "candidate-verify", id, command: verifyCmd });
+      const v = await runShellCommandBuffered({ command: verifyCmd, cwd: wt, timeoutMs: 300_000 });
       testOutput = [v.stdout, v.stderr].filter(Boolean).join("\n").trim();
       testsPassed = v.exitCode === 0 && looksPassing(testOutput);
     }
@@ -505,41 +659,16 @@ async function runForkMode(opts: BestOfNOptions): Promise<BestOfNResult> {
     try {
       // VERIFY: Auto-verify + verifyCommand across tails
       if (opts.verifyAuto && !opts.signal?.aborted) {
-        const union = dedupe(tailRuns.flatMap((r) => r.testCommands.filter(isLikelyTestCommand)));
-        if (union.length > 0) {
-          await Promise.all(
-            tailRuns.map(async (r) => {
-              if (r.candidate.failed || opts.signal?.aborted) return;
-              const outputs: string[] = [];
-              let allPassed = true;
-              for (const cmd of union) {
-                if (opts.signal?.aborted) break;
-                emit({ type: "candidate-verify", id: r.candidate.id, command: cmd });
-                const v = await runShellCommandBuffered({
-                  command: cmd,
-                  cwd: r.worktree,
-                  timeoutMs: 300_000,
-                  signal: opts.signal,
-                });
-                const out = [v.stdout, v.stderr].filter(Boolean).join("\n").trim();
-                const passed = v.exitCode === 0 && looksPassing(out);
-                allPassed = allPassed && passed;
-                outputs.push(`$ ${cmd}\n→ ${passed ? "PASS" : "FAIL"} (exit ${v.exitCode})\n${out}`);
-              }
-              if (outputs.length === 0) return;
-              r.candidate.testOutput = [r.candidate.testOutput, ...outputs].filter(Boolean).join("\n\n");
-              r.candidate.testsPassed = allPassed;
-            }),
-          );
-        }
+        await runVerifyAutoUnion(tailRuns, opts, emit);
       }
 
       if (opts.verifyCommand && !opts.signal?.aborted) {
         await Promise.all(
           tailRuns.map(async (r) => {
             if (r.candidate.failed || opts.signal?.aborted) return;
-            emit({ type: "candidate-verify", id: r.candidate.id, command: opts.verifyCommand! });
-            const v = await runShellCommandBuffered({ command: opts.verifyCommand!, cwd: r.worktree, timeoutMs: 300_000 });
+            const verifyCmd = rewriteCommandForWorktree(opts.verifyCommand!, opts.cwd, r.worktree);
+            emit({ type: "candidate-verify", id: r.candidate.id, command: verifyCmd });
+            const v = await runShellCommandBuffered({ command: verifyCmd, cwd: r.worktree, timeoutMs: 300_000 });
             const testOutput = [v.stdout, v.stderr].filter(Boolean).join("\n").trim();
             const testsPassed = v.exitCode === 0 && looksPassing(testOutput);
             r.candidate.testOutput = testOutput;
@@ -560,11 +689,23 @@ async function runForkMode(opts: BestOfNOptions): Promise<BestOfNResult> {
       }));
 
       const decision = decideSelection(evidence);
-      const selectionMethod = decision.method;
+      const route = routeSelection(decision, candidates, Boolean(opts.verifyAuto));
+      if (route.warning) emit({ type: "warning", message: route.warning });
+      const selectionMethod = route.useSelector ? "selector-needed" : decision.method;
 
       let selection: SelectionResult;
 
-      if (decision.method === "consensus" || decision.method === "single-passing" || decision.method === "best-effort") {
+      if (route.useSelector) {
+        // Genuine tie among passers — or verify-auto yielded no evidence at
+        // all (route.warning): compare with the LLM selector.
+        selection = await selectBestCandidate({
+          request: opts.prompt,
+          candidates: route.pool,
+          ai: opts.ai,
+          selectorModel: opts.selectorModel,
+          signal: opts.signal,
+        });
+      } else if (decision.method === "consensus" || decision.method === "single-passing" || decision.method === "best-effort") {
         const winnerId = candidates[decision.winner]!.id;
         const ranking = candidates.map((c, idx) => ({
           id: c.id,
@@ -579,19 +720,9 @@ async function runForkMode(opts: BestOfNOptions): Promise<BestOfNResult> {
           fallback: true,
           usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
         };
-      } else if (decision.method === "selector-needed") {
-        // Call selector only with passing candidates
-        const passingCandidates = candidates.filter((c) => decision.candidates.includes(candidates.indexOf(c)));
-        selection = await selectBestCandidate({
-          request: opts.prompt,
-          candidates: passingCandidates,
-          ai: opts.ai,
-          selectorModel: opts.selectorModel,
-          signal: opts.signal,
-        });
       } else {
-        const unreachable: never = decision;
-        throw new Error(`Unreachable decideSelection method: ${unreachable}`);
+        // "selector-needed" is always routed to the selector above.
+        throw new Error(`Unreachable decideSelection method: ${decision.method}`);
       }
 
       emit({
@@ -700,36 +831,7 @@ async function runIndependentMode(opts: BestOfNOptions): Promise<BestOfNResult> 
     // all N on the SAME executed evidence instead of whatever subset of
     // tests each one happened to run by itself.
     if (opts.verifyAuto && !opts.signal?.aborted) {
-      const union = dedupe(runs.flatMap((r) => r.testCommands.filter(isLikelyTestCommand)));
-      if (union.length > 0) {
-        await Promise.all(
-          runs.map(async (r) => {
-            if (r.candidate.failed || opts.signal?.aborted) return;
-            const outputs: string[] = [];
-            let allPassed = true;
-            for (const cmd of union) {
-              if (opts.signal?.aborted) break;
-              emit({ type: "candidate-verify", id: r.candidate.id, command: cmd });
-              const v = await runShellCommandBuffered({
-                command: cmd,
-                cwd: r.worktree,
-                timeoutMs: 300_000,
-                signal: opts.signal,
-              });
-              const out = [v.stdout, v.stderr].filter(Boolean).join("\n").trim();
-              const passed = v.exitCode === 0 && looksPassing(out);
-              allPassed = allPassed && passed;
-              outputs.push(`$ ${cmd}\n→ ${passed ? "PASS" : "FAIL"} (exit ${v.exitCode})\n${out}`);
-            }
-            if (outputs.length === 0) return;
-            // Append to (don't replace) any verifyCommand output already
-            // captured, and let the union's combined pass/fail be decisive —
-            // it's the broader, cross-candidate signal.
-            r.candidate.testOutput = [r.candidate.testOutput, ...outputs].filter(Boolean).join("\n\n");
-            r.candidate.testsPassed = allPassed;
-          }),
-        );
-      }
+      await runVerifyAutoUnion(runs, opts, emit);
     }
 
     // Comparative selection. Perf #6: reuse the deterministic decideSelection
@@ -748,9 +850,22 @@ async function runIndependentMode(opts: BestOfNOptions): Promise<BestOfNResult> 
       evidenceScore: c.testsPassed === true ? 100 : c.testOutput ? 40 : 0,
     }));
     const decision = decideSelection(evidence);
+    const route = routeSelection(decision, candidates, Boolean(opts.verifyAuto));
+    if (route.warning) emit({ type: "warning", message: route.warning });
 
     let selection: SelectionResult;
-    if (
+    if (route.useSelector) {
+      // Genuine tie among passers — or verify-auto was on but yielded no
+      // executed evidence for anyone (route.warning): compare with the LLM
+      // selector rather than picking blind on diff size.
+      selection = await selectBestCandidate({
+        request: opts.prompt,
+        candidates: route.pool,
+        ai: opts.ai,
+        selectorModel: opts.selectorModel,
+        signal: opts.signal,
+      });
+    } else if (
       decision.method === "consensus" ||
       decision.method === "single-passing" ||
       decision.method === "best-effort"
@@ -769,21 +884,9 @@ async function runIndependentMode(opts: BestOfNOptions): Promise<BestOfNResult> 
         fallback: true,
         usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
       };
-    } else if (decision.method === "selector-needed") {
-      // Genuine tie — compare only the passing candidates with the LLM selector.
-      const passingCandidates = candidates.filter((c) =>
-        decision.candidates.includes(candidates.indexOf(c)),
-      );
-      selection = await selectBestCandidate({
-        request: opts.prompt,
-        candidates: passingCandidates,
-        ai: opts.ai,
-        selectorModel: opts.selectorModel,
-        signal: opts.signal,
-      });
     } else {
-      const unreachable: never = decision;
-      throw new Error(`Unreachable decideSelection method: ${unreachable}`);
+      // "selector-needed" is always routed to the selector above.
+      throw new Error(`Unreachable decideSelection method: ${decision.method}`);
     }
     emit({
       type: "select-done",

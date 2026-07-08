@@ -147,3 +147,24 @@ describe("buildSystemPrompt — graph-first tool guidance", () => {
     expect(prompt).toContain("GRAPH FIRST");
   });
 });
+
+describe("buildSystemPrompt — F1 localization trust-but-verify rule", () => {
+  it("adds the spec's one-line rule when a localization block was injected this turn", () => {
+    const prompt = buildSystemPrompt({ ...base, hasLocalization: true });
+    expect(prompt).toContain("Candidate locations were computed from the code graph.");
+    expect(prompt).toContain("Verify with one read before");
+    expect(prompt).toContain("do not re-derive them.");
+  });
+
+  it("omits the rule by default — no rule about a block the model never received", () => {
+    const prompt = buildSystemPrompt(base);
+    expect(prompt).not.toContain("Candidate locations were computed");
+    expect(prompt).not.toContain("re-derive");
+  });
+
+  it("keeps the rule on the headless profile alongside the verification protocol", () => {
+    const prompt = buildSystemPrompt({ ...base, profile: "headless", hasLocalization: true });
+    expect(prompt).toContain("Candidate locations were computed from the code graph.");
+    expect(prompt).toContain("Verification protocol");
+  });
+});

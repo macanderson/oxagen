@@ -22,6 +22,10 @@ export * from "./fleet/index";
 export * from "./pipeline/index";
 export * from "./planner/index";
 
+// Lifecycle bounds — max-lifetime ceilings + RSS watchdog for every
+// dispatched/long-lived agent process (fleet workers, daemons, runners).
+export * from "./lifecycle/index";
+
 // Scalpel F4/F7 — cache-fork trunk snapshot + hypothesis probes (public API
 // for the CLI best-of-N fork mode; other scalpel modules are consumed
 // internally via relative imports and don't need barrel exports).

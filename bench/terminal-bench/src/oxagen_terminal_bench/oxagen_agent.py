@@ -745,13 +745,13 @@ class OxagenAgent(BaseInstalledAgent):
     def _populate_best_of_n_metadata(self, context: AgentContext, text: str) -> None:
         """Pull the race outcome from `solve`'s headless JSONL stream — the
         final `type: "result"` line (see `resultEnvelope()` in
-        `apps/cli/src/tui/best-of-n-view/index.tsx`).
+        `apps/cli/src/tui/best-of-n-view/envelope.ts`).
 
-        Deliberately does NOT set `context.cost_usd`: `best-of-n.ts` doesn't
-        thread per-candidate token usage onto `Candidate` yet (a known CLI-side
-        gap — the `--verbose` roll-up this adapter parses for the one-shot path
-        has no best-of-N equivalent), and this adapter does not fabricate a
-        number to fill the gap.
+        Cost: the envelope now carries a `usage` block aggregated across every
+        model call the race made (candidate turns, pipeline judges, the
+        comparative selector) — see `solve-usage.ts`. Prefer that structured
+        block; fall back to the one-shot-format roll-up line solve also prints
+        (same regex as the one-shot path) for logs from older CLI builds.
         """
         result: dict | None = None
         for line in reversed(text.splitlines()):
@@ -777,6 +777,43 @@ class OxagenAgent(BaseInstalledAgent):
             "oxagen_bestofn_winner_files": len(result.get("winnerFiles") or []),
             "oxagen_bestofn_winner_steps": winner.get("steps") if winner else None,
             "oxagen_bestofn_failed_candidates": sum(1 for c in candidates if c.get("failed")),
+        }
+        self._populate_best_of_n_usage(context, result, text)
+
+    def _populate_best_of_n_usage(
+        self, context: AgentContext, result: dict, text: str
+    ) -> None:
+        """Set cost/token/step/wall totals for a solve run.
+
+        Primary source: the result envelope's structured `usage` block.
+        Fallback: the textual roll-up line solve prints after the envelope,
+        in the exact one-shot `--verbose` format this adapter already parses.
+        """
+        usage = result.get("usage")
+        if isinstance(usage, dict):
+            try:
+                cost = usage.get("costUsd")
+                if cost is not None:
+                    context.cost_usd = float(cost)
+                context.metadata = {
+                    **(context.metadata or {}),
+                    "oxagen_total_tokens": usage.get("totalTokens"),
+                    "oxagen_wall_sec": usage.get("wallSec"),
+                    "oxagen_steps": usage.get("steps"),
+                }
+                return
+            except (TypeError, ValueError):
+                pass  # malformed usage block — try the textual roll-up below
+        m = re.search(r"([\d.]+)s total\D+([\d,]+)\s*tok\D+\$([\d.]+)", text)
+        if not m:
+            return
+        context.cost_usd = float(m.group(3))
+        steps_m = re.search(r"(\d+)\s*steps", text)
+        context.metadata = {
+            **(context.metadata or {}),
+            "oxagen_total_tokens": int(m.group(2).replace(",", "")),
+            "oxagen_wall_sec": float(m.group(1)),
+            "oxagen_steps": int(steps_m.group(1)) if steps_m else None,
         }
 
     def _find_agent_log(self) -> Path | None:

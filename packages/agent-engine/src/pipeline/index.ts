@@ -95,9 +95,16 @@ function newTraceId(): string {
  * project rules. Both the pipeline and bare execution paths route through here so
  * the agent gets its full behavioral contract, not just the raw project text.
  * Stable within a session (cwd/projectContext/readOnly don't change), so it keeps
- * the provider prompt cache warm across turns.
+ * the provider prompt cache warm across turns. The one turn-dependent input is
+ * `hasLocalization` — whether ENHANCE injected an F1 candidate-locations block
+ * this turn — which adds the spec's trust-but-verify rule; it is stable within a
+ * turn and false on the bare path (which never runs ENHANCE).
  */
-function composeAgentSystem(opts: RunTurnOptions, cwd: string): string {
+function composeAgentSystem(
+  opts: RunTurnOptions,
+  cwd: string,
+  hasLocalization = false,
+): string {
   return buildSystemPrompt({
     cwd,
     projectContext: opts.projectContext,
@@ -107,6 +114,7 @@ function composeAgentSystem(opts: RunTurnOptions, cwd: string): string {
     // on the pipeline path (RunTurnOptions has no codeMap provider).
     hasCodeGraph: Boolean(opts.codeGraph),
     hasCodeMap: false,
+    hasLocalization,
     profile: opts.profile,
     // A named-agent persona replaces the default identity (its systemPrompt
     // becomes the preamble). Lets `--agent` and the fleet run their persona
@@ -507,7 +515,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
     const estimatedInputTokens =
       Math.ceil(enhanced.prompt.length / 4) +
       estimateMessageTokens(history) +
-      Math.ceil(composeAgentSystem(opts, cwd).length / 4);
+      Math.ceil(composeAgentSystem(opts, cwd, enhanced.hasLocalization).length / 4);
     const estimatedOutputTokens = Math.round(400 + (evaluation.complexity / 100) * 4000);
     const costProjection = projectCost(routed.model, {
       inputTokens: estimatedInputTokens,
@@ -644,7 +652,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
       images: segImages,
       model: routed.model,
       effort: opts.effort,
-      system: composeAgentSystem(opts, cwd),
+      system: composeAgentSystem(opts, cwd, enhanced.hasLocalization),
       history: segHistory,
       maxSteps: segMaxSteps,
       extraTools: opts.extraTools,
@@ -823,7 +831,7 @@ export async function runTurn(opts: RunTurnOptions): Promise<RunTurnResult> {
         images: round === 0 ? opts.images : undefined,
         model: routed.model,
         effort: opts.effort,
-        system: composeAgentSystem(opts, cwd),
+        system: composeAgentSystem(opts, cwd, enhanced.hasLocalization),
         history,
         maxSteps: opts.maxSteps,
         extraTools: opts.extraTools,
