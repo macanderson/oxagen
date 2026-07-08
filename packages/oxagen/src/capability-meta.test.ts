@@ -79,6 +79,9 @@ describe("resolveRecordHref", () => {
   });
   it("builds a conversation href", () => {
     expect(resolveRecordHref("conversation", "c_9", SLUGS)).toBe("/acme/research/chat/c_9");
+    expect(resolveRecordHref("agent", "agt_1", SLUGS)).toBe(
+      "/acme/research/studio/agents/agt_1",
+    );
   });
   it("builds an asset href WITHOUT requiring slugs", () => {
     expect(resolveRecordHref("asset", "gen_1", {})).toBe("/api/v1/assets/gen_1");
@@ -175,6 +178,9 @@ describe("getRenderHint / curated tables", () => {
   it("returns a curated hint for a prioritized capability", () => {
     expect(getRenderHint("web.search")).toEqual({ componentId: "web-search-card" });
     expect(getRenderHint("graph.node.get")?.componentId).toBe("graph-node-card");
+    expect(getRenderHint("agent.definition.list")).toEqual({
+      componentId: "agent-definition-list-card",
+    });
   });
   it("returns undefined for an uncurated capability with no declared render", () => {
     expect(getRenderHint("totally.unknown.capability")).toBeUndefined();

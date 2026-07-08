@@ -11,6 +11,7 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  Bot,
   Brain,
   Code2,
   FileText,
@@ -37,6 +38,12 @@ describe("toolCallMeta — curated map", () => {
     const meta = toolCallMeta("agent.sandbox.exec");
     expect(meta.label).toBe("Run command in sandbox");
     expect(meta.Icon).toBe(Terminal);
+  });
+
+  it("maps agent.definition.list to 'List agents' with Bot (not the derived 'List definition')", () => {
+    const meta = toolCallMeta("agent.definition.list");
+    expect(meta.label).toBe("List agents");
+    expect(meta.Icon).toBe(Bot);
   });
 
   it("maps repo.pr.open to 'Open pull request' with the repo domain icon", () => {
