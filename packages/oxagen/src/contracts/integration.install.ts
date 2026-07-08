@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const integrationInstall = registerCapability({
-  name: "integration.install",
+  name: "install_integration",
+  aliases: ["integration.install"],
   domain: "integration",
   description:
     "Install a plugin instance from catalog or custom URL. Fetches schema, validates config, and installs in workspace scope.",

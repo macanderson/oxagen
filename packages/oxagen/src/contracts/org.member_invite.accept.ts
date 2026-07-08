@@ -4,8 +4,8 @@ import { registerCapability } from "../registry";
 // Accept a pending invitation. Transitions the invitation to 'accepted',
 // creates the org_users row, and provisions least-privilege IAM for the user.
 export const orgMemberInviteAccept = registerCapability({
-  name: "org.member_invite.accept",
-  aliases: ["org.member.invite.accept"],
+  name: "accept_member_invite",
+  aliases: ["org.member_invite.accept", "org.member.invite.accept"],
   domain: "org",
   description: "Accept a pending org invitation. Creates the membership row and provisions least-privilege IAM.",
   mode: "sync",

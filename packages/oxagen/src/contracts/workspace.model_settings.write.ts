@@ -2,8 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const workspaceModelSettingsWrite = registerCapability({
-  name: "workspace.model_settings.write",
-  aliases: ["workspace.model.settings.write"],
+  name: "update_model_settings",
+  aliases: ["workspace.model_settings.write", "workspace.model.settings.write"],
   domain: "workspace",
   description: "Update the workspace-level model defaults (partial update — only provided fields are changed)",
   mode: "sync",

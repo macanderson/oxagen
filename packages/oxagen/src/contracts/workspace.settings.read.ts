@@ -8,7 +8,8 @@ const workspaceSettingsOutput = z.object({
 });
 
 export const workspaceSettingsRead = registerCapability({
-  name: "workspace.settings.read",
+  name: "get_workspace_settings",
+  aliases: ["workspace.settings.read"],
   domain: "workspace",
   description:
     "Read the active workspace's general settings: name, slug, and description.",

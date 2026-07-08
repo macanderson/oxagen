@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const documentRead = registerCapability({
-  name: "document.read",
+  name: "read_document",
+  aliases: ["document.read"],
   domain: "document",
   description: "Read a document by ID — returns title, content, and metadata",
   mode: "sync",

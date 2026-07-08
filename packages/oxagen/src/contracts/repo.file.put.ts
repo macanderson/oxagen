@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const repoFilePut = registerCapability({
-  name: "repo.file.put",
+  name: "put_repo_file",
+  aliases: ["repo.file.put"],
   domain: "repo",
   description: "Commit a file (create or update) to a GitHub repository.",
   mode: "sync",

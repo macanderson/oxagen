@@ -36,8 +36,8 @@ export const memoryPolicySchema = z.object({
 });
 
 export const agentMemoryPolicyRead = registerCapability({
-  name: "agent.memory_policy.read",
-  aliases: ["agent.memory.policy.read"],
+  name: "get_memory_policy",
+  aliases: ["agent.memory_policy.read", "agent.memory.policy.read"],
   domain: "agent",
   description:
     "Read the workspace memory decay policy: half-lives by weight and recall confidence threshold",

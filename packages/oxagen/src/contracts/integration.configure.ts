@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const integrationConfigure = registerCapability({
-  name: "integration.configure",
+  name: "configure_integration",
+  aliases: ["integration.configure"],
   domain: "integration",
   description: "Update plugin instance config: credentials, sync cadence, inference toggles, ontology prompts.",
   mode: "sync",

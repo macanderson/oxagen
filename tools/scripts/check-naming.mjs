@@ -1,39 +1,28 @@
 #!/usr/bin/env node
 /**
- * check-naming.mjs — enforce the ADR-024 capability naming standard.
+ * check-naming.mjs — enforce the ADR-024 verb-first snake_case naming standard.
  *
- * PROPOSED REVISION (ADR-024, Status: Proposed) — NOT YET THE LIVE LINT.
- * This file tightens ADR-022's `domain.subject.action` rule: names are now
- * EXACTLY 3 segments, always. The old 2-segment subject-elision rule
- * (ADR-022 §2) is removed. Do not wire this into `pnpm check:contracts` /
- * `pnpm check:naming` until the renames enumerated in
- * docs/specs/adr024-naming-mapping.md are actually executed — flipping the
- * `NAME_RE` to require exactly 3 segments before then would fail CI on every
- * one of the ~160 capabilities that still use the old shape.
+ * Canonical form: `verb_noun` or `verb_noun_qualifier`. Imperative verb FIRST,
+ * then the entity, then an optional disambiguating word. Lowercase [a-z0-9]
+ * words joined by `_`. 2-3 words (a 4th ONLY where global uniqueness truly
+ * demands it — allowed but flagged as a warning). NO dots — the old dotted
+ * `domain.subject.action` form (ADR-022) is superseded and illegal.
  *
- * Canonical form: `domain.subject.verb` (exactly 3 segments); a compound
- * concept is snake_case INSIDE one segment (agent.file_lock.acquire); segments
- * are lowercase [a-z0-9] words joined by `_`. The verb (final segment) must
- * come from the closed action vocabulary below and MAY be a snake_case
- * compound (get_status, list_neighbors, dispatch_agent, stop_agent, …).
+ * This shape matches the repo's core engine tools (read_file, write_file,
+ * edit_file, run_command, search, list_files, todo_write) — the form an LLM
+ * agent parses best. Those engine tools are NOT registered capabilities and are
+ * intentionally out of scope for this lint (they live in the agent engine, not
+ * packages/oxagen/src/contracts).
  *
- * Subject plurality (ADR-024 §3) — PLURAL subject for collection/list ops,
- * SINGULAR for single-instance ops — cannot be fully mechanized (the tool
- * can't know a capability's return cardinality from its name alone), so it is
- * enforced only as a WARNING heuristic: a `.list`/`.search` verb whose
- * subject doesn't already look plural (doesn't end in `s`, and isn't in the
- * small KNOWN_MASS_NOUNS allowlist of collective/mass-noun subjects that are
- * legitimately singular even for a list op, e.g. "registry") is flagged for
- * human review, not failed.
+ * GLOBAL UNIQUENESS is mandatory: the name is a unique key across the registry,
+ * IAM role_grants.capability_id, ClickHouse tool_invocations.capability_name,
+ * and the on-disk contract file. Two contracts claiming one name is a hard fail.
  *
  * The lint validates every REAL capability — a contract file under
  * packages/oxagen/src/contracts that calls registerCapability(). Shared schema
- * modules (no registerCapability) are ignored. The GRANDFATHER map is
- * UNCHANGED from ADR-022 pending execution of the ADR-024 rename wave — ADR-024
- * will empty this map once every entry below gets a conforming name (tracked
- * in docs/specs/adr024-naming-mapping.md); do not add new entries to silence
- * this lint, and do not remove entries until the underlying contract is
- * actually renamed.
+ * modules (no registerCapability) are ignored. The ADR-022 GRANDFATHER map is
+ * EMPTY: ADR-024 renamed every previously-grandfathered name to a conforming
+ * verb-first snake form (each carries the old dotted name in aliases[]).
  *
  * Exit codes: 0 clean · 1 violations · 2 script error.
  */
@@ -43,76 +32,37 @@ import { join, resolve } from "node:path";
 const ROOT = resolve(process.cwd());
 const CAP_DIR = join(ROOT, "packages/oxagen/src/contracts");
 
-// ── Closed action vocabulary (ADR-022 §4, carried forward by ADR-024 §4) ─────
-// A genuine, verb-only set: the final segment of every 3-segment canonical name
-// MUST be one of these. Derived by auditing every terminal verb actually in use.
-// snake_case compounds (set_enabled, import_env, get_status, list_neighbors) are
-// single actions. Keep this MINIMAL — add a verb only when a real capability
-// needs one no existing verb covers. Under ADR-024 there are no 2-segment
-// exemptions: EVERY name's final segment is checked against this vocabulary.
-const ACTIONS = new Set([
-  // read / list
-  "list", "get", "read", "query", "search", "preview", "browse", "fetch",
-  "summarize", "recommend", "recall", "trace",
-  // create / write
-  "create", "update", "write", "upsert", "add", "put", "record", "author",
-  "compose", "generate", "render", "remember", "cite", "attach", "import",
-  "ingest", "commit", "publish", "snapshot", "fork", "rename", "edit", "export",
-  // delete / lifecycle
-  "delete", "remove", "purge", "erase", "archive", "cancel", "stop", "start",
-  "run", "execute", "exec", "deploy", "resume", "pause", "trigger", "dispatch",
-  "aggregate", "promote", "acquire", "release", "push",
-  // config / toggles / auth
-  "set", "unset", "enable", "disable", "toggle", "configure", "setup",
-  "activate", "install", "uninstall", "register", "reauth", "rotate", "revoke",
-  "reveal", "pin", "purchase", "load", "map", "diff", "patch", "sync",
-  "reconcile", "approve", "decline", "accept", "resolve", "suggest", "infer",
-  "check", "verify", "validate", "analyze", "chat", "change", "mark", "send",
-  "open", "format", "parse", "upload", "refresh", "screenshot", "submit",
-  "fill", "click", "navigate",
-  // snake_case compound actions (ADR-024 leans on this harder than ADR-022 did
-  // — every former noun-terminal grandfather entry resolves to one of these)
-  "set_enabled", "set_default", "set_secret", "set_auth_alerts",
-  "import_env", "install_bulk", "from_traces",
-  "get_status", "get_lineage", "get_logs", "get_metrics", "get_execution",
-  "list_siblings", "list_neighbors", "post_message", "create_bulk",
+// ── Verb vocabulary (ADR-024) ────────────────────────────────────────────────
+// The FIRST word of every capability name must be one of these imperative verbs.
+// Derived from the ADR-024 rename wave; extend only when a real capability needs
+// a verb no existing entry covers (a near-synonym is a smell, not a new entry).
+const VERBS = new Set([
+  "accept", "acquire", "activate", "add", "aggregate", "analyze", "approve",
+  "archive", "attach", "author", "browse", "cancel", "change", "cite", "click",
+  "commit", "compose", "configure", "create", "debug", "decline", "delete",
+  "deploy", "diff", "disable", "dispatch", "draft", "edit", "enable", "erase",
+  "exec", "execute", "export", "fetch", "fill", "fork", "format", "generate",
+  "get", "import", "infer", "ingest", "install", "list", "load", "map", "mark",
+  "navigate", "open", "parse", "patch", "pause", "pin", "post", "preview",
+  "promote", "publish", "purchase", "purge", "push", "put", "query", "read",
+  "reauth", "recall", "recommend", "reconcile", "record", "refresh", "register",
+  "release", "remember", "remove", "rename", "render", "resolve", "resume",
+  "reveal", "revoke", "rotate", "run", "save", "screenshot", "search", "send",
+  "set", "setup", "snapshot", "start", "stop", "submit", "suggest", "summarize",
+  "sync", "toggle", "trace", "trigger", "uninstall", "unset", "update", "upload",
+  "upsert", "validate", "verify", "write",
 ]);
 
-// ── Mass/collective-noun allowlist for the plurality WARNING (ADR-024 §3) ────
-// Subjects that legitimately stay singular even under a list/search verb
-// because they denote one collective thing being listed/browsed, not many
-// discrete instances (e.g. "list the registry" reads fine singular). This is
-// intentionally small — prefer fixing the name over adding to this list.
-const KNOWN_MASS_NOUNS = new Set(["usage", "metrics", "data", "registry"]);
+// ── Grandfather list (emptied by ADR-024) ────────────────────────────────────
+// ADR-022 left 14 non-conforming names here. ADR-024 renamed all of them to
+// verb-first snake forms (old dotted names preserved as aliases). This map is
+// now empty and MUST stay empty — a non-conforming name is a bug to fix, never
+// a grandfather entry.
+const GRANDFATHER = new Map([]);
 
-// ── Grandfather list (ADR-022 §7; UNCHANGED pending the ADR-024 rename wave) ──
-// Pre-standard names deliberately NOT renamed yet. Each entry is a visible unit
-// of naming debt. ADR-024 clears this map to empty once every entry below is
-// actually renamed per docs/specs/adr024-naming-mapping.md — do NOT add new
-// entries to silence this lint, and do NOT remove an entry until its contract
-// is renamed.
-const GRANDFATHER = new Map([
-  ["agent.execution.lineage", "noun-terminal read → agent.execution.get_lineage or agent.execution_lineage.get"],
-  ["agent.subagent.logs", "noun-terminal read → agent.subagent.get_logs or agent.subagent_log.list"],
-  ["agent.subagent.siblings", "noun-terminal read → agent.subagent.list_siblings or agent.subagent_sibling.list"],
-  ["billing.usage.breakdown", "noun-terminal read → billing.usage.summarize or billing.usage_breakdown.get"],
-  ["chat.message.execution", "noun-terminal read → chat.message.get_execution or chat.message_execution.get"],
-  ["eval.run.status", "noun-terminal read (X.Y.status convention) → eval.run.get or eval.run_status.get"],
-  ["repo.ci.status", "noun-terminal read (X.Y.status convention) → repo.ci.get or repo.ci_status.get"],
-  ["research.swarm.status", "noun-terminal read (X.Y.status convention) → research.swarm.get or research.swarm_status.get"],
-  ["schema.reconcile.status", "noun-terminal read (X.Y.status convention) → schema.reconcile.get or schema.reconcile_status.get"],
-  ["schema.registry.config", "noun-terminal read → schema.registry.get or schema.registry_config.get"],
-  ["schema.validate.node", "action-in-middle (validate.node) → schema.node.validate"],
-  ["schema.validate.relationship", "action-in-middle (validate.relationship) → schema.relationship.validate"],
-  ["system.install.instructions", "noun-terminal read → system.install_instructions.get"],
-  ["telemetry.error.cluster", "noun-terminal read (cluster used as a noun) → telemetry.error_cluster.list or telemetry.error.summarize"],
-]);
-
-// Charset: lowercase alnum words joined by `_` inside a segment; segments joined
-// by `.`; EXACTLY 3 segments under ADR-024 (the ADR-022 2-segment allowance is
-// removed). No kebab, no uppercase, no empty segment.
-const WORD = "[a-z0-9]+(?:_[a-z0-9]+)*";
-const NAME_RE = new RegExp(`^${WORD}\\.${WORD}\\.${WORD}$`);
+// Charset: 2+ lowercase [a-z0-9] words joined by `_`. No dots, no kebab, no
+// uppercase, no empty word. (Word-count > 3 is a warning, not a failure.)
+const NAME_RE = /^[a-z0-9]+(?:_[a-z0-9]+)+$/;
 
 function readRealCapabilityNames() {
   if (!existsSync(CAP_DIR)) {
@@ -124,7 +74,10 @@ function readRealCapabilityNames() {
     if (!file.endsWith(".ts") || file.endsWith(".test.ts") || file === "index.ts") continue;
     const src = readFileSync(join(CAP_DIR, file), "utf8");
     if (!/registerCapability\s*\(/.test(src)) continue; // shared modules skipped
-    const m = src.match(/name:\s*["'`]([^"'`]+)["'`]/);
+    // Capture the capability name from inside the registerCapability(...) block,
+    // so an earlier `name:` zod field in an input schema can't be mistaken for it.
+    const block = src.split(/registerCapability\s*\(/).slice(1).join("");
+    const m = block.match(/name:\s*["'`]([^"'`]+)["'`]/);
     if (m) names.push({ name: m[1], file });
   }
   return names;
@@ -132,69 +85,74 @@ function readRealCapabilityNames() {
 
 function validate(name) {
   const problems = [];
-  if (name.includes("-")) problems.push("kebab-case is illegal (use snake_case inside a segment)");
+  const warnings = [];
+  if (name.includes(".")) problems.push("dots are illegal (ADR-024 supersedes the dotted form — use verb_noun snake_case)");
+  if (name.includes("-")) problems.push("kebab-case is illegal (use snake_case)");
   if (!NAME_RE.test(name)) {
-    problems.push("must be exactly 3 lowercase [a-z0-9_] segments joined by '.' (ADR-024 removes the 2-segment form)");
-    return problems; // charset/segment-count failure — later checks would be noise
+    problems.push("must be 2+ lowercase [a-z0-9] words joined by '_'");
+    return { problems, warnings }; // charset failure — later checks would be noise
   }
-  const segs = name.split(".");
-  const verb = segs[2];
-  if (!ACTIONS.has(verb)) {
-    problems.push(`final segment "${verb}" is not in the closed action vocabulary`);
+  const words = name.split("_");
+  if (!VERBS.has(words[0])) {
+    problems.push(`first word "${words[0]}" is not an imperative verb (name must be verb-first)`);
   }
-  return problems;
-}
-
-// Best-effort, non-blocking heuristic (ADR-024 §3): a list/search verb whose
-// subject doesn't look plural is worth a human glance, but plurality can't be
-// fully mechanized (a subject could be an irregular plural, a mass noun not in
-// our small allowlist, or a compound where only the head noun pluralizes) —
-// so this returns warnings, never failures.
-function pluralityWarning(name) {
-  const segs = name.split(".");
-  if (segs.length !== 3) return null;
-  const [, subject, verb] = segs;
-  if (verb !== "list" && verb !== "search") return null;
-  if (KNOWN_MASS_NOUNS.has(subject)) return null;
-  if (subject.endsWith("s")) return null; // naive but cheap; false negatives (irregular plurals) are fine for a warning
-  return `subject "${subject}" looks singular for a "${verb}" (collection) verb — consider pluralizing, or add to KNOWN_MASS_NOUNS if it's a genuine mass noun`;
+  if (words.length > 3) {
+    warnings.push(`${words.length} words — keep names to 2-3 words unless uniqueness truly demands a 4th`);
+  }
+  return { problems, warnings };
 }
 
 function main() {
   const caps = readRealCapabilityNames();
   const violations = [];
   const warnings = [];
+
   for (const { name, file } of caps) {
     if (GRANDFATHER.has(name)) continue;
-    const problems = validate(name);
+    const { problems, warnings: w } = validate(name);
     if (problems.length) violations.push({ name, file, problems });
-    const warn = pluralityWarning(name);
-    if (warn) warnings.push({ name, file, warn });
+    for (const msg of w) warnings.push({ name, file, msg });
   }
 
-  console.log(`check-naming: validated ${caps.length} capabilities against ADR-024` +
-    ` (${GRANDFATHER.size} grandfathered).`);
+  // GLOBAL UNIQUENESS gate.
+  const byName = new Map();
+  for (const { name, file } of caps) {
+    const arr = byName.get(name) ?? [];
+    arr.push(file);
+    byName.set(name, arr);
+  }
+  const dupes = [...byName.entries()].filter(([, files]) => files.length > 1);
+
+  console.log(`check-naming: validated ${caps.length} capabilities against ADR-024 (verb-first snake_case).`);
 
   if (warnings.length) {
-    console.warn(`\nPLURALITY WARNINGS (${warnings.length}, non-blocking):`);
-    for (const { name, file, warn } of warnings) {
-      console.warn(`  ! ${name}  [${file}] — ${warn}`);
-    }
+    console.warn(`\nWORD-COUNT WARNINGS (${warnings.length}, non-blocking):`);
+    for (const { name, file, msg } of warnings) console.warn(`  ! ${name}  [${file}] — ${msg}`);
+  }
+
+  let failed = false;
+
+  if (dupes.length) {
+    failed = true;
+    console.error(`\nDUPLICATE CAPABILITY NAMES — global uniqueness violated (${dupes.length}):`);
+    for (const [name, files] of dupes) console.error(`  ✗ "${name}": ${files.join(", ")}`);
   }
 
   if (violations.length) {
+    failed = true;
     console.error(`\nNAMING VIOLATIONS (${violations.length}):`);
     for (const { name, file, problems } of violations) {
       console.error(`  ✗ ${name}  [${file}]`);
       for (const p of problems) console.error(`      - ${p}`);
     }
     console.error(
-      `\nFix the name (add aliases:[<old>] so nothing breaks — see ADR-022 §6 / ADR-024 §6), or, ` +
-      `if it must ship non-conforming, add it to GRANDFATHER in this script with a reason.`,
+      `\nFix the name to verb-first snake_case (add aliases:[<old>] so nothing breaks — ` +
+      `see ADR-024). A non-conforming name is a bug, not a grandfather entry.`,
     );
-    process.exit(1);
   }
-  console.log("All capability names conform to ADR-024.");
+
+  if (failed) process.exit(1);
+  console.log("All capability names conform to ADR-024 and are globally unique.");
 }
 
 main();

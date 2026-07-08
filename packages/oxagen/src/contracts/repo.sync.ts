@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const repoSync = registerCapability({
-  name: "repo.sync",
+  name: "sync_repo",
+  aliases: ["repo.sync"],
   domain: "repo",
   description: "Trigger incremental or full re-index of a repository connection.",
   mode: "async",

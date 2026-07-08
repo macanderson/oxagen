@@ -5,7 +5,8 @@ import { registerCapability } from "../registry";
 // schedule, scope). Partial — omit a field to leave it unchanged. Pause/resume
 // is handled separately by connection.pause.
 export const connectionUpdate = registerCapability({
-  name: "connection.update",
+  name: "update_connection",
+  aliases: ["connection.update"],
   domain: "connection",
   description:
     "Update a data source connection: rename it (displayName) and/or adjust its delivery configuration (sync schedule, scope). Partial update — omit a field to keep it. Pausing/resuming is connection.pause.",

@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const evalDatasetCreate = registerCapability({
-  name: "eval.dataset.create",
+  name: "create_dataset",
+  aliases: ["eval.dataset.create"],
   domain: "eval",
   description:
     "Create an eval dataset — a named, workspace-scoped collection of cases to score a target against. Items are added separately via eval.dataset.item.add or captured from metered traces via eval.dataset.from_traces.",

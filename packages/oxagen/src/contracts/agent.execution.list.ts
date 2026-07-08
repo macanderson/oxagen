@@ -8,7 +8,8 @@ import { registerCapability } from "../registry";
 // executions. Backs the in-app Activity list and is callable from agent/MCP/API.
 
 export const agentExecutionList = registerCapability({
-  name: "agent.execution.list",
+  name: "list_executions",
+  aliases: ["agent.execution.list"],
   domain: "agent",
   description:
     "List recent top-level agent runs (executions) for the workspace, newest first, with keyset pagination — each row's status, origin, duration, token/cost figures.",

@@ -3,7 +3,8 @@ import { registerCapability } from "../registry";
 import { FieldErrorSchema } from "./schema.shared";
 
 export const schemaValidateRelationship = registerCapability({
-  name: "schema.validate.relationship",
+  name: "validate_schema_relationship",
+  aliases: ["schema.validate.relationship"],
   domain: "schema",
   description: "Validate a relationship's type and properties against the workspace schema. Returns conformance score and field-level errors.",
   mode: "sync",

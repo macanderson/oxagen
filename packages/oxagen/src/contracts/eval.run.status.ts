@@ -3,7 +3,8 @@ import { registerCapability } from "../registry";
 import { evalRunStatusSchema } from "./eval-schema";
 
 export const evalRunStatus = registerCapability({
-  name: "eval.run.status",
+  name: "get_eval_status",
+  aliases: ["eval.run.status"],
   domain: "eval",
   description:
     "Poll an eval run's lifecycle: status, progress counts, and mean score once available. Cheap header read — use eval.run.get for per-item detail.",

@@ -3,7 +3,8 @@ import { registerCapability } from "../registry";
 import { enforcementModeEnum } from "./schema.types";
 
 export const schemaRegistryConfig = registerCapability({
-  name: "schema.registry.config",
+  name: "get_registry_config",
+  aliases: ["schema.registry.config"],
   domain: "schema",
   description: "Set enforcement_mode and conformance_floor for the workspace registry.",
   mode: "sync",

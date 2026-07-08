@@ -11,7 +11,8 @@ import { registerCapability } from "../registry";
  * agent posture (requiresApproval) and a higher risk level than write/update.
  */
 export const agentMemoryDelete = registerCapability({
-  name: "agent.memory.delete",
+  name: "delete_memory",
+  aliases: ["agent.memory.delete"],
   domain: "agent",
   description:
     "Permanently delete an AgentMemory node (and its edges) by id. Destructive — prefer agent.memory.update to lower salience when you only want it to stop surfacing.",

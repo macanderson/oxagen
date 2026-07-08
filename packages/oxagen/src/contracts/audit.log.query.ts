@@ -33,7 +33,8 @@ const auditEvent = z.object({
 });
 
 export const auditLogQuery = registerCapability({
-  name: "audit.log.query",
+  name: "query_audit_log",
+  aliases: ["audit.log.query"],
   domain: "audit",
   description:
     "Query the org's security and automation audit events (security_events + playbook_events) with filters — actor, capability, outcome, event type, time range — returning a unified, time-ordered feed. Read-only.",

@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const schemaChat = registerCapability({
-  name: "schema.chat",
+  name: "run_schema_chat",
+  aliases: ["schema.chat"],
   domain: "schema",
   description: "AI iterative builder turn: takes conversation + current draft; returns assistant message + proposed mutation tool calls.",
   mode: "sync",

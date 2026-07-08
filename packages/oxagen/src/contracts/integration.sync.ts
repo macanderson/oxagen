@@ -2,7 +2,8 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 
 export const integrationSync = registerCapability({
-  name: "integration.sync",
+  name: "sync_integration",
+  aliases: ["integration.sync"],
   domain: "integration",
   description: "Trigger synchronization of a plugin instance.",
   mode: "async",
