@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import { Check, Copy, ExternalLink, FileDiff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { diffAnchorId } from "./diff-anchor";
+import { highlightLine, inferLang, type HighlightedToken } from "./diff-syntax";
+import "./diff-token.css";
 
 /**
  * code-diff-card — renders a unified-diff patch set produced by a
@@ -22,6 +24,15 @@ import { diffAnchorId } from "./diff-anchor";
  * `null`/absent and the card degrades to a path-only row with an external
  * link. A future contract change that returns real patch text needs no card
  * changes — `parseUnifiedDiff` already renders full hunks when `patch` is set.
+ *
+ * Syntax highlighting: when a file's patch has hunks, each code line is
+ * tokenized client-side by Shiki (`./diff-syntax`) with a dual light+dark theme
+ * pair (`github-light` / `github-dark`). Tokens render with the light colour
+ * inline plus a `--shiki-dark` CSS variable; `./diff-token.css` swaps to the
+ * dark colour under the app's `.dark` class — so the diff matches the terminal
+ * agentic-coding look and follows the theme with no JS re-highlight. Rendering
+ * never blocks on highlighting: the diff shows immediately as plain text and
+ * upgrades to colours when tokenization resolves; unknown languages stay plain.
  */
 
 export interface CodeDiffFile {
@@ -144,7 +155,14 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   );
 }
 
-function DiffLineRow({ line }: { line: DiffLine }) {
+/**
+ * A single diff line. When Shiki tokens are available (`tokens`) the code is
+ * rendered as syntax-highlighted spans; otherwise it falls back to plain text.
+ * The add/del row tint and the `+`/`-`/` ` marker are always applied — token
+ * colours sit ON TOP of the row background, exactly like a coding-agent UI.
+ */
+function DiffLineRow({ line, tokens }: { line: DiffLine; tokens?: HighlightedToken[] }) {
+  const marker = line.type === "add" ? "+" : line.type === "del" ? "-" : " ";
   return (
     <div
       className={cn(
@@ -159,22 +177,106 @@ function DiffLineRow({ line }: { line: DiffLine }) {
       <span className="select-none px-2 text-right text-muted-foreground/60 tabular-nums">
         {line.newLine ?? ""}
       </span>
-      <span
-        className={cn(
-          "whitespace-pre px-2",
-          line.type === "add" && "text-success",
-          line.type === "del" && "text-error",
+      <span className="whitespace-pre px-2">
+        <span
+          aria-hidden="true"
+          className={cn(
+            "select-none",
+            line.type === "add" && "text-success",
+            line.type === "del" && "text-error",
+          )}
+        >
+          {marker}
+        </span>
+        {tokens && tokens.length > 0 ? (
+          tokens.map((t, i) => (
+            <span key={i} className="diff-token" style={parseTokenStyle(t.style)}>
+              {t.content}
+            </span>
+          ))
+        ) : (
+          <span
+            className={cn(line.type === "add" && "text-success", line.type === "del" && "text-error")}
+          >
+            {line.content}
+          </span>
         )}
-      >
-        {line.type === "add" ? "+" : line.type === "del" ? "-" : " "}
-        {line.content}
       </span>
     </div>
   );
 }
 
+/**
+ * Convert a Shiki inline style string (`color:#x;--shiki-dark:#y`) into a React
+ * style object. React rejects a raw CSS string on `style`, so we split it into
+ * a keyed object, preserving the `--shiki-dark` custom property the `.dark`
+ * rule in diff-token.css reads.
+ */
+export function parseTokenStyle(style: string | undefined): React.CSSProperties | undefined {
+  if (!style) return undefined;
+  const out: Record<string, string> = {};
+  for (const decl of style.split(";")) {
+    const idx = decl.indexOf(":");
+    if (idx <= 0) continue;
+    const key = decl.slice(0, idx).trim();
+    const value = decl.slice(idx + 1).trim();
+    if (!key || !value) continue;
+    // camelCase standard props; keep custom properties (--shiki-*) verbatim.
+    const prop = key.startsWith("--")
+      ? key
+      : key.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+    out[prop] = value;
+  }
+  return out as React.CSSProperties;
+}
+
+/**
+ * Highlight every code line across a file's hunks with Shiki, returning a map
+ * keyed by `"<hunkIndex>:<lineIndex>"` → token list. Runs once per file in an
+ * effect (client-only), so the diff renders as plain text immediately and
+ * upgrades to syntax colours when highlighting resolves — never blocking paint
+ * and never throwing (highlightLine degrades to plain text on any failure).
+ */
+function useHighlightedHunks(path: string, hunks: DiffHunk[]): Map<string, HighlightedToken[]> {
+  const [map, setMap] = useState<Map<string, HighlightedToken[]>>(() => new Map());
+  // Stable dependency: the concatenated code content + path (language source).
+  const signature = useMemo(
+    () => `${path}\u0000${hunks.map((h) => h.lines.map((l) => l.content).join("\n")).join("\u0001")}`,
+    [path, hunks],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const lang = inferLang(path);
+    if (lang === "plaintext") {
+      setMap(new Map());
+      return;
+    }
+    (async () => {
+      const next = new Map<string, HighlightedToken[]>();
+      for (let hi = 0; hi < hunks.length; hi += 1) {
+        const lines = hunks[hi]?.lines ?? [];
+        for (let li = 0; li < lines.length; li += 1) {
+          const content = lines[li]?.content ?? "";
+          // Sequential await against the shared singleton highlighter keeps
+          // memory flat for large diffs (no burst of parallel tokenizations).
+          const tokens = await highlightLine(content, lang);
+          next.set(`${hi}:${li}`, tokens);
+        }
+      }
+      if (!cancelled) setMap(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [signature, hunks, path]);
+
+  return map;
+}
+
 function FileSection({ file, defaultOpen }: { file: CodeDiffFile; defaultOpen: boolean }) {
-  const hunks = file.patch ? parseUnifiedDiff(file.patch) : [];
+  const hunks = useMemo(() => (file.patch ? parseUnifiedDiff(file.patch) : []), [file.patch]);
+  const highlighted = useHighlightedHunks(file.path, hunks);
   const computed = hunks.length > 0 ? countDiffStats(hunks) : null;
   const additions = file.additions ?? computed?.additions ?? 0;
   const deletions = file.deletions ?? computed?.deletions ?? 0;
@@ -212,7 +314,7 @@ function FileSection({ file, defaultOpen }: { file: CodeDiffFile; defaultOpen: b
                 {hunk.header}
               </div>
               {hunk.lines.map((line, li) => (
-                <DiffLineRow key={li} line={line} />
+                <DiffLineRow key={li} line={line} tokens={highlighted.get(`${hi}:${li}`)} />
               ))}
             </div>
           ))}
