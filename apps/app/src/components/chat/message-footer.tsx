@@ -19,6 +19,7 @@ import { Tooltip, TooltipTrigger, TooltipPopup } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import type { TurnUsage } from "./stream-event-types";
 import { saveAsKnowledgeAction, saveAsMemoryAction } from "./message-footer-actions";
+import { PromptCacheBar } from "./prompt-cache-bar";
 
 export interface MessageFooterProps {
   /** The full plain text of the assistant message (for clipboard + save actions). */
@@ -133,14 +134,23 @@ export function MessageFooter({
 
   return (
     <div className="mt-2 flex items-center justify-between gap-2">
-      {/* Token / credit summary */}
+      {/* Token / credit summary + prompt-cache meter */}
       {usage !== undefined ? (
-        <span className="text-xs tabular-nums text-muted-foreground">
-          {usage.totalTokens.toLocaleString()} tokens
-          {usage.creditsCharged !== undefined
-            ? ` · ${usage.creditsCharged} credit${usage.creditsCharged === 1 ? "" : "s"}`
-            : null}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {usage.totalTokens.toLocaleString()} tokens
+            {usage.creditsCharged !== undefined
+              ? ` · ${usage.creditsCharged} credit${usage.creditsCharged === 1 ? "" : "s"}`
+              : null}
+          </span>
+          {usage.cachedTokens !== undefined && usage.cachedTokens > 0 ? (
+            <PromptCacheBar
+              promptTokens={usage.promptTokens}
+              completionTokens={usage.completionTokens}
+              cachedTokens={usage.cachedTokens}
+            />
+          ) : null}
+        </div>
       ) : (
         <span aria-hidden="true" />
       )}
