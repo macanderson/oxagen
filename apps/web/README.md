@@ -14,8 +14,19 @@ Vercel serves this directory as-is (framework preset: Other, root directory
   the top gates it behind the lead form on `/#field-manual`.
 - `field-manual/engineering-deterministic-ai-coding-agents.epub` — EPUB
   download, served with `Content-Disposition: attachment` (see `vercel.json`).
+- `research/deterministic-systems-optimizations-for-ai-agents/index.html` —
+  the page-flip **book reader** edition of the same manual (ungated). CSS
+  multi-column pagination (each column is a page), 3D leaf-flip on ←/→ keys,
+  running heads + folios, typeface/size/ink-mode settings, and chapter-subset
+  PDF export via print CSS (`@page 8.5in 11in`, fragmentation-safe). Content
+  is baked in at build time from the field-manual source; the sibling
+  `author.jpg` is the externalized headshot (Chromium mispositions replaced
+  elements in multicol fragments, so the reader swaps `<img>` for
+  background-image spans at clone time).
 - `fonts/` — Aeonik + Aeonik Mono variable fonts (copied from
-  `packages/ui/src/styles/fonts/`), cached immutable for a year.
+  `packages/ui/src/styles/fonts/`), plus Literata variable serif
+  (normal + italic, latin subset, from Google Fonts) for the book reader —
+  all cached immutable for a year.
 - `favicon.svg` — the Oxagen hexagon mark.
 - `og.png` — social share card referenced by the Open Graph tags.
 
