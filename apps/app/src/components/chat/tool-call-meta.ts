@@ -95,7 +95,7 @@ const CURATED: Record<string, { label: string; Icon?: LucideIcon }> = {
   "workflow.status": { label: "Check workflow status" },
   "agent.subagent.dispatch": { label: "Dispatch subagent" },
   "agent.subagent.aggregate": { label: "Aggregate subagent results" },
-  "agent.ui.render": { label: "Render interactive view" },
+  "render_agent_ui": { label: "Render interactive view" },
   "agent.feature.verify": { label: "Verify feature" },
   "form.fill": { label: "Fill form" },
   // Memory
