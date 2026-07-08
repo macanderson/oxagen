@@ -105,6 +105,7 @@ import { ScopeReview } from "./scope-review.js";
 import type { ScopeReviewInfo, ScopeReviewDecision } from "../agent/trace.js";
 import { HudPanel } from "./hud.js";
 import { ConfigPanel } from "./config-panel.js";
+import { DiffPanel } from "./diff-panel.js";
 import { LoginPanel } from "./login-panel.js";
 import type { InteractiveLoginResult } from "../commands/auth.js";
 import type { PasteSubmission } from "./paste.js";
@@ -588,6 +589,16 @@ export function ReplApp({
   const closeLoginPanel = useCallback((): void => {
     loginOpenRef.current = false;
     setLoginOpen(false);
+  }, []);
+  // The /diff panel — same takeover pattern as /config: it owns the keyboard
+  // via its own useInput while open, and the central handler yields through
+  // diffOpenRef. `diffInitialPath` lets `/diff <path>` open straight into a file.
+  const [diffOpen, setDiffOpen] = useState(false);
+  const diffOpenRef = useRef(false);
+  const [diffInitialPath, setDiffInitialPath] = useState<string | undefined>(undefined);
+  const closeDiffPanel = useCallback((): void => {
+    diffOpenRef.current = false;
+    setDiffOpen(false);
   }, []);
   // Visibility of the right-hand Agent Team / Task Progress dock. "auto" shows it
   // only while a turn is monitoring work; /panel pins it "on" or hides it "off".
@@ -1280,6 +1291,8 @@ export function ReplApp({
     // handles ↑/↓/e/x/Esc) — swallow everything here so those keys never
     // double-fire into panel-nav, transcript scroll, or the prompt bar.
     if (configOpenRef.current) return;
+    // Same for the /diff panel (its own useInput handles navigation/scroll/Esc).
+    if (diffOpenRef.current) return;
     // Same for the /login panel (its own useInput handles Esc/any-key).
     if (loginOpenRef.current) return;
 
@@ -1577,6 +1590,15 @@ export function ReplApp({
         }
         configOpenRef.current = true;
         setConfigOpen(true);
+        return;
+      }
+      if (text === "/diff" || text.startsWith("/diff ")) {
+        // `/diff` opens the changed-file list; `/diff <path>` opens straight
+        // into that file's diff (suffix-matched inside the panel).
+        const arg = text.slice("/diff".length).trim();
+        setDiffInitialPath(arg || undefined);
+        diffOpenRef.current = true;
+        setDiffOpen(true);
         return;
       }
       if (text === "/panel") {
@@ -3157,6 +3179,14 @@ export function ReplApp({
               width={Math.min(cols - 2, 100)}
               expanded={detailExpanded}
             />
+          ) : diffOpen ? (
+            <DiffPanel
+              cwd={cwd}
+              onClose={closeDiffPanel}
+              width={Math.min(cols - 2, 100)}
+              maxBodyRows={Math.max(8, rows - 18)}
+              initialPath={diffInitialPath}
+            />
           ) : configOpen ? (
             <ConfigPanel cwd={cwd} onClose={closeConfigPanel} width={Math.min(cols - 2, 100)} />
           ) : loginOpen ? (
@@ -3348,6 +3378,8 @@ export function ReplApp({
             width={Math.min((cols || 80) - 2, 100)}
             expanded={detailExpanded}
           />
+        ) : diffOpen ? (
+          <DiffPanel cwd={cwd} onClose={closeDiffPanel} initialPath={diffInitialPath} />
         ) : configOpen ? (
           <ConfigPanel cwd={cwd} onClose={closeConfigPanel} />
         ) : loginOpen ? (

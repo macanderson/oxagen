@@ -12,6 +12,7 @@ import {
   estimateMessageRows,
   totalEstimatedRows,
   computeVisibleWindow,
+  computeBottomWindow,
   INITIAL_SCROLL_STATE,
   type ScrollState,
   type ScrollCtx,
@@ -55,12 +56,27 @@ describe("estimateMessageRows", () => {
     expect(estimateMessageRows(expanded, 80)).toBeGreaterThan(1);
   });
 
-  it("sizes a diff by its line count, capped", () => {
+  it("sizes a diff by its real rendered height: lines + header + marginY", () => {
     const shortDiff = msg({ role: "diff", diff: "line1\nline2\nline3" });
-    expect(estimateMessageRows(shortDiff, 80)).toBe(5); // 3 lines + 2
+    expect(estimateMessageRows(shortDiff, 80)).toBe(6); // 3 lines + header(1) + marginY(2)
 
-    const hugeDiff = msg({ role: "diff", diff: Array.from({ length: 500 }, () => "x").join("\n") });
-    expect(estimateMessageRows(hugeDiff, 80)).toBeLessThanOrEqual(60);
+    // A large diff must be estimated at its FULL rendered height (DiffView
+    // renders every line up to its 500-line cap) — the old 60-row cap made
+    // scroll positions above a big diff unreachable.
+    const bigDiff = msg({ role: "diff", diff: Array.from({ length: 200 }, () => "x").join("\n") });
+    expect(estimateMessageRows(bigDiff, 80)).toBe(203);
+
+    // Past DiffView's own truncation cap, the estimate tracks the cap + its
+    // one-line "… more lines" note instead of growing unboundedly.
+    const hugeDiff = msg({ role: "diff", diff: Array.from({ length: 800 }, () => "x").join("\n") });
+    expect(estimateMessageRows(hugeDiff, 80)).toBe(500 + 1 + 3);
+  });
+
+  it("caps a user prompt at its 4-line preview + expand hint (MessageView truncates it)", () => {
+    const longPrompt = msg({ role: "user", content: Array.from({ length: 30 }, (_, i) => `l${i}`).join("\n") });
+    expect(estimateMessageRows(longPrompt, 80)).toBe(5);
+    const shortPrompt = msg({ role: "user", content: "one\ntwo" });
+    expect(estimateMessageRows(shortPrompt, 80)).toBe(2);
   });
 
   it("gives a summary card a fixed small height and a replay trace a fixed tall one", () => {
@@ -178,22 +194,36 @@ describe("scrollReducer", () => {
 
 describe("computeVisibleWindow", () => {
   it("returns an empty window for an empty transcript", () => {
-    expect(computeVisibleWindow([], 0, 20)).toEqual({ startIndex: 0, endIndex: 0, hiddenAbove: 0 });
+    expect(computeVisibleWindow([], 0, 20)).toEqual({
+      startIndex: 0,
+      endIndex: 0,
+      hiddenAbove: 0,
+      clipTop: 0,
+    });
   });
 
-  it("at offset 0, starts at the first message with nothing hidden above", () => {
+  it("at offset 0, starts at the first message with nothing hidden above and no top clip", () => {
     const heights = [1, 3, 2, 5];
     const win = computeVisibleWindow(heights, 0, 4);
     expect(win.startIndex).toBe(0);
     expect(win.hiddenAbove).toBe(0);
+    expect(win.clipTop).toBe(0);
   });
 
-  it("finds the message containing the offset and reports the rows above it as hidden", () => {
+  it("finds the message containing the offset and splits it into hiddenAbove + clipTop", () => {
     const heights = [2, 3, 4, 1]; // cumulative starts: 0, 2, 5, 9
-    // offset 6 falls inside message index 2 (rows 5..9)
+    // offset 6 falls inside message index 2 (rows 5..9), one row into it.
     const win = computeVisibleWindow(heights, 6, 3);
     expect(win.startIndex).toBe(2);
     expect(win.hiddenAbove).toBe(5);
+    expect(win.clipTop).toBe(1);
+  });
+
+  it("an offset landing exactly on a message boundary has zero clipTop", () => {
+    const heights = [2, 3, 4, 1];
+    const win = computeVisibleWindow(heights, 5, 3);
+    expect(win.startIndex).toBe(2);
+    expect(win.clipTop).toBe(0);
   });
 
   it("grows the window until it covers at least the viewport height", () => {
@@ -203,16 +233,63 @@ describe("computeVisibleWindow", () => {
     expect(win.endIndex - win.startIndex).toBeGreaterThanOrEqual(3);
   });
 
-  it("always includes at least one message even if a single message exceeds the viewport", () => {
-    const heights = [50];
-    const win = computeVisibleWindow(heights, 0, 3);
+  it("covers clipTop + viewport when the offset starts mid-message", () => {
+    const heights = [10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+    // offset 8 → clipTop 8 of the first message; the window must still cover
+    // 8 (clipped) + 4 (viewport) rows before stopping, not just 4.
+    const win = computeVisibleWindow(heights, 8, 4);
     expect(win.startIndex).toBe(0);
-    expect(win.endIndex).toBe(1);
+    expect(win.clipTop).toBe(8);
+    let covered = 0;
+    for (let i = win.startIndex; i < win.endIndex; i++) covered += heights[i] ?? 0;
+    expect(covered).toBeGreaterThanOrEqual(8 + 4);
+  });
+
+  it("scrolls line-by-line THROUGH a single message taller than the viewport via clipTop", () => {
+    const heights = [50];
+    for (const offset of [0, 1, 10, 46]) {
+      const win = computeVisibleWindow(heights, offset, 4);
+      expect(win.startIndex).toBe(0);
+      expect(win.endIndex).toBe(1);
+      expect(win.clipTop).toBe(offset);
+    }
   });
 
   it("clamps a beyond-range offset to the last message rather than throwing", () => {
     const heights = [1, 1, 1];
     const win = computeVisibleWindow(heights, 999, 3);
     expect(win.startIndex).toBe(2);
+  });
+});
+
+describe("computeBottomWindow", () => {
+  it("includes the whole transcript and renders top-down while it's shorter than the viewport", () => {
+    const win = computeBottomWindow([1, 1, 1], 20);
+    expect(win.startIndex).toBe(0);
+    expect(win.anchorBottom).toBe(false);
+  });
+
+  it("anchors to the bottom once the tail fills the viewport, windowing only the tail", () => {
+    const heights = Array.from({ length: 40 }, () => 2); // 80 rows total
+    const win = computeBottomWindow(heights, 10);
+    expect(win.anchorBottom).toBe(true);
+    expect(win.startIndex).toBeGreaterThan(0);
+    // The included tail covers viewport + overscan, and no more than one
+    // message past that (the loop stops at the first message crossing it).
+    let acc = 0;
+    for (let i = win.startIndex; i < heights.length; i++) acc += heights[i] ?? 0;
+    expect(acc).toBeGreaterThanOrEqual(10);
+  });
+
+  it("anchors even when estimates fall just short of the viewport (bias toward never clipping the newest lines)", () => {
+    // 19 estimated rows in a 20-row viewport: within the bias margin, so the
+    // caller flex-ends — a real height 1-2 rows past the estimate must land
+    // flush at the bottom, not clipped off it.
+    const win = computeBottomWindow([19], 20);
+    expect(win.anchorBottom).toBe(true);
+  });
+
+  it("returns an empty top-down window for an empty transcript", () => {
+    expect(computeBottomWindow([], 10)).toEqual({ startIndex: 0, anchorBottom: false });
   });
 });

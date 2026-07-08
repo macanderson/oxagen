@@ -125,6 +125,72 @@ describe("TranscriptViewport", () => {
     const { lastFrame } = render(<TranscriptViewport committedMessages={[]} width={80} height={5} scroll={scroll} />);
     expect(lastFrame()).toBeDefined();
   });
+
+  // The next three tests use `role: "reasoning"` fixtures: reasoning renders
+  // its content lines verbatim (one terminal row per line at this width),
+  // unlike committed assistant prose which re-flows through <Markdown> — so
+  // the expected visible rows are exact, not estimates.
+  const tallMessage: Message = {
+    role: "reasoning",
+    content: Array.from({ length: 10 }, (_, i) => `row-${String(i).padStart(2, "0")}`).join("\n"),
+    timestamp: 1,
+  };
+
+  it("scrolls line-exactly THROUGH a message taller than the viewport (clipTop top-slicing)", () => {
+    // Viewport shows 4 content rows; offset 3 into the single 10-row message
+    // must show rows 3..6 — the regression this guards: the old
+    // message-granularity window could only ever show a tall message's TOP.
+    const midScroll: ScrollState = { rawOffset: 3, stickyBottom: false };
+    const { lastFrame } = render(
+      <TranscriptViewport committedMessages={[tallMessage]} width={80} height={5} scroll={midScroll} />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("row-03");
+    expect(frame).toContain("row-06");
+    expect(frame).not.toContain("row-02");
+    expect(frame).not.toContain("row-07");
+  });
+
+  it("pinned to the bottom, a tall message shows its NEWEST lines (bottom-anchored, not top-rendered)", () => {
+    // stickyBottom with a single 10-row message in a 4-row viewport must show
+    // rows 6..9. Before the flex-end anchor this rendered rows 0..3 — the
+    // newest output was unreachable even at End.
+    const { lastFrame } = render(
+      <TranscriptViewport committedMessages={[tallMessage]} width={80} height={5} scroll={INITIAL_SCROLL_STATE} />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("row-09");
+    expect(frame).toContain("row-06");
+    expect(frame).not.toContain("row-05");
+  });
+
+  it("pinned to the bottom of a long transcript, the latest messages are visible", () => {
+    const messages: Message[] = Array.from({ length: 30 }, (_, i) => ({
+      role: "reasoning" as const,
+      content: `m-${String(i).padStart(2, "0")}`,
+      timestamp: i,
+    }));
+    const { lastFrame } = render(
+      <TranscriptViewport committedMessages={messages} width={80} height={5} scroll={INITIAL_SCROLL_STATE} />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("m-29");
+    expect(frame).not.toContain("m-00");
+  });
+
+  it("a short transcript renders top-down, not bottom-anchored", () => {
+    const messages: Message[] = [
+      { role: "reasoning", content: "only-line", timestamp: 1 },
+    ];
+    const { lastFrame } = render(
+      <TranscriptViewport committedMessages={messages} width={80} height={8} scroll={INITIAL_SCROLL_STATE} />,
+    );
+    const frame = lastFrame() ?? "";
+    // First content row (after the 1-row indicator slot) holds the message —
+    // no blank flex-end gap above it.
+    const lines = frame.split("\n");
+    expect(lines[1]).toContain("only-line");
+  });
 });
 
 describe("TelemetryDock", () => {
