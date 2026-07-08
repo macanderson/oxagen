@@ -27,6 +27,23 @@ export const repoFilePut = registerCapability({
   output: z.object({
     commitSha: z.string().describe("SHA of the commit that created or updated the file"),
     htmlUrl: z.string().describe("HTML URL of the committed file"),
+    diffs: z
+      .array(
+        z.object({
+          path: z.string().describe("Repo-relative file path (equal to the input `path`)"),
+          patch: z.string().describe("Unified-diff patch body for this file"),
+          additions: z.number().int().describe("Added-line count for this file"),
+          deletions: z.number().int().describe("Removed-line count for this file"),
+        }),
+      )
+      .optional()
+      .describe(
+        "Single-element array holding the committed file's unified diff, computed " +
+          "from its content on the target branch before this call vs. the newly " +
+          "committed `content` (an empty 'before' when the file is newly created). " +
+          "Powers the code-diff chat card's full hunk view (packages/oxagen/src/" +
+          "capability-meta.ts maps this onto the card's `{ files }` prop).",
+      ),
   }),
 });
 

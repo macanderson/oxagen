@@ -72,6 +72,24 @@ export const agentRepoEdit = registerCapability({
       .array(z.string())
       .optional()
       .describe("Non-fatal advisories, e.g. that shell execution was unavailable."),
+    diffs: z
+      .array(
+        z.object({
+          path: z.string().describe("Repo-relative file path (matches an entry in changedFiles)"),
+          patch: z.string().describe("Unified-diff patch body for this file"),
+          additions: z.number().int().describe("Added-line count for this file"),
+          deletions: z.number().int().describe("Removed-line count for this file"),
+        }),
+      )
+      .optional()
+      .describe(
+        "Per-file unified-diff patches for the agent's changes, when computable. " +
+          "On the sandbox backend these come from the real `git diff` working tree; " +
+          "on the GitHub-API-only backend they're reconstructed from each file's " +
+          "before/after content. Powers the code-diff chat card's full hunk view " +
+          "(packages/oxagen/src/capability-meta.ts maps this onto the card's " +
+          "`{ files }` prop) — absent when diff computation itself failed.",
+      ),
   }),
 });
 

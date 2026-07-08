@@ -13,6 +13,7 @@ import {
   ModalSandboxWorkspace,
 } from "@oxagen/agent/adapters";
 import { resolveGitHubToken } from "./lib/github-token";
+import { diffFileContents, splitCombinedDiff, type FileDiff } from "./lib/unified-diff";
 import { logger } from "./logger";
 
 export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = async (
@@ -127,6 +128,41 @@ export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = asy
       throw new Error("Agent made no changes.");
     }
 
+    // 7b. Compute a per-file unified-diff patch for each changed file, so the
+    //     chat's code-diff card can render real hunks instead of a path-only
+    //     row. This is a non-critical enrichment — never let it fail the run.
+    //     Sandbox backend: read the real `git diff --cached` from the working
+    //     tree (git already understands renames/adds/deletes). GitHub-API
+    //     backend has no git — reconstruct per file from its content on the
+    //     base branch (undefined/null → "" for a newly created file) vs. the
+    //     agent's final content.
+    let diffs: FileDiff[] | undefined;
+    try {
+      if (sandboxWs) {
+        const rawDiff = await sandboxWs.diff();
+        const byPath = new Map(splitCombinedDiff(rawDiff).map((d) => [d.path, d]));
+        diffs = changed.map((f) => byPath.get(f.path)).filter((d): d is FileDiff => d !== undefined);
+      } else {
+        diffs = await Promise.all(
+          changed.map(async (f) => {
+            const before = await gh.getFileContent({
+              owner: input.owner,
+              repo: input.repo,
+              path: f.path,
+              ref: baseBranch,
+            });
+            return diffFileContents(f.path, before ?? "", f.content);
+          }),
+        );
+      }
+    } catch (err) {
+      logger.error(
+        { err, orgId: ctx.orgId, owner: input.owner, repo: input.repo },
+        "agent.repo.edit: failed to compute diff patches (non-fatal, falling back to path-only)",
+      );
+      diffs = undefined;
+    }
+
     // 8. Derive the branch name (provided or auto-generated from the request id).
     const branch = input.branchName ?? `oxagen-agent-${ctx.requestId.slice(0, 8)}`;
 
@@ -168,6 +204,7 @@ export const agentRepoEditHandler: CapabilityHandler<typeof agentRepoEdit> = asy
       changedFiles: changed.map((f) => f.path),
       summary: result.text,
       execBackend: sandboxWs ? ("sandbox" as const) : ("github-api" as const),
+      ...(diffs && diffs.length > 0 ? { diffs } : {}),
       ...(sandboxWs
         ? {}
         : {

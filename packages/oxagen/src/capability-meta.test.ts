@@ -335,6 +335,38 @@ describe("resolveRenderDirective — structural transforms (coding-agent cards)"
     expect(d?.props.externalLabel).toBe("PR #42");
   });
 
+  it("maps agent.repo.edit's diffs onto matching changedFiles entries with real patch text", () => {
+    const output = {
+      prNumber: 42,
+      prUrl: "https://github.com/acme/repo/pull/42",
+      branch: "agent/fix-health",
+      changedFiles: ["src/index.ts", "src/routes/health.ts"],
+      summary: "Wired up the health-check route.",
+      diffs: [
+        {
+          path: "src/index.ts",
+          patch: "--- a/src/index.ts\n+++ b/src/index.ts\n@@ -1 +1,2 @@\n line 1\n+line 2\n",
+          additions: 1,
+          deletions: 0,
+        },
+        // src/routes/health.ts intentionally has no matching diffs entry —
+        // e.g. the sandbox's combined diff didn't include it — so it should
+        // fall back to the path-only row without breaking the other file.
+      ],
+    };
+    const d = resolveRenderDirective({ capability: "agent.repo.edit", output });
+    expect(d?.componentId).toBe("code-diff");
+    expect(d?.props.files).toEqual([
+      {
+        path: "src/index.ts",
+        patch: output.diffs[0]?.patch,
+        additions: 1,
+        deletions: 0,
+      },
+      { path: "src/routes/health.ts", patch: null, additions: null, deletions: null },
+    ]);
+  });
+
   it("returns null for agent.repo.edit when changedFiles is empty (falls through to standard path)", () => {
     const d = resolveRenderDirective({
       capability: "agent.repo.edit",
@@ -354,6 +386,33 @@ describe("resolveRenderDirective — structural transforms (coding-agent cards)"
     expect(d?.componentId).toBe("code-diff");
     expect(d?.props.files).toEqual([
       { path: "src/config.ts", patch: null, additions: null, deletions: null },
+    ]);
+    expect(d?.props.externalUrl).toBe(output.htmlUrl);
+    expect(d?.props.externalLabel).toBe("commit a1b2c3d");
+  });
+
+  it("maps repo.file.put's diffs onto the code-diff card, preferring the diff's own path", () => {
+    const output = {
+      commitSha: "a1b2c3d4e5f6",
+      htmlUrl: "https://github.com/acme/repo/blob/main/src%2Fconfig.ts",
+      diffs: [
+        {
+          path: "src/config.ts",
+          patch: "--- a/src/config.ts\n+++ b/src/config.ts\n@@ -1 +1 @@\n-old\n+new\n",
+          additions: 1,
+          deletions: 1,
+        },
+      ],
+    };
+    const d = resolveRenderDirective({ capability: "repo.file.put", output });
+    expect(d?.componentId).toBe("code-diff");
+    expect(d?.props.files).toEqual([
+      {
+        path: "src/config.ts",
+        patch: output.diffs[0]?.patch,
+        additions: 1,
+        deletions: 1,
+      },
     ]);
     expect(d?.props.externalUrl).toBe(output.htmlUrl);
     expect(d?.props.externalLabel).toBe("commit a1b2c3d");
