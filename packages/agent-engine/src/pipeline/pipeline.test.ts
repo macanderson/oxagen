@@ -184,9 +184,14 @@ describe("runTurn — bare mode model accounting", () => {
       generateObject: async () => ({ object: {} as never, usage: { totalTokens: 0 } }),
     };
 
-    const prompt = "do something";
+    // ONE prompt drives both the run and the oracle — a high-stakes ask that
+    // classifyTier floors to the precise tier. (Previously a stale `prompt`
+    // variable classified a different, trivial string than the one actually
+    // run, so the oracle and execution diverged the moment the tier→model map
+    // shifted — a latent test bug, not a routing bug.)
+    const prompt = "fix the authentication bug in the login flow";
     const result = await runTurn({
-      prompt: "fix the authentication bug in the login flow",
+      prompt,
       workspace: ws,
       ai,
       bare: true,
