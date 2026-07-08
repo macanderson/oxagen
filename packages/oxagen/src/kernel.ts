@@ -6,7 +6,7 @@ import type {
   ResolvedPrincipal,
 } from "./types";
 import { getSurfaces } from "./types";
-import { getCapability, listCapabilities } from "./registry";
+import { getCapability, listCapabilities, namesForCapability } from "./registry";
 import { pluginForContract } from "./plugins/registry";
 import { runInTenantScope, runWithPrincipal } from "@oxagen/tenancy";
 import { trace, SpanStatusCode, SpanKind } from "@opentelemetry/api";
@@ -398,7 +398,27 @@ export function registerHandlersOnce(token: string, register: () => void): void 
 async function resolveHandler(name: string): Promise<CapabilityHandlerFn> {
   const cached = cache.get(name);
   if (cached) return cached;
-  const loader = loaders.get(name);
+  let loader = loaders.get(name);
+  if (!loader) {
+    // ADR-025 renamed every capability's canonical `name` to a verb-first
+    // snake_case form and kept the pre-rename dotted name as a retired
+    // `aliases` entry (e.g. canonical "render_agent_ui", alias
+    // "agent.ui.render"). `name` here is always the canonical name (callers
+    // resolve through getCapability first), but the handler-registration
+    // modules (packages/agent/src/register.ts, packages/handlers/src/register.ts)
+    // still bind their loaders under the OLD dotted names. Without this
+    // fallback every renamed capability's handler is unreachable by its
+    // canonical name. namesForCapability mirrors the same alias-tolerant
+    // lookup the IAM layer already uses for legacy role_grants rows.
+    for (const alias of namesForCapability(name)) {
+      if (alias === name) continue;
+      const aliasLoader = loaders.get(alias);
+      if (aliasLoader) {
+        loader = aliasLoader;
+        break;
+      }
+    }
+  }
   if (!loader) {
     throw new CapabilityError(
       name,

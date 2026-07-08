@@ -123,6 +123,36 @@ describe("capability kernel", () => {
     registerHandler("test.echo", async () => async (i) => i);
     expect(hasHandler("test.echo")).toBe(true);
   });
+
+  // ADR-025 renamed every capability's canonical name to snake_case and kept
+  // the pre-rename dotted name as a retired alias. Registration modules
+  // (packages/agent/src/register.ts, packages/handlers/src/register.ts)
+  // still bind their loaders under the OLD dotted name — invoke() must still
+  // resolve the handler when called with the NEW canonical name (regression
+  // for the "render_agent_ui" / "agent.ui.render" no-handler bug).
+  it("resolves a handler bound under a retired alias when invoked by the canonical name", async () => {
+    registerCapability({
+      name: "render_agent_ui",
+      aliases: ["agent.ui.render"],
+      domain: "agent",
+      description: "render",
+      mode: "sync" as const,
+      surfaces: ["agent"] as const,
+      layers: ["unit"] as const,
+      sensitivity: "low" as const,
+      defaultEffect: "deny" as const,
+      defaultRoles: { org: {}, workspace: {} },
+      input: z.object({ componentId: z.string() }),
+      output: z.object({ componentId: z.string() }),
+    });
+    // Handler registered under the OLD dotted alias, mirroring the current
+    // state of packages/agent/src/handlers/index.ts.
+    registerHandler("agent.ui.render", async () => async (input) => input);
+    const out = await invoke("render_agent_ui", { componentId: "x" }, ctx, {
+      surface: "agent",
+    });
+    expect(out).toEqual({ componentId: "x" });
+  });
 });
 
 // ---------------------------------------------------------------------------
