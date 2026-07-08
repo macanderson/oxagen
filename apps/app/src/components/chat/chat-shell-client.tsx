@@ -9,7 +9,7 @@ import type { ChatMessage, MessageBubbleCallbacks } from "./message-bubble";
 import { PlanCard } from "./plan-card";
 import { ApprovalCard } from "./approval-card";
 import { ConsentCard } from "./consent-card";
-import { ToolCallCard } from "./tool-call-card";
+import { ToolActivityGroup, type ToolActivityItem } from "./tool-activity-group";
 import { CodeExecuteCard } from "./code-execute-card";
 import { MemoryCard } from "./memory-card";
 import { BackgroundTaskCard } from "./background-task-card";
@@ -28,6 +28,7 @@ import type { RepoOption } from "./repo-selector";
 import type { EnvironmentOption } from "./environment-selector";
 import type { AgentOption } from "./agent-selector";
 import { SuggestedPromptChips } from "./suggested-prompt-chips";
+import type { ConversationMessageSummary } from "@/lib/page-context/suggested-prompts";
 import { ConversationFiles } from "./conversation-files";
 import { ConversationExportMenu } from "./conversation-export-menu";
 import { CodingTracePanel } from "./coding-trace-panel";
@@ -236,6 +237,7 @@ export function ChatShellClient({
     turnError,
     turnWarning,
     turnBudgetNotice,
+    suggestedPrompts,
     consume,
     reset,
     hasBlockingApproval,
@@ -243,6 +245,21 @@ export function ChatShellClient({
     signalApprovalResolved,
     signalConsentResolved,
   } = useToolStream();
+
+  // Trimmed recent history for the no-LLM suggestion fallback: keeps the chips
+  // conversation-aware on reload / before the first per-turn server suggestions
+  // arrive. Server-generated `suggestedPrompts` take precedence in the chips.
+  const conversationHistory = React.useMemo<ConversationMessageSummary[]>(
+    () =>
+      messages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .slice(-6)
+        .map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content.slice(0, 300),
+        })),
+    [messages],
+  );
 
   // Surface a turn-level failure (provider/gateway error, billing block such as
   // insufficient_credits, or an unexpected server throw) as a toast — instead of
@@ -795,6 +812,9 @@ export function ChatShellClient({
       case "tool": {
         const tc = toolCalls[id];
         if (!tc) return null;
+        // Only code-execute renders individually here; every other tool call is
+        // merged into a ToolActivityGroup by the timeline builder below.
+        if (tc.capability !== "agent.code.execute") return null;
         const tone: TimelineTone =
           tc.status === "completed"
             ? "done"
@@ -802,49 +822,23 @@ export function ChatShellClient({
               ? "failed"
               : "running";
         const active = tc.status === "pending" || tc.status === "running";
-        if (tc.capability === "agent.code.execute") {
-          const preview = (tc.inputPreview as Record<string, unknown> | null) ?? {};
-          const language = typeof preview.language === "string" ? preview.language : "node";
-          const code = typeof preview.code === "string" ? preview.code : "";
-          const outputRecord = (tc.output as Record<string, unknown> | null) ?? {};
-          const exitCode =
-            typeof outputRecord.exitCode === "number" ? outputRecord.exitCode : undefined;
-          return {
-            node: (
-              <CodeExecuteCard
-                toolCallId={tc.toolCallId}
-                language={language}
-                code={code}
-                status={tc.status}
-                stdout={tc.stdout}
-                stderr={tc.stderr}
-                exitCode={exitCode}
-                durationMs={tc.durationMs}
-              />
-            ),
-            tone,
-            active,
-          };
-        }
+        const preview = (tc.inputPreview as Record<string, unknown> | null) ?? {};
+        const language = typeof preview.language === "string" ? preview.language : "node";
+        const code = typeof preview.code === "string" ? preview.code : "";
+        const outputRecord = (tc.output as Record<string, unknown> | null) ?? {};
+        const exitCode =
+          typeof outputRecord.exitCode === "number" ? outputRecord.exitCode : undefined;
         return {
           node: (
-            <ToolCallCard
+            <CodeExecuteCard
               toolCallId={tc.toolCallId}
-              capability={tc.capability}
-              // While args are still streaming, show the partial JSON; once the
-              // parsed input lands we show the structured preview.
-              inputPreview={
-                tc.status === "pending" ? tc.partialInput ?? "" : tc.inputPreview
-              }
-              riskLevel={tc.riskLevel}
+              language={language}
+              code={code}
               status={tc.status}
-              output={tc.output}
               stdout={tc.stdout}
               stderr={tc.stderr}
-              errorReason={tc.errorReason}
+              exitCode={exitCode}
               durationMs={tc.durationMs}
-              // In-flight calls stay collapsed — the spinner in the compact
-              // row signals progress; the user can tap to watch live output.
             />
           ),
           tone,
@@ -1033,12 +1027,65 @@ export function ChatShellClient({
     }
   };
 
-  const timelineEntries = order
-    .map((key) => ({ key, rendered: renderEntry(key) }))
-    .filter(
-      (e): e is { key: string; rendered: NonNullable<ReturnType<typeof renderEntry>> } =>
-        e.rendered !== null,
-    );
+  // A groupable tool entry: a `tool:*` order key whose live tool call exists
+  // and is NOT code-execute (that keeps its rich CodeExecuteCard). Returns the
+  // live tool call, or null when the entry breaks a run.
+  const groupableToolCall = (key: string) => {
+    const sep = key.indexOf(":");
+    if (key.slice(0, sep) !== "tool") return null;
+    const tc = toolCalls[key.slice(sep + 1)];
+    if (!tc || tc.capability === "agent.code.execute") return null;
+    return tc;
+  };
+
+  // Walk the ordered timeline, merging consecutive groupable tool calls into a
+  // single compact ToolActivityGroup. Tool calls fire constantly and carry
+  // little conversational signal, so collapsing a run into one quiet unit keeps
+  // the thread readable. Any non-tool entry (text, reasoning, plan, approval,
+  // code-execute…) breaks the run and renders through renderEntry as before.
+  const timelineEntries: Array<{
+    key: string;
+    rendered: NonNullable<ReturnType<typeof renderEntry>>;
+  }> = [];
+  for (let i = 0; i < order.length; ) {
+    if (groupableToolCall(order[i]!)) {
+      const startKey = order[i]!;
+      const runItems: ToolActivityItem[] = [];
+      while (i < order.length) {
+        const tc = groupableToolCall(order[i]!);
+        if (!tc) break;
+        runItems.push({
+          toolCallId: tc.toolCallId,
+          capability: tc.capability,
+          inputPreview: tc.inputPreview,
+          riskLevel: tc.riskLevel,
+          status: tc.status,
+          output: tc.output,
+          stdout: tc.stdout,
+          stderr: tc.stderr,
+          errorReason: tc.errorReason,
+          durationMs: tc.durationMs,
+        });
+        i++;
+      }
+      const anyActive = runItems.some(
+        (it) => it.status === "pending" || it.status === "running",
+      );
+      timelineEntries.push({
+        key: startKey,
+        rendered: {
+          // Rail stays calm: running while in-flight, else done — never failed.
+          node: <ToolActivityGroup items={runItems} live={isStreaming} />,
+          tone: anyActive ? "running" : "done",
+          active: anyActive,
+        },
+      });
+      continue;
+    }
+    const rendered = renderEntry(order[i]!);
+    if (rendered) timelineEntries.push({ key: order[i]!, rendered });
+    i++;
+  }
 
   return (
     <div className="flex h-full w-full gap-4">
@@ -1153,6 +1200,8 @@ export function ChatShellClient({
           action={wrappedSendAction}
           conversationId={conversationId}
           parentMessageId={activeLeafMessageId}
+          suggestions={suggestedPrompts}
+          conversationHistory={conversationHistory}
           className="justify-center"
         />
       ) : null}

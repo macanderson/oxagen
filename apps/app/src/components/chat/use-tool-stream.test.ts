@@ -552,6 +552,58 @@ describe("usage event", () => {
 });
 
 // ---------------------------------------------------------------------------
+// suggested-prompts event (ephemeral per-turn next-step chips)
+// ---------------------------------------------------------------------------
+
+describe("suggested-prompts event", () => {
+  const trio = [
+    { label: "Turn Into An Agent", prompt: "Create an agent that does this." },
+    { label: "Automate This", prompt: "Automate this on a schedule." },
+    { label: "Add To Graph", prompt: "Wire this into the knowledge graph." },
+  ];
+
+  it("initial state has null suggestedPrompts", () => {
+    expect(INITIAL_STATE.suggestedPrompts).toBeNull();
+  });
+
+  it("stores the suggestions from the event", () => {
+    const s = reducer(
+      INITIAL_STATE,
+      event({ type: "suggested-prompts", suggestions: trio }),
+    );
+    expect(s.suggestedPrompts).toEqual(trio);
+  });
+
+  it("replaces the prior turn's suggestions on a second event", () => {
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "suggested-prompts", suggestions: trio }),
+    );
+    const next = [{ label: "Publish It", prompt: "Publish to the marketplace." }];
+    s = reducer(s, event({ type: "suggested-prompts", suggestions: next }));
+    expect(s.suggestedPrompts).toEqual(next);
+  });
+
+  it("ignores an empty payload (keeps prior suggestions)", () => {
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "suggested-prompts", suggestions: trio }),
+    );
+    s = reducer(s, event({ type: "suggested-prompts", suggestions: [] }));
+    expect(s.suggestedPrompts).toEqual(trio);
+  });
+
+  it("reset clears suggestedPrompts back to null", () => {
+    let s = reducer(
+      INITIAL_STATE,
+      event({ type: "suggested-prompts", suggestions: trio }),
+    );
+    s = reducer(s, { type: "reset" });
+    expect(s.suggestedPrompts).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // error event (turn-level failure → toast, never inline text)
 // ---------------------------------------------------------------------------
 

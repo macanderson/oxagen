@@ -72,6 +72,33 @@ describe("formatToolCall", () => {
     expect(line).toContain("semantic-edge-suggest(");
     expect(line).not.toContain("{");
   });
+
+  it("renders unmapped tools flush at the name — no wrench, no leading space", () => {
+    const line = formatToolCall("mcp__x__do", { query: "billing" });
+    expect(line).toBe("mcp__x__do(billing)");
+    expect(line).not.toContain("🔧");
+    expect(line.startsWith(" ")).toBe(false);
+  });
+
+  it("never emits the removed bolt/wrench glyphs for any tool", () => {
+    for (const tool of ["agent.code.execute", "Read", "Bash", "totally.unknown"]) {
+      const line = formatToolCall(tool, { query: "q" });
+      expect(line).not.toContain("⚡");
+      expect(line).not.toContain("🔧");
+    }
+  });
+});
+
+describe("getToolEmoji", () => {
+  it("returns an empty string for unmapped tools (wrench default removed)", () => {
+    expect(getToolEmoji("totally.unknown")).toBe("");
+    expect(getToolEmoji("agent.code.execute")).toBe("");
+  });
+
+  it("keeps the mapped glyphs for core tools", () => {
+    expect(getToolEmoji("Read")).toBe("📖");
+    expect(getToolEmoji("Bash")).toBe("💻");
+  });
 });
 
 describe("toolDisplayLabel", () => {

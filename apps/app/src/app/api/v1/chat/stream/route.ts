@@ -49,6 +49,11 @@ import type {
   MemoryRecallHit,
 } from "@/components/chat/stream-event-types";
 import { autoTitleConversation } from "./auto-title";
+import {
+  buildRecentTurns,
+  generateTurnSuggestions,
+  type TurnSuggestion,
+} from "./suggest-prompts";
 import { streamMediaGeneration } from "./media-generation";
 import { createTurnTranslator, emitUsageEvent } from "./translate-stream";
 import { formatStreamError } from "./stream-parts";
@@ -1349,6 +1354,25 @@ export async function POST(request: NextRequest): Promise<Response> {
 
         const { assistantText, persistedBlocks } = translator.finish();
 
+        // ── Per-turn next-step suggestions ─────────────────────────────────
+        // Kick off conversation-aware suggestion generation NOW — the moment the
+        // final answer text is known — so it runs concurrently with citation
+        // resolution, persistence, and auto-titling below and adds minimal
+        // latency. It self-times-out (6s) and returns null on any failure, so it
+        // can never delay or break the turn; we await it just before [DONE].
+        const suggestionsPromise: Promise<TurnSuggestion[] | null> =
+          generateTurnSuggestions({
+            recentTurns: buildRecentTurns(historyForEngine, {
+              userText: content,
+              assistantText,
+            }),
+            orgId: tenant.id,
+            workspaceId: workspace.id,
+            messageId: requestId,
+            orgSlug,
+            workspaceSlug,
+          });
+
         // ── Grounded-in citations ──────────────────────────────────────────
         // Surface the graph facts this answer was grounded in. The recalled
         // memories were injected into the model context above; here we resolve
@@ -1396,6 +1420,16 @@ export async function POST(request: NextRequest): Promise<Response> {
             workspaceId: workspace.id,
             requestId,
           });
+        }
+
+        // Await the (already-running) suggestion generation and emit it just
+        // before the [DONE] sentinel. It self-times-out and resolves to null on
+        // any failure, so this await is bounded and never throws — the turn is
+        // already fully persisted above regardless of the outcome. `emit` no-ops
+        // if the client disconnected, so a closed stream is handled for free.
+        const suggestions = await suggestionsPromise;
+        if (suggestions && suggestions.length > 0) {
+          emit({ type: "suggested-prompts", suggestions });
         }
       } catch (err) {
         // Log server-side first: this catch covers model-framework crashes,

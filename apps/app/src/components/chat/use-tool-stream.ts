@@ -224,6 +224,14 @@ export interface ToolStreamState {
    * until one arrives. Reset per turn like turnError/turnUsage.
    */
   turnBudgetNotice: LiveBudgetNotice | undefined;
+  /**
+   * Conversation-aware "next step" suggestion chips from a "suggested-prompts"
+   * event (fast-model generated, arrives near [DONE]); null until one arrives.
+   * Reset per turn along with the rest of the state on stream start, so the
+   * chips always reflect the LATEST turn. The chip component falls back to the
+   * static page-context heuristics while this is null.
+   */
+  suggestedPrompts: Array<{ label: string; prompt: string }> | null;
 }
 
 export const INITIAL_STATE: ToolStreamState = {
@@ -246,6 +254,7 @@ export const INITIAL_STATE: ToolStreamState = {
   turnError: undefined,
   turnWarning: undefined,
   turnBudgetNotice: undefined,
+  suggestedPrompts: null,
 };
 
 /** Append a timeline key in first-appearance order (idempotent). */
@@ -616,6 +625,13 @@ export function reducer(state: ToolStreamState, action: Action): ToolStreamState
     case "usage": {
       return { ...state, turnUsage: e.usage };
     }
+    case "suggested-prompts": {
+      // Ephemeral per-turn UX — replace whatever the previous turn showed. The
+      // event is trusted to carry exactly 3 items (the server schema enforces
+      // it), but guard against an empty payload rather than blank the chips.
+      if (e.suggestions.length === 0) return state;
+      return { ...state, suggestedPrompts: e.suggestions };
+    }
     case "budget-notice": {
       return {
         ...state,
@@ -681,6 +697,10 @@ export interface UseToolStreamResult extends ToolStreamState {
   /** Latest per-turn budget notice ("stopped" | "within_grace"). Undefined
    *  until a "budget-notice" event arrives. */
   turnBudgetNotice: LiveBudgetNotice | undefined;
+  /** Conversation-aware next-step suggestion chips for the LATEST turn, or null
+   *  until a "suggested-prompts" event arrives (the chip component falls back to
+   *  the static page-context heuristics while null). */
+  suggestedPrompts: Array<{ label: string; prompt: string }> | null;
 }
 
 export function useToolStream(): UseToolStreamResult {

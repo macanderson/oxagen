@@ -52,6 +52,15 @@ export interface SuggestedPromptChipsProps {
   conversationHistory?: ConversationMessageSummary[];
 
   /**
+   * Per-turn, LLM-generated suggestions from the stream's "suggested-prompts"
+   * event. When provided and non-empty these REPLACE the static
+   * `useSuggestedPrompts()` heuristics — they are conversation-aware and change
+   * every turn. Null/empty (generation failed, timed out, or empty state) falls
+   * back to the static heuristics so chips are always present.
+   */
+  suggestions?: ReadonlyArray<{ label: string; prompt: string }> | null;
+
+  /**
    * Additional className applied to the outer <div> container.
    */
   className?: string;
@@ -80,9 +89,18 @@ export function SuggestedPromptChips({
   parentMessageId,
   inputHasContent = false,
   conversationHistory,
+  suggestions,
   className,
 }: SuggestedPromptChipsProps) {
-  const prompts = useSuggestedPrompts(conversationHistory);
+  // Always call the hook (Rules of Hooks) — it's the fallback source. When the
+  // per-turn LLM suggestions are present they take precedence.
+  const fallbackPrompts = useSuggestedPrompts(conversationHistory);
+  const prompts =
+    suggestions && suggestions.length > 0 ? suggestions : fallbackPrompts;
+
+  // Re-trigger the entrance animation whenever the trio changes (each new turn
+  // emits a fresh set), so the chips gently fade/slide in rather than snapping.
+  const animationKey = prompts.map((p) => p.label).join("|");
   const [pending, startTransition] = React.useTransition();
   const [activatingIndex, setActivatingIndex] = React.useState<number | null>(null);
   const [chipError, setChipError] = React.useState<string | null>(null);
@@ -134,7 +152,8 @@ export function SuggestedPromptChips({
         </p>
       ) : null}
     <div
-      className="flex flex-wrap items-center justify-center gap-2"
+      key={animationKey}
+      className="flex flex-wrap items-center justify-center gap-2 animate-in fade-in slide-in-from-bottom-1 duration-300"
       role="group"
       aria-label="Suggested prompts"
     >
