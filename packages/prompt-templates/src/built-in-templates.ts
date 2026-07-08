@@ -230,7 +230,7 @@ export const BUILT_IN_TEMPLATES: PromptTemplateInput[] = [
         "required": true
       }
     ],
-    "body": "Diagnose the failure of run {{run_id}} using agent.debug.trace with\nsummarize:true. Report the failing step, the error class and message, the\nranked suspect files, and the root-cause diagnosis. Format as:\nProblem → Root Cause → Recommended Fix.\n"
+    "body": "Diagnose the failure of run {{run_id}} using debug_execution with\nsummarize:true. Report the failing step, the error class and message, the\nranked suspect files, and the root-cause diagnosis. Format as:\nProblem → Root Cause → Recommended Fix.\n"
   },
   {
     "id": "summarize-workspace-activity",
